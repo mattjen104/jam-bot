@@ -35,6 +35,9 @@ const allowlist = [
   "xlsx",
   "zod",
   "zod-validation-error",
+  "@slack/bolt",
+  "@slack/types",
+  "spotify-web-api-node",
 ];
 
 async function buildAll() {

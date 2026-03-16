@@ -2,7 +2,7 @@
 
 ## Overview
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+pnpm workspace monorepo using TypeScript. Contains a Slack bot ("TunePool") that helps a friend group discover shared music taste and build group Spotify playlists.
 
 ## Stack
 
@@ -11,86 +11,133 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **Package manager**: pnpm
 - **TypeScript version**: 5.9
 - **API framework**: Express 5
+- **Slack bot**: @slack/bolt (Socket Mode)
+- **Spotify API**: spotify-web-api-node
 - **Database**: PostgreSQL + Drizzle ORM
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
+
+## App Name
+
+The bot is called **TunePool** — this is a placeholder. To rename, update references in:
+- `artifacts/api-server/src/slack/format.ts` (APP_NAME constant)
+- `artifacts/api-server/src/services/blend.ts` (playlist description)
+- `artifacts/api-server/src/slack/commands/help.ts`
+- `artifacts/api-server/src/slack/commands/connect.ts`
+- `artifacts/api-server/src/routes/spotify-auth.ts` (callback HTML pages)
 
 ## Structure
 
 ```text
 artifacts-monorepo/
 ├── artifacts/              # Deployable applications
-│   └── api-server/         # Express API server
+│   └── api-server/         # Express API server + Slack bot
+│       └── src/
+│           ├── index.ts          # Entry: starts Express + Slack bot
+│           ├── app.ts            # Express app setup
+│           ├── routes/           # Express routes
+│           │   ├── health.ts     # GET /api/healthz
+│           │   └── spotify-auth.ts # GET /api/spotify/callback (OAuth)
+│           ├── slack/            # Slack bot module
+│           │   ├── bot.ts        # Bolt app setup, Socket Mode
+│           │   ├── format.ts     # Slack Block Kit formatting helpers
+│           │   └── commands/     # Slash command handlers
+│           │       ├── connect.ts    # /tunepool-connect
+│           │       ├── blend.ts      # /tunepool-blend, /tunepool-mood
+│           │       ├── pair-blend.ts # /tunepool-pair
+│           │       ├── taste-dna.ts  # /tunepool-taste
+│           │       ├── deep-dive.ts  # /tunepool-dive, /tunepool-connections
+│           │       ├── hidden-gems.ts # /tunepool-gems, /tunepool-whofirst
+│           │       └── help.ts       # /tunepool-help
+│           ├── spotify/          # Spotify API integration
+│           │   ├── auth.ts       # OAuth flow + state management
+│           │   ├── client.ts     # Per-user authenticated client + token refresh
+│           │   └── data.ts       # Fetch & cache user tracks/artists
+│           └── services/         # Core business logic
+│               ├── blend.ts      # Group blend, mood mixer, pair blend, playlist creation
+│               ├── discovery.ts  # Hidden gems, who brought it first
+│               ├── taste-analysis.ts # Taste DNA, group comparison
+│               └── artist-intel.ts   # Track deep dive, artist connections
 ├── lib/                    # Shared libraries
 │   ├── api-spec/           # OpenAPI spec + Orval codegen config
 │   ├── api-client-react/   # Generated React Query hooks
 │   ├── api-zod/            # Generated Zod schemas from OpenAPI
 │   └── db/                 # Drizzle ORM schema + DB connection
-├── scripts/                # Utility scripts (single workspace package)
-│   └── src/                # Individual .ts scripts, run via `pnpm --filter @workspace/scripts run <script>`
-├── pnpm-workspace.yaml     # pnpm workspace (artifacts/*, lib/*, lib/integrations/*, scripts)
-├── tsconfig.base.json      # Shared TS options (composite, bundler resolution, es2022)
-├── tsconfig.json           # Root TS project references
-└── package.json            # Root package with hoisted devDeps
+│       └── src/schema/
+│           ├── users.ts          # Slack/Spotify user accounts + tokens
+│           ├── cached-tracks.ts  # Cached Spotify tracks with audio features
+│           └── cached-artists.ts # Cached Spotify artists with genres
+├── scripts/                # Utility scripts
+├── pnpm-workspace.yaml
+├── tsconfig.base.json
+├── tsconfig.json
+└── package.json
 ```
+
+## Environment Variables Required
+
+### Slack (from api.slack.com/apps)
+- `SLACK_BOT_TOKEN` — Bot User OAuth Token (xoxb-...)
+- `SLACK_SIGNING_SECRET` — App signing secret
+- `SLACK_APP_TOKEN` — App-Level Token for Socket Mode (xapp-...)
+
+### Spotify (from developer.spotify.com/dashboard)
+- `SPOTIFY_CLIENT_ID` — Spotify app Client ID
+- `SPOTIFY_CLIENT_SECRET` — Spotify app Client Secret
+- **Redirect URI**: `https://<your-domain>/api/spotify/callback` (add to Spotify app settings)
+
+### Auto-provisioned
+- `DATABASE_URL` — PostgreSQL connection string (Replit)
+
+## Slack Commands
+
+| Command | Description |
+|---|---|
+| `/tunepool-connect` | Connect your Spotify account |
+| `/tunepool-blend` | Group blend playlist from everyone's taste |
+| `/tunepool-mood <mood>` | Mood-filtered mix (chill, hype, melancholy, driving, feel_good, focus, party) |
+| `/tunepool-pair @user` | Taste compatibility & blend with someone |
+| `/tunepool-taste` | Your personal taste DNA |
+| `/tunepool-taste group` | Compare everyone's taste side by side |
+| `/tunepool-dive <song>` | Deep dive on any track |
+| `/tunepool-connections` | Map artist connections across the group |
+| `/tunepool-gems` | Hidden gems from each person's library |
+| `/tunepool-whofirst` | Who discovered shared tracks first? |
+| `/tunepool-help` | Show all commands |
+
+## Slack App Setup
+
+1. Create app at api.slack.com/apps
+2. Enable Socket Mode → get App-Level Token (xapp-...)
+3. Add slash commands: `/tunepool-connect`, `/tunepool-blend`, `/tunepool-mood`, `/tunepool-pair`, `/tunepool-taste`, `/tunepool-dive`, `/tunepool-connections`, `/tunepool-gems`, `/tunepool-whofirst`, `/tunepool-help`
+4. OAuth scopes: `chat:write`, `commands`, `im:history`, `im:read`, `im:write`, `users:read`
+5. Subscribe to bot events: `message.im`
+6. Install to workspace → get Bot Token (xoxb-...)
+
+## Database Schema
+
+- **users** — Slack user ID, Spotify tokens (with auto-refresh), display names
+- **cached_tracks** — User's Spotify tracks with audio features (energy, danceability, tempo, valence, acousticness, instrumentalness), cached for 6 hours
+- **cached_artists** — User's top artists with genres, cached for 6 hours
 
 ## TypeScript & Composite Projects
 
-Every package extends `tsconfig.base.json` which sets `composite: true`. The root `tsconfig.json` lists all packages as project references. This means:
+Every package extends `tsconfig.base.json` which sets `composite: true`. The root `tsconfig.json` lists all packages as project references.
 
-- **Always typecheck from the root** — run `pnpm run typecheck` (which runs `tsc --build --emitDeclarationOnly`). This builds the full dependency graph so that cross-package imports resolve correctly. Running `tsc` inside a single package will fail if its dependencies haven't been built yet.
-- **`emitDeclarationOnly`** — we only emit `.d.ts` files during typecheck; actual JS bundling is handled by esbuild/tsx/vite...etc, not `tsc`.
-- **Project references** — when package A depends on package B, A's `tsconfig.json` must list B in its `references` array. `tsc --build` uses this to determine build order and skip up-to-date packages.
+- **Always typecheck from the root** — run `pnpm run typecheck`
+- **`emitDeclarationOnly`** — only `.d.ts` files during typecheck; actual JS bundling is handled by esbuild/tsx/vite
 
 ## Root Scripts
 
-- `pnpm run build` — runs `typecheck` first, then recursively runs `build` in all packages that define it
+- `pnpm run build` — runs `typecheck` first, then recursively runs `build` in all packages
 - `pnpm run typecheck` — runs `tsc --build --emitDeclarationOnly` using project references
 
-## Packages
+## Key Design Decisions
 
-### `artifacts/api-server` (`@workspace/api-server`)
-
-Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` for request and response validation and `@workspace/db` for persistence.
-
-- Entry: `src/index.ts` — reads `PORT`, starts Express
-- App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
-- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health` (full path: `/api/health`)
-- Depends on: `@workspace/db`, `@workspace/api-zod`
-- `pnpm --filter @workspace/api-server run dev` — run the dev server
-- `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)
-- Build bundles an allowlist of deps (express, cors, pg, drizzle-orm, zod, etc.) and externalizes the rest
-
-### `lib/db` (`@workspace/db`)
-
-Database layer using Drizzle ORM with PostgreSQL. Exports a Drizzle client instance and schema models.
-
-- `src/index.ts` — creates a `Pool` + Drizzle instance, exports schema
-- `src/schema/index.ts` — barrel re-export of all models
-- `src/schema/<modelname>.ts` — table definitions with `drizzle-zod` insert schemas (no models definitions exist right now)
-- `drizzle.config.ts` — Drizzle Kit config (requires `DATABASE_URL`, automatically provided by Replit)
-- Exports: `.` (pool, db, schema), `./schema` (schema only)
-
-Production migrations are handled by Replit when publishing. In development, we just use `pnpm --filter @workspace/db run push`, and we fallback to `pnpm --filter @workspace/db run push-force`.
-
-### `lib/api-spec` (`@workspace/api-spec`)
-
-Owns the OpenAPI 3.1 spec (`openapi.yaml`) and the Orval config (`orval.config.ts`). Running codegen produces output into two sibling packages:
-
-1. `lib/api-client-react/src/generated/` — React Query hooks + fetch client
-2. `lib/api-zod/src/generated/` — Zod schemas
-
-Run codegen: `pnpm --filter @workspace/api-spec run codegen`
-
-### `lib/api-zod` (`@workspace/api-zod`)
-
-Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used by `api-server` for response validation.
-
-### `lib/api-client-react` (`@workspace/api-client-react`)
-
-Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
-
-### `scripts` (`@workspace/scripts`)
-
-Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
+- **Socket Mode** for Slack — no need for public webhook URLs, simpler development
+- **Per-user Spotify OAuth** — each friend connects their own account, tokens stored in PostgreSQL with automatic refresh
+- **Audio features** used for smart matching — energy, danceability, valence, tempo drive the blend algorithm
+- **6-hour cache** on Spotify data to minimize API calls while staying reasonably fresh
+- **Mood profiles** define audio feature ranges for each mood (chill, hype, melancholy, etc.)
+- **Compatibility scores** use a weighted mix of track overlap (30%), artist overlap (30%), and audio feature similarity (40%)
