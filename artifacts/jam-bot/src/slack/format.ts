@@ -81,7 +81,7 @@ export function noDeviceBlocks(
         type: "mrkdwn",
         text:
           `:warning: *No active Spotify playback.* ${status}\n\n` +
-          "To restart: open Spotify on your phone, tap the device picker, pick *Jam Host*, and hit play (or start a Jam from there).",
+          `To restart: open Spotify on your phone, tap the device picker, pick *${deviceName}*, and hit play (or start a Jam from there).`,
       },
     },
   ];
