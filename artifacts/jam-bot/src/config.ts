@@ -19,6 +19,16 @@ const schema = z.object({
   DATABASE_PATH: z.string().min(1).default("./data/jam.db"),
   LLM_HISTORY_WINDOW: z.coerce.number().int().positive().default(25),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
+
+  // Vote-to-skip: how many distinct users must press the skip button on the
+  // currently-playing card before the bot calls skipToNext.
+  SKIP_VOTE_THRESHOLD: z.coerce.number().int().positive().default(3),
+  // Rolling window (seconds) within which the SKIP_VOTE_THRESHOLD votes
+  // must arrive. Votes older than this are pruned before tallying.
+  SKIP_VOTE_WINDOW_SECONDS: z.coerce.number().int().positive().default(300),
+  // Per-user request budget for /play. Over this many in the last hour and
+  // the bot replies ephemerally instead of starting playback.
+  MAX_PLAYS_PER_USER_PER_HOUR: z.coerce.number().int().positive().default(5),
 });
 
 function loadConfig() {

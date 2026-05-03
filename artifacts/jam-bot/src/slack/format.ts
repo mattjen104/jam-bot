@@ -9,15 +9,23 @@ function fmtMs(ms: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+export const VOTE_SKIP_ACTION_ID = "jam_vote_skip";
+
+export interface VoteSkipState {
+  count: number;
+  threshold: number;
+}
+
 export function nowPlayingBlocks(
   track: NonNullable<CurrentlyPlaying["track"]>,
   requestedBy: string | null,
   requestedQuery: string | null,
+  voteSkip?: VoteSkipState,
 ): KnownBlock[] {
   const requesterLine = requestedBy
     ? `\n_Requested by <@${requestedBy}>${requestedQuery ? ` — "${requestedQuery}"` : ""}_`
     : "";
-  return [
+  const blocks: KnownBlock[] = [
     {
       type: "section",
       text: {
@@ -35,6 +43,24 @@ export function nowPlayingBlocks(
         : {}),
     },
   ];
+  if (voteSkip) {
+    blocks.push({
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          action_id: VOTE_SKIP_ACTION_ID,
+          text: {
+            type: "plain_text",
+            text: `:next_track: Vote skip (${voteSkip.count}/${voteSkip.threshold})`,
+            emoji: true,
+          },
+          value: track.id,
+        },
+      ],
+    });
+  }
+  return blocks;
 }
 
 export function historyBlocks(rows: PlayedTrack[]): KnownBlock[] {
