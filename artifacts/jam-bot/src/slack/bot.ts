@@ -269,7 +269,7 @@ slackApp.command(
 
 // ---- Jam Memory slash commands ------------------------------------------
 
-function statsAsFacts(stats: WrappedStats): string {
+export function statsAsFacts(stats: WrappedStats): string {
   const lines: string[] = [];
   lines.push(`Window: ${stats.startStr} -> ${stats.endStr} UTC`);
   lines.push(`Total plays: ${stats.totalPlays}`);
@@ -287,13 +287,14 @@ function statsAsFacts(stats: WrappedStats): string {
       `Top artists: ${stats.topArtists.map((a) => `${a.artist} (${a.plays})`).join(", ")}`,
     );
   }
-  if (stats.perUser.length) {
+  // Strict opt-out: filter opted-out users out completely BEFORE we hand the
+  // facts block to the LLM. Anything we put here can end up in the public
+  // narration the bot posts to the channel, so we can't even include
+  // "opted out of stats" placeholders — that itself leaks identity.
+  const visiblePerUser = stats.perUser.filter((u) => !u.optedOut);
+  if (visiblePerUser.length) {
     lines.push("Per person:");
-    stats.perUser.slice(0, 8).forEach((u) => {
-      if (u.optedOut) {
-        lines.push(`  <@${u.slackUser}>: opted out of stats`);
-        return;
-      }
+    visiblePerUser.forEach((u) => {
       const bits = [
         `${u.plays} plays`,
         u.topArtist ? `top artist ${u.topArtist}` : null,

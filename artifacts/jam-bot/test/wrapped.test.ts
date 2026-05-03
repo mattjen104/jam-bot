@@ -12,6 +12,7 @@ import {
 } from "../src/memory.js";
 import { db, recordPlayed, setOptOut } from "../src/db.js";
 import { parseBoolEnv } from "../src/config.js";
+import { statsAsFacts } from "../src/slack/bot.js";
 
 function uniq(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2)}`;
@@ -240,6 +241,35 @@ describe("buildCandidates (memory set retrieval)", () => {
     );
     expect(cands.some((c) => c.track_id === tid)).toBe(false);
     setOptOut(u, false);
+  });
+});
+
+describe("statsAsFacts (wrapped LLM facts block)", () => {
+  it("never mentions opted-out users — not even as 'opted out' placeholders", () => {
+    const optedUser = uniq("Uf_opt");
+    const visibleUser = uniq("Uf_vis");
+    recordPlayed({
+      track_id: uniq("facts-opt"),
+      title: "OptT",
+      artist: "OptArt",
+      requested_by_slack_user: optedUser,
+    });
+    recordPlayed({
+      track_id: uniq("facts-vis"),
+      title: "VisT",
+      artist: "VisArt",
+      requested_by_slack_user: visibleUser,
+    });
+    setOptOut(optedUser, true);
+    const stats = buildWrappedStats(7);
+    const facts = statsAsFacts(stats);
+    // Crucial: the opted-out user's Slack id must never appear in the facts
+    // block we send to the LLM (otherwise it can end up in public narration).
+    expect(facts).not.toContain(optedUser);
+    expect(facts.toLowerCase()).not.toContain("opted out");
+    // Sanity: a non-opted-out user is still mentioned.
+    expect(facts).toContain(visibleUser);
+    setOptOut(optedUser, false);
   });
 });
 
