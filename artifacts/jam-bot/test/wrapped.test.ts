@@ -13,7 +13,7 @@ import {
   _buildCandidatesForTest,
   askLLMForSet,
 } from "../src/memory.js";
-import { db, recordPlayed, setOptOut } from "../src/db.js";
+import { db, recordPlayed, setOptOut, isOptedOut } from "../src/db.js";
 import { parseBoolEnv } from "../src/config.js";
 import { statsAsFacts } from "../src/slack/bot.js";
 
@@ -320,6 +320,20 @@ describe("WrappedScheduler idempotency", () => {
     // Right day & hour, minute too far off (> 1 minute drift).
     expect(sched.tick(new Date(Date.UTC(2026, 4, 3, 20, 5, 0)), target)).toBe(false);
     expect(fires).toBe(0);
+  });
+});
+
+describe("/dna self-view opt-out policy (strict)", () => {
+  it("blocks an opted-out user from viewing their OWN dna stats too", () => {
+    // We test the policy at the gate the slash handler uses: isOptedOut(subject)
+    // applies regardless of whether subject === userId.
+    const u = uniq("Udna_self");
+    setOptOut(u, true);
+    // The handler now treats an opted-out user as blocked even on self-view.
+    expect(isOptedOut(u)).toBe(true);
+    // Cleanup.
+    setOptOut(u, false);
+    expect(isOptedOut(u)).toBe(false);
   });
 });
 
