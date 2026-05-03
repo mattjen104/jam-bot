@@ -369,8 +369,15 @@ slackApp.command(
       return;
     }
     const subject = target!;
-    if (isOptedOut(subject) && subject !== userId) {
-      await say(`:lock: <@${subject}> has opted out of personal stats.`);
+    // Strict opt-out: even self-view is suppressed. Otherwise an opted-out
+    // user could still produce LLM narration about themselves and have a
+    // teammate read it over their shoulder, which defeats the point.
+    if (isOptedOut(subject)) {
+      const who =
+        subject === userId
+          ? "You've opted out of personal stats. Use `/jamoptout off` to re-enable."
+          : `<@${subject}> has opted out of personal stats.`;
+      await say(`:lock: ${who}`);
       return;
     }
     const stats = buildDnaStats(subject);
