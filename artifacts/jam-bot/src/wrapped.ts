@@ -149,7 +149,16 @@ export class WrappedScheduler {
   // in the `kv` table so it survives restarts.
   private lastFireKey: string | null = null;
 
-  constructor(private readonly fire: () => Promise<void>) {
+  // Throttle for onError notifications. fire() runs at most once per UTC day,
+  // so this is mostly belt-and-suspenders against a pathological tight loop
+  // (clock jumps, bug in tick, etc.) flooding the channel.
+  private lastErrorNotifyAt = 0;
+  private static readonly ERROR_NOTIFY_COOLDOWN_MS = 60 * 60 * 1000;
+
+  constructor(
+    private readonly fire: () => Promise<void>,
+    private readonly onError?: (err: unknown) => void | Promise<void>,
+  ) {
     this.lastFireKey = kvGet(KV_LAST_FIRE);
   }
 
@@ -200,9 +209,26 @@ export class WrappedScheduler {
     }
     this.lastFireKey = key;
     kvSet(KV_LAST_FIRE, key);
-    this.fire().catch((err) =>
-      logger.error("Weekly Wrapped fire failed", { error: String(err) }),
-    );
+    this.fire().catch((err) => {
+      logger.error("Weekly Wrapped fire failed", { error: String(err) });
+      const cb = this.onError;
+      if (!cb) return;
+      const nowMs = now.getTime();
+      if (
+        nowMs - this.lastErrorNotifyAt <
+        WrappedScheduler.ERROR_NOTIFY_COOLDOWN_MS
+      ) {
+        return;
+      }
+      this.lastErrorNotifyAt = nowMs;
+      Promise.resolve()
+        .then(() => cb(err))
+        .catch((notifyErr) =>
+          logger.error("Weekly Wrapped error notifier itself failed", {
+            error: String(notifyErr),
+          }),
+        );
+    });
     return true;
   }
 }

@@ -466,6 +466,8 @@ slackApp.command(
       }
       let queued = 0;
       let firstPlayed: string | null = null;
+      let aborted = false;
+      let abortErr: unknown = null;
       for (const id of set.trackIds) {
         const uri = `spotify:track:${id}`;
         try {
@@ -478,13 +480,34 @@ slackApp.command(
           recordPendingRequest(id, userId, `memory: ${text}`);
           queued++;
         } catch (err) {
-          logger.warn("Memory queue: failed to enqueue track", {
+          // First failure aborts the loop. If the host device just
+          // disappeared (the common cause), every subsequent
+          // playNow/addToQueue would fail the same way and produce a wall
+          // of warnings. One log + one user-facing message is enough.
+          logger.warn("Memory queue: aborting after enqueue failure", {
             id,
+            queuedSoFar: queued,
             error: String(err),
           });
+          aborted = true;
+          abortErr = err;
+          break;
         }
       }
       if (queued > 0) recordUserRequest(userId);
+      if (aborted) {
+        const status = (abortErr as { statusCode?: number })?.statusCode;
+        const deviceGone = status === 404;
+        const reason = deviceGone
+          ? `Spotify device \`${config.SPOTIFY_DEVICE_NAME}\` is no longer reachable. Restart the Jam from your phone and try again.`
+          : "Spotify rejected the request — try again in a moment.";
+        await say(
+          queued > 0
+            ? `:notes: ${set.summary} — started ${queued} of ${set.trackIds.length} tracks, then stopped: ${reason}`
+            : `:warning: Couldn't queue any tracks — ${reason}`,
+        );
+        return;
+      }
       await say(
         `:notes: ${set.summary} — ${firstPlayed ? "now playing the first" : "queued"} ${queued} of ${set.trackIds.length} tracks.`,
       );
@@ -514,7 +537,23 @@ slackApp.command(
 );
 
 // Scheduler — posts the auto Wrapped recap on the configured cadence.
-const wrappedScheduler = new WrappedScheduler(postWrappedToChannel);
+// The 2nd arg surfaces a short, rate-limited notice in-channel when the
+// scheduled fire fails, so a broken weekly post isn't silently invisible.
+const wrappedScheduler = new WrappedScheduler(
+  postWrappedToChannel,
+  async (err) => {
+    try {
+      await postPlainToChannel(
+        ":warning: Couldn't post this week's Wrapped — check logs.",
+      );
+    } catch (postErr) {
+      logger.error("Failed to post Wrapped failure notice", {
+        originalError: String(err),
+        error: String(postErr),
+      });
+    }
+  },
+);
 
 // ---- Channel message listener -------------------------------------------
 
