@@ -167,23 +167,7 @@ export class WrappedScheduler {
       );
       return;
     }
-    const tick = () => {
-      const now = new Date();
-      const key = `${now.getUTCFullYear()}-${now.getUTCMonth()}-${now.getUTCDate()}`;
-      if (
-        now.getUTCDay() === target.dayOfWeek &&
-        now.getUTCHours() === target.hour &&
-        Math.abs(now.getUTCMinutes() - target.minute) <= 1 &&
-        this.lastFireKey !== key
-      ) {
-        this.lastFireKey = key;
-        kvSet(KV_LAST_FIRE, key);
-        this.fire().catch((err) =>
-          logger.error("Weekly Wrapped fire failed", { error: String(err) }),
-        );
-      }
-    };
-    this.timer = setInterval(tick, 30_000);
+    this.timer = setInterval(() => this.tick(new Date(), target), 30_000);
     logger.info(
       `Weekly Wrapped scheduled at "${config.JAM_WRAPPED_SCHEDULE}" UTC`,
     );
@@ -192,5 +176,33 @@ export class WrappedScheduler {
   stop() {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+  }
+
+  /**
+   * Pure-ish tick used by the interval AND by tests. Returns true iff this
+   * call actually fired the wrapped job. The once-per-UTC-day key is
+   * persisted in `kv` so a process restart inside the firing minute can't
+   * double-post. Exported via the class so tests can drive scheduled
+   * behavior deterministically without sleeping for 30s intervals.
+   */
+  tick(
+    now: Date,
+    target: { dayOfWeek: number; hour: number; minute: number },
+  ): boolean {
+    const key = `${now.getUTCFullYear()}-${now.getUTCMonth()}-${now.getUTCDate()}`;
+    if (
+      now.getUTCDay() !== target.dayOfWeek ||
+      now.getUTCHours() !== target.hour ||
+      Math.abs(now.getUTCMinutes() - target.minute) > 1 ||
+      this.lastFireKey === key
+    ) {
+      return false;
+    }
+    this.lastFireKey = key;
+    kvSet(KV_LAST_FIRE, key);
+    this.fire().catch((err) =>
+      logger.error("Weekly Wrapped fire failed", { error: String(err) }),
+    );
+    return true;
   }
 }

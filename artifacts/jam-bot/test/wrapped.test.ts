@@ -3,7 +3,9 @@ import {
   buildWrappedStats,
   parseSchedule,
   toSqliteUtc,
+  WrappedScheduler,
 } from "../src/wrapped.js";
+import { kvGet, kvSet } from "../src/db.js";
 import { buildDnaStats, buildCompatStats } from "../src/dna.js";
 import {
   isMemoryPlaybackRequest,
@@ -262,6 +264,61 @@ describe("buildCandidates (memory set retrieval)", () => {
     );
     expect(cands.some((c) => c.track_id === tid)).toBe(false);
     setOptOut(u, false);
+  });
+});
+
+describe("WrappedScheduler idempotency", () => {
+  it("fires at most once per UTC day, even across many ticks in the firing minute and a process restart", async () => {
+    // Wipe any persisted last-fire key so this test is self-contained.
+    const KV_KEY = "wrapped:last_fire_key";
+    kvSet(KV_KEY, "");
+    let fires = 0;
+    const fire = async () => {
+      fires += 1;
+    };
+    const target = parseSchedule("Sun 20:00")!;
+    expect(target).toBeTruthy();
+    // Construct a Date inside the firing minute on a Sunday in UTC.
+    // 2026-05-03 is a Sunday — verified against the env timestamp.
+    const insideFiringMinute = new Date(Date.UTC(2026, 4, 3, 20, 0, 30));
+    const sched = new WrappedScheduler(fire);
+    // 5 ticks inside the firing window — should only fire once.
+    expect(sched.tick(insideFiringMinute, target)).toBe(true);
+    expect(sched.tick(insideFiringMinute, target)).toBe(false);
+    expect(sched.tick(new Date(Date.UTC(2026, 4, 3, 20, 0, 45)), target)).toBe(false);
+    expect(sched.tick(new Date(Date.UTC(2026, 4, 3, 20, 1, 0)), target)).toBe(false);
+    // A second scheduler instance (simulates process restart) reads the
+    // persisted key from kv and refuses to re-fire on the same UTC day.
+    const sched2 = new WrappedScheduler(fire);
+    expect(sched2.tick(insideFiringMinute, target)).toBe(false);
+    // Wait one microtask so any in-flight fire() promise settles.
+    await new Promise((r) => setImmediate(r));
+    expect(fires).toBe(1);
+    // The persisted key matches the day we fired on.
+    expect(kvGet(KV_KEY)).toBe("2026-4-3");
+    // A tick on the NEXT week's Sunday is allowed to fire again.
+    const nextWeek = new Date(Date.UTC(2026, 4, 10, 20, 0, 30));
+    expect(sched2.tick(nextWeek, target)).toBe(true);
+    await new Promise((r) => setImmediate(r));
+    expect(fires).toBe(2);
+    // Cleanup.
+    kvSet(KV_KEY, "");
+  });
+
+  it("does NOT fire outside the scheduled day/hour/minute window", () => {
+    kvSet("wrapped:last_fire_key", "");
+    let fires = 0;
+    const sched = new WrappedScheduler(async () => {
+      fires += 1;
+    });
+    const target = parseSchedule("Sun 20:00")!;
+    // Wrong day (Mon 2026-05-04).
+    expect(sched.tick(new Date(Date.UTC(2026, 4, 4, 20, 0, 0)), target)).toBe(false);
+    // Right day, wrong hour.
+    expect(sched.tick(new Date(Date.UTC(2026, 4, 3, 19, 0, 0)), target)).toBe(false);
+    // Right day & hour, minute too far off (> 1 minute drift).
+    expect(sched.tick(new Date(Date.UTC(2026, 4, 3, 20, 5, 0)), target)).toBe(false);
+    expect(fires).toBe(0);
   });
 });
 
