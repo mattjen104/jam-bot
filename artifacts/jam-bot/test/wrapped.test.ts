@@ -11,6 +11,7 @@ import {
   isMemoryPlaybackRequest,
   extractRequesterMentions,
   _buildCandidatesForTest,
+  askLLMForSet,
 } from "../src/memory.js";
 import { db, recordPlayed, setOptOut } from "../src/db.js";
 import { parseBoolEnv } from "../src/config.js";
@@ -319,6 +320,71 @@ describe("WrappedScheduler idempotency", () => {
     // Right day & hour, minute too far off (> 1 minute drift).
     expect(sched.tick(new Date(Date.UTC(2026, 4, 3, 20, 5, 0)), target)).toBe(false);
     expect(fires).toBe(0);
+  });
+});
+
+describe("/memory playback end-to-end (intent -> set -> queueable ids)", () => {
+  it("detects playback intent, retrieves candidates, and returns ONLY ids that exist in real history", async () => {
+    const u = uniq("Ue2e_user");
+    const idA = uniq("e2e-A");
+    const idB = uniq("e2e-B");
+    const idC = uniq("e2e-C");
+    recordPlayed({
+      track_id: idA,
+      title: "Khruangbin Vibes A",
+      artist: "Khruangbin",
+      requested_by_slack_user: u,
+    });
+    recordPlayed({
+      track_id: idB,
+      title: "Khruangbin Vibes B",
+      artist: "Khruangbin",
+      requested_by_slack_user: u,
+    });
+    recordPlayed({
+      track_id: idC,
+      title: "Khruangbin Vibes C",
+      artist: "Khruangbin",
+      requested_by_slack_user: u,
+    });
+
+    const prompt = "play me a set of khruangbin we've already played";
+    // Step 1: intent detection.
+    expect(isMemoryPlaybackRequest(prompt)).toBe(true);
+    // Step 2: candidates exist in the real history.
+    const cands = _buildCandidatesForTest(prompt, 60);
+    expect(cands.some((c) => c.track_id === idA)).toBe(true);
+    expect(cands.some((c) => c.track_id === idB)).toBe(true);
+
+    // Step 3: stub OpenRouter and exercise askLLMForSet, including the
+    // "model hallucinates an id not in candidates" guardrail. The implementation
+    // MUST drop the hallucinated id and only return ones that exist.
+    const realFetch = globalThis.fetch;
+    const FAKE_HALLUCINATED_ID = "spotify:track:DEFINITELY_NOT_IN_HISTORY";
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  summary: "A short Khruangbin set from the Jam history.",
+                  track_ids: [idA, idB, FAKE_HALLUCINATED_ID, idA],
+                }),
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    try {
+      const result = await askLLMForSet(prompt, 5);
+      // Only real, deduped ids survive.
+      expect(result.trackIds).toEqual([idA, idB]);
+      expect(result.summary).toMatch(/khruangbin/i);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
   });
 });
 
