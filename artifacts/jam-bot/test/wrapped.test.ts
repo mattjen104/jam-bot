@@ -185,8 +185,20 @@ describe("extractRequesterMentions", () => {
       extractRequesterMentions("play a set of stuff <@U12345ABC> queued during the outage"),
     ).toEqual(["U12345ABC"]);
   });
-  it("returns multiple mentions and dedups callers' problem (no dup logic)", () => {
+  it("supports the <@U…|displayname> mention format Slack uses in slash commands", () => {
+    expect(
+      extractRequesterMentions("play a set of stuff <@U12345ABC|bob> queued"),
+    ).toEqual(["U12345ABC"]);
+    // Mixed forms in one prompt.
+    expect(
+      extractRequesterMentions("mix from <@U1|alice> and <@W2>"),
+    ).toEqual(["U1", "W2"]);
+  });
+  it("returns multiple mentions and dedups duplicates", () => {
     expect(extractRequesterMentions("mix from <@U1> and <@W2>")).toEqual(["U1", "W2"]);
+    expect(
+      extractRequesterMentions("<@U1> tracks plus more <@U1|alice> tracks"),
+    ).toEqual(["U1"]);
   });
   it("returns [] when no mentions present", () => {
     expect(extractRequesterMentions("play me some chill tunes")).toEqual([]);
@@ -212,7 +224,7 @@ describe("buildCandidates (memory set retrieval)", () => {
     expect(cands.some((c) => c.track_id === tid)).toBe(true);
   });
 
-  it("retrieves candidates by Slack-mention requester scope", () => {
+  it("retrieves candidates by Slack-mention requester scope (both <@U> and <@U|name>)", () => {
     const u = uniq("Um_req");
     const tid = uniq("mem-req");
     recordPlayed({
@@ -221,8 +233,17 @@ describe("buildCandidates (memory set retrieval)", () => {
       artist: "RareArtist",
       requested_by_slack_user: u,
     });
-    const cands = _buildCandidatesForTest(`play me a set of stuff <@${u}> queued`, 60);
-    expect(cands.some((c) => c.track_id === tid)).toBe(true);
+    const candsPlain = _buildCandidatesForTest(
+      `play me a set of stuff <@${u}> queued`,
+      60,
+    );
+    expect(candsPlain.some((c) => c.track_id === tid)).toBe(true);
+    // The <@U|displayname> form Slack uses in slash command text must work too.
+    const candsNamed = _buildCandidatesForTest(
+      `play me a set of stuff <@${u}|bob> queued`,
+      60,
+    );
+    expect(candsNamed.some((c) => c.track_id === tid)).toBe(true);
   });
 
   it("excludes opted-out users from the candidate pool at every layer", () => {
@@ -241,6 +262,41 @@ describe("buildCandidates (memory set retrieval)", () => {
     );
     expect(cands.some((c) => c.track_id === tid)).toBe(false);
     setOptOut(u, false);
+  });
+});
+
+describe("askLLM full-history retrieval", () => {
+  it("surfaces a track from full history for a generic 'who introduced us to X' question, even when X isn't in the recents window", async () => {
+    // Insert a Khruangbin row, then bury it with > LLM_HISTORY_WINDOW (=25)
+    // newer plays so it falls OUT of recentPlayed(25). The full-history
+    // keyword retrieval path must still pull it in for askLLM context.
+    const introducer = uniq("Uk_intro");
+    const tid = uniq("khr-1");
+    recordPlayed({
+      track_id: tid,
+      title: "Maria También",
+      artist: "Khruangbin",
+      requested_by_slack_user: introducer,
+    });
+    for (let i = 0; i < 60; i++) {
+      recordPlayed({
+        track_id: uniq(`bury-${i}`),
+        title: `Bury${i}`,
+        artist: "Filler",
+        requested_by_slack_user: uniq("Uk_filler"),
+      });
+    }
+    // Confirm the row IS reachable via the full-history search (this is the
+    // exact retrieval primitive askLLM's buildContext now calls for every
+    // 3+char content word in the question — see openrouter.ts).
+    const { searchPlayedByTitleOrArtist } = await import("../src/db.js");
+    const hits = searchPlayedByTitleOrArtist("khruangbin", 10);
+    expect(hits.some((h) => h.track_id === tid)).toBe(true);
+    // And confirm it would be MISSED by recents-only retrieval, proving the
+    // bug the new code path fixes.
+    const { recentPlayed } = await import("../src/db.js");
+    const recents = recentPlayed(25);
+    expect(recents.some((r) => r.track_id === tid)).toBe(false);
   });
 });
 

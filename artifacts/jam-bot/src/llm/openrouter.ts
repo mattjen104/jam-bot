@@ -227,6 +227,53 @@ async function buildContext(question: string): Promise<string> {
     lines.push(matches.length ? formatRows(matches) : "(none)");
   }
 
+  // Always-on full-history keyword retrieval. The title-regex and date paths
+  // above only fire on narrow patterns ("have we played X", "last friday"),
+  // but a question like "who introduced us to Khruangbin?" must still
+  // retrieve the Khruangbin row from FULL history — not just the last 25
+  // plays. Pull every 3+ char non-stopword content word and union the
+  // title/artist matches across all of them.
+  const STOP = new Set([
+    "who", "what", "when", "where", "why", "how", "the", "and", "but", "for",
+    "are", "was", "were", "you", "your", "our", "this", "that", "with", "from",
+    "have", "has", "had", "did", "does", "doesn", "didn", "isn", "wasn",
+    "weren", "into", "introduced", "us", "any", "ever", "song", "songs",
+    "track", "tracks", "play", "played", "playing", "many", "times", "much",
+    "about", "before", "after", "tell", "know", "name", "first",
+  ]);
+  const contentWords = Array.from(
+    new Set(
+      question
+        .toLowerCase()
+        .replace(/<@[uw][a-z0-9]+(?:\|[^>]+)?>/gi, " ")
+        .split(/[^a-z0-9']+/)
+        .filter((w) => w.length >= 3 && !STOP.has(w)),
+    ),
+  );
+  const keywordHits: PlayedTrack[] = [];
+  const keywordSeen = new Set<number>();
+  for (const w of contentWords) {
+    for (const r of searchPlayedByTitleOrArtist(w, 10)) {
+      if (
+        !keywordSeen.has(r.id) &&
+        !surfacedIds.has(r.id) &&
+        (!r.requested_by_slack_user || !optedOut.has(r.requested_by_slack_user))
+      ) {
+        keywordSeen.add(r.id);
+        keywordHits.push(r);
+      }
+      if (keywordHits.length >= 25) break;
+    }
+    if (keywordHits.length >= 25) break;
+  }
+  if (keywordHits.length) {
+    keywordHits.forEach((r) => surfacedIds.add(r.id));
+    lines.push(
+      `\nFull-history matches for question keywords (${keywordHits.length} shown):`,
+    );
+    lines.push(formatRows(keywordHits));
+  }
+
   if (recent.length) {
     const filtered = recent.filter((r) => !surfacedIds.has(r.id));
     if (filtered.length) {
