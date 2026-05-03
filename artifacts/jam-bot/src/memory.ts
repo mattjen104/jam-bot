@@ -49,10 +49,18 @@ export function isMemoryPlaybackRequest(question: string): boolean {
  */
 export function extractRequesterMentions(question: string): string[] {
   const out: string[] = [];
-  const re = /<@([UW][A-Z0-9]+)>/g;
+  const seen = new Set<string>();
+  // Slack renders mentions as either <@U123> or <@U123|displayname> — handle
+  // both, and dedup so the same user mentioned twice only adds once to the
+  // candidate pool.
+  const re = /<@([UW][A-Z0-9]+)(?:\|[^>]+)?>/g;
   let m;
   while ((m = re.exec(question)) !== null) {
-    out.push(m[1]!);
+    const id = m[1]!;
+    if (!seen.has(id)) {
+      seen.add(id);
+      out.push(id);
+    }
   }
   return out;
 }
@@ -142,7 +150,7 @@ function buildCandidates(question: string, limit: number): PlayedTrack[] {
   ]);
   const words = question
     .toLowerCase()
-    .replace(/<@[uw][a-z0-9]+>/gi, " ") // strip Slack mentions before tokenizing
+    .replace(/<@[uw][a-z0-9]+(?:\|[^>]+)?>/gi, " ") // strip Slack mentions (incl. |displayname form) before tokenizing
     .split(/[^a-z0-9']+/)
     .filter((w) => w.length >= 3 && !stop.has(w));
   for (const w of words) {
