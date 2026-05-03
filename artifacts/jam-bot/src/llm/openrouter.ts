@@ -1,6 +1,11 @@
 import { config } from "../config.js";
 import { logger } from "../logger.js";
-import { recentPlayed } from "../db.js";
+import {
+  recentPlayed,
+  playedInRange,
+  searchPlayedByTitleOrArtist,
+  type PlayedTrack,
+} from "../db.js";
 import { getCurrentlyPlaying } from "../spotify/client.js";
 
 export interface ChatMessage {
@@ -14,9 +19,95 @@ You have the currently playing track and recent Jam history as context. Use them
 If the user asks for trivia or facts you don't know for sure, say so rather than inventing details.
 You do not control playback in this turn — control commands are routed elsewhere — so don't claim you played, queued, or skipped anything.`;
 
-async function buildContext(): Promise<string> {
+function formatRows(rows: PlayedTrack[]): string {
+  return rows
+    .map((t) => {
+      const requester = t.requested_by_slack_user
+        ? ` — requested by <@${t.requested_by_slack_user}>`
+        : "";
+      return `- ${t.played_at}: "${t.title}" by ${t.artist}${requester}`;
+    })
+    .join("\n");
+}
+
+/**
+ * Best-effort date phrase parser: returns ISO bounds [start, end) when the
+ * question refers to a specific day/window (today, yesterday, "last friday",
+ * "this week", etc.). Returns null if no clear date phrase is found.
+ */
+function parseDateRange(question: string): { start: Date; end: Date } | null {
+  const q = question.toLowerCase();
+  const now = new Date();
+  const startOfDay = (d: Date) => {
+    const x = new Date(d);
+    x.setHours(0, 0, 0, 0);
+    return x;
+  };
+  const addDays = (d: Date, n: number) => {
+    const x = new Date(d);
+    x.setDate(x.getDate() + n);
+    return x;
+  };
+
+  if (/\btoday\b/.test(q)) {
+    const start = startOfDay(now);
+    return { start, end: addDays(start, 1) };
+  }
+  if (/\byesterday\b/.test(q)) {
+    const start = addDays(startOfDay(now), -1);
+    return { start, end: addDays(start, 1) };
+  }
+  if (/\blast night\b/.test(q)) {
+    const start = addDays(startOfDay(now), -1);
+    start.setHours(18, 0, 0, 0);
+    const end = startOfDay(now);
+    end.setHours(6, 0, 0, 0);
+    return { start, end };
+  }
+  if (/\bthis week\b/.test(q)) {
+    const start = startOfDay(now);
+    start.setDate(start.getDate() - start.getDay());
+    return { start, end: addDays(start, 7) };
+  }
+  if (/\blast week\b/.test(q)) {
+    const thisWeekStart = startOfDay(now);
+    thisWeekStart.setDate(thisWeekStart.getDate() - thisWeekStart.getDay());
+    const start = addDays(thisWeekStart, -7);
+    return { start, end: thisWeekStart };
+  }
+  const days = [
+    "sunday",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+  ];
+  const dayMatch = q.match(/\blast (sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/);
+  if (dayMatch) {
+    const target = days.indexOf(dayMatch[1]!);
+    const today = startOfDay(now);
+    let diff = today.getDay() - target;
+    if (diff <= 0) diff += 7;
+    const start = addDays(today, -diff);
+    return { start, end: addDays(start, 1) };
+  }
+  return null;
+}
+
+const TITLE_QUESTION_RE =
+  /(have we (?:ever )?played|did we play|when did we play|how many times .* play|played .* before)\s+(?:the song |the track |"|')?([^"'?]+?)["'?]?$/i;
+
+function extractTitleQuery(question: string): string | null {
+  const m = question.match(TITLE_QUESTION_RE);
+  if (!m || !m[2]) return null;
+  return m[2].trim();
+}
+
+async function buildContext(question: string): Promise<string> {
   const cp = await getCurrentlyPlaying().catch(() => null);
-  const history = recentPlayed(config.LLM_HISTORY_WINDOW);
+  const recent = recentPlayed(config.LLM_HISTORY_WINDOW);
 
   const lines: string[] = [];
   if (cp?.track) {
@@ -26,20 +117,36 @@ async function buildContext(): Promise<string> {
   } else {
     lines.push("Currently playing: nothing.");
   }
-  if (history.length) {
+  if (recent.length) {
     lines.push("\nRecent Jam history (most recent first):");
-    for (const t of history) {
-      const requester = t.requested_by_slack_user
-        ? ` — requested by <@${t.requested_by_slack_user}>`
-        : "";
-      lines.push(`- ${t.played_at}: "${t.title}" by ${t.artist}${requester}`);
-    }
+    lines.push(formatRows(recent));
   }
+
+  const range = parseDateRange(question);
+  if (range) {
+    const startIso = range.start.toISOString().replace("T", " ").slice(0, 19);
+    const endIso = range.end.toISOString().replace("T", " ").slice(0, 19);
+    const rangeRows = playedInRange(startIso, endIso, 200);
+    lines.push(
+      `\nTracks played in the matching time range (${startIso} to ${endIso}, ${rangeRows.length} tracks):`,
+    );
+    lines.push(rangeRows.length ? formatRows(rangeRows) : "(none)");
+  }
+
+  const titleQuery = extractTitleQuery(question);
+  if (titleQuery) {
+    const matches = searchPlayedByTitleOrArtist(titleQuery, 20);
+    lines.push(
+      `\nMatches in full Jam history for "${titleQuery}" (${matches.length}):`,
+    );
+    lines.push(matches.length ? formatRows(matches) : "(none)");
+  }
+
   return lines.join("\n");
 }
 
 export async function askLLM(question: string): Promise<string> {
-  const context = await buildContext();
+  const context = await buildContext(question);
   const messages: ChatMessage[] = [
     { role: "system", content: SYSTEM_PROMPT },
     { role: "system", content: `Jam context:\n${context}` },

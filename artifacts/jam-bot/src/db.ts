@@ -96,6 +96,34 @@ export function countPlaysOf(trackId: string): number {
   return countTrackStmt.get(trackId)?.c ?? 0;
 }
 
+const playedInRangeStmt = db.prepare<[string, string, number], PlayedTrack>(
+  `SELECT * FROM played_tracks
+   WHERE played_at >= ? AND played_at < ?
+   ORDER BY played_at ASC
+   LIMIT ?`,
+);
+export function playedInRange(
+  startIso: string,
+  endIso: string,
+  limit = 100,
+): PlayedTrack[] {
+  return playedInRangeStmt.all(startIso, endIso, limit);
+}
+
+const searchByTitleStmt = db.prepare<[string, string, number], PlayedTrack>(
+  `SELECT * FROM played_tracks
+   WHERE title LIKE ? OR artist LIKE ?
+   ORDER BY played_at DESC
+   LIMIT ?`,
+);
+export function searchPlayedByTitleOrArtist(
+  needle: string,
+  limit = 25,
+): PlayedTrack[] {
+  const like = `%${needle.replace(/[%_]/g, "\\$&")}%`;
+  return searchByTitleStmt.all(like, like, limit);
+}
+
 const upsertPendingStmt = db.prepare(`
   INSERT INTO pending_requests (track_id, requested_by_slack_user, requested_query)
   VALUES (?, ?, ?)

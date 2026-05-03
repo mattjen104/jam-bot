@@ -137,11 +137,10 @@ sudo chmod 600 /opt/jam-bot/.env
 The provided units expect the app at `/opt/jam-bot/app` and the env at `/opt/jam-bot/.env`. Adjust if you used different paths.
 
 ```bash
-# Adjust WorkingDirectory in jam-bot.service if needed
 sudo cp /opt/jam-bot/app/deploy/librespot.service /etc/systemd/system/
 sudo cp /opt/jam-bot/app/deploy/jam-bot.service /etc/systemd/system/
-sudo sed -i 's|WorkingDirectory=/opt/jam-bot|WorkingDirectory=/opt/jam-bot/app|' /etc/systemd/system/jam-bot.service
-sudo sed -i 's|EnvironmentFile=/opt/jam-bot/.env|EnvironmentFile=/opt/jam-bot/.env|' /etc/systemd/system/jam-bot.service
+# (The provided units assume the app at /opt/jam-bot/app and env at
+#  /opt/jam-bot/.env. Edit them if you used different paths.)
 
 sudo systemctl daemon-reload
 sudo systemctl enable --now librespot.service

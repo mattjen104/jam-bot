@@ -247,6 +247,10 @@ slackApp.message(async ({ message, say }) => {
             asPlay: true,
             respond: (t) => respond(t),
           });
+        } else {
+          await respond(
+            ":thinking_face: I caught that you want to play something but couldn't tell what. Try `play <song or artist>`.",
+          );
         }
         return;
       case "queue":
@@ -257,6 +261,10 @@ slackApp.message(async ({ message, say }) => {
             asPlay: false,
             respond: (t) => respond(t),
           });
+        } else {
+          await respond(
+            ":thinking_face: I caught that you want to queue something but couldn't tell what. Try `queue <song or artist>`.",
+          );
         }
         return;
       case "skip":
