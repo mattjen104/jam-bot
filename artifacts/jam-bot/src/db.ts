@@ -311,10 +311,13 @@ export interface TopTrackRow {
   plays: number;
 }
 
-// All range queries use `played_at <= end` (inclusive) so an "as of now"
-// snapshot includes plays that happened in the current second. The weekly
-// scheduler fires once per day, so the boundary-double-count window is
-// negligible (one second per week).
+// All range queries use `played_at <= end` (inclusive). Wrapped/dna
+// callers pass `end = now` for "as of this moment" snapshots — with a
+// strict `<` they'd drop rows whose played_at equals the snapshot
+// instant (a real situation in tests and on busy channels). The
+// scheduler fires once per day/week, so the worst-case
+// boundary-double-count window is one second per period; we accept
+// that in exchange for "as of now" actually meaning "as of now".
 const topTracksStmt = db.prepare<[string, string, number], TopTrackRow>(`
   SELECT track_id,
          MAX(title) AS title,
