@@ -88,7 +88,7 @@ describe("buildWrappedStats", () => {
 });
 
 describe("buildDnaStats", () => {
-  it("returns top artists and discovery rate for a user", () => {
+  it("returns top artists, signature track, and discovery rate for a user", () => {
     const u = uniq("Ud");
     const id1 = uniq("dna-1");
     recordPlayed({ track_id: id1, title: "T1", artist: "ArtistX", requested_by_slack_user: u });
@@ -97,6 +97,8 @@ describe("buildDnaStats", () => {
     const dna = buildDnaStats(u);
     expect(dna.totalPlays).toBe(3);
     expect(dna.topArtists[0]?.artist).toBe("ArtistX");
+    expect(dna.signatureTrack?.track_id).toBe(id1);
+    expect(dna.signatureTrack?.plays).toBe(2);
     expect(dna.discoveryRate).toBeGreaterThan(0);
   });
   it("handles a user with no plays", () => {
@@ -104,6 +106,7 @@ describe("buildDnaStats", () => {
     expect(dna.totalPlays).toBe(0);
     expect(dna.discoveryRate).toBe(0);
     expect(dna.topArtists).toEqual([]);
+    expect(dna.signatureTrack).toBeNull();
   });
 });
 
@@ -119,6 +122,13 @@ describe("buildCompatStats", () => {
     expect(stats.sharedArtists).toContain("Shared");
     expect(stats.score).toBeGreaterThan(0);
     expect(stats.score).toBeLessThanOrEqual(100);
+    // Component scores all lie in [0, 1].
+    expect(stats.artistJaccard).toBeGreaterThan(0);
+    expect(stats.artistJaccard).toBeLessThanOrEqual(1);
+    expect(stats.artistCosine).toBeGreaterThanOrEqual(0);
+    expect(stats.artistCosine).toBeLessThanOrEqual(1);
+    expect(stats.timeOfDayOverlap).toBeGreaterThanOrEqual(0);
+    expect(stats.timeOfDayOverlap).toBeLessThanOrEqual(1);
   });
   it("recommends a track from B that A hasn't played", () => {
     const a = uniq("Uc2_a");

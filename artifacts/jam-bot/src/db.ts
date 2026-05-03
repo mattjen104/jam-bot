@@ -17,6 +17,7 @@ db.exec(`
     title TEXT NOT NULL,
     artist TEXT NOT NULL,
     album TEXT,
+    album_image_url TEXT,
     spotify_url TEXT,
     duration_ms INTEGER,
     requested_by_slack_user TEXT,
@@ -71,6 +72,15 @@ const pendingCols = db
   .prepare<[], { name: string }>(`PRAGMA table_info(pending_requests)`)
   .all()
   .map((r) => r.name);
+// Migrate older deployments that don't yet have played_tracks.album_image_url.
+const playedCols = db
+  .prepare<[], { name: string }>(`PRAGMA table_info(played_tracks)`)
+  .all()
+  .map((r) => r.name);
+if (!playedCols.includes("album_image_url")) {
+  db.exec(`ALTER TABLE played_tracks ADD COLUMN album_image_url TEXT`);
+}
+
 if (!pendingCols.includes("id")) {
   db.exec(`
     ALTER TABLE pending_requests RENAME TO pending_requests_old;
@@ -94,6 +104,7 @@ export interface PlayedTrack {
   title: string;
   artist: string;
   album: string | null;
+  album_image_url: string | null;
   spotify_url: string | null;
   duration_ms: number | null;
   requested_by_slack_user: string | null;
@@ -103,8 +114,8 @@ export interface PlayedTrack {
 
 const insertPlayedStmt = db.prepare(`
   INSERT INTO played_tracks
-    (track_id, title, artist, album, spotify_url, duration_ms, requested_by_slack_user, requested_query)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    (track_id, title, artist, album, album_image_url, spotify_url, duration_ms, requested_by_slack_user, requested_query)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
 export function recordPlayed(track: {
@@ -112,6 +123,7 @@ export function recordPlayed(track: {
   title: string;
   artist: string;
   album?: string | null;
+  album_image_url?: string | null;
   spotify_url?: string | null;
   duration_ms?: number | null;
   requested_by_slack_user?: string | null;
@@ -122,6 +134,7 @@ export function recordPlayed(track: {
     track.title,
     track.artist,
     track.album ?? null,
+    track.album_image_url ?? null,
     track.spotify_url ?? null,
     track.duration_ms ?? null,
     track.requested_by_slack_user ?? null,
@@ -260,6 +273,7 @@ export interface TopTrackRow {
   artist: string;
   spotify_url: string | null;
   album: string | null;
+  album_image_url: string | null;
   plays: number;
 }
 
@@ -273,6 +287,7 @@ const topTracksStmt = db.prepare<[string, string, number], TopTrackRow>(`
          MAX(artist) AS artist,
          MAX(spotify_url) AS spotify_url,
          MAX(album) AS album,
+         MAX(album_image_url) AS album_image_url,
          COUNT(*) AS plays
   FROM played_tracks
   WHERE played_at >= ? AND played_at <= ?
@@ -338,6 +353,7 @@ const userTopTracksStmt = db.prepare<
          MAX(artist) AS artist,
          MAX(spotify_url) AS spotify_url,
          MAX(album) AS album,
+         MAX(album_image_url) AS album_image_url,
          COUNT(*) AS plays
   FROM played_tracks
   WHERE requested_by_slack_user = ?
@@ -379,7 +395,7 @@ export function userTopArtistsInRange(
 // Tracks the user introduced to the channel (their request was the very first
 // time that track_id appeared in history) within the window.
 const userDiscoveriesStmt = db.prepare<[string, string, string], TopTrackRow>(`
-  SELECT p.track_id, p.title, p.artist, p.spotify_url, p.album, 1 AS plays
+  SELECT p.track_id, p.title, p.artist, p.spotify_url, p.album, p.album_image_url, 1 AS plays
   FROM played_tracks p
   WHERE p.requested_by_slack_user = ?
     AND p.played_at >= ? AND p.played_at <= ?
@@ -440,6 +456,40 @@ export function userTrackSet(slackUser: string) {
   return userTracksAllStmt.all(slackUser);
 }
 
+// Per-user UTC hour-of-day histogram across ALL their plays. Used by /compat
+// for the time-of-day overlap component (do these two listen at the same
+// hours of day? Bedroom-DJs vs morning-commuters score differently).
+const userHourBucketsStmt = db.prepare<[string], HourBucket>(`
+  SELECT CAST(strftime('%H', played_at) AS INTEGER) AS hour,
+         COUNT(*) AS plays
+  FROM played_tracks
+  WHERE requested_by_slack_user = ?
+  GROUP BY hour
+`);
+export function userHourBuckets(slackUser: string): HourBucket[] {
+  return userHourBucketsStmt.all(slackUser);
+}
+
+// Single top track for a user (across all time) — used to render the
+// signature-track block in /dna.
+const userSignatureTrackStmt = db.prepare<[string], TopTrackRow>(`
+  SELECT track_id,
+         MAX(title) AS title,
+         MAX(artist) AS artist,
+         MAX(spotify_url) AS spotify_url,
+         MAX(album) AS album,
+         MAX(album_image_url) AS album_image_url,
+         COUNT(*) AS plays
+  FROM played_tracks
+  WHERE requested_by_slack_user = ?
+  GROUP BY track_id
+  ORDER BY plays DESC, MAX(played_at) DESC
+  LIMIT 1
+`);
+export function userSignatureTrack(slackUser: string): TopTrackRow | null {
+  return userSignatureTrackStmt.get(slackUser) ?? null;
+}
+
 const totalUserPlaysStmt = db.prepare<[string], { c: number }>(
   `SELECT COUNT(*) AS c FROM played_tracks WHERE requested_by_slack_user = ?`,
 );
@@ -469,6 +519,7 @@ const recommendStmt = db.prepare<[string, string, number], TopTrackRow>(`
          MAX(artist) AS artist,
          MAX(spotify_url) AS spotify_url,
          MAX(album) AS album,
+         MAX(album_image_url) AS album_image_url,
          COUNT(*) AS plays
   FROM played_tracks
   WHERE requested_by_slack_user = ?
