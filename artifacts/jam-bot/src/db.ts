@@ -34,6 +34,14 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
   CREATE INDEX IF NOT EXISTS idx_pending_requests_track_id ON pending_requests (track_id);
+
+  CREATE TABLE IF NOT EXISTS user_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    slack_user TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_user_requests_user_time
+    ON user_requests (slack_user, created_at);
 `);
 
 // Migrate older deployments where pending_requests had track_id PRIMARY KEY
@@ -188,4 +196,26 @@ const expirePendingStmt = db.prepare(
 );
 export function expireOldPending() {
   expirePendingStmt.run();
+}
+
+const insertUserRequestStmt = db.prepare(
+  `INSERT INTO user_requests (slack_user) VALUES (?)`,
+);
+export function recordUserRequest(slackUserId: string) {
+  insertUserRequestStmt.run(slackUserId);
+}
+
+const countUserRequestsStmt = db.prepare<[string], { c: number }>(
+  `SELECT COUNT(*) AS c FROM user_requests
+   WHERE slack_user = ? AND created_at >= datetime('now', '-1 hour')`,
+);
+export function countUserRequestsLastHour(slackUserId: string): number {
+  return countUserRequestsStmt.get(slackUserId)?.c ?? 0;
+}
+
+const expireUserRequestsStmt = db.prepare(
+  `DELETE FROM user_requests WHERE created_at < datetime('now', '-1 day')`,
+);
+export function expireOldUserRequests() {
+  expireUserRequestsStmt.run();
 }
