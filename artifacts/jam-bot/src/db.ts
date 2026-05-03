@@ -159,6 +159,15 @@ export function searchPlayedByTitleOrArtist(
   return searchByTitleStmt.all(like, like, limit);
 }
 
+const countByTitleStmt = db.prepare<[string, string], { c: number }>(
+  `SELECT COUNT(*) AS c FROM played_tracks
+   WHERE title LIKE ? ESCAPE '\\' OR artist LIKE ? ESCAPE '\\'`,
+);
+export function countPlaysMatching(needle: string): number {
+  const like = `%${needle.replace(/[\\%_]/g, "\\$&")}%`;
+  return countByTitleStmt.get(like, like)?.c ?? 0;
+}
+
 const insertPendingStmt = db.prepare(`
   INSERT INTO pending_requests (track_id, requested_by_slack_user, requested_query)
   VALUES (?, ?, ?)
