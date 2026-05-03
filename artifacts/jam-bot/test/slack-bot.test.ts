@@ -28,6 +28,9 @@ vi.mock("@slack/bolt", () => {
     message(handler: MsgHandler) {
       captured.message = handler;
     }
+    action(_id: string, _handler: unknown) {
+      // no-op for tests
+    }
     start = vi.fn().mockResolvedValue(undefined);
   }
   return { App: FakeApp, LogLevel: { WARN: "warn", DEBUG: "debug", INFO: "info", ERROR: "error" } };
@@ -47,11 +50,54 @@ vi.mock("../src/db.js", () => ({
   recordPendingRequest: vi.fn(),
   recentPlayed: vi.fn(() => []),
   expireOldPending: vi.fn(),
+  recordUserRequest: vi.fn(),
+  countUserRequestsLastHour: vi.fn(() => 0),
+  expireOldUserRequests: vi.fn(),
+  setOptOut: vi.fn(),
+  isOptedOut: vi.fn(() => false),
 }));
 
 vi.mock("../src/llm/openrouter.js", () => ({
   askLLM: vi.fn(),
   classifyIntent: vi.fn(),
+  narrate: vi.fn().mockResolvedValue("narration"),
+}));
+
+vi.mock("../src/wrapped.js", () => ({
+  buildWrappedStats: vi.fn(() => ({
+    start: new Date(),
+    end: new Date(),
+    startStr: "",
+    endStr: "",
+    totalPlays: 0,
+    topTracks: [],
+    topArtists: [],
+    perUser: [],
+    lateNightPlays: 0,
+    daytimePlays: 0,
+  })),
+  WrappedScheduler: class {
+    start() {}
+    stop() {}
+  },
+}));
+
+vi.mock("../src/dna.js", () => ({
+  buildDnaStats: vi.fn(() => ({
+    slackUser: "U",
+    totalPlays: 0,
+    topArtists: [],
+    signatureTrackId: null,
+    signatureTrackPlays: 0,
+    discoveryCount: 0,
+    discoveryRate: 0,
+  })),
+  buildCompatStats: vi.fn(),
+}));
+
+vi.mock("../src/memory.js", () => ({
+  askLLMForSet: vi.fn(),
+  isMemoryPlaybackRequest: vi.fn(() => false),
 }));
 
 vi.mock("../src/now-playing.js", async () => {
@@ -63,6 +109,10 @@ vi.mock("../src/slack/format.js", () => ({
   historyBlocks: () => [],
   noDeviceBlocks: () => [],
   nowPlayingBlocks: () => [],
+  wrappedBlocks: () => [],
+  dnaBlocks: () => [],
+  compatBlocks: () => [],
+  VOTE_SKIP_ACTION_ID: "jam_vote_skip",
 }));
 
 beforeAll(async () => {
@@ -190,6 +240,19 @@ describe("intent classifier routing in channel messages", () => {
       id: "DEV-77",
       name: "Jam Host",
       isActive: true,
+    });
+    (spotify.getCurrentlyPlaying as ReturnType<typeof vi.fn>).mockResolvedValue({
+      isPlaying: true,
+      track: {
+        id: "trk-skip",
+        title: "Skip Me",
+        artist: "Tester",
+        album: "Album",
+        durationMs: 1000,
+        progressMs: 0,
+        spotifyUrl: "https://open.spotify.com/track/trk-skip",
+        artistIds: [],
+      },
     });
     (spotify.skipToNext as ReturnType<typeof vi.fn>).mockClear().mockResolvedValue(undefined);
     (spotify.playNow as ReturnType<typeof vi.fn>).mockClear();

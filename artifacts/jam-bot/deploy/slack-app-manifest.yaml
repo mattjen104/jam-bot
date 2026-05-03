@@ -27,6 +27,26 @@ features:
       description: Show recent Jam history
       usage_hint: ""
       should_escape: false
+    - command: /wrapped
+      description: Show this week's Jam Wrapped recap
+      usage_hint: ""
+      should_escape: false
+    - command: /dna
+      description: Show a user's taste DNA card
+      usage_hint: "[@user]"
+      should_escape: false
+    - command: /compat
+      description: Compare two users' musical compatibility
+      usage_hint: "@userA @userB"
+      should_escape: false
+    - command: /memory
+      description: Ask the Jam history a question, or play a curated set
+      usage_hint: "<question or play-me-a-set request>"
+      should_escape: false
+    - command: /jamoptout
+      description: Opt out of (or back into) personal Wrapped stats
+      usage_hint: "[off]"
+      should_escape: false
 oauth_config:
   scopes:
     bot:

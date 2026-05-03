@@ -1,6 +1,6 @@
 import { logger } from "./logger.js";
 import { ensurePlaybackOnHost } from "./spotify/client.js";
-import { startSlackBot } from "./slack/bot.js";
+import { startSlackBot, stopWrappedScheduler } from "./slack/bot.js";
 import { nowPlayingWatcher } from "./now-playing.js";
 import { config } from "./config.js";
 
@@ -31,6 +31,7 @@ async function main() {
 function shutdown(signal: string) {
   logger.info(`Received ${signal}, shutting down`);
   nowPlayingWatcher.stop();
+  stopWrappedScheduler();
   process.exit(0);
 }
 process.on("SIGINT", () => shutdown("SIGINT"));

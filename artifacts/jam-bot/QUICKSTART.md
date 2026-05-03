@@ -100,6 +100,11 @@ All commands work in the configured Slack channel. You can also just *talk* to t
 | `/skip` | Cast a vote to skip. **3 votes** within 5 minutes triggers an actual skip. |
 | `/nowplaying` | Show what's playing right now, with album art. |
 | `/history` | Show the last few tracks the Jam played. |
+| `/wrapped` | Post this week's Jam recap (top tracks, top artists, per-person stats, AI narration). Also auto-posts every Sunday 20:00 UTC. |
+| `/dna` / `/dna @user` | Show your (or someone's) musical "taste DNA" card — top artists, signature track, discovery rate. |
+| `/compat @userA @userB` | Score two people's musical compatibility 0-100 with shared artists + a track recommendation each way. |
+| `/memory <question>` | Free-form recall over Jam history, e.g. "who introduced us to Khruangbin?" — or **"play me a 5-track set from last weekend"** to actually queue tracks. |
+| `/jamoptout` / `/jamoptout off` | Hide your personal stats from `/wrapped`, `/dna`, `/compat` (your plays still count toward channel totals). Run `off` to undo. |
 
 ### Natural language (just type in the channel)
 

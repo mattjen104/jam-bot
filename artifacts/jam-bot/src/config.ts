@@ -29,6 +29,19 @@ const schema = z.object({
   // Per-user request budget for /play. Over this many in the last hour and
   // the bot replies ephemerally instead of starting playback.
   MAX_PLAYS_PER_USER_PER_HOUR: z.coerce.number().int().positive().default(5),
+
+  // ---- Jam Memory (Wrapped / DNA / Compat / Memory) -----------------------
+  // Whether the auto-weekly Wrapped post is enabled. /wrapped on demand
+  // works regardless of this flag.
+  JAM_ENABLE_WEEKLY_WRAPPED: z.coerce.boolean().default(true),
+  // When the auto-weekly post fires. Format: "<Day> HH:MM" in UTC, where
+  // Day is one of Sun/Mon/Tue/Wed/Thu/Fri/Sat. The scheduler checks every
+  // 30s and only fires once per day.
+  JAM_WRAPPED_SCHEDULE: z.string().min(1).default("Sun 20:00"),
+  // How many days back /wrapped and the auto-Wrapped post look.
+  JAM_WRAPPED_LOOKBACK_DAYS: z.coerce.number().int().positive().default(7),
+  // Cap on tracks /memory will queue from a single "play me a set" request.
+  JAM_MEMORY_MAX_QUEUE: z.coerce.number().int().positive().default(10),
 });
 
 function loadConfig() {
