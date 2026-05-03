@@ -226,6 +226,78 @@ async function buildContext(question: string): Promise<string> {
   return lines.join("\n");
 }
 
+async function callOpenRouter(
+  messages: ChatMessage[],
+  opts: {
+    temperature?: number;
+    maxTokens?: number;
+    label: string;
+  },
+): Promise<string> {
+  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.OPENROUTER_API_KEY}`,
+      "HTTP-Referer": "https://github.com/jam-bot",
+      "X-Title": "Jam Bot",
+    },
+    body: JSON.stringify({
+      model: config.OPENROUTER_MODEL,
+      messages,
+      temperature: opts.temperature ?? 0.7,
+      max_tokens: opts.maxTokens ?? 400,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    logger.error(`OpenRouter (${opts.label}) failed`, {
+      status: res.status,
+      body: text,
+    });
+    throw new Error(`OpenRouter ${res.status}`);
+  }
+  const json = (await res.json()) as {
+    choices?: { message?: { content?: string } }[];
+  };
+  const content = json.choices?.[0]?.message?.content?.trim();
+  if (!content) throw new Error("Empty LLM response");
+  return content;
+}
+
+const NARRATE_WRAPPED_SYSTEM = `You're the friendly DJ-host of a small private Spotify Jam.
+Write a 2-3 sentence Slack-friendly recap of the past week, warm and a little playful, no headings or bullets.
+You'll be given the raw stats — pick the most interesting one or two threads (a clear top track, a late-night vs daytime split, a standout discoverer) and weave them into prose.
+Don't restate every number; reference people by Slack mention syntax <@U...> when given.
+Don't claim to play, queue, or skip anything.`;
+
+const NARRATE_DNA_SYSTEM = `You're the friendly DJ-host of a small private Spotify Jam.
+Write 2 short Slack sentences describing this person's musical taste based on their request history.
+Be specific (name an artist or two if given), warm, no bullets, no headings, no superlatives like "absolute legend".`;
+
+const NARRATE_COMPAT_SYSTEM = `You're the friendly DJ-host of a small private Spotify Jam.
+Write 2 short Slack sentences describing how compatible two friends' tastes are based on the stats given.
+Be specific (mention a shared artist or a recommendation if available), warm, conversational, no bullets, no headings.`;
+
+export async function narrate(
+  kind: "wrapped" | "dna" | "compat",
+  factsBlock: string,
+): Promise<string> {
+  const sys =
+    kind === "wrapped"
+      ? NARRATE_WRAPPED_SYSTEM
+      : kind === "dna"
+        ? NARRATE_DNA_SYSTEM
+        : NARRATE_COMPAT_SYSTEM;
+  return callOpenRouter(
+    [
+      { role: "system", content: sys },
+      { role: "user", content: factsBlock },
+    ],
+    { temperature: 0.7, maxTokens: 200, label: `narrate-${kind}` },
+  );
+}
+
 export async function askLLM(question: string): Promise<string> {
   const context = await buildContext(question);
   const messages: ChatMessage[] = [

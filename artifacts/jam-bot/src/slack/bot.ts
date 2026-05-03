@@ -18,15 +18,23 @@ import {
   recordUserRequest,
   countUserRequestsLastHour,
   expireOldUserRequests,
+  setOptOut,
+  isOptedOut,
 } from "../db.js";
-import { askLLM, classifyIntent } from "../llm/openrouter.js";
+import { askLLM, classifyIntent, narrate } from "../llm/openrouter.js";
 import { nowPlayingWatcher } from "../now-playing.js";
 import {
   historyBlocks,
   noDeviceBlocks,
   nowPlayingBlocks,
+  wrappedBlocks,
+  dnaBlocks,
+  compatBlocks,
   VOTE_SKIP_ACTION_ID,
 } from "./format.js";
+import { buildWrappedStats, WrappedScheduler, type WrappedStats } from "../wrapped.js";
+import { buildDnaStats, buildCompatStats } from "../dna.js";
+import { askLLMForSet, isMemoryPlaybackRequest } from "../memory.js";
 import type { CurrentlyPlaying } from "../spotify/client.js";
 
 export const slackApp = new App({
@@ -258,6 +266,247 @@ slackApp.command(
     await handleHistory(say);
   }),
 );
+
+// ---- Jam Memory slash commands ------------------------------------------
+
+function statsAsFacts(stats: WrappedStats): string {
+  const lines: string[] = [];
+  lines.push(`Window: ${stats.startStr} -> ${stats.endStr} UTC`);
+  lines.push(`Total plays: ${stats.totalPlays}`);
+  lines.push(
+    `Late-night (22-06 UTC) plays: ${stats.lateNightPlays}, daytime: ${stats.daytimePlays}`,
+  );
+  if (stats.topTracks.length) {
+    lines.push("Top tracks:");
+    stats.topTracks.forEach((t, i) =>
+      lines.push(`  ${i + 1}. "${t.title}" by ${t.artist} (${t.plays} plays)`),
+    );
+  }
+  if (stats.topArtists.length) {
+    lines.push(
+      `Top artists: ${stats.topArtists.map((a) => `${a.artist} (${a.plays})`).join(", ")}`,
+    );
+  }
+  if (stats.perUser.length) {
+    lines.push("Per person:");
+    stats.perUser.slice(0, 8).forEach((u) => {
+      if (u.optedOut) {
+        lines.push(`  <@${u.slackUser}>: opted out of stats`);
+        return;
+      }
+      const bits = [
+        `${u.plays} plays`,
+        u.topArtist ? `top artist ${u.topArtist}` : null,
+        u.topTrack ? `top track "${u.topTrack}"` : null,
+        u.discoveries > 0 ? `${u.discoveries} discoveries` : null,
+      ].filter(Boolean);
+      lines.push(`  <@${u.slackUser}>: ${bits.join(", ")}`);
+    });
+  }
+  return lines.join("\n");
+}
+
+async function postWrappedToChannel() {
+  const stats = buildWrappedStats();
+  if (stats.totalPlays === 0) {
+    await postPlainToChannel(
+      `:notes: Jam Wrapped: nothing played in the last ${config.JAM_WRAPPED_LOOKBACK_DAYS} days. Queue something up!`,
+    );
+    return;
+  }
+  let narration: string;
+  try {
+    narration = await narrate("wrapped", statsAsFacts(stats));
+  } catch (err) {
+    logger.warn("Wrapped narration failed; falling back to plain", {
+      error: String(err),
+    });
+    narration = "Here's how the Jam went this week.";
+  }
+  await postToChannel(wrappedBlocks(stats, narration), "Jam Wrapped");
+}
+
+slackApp.command(
+  "/wrapped",
+  slashHandler(async ({ say }) => {
+    const stats = buildWrappedStats();
+    if (stats.totalPlays === 0) {
+      await say(
+        `:notes: Nothing has played in the last ${config.JAM_WRAPPED_LOOKBACK_DAYS} days yet — queue something up!`,
+      );
+      return;
+    }
+    let narration: string;
+    try {
+      narration = await narrate("wrapped", statsAsFacts(stats));
+    } catch {
+      narration = "Here's how the Jam went this week.";
+    }
+    await say("Jam Wrapped", wrappedBlocks(stats, narration));
+  }),
+);
+
+// Slack passes user mentions as "<@U123|name>" in command.text.
+function parseUserMention(text: string): string | null {
+  const m = text.trim().match(/^<@([A-Z0-9]+)(?:\|[^>]*)?>$/);
+  return m ? m[1]! : null;
+}
+function parseTwoUserMentions(text: string): [string, string] | null {
+  const parts = text.trim().split(/\s+/);
+  if (parts.length < 2) return null;
+  const a = parseUserMention(parts[0]!);
+  const b = parseUserMention(parts[1]!);
+  return a && b ? [a, b] : null;
+}
+
+slackApp.command(
+  "/dna",
+  slashHandler(async ({ text, userId, say }) => {
+    const target = text ? parseUserMention(text) : userId;
+    if (text && !target) {
+      await say("Usage: `/dna` (yourself) or `/dna @user`");
+      return;
+    }
+    const subject = target!;
+    if (isOptedOut(subject) && subject !== userId) {
+      await say(`:lock: <@${subject}> has opted out of personal stats.`);
+      return;
+    }
+    const stats = buildDnaStats(subject);
+    let narration: string;
+    try {
+      const facts =
+        `User: <@${subject}>\nTotal plays: ${stats.totalPlays}\n` +
+        `Discovery rate: ${Math.round(stats.discoveryRate * 100)}% (${stats.discoveryCount} introduced)\n` +
+        `Top artists: ${stats.topArtists.map((a) => `${a.artist} (${a.plays})`).join(", ") || "none"}`;
+      narration = await narrate("dna", facts);
+    } catch {
+      narration = "Solid taste, hard to summarize in one line.";
+    }
+    await say("Taste DNA", dnaBlocks(stats, narration));
+  }),
+);
+
+slackApp.command(
+  "/compat",
+  slashHandler(async ({ text, say }) => {
+    const pair = parseTwoUserMentions(text);
+    if (!pair) {
+      await say("Usage: `/compat @userA @userB`");
+      return;
+    }
+    const [a, b] = pair;
+    if (a === b) {
+      await say(":upside_down_face: A user is 100% compatible with themselves.");
+      return;
+    }
+    if (isOptedOut(a) || isOptedOut(b)) {
+      await say(":lock: One of those users has opted out of personal stats.");
+      return;
+    }
+    const stats = buildCompatStats(a, b);
+    let narration: string;
+    try {
+      const facts =
+        `Users: <@${a}> vs <@${b}>\nScore: ${stats.score}/100\n` +
+        `Shared artists: ${stats.sharedArtists.join(", ") || "none"}\n` +
+        `Shared tracks: ${stats.sharedTracks}\n` +
+        `Total plays — A: ${stats.totalA}, B: ${stats.totalB}\n` +
+        (stats.recommendForA[0]
+          ? `Reco for <@${a}>: ${stats.recommendForA[0].title} by ${stats.recommendForA[0].artist}\n`
+          : "") +
+        (stats.recommendForB[0]
+          ? `Reco for <@${b}>: ${stats.recommendForB[0].title} by ${stats.recommendForB[0].artist}\n`
+          : "");
+      narration = await narrate("compat", facts);
+    } catch {
+      narration = "Two distinct musical worlds — there's room for crossover.";
+    }
+    await say("Taste compatibility", compatBlocks(stats, narration));
+  }),
+);
+
+slackApp.command(
+  "/memory",
+  slashHandler(async ({ text, userId, say }) => {
+    if (!text) {
+      await say(
+        "Usage: `/memory <question>` — e.g. `/memory who introduced us to Khruangbin?` or `/memory play me a 5-track set from last weekend`",
+      );
+      return;
+    }
+    if (isMemoryPlaybackRequest(text)) {
+      // Per-user rate limit applies here too — this can queue many tracks.
+      const used = countUserRequestsLastHour(userId);
+      if (used >= config.MAX_PLAYS_PER_USER_PER_HOUR) {
+        await say(
+          `:hourglass_flowing_sand: You've hit your hourly play budget (${used}/${config.MAX_PLAYS_PER_USER_PER_HOUR}). Try again later.`,
+        );
+        return;
+      }
+      const host = await ensurePlaybackOnHost();
+      if (!host) {
+        await say(
+          `:warning: No active Spotify device named \`${config.SPOTIFY_DEVICE_NAME}\`. Restart the Jam from your phone first.`,
+        );
+        return;
+      }
+      const set = await askLLMForSet(text);
+      if (!set.trackIds.length) {
+        await say(`:thinking_face: ${set.summary}`);
+        return;
+      }
+      let queued = 0;
+      let firstPlayed: string | null = null;
+      for (const id of set.trackIds) {
+        const uri = `spotify:track:${id}`;
+        try {
+          if (queued === 0) {
+            await playNow(uri, host.id);
+            firstPlayed = uri;
+          } else {
+            await addToQueue(uri, host.id);
+          }
+          recordPendingRequest(id, userId, `memory: ${text}`);
+          queued++;
+        } catch (err) {
+          logger.warn("Memory queue: failed to enqueue track", {
+            id,
+            error: String(err),
+          });
+        }
+      }
+      if (queued > 0) recordUserRequest(userId);
+      await say(
+        `:notes: ${set.summary} — ${firstPlayed ? "now playing the first" : "queued"} ${queued} of ${set.trackIds.length} tracks.`,
+      );
+      return;
+    }
+    const answer = await askLLM(text);
+    await say(answer);
+  }),
+);
+
+slackApp.command(
+  "/jamoptout",
+  slashHandler(async ({ text, userId, say, sayEphemeral }) => {
+    const arg = text.trim().toLowerCase();
+    if (arg === "off" || arg === "false" || arg === "0") {
+      setOptOut(userId, false);
+      await sayEphemeral(
+        ":unlock: You're back in personal Wrapped/DNA/Compat stats.",
+      );
+      return;
+    }
+    setOptOut(userId, true);
+    await sayEphemeral(
+      ":lock: You're now opted out of personal Wrapped/DNA/Compat stats. Run `/jamoptout off` to undo.",
+    );
+  }),
+);
+
+// Scheduler — posts the auto Wrapped recap on the configured cadence.
+const wrappedScheduler = new WrappedScheduler(postWrappedToChannel);
 
 // ---- Channel message listener -------------------------------------------
 
@@ -621,5 +870,10 @@ export async function startSlackBot() {
       error: String(err),
     });
   }
+  wrappedScheduler.start();
   logger.info(`Slack bot connected (channel ${config.SLACK_CHANNEL_ID})`);
+}
+
+export function stopWrappedScheduler() {
+  wrappedScheduler.stop();
 }

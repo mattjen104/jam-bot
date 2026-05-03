@@ -16,3 +16,8 @@ process.env.OPENROUTER_API_KEY ??= "test-openrouter-key";
 process.env.DATABASE_PATH = path.join(tmp, "jam-test.db");
 process.env.NOW_PLAYING_POLL_MS ??= "1000";
 process.env.LOG_LEVEL ??= "error";
+// Make a single-vote skip enough so intent-routing tests can exercise the
+// "skipToNext was called" path without simulating multiple voters.
+process.env.SKIP_VOTE_THRESHOLD ??= "1";
+// Disable the auto-Wrapped scheduler in tests so it never spins up timers.
+process.env.JAM_ENABLE_WEEKLY_WRAPPED ??= "false";
