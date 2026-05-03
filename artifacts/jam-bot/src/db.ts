@@ -295,6 +295,16 @@ const topTracksStmt = db.prepare<[string, string, number], TopTrackRow>(`
   ORDER BY plays DESC, MAX(played_at) DESC
   LIMIT ?
 `);
+// Direct count of plays in a time window — used by /wrapped's headline
+// "totalPlays" so we don't have to derive it from a top-N approximation.
+const countPlaysInRangeStmt = db.prepare<[string, string], { c: number }>(`
+  SELECT COUNT(*) AS c FROM played_tracks
+  WHERE played_at >= ? AND played_at <= ?
+`);
+export function countPlaysInRange(startStr: string, endStr: string): number {
+  return countPlaysInRangeStmt.get(startStr, endStr)?.c ?? 0;
+}
+
 export function topTracksInRange(
   startStr: string,
   endStr: string,

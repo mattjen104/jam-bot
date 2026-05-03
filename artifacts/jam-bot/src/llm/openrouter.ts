@@ -1,6 +1,7 @@
 import { config } from "../config.js";
 import { logger } from "../logger.js";
 import {
+  listOptOuts,
   recentPlayed,
   playedInRange,
   searchPlayedByTitleOrArtist,
@@ -172,7 +173,18 @@ function toSqliteLocalString(d: Date): string {
 
 async function buildContext(question: string): Promise<string> {
   const cp = await getCurrentlyPlaying().catch(() => null);
-  const recent = recentPlayed(config.LLM_HISTORY_WINDOW);
+  // Honor opt-out everywhere /memory and free-form Q&A look at history:
+  // drop any row whose requester has opted out so their personal listening
+  // history can't be echoed back by the LLM. Anonymous plays (no recorded
+  // requester) are still allowed — they don't expose any individual.
+  const optedOut = new Set(listOptOuts());
+  const dropOptedOut = <T extends { requested_by_slack_user: string | null }>(
+    rows: T[],
+  ): T[] =>
+    rows.filter(
+      (r) => !r.requested_by_slack_user || !optedOut.has(r.requested_by_slack_user),
+    );
+  const recent = dropOptedOut(recentPlayed(config.LLM_HISTORY_WINDOW));
 
   const lines: string[] = [];
   if (cp?.track) {
@@ -192,7 +204,7 @@ async function buildContext(question: string): Promise<string> {
   if (range) {
     const startStr = toSqliteLocalString(range.start);
     const endStr = toSqliteLocalString(range.end);
-    const rangeRows = playedInRange(startStr, endStr, 200);
+    const rangeRows = dropOptedOut(playedInRange(startStr, endStr, 200));
     rangeRows.forEach((r) => surfacedIds.add(r.id));
     lines.push(
       `\nTracks played in the matching time range (${startStr} to ${endStr} UTC, ${rangeRows.length} tracks):`,
@@ -201,7 +213,7 @@ async function buildContext(question: string): Promise<string> {
   }
 
   if (titleQuery) {
-    const matches = searchPlayedByTitleOrArtist(titleQuery, 20);
+    const matches = dropOptedOut(searchPlayedByTitleOrArtist(titleQuery, 20));
     matches.forEach((r) => surfacedIds.add(r.id));
     const totalCount = isCountQuestion(question)
       ? countPlaysMatching(titleQuery)

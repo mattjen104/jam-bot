@@ -7,6 +7,7 @@ import {
 import { buildDnaStats, buildCompatStats } from "../src/dna.js";
 import { isMemoryPlaybackRequest } from "../src/memory.js";
 import { db, recordPlayed, setOptOut } from "../src/db.js";
+import { parseBoolEnv } from "../src/config.js";
 
 function uniq(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2)}`;
@@ -67,6 +68,23 @@ describe("buildWrappedStats", () => {
     expect(userBStats?.topArtist).toBe("ArtistB");
     expect(stats.topArtists.find((a) => a.artist === "ArtistA")).toBeDefined();
     expect(stats.totalPlays).toBeGreaterThanOrEqual(8);
+  });
+
+  it("totalPlays is a direct COUNT(*), accurate beyond the top-N tracks", () => {
+    const u = uniq("Uw_count");
+    // Insert 12 distinct track_ids — more than the top-N=5 the recap shows.
+    // The old heuristic (sum-of-user-plays + delta-from-top-5) would not see
+    // tracks 6..12 at all and would undercount; the new direct COUNT(*) does.
+    for (let i = 0; i < 12; i++) {
+      recordPlayed({
+        track_id: uniq(`count-${i}`),
+        title: `T${i}`,
+        artist: "ArtistC",
+        requested_by_slack_user: u,
+      });
+    }
+    const stats = buildWrappedStats(7);
+    expect(stats.totalPlays).toBeGreaterThanOrEqual(12);
   });
 
   it("respects opt-out — user appears with optedOut=true and no personal stats", () => {
@@ -153,6 +171,27 @@ describe("isMemoryPlaybackRequest", () => {
   it("does NOT match recall-only questions", () => {
     expect(isMemoryPlaybackRequest("who introduced us to Khruangbin?")).toBe(false);
     expect(isMemoryPlaybackRequest("how many times have we played Daft Punk?")).toBe(false);
+  });
+});
+
+describe("parseBoolEnv", () => {
+  it("treats the string \"false\" (and friends) as false — fixes the z.coerce.boolean bug", () => {
+    for (const v of ["false", "FALSE", "False", "0", "no", "off", ""]) {
+      expect(parseBoolEnv(v)).toBe(false);
+    }
+  });
+  it("treats the string \"true\" (and unknowns) as true", () => {
+    for (const v of ["true", "TRUE", "1", "yes", "on", "anythingelse"]) {
+      expect(parseBoolEnv(v)).toBe(true);
+    }
+  });
+  it("passes booleans through unchanged", () => {
+    expect(parseBoolEnv(true)).toBe(true);
+    expect(parseBoolEnv(false)).toBe(false);
+  });
+  it("handles null/undefined as false", () => {
+    expect(parseBoolEnv(null)).toBe(false);
+    expect(parseBoolEnv(undefined)).toBe(false);
   });
 });
 

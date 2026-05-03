@@ -4,6 +4,7 @@ import {
   topTracksInRange,
   topArtistsInRange,
   activeUsersInRange,
+  countPlaysInRange,
   userTopTracksInRange,
   userTopArtistsInRange,
   userDiscoveriesInRange,
@@ -105,14 +106,9 @@ export function buildWrappedStats(
     else daytime += b.plays;
   }
 
-  const totalPlays =
-    users.reduce((acc, u) => acc + u.plays, 0) +
-    // include anonymous (no requester) plays so the headline number isn't off
-    Math.max(
-      0,
-      topTracks.reduce((acc, t) => acc + t.plays, 0) -
-        users.reduce((acc, u) => acc + u.plays, 0),
-    );
+  // Direct COUNT(*) over the window — accurate even with anonymous plays
+  // and tracks outside the top-N. Cheap thanks to the played_at index.
+  const totalPlays = countPlaysInRange(startStr, endStr);
 
   return {
     start,

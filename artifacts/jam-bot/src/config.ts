@@ -1,6 +1,26 @@
 import "dotenv/config";
 import { z } from "zod";
 
+/**
+ * Parse a boolean from an env-var string. `z.coerce.boolean()` is wrong here:
+ * it does JS truthy-coercion, which means the literal string "false" coerces
+ * to `true` (any non-empty string is truthy). We want the obvious meaning:
+ * "false"/"0"/"no"/"off" (case-insensitive) all disable the flag, "true"/"1"/
+ * "yes"/"on" enable it. Unknown strings default to `true` (fail-open for
+ * features that are on by default).
+ */
+export function parseBoolEnv(v: unknown): boolean {
+  if (typeof v === "boolean") return v;
+  if (v == null) return false;
+  const s = String(v).trim().toLowerCase();
+  if (["false", "0", "no", "off", ""].includes(s)) return false;
+  return true;
+}
+
+const boolFromEnv = z
+  .union([z.boolean(), z.string()])
+  .transform(parseBoolEnv);
+
 const schema = z.object({
   SPOTIFY_CLIENT_ID: z.string().min(1),
   SPOTIFY_CLIENT_SECRET: z.string().min(1),
@@ -33,7 +53,7 @@ const schema = z.object({
   // ---- Jam Memory (Wrapped / DNA / Compat / Memory) -----------------------
   // Whether the auto-weekly Wrapped post is enabled. /wrapped on demand
   // works regardless of this flag.
-  JAM_ENABLE_WEEKLY_WRAPPED: z.coerce.boolean().default(true),
+  JAM_ENABLE_WEEKLY_WRAPPED: boolFromEnv.default(true),
   // When the auto-weekly post fires. Format: "<Day> HH:MM" in UTC, where
   // Day is one of Sun/Mon/Tue/Wed/Thu/Fri/Sat. The scheduler checks every
   // 30s and only fires once per day.
