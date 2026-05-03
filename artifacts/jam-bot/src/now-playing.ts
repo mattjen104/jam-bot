@@ -83,6 +83,7 @@ class NowPlayingWatcher extends EventEmitter {
           title: cp.track.title,
           artist: cp.track.artist,
           album: cp.track.album,
+          album_image_url: cp.track.albumImageUrl ?? null,
           spotify_url: cp.track.spotifyUrl,
           duration_ms: cp.track.durationMs,
           requested_by_slack_user: pending?.requested_by_slack_user ?? null,

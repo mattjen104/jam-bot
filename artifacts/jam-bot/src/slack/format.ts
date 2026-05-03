@@ -139,6 +139,18 @@ export function wrappedBlocks(
           type: "mrkdwn",
           text: `${PODIUM[i]} *${link}* — ${t.artist}  _(${t.plays} plays)_`,
         },
+        // Album art on the podium so the recap reads like a real Wrapped card,
+        // not just a list of links. We fall back to a text-only block when the
+        // track row pre-dates the album_image_url column.
+        ...(t.album_image_url
+          ? {
+              accessory: {
+                type: "image",
+                image_url: t.album_image_url,
+                alt_text: t.album ?? t.title,
+              },
+            }
+          : {}),
       });
     });
     const rest = stats.topTracks.slice(3);
@@ -154,16 +166,17 @@ export function wrappedBlocks(
     }
   }
 
-  if (stats.perUser.length) {
+  // Strict opt-out: hide opted-out users entirely from the per-person section
+  // (their plays still count toward channel-wide totalPlays / topTracks /
+  // topArtists, but no personal stats — including raw play counts — leak).
+  const visiblePerUser = stats.perUser.filter((u) => !u.optedOut);
+  if (visiblePerUser.length) {
     blocks.push({ type: "divider" });
     blocks.push({
       type: "section",
       text: { type: "mrkdwn", text: "*:bust_in_silhouette: Per person*" },
     });
-    const lines = stats.perUser.slice(0, 8).map((u) => {
-      if (u.optedOut) {
-        return `• <@${u.slackUser}> — ${u.plays} plays  _(opted out of stats)_`;
-      }
+    const lines = visiblePerUser.slice(0, 8).map((u) => {
       const bits: string[] = [];
       if (u.topTrack) bits.push(`top: _${u.topTrack}_`);
       if (u.topArtist) bits.push(`fav artist: *${u.topArtist}*`);
@@ -229,11 +242,35 @@ export function dnaBlocks(stats: DnaStats, narration: string): KnownBlock[] {
         text: `*Top artists:* ${artistLine}`,
       },
     },
-    {
-      type: "section",
-      text: { type: "mrkdwn", text: `:speech_balloon: ${narration}` },
-    },
   ];
+  // Signature track — most-played track for this user, with album art when
+  // we have it. The DNA card is incomplete without it.
+  if (stats.signatureTrack) {
+    const t = stats.signatureTrack;
+    const link = t.spotify_url ? `<${t.spotify_url}|${t.title}>` : t.title;
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text:
+          `*Signature track:* :star2: *${link}* — ${t.artist}` +
+          `  _(${t.plays} ${t.plays === 1 ? "play" : "plays"})_`,
+      },
+      ...(t.album_image_url
+        ? {
+            accessory: {
+              type: "image",
+              image_url: t.album_image_url,
+              alt_text: t.album ?? t.title,
+            },
+          }
+        : {}),
+    });
+  }
+  blocks.push({
+    type: "section",
+    text: { type: "mrkdwn", text: `:speech_balloon: ${narration}` },
+  });
   return blocks;
 }
 
@@ -280,6 +317,17 @@ export function compatBlocks(stats: CompatStats, narration: string): KnownBlock[
         text:
           `:link: <@${stats.userA}> ↔ <@${stats.userB}> — *${stats.score}/100*  ` +
           `(${stats.sharedTracks} shared tracks, ${stats.sharedArtists.length} shared artists)`,
+      },
+    },
+    {
+      type: "section",
+      // Show the three score components so it doesn't feel like a black box.
+      text: {
+        type: "mrkdwn",
+        text:
+          `*Breakdown:* artist overlap *${Math.round(stats.artistJaccard * 100)}%*  ·  ` +
+          `genre proxy *${Math.round(stats.artistCosine * 100)}%*  ·  ` +
+          `time-of-day *${Math.round(stats.timeOfDayOverlap * 100)}%*`,
       },
     },
     {

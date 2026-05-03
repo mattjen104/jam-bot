@@ -136,6 +136,24 @@ run at least once (and after every code update). If you'd rather skip the
 build, change `start` in `package.json` (or the service `ExecStart`) to
 `pnpm run start:tsx` and keep dev deps installed.
 
+### 5d-bis. Optional: tune the Jam Memory features
+
+The Wrapped / DNA / Compat / Memory commands have four optional environment
+variables (all have sensible defaults — skip this section if you're happy
+with the defaults):
+
+| Variable | Default | What it controls |
+| --- | --- | --- |
+| `JAM_ENABLE_WEEKLY_WRAPPED` | `true` | Set to `false` to disable the auto weekly `/wrapped` post (the slash command still works). |
+| `JAM_WRAPPED_SCHEDULE` | `Sun 20:00` | When the auto-Wrapped fires, in **UTC**. Format: `<Day> HH:MM` (e.g. `Fri 17:00`). |
+| `JAM_WRAPPED_LOOKBACK_DAYS` | `7` | How many days back `/wrapped` aggregates over. |
+| `JAM_MEMORY_MAX_QUEUE` | `10` | Max tracks `/memory` will queue when a user asks it to "play me a set …". |
+
+Per-user opt-out (`/jamoptout`) is stored in the database and needs no env
+config. Opted-out users' tracks **never** appear in `/wrapped`'s per-person
+section, in `/dna` for someone else, in `/compat`, or in `/memory`'s candidate
+pool — but they still count toward channel-wide totals.
+
 ### 5e. Drop in the `.env`
 
 Copy the `.env` you built in steps 1-4 to `/opt/jam-bot/.env`:
