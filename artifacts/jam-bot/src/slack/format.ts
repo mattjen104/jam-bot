@@ -67,15 +67,21 @@ export function historyBlocks(rows: PlayedTrack[]): KnownBlock[] {
   ];
 }
 
-export function noDeviceBlocks(deviceName: string): KnownBlock[] {
+export function noDeviceBlocks(
+  deviceName: string,
+  hostVisible = false,
+): KnownBlock[] {
+  const status = hostVisible
+    ? `The Jam host (\`${deviceName}\`) is online but inactive — playback isn't running.`
+    : `The Jam host (\`${deviceName}\`) is offline or no Jam is running.`;
   return [
     {
       type: "section",
       text: {
         type: "mrkdwn",
         text:
-          `:warning: *No active Spotify device.* The Jam host (\`${deviceName}\`) is offline or no Jam is running.\n\n` +
-          "To restart: open Spotify on your phone, tap the device picker, and start a Jam on the *Jam Host* device.",
+          `:warning: *No active Spotify playback.* ${status}\n\n` +
+          "To restart: open Spotify on your phone, tap the device picker, pick *Jam Host*, and hit play (or start a Jam from there).",
       },
     },
   ];
