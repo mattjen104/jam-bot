@@ -4,7 +4,7 @@ import {
   findHostDevice,
   type CurrentlyPlaying,
 } from "./spotify/client.js";
-import { popPendingRequest, recordPlayed } from "./db.js";
+import { popPendingRequest, recordPlayed, lastPlayed } from "./db.js";
 import { config } from "./config.js";
 import { logger } from "./logger.js";
 
@@ -29,6 +29,10 @@ class NowPlayingWatcher extends EventEmitter {
 
   start() {
     if (this.timer || this.stopped) return;
+    // Seed lastTrackId from the most recent persisted row so a restart
+    // doesn't double-record the currently playing track.
+    const last = lastPlayed();
+    if (last) this.lastTrackId = last.track_id;
     const schedule = () => {
       if (this.stopped) return;
       this.timer = setTimeout(async () => {
