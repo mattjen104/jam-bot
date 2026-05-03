@@ -6,7 +6,7 @@ Wants=network-online.target librespot.service
 [Service]
 Type=simple
 User=jam
-WorkingDirectory=/opt/jam-bot
+WorkingDirectory=/opt/jam-bot/app
 EnvironmentFile=/opt/jam-bot/.env
 ExecStart=/usr/bin/pnpm run start
 Restart=on-failure
