@@ -226,17 +226,20 @@ slackApp.message(async ({ message, say }) => {
   const text = message.text.trim();
   if (!text) return;
 
+  const respond = async (t: string, blocks?: KnownBlock[]) => {
+    await say({ text: t, blocks, thread_ts: message.ts });
+  };
+
   let intent;
   try {
     intent = await classifyIntent(text);
   } catch (err) {
     logger.warn("Intent classification threw", { error: String(err) });
+    await respond(
+      ":warning: I couldn't parse that just now — try again, or use a slash command like `/play`, `/skip`, or `/nowplaying`.",
+    );
     return;
   }
-
-  const respond = async (t: string, blocks?: KnownBlock[]) => {
-    await say({ text: t, blocks, thread_ts: message.ts });
-  };
 
   try {
     switch (intent.intent) {

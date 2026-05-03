@@ -37,41 +37,44 @@ function formatRows(rows: PlayedTrack[]): string {
  */
 function parseDateRange(question: string): { start: Date; end: Date } | null {
   const q = question.toLowerCase();
+  // Work in UTC throughout to match SQLite's datetime('now') strings.
   const now = new Date();
-  const startOfDay = (d: Date) => {
+  const startOfDayUtc = (d: Date) => {
     const x = new Date(d);
-    x.setHours(0, 0, 0, 0);
+    x.setUTCHours(0, 0, 0, 0);
     return x;
   };
   const addDays = (d: Date, n: number) => {
     const x = new Date(d);
-    x.setDate(x.getDate() + n);
+    x.setUTCDate(x.getUTCDate() + n);
     return x;
   };
 
   if (/\btoday\b/.test(q)) {
-    const start = startOfDay(now);
+    const start = startOfDayUtc(now);
     return { start, end: addDays(start, 1) };
   }
   if (/\byesterday\b/.test(q)) {
-    const start = addDays(startOfDay(now), -1);
+    const start = addDays(startOfDayUtc(now), -1);
     return { start, end: addDays(start, 1) };
   }
   if (/\blast night\b/.test(q)) {
-    const start = addDays(startOfDay(now), -1);
-    start.setHours(18, 0, 0, 0);
-    const end = startOfDay(now);
-    end.setHours(6, 0, 0, 0);
+    const start = addDays(startOfDayUtc(now), -1);
+    start.setUTCHours(18, 0, 0, 0);
+    const end = startOfDayUtc(now);
+    end.setUTCHours(6, 0, 0, 0);
     return { start, end };
   }
   if (/\bthis week\b/.test(q)) {
-    const start = startOfDay(now);
-    start.setDate(start.getDate() - start.getDay());
+    const start = startOfDayUtc(now);
+    start.setUTCDate(start.getUTCDate() - start.getUTCDay());
     return { start, end: addDays(start, 7) };
   }
   if (/\blast week\b/.test(q)) {
-    const thisWeekStart = startOfDay(now);
-    thisWeekStart.setDate(thisWeekStart.getDate() - thisWeekStart.getDay());
+    const thisWeekStart = startOfDayUtc(now);
+    thisWeekStart.setUTCDate(
+      thisWeekStart.getUTCDate() - thisWeekStart.getUTCDay(),
+    );
     const start = addDays(thisWeekStart, -7);
     return { start, end: thisWeekStart };
   }
@@ -84,11 +87,13 @@ function parseDateRange(question: string): { start: Date; end: Date } | null {
     "friday",
     "saturday",
   ];
-  const dayMatch = q.match(/\blast (sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/);
+  const dayMatch = q.match(
+    /\blast (sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/,
+  );
   if (dayMatch) {
     const target = days.indexOf(dayMatch[1]!);
-    const today = startOfDay(now);
-    let diff = today.getDay() - target;
+    const today = startOfDayUtc(now);
+    let diff = today.getUTCDay() - target;
     if (diff <= 0) diff += 7;
     const start = addDays(today, -diff);
     return { start, end: addDays(start, 1) };
@@ -103,6 +108,18 @@ function extractTitleQuery(question: string): string | null {
   const m = question.match(TITLE_QUESTION_RE);
   if (!m || !m[2]) return null;
   return m[2].trim();
+}
+
+function toSqliteLocalString(d: Date): string {
+  // SQLite's CURRENT_TIMESTAMP / datetime('now') returns UTC strings of the
+  // form "YYYY-MM-DD HH:MM:SS". Convert a JS Date (which we want to interpret
+  // in UTC for consistency with what SQLite stored) to the same format so
+  // string comparisons line up.
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return (
+    `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ` +
+    `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`
+  );
 }
 
 async function buildContext(question: string): Promise<string> {
@@ -124,11 +141,11 @@ async function buildContext(question: string): Promise<string> {
 
   const range = parseDateRange(question);
   if (range) {
-    const startIso = range.start.toISOString().replace("T", " ").slice(0, 19);
-    const endIso = range.end.toISOString().replace("T", " ").slice(0, 19);
-    const rangeRows = playedInRange(startIso, endIso, 200);
+    const startStr = toSqliteLocalString(range.start);
+    const endStr = toSqliteLocalString(range.end);
+    const rangeRows = playedInRange(startStr, endStr, 200);
     lines.push(
-      `\nTracks played in the matching time range (${startIso} to ${endIso}, ${rangeRows.length} tracks):`,
+      `\nTracks played in the matching time range (${startStr} to ${endStr} UTC, ${rangeRows.length} tracks):`,
     );
     lines.push(rangeRows.length ? formatRows(rangeRows) : "(none)");
   }
@@ -201,7 +218,35 @@ Respond ONLY with compact JSON: {"intent":"...","query":"..."}.
 For "play some lo-fi hip hop" the query is "lo-fi hip hop".
 If you're unsure, prefer "question".`;
 
+/**
+ * Cheap deterministic fast-path for the most common explicit commands so we
+ * don't pay an LLM call (and don't depend on its JSON output) for "skip",
+ * "what's playing", etc. Returns null when no fast-path matches.
+ */
+function fastPathIntent(message: string): IntentClassification | null {
+  const m = message.trim().toLowerCase();
+  if (/^(skip|next( song| track)?|next!?)$/.test(m)) {
+    return { intent: "skip" };
+  }
+  if (/^(what'?s? playing|now playing|np|what is playing)\??$/.test(m)) {
+    return { intent: "nowplaying" };
+  }
+  if (/^(history|what (have|did) we play(ed)?( recently)?)\??$/.test(m)) {
+    return { intent: "history" };
+  }
+  const playMatch = message.match(/^(?:please\s+)?play\s+(.+)$/i);
+  if (playMatch) return { intent: "play", query: playMatch[1]!.trim() };
+  const queueMatch = message.match(
+    /^(?:queue|add(?:\s+to(?:\s+the)?\s+queue)?)\s+(.+)$/i,
+  );
+  if (queueMatch) return { intent: "queue", query: queueMatch[1]!.trim() };
+  return null;
+}
+
 export async function classifyIntent(message: string): Promise<IntentClassification> {
+  const fast = fastPathIntent(message);
+  if (fast) return fast;
+
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
