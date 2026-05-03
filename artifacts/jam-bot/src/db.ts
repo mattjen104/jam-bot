@@ -27,12 +27,39 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_played_tracks_track_id ON played_tracks (track_id);
 
   CREATE TABLE IF NOT EXISTS pending_requests (
-    track_id TEXT PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    track_id TEXT NOT NULL,
     requested_by_slack_user TEXT NOT NULL,
     requested_query TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+  CREATE INDEX IF NOT EXISTS idx_pending_requests_track_id ON pending_requests (track_id);
 `);
+
+// Migrate older deployments where pending_requests had track_id PRIMARY KEY
+// (no `id` column). The table above already exists in that case, so the
+// CREATE TABLE IF NOT EXISTS above is a no-op; we add the missing column /
+// index in-place so FIFO pops work.
+const pendingCols = db
+  .prepare<[], { name: string }>(`PRAGMA table_info(pending_requests)`)
+  .all()
+  .map((r) => r.name);
+if (!pendingCols.includes("id")) {
+  db.exec(`
+    ALTER TABLE pending_requests RENAME TO pending_requests_old;
+    CREATE TABLE pending_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      track_id TEXT NOT NULL,
+      requested_by_slack_user TEXT NOT NULL,
+      requested_query TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    INSERT INTO pending_requests (track_id, requested_by_slack_user, requested_query, created_at)
+      SELECT track_id, requested_by_slack_user, requested_query, created_at FROM pending_requests_old;
+    DROP TABLE pending_requests_old;
+    CREATE INDEX IF NOT EXISTS idx_pending_requests_track_id ON pending_requests (track_id);
+  `);
+}
 
 export interface PlayedTrack {
   id: number;
@@ -124,36 +151,35 @@ export function searchPlayedByTitleOrArtist(
   return searchByTitleStmt.all(like, like, limit);
 }
 
-const upsertPendingStmt = db.prepare(`
+const insertPendingStmt = db.prepare(`
   INSERT INTO pending_requests (track_id, requested_by_slack_user, requested_query)
   VALUES (?, ?, ?)
-  ON CONFLICT(track_id) DO UPDATE SET
-    requested_by_slack_user = excluded.requested_by_slack_user,
-    requested_query = excluded.requested_query,
-    created_at = datetime('now')
 `);
 export function recordPendingRequest(
   trackId: string,
   slackUserId: string,
   query: string,
 ) {
-  upsertPendingStmt.run(trackId, slackUserId, query);
+  insertPendingStmt.run(trackId, slackUserId, query);
 }
 
 interface PendingRow {
+  id: number;
   track_id: string;
   requested_by_slack_user: string;
   requested_query: string;
 }
 const popPendingStmt = db.prepare<[string], PendingRow>(
-  `SELECT * FROM pending_requests WHERE track_id = ?`,
+  `SELECT * FROM pending_requests WHERE track_id = ? ORDER BY id ASC LIMIT 1`,
 );
-const deletePendingStmt = db.prepare<[string]>(
-  `DELETE FROM pending_requests WHERE track_id = ?`,
+const deletePendingStmt = db.prepare<[number]>(
+  `DELETE FROM pending_requests WHERE id = ?`,
 );
+// FIFO pop: when several people request the same track, attribute each play
+// to the requester whose request was registered first.
 export function popPendingRequest(trackId: string): PendingRow | undefined {
   const row = popPendingStmt.get(trackId);
-  if (row) deletePendingStmt.run(trackId);
+  if (row) deletePendingStmt.run(row.id);
   return row;
 }
 
