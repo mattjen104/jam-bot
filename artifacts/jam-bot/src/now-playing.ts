@@ -16,7 +16,7 @@ export interface TrackChangeEvent {
 
 export type NowPlayingEvents = {
   trackChange: (event: TrackChangeEvent) => void;
-  noActiveDevice: () => void;
+  noActiveDevice: (info: { hostVisible: boolean }) => void;
   resumed: () => void;
 };
 
@@ -63,6 +63,7 @@ class NowPlayingWatcher extends EventEmitter {
         if (needsAttention && !this.wasNoDevice) {
           this.wasNoDevice = true;
           this.emit("noActiveDevice", { hostVisible: !!host });
+          // (typed payload — Slack listener reads `hostVisible`)
         }
         return;
       }
