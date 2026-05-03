@@ -3,9 +3,12 @@ import { logger } from "./logger.js";
 import {
   recentPlayed,
   searchPlayedByTitleOrArtist,
+  playedInRange,
+  playedByRequester,
   listOptOuts,
   type PlayedTrack,
 } from "./db.js";
+import { parseDateRange, toSqliteLocalString } from "./llm/openrouter.js";
 
 export interface MemorySetResult {
   summary: string;
@@ -40,47 +43,117 @@ export function isMemoryPlaybackRequest(question: string): boolean {
 }
 
 /**
+ * Pull Slack user mentions (`<@U12345>`) out of a question. Used so /memory
+ * can scope a set to "stuff <@U123> played" — same retrieval primitive as
+ * the askLLM Q&A path.
+ */
+export function extractRequesterMentions(question: string): string[] {
+  const out: string[] = [];
+  const re = /<@([UW][A-Z0-9]+)>/g;
+  let m;
+  while ((m = re.exec(question)) !== null) {
+    out.push(m[1]!);
+  }
+  return out;
+}
+
+/**
+ * Detect named months ("august", "december") so the LLM can ask for a set
+ * "from August jam sessions" and get a real date-window candidate pool
+ * back, even though parseDateRange doesn't handle bare month names.
+ */
+function parseMonthName(question: string): { start: Date; end: Date } | null {
+  const months = [
+    "january", "february", "march", "april", "may", "june",
+    "july", "august", "september", "october", "november", "december",
+  ];
+  const m = question.toLowerCase().match(
+    /\b(january|february|march|april|may|june|july|august|september|october|november|december)\b/,
+  );
+  if (!m) return null;
+  const monthIdx = months.indexOf(m[1]!);
+  // Resolve the *most recent* occurrence of that month: this year if it's
+  // already happened, otherwise last year. So in May 2026 "august" -> Aug 2025.
+  const now = new Date();
+  let year = now.getUTCFullYear();
+  if (monthIdx > now.getUTCMonth()) year -= 1;
+  const start = new Date(Date.UTC(year, monthIdx, 1));
+  const end = new Date(Date.UTC(year, monthIdx + 1, 1));
+  return { start, end };
+}
+
+/**
  * Build a candidate pool of tracks from history that the LLM can pick from
- * for a "play me a set" request. We bias toward title/artist matches when the
- * question contains an obvious search term, otherwise fall back to recents.
+ * for a "play me a set" request. We layer multiple retrieval primitives so
+ * temporal ("from last weekend"), entity ("stuff <@U123> queued"), and
+ * keyword ("dub techno set") prompts all ground in real history rather than
+ * just the most recent 50 plays:
+ *
+ *   1. Date window  — parseDateRange / parseMonthName -> playedInRange.
+ *   2. Requester(s) — Slack `<@U…>` mentions -> playedByRequester.
+ *   3. Title/artist keywords -> searchPlayedByTitleOrArtist.
+ *   4. Recents fallback so we never return an empty pool.
+ *
+ * Opt-out is honored at every layer: opted-out users' rows never enter the
+ * candidate pool.
  */
 function buildCandidates(question: string, limit: number): PlayedTrack[] {
-  // Honor opt-out: drop any track whose requester has opted out so their
-  // listening history can't be surfaced (or echoed to the LLM) by /memory.
-  // Tracks with no recorded requester (anonymous plays) are still allowed.
   const optedOut = new Set(listOptOuts());
   const isAllowed = (row: PlayedTrack) =>
     !row.requested_by_slack_user || !optedOut.has(row.requested_by_slack_user);
 
   const seen = new Set<string>();
   const out: PlayedTrack[] = [];
-
-  // Cheap keyword extraction: any 3+ char word that isn't a stopword.
-  const stop = new Set([
-    "play", "me", "a", "the", "of", "set", "mix", "playlist", "from",
-    "songs", "song", "tracks", "track", "with", "and", "or", "for", "some",
-    "us", "our", "jam", "channel", "history", "any", "all", "that", "this",
-  ]);
-  const words = question
-    .toLowerCase()
-    .split(/[^a-z0-9']+/)
-    .filter((w) => w.length >= 3 && !stop.has(w));
-
-  for (const w of words) {
-    for (const row of searchPlayedByTitleOrArtist(w, 25)) {
+  const push = (rows: PlayedTrack[]) => {
+    for (const row of rows) {
+      if (out.length >= limit) return;
       if (!seen.has(row.track_id) && isAllowed(row)) {
         seen.add(row.track_id);
         out.push(row);
       }
-      if (out.length >= limit) return out;
     }
+  };
+
+  // 1. Date window: "last weekend", "august", "yesterday", "last friday", etc.
+  const range = parseDateRange(question) ?? parseMonthName(question);
+  if (range) {
+    push(
+      playedInRange(
+        toSqliteLocalString(range.start),
+        toSqliteLocalString(range.end),
+        200,
+      ),
+    );
   }
-  for (const row of recentPlayed(50)) {
-    if (!seen.has(row.track_id) && isAllowed(row)) {
-      seen.add(row.track_id);
-      out.push(row);
-    }
-    if (out.length >= limit) return out;
+
+  // 2. Requester scope: "stuff Bob queued during the outage" (with @mention).
+  for (const u of extractRequesterMentions(question)) {
+    if (out.length >= limit) break;
+    push(playedByRequester(u, 100));
+  }
+
+  // 3. Title/artist keywords. Cheap stop-list extraction.
+  const stop = new Set([
+    "play", "me", "a", "the", "of", "set", "mix", "playlist", "from",
+    "songs", "song", "tracks", "track", "with", "and", "or", "for", "some",
+    "us", "our", "jam", "channel", "history", "any", "all", "that", "this",
+    "weekend", "night", "morning", "evening", "today", "yesterday", "week",
+    "month", "year", "session", "sessions", "vibe", "vibes", "during",
+  ]);
+  const words = question
+    .toLowerCase()
+    .replace(/<@[uw][a-z0-9]+>/gi, " ") // strip Slack mentions before tokenizing
+    .split(/[^a-z0-9']+/)
+    .filter((w) => w.length >= 3 && !stop.has(w));
+  for (const w of words) {
+    if (out.length >= limit) break;
+    push(searchPlayedByTitleOrArtist(w, 25));
+  }
+
+  // 4. Fallback so we never hand the LLM an empty pool when the prompt is
+  // vague ("play me a set"). Only fires when nothing above hit.
+  if (out.length === 0) {
+    push(recentPlayed(50));
   }
   return out;
 }
@@ -181,3 +254,6 @@ export function lookupHistoryTrack(trackId: string): PlayedTrack | undefined {
   // to scanning recents for an exact id match.
   return recentPlayed(500).find((r) => r.track_id === trackId);
 }
+
+// Re-export for tests / external callers.
+export { buildCandidates as _buildCandidatesForTest };

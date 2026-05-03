@@ -177,6 +177,21 @@ export function playedInRange(
   return playedInRangeStmt.all(startIso, endIso, limit);
 }
 
+// All plays by a single requester, newest-first. Used by /memory to honor
+// "play me a set of stuff Bob queued during the outage" style requests.
+const playedByRequesterStmt = db.prepare<[string, number], PlayedTrack>(
+  `SELECT * FROM played_tracks
+   WHERE requested_by_slack_user = ?
+   ORDER BY played_at DESC
+   LIMIT ?`,
+);
+export function playedByRequester(
+  slackUser: string,
+  limit = 100,
+): PlayedTrack[] {
+  return playedByRequesterStmt.all(slackUser, limit);
+}
+
 const searchByTitleStmt = db.prepare<[string, string, number], PlayedTrack>(
   `SELECT * FROM played_tracks
    WHERE title LIKE ? ESCAPE '\\' OR artist LIKE ? ESCAPE '\\'
