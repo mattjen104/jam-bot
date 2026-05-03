@@ -97,9 +97,13 @@ sudo cp ~/.cargo/bin/librespot /usr/bin/librespot
 
 ```bash
 sudo useradd --system --create-home --home-dir /opt/jam-bot --shell /usr/sbin/nologin jam
-sudo mkdir -p /opt/jam-bot
+sudo mkdir -p /opt/jam-bot /opt/jam-bot/librespot-cache
 sudo chown -R jam:jam /opt/jam-bot
 ```
+
+The `librespot-cache` directory is where librespot will persist the host
+account's Spotify Connect credentials after the one-time auth in step 6, so
+the device stays signed in across reboots.
 
 ### 5d. Copy the bot
 
@@ -160,13 +164,57 @@ sudo journalctl -u jam-bot -f
 
 You should see `Slack bot connected` and `Now-playing watcher started`.
 
-## 6. Start the Jam (one time)
+## 6. Sign librespot into the host account, then start the Jam (one time)
 
-1. Open Spotify on your phone, signed in as the host account.
-2. Tap the device picker (bottom-left of the Now Playing bar).
-3. Pick **Jam Host** — playback transfers to the droplet.
-4. Tap the Jam icon → **Start a Jam** → share the link with your friends.
-5. From now on, anyone in the Slack channel can `/play`, `/queue`, `/skip`, etc., and Jam Bot will keep things going even if everyone closes Spotify on their phones.
+The first time librespot starts on the droplet it has no credentials cached,
+so it can't appear in your account's device list. There are two ways to
+authenticate it; both only need to be done once.
+
+### Option A — Zeroconf via Spotify Connect (recommended)
+
+This works as long as your phone and the droplet are on the same network *or*
+your phone Spotify can reach the librespot mDNS endpoint (it usually can,
+because Spotify Connect goes through Spotify's servers).
+
+1. Make sure `librespot.service` is running: `sudo systemctl status librespot`.
+2. On your phone, signed in as the **host Premium account**, open Spotify and
+   tap the device picker.
+3. Pick **Jam Host**. Spotify will hand off the auth token to librespot, which
+   writes it into `/opt/jam-bot/librespot-cache/credentials.json`.
+4. Verify on the droplet:
+   ```bash
+   sudo ls /opt/jam-bot/librespot-cache/
+   # should show credentials.json (and possibly files/ for audio cache)
+   ```
+
+### Option B — Explicit OAuth (if zeroconf doesn't reach the droplet)
+
+```bash
+sudo systemctl stop librespot
+sudo -u jam /usr/bin/librespot \
+  --cache /opt/jam-bot/librespot-cache \
+  --name "Jam Host" \
+  --backend pipe \
+  --enable-oauth
+# Open the printed URL in any browser, sign in as the HOST account, paste back
+# the redirect URL when prompted, then ctrl-c.
+sudo systemctl start librespot
+```
+
+### Then start the actual Jam
+
+1. With the **Jam Host** device now visible in your phone's Spotify, tap the
+   device picker and pick **Jam Host**. Playback transfers to the droplet.
+2. Tap the Jam icon → **Start a Jam** → share the link with your friends.
+3. Confirm Jam Bot also sees the device:
+   ```bash
+   sudo journalctl -u jam-bot -n 50 | grep -i "host"
+   # should NOT contain 'Host device "Jam Host" not visible'
+   ```
+4. From now on, anyone in the Slack channel can `/play`, `/queue`, `/skip`,
+   etc., and Jam Bot will keep things going even if everyone closes Spotify
+   on their phones. After a reboot, librespot picks up its cached credentials
+   automatically — no re-auth needed.
 
 ## 7. Verify
 
@@ -185,7 +233,14 @@ You should see a "Now playing" card, a confirmation that the song was queued/pla
 ## Troubleshooting
 
 **Bot logs say `Host device "Jam Host" not visible to Spotify yet`.**
-librespot isn't running, or it's running with a different `--name`. Check `sudo systemctl status librespot` and `sudo journalctl -u librespot -n 50`. Make sure the `--name` flag matches `SPOTIFY_DEVICE_NAME` in `.env`.
+Three common causes:
+1. librespot isn't running. Check `sudo systemctl status librespot` and
+   `sudo journalctl -u librespot -n 50`.
+2. The `--name` flag in `librespot.service` doesn't match `SPOTIFY_DEVICE_NAME`
+   in `.env`.
+3. **librespot has never been authenticated to the host account.** Without
+   credentials in `/opt/jam-bot/librespot-cache/`, the device won't show up
+   in the host account's Spotify device list. Re-do step 6.
 
 **Bot posts "No active Spotify device" in the channel.**
 The Jam ended (e.g. host account playback was paused on the librespot side for too long, or Spotify pushed the stream to another device). Open Spotify on your phone, transfer to **Jam Host**, and play one song to wake it back up.
