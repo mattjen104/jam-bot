@@ -191,13 +191,32 @@ export function searchPlayedByTitleOrArtist(
   return searchByTitleStmt.all(like, like, limit);
 }
 
-const countByTitleStmt = db.prepare<[string, string], { c: number }>(
-  `SELECT COUNT(*) AS c FROM played_tracks
-   WHERE title LIKE ? ESCAPE '\\' OR artist LIKE ? ESCAPE '\\'`,
-);
+// Opt-out aware count. We exclude any play whose requester has opted out so
+// the LLM can't infer "there are more plays than the rows you saw" — which
+// would leak the existence of opted-out users' history. Anonymous plays
+// (no recorded requester) are still counted; they don't expose anyone.
 export function countPlaysMatching(needle: string): number {
   const like = `%${needle.replace(/[\\%_]/g, "\\$&")}%`;
-  return countByTitleStmt.get(like, like)?.c ?? 0;
+  const opted = listOptOuts();
+  if (opted.length === 0) {
+    return (
+      db
+        .prepare<[string, string], { c: number }>(
+          `SELECT COUNT(*) AS c FROM played_tracks
+           WHERE title LIKE ? ESCAPE '\\' OR artist LIKE ? ESCAPE '\\'`,
+        )
+        .get(like, like)?.c ?? 0
+    );
+  }
+  const placeholders = opted.map(() => "?").join(",");
+  const sql = `SELECT COUNT(*) AS c FROM played_tracks
+     WHERE (title LIKE ? ESCAPE '\\' OR artist LIKE ? ESCAPE '\\')
+       AND (requested_by_slack_user IS NULL
+            OR requested_by_slack_user NOT IN (${placeholders}))`;
+  const row = db
+    .prepare<unknown[], { c: number }>(sql)
+    .get(like, like, ...opted) as { c: number } | undefined;
+  return row?.c ?? 0;
 }
 
 const insertPendingStmt = db.prepare(`

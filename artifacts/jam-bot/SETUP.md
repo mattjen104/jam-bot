@@ -145,7 +145,7 @@ with the defaults):
 | Variable | Default | What it controls |
 | --- | --- | --- |
 | `JAM_ENABLE_WEEKLY_WRAPPED` | `true` | Set to `false` to disable the auto weekly `/wrapped` post (the slash command still works). |
-| `JAM_WRAPPED_SCHEDULE` | `Sun 20:00` | When the auto-Wrapped fires, in **UTC**. Format: `<Day> HH:MM` (e.g. `Fri 17:00`). |
+| `JAM_WRAPPED_SCHEDULE` | `Sun 20:00` | When the auto-Wrapped fires, in **UTC** (the bot is UTC-only by design — pick a UTC time that lines up with your channel's local "everyone's around" hour). Format: `<Day> HH:MM` (e.g. `Fri 17:00`). |
 | `JAM_WRAPPED_LOOKBACK_DAYS` | `7` | How many days back `/wrapped` aggregates over. |
 | `JAM_MEMORY_MAX_QUEUE` | `10` | Max tracks `/memory` will queue when a user asks it to "play me a set …". |
 
