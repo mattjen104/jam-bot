@@ -37,7 +37,7 @@ function formatRows(rows: PlayedTrack[]): string {
  * question refers to a specific day/window (today, yesterday, "last friday",
  * "this week", etc.). Returns null if no clear date phrase is found.
  */
-function parseDateRange(question: string): { start: Date; end: Date } | null {
+export function parseDateRange(question: string): { start: Date; end: Date } | null {
   const q = question.toLowerCase();
   // Work in UTC throughout to match SQLite's datetime('now') strings.
   const now = new Date();
@@ -159,7 +159,7 @@ function isCountQuestion(question: string): boolean {
   return COUNT_QUESTION_RE.test(question);
 }
 
-function toSqliteLocalString(d: Date): string {
+export function toSqliteLocalString(d: Date): string {
   // SQLite's CURRENT_TIMESTAMP / datetime('now') returns UTC strings of the
   // form "YYYY-MM-DD HH:MM:SS". Convert a JS Date (which we want to interpret
   // in UTC for consistency with what SQLite stored) to the same format so

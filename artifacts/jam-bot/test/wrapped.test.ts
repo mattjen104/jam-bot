@@ -5,7 +5,11 @@ import {
   toSqliteUtc,
 } from "../src/wrapped.js";
 import { buildDnaStats, buildCompatStats } from "../src/dna.js";
-import { isMemoryPlaybackRequest } from "../src/memory.js";
+import {
+  isMemoryPlaybackRequest,
+  extractRequesterMentions,
+  _buildCandidatesForTest,
+} from "../src/memory.js";
 import { db, recordPlayed, setOptOut } from "../src/db.js";
 import { parseBoolEnv } from "../src/config.js";
 
@@ -171,6 +175,71 @@ describe("isMemoryPlaybackRequest", () => {
   it("does NOT match recall-only questions", () => {
     expect(isMemoryPlaybackRequest("who introduced us to Khruangbin?")).toBe(false);
     expect(isMemoryPlaybackRequest("how many times have we played Daft Punk?")).toBe(false);
+  });
+});
+
+describe("extractRequesterMentions", () => {
+  it("pulls Slack mentions out of /memory prompts", () => {
+    expect(
+      extractRequesterMentions("play a set of stuff <@U12345ABC> queued during the outage"),
+    ).toEqual(["U12345ABC"]);
+  });
+  it("returns multiple mentions and dedups callers' problem (no dup logic)", () => {
+    expect(extractRequesterMentions("mix from <@U1> and <@W2>")).toEqual(["U1", "W2"]);
+  });
+  it("returns [] when no mentions present", () => {
+    expect(extractRequesterMentions("play me some chill tunes")).toEqual([]);
+  });
+});
+
+describe("buildCandidates (memory set retrieval)", () => {
+  it("retrieves candidates by date window even when prompt has no title keyword", () => {
+    // Insert a play with a played_at firmly in the LAST friday window.
+    // We approximate by using today; parseDateRange("last friday") returns
+    // a UTC midnight day window. Easier: use "today" which is unambiguous.
+    const u = uniq("Um_date");
+    const tid = uniq("mem-date");
+    recordPlayed({
+      track_id: tid,
+      title: "ZzObscureTitle",
+      artist: "ZzObscureArtist",
+      requested_by_slack_user: u,
+    });
+    // "play me a set from today" should pick up our new track via the
+    // date-window primitive even though "today"/"set"/etc are stop-words.
+    const cands = _buildCandidatesForTest("play me a set from today", 60);
+    expect(cands.some((c) => c.track_id === tid)).toBe(true);
+  });
+
+  it("retrieves candidates by Slack-mention requester scope", () => {
+    const u = uniq("Um_req");
+    const tid = uniq("mem-req");
+    recordPlayed({
+      track_id: tid,
+      title: "OnlyByU",
+      artist: "RareArtist",
+      requested_by_slack_user: u,
+    });
+    const cands = _buildCandidatesForTest(`play me a set of stuff <@${u}> queued`, 60);
+    expect(cands.some((c) => c.track_id === tid)).toBe(true);
+  });
+
+  it("excludes opted-out users from the candidate pool at every layer", () => {
+    const u = uniq("Um_opt");
+    const tid = uniq("mem-opt");
+    recordPlayed({
+      track_id: tid,
+      title: "OptedTitle",
+      artist: "OptedArtist",
+      requested_by_slack_user: u,
+    });
+    setOptOut(u, true);
+    const cands = _buildCandidatesForTest(
+      `play me a set from today by <@${u}> with OptedTitle`,
+      60,
+    );
+    expect(cands.some((c) => c.track_id === tid)).toBe(false);
+    setOptOut(u, false);
   });
 });
 
