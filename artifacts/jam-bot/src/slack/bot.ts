@@ -212,6 +212,8 @@ slackApp.command(
 
 // ---- Channel message listener -------------------------------------------
 
+let cachedBotUserId: string | null = null;
+
 slackApp.message(async ({ message, say }) => {
   if (message.subtype) return;
   if (!("user" in message) || !message.user) return;
@@ -219,8 +221,7 @@ slackApp.message(async ({ message, say }) => {
     return;
   if (!("text" in message) || !message.text) return;
 
-  const auth = await slackApp.client.auth.test();
-  if (message.user === auth.user_id) return;
+  if (cachedBotUserId && message.user === cachedBotUserId) return;
 
   const text = message.text.trim();
   if (!text) return;
@@ -332,5 +333,13 @@ setInterval(() => expireOldPending(), 10 * 60 * 1000);
 
 export async function startSlackBot() {
   await slackApp.start();
+  try {
+    const auth = await slackApp.client.auth.test();
+    cachedBotUserId = auth.user_id ?? null;
+  } catch (err) {
+    logger.warn("Could not cache bot user id at startup", {
+      error: String(err),
+    });
+  }
   logger.info(`Slack bot connected (channel ${config.SLACK_CHANNEL_ID})`);
 }
