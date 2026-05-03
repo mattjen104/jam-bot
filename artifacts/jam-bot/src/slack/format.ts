@@ -176,7 +176,11 @@ export function wrappedBlocks(
       type: "section",
       text: { type: "mrkdwn", text: "*:bust_in_silhouette: Per person*" },
     });
-    const lines = visiblePerUser.slice(0, 8).map((u) => {
+    // Show every active member (no slice cap) — the requirement is
+    // "one stat per active member". Slack section blocks are capped at
+    // ~3000 chars; with ~50-char lines that's ~60 members worth of room
+    // before we'd need to split, which is fine for a music channel.
+    const lines = visiblePerUser.map((u) => {
       const bits: string[] = [];
       if (u.topTrack) bits.push(`top: _${u.topTrack}_`);
       if (u.topArtist) bits.push(`fav artist: *${u.topArtist}*`);
