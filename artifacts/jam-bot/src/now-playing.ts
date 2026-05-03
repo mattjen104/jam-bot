@@ -54,13 +54,15 @@ class NowPlayingWatcher extends EventEmitter {
     try {
       const cp = await getCurrentlyPlaying();
       if (!cp.track) {
-        // "nothing playing" can mean (a) the host is offline, or (b) the host
-        // is online but Spotify just hasn't been started yet. Only emit the
-        // offline alert when we've actually lost the host device.
+        // "nothing playing" can mean: (a) host offline, (b) host visible but
+        // inactive (nobody has hit play yet / was kicked off), or (c) host
+        // online and active but the queue ran dry. Treat (a) and (b) as
+        // "needs attention" and emit the offline alert; (c) is silent.
         const host = await findHostDevice().catch(() => null);
-        if (!host && !this.wasNoDevice) {
+        const needsAttention = !host || !host.isActive;
+        if (needsAttention && !this.wasNoDevice) {
           this.wasNoDevice = true;
-          this.emit("noActiveDevice");
+          this.emit("noActiveDevice", { hostVisible: !!host });
         }
         return;
       }

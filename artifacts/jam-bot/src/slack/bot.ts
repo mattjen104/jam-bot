@@ -311,12 +311,14 @@ nowPlayingWatcher.on("trackChange", async (event) => {
   }
 });
 
-nowPlayingWatcher.on("noActiveDevice", async () => {
-  logger.info("No active Spotify device detected");
+nowPlayingWatcher.on("noActiveDevice", async (info?: { hostVisible?: boolean }) => {
+  logger.info("No active Spotify playback detected", {
+    hostVisible: info?.hostVisible ?? false,
+  });
   try {
     await postToChannel(
-      noDeviceBlocks(config.SPOTIFY_DEVICE_NAME),
-      "No active Spotify device.",
+      noDeviceBlocks(config.SPOTIFY_DEVICE_NAME, info?.hostVisible ?? false),
+      "No active Spotify playback.",
     );
   } catch (err) {
     logger.error("Failed to post no-device notice", { error: String(err) });

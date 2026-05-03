@@ -98,6 +98,7 @@ sudo cp ~/.cargo/bin/librespot /usr/bin/librespot
 ```bash
 sudo useradd --system --create-home --home-dir /opt/jam-bot --shell /usr/sbin/nologin jam
 sudo mkdir -p /opt/jam-bot
+sudo chown -R jam:jam /opt/jam-bot
 ```
 
 ### 5d. Copy the bot
@@ -105,7 +106,9 @@ sudo mkdir -p /opt/jam-bot
 Either git clone the whole monorepo and symlink, or copy just `artifacts/jam-bot/` over:
 
 ```bash
-# Option A: clone monorepo
+# Option A: clone monorepo (the parent dir must be writable by `jam`)
+sudo mkdir -p /opt/jam-bot-repo
+sudo chown jam:jam /opt/jam-bot-repo
 sudo -u jam git clone <your-fork-url> /opt/jam-bot-repo
 sudo ln -sfn /opt/jam-bot-repo/artifacts/jam-bot /opt/jam-bot/app
 
