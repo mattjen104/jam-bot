@@ -301,6 +301,54 @@ describe("intent classifier routing in channel messages", () => {
     expect(spotify.skipToNext).not.toHaveBeenCalled();
   });
 
+  it("/memory aborts on first enqueue failure with a single user-facing message", async () => {
+    const memory = await import("../src/memory.js");
+    const spotify = await import("../src/spotify/client.js");
+    (memory.isMemoryPlaybackRequest as ReturnType<typeof vi.fn>).mockReturnValue(true);
+    (memory.askLLMForSet as ReturnType<typeof vi.fn>).mockResolvedValue({
+      summary: "test set",
+      trackIds: ["a", "b", "c", "d"],
+    });
+    (spotify.ensurePlaybackOnHost as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "DEV-X",
+      name: "Jam Host",
+      isActive: true,
+    });
+    const deviceGone = Object.assign(new Error("device gone"), { statusCode: 404 });
+    (spotify.playNow as ReturnType<typeof vi.fn>).mockClear().mockRejectedValue(deviceGone);
+    (spotify.addToQueue as ReturnType<typeof vi.fn>).mockClear().mockResolvedValue(undefined);
+
+    const handler = captured.commands["/memory"];
+    expect(handler).toBeDefined();
+    const ack = vi.fn().mockResolvedValue(undefined);
+    const respond = vi.fn().mockResolvedValue(undefined);
+    await handler!({
+      command: {
+        channel_id: process.env.SLACK_CHANNEL_ID!,
+        user_id: "U_mem",
+        text: "play me a set from last week",
+        command: "/memory",
+      },
+      ack,
+      respond,
+    });
+
+    // playNow attempted exactly once; addToQueue NEVER hit because we abort.
+    expect(spotify.playNow).toHaveBeenCalledTimes(1);
+    expect(spotify.addToQueue).not.toHaveBeenCalled();
+
+    // Exactly one in_channel message — the failure notice — is sent back.
+    const inChannel = respond.mock.calls.filter(
+      ([m]) => (m as { response_type?: string }).response_type === "in_channel",
+    );
+    expect(inChannel).toHaveLength(1);
+    const text = (inChannel[0]?.[0] as { text: string }).text;
+    expect(text).toMatch(/no longer reachable|Couldn't queue any tracks/i);
+
+    // Reset mock so other tests in this file are unaffected.
+    (memory.isMemoryPlaybackRequest as ReturnType<typeof vi.fn>).mockReturnValue(false);
+  });
+
   it("ignores messages from a different channel", async () => {
     const llm = await import("../src/llm/openrouter.js");
     (llm.classifyIntent as ReturnType<typeof vi.fn>).mockClear();

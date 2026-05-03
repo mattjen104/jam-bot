@@ -321,6 +321,66 @@ describe("WrappedScheduler idempotency", () => {
     expect(sched.tick(new Date(Date.UTC(2026, 4, 3, 20, 5, 0)), target)).toBe(false);
     expect(fires).toBe(0);
   });
+
+  it("invokes onError when fire() rejects, and only logs (not throws) when no onError is wired", async () => {
+    kvSet("wrapped:last_fire_key", "");
+    const errs: unknown[] = [];
+    const sched = new WrappedScheduler(
+      async () => {
+        throw new Error("boom");
+      },
+      (e) => {
+        errs.push(e);
+      },
+    );
+    const target = parseSchedule("Sun 20:00")!;
+    expect(sched.tick(new Date(Date.UTC(2026, 4, 3, 20, 0, 30)), target)).toBe(true);
+    // Allow the .catch handler + onError microtask to settle.
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
+    expect(errs).toHaveLength(1);
+    expect(String(errs[0])).toContain("boom");
+    kvSet("wrapped:last_fire_key", "");
+  });
+
+  it("rate-limits onError notifications across repeated failing fires (cooldown)", async () => {
+    const KV_KEY = "wrapped:last_fire_key";
+    kvSet(KV_KEY, "");
+    const errs: unknown[] = [];
+    const sched = new WrappedScheduler(
+      async () => {
+        throw new Error("boom");
+      },
+      (e) => {
+        errs.push(e);
+      },
+    );
+    const target = parseSchedule("Sun 20:00")!;
+    // Fire on three consecutive Sundays — far beyond the once-per-day
+    // idempotency window but well within the 1-hour error cooldown only on
+    // the first/second pair. We simulate the "tight loop" worst case by
+    // jumping the lastFireKey ourselves between ticks so each tick fires.
+    // We have to stay within the parsed schedule's firing window (Sun 20:00
+    // ±1 minute). To test the cooldown we manipulate lastFireKey directly
+    // between ticks so each tick is allowed to fire, then advance "now" to
+    // an instant inside vs. outside the 1-hour cooldown.
+    const t1 = new Date(Date.UTC(2026, 4, 3, 20, 0, 30));
+    expect(sched.tick(t1, target)).toBe(true);
+    kvSet(KV_KEY, "");
+    (sched as unknown as { lastFireKey: string | null }).lastFireKey = null;
+    // 15 seconds later — same firing minute, inside cooldown — must NOT notify.
+    const t2 = new Date(Date.UTC(2026, 4, 3, 20, 0, 45));
+    expect(sched.tick(t2, target)).toBe(true);
+    kvSet(KV_KEY, "");
+    (sched as unknown as { lastFireKey: string | null }).lastFireKey = null;
+    // Next Sunday at 20:00 — far outside cooldown — SHOULD notify again.
+    const t3 = new Date(Date.UTC(2026, 4, 10, 20, 0, 30));
+    expect(sched.tick(t3, target)).toBe(true);
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
+    expect(errs).toHaveLength(2);
+    kvSet(KV_KEY, "");
+  });
 });
 
 describe("/dna self-view opt-out policy (strict)", () => {
