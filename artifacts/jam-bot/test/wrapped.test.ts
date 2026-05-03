@@ -342,7 +342,7 @@ describe("/memory playback end-to-end (intent -> set -> queueable ids)", () => {
     const u = uniq("Ue2e_user");
     const idA = uniq("e2e-A");
     const idB = uniq("e2e-B");
-    const idC = uniq("e2e-C");
+    const idC = uniq("e2e-C"); // third row to validate lookupHistoryTrack below
     recordPlayed({
       track_id: idA,
       title: "Khruangbin Vibes A",
@@ -399,6 +399,16 @@ describe("/memory playback end-to-end (intent -> set -> queueable ids)", () => {
     } finally {
       globalThis.fetch = realFetch;
     }
+
+    // Step 4: lookupHistoryTrack does an indexed track_id lookup (not a
+    // title/artist text search), so it returns the canonical row even when
+    // the id is something like "spotify:track:..." that has no overlap with
+    // any title/artist text.
+    const { lookupHistoryTrack } = await import("../src/memory.js");
+    const looked = lookupHistoryTrack(idC);
+    expect(looked?.track_id).toBe(idC);
+    expect(looked?.title).toBe("Khruangbin Vibes C");
+    expect(lookupHistoryTrack("does-not-exist-xyz")).toBeUndefined();
   });
 });
 

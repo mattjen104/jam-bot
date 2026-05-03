@@ -156,6 +156,21 @@ export function lastPlayed(): PlayedTrack | undefined {
   return lastPlayedStmt.get();
 }
 
+const lastPlayedByTrackIdStmt = db.prepare<[string], PlayedTrack>(
+  `SELECT * FROM played_tracks
+   WHERE track_id = ?
+   ORDER BY played_at DESC
+   LIMIT 1`,
+);
+/**
+ * Look up the most recent play row for a given Spotify track id. Used by
+ * /memory playback to surface "now queueing X" confirmation messages with
+ * the canonical title/artist text we recorded the first time it played.
+ */
+export function lastPlayedByTrackId(trackId: string): PlayedTrack | undefined {
+  return lastPlayedByTrackIdStmt.get(trackId);
+}
+
 const countTrackStmt = db.prepare<[string], { c: number }>(
   `SELECT COUNT(*) AS c FROM played_tracks WHERE track_id = ?`,
 );

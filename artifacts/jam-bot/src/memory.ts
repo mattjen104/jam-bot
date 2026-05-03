@@ -5,6 +5,7 @@ import {
   searchPlayedByTitleOrArtist,
   playedInRange,
   playedByRequester,
+  lastPlayedByTrackId,
   listOptOuts,
   type PlayedTrack,
 } from "./db.js";
@@ -253,14 +254,12 @@ export async function askLLMForSet(
 
 /**
  * Look up a track row from history by Spotify track id, returning the most
- * recent play (so we have title/artist for confirmation messaging).
+ * recent play (so we have title/artist for confirmation messaging). Backed
+ * by a real indexed `WHERE track_id = ?` query — not the title/artist text
+ * search the previous implementation accidentally used.
  */
 export function lookupHistoryTrack(trackId: string): PlayedTrack | undefined {
-  const matches = searchPlayedByTitleOrArtist(trackId, 1);
-  if (matches[0]?.track_id === trackId) return matches[0];
-  // searchPlayedByTitleOrArtist matches by title/artist, not id, so fall back
-  // to scanning recents for an exact id match.
-  return recentPlayed(500).find((r) => r.track_id === trackId);
+  return lastPlayedByTrackId(trackId);
 }
 
 // Re-export for tests / external callers.
