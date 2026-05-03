@@ -1,0 +1,32 @@
+[Unit]
+Description=librespot — headless Spotify Connect device for Jam Host
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=jam
+# Adjust --backend to match your droplet:
+#   --backend pulseaudio   (most common on desktop-y Linux)
+#   --backend alsa         (server-style, typical on droplets without pulse)
+#   --backend pipe         (discard audio — fine if listeners get audio via Jam)
+#
+# For a headless droplet running a Spotify Jam, you usually do NOT need real
+# audio output: Jam listeners hear the music on their own devices. The pipe
+# backend keeps librespot happy without configuring sound.
+ExecStart=/usr/bin/librespot \
+  --name "Jam Host" \
+  --bitrate 320 \
+  --device-type computer \
+  --backend pipe \
+  --enable-volume-normalisation \
+  --initial-volume 80 \
+  --disable-audio-cache
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
