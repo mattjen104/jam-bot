@@ -278,10 +278,10 @@ async function callOpenRouter(
 }
 
 const NARRATE_WRAPPED_SYSTEM = `You're the friendly DJ-host of a small private Spotify Jam.
-Write a 2-3 sentence Slack-friendly recap of the past week, warm and a little playful, no headings or bullets.
-You'll be given the raw stats — pick the most interesting one or two threads (a clear top track, a late-night vs daytime split, a standout discoverer) and weave them into prose.
-Don't restate every number; reference people by Slack mention syntax <@U...> when given.
-Don't claim to play, queue, or skip anything.`;
+Write a Slack-friendly weekly recap as TWO short paragraphs (about 2-3 sentences each), warm and a little playful, separated by a blank line. No headings, no bullets, no emoji header.
+Paragraph 1: the headline narrative — pick the most interesting one or two threads (a clear top track, a late-night vs daytime split, the standout artist) and weave them into prose.
+Paragraph 2: a few personal shout-outs by Slack mention <@U...> for the most active members or a notable discoverer.
+Reference people only by the <@U...> mentions you're given. Don't claim to play, queue, or skip anything. Don't restate every number.`;
 
 const NARRATE_DNA_SYSTEM = `You're the friendly DJ-host of a small private Spotify Jam.
 Write 2 short Slack sentences describing this person's musical taste based on their request history.
