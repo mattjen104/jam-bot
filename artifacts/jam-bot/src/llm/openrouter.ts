@@ -4,6 +4,7 @@ import {
   recentPlayed,
   playedInRange,
   searchPlayedByTitleOrArtist,
+  countPlaysMatching,
   type PlayedTrack,
 } from "../db.js";
 import { getCurrentlyPlaying } from "../spotify/client.js";
@@ -65,6 +66,19 @@ function parseDateRange(question: string): { start: Date; end: Date } | null {
     end.setUTCHours(6, 0, 0, 0);
     return { start, end };
   }
+  if (/\b(tonight|this evening)\b/.test(q)) {
+    const start = startOfDayUtc(now);
+    start.setUTCHours(18, 0, 0, 0);
+    const end = addDays(startOfDayUtc(now), 1);
+    end.setUTCHours(6, 0, 0, 0);
+    return { start, end };
+  }
+  if (/\bthis morning\b/.test(q)) {
+    const start = startOfDayUtc(now);
+    const end = startOfDayUtc(now);
+    end.setUTCHours(12, 0, 0, 0);
+    return { start, end };
+  }
   if (/\bthis week\b/.test(q)) {
     const start = startOfDayUtc(now);
     start.setUTCDate(start.getUTCDate() - start.getUTCDay());
@@ -77,6 +91,33 @@ function parseDateRange(question: string): { start: Date; end: Date } | null {
     );
     const start = addDays(thisWeekStart, -7);
     return { start, end: thisWeekStart };
+  }
+  if (/\bthis month\b/.test(q)) {
+    const start = startOfDayUtc(now);
+    start.setUTCDate(1);
+    const end = new Date(start);
+    end.setUTCMonth(end.getUTCMonth() + 1);
+    return { start, end };
+  }
+  if (/\blast month\b/.test(q)) {
+    const end = startOfDayUtc(now);
+    end.setUTCDate(1);
+    const start = new Date(end);
+    start.setUTCMonth(start.getUTCMonth() - 1);
+    return { start, end };
+  }
+  const nDaysAgo = q.match(/\b(\d{1,3})\s+days?\s+ago\b/);
+  if (nDaysAgo) {
+    const n = parseInt(nDaysAgo[1]!, 10);
+    const start = addDays(startOfDayUtc(now), -n);
+    return { start, end: addDays(start, 1) };
+  }
+  const lastNDays = q.match(/\b(?:last|past)\s+(\d{1,3})\s+days?\b/);
+  if (lastNDays) {
+    const n = parseInt(lastNDays[1]!, 10);
+    const end = addDays(startOfDayUtc(now), 1);
+    const start = addDays(end, -n);
+    return { start, end };
   }
   const days = [
     "sunday",
@@ -102,12 +143,19 @@ function parseDateRange(question: string): { start: Date; end: Date } | null {
 }
 
 const TITLE_QUESTION_RE =
-  /(have we (?:ever )?played|did we play|when did we play|how many times .* play|played .* before)\s+(?:the song |the track |"|')?([^"'?]+?)["'?]?$/i;
+  /(have we (?:ever )?played|did we (?:ever )?play|when did we (?:last )?play|how (?:many times|often) .* play(?:ed)?|played .* before|ever played|is .* in our history)\s+(?:the song |the track |"|')?([^"'?]+?)["'?]?$/i;
+
+const COUNT_QUESTION_RE =
+  /\b(how (?:many times|often)|count(?:s)?)\b/i;
 
 function extractTitleQuery(question: string): string | null {
   const m = question.match(TITLE_QUESTION_RE);
   if (!m || !m[2]) return null;
   return m[2].trim();
+}
+
+function isCountQuestion(question: string): boolean {
+  return COUNT_QUESTION_RE.test(question);
 }
 
 function toSqliteLocalString(d: Date): string {
@@ -134,29 +182,45 @@ async function buildContext(question: string): Promise<string> {
   } else {
     lines.push("Currently playing: nothing.");
   }
-  if (recent.length) {
-    lines.push("\nRecent Jam history (most recent first):");
-    lines.push(formatRows(recent));
-  }
-
   const range = parseDateRange(question);
+  const titleQuery = extractTitleQuery(question);
+
+  // Track ids surfaced via targeted retrieval so we can dedup the generic
+  // "recent history" block and avoid wasting context on duplicate rows.
+  const surfacedIds = new Set<number>();
+
   if (range) {
     const startStr = toSqliteLocalString(range.start);
     const endStr = toSqliteLocalString(range.end);
     const rangeRows = playedInRange(startStr, endStr, 200);
+    rangeRows.forEach((r) => surfacedIds.add(r.id));
     lines.push(
       `\nTracks played in the matching time range (${startStr} to ${endStr} UTC, ${rangeRows.length} tracks):`,
     );
     lines.push(rangeRows.length ? formatRows(rangeRows) : "(none)");
   }
 
-  const titleQuery = extractTitleQuery(question);
   if (titleQuery) {
     const matches = searchPlayedByTitleOrArtist(titleQuery, 20);
+    matches.forEach((r) => surfacedIds.add(r.id));
+    const totalCount = isCountQuestion(question)
+      ? countPlaysMatching(titleQuery)
+      : matches.length;
+    const countNote = isCountQuestion(question)
+      ? ` — total plays in history: ${totalCount}`
+      : "";
     lines.push(
-      `\nMatches in full Jam history for "${titleQuery}" (${matches.length}):`,
+      `\nMatches in full Jam history for "${titleQuery}" (${matches.length} shown${countNote}):`,
     );
     lines.push(matches.length ? formatRows(matches) : "(none)");
+  }
+
+  if (recent.length) {
+    const filtered = recent.filter((r) => !surfacedIds.has(r.id));
+    if (filtered.length) {
+      lines.push("\nRecent Jam history (most recent first):");
+      lines.push(formatRows(filtered));
+    }
   }
 
   return lines.join("\n");
