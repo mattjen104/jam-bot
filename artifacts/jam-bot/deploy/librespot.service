@@ -6,27 +6,40 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=jam
-# Adjust --backend to match your droplet:
-#   --backend pulseaudio   (most common on desktop-y Linux)
-#   --backend alsa         (server-style, typical on droplets without pulse)
-#   --backend pipe         (discard audio — fine if listeners get audio via Jam)
+# Persist the Spotify Connect credentials so the device stays signed into the
+# host Premium account across restarts. The cache directory is created (and
+# populated on first auth) by the `librespot` process running as `jam`.
 #
-# For a headless droplet running a Spotify Jam, you usually do NOT need real
-# audio output: Jam listeners hear the music on their own devices. The pipe
-# backend keeps librespot happy without configuring sound.
+# First-time auth (one of the two below):
+#   (a) Zeroconf discovery: leave OFF the --disable-discovery flag (default).
+#       From your host phone's Spotify, open the device picker and choose
+#       "Jam Host". librespot will accept the auth and write credentials.json
+#       into /opt/jam-bot/librespot-cache, after which restarts are silent.
+#   (b) Explicit OAuth: stop this service, run as the jam user
+#         sudo -u jam /usr/bin/librespot --cache /opt/jam-bot/librespot-cache \
+#           --name "Jam Host" --enable-oauth
+#       follow the printed URL on any browser, sign in with the host account,
+#       then ctrl-c and re-enable the service.
+#
+# --backend pipe discards audio (fine on a headless droplet — Jam listeners
+# stream directly from Spotify). Switch to alsa/pulseaudio if you actually
+# want audio out of the box.
 ExecStart=/usr/bin/librespot \
   --name "Jam Host" \
   --bitrate 320 \
   --device-type computer \
   --backend pipe \
+  --cache /opt/jam-bot/librespot-cache \
   --enable-volume-normalisation \
-  --initial-volume 80 \
-  --disable-audio-cache
+  --initial-volume 80
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
 NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/jam-bot/librespot-cache
 
 [Install]
 WantedBy=multi-user.target
