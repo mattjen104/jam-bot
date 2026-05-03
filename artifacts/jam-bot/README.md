@@ -20,10 +20,7 @@ A self-hosted Slack bot that runs a permanent Spotify Jam from a single Linux bo
 
 ## Quick start
 
-1. Read [SETUP.md](./SETUP.md) for the full droplet walkthrough.
-2. Locally: `pnpm install && pnpm run spotify:auth` to get your `SPOTIFY_REFRESH_TOKEN`.
-3. On the droplet: copy `.env.example` to `.env`, fill it in, install `librespot`, drop the two `systemd` units in place, and `systemctl enable --now librespot jam-bot`.
-4. From your phone, open Spotify, transfer to the **Jam Host** device once, and start a Jam. The droplet takes it from there.
+See [QUICKSTART.md](./QUICKSTART.md) for the 15-minute path from zero to running, plus a cheat sheet of all the commands. For the long version, options, and troubleshooting, see [SETUP.md](./SETUP.md).
 
 ## Project layout
 

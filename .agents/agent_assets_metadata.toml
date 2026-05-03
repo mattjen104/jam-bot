@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "OuS-Jv-RPd2iSfRx2DCZ9"
+uri = "file://artifacts/jam-bot/QUICKSTART.md"
+type = "text"
+title = "Jam Bot — Quick Start"
