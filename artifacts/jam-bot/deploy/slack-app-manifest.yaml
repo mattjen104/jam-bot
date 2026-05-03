@@ -34,6 +34,7 @@ oauth_config:
       # post replies, run slash commands, and resolve user IDs for "@user"
       # attribution. Add groups:history / im:history yourself if you want the
       # bot to also work in private channels or DMs.
+      - app_mentions:read
       - channels:history
       - chat:write
       - commands

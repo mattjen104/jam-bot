@@ -127,7 +127,14 @@ Either way you should end up with `/opt/jam-bot/app/package.json` reachable.
 ```bash
 cd /opt/jam-bot/app
 sudo -u jam pnpm install --prod=false
+sudo -u jam pnpm run build       # compiles TS -> dist/ for `node ./dist/index.js`
 ```
+
+The provided `jam-bot.service` runs `pnpm run start`, which executes the
+compiled `node ./dist/index.js` — so the `build` step above must have been
+run at least once (and after every code update). If you'd rather skip the
+build, change `start` in `package.json` (or the service `ExecStart`) to
+`pnpm run start:tsx` and keep dev deps installed.
 
 ### 5e. Drop in the `.env`
 
@@ -268,5 +275,6 @@ Refresh tokens for Spotify don't usually expire, but if they do (or if you chang
 cd /opt/jam-bot/app
 sudo -u jam git pull   # (if you cloned the repo)
 sudo -u jam pnpm install --prod=false
+sudo -u jam pnpm run build
 sudo systemctl restart jam-bot
 ```
