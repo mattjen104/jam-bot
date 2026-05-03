@@ -112,7 +112,7 @@ export function playedInRange(
 
 const searchByTitleStmt = db.prepare<[string, string, number], PlayedTrack>(
   `SELECT * FROM played_tracks
-   WHERE title LIKE ? OR artist LIKE ?
+   WHERE title LIKE ? ESCAPE '\\' OR artist LIKE ? ESCAPE '\\'
    ORDER BY played_at DESC
    LIMIT ?`,
 );
@@ -120,7 +120,7 @@ export function searchPlayedByTitleOrArtist(
   needle: string,
   limit = 25,
 ): PlayedTrack[] {
-  const like = `%${needle.replace(/[%_]/g, "\\$&")}%`;
+  const like = `%${needle.replace(/[\\%_]/g, "\\$&")}%`;
   return searchByTitleStmt.all(like, like, limit);
 }
 

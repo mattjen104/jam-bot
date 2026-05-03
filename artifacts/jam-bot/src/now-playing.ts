@@ -1,5 +1,9 @@
 import { EventEmitter } from "node:events";
-import { getCurrentlyPlaying, type CurrentlyPlaying } from "./spotify/client.js";
+import {
+  getCurrentlyPlaying,
+  findHostDevice,
+  type CurrentlyPlaying,
+} from "./spotify/client.js";
 import { popPendingRequest, recordPlayed } from "./db.js";
 import { config } from "./config.js";
 import { logger } from "./logger.js";
@@ -50,7 +54,11 @@ class NowPlayingWatcher extends EventEmitter {
     try {
       const cp = await getCurrentlyPlaying();
       if (!cp.track) {
-        if (!this.wasNoDevice) {
+        // "nothing playing" can mean (a) the host is offline, or (b) the host
+        // is online but Spotify just hasn't been started yet. Only emit the
+        // offline alert when we've actually lost the host device.
+        const host = await findHostDevice().catch(() => null);
+        if (!host && !this.wasNoDevice) {
           this.wasNoDevice = true;
           this.emit("noActiveDevice");
         }
