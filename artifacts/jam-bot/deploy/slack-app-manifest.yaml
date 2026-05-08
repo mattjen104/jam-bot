@@ -17,19 +17,15 @@ features:
       should_escape: false
     - command: /skip
       description: Skip the current track
-      usage_hint: ""
       should_escape: false
     - command: /nowplaying
       description: Show what's playing
-      usage_hint: ""
       should_escape: false
     - command: /history
       description: Show recent Jam history
-      usage_hint: ""
       should_escape: false
     - command: /wrapped
       description: Show this week's Jam Wrapped recap
-      usage_hint: ""
       should_escape: false
     - command: /dna
       description: Show a user's taste DNA card
