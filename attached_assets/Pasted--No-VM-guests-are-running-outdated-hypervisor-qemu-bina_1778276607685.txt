@@ -1,0 +1,610 @@
+
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
+info: downloading installer
+warn: It looks like you have an existing rustup settings file at:
+warn: /root/.rustup/settings.toml
+warn: Rustup will install the default toolchain as specified in the settings file,
+warn: instead of the one inferred from the default host triple.
+info: profile set to default
+info: default host triple is x86_64-unknown-linux-gnu
+info: syncing channel updates for stable-x86_64-unknown-linux-gnu
+info: latest update on 2026-04-16 for version 1.95.0 (59807616e 2026-04-14)
+info: downloading 6 components
+        cargo installed                       10.48 MiB
+       clippy installed                        4.48 MiB
+    rust-docs unpacking   [#####          ]   21.18 MiB (3.82 MiB/s, ETA: 4s)
+     rust-std installed                       28.20 MiB
+     rust-std installed                       28.20 MiB
+error: failed to extract package: No space left on device (os error 28)
+error: rustup could not choose a version of cargo to run, because one wasn't specified explicitly, and no default is configured.
+help: run 'rustup default stable' to download the latest stable release of Rust and set it as your default toolchain.
+cp: cannot stat '/root/.cargo/bin/librespot': No such file or directory
+chmod: cannot access '/usr/bin/librespot': No such file or directory
+-bash: /usr/bin/librespot: No such file or directory
+root@Phantom:/tmp# df -h /
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/vda1       8.7G  8.2G  451M  95% /
+root@Phantom:/tmp# df -h
+lsblk
+Filesystem      Size  Used Avail Use% Mounted on
+tmpfs           392M  1.8M  390M   1% /run
+/dev/vda1       8.7G  8.2G  451M  95% /
+tmpfs           2.0G  1.1M  2.0G   1% /dev/shm
+tmpfs           5.0M     0  5.0M   0% /run/lock
+/dev/vda16      881M  114M  705M  14% /boot
+/dev/vda15      105M  6.2M   99M   6% /boot/efi
+/dev/sda         20G   13G  6.5G  66% /mnt/volume_sfo3_01
+overlay          20G   13G  6.5G  66% /mnt/volume_sfo3_01/docker/rootfs/overlayfs/e56d1eb0d47221fea4e09c98f84554a274fe35735cba16d4729c83c185ade898
+overlay          20G   13G  6.5G  66% /mnt/volume_sfo3_01/docker/rootfs/overlayfs/23a22b3670d6c0f2ba9bfd8ed3bbc5d0a9035d8af366202776a5c6634b50c235
+overlay          20G   13G  6.5G  66% /mnt/volume_sfo3_01/docker/rootfs/overlayfs/e4655102393c199547dc5dfcf5a23364438e48adb90135f7a6cee27986d1b9f9
+tmpfs           392M   16K  392M   1% /run/user/0
+NAME    MAJ:MIN RM   SIZE RO TYPE MOUNTPOINTS
+loop0     7:0    0  48.4M  1 loop /snap/snapd/26382
+loop1     7:1    0  66.8M  1 loop /snap/core24/1587
+loop2     7:2    0    74M  1 loop /snap/core22/2411
+loop3     7:3    0     4K  1 loop /snap/bare/5
+loop4     7:4    0  49.1M  1 loop /snap/cups/1170
+loop6     7:6    0  91.7M  1 loop /snap/gtk-common-themes/1535
+loop7     7:7    0   395M  1 loop /snap/mesa-2404/1165
+loop8     7:8    0 606.1M  1 loop /snap/gnome-46-2404/153
+loop9     7:9    0  49.1M  1 loop /snap/cups/1183
+loop10    7:10   0 184.4M  1 loop /snap/chromium/3411
+loop11    7:11   0  49.3M  1 loop /snap/snapd/26865
+loop12    7:12   0 184.4M  1 loop /snap/chromium/3423
+sda       8:0    0    20G  0 disk /mnt/volume_sfo3_01
+vda     253:0    0    10G  0 disk 
+├─vda1  253:1    0     9G  0 part /
+├─vda14 253:14   0     4M  0 part 
+├─vda15 253:15   0   106M  0 part /boot/efi
+└─vda16 259:0    0   913M  0 part /boot
+vdb     253:16   0   488K  1 disk 
+root@Phantom:/tmp# # 1. Clean up the failed attempts on root
+rm -rf ~/.rustup ~/.cargo /tmp/librespot* /tmp/cargo-*
+sudo apt-get clean
+sudo apt-get autoremove -y
+df -h /
+
+# 2. Make a build dir on the volume
+sudo mkdir -p /mnt/volume_sfo3_01/build
+sudo chown $USER:$USER /mnt/volume_sfo3_01/build
+
+# 3. Tell rustup + cargo to live on the volume instead of /root
+export RUSTUP_HOME=/mnt/volume_sfo3_01/build/rustup
+export CARGO_HOME=/mnt/volume_sfo3_01/build/cargo
+export CARGO_TARGET_DIR=/mnt/volume_sfo3_01/build/target
+
+# 4. Install Rust onto the volume
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --no-modify-path
+source $CARGO_HOME/env
+
+# 5. Build librespot (slow, ~5-10 min)
+cargo install librespot --root /mnt/volume_sfo3_01/build/cargo
+
+# 6. Copy the small (~20MB) binary to where the service expects it
+sudo cp /mnt/volume_sfo3_01/build/cargo/bin/librespot /usr/bin/librespot
+sudo chmod +x /usr/bin/librespot
+/usr/bin/librespot --version
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+0 upgraded, 0 newly installed, 0 to remove and 69 not upgraded.
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/vda1       8.7G  8.1G  619M  94% /
+info: downloading installer
+warn: It looks like you have an existing rustup settings file at:
+warn: /mnt/volume_sfo3_01/build/rustup/settings.toml
+warn: Rustup will install the default toolchain as specified in the settings file,
+warn: instead of the one inferred from the default host triple.
+info: profile set to default
+info: default host triple is x86_64-unknown-linux-gnu
+info: syncing channel updates for stable-x86_64-unknown-linux-gnu
+info: latest update on 2026-04-16 for version 1.95.0 (59807616e 2026-04-14)
+info: downloading 6 components
+        cargo installed                       10.48 MiB
+       clippy installed                        4.48 MiB
+    rust-docs installed                       21.18 MiB
+     rust-std installed                       28.20 MiB
+        rustc installed                       76.63 MiB
+      rustfmt installed                        2.06 MiB                                                           info: default toolchain set to stable-x86_64-unknown-linux-gnu
+
+  stable-x86_64-unknown-linux-gnu installed - rustc 1.95.0 (59807616e 2026-04-14)
+
+
+Rust is installed now. Great!
+
+To get started you need Cargo's bin directory 
+(/mnt/volume_sfo3_01/build/cargo/bin) in your PATH
+environment variable. This has not been done automatically.
+
+To configure your current shell, you need to source
+the corresponding env file under /mnt/volume_sfo3_01/build/cargo.
+
+This is usually done by running one of the following (note the leading DOT):
+. "/mnt/volume_sfo3_01/build/cargo/env"            # For 
+sh/bash/zsh/ash/dash/pdksh
+source "/mnt/volume_sfo3_01/build/cargo/env.fish"  # For fish
+source "/mnt/volume_sfo3_01/build/cargo/env.nu"  # For nushell
+source "/mnt/volume_sfo3_01/build/cargo/env.tcsh"  # For tcsh
+. "/mnt/volume_sfo3_01/build/cargo/env.ps1"        # For pwsh
+source "/mnt/volume_sfo3_01/build/cargo/env.xsh"   # For xonsh
+    Updating crates.io index
+  Downloaded librespot v0.8.0
+  Downloaded 1 crate (62.7KiB) in 0.09s
+  Installing librespot v0.8.0
+    Updating crates.io index
+     Locking 400 packages to latest compatible versions
+      Adding generic-array v0.14.7 (available: v0.14.9)
+      Adding sha1 v0.10.6 (available: v0.11.0)
+      Adding sysinfo v0.36.1 (available: v0.39.0)
+  Downloaded httpdate v1.0.3
+  Downloaded getrandom v0.4.2
+  Downloaded idna_adapter v1.2.2
+  Downloaded is-wsl v0.4.0
+  Downloaded serde_path_to_error v0.1.20
+  Downloaded num-conv v0.2.1
+  Downloaded openssl-macros v0.1.1
+  Downloaded vergen-lib v9.1.0
+  Downloaded spki v0.7.3
+  Downloaded vcpkg v0.2.15
+  Downloaded zerofrom v0.1.7
+  Downloaded zerofrom-derive v0.1.7
+  Downloaded zmij v1.0.21
+  Downloaded yoke v0.8.2
+  Downloaded tracing-core v0.1.36
+  Downloaded uuid v1.23.1
+  Downloaded zerotrie v0.2.4
+  Downloaded zerovec v0.11.6
+  Downloaded tokio-util v0.7.18
+  Downloaded tower-http v0.6.10
+  Downloaded mio v1.2.0
+  Downloaded rustix v1.1.4
+  Downloaded sysinfo v0.36.1
+  Downloaded tokio v1.52.3
+  Downloaded zerocopy v0.8.48
+  Downloaded time v0.3.47
+  Downloaded zerocopy-derive v0.8.48
+  Downloaded typenum v1.20.0
+  Downloaded syn v2.0.117
+  Downloaded tower v0.5.3
+  Downloaded serde_core v1.0.228
+  Downloaded rustix v0.38.44
+  Downloaded unicode-ident v1.0.24
+  Downloaded symphonia-core v0.5.5
+  Downloaded ryu v1.0.23
+  Downloaded rand v0.8.6
+  Downloaded tracing v0.1.44
+  Downloaded num-bigint v0.4.6
+  Downloaded serde_json v1.0.149
+  Downloaded encoding_rs v0.8.35
+  Downloaded regex v1.12.3
+  Downloaded linux-raw-sys v0.12.1
+  Downloaded protobuf v3.7.2
+  Downloaded librespot-core v0.8.0
+  Downloaded rustls-pki-types v1.14.1
+  Downloaded regex-syntax v0.8.10
+  Downloaded quote v1.0.45
+  Downloaded pkcs1 v0.7.5
+  Downloaded once_cell v1.21.4
+  Downloaded spinning_top v0.3.0
+  Downloaded rand_core v0.6.4
+  Downloaded ppv-lite86 v0.2.21
+  Downloaded pkg-config v0.3.33
+  Downloaded num-rational v0.4.2
+  Downloaded which v4.4.2
+  Downloaded utf8_iter v1.0.4
+  Downloaded unicode-width v0.2.2
+  Downloaded tokio-tungstenite v0.28.0
+  Downloaded tokio-stream v0.1.18
+  Downloaded time-macros v0.2.27
+  Downloaded tempfile v3.27.0
+  Downloaded synstructure v0.13.2
+  Downloaded subtle v2.6.1
+  Downloaded regex-automata v0.4.14
+  Downloaded simd-adler32 v0.3.9
+  Downloaded sha2 v0.10.9
+  Downloaded pbkdf2 v0.12.2
+  Downloaded openssl-probe v0.2.1
+  Downloaded num_threads v0.1.7
+  Downloaded multimap v0.10.1
+  Downloaded is_terminal_polyfill v1.70.2
+  Downloaded zerovec-derive v0.11.3
+  Downloaded zeroize v1.8.2
+  Downloaded vergen-lib v0.1.6
+  Downloaded vergen-gitcl v1.0.8
+  Downloaded vergen v9.1.0
+  Downloaded thiserror-impl v2.0.18
+  Downloaded thiserror v2.0.18
+  Downloaded thiserror v1.0.69
+  Downloaded yoke-derive v0.8.2
+  Downloaded writeable v0.6.3
+  Downloaded version_check v0.9.5
+  Downloaded utf8parse v0.2.2
+  Downloaded url v2.5.8
+  Downloaded tungstenite v0.28.0
+  Downloaded tower-service v0.3.3
+  Downloaded tower-layer v0.3.3
+  Downloaded tokio-native-tls v0.3.1
+  Downloaded tokio-macros v2.7.0
+  Downloaded tinystr v0.8.3
+  Downloaded time-core v0.1.8
+  Downloaded thiserror-impl v1.0.69
+  Downloaded symphonia-format-ogg v0.5.5
+  Downloaded symphonia-codec-vorbis v0.5.5
+  Downloaded symphonia-bundle-mp3 v0.5.5
+  Downloaded symphonia v0.5.5
+  Downloaded stable_deref_trait v1.2.1
+  Downloaded spin v0.9.8
+  Downloaded signature v2.2.0
+  Downloaded shannon v0.2.0
+  Downloaded sha1 v0.10.6
+  Downloaded portable-atomic v1.13.1
+  Downloaded nonzero_ext v0.3.0
+  Downloaded librespot-playback v0.8.0
+  Downloaded web-time v1.1.0
+  Downloaded want v0.3.1
+  Downloaded utf-8 v0.7.6
+  Downloaded symphonia-utils-xiph v0.5.5
+  Downloaded symphonia-bundle-flac v0.5.5
+  Downloaded smallvec v1.15.1
+  Downloaded shell-words v1.1.1
+  Downloaded serde v1.0.228
+  Downloaded rsa v0.9.10
+  Downloaded rodio v0.21.1
+  Downloaded reqwest v0.12.28
+  Downloaded rand_distr v0.5.1
+  Downloaded rand v0.9.4
+  Downloaded quick-xml v0.38.4
+  Downloaded protobuf-json-mapping v3.7.2
+  Downloaded protobuf-codegen v3.7.2
+  Downloaded pkcs8 v0.10.2
+  Downloaded pin-project-lite v0.2.17
+  Downloaded pem-rfc7468 v0.7.0
+  Downloaded libc v0.2.186
+  Downloaded icu_properties_data v2.2.0
+  Downloaded hyper v1.9.0
+  Downloaded httparse v1.10.1
+  Downloaded hashbrown v0.17.0
+  Downloaded h2 v0.4.14
+  Downloaded governor v0.10.4
+  Downloaded socket2 v0.6.3
+  Downloaded serde_urlencoded v0.7.1
+  Downloaded rustversion v1.0.22
+  Downloaded linux-raw-sys v0.4.15
+  Downloaded rand_chacha v0.3.1
+  Downloaded protobuf-parse v3.7.2
+  Downloaded proc-macro2 v1.0.106
+  Downloaded icu_normalizer_data v2.2.0
+  Downloaded icu_locale_core v2.2.0
+  Downloaded icu_collections v2.2.0
+  Downloaded hyper-util v0.1.20
+  Downloaded http v1.4.0
+  Downloaded hashbrown v0.16.1
+  Downloaded futures-util v0.3.32
+  Downloaded fastrand v2.4.1
+  Downloaded der v0.7.10
+  Downloaded slab v0.4.12
+  Downloaded shlex v1.3.0
+  Downloaded serde_derive v1.0.228
+  Downloaded scopeguard v1.2.0
+  Downloaded rand_core v0.9.5
+  Downloaded protobuf-support v3.7.2
+  Downloaded powerfmt v0.2.0
+  Downloaded parking_lot_core v0.9.12
+  Downloaded openssl-sys v0.9.115
+  Downloaded openssl v0.10.79
+  Downloaded miniz_oxide v0.8.9
+  Downloaded icu_provider v2.2.0
+  Downloaded headers-core v0.3.0
+  Downloaded getrandom v0.3.4
+  Downloaded getrandom v0.2.17
+  Downloaded futures-timer v3.0.3
+  Downloaded futures-task v0.3.32
+  Downloaded futures-core v0.3.32
+  Downloaded form_urlencoded v1.2.2
+  Downloaded fnv v1.0.7
+  Downloaded flate2 v1.1.9
+  Downloaded derive_builder_core v0.20.2
+  Downloaded try-lock v0.2.5
+  Downloaded sync_wrapper v1.0.2
+  Downloaded symphonia-metadata v0.5.5
+  Downloaded strsim v0.11.1
+  Downloaded signal-hook-registry v1.4.8
+  Downloaded serde_repr v0.1.20
+  Downloaded potential_utf v0.1.5
+  Downloaded percent-encoding v2.3.2
+  Downloaded pathdiff v0.2.3
+  Downloaded open v5.3.4
+  Downloaded oauth2 v5.0.0
+  Downloaded num-bigint-dig v0.8.6
+  Downloaded librespot-discovery v0.8.0
+  Downloaded libm v0.2.16
+  Downloaded jiff v0.2.24
+  Downloaded headers v0.4.1
+  Downloaded futures-sink v0.3.32
+  Downloaded digest v0.10.7
+  Downloaded derive_builder v0.20.2
+  Downloaded deranged v0.5.8
+  Downloaded data-encoding v2.11.0
+  Downloaded num-traits v0.2.19
+  Downloaded num-iter v0.1.45
+  Downloaded num-integer v0.1.46
+  Downloaded num-derive v0.4.2
+  Downloaded native-tls v0.2.18
+  Downloaded mime v0.3.17
+  Downloaded log v0.4.29
+  Downloaded lock_api v0.4.14
+  Downloaded litemap v0.8.2
+  Downloaded librespot-protocol v0.8.0
+  Downloaded librespot-oauth v0.8.0
+  Downloaded librespot-metadata v0.8.0
+  Downloaded librespot-audio v0.8.0
+  Downloaded lazy_static v1.5.0
+  Downloaded is-docker v0.2.0
+  Downloaded if-addrs v0.14.0
+  Downloaded ident_case v1.0.1
+  Downloaded iana-time-zone v0.1.65
+  Downloaded hyper-proxy2 v0.1.0
+  Downloaded http-body v1.0.1
+  Downloaded generic-array v0.14.7
+  Downloaded futures-macro v0.3.32
+  Downloaded foreign-types-shared v0.1.1
+  Downloaded foreign-types v0.3.2
+  Downloaded errno v0.3.14
+  Downloaded derive_builder_macro v0.20.2
+  Downloaded darling_macro v0.20.11
+  Downloaded darling v0.20.11
+  Downloaded librespot-connect v0.8.0
+  Downloaded ipnet v2.12.0
+  Downloaded inout v0.1.4
+  Downloaded indexmap v2.14.0
+  Downloaded idna v1.1.0
+  Downloaded hostname v0.4.2
+  Downloaded futures-io v0.3.32
+  Downloaded foldhash v0.2.0
+  Downloaded equivalent v1.0.2
+  Downloaded displaydoc v0.2.5
+  Downloaded dasp_sample v0.11.0
+  Downloaded rand_chacha v0.9.0
+  Downloaded priority-queue v2.7.0
+  Downloaded parking_lot v0.12.5
+  Downloaded memchr v2.8.0
+  Downloaded libmdns v0.10.1
+  Downloaded itoa v1.0.18
+  Downloaded hyper-tls v0.6.0
+  Downloaded home v0.5.12
+  Downloaded hmac v0.12.1
+  Downloaded find-msvc-tools v0.1.9
+  Downloaded env_logger v0.11.10
+  Downloaded env_filter v1.0.1
+  Downloaded ctr v0.9.2
+  Downloaded chrono v0.4.44
+  Downloaded arrayvec v0.7.6
+  Downloaded alsa-sys v0.3.1
+  Downloaded allocator-api2 v0.2.21
+  Downloaded aho-corasick v1.1.4
+  Downloaded http-body-util v0.1.3
+  Downloaded either v1.15.0
+  Downloaded crc32fast v1.5.0
+  Downloaded cpufeatures v0.2.17
+  Downloaded cpal v0.16.0
+  Downloaded const-oid v0.9.6
+  Downloaded colorchoice v1.0.5
+  Downloaded cfg-if v1.0.4
+  Downloaded bytes v1.11.1
+  Downloaded byteorder v1.5.0
+  Downloaded bytemuck v1.25.0
+  Downloaded bitflags v2.11.1
+  Downloaded base64ct v1.8.3
+  Downloaded base64 v0.22.1
+  Downloaded atomic-waker v1.1.2
+  Downloaded anyhow v1.0.102
+  Downloaded anstyle-query v1.1.5
+  Downloaded anstyle-parse v1.0.0
+  Downloaded anstyle v1.0.14
+  Downloaded anstream v1.0.0
+  Downloaded aes v0.8.4
+  Downloaded icu_properties v2.2.0
+  Downloaded icu_normalizer v2.2.0
+  Downloaded futures-channel v0.3.32
+  Downloaded darling_core v0.20.11
+  Downloaded crypto-common v0.1.7
+  Downloaded cc v1.2.62
+  Downloaded block-buffer v0.10.4
+  Downloaded bitflags v1.3.2
+  Downloaded autocfg v1.5.0
+  Downloaded alsa v0.9.1
+  Downloaded getopts v0.2.24
+  Downloaded cipher v0.4.4
+  Downloaded async-trait v0.1.89
+  Downloaded adler2 v2.0.1
+  Downloaded 281 crates (23.8MiB) in 2.01s (largest was `linux-raw-sys` at 2.9MiB)
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.45
+   Compiling libc v0.2.186
+   Compiling syn v2.0.117
+   Compiling cfg-if v1.0.4
+   Compiling version_check v0.9.5
+   Compiling bytes v1.11.1
+   Compiling generic-array v0.14.7
+   Compiling pkg-config v0.3.33
+   Compiling log v0.4.29
+   Compiling libm v0.2.16
+   Compiling autocfg v1.5.0
+   Compiling pin-project-lite v0.2.17
+   Compiling itoa v1.0.18
+   Compiling typenum v1.20.0
+   Compiling synstructure v0.13.2
+   Compiling futures-core v0.3.32
+   Compiling zerofrom-derive v0.1.7
+   Compiling zerofrom v0.1.7
+   Compiling yoke-derive v0.8.2
+   Compiling errno v0.3.14
+   Compiling const-oid v0.9.6
+   Compiling smallvec v1.15.1
+   Compiling stable_deref_trait v1.2.1
+   Compiling getrandom v0.3.4
+   Compiling once_cell v1.21.4
+   Compiling yoke v0.8.2
+   Compiling signal-hook-registry v1.4.8
+   Compiling crypto-common v0.1.7
+   Compiling tokio-macros v2.7.0
+   Compiling mio v1.2.0
+   Compiling socket2 v0.6.3
+   Compiling shlex v1.3.0
+   Compiling futures-sink v0.3.32
+   Compiling thiserror v1.0.69
+   Compiling bitflags v2.11.1
+   Compiling rustversion v1.0.22
+   Compiling find-msvc-tools v0.1.9
+   Compiling cc v1.2.62
+   Compiling tokio v1.52.3
+   Compiling zerovec-derive v0.11.3
+   Compiling http v1.4.0
+   Compiling zerocopy v0.8.48
+   Compiling vcpkg v0.2.15
+   Compiling memchr v2.8.0
+   Compiling openssl-sys v0.9.115
+   Compiling zerovec v0.11.6
+   Compiling zerocopy-derive v0.8.48
+   Compiling displaydoc v0.2.5
+   Compiling thiserror-impl v1.0.69
+   Compiling slab v0.4.12
+warning: openssl-sys@0.9.115: Could not find directory of OpenSSL installation, and this `-sys` crate cannot proceed without this knowledge. If OpenSSL is installed and this crate had trouble finding it,  you can set the `OPENSSL_DIR` environment variable for the compilation process. See stderr section below for further information.
+error: failed to run custom build command for `openssl-sys v0.9.115`
+
+Caused by:
+  process didn't exit successfully: `/mnt/volume_sfo3_01/build/target/release/build/openssl-sys-33c73d9001fe9212/build-script-main` (exit status: 101)
+  --- stdout
+  cargo:rustc-check-cfg=cfg(osslconf, values("OPENSSL_NO_OCB", "OPENSSL_NO_SM4", "OPENSSL_NO_SEED", "OPENSSL_NO_CHACHA", "OPENSSL_NO_CAST", "OPENSSL_NO_IDEA", "OPENSSL_NO_CAMELLIA", "OPENSSL_NO_RC4", "OPENSSL_NO_BF", "OPENSSL_NO_PSK", "OPENSSL_NO_DEPRECATED_3_0", "OPENSSL_NO_SCRYPT", "OPENSSL_NO_SM3", "OPENSSL_NO_RMD160", "OPENSSL_NO_EC2M", "OPENSSL_NO_OCSP", "OPENSSL_NO_CMS", "OPENSSL_NO_COMP", "OPENSSL_NO_SOCK", "OPENSSL_NO_STDIO", "OPENSSL_NO_EC", "OPENSSL_NO_SSL3_METHOD", "OPENSSL_NO_KRB5", "OPENSSL_NO_TLSEXT", "OPENSSL_NO_SRP", "OPENSSL_NO_SRTP", "OPENSSL_NO_RFC3779", "OPENSSL_NO_SHA", "OPENSSL_NO_NEXTPROTONEG", "OPENSSL_NO_ENGINE", "OPENSSL_NO_BUF_FREELISTS", "OPENSSL_NO_RC2"))
+  cargo:rustc-check-cfg=cfg(openssl)
+  cargo:rustc-check-cfg=cfg(libressl)
+  cargo:rustc-check-cfg=cfg(boringssl)
+  cargo:rustc-check-cfg=cfg(awslc)
+  cargo:rustc-check-cfg=cfg(awslc_pregenerated)
+  cargo:rustc-check-cfg=cfg(libressl250)
+  cargo:rustc-check-cfg=cfg(libressl251)
+  cargo:rustc-check-cfg=cfg(libressl252)
+  cargo:rustc-check-cfg=cfg(libressl261)
+  cargo:rustc-check-cfg=cfg(libressl270)
+  cargo:rustc-check-cfg=cfg(libressl271)
+  cargo:rustc-check-cfg=cfg(libressl273)
+  cargo:rustc-check-cfg=cfg(libressl280)
+  cargo:rustc-check-cfg=cfg(libressl281)
+  cargo:rustc-check-cfg=cfg(libressl291)
+  cargo:rustc-check-cfg=cfg(libressl310)
+  cargo:rustc-check-cfg=cfg(libressl321)
+  cargo:rustc-check-cfg=cfg(libressl332)
+  cargo:rustc-check-cfg=cfg(libressl340)
+  cargo:rustc-check-cfg=cfg(libressl350)
+  cargo:rustc-check-cfg=cfg(libressl360)
+  cargo:rustc-check-cfg=cfg(libressl361)
+  cargo:rustc-check-cfg=cfg(libressl370)
+  cargo:rustc-check-cfg=cfg(libressl380)
+  cargo:rustc-check-cfg=cfg(libressl381)
+  cargo:rustc-check-cfg=cfg(libressl382)
+  cargo:rustc-check-cfg=cfg(libressl390)
+  cargo:rustc-check-cfg=cfg(libressl400)
+  cargo:rustc-check-cfg=cfg(libressl410)
+  cargo:rustc-check-cfg=cfg(libressl420)
+  cargo:rustc-check-cfg=cfg(libressl430)
+  cargo:rustc-check-cfg=cfg(ossl101)
+  cargo:rustc-check-cfg=cfg(ossl102)
+  cargo:rustc-check-cfg=cfg(ossl102f)
+  cargo:rustc-check-cfg=cfg(ossl102h)
+  cargo:rustc-check-cfg=cfg(ossl110)
+  cargo:rustc-check-cfg=cfg(ossl110f)
+  cargo:rustc-check-cfg=cfg(ossl110g)
+  cargo:rustc-check-cfg=cfg(ossl110h)
+  cargo:rustc-check-cfg=cfg(ossl111)
+  cargo:rustc-check-cfg=cfg(ossl111b)
+  cargo:rustc-check-cfg=cfg(ossl111c)
+  cargo:rustc-check-cfg=cfg(ossl111d)
+  cargo:rustc-check-cfg=cfg(ossl300)
+  cargo:rustc-check-cfg=cfg(ossl310)
+  cargo:rustc-check-cfg=cfg(ossl320)
+  cargo:rustc-check-cfg=cfg(ossl330)
+  cargo:rustc-check-cfg=cfg(ossl340)
+  cargo:rustc-check-cfg=cfg(ossl400)
+  cargo:rerun-if-env-changed=X86_64_UNKNOWN_LINUX_GNU_OPENSSL_LIB_DIR
+  X86_64_UNKNOWN_LINUX_GNU_OPENSSL_LIB_DIR unset
+  cargo:rerun-if-env-changed=OPENSSL_LIB_DIR
+  OPENSSL_LIB_DIR unset
+  cargo:rerun-if-env-changed=X86_64_UNKNOWN_LINUX_GNU_OPENSSL_INCLUDE_DIR
+  X86_64_UNKNOWN_LINUX_GNU_OPENSSL_INCLUDE_DIR unset
+  cargo:rerun-if-env-changed=OPENSSL_INCLUDE_DIR
+  OPENSSL_INCLUDE_DIR unset
+  cargo:rerun-if-env-changed=X86_64_UNKNOWN_LINUX_GNU_OPENSSL_DIR
+  X86_64_UNKNOWN_LINUX_GNU_OPENSSL_DIR unset
+  cargo:rerun-if-env-changed=OPENSSL_DIR
+  OPENSSL_DIR unset
+  cargo:rerun-if-env-changed=OPENSSL_NO_PKG_CONFIG
+  cargo:rerun-if-env-changed=PKG_CONFIG_x86_64-unknown-linux-gnu
+  cargo:rerun-if-env-changed=PKG_CONFIG_x86_64_unknown_linux_gnu
+  cargo:rerun-if-env-changed=HOST_PKG_CONFIG
+  cargo:rerun-if-env-changed=PKG_CONFIG
+  cargo:rerun-if-env-changed=OPENSSL_STATIC
+  cargo:rerun-if-env-changed=OPENSSL_DYNAMIC
+  cargo:rerun-if-env-changed=PKG_CONFIG_ALL_STATIC
+  cargo:rerun-if-env-changed=PKG_CONFIG_ALL_DYNAMIC
+  cargo:rerun-if-env-changed=PKG_CONFIG_PATH_x86_64-unknown-linux-gnu
+  cargo:rerun-if-env-changed=PKG_CONFIG_PATH_x86_64_unknown_linux_gnu
+  cargo:rerun-if-env-changed=HOST_PKG_CONFIG_PATH
+  cargo:rerun-if-env-changed=PKG_CONFIG_PATH
+  cargo:rerun-if-env-changed=PKG_CONFIG_LIBDIR_x86_64-unknown-linux-gnu
+  cargo:rerun-if-env-changed=PKG_CONFIG_LIBDIR_x86_64_unknown_linux_gnu
+  cargo:rerun-if-env-changed=HOST_PKG_CONFIG_LIBDIR
+  cargo:rerun-if-env-changed=PKG_CONFIG_LIBDIR
+  cargo:rerun-if-env-changed=PKG_CONFIG_SYSROOT_DIR_x86_64-unknown-linux-gnu
+  cargo:rerun-if-env-changed=PKG_CONFIG_SYSROOT_DIR_x86_64_unknown_linux_gnu
+  cargo:rerun-if-env-changed=HOST_PKG_CONFIG_SYSROOT_DIR
+  cargo:rerun-if-env-changed=PKG_CONFIG_SYSROOT_DIR
+
+
+  Could not find openssl via pkg-config:
+
+  pkg-config exited with status code 1
+  > PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 pkg-config --libs --cflags openssl
+
+  pkg-config output:
+    Package openssl was not found in the pkg-config search path.
+    Perhaps you should add the directory containing `openssl.pc'
+    to the PKG_CONFIG_PATH environment variable
+    Package 'openssl', required by 'virtual:world', not found
+
+  The system library `openssl` required by crate `openssl-sys` was not found.
+  The file `openssl.pc` needs to be installed and the PKG_CONFIG_PATH environment variable must contain its parent directory.
+  The PKG_CONFIG_PATH environment variable is not set.
+
+  HINT: if you have installed the library, try setting PKG_CONFIG_PATH to the directory containing `openssl.pc`.
+
+
+  cargo:warning=Could not find directory of OpenSSL installation, and this `-sys` crate cannot proceed without this knowledge. If OpenSSL is installed and this crate had trouble finding it,  you can set the `OPENSSL_DIR` environment variable for the compilation process. See stderr section below for further information.
+
+  --- stderr
+
+
+  Could not find directory of OpenSSL installation, and this `-sys` crate cannot
+  proceed without this knowledge. If OpenSSL is installed and this crate had
+  trouble finding it,  you can set the `OPENSSL_DIR` environment variable for the
+  compilation process.
+
+  Make sure you also have the development packages of openssl installed.
+  For example, `libssl-dev` on Ubuntu or `openssl-devel` on Fedora.
+
+  If you're in a situation where you think the directory *should* be found
+  automatically, please open a bug at https://github.com/rust-openssl/rust-openssl
+  and include information about your system as well as this message.
+
+  $HOST = x86_64-unknown-linux-gnu
+  $TARGET = x86_64-unknown-linux-gnu
+  openssl-sys = 0.9.115
+
+
+warning: build failed, waiting for other jobs to finish...
+error: failed to compile `librespot v0.8.0`, intermediate artifacts can be found at `/mnt/volume_sfo3_01/build/target`.
+To reuse those artifacts with a future compilation, set the environment variable `CARGO_BUILD_BUILD_DIR` to that path.
+cp: cannot stat '/mnt/volume_sfo3_01/build/cargo/bin/librespot': No such file or directory
+chmod: cannot access '/usr/bin/librespot': No such file or directory
+-bash: /usr/bin/librespot: No such file or directory
+root@Phantom:/tmp# 
