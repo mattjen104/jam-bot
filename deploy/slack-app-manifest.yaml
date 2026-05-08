@@ -1,0 +1,66 @@
+display_information:
+  name: Jam Bot
+  description: Permanent Spotify Jam host for our channel.
+  background_color: "#1DB954"
+features:
+  bot_user:
+    display_name: Jam Bot
+    always_online: true
+  slash_commands:
+    - command: /play
+      description: Play a song now
+      usage_hint: "<song or artist>"
+      should_escape: false
+    - command: /queue
+      description: Add a song to the queue
+      usage_hint: "<song or artist>"
+      should_escape: false
+    - command: /skip
+      description: Skip the current track
+      should_escape: false
+    - command: /nowplaying
+      description: Show what's playing
+      should_escape: false
+    - command: /history
+      description: Show recent Jam history
+      should_escape: false
+    - command: /wrapped
+      description: Show this week's Jam Wrapped recap
+      should_escape: false
+    - command: /dna
+      description: Show a user's taste DNA card
+      usage_hint: "[@user]"
+      should_escape: false
+    - command: /compat
+      description: Compare two users' musical compatibility
+      usage_hint: "@userA @userB"
+      should_escape: false
+    - command: /memory
+      description: Ask the Jam history a question, or play a curated set
+      usage_hint: "<question or play-me-a-set request>"
+      should_escape: false
+    - command: /jamoptout
+      description: Opt out of (or back into) personal Wrapped stats
+      usage_hint: "[off]"
+      should_escape: false
+oauth_config:
+  scopes:
+    bot:
+      # Minimum needed for: read messages in the configured public channel,
+      # post replies, run slash commands, and resolve user IDs for "@user"
+      # attribution. Add groups:history / im:history yourself if you want the
+      # bot to also work in private channels or DMs.
+      - app_mentions:read
+      - channels:history
+      - chat:write
+      - commands
+      - users:read
+settings:
+  event_subscriptions:
+    bot_events:
+      - message.channels
+  interactivity:
+    is_enabled: true
+  org_deploy_enabled: false
+  socket_mode_enabled: true
+  token_rotation_enabled: false

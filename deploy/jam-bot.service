@@ -1,0 +1,23 @@
+[Unit]
+Description=Jam Bot — Slack + Spotify Jam controller
+After=network-online.target librespot.service
+Wants=network-online.target librespot.service
+
+[Service]
+Type=simple
+User=jam
+WorkingDirectory=/opt/jam-bot/app
+EnvironmentFile=/opt/jam-bot/.env
+ExecStart=/usr/bin/pnpm run start
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
