@@ -1,0 +1,37 @@
+-bash: /root/.cargo/env: No such file or directory
+-bash: /root/.cargo/env: No such file or directory
+root@Phantom:/tmp# 
+root@Phantom:/tmp# 
+root@Phantom:/tmp# 
+root@Phantom:/tmp# ^C
+root@Phantom:/tmp# sudo cp /mnt/volume_sfo3_01/build/cargo/bin/librespot /usr/bin/librespot
+sudo systemctl restart librespot.service
+sleep 3
+sudo journalctl -u librespot.service -n 25 --no-pager -l
+cp: cannot stat '/mnt/volume_sfo3_01/build/cargo/bin/librespot': No such file or directory
+May 08 22:16:52 Phantom systemd[1]: Stopped librespot.service - librespot — headless Spotify Connect device for Jam Host.
+May 08 22:16:58 Phantom systemd[1]: Started librespot.service - librespot — headless Spotify Connect device for Jam Host.
+May 08 22:16:58 Phantom librespot[3415945]: [2026-05-08T22:16:58Z INFO  librespot] librespot 0.6.0 VERGEN_IDEMPOTENT_OUTPUT (Built on 2026-05-08, Build ID: aRADDuDm, Profile: release)
+May 08 22:16:58 Phantom librespot[3415945]: [2026-05-08T22:16:58Z INFO  librespot_playback::mixer::softmixer] Mixing with softvol and volume control: Log(60.0)
+May 08 22:16:58 Phantom librespot[3415945]: [2026-05-08T22:16:58Z INFO  librespot_playback::convert] Converting with ditherer: tpdf
+May 08 22:16:58 Phantom librespot[3415945]: [2026-05-08T22:16:58Z INFO  librespot_playback::audio_backend::pipe] Using StdoutSink (pipe) with format: S16
+May 08 22:17:58 Phantom systemd[1]: Stopping librespot.service - librespot — headless Spotify Connect device for Jam Host...
+May 08 22:17:58 Phantom systemd[1]: librespot.service: Deactivated successfully.
+May 08 22:17:58 Phantom systemd[1]: Stopped librespot.service - librespot — headless Spotify Connect device for Jam Host.
+May 08 22:18:03 Phantom systemd[1]: Started librespot.service - librespot — headless Spotify Connect device for Jam Host.
+May 08 22:18:03 Phantom librespot[3416369]: [2026-05-08T22:18:03Z INFO  librespot] librespot 0.6.0 VERGEN_IDEMPOTENT_OUTPUT (Built on 2026-05-08, Build ID: aRADDuDm, Profile: release)
+May 08 22:18:03 Phantom librespot[3416369]: [2026-05-08T22:18:03Z INFO  librespot_playback::mixer::softmixer] Mixing with softvol and volume control: Log(60.0)
+May 08 22:18:03 Phantom librespot[3416369]: [2026-05-08T22:18:03Z INFO  librespot_playback::convert] Converting with ditherer: tpdf
+May 08 22:18:03 Phantom librespot[3416369]: [2026-05-08T22:18:03Z INFO  librespot_playback::audio_backend::pipe] Using StdoutSink (pipe) with format: S16
+May 08 22:41:17 Phantom systemd[1]: Stopping librespot.service - librespot — headless Spotify Connect device for Jam Host...
+May 08 22:41:17 Phantom systemd[1]: librespot.service: Deactivated successfully.
+May 08 22:41:17 Phantom systemd[1]: Stopped librespot.service - librespot — headless Spotify Connect device for Jam Host.
+May 08 22:41:17 Phantom systemd[1]: Started librespot.service - librespot — headless Spotify Connect device for Jam Host.
+May 08 22:41:17 Phantom librespot[3425720]: [2026-05-08T22:41:17Z INFO  librespot] librespot 0.6.0 VERGEN_IDEMPOTENT_OUTPUT (Built on 2026-05-08, Build ID: aRADDuDm, Profile: release)
+May 08 22:41:17 Phantom librespot[3425720]: [2026-05-08T22:41:17Z INFO  librespot_playback::mixer::softmixer] Mixing with softvol and volume control: Log(60.0)
+May 08 22:41:17 Phantom librespot[3425720]: [2026-05-08T22:41:17Z INFO  librespot_playback::convert] Converting with ditherer: tpdf
+May 08 22:41:17 Phantom librespot[3425720]: [2026-05-08T22:41:17Z INFO  librespot_playback::audio_backend::pipe] Using StdoutSink (pipe) with format: S16
+May 08 22:41:17 Phantom librespot[3425720]: [2026-05-08T22:41:17Z INFO  librespot_core::session] Connecting to AP "ap-guc3.spotify.com:4070"
+May 08 22:41:17 Phantom librespot[3425720]: [2026-05-08T22:41:17Z INFO  librespot_core::session] Authenticated as '1261507623' !
+May 08 22:41:17 Phantom librespot[3425720]: [2026-05-08T22:41:17Z INFO  librespot_core::session] Country: "US"
+root@Phantom:/tmp# 
