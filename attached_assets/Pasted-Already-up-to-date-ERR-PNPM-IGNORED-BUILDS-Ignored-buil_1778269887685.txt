@@ -1,0 +1,130 @@
+Already up to date
+[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: better-sqlite3@11.10.0, esbuild@0.27.7
+
+Run "pnpm approve-builds" to pick which dependencies should be allowed to run scripts.
+[ERROR] Command failed with exit code 1: "C:\Users\mjensen\AppData\Local\fnm_multishells\28304_1778269071820\node.exe" "C:\Users\mjensen\AppData\Local\fnm_multishells\28304_1778269071820\node_modules\pnpm\bin\pnpm.mjs" install
+
+pnpm: Command failed with exit code 1: "C:\Users\mjensen\AppData\Local\fnm_multishells\28304_1778269071820\node.exe" "C:\Users\mjensen\AppData\Local\fnm_multishells\28304_1778269071820\node_modules\pnpm\bin\pnpm.mjs" install
+    at getFinalError (file:///C:/Users/mjensen/AppData/Roaming/fnm/node-versions/v24.15.0/installation/node_modules/pnpm/dist/pnpm.mjs:28550:14)
+    at makeError (file:///C:/Users/mjensen/AppData/Roaming/fnm/node-versions/v24.15.0/installation/node_modules/pnpm/dist/pnpm.mjs:30857:21)
+    at getSyncResult (file:///C:/Users/mjensen/AppData/Roaming/fnm/node-versions/v24.15.0/installation/node_modules/pnpm/dist/pnpm.mjs:32701:10)
+    at spawnSubprocessSync (file:///C:/Users/mjensen/AppData/Roaming/fnm/node-versions/v24.15.0/installation/node_modules/pnpm/dist/pnpm.mjs:32661:14)
+    at execaCoreSync (file:///C:/Users/mjensen/AppData/Roaming/fnm/node-versions/v24.15.0/installation/node_modules/pnpm/dist/pnpm.mjs:32591:23)
+    at callBoundExeca (file:///C:/Users/mjensen/AppData/Roaming/fnm/node-versions/v24.15.0/installation/node_modules/pnpm/dist/pnpm.mjs:35119:23)
+    at boundExeca (file:///C:/Users/mjensen/AppData/Roaming/fnm/node-versions/v24.15.0/installation/node_modules/pnpm/dist/pnpm.mjs:35096:49)
+    at sync (file:///C:/Users/mjensen/AppData/Roaming/fnm/node-versions/v24.15.0/installation/node_modules/pnpm/dist/pnpm.mjs:35255:10)
+    at runPnpmCli (file:///C:/Users/mjensen/AppData/Roaming/fnm/node-versions/v24.15.0/installation/node_modules/pnpm/dist/pnpm.mjs:208877:5)
+    at runDepsStatusCheck (file:///C:/Users/mjensen/AppData/Roaming/fnm/node-versions/v24.15.0/installation/node_modules/pnpm/dist/pnpm.mjs:210581:7)
+PS C:\jam-bot\jam-bot>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
