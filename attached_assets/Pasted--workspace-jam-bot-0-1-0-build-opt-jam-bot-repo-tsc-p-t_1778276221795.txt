@@ -1,0 +1,41 @@
+> @workspace/jam-bot@0.1.0 build /opt/jam-bot-repo
+> tsc -p tsconfig.build.json
+
+root@Phantom:/opt/jam-bot/app# sudo nano /opt/jam-bot/.env
+root@Phantom:/opt/jam-bot/app# sudo chown jam:jam /opt/jam-bot/.env
+sudo chmod 600 /opt/jam-bot/.env
+root@Phantom:/opt/jam-bot/app# sudo cp /opt/jam-bot/app/deploy/librespot.service /etc/systemd/system/
+sudo cp /opt/jam-bot/app/deploy/jam-bot.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now librespot.service jam-bot.service
+sudo systemctl status librespot.service --no-pager
+sudo systemctl status jam-bot.service --no-pager
+Created symlink /etc/systemd/system/multi-user.target.wants/librespot.service → /etc/systemd/system/librespot.service.
+Created symlink /etc/systemd/system/multi-user.target.wants/jam-bot.service → /etc/systemd/system/jam-bot.service.
+● librespot.service - librespot — headless Spotify Connect device for Jam Host
+     Loaded: loaded (/etc/systemd/system/librespot.service; enabled; preset: enabled)
+     Active: active (running) since Fri 2026-05-08 21:36:38 UTC; 46ms ago
+   Main PID: 3388991 ((ibrespot))
+      Tasks: 1 (limit: 4656)
+     Memory: 1.4M (peak: 1.7M)
+        CPU: 13ms
+     CGroup: /system.slice/librespot.service
+             └─3388991 "(ibrespot)"
+
+May 08 21:36:38 Phantom systemd[1]: Started librespot.service - librespot — headless Spotify Connect devi…am Host.
+May 08 21:36:38 Phantom systemd[1]: librespot.service: Main process exited, code=exited, status=203/EXEC
+May 08 21:36:38 Phantom systemd[1]: librespot.service: Failed with result 'exit-code'.
+Hint: Some lines were ellipsized, use -l to show in full.
+● jam-bot.service - Jam Bot — Slack + Spotify Jam controller
+     Loaded: loaded (/etc/systemd/system/jam-bot.service; enabled; preset: enabled)
+     Active: active (running) since Fri 2026-05-08 21:36:38 UTC; 176ms ago
+   Main PID: 3388993 (node)
+      Tasks: 7 (limit: 4656)
+     Memory: 10.9M (peak: 13.8M)
+        CPU: 77ms
+     CGroup: /system.slice/jam-bot.service
+             └─3388993 node /usr/bin/pnpm run start
+
+May 08 21:36:38 Phantom systemd[1]: Started jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+root@Phantom:/opt/jam-bot/app# ^C
+root@Phantom:/opt/jam-bot/app# 
