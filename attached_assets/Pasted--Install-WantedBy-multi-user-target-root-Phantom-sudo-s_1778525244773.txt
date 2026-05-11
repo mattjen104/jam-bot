@@ -1,0 +1,44 @@
+[Install]
+WantedBy=multi-user.target
+root@Phantom:~# sudo sed -i 's|--backend alsa --device default --device default|--backend alsa --device default|' /etc/systemd/system/librespot.service
+grep -A1 "backend alsa" /etc/systemd/system/librespot.service
+sudo systemctl daemon-reload
+sudo systemctl restart librespot.service
+sleep 3
+sudo journalctl -u librespot.service -n 30 --no-pager -l
+# --backend alsa --device default discards audio (fine on a headless droplet — Jam listeners
+# stream directly from Spotify). Switch to alsa/pulseaudio if you actually
+--
+  --backend alsa --device default \
+  --cache /opt/jam-bot/librespot-cache \
+May 11 18:47:16 Phantom librespot[785723]:                         Available ports are usually 80, 443 and 4070.
+May 11 18:47:16 Phantom librespot[785723]:     -A, --autoplay OVERRIDE
+May 11 18:47:16 Phantom librespot[785723]:                         Explicitly set autoplay {on|off}. Defaults to
+May 11 18:47:16 Phantom librespot[785723]:                         following the client setting.
+May 11 18:47:16 Phantom librespot[785723]:     -i, --zeroconf-interface IP
+May 11 18:47:16 Phantom librespot[785723]:                         Comma-separated interface IP addresses on which
+May 11 18:47:16 Phantom librespot[785723]:                         zeroconf will bind. Defaults to all interfaces.
+May 11 18:47:16 Phantom librespot[785723]:                         Ignored by DNS-SD.
+May 11 18:47:16 Phantom librespot[785723]:         --zeroconf-backend BACKEND
+May 11 18:47:16 Phantom librespot[785723]:                         Zeroconf (MDNS/DNS-SD) backend to use. Valid values
+May 11 18:47:16 Phantom librespot[785723]:                         are 'avahi', 'dns-sd' and 'libmdns', if librespot is
+May 11 18:47:16 Phantom librespot[785723]:                         compiled with the corresponding feature flags.
+May 11 18:47:16 Phantom librespot[785723]:     -l, --local-file-dir DIRECTORY
+May 11 18:47:16 Phantom librespot[785723]:                         Directory to search for local file playback. Can be
+May 11 18:47:16 Phantom librespot[785723]:                         specified multiple times to add multiple search
+May 11 18:47:16 Phantom librespot[785723]:                         directories
+May 11 18:47:16 Phantom systemd[1]: librespot.service: Failed with result 'exit-code'.
+May 11 18:47:19 Phantom systemd[1]: Stopped librespot.service - librespot — headless Spotify Connect device for Jam Host.
+May 11 18:47:19 Phantom systemd[1]: Started librespot.service - librespot — headless Spotify Connect device for Jam Host.
+May 11 18:47:19 Phantom librespot[785797]: [2026-05-11T18:47:19Z INFO  librespot] librespot 0.8.0 33bf3a7 (Built on 2026-05-11, Build ID: vQRvmrES, Profile: release)
+May 11 18:47:19 Phantom librespot[785797]: [2026-05-11T18:47:19Z WARN  librespot_core::cache] credential file "/opt/jam-bot/librespot-cache/credentials.json" is currently world readable, consider using  chmod 600 "/opt/jam-bot/librespot-cache/credentials.json" to fix this
+May 11 18:47:19 Phantom librespot[785797]: [2026-05-11T18:47:19Z INFO  librespot_playback::mixer::softmixer] Mixing with softvol and volume control: Log(60.0)
+May 11 18:47:19 Phantom librespot[785797]: [2026-05-11T18:47:19Z INFO  librespot_playback::convert] Converting with ditherer: tpdf
+May 11 18:47:19 Phantom librespot[785797]: [2026-05-11T18:47:19Z INFO  librespot_playback::audio_backend::alsa] Using AlsaSink with format: S16
+May 11 18:47:19 Phantom librespot[785797]: [2026-05-11T18:47:19Z INFO  librespot_core::session] Connecting to AP "ap-guc3.spotify.com:4070"
+May 11 18:47:19 Phantom librespot[785797]: [2026-05-11T18:47:19Z INFO  librespot_core::session] Authenticated as '1261507623' !
+May 11 18:47:19 Phantom librespot[785797]: [2026-05-11T18:47:19Z WARN  librespot_core::cache] credential file "/opt/jam-bot/librespot-cache/credentials.json" is currently world readable, consider using  chmod 600 "/opt/jam-bot/librespot-cache/credentials.json" to fix this
+May 11 18:47:19 Phantom librespot[785797]: [2026-05-11T18:47:19Z INFO  librespot_core::session] Country: "US"
+May 11 18:47:20 Phantom librespot[785797]: [2026-05-11T18:47:20Z INFO  librespot_core::spclient] Resolved "guc3-spclient.spotify.com:443" as spclient access point
+May 11 18:47:20 Phantom librespot[785797]: [2026-05-11T18:47:20Z INFO  librespot_connect::spirc] active device is <> with session <56367e88906b4e998d5bb4cd79683662>
+root@Phantom:~# 
