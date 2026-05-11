@@ -1,0 +1,32 @@
+root@Phantom:/opt/jam-bot-repo# sudo journalctl -u jam-bot -n 50 --no-pager | grep -iE "jam|spotify|sp_dc"
+May 11 21:51:11 Phantom systemd[1]: jam-bot.service: Deactivated successfully.
+May 11 21:51:11 Phantom systemd[1]: Stopped jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 11 21:51:11 Phantom systemd[1]: jam-bot.service: Consumed 2.805s CPU time.
+May 11 21:51:11 Phantom systemd[1]: Started jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 11 21:51:12 Phantom pnpm[812448]: > @workspace/jam-bot@0.1.0 start /opt/jam-bot-repo/artifacts/jam-bot
+May 11 21:51:13 Phantom pnpm[812462]: [2026-05-11T21:51:13.084Z] INFO Starting Jam Bot...
+May 11 21:51:13 Phantom pnpm[812462]: [2026-05-11T21:51:13.517Z] INFO Found host device "Jam Host"
+May 11 21:51:14 Phantom pnpm[812462]: [2026-05-11T21:51:14.316Z] INFO Jam Bot is up.
+May 11 21:55:40 Phantom systemd[1]: Stopping jam-bot.service - Jam Bot — Slack + Spotify Jam controller...
+May 11 21:55:40 Phantom systemd[1]: jam-bot.service: Deactivated successfully.
+May 11 21:55:40 Phantom systemd[1]: Stopped jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 11 21:55:40 Phantom systemd[1]: jam-bot.service: Consumed 3.104s CPU time.
+May 11 21:55:40 Phantom systemd[1]: Started jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 11 21:55:41 Phantom pnpm[813081]: > @workspace/jam-bot@0.1.0 start /opt/jam-bot-repo/artifacts/jam-bot
+May 11 21:55:41 Phantom pnpm[813093]: [2026-05-11T21:55:41.636Z] INFO Starting Jam Bot...
+May 11 21:55:41 Phantom pnpm[813093]: [2026-05-11T21:55:41.967Z] INFO Found host device "Jam Host"
+May 11 21:55:42 Phantom pnpm[813093]: [2026-05-11T21:55:42.419Z] INFO Jam Bot is up.
+May 11 21:58:29 Phantom pnpm[813093]: [2026-05-11T21:58:29.771Z] INFO No active Spotify playback detected {"hostVisible":true}
+May 11 22:03:30 Phantom systemd[1]: Stopping jam-bot.service - Jam Bot — Slack + Spotify Jam controller...
+May 11 22:03:30 Phantom systemd[1]: jam-bot.service: Deactivated successfully.
+May 11 22:03:30 Phantom systemd[1]: Stopped jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 11 22:03:30 Phantom systemd[1]: jam-bot.service: Consumed 4.917s CPU time.
+May 11 22:03:30 Phantom systemd[1]: Started jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 11 22:03:31 Phantom pnpm[814304]: > @workspace/jam-bot@0.1.0 start /opt/jam-bot-repo/artifacts/jam-bot
+May 11 22:03:31 Phantom pnpm[814317]: [2026-05-11T22:03:31.864Z] INFO Starting Jam Bot...
+May 11 22:03:32 Phantom pnpm[814317]: [2026-05-11T22:03:32.584Z] INFO Transferred playback to host device "Jam Host"
+May 11 22:03:32 Phantom pnpm[814317]: [2026-05-11T22:03:32.584Z] INFO Found host device "Jam Host"
+May 11 22:03:33 Phantom pnpm[814317]: [2026-05-11T22:03:33.044Z] INFO Jam Bot is up.
+May 11 22:04:26 Phantom pnpm[814317]: [2026-05-11T22:04:26.354Z] INFO Jam start fell back to manual instructions {"reason":"Error: get_access_token failed: 403 URL Blocked"}
+May 11 22:06:28 Phantom pnpm[814317]: [2026-05-11T22:06:28.872Z] INFO Jam start fell back to manual instructions {"reason":"Error: get_access_token failed: 403 URL Blocked"}
+root@Phantom:/opt/jam-bot-repo# 
