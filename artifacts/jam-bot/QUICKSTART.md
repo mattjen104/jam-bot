@@ -137,22 +137,26 @@ All commands work in the configured Slack channel. You can also just *talk* to t
 | `/memory <question>` | Free-form recall over Jam history, e.g. "who introduced us to Khruangbin?" — or **"play me a 5-track set from last weekend"** to actually queue tracks. |
 | `/jamoptout` / `/jamoptout off` | Hide your personal stats from `/wrapped`, `/dna`, `/compat` (your plays still count toward channel totals). Run `off` to undo. |
 
-### Natural language (just type in the channel)
+### Natural language (must @-mention the bot)
+
+To avoid the bot interpreting every message in the channel — and answering questions you were asking each other — natural language only fires when you **@-mention `@Jam Bot`** in the message. Examples:
 
 ```
-play some lo-fi study beats
-queue Bohemian Rhapsody
-skip                              ← counts as one vote
-what's playing?
-who produced this song?           ← LLM answer in a thread
-have we played Mr. Brightside before?
-what did we play last Friday?
-how many times have we played Daft Punk?
+@Jam Bot play some lo-fi study beats
+@Jam Bot queue Bohemian Rhapsody
+@Jam Bot skip                              ← counts as one vote
+@Jam Bot what's playing?
+@Jam Bot who produced this song?           ← LLM answer in a thread
+@Jam Bot have we played Mr. Brightside before?
+@Jam Bot what did we play last Friday?
+@Jam Bot how many times have we played Daft Punk?
 ```
+
+Slash commands (`/play`, `/skip`, etc.) don't need a mention — they're already directed at the bot.
 
 ### Vote-to-skip
 
-Every "Now playing" card has a **Vote skip (X/3)** button. The card updates as votes come in; once the threshold is hit the bot calls Spotify to skip and posts a confirmation. Both `/skip` and saying "skip" in the channel count as votes — no single person can override the room.
+Every "Now playing" card has a **Vote skip (X/3)** button. The card updates as votes come in; once the threshold is hit the bot calls Spotify to skip and posts a confirmation. Both `/skip` and `@Jam Bot skip` count as votes — no single person can override the room.
 
 ### When something goes wrong
 

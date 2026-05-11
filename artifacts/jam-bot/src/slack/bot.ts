@@ -568,8 +568,22 @@ slackApp.message(async ({ message, say }) => {
 
   if (cachedBotUserId && message.user === cachedBotUserId) return;
 
-  const text = message.text.trim();
-  if (!text) return;
+  // Require an explicit @mention of the bot, so we don't try to interpret
+  // every message in the channel (which led to the bot answering questions
+  // that humans were asking each other). Strip the mention before passing
+  // the rest to the intent classifier.
+  if (!cachedBotUserId) return;
+  const mentionTag = `<@${cachedBotUserId}>`;
+  const rawText = message.text;
+  if (!rawText.includes(mentionTag)) return;
+  const text = rawText.split(mentionTag).join(" ").replace(/\s+/g, " ").trim();
+  if (!text) {
+    await say({
+      text: "Hi! Try `play <song>`, `queue <song>`, `skip`, `what's playing?`, or ask me a question about Jam history. Slash commands like `/play` and `/nowplaying` also work.",
+      thread_ts: message.ts,
+    });
+    return;
+  }
 
   const respond = async (t: string, blocks?: KnownBlock[]) => {
     await say({ text: t, blocks, thread_ts: message.ts });
