@@ -135,6 +135,7 @@ All commands work in the configured Slack channel. You can also just *talk* to t
 | `/dna` / `/dna @user` | Show your (or someone's) musical "taste DNA" card — top artists, signature track, discovery rate. |
 | `/compat @userA @userB` | Score two people's musical compatibility 0-100 with shared artists + a track recommendation each way. |
 | `/memory <question>` | Free-form recall over Jam history, e.g. "who introduced us to Khruangbin?" — or **"play me a 5-track set from last weekend"** to actually queue tracks. |
+| `/jam` | Start a Spotify Jam (social listening session). Tries the unofficial Spotify endpoint when `SPOTIFY_SP_DC` is set; otherwise prints clear "tap Start a Jam in your Spotify app on `Jam Host`" instructions, which always work. |
 | `/jamoptout` / `/jamoptout off` | Hide your personal stats from `/wrapped`, `/dna`, `/compat` (your plays still count toward channel totals). Run `off` to undo. |
 | `/quiet` / `/quiet on` / `/quiet off` / `/quiet status` | **Test mode.** Reroutes only the *automated background posts* — now-playing cards, "no active device", "Jam is back online", and the scheduled Wrapped — to a DM to `JAM_QUIET_DM_USER`. **Friend interactions (slash commands, @mentions, vote-skip) post in the channel normally**, so people in the Jam still get the responses they asked for. Resets to off when the bot restarts. |
 
@@ -160,6 +161,20 @@ To avoid the bot interpreting every message in the channel — and answering que
 ```
 
 Slash commands (`/play`, `/skip`, etc.) don't need a mention — they're already directed at the bot.
+
+### DM testing (host only)
+
+If you set `JAM_QUIET_DM_USER` to your Slack user ID, **you can DM the bot directly** and it will respond exactly as if you'd typed the message in the channel — no `@Jam Bot` prefix needed in a DM, since it's already a 1:1 conversation. Slash commands (`/play`, `/jam`, etc.) also work in the DM. Both natural-language and slash commands trigger the same real Spotify operations (the music actually plays on the host device); only the Slack reply lands in your DM instead of the channel.
+
+This is the recommended way to freely test new behavior without notifying anyone in the Jam channel. DMs from anyone other than `JAM_QUIET_DM_USER` are ignored.
+
+### Starting a Spotify Jam
+
+Spotify hasn't published a public Web API for starting a Jam (social listening) session, so by default `/jam` (or "start a jam" via natural language) prints clear instructions: open Spotify on your phone, tap the Connect speaker icon → `Jam Host`, then tap Connect again → **Start a Jam** → share the link.
+
+If you want it to *actually* start the Jam programmatically, paste the `sp_dc` browser cookie from open.spotify.com into `SPOTIFY_SP_DC` in the bot's `.env` and restart. The bot will then call Spotify's undocumented social-connect endpoint and post the join URL straight to Slack. The endpoint is not officially supported and may break — when it fails, the manual instructions still appear, so nothing is left half-broken. Refresh the cookie when the programmatic path stops working.
+
+Either way, `/play`, `/queue`, `/skip` keep working without a Jam — they go straight to the host device.
 
 ### Vote-to-skip
 

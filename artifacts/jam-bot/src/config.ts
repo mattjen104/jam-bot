@@ -77,6 +77,14 @@ const schema = z.object({
   // this user instead of posting in-channel. If unset, quiet mode falls
   // back to ephemeral messages visible only to the slash-command caller.
   JAM_QUIET_DM_USER: z.string().optional(),
+
+  // ---- Spotify Jam (social listening) -----------------------------------
+  // Optional `sp_dc` cookie value from open.spotify.com (DevTools ->
+  // Application -> Cookies). Used by /jam to attempt programmatic Jam
+  // start via Spotify's undocumented social-connect endpoint. If unset,
+  // /jam falls back to manual "tap Start a Jam in the app" instructions.
+  // The endpoint may break at any time; the fallback always works.
+  SPOTIFY_SP_DC: z.string().optional(),
 });
 
 function loadConfig() {

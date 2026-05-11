@@ -39,6 +39,9 @@ features:
       description: Ask the Jam history a question, or play a curated set
       usage_hint: "<question or play-me-a-set request>"
       should_escape: false
+    - command: /jam
+      description: Start a Spotify Jam (social listening) session
+      should_escape: false
     - command: /quiet
       description: Toggle quiet mode (suppress all bot channel posts while testing)
       usage_hint: "[on|off|status]"
@@ -60,12 +63,20 @@ oauth_config:
       - commands
       - users:read
       # Required for /quiet test mode to DM the configured JAM_QUIET_DM_USER
-      # via chat.postMessage with a user ID as the channel.
+      # via chat.postMessage with a user ID as the channel, and for the
+      # host to DM the bot natural-language commands.
       - im:write
+      - im:history
+      - im:read
+      - mpim:history
 settings:
   event_subscriptions:
     bot_events:
       - app_mention
+      # Lets the host DM the bot natural-language commands ("play X",
+      # "skip", "start a jam", etc). The handler ignores DMs from anyone
+      # other than the configured JAM_QUIET_DM_USER.
+      - message.im
   interactivity:
     is_enabled: true
   org_deploy_enabled: false
