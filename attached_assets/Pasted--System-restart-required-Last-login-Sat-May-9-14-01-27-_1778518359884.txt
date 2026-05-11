@@ -1,0 +1,85 @@
+*** System restart required ***
+Last login: Sat May  9 14:01:27 2026 from 198.211.111.194
+-bash: /root/.cargo/env: No such file or directory
+-bash: /root/.cargo/env: No such file or directory
+root@Phantom:~# journalctl -u jam-bot.service -n 80 --no-pager -l
+May 11 16:52:15 Phantom pnpm[753787]:  → /opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/compiled/20.20.2/linux/x64/better_sqlite3.node
+May 11 16:52:15 Phantom pnpm[753787]:  → /opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/addon-build/release/install-root/better_sqlite3.node
+May 11 16:52:15 Phantom pnpm[753787]:  → /opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/addon-build/debug/install-root/better_sqlite3.node
+May 11 16:52:15 Phantom pnpm[753787]:  → /opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/addon-build/default/install-root/better_sqlite3.node
+May 11 16:52:15 Phantom pnpm[753787]:  → /opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/lib/binding/node-v115-linux-x64/better_sqlite3.node
+May 11 16:52:15 Phantom pnpm[753787]:     at bindings (/opt/jam-bot-repo/node_modules/.pnpm/bindings@1.5.0/node_modules/bindings/bindings.js:126:9)
+May 11 16:52:15 Phantom pnpm[753787]:     at new Database (/opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/lib/database.js:48:64)
+May 11 16:52:15 Phantom pnpm[753787]:     at file:///opt/jam-bot-repo/dist/db.js:7:19
+May 11 16:52:15 Phantom pnpm[753787]:     at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+May 11 16:52:15 Phantom pnpm[753787]:     at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+May 11 16:52:15 Phantom pnpm[753787]:     at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+May 11 16:52:15 Phantom pnpm[753787]:   tries: [
+May 11 16:52:15 Phantom pnpm[753787]:     '/opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/build/better_sqlite3.node',
+May 11 16:52:15 Phantom pnpm[753787]:     '/opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/build/Debug/better_sqlite3.node',
+May 11 16:52:15 Phantom pnpm[753787]:     '/opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/build/Release/better_sqlite3.node',
+May 11 16:52:15 Phantom pnpm[753787]:     '/opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/out/Debug/better_sqlite3.node',
+May 11 16:52:15 Phantom pnpm[753787]:     '/opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/Debug/better_sqlite3.node',
+May 11 16:52:15 Phantom pnpm[753787]:     '/opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/out/Release/better_sqlite3.node',
+May 11 16:52:15 Phantom pnpm[753787]:     '/opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/Release/better_sqlite3.node',
+May 11 16:52:15 Phantom pnpm[753787]:     '/opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/build/default/better_sqlite3.node',
+May 11 16:52:15 Phantom pnpm[753787]:     '/opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/compiled/20.20.2/linux/x64/better_sqlite3.node',
+May 11 16:52:15 Phantom pnpm[753787]:     '/opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/addon-build/release/install-root/better_sqlite3.node',
+May 11 16:52:15 Phantom pnpm[753787]:     '/opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/addon-build/debug/install-root/better_sqlite3.node',
+May 11 16:52:15 Phantom pnpm[753787]:     '/opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/addon-build/default/install-root/better_sqlite3.node',
+May 11 16:52:15 Phantom pnpm[753787]:     '/opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/lib/binding/node-v115-linux-x64/better_sqlite3.node'
+May 11 16:52:15 Phantom pnpm[753787]:   ]
+May 11 16:52:15 Phantom pnpm[753787]: }
+May 11 16:52:15 Phantom pnpm[753787]: Node.js v20.20.2
+May 11 16:52:15 Phantom pnpm[753773]:  ELIFECYCLE  Command failed with exit code 1.
+May 11 16:52:15 Phantom systemd[1]: jam-bot.service: Main process exited, code=exited, status=1/FAILURE
+May 11 16:52:15 Phantom systemd[1]: jam-bot.service: Failed with result 'exit-code'.
+May 11 16:52:15 Phantom systemd[1]: jam-bot.service: Consumed 1.445s CPU time.
+May 11 16:52:20 Phantom systemd[1]: jam-bot.service: Scheduled restart job, restart counter is at 36913.
+May 11 16:52:20 Phantom systemd[1]: Started jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 11 16:52:21 Phantom pnpm[753810]: > @workspace/jam-bot@0.1.0 start /opt/jam-bot-repo
+May 11 16:52:21 Phantom pnpm[753810]: > node ./dist/index.js
+May 11 16:52:21 Phantom pnpm[753822]: /opt/jam-bot-repo/node_modules/.pnpm/bindings@1.5.0/node_modules/bindings/bindings.js:126
+May 11 16:52:21 Phantom pnpm[753822]:   err = new Error(
+May 11 16:52:21 Phantom pnpm[753822]:         ^
+May 11 16:52:21 Phantom pnpm[753822]: Error: Could not locate the bindings file. Tried:
+May 11 16:52:21 Phantom pnpm[753822]:  → /opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/build/better_sqlite3.node
+May 11 16:52:21 Phantom pnpm[753822]:  → /opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/build/Debug/better_sqlite3.node
+May 11 16:52:21 Phantom pnpm[753822]:  → /opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/build/Release/better_sqlite3.node
+May 11 16:52:21 Phantom pnpm[753822]:  → /opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/out/Debug/better_sqlite3.node
+May 11 16:52:21 Phantom pnpm[753822]:  → /opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/Debug/better_sqlite3.node
+May 11 16:52:21 Phantom pnpm[753822]:  → /opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/out/Release/better_sqlite3.node
+May 11 16:52:21 Phantom pnpm[753822]:  → /opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/Release/better_sqlite3.node
+May 11 16:52:21 Phantom pnpm[753822]:  → /opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/build/default/better_sqlite3.node
+May 11 16:52:21 Phantom pnpm[753822]:  → /opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/compiled/20.20.2/linux/x64/better_sqlite3.node
+May 11 16:52:21 Phantom pnpm[753822]:  → /opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/addon-build/release/install-root/better_sqlite3.node
+May 11 16:52:21 Phantom pnpm[753822]:  → /opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/addon-build/debug/install-root/better_sqlite3.node
+May 11 16:52:21 Phantom pnpm[753822]:  → /opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/addon-build/default/install-root/better_sqlite3.node
+May 11 16:52:21 Phantom pnpm[753822]:  → /opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/lib/binding/node-v115-linux-x64/better_sqlite3.node
+May 11 16:52:21 Phantom pnpm[753822]:     at bindings (/opt/jam-bot-repo/node_modules/.pnpm/bindings@1.5.0/node_modules/bindings/bindings.js:126:9)
+May 11 16:52:21 Phantom pnpm[753822]:     at new Database (/opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/lib/database.js:48:64)
+May 11 16:52:21 Phantom pnpm[753822]:     at file:///opt/jam-bot-repo/dist/db.js:7:19
+May 11 16:52:21 Phantom pnpm[753822]:     at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+May 11 16:52:21 Phantom pnpm[753822]:     at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+May 11 16:52:21 Phantom pnpm[753822]:     at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+May 11 16:52:21 Phantom pnpm[753822]:   tries: [
+May 11 16:52:21 Phantom pnpm[753822]:     '/opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/build/better_sqlite3.node',
+May 11 16:52:21 Phantom pnpm[753822]:     '/opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/build/Debug/better_sqlite3.node',
+May 11 16:52:21 Phantom pnpm[753822]:     '/opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/build/Release/better_sqlite3.node',
+May 11 16:52:21 Phantom pnpm[753822]:     '/opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/out/Debug/better_sqlite3.node',
+May 11 16:52:21 Phantom pnpm[753822]:     '/opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/Debug/better_sqlite3.node',
+May 11 16:52:21 Phantom pnpm[753822]:     '/opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/out/Release/better_sqlite3.node',
+May 11 16:52:21 Phantom pnpm[753822]:     '/opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/Release/better_sqlite3.node',
+May 11 16:52:21 Phantom pnpm[753822]:     '/opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/build/default/better_sqlite3.node',
+May 11 16:52:21 Phantom pnpm[753822]:     '/opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/compiled/20.20.2/linux/x64/better_sqlite3.node',
+May 11 16:52:21 Phantom pnpm[753822]:     '/opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/addon-build/release/install-root/better_sqlite3.node',
+May 11 16:52:21 Phantom pnpm[753822]:     '/opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/addon-build/debug/install-root/better_sqlite3.node',
+May 11 16:52:21 Phantom pnpm[753822]:     '/opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/addon-build/default/install-root/better_sqlite3.node',
+May 11 16:52:21 Phantom pnpm[753822]:     '/opt/jam-bot-repo/node_modules/.pnpm/better-sqlite3@11.10.0/node_modules/better-sqlite3/lib/binding/node-v115-linux-x64/better_sqlite3.node'
+May 11 16:52:21 Phantom pnpm[753822]:   ]
+May 11 16:52:21 Phantom pnpm[753822]: }
+May 11 16:52:21 Phantom pnpm[753822]: Node.js v20.20.2
+May 11 16:52:21 Phantom pnpm[753810]:  ELIFECYCLE  Command failed with exit code 1.
+May 11 16:52:21 Phantom systemd[1]: jam-bot.service: Main process exited, code=exited, status=1/FAILURE
+May 11 16:52:21 Phantom systemd[1]: jam-bot.service: Failed with result 'exit-code'.
+May 11 16:52:21 Phantom systemd[1]: jam-bot.service: Consumed 1.383s CPU time.
