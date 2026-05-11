@@ -1,0 +1,102 @@
+Done in 1.5s using pnpm v10.33.4
+
+> @workspace/jam-bot@0.1.0 build /opt/jam-bot-repo
+> tsc -p tsconfig.build.json
+
+root@Phantom:/opt/jam-bot/app# sudo journalctl -u jam-bot -n 5 --no-pager
+grep -c "mentionTag" /opt/jam-bot/app/dist/slack/bot.js
+May 11 19:08:27 Phantom pnpm[788975]: [2026-05-11T19:08:27.158Z] INFO Found host device "Jam Host"
+May 11 19:08:27 Phantom pnpm[788975]: [2026-05-11T19:08:27.599Z] INFO Weekly Wrapped scheduled at "Sun 20:00" UTC
+May 11 19:08:27 Phantom pnpm[788975]: [2026-05-11T19:08:27.599Z] INFO Slack bot connected (channel C0B2JRU8SLV)
+May 11 19:08:27 Phantom pnpm[788975]: [2026-05-11T19:08:27.600Z] INFO Now-playing watcher started (every 5000ms)
+May 11 19:08:27 Phantom pnpm[788975]: [2026-05-11T19:08:27.600Z] INFO Jam Bot is up.
+0
+root@Phantom:/opt/jam-bot/app# cd /opt/jam-bot/app
+sudo -u jam git pull
+sudo -u jam pnpm run build
+sudo systemctl restart jam-bot
+grep -c "mentionTag" /opt/jam-bot/app/dist/slack/bot.js
+remote: Enumerating objects: 608, done.
+remote: Counting objects: 100% (608/608), done.
+remote: Compressing objects: 100% (293/293), done.
+remote: Total 608 (delta 294), reused 608 (delta 294), pack-reused 0 (from 0)
+Receiving objects: 100% (608/608), 564.18 KiB | 7.05 MiB/s, done.
+Resolving deltas: 100% (294/294), done.
+From https://github.com/mattjen104/jam-bot
+ * [new branch]      master     -> origin/master
+Already up to date.
+
+> @workspace/jam-bot@0.1.0 build /opt/jam-bot-repo
+> tsc -p tsconfig.build.json
+
+0
+root@Phantom:/opt/jam-bot/app# cd /opt/jam-bot-repo
+sudo -u jam git checkout master
+sudo -u jam git pull
+cd /opt/jam-bot/app
+sudo -u jam pnpm run build
+sudo systemctl restart jam-bot
+grep -c "mentionTag" /opt/jam-bot/app/dist/slack/bot.js
+branch 'master' set up to track 'origin/master'.
+Switched to a new branch 'master'
+Already up to date.
+
+> workspace@0.0.0 build /opt/jam-bot-repo
+> pnpm run typecheck && pnpm -r --if-present run build
+
+
+> workspace@0.0.0 typecheck /opt/jam-bot-repo
+> pnpm run typecheck:libs && pnpm -r --filter "./artifacts/**" --filter "./scripts" --if-present run typecheck
+
+
+> workspace@0.0.0 typecheck:libs /opt/jam-bot-repo
+> tsc --build
+
+lib/db/src/index.ts:1:25 - error TS2307: Cannot find module 'drizzle-orm/node-postgres' or its corresponding type declarations.
+
+1 import { drizzle } from "drizzle-orm/node-postgres";
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+lib/db/src/index.ts:2:16 - error TS2307: Cannot find module 'pg' or its corresponding type declarations.
+
+2 import pg from "pg";
+                 ~~~~
+
+lib/db/src/schema/cached-artists.ts:1:59 - error TS2307: Cannot find module 'drizzle-orm/pg-core' or its corresponding type declarations.
+
+1 import { pgTable, serial, integer, text, timestamp } from "drizzle-orm/pg-core";
+                                                            ~~~~~~~~~~~~~~~~~~~~~
+
+lib/db/src/schema/cached-tracks.ts:1:65 - error TS2307: Cannot find module 'drizzle-orm/pg-core' or its corresponding type declarations.
+
+1 import { pgTable, serial, integer, text, real, timestamp } from "drizzle-orm/pg-core";
+                                                                  ~~~~~~~~~~~~~~~~~~~~~
+
+lib/db/src/schema/users.ts:1:50 - error TS2307: Cannot find module 'drizzle-orm/pg-core' or its corresponding type declarations.
+
+1 import { pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+                                                   ~~~~~~~~~~~~~~~~~~~~~
+
+lib/api-client-react/src/generated/api.ts:8:26 - error TS2307: Cannot find module '@tanstack/react-query' or its corresponding type declarations.
+
+8 import { useQuery } from "@tanstack/react-query";
+                           ~~~~~~~~~~~~~~~~~~~~~~~
+
+lib/api-client-react/src/generated/api.ts:14:8 - error TS2307: Cannot find module '@tanstack/react-query' or its corresponding type declarations.
+
+14 } from "@tanstack/react-query";
+          ~~~~~~~~~~~~~~~~~~~~~~~
+
+lib/api-client-react/src/generated/api.ts:64:5 - error TS7031: Binding element 'signal' implicitly has an 'any' type.
+
+64     signal,
+       ~~~~~~
+
+
+Found 8 errors.
+
+ ELIFECYCLE  Command failed with exit code 2.
+ ELIFECYCLE  Command failed with exit code 2.
+ ELIFECYCLE  Command failed with exit code 2.
+0
+root@Phantom:/opt/jam-bot/app# 
