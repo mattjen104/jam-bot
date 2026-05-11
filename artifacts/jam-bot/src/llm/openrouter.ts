@@ -396,7 +396,7 @@ export async function askLLM(question: string): Promise<string> {
 }
 
 export interface IntentClassification {
-  intent: "play" | "queue" | "skip" | "nowplaying" | "history" | "question";
+  intent: "play" | "queue" | "skip" | "nowplaying" | "history" | "jam" | "question";
   query?: string;
 }
 
@@ -406,6 +406,7 @@ const INTENT_SYSTEM = `You classify a Slack message in a Spotify Jam channel int
 - skip: user wants to skip the current track
 - nowplaying: user is asking what's playing right now
 - history: user is asking about past tracks (today, last night, last Friday, etc.)
+- jam: user wants to start or open a Spotify Jam / social listening session (e.g. "start a jam", "open the jam", "let's jam", "share the jam link")
 - question: any other music question or chat (facts, recommendations, comparisons, lyrics, opinions)
 
 Respond ONLY with compact JSON: {"intent":"...","query":"..."}.
@@ -428,6 +429,13 @@ function fastPathIntent(message: string): IntentClassification | null {
   }
   if (/^(history|what (have|did) we play(ed)?( recently)?)\??$/.test(m)) {
     return { intent: "history" };
+  }
+  if (
+    /^(start (a )?jam|open (the )?jam|begin (a )?jam|let'?s jam|jam( session)?( link)?|share (the )?jam( link)?)$/.test(
+      m,
+    )
+  ) {
+    return { intent: "jam" };
   }
   const playMatch = message.match(/^(?:please\s+)?play\s+(.+)$/i);
   if (playMatch) return { intent: "play", query: playMatch[1]!.trim() };
@@ -475,7 +483,7 @@ export async function classifyIntent(message: string): Promise<IntentClassificat
   try {
     const parsed = JSON.parse(raw) as IntentClassification;
     if (
-      ["play", "queue", "skip", "nowplaying", "history", "question"].includes(
+      ["play", "queue", "skip", "nowplaying", "history", "jam", "question"].includes(
         parsed.intent,
       )
     ) {

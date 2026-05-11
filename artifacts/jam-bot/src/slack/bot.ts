@@ -22,6 +22,7 @@ import {
   isOptedOut,
 } from "../db.js";
 import { askLLM, classifyIntent, narrate } from "../llm/openrouter.js";
+import { startSpotifyJam, manualJamInstructions } from "../spotify/jam.js";
 import { nowPlayingWatcher } from "../now-playing.js";
 import {
   historyBlocks,
@@ -282,16 +283,31 @@ function slashHandler(
 ) {
   return async ({ command, ack, respond }: Parameters<Parameters<typeof slackApp.command>[1]>[0]) => {
     await ack();
-    if (command.channel_id !== config.SLACK_CHANNEL_ID) {
+    // Allow either: (a) the configured Jam channel, or (b) a DM with the
+    // bot, but only if the DM is from the configured host (JAM_QUIET_DM_USER).
+    // DMs are intended as a host-only test surface — they execute the same
+    // real Spotify operations as channel commands, so we don't want random
+    // workspace members poking at the bot in private.
+    const isDm = command.channel_id.startsWith("D");
+    const isJamChannel = command.channel_id === config.SLACK_CHANNEL_ID;
+    const isHostDm =
+      isDm &&
+      !!config.JAM_QUIET_DM_USER &&
+      command.user_id === config.JAM_QUIET_DM_USER;
+    if (!isJamChannel && !isHostDm) {
       await respond({
         response_type: "ephemeral",
-        text: `:no_entry_sign: Jam Bot only accepts commands in the configured Jam channel.`,
+        text: isDm
+          ? `:no_entry_sign: DM commands are only enabled for the configured host. Set \`JAM_QUIET_DM_USER\` in the bot's .env to your Slack user ID to enable testing in DMs.`
+          : `:no_entry_sign: Jam Bot only accepts commands in the configured Jam channel.`,
       });
       return;
     }
     // Slash command replies always post to the channel — quiet mode does
     // NOT touch friend interactions. If a friend runs /play during a test,
-    // they (and the channel) still see the normal "Playing X" reply.
+    // they (and the channel) still see the normal "Playing X" reply. In a
+    // DM the response_type is moot (it's a 1:1 channel), so the same
+    // in_channel reply just lands in the DM.
     const say = async (text: string, blocks?: KnownBlock[]) => {
       await respond({ response_type: "in_channel", text, blocks });
     };
@@ -653,6 +669,23 @@ slackApp.command(
 );
 
 slackApp.command(
+  "/jam",
+  slashHandler(async ({ say }) => {
+    const result = await startSpotifyJam();
+    if (result.ok) {
+      await say(
+        `:notes: Started a Spotify Jam — join here: ${result.joinUrl}`,
+      );
+      return;
+    }
+    logger.info("Jam start fell back to manual instructions", {
+      reason: result.reason,
+    });
+    await say(manualJamInstructions());
+  }),
+);
+
+slackApp.command(
   "/jamoptout",
   slashHandler(async ({ text, userId, say, sayEphemeral }) => {
     const arg = text.trim().toLowerCase();
@@ -695,41 +728,19 @@ const wrappedScheduler = new WrappedScheduler(
 
 let cachedBotUserId: string | null = null;
 
-// We use the `app_mention` event (not `message.channels`) so this only
-// fires when the bot is explicitly @-mentioned, and so it works even when
-// the Slack workspace hasn't granted the channels:history scope.
-slackApp.event("app_mention", async ({ event, say }) => {
-  logger.info("app_mention received", {
-    user: event.user,
-    channel: event.channel,
-    text: event.text,
-  });
-
-  if (event.channel !== config.SLACK_CHANNEL_ID) {
-    logger.info("Ignoring app_mention from non-Jam channel", {
-      channel: event.channel,
-    });
-    return;
-  }
-  if (!event.user) return;
-  if (cachedBotUserId && event.user === cachedBotUserId) return;
-  if (!event.text) return;
-
-  // Strip the bot's @mention tag(s) out of the text before passing to the
-  // intent classifier. The mention tag looks like `<@U12345>`.
-  const text = event.text.replace(/<@[A-Z0-9]+>/g, " ").replace(/\s+/g, " ").trim();
-  const userId = event.user;
-  const threadTs = event.thread_ts ?? event.ts;
-
-  // @mention replies always post to the channel/thread — quiet mode only
-  // affects automated background posts, not direct friend interactions.
-  const respond = async (t: string, blocks?: KnownBlock[]) => {
-    await say({ text: t, blocks, thread_ts: threadTs });
-  };
-
+/**
+ * Shared NL handler used by both `app_mention` (in the Jam channel) and
+ * direct messages from the host. Takes already-stripped text and a
+ * `respond` callback that knows where to post the reply.
+ */
+async function handleNaturalLanguage(
+  text: string,
+  userId: string,
+  respond: (t: string, blocks?: KnownBlock[]) => Promise<void>,
+) {
   if (!text) {
     await respond(
-      "Hi! Try `play <song>`, `queue <song>`, `skip`, `what's playing?`, or ask me a question about Jam history. Slash commands like `/play` and `/nowplaying` also work.",
+      "Hi! Try `play <song>`, `queue <song>`, `skip`, `what's playing?`, `start a jam`, or ask me a question about Jam history. Slash commands like `/play` and `/nowplaying` also work.",
     );
     return;
   }
@@ -784,6 +795,20 @@ slackApp.event("app_mention", async ({ event, say }) => {
       case "history":
         await handleHistory(respond);
         return;
+      case "jam": {
+        const result = await startSpotifyJam();
+        if (result.ok) {
+          await respond(
+            `:notes: Started a Spotify Jam — join here: ${result.joinUrl}`,
+          );
+        } else {
+          logger.info("NL Jam start fell back to manual instructions", {
+            reason: result.reason,
+          });
+          await respond(manualJamInstructions());
+        }
+        return;
+      }
       case "question": {
         const answer = await askLLM(text);
         await respond(answer);
@@ -791,11 +816,87 @@ slackApp.event("app_mention", async ({ event, say }) => {
       }
     }
   } catch (err) {
-    logger.error("app_mention handler failed", { error: String(err) });
+    logger.error("NL handler failed", { error: String(err) });
     await respond(
       ":warning: Something went wrong handling that — check the bot logs.",
     );
   }
+}
+
+// We use the `app_mention` event (not `message.channels`) so this only
+// fires when the bot is explicitly @-mentioned, and so it works even when
+// the Slack workspace hasn't granted the channels:history scope.
+slackApp.event("app_mention", async ({ event, say }) => {
+  logger.info("app_mention received", {
+    user: event.user,
+    channel: event.channel,
+    text: event.text,
+  });
+
+  if (event.channel !== config.SLACK_CHANNEL_ID) {
+    logger.info("Ignoring app_mention from non-Jam channel", {
+      channel: event.channel,
+    });
+    return;
+  }
+  if (!event.user) return;
+  if (cachedBotUserId && event.user === cachedBotUserId) return;
+  if (!event.text) return;
+
+  // Strip the bot's @mention tag(s) out of the text before passing to the
+  // intent classifier. The mention tag looks like `<@U12345>`.
+  const text = event.text.replace(/<@[A-Z0-9]+>/g, " ").replace(/\s+/g, " ").trim();
+  const userId = event.user;
+  const threadTs = event.thread_ts ?? event.ts;
+
+  // @mention replies always post to the channel/thread — quiet mode only
+  // affects automated background posts, not direct friend interactions.
+  const respond = async (t: string, blocks?: KnownBlock[]) => {
+    await say({ text: t, blocks, thread_ts: threadTs });
+  };
+
+  await handleNaturalLanguage(text, userId, respond);
+});
+
+// Direct-message handler. The host (JAM_QUIET_DM_USER) can DM the bot any
+// natural-language command — "play X", "skip", "start a jam", "what's
+// playing", "who introduced us to Khruangbin?" — and it runs exactly like
+// the same message in-channel, but the reply lands in the DM. Slash
+// commands also work in DMs (allowed by slashHandler when the caller is
+// the host). DMs from anyone other than JAM_QUIET_DM_USER are ignored to
+// keep this strictly a host-test surface.
+slackApp.event("message", async ({ event, client }) => {
+  // The event union is wide; narrow to actual user IM messages.
+  if (event.type !== "message") return;
+  if ((event as { subtype?: string }).subtype) return; // edits, deletes, joins, etc.
+  if ((event as { channel_type?: string }).channel_type !== "im") return;
+
+  const e = event as {
+    user?: string;
+    text?: string;
+    channel: string;
+    ts: string;
+    bot_id?: string;
+  };
+  if (e.bot_id || !e.user || !e.text) return;
+  if (cachedBotUserId && e.user === cachedBotUserId) return;
+
+  if (!config.JAM_QUIET_DM_USER || e.user !== config.JAM_QUIET_DM_USER) {
+    logger.info("Ignoring DM from non-host user", { user: e.user });
+    return;
+  }
+
+  logger.info("DM received", { user: e.user, text: e.text });
+
+  const text = e.text.replace(/<@[A-Z0-9]+>/g, " ").replace(/\s+/g, " ").trim();
+  const respond = async (t: string, blocks?: KnownBlock[]) => {
+    await client.chat.postMessage({
+      channel: e.channel,
+      text: t,
+      ...(blocks ? { blocks } : {}),
+    });
+  };
+  await handleNaturalLanguage(text, e.user, respond);
 });
 
 // ---- Vote-to-skip --------------------------------------------------------
