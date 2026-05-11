@@ -108,6 +108,74 @@ async function postEphemeralToUser(
   }
 }
 
+/**
+ * Send a DM to a user. Slack auto-resolves a user ID passed as `channel`
+ * into the IM channel between the bot and that user. Used by quiet mode to
+ * route bot output to the configured test user instead of the public
+ * channel — so testing produces a real DM thread you can scroll back
+ * through, not vanishing ephemeral messages.
+ */
+async function postDMToUser(
+  userId: string,
+  text: string,
+  blocks?: KnownBlock[],
+) {
+  try {
+    await slackApp.client.chat.postMessage({
+      channel: userId,
+      text,
+      blocks,
+    });
+  } catch (err) {
+    logger.warn("postDM failed", { error: String(err), userId });
+  }
+}
+
+/**
+ * In quiet mode, route bot output away from the public channel. Prefer DM
+ * to JAM_QUIET_DM_USER if configured (so the tester gets a persistent DM
+ * thread). Fallback: ephemeral to the invoking user, which leaves no
+ * persistent record but at least doesn't notify anyone else. If neither is
+ * available (e.g. background event with no invoker), the message is dropped
+ * and only logged.
+ */
+async function deliverQuietly(
+  text: string,
+  blocks: KnownBlock[] | undefined,
+  invokerUserId: string | undefined,
+  context: string,
+) {
+  if (config.JAM_QUIET_DM_USER) {
+    await postDMToUser(config.JAM_QUIET_DM_USER, text, blocks);
+    return;
+  }
+  if (invokerUserId) {
+    await postEphemeralToUser(invokerUserId, text, blocks);
+    return;
+  }
+  logger.info("Dropped quiet-mode message (no DM target, no invoker)", {
+    context,
+    text,
+  });
+}
+
+/**
+ * Day-of-week gate for the "Now playing" card. Friends only get pinged
+ * with track-change cards on the days listed in JAM_NOWPLAYING_DAYS
+ * (UTC). Tracks still play and get logged on every day — only the Slack
+ * post is suppressed.
+ */
+function isNowPlayingPostAllowedToday(now: Date = new Date()): boolean {
+  const allowed = new Set(
+    config.JAM_NOWPLAYING_DAYS
+      .split(",")
+      .map((s) => parseInt(s.trim(), 10))
+      .filter((n) => Number.isInteger(n) && n >= 0 && n <= 6),
+  );
+  if (allowed.size === 0) return true; // misconfigured -> fail-open
+  return allowed.has(now.getUTCDay());
+}
+
 async function handlePlayOrQueue(args: {
   query: string;
   slackUserId: string;
@@ -240,15 +308,25 @@ function slashHandler(
       });
       return;
     }
-    // In quiet mode, every "say" becomes ephemeral so only the invoker sees
-    // it. This keeps testing usable (you still get the bot's reply) without
-    // notifying the rest of the channel.
+    // In quiet mode, route the slash response away from the channel. If
+    // JAM_QUIET_DM_USER is set, DM that user (so you get a persistent DM
+    // thread while testing). Otherwise fall back to ephemeral so at least
+    // no one else is notified. We still ack the slash command with a tiny
+    // ephemeral so Slack doesn't show "/play didn't respond" to the caller.
     const say = async (text: string, blocks?: KnownBlock[]) => {
-      await respond({
-        response_type: silentMode ? "ephemeral" : "in_channel",
-        text,
-        blocks,
-      });
+      if (silentMode) {
+        await deliverQuietly(text, blocks, command.user_id, `slash ${command.command}`);
+        if (config.JAM_QUIET_DM_USER && command.user_id !== config.JAM_QUIET_DM_USER) {
+          // The caller isn't the DM target — give them an ephemeral hint so
+          // they don't think the bot is broken.
+          await respond({
+            response_type: "ephemeral",
+            text: ":mute: Quiet mode is on — response sent as a DM to the host.",
+          });
+        }
+        return;
+      }
+      await respond({ response_type: "in_channel", text, blocks });
     };
     const sayEphemeral = async (text: string) => {
       await respond({ response_type: "ephemeral", text });
@@ -667,9 +745,8 @@ slackApp.event("app_mention", async ({ event, say }) => {
 
   const respond = async (t: string, blocks?: KnownBlock[]) => {
     if (silentMode) {
-      // Reply privately to the user who pinged the bot, instead of posting
-      // visibly in the channel and notifying everyone.
-      await postEphemeralToUser(userId, t, blocks);
+      // Route privately — DM the host if configured, ephemeral fallback.
+      await deliverQuietly(t, blocks, userId, "app_mention");
       return;
     }
     await say({ text: t, blocks, thread_ts: threadTs });
@@ -966,6 +1043,17 @@ nowPlayingWatcher.on("trackChange", async (event) => {
   if (silentMode) {
     logger.info("Suppressed now-playing post (quiet mode)", {
       track: event.current.title,
+    });
+    return;
+  }
+  if (!isNowPlayingPostAllowedToday()) {
+    // Day-of-week gate: by default we only post the now-playing card on
+    // Fridays so the channel doesn't get pinged with every track change
+    // every day. Music still plays and is logged to history.
+    logger.info("Suppressed now-playing post (off-day)", {
+      track: event.current.title,
+      utcDay: new Date().getUTCDay(),
+      allowed: config.JAM_NOWPLAYING_DAYS,
     });
     return;
   }
