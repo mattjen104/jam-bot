@@ -1,0 +1,30 @@
+  type hw
+    card Dummy
+}
+ExecStart=/usr/bin/librespot \
+May 11 18:46:02 Phantom librespot[785541]:     -w, --normalisation-knee KNEE
+May 11 18:46:02 Phantom librespot[785541]:                         Knee width (dB) of the dynamic limiter from 0.0 to
+May 11 18:46:02 Phantom librespot[785541]:                         10.0. Defaults to 5.0.
+May 11 18:46:02 Phantom librespot[785541]:     -z, --zeroconf-port PORT
+May 11 18:46:02 Phantom librespot[785541]:                         The port the internal server advertises over zeroconf
+May 11 18:46:02 Phantom librespot[785541]:                         1 - 65535. Ports <= 1024 may require root privileges.
+May 11 18:46:02 Phantom librespot[785541]:     -x, --proxy URL     HTTP proxy to use when connecting.
+May 11 18:46:02 Phantom systemd[1]: librespot.service: Failed with result 'exit-code'.
+May 11 18:46:02 Phantom librespot[785541]:     -a, --ap-port PORT  Connect to an AP with a specified port 1 - 65535.
+May 11 18:46:02 Phantom librespot[785541]:                         Available ports are usually 80, 443 and 4070.
+May 11 18:46:02 Phantom librespot[785541]:     -A, --autoplay OVERRIDE
+May 11 18:46:02 Phantom librespot[785541]:                         Explicitly set autoplay {on|off}. Defaults to
+May 11 18:46:02 Phantom librespot[785541]:                         following the client setting.
+May 11 18:46:02 Phantom librespot[785541]:     -i, --zeroconf-interface IP
+May 11 18:46:02 Phantom librespot[785541]:                         Comma-separated interface IP addresses on which
+May 11 18:46:02 Phantom librespot[785541]:                         zeroconf will bind. Defaults to all interfaces.
+May 11 18:46:02 Phantom librespot[785541]:                         Ignored by DNS-SD.
+May 11 18:46:02 Phantom librespot[785541]:         --zeroconf-backend BACKEND
+May 11 18:46:02 Phantom librespot[785541]:                         Zeroconf (MDNS/DNS-SD) backend to use. Valid values
+May 11 18:46:02 Phantom librespot[785541]:                         are 'avahi', 'dns-sd' and 'libmdns', if librespot is
+May 11 18:46:02 Phantom librespot[785541]:                         compiled with the corresponding feature flags.
+May 11 18:46:02 Phantom librespot[785541]:     -l, --local-file-dir DIRECTORY
+May 11 18:46:02 Phantom librespot[785541]:                         Directory to search for local file playback. Can be
+May 11 18:46:02 Phantom librespot[785541]:                         specified multiple times to add multiple search
+May 11 18:46:02 Phantom librespot[785541]:                         directories
+root@Phantom:~# 
