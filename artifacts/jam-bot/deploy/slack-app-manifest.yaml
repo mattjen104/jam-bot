@@ -3,6 +3,13 @@ display_information:
   description: Permanent Spotify Jam host for our channel.
   background_color: "#1DB954"
 features:
+  app_home:
+    # Show the Messages tab in the bot's App Home and allow users to type
+    # there. Required so the host can DM the bot natural-language commands
+    # ("play X", "skip", "start a jam") in addition to slash commands.
+    home_tab_enabled: false
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: false
   bot_user:
     display_name: Jam Bot
     always_online: true
