@@ -39,6 +39,10 @@ features:
       description: Ask the Jam history a question, or play a curated set
       usage_hint: "<question or play-me-a-set request>"
       should_escape: false
+    - command: /quiet
+      description: Toggle quiet mode (suppress all bot channel posts while testing)
+      usage_hint: "[on|off|status]"
+      should_escape: false
     - command: /jamoptout
       description: Opt out of (or back into) personal Wrapped stats
       usage_hint: "[off]"
