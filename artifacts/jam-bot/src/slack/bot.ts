@@ -572,10 +572,21 @@ slackApp.message(async ({ message, say }) => {
   // every message in the channel (which led to the bot answering questions
   // that humans were asking each other). Strip the mention before passing
   // the rest to the intent classifier.
-  if (!cachedBotUserId) return;
+  logger.info("Channel message received", {
+    user: message.user,
+    text: message.text,
+    cachedBotUserId,
+  });
+  if (!cachedBotUserId) {
+    logger.warn("Skipping message: bot user id not cached yet");
+    return;
+  }
   const mentionTag = `<@${cachedBotUserId}>`;
   const rawText = message.text;
-  if (!rawText.includes(mentionTag)) return;
+  if (!rawText.includes(mentionTag)) {
+    logger.info("Skipping message: no mention of bot", { mentionTag });
+    return;
+  }
   const text = rawText.split(mentionTag).join(" ").replace(/\s+/g, " ").trim();
   if (!text) {
     await say({
