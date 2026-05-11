@@ -40,30 +40,72 @@ interface CachedToken {
 
 let cachedInternalToken: CachedToken | null = null;
 
-async function fetchInternalAccessToken(spDc: string): Promise<string> {
+/**
+ * Fetch an internal Spotify access token, either via the home-network
+ * relay (preferred — see tools/spotify-token-relay) or by calling
+ * open.spotify.com directly. The direct path returns 403 "URL Blocked"
+ * from datacenter IPs, so on a cloud droplet you almost certainly want
+ * the relay path.
+ */
+async function fetchInternalAccessToken(): Promise<string> {
   if (cachedInternalToken && Date.now() < cachedInternalToken.expiresAt - 60_000) {
     return cachedInternalToken.token;
   }
-  const res = await fetch(
-    "https://open.spotify.com/get_access_token?reason=transport&productType=web_player",
-    {
+
+  let json: InternalTokenResponse;
+
+  if (config.SPOTIFY_TOKEN_RELAY_URL) {
+    // ---- Relay path (works from datacenter IPs) ------------------------
+    if (!config.SPOTIFY_TOKEN_RELAY_SECRET) {
+      throw new Error(
+        "SPOTIFY_TOKEN_RELAY_URL is set but SPOTIFY_TOKEN_RELAY_SECRET is missing. Set both, matching the relay's RELAY_SECRET.",
+      );
+    }
+    const relayUrl = `${config.SPOTIFY_TOKEN_RELAY_URL.replace(/\/$/, "")}/token`;
+    const res = await fetch(relayUrl, {
       headers: {
-        Cookie: `sp_dc=${spDc}`,
-        "User-Agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
-          "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+        Authorization: `Bearer ${config.SPOTIFY_TOKEN_RELAY_SECRET}`,
       },
-    },
-  );
-  if (!res.ok) {
-    throw new Error(
-      `get_access_token failed: ${res.status} ${res.statusText}`,
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(
+        `token relay returned ${res.status}: ${body.slice(0, 200)}`,
+      );
+    }
+    json = (await res.json()) as InternalTokenResponse;
+  } else {
+    // ---- Direct path (only works from residential IPs) -----------------
+    if (!config.SPOTIFY_SP_DC) {
+      throw new Error(
+        "no token source configured — set SPOTIFY_TOKEN_RELAY_URL (recommended for cloud droplets) or SPOTIFY_SP_DC",
+      );
+    }
+    const res = await fetch(
+      "https://open.spotify.com/get_access_token?reason=transport&productType=web_player",
+      {
+        headers: {
+          Cookie: `sp_dc=${config.SPOTIFY_SP_DC}`,
+          "User-Agent":
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+        },
+      },
     );
+    if (!res.ok) {
+      throw new Error(
+        `get_access_token failed: ${res.status} ${res.statusText}` +
+          (res.status === 403
+            ? " (Spotify blocks this endpoint from datacenter IPs — set up tools/spotify-token-relay on a home machine)"
+            : ""),
+      );
+    }
+    json = (await res.json()) as InternalTokenResponse;
   }
-  const json = (await res.json()) as InternalTokenResponse;
+
   if (!json.accessToken || json.isAnonymous) {
     throw new Error(
-      "get_access_token returned an anonymous token — your sp_dc cookie has likely expired. Grab a fresh one from open.spotify.com.",
+      "internal token endpoint returned an anonymous token — your sp_dc cookie has likely expired. Grab a fresh one from open.spotify.com.",
     );
   }
   cachedInternalToken = {
@@ -136,16 +178,16 @@ async function getCurrentJam(
  * Always returns a result tuple — never throws.
  */
 export async function startSpotifyJam(): Promise<JamStartResult> {
-  if (!config.SPOTIFY_SP_DC) {
+  if (!config.SPOTIFY_TOKEN_RELAY_URL && !config.SPOTIFY_SP_DC) {
     return {
       ok: false,
       reason:
-        "no SPOTIFY_SP_DC cookie configured — Spotify hasn't published a public Jam API",
+        "no Spotify internal-token source configured — set SPOTIFY_TOKEN_RELAY_URL (recommended) or SPOTIFY_SP_DC",
     };
   }
   let token: string;
   try {
-    token = await fetchInternalAccessToken(config.SPOTIFY_SP_DC);
+    token = await fetchInternalAccessToken();
   } catch (err) {
     cachedInternalToken = null;
     return { ok: false, reason: String(err) };

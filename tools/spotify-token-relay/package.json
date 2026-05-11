@@ -1,0 +1,13 @@
+{
+  "name": "spotify-token-relay",
+  "version": "1.0.0",
+  "description": "Tiny home-network relay that fetches Spotify internal access tokens for Jam Bot. Run on a non-datacenter IP (your home computer / Pi) so the bot can sidestep Spotify's datacenter block on get_access_token.",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.mjs"
+  }
+}
