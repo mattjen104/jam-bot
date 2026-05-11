@@ -1,0 +1,17 @@
+poll: Invalid PlayerState
+May 11 18:42:27 Phantom systemd[1]: librespot.service: Main process exited, code=exited, status=1/FAILURE
+May 11 18:42:27 Phantom systemd[1]: librespot.service: Failed with result 'exit-code'.
+May 11 18:42:30 Phantom systemd[1]: Stopped librespot.service - librespot — headless Spotify Connect device for Jam Host.
+May 11 18:42:30 Phantom systemd[1]: Started librespot.service - librespot — headless Spotify Connect device for Jam Host.
+May 11 18:42:30 Phantom librespot[784847]: [2026-05-11T18:42:30Z INFO  librespot] librespot 0.8.0 33bf3a7 (Built on 2026-05-11, Build ID: vQRvmrES, Profile: release)
+May 11 18:42:30 Phantom librespot[784847]: [2026-05-11T18:42:30Z WARN  librespot_core::cache] credential file "/opt/jam-bot/librespot-cache/credentials.json" is currently world readable, consider using  chmod 600 "/opt/jam-bot/librespot-cache/credentials.json" to fix this
+May 11 18:42:30 Phantom librespot[784847]: [2026-05-11T18:42:30Z INFO  librespot_playback::mixer::softmixer] Mixing with softvol and volume control: Log(60.0)
+May 11 18:42:30 Phantom librespot[784847]: [2026-05-11T18:42:30Z INFO  librespot_playback::convert] Converting with ditherer: tpdf
+May 11 18:42:30 Phantom librespot[784847]: [2026-05-11T18:42:30Z INFO  librespot_playback::audio_backend::alsa] Using AlsaSink with format: S16
+May 11 18:42:31 Phantom librespot[784847]: [2026-05-11T18:42:31Z INFO  librespot_core::session] Connecting to AP "ap-guc3.spotify.com:4070"
+May 11 18:42:31 Phantom librespot[784847]: [2026-05-11T18:42:31Z INFO  librespot_core::session] Authenticated as '1261507623' !
+May 11 18:42:31 Phantom librespot[784847]: [2026-05-11T18:42:31Z WARN  librespot_core::cache] credential file "/opt/jam-bot/librespot-cache/credentials.json" is currently world readable, consider using  chmod 600 "/opt/jam-bot/librespot-cache/credentials.json" to fix this
+May 11 18:42:31 Phantom librespot[784847]: [2026-05-11T18:42:31Z INFO  librespot_core::session] Country: "US"
+May 11 18:42:31 Phantom librespot[784847]: [2026-05-11T18:42:31Z INFO  librespot_core::spclient] Resolved "guc3-spclient.spotify.com:443" as spclient access point
+May 11 18:42:32 Phantom librespot[784847]: [2026-05-11T18:42:32Z INFO  librespot_connect::spirc] active device is <> with session <7448837365b9413083a901e3bb9c473f>
+root@Phantom:~# 
