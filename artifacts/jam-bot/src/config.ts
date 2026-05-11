@@ -33,7 +33,7 @@ const schema = z.object({
   SLACK_CHANNEL_ID: z.string().min(1),
 
   OPENROUTER_API_KEY: z.string().min(1),
-  OPENROUTER_MODEL: z.string().min(1).default("anthropic/claude-3.5-sonnet"),
+  OPENROUTER_MODEL: z.string().min(1).default("anthropic/claude-sonnet-4"),
 
   NOW_PLAYING_POLL_MS: z.coerce.number().int().positive().default(5000),
   DATABASE_PATH: z.string().min(1).default("./data/jam.db"),
