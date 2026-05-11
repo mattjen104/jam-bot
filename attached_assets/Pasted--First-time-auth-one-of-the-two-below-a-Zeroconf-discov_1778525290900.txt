@@ -1,0 +1,86 @@
+#
+# First-time auth (one of the two below):
+#   (a) Zeroconf discovery: leave OFF the --disable-discovery flag (default).
+#       From your host phone's Spotify, open the device picker and choose
+#       "Jam Host". librespot will accept the auth and write credentials.json
+#       into /opt/jam-bot/librespot-cache, after which restarts are silent.
+#   (b) Explicit OAuth: stop this service, run as the jam user
+#         sudo -u jam /usr/bin/librespot --cache /opt/jam-bot/librespot-cache \
+#           --name "Jam Host" --enable-oauth
+#       follow the printed URL on any browser, sign in with the host account,
+#       then ctrl-c and re-enable the service.
+#
+# --backend alsa --device default --device default discards audio (fine on a headless droplet — Jam listeners
+# stream directly from Spotify). Switch to alsa/pulseaudio if you actually
+# want audio out of the box.
+ExecStart=/usr/bin/librespot \
+  --name "Jam Host" \
+  --bitrate 160 \
+  --device-type computer \
+  --backend alsa --device default --device default \
+  --cache /opt/jam-bot/librespot-cache \
+  --enable-volume-normalisation \
+  --initial-volume 80
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/jam-bot/librespot-cache
+
+[Install]
+WantedBy=multi-user.target
+root@Phantom:~# sudo sed -i 's|--backend alsa --device default --device default|--backend alsa --device default|' /etc/systemd/system/librespot.service
+grep -A1 "backend alsa" /etc/systemd/system/librespot.service
+sudo systemctl daemon-reload
+sudo systemctl restart librespot.service
+sleep 3
+sudo journalctl -u librespot.service -n 30 --no-pager -l
+# --backend alsa --device default discards audio (fine on a headless droplet — Jam listeners
+# stream directly from Spotify). Switch to alsa/pulseaudio if you actually
+--
+  --backend alsa --device default \
+  --cache /opt/jam-bot/librespot-cache \
+May 11 18:47:16 Phantom librespot[785723]:                         Available ports are usually 80, 443 and 4070.
+May 11 18:47:16 Phantom librespot[785723]:     -A, --autoplay OVERRIDE
+May 11 18:47:16 Phantom librespot[785723]:                         Explicitly set autoplay {on|off}. Defaults to
+May 11 18:47:16 Phantom librespot[785723]:                         following the client setting.
+May 11 18:47:16 Phantom librespot[785723]:     -i, --zeroconf-interface IP
+May 11 18:47:16 Phantom librespot[785723]:                         Comma-separated interface IP addresses on which
+May 11 18:47:16 Phantom librespot[785723]:                         zeroconf will bind. Defaults to all interfaces.
+May 11 18:47:16 Phantom librespot[785723]:                         Ignored by DNS-SD.
+May 11 18:47:16 Phantom librespot[785723]:         --zeroconf-backend BACKEND
+May 11 18:47:16 Phantom librespot[785723]:                         Zeroconf (MDNS/DNS-SD) backend to use. Valid values
+May 11 18:47:16 Phantom librespot[785723]:                         are 'avahi', 'dns-sd' and 'libmdns', if librespot is
+May 11 18:47:16 Phantom librespot[785723]:                         compiled with the corresponding feature flags.
+May 11 18:47:16 Phantom librespot[785723]:     -l, --local-file-dir DIRECTORY
+May 11 18:47:16 Phantom librespot[785723]:                         Directory to search for local file playback. Can be
+May 11 18:47:16 Phantom librespot[785723]:                         specified multiple times to add multiple search
+May 11 18:47:16 Phantom librespot[785723]:                         directories
+May 11 18:47:16 Phantom systemd[1]: librespot.service: Failed with result 'exit-code'.
+May 11 18:47:19 Phantom systemd[1]: Stopped librespot.service - librespot — headless Spotify Connect device for Jam Host.
+May 11 18:47:19 Phantom systemd[1]: Started librespot.service - librespot — headless Spotify Connect device for Jam Host.
+May 11 18:47:19 Phantom librespot[785797]: [2026-05-11T18:47:19Z INFO  librespot] librespot 0.8.0 33bf3a7 (Built on 2026-05-11, Build ID: vQRvmrES, Profile: release)
+May 11 18:47:19 Phantom librespot[785797]: [2026-05-11T18:47:19Z WARN  librespot_core::cache] credential file "/opt/jam-bot/librespot-cache/credentials.json" is currently world readable, consider using  chmod 600 "/opt/jam-bot/librespot-cache/credentials.json" to fix this
+May 11 18:47:19 Phantom librespot[785797]: [2026-05-11T18:47:19Z INFO  librespot_playback::mixer::softmixer] Mixing with softvol and volume control: Log(60.0)
+May 11 18:47:19 Phantom librespot[785797]: [2026-05-11T18:47:19Z INFO  librespot_playback::convert] Converting with ditherer: tpdf
+May 11 18:47:19 Phantom librespot[785797]: [2026-05-11T18:47:19Z INFO  librespot_playback::audio_backend::alsa] Using AlsaSink with format: S16
+May 11 18:47:19 Phantom librespot[785797]: [2026-05-11T18:47:19Z INFO  librespot_core::session] Connecting to AP "ap-guc3.spotify.com:4070"
+May 11 18:47:19 Phantom librespot[785797]: [2026-05-11T18:47:19Z INFO  librespot_core::session] Authenticated as '1261507623' !
+May 11 18:47:19 Phantom librespot[785797]: [2026-05-11T18:47:19Z WARN  librespot_core::cache] credential file "/opt/jam-bot/librespot-cache/credentials.json" is currently world readable, consider using  chmod 600 "/opt/jam-bot/librespot-cache/credentials.json" to fix this
+May 11 18:47:19 Phantom librespot[785797]: [2026-05-11T18:47:19Z INFO  librespot_core::session] Country: "US"
+May 11 18:47:20 Phantom librespot[785797]: [2026-05-11T18:47:20Z INFO  librespot_core::spclient] Resolved "guc3-spclient.spotify.com:443" as spclient access point
+May 11 18:47:20 Phantom librespot[785797]: [2026-05-11T18:47:20Z INFO  librespot_connect::spirc] active device is <> with session <56367e88906b4e998d5bb4cd79683662>
+root@Phantom:~# sudo journalctl -u librespot.service -f
+May 11 18:47:19 Phantom librespot[785797]: [2026-05-11T18:47:19Z INFO  librespot_core::session] Country: "US"
+May 11 18:47:20 Phantom librespot[785797]: [2026-05-11T18:47:20Z INFO  librespot_core::spclient] Resolved "guc3-spclient.spotify.com:443" as spclient access point
+May 11 18:47:20 Phantom librespot[785797]: [2026-05-11T18:47:20Z INFO  librespot_connect::spirc] active device is <> with session <56367e88906b4e998d5bb4cd79683662>
+May 11 18:47:45 Phantom librespot[785797]: [2026-05-11T18:47:45Z WARN  librespot_connect::state::context] couldn't load context info because: context is not available. type: Default
+May 11 18:47:45 Phantom librespot[785797]: [2026-05-11T18:47:45Z INFO  librespot_playback::player] Loading <Merged In Dreams - Ne Plus Ultra - Live at Bbc Maida Vale Studios> with Spotify URI <spotify:track:5wowed51KuYTYthkNjdIWL>
+May 11 18:47:45 Phantom librespot[785797]: [2026-05-11T18:47:45Z INFO  librespot_playback::player] <Merged In Dreams - Ne Plus Ultra - Live at Bbc Maida Vale Studios> (933760 ms) loaded
+May 11 18:47:54 Phantom librespot[785797]: ALSA lib confmisc.c:165:(snd_config_get_card) Cannot get card index for Dummy
+May 11 18:47:54 Phantom librespot[785797]: [2026-05-11T18:47:54Z ERROR librespot_playback::player] Audio Sink Error Connection Refused: <AlsaSink> Device default May be Invalid, Busy, or Already in Use, ALSA function 'snd_pcm_open' failed with error 'No such device (19)'
+May 11 18:47:56 Phantom librespot[785797]: ALSA lib confmisc.c:165:(snd_config_get_card) Cannot get card index for Dummy
+May 11 18:47:56 Phantom librespot[785797]: [2026-05-11T18:47:56Z ERROR librespot_playback::player] Audio Sink Error Connection Refused: <AlsaSink> Device default May be Invalid, Busy, or Already in Use, ALSA function 'snd_pcm_open' failed with error 'No such device (19)'
