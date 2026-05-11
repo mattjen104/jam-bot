@@ -23,7 +23,7 @@ import { logger } from "../logger.js";
  */
 
 export type JamStartResult =
-  | { ok: true; joinUrl: string; sessionId: string }
+  | { ok: true; joinUrl: string; sessionId: string; existed: boolean }
   | { ok: false; reason: string };
 
 interface InternalTokenResponse {
@@ -79,10 +79,61 @@ interface SessionResponse {
   join_session_url?: string;
 }
 
+const BROWSER_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
+  "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
+
+function extractJoinUrl(data: SessionResponse): string | null {
+  if (data.join_session_url) return data.join_session_url;
+  if (data.join_session_token) {
+    return `https://open.spotify.com/jam/${data.join_session_token}`;
+  }
+  return null;
+}
+
 /**
- * Best-effort programmatic Jam start. Returns ok:false with a human-readable
- * reason when the unofficial endpoint isn't available — caller should then
- * post the manual fallback instructions.
+ * Look up the host's currently-active Jam session, if one exists. Returns
+ * null when there is no active session, throws on auth/network failures
+ * so the caller can decide whether to fall back or surface the error.
+ */
+async function getCurrentJam(
+  token: string,
+): Promise<{ joinUrl: string; sessionId: string } | null> {
+  const res = await fetch(
+    "https://spclient.wg.spotify.com/social-connect/v2/sessions/current",
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "User-Agent": BROWSER_UA,
+      },
+    },
+  );
+  // 404 = no active session. Anything else non-2xx is a real failure.
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(
+      `current-session lookup failed (${res.status}): ${body.slice(0, 200)}`,
+    );
+  }
+  const data = (await res.json()) as SessionResponse;
+  const url = extractJoinUrl(data);
+  if (!url || !data.session_id) return null;
+  return { joinUrl: url, sessionId: data.session_id };
+}
+
+/**
+ * Best-effort programmatic Jam start. Behavior:
+ *   1. If SPOTIFY_SP_DC is unset -> return ok:false (caller shows manual
+ *      instructions).
+ *   2. Look up the host's current Jam. If one already exists, return its
+ *      join URL with `existed: true` — no creation attempt, no Spotify
+ *      "you already have a Jam" rejection.
+ *   3. Otherwise POST to create one and return the new join URL with
+ *      `existed: false`.
+ *
+ * Always returns a result tuple — never throws.
  */
 export async function startSpotifyJam(): Promise<JamStartResult> {
   if (!config.SPOTIFY_SP_DC) {
@@ -99,6 +150,31 @@ export async function startSpotifyJam(): Promise<JamStartResult> {
     cachedInternalToken = null;
     return { ok: false, reason: String(err) };
   }
+
+  // Step 1: is there already a live Jam? If yes, just hand back its URL.
+  try {
+    const existing = await getCurrentJam(token);
+    if (existing) {
+      logger.info("Spotify Jam already active; returning existing join URL", {
+        sessionId: existing.sessionId,
+      });
+      return {
+        ok: true,
+        joinUrl: existing.joinUrl,
+        sessionId: existing.sessionId,
+        existed: true,
+      };
+    }
+  } catch (err) {
+    // Don't fail the whole command on a lookup glitch — fall through and
+    // try the create. The create path will surface the actual error if it
+    // also fails.
+    logger.warn("Spotify current-session lookup failed; trying create", {
+      error: String(err),
+    });
+  }
+
+  // Step 2: no active session, try to create one.
   try {
     const res = await fetch(
       "https://spclient.wg.spotify.com/social-connect/v2/sessions/current_or_new?local_device_id=jam-bot",
@@ -107,9 +183,7 @@ export async function startSpotifyJam(): Promise<JamStartResult> {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
-          "User-Agent":
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+          "User-Agent": BROWSER_UA,
         },
         body: JSON.stringify({}),
       },
@@ -126,18 +200,19 @@ export async function startSpotifyJam(): Promise<JamStartResult> {
       };
     }
     const data = (await res.json()) as SessionResponse;
-    const url =
-      data.join_session_url ??
-      (data.join_session_token
-        ? `https://open.spotify.com/jam/${data.join_session_token}`
-        : null);
+    const url = extractJoinUrl(data);
     if (!url || !data.session_id) {
       return {
         ok: false,
         reason: "Spotify response missing join URL — endpoint shape may have changed",
       };
     }
-    return { ok: true, joinUrl: url, sessionId: data.session_id };
+    return {
+      ok: true,
+      joinUrl: url,
+      sessionId: data.session_id,
+      existed: false,
+    };
   } catch (err) {
     return { ok: false, reason: `Network error: ${String(err)}` };
   }
