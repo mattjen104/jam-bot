@@ -1,0 +1,69 @@
+Found 8 errors.
+
+ ELIFECYCLE  Command failed with exit code 2.
+ ELIFECYCLE  Command failed with exit code 2.
+ ELIFECYCLE  Command failed with exit code 2.
+0
+root@Phantom:/opt/jam-bot/app# cd /opt/jam-bot/app
+sudo -u jam pnpm run build
+sudo systemctl restart jam-bot
+grep -c "mentionTag" /opt/jam-bot/app/dist/slack/bot.js
+
+> workspace@0.0.0 build /opt/jam-bot-repo
+> pnpm run typecheck && pnpm -r --if-present run build
+
+
+> workspace@0.0.0 typecheck /opt/jam-bot-repo
+> pnpm run typecheck:libs && pnpm -r --filter "./artifacts/**" --filter "./scripts" --if-present run typecheck
+
+
+> workspace@0.0.0 typecheck:libs /opt/jam-bot-repo
+> tsc --build
+
+lib/db/src/index.ts:1:25 - error TS2307: Cannot find module 'drizzle-orm/node-postgres' or its corresponding type declarations.
+
+1 import { drizzle } from "drizzle-orm/node-postgres";
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+lib/db/src/index.ts:2:16 - error TS2307: Cannot find module 'pg' or its corresponding type declarations.
+
+2 import pg from "pg";
+                 ~~~~
+
+lib/db/src/schema/cached-artists.ts:1:59 - error TS2307: Cannot find module 'drizzle-orm/pg-core' or its corresponding type declarations.
+
+1 import { pgTable, serial, integer, text, timestamp } from "drizzle-orm/pg-core";
+                                                            ~~~~~~~~~~~~~~~~~~~~~
+
+lib/db/src/schema/cached-tracks.ts:1:65 - error TS2307: Cannot find module 'drizzle-orm/pg-core' or its corresponding type declarations.
+
+1 import { pgTable, serial, integer, text, real, timestamp } from "drizzle-orm/pg-core";
+                                                                  ~~~~~~~~~~~~~~~~~~~~~
+
+lib/db/src/schema/users.ts:1:50 - error TS2307: Cannot find module 'drizzle-orm/pg-core' or its corresponding type declarations.
+
+1 import { pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+                                                   ~~~~~~~~~~~~~~~~~~~~~
+
+lib/api-client-react/src/generated/api.ts:8:26 - error TS2307: Cannot find module '@tanstack/react-query' or its corresponding type declarations.
+
+8 import { useQuery } from "@tanstack/react-query";
+                           ~~~~~~~~~~~~~~~~~~~~~~~
+
+lib/api-client-react/src/generated/api.ts:14:8 - error TS2307: Cannot find module '@tanstack/react-query' or its corresponding type declarations.
+
+14 } from "@tanstack/react-query";
+          ~~~~~~~~~~~~~~~~~~~~~~~
+
+lib/api-client-react/src/generated/api.ts:64:5 - error TS7031: Binding element 'signal' implicitly has an 'any' type.
+
+64     signal,
+       ~~~~~~
+
+
+Found 8 errors.
+
+ ELIFECYCLE  Command failed with exit code 1.
+ ELIFECYCLE  Command failed with exit code 1.
+ ELIFECYCLE  Command failed with exit code 1.
+0

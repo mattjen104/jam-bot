@@ -80,9 +80,9 @@ sudo chown -R jam:jam /opt/jam-bot
 sudo mkdir -p /opt/jam-bot-repo && sudo chown jam:jam /opt/jam-bot-repo
 sudo -u jam git clone <your-fork-url> /opt/jam-bot-repo
 sudo ln -sfn /opt/jam-bot-repo/artifacts/jam-bot /opt/jam-bot/app
-cd /opt/jam-bot/app
+cd /opt/jam-bot-repo
 sudo -u jam pnpm install --prod=false
-sudo -u jam pnpm run build
+sudo -u jam pnpm --filter @workspace/jam-bot run build
 ```
 
 ### 4. Drop in `.env` and start the services
@@ -176,9 +176,9 @@ For the long version, see [`SETUP.md` § Troubleshooting](./SETUP.md#troubleshoo
 ## Part 3 — Updating the bot
 
 ```bash
-cd /opt/jam-bot/app
+cd /opt/jam-bot-repo
 sudo -u jam git pull
 sudo -u jam pnpm install --prod=false
-sudo -u jam pnpm run build
+sudo -u jam pnpm --filter @workspace/jam-bot run build
 sudo systemctl restart jam-bot
 ```
