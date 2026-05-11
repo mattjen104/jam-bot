@@ -59,6 +59,9 @@ oauth_config:
       - chat:write
       - commands
       - users:read
+      # Required for /quiet test mode to DM the configured JAM_QUIET_DM_USER
+      # via chat.postMessage with a user ID as the channel.
+      - im:write
 settings:
   event_subscriptions:
     bot_events:

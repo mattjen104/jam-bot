@@ -62,6 +62,21 @@ const schema = z.object({
   JAM_WRAPPED_LOOKBACK_DAYS: z.coerce.number().int().positive().default(7),
   // Cap on tracks /memory will queue from a single "play me a set" request.
   JAM_MEMORY_MAX_QUEUE: z.coerce.number().int().positive().default(10),
+
+  // ---- Now-playing post schedule -----------------------------------------
+  // Comma-separated list of UTC day-of-week numbers (0=Sun..6=Sat) on which
+  // the "Now playing" card is allowed to post. Defaults to Friday only so
+  // friends only get pinged with track-change cards on Fridays. Other days,
+  // tracks still play and get logged to history — they just don't post.
+  // Set to "0,1,2,3,4,5,6" to post every day.
+  JAM_NOWPLAYING_DAYS: z.string().default("5"),
+
+  // ---- Quiet (test) mode -------------------------------------------------
+  // Slack user ID (e.g. U01ABC...) to receive bot output as DMs while quiet
+  // mode is on. When set, slash command replies and @mention answers DM
+  // this user instead of posting in-channel. If unset, quiet mode falls
+  // back to ephemeral messages visible only to the slash-command caller.
+  JAM_QUIET_DM_USER: z.string().optional(),
 });
 
 function loadConfig() {

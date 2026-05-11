@@ -136,7 +136,13 @@ All commands work in the configured Slack channel. You can also just *talk* to t
 | `/compat @userA @userB` | Score two people's musical compatibility 0-100 with shared artists + a track recommendation each way. |
 | `/memory <question>` | Free-form recall over Jam history, e.g. "who introduced us to Khruangbin?" — or **"play me a 5-track set from last weekend"** to actually queue tracks. |
 | `/jamoptout` / `/jamoptout off` | Hide your personal stats from `/wrapped`, `/dna`, `/compat` (your plays still count toward channel totals). Run `off` to undo. |
-| `/quiet` / `/quiet on` / `/quiet off` / `/quiet status` | **Test mode.** Toggle suppression of *all* bot channel posts (now-playing cards, vote-skip cards, Wrapped, @mention replies). Music keeps playing and slash commands still respond — but only the caller sees them (ephemeral). Resets to off when the bot restarts. Use this while testing so your friends don't get notification-bombed. |
+| `/quiet` / `/quiet on` / `/quiet off` / `/quiet status` | **Test mode.** Toggle suppression of *all* bot channel posts (now-playing cards, vote-skip cards, Wrapped, @mention replies). Music keeps playing and slash commands still respond — but the response is DM'd to the user in `JAM_QUIET_DM_USER` (or sent as an ephemeral to the caller if that's not set). Resets to off when the bot restarts. Use this while testing so your friends don't get notification-bombed. |
+
+### Notification-friendly defaults
+
+- **Now-playing cards only post on Fridays** by default. Tracks still play and get logged to history every day — but the channel only sees the "Now playing" card on Friday so friends aren't notified on every track change. Override with `JAM_NOWPLAYING_DAYS` (UTC, comma-separated 0=Sun..6=Sat). Set to `0,1,2,3,4,5,6` to restore the every-day behavior.
+- **`@Jam Bot`, slash command, and vote-skip notifications still fire normally** — those are direct interactions, not background pings.
+- **Quiet mode → DMs.** Set `JAM_QUIET_DM_USER=U01YourSlackId` and run `/quiet on`. All bot replies route to your DMs as a real thread, so you can keep testing without anyone in the channel seeing or being notified.
 
 ### Natural language (must @-mention the bot)
 
