@@ -1,0 +1,73 @@
+^C
+root@Phantom:~# export RUSTUP_HOME=/mnt/volume_sfo3_01/build/rustup
+export CARGO_HOME=/mnt/volume_sfo3_01/build/cargo
+export CARGO_TARGET_DIR=/mnt/volume_sfo3_01/build/cargo-target
+export PATH=$CARGO_HOME/bin:$PATH
+
+cargo install --git https://github.com/librespot-org/librespot \
+  --branch dev \
+  --no-default-features \
+  --features "pipe-backend with-libmdns" \
+  --root /mnt/volume_sfo3_01/build/librespot-install \
+  --force
+    Updating git repository `https://github.com/librespot-org/librespot`
+  Installing librespot v0.8.0 (https://github.com/librespot-org/librespot?branch=dev#33bf3a77)
+error: failed to compile `librespot v0.8.0 (https://github.com/librespot-org/librespot?branch=dev#33bf3a77)`, intermediate artifacts can be found at `/mnt/volume_sfo3_01/build/cargo-target`.
+To reuse those artifacts with a future compilation, set the environment variable `CARGO_BUILD_BUILD_DIR` to that path.
+
+Caused by:
+  the package 'librespot' does not contain this feature: pipe-backend
+root@Phantom:~# cd /mnt/volume_sfo3_01/build/cargo/git/checkouts/librespot-*/*/
+grep -A 50 '^\[features\]' Cargo.toml | head -60
+[features]
+default = ["native-tls", "rodio-backend", "with-libmdns"]
+
+# TLS backends (mutually exclusive - compile-time checks in oauth/src/lib.rs)
+# Note: Feature validation is in oauth crate since it's compiled first in the dependency tree.
+# See COMPILING.md for more details on TLS backend selection.
+
+# native-tls: Uses the system's native TLS stack (OpenSSL on Linux, Secure Transport on macOS,
+# SChannel on Windows). This is the default as it's well-tested, widely compatible, and integrates
+# with system certificate stores. Choose this for maximum compatibility and when you want to use
+# system-managed certificates.
+native-tls = ["librespot-core/native-tls", "librespot-oauth/native-tls"]
+
+# rustls-tls: Uses the Rust-based rustls TLS implementation with certificate authority (CA)
+# verification. This provides a Rust TLS stack (with assembly optimizations). Choose this for
+# avoiding external  OpenSSL dependencies, reproducible builds, or when targeting platforms where
+# native TLS  dependencies are unavailable or problematic (musl, embedded, static linking).
+#
+# Two certificate store options are available:
+#
+# - rustls-tls-native-roots: Uses rustls with native system certificate stores (ca-certificates on
+# Linux, Security.framework on macOS, Windows certificate store on Windows). Best for most users as
+# it integrates with system-managed certificates and gets security updates through the OS.
+rustls-tls-native-roots = [
+    "librespot-core/rustls-tls-native-roots",
+    "librespot-oauth/rustls-tls-native-roots",
+]
+# rustls-tls-webpki-roots: Uses rustls with Mozilla's compiled-in certificate store (webpki-roots).
+# Best for reproducible builds, containerized environments, or when you want certificate handling
+# to be independent of the host system.
+rustls-tls-webpki-roots = [
+    "librespot-core/rustls-tls-webpki-roots",
+    "librespot-oauth/rustls-tls-webpki-roots",
+]
+
+# Audio backends - see README.md for audio backend selection guide
+# Cross-platform backends:
+
+# rodio-backend: Cross-platform audio backend using Rodio (default). Provides good cross-platform
+# compatibility with automatic backend selection. Uses ALSA on Linux, WASAPI on Windows, CoreAudio
+# on macOS.
+rodio-backend = ["librespot-playback/rodio-backend"]
+
+# rodiojack-backend: Rodio backend with JACK support for professional audio setups.
+rodiojack-backend = ["librespot-playback/rodiojack-backend"]
+
+# gstreamer-backend: Uses GStreamer multimedia framework for audio output.
+# Provides extensive audio processing capabilities.
+gstreamer-backend = ["librespot-playback/gstreamer-backend"]
+
+# portaudio-backend: Cross-platform audio I/O library backend.
+root@Phantom:/mnt/volume_sfo3_01/build/cargo/git/checkouts/librespot-0af58e53e65aac12/33bf3a7# 
