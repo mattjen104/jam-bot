@@ -84,7 +84,25 @@ const schema = z.object({
   // start via Spotify's undocumented social-connect endpoint. If unset,
   // /jam falls back to manual "tap Start a Jam in the app" instructions.
   // The endpoint may break at any time; the fallback always works.
+  //
+  // NOTE: Spotify blocks the `get_access_token` endpoint from datacenter
+  // IPs (DigitalOcean, AWS, etc), so SPOTIFY_SP_DC alone won't work on
+  // a cloud droplet — you'll see 403 "URL Blocked". Set the relay vars
+  // below instead and run tools/spotify-token-relay on a residential IP.
   SPOTIFY_SP_DC: z.string().optional(),
+
+  // Optional URL of a spotify-token-relay instance (see
+  // tools/spotify-token-relay). When set, the bot calls the relay for
+  // internal Spotify tokens instead of hitting open.spotify.com directly.
+  // This is the workaround for the datacenter-IP block. The relay runs
+  // on your home network and holds the sp_dc cookie there — the droplet
+  // only ever sees short-lived access tokens.
+  SPOTIFY_TOKEN_RELAY_URL: z.string().url().optional(),
+
+  // Shared secret matching the relay's RELAY_SECRET. Required when
+  // SPOTIFY_TOKEN_RELAY_URL is set. Generate with:
+  //   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+  SPOTIFY_TOKEN_RELAY_SECRET: z.string().optional(),
 });
 
 function loadConfig() {
