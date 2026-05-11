@@ -1,0 +1,79 @@
+rwxrwxrwx 1 root root 35 May 11 19:21 /opt/jam-bot/app -> /opt/jam-bot-repo/artifacts/jam-bot
+3
+root@Phantom:/opt/jam-bot-repo# # 1. Verify the symlink + compiled file are correct now
+ls -la /opt/jam-bot/app
+grep -c mentionTag /opt/jam-bot/app/dist/slack/bot.js
+
+# 2. Confirm service was restarted with the new code
+sudo systemctl status jam-bot --no-pager | head -15
+
+# 3. Watch the logs while you test (Ctrl+C after the test)
+sudo journalctl -u jam-bot -n 50 --no-pager
+lrwxrwxrwx 1 root root 35 May 11 19:21 /opt/jam-bot/app -> /opt/jam-bot-repo/artifacts/jam-bot
+3
+● jam-bot.service - Jam Bot — Slack + Spotify Jam controller
+     Loaded: loaded (/etc/systemd/system/jam-bot.service; enabled; preset: enabled)
+     Active: active (running) since Mon 2026-05-11 19:21:55 UTC; 3min 29s ago
+   Main PID: 791587 (node)
+      Tasks: 23 (limit: 4656)
+     Memory: 73.0M (peak: 89.9M)
+        CPU: 3.416s
+     CGroup: /system.slice/jam-bot.service
+             ├─791587 node /usr/bin/pnpm run start
+             ├─791599 sh -c "node ./dist/index.js"
+             └─791600 node ./dist/index.js
+
+May 11 19:21:56 Phantom pnpm[791587]: > @workspace/jam-bot@0.1.0 start /opt/jam-bot-repo/artifacts/jam-bot
+May 11 19:21:56 Phantom pnpm[791587]: > node ./dist/index.js
+May 11 19:21:56 Phantom pnpm[791600]: [2026-05-11T19:21:56.916Z] INFO Starting Jam Bot...
+May 11 19:21:09 Phantom pnpm[791365]:  ERR_PNPM_NO_SCRIPT_OR_SERVER  Missing script start or file server.js
+May 11 19:21:09 Phantom systemd[1]: jam-bot.service: Main process exited, code=exited, status=1/FAILURE
+May 11 19:21:09 Phantom systemd[1]: jam-bot.service: Failed with result 'exit-code'.
+May 11 19:21:14 Phantom systemd[1]: jam-bot.service: Scheduled restart job, restart counter is at 27.
+May 11 19:21:14 Phantom systemd[1]: Started jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 11 19:21:15 Phantom pnpm[791393]:  ERR_PNPM_NO_SCRIPT_OR_SERVER  Missing script start or file server.js
+May 11 19:21:15 Phantom systemd[1]: jam-bot.service: Main process exited, code=exited, status=1/FAILURE
+May 11 19:21:15 Phantom systemd[1]: jam-bot.service: Failed with result 'exit-code'.
+May 11 19:21:20 Phantom systemd[1]: jam-bot.service: Scheduled restart job, restart counter is at 28.
+May 11 19:21:20 Phantom systemd[1]: Started jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 11 19:21:21 Phantom pnpm[791414]:  ERR_PNPM_NO_SCRIPT_OR_SERVER  Missing script start or file server.js
+May 11 19:21:21 Phantom systemd[1]: jam-bot.service: Main process exited, code=exited, status=1/FAILURE
+May 11 19:21:21 Phantom systemd[1]: jam-bot.service: Failed with result 'exit-code'.
+May 11 19:21:26 Phantom systemd[1]: jam-bot.service: Scheduled restart job, restart counter is at 29.
+May 11 19:21:26 Phantom systemd[1]: Started jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 11 19:21:27 Phantom pnpm[791435]:  ERR_PNPM_NO_SCRIPT_OR_SERVER  Missing script start or file server.js
+May 11 19:21:27 Phantom systemd[1]: jam-bot.service: Main process exited, code=exited, status=1/FAILURE
+May 11 19:21:27 Phantom systemd[1]: jam-bot.service: Failed with result 'exit-code'.
+May 11 19:21:32 Phantom systemd[1]: jam-bot.service: Scheduled restart job, restart counter is at 30.
+May 11 19:21:32 Phantom systemd[1]: Started jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 11 19:21:33 Phantom pnpm[791483]:  ERR_PNPM_NO_SCRIPT_OR_SERVER  Missing script start or file server.js
+May 11 19:21:33 Phantom systemd[1]: jam-bot.service: Main process exited, code=exited, status=1/FAILURE
+May 11 19:21:33 Phantom systemd[1]: jam-bot.service: Failed with result 'exit-code'.
+May 11 19:21:38 Phantom systemd[1]: jam-bot.service: Scheduled restart job, restart counter is at 31.
+May 11 19:21:38 Phantom systemd[1]: Started jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 11 19:21:39 Phantom pnpm[791508]:  ERR_PNPM_NO_SCRIPT_OR_SERVER  Missing script start or file server.js
+May 11 19:21:39 Phantom systemd[1]: jam-bot.service: Main process exited, code=exited, status=1/FAILURE
+May 11 19:21:39 Phantom systemd[1]: jam-bot.service: Failed with result 'exit-code'.
+May 11 19:21:44 Phantom systemd[1]: jam-bot.service: Scheduled restart job, restart counter is at 32.
+May 11 19:21:44 Phantom systemd[1]: Started jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 11 19:21:45 Phantom pnpm[791535]:  ERR_PNPM_NO_SCRIPT_OR_SERVER  Missing script start or file server.js
+May 11 19:21:45 Phantom systemd[1]: jam-bot.service: Main process exited, code=exited, status=1/FAILURE
+May 11 19:21:45 Phantom systemd[1]: jam-bot.service: Failed with result 'exit-code'.
+May 11 19:21:50 Phantom systemd[1]: jam-bot.service: Scheduled restart job, restart counter is at 33.
+May 11 19:21:50 Phantom systemd[1]: Started jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 11 19:21:51 Phantom pnpm[791558]:  ERR_PNPM_NO_SCRIPT_OR_SERVER  Missing script start or file server.js
+May 11 19:21:51 Phantom systemd[1]: jam-bot.service: Main process exited, code=exited, status=1/FAILURE
+May 11 19:21:51 Phantom systemd[1]: jam-bot.service: Failed with result 'exit-code'.
+May 11 19:21:55 Phantom systemd[1]: Stopped jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 11 19:21:55 Phantom systemd[1]: Started jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 11 19:21:56 Phantom pnpm[791587]: > @workspace/jam-bot@0.1.0 start /opt/jam-bot-repo/artifacts/jam-bot
+May 11 19:21:56 Phantom pnpm[791587]: > node ./dist/index.js
+May 11 19:21:56 Phantom pnpm[791600]: [2026-05-11T19:21:56.916Z] INFO Starting Jam Bot...
+May 11 19:21:57 Phantom pnpm[791600]: [2026-05-11T19:21:57.281Z] INFO Found host device "Jam Host"
+May 11 19:21:58 Phantom pnpm[791600]: [2026-05-11T19:21:58.175Z] INFO Weekly Wrapped scheduled at "Sun 20:00" UTC
+May 11 19:21:58 Phantom pnpm[791600]: [2026-05-11T19:21:58.175Z] INFO Slack bot connected (channel C0B2JRU8SLV)
+May 11 19:21:58 Phantom pnpm[791600]: [2026-05-11T19:21:58.176Z] INFO Now-playing watcher started (every 5000ms)
+May 11 19:21:58 Phantom pnpm[791600]: [2026-05-11T19:21:58.176Z] INFO Jam Bot is up.
+May 11 19:23:26 Phantom pnpm[791600]: [2026-05-11T19:23:26.946Z] INFO No active Spotify playback detected {"hostVisible":true}
+May 11 19:23:47 Phantom pnpm[791600]: [2026-05-11T19:23:47.811Z] INFO Playback resumed
+root@Phantom:/opt/jam-bot-repo# 
