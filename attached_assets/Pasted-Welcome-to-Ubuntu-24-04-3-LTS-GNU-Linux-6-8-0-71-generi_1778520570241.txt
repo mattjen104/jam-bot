@@ -1,0 +1,128 @@
+Welcome to Ubuntu 24.04.3 LTS (GNU/Linux 6.8.0-71-generic x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Mon May 11 17:20:32 UTC 2026
+
+  System load:  0.0               Processes:             159
+  Usage of /:   91.7% of 8.65GB   Users logged in:       1
+  Memory usage: 33%               IPv4 address for eth0: 146.190.33.157
+  Swap usage:   0%                IPv4 address for eth0: 10.48.0.5
+
+  => / is using 91.7% of 8.65GB
+
+Expanded Security Maintenance for Applications is not enabled.
+
+69 updates can be applied immediately.
+To see these additional updates run: apt list --upgradable
+
+22 additional security updates can be applied with ESM Apps.
+Learn more about enabling ESM Apps service at https://ubuntu.com/esm
+
+
+*** System restart required ***
+Last login: Mon May 11 16:51:14 2026 from 162.243.188.66
+-bash: /root/.cargo/env: No such file or directory
+-bash: /root/.cargo/env: No such file or directory
+root@Phantom:~# sudo systemctl status librespot.service --no-pager
+sudo journalctl -u librespot.service -n 50 --no-pager -l
+● librespot.service - librespot — headless Spotify Connect device for Jam Host
+     Loaded: loaded (/etc/systemd/system/librespot.service; enabled; preset: enabled)
+     Active: active (running) since Fri 2026-05-08 22:41:17 UTC; 2 days ago
+   Main PID: 3425720 (librespot)
+      Tasks: 5 (limit: 4656)
+     Memory: 6.3M (peak: 6.9M)
+        CPU: 2.301s
+     CGroup: /system.slice/librespot.service
+             └─3425720 /usr/bin/librespot --name "Jam Host" --bitrate 320 --device-type computer --backend pipe -…
+
+May 11 17:15:59 Phantom librespot[3425720]: [2026-05-11T17:15:59Z ERROR librespot_playback::player] Skippi…")>: ()
+May 11 17:15:59 Phantom librespot[3425720]: [2026-05-11T17:15:59Z INFO  librespot_connect::spirc] Resolved…2uQJn">
+May 11 17:16:00 Phantom librespot[3425720]: [2026-05-11T17:16:00Z ERROR librespot_playback::player] Track … found.
+May 11 17:16:00 Phantom librespot[3425720]: [2026-05-11T17:16:00Z WARN  librespot_playback::player] <spoti…ailable
+May 11 17:18:36 Phantom librespot[3425720]: [2026-05-11T17:18:36Z ERROR librespot_playback::player] Track … found.
+May 11 17:18:36 Phantom librespot[3425720]: [2026-05-11T17:18:36Z WARN  librespot_playback::player] <spoti…ailable
+May 11 17:18:36 Phantom librespot[3425720]: [2026-05-11T17:18:36Z ERROR librespot_playback::player] Skippi…")>: ()
+May 11 17:18:36 Phantom librespot[3425720]: [2026-05-11T17:18:36Z ERROR librespot_connect::spirc] ContextE…(404) }
+May 11 17:18:36 Phantom librespot[3425720]: [2026-05-11T17:18:36Z WARN  librespot_connect::spirc] Skipping track …
+May 11 17:18:36 Phantom librespot[3425720]: [2026-05-11T17:18:36Z WARN  librespot_connect::spirc] No playable tra…
+Hint: Some lines were ellipsized, use -l to show in full.
+May 11 16:20:22 Phantom librespot[3425720]: [2026-05-11T16:20:22Z WARN  libmdns::fsm] couldn't parse packet from 185.209.162.57:13685: packet has non-zero reserved bits
+May 11 17:06:50 Phantom librespot[3425720]: [2026-05-11T17:06:50Z INFO  librespot_core::spclient] Resolved "guc3-spclient.spotify.com:443" as spclient access point
+May 11 17:06:50 Phantom librespot[3425720]: [2026-05-11T17:06:50Z ERROR librespot_playback::player] Track should be available, but no alternatives found.
+May 11 17:06:50 Phantom librespot[3425720]: [2026-05-11T17:06:50Z WARN  librespot_playback::player] <spotify:track:5jp5AQj5fbpmIKX4Wa0dI9> is not available
+May 11 17:06:50 Phantom librespot[3425720]: [2026-05-11T17:06:50Z ERROR librespot_playback::player] Skipping to next track, unable to load track <SpotifyId("spotify:track:5jp5AQj5fbpmIKX4Wa0dI9")>: ()
+May 11 17:06:50 Phantom librespot[3425720]: [2026-05-11T17:06:50Z ERROR librespot_connect::spirc] ContextError: Error { kind: NotFound, error: StatusCode(404) }
+May 11 17:06:50 Phantom librespot[3425720]: [2026-05-11T17:06:50Z WARN  librespot_connect::spirc] Skipping track <TrackRef { gid: Some([174, 145, 89, 182, 18, 164, 78, 146, 136, 239, 136, 62, 156, 52, 232, 197]), uri: None, queued: None, context: Some("NonPlayable"), special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } }> at position [0] of 1
+May 11 17:06:50 Phantom librespot[3425720]: [2026-05-11T17:06:50Z WARN  librespot_connect::spirc] No playable track found in state: State { context_uri: Some("spotify:user:1261507623:collection:artist:3372rwAO63ZVSvEDvqBV3a"), index: None, position_ms: Some(5226), status: Some(kPlayStatusPause), position_measured_at: Some(1778519210745), context_description: None, shuffle: Some(false), repeat: Some(false), last_command_ident: None, last_command_msgid: None, playing_from_fallback: None, row: None, playing_track_index: Some(0), track: [TrackRef { gid: Some([174, 145, 89, 182, 18, 164, 78, 146, 136, 239, 136, 62, 156, 52, 232, 197]), uri: None, queued: None, context: Some("NonPlayable"), special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } }], ad: MessageField(None), special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } }
+May 11 17:09:13 Phantom librespot[3425720]: [2026-05-11T17:09:13Z ERROR librespot_playback::player] Track should be available, but no alternatives found.
+May 11 17:09:13 Phantom librespot[3425720]: [2026-05-11T17:09:13Z WARN  librespot_playback::player] <spotify:track:5wowed51KuYTYthkNjdIWL> is not available
+May 11 17:09:13 Phantom librespot[3425720]: [2026-05-11T17:09:13Z ERROR librespot_playback::player] Skipping to next track, unable to load track <SpotifyId("spotify:track:5wowed51KuYTYthkNjdIWL")>: ()
+May 11 17:09:13 Phantom librespot[3425720]: [2026-05-11T17:09:13Z INFO  librespot_connect::spirc] Resolved 50 tracks from <"spotify:album:3cRh1veWIQZTLG2Ug2uQJn">
+May 11 17:09:13 Phantom librespot[3425720]: [2026-05-11T17:09:13Z ERROR librespot_playback::player] Track should be available, but no alternatives found.
+May 11 17:09:13 Phantom librespot[3425720]: [2026-05-11T17:09:13Z WARN  librespot_playback::player] <spotify:track:4MCG2f0caAYMopFci8EMgj> is not available
+May 11 17:13:36 Phantom librespot[3425720]: [2026-05-11T17:13:36Z ERROR librespot_connect::spirc] ContextError: Error { kind: NotFound, error: StatusCode(404) }
+May 11 17:13:36 Phantom librespot[3425720]: [2026-05-11T17:13:36Z ERROR librespot_playback::player] Track should be available, but no alternatives found.
+May 11 17:13:36 Phantom librespot[3425720]: [2026-05-11T17:13:36Z WARN  librespot_playback::player] <spotify:track:2FZ0yrA5aPClG5ZPBlV7n4> is not available
+May 11 17:13:36 Phantom librespot[3425720]: [2026-05-11T17:13:36Z ERROR librespot_playback::player] Skipping to next track, unable to load track <SpotifyId("spotify:track:2FZ0yrA5aPClG5ZPBlV7n4")>: ()
+May 11 17:13:36 Phantom librespot[3425720]: [2026-05-11T17:13:36Z WARN  librespot_connect::spirc] Skipping track <TrackRef { gid: Some([87, 246, 142, 101, 52, 150, 67, 15, 163, 58, 130, 207, 210, 86, 3, 218]), uri: None, queued: None, context: Some("NonPlayable"), special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } }> at position [0] of 1
+May 11 17:13:36 Phantom librespot[3425720]: [2026-05-11T17:13:36Z WARN  librespot_connect::spirc] No playable track found in state: State { context_uri: Some(""), index: None, position_ms: Some(0), status: Some(kPlayStatusPlay), position_measured_at: Some(1778519616852), context_description: None, shuffle: Some(false), repeat: Some(false), last_command_ident: None, last_command_msgid: None, playing_from_fallback: None, row: None, playing_track_index: Some(0), track: [TrackRef { gid: Some([87, 246, 142, 101, 52, 150, 67, 15, 163, 58, 130, 207, 210, 86, 3, 218]), uri: None, queued: None, context: Some("NonPlayable"), special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } }], ad: MessageField(None), special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } }
+May 11 17:14:11 Phantom librespot[3425720]: [2026-05-11T17:14:11Z ERROR librespot_playback::player] Track should be available, but no alternatives found.
+May 11 17:14:11 Phantom librespot[3425720]: [2026-05-11T17:14:11Z WARN  librespot_playback::player] <spotify:track:4MCG2f0caAYMopFci8EMgj> is not available
+May 11 17:14:11 Phantom librespot[3425720]: [2026-05-11T17:14:11Z ERROR librespot_playback::player] Skipping to next track, unable to load track <SpotifyId("spotify:track:4MCG2f0caAYMopFci8EMgj")>: ()
+May 11 17:14:11 Phantom librespot[3425720]: [2026-05-11T17:14:11Z INFO  librespot_connect::spirc] Resolved 50 tracks from <"spotify:album:3cRh1veWIQZTLG2Ug2uQJn">
+May 11 17:14:11 Phantom librespot[3425720]: [2026-05-11T17:14:11Z ERROR librespot_playback::player] Track should be available, but no alternatives found.
+May 11 17:14:11 Phantom librespot[3425720]: [2026-05-11T17:14:11Z WARN  librespot_playback::player] <spotify:track:1RPOtdcAWRSfIM74CuTXAe> is not available
+May 11 17:14:34 Phantom librespot[3425720]: [2026-05-11T17:14:34Z ERROR librespot_playback::player] Track should be available, but no alternatives found.
+May 11 17:14:34 Phantom librespot[3425720]: [2026-05-11T17:14:34Z WARN  librespot_playback::player] <spotify:track:608xszaAxVh4m7NcKJiAbF> is not available
+May 11 17:14:34 Phantom librespot[3425720]: [2026-05-11T17:14:34Z ERROR librespot_playback::player] Skipping to next track, unable to load track <SpotifyId("spotify:track:608xszaAxVh4m7NcKJiAbF")>: ()
+May 11 17:14:34 Phantom librespot[3425720]: [2026-05-11T17:14:34Z ERROR librespot_connect::spirc] ContextError: Error { kind: NotFound, error: StatusCode(404) }
+May 11 17:14:34 Phantom librespot[3425720]: [2026-05-11T17:14:34Z WARN  librespot_connect::spirc] Skipping track <TrackRef { gid: Some([197, 54, 209, 15, 39, 77, 65, 16, 130, 227, 44, 189, 96, 175, 175, 99]), uri: None, queued: None, context: Some("NonPlayable"), special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } }> at position [0] of 1
+May 11 17:14:34 Phantom librespot[3425720]: [2026-05-11T17:14:34Z WARN  librespot_connect::spirc] No playable track found in state: State { context_uri: Some(""), index: None, position_ms: Some(0), status: Some(kPlayStatusPlay), position_measured_at: Some(1778519674588), context_description: None, shuffle: Some(false), repeat: Some(false), last_command_ident: None, last_command_msgid: None, playing_from_fallback: None, row: None, playing_track_index: Some(0), track: [TrackRef { gid: Some([197, 54, 209, 15, 39, 77, 65, 16, 130, 227, 44, 189, 96, 175, 175, 99]), uri: None, queued: None, context: Some("NonPlayable"), special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } }], ad: MessageField(None), special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } }
+May 11 17:15:20 Phantom librespot[3425720]: [2026-05-11T17:15:20Z ERROR librespot_playback::player] Track should be available, but no alternatives found.
+May 11 17:15:20 Phantom librespot[3425720]: [2026-05-11T17:15:20Z WARN  librespot_playback::player] <spotify:track:4MCG2f0caAYMopFci8EMgj> is not available
+May 11 17:15:20 Phantom librespot[3425720]: [2026-05-11T17:15:20Z ERROR librespot_playback::player] Skipping to next track, unable to load track <SpotifyId("spotify:track:4MCG2f0caAYMopFci8EMgj")>: ()
+May 11 17:15:20 Phantom librespot[3425720]: [2026-05-11T17:15:20Z INFO  librespot_connect::spirc] Resolved 50 tracks from <"spotify:album:3cRh1veWIQZTLG2Ug2uQJn">
+May 11 17:15:20 Phantom librespot[3425720]: [2026-05-11T17:15:20Z ERROR librespot_playback::player] Track should be available, but no alternatives found.
+May 11 17:15:20 Phantom librespot[3425720]: [2026-05-11T17:15:20Z WARN  librespot_playback::player] <spotify:track:1RPOtdcAWRSfIM74CuTXAe> is not available
+May 11 17:15:59 Phantom librespot[3425720]: [2026-05-11T17:15:59Z ERROR librespot_playback::player] Track should be available, but no alternatives found.
+May 11 17:15:59 Phantom librespot[3425720]: [2026-05-11T17:15:59Z WARN  librespot_playback::player] <spotify:track:4MCG2f0caAYMopFci8EMgj> is not available
+May 11 17:15:59 Phantom librespot[3425720]: [2026-05-11T17:15:59Z ERROR librespot_playback::player] Skipping to next track, unable to load track <SpotifyId("spotify:track:4MCG2f0caAYMopFci8EMgj")>: ()
+May 11 17:15:59 Phantom librespot[3425720]: [2026-05-11T17:15:59Z INFO  librespot_connect::spirc] Resolved 50 tracks from <"spotify:album:3cRh1veWIQZTLG2Ug2uQJn">
+May 11 17:16:00 Phantom librespot[3425720]: [2026-05-11T17:16:00Z ERROR librespot_playback::player] Track should be available, but no alternatives found.
+May 11 17:16:00 Phantom librespot[3425720]: [2026-05-11T17:16:00Z WARN  librespot_playback::player] <spotify:track:1RPOtdcAWRSfIM74CuTXAe> is not available
+May 11 17:18:36 Phantom librespot[3425720]: [2026-05-11T17:18:36Z ERROR librespot_playback::player] Track should be available, but no alternatives found.
+May 11 17:18:36 Phantom librespot[3425720]: [2026-05-11T17:18:36Z WARN  librespot_playback::player] <spotify:track:3AhXZa8sUQht0UEdBJgpGc> is not available
+May 11 17:18:36 Phantom librespot[3425720]: [2026-05-11T17:18:36Z ERROR librespot_playback::player] Skipping to next track, unable to load track <SpotifyId("spotify:track:3AhXZa8sUQht0UEdBJgpGc")>: ()
+May 11 17:18:36 Phantom librespot[3425720]: [2026-05-11T17:18:36Z ERROR librespot_connect::spirc] ContextError: Error { kind: NotFound, error: StatusCode(404) }
+May 11 17:18:36 Phantom librespot[3425720]: [2026-05-11T17:18:36Z WARN  librespot_connect::spirc] Skipping track <TrackRef { gid: Some([117, 205, 100, 213, 132, 66, 78, 32, 148, 245, 85, 211, 13, 255, 14, 140]), uri: None, queued: None, context: Some("NonPlayable"), special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } }> at position [0] of 1
+May 11 17:18:36 Phantom librespot[3425720]: [2026-05-11T17:18:36Z WARN  librespot_connect::spirc] No playable track found in state: State { context_uri: Some(""), index: None, position_ms: Some(0), status: Some(kPlayStatusPlay), position_measured_at: Some(1778519916564), context_description: None, shuffle: Some(false), repeat: Some(false), last_command_ident: None, last_command_msgid: None, playing_from_fallback: None, row: None, playing_track_index: Some(0), track: [TrackRef { gid: Some([117, 205, 100, 213, 132, 66, 78, 32, 148, 245, 85, 211, 13, 255, 14, 140]), uri: None, queued: None, context: Some("NonPlayable"), special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } }], ad: MessageField(None), special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } }
+root@Phantom:~# sudo sed -i 's/--bitrate 320/--bitrate 160/' /etc/systemd/system/librespot.service
+sudo systemctl daemon-reload
+sudo systemctl restart librespot.service
+sleep 3
+root@Phantom:~# sudo journalctl -u librespot.service -f
+May 11 17:27:39 Phantom librespot[762667]: [2026-05-11T17:27:39Z WARN  librespot_playback::player] <spotify:track:5wowed51KuYTYthkNjdIWL> is not available
+May 11 17:27:39 Phantom librespot[762667]: [2026-05-11T17:27:39Z ERROR librespot_playback::player] Skipping to next track, unable to load track <SpotifyId("spotify:track:5wowed51KuYTYthkNjdIWL")>: ()
+May 11 17:27:39 Phantom librespot[762667]: [2026-05-11T17:27:39Z ERROR librespot_playback::player] Track should be available, but no alternatives found.
+May 11 17:27:39 Phantom librespot[762667]: [2026-05-11T17:27:39Z WARN  librespot_playback::player] <spotify:track:4MCG2f0caAYMopFci8EMgj> is not available
+May 11 17:28:00 Phantom librespot[762667]: [2026-05-11T17:28:00Z ERROR librespot_connect::spirc] ContextError: Error { kind: NotFound, error: StatusCode(404) }
+May 11 17:28:00 Phantom librespot[762667]: [2026-05-11T17:28:00Z ERROR librespot_playback::player] Track should be available, but no alternatives found.
+May 11 17:28:00 Phantom librespot[762667]: [2026-05-11T17:28:00Z WARN  librespot_playback::player] <spotify:track:4zLMM82wGnGS0VIy3pq2yU> is not available
+May 11 17:28:00 Phantom librespot[762667]: [2026-05-11T17:28:00Z ERROR librespot_playback::player] Skipping to next track, unable to load track <SpotifyId("spotify:track:4zLMM82wGnGS0VIy3pq2yU")>: ()
+May 11 17:28:00 Phantom librespot[762667]: [2026-05-11T17:28:00Z WARN  librespot_connect::spirc] Skipping track <TrackRef { gid: Some([150, 98, 84, 227, 169, 194, 77, 204, 164, 74, 169, 121, 67, 1, 108, 92]), uri: None, queued: None, context: Some("NonPlayable"), special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } }> at position [0] of 1
+May 11 17:28:00 Phantom librespot[762667]: [2026-05-11T17:28:00Z WARN  librespot_connect::spirc] No playable track found in state: State { context_uri: Some(""), index: None, position_ms: Some(0), status: Some(kPlayStatusPlay), position_measured_at: Some(1778520480278), context_description: None, shuffle: Some(false), repeat: Some(false), last_command_ident: None, last_command_msgid: None, playing_from_fallback: None, row: None, playing_track_index: Some(0), track: [TrackRef { gid: Some([150, 98, 84, 227, 169, 194, 77, 204, 164, 74, 169, 121, 67, 1, 108, 92]), uri: None, queued: None, context: Some("NonPlayable"), special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } }], ad: MessageField(None), special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } }
+May 11 17:28:55 Phantom librespot[762667]: [2026-05-11T17:28:55Z ERROR librespot_playback::player] Track should be available, but no alternatives found.
+May 11 17:28:55 Phantom librespot[762667]: [2026-05-11T17:28:55Z WARN  librespot_playback::player] <spotify:track:5wowed51KuYTYthkNjdIWL> is not available
+May 11 17:28:55 Phantom librespot[762667]: [2026-05-11T17:28:55Z ERROR librespot_playback::player] Skipping to next track, unable to load track <SpotifyId("spotify:track:5wowed51KuYTYthkNjdIWL")>: ()
+May 11 17:28:55 Phantom librespot[762667]: [2026-05-11T17:28:55Z INFO  librespot_connect::spirc] Resolved 50 tracks from <"spotify:album:3cRh1veWIQZTLG2Ug2uQJn">
+May 11 17:28:56 Phantom librespot[762667]: [2026-05-11T17:28:56Z ERROR librespot_playback::player] Track should be available, but no alternatives found.
+May 11 17:28:56 Phantom librespot[762667]: [2026-05-11T17:28:56Z WARN  librespot_playback::player] <spotify:track:4MCG2f0caAYMopFci8EMgj> is not available
+May 11 17:29:24 Phantom librespot[762667]: [2026-05-11T17:29:24Z ERROR librespot_connect::spirc] ContextError: Error { kind: NotFound, error: StatusCode(404) }
+May 11 17:29:24 Phantom librespot[762667]: [2026-05-11T17:29:24Z ERROR librespot_playback::player] Track should be available, but no alternatives found.
+May 11 17:29:24 Phantom librespot[762667]: [2026-05-11T17:29:24Z WARN  librespot_playback::player] <spotify:track:0xIZPPBfLqQEAj1BLmGrNc> is not available
+May 11 17:29:24 Phantom librespot[762667]: [2026-05-11T17:29:24Z ERROR librespot_playback::player] Skipping to next track, unable to load track <SpotifyId("spotify:track:0xIZPPBfLqQEAj1BLmGrNc")>: ()
+May 11 17:29:24 Phantom librespot[762667]: [2026-05-11T17:29:24Z WARN  librespot_connect::spirc] Skipping track <TrackRef { gid: Some([17, 223, 121, 72, 173, 10, 69, 163, 176, 83, 61, 87, 146, 136, 169, 70]), uri: None, queued: None, context: Some("NonPlayable"), special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } }> at position [0] of 1
+May 11 17:29:24 Phantom librespot[762667]: [2026-05-11T17:29:24Z WARN  librespot_connect::spirc] No playable track found in state: State { context_uri: Some(""), index: None, position_ms: Some(0), status: Some(kPlayStatusPlay), position_measured_at: Some(1778520564730), context_description: None, shuffle: Some(false), repeat: Some(false), last_command_ident: None, last_command_msgid: None, playing_from_fallback: None, row: None, playing_track_index: Some(0), track: [TrackRef { gid: Some([17, 223, 121, 72, 173, 10, 69, 163, 176, 83, 61, 87, 146, 136, 169, 70]), uri: None, queued: None, context: Some("NonPlayable"), special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } }], ad: MessageField(None), special_fields: SpecialFields { unknown_fields: UnknownFields { fields: None }, cached_size: CachedSize { size: 0 } } }
