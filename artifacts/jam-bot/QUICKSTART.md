@@ -136,6 +136,7 @@ All commands work in the configured Slack channel. You can also just *talk* to t
 | `/compat @userA @userB` | Score two people's musical compatibility 0-100 with shared artists + a track recommendation each way. |
 | `/memory <question>` | Free-form recall over Jam history, e.g. "who introduced us to Khruangbin?" — or **"play me a 5-track set from last weekend"** to actually queue tracks. |
 | `/jamoptout` / `/jamoptout off` | Hide your personal stats from `/wrapped`, `/dna`, `/compat` (your plays still count toward channel totals). Run `off` to undo. |
+| `/quiet` / `/quiet on` / `/quiet off` / `/quiet status` | **Test mode.** Toggle suppression of *all* bot channel posts (now-playing cards, vote-skip cards, Wrapped, @mention replies). Music keeps playing and slash commands still respond — but only the caller sees them (ephemeral). Resets to off when the bot restarts. Use this while testing so your friends don't get notification-bombed. |
 
 ### Natural language (must @-mention the bot)
 

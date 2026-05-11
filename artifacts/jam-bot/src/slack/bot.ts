@@ -45,7 +45,34 @@ export const slackApp = new App({
   logLevel: LogLevel.WARN,
 });
 
+// ---- Quiet (test) mode ---------------------------------------------------
+// While quiet mode is on, the bot performs all actions normally (queueing,
+// playing, vote-counting, etc.) but suppresses *every* message that would
+// otherwise post to the configured Jam channel. Slash command and @mention
+// responses are downgraded to ephemeral (visible only to the user who
+// invoked them), so the channel members see nothing and aren't notified.
+//
+// Toggle from Slack with `/quiet`, `/quiet on`, `/quiet off`, `/quiet status`.
+// Resets to OFF on bot restart — that's intentional, so a forgotten test
+// mode doesn't silently swallow real Wrapped/now-playing posts forever.
+let silentMode = false;
+export function isSilent(): boolean {
+  return silentMode;
+}
+export function setSilent(on: boolean): void {
+  silentMode = on;
+  logger.info("Quiet mode toggled", { silent: silentMode });
+  // Drop any in-flight vote-card reference so we don't accidentally update a
+  // pre-existing channel message while quiet mode is on. A fresh card will
+  // be created on the next trackChange (also gated by silentMode).
+  if (on) activeVote = null;
+}
+
 async function postToChannel(blocks: KnownBlock[], text: string) {
+  if (silentMode) {
+    logger.info("Suppressed channel post (quiet mode)", { text });
+    return;
+  }
   await slackApp.client.chat.postMessage({
     channel: config.SLACK_CHANNEL_ID,
     text,
@@ -54,10 +81,31 @@ async function postToChannel(blocks: KnownBlock[], text: string) {
 }
 
 async function postPlainToChannel(text: string) {
+  if (silentMode) {
+    logger.info("Suppressed plain channel post (quiet mode)", { text });
+    return;
+  }
   await slackApp.client.chat.postMessage({
     channel: config.SLACK_CHANNEL_ID,
     text,
   });
+}
+
+async function postEphemeralToUser(
+  userId: string,
+  text: string,
+  blocks?: KnownBlock[],
+) {
+  try {
+    await slackApp.client.chat.postEphemeral({
+      channel: config.SLACK_CHANNEL_ID,
+      user: userId,
+      text,
+      blocks,
+    });
+  } catch (err) {
+    logger.warn("postEphemeral failed", { error: String(err) });
+  }
 }
 
 async function handlePlayOrQueue(args: {
@@ -192,8 +240,15 @@ function slashHandler(
       });
       return;
     }
+    // In quiet mode, every "say" becomes ephemeral so only the invoker sees
+    // it. This keeps testing usable (you still get the bot's reply) without
+    // notifying the rest of the channel.
     const say = async (text: string, blocks?: KnownBlock[]) => {
-      await respond({ response_type: "in_channel", text, blocks });
+      await respond({
+        response_type: silentMode ? "ephemeral" : "in_channel",
+        text,
+        blocks,
+      });
     };
     const sayEphemeral = async (text: string) => {
       await respond({ response_type: "ephemeral", text });
@@ -519,6 +574,31 @@ slackApp.command(
 );
 
 slackApp.command(
+  "/quiet",
+  slashHandler(async ({ text, sayEphemeral }) => {
+    const arg = text.trim().toLowerCase();
+    if (arg === "status" || arg === "?") {
+      await sayEphemeral(
+        silentMode
+          ? ":mute: Quiet mode is *on* — channel posts are suppressed."
+          : ":loud_sound: Quiet mode is *off* — bot is posting normally.",
+      );
+      return;
+    }
+    let next: boolean;
+    if (arg === "on" || arg === "true" || arg === "1") next = true;
+    else if (arg === "off" || arg === "false" || arg === "0") next = false;
+    else next = !silentMode; // bare `/quiet` toggles
+    setSilent(next);
+    await sayEphemeral(
+      next
+        ? ":mute: Quiet mode *on*. Now-playing cards, vote-skip cards, Wrapped, and replies are suppressed in the channel. Slash commands still respond, but only to you."
+        : ":loud_sound: Quiet mode *off*. Bot is posting to the channel again.",
+    );
+  }),
+);
+
+slackApp.command(
   "/jamoptout",
   slashHandler(async ({ text, userId, say, sayEphemeral }) => {
     const arg = text.trim().toLowerCase();
@@ -586,6 +666,12 @@ slackApp.event("app_mention", async ({ event, say }) => {
   const threadTs = event.thread_ts ?? event.ts;
 
   const respond = async (t: string, blocks?: KnownBlock[]) => {
+    if (silentMode) {
+      // Reply privately to the user who pinged the bot, instead of posting
+      // visibly in the channel and notifying everyone.
+      await postEphemeralToUser(userId, t, blocks);
+      return;
+    }
     await say({ text: t, blocks, thread_ts: threadTs });
   };
 
@@ -697,6 +783,12 @@ type SkipVoteResult =
 
 async function refreshNowPlayingCard(state: VoteState, count: number, threshold: number) {
   if (!state.messageTs || !state.channel) return;
+  if (silentMode) {
+    // A vote-button card from before quiet-mode was enabled is still in the
+    // channel; updating it would be a visible mutation everyone sees.
+    logger.info("Suppressed now-playing card update (quiet mode)");
+    return;
+  }
   try {
     await slackApp.client.chat.update({
       channel: state.channel,
@@ -871,6 +963,12 @@ slackApp.action(VOTE_SKIP_ACTION_ID, async ({ ack, body, action, respond }) => {
 nowPlayingWatcher.on("trackChange", async (event) => {
   // Reset votes — any prior card is now stale.
   activeVote = null;
+  if (silentMode) {
+    logger.info("Suppressed now-playing post (quiet mode)", {
+      track: event.current.title,
+    });
+    return;
+  }
   try {
     const blocks = nowPlayingBlocks(
       event.current,
