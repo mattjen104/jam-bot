@@ -1,0 +1,19 @@
+h ditherer: tpdf
+May 11 18:42:30 Phantom librespot[784847]: [2026-05-11T18:42:30Z INFO  librespot_playback::audio_backend::alsa] Using AlsaSink with format: S16
+May 11 18:42:31 Phantom librespot[784847]: [2026-05-11T18:42:31Z INFO  librespot_core::session] Connecting to AP "ap-guc3.spotify.com:4070"
+May 11 18:42:31 Phantom librespot[784847]: [2026-05-11T18:42:31Z INFO  librespot_core::session] Authenticated as '1261507623' !
+May 11 18:42:31 Phantom librespot[784847]: [2026-05-11T18:42:31Z WARN  librespot_core::cache] credential file "/opt/jam-bot/librespot-cache/credentials.json" is currently world readable, consider using  chmod 600 "/opt/jam-bot/librespot-cache/credentials.json" to fix this
+May 11 18:42:31 Phantom librespot[784847]: [2026-05-11T18:42:31Z INFO  librespot_core::session] Country: "US"
+May 11 18:42:31 Phantom librespot[784847]: [2026-05-11T18:42:31Z INFO  librespot_core::spclient] Resolved "guc3-spclient.spotify.com:443" as spclient access point
+May 11 18:42:32 Phantom librespot[784847]: [2026-05-11T18:42:32Z INFO  librespot_connect::spirc] active device is <> with session <7448837365b9413083a901e3bb9c473f>
+root@Phantom:~# sudo journalctl -u librespot.service -f
+May 11 18:43:04 Phantom librespot[784847]: [2026-05-11T18:43:04Z ERROR librespot_playback::player] Audio Sink Error Connection Refused: <AlsaSink> Device default May be Invalid, Busy, or Already in Use, ALSA function 'snd_pcm_open' failed with error 'No such file or directory (2)'
+May 11 18:43:29 Phantom librespot[784847]: ALSA lib confmisc.c:855:(parse_card) cannot find card '0'
+May 11 18:43:29 Phantom librespot[784847]: ALSA lib conf.c:5204:(_snd_config_evaluate) function snd_func_card_inum returned error: No such file or directory
+May 11 18:43:29 Phantom librespot[784847]: ALSA lib confmisc.c:422:(snd_func_concat) error evaluating strings
+May 11 18:43:29 Phantom librespot[784847]: ALSA lib conf.c:5204:(_snd_config_evaluate) function snd_func_concat returned error: No such file or directory
+May 11 18:43:29 Phantom librespot[784847]: ALSA lib confmisc.c:1342:(snd_func_refer) error evaluating name
+May 11 18:43:29 Phantom librespot[784847]: ALSA lib conf.c:5204:(_snd_config_evaluate) function snd_func_refer returned error: No such file or directory
+May 11 18:43:29 Phantom librespot[784847]: ALSA lib conf.c:5727:(snd_config_expand) Evaluate error: No such file or directory
+May 11 18:43:29 Phantom librespot[784847]: ALSA lib pcm.c:2721:(snd_pcm_open_noupdate) Unknown PCM default
+May 11 18:43:29 Phantom librespot[784847]: [2026-05-11T18:43:29Z ERROR librespot_playback::player] Audio Sink Error Connection Refused: <AlsaSink> Device default May be Invalid, Busy, or Already in Use, ALSA function 'snd_pcm_open' failed with error 'No such file or directory (2)'
