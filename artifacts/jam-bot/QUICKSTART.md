@@ -36,12 +36,43 @@ Copy the printed `SPOTIFY_REFRESH_TOKEN` into `.env`. Fill in the Slack and Open
 SSH in and run:
 
 ```bash
-# 3a. Install librespot + node + pnpm
-sudo apt-get update && sudo apt-get install -y librespot nodejs npm
+# 3a. Install node + pnpm + ALSA + a fake sound card.
+# DO NOT use `apt install librespot` — the apt version is 0.6.x and 404s on
+# every track. Build from source (dev branch >= 0.8) below.
+sudo apt-get update
+sudo apt-get install -y nodejs npm \
+  build-essential pkg-config libssl-dev libasound2-dev alsa-utils \
+  linux-modules-extra-$(uname -r)
 sudo npm install -g pnpm
 
-# 3b. Service user + dirs
+# Fake sound card so librespot's alsa backend has a device to write into.
+# (The droplet has no real audio hardware. Jam listeners stream from Spotify
+# directly to their phones, so the droplet just needs a sink to discard audio.)
+sudo modprobe snd-dummy
+echo "snd-dummy" | sudo tee /etc/modules-load.d/snd-dummy.conf
+
+# Rust toolchain on the volume (root disk is too small for the build).
+# Replace /mnt/your-volume with your actual volume mount path; if you have no
+# extra volume, use /opt/build instead and skip the volume bits.
+export RUSTUP_HOME=/mnt/your-volume/build/rustup
+export CARGO_HOME=/mnt/your-volume/build/cargo
+export CARGO_TARGET_DIR=/mnt/your-volume/build/cargo-target
+export PATH=$CARGO_HOME/bin:$PATH
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
+
+# Build librespot 0.8 dev (~10-15 min on a 1-vCPU droplet — don't Ctrl+C).
+cargo install --git https://github.com/librespot-org/librespot \
+  --branch dev \
+  --no-default-features \
+  --features "alsa-backend with-libmdns native-tls" \
+  --root /mnt/your-volume/build/librespot-install \
+  --force
+sudo cp /mnt/your-volume/build/librespot-install/bin/librespot /usr/bin/librespot
+
+# 3b. Service user + dirs. jam MUST be in the audio group so it can open the
+# /dev/snd/* device nodes (which are owned by root:audio).
 sudo useradd --system --create-home --home-dir /opt/jam-bot --shell /usr/sbin/nologin jam
+sudo usermod -aG audio jam
 sudo mkdir -p /opt/jam-bot /opt/jam-bot/librespot-cache
 sudo chown -R jam:jam /opt/jam-bot
 
@@ -131,6 +162,8 @@ Every "Now playing" card has a **Vote skip (X/3)** button. The card updates as v
 | `/play` says "you've hit your hourly request limit" | Wait, or have someone else queue it, or bump `MAX_PLAYS_PER_USER_PER_HOUR` in `.env` and restart. |
 | Bot is silent on slash commands | `sudo journalctl -u jam-bot -n 100 -f` — usually a stale token. |
 | librespot device disappeared from Spotify | `sudo systemctl restart librespot` (it'll pick up cached creds). |
+| librespot logs `Track should be available, but no alternatives found` (404 on every track) | You're on librespot 0.6.x. Rebuild from the `dev` branch — see § 3a. |
+| librespot logs `ALSA function 'snd_pcm_open' failed` / `Cannot get card index` | snd-dummy module not loaded, or the `jam` user isn't in the `audio` group. Fix: `sudo modprobe snd-dummy && sudo usermod -aG audio jam && sudo systemctl restart librespot`. |
 
 For the long version, see [`SETUP.md` § Troubleshooting](./SETUP.md#troubleshooting).
 
