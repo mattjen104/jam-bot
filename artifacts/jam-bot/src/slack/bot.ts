@@ -46,15 +46,17 @@ export const slackApp = new App({
 });
 
 // ---- Quiet (test) mode ---------------------------------------------------
-// While quiet mode is on, the bot performs all actions normally (queueing,
-// playing, vote-counting, etc.) but suppresses *every* message that would
-// otherwise post to the configured Jam channel. Slash command and @mention
-// responses are downgraded to ephemeral (visible only to the user who
-// invoked them), so the channel members see nothing and aren't notified.
+// While quiet mode is on, only the *automated background* posts the bot
+// makes on its own (now-playing card, "no active device" notice, "Jam is
+// back online", scheduled Wrapped) get rerouted to a private DM to
+// JAM_QUIET_DM_USER. Friend interactions are unaffected: slash command
+// replies, @mention answers, and vote-skip outcomes still post to the
+// channel normally, so other people in the Jam still get the responses
+// they asked for.
 //
 // Toggle from Slack with `/quiet`, `/quiet on`, `/quiet off`, `/quiet status`.
-// Resets to OFF on bot restart — that's intentional, so a forgotten test
-// mode doesn't silently swallow real Wrapped/now-playing posts forever.
+// Resets to OFF on bot restart — intentional, so a forgotten test mode
+// doesn't silently swallow real Wrapped/now-playing posts forever.
 let silentMode = false;
 export function isSilent(): boolean {
   return silentMode;
@@ -62,17 +64,16 @@ export function isSilent(): boolean {
 export function setSilent(on: boolean): void {
   silentMode = on;
   logger.info("Quiet mode toggled", { silent: silentMode });
-  // Drop any in-flight vote-card reference so we don't accidentally update a
-  // pre-existing channel message while quiet mode is on. A fresh card will
-  // be created on the next trackChange (also gated by silentMode).
+  // Drop any in-flight vote-card reference. The card we'd update is now
+  // either nonexistent (background DM'd) or stale; a fresh card will be
+  // set up on the next trackChange.
   if (on) activeVote = null;
 }
 
+// Plain channel posters — used by interactive paths (vote-skip pass
+// announcements, etc). These are NOT gated by quiet mode because they're
+// reactions to friend actions, not background noise.
 async function postToChannel(blocks: KnownBlock[], text: string) {
-  if (silentMode) {
-    logger.info("Suppressed channel post (quiet mode)", { text });
-    return;
-  }
   await slackApp.client.chat.postMessage({
     channel: config.SLACK_CHANNEL_ID,
     text,
@@ -81,39 +82,15 @@ async function postToChannel(blocks: KnownBlock[], text: string) {
 }
 
 async function postPlainToChannel(text: string) {
-  if (silentMode) {
-    logger.info("Suppressed plain channel post (quiet mode)", { text });
-    return;
-  }
   await slackApp.client.chat.postMessage({
     channel: config.SLACK_CHANNEL_ID,
     text,
   });
 }
 
-async function postEphemeralToUser(
-  userId: string,
-  text: string,
-  blocks?: KnownBlock[],
-) {
-  try {
-    await slackApp.client.chat.postEphemeral({
-      channel: config.SLACK_CHANNEL_ID,
-      user: userId,
-      text,
-      blocks,
-    });
-  } catch (err) {
-    logger.warn("postEphemeral failed", { error: String(err) });
-  }
-}
-
 /**
  * Send a DM to a user. Slack auto-resolves a user ID passed as `channel`
- * into the IM channel between the bot and that user. Used by quiet mode to
- * route bot output to the configured test user instead of the public
- * channel — so testing produces a real DM thread you can scroll back
- * through, not vanishing ephemeral messages.
+ * into the IM channel between the bot and that user.
  */
 async function postDMToUser(
   userId: string,
@@ -132,30 +109,34 @@ async function postDMToUser(
 }
 
 /**
- * In quiet mode, route bot output away from the public channel. Prefer DM
- * to JAM_QUIET_DM_USER if configured (so the tester gets a persistent DM
- * thread). Fallback: ephemeral to the invoking user, which leaves no
- * persistent record but at least doesn't notify anyone else. If neither is
- * available (e.g. background event with no invoker), the message is dropped
- * and only logged.
+ * Background channel poster — used by automated events (now-playing,
+ * device-gone, Jam-back, scheduled Wrapped). When quiet mode is on, the
+ * post is rerouted as a DM to JAM_QUIET_DM_USER instead of going to the
+ * channel, so friends in the Jam aren't notified by every track change
+ * while you're testing. If quiet mode is on but no DM target is
+ * configured, the post is dropped + logged (rather than leaking to the
+ * channel).
  */
-async function deliverQuietly(
-  text: string,
+async function postBackgroundToChannel(
   blocks: KnownBlock[] | undefined,
-  invokerUserId: string | undefined,
+  text: string,
   context: string,
 ) {
-  if (config.JAM_QUIET_DM_USER) {
-    await postDMToUser(config.JAM_QUIET_DM_USER, text, blocks);
+  if (silentMode) {
+    if (config.JAM_QUIET_DM_USER) {
+      await postDMToUser(config.JAM_QUIET_DM_USER, text, blocks);
+    } else {
+      logger.info("Suppressed background post (quiet mode, no DM target)", {
+        context,
+        text,
+      });
+    }
     return;
   }
-  if (invokerUserId) {
-    await postEphemeralToUser(invokerUserId, text, blocks);
-    return;
-  }
-  logger.info("Dropped quiet-mode message (no DM target, no invoker)", {
-    context,
+  await slackApp.client.chat.postMessage({
+    channel: config.SLACK_CHANNEL_ID,
     text,
+    ...(blocks ? { blocks } : {}),
   });
 }
 
@@ -308,24 +289,10 @@ function slashHandler(
       });
       return;
     }
-    // In quiet mode, route the slash response away from the channel. If
-    // JAM_QUIET_DM_USER is set, DM that user (so you get a persistent DM
-    // thread while testing). Otherwise fall back to ephemeral so at least
-    // no one else is notified. We still ack the slash command with a tiny
-    // ephemeral so Slack doesn't show "/play didn't respond" to the caller.
+    // Slash command replies always post to the channel — quiet mode does
+    // NOT touch friend interactions. If a friend runs /play during a test,
+    // they (and the channel) still see the normal "Playing X" reply.
     const say = async (text: string, blocks?: KnownBlock[]) => {
-      if (silentMode) {
-        await deliverQuietly(text, blocks, command.user_id, `slash ${command.command}`);
-        if (config.JAM_QUIET_DM_USER && command.user_id !== config.JAM_QUIET_DM_USER) {
-          // The caller isn't the DM target — give them an ephemeral hint so
-          // they don't think the bot is broken.
-          await respond({
-            response_type: "ephemeral",
-            text: ":mute: Quiet mode is on — response sent as a DM to the host.",
-          });
-        }
-        return;
-      }
       await respond({ response_type: "in_channel", text, blocks });
     };
     const sayEphemeral = async (text: string) => {
@@ -443,8 +410,10 @@ export function statsAsFacts(stats: WrappedStats): string {
 async function postWrappedToChannel() {
   const stats = buildWrappedStats();
   if (stats.totalPlays === 0) {
-    await postPlainToChannel(
+    await postBackgroundToChannel(
+      undefined,
       `:notes: Jam Wrapped: nothing played in the last ${config.JAM_WRAPPED_LOOKBACK_DAYS} days. Queue something up!`,
+      "wrapped-empty",
     );
     return;
   }
@@ -457,7 +426,11 @@ async function postWrappedToChannel() {
     });
     narration = "Here's how the Jam went this week.";
   }
-  await postToChannel(wrappedBlocks(stats, narration), "Jam Wrapped");
+  await postBackgroundToChannel(
+    wrappedBlocks(stats, narration),
+    "Jam Wrapped",
+    "wrapped",
+  );
 }
 
 slackApp.command(
@@ -658,8 +631,8 @@ slackApp.command(
     if (arg === "status" || arg === "?") {
       await sayEphemeral(
         silentMode
-          ? ":mute: Quiet mode is *on* — channel posts are suppressed."
-          : ":loud_sound: Quiet mode is *off* — bot is posting normally.",
+          ? ":mute: Quiet mode is *on* — automated background posts are DM'd to the host instead of the channel."
+          : ":loud_sound: Quiet mode is *off* — automated background posts go to the channel.",
       );
       return;
     }
@@ -668,10 +641,13 @@ slackApp.command(
     else if (arg === "off" || arg === "false" || arg === "0") next = false;
     else next = !silentMode; // bare `/quiet` toggles
     setSilent(next);
+    const target = config.JAM_QUIET_DM_USER
+      ? `<@${config.JAM_QUIET_DM_USER}>`
+      : "(no DM target set — posts will be dropped instead)";
     await sayEphemeral(
       next
-        ? ":mute: Quiet mode *on*. Now-playing cards, vote-skip cards, Wrapped, and replies are suppressed in the channel. Slash commands still respond, but only to you."
-        : ":loud_sound: Quiet mode *off*. Bot is posting to the channel again.",
+        ? `:mute: Quiet mode *on*. Now-playing cards, "no device" / "back online" notices, and the scheduled Wrapped will DM ${target} instead of posting in the channel. Friend interactions (slash commands, @mentions, vote-skip) still post normally.`
+        : ":loud_sound: Quiet mode *off*. Automated background posts will go to the channel again.",
     );
   }),
 );
@@ -701,8 +677,10 @@ const wrappedScheduler = new WrappedScheduler(
   postWrappedToChannel,
   async (err) => {
     try {
-      await postPlainToChannel(
+      await postBackgroundToChannel(
+        undefined,
         ":warning: Couldn't post this week's Wrapped — check logs.",
+        "wrapped-error",
       );
     } catch (postErr) {
       logger.error("Failed to post Wrapped failure notice", {
@@ -743,12 +721,9 @@ slackApp.event("app_mention", async ({ event, say }) => {
   const userId = event.user;
   const threadTs = event.thread_ts ?? event.ts;
 
+  // @mention replies always post to the channel/thread — quiet mode only
+  // affects automated background posts, not direct friend interactions.
   const respond = async (t: string, blocks?: KnownBlock[]) => {
-    if (silentMode) {
-      // Route privately — DM the host if configured, ephemeral fallback.
-      await deliverQuietly(t, blocks, userId, "app_mention");
-      return;
-    }
     await say({ text: t, blocks, thread_ts: threadTs });
   };
 
@@ -859,13 +834,11 @@ type SkipVoteResult =
   | { kind: "skip_failed"; count: number; threshold: number; reason: string };
 
 async function refreshNowPlayingCard(state: VoteState, count: number, threshold: number) {
+  // No public card to update? That's fine — happens when quiet mode was on
+  // when the trackChange fired (we DM'd the card instead) or we never
+  // posted one (off-day). Vote tally still progresses; nothing visible to
+  // refresh.
   if (!state.messageTs || !state.channel) return;
-  if (silentMode) {
-    // A vote-button card from before quiet-mode was enabled is still in the
-    // channel; updating it would be a visible mutation everyone sees.
-    logger.info("Suppressed now-playing card update (quiet mode)");
-    return;
-  }
   try {
     await slackApp.client.chat.update({
       channel: state.channel,
@@ -1040,16 +1013,12 @@ slackApp.action(VOTE_SKIP_ACTION_ID, async ({ ack, body, action, respond }) => {
 nowPlayingWatcher.on("trackChange", async (event) => {
   // Reset votes — any prior card is now stale.
   activeVote = null;
-  if (silentMode) {
-    logger.info("Suppressed now-playing post (quiet mode)", {
-      track: event.current.title,
-    });
-    return;
-  }
-  if (!isNowPlayingPostAllowedToday()) {
-    // Day-of-week gate: by default we only post the now-playing card on
-    // Fridays so the channel doesn't get pinged with every track change
-    // every day. Music still plays and is logged to history.
+
+  // In quiet mode, the now-playing card is rerouted as a DM to the host
+  // (handled inside postBackgroundToChannel). The day-of-week gate is
+  // bypassed in quiet mode — testing should always show you the cards.
+  // Out of quiet mode, the day-gate applies (default: Fridays only).
+  if (!silentMode && !isNowPlayingPostAllowedToday()) {
     logger.info("Suppressed now-playing post (off-day)", {
       track: event.current.title,
       utcDay: new Date().getUTCDay(),
@@ -1057,6 +1026,7 @@ nowPlayingWatcher.on("trackChange", async (event) => {
     });
     return;
   }
+
   try {
     const blocks = nowPlayingBlocks(
       event.current,
@@ -1064,9 +1034,23 @@ nowPlayingWatcher.on("trackChange", async (event) => {
       event.requestedQuery,
       { count: 0, threshold: config.SKIP_VOTE_THRESHOLD },
     );
+    const text = `Now playing: ${event.current.title} by ${event.current.artist}`;
+    if (silentMode) {
+      // DM the card to the host. No public message means no vote-button
+      // card to attach to — vote tallying still works via /skip but we
+      // can't update a card the channel can't see.
+      if (config.JAM_QUIET_DM_USER) {
+        await postDMToUser(config.JAM_QUIET_DM_USER, text, blocks);
+      } else {
+        logger.info("Suppressed now-playing post (quiet mode, no DM target)", {
+          track: event.current.title,
+        });
+      }
+      return;
+    }
     const res = await slackApp.client.chat.postMessage({
       channel: config.SLACK_CHANNEL_ID,
-      text: `Now playing: ${event.current.title} by ${event.current.artist}`,
+      text,
       blocks,
     });
     if (res.ts && res.channel) {
@@ -1091,9 +1075,10 @@ nowPlayingWatcher.on("noActiveDevice", async (info?: { hostVisible?: boolean }) 
     hostVisible: info?.hostVisible ?? false,
   });
   try {
-    await postToChannel(
+    await postBackgroundToChannel(
       noDeviceBlocks(config.SPOTIFY_DEVICE_NAME, info?.hostVisible ?? false),
       "No active Spotify playback.",
+      "noActiveDevice",
     );
   } catch (err) {
     logger.error("Failed to post no-device notice", { error: String(err) });
@@ -1103,7 +1088,11 @@ nowPlayingWatcher.on("noActiveDevice", async (info?: { hostVisible?: boolean }) 
 nowPlayingWatcher.on("resumed", async () => {
   logger.info("Playback resumed");
   try {
-    await postPlainToChannel(":white_check_mark: Jam is back online.");
+    await postBackgroundToChannel(
+      undefined,
+      ":white_check_mark: Jam is back online.",
+      "resumed",
+    );
   } catch (err) {
     logger.error("Failed to post resumed notice", { error: String(err) });
   }
