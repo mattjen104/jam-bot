@@ -26,7 +26,6 @@ import { startSpotifyJam, manualJamInstructions } from "../spotify/jam.js";
 import { nowPlayingWatcher } from "../now-playing.js";
 import {
   historyBlocks,
-  noDeviceBlocks,
   nowPlayingBlocks,
   wrappedBlocks,
   dnaBlocks,
@@ -674,7 +673,9 @@ slackApp.command(
     const result = await startSpotifyJam();
     if (result.ok) {
       await say(
-        `:notes: Started a Spotify Jam — join here: ${result.joinUrl}`,
+        result.existed
+          ? `:notes: A Spotify Jam is already active — join here: ${result.joinUrl}`
+          : `:notes: Started a Spotify Jam — join here: ${result.joinUrl}`,
       );
       return;
     }
@@ -799,7 +800,9 @@ async function handleNaturalLanguage(
         const result = await startSpotifyJam();
         if (result.ok) {
           await respond(
-            `:notes: Started a Spotify Jam — join here: ${result.joinUrl}`,
+            result.existed
+              ? `:notes: A Spotify Jam is already active — join here: ${result.joinUrl}`
+              : `:notes: Started a Spotify Jam — join here: ${result.joinUrl}`,
           );
         } else {
           logger.info("NL Jam start fell back to manual instructions", {
@@ -1171,32 +1174,18 @@ nowPlayingWatcher.on("trackChange", async (event) => {
   }
 });
 
-nowPlayingWatcher.on("noActiveDevice", async (info?: { hostVisible?: boolean }) => {
+// Connection-state notices ("no active device", "Jam is back online") are
+// noise nobody actually wants — log them for debugging from the droplet
+// shell and that's it. No channel post, no DM, even when quiet mode is
+// off. If you need to debug a dropped connection: `journalctl -u jam-bot`.
+nowPlayingWatcher.on("noActiveDevice", (info?: { hostVisible?: boolean }) => {
   logger.info("No active Spotify playback detected", {
     hostVisible: info?.hostVisible ?? false,
   });
-  try {
-    await postBackgroundToChannel(
-      noDeviceBlocks(config.SPOTIFY_DEVICE_NAME, info?.hostVisible ?? false),
-      "No active Spotify playback.",
-      "noActiveDevice",
-    );
-  } catch (err) {
-    logger.error("Failed to post no-device notice", { error: String(err) });
-  }
 });
 
-nowPlayingWatcher.on("resumed", async () => {
+nowPlayingWatcher.on("resumed", () => {
   logger.info("Playback resumed");
-  try {
-    await postBackgroundToChannel(
-      undefined,
-      ":white_check_mark: Jam is back online.",
-      "resumed",
-    );
-  } catch (err) {
-    logger.error("Failed to post resumed notice", { error: String(err) });
-  }
 });
 
 setInterval(() => {
