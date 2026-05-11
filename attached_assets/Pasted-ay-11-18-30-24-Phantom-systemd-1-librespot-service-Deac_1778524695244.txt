@@ -1,0 +1,281 @@
+ay 11 18:30:24 Phantom systemd[1]: librespot.service: Deactivated successfully.
+May 11 18:30:24 Phantom systemd[1]: Stopped librespot.service - librespot — headless Spotify Connect device for Jam Host.
+May 11 18:30:25 Phantom systemd[1]: Started librespot.service - librespot — headless Spotify Connect device for Jam Host.
+May 11 18:30:25 Phantom librespot[780601]: [2026-05-11T18:30:25Z INFO  librespot] librespot 0.6.0 VERGEN_IDEMPOTENT_OUTPUT (Built on 2026-05-08, Build ID: aRADDuDm, Profile: release)
+May 11 18:30:25 Phantom librespot[780601]: [2026-05-11T18:30:25Z ERROR librespot] Invalid `--backend` / `-B`: "alsa"
+May 11 18:30:25 Phantom librespot[780601]: Available backends:
+May 11 18:30:25 Phantom librespot[780601]: - rodio (default)
+May 11 18:30:25 Phantom librespot[780601]: - pipe
+May 11 18:30:25 Phantom librespot[780601]: - subprocess
+May 11 18:30:25 Phantom systemd[1]: librespot.service: Main process exited, code=exited, status=1/FAILURE
+May 11 18:30:25 Phantom systemd[1]: librespot.service: Failed with result 'exit-code'.
+root@Phantom:~# export RUSTUP_HOME=/mnt/volume_sfo3_01/build/rustup
+export CARGO_HOME=/mnt/volume_sfo3_01/build/cargo
+export CARGO_TARGET_DIR=/mnt/volume_sfo3_01/build/cargo-target
+export PATH=$CARGO_HOME/bin:$PATH
+
+cargo install --git https://github.com/librespot-org/librespot \
+  --branch dev \
+  --no-default-features \
+  --features "alsa-backend with-libmdns" \
+  --root /mnt/volume_sfo3_01/build/librespot-install \
+  --force
+    Updating git repository `https://github.com/librespot-org/librespot`
+  Installing librespot v0.8.0 (https://github.com/librespot-org/librespot?branch=dev#33bf3a77)
+    Updating crates.io index
+     Locking 332 packages to latest Rust 1.85 compatible versions
+      Adding aes v0.8.4 (available: v0.9.0)
+      Adding alsa v0.10.0 (available: v0.11.0)
+      Adding ctr v0.9.2 (available: v0.10.0)
+      Adding generic-array v0.14.7 (available: v0.14.9)
+      Adding hmac v0.12.1 (available: v0.13.0)
+      Adding home v0.5.11 (available: v0.5.12, requires Rust 1.88)
+      Adding icu_collections v2.1.1 (available: v2.2.0, requires Rust 1.86)
+      Adding icu_locale_core v2.1.1 (available: v2.2.0, requires Rust 1.86)
+      Adding icu_normalizer v2.1.1 (available: v2.2.0, requires Rust 1.86)
+      Adding icu_normalizer_data v2.1.1 (available: v2.2.0, requires Rust 1.86)
+      Adding icu_properties v2.1.2 (available: v2.2.0, requires Rust 1.86)
+      Adding icu_properties_data v2.1.2 (available: v2.2.0, requires Rust 1.86)
+      Adding icu_provider v2.1.1 (available: v2.2.0, requires Rust 1.86)
+      Adding idna_adapter v1.2.1 (available: v1.2.2, requires Rust 1.86)
+      Adding pbkdf2 v0.12.2 (available: v0.13.0)
+      Adding quick-xml v0.38.4 (available: v0.40.0)
+      Adding rand v0.9.4 (available: v0.10.1)
+      Adding rand_distr v0.5.1 (available: v0.6.0)
+      Adding reqwest v0.12.28 (available: v0.13.3)
+      Adding sha1 v0.10.6 (available: v0.11.0)
+      Adding sysinfo v0.36.1 (available: v0.39.1, requires Rust 1.95)
+      Adding time v0.3.45 (available: v0.3.47, requires Rust 1.88.0)
+      Adding time-core v0.1.7 (available: v0.1.8, requires Rust 1.88.0)
+      Adding time-macros v0.2.25 (available: v0.2.27, requires Rust 1.88.0)
+      Adding tokio-tungstenite v0.28.0 (available: v0.29.0)
+      Adding vergen v9.0.6 (available: v9.1.0, requires Rust 1.88.0)
+      Adding vergen-gitcl v1.0.8 (available: v9.1.0, requires Rust 1.88.0)
+      Adding wasip2 v1.0.1+wasi-0.2.4 (available: v1.0.3+wasi-0.2.9, requires Rust 1.87.0)
+      Adding wasip3 v0.4.0+wasi-0.3.0-rc-2026-01-06 (requires Rust 1.87.0)
+      Adding wit-bindgen v0.51.0 (requires Rust 1.87.0)
+      Adding wit-bindgen-core v0.51.0 (requires Rust 1.87.0)
+      Adding wit-bindgen-rust v0.51.0 (requires Rust 1.87.0)
+   Compiling protobuf v3.7.2
+   Compiling hashbrown v0.16.1
+   Compiling tungstenite v0.28.0
+   Compiling headers v0.4.1
+   Compiling open v5.3.4
+   Compiling miniz_oxide v0.8.9
+   Compiling deranged v0.5.8
+   Compiling oauth2 v5.0.0
+   Compiling num-bigint-dig v0.8.6
+   Compiling parking_lot v0.12.5
+   Compiling pkcs1 v0.7.5
+   Compiling librespot-core v0.8.0 (/mnt/volume_sfo3_01/build/cargo/git/checkouts/librespot-0af58e53e65aac12/33bf3a7/core)
+   Compiling librespot-protocol v0.8.0 (/mnt/volume_sfo3_01/build/cargo/git/checkouts/librespot-0af58e53e65aac12/33bf3a7/protocol)
+   Compiling portable-atomic v1.13.1
+   Compiling crc32fast v1.5.0
+   Compiling spinning_top v0.3.0
+   Compiling signature v2.2.0
+   Compiling hmac v0.12.1
+   Compiling web-time v1.1.0
+   Compiling futures-timer v3.0.3
+   Compiling nonzero_ext v0.3.0
+   Compiling num-conv v0.1.0
+   Compiling time-core v0.1.7
+   Compiling time v0.3.45
+   Compiling governor v0.10.4
+   Compiling pbkdf2 v0.12.2
+   Compiling rsa v0.9.10
+   Compiling flate2 v1.1.9
+   Compiling librespot-oauth v0.8.0 (/mnt/volume_sfo3_01/build/cargo/git/checkouts/librespot-0af58e53e65aac12/33bf3a7/oauth)
+error: Either feature "native-tls" (default), "rustls-tls-native-roots" or "rustls-tls-webpki-roots" must be enabled for this crate.
+  --> oauth/src/lib.rs:48:1
+   |
+48 | / compile_error!(
+49 | |     "Either feature \"native-tls\" (default), \"rustls-tls-native-roots\" or \"rustls-tls-webpki-roots\"...
+50 | | );
+   | |_^
+
+error: could not compile `librespot-oauth` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+^C  Building [====================>    ] 314/373: librespot-protocol                                            
+root@Phantom:~# cargo install --git https://github.com/librespot-org/librespot \
+  --branch dev \
+  --no-default-features \
+  --features "alsa-backend with-libmdns native-tls" \
+  --root /mnt/volume_sfo3_01/build/librespot-install \
+  --force
+    Updating git repository `https://github.com/librespot-org/librespot`
+  Installing librespot v0.8.0 (https://github.com/librespot-org/librespot?branch=dev#33bf3a77)
+    Updating crates.io index
+     Locking 347 packages to latest Rust 1.85 compatible versions
+      Adding aes v0.8.4 (available: v0.9.0)
+      Adding alsa v0.10.0 (available: v0.11.0)
+      Adding ctr v0.9.2 (available: v0.10.0)
+      Adding generic-array v0.14.7 (available: v0.14.9)
+      Adding hmac v0.12.1 (available: v0.13.0)
+      Adding home v0.5.11 (available: v0.5.12, requires Rust 1.88)
+      Adding icu_collections v2.1.1 (available: v2.2.0, requires Rust 1.86)
+      Adding icu_locale_core v2.1.1 (available: v2.2.0, requires Rust 1.86)
+      Adding icu_normalizer v2.1.1 (available: v2.2.0, requires Rust 1.86)
+      Adding icu_normalizer_data v2.1.1 (available: v2.2.0, requires Rust 1.86)
+      Adding icu_properties v2.1.2 (available: v2.2.0, requires Rust 1.86)
+      Adding icu_properties_data v2.1.2 (available: v2.2.0, requires Rust 1.86)
+      Adding icu_provider v2.1.1 (available: v2.2.0, requires Rust 1.86)
+      Adding idna_adapter v1.2.1 (available: v1.2.2, requires Rust 1.86)
+      Adding pbkdf2 v0.12.2 (available: v0.13.0)
+      Adding quick-xml v0.38.4 (available: v0.40.0)
+      Adding rand v0.9.4 (available: v0.10.1)
+      Adding rand_distr v0.5.1 (available: v0.6.0)
+      Adding reqwest v0.12.28 (available: v0.13.3)
+      Adding sha1 v0.10.6 (available: v0.11.0)
+      Adding sysinfo v0.36.1 (available: v0.39.1, requires Rust 1.95)
+      Adding time v0.3.45 (available: v0.3.47, requires Rust 1.88.0)
+      Adding time-core v0.1.7 (available: v0.1.8, requires Rust 1.88.0)
+      Adding time-macros v0.2.25 (available: v0.2.27, requires Rust 1.88.0)
+      Adding tokio-tungstenite v0.28.0 (available: v0.29.0)
+      Adding vergen v9.0.6 (available: v9.1.0, requires Rust 1.88.0)
+      Adding vergen-gitcl v1.0.8 (available: v9.1.0, requires Rust 1.88.0)
+      Adding wasip2 v1.0.1+wasi-0.2.4 (available: v1.0.3+wasi-0.2.9, requires Rust 1.87.0)
+      Adding wasip3 v0.4.0+wasi-0.3.0-rc-2026-01-06 (requires Rust 1.87.0)
+      Adding wit-bindgen v0.51.0 (requires Rust 1.87.0)
+      Adding wit-bindgen-core v0.51.0 (requires Rust 1.87.0)
+      Adding wit-bindgen-rust v0.51.0 (requires Rust 1.87.0)
+  Downloaded openssl-sys v0.9.115
+  Downloaded tokio-native-tls v0.3.1
+  Downloaded shlex v1.3.0
+  Downloaded cc v1.2.62
+  Downloaded vcpkg v0.2.15
+  Downloaded openssl-macros v0.1.1
+  Downloaded foreign-types v0.3.2
+  Downloaded hyper-tls v0.6.0
+  Downloaded rustls-pki-types v1.14.1
+  Downloaded openssl-probe v0.2.1
+  Downloaded find-msvc-tools v0.1.9
+  Downloaded native-tls v0.2.18
+  Downloaded foreign-types-shared v0.1.1
+  Downloaded openssl v0.10.79
+  Downloaded 14 crates (867.5KiB) in 0.77s
+   Compiling pkg-config v0.3.33
+   Compiling shlex v1.3.0
+   Compiling find-msvc-tools v0.1.9
+   Compiling cc v1.2.62
+   Compiling vcpkg v0.2.15
+   Compiling openssl v0.10.79
+   Compiling foreign-types-shared v0.1.1
+   Compiling foreign-types v0.3.2
+   Compiling openssl-macros v0.1.1
+   Compiling native-tls v0.2.18
+   Compiling openssl-probe v0.2.1
+   Compiling openssl-sys v0.9.115
+   Compiling rustls-pki-types v1.14.1
+   Compiling data-encoding v2.11.0
+   Compiling librespot-core v0.8.0 (/mnt/volume_sfo3_01/build/cargo/git/checkouts/librespot-0af58e53e65aac12/33bf3a7/core)
+   Compiling tokio-native-tls v0.3.1
+   Compiling hyper-tls v0.6.0
+   Compiling reqwest v0.12.28
+   Compiling oauth2 v5.0.0
+   Compiling tungstenite v0.28.0
+   Compiling tokio-tungstenite v0.28.0
+   Compiling librespot-oauth v0.8.0 (/mnt/volume_sfo3_01/build/cargo/git/checkouts/librespot-0af58e53e65aac12/33bf3a7/oauth)
+   Compiling hyper-proxy2 v0.1.0
+   Compiling librespot-protocol v0.8.0 (/mnt/volume_sfo3_01/build/cargo/git/checkouts/librespot-0af58e53e65aac12/33bf3a7/protocol)
+   Compiling shannon v0.2.0
+   Compiling protobuf-json-mapping v3.7.2
+   Compiling uuid v1.23.1
+   Compiling aes v0.8.4
+   Compiling symphonia-utils-xiph v0.5.5
+   Compiling num-bigint v0.4.6
+   Compiling quick-xml v0.38.4
+   Compiling priority-queue v2.7.0
+   Compiling sysinfo v0.36.1
+   Compiling tokio-stream v0.1.18
+   Compiling num-derive v0.4.2
+warning: this lint expectation is unfulfilled
+  --> core/src/authentication.rs:69:14
+   |
+69 |     #[expect(deprecated)]
+   |              ^^^^^^^^^^
+   |
+   = note: `#[warn(unfulfilled_lint_expectations)]` on by default
+
+warning: `librespot-core` (lib) generated 1 warning
+   Compiling rustix v1.1.4
+   Compiling alsa-sys v0.3.1
+   Compiling linux-raw-sys v0.12.1
+   Compiling ctr v0.9.2
+   Compiling fastrand v2.4.1
+   Compiling tempfile v3.27.0
+   Compiling symphonia-codec-vorbis v0.5.5
+   Compiling symphonia-format-ogg v0.5.5
+   Compiling symphonia-bundle-flac v0.5.5
+   Compiling symphonia-bundle-mp3 v0.5.5
+   Compiling async-trait v0.1.89
+   Compiling utf8parse v0.2.2
+   Compiling anstyle-parse v1.0.0
+   Compiling librespot-metadata v0.8.0 (/mnt/volume_sfo3_01/build/cargo/git/checkouts/librespot-0af58e53e65aac12/33bf3a7/metadata)
+   Compiling symphonia v0.5.5
+   Compiling alsa v0.10.0
+   Compiling librespot-audio v0.8.0 (/mnt/volume_sfo3_01/build/cargo/git/checkouts/librespot-0af58e53e65aac12/33bf3a7/audio)
+   Compiling rand_distr v0.5.1
+   Compiling hostname v0.4.2
+   Compiling if-addrs v0.14.0
+   Compiling anstyle v1.0.14
+   Compiling colorchoice v1.0.5
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling anstyle-query v1.1.5
+   Compiling shell-words v1.1.1
+   Compiling multimap v0.10.1
+   Compiling librespot-playback v0.8.0 (/mnt/volume_sfo3_01/build/cargo/git/checkouts/librespot-0af58e53e65aac12/33bf3a7/playback)
+   Compiling libmdns v0.10.1
+   Compiling anstream v1.0.0
+   Compiling env_filter v1.0.1
+   Compiling serde_repr v0.1.20
+   Compiling unicode-width v0.2.2
+   Compiling jiff v0.2.24
+   Compiling env_logger v0.11.10
+   Compiling getopts v0.2.24
+   Compiling librespot-discovery v0.8.0 (/mnt/volume_sfo3_01/build/cargo/git/checkouts/librespot-0af58e53e65aac12/33bf3a7/discovery)
+   Compiling librespot-connect v0.8.0 (/mnt/volume_sfo3_01/build/cargo/git/checkouts/librespot-0af58e53e65aac12/33bf3a7/connect)
+   Compiling librespot v0.8.0 (/mnt/volume_sfo3_01/build/cargo/git/checkouts/librespot-0af58e53e65aac12/33bf3a7)
+    Finished `release` profile [optimized] target(s) in 4m 36s
+  Installing /mnt/volume_sfo3_01/build/librespot-install/bin/librespot
+   Installed package `librespot v0.8.0 (https://github.com/librespot-org/librespot?branch=dev#33bf3a77)` (executable `librespot`)
+warning: be sure to add `/mnt/volume_sfo3_01/build/librespot-install/bin` to your PATH to be able to run the installed binaries
+root@Phantom:~# sudo systemctl stop librespot.service
+sudo cp /mnt/volume_sfo3_01/build/librespot-install/bin/librespot /usr/bin/librespot
+/usr/bin/librespot --version
+sudo sed -i 's/--backend pipe/--backend alsa/' /etc/systemd/system/librespot.service
+sudo systemctl daemon-reload
+sudo systemctl start librespot.service
+sleep 3
+sudo journalctl -u librespot.service -n 30 --no-pager -l
+librespot 0.8.0 33bf3a7 (Built on 2026-05-11, Build ID: vQRvmrES, Profile: release)
+May 11 18:37:30 Phantom systemd[1]: librespot.service: Main process exited, code=exited, status=1/FAILURE
+May 11 18:37:30 Phantom systemd[1]: librespot.service: Failed with result 'exit-code'.
+May 11 18:37:35 Phantom systemd[1]: librespot.service: Scheduled restart job, restart counter is at 82.
+May 11 18:37:35 Phantom systemd[1]: Started librespot.service - librespot — headless Spotify Connect device for Jam Host.
+May 11 18:37:35 Phantom librespot[783845]: [2026-05-11T18:37:35Z INFO  librespot] librespot 0.6.0 VERGEN_IDEMPOTENT_OUTPUT (Built on 2026-05-08, Build ID: aRADDuDm, Profile: release)
+May 11 18:37:35 Phantom librespot[783845]: [2026-05-11T18:37:35Z ERROR librespot] Invalid `--backend` / `-B`: "alsa"
+May 11 18:37:35 Phantom librespot[783845]: Available backends:
+May 11 18:37:35 Phantom librespot[783845]: - rodio (default)
+May 11 18:37:35 Phantom librespot[783845]: - pipe
+May 11 18:37:35 Phantom librespot[783845]: - subprocess
+May 11 18:37:35 Phantom systemd[1]: librespot.service: Main process exited, code=exited, status=1/FAILURE
+May 11 18:37:35 Phantom systemd[1]: librespot.service: Failed with result 'exit-code'.
+May 11 18:37:36 Phantom systemd[1]: Stopped librespot.service - librespot — headless Spotify Connect device for Jam Host.
+May 11 18:37:37 Phantom systemd[1]: Started librespot.service - librespot — headless Spotify Connect device for Jam Host.
+May 11 18:37:37 Phantom librespot[783924]: [2026-05-11T18:37:37Z INFO  librespot] librespot 0.8.0 33bf3a7 (Built on 2026-05-11, Build ID: vQRvmrES, Profile: release)
+May 11 18:37:37 Phantom librespot[783924]: [2026-05-11T18:37:37Z WARN  librespot_core::cache] credential file "/opt/jam-bot/librespot-cache/credentials.json" is currently world readable, consider using  chmod 600 "/opt/jam-bot/librespot-cache/credentials.json" to fix this
+May 11 18:37:37 Phantom librespot[783924]: [2026-05-11T18:37:37Z INFO  librespot_playback::mixer::softmixer] Mixing with softvol and volume control: Log(60.0)
+May 11 18:37:37 Phantom librespot[783924]: [2026-05-11T18:37:37Z INFO  librespot_playback::convert] Converting with ditherer: tpdf
+May 11 18:37:37 Phantom librespot[783924]: [2026-05-11T18:37:37Z INFO  librespot_playback::audio_backend::alsa] Using AlsaSink with format: S16
+May 11 18:37:37 Phantom librespot[783924]: [2026-05-11T18:37:37Z INFO  librespot_core::session] Connecting to AP "ap-guc3.spotify.com:4070"
+May 11 18:37:38 Phantom librespot[783924]: [2026-05-11T18:37:38Z INFO  librespot_core::session] Authenticated as '1261507623' !
+May 11 18:37:38 Phantom librespot[783924]: [2026-05-11T18:37:38Z WARN  librespot_core::cache] credential file "/opt/jam-bot/librespot-cache/credentials.json" is currently world readable, consider using  chmod 600 "/opt/jam-bot/librespot-cache/credentials.json" to fix this
+May 11 18:37:38 Phantom librespot[783924]: [2026-05-11T18:37:38Z INFO  librespot_core::session] Country: "US"
+May 11 18:37:38 Phantom librespot[783924]: [2026-05-11T18:37:38Z INFO  librespot_core::spclient] Resolved "guc3-spclient.spotify.com:443" as spclient access point
+May 11 18:37:38 Phantom librespot[783924]: [2026-05-11T18:37:38Z INFO  librespot_connect::spirc] trying to take over control automatically, session_id:
+May 11 18:37:38 Phantom librespot[783924]: [2026-05-11T18:37:38Z WARN  librespot_connect::state::context] couldn't load context info because: context is not available. type: Default
+May 11 18:37:38 Phantom librespot[783924]: [2026-05-11T18:37:38Z WARN  librespot_connect::spirc] didn't find initial track: Invalid state { the current track couldn't be resolved from the transfer state }
+May 11 18:37:38 Phantom librespot[783924]: [2026-05-11T18:37:38Z WARN  librespot_connect::spirc] tried to transfer with an invalid state, using fallback as ctx_uri ()
+May 11 18:37:38 Phantom librespot[783924]: [2026-05-11T18:37:38Z WARN  librespot_connect::spirc] continuing transfer in an unknown state. context is not available. type: Default
+May 11 18:37:38 Phantom librespot[783924]: [2026-05-11T18:37:38Z WARN  librespot_connect::spirc] failed filling up next_track during stopping: Invalid state { context is not available. type: Default }
+root@Phantom:~# 
