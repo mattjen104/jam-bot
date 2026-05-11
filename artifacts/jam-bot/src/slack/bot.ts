@@ -559,46 +559,42 @@ const wrappedScheduler = new WrappedScheduler(
 
 let cachedBotUserId: string | null = null;
 
-slackApp.message(async ({ message, say }) => {
-  if (message.subtype) return;
-  if (!("user" in message) || !message.user) return;
-  if (!("channel" in message) || message.channel !== config.SLACK_CHANNEL_ID)
-    return;
-  if (!("text" in message) || !message.text) return;
-
-  if (cachedBotUserId && message.user === cachedBotUserId) return;
-
-  // Require an explicit @mention of the bot, so we don't try to interpret
-  // every message in the channel (which led to the bot answering questions
-  // that humans were asking each other). Strip the mention before passing
-  // the rest to the intent classifier.
-  logger.info("Channel message received", {
-    user: message.user,
-    text: message.text,
-    cachedBotUserId,
+// We use the `app_mention` event (not `message.channels`) so this only
+// fires when the bot is explicitly @-mentioned, and so it works even when
+// the Slack workspace hasn't granted the channels:history scope.
+slackApp.event("app_mention", async ({ event, say }) => {
+  logger.info("app_mention received", {
+    user: event.user,
+    channel: event.channel,
+    text: event.text,
   });
-  if (!cachedBotUserId) {
-    logger.warn("Skipping message: bot user id not cached yet");
-    return;
-  }
-  const mentionTag = `<@${cachedBotUserId}>`;
-  const rawText = message.text;
-  if (!rawText.includes(mentionTag)) {
-    logger.info("Skipping message: no mention of bot", { mentionTag });
-    return;
-  }
-  const text = rawText.split(mentionTag).join(" ").replace(/\s+/g, " ").trim();
-  if (!text) {
-    await say({
-      text: "Hi! Try `play <song>`, `queue <song>`, `skip`, `what's playing?`, or ask me a question about Jam history. Slash commands like `/play` and `/nowplaying` also work.",
-      thread_ts: message.ts,
+
+  if (event.channel !== config.SLACK_CHANNEL_ID) {
+    logger.info("Ignoring app_mention from non-Jam channel", {
+      channel: event.channel,
     });
     return;
   }
+  if (!event.user) return;
+  if (cachedBotUserId && event.user === cachedBotUserId) return;
+  if (!event.text) return;
+
+  // Strip the bot's @mention tag(s) out of the text before passing to the
+  // intent classifier. The mention tag looks like `<@U12345>`.
+  const text = event.text.replace(/<@[A-Z0-9]+>/g, " ").replace(/\s+/g, " ").trim();
+  const userId = event.user;
+  const threadTs = event.thread_ts ?? event.ts;
 
   const respond = async (t: string, blocks?: KnownBlock[]) => {
-    await say({ text: t, blocks, thread_ts: message.ts });
+    await say({ text: t, blocks, thread_ts: threadTs });
   };
+
+  if (!text) {
+    await respond(
+      "Hi! Try `play <song>`, `queue <song>`, `skip`, `what's playing?`, or ask me a question about Jam history. Slash commands like `/play` and `/nowplaying` also work.",
+    );
+    return;
+  }
 
   let intent;
   try {
@@ -617,7 +613,7 @@ slackApp.message(async ({ message, say }) => {
         if (intent.query) {
           await handlePlayOrQueue({
             query: intent.query,
-            slackUserId: message.user,
+            slackUserId: userId,
             asPlay: true,
             respond: (t) => respond(t),
           });
@@ -631,7 +627,7 @@ slackApp.message(async ({ message, say }) => {
         if (intent.query) {
           await handlePlayOrQueue({
             query: intent.query,
-            slackUserId: message.user,
+            slackUserId: userId,
             asPlay: false,
             respond: (t) => respond(t),
           });
@@ -642,7 +638,7 @@ slackApp.message(async ({ message, say }) => {
         }
         return;
       case "skip":
-        await handleSkip(message.user, (t) => respond(t));
+        await handleSkip(userId, (t) => respond(t));
         return;
       case "nowplaying":
         await handleNowPlaying(respond);
@@ -657,7 +653,7 @@ slackApp.message(async ({ message, say }) => {
       }
     }
   } catch (err) {
-    logger.error("Message handler failed", { error: String(err) });
+    logger.error("app_mention handler failed", { error: String(err) });
     await respond(
       ":warning: Something went wrong handling that — check the bot logs.",
     );
