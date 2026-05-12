@@ -24,10 +24,14 @@ droplet. The droplet only ever sees short-lived (~1 hour) access tokens.
 
 - A computer that can stay on (sleep is OK, but `/jam` will fall back
   while it's asleep).
-- Node 20 or newer. Check with `node --version`. If you don't have it:
-  - macOS: `brew install node`
-  - Linux: use your package manager or [nvm](https://github.com/nvm-sh/nvm)
-  - Windows: download from [nodejs.org](https://nodejs.org/)
+- **Either** Node 20+ **or** Python 3.8+ — the relay ships in two
+  flavors and they do exactly the same thing. Pick whichever is already
+  installed:
+  - **Python (`jam_relay.py`)** — single file, zero installs, just
+    `python jam_relay.py`. Easiest if you already have Python (most
+    Windows machines do — check `python --version`).
+  - **Node (`index.mjs`)** — single file, zero installs, just
+    `npm start`. Easiest if you already have Node.
 - A way to expose `localhost:8787` to your droplet. The easiest is
   [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)
   (free, no signup needed for quick tunnels). `ngrok` also works.
@@ -66,7 +70,25 @@ months from now, just grab a fresh one and restart the relay.
 
 ### 4. Set env vars and start the relay
 
-In the `tools/spotify-token-relay` folder:
+In the `tools/spotify-token-relay` folder, pick **one** flavor:
+
+**Python (recommended on Windows — no install required):**
+
+```powershell
+# PowerShell (Windows)
+$env:SPOTIFY_SP_DC = "paste-the-sp_dc-cookie-here"
+$env:RELAY_SECRET  = "paste-the-generated-secret-here"
+python jam_relay.py
+```
+
+```bash
+# bash / zsh (macOS, Linux)
+SPOTIFY_SP_DC="paste-the-sp_dc-cookie-here" \
+RELAY_SECRET="paste-the-generated-secret-here" \
+python3 jam_relay.py
+```
+
+**Node (alternative):**
 
 ```bash
 SPOTIFY_SP_DC="paste-the-sp_dc-cookie-here" \
@@ -74,7 +96,7 @@ RELAY_SECRET="paste-the-generated-secret-here" \
 npm start
 ```
 
-You should see:
+Either way, you should see:
 
 ```
 [relay] listening on http://127.0.0.1:8787
