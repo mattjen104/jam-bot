@@ -4,7 +4,7 @@ A self-hosted Slack bot that runs a permanent Spotify Jam from a single Linux bo
 
 ## What it does
 
-- Runs alongside `librespot`, which appears on Spotify as a Connect device named **Jam Host**. The Spotify Premium account on the droplet starts a Jam on this device once, and from then on the droplet keeps the Jam alive — no phones need to stay open.
+- The Jam Host runs on an always-on home Windows PC (Spotify Desktop + a small Python relay + a Cloudflare tunnel + a UI-automation driver). The droplet runs the Slack bot only and asks the home PC to click *Start a Jam* whenever someone in Slack says so. See [`tools/spotify-token-relay/HOST_SETUP_WINDOWS.md`](../../tools/spotify-token-relay/HOST_SETUP_WINDOWS.md). The legacy librespot-on-droplet path still exists as a manual fallback Connect device.
 - Listens in one Slack channel:
   - Slash commands: `/play <query>`, `/queue <query>`, `/skip`, `/nowplaying`, `/history`
   - Natural messages: "play some lo-fi", "queue Bohemian Rhapsody", "skip", "what's playing", "who produced this", "recommend something similar"

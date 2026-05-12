@@ -1,29 +1,47 @@
-# Spotify Token Relay
+# Spotify Token Relay + Jam Host
 
-A small Python script + companion Chrome extension that lets Jam Bot
-start Spotify Jams from your DigitalOcean droplet by harvesting the
-Web Player access token from your home browser and serving it over a
-Cloudflare tunnel.
+The "Jam Host" half of Jam Bot. Runs on your always-on home Windows PC.
+Three jobs:
 
-## Why you need this
+1. Hold a fresh Spotify Web Player access token (harvested by the
+   Chrome extension) so the bot can read Spotify state.
+2. Drive the Spotify Desktop client via UI automation when the bot
+   asks it to *Start a Jam*.
+3. Expose both of the above to the droplet over a Cloudflare tunnel.
 
-Spotify deprecated the unauthenticated `open.spotify.com/get_access_token`
-endpoint — it now returns HTTP 403 "URL Blocked" via Varnish for any
-non-browser request, regardless of source IP, cookies, or headers.
+The droplet keeps running the Slack bot only — it no longer pretends to
+be a librespot device, no longer needs a residential IP, and no longer
+needs anyone to tap *Start a Jam* on a phone.
 
-The only reliable way to get a Web Player token (which is required for
-the **Jam** feature — there is no public OAuth scope for Jams) is to
-extract it from a real, logged-in browser session.
+## Why this architecture
 
-This relay does that in three pieces:
+Two separate Spotify limitations forced this split:
+
+- **`open.spotify.com/get_access_token` is blocked from datacenter IPs.**
+  Returns HTTP 403 "URL Blocked" via Varnish for any non-browser
+  request. The only reliable way to obtain a Web Player token (required
+  for any Jam-related call) is to extract it from a real, logged-in
+  browser. → handled by the Chrome extension + relay token endpoints.
+- **Spotify won't let the Web Player create Jams.** Their internal
+  `social-connect` create-session endpoint returns 405 for Web Player
+  tokens — Jams can only be created by the desktop or mobile client.
+  → handled by the new UI-automation driver, which clicks *Start a Jam*
+  in the real Spotify Desktop app.
+
+## Pieces
 
 1. **Chrome extension** (`chrome-extension/`) — runs in your browser,
    watches your open Spotify Web Player tab, grabs the access token
    whenever Spotify rotates it, and POSTs it to the relay.
 2. **Python relay** (`jam_relay.py`) — runs on the same machine, holds
-   the latest token in memory, serves it to the droplet over an
-   authenticated HTTP request.
-3. **Cloudflare tunnel** (`cloudflared`) — exposes the relay's
+   the latest token in memory, exposes `/token`, `/health`, and
+   `/jam/start` (which spawns the UI driver).
+3. **UI driver** (`jam_start_windows.py`) — pywinauto + UIA, with an
+   OpenRouter vision-model fallback for when Spotify's accessibility
+   tree is sparse. See [`HOST_SETUP_WINDOWS.md`](./HOST_SETUP_WINDOWS.md)
+   for the full host setup, debugging commands, and "things that will
+   break it" checklist.
+4. **Cloudflare tunnel** (`cloudflared`) — exposes the relay's
    `localhost:8787` to the public internet so the droplet can reach it.
 
 The token is the same one Spotify's own Web Player uses (~50 minutes,
@@ -32,12 +50,23 @@ already has.
 
 ## What you need
 
-- A computer that stays on with **Chrome (or any Chromium browser)
-  open**, including a Spotify Web Player tab logged in as the Jam Host
-  account. The window can be minimised.
-- Python 3.8+ (most Windows machines have it — check `python --version`).
+- An always-on **Windows PC** with **Spotify Desktop** installed,
+  signed in as the Jam Host Premium account, and *currently playing
+  something* before each `start a jam` (Spotify won't create a Jam
+  from an idle context).
+- The same PC running **Chrome (or any Chromium browser)** with a
+  Spotify Web Player tab signed into the same account. The window can
+  be minimised.
+- Python 3.11+ (`python --version` from PowerShell).
 - [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)
   (free, no signup needed for quick tunnels).
+- An **OpenRouter** API key, only if you want the vision-model
+  fallback for when Spotify's accessibility tree is too sparse for the
+  primary UI-automation path. Optional.
+
+For the full Windows host setup (Python deps, env vars, three-terminal
+launch sequence, autostart on reboot, troubleshooting checklist) see
+[`HOST_SETUP_WINDOWS.md`](./HOST_SETUP_WINDOWS.md).
 
 The legacy Node version (`index.mjs`) talked to Spotify directly and no
 longer works because of the Varnish block. It's kept in the repo only
@@ -134,7 +163,25 @@ Then restart the bot:
 sudo systemctl restart jam-bot
 ```
 
-### 7. Test
+### 7. Install the UI driver deps
+
+The relay's `/jam/start` endpoint shells out to `jam_start_windows.py`
+to actually click *Start a Jam* in the Spotify Desktop window. Install
+its Python deps once:
+
+```powershell
+python -m pip install pywinauto pyautogui mss Pillow requests psutil
+```
+
+Optional: set `OPENROUTER_API_KEY` in the same terminal that runs the
+relay to enable the vision-model fallback for when Spotify renames a
+button. The primary UIA path works without it.
+
+See [`HOST_SETUP_WINDOWS.md`](./HOST_SETUP_WINDOWS.md) for the full
+details, autostart-on-reboot setup (Task Scheduler / NSSM), and the
+debugging commands (`--debug-tree`, `--vision-only`).
+
+### 8. Test
 
 In Slack, DM the bot `start a jam`. It should reply with a Jam invite
 link instead of manual instructions.
@@ -172,6 +219,19 @@ around the Spotify Web Player tab to force an API call.
   no fresh token from the extension.
 - **Bot logs show `token relay returned 401`** — `RELAY_SECRET` on the
   relay does not match `SPOTIFY_TOKEN_RELAY_SECRET` on the droplet.
+- **`/jam/start` returns `ok:false, reason: "Spotify window not found"`**
+  — Spotify Desktop isn't running on the host (or it's only in the
+  notification tray). Open it and play any track first.
+- **`/jam/start` returns `ok:false, reason: "...button not found..."`**
+  — Spotify likely renamed the Connect or Jam button in a recent
+  update. SSH to the host and run
+  `python jam_start_windows.py --debug-tree` to dump the UIA tree, then
+  add the new label to the `*_HINTS` tuples at the top of
+  `jam_start_windows.py`. The vision fallback will also pick it up
+  automatically once `OPENROUTER_API_KEY` is set.
+- **`/jam/start` returns `504 ... timed out after 30s`** — Spotify is
+  unresponsive or has a modal dialog open. Bring its window to the
+  front on the host machine, dismiss anything blocking, and retry.
 
 ## Security notes
 
