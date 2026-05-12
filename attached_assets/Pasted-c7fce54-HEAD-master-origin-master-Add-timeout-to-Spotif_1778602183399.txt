@@ -1,0 +1,36 @@
+c7fce54 (HEAD -> master, origin/master) Add timeout to Spotify API calls to prevent indefinite hangs
+root@Phantom:/opt/jam-bot-repo#
+root@Phantom:/opt/jam-bot-repo# cd /opt/jam-bot-repo && sudo -u jam git log -1 --oneline
+c7fce54 (HEAD -> master, origin/master) Add timeout to Spotify API calls to prevent indefinite hangs
+root@Phantom:/opt/jam-bot-repo# sudo journalctl -u jam-bot --no-pager -n 30
+May 12 16:01:30 Phantom pnpm[963075]:  WARN   Local package.json exists, but node_modules missing, did you mean to install?
+May 12 16:01:30 Phantom systemd[1]: jam-bot.service: Deactivated successfully.
+May 12 16:01:30 Phantom systemd[1]: Stopped jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 12 16:01:30 Phantom systemd[1]: jam-bot.service: Consumed 2.012s CPU time.
+May 12 16:01:30 Phantom systemd[1]: Started jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 12 16:01:31 Phantom pnpm[964146]: > @workspace/jam-bot@0.1.0 start /opt/jam-bot-repo/artifacts/jam-bot
+May 12 16:01:31 Phantom pnpm[964146]: > node ./dist/index.js
+May 12 16:01:32 Phantom pnpm[964159]: [2026-05-12T16:01:32.031Z] INFO Starting Jam Bot...
+May 12 16:05:43 Phantom systemd[1]: Stopping jam-bot.service - Jam Bot — Slack + Spotify Jam controller...
+May 12 16:05:43 Phantom pnpm[964159]: [2026-05-12T16:05:43.799Z] INFO Received SIGTERM, shutting down
+May 12 16:05:43 Phantom pnpm[964146]:  ELIFECYCLE  Command failed.
+May 12 16:05:43 Phantom pnpm[964146]:  WARN   Local package.json exists, but node_modules missing, did you mean to install?
+May 12 16:05:43 Phantom systemd[1]: jam-bot.service: Deactivated successfully.
+May 12 16:05:43 Phantom systemd[1]: Stopped jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 12 16:05:43 Phantom systemd[1]: jam-bot.service: Consumed 2.057s CPU time.
+May 12 16:05:43 Phantom systemd[1]: Started jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 12 16:05:44 Phantom pnpm[964807]: > @workspace/jam-bot@0.1.0 start /opt/jam-bot-repo/artifacts/jam-bot
+May 12 16:05:44 Phantom pnpm[964807]: > node ./dist/index.js
+May 12 16:05:45 Phantom pnpm[964821]: [2026-05-12T16:05:45.296Z] INFO Starting Jam Bot...
+May 12 16:07:29 Phantom pnpm[964821]: [2026-05-12T16:07:29.618Z] INFO Received SIGTERM, shutting down
+May 12 16:07:29 Phantom systemd[1]: Stopping jam-bot.service - Jam Bot — Slack + Spotify Jam controller...
+May 12 16:07:29 Phantom pnpm[964807]:  ELIFECYCLE  Command failed.
+May 12 16:07:29 Phantom pnpm[964807]:  WARN   Local package.json exists, but node_modules missing, did you mean to install?
+May 12 16:07:29 Phantom systemd[1]: jam-bot.service: Deactivated successfully.
+May 12 16:07:29 Phantom systemd[1]: Stopped jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 12 16:07:29 Phantom systemd[1]: jam-bot.service: Consumed 2.015s CPU time.
+May 12 16:07:29 Phantom systemd[1]: Started jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 12 16:07:30 Phantom pnpm[965102]: > @workspace/jam-bot@0.1.0 start /opt/jam-bot-repo/artifacts/jam-bot
+May 12 16:07:30 Phantom pnpm[965102]: > node ./dist/index.js
+May 12 16:07:31 Phantom pnpm[965136]: [2026-05-12T16:07:31.228Z] INFO Starting Jam Bot...
+root@Phantom:/opt/jam-bot-repo#
