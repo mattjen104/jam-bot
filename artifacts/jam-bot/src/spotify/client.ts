@@ -20,12 +20,33 @@ async function ensureAccessToken(): Promise<void> {
   });
 }
 
+const SPOTIFY_CALL_TIMEOUT_MS = 15_000;
+
+function withTimeout<T>(label: string, p: Promise<T>, ms = SPOTIFY_CALL_TIMEOUT_MS): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(
+      () => reject(new Error(`Spotify call timed out after ${ms}ms: ${label}`)),
+      ms,
+    );
+    p.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      },
+    );
+  });
+}
+
 async function withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
   let lastErr: unknown;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      await ensureAccessToken();
-      return await fn();
+      await withTimeout(`${label}:refreshToken`, ensureAccessToken());
+      return await withTimeout(label, fn());
     } catch (err: unknown) {
       lastErr = err;
       const status = (err as { statusCode?: number })?.statusCode;
