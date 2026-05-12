@@ -1,0 +1,62 @@
+* ALPN: curl offers ←[7mhttp/←[0m1.1
+* ALPN: server accepted ←[7mhttp/←[0m1.1
+* using ←[7mHTTP/←[0m1.x
+> GET /get_access_token?reason=transport&productType=web_player ←[7mHTTP/←[0m1.1
+< ←[7mHTTP/←[0m1.1 403 URL Blocked
+←[7m< Server←[0m: Varnish
+
+PS C:\Users\mjensen> type response.txt
+
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+  <head>
+    <title>403 URL Blocked</title>
+  </head>
+  <body>
+    <h1>Error 403 URL Blocked</h1>
+    <p>URL Blocked</p>
+    <h3>Error 54113</h3>
+    <p>Details: cache-sjc1000138-SJC 1778603551 462556903</p>
+    <hr>
+    <p>Varnish cache server</p>
+  </body>
+</html>
+PS C:\Users\mjensen> curl.exe -v -o response.txt `
+>>   -H "Cookie: sp_dc=$env:SPOTIFY_SP_DC" `
+>>   -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" `
+>>   -H "Accept: application/json" `
+>>   -H "Referer: https://open.spotify.com/" `
+>>   -H "Origin: https://open.spotify.com" `
+>>   -H "App-Platform: WebPlayer" `
+>>   -H "Sec-Fetch-Site: same-origin" `
+>>   -H "Sec-Fetch-Mode: cors" `
+>>   -H "Sec-Fetch-Dest: empty" `
+>>   "https://open.spotify.com/get_access_token?reason=transport&productType=web_player" 2>&1 | Select-String -Pattern "HTTP/"
+
+* ALPN: curl offers ←[7mhttp/←[0m1.1
+* ALPN: server accepted ←[7mhttp/←[0m1.1
+* using ←[7mHTTP/←[0m1.x
+> GET /get_access_token?reason=transport&productType=web_player ←[7mHTTP/←[0m1.1
+< ←[7mHTTP/←[0m1.1 403 URL Blocked
+
+PS C:\Users\mjensen> type response.txt
+
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+  <head>
+    <title>403 URL Blocked</title>
+  </head>
+  <body>
+    <h1>Error 403 URL Blocked</h1>
+    <p>URL Blocked</p>
+    <h3>Error 54113</h3>
+    <p>Details: cache-sjc1000096-SJC 1778603607 4033410960</p>
+    <hr>
+    <p>Varnish cache server</p>
+  </body>
+</html>
+PS C:\Users\mjensen>
