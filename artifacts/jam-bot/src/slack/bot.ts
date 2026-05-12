@@ -682,7 +682,10 @@ slackApp.command(
     logger.info("Jam start fell back to manual instructions", {
       reason: result.reason,
     });
-    await say(manualJamInstructions());
+    await say(
+      `:warning: Couldn't start a Jam automatically. Reason: \`${result.reason}\`\n\n` +
+        manualJamInstructions(),
+    );
   }),
 );
 
@@ -808,7 +811,10 @@ async function handleNaturalLanguage(
           logger.info("NL Jam start fell back to manual instructions", {
             reason: result.reason,
           });
-          await respond(manualJamInstructions());
+          await respond(
+            `:warning: Couldn't start a Jam automatically. Reason: \`${result.reason}\`\n\n` +
+              manualJamInstructions(),
+          );
         }
         return;
       }

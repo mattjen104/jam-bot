@@ -348,6 +348,97 @@ def try_uia_path() -> Optional[str]:
 # Vision fallback
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Vision coordinate cache
+# ---------------------------------------------------------------------------
+# Each successful vision-driven click is persisted next to the script so
+# the next invocation can skip the OpenRouter round-trip (~1-3s + a paid
+# API call). The cache is keyed by Spotify build version so a Spotify
+# auto-update transparently invalidates stale entries; cached coords are
+# tried first inside the vision-fallback path, and we still fall through
+# to the LLM if the cached click misses.
+
+_CACHE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           ".jam_vision_cache.json")
+
+
+def _load_vision_cache() -> dict:
+    try:
+        with open(_CACHE_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, dict) else {}
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+
+
+def _save_vision_cache(cache: dict) -> None:
+    try:
+        tmp = _CACHE_PATH + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(cache, f, indent=2)
+        os.replace(tmp, _CACHE_PATH)
+    except OSError as e:
+        log(f"vision cache write failed: {e}")
+
+
+def _spotify_version() -> str:
+    """
+    Return a string identifying the running Spotify build. We use the
+    process's executable path + its file-modification time as a cheap
+    proxy for "which Spotify version is this" — exact enough that an
+    auto-update invalidates the cache without us needing to parse
+    Spotify's own version metadata.
+    """
+    try:
+        import psutil  # type: ignore
+
+        for proc in psutil.process_iter(["name", "exe"]):
+            try:
+                name = (proc.info.get("name") or "").lower()
+                exe = proc.info.get("exe") or ""
+            except Exception:
+                continue
+            if name == "spotify.exe" and exe:
+                try:
+                    mtime = int(os.path.getmtime(exe))
+                except OSError:
+                    mtime = 0
+                return f"{exe}@{mtime}"
+    except Exception as e:
+        log(f"spotify version probe failed: {e}")
+    return "unknown"
+
+
+def _cache_key(version: str, label: str) -> str:
+    return f"{version}::{label}"
+
+
+def _try_cached_click(version: str, label: str) -> bool:
+    cache = _load_vision_cache()
+    entry = cache.get(_cache_key(version, label))
+    if not entry:
+        return False
+    img, bbox = _grab_spotify_screenshot()
+    if bbox is None:
+        return False
+    pct = (entry.get("x_pct"), entry.get("y_pct"))
+    if not isinstance(pct[0], (int, float)) or not isinstance(pct[1], (int, float)):
+        return False
+    log(f"using cached vision coords for '{label}': {pct}")
+    _click_at_window_pct(bbox, pct)
+    return True
+
+
+def _remember_click(version: str, label: str, pct: tuple[float, float]) -> None:
+    cache = _load_vision_cache()
+    cache[_cache_key(version, label)] = {
+        "x_pct": pct[0],
+        "y_pct": pct[1],
+        "saved_at": int(time.time()),
+    }
+    _save_vision_cache(cache)
+
+
 def _grab_spotify_screenshot():
     """Returns (PIL.Image, (left, top, width, height)) of Spotify window."""
     _, win = _find_spotify_window()
@@ -460,9 +551,16 @@ def _click_at_window_pct(bbox: tuple[int, int, int, int], pct: tuple[float, floa
 
 def try_vision_path() -> Optional[str]:
     log("attempting vision fallback path")
+    version = _spotify_version()
 
-    # Click sequence: Connect button, then Start a Jam.
+    # Click sequence: Connect button, then Start a Jam. Try cached
+    # coordinates first (per Spotify build); only call OpenRouter when
+    # the cache misses or the cached click fails.
     for label in ("Connect to a device (speakers icon)", "Start a Jam"):
+        if _try_cached_click(version, label):
+            time.sleep(1.2)
+            continue
+
         img, bbox = _grab_spotify_screenshot()
         if img is None:
             log("no Spotify window for screenshot")
@@ -472,6 +570,7 @@ def try_vision_path() -> Optional[str]:
             log(f"vision could not locate '{label}'")
             return None
         _click_at_window_pct(bbox, coords)
+        _remember_click(version, label, coords)
         time.sleep(1.2)
 
     # After clicking Start a Jam, try to read the URL via UIA — the dialog
