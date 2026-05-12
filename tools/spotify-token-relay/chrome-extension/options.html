@@ -1,0 +1,76 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Jam Token Relay — Settings</title>
+    <style>
+      body {
+        font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+        padding: 20px;
+        max-width: 460px;
+        color: #1a1a1a;
+      }
+      h1 { font-size: 18px; margin: 0 0 12px; }
+      label { display: block; margin-top: 14px; font-size: 13px; font-weight: 600; }
+      input[type="text"], input[type="password"] {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px 10px;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        font-size: 12px;
+        border: 1px solid #c9c9c9;
+        border-radius: 6px;
+        margin-top: 4px;
+      }
+      .hint { color: #666; font-size: 11px; margin-top: 4px; line-height: 1.4; }
+      button {
+        margin-top: 16px;
+        padding: 8px 16px;
+        font-size: 13px;
+        font-weight: 600;
+        background: #1db954;
+        color: white;
+        border: 0;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      button:hover { background: #19a44a; }
+      .status {
+        margin-top: 18px;
+        padding: 10px 12px;
+        border-radius: 6px;
+        background: #f4f4f4;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      .status .label { font-weight: 600; }
+      .ok { color: #1db954; }
+      .err { color: #c0392b; }
+      .pending { color: #888; }
+    </style>
+  </head>
+  <body>
+    <h1>Jam Token Relay</h1>
+    <p class="hint">
+      Pushes the Spotify Web Player access token from this browser to your
+      Jam Bot relay. Keep a Spotify Web Player tab open while a Jam is active.
+    </p>
+
+    <label for="relayUrl">Relay URL</label>
+    <input type="text" id="relayUrl" placeholder="https://your-tunnel.trycloudflare.com" />
+    <div class="hint">No trailing slash. The same URL the droplet uses (<code>SPOTIFY_TOKEN_RELAY_URL</code>).</div>
+
+    <label for="relaySecret">Relay secret</label>
+    <input type="password" id="relaySecret" placeholder="64-char hex" />
+    <div class="hint">Same value as <code>RELAY_SECRET</code> on the relay AND <code>SPOTIFY_TOKEN_RELAY_SECRET</code> on the droplet.</div>
+
+    <button id="save">Save</button>
+
+    <div class="status">
+      <div><span class="label">Last status:</span> <span id="status">loading...</span></div>
+      <div><span class="label">Detail:</span> <span id="detail"></span></div>
+      <div><span class="label">At:</span> <span id="when"></span></div>
+    </div>
+  </body>
+  <script src="options.js"></script>
+</html>

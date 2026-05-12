@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Jam Token Relay",
+  "version": "1.0.0",
+  "description": "Harvests the Spotify Web Player access token from the Jam Host's browser and pushes it to the local Jam Bot relay so friends can start Jams from Slack.",
+  "permissions": ["webRequest", "storage"],
+  "host_permissions": [
+    "https://api.spotify.com/*",
+    "https://api-partner.spotify.com/*",
+    "https://gew4-spclient.spotify.com/*",
+    "https://*.spotify.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "options_page": "options.html",
+  "action": {
+    "default_title": "Jam Token Relay — click to open settings",
+    "default_popup": "options.html"
+  }
+}
