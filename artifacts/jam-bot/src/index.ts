@@ -4,11 +4,24 @@ import { startSlackBot, stopWrappedScheduler } from "./slack/bot.js";
 import { nowPlayingWatcher } from "./now-playing.js";
 import { config } from "./config.js";
 
+function dbg(msg: string) {
+  process.stdout.write(`[DBG ${new Date().toISOString()}] ${msg}\n`);
+}
+
 async function main() {
+  dbg("main:enter");
   logger.info("Starting Jam Bot...");
+  dbg("main:after-logger");
 
   try {
-    const host = await ensurePlaybackOnHost();
+    dbg("main:before-ensurePlaybackOnHost");
+    const host = await Promise.race([
+      ensurePlaybackOnHost(),
+      new Promise((_r, rej) =>
+        setTimeout(() => rej(new Error("ensurePlaybackOnHost wall-clock timeout 20s")), 20_000),
+      ),
+    ]) as Awaited<ReturnType<typeof ensurePlaybackOnHost>>;
+    dbg("main:after-ensurePlaybackOnHost");
     if (host) {
       logger.info(`Found host device "${host.name}"`);
     } else {
@@ -17,13 +30,17 @@ async function main() {
       );
     }
   } catch (err) {
+    dbg(`main:ensurePlaybackOnHost-catch ${String(err)}`);
     logger.warn("Could not transfer playback at startup", {
       error: String(err),
     });
   }
 
+  dbg("main:before-startSlackBot");
   await startSlackBot();
+  dbg("main:after-startSlackBot");
   nowPlayingWatcher.start();
+  dbg("main:after-nowPlayingWatcher");
 
   logger.info("Jam Bot is up.");
 }
