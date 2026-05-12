@@ -142,7 +142,7 @@ async function getCurrentJam(
   token: string,
 ): Promise<{ joinUrl: string; sessionId: string } | null> {
   const res = await fetch(
-    "https://spclient.wg.spotify.com/social-connect/v2/sessions/current",
+    "https://spclient.wg.spotify.com/social-connect/v3/sessions/current",
     {
       method: "GET",
       headers: {
@@ -219,9 +219,9 @@ export async function startSpotifyJam(): Promise<JamStartResult> {
   // Step 2: no active session, try to create one.
   try {
     const res = await fetch(
-      "https://spclient.wg.spotify.com/social-connect/v2/sessions/current_or_new?local_device_id=jam-bot",
+      "https://spclient.wg.spotify.com/social-connect/v3/sessions/current_or_new?local_device_id=jam-bot",
       {
-        method: "POST",
+        method: "PUT",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",

@@ -1,0 +1,73 @@
+*** System restart required ***
+Last login: Tue May 12 15:12:37 2026 from 47.152.73.144
+-bash: /root/.cargo/env: No such file or directory
+-bash: /root/.cargo/env: No such file or directory
+root@Phantom:~# sudo sed -i 's|^SPOTIFY_TOKEN_RELAY_URL=.*|SPOTIFY_TOKEN_RELAY_URL=https://charms-webcast-workshops-event.trycloudflare.com|' /opt/jam-bot/.env
+grep SPOTIFY_TOKEN_RELAY /opt/jam-bot/.env
+sudo systemctl restart jam-bot
+SPOTIFY_TOKEN_RELAY_URL=https://charms-webcast-workshops-event.trycloudflare.com
+SPOTIFY_TOKEN_RELAY_SECRET=f637291857a1f87f93bca6c960d8532b29e93903c1ff01cc1bb992bc56229d21
+root@Phantom:~# curl https://charms-webcast-workshops-event.trycloudflare.com/health
+{"ok": true, "hasToken": true, "expiresInSec": 3205}root@Phantom:~# sudo journalctl -u jam-bot -n 100 --no-pager | grep -iE "jam|tsudo journalctl -u jam-bot -n 100 --no-pager | grep -iE "jam|token|spotify|error|warn"
+May 12 16:05:43 Phantom systemd[1]: Stopped jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 12 16:05:43 Phantom systemd[1]: jam-bot.service: Consumed 2.057s CPU time.
+May 12 16:05:43 Phantom systemd[1]: Started jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 12 16:05:44 Phantom pnpm[964807]: > @workspace/jam-bot@0.1.0 start /opt/jam-bot-repo/artifacts/jam-bot
+May 12 16:05:45 Phantom pnpm[964821]: [2026-05-12T16:05:45.296Z] INFO Starting Jam Bot...
+May 12 16:07:29 Phantom systemd[1]: Stopping jam-bot.service - Jam Bot — Slack + Spotify Jam controller...
+May 12 16:07:29 Phantom pnpm[964807]:  WARN   Local package.json exists, but node_modules missing, did you mean to install?
+May 12 16:07:29 Phantom systemd[1]: jam-bot.service: Deactivated successfully.
+May 12 16:07:29 Phantom systemd[1]: Stopped jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 12 16:07:29 Phantom systemd[1]: jam-bot.service: Consumed 2.015s CPU time.
+May 12 16:07:29 Phantom systemd[1]: Started jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 12 16:07:30 Phantom pnpm[965102]: > @workspace/jam-bot@0.1.0 start /opt/jam-bot-repo/artifacts/jam-bot
+May 12 16:07:31 Phantom pnpm[965136]: [2026-05-12T16:07:31.228Z] INFO Starting Jam Bot...
+May 12 16:12:35 Phantom systemd[1]: Stopping jam-bot.service - Jam Bot — Slack + Spotify Jam controller...
+May 12 16:12:35 Phantom pnpm[965102]:  WARN   Local package.json exists, but node_modules missing, did you mean to install?
+May 12 16:12:35 Phantom systemd[1]: jam-bot.service: Deactivated successfully.
+May 12 16:12:35 Phantom systemd[1]: Stopped jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 12 16:12:35 Phantom systemd[1]: jam-bot.service: Consumed 2.189s CPU time.
+May 12 16:12:35 Phantom systemd[1]: Started jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 12 16:12:36 Phantom pnpm[965855]: > @workspace/jam-bot@0.1.0 start /opt/jam-bot-repo/artifacts/jam-bot
+May 12 16:12:36 Phantom pnpm[965868]: [2026-05-12T16:12:36.793Z] INFO Starting Jam Bot...
+May 12 16:12:52 Phantom systemd[1]: Stopping jam-bot.service - Jam Bot — Slack + Spotify Jam controller...
+May 12 16:12:52 Phantom pnpm[965855]:  WARN   Local package.json exists, but node_modules missing, did you mean to install?
+May 12 16:12:52 Phantom systemd[1]: jam-bot.service: Deactivated successfully.
+May 12 16:12:52 Phantom systemd[1]: Stopped jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 12 16:12:52 Phantom systemd[1]: jam-bot.service: Consumed 1.800s CPU time.
+May 12 16:12:52 Phantom systemd[1]: Started jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 12 16:12:52 Phantom pnpm[965909]: > @workspace/jam-bot@0.1.0 start /opt/jam-bot-repo/artifacts/jam-bot
+May 12 16:12:53 Phantom pnpm[965922]: [2026-05-12T16:12:53.591Z] INFO Starting Jam Bot...
+May 12 16:20:27 Phantom systemd[1]: Stopping jam-bot.service - Jam Bot — Slack + Spotify Jam controller...
+May 12 16:20:27 Phantom pnpm[965909]:  WARN   Local package.json exists, but node_modules missing, did you mean to install?
+May 12 16:20:27 Phantom systemd[1]: jam-bot.service: Deactivated successfully.
+May 12 16:20:27 Phantom systemd[1]: Stopped jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 12 16:20:27 Phantom systemd[1]: jam-bot.service: Consumed 2.285s CPU time.
+May 12 16:20:27 Phantom systemd[1]: Started jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 12 16:20:28 Phantom pnpm[967083]: > @workspace/jam-bot@0.1.0 start /opt/jam-bot-repo/artifacts/jam-bot
+May 12 16:20:28 Phantom pnpm[967097]: [2026-05-12T16:20:28.811Z] INFO Starting Jam Bot...
+May 12 16:20:48 Phantom pnpm[967097]: [DBG 2026-05-12T16:20:48.874Z] main:ensurePlaybackOnHost-catch Error: ensurePlaybackOnHost wall-clock timeout 20s
+May 12 16:20:48 Phantom pnpm[967097]: [2026-05-12T16:20:48.875Z] WARN Could not transfer playback at startup {"error":"Error: ensurePlaybackOnHost wall-clock timeout 20s"}
+May 12 16:20:49 Phantom pnpm[967097]: [2026-05-12T16:20:49.360Z] INFO Jam Bot is up.
+May 12 16:22:36 Phantom pnpm[967097]: [2026-05-12T16:22:36.072Z] INFO DM received {"user":"U0283H3JA","text":"start a jam"}
+May 12 16:22:37 Phantom pnpm[967097]: [2026-05-12T16:22:37.308Z] INFO NL Jam start fell back to manual instructions {"reason":"Error: token relay returned 502: {\"error\": \"Spotify rejected get_access_token: 403 \\n<?xml version=\\\"1.0\\\" encoding=\\\"utf-8\\\"?>\\n<!DOCTYPE html PUBLIC \\\"-//W3C//DTD XHTML 1.0 Strict//EN\\\"\\n \\\"http://www.w3.org/TR/xhtml1/DTD/xhtml1-st"}
+May 12 16:24:43 Phantom pnpm[967097]: [2026-05-12T16:24:43.461Z] INFO DM received {"user":"U0283H3JA","text":"start a jam"}
+May 12 16:24:44 Phantom pnpm[967097]: [2026-05-12T16:24:44.228Z] INFO NL Jam start fell back to manual instructions {"reason":"Error: token relay returned 502: {\"error\": \"Spotify rejected get_access_token: 403 \\n<?xml version=\\\"1.0\\\" encoding=\\\"utf-8\\\"?>\\n<!DOCTYPE html PUBLIC \\\"-//W3C//DTD XHTML 1.0 Strict//EN\\\"\\n \\\"http://www.w3.org/TR/xhtml1/DTD/xhtml1-st"}
+May 12 16:28:53 Phantom pnpm[967097]: [2026-05-12T16:28:53.494Z] INFO DM received {"user":"U0283H3JA","text":"start a jam"}
+May 12 16:28:54 Phantom pnpm[967097]: [2026-05-12T16:28:54.266Z] INFO NL Jam start fell back to manual instructions {"reason":"Error: token relay returned 502: {\"error\": \"Spotify rejected get_access_token: 403 \\n<?xml version=\\\"1.0\\\" encoding=\\\"utf-8\\\"?>\\n<!DOCTYPE html PUBLIC \\\"-//W3C//DTD XHTML 1.0 Strict//EN\\\"\\n \\\"http://www.w3.org/TR/xhtml1/DTD/xhtml1-st"}
+May 12 17:06:50 Phantom pnpm[967097]: [2026-05-12T17:06:50.672Z] INFO No active Spotify playback detected {"hostVisible":true}
+May 12 17:06:51 Phantom pnpm[967097]: [2026-05-12T17:06:51.097Z] INFO Transferred playback to host device "Jam Host"
+May 12 17:16:54 Phantom pnpm[967097]: [2026-05-12T17:16:54.255Z] INFO No active Spotify playback detected {"hostVisible":true}
+May 12 19:48:23 Phantom systemd[1]: Stopping jam-bot.service - Jam Bot — Slack + Spotify Jam controller...
+May 12 19:48:23 Phantom pnpm[967083]:  WARN   Local package.json exists, but node_modules missing, did you mean to install?
+May 12 19:48:23 Phantom systemd[1]: jam-bot.service: Deactivated successfully.
+May 12 19:48:23 Phantom systemd[1]: Stopped jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 12 19:48:23 Phantom systemd[1]: jam-bot.service: Consumed 44.877s CPU time.
+May 12 19:48:23 Phantom systemd[1]: Started jam-bot.service - Jam Bot — Slack + Spotify Jam controller.
+May 12 19:48:24 Phantom pnpm[995060]: > @workspace/jam-bot@0.1.0 start /opt/jam-bot-repo/artifacts/jam-bot
+May 12 19:48:24 Phantom pnpm[995074]: [2026-05-12T19:48:24.776Z] INFO Starting Jam Bot...
+May 12 19:48:25 Phantom pnpm[995074]: [2026-05-12T19:48:25.143Z] INFO Found host device "Jam Host"
+May 12 19:48:25 Phantom pnpm[995074]: [2026-05-12T19:48:25.573Z] INFO Jam Bot is up.
+May 12 19:49:17 Phantom pnpm[995074]: [2026-05-12T19:49:17.901Z] INFO DM received {"user":"U0283H3JA","text":"start a jam"}
+May 12 19:49:18 Phantom pnpm[995074]: [2026-05-12T19:49:18.351Z] WARN Spotify Jam create failed {"status":405,"body":""}
+May 12 19:49:18 Phantom pnpm[995074]: [2026-05-12T19:49:18.352Z] INFO NL Jam start fell back to manual instructions {"reason":"Spotify rejected the Jam-create request (405). The unofficial endpoint may have changed, or the host needs an active playback device."}
