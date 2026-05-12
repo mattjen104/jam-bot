@@ -2,24 +2,24 @@ import { config } from "../config.js";
 import { logger } from "../logger.js";
 
 /**
- * Spotify Jam (a.k.a. "social listening session") is the in-app feature where
- * multiple Spotify users join the same playback queue and can each add tracks.
+ * Spotify Jam (a.k.a. "social listening session") is the in-app feature
+ * where multiple Spotify users join the same playback queue. Spotify
+ * has not published a public Web API for *creating* a Jam — only the
+ * desktop, mobile, and web clients can do it, and the create endpoint
+ * rejects Web Player tokens (returns 405).
  *
- * Honest status: Spotify has NOT published a public Web API for starting or
- * managing a Jam. The only way to programmatically create one is via an
- * undocumented endpoint that the Spotify desktop/mobile/web clients use
- * internally, and that endpoint requires an "internal" access token derived
- * from the `sp_dc` browser cookie (NOT the standard OAuth refresh token).
- *
- * This module:
- *   - When `SPOTIFY_SP_DC` is configured, attempts to create a Jam via the
- *     unofficial endpoint and returns the share URL on success.
- *   - When unset or the call fails, returns a fallback that explains how to
- *     start the Jam by hand from the host device, plus a `spotify:` deep
- *     link that opens the Spotify client.
- *
- * The unofficial endpoint may break at any time. The fallback message always
- * works and is the *recommended* path for most setups.
+ * Architecture:
+ *   - Jam Host runs full-time on the user's home Windows PC (Spotify
+ *     Desktop, the Python relay, and the cloudflared tunnel).
+ *   - The bot fetches a Web Player token from the relay (harvested by
+ *     the companion Chrome extension) and uses it for the cheap
+ *     read-only "is there already a Jam?" lookup.
+ *   - When no Jam is active, the bot POSTs to the relay's /jam/start
+ *     endpoint, which spawns a UI-automation script that drives the
+ *     Spotify Desktop client (pywinauto + UIA, with a vision-model
+ *     fallback) and returns the resulting share URL.
+ *   - manualJamInstructions() is the final fallback when the relay
+ *     itself is unreachable or the driver fails.
  */
 
 export type JamStartResult =
@@ -41,76 +41,47 @@ interface CachedToken {
 let cachedInternalToken: CachedToken | null = null;
 
 /**
- * Fetch an internal Spotify access token, either via the home-network
- * relay (preferred — see tools/spotify-token-relay) or by calling
- * open.spotify.com directly. The direct path returns 403 "URL Blocked"
- * from datacenter IPs, so on a cloud droplet you almost certainly want
- * the relay path.
+ * Fetch an internal Spotify access token via the home-network relay.
+ * The legacy direct-from-Spotify path was removed: Spotify now returns
+ * 403 "URL Blocked" via Varnish for any non-browser request to
+ * `open.spotify.com/get_access_token`, regardless of source IP.
  */
 async function fetchInternalAccessToken(): Promise<string> {
-  if (cachedInternalToken && Date.now() < cachedInternalToken.expiresAt - 60_000) {
+  if (
+    cachedInternalToken &&
+    Date.now() < cachedInternalToken.expiresAt - 60_000
+  ) {
     return cachedInternalToken.token;
   }
 
-  let json: InternalTokenResponse;
-
-  if (config.SPOTIFY_TOKEN_RELAY_URL) {
-    // ---- Relay path (works from datacenter IPs) ------------------------
-    if (!config.SPOTIFY_TOKEN_RELAY_SECRET) {
-      throw new Error(
-        "SPOTIFY_TOKEN_RELAY_URL is set but SPOTIFY_TOKEN_RELAY_SECRET is missing. Set both, matching the relay's RELAY_SECRET.",
-      );
-    }
-    const relayUrl = `${config.SPOTIFY_TOKEN_RELAY_URL.replace(/\/$/, "")}/token`;
-    const res = await fetch(relayUrl, {
-      headers: {
-        Authorization: `Bearer ${config.SPOTIFY_TOKEN_RELAY_SECRET}`,
-      },
-    });
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new Error(
-        `token relay returned ${res.status}: ${body.slice(0, 200)}`,
-      );
-    }
-    json = (await res.json()) as InternalTokenResponse;
-  } else {
-    // ---- Direct path (only works from residential IPs) -----------------
-    if (!config.SPOTIFY_SP_DC) {
-      throw new Error(
-        "no token source configured — set SPOTIFY_TOKEN_RELAY_URL (recommended for cloud droplets) or SPOTIFY_SP_DC",
-      );
-    }
-    const res = await fetch(
-      "https://open.spotify.com/get_access_token?reason=transport&productType=web_player",
-      {
-        headers: {
-          Cookie: `sp_dc=${config.SPOTIFY_SP_DC}`,
-          "User-Agent":
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
-        },
-      },
+  if (!config.SPOTIFY_TOKEN_RELAY_URL || !config.SPOTIFY_TOKEN_RELAY_SECRET) {
+    throw new Error(
+      "SPOTIFY_TOKEN_RELAY_URL and SPOTIFY_TOKEN_RELAY_SECRET must both be set — see tools/spotify-token-relay/README.md.",
     );
-    if (!res.ok) {
-      throw new Error(
-        `get_access_token failed: ${res.status} ${res.statusText}` +
-          (res.status === 403
-            ? " (Spotify blocks this endpoint from datacenter IPs — set up tools/spotify-token-relay on a home machine)"
-            : ""),
-      );
-    }
-    json = (await res.json()) as InternalTokenResponse;
   }
+  const relayUrl = `${config.SPOTIFY_TOKEN_RELAY_URL.replace(/\/$/, "")}/token`;
+  const res = await fetch(relayUrl, {
+    headers: {
+      Authorization: `Bearer ${config.SPOTIFY_TOKEN_RELAY_SECRET}`,
+    },
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(
+      `token relay returned ${res.status}: ${body.slice(0, 200)}`,
+    );
+  }
+  const json = (await res.json()) as InternalTokenResponse;
 
   if (!json.accessToken || json.isAnonymous) {
     throw new Error(
-      "internal token endpoint returned an anonymous token — your sp_dc cookie has likely expired. Grab a fresh one from open.spotify.com.",
+      "relay returned an anonymous token — the host browser probably isn't logged into Spotify. Open the Spotify Web Player tab on the host and try again.",
     );
   }
   cachedInternalToken = {
     token: json.accessToken,
-    expiresAt: json.accessTokenExpirationTimestampMs ?? Date.now() + 30 * 60_000,
+    expiresAt:
+      json.accessTokenExpirationTimestampMs ?? Date.now() + 30 * 60_000,
   };
   return cachedInternalToken.token;
 }
@@ -134,9 +105,9 @@ function extractJoinUrl(data: SessionResponse): string | null {
 }
 
 /**
- * Look up the host's currently-active Jam session, if one exists. Returns
- * null when there is no active session, throws on auth/network failures
- * so the caller can decide whether to fall back or surface the error.
+ * Look up the host's currently-active Jam session, if one exists.
+ * Returns null when there is no active session, throws on auth/network
+ * failures so the caller can decide whether to fall back.
  */
 async function getCurrentJam(
   token: string,
@@ -165,115 +136,161 @@ async function getCurrentJam(
   return { joinUrl: url, sessionId: data.session_id };
 }
 
+interface RelayJamStartResponse {
+  ok?: boolean;
+  joinUrl?: string;
+  reason?: string;
+}
+
+/**
+ * Ask the relay's UI-automation driver to start a fresh Jam on the host
+ * Spotify Desktop client. The relay subprocess can take ~30s in the
+ * worst case (vision fallback), so we use a slightly longer client-side
+ * deadline.
+ */
+async function startJamViaRelay(): Promise<JamStartResult> {
+  const baseUrl = config.SPOTIFY_TOKEN_RELAY_URL?.replace(/\/$/, "") ?? "";
+  if (!baseUrl || !config.SPOTIFY_TOKEN_RELAY_SECRET) {
+    return {
+      ok: false,
+      reason:
+        "SPOTIFY_TOKEN_RELAY_URL / SPOTIFY_TOKEN_RELAY_SECRET not set — point them at your home relay.",
+    };
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 40_000);
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl}/jam/start`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.SPOTIFY_TOKEN_RELAY_SECRET}`,
+        "Content-Type": "application/json",
+      },
+      body: "{}",
+      signal: controller.signal,
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      reason: `relay /jam/start network error: ${String(err)}`,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+
+  const bodyText = await res.text().catch(() => "");
+  if (!res.ok && res.status !== 504) {
+    return {
+      ok: false,
+      reason: `relay /jam/start returned ${res.status}: ${bodyText.slice(0, 200)}`,
+    };
+  }
+
+  let data: RelayJamStartResponse;
+  try {
+    data = JSON.parse(bodyText) as RelayJamStartResponse;
+  } catch {
+    return {
+      ok: false,
+      reason: `relay /jam/start returned non-JSON: ${bodyText.slice(0, 200)}`,
+    };
+  }
+
+  if (!data.ok || !data.joinUrl) {
+    return {
+      ok: false,
+      reason:
+        data.reason ?? "relay returned ok:false with no reason",
+    };
+  }
+
+  // The driver returns the URL but no session_id — derive a stable
+  // identifier from the URL so /wrapped et al. can reference it.
+  const sessionId =
+    data.joinUrl.split("/").filter(Boolean).pop() ?? data.joinUrl;
+  return { ok: true, joinUrl: data.joinUrl, sessionId, existed: false };
+}
+
 /**
  * Best-effort programmatic Jam start. Behavior:
- *   1. If SPOTIFY_SP_DC is unset -> return ok:false (caller shows manual
- *      instructions).
- *   2. Look up the host's current Jam. If one already exists, return its
- *      join URL with `existed: true` — no creation attempt, no Spotify
- *      "you already have a Jam" rejection.
- *   3. Otherwise POST to create one and return the new join URL with
- *      `existed: false`.
+ *   1. If neither relay nor sp_dc is configured, return ok:false (caller
+ *      shows manual instructions).
+ *   2. Use the harvested Web Player token to look up the host's current
+ *      Jam. If one already exists, return its join URL with
+ *      `existed: true` — no need to invoke the UI driver.
+ *   3. Otherwise POST to the relay's /jam/start endpoint, which drives
+ *      Spotify Desktop on the home PC and returns the resulting URL.
  *
  * Always returns a result tuple — never throws.
  */
 export async function startSpotifyJam(): Promise<JamStartResult> {
-  if (!config.SPOTIFY_TOKEN_RELAY_URL && !config.SPOTIFY_SP_DC) {
+  if (!config.SPOTIFY_TOKEN_RELAY_URL || !config.SPOTIFY_TOKEN_RELAY_SECRET) {
     return {
       ok: false,
       reason:
-        "no Spotify internal-token source configured — set SPOTIFY_TOKEN_RELAY_URL (recommended) or SPOTIFY_SP_DC",
+        "Spotify token relay is not configured — set SPOTIFY_TOKEN_RELAY_URL and SPOTIFY_TOKEN_RELAY_SECRET (see tools/spotify-token-relay/README.md).",
     };
   }
-  let token: string;
+
+  // Step 1: cheap read-only lookup. If there's already a Jam, hand back
+  // the URL without bothering the UI driver.
+  let token: string | null = null;
   try {
     token = await fetchInternalAccessToken();
   } catch (err) {
     cachedInternalToken = null;
-    return { ok: false, reason: String(err) };
-  }
-
-  // Step 1: is there already a live Jam? If yes, just hand back its URL.
-  try {
-    const existing = await getCurrentJam(token);
-    if (existing) {
-      logger.info("Spotify Jam already active; returning existing join URL", {
-        sessionId: existing.sessionId,
-      });
-      return {
-        ok: true,
-        joinUrl: existing.joinUrl,
-        sessionId: existing.sessionId,
-        existed: true,
-      };
-    }
-  } catch (err) {
-    // Don't fail the whole command on a lookup glitch — fall through and
-    // try the create. The create path will surface the actual error if it
-    // also fails.
-    logger.warn("Spotify current-session lookup failed; trying create", {
+    logger.warn("Spotify token fetch failed; will still try relay /jam/start", {
       error: String(err),
     });
   }
 
-  // Step 2: no active session, try to create one.
-  try {
-    const res = await fetch(
-      "https://spclient.wg.spotify.com/social-connect/v3/sessions/current_or_new?local_device_id=jam-bot",
-      {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          "User-Agent": BROWSER_UA,
-        },
-        body: JSON.stringify({}),
-      },
-    );
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      logger.warn("Spotify Jam create failed", {
-        status: res.status,
-        body: body.slice(0, 200),
-      });
-      return {
-        ok: false,
-        reason: `Spotify rejected the Jam-create request (${res.status}). The unofficial endpoint may have changed, or the host needs an active playback device.`,
-      };
+  if (token) {
+    try {
+      const existing = await getCurrentJam(token);
+      if (existing) {
+        logger.info(
+          "Spotify Jam already active; returning existing join URL",
+          { sessionId: existing.sessionId },
+        );
+        return {
+          ok: true,
+          joinUrl: existing.joinUrl,
+          sessionId: existing.sessionId,
+          existed: true,
+        };
+      }
+    } catch (err) {
+      logger.warn(
+        "Spotify current-session lookup failed; trying relay /jam/start",
+        { error: String(err) },
+      );
     }
-    const data = (await res.json()) as SessionResponse;
-    const url = extractJoinUrl(data);
-    if (!url || !data.session_id) {
-      return {
-        ok: false,
-        reason: "Spotify response missing join URL — endpoint shape may have changed",
-      };
-    }
-    return {
-      ok: true,
-      joinUrl: url,
-      sessionId: data.session_id,
-      existed: false,
-    };
-  } catch (err) {
-    return { ok: false, reason: `Network error: ${String(err)}` };
   }
+
+  // Step 2: ask the home PC's relay to drive Spotify Desktop into
+  // starting a Jam.
+  const result = await startJamViaRelay();
+  if (!result.ok) {
+    logger.warn("relay /jam/start failed", { reason: result.reason });
+  }
+  return result;
 }
 
 /**
- * The "no-API" instructions we hand back when programmatic start isn't
- * available. Always works — the host opens Spotify on their phone, taps the
- * Connect-to-device speaker icon, picks the librespot host, and starts a
- * Jam from there.
+ * The "no-API" instructions we hand back when the programmatic path is
+ * unavailable. Always works — the host opens Spotify on their phone or
+ * desktop, taps the Connect speaker icon, and starts a Jam from there.
  */
 export function manualJamInstructions(): string {
   return (
-    `:notes: Spotify hasn't published a public Jam API, so I can't start one for you directly. ` +
-    `To open a Jam:\n` +
-    `  1. Open Spotify on your phone (host account).\n` +
-    `  2. Tap the speaker / Connect icon and select \`${config.SPOTIFY_DEVICE_NAME}\`.\n` +
-    `  3. Tap the Connect icon again -> *Start a Jam* -> share the join link.\n\n` +
-    `Friends in this Slack can keep using \`/play\`, \`/queue\`, and \`/skip\` regardless — those don't need a Jam session, they go straight to the host device.\n\n` +
-    `_(Tip: set \`SPOTIFY_SP_DC\` in the bot's .env to your sp_dc browser cookie from open.spotify.com and I'll try to start the Jam programmatically next time. It's an undocumented endpoint and may break, so the manual flow above is always the fallback.)_`
+    `:notes: I couldn't start the Jam automatically. ` +
+    `To open one by hand:\n` +
+    `  1. On the home PC (or your phone) make sure Spotify is signed into the Jam Host account and currently playing something.\n` +
+    `  2. Click the speaker / Connect icon in the bottom-right of Spotify.\n` +
+    `  3. Click the same icon again -> *Start a Jam* -> copy the share link and paste it back here.\n\n` +
+    `_(If this keeps happening, the home PC's Jam relay is probably down — check that the relay terminal and cloudflared tunnel are still running, and that Spotify Desktop is signed in. See ` +
+    `tools/spotify-token-relay/HOST_SETUP_WINDOWS.md for the host troubleshooting checklist.)_`
   );
 }

@@ -170,11 +170,19 @@ This is the recommended way to freely test new behavior without notifying anyone
 
 ### Starting a Spotify Jam
 
-Spotify hasn't published a public Web API for starting a Jam (social listening) session, so by default `/jam` (or "start a jam" via natural language) prints clear instructions: open Spotify on your phone, tap the Connect speaker icon → `Jam Host`, then tap Connect again → **Start a Jam** → share the link.
+Spotify hasn't published a public Web API for starting a Jam (social listening) session, and even Spotify's *Web Player* isn't allowed to create one — only the desktop and mobile apps can. The bot's setup splits the work: an always-on **home Windows PC** runs Spotify Desktop, the Python relay, the Cloudflare tunnel, and a UI-automation driver. The **droplet** runs only the Slack bot and asks the home PC to click *Start a Jam* whenever someone in Slack says so.
 
-If you want it to *actually* start the Jam programmatically, paste the `sp_dc` browser cookie from open.spotify.com into `SPOTIFY_SP_DC` in the bot's `.env` and restart. The bot will then call Spotify's undocumented social-connect endpoint and post the join URL straight to Slack. The endpoint is not officially supported and may break — when it fails, the manual instructions still appear, so nothing is left half-broken. Refresh the cookie when the programmatic path stops working.
+When `/jam` (or "start a jam" via natural language) fires, the bot:
 
-Either way, `/play`, `/queue`, `/skip` keep working without a Jam — they go straight to the host device.
+1. Asks the relay for a fresh Web Player token and checks Spotify for an already-active Jam — if there is one, posts that URL.
+2. Otherwise POSTs `/jam/start` to the relay, which spawns `jam_start_windows.py` to drive Spotify Desktop (pywinauto + UIA, with an OpenRouter vision-model fallback) and returns the new join URL.
+3. Posts the URL into Slack. If both paths fail, the manual instructions still appear — nothing is left half-broken.
+
+Set `SPOTIFY_TOKEN_RELAY_URL` and `SPOTIFY_TOKEN_RELAY_SECRET` in the droplet's `.env` to point at the home PC's Cloudflare tunnel. For the full Windows host setup (Python deps, env vars, autostart on reboot, debugging) see [`tools/spotify-token-relay/HOST_SETUP_WINDOWS.md`](../../tools/spotify-token-relay/HOST_SETUP_WINDOWS.md).
+
+`/play`, `/queue`, `/skip` keep working without a Jam — they go straight to the host device.
+
+> **Linux migration note.** A future move of the Jam Host to an old Mac running Linux is supported by design: `jam_start_windows.py` is the only Windows-specific piece, and the relay's HTTP contract stays the same. Add a `jam_start_linux.py` (AT-SPI / xdotool, same JSON-on-stdout contract) and have the relay select it on `sys.platform != "win32"`.
 
 ### Vote-to-skip
 
