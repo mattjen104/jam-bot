@@ -1,0 +1,94 @@
+*** System restart required ***
+Last login: Wed May 13 03:39:37 2026 from 162.243.188.66
+-bash: /root/.cargo/env: No such file or directory
+-bash: /root/.cargo/env: No such file or directory
+root@Phantom:~# sudo systemctl restart jam-bot
+root@Phantom:~# sudo nano /opt/jam-bot/.env
+root@Phantom:~# set -a; source /opt/jam-bot/.env; set +a
+curl -s -X POST -H "Authorization: Bearer $RELAY_SECRET" "$SPOTIFY_TOKEN_RELAY_URL/jam/start"
+Command 'Host' not found, did you mean:
+  command 'gost' from snap gost (2.12.0)
+  command 'ost' from deb openstructure (2.5.0-1build1)
+  command 'host' from deb bind9-host (1:9.18.39-0ubuntu0.24.04.3)
+  command 'most' from deb most (5.2.0-1)
+  command 'gost' from deb gost (0.1.2-2ubuntu0.24.04.3)
+See 'snap info <snapname>' for additional versions.
+20:00: command not found
+{"error": "not found"}root@Phantom:~# ^C
+root@Phantom:~# sudo sed 's/=.*/=<REDACTED>/' /opt/jam-bot/.env
+# =<REDACTED>
+# Spotify (developer.spotify.com/dashboard)
+# =<REDACTED>
+# Create an app, set redirect URI to http://127.0.0.1:8888/callback
+# (used only by the one-time `pnpm run spotify:auth` CLI).
+SPOTIFY_CLIENT_ID=<REDACTED>
+SPOTIFY_CLIENT_SECRET=<REDACTED>
+# Get this by running: pnpm run spotify:auth
+SPOTIFY_REFRESH_TOKEN=<REDACTED>
+# The librespot device name to transfer playback to on startup.
+# Must match the `--name` flag in your librespot systemd unit.
+SPOTIFY_DEVICE_NAME=<REDACTED>
+SPOTIFY_TOKEN_RELAY_URL=<REDACTED>
+SPOTIFY_TOKEN_RELAY_SECRET=<REDACTED>
+# =<REDACTED>
+# Slack (api.slack.com/apps)
+# =<REDACTED>
+# Bot User OAuth Token, starts with xoxb-
+SLACK_BOT_TOKEN=<REDACTED>
+# App-Level Token for Socket Mode, starts with xapp-
+SLACK_APP_TOKEN=<REDACTED>
+# Signing secret from Basic Information
+SLACK_SIGNING_SECRET=<REDACTED>
+# Channel ID where the bot listens and posts (e.g. C0123456789).
+# Right-click channel name in Slack -> View channel details -> bottom of pane.
+SLACK_CHANNEL_ID=<REDACTED>
+
+# =<REDACTED>
+# OpenRouter (openrouter.ai/keys)
+# =<REDACTED>
+OPENROUTER_API_KEY=<REDACTED>
+# Any OpenRouter model slug, e.g. anthropic/claude-3.5-sonnet,
+# openai/gpt-4o-mini, meta-llama/llama-3.3-70b-instruct
+OPENROUTER_MODEL=<REDACTED>
+
+# =<REDACTED>
+# Bot internals
+# =<REDACTED>
+# How often (ms) to poll Spotify for the currently playing track.
+NOW_PLAYING_POLL_MS=<REDACTED>
+# SQLite database path (created on first run).
+DATABASE_PATH=<REDACTED>
+# History rows to include as LLM context.
+LLM_HISTORY_WINDOW=<REDACTED>
+# Log level: debug | info | warn | error
+LOG_LEVEL=<REDACTED>
+# Distinct users that must press the "Vote skip" button on the now-playing
+# card before the bot skips the current track.
+SKIP_VOTE_THRESHOLD=<REDACTED>
+# Rolling window (seconds) within which those votes must arrive. Older
+# votes are pruned before each tally.
+SKIP_VOTE_WINDOW_SECONDS=<REDACTED>
+# Soft cap on how many `/play` requests a single user can make per rolling
+# hour. Over this they get an ephemeral "slow down" reply. Also caps how
+# often a single user can fire off a `/memory play me a set...` request.
+MAX_PLAYS_PER_USER_PER_HOUR=<REDACTED>
+
+# =<REDACTED>
+# Jam Memory (Wrapped / DNA / Compat / Memory)
+# =<REDACTED>
+# Whether the auto-weekly Wrapped post is enabled. /wrapped on demand always
+# works; this only controls the scheduled post.
+JAM_ENABLE_WEEKLY_WRAPPED=<REDACTED>
+# When the auto-weekly post fires, in UTC. Format: "<Day> HH:MM" where Day is
+# Sun/Mon/Tue/Wed/Thu/Fri/Sat. The scheduler checks every 30s and only fires
+# once per day.
+JAM_WRAPPED_SCHEDULE=<REDACTED>
+# How many days back /wrapped and the auto-Wrapped post look.
+JAM_WRAPPED_LOOKBACK_DAYS=<REDACTED>
+# Cap on how many tracks `/memory play me a set...` will queue at once.
+JAM_MEMORY_MAX_QUEUE=<REDACTED>
+JAM_NOWPLAYING_DAYS=<REDACTED>
+JAM_QUIET_DM_USER=<REDACTED>
+SPOTIFY_SP_DC=<REDACTED>
+RELAY_SECRET=<REDACTED>
+root@Phantom:~# 
