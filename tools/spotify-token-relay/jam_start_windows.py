@@ -938,10 +938,24 @@ class UIASubstrate(Substrate):
         text = ""
         try:
             import ctypes
+            from ctypes import wintypes
             CF_UNICODETEXT = 13
             user32 = ctypes.windll.user32
             kernel32 = ctypes.windll.kernel32
-            opened = user32.OpenClipboard(0)
+            # CRITICAL on 64-bit Python: declare restypes as pointer-sized
+            # (c_void_p), otherwise ctypes truncates HANDLE/HGLOBAL to
+            # 32 bits and GlobalLock gets a garbage pointer.
+            user32.OpenClipboard.argtypes = [wintypes.HWND]
+            user32.OpenClipboard.restype = wintypes.BOOL
+            user32.GetClipboardData.argtypes = [wintypes.UINT]
+            user32.GetClipboardData.restype = ctypes.c_void_p
+            user32.CloseClipboard.argtypes = []
+            user32.CloseClipboard.restype = wintypes.BOOL
+            kernel32.GlobalLock.argtypes = [ctypes.c_void_p]
+            kernel32.GlobalLock.restype = ctypes.c_void_p
+            kernel32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+            kernel32.GlobalUnlock.restype = wintypes.BOOL
+            opened = user32.OpenClipboard(None)
             log_step(self.name, GOAL_COPY_LINK, "openclipboard",
                      ok=bool(opened))
             try:
