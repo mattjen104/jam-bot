@@ -916,23 +916,38 @@ class UIASubstrate(Substrate):
                      candidates=len(elements),
                      hints=list(SHARE_LINK_HINTS))
             return None
+        # Capture element coords so if we end up clicking the wrong thing
+        # we can spot it.
+        try:
+            r = match["el"].rectangle()
+            bbox = (r.left, r.top, r.right, r.bottom)
+        except Exception:
+            bbox = None
         log_step(self.name, GOAL_COPY_LINK, "found-copy-link",
-                 name=match["name"], ctrl=match["ctrl"])
-        if not _click_uia(match["el"]):
+                 name=match["name"], ctrl=match["ctrl"], bbox=bbox)
+        click_ok = _click_uia(match["el"])
+        log_step(self.name, GOAL_COPY_LINK, "click-attempted",
+                 click_ok=click_ok)
+        if not click_ok:
             log_step(self.name, GOAL_COPY_LINK, "copy-link-click-failed",
                      name=match["name"])
             return None
         # Spotify needs a beat for the clipboard write to land.
         time.sleep(0.7)
+        log_step(self.name, GOAL_COPY_LINK, "clipboard-read-begin")
         text = ""
         try:
             import ctypes
             CF_UNICODETEXT = 13
             user32 = ctypes.windll.user32
             kernel32 = ctypes.windll.kernel32
-            user32.OpenClipboard(0)
+            opened = user32.OpenClipboard(0)
+            log_step(self.name, GOAL_COPY_LINK, "openclipboard",
+                     ok=bool(opened))
             try:
                 handle = user32.GetClipboardData(CF_UNICODETEXT)
+                log_step(self.name, GOAL_COPY_LINK, "getclipboarddata",
+                         handle=int(handle) if handle else 0)
                 if not handle:
                     log_step(self.name, GOAL_COPY_LINK,
                              "clipboard-empty-after-click")
@@ -940,8 +955,12 @@ class UIASubstrate(Substrate):
                 ptr = kernel32.GlobalLock(handle)
                 try:
                     if not ptr:
+                        log_step(self.name, GOAL_COPY_LINK,
+                                 "globallock-null")
                         return None
                     text = ctypes.wstring_at(ptr)
+                    log_step(self.name, GOAL_COPY_LINK,
+                             "clipboard-read-ok", chars=len(text or ""))
                 finally:
                     kernel32.GlobalUnlock(handle)
             finally:
