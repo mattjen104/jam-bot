@@ -1,0 +1,3119 @@
+#!/usr/bin/env python3
+"""
+ocr_overlay.py — OCR-based Vimium overlay for Epic Hyperspace via Citrix.
+
+Runs on local Windows machine. No cloud APIs — fully local, HIPAA-compliant.
+Uses PaddleOCR for text detection, PyQt5 for the transparent overlay.
+
+Epic's layout is pre-defined from EPIC_VISUAL_REFERENCE:
+  Layer 1: Title bar         (~25px from top)       — search bar only
+  Layer 2: Shortcut toolbar  (~20px, y≈25–45)       — user-specific buttons
+  Layer 3: Workspace tabs    (~22px, y≈45–67)       — open tabs
+  Layer 4: Breadcrumb        (~28px, y≈67–95)       — current screen title
+  Layer 5: Left sidebar      (left ~120px, full h)  — nav items
+  Layer 6: Workspace         (rest of screen)       — forms, tables, content
+  Layer 7: Bottom bar        (~25px from bottom)    — Accept, Cancel, Sign
+
+Usage:
+  python tools/ocr_overlay.py                  # interactive overlay
+  python tools/ocr_overlay.py --scan           # one-shot scan, print elements
+  python tools/ocr_overlay.py --correct        # correction mode
+"""
+
+import os
+import sys
+import re
+import time
+import json
+import math
+import hashlib
+import sqlite3
+import queue
+import threading
+import argparse
+from dataclasses import dataclass, field, asdict
+from typing import Optional
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 1 — Epic Layer Band Definitions
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Pixel offsets from TOP of Epic window (absolute px, not relative).
+# These are the same regardless of window size — Epic renders fixed-height strips.
+LAYER_BANDS = {
+    "title_bar":        {"y": 0,   "h": 25,  "x": 0,   "w_frac": 1.0},
+    "shortcut_toolbar": {"y": 25,  "h": 20,  "x": 0,   "w_frac": 1.0},
+    "workspace_tabs":   {"y": 45,  "h": 22,  "x": 0,   "w_frac": 1.0},
+    "activity_tabs":    {"y": 67,  "h": 22,  "x": 0,   "w_frac": 1.0},  # conditional
+    "breadcrumb":       {"y": 67,  "h": 28,  "x": 0,   "w_frac": 1.0},  # y adjusts if activity_tabs present
+    "sidebar":          {"y": 95,  "h": -1,  "x": 0,   "w": 130},       # h=-1 means to bottom bar
+    "workspace":        {"y": 95,  "h": -1,  "x": 130, "w_frac": 1.0},  # x=130 past sidebar
+    "bottom_bar":       {"y": -25, "h": 25,  "x": 0,   "w_frac": 1.0},  # y=-25 means from bottom
+}
+
+# Layers used for PHI-safe screen fingerprinting
+FINGERPRINT_LAYERS = ["shortcut_toolbar", "workspace_tabs", "breadcrumb"]
+
+# Universal elements pre-seeded at confidence=confirmed (appear for all users)
+UNIVERSAL_ELEMENTS = [
+    {"text": "Log Out",    "layer": "shortcut_toolbar", "semantic": None},
+    {"text": "Accept",     "layer": "bottom_bar",       "semantic": "a"},
+    {"text": "Cancel",     "layer": "bottom_bar",       "semantic": "c"},
+    {"text": "Sign",       "layer": "bottom_bar",       "semantic": None},
+    {"text": "Submit",     "layer": "bottom_bar",       "semantic": None},
+]
+
+# Permanent semantic shortcuts (user can extend these)
+DEFAULT_SEMANTICS = {
+    "Accept":   "a",
+    "Cancel":   "c",
+    "Sign":     "s",
+    "Log Out":  "l",   # lowercase — CLI lowercases all hint input before dispatch
+}
+
+# PHI patterns to exclude from fingerprinting
+_PHI_PATTERNS = [
+    re.compile(r"\b[A-Z][a-z]+,\s+[A-Z][a-z]+\b"),          # LastName, FirstName
+    re.compile(r"\b\d{1,2}/\d{1,2}/\d{2,4}\b"),              # DOB 01/15/1980
+    re.compile(r"\b\d{6,10}\b"),                               # MRN
+    re.compile(r"\b\d{1,3}\s*(y|yo|yr|yrs)\b", re.I),        # age
+    re.compile(r"\bDOB\b|\bMRN\b|\bDOD\b", re.I),            # explicit PHI labels
+]
+
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ocr_kb.sqlite3")
+BRIDGE_URL = os.environ.get("BRIDGE_URL", "http://localhost:5000")
+BRIDGE_TOKEN = os.environ.get("BRIDGE_TOKEN", "")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 2 — OCR Pipeline
+# ─────────────────────────────────────────────────────────────────────────────
+
+_ocr_engine = None
+_ocr_lock = threading.Lock()
+
+
+def _get_ocr():
+    global _ocr_engine
+    if _ocr_engine is None:
+        with _ocr_lock:
+            if _ocr_engine is None:
+                try:
+                    from paddleocr import PaddleOCR
+                    _attempts = [
+                        {"lang": "en", "show_log": False},
+                        {"lang": "en"},
+                        {},
+                    ]
+                    for _kw in _attempts:
+                        try:
+                            _ocr_engine = PaddleOCR(**_kw)
+                            print(f"[ocr] PaddleOCR initialized (kwargs={list(_kw.keys())})")
+                            break
+                        except Exception as _te:
+                            print(f"[ocr] PaddleOCR rejected {_kw}: {_te}")
+                            continue
+                    else:
+                        print("[ocr] PaddleOCR: all init attempts failed")
+                        _ocr_engine = "unavailable"
+                except ImportError:
+                    print("[ocr] PaddleOCR not found — install: pip install paddlepaddle paddleocr")
+                    _ocr_engine = "unavailable"
+    return _ocr_engine if _ocr_engine != "unavailable" else None
+
+
+@dataclass
+class OcrElement:
+    text: str
+    layer: str
+    rel_x: float    # center x as fraction of window width
+    rel_y: float    # center y as fraction of window height
+    rel_w: float    # width fraction
+    rel_h: float    # height fraction
+    confidence: float = 0.0
+    abs_cx: int = 0  # absolute screen center x (for clicking)
+    abs_cy: int = 0  # absolute screen center y
+    options: list = None  # dropdown options if probed; None = not probed
+    arrow_behavior: dict = None  # {behavior, region:[x,y,w,h]} or None
+    tab_index: int = -1  # focus order within the activity (0 = first Tab stop)
+
+
+def _looks_like_phi(text: str) -> bool:
+    for pat in _PHI_PATTERNS:
+        if pat.search(text):
+            return True
+    return False
+
+
+def _get_layer_crop(img_arr, layer_name: str, win_w: int, win_h: int):
+    """Compute crop coords for a named layer band. Returns (x1,y1,x2,y2) or None."""
+    b = LAYER_BANDS.get(layer_name)
+    if not b:
+        return None
+    x1 = b.get("x", 0)
+    w = int(b.get("w_frac", 0) * win_w) if "w_frac" in b else b.get("w", win_w)
+    x2 = min(x1 + w, win_w)
+    y_raw = b.get("y", 0)
+    y1 = y_raw if y_raw >= 0 else max(0, win_h + y_raw)
+    h = b.get("h", 0)
+    y2 = (y1 + h) if h > 0 else max(0, win_h - 25)  # h=-1 means to bottom_bar top
+    y2 = min(y2, win_h)
+    if x2 <= x1 or y2 <= y1:
+        return None
+    return (x1, y1, x2, y2)
+
+
+def scan_window(window_title: str, with_activity_tabs: bool = False) -> list[OcrElement]:
+    """Screenshot the named window and run per-layer OCR. Returns OcrElement list."""
+    try:
+        import mss
+        import numpy as np
+        from PIL import Image
+    except ImportError:
+        print("[ocr] mss/PIL not available")
+        return []
+
+    ocr = _get_ocr()
+    if not ocr:
+        print("[ocr] No OCR engine — install PaddleOCR:  pip install paddlepaddle paddleocr")
+        return []
+
+    # Find window
+    try:
+        import pygetwindow as gw
+        wins = [w for w in gw.getAllWindows() if window_title.lower() in (w.title or "").lower() and w.width > 100]
+    except Exception:
+        wins = []
+    if not wins:
+        print(f"[ocr] Window not found: {window_title}")
+        return []
+    win = wins[0]
+    win_left, win_top, win_w, win_h = win.left, win.top, win.width, win.height
+
+    # Capture
+    with mss.mss() as sct:
+        region = {"left": win_left, "top": win_top, "width": win_w, "height": win_h}
+        shot = sct.grab(region)
+        img_arr = np.array(shot)  # BGRA
+        img_arr = img_arr[:, :, :3]  # drop alpha → BGR
+
+    elements: list[OcrElement] = []
+
+    # Determine which layers to scan
+    scan_layers = list(LAYER_BANDS.keys())
+    # Adjust breadcrumb y if activity tabs visible
+    if with_activity_tabs:
+        LAYER_BANDS["breadcrumb"]["y"] = 89
+    else:
+        LAYER_BANDS["breadcrumb"]["y"] = 67
+    # Don't scan activity_tabs if not in patient chart (reduces noise)
+    if not with_activity_tabs:
+        scan_layers = [l for l in scan_layers if l != "activity_tabs"]
+    # Skip title_bar (rarely clickable, search bar handled separately)
+    scan_layers = [l for l in scan_layers if l != "title_bar"]
+
+    for layer_name in scan_layers:
+        crop = _get_layer_crop(img_arr, layer_name, win_w, win_h)
+        if crop is None:
+            continue
+        x1, y1, x2, y2 = crop
+        band = img_arr[y1:y2, x1:x2]
+        if band.size == 0:
+            continue
+
+        try:
+            result = ocr.ocr(band, cls=False)
+        except (TypeError, Exception) as e:
+            if "cls" in str(e).lower() or "argument" in str(e).lower():
+                try:
+                    result = ocr.ocr(band)
+                except Exception as e2:
+                    print(f"[ocr] OCR error on layer {layer_name}: {e2}")
+                    continue
+            else:
+                print(f"[ocr] OCR error on layer {layer_name}: {e}")
+                continue
+
+        if not result or not result[0]:
+            continue
+
+        for line in result[0]:
+            bbox_pts, (text, conf) = line
+            text = text.strip()
+            if not text or conf < 0.5:
+                continue
+
+            # bbox_pts = [[x1,y1],[x2,y1],[x2,y2],[x1,y2]] relative to band
+            xs = [p[0] for p in bbox_pts]
+            ys = [p[1] for p in bbox_pts]
+            bx1, bx2 = min(xs), max(xs)
+            by1, by2 = min(ys), max(ys)
+
+            # Convert to absolute window coords (center)
+            abs_bx1 = x1 + bx1
+            abs_by1 = y1 + by1
+            abs_bx2 = x1 + bx2
+            abs_by2 = y1 + by2
+            abs_cx = (abs_bx1 + abs_bx2) // 2
+            abs_cy = (abs_by1 + abs_by2) // 2
+
+            elements.append(OcrElement(
+                text=text,
+                layer=layer_name,
+                rel_x=(abs_bx1 + abs_bx2) / 2 / win_w,
+                rel_y=(abs_by1 + abs_by2) / 2 / win_h,
+                rel_w=(abs_bx2 - abs_bx1) / win_w,
+                rel_h=(abs_by2 - abs_by1) / win_h,
+                confidence=conf,
+                abs_cx=win_left + abs_cx,
+                abs_cy=win_top + abs_cy,
+            ))
+
+    return elements
+
+
+def _classify_layer(cx: int, cy: int, win_w: int, win_h: int,
+                    has_activity_tabs: bool = False) -> str:
+    """Classify a pixel coordinate into the appropriate LAYER_BANDS layer."""
+    if cy >= win_h - 25:
+        return "bottom_bar"
+    if cy < 25:
+        return "title_bar"
+    if cy < 45:
+        return "shortcut_toolbar"
+    if cy < 67:
+        return "workspace_tabs"
+    if cy < 95:
+        if has_activity_tabs and cy < 89:
+            return "activity_tabs"
+        return "breadcrumb"
+    if cx < 130:
+        return "sidebar"
+    return "workspace"
+
+
+def _capture_window(sct, region: dict):
+    """Grab a screenshot and return as numpy BGR array."""
+    import numpy as np
+    shot = sct.grab(region)
+    arr = np.array(shot)[:, :, :3]
+    return arr
+
+
+def _find_diff_bboxes(prev_frame, curr_frame, threshold: int = 30, min_area: int = 50):
+    """Pixel-diff two BGR frames; return ALL changed bounding boxes.
+
+    Returns list of (x1, y1, x2, y2) for each contiguous changed region,
+    sorted by area descending. Empty list if no significant change.
+    """
+    import numpy as np
+    diff = np.abs(curr_frame.astype(np.int16) - prev_frame.astype(np.int16))
+    mask = np.any(diff > threshold, axis=2).astype(np.uint8)
+
+    changed = np.where(mask)
+    if len(changed[0]) < min_area:
+        return []
+
+    results = []
+    try:
+        import cv2
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        for c in contours:
+            x, y, w, h = cv2.boundingRect(c)
+            if w * h >= min_area:
+                results.append((x, y, x + w, y + h))
+    except ImportError:
+        y_min, y_max = int(changed[0].min()), int(changed[0].max())
+        x_min, x_max = int(changed[1].min()), int(changed[1].max())
+        if (x_max - x_min) * (y_max - y_min) >= min_area:
+            results.append((x_min, y_min, x_max, y_max))
+
+    results.sort(key=lambda b: (b[2] - b[0]) * (b[3] - b[1]), reverse=True)
+    return results
+
+
+def _quantize_pos(cx: int, cy: int, cell: int = 20) -> tuple:
+    """Quantize a position to a grid cell for visited-set cycle detection."""
+    return (cx // cell, cy // cell)
+
+
+def tab_walk_scan(
+    window_title: str,
+    max_steps: int = 300,
+    tab_delay: float = 0.18,
+    progress_cb=None,
+    cancel_flag=None,
+    has_activity_tabs: bool = False,
+    probe_options: bool = False,
+) -> list[OcrElement]:
+    """Discover interactive fields by Tab-walking and pixel-diffing the highlight.
+
+    Sends Tab keystrokes to Epic and detects the focus highlight change via
+    consecutive-frame pixel diff. Multiple diff regions are produced (old highlight
+    disappears, new highlight appears); `_pick_new_bbox` selects the region NOT
+    matching any previously known position, isolating the newly focused field.
+
+    Cycle detection: the walk stops when the current highlight center is within
+    ±10px of the FIRST discovered element's center (after at least 3 steps), or
+    after 3 consecutive revisits of quantized visited positions, or after
+    `max_steps`.
+
+    Args:
+        window_title: Epic window title substring.
+        max_steps: Maximum Tab presses before giving up.
+        tab_delay: Seconds to wait after each Tab for Citrix render.
+        progress_cb: Optional callback(count) called every 10 elements found.
+        cancel_flag: Optional threading.Event — if set, walk aborts early.
+
+    Returns:
+        List of OcrElement with pixel-perfect bounding boxes.
+    """
+    try:
+        import mss
+        import numpy as np
+        import pyautogui
+        import pygetwindow as gw
+    except ImportError as e:
+        print(f"[tab-walk] Missing dependency: {e}", flush=True)
+        return []
+
+    wins = [w for w in gw.getAllWindows()
+            if window_title.lower() in (w.title or "").lower() and w.width > 100]
+    if not wins:
+        print(f"[tab-walk] Window not found: {window_title}", flush=True)
+        return []
+    win = wins[0]
+    win_left, win_top, win_w, win_h = win.left, win.top, win.width, win.height
+    region = {"left": win_left, "top": win_top, "width": win_w, "height": win_h}
+
+    pyautogui.PAUSE = 0.02
+
+    try:
+        win.activate()
+    except Exception:
+        pass
+    time.sleep(0.2)
+
+    pyautogui.press('escape')
+    time.sleep(0.15)
+    pyautogui.press('escape')
+    time.sleep(0.15)
+
+    print(f"[tab-walk] Window rect: left={win_left} top={win_top} w={win_w} h={win_h}", flush=True)
+
+    ocr = _get_ocr()
+
+    elements: list[OcrElement] = []
+    visited: set = set()
+    first_center = None
+    no_change_streak = 0
+    revisit_count = 0
+
+    def _ocr_crop(frame, x1, y1, x2, y2):
+        if ocr is None:
+            return ""
+        pad = 8
+        cy1 = max(0, y1 - pad)
+        cy2 = min(win_h, y2 + pad)
+        cx1 = max(0, x1 - pad)
+        cx2 = min(win_w, x2 + pad)
+        crop = frame[cy1:cy2, cx1:cx2]
+        if crop.size == 0:
+            return ""
+        try:
+            result = ocr.ocr(crop, cls=False)
+        except Exception:
+            try:
+                result = ocr.ocr(crop)
+            except Exception:
+                return ""
+        if result and result[0]:
+            texts = [line[1][0].strip() for line in result[0]
+                     if line[1][0].strip() and line[1][1] > 0.4]
+            return " ".join(texts)
+        return ""
+
+    def _pick_new_bbox(bboxes, known_positions):
+        """From diff bboxes, pick the one NOT matching any known position."""
+        if not bboxes:
+            return None
+        if len(bboxes) == 1:
+            return bboxes[0]
+        for bbox in bboxes:
+            bcx = (bbox[0] + bbox[2]) // 2
+            bcy = (bbox[1] + bbox[3]) // 2
+            is_known = False
+            for kx, ky in known_positions:
+                if abs(bcx - kx) < 20 and abs(bcy - ky) < 20:
+                    is_known = True
+                    break
+            if not is_known:
+                return bbox
+        return bboxes[0]
+
+    with mss.mss() as sct:
+        prev_frame = _capture_window(sct, region)
+        known_centers: list[tuple] = []
+
+        for step in range(max_steps):
+            if cancel_flag and cancel_flag.is_set():
+                print(f"[tab-walk] Cancelled at step {step}", flush=True)
+                break
+
+            pyautogui.press('tab')
+            time.sleep(tab_delay)
+
+            curr_frame = _capture_window(sct, region)
+
+            bboxes = _find_diff_bboxes(prev_frame, curr_frame, threshold=30, min_area=50)
+
+            if not bboxes:
+                no_change_streak += 1
+                if no_change_streak > 5:
+                    print(f"[tab-walk] No changes for 5 Tabs — stopping at step {step}", flush=True)
+                    break
+                prev_frame = curr_frame
+                continue
+            no_change_streak = 0
+
+            bbox = _pick_new_bbox(bboxes, known_centers)
+            if bbox is None:
+                prev_frame = curr_frame
+                continue
+
+            x1, y1, x2, y2 = bbox
+            cx = (x1 + x2) // 2
+            cy = (y1 + y2) // 2
+
+            if first_center is not None and step > 2:
+                fx, fy = first_center
+                if abs(cx - fx) <= 10 and abs(cy - fy) <= 10:
+                    print(f"[tab-walk] Cycle complete at step {step} — "
+                          f"returned to first field ({fx},{fy})", flush=True)
+                    break
+
+            qpos = _quantize_pos(cx, cy)
+            if qpos in visited:
+                revisit_count += 1
+                if revisit_count >= 3:
+                    print(f"[tab-walk] Cycle detected at step {step} — "
+                          f"{revisit_count} revisits of known positions", flush=True)
+                    break
+                prev_frame = curr_frame
+                continue
+            revisit_count = 0
+            visited.add(qpos)
+
+            if first_center is None:
+                first_center = (cx, cy)
+
+            label = _ocr_crop(curr_frame, x1, y1, x2, y2)
+            if not label:
+                label = f"field_{step}"
+
+            layer = _classify_layer(cx, cy, win_w, win_h, has_activity_tabs=has_activity_tabs)
+            known_centers.append((cx, cy))
+
+            elements.append(OcrElement(
+                text=label,
+                layer=layer,
+                rel_x=cx / win_w,
+                rel_y=cy / win_h,
+                rel_w=(x2 - x1) / win_w,
+                rel_h=(y2 - y1) / win_h,
+                confidence=1.0,
+                abs_cx=win_left + cx,
+                abs_cy=win_top + cy,
+                tab_index=len(elements),  # focus order: 0,1,2,…
+            ))
+
+            # Probe field behavior while focus is confirmed on this field.
+            # Done inline (single walk) to guarantee element-to-grammar mapping.
+            if probe_options:
+                # Arrow-key behavior probe (cheap, non-destructive: Down then Up).
+                try:
+                    arrow = _probe_arrow_behavior(region, (x1, y1, x2, y2))
+                    if arrow and arrow.get("behavior") not in (None, "unknown"):
+                        elements[-1].arrow_behavior = arrow
+                        curr_frame = _capture_window(sct, region)
+                except Exception as _ae:
+                    print(f"[tab-walk] arrow probe failed at #{len(elements)}: {_ae}", flush=True)
+                # Dropdown options probe (Alt+Down). Skip if arrow probe already
+                # classified the field as 'item' or 'macro' (not a dropdown).
+                ab = (elements[-1].arrow_behavior or {}).get("behavior")
+                if ab in (None, "dropdown", "none"):
+                    try:
+                        opts = _probe_field_options(region, ocr)
+                        if opts:
+                            elements[-1].options = opts
+                            curr_frame = _capture_window(sct, region)
+                    except Exception as _pe:
+                        print(f"[tab-walk] options probe failed at #{len(elements)}: {_pe}", flush=True)
+
+            if progress_cb and len(elements) % 10 == 0:
+                # progress_cb may be either the legacy single-arg callback
+                # (count) used by overlay code paths, or the two-arg
+                # (stage, data) callback used by discover_grammar. Try the
+                # richer signature first, fall back to the legacy form.
+                try:
+                    progress_cb("tab_walk", {"count": len(elements)})
+                except TypeError:
+                    try:
+                        progress_cb(len(elements))
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+
+            print(f"[tab-walk] #{len(elements)}: '{label}' @ ({cx},{cy}) "
+                  f"bbox=({x1},{y1},{x2},{y2}) {(x2-x1)}x{(y2-y1)}px layer={layer}",
+                  flush=True)
+            prev_frame = curr_frame
+
+    # Reverse pass (Shift+Tab) to discover any fields the forward walk missed.
+    # Some Hyperdrive activities have asymmetric focus chains (e.g. dialog
+    # buttons reachable only by reverse-tab from a sentinel). We walk back up
+    # to len(elements)+12 steps and append any newly discovered field
+    # positions to the focus order. Existing positions are skipped.
+    try:
+        with mss.mss() as sct:
+            prev_frame_r = _capture_window(sct, region)
+            reverse_steps = max(12, len(elements) + 8)
+            no_change_streak_r = 0
+            for rstep in range(reverse_steps):
+                if cancel_flag and cancel_flag.is_set():
+                    break
+                pyautogui.hotkey('shift', 'tab')
+                time.sleep(tab_delay)
+                curr_frame_r = _capture_window(sct, region)
+                bboxes_r = _find_diff_bboxes(prev_frame_r, curr_frame_r,
+                                             threshold=30, min_area=50)
+                if not bboxes_r:
+                    no_change_streak_r += 1
+                    if no_change_streak_r > 4:
+                        break
+                    prev_frame_r = curr_frame_r
+                    continue
+                no_change_streak_r = 0
+                bbox_r = _pick_new_bbox(bboxes_r, known_centers)
+                if bbox_r is None:
+                    prev_frame_r = curr_frame_r
+                    continue
+                xr1, yr1, xr2, yr2 = bbox_r
+                cxr = (xr1 + xr2) // 2
+                cyr = (yr1 + yr2) // 2
+                qpos_r = _quantize_pos(cxr, cyr)
+                if qpos_r in visited:
+                    prev_frame_r = curr_frame_r
+                    continue
+                visited.add(qpos_r)
+                known_centers.append((cxr, cyr))
+                label_r = _ocr_crop(curr_frame_r, xr1, yr1, xr2, yr2) or f"rfield_{rstep}"
+                layer_r = _classify_layer(cxr, cyr, win_w, win_h,
+                                          has_activity_tabs=has_activity_tabs)
+                elements.append(OcrElement(
+                    text=label_r, layer=layer_r,
+                    rel_x=cxr / win_w, rel_y=cyr / win_h,
+                    rel_w=(xr2 - xr1) / win_w, rel_h=(yr2 - yr1) / win_h,
+                    confidence=1.0,
+                    abs_cx=win_left + cxr, abs_cy=win_top + cyr,
+                    tab_index=len(elements),  # appended at end of focus order
+                ))
+                print(f"[tab-walk] reverse #{len(elements)}: '{label_r}' "
+                      f"@ ({cxr},{cyr}) layer={layer_r}", flush=True)
+                prev_frame_r = curr_frame_r
+    except Exception as _re:
+        print(f"[tab-walk] reverse pass aborted: {_re}", flush=True)
+
+    try:
+        pyautogui.press('escape')
+        time.sleep(0.1)
+    except Exception:
+        pass
+
+    print(f"[tab-walk] Walk complete: {len(elements)} fields found "
+          f"(forward + reverse)", flush=True)
+    return elements
+
+
+def _is_chart_screen(window_title: str) -> bool:
+    """Detect Hyperdrive patient-chart contexts where OCR persistence is unsafe.
+    We refuse to persist any OCR text from these screens (HIPAA gate)."""
+    if not window_title:
+        return False
+    t = window_title.lower()
+    chart_markers = ("chart review", "patient station", "snapshot",
+                     "results review", "synopsis", "mar", "encounter",
+                     " - in basket", "story board", "storyboard")
+    return any(m in t for m in chart_markers)
+
+
+def _probe_field_options(window_region, ocr, max_options: int = 20) -> list[str]:
+    """After a Tab-walk has settled on a field, attempt Alt+Down to open
+    a dropdown and OCR any newly-appeared region. Returns the list of
+    discovered option strings (empty if not a dropdown).
+
+    Closes the dropdown with Escape on completion.
+    """
+    try:
+        import mss
+        import pyautogui
+    except ImportError:
+        return []
+    if ocr is None:
+        return []
+
+    pad_y = 4
+    region_below = {
+        "left": window_region["left"],
+        "top": window_region["top"] + pad_y,
+        "width": window_region["width"],
+        "height": window_region["height"],
+    }
+    try:
+        with mss.mss() as sct:
+            before = _capture_window(sct, region_below)
+            pyautogui.hotkey('alt', 'down')
+            time.sleep(0.35)
+            after = _capture_window(sct, region_below)
+    except Exception:
+        return []
+
+    bboxes = _find_diff_bboxes(before, after, threshold=25, min_area=200)
+    if not bboxes:
+        try:
+            pyautogui.press('escape')
+            time.sleep(0.1)
+        except Exception:
+            pass
+        return []
+
+    # Pick the largest diff bbox = likely the dropdown panel
+    bboxes.sort(key=lambda b: (b[2]-b[0]) * (b[3]-b[1]), reverse=True)
+    x1, y1, x2, y2 = bboxes[0]
+    crop = after[y1:y2, x1:x2]
+    options: list[str] = []
+    if crop.size > 0:
+        try:
+            result = ocr.ocr(crop, cls=False)
+        except Exception:
+            try:
+                result = ocr.ocr(crop)
+            except Exception:
+                result = None
+        if result and result[0]:
+            for line in result[0]:
+                txt = (line[1][0] or "").strip()
+                conf = line[1][1] if len(line[1]) > 1 else 0
+                # HIPAA: drop any candidate that matches PHI patterns
+                if txt and conf > 0.5 and 1 <= len(txt) <= 80 and not _looks_like_phi(txt):
+                    options.append(txt)
+                if len(options) >= max_options:
+                    break
+
+    try:
+        pyautogui.press('escape')
+        time.sleep(0.1)
+    except Exception:
+        pass
+    return options
+
+
+def _probe_arrow_behavior(window_region, field_bbox) -> dict:
+    """After Tab settles on a field, send Down once and classify the response:
+      - "dropdown": a NEW region appears below the field (handled by Alt+Down already)
+      - "item":     small caret/text change inside the field bbox (single-item move)
+      - "macro":    larger change spanning beyond the field (page/macro move)
+      - "none":     no change at all (read-only or boundary)
+    Returns {behavior, region:[x,y,w,h]} where region is the bounded change map.
+    """
+    try:
+        import mss
+        import pyautogui
+    except ImportError:
+        return {"behavior": "unknown", "region": []}
+    try:
+        with mss.mss() as sct:
+            before = _capture_window(sct, window_region)
+            pyautogui.press('down')
+            time.sleep(0.2)
+            after = _capture_window(sct, window_region)
+            # Reverse with Up to leave focus undisturbed for next Tab.
+            pyautogui.press('up')
+            time.sleep(0.1)
+    except Exception:
+        return {"behavior": "unknown", "region": []}
+
+    bboxes = _find_diff_bboxes(before, after, threshold=25, min_area=80)
+    if not bboxes:
+        return {"behavior": "none", "region": []}
+
+    # Pick the largest diff
+    bboxes.sort(key=lambda b: (b[2]-b[0]) * (b[3]-b[1]), reverse=True)
+    x1, y1, x2, y2 = bboxes[0]
+    region = [int(x1), int(y1), int(x2 - x1), int(y2 - y1)]
+    diff_area = (x2 - x1) * (y2 - y1)
+
+    fx1, fy1, fx2, fy2 = field_bbox
+    field_area = max(1, (fx2 - fx1) * (fy2 - fy1))
+    contained = (x1 >= fx1 - 4 and y1 >= fy1 - 4 and
+                 x2 <= fx2 + 4 and y2 <= fy2 + 4)
+
+    if contained and diff_area <= field_area * 1.2:
+        behavior = "item"
+    elif y1 > fy2 - 4:
+        behavior = "dropdown"
+    else:
+        behavior = "macro"
+    return {"behavior": behavior, "region": region}
+
+
+def set_element_arrow_behavior(conn, elem_id: int, arrow: dict):
+    """Persist arrow-key probe result on an element row."""
+    if not arrow:
+        return
+    try:
+        conn.execute(
+            "UPDATE elements SET arrow_behavior=?, updated_at=? WHERE id=?",
+            (json.dumps(arrow), time.time(), elem_id),
+        )
+        conn.commit()
+    except Exception:
+        pass
+
+
+def _ocr_menu_panel(frame_before, frame_after) -> list[str]:
+    """OCR the largest 'newly appeared' region between two frames; return
+    confidence-filtered, PHI-filtered text lines (one per visible row)."""
+    bboxes = _find_diff_bboxes(frame_before, frame_after, threshold=20, min_area=400)
+    if not bboxes:
+        return []
+    bboxes.sort(key=lambda b: (b[2]-b[0]) * (b[3]-b[1]), reverse=True)
+    x1, y1, x2, y2 = bboxes[0]
+    crop = frame_after[y1:y2, x1:x2]
+    if crop.size == 0:
+        return []
+    ocr = _get_ocr()
+    if ocr is None:
+        return []
+    try:
+        result = ocr.ocr(crop, cls=False)
+    except Exception:
+        try:
+            result = ocr.ocr(crop)
+        except Exception:
+            return []
+    out: list[str] = []
+    if result and result[0]:
+        for line in result[0]:
+            txt = (line[1][0] or "").strip()
+            conf = line[1][1] if len(line[1]) > 1 else 0
+            if txt and conf > 0.55 and 2 <= len(txt) <= 60 and not _looks_like_phi(txt):
+                out.append(txt)
+    return out
+
+
+def _enumerate_activities_via_menu(window_title: str, max_items: int = 200,
+                                   max_pages: int = 25,
+                                   progress_cb=None) -> list[str]:
+    """Open Epic's activity navigator (Ctrl+Space) and exhaustively enumerate
+    activity names by paging the menu with PageDown until no new entries appear
+    for two consecutive pages. Deterministic upper bound via max_pages."""
+    try:
+        import mss
+        import pyautogui
+        import pygetwindow as gw
+    except ImportError:
+        return []
+    wins = [w for w in gw.getAllWindows()
+            if window_title.lower() in (w.title or "").lower() and w.width > 100]
+    if not wins:
+        return []
+    win = wins[0]
+    region = {"left": win.left, "top": win.top,
+              "width": win.width, "height": win.height}
+    if _get_ocr() is None:
+        return []
+
+    if progress_cb:
+        try: progress_cb("enumerating_activities", None)
+        except Exception: pass
+    print(f"[discover] enumerating activities via Ctrl+Space menu (max {max_items})...", flush=True)
+
+    names: list[str] = []
+    seen: set = set()
+    try:
+        with mss.mss() as sct:
+            before = _capture_window(sct, region)
+            pyautogui.hotkey('ctrl', 'space')
+            time.sleep(0.5)
+            after = _capture_window(sct, region)
+            stable_baseline = before
+            consecutive_no_new = 0
+            for page in range(max_pages):
+                page_lines = _ocr_menu_panel(stable_baseline, after)
+                added_this_page = 0
+                for txt in page_lines:
+                    if txt not in seen:
+                        seen.add(txt)
+                        names.append(txt)
+                        added_this_page += 1
+                        if len(names) >= max_items:
+                            break
+                if len(names) >= max_items:
+                    break
+                if added_this_page == 0:
+                    consecutive_no_new += 1
+                    if consecutive_no_new >= 2:
+                        break
+                else:
+                    consecutive_no_new = 0
+                # Page the menu and re-capture.
+                pyautogui.press('pagedown')
+                time.sleep(0.25)
+                after = _capture_window(sct, region)
+    except Exception:
+        pass
+    try:
+        pyautogui.press('escape'); time.sleep(0.15)
+    except Exception:
+        pass
+    print(f"[discover] enumerated {len(names)} activities", flush=True)
+    if progress_cb:
+        # 'total' aligns with the scanning_activity stage; the CLI formatter
+        # renders index/total when present. We don't yet have an index here, so
+        # this stage just signals enumeration finished with the discovered count.
+        try: progress_cb("activities_enumerated",
+                         {"total": len(names), "activity_count": len(names)})
+        except Exception: pass
+    return names
+
+
+def _scan_one_activity(window_title: str, probe_options: bool, max_steps: int,
+                       progress_cb=None, cancel_flag=None) -> dict:
+    """Tab-walk + (optional) arrow probe a SINGLE activity screen, then persist
+    elements keyed by the screen's pHash. HIPAA: refuses to persist anything
+    if the window title matches a chart-context marker.
+
+    Returns: {fields, options, fp, phash, skipped_reason?}
+    """
+    if _is_chart_screen(window_title):
+        return {"fields": 0, "options": 0, "fp": "", "phash": "",
+                "skipped_reason": "chart_screen_phi_gate"}
+
+    elements = tab_walk_scan(
+        window_title, max_steps=max_steps, tab_delay=0.18,
+        has_activity_tabs=False,
+        probe_options=probe_options,
+        progress_cb=progress_cb,
+        cancel_flag=cancel_flag,
+    )
+    if not elements:
+        return {"fields": 0, "options": 0, "fp": "", "phash": ""}
+
+    # Strip any individual element labels that match PHI before persistence.
+    safe_elements = [e for e in elements if not _looks_like_phi(e.text or "")]
+    if not safe_elements:
+        return {"fields": 0, "options": 0, "fp": "", "phash": "",
+                "skipped_reason": "all_labels_phi"}
+
+    fp = compute_screen_fp(safe_elements)
+    phash = _compute_window_phash(window_title)
+    options_count = 0
+
+    conn = _db_connect()
+    try:
+        save_screen_fp(conn, fp, safe_elements)
+        save_fp_bridge(conn, phash, fp)
+        for e in safe_elements:
+            elem_id = upsert_element(conn, e, fp)
+            # Discover writes at 'confirmed' so the overlay fast-path can
+            # consume them on the very next visit (read filter is
+            # IN ('confirmed','reliable','named')).
+            try:
+                conn.execute(
+                    "UPDATE elements SET confidence='confirmed', updated_at=? "
+                    "WHERE id=? AND confidence='seen'",
+                    (time.time(), elem_id),
+                )
+            except Exception:
+                pass
+            if e.options:
+                # Re-filter PHI on options just before persistence (defense in depth).
+                clean_opts = [o for o in e.options if not _looks_like_phi(o)]
+                if clean_opts:
+                    set_element_options(conn, elem_id, clean_opts)
+                    options_count += 1
+            if e.arrow_behavior:
+                set_element_arrow_behavior(conn, elem_id, e.arrow_behavior)
+            # Persist focus order so navigation grammar can be replayed.
+            try:
+                conn.execute(
+                    "UPDATE elements SET tab_index=?, updated_at=? WHERE id=?",
+                    (int(e.tab_index), time.time(), elem_id),
+                )
+            except Exception:
+                pass
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {"fields": len(safe_elements), "options": options_count,
+            "fp": fp, "phash": phash}
+
+
+def discover_grammar(window_title: str, probe_options: bool = False,
+                     max_steps: int = 300, crawl_activities: bool = False,
+                     max_activities: int = 200, progress_cb=None,
+                     activity_timeout: float = 120.0) -> dict:
+    """Hyperdrive grammar discovery:
+    (1) always scan the current activity first (no nav).
+    (2) if crawl_activities=True: open Ctrl+Space (Epic activity navigator),
+        OCR the menu to enumerate, then iterate each by typing name+Enter.
+    (3) per activity: tab_walk_scan + (optional) per-field Alt+Down option probe.
+    (4) per activity: persist a separate grammar model keyed by that screen's pHash.
+    (5) HIPAA gate: refuse to persist on chart-context screens; drop PHI tokens.
+    (6) Per-activity watchdog (default 120s): if an activity exceeds the budget,
+        the cancel_flag is set, the worker is given a brief grace period, and the
+        crawl moves on with error="watchdog_timeout".
+
+    Defaults are deliberately small (current activity only, no probing) so a
+    first run completes in 10-60s. Power users opt into the full crawl.
+
+    Returns aggregated summary dict.
+    """
+    try:
+        import pygetwindow as gw
+        import pyautogui
+    except ImportError as e:
+        return {"error": f"missing dependency: {e}", "activities": []}
+
+    def _find_win():
+        wins = [w for w in gw.getAllWindows()
+                if window_title.lower() in (w.title or "").lower() and w.width > 100]
+        return wins[0] if wins else None
+
+    win = _find_win()
+    if not win:
+        return {"error": "window not found", "window": window_title, "activities": []}
+    try:
+        win.activate()
+    except Exception:
+        pass
+    time.sleep(0.25)
+
+    if progress_cb:
+        try: progress_cb("window_activated", {"title": win.title or window_title})
+        except Exception: pass
+    print(f"[discover] window activated: {win.title}", flush=True)
+
+    activities: list[dict] = []
+    seen_phashes: set = set()
+
+    def _run_activity_with_watchdog(idx: int, name: str | None, scan_title: str) -> dict:
+        """Run _scan_one_activity in a worker thread with a watchdog timer.
+        On timeout: set cancel_flag, wait briefly for graceful exit, return
+        {error: "watchdog_timeout"}."""
+        cancel = threading.Event()
+        result_box: dict = {}
+        err_box: dict = {}
+
+        def _worker():
+            try:
+                # Inner progress wrapper prefixes the activity index so the
+                # tab-walk's per-N-elements callback is attributable.
+                def _act_progress(stage, data=None):
+                    if progress_cb:
+                        try:
+                            d2 = dict(data or {})
+                            d2.setdefault("activity_index", idx)
+                            if name is not None:
+                                d2.setdefault("activity_name", name)
+                            progress_cb(stage, d2)
+                        except Exception:
+                            pass
+                result_box["res"] = _scan_one_activity(
+                    scan_title, probe_options, max_steps,
+                    progress_cb=_act_progress, cancel_flag=cancel,
+                )
+            except Exception as we:
+                err_box["err"] = str(we)
+
+        t = threading.Thread(target=_worker, daemon=True)
+        t.start()
+        t.join(timeout=activity_timeout)
+        if t.is_alive():
+            print(f"[discover] watchdog: activity {idx} ({scan_title!r}) "
+                  f"exceeded {activity_timeout}s — cancelling", flush=True)
+            cancel.set()
+            t.join(timeout=5.0)  # graceful exit grace period
+            if progress_cb:
+                try: progress_cb("activity_timeout",
+                                 {"activity_index": idx, "activity_name": name,
+                                  "seconds": activity_timeout})
+                except Exception: pass
+            return {"error": "watchdog_timeout"}
+        if "err" in err_box:
+            return {"error": f"scan exception: {err_box['err']}"}
+        return result_box.get("res", {})
+
+    # Stage: scanning_activity 1/N for the current screen. We use 1-indexed
+    # counters here for user-facing clarity (the watchdog wrapper records the
+    # 0-indexed `activity_index` separately for internal aggregation).
+    if progress_cb:
+        try: progress_cb("scanning_activity",
+                         {"index": 1, "total": 1 if not crawl_activities else None,
+                          "activity_name": win.title or window_title})
+        except Exception: pass
+    print(f"[discover] scanning current activity: {win.title!r}", flush=True)
+
+    # Always scan the current activity first (no nav). Subject to watchdog.
+    first = _run_activity_with_watchdog(0, None, win.title or window_title)
+    if first.get("phash"):
+        seen_phashes.add(first["phash"])
+    activities.append({"activity_index": 0, "title": win.title, **first})
+
+    if crawl_activities:
+        # Deterministic exhaustive enumeration: open Epic's activity navigator
+        # (Ctrl+Space), OCR the menu to learn the full activity list, then
+        # iterate each by typing its name + Enter. Bounded by the menu contents,
+        # not by a guessed step count.
+        activity_names = _enumerate_activities_via_menu(
+            window_title, max_items=max_activities, progress_cb=progress_cb,
+        )
+        total_n = len(activity_names)
+        for idx, name in enumerate(activity_names, start=1):
+            if progress_cb:
+                try: progress_cb("scanning_activity",
+                                 {"index": idx, "total": total_n,
+                                  "activity_name": name})
+                except Exception: pass
+            print(f"[discover] activity {idx}/{total_n}: {name!r}", flush=True)
+            try:
+                pyautogui.hotkey('ctrl', 'space')
+                time.sleep(0.4)
+                # Type the activity name to filter, then Enter to select.
+                pyautogui.typewrite(name, interval=0.02)
+                time.sleep(0.25)
+                pyautogui.press('enter')
+                time.sleep(0.9)
+            except Exception as ne:
+                activities.append({"activity_index": idx, "name": name,
+                                   "error": f"nav failed: {ne}"})
+                continue
+
+            cur_win = _find_win()
+            cur_title = (cur_win.title if cur_win else window_title) or window_title
+            phash_now = _compute_window_phash(cur_title)
+            if phash_now and phash_now in seen_phashes:
+                activities.append({"activity_index": idx, "name": name,
+                                   "title": cur_title,
+                                   "skipped_reason": "duplicate_phash"})
+                continue
+
+            res = _run_activity_with_watchdog(idx, name, cur_title)
+            if res.get("phash"):
+                seen_phashes.add(res["phash"])
+            activities.append({"activity_index": idx, "name": name,
+                               "title": cur_title, **res})
+
+    total_fields = sum(a.get("fields", 0) for a in activities)
+    total_options = sum(a.get("options", 0) for a in activities)
+    activity_count = len([a for a in activities if a.get("fields", 0) > 0])
+    if progress_cb:
+        try: progress_cb("complete",
+                         {"activity_count": activity_count,
+                          "fields": total_fields, "options": total_options})
+        except Exception: pass
+    print(f"[discover] complete: {activity_count} activities, "
+          f"{total_fields} fields, {total_options} with options",
+          flush=True)
+    return {
+        "window": window_title,
+        "activities": activities,
+        "activity_count": activity_count,
+        "fields": total_fields,
+        "options": total_options,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 3 — SQLite Knowledge Base
+# ─────────────────────────────────────────────────────────────────────────────
+
+_SCHEMA = """
+CREATE TABLE IF NOT EXISTS elements (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    text          TEXT NOT NULL,
+    layer         TEXT NOT NULL,
+    rel_x         REAL NOT NULL,
+    rel_y         REAL NOT NULL,
+    rel_w         REAL NOT NULL,
+    rel_h         REAL NOT NULL,
+    screen_fps    TEXT DEFAULT '[]',
+    confidence    TEXT DEFAULT 'seen',
+    click_count   INTEGER DEFAULT 0,
+    semantic      TEXT DEFAULT NULL,
+    is_correction INTEGER DEFAULT 0,
+    created_at    REAL NOT NULL,
+    updated_at    REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS screen_fingerprints (
+    fp            TEXT PRIMARY KEY,
+    activity_name TEXT,
+    layer_texts   TEXT DEFAULT '{}',
+    first_seen    REAL NOT NULL,
+    last_seen     REAL NOT NULL,
+    visit_count   INTEGER DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS fp_bridge (
+    phash_fp  TEXT PRIMARY KEY,
+    ocr_fp    TEXT NOT NULL,
+    updated_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_elements_text ON elements(text);
+CREATE INDEX IF NOT EXISTS idx_elements_layer ON elements(layer);
+CREATE INDEX IF NOT EXISTS idx_elements_confidence ON elements(confidence);
+CREATE INDEX IF NOT EXISTS idx_fp_bridge_ocr ON fp_bridge(ocr_fp);
+"""
+
+CONFIDENCE_TIERS = ["seen", "confirmed", "reliable", "named"]
+RELIABLE_THRESHOLD = 5
+
+
+def _db_connect():
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conn.executescript(_SCHEMA)
+    # Additive migration: 'options' column on elements stores
+    # JSON-encoded list of dropdown values discovered via Alt+Down probing.
+    try:
+        conn.execute("ALTER TABLE elements ADD COLUMN options TEXT DEFAULT NULL")
+    except sqlite3.OperationalError:
+        pass  # column already exists
+    # Additive migration: 'arrow_behavior' stores per-field arrow-key probe
+    # results — JSON dict {behavior:item|macro|dropdown|none, region:[x,y,w,h]}.
+    try:
+        conn.execute("ALTER TABLE elements ADD COLUMN arrow_behavior TEXT DEFAULT NULL")
+    except sqlite3.OperationalError:
+        pass
+    # Additive migration: 'tab_index' stores focus order within an activity
+    # (0 = first Tab stop). Enables deterministic navigation grammar replay.
+    try:
+        conn.execute("ALTER TABLE elements ADD COLUMN tab_index INTEGER DEFAULT -1")
+    except sqlite3.OperationalError:
+        pass
+    conn.commit()
+    return conn
+
+
+def get_elements_by_phash(conn, phash_fp: str) -> list:
+    """Fast lookup: pHash → cached elements (joined via fp_bridge → elements.screen_fps).
+    Used by the overlay's fast-path render to skip tab-walk on familiar screens."""
+    if not phash_fp or phash_fp == "0":
+        return []
+    bridge = conn.execute(
+        "SELECT ocr_fp FROM fp_bridge WHERE phash_fp=?", (phash_fp,)
+    ).fetchone()
+    if not bridge:
+        return []
+    ocr_fp = bridge["ocr_fp"]
+    rows = conn.execute(
+        "SELECT * FROM elements WHERE confidence IN ('confirmed','reliable','named') "
+        "AND (screen_fps LIKE ? OR is_correction=1)",
+        (f'%{ocr_fp}%',)
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def set_element_options(conn, elem_id: int, options: list[str]):
+    """Store discovered dropdown options on an element row."""
+    if not options:
+        return
+    conn.execute(
+        "UPDATE elements SET options=?, updated_at=? WHERE id=?",
+        (json.dumps(options), time.time(), elem_id),
+    )
+    conn.commit()
+
+
+def _seed_universal_elements(conn):
+    """Pre-seed universal Epic elements (Accept, Cancel, etc.) at 'confirmed' confidence."""
+    now = time.time()
+    for elem in UNIVERSAL_ELEMENTS:
+        existing = conn.execute(
+            "SELECT id FROM elements WHERE text=? AND layer=? AND is_correction=0",
+            (elem["text"], elem["layer"])
+        ).fetchone()
+        if not existing:
+            semantic = elem.get("semantic") or DEFAULT_SEMANTICS.get(elem["text"])
+            conn.execute(
+                "INSERT INTO elements (text,layer,rel_x,rel_y,rel_w,rel_h,confidence,semantic,created_at,updated_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (elem["text"], elem["layer"], 0.5, 0.98, 0.05, 0.02, "confirmed", semantic, now, now)
+            )
+    conn.commit()
+
+
+def upsert_element(conn, elem: OcrElement, screen_fp: str) -> int:
+    """Insert or update an element in the KB. Returns element id."""
+    now = time.time()
+    # Find existing by text+layer within proximity (±5% of window)
+    existing = conn.execute(
+        "SELECT id, confidence, click_count, screen_fps, semantic FROM elements "
+        "WHERE text=? AND layer=? AND ABS(rel_x-?)<=0.08 AND ABS(rel_y-?)<=0.05 AND is_correction=0",
+        (elem.text, elem.layer, elem.rel_x, elem.rel_y)
+    ).fetchone()
+
+    if existing:
+        fps = json.loads(existing["screen_fps"] or "[]")
+        if screen_fp and screen_fp not in fps:
+            fps.append(screen_fp)
+        conn.execute(
+            "UPDATE elements SET rel_x=?, rel_y=?, rel_w=?, rel_h=?, screen_fps=?, updated_at=? WHERE id=?",
+            (elem.rel_x, elem.rel_y, elem.rel_w, elem.rel_h, json.dumps(fps), now, existing["id"])
+        )
+        conn.commit()
+        return existing["id"]
+    else:
+        fps = [screen_fp] if screen_fp else []
+        semantic = DEFAULT_SEMANTICS.get(elem.text)
+        cur = conn.execute(
+            "INSERT INTO elements (text,layer,rel_x,rel_y,rel_w,rel_h,screen_fps,confidence,semantic,created_at,updated_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (elem.text, elem.layer, elem.rel_x, elem.rel_y, elem.rel_w, elem.rel_h,
+             json.dumps(fps), "seen", semantic, now, now)
+        )
+        conn.commit()
+        return cur.lastrowid
+
+
+def promote_element(conn, elem_id: int, label: str = None):
+    """Promote an element's confidence tier after a confirmed click."""
+    now = time.time()
+    row = conn.execute(
+        "SELECT text, confidence, click_count, semantic FROM elements WHERE id=?", (elem_id,)
+    ).fetchone()
+    if not row:
+        return
+    count = (row["click_count"] or 0) + 1
+    current = row["confidence"]
+    tier_idx = CONFIDENCE_TIERS.index(current) if current in CONFIDENCE_TIERS else 0
+    if current != "named":
+        if count >= RELIABLE_THRESHOLD and tier_idx < CONFIDENCE_TIERS.index("reliable"):
+            tier_idx = CONFIDENCE_TIERS.index("reliable")
+        elif count == 1 and current == "seen":
+            tier_idx = CONFIDENCE_TIERS.index("confirmed")
+    new_confidence = "named" if label else CONFIDENCE_TIERS[tier_idx]
+    semantic = label if label else row["semantic"]
+    # Auto-assign semantic from DEFAULT_SEMANTICS when element first reaches reliable/named
+    if not semantic and new_confidence in ("reliable", "named"):
+        semantic = DEFAULT_SEMANTICS.get(row["text"])
+    conn.execute(
+        "UPDATE elements SET click_count=?, confidence=?, semantic=?, updated_at=? WHERE id=?",
+        (count, new_confidence, semantic, now, elem_id)
+    )
+    conn.commit()
+
+
+def get_semantic_map(conn) -> dict[str, str]:
+    """
+    Return a text → shortcut-key mapping from the KB (confirmed+ elements with semantic set).
+    This loads user-learned semantics across sessions, not just the hardcoded DEFAULT_SEMANTICS.
+    All shortcut keys are normalized to lowercase so they match the CLI which calls
+    hint.toLowerCase() before dispatching (cli-engine.ts line ~5407).
+    """
+    rows = conn.execute(
+        "SELECT text, semantic FROM elements WHERE semantic IS NOT NULL AND semantic != '' "
+        "AND confidence IN ('confirmed','reliable','named')"
+    ).fetchall()
+    # Normalize semantic keys to lowercase for consistent CLI dispatch
+    result = {r["text"]: r["semantic"].lower() for r in rows}
+    # Fill in defaults for anything not in KB yet (DEFAULT_SEMANTICS already all lowercase)
+    for text, key in DEFAULT_SEMANTICS.items():
+        if text not in result:
+            result[text] = key
+    return result
+
+
+def get_reliable_elements(conn, screen_fp: str, layer: str = None) -> list[dict]:
+    """Return reliable/confirmed elements for a screen, optionally filtered by layer."""
+    query = "SELECT * FROM elements WHERE confidence IN ('confirmed','reliable','named')"
+    params = []
+    if screen_fp:
+        query += " AND (screen_fps LIKE ? OR screen_fps='[]' OR is_correction=1)"
+        params.append(f'%{screen_fp}%')
+    if layer:
+        query += " AND layer=?"
+        params.append(layer)
+    rows = conn.execute(query, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+def save_correction(conn, text: str, layer: str, rel_x: float, rel_y: float,
+                    rel_w: float, rel_h: float, screen_fp: str, semantic: str = None):
+    """Save a user correction at highest confidence."""
+    now = time.time()
+    fps = json.dumps([screen_fp] if screen_fp else [])
+    conn.execute(
+        "INSERT INTO elements (text,layer,rel_x,rel_y,rel_w,rel_h,screen_fps,confidence,semantic,is_correction,created_at,updated_at) "
+        "VALUES (?,?,?,?,?,?,?,'named',?,1,?,?)",
+        (text, layer, rel_x, rel_y, rel_w, rel_h, fps, semantic, now, now)
+    )
+    conn.commit()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 4 — Text-based Screen Fingerprinter
+# ─────────────────────────────────────────────────────────────────────────────
+
+def compute_screen_fp(elements: list[OcrElement]) -> str:
+    """
+    Hash the stable text labels from Layers 2+3+4 only, excluding PHI.
+    Returns a hex string fingerprint.
+    """
+    stable_texts = []
+    for e in elements:
+        if e.layer not in FINGERPRINT_LAYERS:
+            continue
+        if _looks_like_phi(e.text):
+            continue
+        if len(e.text) < 2 or len(e.text) > 60:
+            continue
+        stable_texts.append(e.text.strip().lower())
+    stable_texts.sort()
+    blob = "|".join(stable_texts)
+    return hashlib.sha1(blob.encode()).hexdigest()[:16]
+
+
+def save_screen_fp(conn, fp: str, elements: list[OcrElement]):
+    """Record a screen fingerprint with its layer text snapshot."""
+    layer_texts: dict[str, list[str]] = {}
+    for e in elements:
+        if e.layer in FINGERPRINT_LAYERS and not _looks_like_phi(e.text):
+            layer_texts.setdefault(e.layer, []).append(e.text)
+
+    now = time.time()
+    existing = conn.execute("SELECT visit_count FROM screen_fingerprints WHERE fp=?", (fp,)).fetchone()
+    if existing:
+        conn.execute(
+            "UPDATE screen_fingerprints SET last_seen=?, visit_count=visit_count+1 WHERE fp=?",
+            (now, fp)
+        )
+    else:
+        conn.execute(
+            "INSERT INTO screen_fingerprints (fp,layer_texts,first_seen,last_seen) VALUES (?,?,?,?)",
+            (fp, json.dumps(layer_texts), now, now)
+        )
+    conn.commit()
+
+
+def get_activity_for_fp(conn, fp: str) -> str:
+    """Look up the activity name associated with a screen fingerprint."""
+    row = conn.execute("SELECT activity_name FROM screen_fingerprints WHERE fp=?", (fp,)).fetchone()
+    return row["activity_name"] if row and row["activity_name"] else ""
+
+
+def tag_fp_activity(conn, fp: str, activity_name: str):
+    """Associate an activity name with a screen fingerprint."""
+    conn.execute(
+        "UPDATE screen_fingerprints SET activity_name=? WHERE fp=?",
+        (activity_name, fp)
+    )
+    conn.commit()
+
+
+def _compute_window_phash(win_title: str) -> str:
+    """
+    Compute the same 8×8 average perceptual hash that epic_agent.py uses
+    (_session_phash / _SESSION_HASH_SIZE=8) so that OCR-KB fingerprints can
+    be cross-referenced with navigation-tree node keys.
+
+    Returns a 16-char hex string, or '0' on failure.
+    """
+    try:
+        import pygetwindow as _gw
+        import mss as _mss
+        from PIL import Image as _Image
+        wins = [w for w in _gw.getAllWindows()
+                if win_title.lower() in (w.title or "").lower() and w.width > 100]
+        if not wins:
+            return "0"
+        w = wins[0]
+        with _mss.mss() as sct:
+            region = {"left": w.left, "top": w.top, "width": w.width, "height": w.height}
+            shot = sct.grab(region)
+            img = _Image.frombytes("RGB", shot.size, shot.rgb)
+        SZ = 8
+        small = img.resize((SZ, SZ), _Image.LANCZOS).convert("L")
+        pixels = list(small.getdata())
+        avg = sum(pixels) / len(pixels) if pixels else 128
+        bits = "".join("1" if p > avg else "0" for p in pixels)
+        return hex(int(bits, 2))[2:].zfill((SZ * SZ) // 4)
+    except Exception:
+        return "0"
+
+
+def save_fp_bridge(conn, phash_fp: str, ocr_fp: str):
+    """
+    Record the mapping from a pHash fingerprint (used by epic_agent navigation
+    tree nodes) to the OCR text fingerprint (used by this module's KB entries).
+    This is the key cross-reference that lets get_ocr_kb_summary work correctly
+    when called from the agent heartbeat loop (which passes pHash fps).
+    """
+    if not phash_fp or phash_fp == "0":
+        return
+    conn.execute(
+        "INSERT OR REPLACE INTO fp_bridge (phash_fp, ocr_fp, updated_at) VALUES (?,?,?)",
+        (phash_fp, ocr_fp, time.time())
+    )
+    conn.commit()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 5 — Hint Key Generation (mirror of epic_agent.py _generate_hint_keys)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def generate_hint_keys(count: int) -> list[str]:
+    """Generate Vimium-style two-char hint keys: as, sd, df, ..."""
+    singles = "1234567890asdfghjklqwertyuiopzxcvbnm"
+    keys = list(singles)
+    if count <= len(keys):
+        return keys[:count]
+    for a in "asdfghjkl":
+        for b in singles:
+            keys.append(a + b)
+            if len(keys) >= count:
+                return keys[:count]
+    return keys[:count]
+
+
+# Layer display colors for hints (terminal ANSI; Qt uses these too)
+LAYER_COLORS = {
+    "shortcut_toolbar": "#FFD700",   # gold
+    "workspace_tabs":   "#87CEEB",   # sky blue
+    "activity_tabs":    "#98FB98",   # pale green
+    "breadcrumb":       "#DDA0DD",   # plum
+    "sidebar":          "#F0E68C",   # khaki
+    "workspace":        "#FFFFFF",   # white
+    "bottom_bar":       "#FFA07A",   # light salmon
+}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 6 — PyQt5 Transparent Overlay
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _parse_hotkey_combo(combo: str):
+    """
+    Parse a hotkey combo string like "ctrl+shift+h" into (mods_frozenset, trigger).
+
+    mods_frozenset — frozenset of modifier names e.g. frozenset({'ctrl','shift'})
+    trigger        — lowercase single char e.g. 'h', or a pynput Key name e.g. 'f9'
+
+    Examples:
+        "ctrl+shift+h"  → (frozenset({'ctrl','shift'}), 'h')
+        "ctrl+alt+f9"   → (frozenset({'ctrl','alt'}),   'f9')
+        "scroll_lock"   → (frozenset(), 'scroll_lock')
+    """
+    _MODS = {"ctrl", "control", "shift", "alt", "cmd", "super", "win"}
+    parts = [p.strip().lower() for p in combo.replace("-", "+").split("+")]
+    mods = frozenset(p for p in parts if p in _MODS or p in ("control",))
+    # Normalise "control" → "ctrl"
+    mods = frozenset("ctrl" if m == "control" else m for m in mods)
+    trigger_parts = [p for p in parts if p not in _MODS and p != "control"]
+    trigger = trigger_parts[0] if trigger_parts else ""
+    return mods, trigger
+
+
+def _hotkey_matches(mods_held: set, key, mods_wanted: frozenset, trigger: str) -> bool:
+    """
+    Return True when the currently-held modifiers match mods_wanted and key
+    matches the trigger character/name.
+    """
+    try:
+        from pynput import keyboard as pk
+        # Normalise held modifiers to simple names
+        norm = set()
+        for m in mods_held:
+            s = str(m)
+            if "ctrl" in s or "control" in s:   norm.add("ctrl")
+            elif "shift" in s:                   norm.add("shift")
+            elif "alt" in s:                     norm.add("alt")
+            elif "cmd" in s or "super" in s:     norm.add("cmd")
+        if norm != set(mods_wanted):
+            return False
+        # Match trigger: single char.
+        # IMPORTANT: when Ctrl is held, pynput sets key.char to the ASCII control
+        # character (e.g. Ctrl+H → '\x08', Ctrl+C → '\x03') rather than the letter.
+        # We therefore check key.vk (Windows virtual-key code) as the primary source
+        # and only fall back to key.char when vk is unavailable.
+        if len(trigger) == 1:
+            # VK-based match (reliable under Ctrl/Shift): ord('A')..ord('Z') = 65..90
+            if hasattr(key, 'vk') and key.vk is not None:
+                return key.vk == ord(trigger.upper())
+            # Fallback for platforms without vk
+            return hasattr(key, 'char') and key.char and key.char.lower() == trigger
+        # Match trigger: named key (f9, scroll_lock, pause …)
+        try:
+            wanted_key = getattr(pk.Key, trigger)
+            return key == wanted_key
+        except AttributeError:
+            return False
+    except Exception:
+        return False
+
+
+def _win32_overlay_hotkeys(dispatch_fn, toggle_hints_fn, toggle_correct_fn,
+                           hint_mods, hint_trigger, hint_key_name,
+                           correct_mods, correct_trigger, correct_key_name) -> bool:
+    """Register Ctrl+Shift+H / Ctrl+Shift+C via Win32 RegisterHotKey.
+
+    Uses the same WM_HOTKEY approach as epic_agent.py so the hotkeys fire even
+    when Citrix/Epic has focus and intercepts pynput's low-level hook.
+
+    Returns True if both hotkeys were registered and the message-loop thread is
+    running.  Returns False (with printed diagnostics) on any failure so the
+    caller can fall back to a pynput listener.
+    """
+    try:
+        import ctypes
+        import ctypes.wintypes
+
+        _u32 = ctypes.windll.user32
+
+        MOD_CTRL     = 0x0002
+        MOD_SHIFT    = 0x0004
+        MOD_NOREPEAT = 0x4000
+        WM_HOTKEY    = 0x0312
+        HK_HINTS     = 10   # IDs 10/11 — won't collide with agent (separate process)
+        HK_CORRECT   = 11
+
+        _VK_NAMED = {
+            "f1": 0x70, "f2": 0x71, "f3": 0x72, "f4": 0x73,
+            "f5": 0x74, "f6": 0x75, "f7": 0x76, "f8": 0x77,
+            "f9": 0x78, "f10": 0x79, "f11": 0x7A, "f12": 0x7B,
+            "pause": 0x13, "scroll_lock": 0x91,
+        }
+
+        def _combo_to_win32(mods_frozenset, trigger):
+            vk = (_VK_NAMED.get(trigger)
+                  if trigger in _VK_NAMED
+                  else (ord(trigger.upper()) if len(trigger) == 1 else 0))
+            w32 = MOD_NOREPEAT
+            if "ctrl"  in mods_frozenset: w32 |= MOD_CTRL
+            if "shift" in mods_frozenset: w32 |= MOD_SHIFT
+            return vk, w32
+
+        hint_vk, hint_w32 = _combo_to_win32(hint_mods,    hint_trigger)
+        corr_vk, corr_w32 = _combo_to_win32(correct_mods, correct_trigger)
+
+        # CRITICAL: RegisterHotKey binds to the calling thread's message queue.
+        # GetMessageW only drains the queue of the thread it runs on.
+        # Both calls MUST happen on the same thread — so RegisterHotKey moves
+        # inside the daemon thread, exactly like epic_agent.py lines 518-584.
+        _result  = [False]
+        _ready   = threading.Event()
+
+        def _win32_msg_loop():
+            ok1 = bool(_u32.RegisterHotKey(None, HK_HINTS,   hint_w32, hint_vk))
+            ok2 = bool(_u32.RegisterHotKey(None, HK_CORRECT, corr_w32, corr_vk))
+            _result[0] = ok1 and ok2
+            if not ok1:
+                print(f"[overlay] WARNING: Win32 could not register {hint_key_name} "
+                      f"(already in use?). Try --hint-key with a different combo.")
+            if not ok2:
+                print(f"[overlay] WARNING: Win32 could not register {correct_key_name} "
+                      f"(already in use?). Try --correct-key with a different combo.")
+            _ready.set()   # unblock caller before entering the loop
+
+            if _result[0]:
+                msg = ctypes.wintypes.MSG()
+                while _u32.GetMessageW(ctypes.byref(msg), None, 0, 0) != 0:
+                    if msg.message == WM_HOTKEY:
+                        if msg.wParam == HK_HINTS:
+                            dispatch_fn(toggle_hints_fn)
+                        elif msg.wParam == HK_CORRECT:
+                            dispatch_fn(toggle_correct_fn)
+            # Clean up whatever got registered
+            if ok1: _u32.UnregisterHotKey(None, HK_HINTS)
+            if ok2: _u32.UnregisterHotKey(None, HK_CORRECT)
+
+        _t = threading.Thread(target=_win32_msg_loop, daemon=True)
+        _t.start()
+        _ready.wait(timeout=2.0)   # wait for registration result before returning
+
+        if _result[0]:
+            print(f"[overlay] Hotkeys registered via Win32: "
+                  f"{hint_key_name} = hints, {correct_key_name} = correction")
+            return True
+
+        print("[overlay] Falling back to pynput listener for toggle hotkeys.")
+        return False
+
+    except Exception as exc:
+        print(f"[overlay] Win32 hotkey setup failed ({exc}) — using pynput fallback")
+        return False
+
+
+class OverlayWindow:
+    """
+    PyQt5 transparent always-on-top overlay that draws Vimium hints over Epic.
+
+    Hotkeys (configurable via --hint-key / --correct-key; defaults avoid Epic conflicts):
+      Ctrl+Shift+H — Toggle hints on/off
+      Ctrl+Shift+C — Toggle correction mode
+      Escape      — Hide hints / cancel input
+      0-9, a-z    — Hint selection (multi-char, fires after 600ms idle)
+      Backspace   — Delete last hint char
+    """
+
+    def __init__(self, win_title: str, db_path: str = DB_PATH,
+                 hint_key: str = "ctrl+shift+h", correct_key: str = "ctrl+shift+c"):
+        self.win_title = win_title
+        self.db_path = db_path
+        self.conn = _db_connect()
+        _seed_universal_elements(self.conn)
+
+        self._hint_key_name    = hint_key
+        self._correct_key_name = correct_key
+        self._hint_mods,    self._hint_trigger    = _parse_hotkey_combo(hint_key)
+        self._correct_mods, self._correct_trigger = _parse_hotkey_combo(correct_key)
+
+        self.elements: list[OcrElement] = []
+        self.hint_map: dict[str, OcrElement] = {}
+        self.current_input = ""
+        self.visible = False
+        self.correction_mode = False
+        self._current_phash: str = "0"    # updated by refresh(); same algo as epic_agent._session_phash
+        self._pending_input_timer = None
+
+        self._app = None
+        self._window = None
+        self._scene = None
+
+        # Correction mode state
+        self._corr_selected: Optional[dict] = None     # currently selected KB element
+        self._corr_drawing: bool = False               # True while rubber-band drawing
+        self._corr_drag_start: Optional[tuple] = None  # (scene_x, scene_y) drag start
+        self._corr_new_rect: Optional[tuple] = None    # (x, y, w, h) in scene coords
+        self._corr_resize_mode: bool = False           # True when resizing (vs moving) selected
+        self._QInputDialog = None                      # set during run() when Qt is available
+
+    def _find_epic_window(self):
+        try:
+            import pygetwindow as gw
+            wins = [w for w in gw.getAllWindows()
+                    if self.win_title.lower() in (w.title or "").lower() and w.width > 100]
+            return wins[0] if wins else None
+        except Exception:
+            return None
+
+    def _show_scanning_badge(self, msg: str = "Scanning…"):
+        """Paint a blue badge with a message so the user gets feedback."""
+        if self._scene is None:
+            return
+        from PyQt5.QtWidgets import QGraphicsTextItem, QGraphicsRectItem
+        from PyQt5.QtGui import QColor, QFont, QPen, QBrush
+        win = self._find_epic_window()
+        if not win:
+            return
+        self._scene.clear()
+        badge_font = QFont("Consolas", 10, QFont.Bold)
+        badge_text = QGraphicsTextItem(f" {msg} ")
+        badge_text.setFont(badge_font)
+        badge_text.setDefaultTextColor(QColor("#000000"))
+        bw = len(msg) * 8 + 20
+        bh = 22
+        bx = win.width - bw - 10
+        by = 10
+        badge_bg = QGraphicsRectItem(bx, by, bw, bh)
+        badge_bg.setBrush(QBrush(QColor("#00AAFF")))
+        badge_bg.setPen(QPen(QColor("#000000"), 1))
+        badge_bg.setOpacity(0.92)
+        self._scene.addItem(badge_bg)
+        badge_text.setPos(bx + 2, by + 2)
+        self._scene.addItem(badge_text)
+
+    def _update_scan_badge(self, count: int):
+        """Log progress to console. Overlay stays hidden during tab-walk
+        to guarantee clean pixel diffs — no badge flash that could leak
+        overlay pixels into captured frames."""
+        print(f"[overlay] Scanning… {count} fields found so far")
+
+    def _refresh_bg(self):
+        """Tab-walk scan on a background thread; dispatch _redraw to Qt main thread.
+
+        FAST PATH: before tab-walking (which takes seconds), compute the window
+        pHash and look up cached elements. If we have ≥3 reliable cached
+        elements for this screen, build a hint map immediately, dispatch a
+        redraw so the user sees overlay hints in <100ms, and SKIP the live
+        tab-walk (strict known-fingerprint behavior — the cached grammar is
+        the source of truth). Live tab-walk runs only when the pHash is
+        unknown or the cache is too sparse.
+        """
+        scan_id = getattr(self, '_scan_id', 0) + 1
+        self._scan_id = scan_id
+        cancel = threading.Event()
+        self._scan_cancel = cancel
+        try:
+            win = self._find_epic_window()
+            if not win:
+                print(f"[overlay] Epic window not found: {self.win_title!r} — is Hyperspace open?")
+                return
+
+            # ── FAST PATH: cached render from pHash ──────────────────────────
+            # Canonical contract: consume GET /api/epic/grammar/:phash if the
+            # local server is reachable; fall back to direct sqlite read
+            # when offline (e.g. server down / unit tests).
+            try:
+                phash_now = _compute_window_phash(self.win_title)
+                cached = []
+                if phash_now and phash_now != "0":
+                    try:
+                        import urllib.request, json as _json
+                        url = f"http://127.0.0.1:5000/api/epic/grammar/{phash_now}"
+                        with urllib.request.urlopen(url, timeout=0.4) as resp:
+                            payload = _json.loads(resp.read().decode("utf-8"))
+                            cached = payload.get("fields", []) or []
+                    except Exception:
+                        # Server unreachable → local fallback
+                        cached = get_elements_by_phash(self.conn, phash_now)
+                # Strict contract: ANY cached fields for a recognized pHash
+                # mean this is a known screen — render from stored grammar
+                # and skip live OCR. Sparse grammars are still authoritative
+                # (e.g. simple modal/dialog screens with 1–2 fields).
+                if len(cached) >= 1:
+                    cached_elems: list[OcrElement] = []
+                    for r in cached:
+                        cached_elems.append(OcrElement(
+                            text=r["text"], layer=r["layer"],
+                            rel_x=r["rel_x"], rel_y=r["rel_y"],
+                            rel_w=r["rel_w"], rel_h=r["rel_h"],
+                            confidence=0.99,
+                            abs_cx=win.left + int(r["rel_x"] * win.width),
+                            abs_cy=win.top + int(r["rel_y"] * win.height),
+                        ))
+                    sem_map_fast = get_semantic_map(self.conn)
+                    reserved_fast = set(sem_map_fast.values())
+                    cand_fast = generate_hint_keys(len(cached_elems) + len(reserved_fast) + 10)
+                    pos_fast = [k for k in cand_fast if k not in reserved_fast]
+                    hint_fast: dict = {}
+                    for e in cached_elems:
+                        sem = sem_map_fast.get(e.text)
+                        if sem and sem not in hint_fast:
+                            hint_fast[sem] = e
+                    ki = 0
+                    for e in cached_elems:
+                        if any(hint_fast.get(k) is e for k in hint_fast):
+                            continue
+                        while ki < len(pos_fast) and pos_fast[ki] in hint_fast:
+                            ki += 1
+                        if ki < len(pos_fast):
+                            hint_fast[pos_fast[ki]] = e
+                            ki += 1
+                    self.elements = cached_elems
+                    self.hint_map = hint_fast
+                    self._current_phash = phash_now
+                    dq_fast = getattr(self, '_dispatch_q', None)
+                    if dq_fast is not None:
+                        dq_fast.put(self._redraw)
+                    print(f"[overlay] FAST-PATH render: {len(cached_elems)} cached elements "
+                          f"(phash={phash_now[:8]}) — skipping live tab-walk")
+                    return  # Strict: known fingerprint → no live scan needed
+            except Exception as _e:
+                print(f"[overlay] fast-path skipped: {_e}")
+
+            print(f"[overlay] Tab-walk scanning: {win.title!r} ({win.width}x{win.height})")
+            has_activity_tabs = self._check_activity_tabs()
+
+            dq = getattr(self, '_dispatch_q', None)
+            if dq is not None and self._window:
+                dq.put(lambda: self._window.hide())
+                time.sleep(0.3)
+
+            elements = tab_walk_scan(
+                self.win_title,
+                max_steps=300,
+                tab_delay=0.18,
+                progress_cb=self._update_scan_badge,
+                cancel_flag=cancel,
+                has_activity_tabs=has_activity_tabs,
+            )
+            print(f"[overlay] Tab-walk complete: {len(elements)} elements found")
+
+            if not self.visible or self._scan_id != scan_id:
+                print("[overlay] Scan aborted — visibility changed during walk")
+                if dq is not None and self._window:
+                    dq.put(lambda: self._window.show())
+                return
+
+            if dq is not None and self._window:
+                dq.put(lambda: self._window.show())
+
+            if not elements:
+                print("[overlay] Tab-walk found 0 elements — falling back to OCR scan")
+                has_at = self._check_activity_tabs()
+                elements = scan_window(self.win_title, with_activity_tabs=has_at)
+                print(f"[overlay] OCR fallback: {len(elements)} elements found")
+
+            if not elements:
+                print("[overlay] No elements found by either method — skipping KB update")
+                self.elements = []
+                self.hint_map = {}
+                dq = getattr(self, '_dispatch_q', None)
+                if dq is not None:
+                    dq.put(self._redraw)
+                return
+
+            fp = compute_screen_fp(elements)
+            phash = _compute_window_phash(self.win_title)
+            # HIPAA gate (live fallback path): refuse to persist OCR text
+            # when the active window is a patient-chart context, and drop any
+            # element whose text trips the PHI heuristic. Keeps the in-memory
+            # `elements` for the current overlay render but blocks writes to
+            # disk so PHI never enters the abstraction.
+            chart_screen = _is_chart_screen(self.win_title)
+            if chart_screen:
+                print("[overlay] PHI gate: chart screen detected, "
+                      "skipping persistence of live tab-walk results")
+            else:
+                safe = []
+                for e in elements:
+                    if _looks_like_phi(e.text or ""):
+                        continue
+                    if e.options:
+                        e.options = [o for o in e.options
+                                     if not _looks_like_phi(o)]
+                    safe.append(e)
+                if safe:
+                    save_screen_fp(self.conn, fp, safe)
+                    for e in safe:
+                        upsert_element(self.conn, e, fp)
+                    save_fp_bridge(self.conn, phash, fp)
+            self._current_phash = phash
+
+            reliable = get_reliable_elements(self.conn, fp)
+            seen_set = {(e.text, e.layer) for e in elements}
+            for r in reliable:
+                if (r["text"], r["layer"]) not in seen_set:
+                    win_obj = self._find_epic_window()
+                    if win_obj:
+                        elements.append(OcrElement(
+                            text=r["text"], layer=r["layer"],
+                            rel_x=r["rel_x"], rel_y=r["rel_y"],
+                            rel_w=r["rel_w"], rel_h=r["rel_h"],
+                            confidence=0.99,
+                            abs_cx=win_obj.left + int(r["rel_x"] * win_obj.width),
+                            abs_cy=win_obj.top + int(r["rel_y"] * win_obj.height),
+                        ))
+
+            # Build hint map (pure Python — safe on background thread)
+            sem_map = get_semantic_map(self.conn)
+            reserved_keys = set(sem_map.values())
+            candidates = generate_hint_keys(len(elements) + len(reserved_keys) + 10)
+            positional_keys = [k for k in candidates if k not in reserved_keys]
+            hint_map: dict = {}
+            for e in elements:
+                sem = sem_map.get(e.text)
+                if sem and sem not in hint_map:
+                    hint_map[sem] = e
+            ki = 0
+            for e in elements:
+                if any(hint_map.get(k) is e for k in hint_map):
+                    continue
+                while ki < len(positional_keys) and positional_keys[ki] in hint_map:
+                    ki += 1
+                if ki < len(positional_keys):
+                    hint_map[positional_keys[ki]] = e
+                    ki += 1
+
+            print(f"[overlay] {len(elements)} elements, fp={fp[:8]}")
+            # Commit results and schedule Qt redraw on the main thread
+            self.elements = elements
+            self.hint_map = hint_map
+            dq = getattr(self, '_dispatch_q', None)
+            if dq is not None:
+                def _finalize():
+                    self._redraw()
+                    if self.visible and self.hint_map:
+                        getattr(self, '_start_suppress_listener', lambda: None)()
+                dq.put(_finalize)
+            else:
+                self._redraw()
+                if self.visible and self.hint_map:
+                    getattr(self, '_start_suppress_listener', lambda: None)()
+        except Exception as ex:
+            print(f"[overlay] Scan error: {ex}")
+            import traceback; traceback.print_exc()
+            dq = getattr(self, '_dispatch_q', None)
+            if dq is not None:
+                if self._window:
+                    dq.put(lambda: self._window.show())
+                dq.put(self._redraw)
+
+    def refresh(self):
+        """Re-scan synchronously (used by correction mode / external callers)."""
+        win = self._find_epic_window()
+        if not win:
+            print(f"[overlay] Epic window not found: {self.win_title!r} — is Hyperspace open?")
+            return
+
+        print(f"[overlay] Scanning window: {win.title!r} ({win.width}x{win.height})")
+        has_activity_tabs = self._check_activity_tabs()
+        self.elements = scan_window(self.win_title, with_activity_tabs=has_activity_tabs)
+        print(f"[overlay] Scan complete: {len(self.elements)} elements found")
+
+        fp = compute_screen_fp(self.elements)
+        self._current_phash = _compute_window_phash(self.win_title)
+        # HIPAA gate (sync refresh path): same posture as _refresh_bg —
+        # refuse to persist on chart screens; drop PHI-bearing rows.
+        if _is_chart_screen(self.win_title):
+            print("[overlay] PHI gate: chart screen — skipping refresh persistence")
+        else:
+            safe = []
+            for e in self.elements:
+                if _looks_like_phi(e.text or ""):
+                    continue
+                if e.options:
+                    e.options = [o for o in e.options if not _looks_like_phi(o)]
+                safe.append(e)
+            if safe:
+                save_screen_fp(self.conn, fp, safe)
+                for e in safe:
+                    upsert_element(self.conn, e, fp)
+                save_fp_bridge(self.conn, self._current_phash, fp)
+
+        reliable = get_reliable_elements(self.conn, fp)
+        seen_set = {(e.text, e.layer) for e in self.elements}
+        for r in reliable:
+            if (r["text"], r["layer"]) not in seen_set:
+                win_obj = self._find_epic_window()
+                if win_obj:
+                    self.elements.append(OcrElement(
+                        text=r["text"], layer=r["layer"],
+                        rel_x=r["rel_x"], rel_y=r["rel_y"],
+                        rel_w=r["rel_w"], rel_h=r["rel_h"],
+                        confidence=0.99,
+                        abs_cx=win_obj.left + int(r["rel_x"] * win_obj.width),
+                        abs_cy=win_obj.top + int(r["rel_y"] * win_obj.height),
+                    ))
+
+        sem_map = get_semantic_map(self.conn)
+        reserved_keys = set(sem_map.values())
+        candidates = generate_hint_keys(len(self.elements) + len(reserved_keys) + 10)
+        positional_keys = [k for k in candidates if k not in reserved_keys]
+
+        self.hint_map = {}
+        for e in self.elements:
+            sem = sem_map.get(e.text)
+            if sem and sem not in self.hint_map:
+                self.hint_map[sem] = e
+
+        ki = 0
+        for e in self.elements:
+            if any(self.hint_map.get(k) is e for k in self.hint_map):
+                continue
+            while ki < len(positional_keys) and positional_keys[ki] in self.hint_map:
+                ki += 1
+            if ki < len(positional_keys):
+                self.hint_map[positional_keys[ki]] = e
+                ki += 1
+
+        print(f"[overlay] {len(self.elements)} elements, fp={fp[:8]}")
+        self._redraw()
+
+    def _check_activity_tabs(self) -> bool:
+        """Quick check: are activity tabs visible? (patient chart context)"""
+        # Heuristic: scan just the activity_tabs y-band for known clinical tab names
+        win = self._find_epic_window()
+        if not win:
+            return False
+        try:
+            import mss, numpy as np
+            with mss.mss() as sct:
+                region = {"left": win.left, "top": win.top + 45,
+                          "width": win.width, "height": 24}
+                shot = sct.grab(region)
+                arr = np.array(shot)[:, :, :3]
+            ocr = _get_ocr()
+            if not ocr:
+                return False
+            result = ocr.ocr(arr, cls=False)
+            if not result or not result[0]:
+                return False
+            texts = [line[1][0].lower() for line in result[0] if line]
+            clinical_tabs = {"snapshot", "chart review", "synopsis", "results", "demographics",
+                             "allergies", "history", "problem list", "orders", "flowsheet"}
+            return any(any(ct in t for ct in clinical_tabs) for t in texts)
+        except Exception:
+            return False
+
+    def fire_hint(self, hint: str):
+        """Execute the action for a given hint key."""
+        elem = self.hint_map.get(hint)
+        if not elem:
+            print(f"[overlay] Unknown hint: {hint!r}  (available: {list(self.hint_map.keys())[:20]})")
+            return
+
+        print(f"[overlay] Firing hint '{hint}' → {elem.text!r} ({elem.layer}) at ({elem.abs_cx},{elem.abs_cy})")
+
+        # Click the element
+        try:
+            import pyautogui
+            pyautogui.moveTo(elem.abs_cx, elem.abs_cy)
+            time.sleep(0.1)
+            pyautogui.click(elem.abs_cx, elem.abs_cy)
+        except Exception as e:
+            print(f"[overlay] Click failed: {e}")
+            return
+
+        # Promote confidence in KB
+        fp = compute_screen_fp(self.elements)
+        existing = self.conn.execute(
+            "SELECT id FROM elements WHERE text=? AND layer=? AND ABS(rel_x-?)<=0.08",
+            (elem.text, elem.layer, elem.rel_x)
+        ).fetchone()
+        if existing:
+            promote_element(self.conn, existing["id"])
+
+        # Report to server
+        self._report_click(elem, hint, fp)
+
+        # Refresh hints after click settles
+        time.sleep(0.8)
+        self.refresh()
+
+    def _report_click(self, elem: OcrElement, hint: str, fp: str):
+        """Send confirmed element click to Rachael server via bridge."""
+        if not BRIDGE_TOKEN:
+            return
+        try:
+            import urllib.request
+            win = self._find_epic_window()
+            win_title = win.title if win else self.win_title
+            payload = json.dumps({
+                "fingerprint": fp,              # OCR text fp (KB key)
+                "phashFingerprint": self._current_phash,   # pHash fp (navigation tree key)
+                "windowTitle": win_title,
+                "element": {
+                    "text": elem.text,
+                    "layer": elem.layer,
+                    "rel_x": elem.rel_x,
+                    "rel_y": elem.rel_y,
+                    "rel_w": elem.rel_w,
+                    "rel_h": elem.rel_h,
+                    "hint": hint,
+                },
+            }).encode()
+            req = urllib.request.Request(
+                f"{BRIDGE_URL}/api/epic/ocr/click",
+                data=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {BRIDGE_TOKEN}",
+                },
+                method="POST",
+            )
+            urllib.request.urlopen(req, timeout=3)
+        except Exception:
+            pass
+
+    def _redraw(self):
+        """Update the Qt overlay scene with current hints."""
+        if self._scene is None:
+            return
+        from PyQt5.QtWidgets import QGraphicsTextItem, QGraphicsRectItem
+        from PyQt5.QtCore import Qt, QRectF
+        from PyQt5.QtGui import QColor, QFont, QPen, QBrush
+
+        self._scene.clear()
+        if not self.visible:
+            return
+
+        win = self._find_epic_window()
+        if not win:
+            return
+        ww, wh = win.width, win.height
+
+        # Status badge — always show when visible so the hotkey is visually confirmed
+        if not self.hint_map:
+            # Nothing to hint — show a small diagnostic badge top-right
+            ocr_ok = _get_ocr() is not None
+            msg = "OCR: 0 elements" if ocr_ok else "OCR engine not installed  pip install paddlepaddle paddleocr"
+            badge_font = QFont("Consolas", 10, QFont.Bold)
+            badge_text = QGraphicsTextItem(f" {msg} ")
+            badge_text.setFont(badge_font)
+            badge_text.setDefaultTextColor(QColor("#000000"))
+            bw = len(msg) * 8 + 16
+            bh = 22
+            bx = ww - bw - 10
+            by = 10
+            badge_bg = QGraphicsRectItem(bx, by, bw, bh)
+            badge_bg.setBrush(QBrush(QColor("#FF4444") if not ocr_ok else QColor("#FFA500")))
+            badge_bg.setPen(QPen(QColor("#000000"), 1))
+            badge_bg.setOpacity(0.92)
+            self._scene.addItem(badge_bg)
+            badge_text.setPos(bx + 2, by + 2)
+            self._scene.addItem(badge_text)
+            return
+
+        font = QFont("Consolas", 9, QFont.Bold)
+        for hint_key, elem in self.hint_map.items():
+            cx = int(elem.rel_x * ww)
+            cy = int(elem.rel_y * wh)
+            color_hex = LAYER_COLORS.get(elem.layer, "#FFFFFF")
+            color = QColor(color_hex)
+
+            # Background box
+            text_w, text_h = max(len(hint_key) * 8 + 6, 20), 16
+            rect = QGraphicsRectItem(cx - text_w // 2, cy - text_h // 2, text_w, text_h)
+            rect.setBrush(QBrush(color))
+            rect.setPen(QPen(QColor("#000000"), 1))
+            rect.setOpacity(0.88)
+            self._scene.addItem(rect)
+
+            # Hint text
+            text_item = QGraphicsTextItem(hint_key)
+            text_item.setFont(font)
+            text_item.setDefaultTextColor(QColor("#000000"))
+            text_item.setPos(cx - text_w // 2 + 2, cy - text_h // 2)
+            self._scene.addItem(text_item)
+
+        print(f"[overlay] Drew {len(self.hint_map)} hint(s) on scene")
+        if self._window:
+            self._window.viewport().update()
+
+    def run(self):
+        """Start the Qt event loop with the overlay window."""
+        try:
+            from PyQt5.QtWidgets import QApplication, QGraphicsView, QGraphicsScene, QInputDialog
+            from PyQt5.QtCore import Qt, QTimer
+            from PyQt5.QtGui import QColor
+        except ImportError:
+            print("[overlay] PyQt5 not installed — pip install PyQt5")
+            return
+
+        self._QInputDialog = QInputDialog
+        overlay_ref = self  # closure ref for CorrectionView
+
+        class CorrectionView(QGraphicsView):
+            """QGraphicsView subclass that routes mouse events to correction mode handlers."""
+            def mousePressEvent(self, event):
+                if overlay_ref.correction_mode:
+                    pos = self.mapToScene(event.pos())
+                    overlay_ref.correction_press(
+                        pos.x(), pos.y(),
+                        right_button=(event.button() == Qt.RightButton)
+                    )
+                else:
+                    super().mousePressEvent(event)
+
+            def mouseMoveEvent(self, event):
+                if overlay_ref.correction_mode and event.buttons():
+                    pos = self.mapToScene(event.pos())
+                    overlay_ref.correction_move(pos.x(), pos.y())
+                else:
+                    super().mouseMoveEvent(event)
+
+            def mouseReleaseEvent(self, event):
+                if overlay_ref.correction_mode:
+                    pos = self.mapToScene(event.pos())
+                    overlay_ref.correction_release(pos.x(), pos.y())
+                else:
+                    super().mouseReleaseEvent(event)
+
+        self._app = QApplication.instance() or QApplication(sys.argv)
+
+        self._scene = QGraphicsScene()
+        self._window = CorrectionView(self._scene)
+        self._window.setWindowFlags(
+            Qt.WindowStaysOnTopHint |
+            Qt.FramelessWindowHint |
+            Qt.Tool
+        )
+        self._window.setAttribute(Qt.WA_TranslucentBackground)
+        self._window.setAttribute(Qt.WA_ShowWithoutActivating)
+        self._window.setStyleSheet("background: transparent; border: none;")
+        self._window.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._window.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        win = self._find_epic_window()
+        if win:
+            self._window.setGeometry(win.left, win.top, win.width, win.height)
+            self._scene.setSceneRect(0, 0, win.width, win.height)
+        self._window.show()
+
+        # ── Hotkey listener setup ─────────────────────────────────────────────
+        # _dispatch: thread-safe cross-thread dispatch to the Qt main thread.
+        # QTimer.singleShot(0, fn) called from a non-Qt thread schedules the timer
+        # on the CALLING thread's event loop — daemon threads have none, so the call
+        # is silently dropped and fn() never executes.
+        # Fix: put fn into a SimpleQueue; a QTimer on the Qt main thread drains it.
+        _dispatch_q: queue.SimpleQueue = queue.SimpleQueue()
+        self._dispatch_q = _dispatch_q   # expose for _schedule_input_fire
+
+        def _dispatch(fn):
+            _dispatch_q.put(fn)
+
+        # ── 1. Suppressing hint-char listener (pynput) ────────────────────────
+        # Active only while hints are visible; consumes typed hint chars so they
+        # do NOT reach the Citrix/Epic app.
+        self._suppress_listener = None
+        self._suppress_lock = threading.Lock()
+        self._start_suppress_listener = lambda: None
+        self._stop_suppress_listener  = lambda: None
+
+        try:
+            from pynput import keyboard as pk
+
+            def _stop_suppress_listener():
+                with self._suppress_lock:
+                    if self._suppress_listener:
+                        try:
+                            self._suppress_listener.stop()
+                        except Exception:
+                            pass
+                        self._suppress_listener = None
+
+            def _start_suppress_listener():
+                """Start a suppressing listener so hint keys don't reach the Epic app."""
+                with self._suppress_lock:
+                    if self._suppress_listener and getattr(self._suppress_listener, 'running', False):
+                        return
+
+                    def on_hint_press(key):
+                        try:
+                            k = key.char if hasattr(key, 'char') and key.char else None
+                        except Exception:
+                            k = None
+                        if key == pk.Key.esc:
+                            def _esc():
+                                self.current_input = ""
+                                self.visible = False
+                                _stop_suppress_listener()
+                                self._redraw()
+                            _dispatch(_esc)
+                        elif key == pk.Key.backspace:
+                            def _bs():
+                                self.current_input = self.current_input[:-1]
+                                self._redraw()
+                            _dispatch(_bs)
+                        elif k:
+                            def _char(c=k):
+                                self.current_input += c
+                                self._schedule_input_fire()
+                            _dispatch(_char)
+
+                    sl = pk.Listener(on_press=on_hint_press, suppress=True)
+                    sl.daemon = True
+                    sl.start()
+                    self._suppress_listener = sl
+
+            self._start_suppress_listener = _start_suppress_listener
+            self._stop_suppress_listener  = _stop_suppress_listener
+
+        except ImportError:
+            print("[overlay] pynput not installed — hint key input disabled (pip install pynput)")
+
+        # ── 2. Toggle hotkeys: Win32 RegisterHotKey (works through Citrix) ────
+        # Delegates to module-level helper so the logic is isolated and testable.
+        # Falls back to pynput if not on Windows or if registration fails.
+        _win32_ok = _win32_overlay_hotkeys(
+            _dispatch,
+            self.toggle_hints,
+            self.toggle_correction,
+            self._hint_mods,    self._hint_trigger,    self._hint_key_name,
+            self._correct_mods, self._correct_trigger, self._correct_key_name,
+        )
+
+        if not _win32_ok:
+            # Pynput fallback: modifier-tracking non-suppressing listener
+            print("[overlay] Win32 hotkeys unavailable — using pynput listener (may not work in Citrix)")
+            try:
+                from pynput import keyboard as pk
+                _mods_held: set = set()
+                _mods_lock = threading.Lock()
+
+                def on_hotkey_press(key):
+                    with _mods_lock:
+                        try:
+                            if key in (pk.Key.ctrl_l, pk.Key.ctrl_r, pk.Key.ctrl):
+                                _mods_held.add(key)
+                            elif key in (pk.Key.shift, pk.Key.shift_l, pk.Key.shift_r):
+                                _mods_held.add(key)
+                            elif key in (pk.Key.alt_l, pk.Key.alt_r, pk.Key.alt_gr, pk.Key.alt):
+                                _mods_held.add(key)
+                            elif key in (pk.Key.cmd, pk.Key.cmd_l, pk.Key.cmd_r):
+                                _mods_held.add(key)
+                        except Exception:
+                            pass
+                        held = set(_mods_held)
+                    if _hotkey_matches(held, key, self._hint_mods, self._hint_trigger):
+                        _dispatch(self.toggle_hints)
+                    elif _hotkey_matches(held, key, self._correct_mods, self._correct_trigger):
+                        _dispatch(self.toggle_correction)
+
+                def on_hotkey_release(key):
+                    with _mods_lock:
+                        _mods_held.discard(key)
+
+                _hl = pk.Listener(on_press=on_hotkey_press,
+                                  on_release=on_hotkey_release,
+                                  suppress=False)
+                _hl.daemon = True
+                _hl.start()
+            except ImportError:
+                print("[overlay] pynput not installed — toggle hotkeys disabled (pip install pynput)")
+
+        # Drain cross-thread dispatch queue on the Qt main thread (50 ms poll)
+        _drain_timer = QTimer()
+        def _drain_dispatch():
+            while not _dispatch_q.empty():
+                try:
+                    _dispatch_q.get_nowait()()
+                except Exception:
+                    pass
+        _drain_timer.timeout.connect(_drain_dispatch)
+        _drain_timer.start(50)
+
+        # Timer to track and reposition the overlay to Epic window
+        def reposition():
+            w = self._find_epic_window()
+            if w and self._window:
+                self._window.setGeometry(w.left, w.top, w.width, w.height)
+                self._scene.setSceneRect(0, 0, w.width, w.height)
+
+        timer = QTimer()
+        timer.timeout.connect(reposition)
+        timer.start(500)
+
+        hk = self._hint_key_name.replace("_", " ").title()
+        ck = self._correct_key_name.replace("_", " ").title()
+        print(f"[overlay] Running. {hk}=toggle hints, {ck}=correction mode, Esc=cancel")
+        self._app.exec_()
+
+    def toggle_hints(self):
+        self.visible = not self.visible
+        if self.visible:
+            self._show_scanning_badge()
+            threading.Thread(target=self._refresh_bg, daemon=True).start()
+        else:
+            cancel = getattr(self, '_scan_cancel', None)
+            if cancel:
+                cancel.set()
+            self._scene and self._scene.clear()
+            if self._window:
+                self._window.show()
+            getattr(self, '_stop_suppress_listener', lambda: None)()
+        print(f"[overlay] Hints {'visible' if self.visible else 'hidden'}")
+
+    def toggle_correction(self):
+        self.correction_mode = not self.correction_mode
+        if self.correction_mode:
+            self._draw_correction_grid()
+        else:
+            self._redraw()
+        print(f"[overlay] Correction mode {'ON' if self.correction_mode else 'OFF'}")
+
+    def _schedule_input_fire(self):
+        if self._pending_input_timer:
+            try:
+                self._pending_input_timer.cancel()
+            except Exception:
+                pass
+        # Timer fires on a background thread; dispatch via the SimpleQueue so
+        # _try_fire_input always runs on the Qt main thread (same fix as _dispatch).
+        _dq = getattr(self, '_dispatch_q', None)
+        if _dq is not None:
+            self._pending_input_timer = threading.Timer(
+                0.6, lambda: _dq.put(self._try_fire_input)
+            )
+        else:
+            self._pending_input_timer = threading.Timer(0.6, self._try_fire_input)
+        self._pending_input_timer.daemon = True
+        self._pending_input_timer.start()
+
+    def _try_fire_input(self):
+        inp = self.current_input
+        self.current_input = ""
+        if inp in self.hint_map:
+            self.fire_hint(inp)
+        else:
+            print(f"[overlay] No hint '{inp}'")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 7 — Correction Mode (grid, mouse interaction, element editing)
+# ─────────────────────────────────────────────────────────────────────────────
+
+    def _classify_layer_by_pos(self, scene_x: float, scene_y: float) -> str:
+        """Map scene coords to the nearest Epic layer name using fixed pixel bands."""
+        win = self._find_epic_window()
+        wh = win.height if win else 1080
+        ww = win.width if win else 1920
+        y = scene_y
+        from_bottom = wh - y
+        if y < 25:                                          return "title_bar"
+        if y < 45:                                          return "shortcut_toolbar"
+        if y < 67:                                          return "workspace_tabs"
+        if y < 95:                                          return "breadcrumb"
+        if from_bottom < 25:                                return "bottom_bar"
+        if scene_x < 130:                                   return "sidebar"
+        return "workspace"
+
+    def _correction_hit_test(self, sx: float, sy: float) -> Optional[dict]:
+        """Return the KB element whose bounding box contains scene point (sx, sy), or None."""
+        win = self._find_epic_window()
+        if not win:
+            return None
+        ww, wh = win.width, win.height
+        fp = compute_screen_fp(self.elements)
+        for r in get_reliable_elements(self.conn, fp):
+            cx = r["rel_x"] * ww
+            cy = r["rel_y"] * wh
+            hw = max(r["rel_w"] * ww / 2, 14)
+            hh = max(r["rel_h"] * wh / 2, 9)
+            if abs(sx - cx) <= hw and abs(sy - cy) <= hh:
+                return dict(r)
+        return None
+
+    def _corr_delete_element(self, elem_id: int):
+        """Delete an element from the KB and refresh the correction grid."""
+        row = self.conn.execute("SELECT text FROM elements WHERE id=?", (elem_id,)).fetchone()
+        self.conn.execute("DELETE FROM elements WHERE id=?", (elem_id,))
+        self.conn.commit()
+        print(f"[correction] Deleted element id={elem_id} ({row['text'] if row else '?'})")
+        self._draw_correction_grid()
+
+    def correction_press(self, sx: float, sy: float, right_button: bool = False):
+        """Handle a mouse press event in correction mode (called from CorrectionView)."""
+        if right_button:
+            hit = self._correction_hit_test(sx, sy)
+            if hit:
+                self._corr_delete_element(hit["id"])
+            return
+        hit = self._correction_hit_test(sx, sy)
+        self._corr_resize_mode = False
+        if hit:
+            # If the hit box is already selected, check if user clicked near its
+            # bottom-right corner (within 14px of each edge) → enter resize mode
+            if self._corr_selected and hit["id"] == self._corr_selected.get("id"):
+                win = self._find_epic_window()
+                if win:
+                    cx = hit["rel_x"] * win.width
+                    cy = hit["rel_y"] * win.height
+                    hw = max(hit["rel_w"] * win.width / 2, 14)
+                    hh = max(hit["rel_h"] * win.height / 2, 9)
+                    near_right  = abs(sx - (cx + hw)) < 14
+                    near_bottom = abs(sy - (cy + hh)) < 14
+                    if near_right or near_bottom:
+                        self._corr_resize_mode = True
+                        self._corr_drag_start = (sx, sy)
+                        self._draw_correction_grid()
+                        return
+            self._corr_selected = hit
+            self._corr_drawing = False
+        else:
+            self._corr_selected = None
+            self._corr_drawing = True
+        self._corr_drag_start = (sx, sy)
+        self._corr_new_rect = None
+        self._draw_correction_grid()
+
+    def correction_move(self, sx: float, sy: float):
+        """Handle mouse drag in correction mode — draw new box, move, or resize an element."""
+        if self._corr_resize_mode and self._corr_selected and self._corr_drag_start:
+            win = self._find_epic_window()
+            if not win:
+                return
+            dx = (sx - self._corr_drag_start[0]) / win.width
+            dy = (sy - self._corr_drag_start[1]) / win.height
+            # Growing by the delta in each axis (×2 because rel_w/h span full width/height)
+            self._corr_selected["rel_w"] = max(0.015, self._corr_selected.get("rel_w", 0.05) + dx * 2)
+            self._corr_selected["rel_h"] = max(0.008, self._corr_selected.get("rel_h", 0.02) + dy * 2)
+            self._corr_drag_start = (sx, sy)
+            self._draw_correction_grid()
+        elif self._corr_drawing and self._corr_drag_start:
+            x1, y1 = self._corr_drag_start
+            self._corr_new_rect = (min(x1, sx), min(y1, sy), abs(sx - x1), abs(sy - y1))
+            self._draw_correction_grid()
+        elif self._corr_selected and self._corr_drag_start:
+            win = self._find_epic_window()
+            if not win:
+                return
+            dx = (sx - self._corr_drag_start[0]) / win.width
+            dy = (sy - self._corr_drag_start[1]) / win.height
+            self._corr_selected["rel_x"] = max(0.0, min(1.0, self._corr_selected["rel_x"] + dx))
+            self._corr_selected["rel_y"] = max(0.0, min(1.0, self._corr_selected["rel_y"] + dy))
+            self._corr_drag_start = (sx, sy)
+            self._draw_correction_grid()
+
+    def correction_release(self, sx: float, sy: float):
+        """Handle mouse release in correction mode — save changes to KB."""
+        if self._corr_resize_mode and self._corr_selected:
+            elem = self._corr_selected
+            now = time.time()
+            self.conn.execute(
+                "UPDATE elements SET rel_w=?, rel_h=?, updated_at=? WHERE id=?",
+                (max(0.015, elem.get("rel_w", 0.05)),
+                 max(0.008, elem.get("rel_h", 0.02)),
+                 now, elem["id"])
+            )
+            self.conn.commit()
+            print(f"[correction] Resized '{elem['text']}' → w={elem.get('rel_w', 0.05):.3f} h={elem.get('rel_h', 0.02):.3f}")
+            self._corr_resize_mode = False
+            self._corr_selected = None
+            self._corr_drag_start = None
+            self._draw_correction_grid()
+            return
+
+        if self._corr_drawing and self._corr_new_rect:
+            x, y, w, h = self._corr_new_rect
+            if w < 8 or h < 8:
+                self._corr_drawing = False
+                self._corr_new_rect = None
+                self._draw_correction_grid()
+                return
+            win = self._find_epic_window()
+            if not win:
+                return
+            ww, wh = win.width, win.height
+            rel_x = (x + w / 2) / ww
+            rel_y = (y + h / 2) / wh
+            rel_w = w / ww
+            rel_h = h / wh
+            layer = self._classify_layer_by_pos(x, y)
+            if self._QInputDialog and self._window:
+                text, ok = self._QInputDialog.getText(
+                    self._window, "New Element",
+                    f"Label for this element\n(layer: {layer.replace('_', ' ')}):"
+                )
+            else:
+                text, ok = input(f"Label for new element in {layer}: "), True
+            if ok and str(text).strip():
+                fp = compute_screen_fp(self.elements)
+                save_correction(self.conn, str(text).strip(), layer, rel_x, rel_y, rel_w, rel_h, fp)
+                print(f"[correction] Added '{text}' in {layer} at ({rel_x:.3f},{rel_y:.3f})")
+            self._corr_drawing = False
+            self._corr_new_rect = None
+
+        elif self._corr_selected and self._corr_drag_start:
+            elem = self._corr_selected
+            now = time.time()
+            self.conn.execute(
+                "UPDATE elements SET rel_x=?, rel_y=?, rel_w=?, rel_h=?, updated_at=? WHERE id=?",
+                (elem["rel_x"], elem["rel_y"],
+                 elem.get("rel_w", 0.05), elem.get("rel_h", 0.02),
+                 now, elem["id"])
+            )
+            self.conn.commit()
+            print(f"[correction] Moved '{elem['text']}' → ({elem['rel_x']:.3f},{elem['rel_y']:.3f})")
+            self._corr_selected = None
+            self._corr_drag_start = None
+
+        self._draw_correction_grid()
+
+    def _draw_correction_grid(self):
+        """Draw Epic layer bands as colored zones + existing element boxes."""
+        if self._scene is None:
+            return
+        from PyQt5.QtWidgets import QGraphicsRectItem, QGraphicsTextItem
+        from PyQt5.QtCore import Qt, QRectF
+        from PyQt5.QtGui import QColor, QFont, QPen, QBrush
+
+        self._scene.clear()
+        win = self._find_epic_window()
+        if not win:
+            return
+        ww, wh = win.width, win.height
+
+        # Draw layer bands as semi-transparent colored zones
+        band_colors = {
+            "shortcut_toolbar": QColor(255, 215, 0, 60),
+            "workspace_tabs":   QColor(135, 206, 235, 60),
+            "activity_tabs":    QColor(152, 251, 152, 60),
+            "breadcrumb":       QColor(221, 160, 221, 60),
+            "sidebar":          QColor(240, 230, 140, 60),
+            "bottom_bar":       QColor(255, 160, 122, 60),
+        }
+        label_font = QFont("Consolas", 7)
+        for layer_name, color in band_colors.items():
+            crop = _get_layer_crop(None, layer_name, ww, wh)
+            if crop is None:
+                continue
+            x1, y1, x2, y2 = crop
+            rect = QGraphicsRectItem(x1, y1, x2 - x1, y2 - y1)
+            rect.setBrush(QBrush(color))
+            rect.setPen(QPen(QColor(255, 255, 255, 80), 1))
+            self._scene.addItem(rect)
+            lbl = QGraphicsTextItem(layer_name.replace("_", " "))
+            lbl.setFont(label_font)
+            lbl.setDefaultTextColor(QColor(255, 255, 255, 200))
+            lbl.setPos(x1 + 2, y1 + 1)
+            self._scene.addItem(lbl)
+
+        # Draw existing elements as labeled boxes
+        fp = compute_screen_fp(self.elements)
+        reliable = get_reliable_elements(self.conn, fp)
+        selected_id = self._corr_selected.get("id") if self._corr_selected else None
+        for r in reliable:
+            rx = int(r["rel_x"] * ww)
+            ry = int(r["rel_y"] * wh)
+            rw = max(int(r["rel_w"] * ww), 20)
+            rh = max(int(r["rel_h"] * wh), 12)
+            is_selected = selected_id is not None and r["id"] == selected_id
+            color_hex = LAYER_COLORS.get(r["layer"], "#FFFFFF")
+            c = QColor(color_hex)
+            c.setAlpha(160)
+            box = QGraphicsRectItem(rx - rw // 2, ry - rh // 2, rw, rh)
+            box.setBrush(QBrush(c))
+            if is_selected:
+                box.setPen(QPen(QColor("#FF4400"), 2))  # orange-red for selected
+            elif r["is_correction"]:
+                box.setPen(QPen(QColor("#00FF00"), 1))  # green for corrections
+            else:
+                box.setPen(QPen(QColor("#FFFFFF"), 1))
+            box.setOpacity(0.75)
+            self._scene.addItem(box)
+            conf_marker = {"seen": "·", "confirmed": "○", "reliable": "●", "named": "★"}.get(r["confidence"], "?")
+            sem = f"[{r['semantic']}]" if r["semantic"] else ""
+            txt = QGraphicsTextItem(f"{conf_marker}{r['text'][:12]}{sem}")
+            txt.setFont(QFont("Consolas", 6))
+            txt.setDefaultTextColor(QColor("#000000"))
+            txt.setPos(rx - rw // 2 + 1, ry - rh // 2)
+            self._scene.addItem(txt)
+            # Resize handle: small orange square at bottom-right corner of selected box
+            if is_selected:
+                handle = QGraphicsRectItem(rx + rw // 2 - 8, ry + rh // 2 - 8, 8, 8)
+                handle.setBrush(QBrush(QColor("#FF4400")))
+                handle.setPen(QPen(QColor("#FFFFFF"), 1))
+                self._scene.addItem(handle)
+
+        # Rubber-band rect (new box being drawn)
+        if self._corr_new_rect:
+            rx2, ry2, rw2, rh2 = self._corr_new_rect
+            layer = self._classify_layer_by_pos(rx2, ry2)
+            rubber = QGraphicsRectItem(rx2, ry2, rw2, rh2)
+            rubber.setPen(QPen(QColor("#00FF88"), 2))
+            rubber.setBrush(QBrush(QColor(0, 255, 136, 35)))
+            self._scene.addItem(rubber)
+            lbl2 = QGraphicsTextItem(f"+ new [{layer.replace('_', ' ')}]")
+            lbl2.setFont(QFont("Consolas", 7))
+            lbl2.setDefaultTextColor(QColor("#00FF88"))
+            lbl2.setPos(rx2 + 2, ry2 + 1)
+            self._scene.addItem(lbl2)
+
+        # Status line
+        status_parts = [f"{self._correct_key_name.replace('_',' ').title()}=exit correction"]
+        if self._corr_resize_mode and self._corr_selected:
+            status_parts.insert(0, f"RESIZE '{self._corr_selected.get('text', '?')}' | drag=change size | release=save")
+        elif self._corr_selected:
+            status_parts.insert(0, f"Selected: '{self._corr_selected.get('text', '?')}' | drag=move | click corner-handle=resize | right-click=delete")
+        elif self._corr_drawing and self._corr_new_rect:
+            status_parts.insert(0, "Release to label new element")
+        else:
+            status_parts.insert(0, "Click=select | Drag empty area=new box | Right-click=delete")
+        status = QGraphicsTextItem("  ".join(status_parts))
+        status.setFont(QFont("Consolas", 7))
+        status.setDefaultTextColor(QColor(255, 255, 100, 220))
+        status.setPos(4, wh - 20)
+        self._scene.addItem(status)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 8 — Headless / CLI scan mode
+# ─────────────────────────────────────────────────────────────────────────────
+
+def cli_scan(window_title: str, output_json: bool = False):
+    """One-shot scan — take a screenshot, run OCR, print elements."""
+    print(f"[scan] Scanning: {window_title}")
+    elements = scan_window(window_title)
+    if not elements:
+        print("[scan] No elements detected. Is the window visible?")
+        return
+
+    fp = compute_screen_fp(elements)
+    print(f"[scan] Screen fingerprint: {fp}")
+    print(f"[scan] {len(elements)} elements detected:\n")
+
+    conn = _db_connect()
+    _seed_universal_elements(conn)
+    for e in elements:
+        upsert_element(conn, e, fp)
+
+    keys = generate_hint_keys(len(elements))
+    for i, (e, k) in enumerate(zip(elements, keys)):
+        sem = DEFAULT_SEMANTICS.get(e.text)
+        sem_str = f" [{sem}]" if sem else ""
+        phi_flag = " [!PHI?]" if _looks_like_phi(e.text) else ""
+        print(f"  {k:>4}  {e.layer:<20}  {e.text[:40]:<40}  rel=({e.rel_x:.3f},{e.rel_y:.3f}){sem_str}{phi_flag}")
+
+    save_screen_fp(conn, fp, elements)
+
+    if output_json:
+        data = [{"hint": k, "text": e.text, "layer": e.layer,
+                 "rel_x": e.rel_x, "rel_y": e.rel_y} for e, k in zip(elements, keys)]
+        print("\n" + json.dumps(data, indent=2))
+
+
+def cli_list_kb(layer: str = None, min_confidence: str = "seen"):
+    """List elements from the knowledge base."""
+    conn = _db_connect()
+    query = "SELECT * FROM elements WHERE confidence >= ?"
+    conf_order = {c: i for i, c in enumerate(CONFIDENCE_TIERS)}
+    rows = conn.execute("SELECT * FROM elements").fetchall()
+    rows = [r for r in rows if conf_order.get(r["confidence"], 0) >= conf_order.get(min_confidence, 0)]
+    if layer:
+        rows = [r for r in rows if r["layer"] == layer]
+    rows = sorted(rows, key=lambda r: (-conf_order.get(r["confidence"], 0), r["layer"], r["text"]))
+    print(f"\n{'ID':>5}  {'Confidence':<10}  {'Layer':<20}  {'Clicks':>6}  {'Text'}")
+    print("-" * 80)
+    for r in rows:
+        sem = f" [{r['semantic']}]" if r["semantic"] else ""
+        corr = " [correction]" if r["is_correction"] else ""
+        print(f"  {r['id']:>4}  {r['confidence']:<10}  {r['layer']:<20}  {r['click_count']:>6}  {r['text'][:35]}{sem}{corr}")
+    print(f"\n{len(rows)} elements in knowledge base.")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 9 — Agent Command Handlers (called from epic_agent.py)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _get_agent_fns():
+    """Resolve post_result and find_window from the running epic_agent (__main__)."""
+    import sys as _sys
+    main = _sys.modules.get("__main__")
+    if main is None:
+        return None, None
+    return getattr(main, "post_result", None), getattr(main, "find_window", None)
+
+
+def execute_ocr_view(cmd: dict):
+    """
+    Command handler: scan Epic window via OCR and return hint map.
+    Called from epic_agent.py command dispatch.
+    """
+    post_result, find_window = _get_agent_fns()
+    if not post_result or not find_window:
+        print("[ocr] execute_ocr_view: not running inside epic_agent context")
+        return
+    env = cmd.get("env", "SUP")
+    command_id = cmd.get("id", "unknown")
+
+    window = find_window(env)
+    if not window:
+        post_result(command_id, "error", error=f"No {env} window found")
+        return
+
+    win_title = window.title
+    elements = scan_window(win_title)
+    if not elements:
+        post_result(command_id, "complete", data={"elements": [], "hintMap": {}, "elementCount": 0})
+        return
+
+    fp = compute_screen_fp(elements)
+    phash_fp = _compute_window_phash(win_title)   # same algorithm as epic_agent.py
+    conn = _db_connect()
+    _seed_universal_elements(conn)
+    save_screen_fp(conn, fp, elements)
+    for e in elements:
+        upsert_element(conn, e, fp)
+    # Bridge pHash (navigation tree key) ↔ OCR text fp (KB key)
+    save_fp_bridge(conn, phash_fp, fp)
+
+    # Collision-proof hint map: KB semantics get reserved keys; positional keys never clash
+    sem_map = get_semantic_map(conn)   # text → shortcut key (KB + defaults)
+    reserved_keys = set(sem_map.values())
+    candidates = generate_hint_keys(len(elements) + len(reserved_keys) + 10)
+    positional_keys = [k for k in candidates if k not in reserved_keys]
+
+    hint_map: dict = {}
+    # First pass: semantic shortcuts from KB
+    for e in elements:
+        sem = sem_map.get(e.text)
+        if sem and sem not in hint_map:
+            hint_map[sem] = e
+    # Second pass: positional keys for remaining elements
+    ki = 0
+    for e in elements:
+        if any(hint_map.get(k) is e for k in hint_map):
+            continue
+        while ki < len(positional_keys) and positional_keys[ki] in hint_map:
+            ki += 1
+        if ki < len(positional_keys):
+            hint_map[positional_keys[ki]] = e
+            ki += 1
+
+    # Build structured layer summary
+    layer_summary: dict[str, list[str]] = {}
+    for e in elements:
+        layer_summary.setdefault(e.layer, []).append(e.text)
+
+    serialized_map = {k: {"text": e.text, "layer": e.layer,
+                          "rel_x": e.rel_x, "rel_y": e.rel_y,
+                          "abs_cx": e.abs_cx, "abs_cy": e.abs_cy}
+                      for k, e in hint_map.items()}
+
+    post_result(command_id, "complete", data={
+        "fingerprint": fp,
+        "phashFingerprint": phash_fp,
+        "activity": get_activity_for_fp(conn, fp),
+        "elementCount": len(elements),
+        "hintMap": serialized_map,
+        "layerSummary": layer_summary,
+        "elements": [
+            {"hint": k, "text": e.text, "layer": e.layer,
+             "rel_x": round(e.rel_x, 3), "rel_y": round(e.rel_y, 3)}
+            for k, e in hint_map.items()
+        ],
+    })
+    print(f"  [ocr-view] {len(elements)} elements, fp={fp[:8]}, phash={phash_fp[:8]}, env={env}")
+
+
+def execute_ocr_do(cmd: dict):
+    """
+    Command handler: click an element by OCR hint key.
+    """
+    post_result, find_window = _get_agent_fns()
+    if not post_result or not find_window:
+        print("[ocr] execute_ocr_do: not running inside epic_agent context")
+        return
+    env = cmd.get("env", "SUP")
+    hint = cmd.get("hint", "")
+    command_id = cmd.get("id", "unknown")
+
+    if not hint:
+        post_result(command_id, "error", error="Missing hint parameter")
+        return
+
+    window = find_window(env)
+    if not window:
+        post_result(command_id, "error", error=f"No {env} window found")
+        return
+
+    elements = scan_window(window.title)
+    if not elements:
+        post_result(command_id, "error", error="No elements detected on screen")
+        return
+
+    fp = compute_screen_fp(elements)
+    phash_fp2 = _compute_window_phash(window.title)
+    conn2 = _db_connect()
+    _seed_universal_elements(conn2)
+    for e in elements:
+        upsert_element(conn2, e, fp)
+    # Bridge pHash (navigation tree key) ↔ OCR text fp (KB key)
+    save_fp_bridge(conn2, phash_fp2, fp)
+
+    # Collision-proof hint map using KB semantics (same logic as execute_ocr_view)
+    sem_map2 = get_semantic_map(conn2)
+    reserved2 = set(sem_map2.values())
+    cands2 = generate_hint_keys(len(elements) + len(reserved2) + 10)
+    pos_keys2 = [k for k in cands2 if k not in reserved2]
+
+    hint_map: dict[str, OcrElement] = {}
+    for e in elements:
+        sem = sem_map2.get(e.text)
+        if sem and sem not in hint_map:
+            hint_map[sem] = e
+    ki2 = 0
+    for e in elements:
+        if any(hint_map.get(k) is e for k in hint_map):
+            continue
+        while ki2 < len(pos_keys2) and pos_keys2[ki2] in hint_map:
+            ki2 += 1
+        if ki2 < len(pos_keys2):
+            hint_map[pos_keys2[ki2]] = e
+            ki2 += 1
+
+    elem = hint_map.get(hint)
+    if not elem:
+        available = list(hint_map.keys())[:20]
+        post_result(command_id, "error", error=f"Hint '{hint}' not found. Available: {available}")
+        return
+
+    try:
+        import pyautogui
+        pyautogui.moveTo(elem.abs_cx, elem.abs_cy)
+        import time as _t; _t.sleep(0.1)
+        pyautogui.click(elem.abs_cx, elem.abs_cy)
+    except Exception as e:
+        post_result(command_id, "error", error=f"Click failed: {e}")
+        return
+
+    existing = conn2.execute(
+        "SELECT id FROM elements WHERE text=? AND layer=?", (elem.text, elem.layer)
+    ).fetchone()
+    if existing:
+        promote_element(conn2, existing["id"])
+
+    post_result(command_id, "complete", data={
+        "clicked": elem.text,
+        "layer": elem.layer,
+        "abs_cx": elem.abs_cx,
+        "abs_cy": elem.abs_cy,
+        "fingerprint": fp,
+        "phashFingerprint": phash_fp2,
+    })
+    print(f"  [ocr-do] Clicked '{elem.text}' ({elem.layer}) via hint '{hint}', phash={phash_fp2[:8]}")
+
+
+def get_ocr_elements_for_heartbeat(window_title: str) -> dict:
+    """
+    Get current OCR element map for inclusion in agent heartbeat payload.
+    Called from always-on capture drain.
+    """
+    try:
+        elements = scan_window(window_title)
+        if not elements:
+            return {}
+        fp = compute_screen_fp(elements)
+        layer_summary: dict[str, list[str]] = {}
+        for e in elements:
+            if not _looks_like_phi(e.text):
+                layer_summary.setdefault(e.layer, []).append(e.text)
+        return {
+            "fingerprint": fp,
+            "layerSummary": layer_summary,
+            "elementCount": len(elements),
+        }
+    except Exception:
+        return {}
+
+
+def get_ocr_kb_summary(fp: str) -> dict:
+    """
+    Read accumulated OCR element layer summary for a fingerprint from the KB.
+    Does NOT run OCR — reads only from the local SQLite knowledge base.
+    Safe to call frequently from the heartbeat loop.
+
+    fp may be either a pHash fp (from epic_agent.py heartbeat) or an OCR text fp.
+    The fp_bridge table is consulted first to resolve pHash → OCR fp when needed,
+    so that node.ocrLayers is populated even when called with the canonical tree fp.
+    """
+    try:
+        conn = _db_connect()
+        # Resolve pHash fp → OCR text fp via bridge table.
+        # If not in bridge (or fp IS an ocr_fp), use fp directly.
+        bridge_row = conn.execute(
+            "SELECT ocr_fp FROM fp_bridge WHERE phash_fp=?", (fp,)
+        ).fetchone()
+        ocr_fp = bridge_row["ocr_fp"] if bridge_row else fp
+
+        rows = conn.execute(
+            "SELECT layer, text, confidence FROM elements "
+            "WHERE confidence IN ('confirmed','reliable','named') AND screen_fps LIKE ?",
+            (f"%{ocr_fp}%",)
+        ).fetchall()
+        layer_summary: dict[str, list[str]] = {}
+        for r in rows:
+            if not _looks_like_phi(r["text"]):
+                layer_summary.setdefault(r["layer"], []).append(r["text"])
+        return {
+            "phashFp": fp,
+            "ocrFp": ocr_fp,
+            "layerSummary": layer_summary,
+            "elementCount": len(rows),
+        } if rows else {}
+    except Exception:
+        return {}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SECTION 10 — CLI entry point
+# ─────────────────────────────────────────────────────────────────────────────
+
+def main():
+    global BRIDGE_URL, BRIDGE_TOKEN  # declare before any reference to these names
+    parser = argparse.ArgumentParser(description="OCR Vimium overlay for Epic Hyperspace")
+    parser.add_argument("--window", default="",
+                        help="Window title substring to find Epic (default: auto-detect)")
+    parser.add_argument("--scan", action="store_true",
+                        help="One-shot scan and print elements, then exit")
+    parser.add_argument("--json", action="store_true",
+                        help="Output scan results as JSON")
+    parser.add_argument("--list-kb", action="store_true",
+                        help="List knowledge base contents")
+    parser.add_argument("--layer", default=None,
+                        help="Filter KB list or scan by layer name")
+    parser.add_argument("--correct", action="store_true",
+                        help="Start in correction mode")
+    parser.add_argument("--add", nargs=4, metavar=("TEXT", "LAYER", "REL_X", "REL_Y"),
+                        help="Manually add an element to the KB")
+    parser.add_argument("--tag", nargs=2, metavar=("FP", "ACTIVITY"),
+                        help="Tag a screen fingerprint with an activity name")
+    parser.add_argument("--bridge-url", default=BRIDGE_URL)
+    parser.add_argument("--bridge-token", default=BRIDGE_TOKEN)
+    parser.add_argument("--hint-key", default="ctrl+shift+h",
+                        help="Hotkey to toggle hint overlay (default: ctrl+shift+h). "
+                             "Supports combos like ctrl+shift+h, or bare keys like f12.")
+    parser.add_argument("--correct-key", default="ctrl+shift+c",
+                        help="Hotkey to toggle correction mode (default: ctrl+shift+c). "
+                             "Supports combos like ctrl+shift+c, or bare keys like f11.")
+    args = parser.parse_args()
+    BRIDGE_URL = args.bridge_url
+    BRIDGE_TOKEN = args.bridge_token
+
+    # Auto-detect Epic window title
+    win_title = args.window
+    if not win_title:
+        try:
+            import pygetwindow as gw
+            epic_keywords = ["hyperspace", "hyperdrive", "haiku", "canto"]
+            browser_noise = ["chrome", "firefox", "edge", "brave", "safari",
+                             "replit", "github", ".py -", ".ts -", "visual studio"]
+            for w in gw.getAllWindows():
+                t = (w.title or "").lower()
+                if w.width < 400:
+                    continue
+                if any(b in t for b in browser_noise):
+                    continue
+                if any(k in t for k in epic_keywords):
+                    win_title = w.title
+                    print(f"[ocr] Auto-detected Epic window: {win_title!r}")
+                    break
+        except Exception:
+            pass
+    if not win_title:
+        win_title = "Hyperspace"
+        print(f"[ocr] Using default window title: {win_title!r}")
+
+    if args.list_kb:
+        cli_list_kb(layer=args.layer)
+        return
+
+    if args.add:
+        text, layer, rel_x, rel_y = args.add[0], args.add[1], float(args.add[2]), float(args.add[3])
+        conn = _db_connect()
+        save_correction(conn, text, layer, rel_x, rel_y, 0.05, 0.02, "", None)
+        print(f"[ocr] Added correction: '{text}' in {layer} at ({rel_x:.3f},{rel_y:.3f})")
+        return
+
+    if args.tag:
+        fp, activity = args.tag
+        conn = _db_connect()
+        tag_fp_activity(conn, fp, activity)
+        print(f"[ocr] Tagged fingerprint {fp} → '{activity}'")
+        return
+
+    if args.scan:
+        cli_scan(win_title, output_json=args.json)
+        return
+
+    # Interactive overlay mode
+    overlay = OverlayWindow(win_title,
+                            hint_key=args.hint_key,
+                            correct_key=args.correct_key)
+    if args.correct:
+        overlay.correction_mode = True
+
+    print(f"[ocr] Starting overlay over: {win_title!r}")
+    hkn = args.hint_key.replace("_", " ").title()
+    ckn = args.correct_key.replace("_", " ").title()
+    print(f"[ocr] {hkn}=toggle hints  {ckn}=correction mode  Esc=cancel")
+    overlay.run()
+
+
+if __name__ == "__main__":
+    main()
