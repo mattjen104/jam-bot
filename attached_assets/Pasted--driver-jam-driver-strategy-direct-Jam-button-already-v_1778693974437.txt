@@ -1,0 +1,19 @@
+[driver] [jam-driver] strategy: direct (Jam button already visible)
+[driver] [jam-driver] step substrate=cdp goal=init result=skip reason="CDP websocket connect failed: Handshake status 403 Forbidden -+-+- {'content-length': '239', 'content-type': 'text/html'} -+-+- b'Rejected an incoming WebSocket connection from the http://127.0.0.1:9222 origin. Use the command line flag --remote-allow-origins=http://127.0.0.1:9222 to allow connections from this origin or --remote-allow-origins=* to allow all origins.'"
+[driver] [jam-driver] step substrate=cdp goal=find_jam_button result=skip reason='substrate unavailable'
+[driver] [jam-driver] step substrate=uia goal=init result=ok
+[driver] [jam-driver] step substrate=uia goal=find_jam_button result=ok name='Invite others to your Jam, and listen together from anywhere.Start a Jam' auto_id='' ctrl='ListItem'
+[driver] [jam-driver] step substrate=engine goal=extract_url result=no-url-yet
+[driver] [jam-driver] strategy: via Friend Activity sidebar
+[driver] [jam-driver] step substrate=cdp goal=open_friend_activity result=skip reason='substrate unavailable'
+[driver] [jam-driver] step substrate=uia goal=open_friend_activity result=ok name='Friend Activity' auto_id='' ctrl='Button'
+[driver] [jam-driver] step substrate=cdp goal=find_jam_button result=skip reason='substrate unavailable'
+[driver] [jam-driver] step substrate=uia goal=find_jam_button result=miss reason='no UIA element matched any of 6 hints' candidates=1575
+[driver] C:\Users\mjensen\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:113: RequestsDependencyWarning: urllib3 (2.5.0) or chardet (7.4.3)/charset_normalizer (3.4.2) doesn't match a supported version!
+[driver]   warnings.warn(
+[driver] [jam-driver] step substrate=vision goal=find_jam_button result=miss reason='model returned null/no match' label='Start a Jam'
+[driver] [jam-driver] step substrate=engine goal=find_jam_button result=all-substrates-missed strategy='via Friend Activity sidebar'
+[driver] [jam-driver] strategy: via Connect popover
+[driver] [jam-driver] step substrate=cdp goal=open_connect_popover result=skip reason='substrate unavailable'
+[driver] [jam-driver] step substrate=uia goal=open_connect_popover result=ok name='Connect to a device' auto_id='' ctrl='Button'
+[driver] [jam-driver] step substrate=cdp goal=find_jam_button result=skip reason='substrate unavailable'
