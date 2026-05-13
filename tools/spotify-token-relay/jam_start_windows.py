@@ -906,14 +906,25 @@ class UIASubstrate(Substrate):
     def click_copy_link_and_read_clipboard(self) -> Optional[str]:
         win = self._ensure_window()
         if win is None:
+            log_step(self.name, GOAL_COPY_LINK, "skip",
+                     reason="no spotify window")
             return None
         elements = _enumerate_uia(win)
         match = _match_uia(elements, SHARE_LINK_HINTS)
         if match is None:
+            log_step(self.name, GOAL_COPY_LINK, "no-copy-link-button",
+                     candidates=len(elements),
+                     hints=list(SHARE_LINK_HINTS))
             return None
+        log_step(self.name, GOAL_COPY_LINK, "found-copy-link",
+                 name=match["name"], ctrl=match["ctrl"])
         if not _click_uia(match["el"]):
+            log_step(self.name, GOAL_COPY_LINK, "copy-link-click-failed",
+                     name=match["name"])
             return None
-        time.sleep(0.5)
+        # Spotify needs a beat for the clipboard write to land.
+        time.sleep(0.7)
+        text = ""
         try:
             import ctypes
             CF_UNICODETEXT = 13
@@ -923,6 +934,8 @@ class UIASubstrate(Substrate):
             try:
                 handle = user32.GetClipboardData(CF_UNICODETEXT)
                 if not handle:
+                    log_step(self.name, GOAL_COPY_LINK,
+                             "clipboard-empty-after-click")
                     return None
                 ptr = kernel32.GlobalLock(handle)
                 try:
@@ -934,12 +947,19 @@ class UIASubstrate(Substrate):
             finally:
                 user32.CloseClipboard()
         except Exception as e:
-            log(f"clipboard read failed: {e}")
+            log_step(self.name, GOAL_COPY_LINK, "clipboard-read-failed",
+                     error=str(e))
             return None
         url = _extract_jam_url(text)
         if url:
             log_step(self.name, GOAL_COPY_LINK, "url-from-clipboard", url=url)
-        return url
+            return url
+        # Surface what was actually copied so we can fix the regex if Spotify
+        # changed its URL format. Truncate to avoid leaking long share text.
+        preview = (text or "")[:200].replace("\n", "\\n")
+        log_step(self.name, GOAL_COPY_LINK, "clipboard-no-jam-url-match",
+                 clipboard_preview=preview, clipboard_len=len(text or ""))
+        return None
 
 
 # ---------------------------------------------------------------------------
