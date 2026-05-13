@@ -1140,21 +1140,30 @@ class Engine:
                 # Wait for popover/sidebar to render.
                 time.sleep(1.4)
             if self._try_goal(GOAL_FIND_JAM, JAM_HINTS):
-                # Wait for Jam dialog.
-                time.sleep(1.5)
-                url = self._extract_url_any()
-                if url:
-                    self._commit_pending()
-                    return url
-                log_step("engine", "extract_url", "no-url-yet")
-                # Don't lose the click — the click happened, dialog
-                # may just not have settled. Try one more URL-pass after
-                # a short wait before falling through.
-                time.sleep(1.0)
-                url = self._extract_url_any()
-                if url:
-                    self._commit_pending()
-                    return url
+                # The click fired. The Jam share dialog usually appears
+                # within ~1-3s but can be slow on cold cache. Poll
+                # extract_url generously before giving up — falling
+                # through to the next strategy here is *destructive*
+                # because the FA opener is a toggle and will close the
+                # already-open sidebar.
+                deadline = time.time() + 18.0
+                attempt = 0
+                while time.time() < deadline:
+                    url = self._extract_url_any()
+                    if url:
+                        self._commit_pending()
+                        return url
+                    attempt += 1
+                    log_step("engine", "extract_url", "no-url-yet",
+                             attempt=attempt)
+                    time.sleep(1.0)
+                # Genuine failure: clicked but no URL ever materialised.
+                log_step("engine", "extract_url",
+                         "give-up-after-successful-click",
+                         strategy=desc, attempts=attempt)
+                # Don't fall through to the next strategy — its opener
+                # would untoggle the state we just set up. Bail out.
+                return None
             else:
                 log_step("engine", GOAL_FIND_JAM, "all-substrates-missed",
                          strategy=desc)
