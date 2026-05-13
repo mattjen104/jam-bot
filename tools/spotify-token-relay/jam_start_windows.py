@@ -120,7 +120,7 @@ def _import_pillow_clipboard():
 # ---------------------------------------------------------------------------
 
 # Spotify renames the "Start a Jam" button between builds. Match against
-# any of these (case-insensitive substring match on Name / FullDescription).
+# any of these (case-insensitive substring match on name + automation_id).
 JAM_BUTTON_HINTS = (
     "start a jam",
     "start jam",
@@ -128,16 +128,35 @@ JAM_BUTTON_HINTS = (
     "start a session",
     "create a jam",
     "host a jam",
-    "invite friends",
-    "listen with friends",
-    "jam",
 )
 
-CONNECT_BUTTON_HINTS = (
-    "connect to a device",
-    "playing on ",  # when already streaming to a device, button text changes
-    "devices available",
-    "spotify connect",
+# Affordances that REVEAL "Start a Jam" when clicked. Order matters — we
+# try them in priority order. Friend Activity is preferred because the
+# sidebar stays open and doesn't depend on Spotify having an active
+# playback context. Connect is the fallback (popover route).
+#
+# Each opener: (human description, hints matched against name+auto_id).
+JAM_OPENERS = (
+    (
+        "Friend Activity sidebar",
+        (
+            "friend activity",
+            "what friends are playing",
+            "what friends are listening",
+            "buddy list",
+            "friendactivitybutton",
+            "show friends",
+        ),
+    ),
+    (
+        "Connect / devices popover",
+        (
+            "connect to a device",
+            "playing on ",  # button text changes when actively streaming
+            "devices available",
+            "spotify connect",
+        ),
+    ),
 )
 
 SHARE_LINK_HINTS = (
@@ -145,6 +164,11 @@ SHARE_LINK_HINTS = (
     "copy invite link",
     "share link",
 )
+
+# Control types worth searching for clickable affordances. Spotify's
+# Electron client exposes some buttons as ListItem or MenuItem rather
+# than Button.
+CLICKABLE_CTRL_TYPES = ("Button", "ListItem", "MenuItem", "TabItem", "Hyperlink")
 
 
 def _find_spotify_window():
@@ -202,19 +226,61 @@ def _all_descendants(win, control_type: Optional[str] = None):
         return []
 
 
-def _find_by_hint(win, hints, control_type: Optional[str] = "Button"):
-    """Find the first descendant whose name matches any of the hints."""
-    for el in _all_descendants(win, control_type):
+def _enumerate_elements(win) -> list[dict]:
+    """
+    Walk every descendant once and return a flat index of clickable
+    candidates with the metadata we use for matching. Centralising the
+    walk lets the matchers compose cheaply without re-traversing the
+    UIA tree on every attempt.
+    """
+    out: list[dict] = []
+    for el in _all_descendants(win, None):
         try:
-            name = (el.window_text() or "").lower()
+            ctrl = el.element_info.control_type or ""
+        except Exception:
+            ctrl = ""
+        try:
+            name = (el.window_text() or "").strip()
         except Exception:
             name = ""
-        if not name:
+        try:
+            auto_id = getattr(el.element_info, "automation_id", "") or ""
+        except Exception:
+            auto_id = ""
+        out.append({
+            "el": el,
+            "name": name,
+            "auto_id": auto_id,
+            "ctrl": ctrl,
+        })
+    return out
+
+
+def _match_first(elements: list[dict], hints, ctrl_types=CLICKABLE_CTRL_TYPES):
+    """
+    Return the first element in `elements` matching any hint against
+    name + automation_id (case-insensitive substring), filtered to
+    `ctrl_types` if provided.
+    """
+    hints_lower = [h.lower() for h in hints if h]
+    for e in elements:
+        if ctrl_types and e["ctrl"] not in ctrl_types:
             continue
-        for hint in hints:
-            if hint in name:
-                return el
+        haystack = (e["name"] + " " + e["auto_id"]).lower()
+        if not haystack.strip():
+            continue
+        for h in hints_lower:
+            if h in haystack:
+                return e
     return None
+
+
+def _find_by_hint(win, hints, control_type: Optional[str] = "Button"):
+    """Back-compat shim used by SHARE_LINK_HINTS lookup."""
+    elements = _enumerate_elements(win)
+    ctrl_types = (control_type,) if control_type else CLICKABLE_CTRL_TYPES
+    match = _match_first(elements, hints, ctrl_types=ctrl_types)
+    return match["el"] if match else None
 
 
 def _click(el, prefer_real_mouse: bool = False) -> bool:
