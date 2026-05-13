@@ -43,11 +43,52 @@ In PowerShell, in this directory:
 
 ```powershell
 python -m pip install --upgrade pip
-python -m pip install pywinauto pyautogui mss Pillow requests psutil
+python -m pip install pywinauto pyautogui mss Pillow requests psutil websocket-client
 ```
 
 `psutil` is optional but makes Spotify-window detection more reliable
 when several "Spotify-titled" notification popups exist.
+`websocket-client` is required for the CDP (DOM) substrate; without it
+the driver falls back to UIA + vision only.
+
+---
+
+## Enable Spotify's debug port (CDP / DOM substrate)
+
+Spotify Desktop is an Electron app. Launched with
+`--remote-debugging-port=9222` it exposes a real Chromium DevTools
+endpoint, which lets the driver address buttons by `aria-label`,
+`data-testid`, and visible text — far more reliable than the UI
+Automation tree, which Spotify rebuilds frequently.
+
+This is **strongly recommended** but optional: without it the driver
+falls back to UIA + vision and still works.
+
+1. Find your Spotify shortcut (Start Menu → right-click "Spotify" →
+   *More* → *Open file location*; or your taskbar/desktop shortcut).
+2. Right-click the shortcut → *Properties*.
+3. In the *Target* field, append a space and `--remote-debugging-port=9222`
+   to the existing path. Example:
+   `"C:\Users\<you>\AppData\Roaming\Spotify\Spotify.exe" --remote-debugging-port=9222`
+4. Click *Apply*. Fully quit Spotify (right-click tray icon → Quit), then
+   relaunch from the modified shortcut.
+
+Verify it's listening:
+
+```powershell
+curl http://localhost:9222/json
+```
+
+You should get back a JSON array including a `"type": "page"` target
+with a Spotify URL. If you instead get "connection refused", Spotify
+either wasn't relaunched from the modified shortcut or another instance
+(autostarted at boot) is still running without the flag — fully quit
+all Spotify processes (Task Manager → Spotify.exe) and relaunch from
+the shortcut.
+
+The driver auto-detects the CDP endpoint on every run; once it's
+working, you'll see `[jam-driver] step substrate=cdp goal=... result=ok`
+in the relay log instead of the slower UIA path.
 
 ---
 
