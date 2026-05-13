@@ -331,8 +331,35 @@ def _handle_jam_start_impl(handler: "RelayHandler") -> None:
             timeout=JAM_START_TIMEOUT_SEC,
             # Inherit OPENROUTER_API_KEY etc. from the relay's env.
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as te:
         elapsed = int(time.time() - started)
+        # Surface whatever the driver managed to write before we killed it,
+        # otherwise a hung driver is a complete black box.
+        timeout_stderr = ""
+        try:
+            raw = te.stderr
+            if isinstance(raw, bytes):
+                raw = raw.decode("utf-8", errors="replace")
+            timeout_stderr = (raw or "").strip()
+        except Exception:
+            pass
+        timeout_stdout = ""
+        try:
+            raw = te.stdout
+            if isinstance(raw, bytes):
+                raw = raw.decode("utf-8", errors="replace")
+            timeout_stdout = (raw or "").strip()
+        except Exception:
+            pass
+        print(f"[relay] /jam/start TIMEOUT after {elapsed}s")
+        if timeout_stderr:
+            for line in timeout_stderr.splitlines()[-40:]:
+                print(f"[driver] {line}")
+        else:
+            print("[driver] (no stderr captured before timeout)")
+        if timeout_stdout:
+            for line in timeout_stdout.splitlines()[-10:]:
+                print(f"[driver-stdout] {line}")
         handler._send_json(
             504,
             {
@@ -343,9 +370,11 @@ def _handle_jam_start_impl(handler: "RelayHandler") -> None:
                     f"weird state. Bring the Spotify window to the front "
                     f"manually and retry."
                 ),
+                "stderrTail": "\n".join(
+                    timeout_stderr.splitlines()[-20:]
+                )[-1200:],
             },
         )
-        print(f"[relay] /jam/start TIMEOUT after {elapsed}s")
         return
     except Exception as e:
         handler._send_json(
