@@ -127,11 +127,15 @@ JAM_BUTTON_HINTS = (
     "start session",
     "start a session",
     "create a jam",
+    "host a jam",
+    "invite friends",
+    "listen with friends",
+    "jam",
 )
 
 CONNECT_BUTTON_HINTS = (
     "connect to a device",
-    "connect",
+    "playing on ",  # when already streaming to a device, button text changes
     "devices available",
     "spotify connect",
 )
@@ -213,9 +217,16 @@ def _find_by_hint(win, hints, control_type: Optional[str] = "Button"):
     return None
 
 
-def _click(el) -> bool:
-    """Try the most reliable invoke methods in order."""
-    for fn_name in ("invoke", "click_input", "click"):
+def _click(el, prefer_real_mouse: bool = False) -> bool:
+    """Try the most reliable invoke methods in order.
+
+    Spotify's Connect popover only opens on a real mouse click, not on
+    UIA invoke(). Pass prefer_real_mouse=True for those cases."""
+    if prefer_real_mouse:
+        order = ("click_input", "invoke", "click")
+    else:
+        order = ("invoke", "click_input", "click")
+    for fn_name in order:
         try:
             fn = getattr(el, fn_name, None)
             if fn is None:
@@ -315,22 +326,37 @@ def try_uia_path() -> Optional[str]:
     except Exception:
         pass
 
-    # Step 1: open the Connect/devices flyout.
+    # Step 1: open the Connect/devices flyout. Spotify only opens the
+    # popover on a real mouse click — UIA invoke() is silently ignored.
     connect_btn = _find_by_hint(win, CONNECT_BUTTON_HINTS)
     if connect_btn is None:
         log("connect button not found via UIA")
         return None
-    if not _click(connect_btn):
+    log(f"clicking connect button: {connect_btn.window_text()!r}")
+    if not _click(connect_btn, prefer_real_mouse=True):
         log("clicking connect button failed")
         return None
-    time.sleep(0.6)
+    time.sleep(1.2)
 
-    # Step 2: click "Start a Jam".
+    # Step 2: click "Start a Jam" inside the popover. Same real-mouse
+    # requirement applies. Re-walk the tree so we see the freshly
+    # rendered popover.
     jam_btn = _find_by_hint(win, JAM_BUTTON_HINTS)
     if jam_btn is None:
-        log("'Start a Jam' button not found via UIA")
+        log("'Start a Jam' button not found via UIA after opening Connect popover")
+        # Dump candidate button names to help diagnose UI changes.
+        names = []
+        for el in _all_descendants(win, "Button"):
+            try:
+                n = el.window_text() or ""
+            except Exception:
+                continue
+            if n:
+                names.append(n)
+        log(f"visible buttons after Connect click ({len(names)}): {names[:40]}")
         return None
-    if not _click(jam_btn):
+    log(f"clicking jam button: {jam_btn.window_text()!r}")
+    if not _click(jam_btn, prefer_real_mouse=True):
         log("clicking 'Start a Jam' failed")
         return None
     time.sleep(1.5)
@@ -556,7 +582,12 @@ def try_vision_path() -> Optional[str]:
     # Click sequence: Connect button, then Start a Jam. Try cached
     # coordinates first (per Spotify build); only call OpenRouter when
     # the cache misses or the cached click fails.
-    for label in ("Connect to a device (speakers icon)", "Start a Jam"):
+    #
+    # IMPORTANT: don't commit any vision-discovered coords to the cache
+    # until the WHOLE flow succeeds (URL extracted). Otherwise one bad
+    # vision guess gets cached and replayed forever.
+    pending_cache: list[tuple[str, tuple[float, float]]] = []
+    for label in ("Connect to a device", "Start a Jam"):
         if _try_cached_click(version, label):
             time.sleep(1.2)
             continue
@@ -570,21 +601,30 @@ def try_vision_path() -> Optional[str]:
             log(f"vision could not locate '{label}'")
             return None
         _click_at_window_pct(bbox, coords)
-        _remember_click(version, label, coords)
+        pending_cache.append((label, coords))
         time.sleep(1.2)
 
     # After clicking Start a Jam, try to read the URL via UIA — the dialog
     # is a real OS-level dialog, so its text is usually exposed even when
     # the surrounding chrome wasn't.
     _, win = _find_spotify_window()
+    url: Optional[str] = None
     if win is not None:
         url = _read_share_url_from_dialog(win)
-        if url:
-            return url
-        url = _click_copy_link_and_read_clipboard(win)
-        if url:
-            return url
+        if not url:
+            url = _click_copy_link_and_read_clipboard(win)
 
+    if url:
+        # Flow succeeded — now it's safe to remember those vision coords.
+        for label, coords in pending_cache:
+            _remember_click(version, label, coords)
+        return url
+
+    if pending_cache:
+        log(
+            f"vision flow did not produce a URL; discarding {len(pending_cache)} "
+            "uncommitted cache entries to avoid poisoning future runs"
+        )
     return None
 
 
@@ -672,7 +712,19 @@ def main() -> None:
                         help="Print Spotify's UIA tree to stderr and exit.")
     parser.add_argument("--vision-only", action="store_true",
                         help="Skip the UIA path; force vision fallback.")
+    parser.add_argument("--clear-cache", action="store_true",
+                        help="Delete the vision coord cache and exit.")
     args = parser.parse_args()
+
+    if args.clear_cache:
+        try:
+            os.remove(_CACHE_PATH)
+            log(f"cleared vision cache: {_CACHE_PATH}")
+        except FileNotFoundError:
+            log("vision cache already empty")
+        except OSError as e:
+            log(f"could not delete cache: {e}")
+        emit({"ok": True, "joinUrl": "<cache cleared>"})
 
     if args.debug_tree:
         dump_tree()
