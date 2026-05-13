@@ -152,7 +152,11 @@ JAM_STRATEGIES: list[tuple[str, Optional[tuple[str, tuple[str, ...]]]]] = [
 ]
 
 JAM_URL_RE = re.compile(
-    r"https?://(?:open\.)?spotify\.com/(?:jam|social-session)/[A-Za-z0-9_\-]+"
+    r"https?://(?:"
+    r"(?:open\.)?spotify\.com/(?:jam|social-session)/[A-Za-z0-9_\-]+"
+    r"|"
+    r"spotify\.link/[A-Za-z0-9_\-]+"
+    r")"
 )
 
 
