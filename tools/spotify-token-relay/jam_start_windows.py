@@ -1225,17 +1225,17 @@ def run(args) -> None:
             ),
         })
 
+    # Strict flag semantics: each --no-* flag removes that substrate
+    # entirely (clicks AND URL extraction). --vision-only is equivalent
+    # to passing both --no-cdp and --no-uia.
+    use_cdp = not args.no_cdp and not args.vision_only
+    use_uia = not args.no_uia and not args.vision_only
     substrates: list[Substrate] = []
-    if not args.no_cdp and not args.vision_only:
+    if use_cdp:
         substrates.append(CDPSubstrate())
-    if not args.no_uia and not args.vision_only:
+    if use_uia:
         substrates.append(UIASubstrate())
-    # Vision is always last; --vision-only forces it to be the only one
-    # tried for the click steps but UIA still handles URL extraction.
-    if args.vision_only:
-        substrates = [VisionSubstrate(), UIASubstrate()]
-    else:
-        substrates.append(VisionSubstrate())
+    substrates.append(VisionSubstrate())
 
     engine = Engine(substrates)
     try:
