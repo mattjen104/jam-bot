@@ -82,7 +82,7 @@ SECRET = os.environ.get("RELAY_SECRET", "")
 # How long the Jam-start UI driver gets to finish before we give up and
 # return a structured error to the bot. Spotify can be sluggish on first
 # Connect-flyout open so 30s is on the lower edge of "comfortable".
-JAM_START_TIMEOUT_SEC = 30
+JAM_START_TIMEOUT_SEC = 75
 
 # Path to the platform-specific UI driver. Always resolves next to this
 # script so a `cd` doesn't break it.
