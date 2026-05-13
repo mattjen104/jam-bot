@@ -748,16 +748,31 @@ def _enumerate_uia(win) -> list[dict]:
 
 
 def _match_uia(elements: list[dict], hints, ctrl_types=_CLICKABLE_CTRL_TYPES):
+    """Match by hint substring, but prefer narrower control types first.
+
+    Spotify's Electron UI often nests a real <Button name="Start a Jam">
+    inside a <ListItem name="Invite others to your Jam, and listen
+    together from anywhere.Start a Jam">. Both match the hint
+    "start a jam", but only clicking the Button actually invokes the
+    action; clicking the ListItem container is a no-op. So we walk
+    ctrl_types in the order they were given (Button first by convention
+    in _CLICKABLE_CTRL_TYPES) and only fall back to wider container
+    types if no narrower match exists.
+    """
     hints_lower = [h.lower() for h in hints if h]
-    for e in elements:
-        if ctrl_types and e["ctrl"] not in ctrl_types:
-            continue
-        haystack = (e["name"] + " " + e["auto_id"]).lower()
-        if not haystack.strip():
-            continue
-        for h in hints_lower:
-            if h in haystack:
-                return e
+    if not hints_lower:
+        return None
+    types_in_order = ctrl_types if ctrl_types else (None,)
+    for want_ctrl in types_in_order:
+        for e in elements:
+            if want_ctrl is not None and e["ctrl"] != want_ctrl:
+                continue
+            haystack = (e["name"] + " " + e["auto_id"]).lower()
+            if not haystack.strip():
+                continue
+            for h in hints_lower:
+                if h in haystack:
+                    return e
     return None
 
 

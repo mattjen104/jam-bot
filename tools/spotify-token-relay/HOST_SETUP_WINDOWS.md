@@ -67,9 +67,16 @@ falls back to UIA + vision and still works.
 1. Find your Spotify shortcut (Start Menu → right-click "Spotify" →
    *More* → *Open file location*; or your taskbar/desktop shortcut).
 2. Right-click the shortcut → *Properties*.
-3. In the *Target* field, append a space and `--remote-debugging-port=9222`
-   to the existing path. Example:
-   `"C:\Users\<you>\AppData\Roaming\Spotify\Spotify.exe" --remote-debugging-port=9222`
+3. In the *Target* field, append a space and **both** of these flags to
+   the existing path:
+   `--remote-debugging-port=9222 --remote-allow-origins=*`
+   Example:
+   `"C:\Users\<you>\AppData\Roaming\Spotify\Spotify.exe" --remote-debugging-port=9222 --remote-allow-origins=*`
+
+   The second flag is required on recent Chromium versions, otherwise
+   the DevTools websocket handshake returns **403 Forbidden** ("Rejected
+   an incoming WebSocket connection from the http://127.0.0.1:9222
+   origin") and the CDP substrate is silently disabled.
 4. Click *Apply*. Fully quit Spotify (right-click tray icon → Quit), then
    relaunch from the modified shortcut.
 
