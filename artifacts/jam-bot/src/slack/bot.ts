@@ -12,6 +12,10 @@ import {
   findHostDevice,
 } from "../spotify/client.js";
 import {
+  withPlaybackLock,
+  PlaybackLockBusyError,
+} from "../spotify/playback-lock.js";
+import {
   recordPendingRequest,
   recentPlayed,
   expireOldPending,
@@ -180,34 +184,82 @@ async function handlePlayOrQueue(args: {
     }
   }
 
-  const host = await ensurePlaybackOnHost();
-  if (!host) {
-    await respond(
-      `:warning: No active Spotify device named \`${config.SPOTIFY_DEVICE_NAME}\`. Restart the Jam from your phone first.`,
-    );
-    return;
-  }
   const track = await searchTrack(query);
   if (!track) {
     await respond(`:mag: Couldn't find anything for "${query}".`);
     return;
   }
 
-  if (asPlay) {
-    // Use the play endpoint with explicit URI so we always start *this* track,
-    // rather than queueing and hoping skipToNext lands on it.
-    await playNow(track.uri, host.id);
-    recordPendingRequest(track.id, slackUserId, query);
-    recordUserRequest(slackUserId);
-    await respond(
-      `:arrow_forward: Playing *${track.title}* by ${track.artist}`,
-    );
-  } else {
-    await addToQueue(track.uri, host.id);
-    recordPendingRequest(track.id, slackUserId, query);
-    await respond(
-      `:heavy_plus_sign: Queued *${track.title}* by ${track.artist}`,
-    );
+  // Everything below depends on the host device + actual playback state,
+  // which can change between calls if another command runs. To avoid a
+  // TOCTOU race (caller A reads "no jam exists", caller B starts one,
+  // caller A then restarts the just-started track), we do the host
+  // lookup, current-track check, AND the mutation inside a single
+  // critical section. Slack responses + DB bookkeeping happen AFTER the
+  // lock is released so they don't extend the contended window.
+  type Outcome =
+    | { kind: "no_host" }
+    | { kind: "already_playing" }
+    | { kind: "played" }
+    | { kind: "queued" };
+
+  let outcome: Outcome;
+  try {
+    outcome = await withPlaybackLock(async (): Promise<Outcome> => {
+      const host = await ensurePlaybackOnHost();
+      if (!host) return { kind: "no_host" };
+      if (asPlay) {
+        // Don't restart the song someone is already listening to. Common
+        // scenario: a friend hears a song they like, runs `/play <title>`,
+        // search returns the currently-playing track. Check inside the
+        // lock so the answer is current at the moment of mutation.
+        const cp = await getCurrentlyPlaying().catch(() => null);
+        if (cp?.isPlaying && cp.track?.id === track.id) {
+          return { kind: "already_playing" };
+        }
+        // Use the play endpoint with explicit URI so we always start
+        // *this* track rather than queueing and hoping skipToNext lands
+        // on it.
+        await playNow(track.uri, host.id);
+        return { kind: "played" };
+      }
+      await addToQueue(track.uri, host.id);
+      return { kind: "queued" };
+    });
+  } catch (err) {
+    if (err instanceof PlaybackLockBusyError) {
+      await respond(
+        ":hourglass_flowing_sand: Another track is being queued right now — try again in a sec.",
+      );
+      return;
+    }
+    throw err;
+  }
+
+  switch (outcome.kind) {
+    case "no_host":
+      await respond(
+        `:warning: No active Spotify device named \`${config.SPOTIFY_DEVICE_NAME}\`. Restart the Jam from your phone first.`,
+      );
+      return;
+    case "already_playing":
+      await respond(
+        `:notes: *${track.title}* by ${track.artist} is already playing — not restarting.`,
+      );
+      return;
+    case "played":
+      recordPendingRequest(track.id, slackUserId, query);
+      recordUserRequest(slackUserId);
+      await respond(
+        `:arrow_forward: Playing *${track.title}* by ${track.artist}`,
+      );
+      return;
+    case "queued":
+      recordPendingRequest(track.id, slackUserId, query);
+      await respond(
+        `:heavy_plus_sign: Queued *${track.title}* by ${track.artist}`,
+      );
+      return;
   }
 }
 
@@ -573,13 +625,10 @@ slackApp.command(
         );
         return;
       }
-      const host = await ensurePlaybackOnHost();
-      if (!host) {
-        await say(
-          `:warning: No active Spotify device named \`${config.SPOTIFY_DEVICE_NAME}\`. Restart the Jam from your phone first.`,
-        );
-        return;
-      }
+      // askLLMForSet can take several seconds — keep it OUTSIDE the
+      // playback lock so it doesn't block other commands. Host lookup
+      // and the actual mutation loop both go INSIDE the lock so a
+      // concurrent transfer/skip can't race with our writes.
       const set = await askLLMForSet(text);
       if (!set.trackIds.length) {
         await say(`:thinking_face: ${set.summary}`);
@@ -589,31 +638,54 @@ slackApp.command(
       let firstPlayed: string | null = null;
       let aborted = false;
       let abortErr: unknown = null;
-      for (const id of set.trackIds) {
-        const uri = `spotify:track:${id}`;
-        try {
-          if (queued === 0) {
-            await playNow(uri, host.id);
-            firstPlayed = uri;
-          } else {
-            await addToQueue(uri, host.id);
+      let hostFound = false;
+      try {
+        await withPlaybackLock(async () => {
+          const host = await ensurePlaybackOnHost();
+          if (!host) return;
+          hostFound = true;
+          for (const id of set.trackIds) {
+            const uri = `spotify:track:${id}`;
+            try {
+              if (queued === 0) {
+                await playNow(uri, host.id);
+                firstPlayed = uri;
+              } else {
+                await addToQueue(uri, host.id);
+              }
+              recordPendingRequest(id, userId, `memory: ${text}`);
+              queued++;
+            } catch (err) {
+              // First failure aborts the loop. If the host device just
+              // disappeared (the common cause), every subsequent
+              // playNow/addToQueue would fail the same way and produce
+              // a wall of warnings. One log + one user-facing message
+              // is enough.
+              logger.warn("Memory queue: aborting after enqueue failure", {
+                id,
+                queuedSoFar: queued,
+                error: String(err),
+              });
+              aborted = true;
+              abortErr = err;
+              break;
+            }
           }
-          recordPendingRequest(id, userId, `memory: ${text}`);
-          queued++;
-        } catch (err) {
-          // First failure aborts the loop. If the host device just
-          // disappeared (the common cause), every subsequent
-          // playNow/addToQueue would fail the same way and produce a wall
-          // of warnings. One log + one user-facing message is enough.
-          logger.warn("Memory queue: aborting after enqueue failure", {
-            id,
-            queuedSoFar: queued,
-            error: String(err),
-          });
-          aborted = true;
-          abortErr = err;
-          break;
+        });
+      } catch (err) {
+        if (err instanceof PlaybackLockBusyError) {
+          await say(
+            ":hourglass_flowing_sand: Another track is being queued right now — try again in a sec.",
+          );
+          return;
         }
+        throw err;
+      }
+      if (!hostFound) {
+        await say(
+          `:warning: No active Spotify device named \`${config.SPOTIFY_DEVICE_NAME}\`. Restart the Jam from your phone first.`,
+        );
+        return;
       }
       if (queued > 0) recordUserRequest(userId);
       if (aborted) {
@@ -1049,8 +1121,16 @@ async function castSkipVote(
     };
   }
   try {
-    await skipToNext(host.id);
+    await withPlaybackLock(() => skipToNext(host.id));
   } catch (err) {
+    if (err instanceof PlaybackLockBusyError) {
+      return {
+        kind: "skip_failed",
+        count,
+        threshold,
+        reason: "another playback action is in flight — try again in a sec",
+      };
+    }
     logger.error("Vote-skip skipToNext failed", { error: String(err) });
     return {
       kind: "skip_failed",

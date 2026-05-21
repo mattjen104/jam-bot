@@ -75,6 +75,41 @@ async function withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
   throw lastErr;
 }
 
+/**
+ * Single-attempt wrapper for non-idempotent mutations
+ * (`play`, `addToQueue`, `skipToNext`, `transferMyPlayback`).
+ *
+ * Spotify's playback-mutation endpoints do NOT accept an idempotency key,
+ * so a retry after a timeout can produce a second skip / double-queue
+ * even when the original call actually succeeded. Friends saw this as
+ * "the bot skips through the album" / "queues a track twice."
+ *
+ * We still do the pre-flight token refresh and ONE on-401 retry (a 401
+ * means the token expired before we used it — refreshing and retrying
+ * is safe because the previous attempt was rejected, not executed).
+ * Everything else (5xx, 429, timeout) is surfaced to the caller after
+ * a single attempt.
+ */
+async function withOnce<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  try {
+    await withTimeout(`${label}:refreshToken`, ensureAccessToken());
+    return await withTimeout(label, fn());
+  } catch (err: unknown) {
+    const status = (err as { statusCode?: number })?.statusCode;
+    if (status === 401) {
+      // Token was just-expired; safe to retry once after refresh.
+      accessTokenExpiresAt = 0;
+      await withTimeout(`${label}:refreshToken`, ensureAccessToken());
+      return await withTimeout(label, fn());
+    }
+    logger.warn(`Spotify mutation failed (no retry): ${label}`, {
+      status,
+      error: String(err),
+    });
+    throw err;
+  }
+}
+
 export interface CurrentlyPlaying {
   isPlaying: boolean;
   track?: {
@@ -141,13 +176,13 @@ export async function searchTrack(
 }
 
 export async function addToQueue(uri: string, deviceId?: string) {
-  return withRetry("addToQueue", async () => {
+  return withOnce("addToQueue", async () => {
     await api.addToQueue(uri, deviceId ? { device_id: deviceId } : undefined);
   });
 }
 
 export async function playNow(uri: string, deviceId?: string) {
-  return withRetry("play", async () => {
+  return withOnce("play", async () => {
     await api.play({
       uris: [uri],
       ...(deviceId ? { device_id: deviceId } : {}),
@@ -156,7 +191,7 @@ export async function playNow(uri: string, deviceId?: string) {
 }
 
 export async function skipToNext(deviceId?: string) {
-  return withRetry("skipToNext", async () => {
+  return withOnce("skipToNext", async () => {
     await api.skipToNext(deviceId ? { device_id: deviceId } : undefined);
   });
 }
@@ -190,18 +225,42 @@ export async function findHostDevice(): Promise<DeviceInfo | null> {
 }
 
 export async function transferPlaybackTo(deviceId: string, play = false) {
-  return withRetry("transferMyPlayback", async () => {
+  return withOnce("transferMyPlayback", async () => {
     await api.transferMyPlayback([deviceId], { play });
+  });
+}
+
+/**
+ * Returns the device id that Spotify currently considers active for
+ * playback, or null if no device is. Used to debounce stale
+ * `is_active` flags from `/me/player/devices`, which sometimes report
+ * a device as inactive for a few seconds even while it's playing.
+ */
+export async function getActivePlaybackDeviceId(): Promise<string | null> {
+  return withRetry("getMyCurrentPlaybackState", async () => {
+    const res = await api.getMyCurrentPlaybackState();
+    return res.body?.device?.id ?? null;
   });
 }
 
 export async function ensurePlaybackOnHost(): Promise<DeviceInfo | null> {
   const host = await findHostDevice();
   if (!host) return null;
-  if (!host.isActive) {
-    await transferPlaybackTo(host.id, false);
-    logger.info(`Transferred playback to host device "${host.name}"`);
+  if (host.isActive) return host;
+
+  // The `/me/player/devices` `is_active` flag is laggy — it can read
+  // false for several seconds after a track change even though the
+  // host is actively playing. Confirm with `/me/player` (which Spotify
+  // updates in lockstep with playback) before firing a transfer; an
+  // unnecessary transferMyPlayback occasionally restarts the current
+  // track, which friends saw as "the bot keeps restarting the song."
+  const activeDeviceId = await getActivePlaybackDeviceId().catch(() => null);
+  if (activeDeviceId === host.id) {
+    return host;
   }
+
+  await transferPlaybackTo(host.id, false);
+  logger.info(`Transferred playback to host device "${host.name}"`);
   return host;
 }
 
