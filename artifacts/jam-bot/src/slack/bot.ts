@@ -26,6 +26,7 @@ import {
   isOptedOut,
 } from "../db.js";
 import { askLLM, classifyIntent, narrate, type ChatMessage } from "../llm/openrouter.js";
+import { extractUrls, fetchLinkContext } from "../llm/links.js";
 import { startSpotifyJam, manualJamInstructions } from "../spotify/jam.js";
 import { nowPlayingWatcher } from "../now-playing.js";
 import {
@@ -865,6 +866,27 @@ async function handleNaturalLanguage(
     await respond(
       ":warning: I couldn't parse that just now — try again, or use a slash command like `/play`, `/skip`, or `/nowplaying`.",
     );
+    return;
+  }
+
+  // Link-reading: only when the message is a general question that happens to
+  // contain web links. Command intents (play/queue/skip/nowplaying/history/jam)
+  // always run their handler even if a URL is present, so a pasted link can't
+  // hijack e.g. a skip request.
+  const urls = extractUrls(text);
+  if (urls.length > 0 && intent.intent === "question") {
+    try {
+      const linkContext = await fetchLinkContext(urls);
+      const answer = await askLLM(text, getConvHistory(convKey), linkContext);
+      pushConvTurn(convKey, "user", text);
+      pushConvTurn(convKey, "assistant", answer);
+      await respond(answer);
+    } catch (err) {
+      logger.error("Link-aware question failed", { error: String(err) });
+      await respond(
+        ":warning: I tried to read that link but something went wrong — check the bot logs.",
+      );
+    }
     return;
   }
 

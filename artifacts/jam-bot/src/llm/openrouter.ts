@@ -399,14 +399,24 @@ export async function narrate(
 export async function askLLM(
   question: string,
   history: ChatMessage[] = [],
+  linkContext = "",
 ): Promise<string> {
   const context = await buildContext(question);
   const messages: ChatMessage[] = [
     { role: "system", content: SYSTEM_PROMPT },
     { role: "system", content: `Jam context:\n${context}` },
-    ...history,
-    { role: "user", content: question },
   ];
+  if (linkContext.trim()) {
+    messages.push({
+      role: "system",
+      content:
+        "The user shared one or more links. Below is the readable content the " +
+        "bot fetched from them — use it to answer. If a link says it couldn't " +
+        "be read, say so plainly instead of guessing what was on the page.\n\n" +
+        linkContext,
+    });
+  }
+  messages.push(...history, { role: "user", content: question });
 
   let res: Response;
   try {
