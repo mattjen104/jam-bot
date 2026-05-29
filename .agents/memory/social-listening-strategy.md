@@ -22,6 +22,14 @@ Advisory thread for the owner of jam-bot (a Slack+Spotify Jam orchestrator). Goa
 - **Extended Quota effectively closed to new indies:** since May 2025 requires registered business/org + ~250k MAU. Catch-22 — can't reach 250k while capped at 5. A new centralized scalable Spotify *API* integration is dead.
 - **Per-service playback:** Apple Music (MusicKit) ✅ no per-app user cap; YouTube (iframe) ✅; Tidal ⚠️ full tracks embed-only; Amazon ⚠️ gated. The 5-user cap is **Spotify-specific** → a scalable cross-service product is **Apple/YouTube-first, Spotify a degraded guest** (unless using the client-injection executor below).
 
+### Amazon Music adapter (verified) — lowest priority
+- **Invisible control IS possible** via background headful browser at music.amazon.com controlled by JS/DOM (uses the user's own session → no Amazon approval needed, dodges their gated dev program like the spicetify trick). Widevine DRM → must be headful (off-screen ok), control via JS not OS-mouse → no cursor hijack.
+- Desktop app is **Electron (injectable in principle)** but there is **no spicetify-equivalent** — build/maintain from scratch.
+- Official **Amazon Music Web API** reportedly now has playback (all tiers) but is **closed beta (approval required)** and the **service controls the queue** (looser sync) — same indie-gating wall as Spotify extended quota.
+- **Worst service on non-technical axes:** ToS is the most hostile (prohibits robots/automation/reverse-engineering; "substantially exceeds or **differs from normal use**" clause is aimed straight at the correlated-fleet signature); smallest synced-listening demand; no tooling.
+- **Legal line:** controlling transport (play/pause/seek via JS) = ToS-gray only; touching the Widevine CDM / decrypting/capturing the stream = DMCA §1201 circumvention (far worse). Let the real browser play; only control transport.
+- **Build order:** Apple (MusicKit) + YouTube (iframe) first → Spotify via client injection → Amazon last, best-effort Route-A adapter only on real user signal.
+
 ## How Spicetify escapes the wall
 - Spicetify is a **client patch**, not a registered app: injects JS into the Spotify desktop Electron client; uses internal `Spicetify.Player` / `CosmosAsync` which reuse the user's own logged-in session → no client_id, no OAuth, no quota, no 5-user cap. spicetify-jam adds a WebSocket backend for room coordination; each guest's local Spicetify drives their own client to the host clock.
 - Native-client traffic is low-detectability (looks like the real client). Desktop-only and Spotify-only by nature.
