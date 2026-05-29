@@ -1,0 +1,1 @@
+- [Cross-service synced-listening strategy](social-listening-strategy.md) — jam-bot "agnostic spicetify" idea: coordinate-never-redistribute, monetize the conductor, desktop-only, agent self-heals + deterministic clock, invisible control via injection/JS not OS-mouse, ban-risk reality.
