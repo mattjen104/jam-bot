@@ -25,7 +25,7 @@ import {
   setOptOut,
   isOptedOut,
 } from "../db.js";
-import { askLLM, classifyIntent, narrate } from "../llm/openrouter.js";
+import { askLLM, classifyIntent, narrate, type ChatMessage } from "../llm/openrouter.js";
 import { startSpotifyJam, manualJamInstructions } from "../spotify/jam.js";
 import { nowPlayingWatcher } from "../now-playing.js";
 import {
@@ -804,15 +804,51 @@ const wrappedScheduler = new WrappedScheduler(
 
 let cachedBotUserId: string | null = null;
 
+// Rolling per-conversation memory of recent @mention / DM exchanges so the
+// LLM persona can see the back-and-forth and escalate when repeatedly razzed.
+// In-memory only (not persisted) and expired after inactivity.
+const CONV_TURN_LIMIT = 8; // keep the last N messages (user + assistant)
+const CONV_TTL_MS = 30 * 60 * 1000; // drop turns older than 30 minutes
+const convMemory = new Map<
+  string,
+  { role: "user" | "assistant"; content: string; ts: number }[]
+>();
+
+function freshTurns(key: string) {
+  const now = Date.now();
+  const turns = (convMemory.get(key) ?? []).filter(
+    (t) => now - t.ts < CONV_TTL_MS,
+  );
+  if (turns.length === 0) convMemory.delete(key);
+  else convMemory.set(key, turns);
+  return turns;
+}
+
+function getConvHistory(key: string): ChatMessage[] {
+  return freshTurns(key).map((t) => ({ role: t.role, content: t.content }));
+}
+
+function pushConvTurn(key: string, role: "user" | "assistant", content: string) {
+  const turns = freshTurns(key);
+  turns.push({ role, content, ts: Date.now() });
+  while (turns.length > CONV_TURN_LIMIT) turns.shift();
+  convMemory.set(key, turns);
+}
+
 /**
  * Shared NL handler used by both `app_mention` (in the Jam channel) and
  * direct messages from the host. Takes already-stripped text and a
  * `respond` callback that knows where to post the reply.
+ *
+ * `convKey` scopes the rolling conversation memory (channel id for
+ * @mentions, `dm:<user>` for DMs) so the persona can track and escalate a
+ * running back-and-forth.
  */
 async function handleNaturalLanguage(
   text: string,
   userId: string,
   respond: (t: string, blocks?: KnownBlock[]) => Promise<void>,
+  convKey: string,
 ) {
   if (!text) {
     await respond(
@@ -891,7 +927,9 @@ async function handleNaturalLanguage(
         return;
       }
       case "question": {
-        const answer = await askLLM(text);
+        const answer = await askLLM(text, getConvHistory(convKey));
+        pushConvTurn(convKey, "user", text);
+        pushConvTurn(convKey, "assistant", answer);
         await respond(answer);
         return;
       }
@@ -936,7 +974,7 @@ slackApp.event("app_mention", async ({ event, say }) => {
     await say({ text: t, blocks, thread_ts: threadTs });
   };
 
-  await handleNaturalLanguage(text, userId, respond);
+  await handleNaturalLanguage(text, userId, respond, event.channel);
 });
 
 // Direct-message handler. The host (JAM_QUIET_DM_USER) can DM the bot any
@@ -977,7 +1015,7 @@ slackApp.event("message", async ({ event, client }) => {
       ...(blocks ? { blocks } : {}),
     });
   };
-  await handleNaturalLanguage(text, e.user, respond);
+  await handleNaturalLanguage(text, e.user, respond, `dm:${e.user}`);
 });
 
 // ---- Vote-to-skip --------------------------------------------------------

@@ -1,1 +1,2 @@
-- [Cross-service synced-listening strategy](social-listening-strategy.md) — jam-bot "agnostic spicetify" idea: coordinate-never-redistribute, monetize the conductor, desktop-only, agent self-heals + deterministic clock, invisible control via injection/JS not OS-mouse, ban-risk reality.
+- [Synced-listening strategy](social-listening-strategy.md) — jam-bot "agnostic spicetify": coordinate-never-redistribute, monetize the conductor, desktop-only, ban-risk reality.
+- [jam-bot persona & escalation](jam-bot-persona.md) — music-teacher voice that escalates when razzed; uses in-memory turn buffer (no Slack history scope) fed to askLLM.
