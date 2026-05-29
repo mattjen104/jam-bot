@@ -285,6 +285,27 @@ async function buildContext(question: string): Promise<string> {
   return lines.join("\n");
 }
 
+// Hard ceiling on every OpenRouter request. Without this, a stalled
+// connection hangs the Slack handler indefinitely (the request never
+// resolves, so the user never gets a reply). AbortSignal.timeout fires a
+// TimeoutError on the fetch promise after the deadline.
+const LLM_TIMEOUT_MS = 15_000;
+
+function llmAbortError(label: string, err: unknown): Error {
+  // Node's AbortSignal.timeout surfaces as TimeoutError, but some
+  // runtimes/fetch layers report the abort as a generic AbortError.
+  if (
+    err instanceof Error &&
+    (err.name === "TimeoutError" || err.name === "AbortError")
+  ) {
+    logger.warn(`OpenRouter (${label}) timed out`, {
+      timeoutMs: LLM_TIMEOUT_MS,
+    });
+    return new Error(`OpenRouter ${label} timed out after ${LLM_TIMEOUT_MS}ms`);
+  }
+  return err instanceof Error ? err : new Error(String(err));
+}
+
 async function callOpenRouter(
   messages: ChatMessage[],
   opts: {
@@ -293,21 +314,27 @@ async function callOpenRouter(
     label: string;
   },
 ): Promise<string> {
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.OPENROUTER_API_KEY}`,
-      "HTTP-Referer": "https://github.com/jam-bot",
-      "X-Title": "Jam Bot",
-    },
-    body: JSON.stringify({
-      model: config.OPENROUTER_MODEL,
-      messages,
-      temperature: opts.temperature ?? 0.7,
-      max_tokens: opts.maxTokens ?? 400,
-    }),
-  });
+  let res: Response;
+  try {
+    res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.OPENROUTER_API_KEY}`,
+        "HTTP-Referer": "https://github.com/jam-bot",
+        "X-Title": "Jam Bot",
+      },
+      body: JSON.stringify({
+        model: config.OPENROUTER_MODEL,
+        messages,
+        temperature: opts.temperature ?? 0.7,
+        max_tokens: opts.maxTokens ?? 400,
+      }),
+      signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
+    });
+  } catch (err) {
+    throw llmAbortError(opts.label, err);
+  }
   if (!res.ok) {
     const text = await res.text();
     logger.error(`OpenRouter (${opts.label}) failed`, {
@@ -365,21 +392,27 @@ export async function askLLM(question: string): Promise<string> {
     { role: "user", content: question },
   ];
 
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.OPENROUTER_API_KEY}`,
-      "HTTP-Referer": "https://github.com/jam-bot",
-      "X-Title": "Jam Bot",
-    },
-    body: JSON.stringify({
-      model: config.OPENROUTER_MODEL,
-      messages,
-      temperature: 0.6,
-      max_tokens: 500,
-    }),
-  });
+  let res: Response;
+  try {
+    res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.OPENROUTER_API_KEY}`,
+        "HTTP-Referer": "https://github.com/jam-bot",
+        "X-Title": "Jam Bot",
+      },
+      body: JSON.stringify({
+        model: config.OPENROUTER_MODEL,
+        messages,
+        temperature: 0.6,
+        max_tokens: 500,
+      }),
+      signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
+    });
+  } catch (err) {
+    throw llmAbortError("askLLM", err);
+  }
 
   if (!res.ok) {
     const text = await res.text();
@@ -450,25 +483,34 @@ export async function classifyIntent(message: string): Promise<IntentClassificat
   const fast = fastPathIntent(message);
   if (fast) return fast;
 
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.OPENROUTER_API_KEY}`,
-      "HTTP-Referer": "https://github.com/jam-bot",
-      "X-Title": "Jam Bot",
-    },
-    body: JSON.stringify({
-      model: config.OPENROUTER_MODEL,
-      messages: [
-        { role: "system", content: INTENT_SYSTEM },
-        { role: "user", content: message },
-      ],
-      temperature: 0,
-      max_tokens: 120,
-      response_format: { type: "json_object" },
-    }),
-  });
+  let res: Response;
+  try {
+    res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.OPENROUTER_API_KEY}`,
+        "HTTP-Referer": "https://github.com/jam-bot",
+        "X-Title": "Jam Bot",
+      },
+      body: JSON.stringify({
+        model: config.OPENROUTER_MODEL,
+        messages: [
+          { role: "system", content: INTENT_SYSTEM },
+          { role: "user", content: message },
+        ],
+        temperature: 0,
+        max_tokens: 120,
+        response_format: { type: "json_object" },
+      }),
+      signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
+    });
+  } catch (err) {
+    logger.warn("Intent classification errored; defaulting to question", {
+      error: String(llmAbortError("classifyIntent", err)),
+    });
+    return { intent: "question" };
+  }
 
   if (!res.ok) {
     logger.warn("Intent classification failed; defaulting to question", {
