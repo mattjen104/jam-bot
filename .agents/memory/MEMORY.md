@@ -1,2 +1,3 @@
 - [Synced-listening strategy](social-listening-strategy.md) — jam-bot "agnostic spicetify": coordinate-never-redistribute, monetize the conductor, desktop-only, ban-risk reality.
 - [jam-bot persona & escalation](jam-bot-persona.md) — music-teacher voice that escalates when razzed; uses in-memory turn buffer (no Slack history scope) fed to askLLM.
+- [jam-bot persona isolation & intent fast-paths](jam-bot-persona-and-intents.md) — keep she/her but never retone voice/taste: add behavior as layered askLLM opts blocks, leave base SYSTEM_PROMPT alone; every intent needs a deterministic fast-path regex off the LLM hot path.

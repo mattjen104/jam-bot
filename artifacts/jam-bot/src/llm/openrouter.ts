@@ -396,16 +396,81 @@ export async function narrate(
   );
 }
 
+export interface AskOptions {
+  /** Display name of the person talking right now (identity, always cheap). */
+  speakerName?: string;
+  /**
+   * Compact personalization block (taste summary + a few remembered facts)
+   * for the CURRENT speaker only. Injected ONLY when the personalization
+   * gate fires (past/self question or provoked/roast). Empty otherwise.
+   */
+  personalization?: string;
+  /** True when the speaker is provoking the bot (drives the personalization gate). */
+  provoked?: boolean;
+  /** The bot's previous burn at this person, so it doesn't repeat itself. */
+  avoidBurn?: string;
+  /**
+   * True when replying inside an active engaged thread. Relaxes the default
+   * brevity rule so she can give a longer, well-structured teaching answer,
+   * and reinforces the no-fabrication accuracy guardrail.
+   */
+  engaged?: boolean;
+}
+
 export async function askLLM(
   question: string,
   history: ChatMessage[] = [],
   linkContext = "",
+  opts: AskOptions = {},
 ): Promise<string> {
   const context = await buildContext(question);
   const messages: ChatMessage[] = [
     { role: "system", content: SYSTEM_PROMPT },
     { role: "system", content: `Jam context:\n${context}` },
   ];
+  if (opts.speakerName) {
+    messages.push({
+      role: "system",
+      content:
+        `The person talking to you right now is ${opts.speakerName}. ` +
+        `In a multi-person thread, each prior user turn is prefixed with that ` +
+        `speaker's name — keep straight who said what and never collapse ` +
+        `several people into one. This is identity only; don't volunteer ` +
+        `anything personal about them unless it's relevant to their message.`,
+    });
+  }
+  if (opts.personalization && opts.personalization.trim()) {
+    messages.push({
+      role: "system",
+      content:
+        `Personal context about ${opts.speakerName ?? "this person"} — relevant ` +
+        `to THIS message only (they asked about themselves/their history, or ` +
+        `you're clapping back at them). Use it here; do NOT bring up remembered ` +
+        `facts in ordinary chat.\n${opts.personalization}`,
+    });
+  }
+  if (opts.engaged) {
+    messages.push({
+      role: "system",
+      content:
+        `You're in an engaged thread — someone pulled you into a back-and-forth ` +
+        `and wants you fully in it. Drop the usual one-or-two-line brevity: give ` +
+        `a richer, well-structured answer (clear sections and short, scannable ` +
+        `chunks where it helps), like a great teacher walking the room through it. ` +
+        `Stay on-topic and don't pad. Accuracy is non-negotiable: never invent ` +
+        `bands, albums, songs, people, or facts — if you're not sure, say so ` +
+        `plainly instead of guessing.`,
+    });
+  }
+  // Burn-variation only. Tone/length/escalation are owned by the persona
+  // prompt (unchanged) — we just feed it the previous clap-back so it
+  // doesn't repeat itself at the same person.
+  if (opts.provoked && opts.avoidBurn) {
+    messages.push({
+      role: "system",
+      content: `You already burned them with: "${opts.avoidBurn}". Don't reuse that line or its phrasing — come at them fresh.`,
+    });
+  }
   if (linkContext.trim()) {
     messages.push({
       role: "system",
@@ -455,7 +520,15 @@ export async function askLLM(
 }
 
 export interface IntentClassification {
-  intent: "play" | "queue" | "skip" | "nowplaying" | "history" | "jam" | "question";
+  intent:
+    | "play"
+    | "queue"
+    | "skip"
+    | "nowplaying"
+    | "history"
+    | "jam"
+    | "tour"
+    | "question";
   query?: string;
 }
 
@@ -466,11 +539,12 @@ const INTENT_SYSTEM = `You classify a Slack message in a Spotify Jam channel int
 - nowplaying: user is asking what's playing right now
 - history: user is asking about past tracks (today, last night, last Friday, etc.)
 - jam: user wants to start or open a Spotify Jam / social listening session (e.g. "start a jam", "open the jam", "let's jam", "share the jam link")
+- tour: user wants a guided, curated multi-track "tour" of a theme — a genre, era, artist, scene, or mood (e.g. "give us a tour of prog rock", "tour of Bowie's Berlin era", "walk us through Motown"). The query is the theme.
 - question: any other music question or chat (facts, recommendations, comparisons, lyrics, opinions)
 
 Respond ONLY with compact JSON: {"intent":"...","query":"..."}.
-"query" is required for play/queue (the song/artist/genre/vibe to search) and omitted for others.
-For "play some lo-fi hip hop" the query is "lo-fi hip hop".
+"query" is required for play/queue (the song/artist/genre/vibe to search) and for tour (the theme to tour), and omitted for others.
+For "play some lo-fi hip hop" the query is "lo-fi hip hop". For "give us a tour of Motown" the intent is "tour" and the query is "Motown".
 If you're unsure, prefer "question".`;
 
 /**
@@ -496,6 +570,20 @@ function fastPathIntent(message: string): IntentClassification | null {
   ) {
     return { intent: "jam" };
   }
+  // Guided tour: "give us a tour of X", "take me on a tour of X", "tour of X",
+  // "a tour through X", and counted forms like "a 5-track tour of X" /
+  // "give us a 4 song tour of X". The captured group is the theme; the count
+  // (if any) is parsed separately by parseTourLength so it stays off the LLM
+  // hot path. Checked before play/queue so "tour" never gets mistaken for a
+  // track query.
+  const tourOf = message.match(
+    /^(?:please\s+)?(?:can you\s+|could you\s+|would you\s+)?(?:give (?:us|me|everyone)\s+|take (?:us|me|everyone)\s+on\s+|do\s+)?a?\s*(?:\d{1,2}[-\s]*(?:track|song|tune)s?\s+)?tour\s+(?:of|through)\s+(.+)$/i,
+  );
+  if (tourOf) return { intent: "tour", query: tourOf[1]!.trim() };
+  const walkThrough = message.match(
+    /^(?:please\s+)?walk (?:us|me|everyone)\s+through\s+(.+)$/i,
+  );
+  if (walkThrough) return { intent: "tour", query: walkThrough[1]!.trim() };
   const playMatch = message.match(/^(?:please\s+)?play\s+(.+)$/i);
   if (playMatch) return { intent: "play", query: playMatch[1]!.trim() };
   const queueMatch = message.match(
@@ -551,9 +639,16 @@ export async function classifyIntent(message: string): Promise<IntentClassificat
   try {
     const parsed = JSON.parse(raw) as IntentClassification;
     if (
-      ["play", "queue", "skip", "nowplaying", "history", "jam", "question"].includes(
-        parsed.intent,
-      )
+      [
+        "play",
+        "queue",
+        "skip",
+        "nowplaying",
+        "history",
+        "jam",
+        "tour",
+        "question",
+      ].includes(parsed.intent)
     ) {
       return parsed;
     }
@@ -561,4 +656,305 @@ export async function classifyIntent(message: string): Promise<IntentClassificat
     // fallthrough
   }
   return { intent: "question" };
+}
+
+// ---- Personalization gate (deterministic, no LLM on the hot path) -------
+
+// Fires when the speaker is razzing/insulting the bot. Used both to pull
+// the heckler's own taste into the clap-back and to enforce the short,
+// varied burn. Kept deterministic so we never pay an LLM call just to
+// decide whether someone is being rude.
+const PROVOKE_RE =
+  /\b(fuck(in'?|ing)?|shit|stupid|dumb|idiot|moron|sucks?|trash|garbage|crap|shut\s*up|stfu|lame|wack|whack|wtf|bitch|asshole|terrible|awful|worst|dogshit|you'?re\s+wrong|you\s+suck|hate\s+you|boo+\b|clown)\b/i;
+export function detectProvoked(text: string): boolean {
+  return PROVOKE_RE.test(text);
+}
+
+// Fires when the message actually needs the speaker's personal memory:
+// asks about themselves, their past, their taste, or a recommendation "for
+// me". Default chat does NOT match, so no personalization leaks into
+// ordinary replies.
+// Note: bare "remember"/"forget" are intentionally excluded — recall and
+// forget have their own dedicated handlers, and the background extractor
+// captures "remember that I…" passively, so they'd only cause false
+// positives (and wasted personalization tokens) here.
+const PERSONALIZATION_RE =
+  /\b(about me|for me|my\s+(taste|music|vibe|history|favou?rites?|favou?rite|top|most[- ]played)|what\s+(did|have)\s+i|did\s+i\s+(ever\s+)?(play|request|queue|like)|recommend\b.*\b(me|for me)\b|something\s+for\s+me|know\s+about\s+me)\b/i;
+export function needsPersonalization(text: string): boolean {
+  return PERSONALIZATION_RE.test(text);
+}
+
+// "forget what you know about me" / "wipe my memory"
+const FORGET_RE =
+  /\b(forget\s+(everything|all|what\s+you\s+know|about\s+me|me)|wipe\s+(my\s+)?memory|delete\s+(my\s+)?memory|forget\s+me)\b/i;
+export function isForgetMemoryRequest(text: string): boolean {
+  return FORGET_RE.test(text);
+}
+
+// "what do you remember/know about me"
+const RECALL_RE =
+  /\bwhat\s+(do|have)\s+you\s+(remember|know|got|have)\b.*\b(about|on)\s+me\b/i;
+export function isRecallMemoryRequest(text: string): boolean {
+  return RECALL_RE.test(text);
+}
+
+// Dismissal from an engaged thread ("stop", "we're done", "you can go").
+// Deterministic so leaving a thread never costs an LLM call. Kept tight and
+// anchored so it doesn't fire on unrelated chatter that merely contains the
+// word "stop" (e.g. "stop me if you've heard this").
+const DISMISS_RE =
+  /^(?:\s*(?:ok(?:ay)?|alright|cool|thanks?|thank\s+you|hey)[,!.\s]*)*(stop|stop\s+it|that'?s\s+(?:enough|all|it)|that'?ll\s+do|we'?re\s+(?:done|good|all\s+set)|i'?m\s+done|enough|knock\s+it\s+off|you\s+can\s+(?:go|stop|leave)|leave\s+us|bow\s+out|dismissed?)[,!.\s]*$/i;
+export function isDismissRequest(text: string): boolean {
+  return DISMISS_RE.test(text.trim());
+}
+
+// ---- Background fact extraction (cheap model, off the hot path) ---------
+
+export interface ExtractedMemory {
+  fact: string;
+  category: string;
+}
+
+const EXTRACT_SYSTEM = `You extract durable, self-descriptive facts the speaker stated about THEMSELVES, for a long-term memory store.
+Keep ONLY things worth remembering across conversations:
+- music taste / preferences ("loves shoegaze", "can't stand country")
+- stated personal details ("plays bass", "lives in Berlin", "DJs on weekends")
+Ignore: questions, song/play/queue/skip requests, commands, one-off chatter, opinions about other people, and anything not about the speaker themselves.
+Each fact must be a short standalone statement in third person ("Likes lo-fi for studying"). No names, no pronouns referring to others.
+If there are no durable self-facts, return an empty list.
+Respond ONLY with compact JSON: {"facts":[{"fact":"...","category":"taste|preference|personal"}]}.`;
+
+/**
+ * Pull durable self-facts out of a message on the CHEAP model. Best-effort:
+ * any failure returns []. Dedupes against `existingFacts` (case-insensitive)
+ * and within the batch, and caps the number returned so a single chatty
+ * message can't dump a wall of "facts" into the store.
+ */
+export async function extractMemories(
+  message: string,
+  existingFacts: string[] = [],
+): Promise<ExtractedMemory[]> {
+  let res: Response;
+  try {
+    res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.OPENROUTER_API_KEY}`,
+        "HTTP-Referer": "https://github.com/jam-bot",
+        "X-Title": "Jam Bot",
+      },
+      body: JSON.stringify({
+        model: config.OPENROUTER_EXTRACT_MODEL,
+        messages: [
+          { role: "system", content: EXTRACT_SYSTEM },
+          { role: "user", content: message },
+        ],
+        temperature: 0,
+        max_tokens: 200,
+        response_format: { type: "json_object" },
+      }),
+      signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
+    });
+  } catch (err) {
+    logger.warn("Memory extraction request errored", {
+      error: String(llmAbortError("extractMemories", err)),
+    });
+    return [];
+  }
+  if (!res.ok) {
+    logger.warn("Memory extraction failed", { status: res.status });
+    return [];
+  }
+  const json = (await res.json()) as {
+    choices?: { message?: { content?: string } }[];
+  };
+  const raw = json.choices?.[0]?.message?.content ?? "";
+  let parsed: { facts?: { fact?: unknown; category?: unknown }[] };
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  const seen = new Set(existingFacts.map((f) => f.trim().toLowerCase()));
+  const out: ExtractedMemory[] = [];
+  for (const f of parsed.facts ?? []) {
+    const fact = typeof f.fact === "string" ? f.fact.trim() : "";
+    if (!fact) continue;
+    const key = fact.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const category =
+      typeof f.category === "string" && f.category.trim()
+        ? f.category.trim()
+        : "personal";
+    out.push({ fact, category });
+    if (out.length >= 5) break;
+  }
+  return out;
+}
+
+// ---- Guided music tour (curation + narration) ---------------------------
+
+export interface TourPick {
+  title: string;
+  artist: string;
+}
+
+export interface TourCuration {
+  intro: string;
+  picks: TourPick[];
+}
+
+const TOUR_CURATE_SYSTEM = `You curate a guided listening "tour" of a musical theme for knowledgeable listeners.
+Given a theme — a genre, era, artist, scene, or mood — propose a coherent, well-sequenced set of REAL, well-known tracks that actually exist on Spotify.
+Choose tracks that genuinely tell the story of the theme (span the key artists/eras/sounds where it fits) and order them the way you'd play them on a tour.
+Use ONLY real song and artist names — never invent songs, artists, or albums. If you're not certain a track is real, leave it out.
+Return ONLY compact JSON: {"intro":"<one or two plain sentences setting up the tour>","tracks":[{"title":"<song title>","artist":"<primary artist>"}, ...]}.
+Provide exactly {{COUNT}} tracks.`;
+
+const TOUR_TIDBIT_SYSTEM = `You are a knowledgeable music teacher narrating a guided listening tour — one short tidbit per track, delivered as that track starts playing.
+You'll get the tour theme and a numbered list of REAL tracks already queued (title, artist, album).
+For each track write ONE brief, scannable tidbit (1-3 sentences): the album it's from, who's in the band or who played on it, and a line of musical or historical context.
+Stay strictly factual. If you're unsure of a detail, leave it out or say so plainly — never invent band members, dates, labels, albums, or facts.
+Return ONLY compact JSON: {"tidbits":["<tidbit for track 1>","<tidbit for track 2>", ...]} with exactly one entry per track, in the same order.`;
+
+function stripJsonFences(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .trim();
+}
+
+/**
+ * Ask the model for a themed, well-sequenced set of REAL tracks (title +
+ * artist only). Resolution against Spotify search happens in the tour
+ * orchestrator — this step only proposes; it never queues or fabricates ids.
+ */
+export async function curateTourPicks(
+  theme: string,
+  count: number,
+): Promise<TourCuration> {
+  const sys = TOUR_CURATE_SYSTEM.replace("{{COUNT}}", String(count));
+  let res: Response;
+  try {
+    res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.OPENROUTER_API_KEY}`,
+        "HTTP-Referer": "https://github.com/jam-bot",
+        "X-Title": "Jam Bot",
+      },
+      body: JSON.stringify({
+        model: config.OPENROUTER_MODEL,
+        messages: [
+          { role: "system", content: sys },
+          { role: "user", content: `Theme: ${theme}` },
+        ],
+        temperature: 0.5,
+        max_tokens: 700,
+        response_format: { type: "json_object" },
+      }),
+      signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
+    });
+  } catch (err) {
+    throw llmAbortError("curateTourPicks", err);
+  }
+  if (!res.ok) {
+    logger.error("OpenRouter (tour curation) failed", { status: res.status });
+    throw new Error(`OpenRouter ${res.status}`);
+  }
+  const json = (await res.json()) as {
+    choices?: { message?: { content?: string } }[];
+  };
+  const raw = json.choices?.[0]?.message?.content ?? "";
+  let parsed: { intro?: unknown; tracks?: unknown };
+  try {
+    parsed = JSON.parse(stripJsonFences(raw));
+  } catch {
+    logger.warn("Tour curation returned non-JSON", { raw });
+    return { intro: "", picks: [] };
+  }
+  const picks: TourPick[] = Array.isArray(parsed.tracks)
+    ? parsed.tracks
+        .map((t): TourPick | null => {
+          const title =
+            typeof (t as TourPick)?.title === "string"
+              ? (t as TourPick).title.trim()
+              : "";
+          const artist =
+            typeof (t as TourPick)?.artist === "string"
+              ? (t as TourPick).artist.trim()
+              : "";
+          return title && artist ? { title, artist } : null;
+        })
+        .filter((p): p is TourPick => p !== null)
+    : [];
+  return {
+    intro: typeof parsed.intro === "string" ? parsed.intro.trim() : "",
+    picks,
+  };
+}
+
+/**
+ * Write one short tidbit per RESOLVED track. Called only after each pick has
+ * been confirmed real via Spotify search, so the model narrates tracks that
+ * actually exist (title/artist/album come straight from Spotify). The
+ * accuracy guardrail is in the prompt: admit uncertainty, never invent.
+ */
+export async function writeTourTidbits(
+  theme: string,
+  tracks: { title: string; artist: string; album: string }[],
+): Promise<string[]> {
+  if (!tracks.length) return [];
+  const list = tracks
+    .map(
+      (t, i) => `${i + 1}. "${t.title}" by ${t.artist} (album: ${t.album})`,
+    )
+    .join("\n");
+  let res: Response;
+  try {
+    res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.OPENROUTER_API_KEY}`,
+        "HTTP-Referer": "https://github.com/jam-bot",
+        "X-Title": "Jam Bot",
+      },
+      body: JSON.stringify({
+        model: config.OPENROUTER_MODEL,
+        messages: [
+          { role: "system", content: TOUR_TIDBIT_SYSTEM },
+          { role: "user", content: `Theme: ${theme}\n\nTracks:\n${list}` },
+        ],
+        temperature: 0.4,
+        max_tokens: 900,
+        response_format: { type: "json_object" },
+      }),
+      signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
+    });
+  } catch (err) {
+    throw llmAbortError("writeTourTidbits", err);
+  }
+  if (!res.ok) {
+    logger.error("OpenRouter (tour tidbits) failed", { status: res.status });
+    throw new Error(`OpenRouter ${res.status}`);
+  }
+  const json = (await res.json()) as {
+    choices?: { message?: { content?: string } }[];
+  };
+  const raw = json.choices?.[0]?.message?.content ?? "";
+  let parsed: { tidbits?: unknown };
+  try {
+    parsed = JSON.parse(stripJsonFences(raw));
+  } catch {
+    logger.warn("Tour tidbits returned non-JSON", { raw });
+    return [];
+  }
+  return Array.isArray(parsed.tidbits)
+    ? parsed.tidbits.map((t) => (typeof t === "string" ? t.trim() : ""))
+    : [];
 }

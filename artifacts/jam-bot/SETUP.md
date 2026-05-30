@@ -57,6 +57,14 @@ Paste it into your `.env` as `SPOTIFY_REFRESH_TOKEN`. You can keep using this `.
 4. In Slack, invite the bot to your channel (`/invite @Jam Bot`).
 5. Get the channel ID: right-click the channel → **View channel details** → bottom of the pane shows the ID (`C...`). Copy to `SLACK_CHANNEL_ID`.
 
+> **Already had the bot installed before active engagement (thread mode)?**
+> Re-apply the manifest so she gets the `message.channels` event
+> subscription: **App settings → App Manifest** → paste the latest
+> [`deploy/slack-app-manifest.yaml`](./deploy/slack-app-manifest.yaml) → **Save
+> Changes**, then **Install App → Reinstall**. Without it she'll only answer
+> when re-mentioned instead of staying in the thread. The `channels:history`
+> scope was already required, so no new permissions are added.
+
 ## 4. Get an OpenRouter key
 
 1. <https://openrouter.ai/keys> → create a key → copy to `OPENROUTER_API_KEY`.

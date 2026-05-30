@@ -34,6 +34,14 @@ const schema = z.object({
 
   OPENROUTER_API_KEY: z.string().min(1),
   OPENROUTER_MODEL: z.string().min(1).default("anthropic/claude-sonnet-4"),
+  // Cheaper model used for off-hot-path background work (memory fact
+  // extraction). Keeping this separate from OPENROUTER_MODEL means the
+  // expensive reply model's cost/quality is unchanged while the
+  // remembering work runs on something cheap.
+  OPENROUTER_EXTRACT_MODEL: z
+    .string()
+    .min(1)
+    .default("anthropic/claude-3.5-haiku"),
 
   NOW_PLAYING_POLL_MS: z.coerce.number().int().positive().default(5000),
   DATABASE_PATH: z.string().min(1).default("./data/jam.db"),
@@ -62,6 +70,23 @@ const schema = z.object({
   JAM_WRAPPED_LOOKBACK_DAYS: z.coerce.number().int().positive().default(7),
   // Cap on tracks /memory will queue from a single "play me a set" request.
   JAM_MEMORY_MAX_QUEUE: z.coerce.number().int().positive().default(10),
+
+  // ---- Guided music tour -------------------------------------------------
+  // Default number of tracks in a "give us a tour of X" set when the user
+  // doesn't ask for a specific length, and the hard cap on tour length.
+  JAM_TOUR_DEFAULT_TRACKS: z.coerce.number().int().positive().default(6),
+  JAM_TOUR_MAX_TRACKS: z.coerce.number().int().positive().default(12),
+
+  // ---- Active engagement (thread) mode -----------------------------------
+  // Once Jam Bot is @-mentioned in a thread (or starts one), she keeps
+  // answering follow-ups in THAT thread without a re-mention until dismissed
+  // or until the thread goes quiet for this long. Lazily expired on the next
+  // lookup and swept periodically so a forgotten session can't linger.
+  JAM_ENGAGE_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(10 * 60 * 1000),
 
   // ---- Now-playing post schedule -----------------------------------------
   // Comma-separated list of UTC day-of-week numbers (0=Sun..6=Sat) on which

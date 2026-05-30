@@ -62,6 +62,45 @@ db.exec(`
     k TEXT PRIMARY KEY,
     v TEXT NOT NULL
   );
+
+  -- Durable, per-user remembered facts (taste, preferences, personal
+  -- details) accumulated over time and pulled into a reply ONLY when the
+  -- personalization gate fires. Dedupe is enforced by a case-insensitive
+  -- unique index on (slack_user, fact) so the same fact isn't stored twice.
+  CREATE TABLE IF NOT EXISTS user_memories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    slack_user TEXT NOT NULL,
+    fact TEXT NOT NULL,
+    category TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    last_used_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_user_memories_user ON user_memories (slack_user);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_user_memories_user_fact
+    ON user_memories (slack_user, lower(fact));
+
+  -- Cache of Slack display names so identity resolution doesn't hit the
+  -- Slack Web API on every message. Refreshed opportunistically on miss.
+  CREATE TABLE IF NOT EXISTS user_names (
+    slack_user TEXT PRIMARY KEY,
+    display_name TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- Active "engaged" threads: once Jam Bot is @-mentioned in a thread (or
+  -- starts one) she answers follow-ups there without a re-mention until
+  -- dismissed or until the thread goes quiet past the inactivity timeout.
+  -- Keyed by (channel, thread_ts); last_activity_ms drives auto-exit and
+  -- survives restarts so a session isn't lost on redeploy.
+  CREATE TABLE IF NOT EXISTS engagement_sessions (
+    channel TEXT NOT NULL,
+    thread_ts TEXT NOT NULL,
+    started_by TEXT,
+    topic TEXT,
+    last_activity_ms INTEGER NOT NULL,
+    PRIMARY KEY (channel, thread_ts)
+  );
 `);
 
 // Migrate older deployments where pending_requests had track_id PRIMARY KEY
@@ -641,4 +680,151 @@ export function kvGet(key: string): string | null {
 }
 export function kvSet(key: string, value: string) {
   kvSetStmt.run(key, value);
+}
+
+// ---- Per-user remembered facts -----------------------------------------
+
+export interface UserMemory {
+  id: number;
+  slack_user: string;
+  fact: string;
+  category: string | null;
+  created_at: string;
+  updated_at: string;
+  last_used_at: string | null;
+}
+
+// INSERT OR IGNORE relies on the case-insensitive unique index
+// (slack_user, lower(fact)) to drop exact/case-variant duplicates. On a
+// duplicate we bump updated_at so the fact is treated as freshly reasserted.
+const insertMemoryStmt = db.prepare(`
+  INSERT INTO user_memories (slack_user, fact, category)
+  VALUES (?, ?, ?)
+  ON CONFLICT (slack_user, lower(fact))
+  DO UPDATE SET updated_at = datetime('now')
+`);
+export function addUserMemory(
+  slackUser: string,
+  fact: string,
+  category: string | null = null,
+) {
+  const trimmed = fact.trim();
+  if (!trimmed) return;
+  insertMemoryStmt.run(slackUser, trimmed, category);
+}
+
+// Most-relevant-first: recently used, then most recently asserted.
+const getMemoriesStmt = db.prepare<[string, number], UserMemory>(`
+  SELECT * FROM user_memories
+  WHERE slack_user = ?
+  ORDER BY COALESCE(last_used_at, updated_at) DESC, id DESC
+  LIMIT ?
+`);
+export function getUserMemories(slackUser: string, limit = 50): UserMemory[] {
+  return getMemoriesStmt.all(slackUser, limit);
+}
+
+const forgetMemoriesStmt = db.prepare<[string]>(
+  `DELETE FROM user_memories WHERE slack_user = ?`,
+);
+export function forgetUserMemories(slackUser: string) {
+  forgetMemoriesStmt.run(slackUser);
+}
+
+const touchMemoriesStmt = db.prepare<[string]>(
+  `UPDATE user_memories SET last_used_at = datetime('now') WHERE slack_user = ?`,
+);
+export function touchUserMemories(slackUser: string) {
+  touchMemoriesStmt.run(slackUser);
+}
+
+// ---- Slack display-name cache ------------------------------------------
+
+const getNameStmt = db.prepare<[string], { display_name: string }>(
+  `SELECT display_name FROM user_names WHERE slack_user = ?`,
+);
+export function getCachedUserName(slackUser: string): string | null {
+  return getNameStmt.get(slackUser)?.display_name ?? null;
+}
+
+const setNameStmt = db.prepare(`
+  INSERT INTO user_names (slack_user, display_name)
+  VALUES (?, ?)
+  ON CONFLICT(slack_user) DO UPDATE SET
+    display_name = excluded.display_name,
+    updated_at = datetime('now')
+`);
+export function setCachedUserName(slackUser: string, displayName: string) {
+  const trimmed = displayName.trim();
+  if (!trimmed) return;
+  setNameStmt.run(slackUser, trimmed);
+}
+
+// ---- Active engagement sessions (thread mode) --------------------------
+
+export interface EngagementSession {
+  channel: string;
+  thread_ts: string;
+  started_by: string | null;
+  topic: string | null;
+  last_activity_ms: number;
+}
+
+// Start OR refresh: re-mentioning her in an already-engaged thread just
+// bumps last_activity (the original starter/topic are kept).
+const startSessionStmt = db.prepare(`
+  INSERT INTO engagement_sessions (channel, thread_ts, started_by, topic, last_activity_ms)
+  VALUES (?, ?, ?, ?, ?)
+  ON CONFLICT(channel, thread_ts) DO UPDATE SET last_activity_ms = excluded.last_activity_ms
+`);
+export function startEngagementSession(
+  channel: string,
+  threadTs: string,
+  startedBy: string | null,
+  topic: string | null = null,
+) {
+  startSessionStmt.run(channel, threadTs, startedBy, topic, Date.now());
+}
+
+const refreshSessionStmt = db.prepare<[number, string, string]>(
+  `UPDATE engagement_sessions SET last_activity_ms = ? WHERE channel = ? AND thread_ts = ?`,
+);
+export function refreshEngagementSession(channel: string, threadTs: string) {
+  refreshSessionStmt.run(Date.now(), channel, threadTs);
+}
+
+const getSessionStmt = db.prepare<[string, string], EngagementSession>(
+  `SELECT * FROM engagement_sessions WHERE channel = ? AND thread_ts = ?`,
+);
+const deleteSessionStmt = db.prepare<[string, string]>(
+  `DELETE FROM engagement_sessions WHERE channel = ? AND thread_ts = ?`,
+);
+export function endEngagementSession(channel: string, threadTs: string) {
+  deleteSessionStmt.run(channel, threadTs);
+}
+
+/**
+ * Return the active session for a thread, or null. A session that hasn't
+ * seen activity within `maxIdleMs` is treated as gone and deleted in place
+ * (lazy auto-exit), so a stale thread never keeps her engaged.
+ */
+export function getEngagementSession(
+  channel: string,
+  threadTs: string,
+  maxIdleMs: number,
+): EngagementSession | null {
+  const row = getSessionStmt.get(channel, threadTs);
+  if (!row) return null;
+  if (Date.now() - row.last_activity_ms > maxIdleMs) {
+    deleteSessionStmt.run(channel, threadTs);
+    return null;
+  }
+  return row;
+}
+
+const expireSessionsStmt = db.prepare<[number]>(
+  `DELETE FROM engagement_sessions WHERE last_activity_ms < ?`,
+);
+export function expireEngagementSessions(maxIdleMs: number) {
+  expireSessionsStmt.run(Date.now() - maxIdleMs);
 }

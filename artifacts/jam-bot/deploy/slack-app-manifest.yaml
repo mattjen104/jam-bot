@@ -84,6 +84,12 @@ settings:
       # "skip", "start a jam", etc). The handler ignores DMs from anyone
       # other than the configured JAM_QUIET_DM_USER.
       - message.im
+      # Required for active engagement (thread mode): after she's @mentioned
+      # in a thread she keeps answering follow-up replies in that thread
+      # WITHOUT a re-mention until dismissed or the session times out. This
+      # delivers those un-mentioned channel-thread replies. Uses the existing
+      # channels:history scope. Without it she'll only reply when re-mentioned.
+      - message.channels
   interactivity:
     is_enabled: true
   org_deploy_enabled: false

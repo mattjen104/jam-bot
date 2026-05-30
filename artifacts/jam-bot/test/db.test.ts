@@ -7,6 +7,11 @@ import {
   searchPlayedByTitleOrArtist,
   recordPendingRequest,
   popPendingRequest,
+  addUserMemory,
+  getUserMemories,
+  forgetUserMemories,
+  getCachedUserName,
+  setCachedUserName,
 } from "../src/db.js";
 
 function uniqueId(prefix: string) {
@@ -67,5 +72,43 @@ describe("db roundtrips", () => {
     expect(b?.requested_by_slack_user).toBe("U2");
     expect(b?.requested_query).toBe("second");
     expect(c).toBeUndefined();
+  });
+});
+
+describe("user memories", () => {
+  it("stores facts, dedupes case-insensitively, and reads them back", () => {
+    const user = uniqueId("mem");
+    addUserMemory(user, "Loves shoegaze", "taste");
+    addUserMemory(user, "Plays bass", "personal");
+    // Same fact, different casing/whitespace — must NOT create a duplicate row.
+    addUserMemory(user, "  loves SHOEGAZE  ", "taste");
+
+    const facts = getUserMemories(user).map((m) => m.fact);
+    expect(facts).toContain("Loves shoegaze");
+    expect(facts).toContain("Plays bass");
+    expect(facts.filter((f) => f.toLowerCase() === "loves shoegaze")).toHaveLength(1);
+  });
+
+  it("forgets all facts for a user without touching others", () => {
+    const a = uniqueId("mem-a");
+    const b = uniqueId("mem-b");
+    addUserMemory(a, "Hates country", "taste");
+    addUserMemory(b, "DJs on weekends", "personal");
+
+    forgetUserMemories(a);
+    expect(getUserMemories(a)).toHaveLength(0);
+    expect(getUserMemories(b).map((m) => m.fact)).toContain("DJs on weekends");
+  });
+});
+
+describe("user name cache", () => {
+  it("returns null before caching and the stored name after", () => {
+    const user = uniqueId("name");
+    expect(getCachedUserName(user)).toBeNull();
+    setCachedUserName(user, "Ada Lovelace");
+    expect(getCachedUserName(user)).toBe("Ada Lovelace");
+    // Re-caching updates the value.
+    setCachedUserName(user, "Ada L.");
+    expect(getCachedUserName(user)).toBe("Ada L.");
   });
 });

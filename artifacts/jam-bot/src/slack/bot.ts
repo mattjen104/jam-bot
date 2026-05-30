@@ -23,8 +23,33 @@ import {
   expireOldUserRequests,
   setOptOut,
   isOptedOut,
+  addUserMemory,
+  getUserMemories,
+  forgetUserMemories,
+  touchUserMemories,
+  getCachedUserName,
+  setCachedUserName,
+  userTotalPlays,
+  userArtistVector,
+  userSignatureTrack,
+  startEngagementSession,
+  refreshEngagementSession,
+  getEngagementSession,
+  endEngagementSession,
+  expireEngagementSessions,
 } from "../db.js";
-import { askLLM, classifyIntent, narrate, type ChatMessage } from "../llm/openrouter.js";
+import {
+  askLLM,
+  classifyIntent,
+  narrate,
+  extractMemories,
+  detectProvoked,
+  needsPersonalization,
+  isForgetMemoryRequest,
+  isRecallMemoryRequest,
+  isDismissRequest,
+  type ChatMessage,
+} from "../llm/openrouter.js";
 import { extractUrls, fetchLinkContext } from "../llm/links.js";
 import { startSpotifyJam, manualJamInstructions } from "../spotify/jam.js";
 import { nowPlayingWatcher } from "../now-playing.js";
@@ -39,6 +64,7 @@ import {
 import { buildWrappedStats, WrappedScheduler, type WrappedStats } from "../wrapped.js";
 import { buildDnaStats, buildCompatStats } from "../dna.js";
 import { askLLMForSet, isMemoryPlaybackRequest } from "../memory.js";
+import { buildTour, parseTourLength, isStopTourRequest } from "../tour.js";
 import type { CurrentlyPlaying } from "../spotify/client.js";
 
 export const slackApp = new App({
@@ -72,6 +98,37 @@ export function setSilent(on: boolean): void {
   // either nonexistent (background DM'd) or stale; a fresh card will be
   // set up on the next trackChange.
   if (on) activeVote = null;
+}
+
+// ---- Guided music tour ---------------------------------------------------
+// A tour is a curated set of real tracks queued onto the active device. Its
+// per-track tidbits are pre-generated at queue time (off the now-playing hot
+// path) and posted as the matching track plays — attached to that track's
+// now-playing card. The tour's lifecycle is its queued tracks (consumed as
+// they play) plus an explicit stop; it is independent of engaged-thread
+// auto-exit, so quiet listening never ends it.
+interface ActiveTour {
+  theme: string;
+  // track id -> tidbit, consumed when that track starts playing.
+  tidbits: Map<string, string>;
+  // ids not yet played; when this empties the tour is complete.
+  remaining: Set<string>;
+}
+let activeTour: ActiveTour | null = null;
+
+/**
+ * If the given track belongs to the active tour, pull (and consume) its
+ * tidbit. Consumption is synchronous so a track can't be narrated twice, and
+ * the tour clears itself once its last track starts playing.
+ */
+function consumeTourTidbit(trackId: string): string | null {
+  if (!activeTour) return null;
+  const tidbit = activeTour.tidbits.get(trackId);
+  if (tidbit === undefined) return null;
+  activeTour.tidbits.delete(trackId);
+  activeTour.remaining.delete(trackId);
+  if (activeTour.remaining.size === 0) activeTour = null;
+  return tidbit;
 }
 
 // Plain channel posters — used by interactive paths (vote-skip pass
@@ -804,6 +861,23 @@ const wrappedScheduler = new WrappedScheduler(
 
 let cachedBotUserId: string | null = null;
 
+/**
+ * Return the bot's own user id, lazily fetching it if startup caching failed.
+ * Engaged-thread dedup depends on knowing our own id so we can skip messages
+ * that re-mention us (those are owned by the app_mention handler) — if the
+ * boot-time auth.test() failed we MUST recover it here or we'd double-reply.
+ */
+async function ensureBotUserId(): Promise<string | null> {
+  if (cachedBotUserId) return cachedBotUserId;
+  try {
+    const auth = await slackApp.client.auth.test();
+    cachedBotUserId = auth.user_id ?? null;
+  } catch (err) {
+    logger.warn("Lazy bot-id fetch failed", { error: String(err) });
+  }
+  return cachedBotUserId;
+}
+
 // Rolling per-conversation memory of recent @mention / DM exchanges so the
 // LLM persona can see the back-and-forth and escalate when repeatedly razzed.
 // In-memory only (not persisted) and expired after inactivity.
@@ -811,7 +885,7 @@ const CONV_TURN_LIMIT = 8; // keep the last N messages (user + assistant)
 const CONV_TTL_MS = 30 * 60 * 1000; // drop turns older than 30 minutes
 const convMemory = new Map<
   string,
-  { role: "user" | "assistant"; content: string; ts: number }[]
+  { role: "user" | "assistant"; content: string; name?: string; ts: number }[]
 >();
 
 function freshTurns(key: string) {
@@ -824,15 +898,299 @@ function freshTurns(key: string) {
   return turns;
 }
 
+// Prefix each prior USER turn with its speaker's name so the model can keep
+// several people straight in a shared channel/thread instead of collapsing
+// them into one "user". Assistant turns are passed through unchanged.
 function getConvHistory(key: string): ChatMessage[] {
-  return freshTurns(key).map((t) => ({ role: t.role, content: t.content }));
+  return freshTurns(key).map((t) => ({
+    role: t.role,
+    content: t.role === "user" && t.name ? `${t.name}: ${t.content}` : t.content,
+  }));
 }
 
-function pushConvTurn(key: string, role: "user" | "assistant", content: string) {
+function pushConvTurn(
+  key: string,
+  role: "user" | "assistant",
+  content: string,
+  name?: string,
+) {
   const turns = freshTurns(key);
-  turns.push({ role, content, ts: Date.now() });
+  turns.push({ role, content, name, ts: Date.now() });
   while (turns.length > CONV_TURN_LIMIT) turns.shift();
   convMemory.set(key, turns);
+}
+
+// Per (conversation, user) record of the bot's last clap-back, so a repeated
+// provocation doesn't get the same burn fired back verbatim. In-memory only.
+const lastBurn = new Map<string, string>();
+
+// Conversation-memory key. Channel @mentions/threads are scoped per-thread
+// (`channel:threadTs`) so each engaged thread is its own conversation and
+// one session's chatter never bleeds into another. DMs use `dm:<user>`.
+function threadConvKey(channel: string, threadTs: string): string {
+  return `${channel}:${threadTs}`;
+}
+
+/**
+ * If the message dismisses the bot from an active engaged thread, end the
+ * session, post a brief in-character sign-off, and return true so the caller
+ * skips normal handling. No-op (returns false) when there's no live session.
+ */
+async function maybeHandleDismissal(
+  channel: string,
+  threadTs: string,
+  text: string,
+  respond: (t: string, blocks?: KnownBlock[]) => Promise<void>,
+): Promise<boolean> {
+  if (!isDismissRequest(text)) return false;
+  const session = getEngagementSession(
+    channel,
+    threadTs,
+    config.JAM_ENGAGE_TIMEOUT_MS,
+  );
+  if (!session) return false;
+  endEngagementSession(channel, threadTs);
+  await respond("Cool — I'll bow out. Give me a shout if you want me back in.");
+  return true;
+}
+
+/**
+ * Resolve a Slack user ID to a friendly display name, cached in the DB so we
+ * don't hit the Slack Web API on every message. Falls back to the `<@U…>`
+ * mention (which Slack renders as a name client-side) if lookup fails.
+ */
+async function resolveUserName(userId: string): Promise<string> {
+  const cached = getCachedUserName(userId);
+  if (cached) return cached;
+  try {
+    const res = await slackApp.client.users.info({ user: userId });
+    const u = res.user as
+      | {
+          profile?: { display_name?: string; real_name?: string };
+          real_name?: string;
+          name?: string;
+        }
+      | undefined;
+    const name =
+      u?.profile?.display_name?.trim() ||
+      u?.real_name?.trim() ||
+      u?.profile?.real_name?.trim() ||
+      u?.name?.trim();
+    if (name) {
+      setCachedUserName(userId, name);
+      return name;
+    }
+  } catch (err) {
+    logger.warn("users.info lookup failed", { error: String(err), userId });
+  }
+  return `<@${userId}>`;
+}
+
+// Cheap taste summary derived entirely from existing play-history
+// aggregations — no LLM. Returns "" when the user has no history.
+function buildTasteSummary(userId: string): string {
+  const total = userTotalPlays(userId);
+  if (total === 0) return "";
+  const artists = userArtistVector(userId)
+    .sort((a, b) => b.plays - a.plays)
+    .slice(0, 3)
+    .map((a) => a.artist);
+  const sig = userSignatureTrack(userId);
+  const parts = [`${total} tracks requested in the Jam`];
+  if (artists.length) parts.push(`most-played artists: ${artists.join(", ")}`);
+  if (sig) parts.push(`signature track: "${sig.title}" by ${sig.artist}`);
+  return parts.join("; ");
+}
+
+const PERSONALIZATION_CHAR_CAP = 800;
+
+// Assemble the gated personalization block for ONE speaker: their taste
+// summary plus a few most-relevant remembered facts, hard-capped in size.
+// Caller must have already confirmed the gate fired and the user isn't
+// opted out.
+function buildPersonalization(userId: string, speakerName: string): string {
+  const taste = buildTasteSummary(userId);
+  const facts = getUserMemories(userId, 8).map((m) => `- ${m.fact}`);
+  const lines: string[] = [];
+  if (taste) lines.push(`Taste (from play history): ${taste}`);
+  if (facts.length)
+    lines.push(`Remembered about ${speakerName}:\n${facts.join("\n")}`);
+  if (lines.length) touchUserMemories(userId);
+  let block = lines.join("\n");
+  if (block.length > PERSONALIZATION_CHAR_CAP)
+    block = block.slice(0, PERSONALIZATION_CHAR_CAP);
+  return block;
+}
+
+// Fire-and-forget durable-fact extraction on the cheap model. Never throws,
+// never blocks the reply. Honors the stats opt-out (no facts extracted or
+// stored for opted-out users).
+async function extractAndStoreMemories(userId: string, text: string) {
+  try {
+    if (isOptedOut(userId)) return;
+    const existing = getUserMemories(userId).map((m) => m.fact);
+    const facts = await extractMemories(text, existing);
+    for (const f of facts) addUserMemory(userId, f.fact, f.category);
+  } catch (err) {
+    logger.warn("Memory extraction failed", { error: String(err), userId });
+  }
+}
+
+/**
+ * Answer a free-form question/chat turn with identity + gated
+ * personalization. Used by both the link-aware path and the plain question
+ * intent. Resolves the speaker's name (always), decides whether the
+ * personalization gate fires (past/self question OR provoked), injects the
+ * speaker's compact memory ONLY when it does, varies the burn when
+ * provoked, and kicks off background fact extraction after replying.
+ */
+async function answerQuestion(
+  text: string,
+  userId: string,
+  convKey: string,
+  respond: (t: string, blocks?: KnownBlock[]) => Promise<void>,
+  linkContext = "",
+  engaged = false,
+) {
+  const speakerName = await resolveUserName(userId);
+  const provoked = detectProvoked(text);
+  const gateFires = provoked || needsPersonalization(text);
+  // Personalization (taste + remembered facts) only when the gate fires AND
+  // the speaker hasn't opted out. We never weaponize an opted-out user's
+  // history, and never inject personal data into ordinary chat.
+  const personalization =
+    gateFires && !isOptedOut(userId)
+      ? buildPersonalization(userId, speakerName)
+      : "";
+  const burnKey = `${convKey}:${userId}`;
+  const answer = await askLLM(text, getConvHistory(convKey), linkContext, {
+    speakerName,
+    personalization,
+    provoked,
+    avoidBurn: provoked ? lastBurn.get(burnKey) : undefined,
+    engaged,
+  });
+  pushConvTurn(convKey, "user", text, speakerName);
+  pushConvTurn(convKey, "assistant", answer);
+  if (provoked) lastBurn.set(burnKey, answer);
+  await respond(answer);
+  void extractAndStoreMemories(userId, text);
+}
+
+/**
+ * Kick off a guided music tour: curate a set of REAL tracks for the theme,
+ * queue them onto the active device using the same multi-track set path as
+ * /memory, and register the active tour so each track's pre-generated tidbit
+ * posts as it plays. Honors the per-user hourly play budget.
+ */
+async function handleTour(args: {
+  theme: string;
+  rawText: string;
+  slackUserId: string;
+  respond: (t: string) => Promise<void>;
+}) {
+  const { theme, rawText, slackUserId, respond } = args;
+
+  const used = countUserRequestsLastHour(slackUserId);
+  if (used >= config.MAX_PLAYS_PER_USER_PER_HOUR) {
+    await respond(
+      `:hourglass_flowing_sand: You've hit your hourly play budget (${used}/${config.MAX_PLAYS_PER_USER_PER_HOUR}). Try again later.`,
+    );
+    return;
+  }
+
+  // Curation + resolution + narration all run OUTSIDE the playback lock (they
+  // can take several seconds and hit the network); only device lookup and the
+  // queue mutation loop run inside it.
+  const tour = await buildTour(theme, parseTourLength(rawText));
+  if (!tour.tracks.length) {
+    await respond(
+      `:thinking_face: I couldn't put together a real, findable set for "${theme}" right now — try another angle?`,
+    );
+    return;
+  }
+
+  let queued = 0;
+  let firstPlayed = false;
+  let aborted = false;
+  let abortErr: unknown = null;
+  let deviceFound = false;
+  try {
+    await withPlaybackLock(async () => {
+      const device = await findActiveDevice();
+      if (!device) return;
+      deviceFound = true;
+      for (const track of tour.tracks) {
+        try {
+          if (queued === 0) {
+            await playNow(track.uri, device.id);
+            firstPlayed = true;
+          } else {
+            await addToQueue(track.uri, device.id);
+          }
+          recordPendingRequest(track.trackId, slackUserId, `tour: ${theme}`);
+          queued++;
+        } catch (err) {
+          logger.warn("Tour queue: aborting after enqueue failure", {
+            id: track.trackId,
+            queuedSoFar: queued,
+            error: String(err),
+          });
+          aborted = true;
+          abortErr = err;
+          break;
+        }
+      }
+    });
+  } catch (err) {
+    if (err instanceof PlaybackLockBusyError) {
+      await respond(
+        ":hourglass_flowing_sand: Another track is being queued right now — try again in a sec.",
+      );
+      return;
+    }
+    throw err;
+  }
+
+  if (!deviceFound) {
+    await respond(
+      ":warning: No active Spotify device. Open Spotify on your phone (or any device) and start playing something, then try again.",
+    );
+    return;
+  }
+
+  // Register the tour over the tracks that actually made it into the queue,
+  // so narration only fires for tracks that will really play.
+  const queuedTracks = tour.tracks.slice(0, queued);
+  if (queuedTracks.length) {
+    activeTour = {
+      theme: tour.theme,
+      tidbits: new Map(queuedTracks.map((t) => [t.trackId, t.tidbit])),
+      remaining: new Set(queuedTracks.map((t) => t.trackId)),
+    };
+    recordUserRequest(slackUserId);
+  }
+
+  const intro = tour.intro ? `${tour.intro}\n\n` : "";
+  if (aborted) {
+    const status = (abortErr as { statusCode?: number })?.statusCode;
+    const reason =
+      status === 404
+        ? "Your Spotify device went away mid-queue. Make sure Spotify is still playing and try again."
+        : "Spotify rejected the request — try again in a moment.";
+    await respond(
+      queued > 0
+        ? `:notes: ${intro}Started a ${queued}-track tour of ${theme}, then stopped: ${reason}`
+        : `:warning: Couldn't queue any tracks — ${reason}`,
+    );
+    return;
+  }
+
+  await respond(
+    `:notes: ${intro}Queued a ${queued}-track tour of ${theme} — ${
+      firstPlayed ? "starting now" : "added to the queue"
+    }. I'll drop a note on each track as it comes up. Say "stop the tour" any time.`,
+  );
 }
 
 /**
@@ -849,11 +1207,46 @@ async function handleNaturalLanguage(
   userId: string,
   respond: (t: string, blocks?: KnownBlock[]) => Promise<void>,
   convKey: string,
+  engaged = false,
 ) {
   if (!text) {
     await respond(
       "Hi! Try `play <song>`, `queue <song>`, `skip`, `what's playing?`, `start a jam`, or ask me a question about Jam history. Slash commands like `/play` and `/nowplaying` also work.",
     );
+    return;
+  }
+
+  // Memory inspect/control — handled before intent classification (and
+  // before any LLM call) so "what do you remember about me" / "forget me"
+  // are meta-commands, not questions routed to the persona.
+  if (isForgetMemoryRequest(text)) {
+    forgetUserMemories(userId);
+    await respond("Done — wiped what I had on you. Clean slate.");
+    return;
+  }
+  if (isRecallMemoryRequest(text)) {
+    const facts = isOptedOut(userId) ? [] : getUserMemories(userId);
+    await respond(
+      facts.length
+        ? "Here's what I've got on you:\n" +
+            facts.map((f) => `• ${f.fact}`).join("\n")
+        : "Nothing yet — I haven't picked up anything worth keeping about you.",
+    );
+    return;
+  }
+
+  // Stop the tour — handled before intent classification so "stop the tour"
+  // ends narration even mid-set without an LLM round-trip. The queued tracks
+  // keep playing; we just stop narrating and let the tour go quiet.
+  if (isStopTourRequest(text)) {
+    if (activeTour) {
+      activeTour = null;
+      await respond(
+        "Tour's over — the queue keeps playing, I'll just stop narrating.",
+      );
+    } else {
+      await respond("No tour running right now.");
+    }
     return;
   }
 
@@ -876,10 +1269,7 @@ async function handleNaturalLanguage(
   if (urls.length > 0 && intent.intent === "question") {
     try {
       const linkContext = await fetchLinkContext(urls);
-      const answer = await askLLM(text, getConvHistory(convKey), linkContext);
-      pushConvTurn(convKey, "user", text);
-      pushConvTurn(convKey, "assistant", answer);
-      await respond(answer);
+      await answerQuestion(text, userId, convKey, respond, linkContext, engaged);
     } catch (err) {
       logger.error("Link-aware question failed", { error: String(err) });
       await respond(
@@ -947,11 +1337,24 @@ async function handleNaturalLanguage(
         }
         return;
       }
+      case "tour": {
+        const theme = intent.query?.trim();
+        if (!theme) {
+          await respond(
+            ':thinking_face: A tour of what? Try "give us a tour of Motown" or "a tour of 90s shoegaze".',
+          );
+          return;
+        }
+        await handleTour({
+          theme,
+          rawText: text,
+          slackUserId: userId,
+          respond: (t) => respond(t),
+        });
+        return;
+      }
       case "question": {
-        const answer = await askLLM(text, getConvHistory(convKey));
-        pushConvTurn(convKey, "user", text);
-        pushConvTurn(convKey, "assistant", answer);
-        await respond(answer);
+        await answerQuestion(text, userId, convKey, respond, "", engaged);
         return;
       }
     }
@@ -988,6 +1391,7 @@ slackApp.event("app_mention", async ({ event, say }) => {
   const text = event.text.replace(/<@[A-Z0-9]+>/g, " ").replace(/\s+/g, " ").trim();
   const userId = event.user;
   const threadTs = event.thread_ts ?? event.ts;
+  const channel = event.channel;
 
   // @mention replies always post to the channel/thread — quiet mode only
   // affects automated background posts, not direct friend interactions.
@@ -995,7 +1399,21 @@ slackApp.event("app_mention", async ({ event, say }) => {
     await say({ text: t, blocks, thread_ts: threadTs });
   };
 
-  await handleNaturalLanguage(text, userId, respond, event.channel);
+  // Dismissed mid-thread ("@Jam stop")? End the session and bow out.
+  if (await maybeHandleDismissal(channel, threadTs, text, respond)) return;
+
+  // An @mention IS the engagement trigger: from now on she answers
+  // follow-ups in this thread without a re-mention until it's dismissed or
+  // goes quiet. Starting/refreshing here also keeps a live thread alive.
+  startEngagementSession(channel, threadTs, userId, text.slice(0, 120));
+
+  await handleNaturalLanguage(
+    text,
+    userId,
+    respond,
+    threadConvKey(channel, threadTs),
+    true,
+  );
 });
 
 // Direct-message handler. The host (JAM_QUIET_DM_USER) can DM the bot any
@@ -1006,21 +1424,76 @@ slackApp.event("app_mention", async ({ event, say }) => {
 // the host). DMs from anyone other than JAM_QUIET_DM_USER are ignored to
 // keep this strictly a host-test surface.
 slackApp.event("message", async ({ event, client }) => {
-  // The event union is wide; narrow to actual user IM messages.
+  // The event union is wide; narrow to actual user messages.
   if (event.type !== "message") return;
   if ((event as { subtype?: string }).subtype) return; // edits, deletes, joins, etc.
-  if ((event as { channel_type?: string }).channel_type !== "im") return;
 
   const e = event as {
     user?: string;
     text?: string;
     channel: string;
+    channel_type?: string;
     ts: string;
+    thread_ts?: string;
     bot_id?: string;
   };
   if (e.bot_id || !e.user || !e.text) return;
   if (cachedBotUserId && e.user === cachedBotUserId) return;
 
+  // ---- Engaged-thread follow-ups (channel, no @mention) ----------------
+  // When she's been pulled into a thread, she keeps answering replies in
+  // that thread without needing to be re-mentioned, until dismissed or the
+  // session times out. Messages that DO mention her are owned by the
+  // app_mention handler — skip them here to avoid double-replies.
+  if (e.channel_type !== "im") {
+    const threadTs = e.thread_ts;
+    if (!threadTs) return; // top-level channel chatter — not ours
+    // Messages that re-mention the bot are delivered to BOTH this handler and
+    // app_mention. app_mention owns them — skip here so we don't double-reply.
+    // We need our own id to detect that; recover it lazily if boot caching
+    // failed, and bail out entirely if we still can't (better silent than
+    // double-posting). A literal "<@" with no resolvable id means a mention
+    // we can't attribute — treat conservatively and skip.
+    const botId = await ensureBotUserId();
+    if (botId) {
+      if (e.text.includes(`<@${botId}>`)) return;
+    } else if (e.text.includes("<@")) {
+      return;
+    }
+
+    const session = getEngagementSession(
+      e.channel,
+      threadTs,
+      config.JAM_ENGAGE_TIMEOUT_MS,
+    );
+    if (!session) return; // no live session in this thread
+
+    const text = e.text.replace(/<@[A-Z0-9]+>/g, " ").replace(/\s+/g, " ").trim();
+    if (!text) return;
+
+    const respond = async (t: string, blocks?: KnownBlock[]) => {
+      await client.chat.postMessage({
+        channel: e.channel,
+        text: t,
+        thread_ts: threadTs,
+        ...(blocks ? { blocks } : {}),
+      });
+    };
+
+    if (await maybeHandleDismissal(e.channel, threadTs, text, respond)) return;
+
+    refreshEngagementSession(e.channel, threadTs);
+    await handleNaturalLanguage(
+      text,
+      e.user,
+      respond,
+      threadConvKey(e.channel, threadTs),
+      true,
+    );
+    return;
+  }
+
+  // ---- Host DM surface --------------------------------------------------
   if (!config.JAM_QUIET_DM_USER || e.user !== config.JAM_QUIET_DM_USER) {
     logger.info("Ignoring DM from non-host user", { user: e.user });
     return;
@@ -1263,11 +1736,17 @@ nowPlayingWatcher.on("trackChange", async (event) => {
   // Reset votes — any prior card is now stale.
   activeVote = null;
 
+  // If this track belongs to the active tour, pull (and consume) its tidbit
+  // up front — synchronously, before any await, so it's never double-narrated.
+  const tourTidbit = consumeTourTidbit(event.current.id);
+
   // In quiet mode, the now-playing card is rerouted as a DM to the host
   // (handled inside postBackgroundToChannel). The day-of-week gate is
   // bypassed in quiet mode — testing should always show you the cards.
-  // Out of quiet mode, the day-gate applies (default: Fridays only).
-  if (!silentMode && !isNowPlayingPostAllowedToday()) {
+  // Out of quiet mode, the day-gate applies (default: Fridays only) — but a
+  // tour tidbit forces the card through so the commentary has a card to sit
+  // with (the user explicitly started the tour).
+  if (!silentMode && !isNowPlayingPostAllowedToday() && !tourTidbit) {
     logger.info("Suppressed now-playing post (off-day)", {
       track: event.current.title,
       utcDay: new Date().getUTCDay(),
@@ -1287,9 +1766,13 @@ nowPlayingWatcher.on("trackChange", async (event) => {
     if (silentMode) {
       // DM the card to the host. No public message means no vote-button
       // card to attach to — vote tallying still works via /skip but we
-      // can't update a card the channel can't see.
+      // can't update a card the channel can't see. A tour tidbit follows
+      // the card into the DM so quiet-mode tours still narrate.
       if (config.JAM_QUIET_DM_USER) {
         await postDMToUser(config.JAM_QUIET_DM_USER, text, blocks);
+        if (tourTidbit) {
+          await postDMToUser(config.JAM_QUIET_DM_USER, tourTidbit);
+        }
       } else {
         logger.info("Suppressed now-playing post (quiet mode, no DM target)", {
           track: event.current.title,
@@ -1313,6 +1796,15 @@ nowPlayingWatcher.on("trackChange", async (event) => {
         requestedQuery: event.requestedQuery,
         skipped: false,
       };
+      // Attach the tour tidbit as a threaded reply under THIS track's card so
+      // the commentary stays with the music, never dumped up front.
+      if (tourTidbit) {
+        await slackApp.client.chat.postMessage({
+          channel: res.channel,
+          thread_ts: res.ts,
+          text: tourTidbit,
+        });
+      }
     }
   } catch (err) {
     logger.error("Failed to post now-playing", { error: String(err) });
@@ -1334,6 +1826,7 @@ nowPlayingWatcher.on("resumed", () => {
 setInterval(() => {
   expireOldPending();
   expireOldUserRequests();
+  expireEngagementSessions(config.JAM_ENGAGE_TIMEOUT_MS);
 }, 10 * 60 * 1000);
 
 export async function startSlackBot() {
@@ -1348,6 +1841,11 @@ export async function startSlackBot() {
   }
   wrappedScheduler.start();
   logger.info(`Slack bot connected (channel ${config.SLACK_CHANNEL_ID})`);
+  logger.info(
+    "Active engagement (thread mode) needs the `message.channels` event " +
+      "subscription + `channels:history` scope. If she only replies when " +
+      "re-mentioned, re-apply deploy/slack-app-manifest.yaml and reinstall.",
+  );
 }
 
 export function stopWrappedScheduler() {
