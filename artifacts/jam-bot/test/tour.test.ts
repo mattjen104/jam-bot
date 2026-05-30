@@ -42,6 +42,20 @@ describe("isStopTourRequest", () => {
   });
 });
 
+describe("isSaveTourRequest", () => {
+  it("matches save phrasings and ignores unrelated chatter", async () => {
+    const { isSaveTourRequest } = await import("../src/tour.js");
+    expect(isSaveTourRequest("save the tour")).toBe(true);
+    expect(isSaveTourRequest("save this tour")).toBe(true);
+    expect(isSaveTourRequest("can you save this as a playlist?")).toBe(true);
+    expect(isSaveTourRequest("save it to a playlist")).toBe(true);
+    // No tour/playlist anchor -> not a save-tour request.
+    expect(isSaveTourRequest("save me a seat")).toBe(false);
+    expect(isSaveTourRequest("that tour was great")).toBe(false);
+    expect(isSaveTourRequest("play some jazz")).toBe(false);
+  });
+});
+
 describe("buildTour", () => {
   it("queues only real, findable tracks and drops fabricated/unfindable picks", async () => {
     const spotify = await import("../src/spotify/client.js");

@@ -263,3 +263,47 @@ export async function findActiveDevice(): Promise<DeviceInfo | null> {
 export async function getArtistInfo(artistId: string) {
   return withRetry("getArtist", async () => (await api.getArtist(artistId)).body);
 }
+
+export interface CreatedPlaylist {
+  id: string;
+  url: string;
+}
+
+/**
+ * Create a playlist on the connected account and add the given track URIs to
+ * it. Used to persist a guided tour as a real, replayable Spotify playlist.
+ *
+ * Both the create and the add-tracks calls are non-idempotent mutations, so
+ * each runs through `withOnce` (single attempt + on-401 refresh) rather than
+ * `withRetry`: a blind retry after a timeout could create a duplicate
+ * playlist or double-add tracks even when the original call succeeded.
+ *
+ * Requires the `playlist-modify-public` / `playlist-modify-private` scope on
+ * the refresh token. Without it Spotify returns 403 — surfaced to the caller
+ * so it can point the user at the re-auth step in SETUP.md.
+ */
+export async function createPlaylistWithTracks(args: {
+  name: string;
+  description: string;
+  uris: string[];
+  isPublic?: boolean;
+}): Promise<CreatedPlaylist> {
+  const { name, description, uris, isPublic = true } = args;
+  const created = await withOnce("createPlaylist", async () =>
+    api.createPlaylist(name, { description, public: isPublic }),
+  );
+  const id = created.body.id;
+  const url =
+    created.body.external_urls?.spotify ??
+    `https://open.spotify.com/playlist/${id}`;
+  // Spotify caps add-tracks at 100 URIs per call; tours are far smaller than
+  // that, but chunk defensively so a future longer set can't 400.
+  for (let i = 0; i < uris.length; i += 100) {
+    const chunk = uris.slice(i, i + 100);
+    if (!chunk.length) continue;
+    await withOnce("addTracksToPlaylist", async () => {
+      await api.addTracksToPlaylist(id, chunk);
+    });
+  }
+  return { id, url };
+}

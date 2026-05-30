@@ -52,6 +52,7 @@ vi.mock("../src/spotify/client.js", () => ({
   skipToNext: vi.fn(),
   getCurrentlyPlaying: vi.fn(),
   findActiveDevice: vi.fn(),
+  createPlaylistWithTracks: vi.fn(),
 }));
 
 // In-memory engagement-session store so thread-mode behavior is exercised
@@ -1029,5 +1030,87 @@ describe("guided music tour", () => {
       .map((c) => c[0] as { thread_ts?: string })
       .filter((a) => a.thread_ts !== undefined);
     expect(threaded).toHaveLength(0);
+  });
+
+  it("saves the last tour as a playlist using the already-resolved uris", async () => {
+    const llm = await import("../src/llm/openrouter.js");
+    const spotify = await import("../src/spotify/client.js");
+
+    // First, kick off a tour so there's a savable set with real uris.
+    (llm.classifyIntent as ReturnType<typeof vi.fn>).mockResolvedValue({
+      intent: "tour",
+      query: "Soul",
+    });
+    (llm.curateTourPicks as ReturnType<typeof vi.fn>).mockResolvedValue({
+      intro: "A soul primer.",
+      picks: [
+        { title: "What's Going On", artist: "Marvin Gaye" },
+        { title: "A Change Is Gonna Come", artist: "Sam Cooke" },
+      ],
+    });
+    (spotify.searchTrack as ReturnType<typeof vi.fn>).mockImplementation(
+      async (q: string) => {
+        if (q.startsWith("What's Going On"))
+          return { id: "s1", uri: "spotify:track:s1", title: "What's Going On", artist: "Marvin Gaye", album: "What's Going On", durationMs: 1 };
+        if (q.startsWith("A Change Is Gonna Come"))
+          return { id: "s2", uri: "spotify:track:s2", title: "A Change Is Gonna Come", artist: "Sam Cooke", album: "Ain't That Good News", durationMs: 1 };
+        return null;
+      },
+    );
+    (llm.writeTourTidbits as ReturnType<typeof vi.fn>).mockResolvedValue([
+      "Marvin tidbit.",
+      "Sam tidbit.",
+    ]);
+    (spotify.findActiveDevice as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "DEV-S",
+      name: "Jam Host",
+      isActive: true,
+    });
+    (spotify.playNow as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    (spotify.addToQueue as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+
+    const mention = captured.events["app_mention"];
+    await mention!({
+      event: {
+        user: "U_save",
+        channel: CH,
+        text: "<@BOT> give us a tour of Soul",
+        ts: "1700003000.000100",
+      },
+      say: vi.fn().mockResolvedValue(undefined),
+    });
+
+    // Now ask to save it. classifyIntent must NOT be hit — deterministic
+    // save short-circuit — and the resolved tour uris get persisted.
+    (llm.classifyIntent as ReturnType<typeof vi.fn>).mockClear();
+    (spotify.createPlaylistWithTracks as ReturnType<typeof vi.fn>)
+      .mockClear()
+      .mockResolvedValue({
+        id: "PL1",
+        url: "https://open.spotify.com/playlist/PL1",
+      });
+
+    const say = vi.fn().mockResolvedValue(undefined);
+    await mention!({
+      event: {
+        user: "U_save",
+        channel: CH,
+        text: "<@BOT> save the tour",
+        ts: "1700003000.000200",
+      },
+      say,
+    });
+
+    expect(llm.classifyIntent).not.toHaveBeenCalled();
+    expect(spotify.createPlaylistWithTracks).toHaveBeenCalledTimes(1);
+    const arg = (spotify.createPlaylistWithTracks as ReturnType<typeof vi.fn>)
+      .mock.calls[0]![0] as { name: string; uris: string[] };
+    expect(arg.uris).toEqual(["spotify:track:s1", "spotify:track:s2"]);
+    expect(arg.name).toContain("Soul");
+    // The reply links the playlist and re-posts the tidbits.
+    const reply = say.mock.calls.at(-1)?.[0] as { text: string };
+    expect(reply.text).toContain("https://open.spotify.com/playlist/PL1");
+    expect(reply.text).toContain("Marvin tidbit.");
+    expect(reply.text).toContain("Sam tidbit.");
   });
 });

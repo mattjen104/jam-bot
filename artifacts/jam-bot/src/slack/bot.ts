@@ -9,6 +9,7 @@ import {
   skipToNext,
   getCurrentlyPlaying,
   findActiveDevice,
+  createPlaylistWithTracks,
 } from "../spotify/client.js";
 import {
   withPlaybackLock,
@@ -64,7 +65,13 @@ import {
 import { buildWrappedStats, WrappedScheduler, type WrappedStats } from "../wrapped.js";
 import { buildDnaStats, buildCompatStats } from "../dna.js";
 import { askLLMForSet, isMemoryPlaybackRequest } from "../memory.js";
-import { buildTour, parseTourLength, isStopTourRequest } from "../tour.js";
+import {
+  buildTour,
+  parseTourLength,
+  isStopTourRequest,
+  isSaveTourRequest,
+  type TourTrack,
+} from "../tour.js";
 import type { CurrentlyPlaying } from "../spotify/client.js";
 
 export const slackApp = new App({
@@ -115,6 +122,19 @@ interface ActiveTour {
   remaining: Set<string>;
 }
 let activeTour: ActiveTour | null = null;
+
+// The most recently queued tour, retained for "save this tour". Unlike
+// `activeTour` (whose tidbits/remaining sets are consumed as tracks play and
+// which clears itself when the last track starts or on "stop the tour"), this
+// holds the FULL resolved track list — real uris + tidbits — so saving works
+// while the tour plays, after it finishes, and even after it's been stopped.
+// Replaced when a new tour starts; only cleared on bot restart. Saving reuses
+// these already-resolved uris and never re-fabricates tracks.
+let lastSavableTour: {
+  theme: string;
+  intro: string;
+  tracks: TourTrack[];
+} | null = null;
 
 /**
  * If the given track belongs to the active tour, pull (and consume) its
@@ -1168,6 +1188,13 @@ async function handleTour(args: {
       tidbits: new Map(queuedTracks.map((t) => [t.trackId, t.tidbit])),
       remaining: new Set(queuedTracks.map((t) => t.trackId)),
     };
+    // Retain the full queued set (uris + tidbits) so "save this tour" can
+    // persist it as a playlist later, even after every track has played.
+    lastSavableTour = {
+      theme: tour.theme,
+      intro: tour.intro,
+      tracks: queuedTracks,
+    };
     recordUserRequest(slackUserId);
   }
 
@@ -1189,7 +1216,73 @@ async function handleTour(args: {
   await respond(
     `:notes: ${intro}Queued a ${queued}-track tour of ${theme} — ${
       firstPlayed ? "starting now" : "added to the queue"
-    }. I'll drop a note on each track as it comes up. Say "stop the tour" any time.`,
+    }. I'll drop a note on each track as it comes up. Say "stop the tour" any time, or "save the tour" to keep it as a playlist.`,
+  );
+}
+
+// Spotify caps playlist names at 100 chars and descriptions at 300; keep our
+// generated values well within those so a create never 400s on length.
+function tourPlaylistName(theme: string): string {
+  const name = `Jam Tour: ${theme}`;
+  return name.length > 100 ? `${name.slice(0, 97)}...` : name;
+}
+function tourPlaylistDescription(intro: string, theme: string): string {
+  const lead = intro.trim() || `A guided Jam Bot tour of ${theme}.`;
+  const full = `${lead} — saved from a Jam Bot guided tour.`;
+  return full.length > 300 ? full.slice(0, 300) : full;
+}
+
+/**
+ * Persist the most recently queued tour (`lastSavableTour`) as a real Spotify
+ * playlist: name it for the theme, fill it with the already-resolved tour
+ * uris (never re-fabricated), stash the intro in the description, and re-post
+ * the per-track tidbits to the channel so the "guided" feel survives a
+ * replay. Surfaces a clear note if the refresh token lacks the playlist
+ * scope.
+ */
+async function handleSaveTour(args: { respond: (t: string) => Promise<void> }) {
+  const { respond } = args;
+  const tour = lastSavableTour;
+  if (!tour || !tour.tracks.length) {
+    await respond(
+      'No tour to save yet — start one first with something like "give us a tour of Motown", then say "save the tour".',
+    );
+    return;
+  }
+
+  let playlist;
+  try {
+    playlist = await createPlaylistWithTracks({
+      name: tourPlaylistName(tour.theme),
+      description: tourPlaylistDescription(tour.intro, tour.theme),
+      uris: tour.tracks.map((t) => t.uri),
+      isPublic: true,
+    });
+  } catch (err) {
+    const status = (err as { statusCode?: number })?.statusCode;
+    if (status === 403) {
+      await respond(
+        ":lock: I can't save playlists yet — the Spotify token is missing the `playlist-modify-public` scope. Re-run `pnpm run spotify:auth`, update `SPOTIFY_REFRESH_TOKEN`, and restart the bot (see SETUP.md).",
+      );
+      return;
+    }
+    logger.error("Save tour: playlist creation failed", {
+      theme: tour.theme,
+      error: String(err),
+    });
+    await respond(
+      ":warning: Couldn't save the tour as a playlist just now — try again in a moment.",
+    );
+    return;
+  }
+
+  // Re-post the tidbits so the narrated context travels with the saved set.
+  const tidbits = tour.tracks
+    .map((t, i) => `${i + 1}. *${t.title}* — ${t.artist}\n   ${t.tidbit}`)
+    .join("\n");
+  await respond(
+    `:floppy_disk: Saved your ${tour.tracks.length}-track tour of ${tour.theme} as a playlist — replay it any time: ${playlist.url}\n\n` +
+      `Here are the tidbits so the guided feel comes along for the replay:\n${tidbits}`,
   );
 }
 
@@ -1247,6 +1340,14 @@ async function handleNaturalLanguage(
     } else {
       await respond("No tour running right now.");
     }
+    return;
+  }
+
+  // Save the tour as a playlist — handled before intent classification so
+  // "save the tour" persists the most recent set without an LLM round-trip,
+  // even after it's finished playing or been stopped.
+  if (isSaveTourRequest(text)) {
+    await handleSaveTour({ respond: (t) => respond(t) });
     return;
   }
 

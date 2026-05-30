@@ -44,6 +44,16 @@ export function isStopTourRequest(text: string): boolean {
 }
 
 /**
+ * Deterministic detector for "save this tour" style asks. Kept off the LLM so
+ * persisting a tour as a playlist never depends on a network round-trip.
+ * Requires an explicit "tour"/"playlist" anchor so ordinary chatter that
+ * happens to contain "save" doesn't trigger a playlist create.
+ */
+export function isSaveTourRequest(text: string): boolean {
+  return /\bsave\b[^.!?]*\b(tour|playlist)\b/i.test(text);
+}
+
+/**
  * Build a guided tour for a theme: ask the model for real picks, resolve
  * each against Spotify search (dropping anything that can't be found so we
  * never queue a fabricated track), then narrate the resolved set. A small

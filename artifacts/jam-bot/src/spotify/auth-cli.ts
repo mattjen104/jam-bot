@@ -24,6 +24,9 @@ const SCOPES = [
   "user-read-currently-playing",
   "user-read-recently-played",
   "streaming",
+  // Needed to save a guided tour as a real Spotify playlist.
+  "playlist-modify-public",
+  "playlist-modify-private",
 ].join(" ");
 
 if (!CLIENT_ID || !CLIENT_SECRET) {

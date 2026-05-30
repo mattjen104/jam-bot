@@ -46,6 +46,13 @@ AQ...
 
 Paste it into your `.env` as `SPOTIFY_REFRESH_TOKEN`. You can keep using this `.env` on the droplet later.
 
+> **Saving guided tours as playlists:** the auth handshake requests the
+> `playlist-modify-public` / `playlist-modify-private` scopes so "save the
+> tour" can create a real Spotify playlist on the host account. If you
+> authorized before this feature was added, re-run `pnpm run spotify:auth`,
+> approve the new permissions, and update `SPOTIFY_REFRESH_TOKEN` — otherwise
+> Jam Bot will reply that it's missing the playlist scope when asked to save.
+
 ## 3. Create the Slack app
 
 1. Go to <https://api.slack.com/apps> → **Create New App** → **From an app manifest**.
