@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import {
   getCurrentlyPlaying,
-  findHostDevice,
+  findActiveDevice,
   type CurrentlyPlaying,
 } from "./spotify/client.js";
 import { popPendingRequest, recordPlayed, lastPlayed } from "./db.js";
@@ -16,7 +16,7 @@ export interface TrackChangeEvent {
 
 export type NowPlayingEvents = {
   trackChange: (event: TrackChangeEvent) => void;
-  noActiveDevice: (info: { hostVisible: boolean }) => void;
+  noActiveDevice: () => void;
   resumed: () => void;
 };
 
@@ -58,16 +58,14 @@ class NowPlayingWatcher extends EventEmitter {
     try {
       const cp = await getCurrentlyPlaying();
       if (!cp.track) {
-        // "nothing playing" can mean: (a) host offline, (b) host visible but
-        // inactive (nobody has hit play yet / was kicked off), or (c) host
-        // online and active but the queue ran dry. Treat (a) and (b) as
-        // "needs attention" and emit the offline alert; (c) is silent.
-        const host = await findHostDevice().catch(() => null);
-        const needsAttention = !host || !host.isActive;
+        // "nothing playing" can mean: (a) no device active anywhere, or
+        // (b) a device is active but the queue ran dry. Treat (a) as
+        // "needs attention" and emit the offline alert; (b) is silent.
+        const device = await findActiveDevice().catch(() => null);
+        const needsAttention = !device;
         if (needsAttention && !this.wasNoDevice) {
           this.wasNoDevice = true;
-          this.emit("noActiveDevice", { hostVisible: !!host });
-          // (typed payload — Slack listener reads `hostVisible`)
+          this.emit("noActiveDevice");
         }
         return;
       }

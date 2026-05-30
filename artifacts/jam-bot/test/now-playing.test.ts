@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../src/spotify/client.js", () => ({
   getCurrentlyPlaying: vi.fn(),
-  findHostDevice: vi.fn(),
+  findActiveDevice: vi.fn(),
 }));
 
 vi.mock("../src/db.js", () => ({
@@ -65,18 +65,18 @@ describe("NowPlayingWatcher", () => {
     expect(db.recordPlayed).toHaveBeenCalledTimes(2);
   });
 
-  it("emits noActiveDevice once while host is offline, then resumed when track returns", async () => {
+  it("emits noActiveDevice once while no device is active, then resumed when track returns", async () => {
     const spotify = await import("../src/spotify/client.js");
     const { nowPlayingWatcher } = await import("../src/now-playing.js");
 
     (spotify.getCurrentlyPlaying as ReturnType<typeof vi.fn>).mockResolvedValue({
       isPlaying: false,
     });
-    (spotify.findHostDevice as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    (spotify.findActiveDevice as ReturnType<typeof vi.fn>).mockResolvedValue(null);
 
     const noDevice: unknown[] = [];
     const resumed: unknown[] = [];
-    nowPlayingWatcher.on("noActiveDevice", (i) => noDevice.push(i));
+    nowPlayingWatcher.on("noActiveDevice", () => noDevice.push(1));
     nowPlayingWatcher.on("resumed", () => resumed.push(1));
 
     const tickable = nowPlayingWatcher as unknown as { tick: () => Promise<void> };

@@ -41,9 +41,8 @@ vi.mock("../src/spotify/client.js", () => ({
   addToQueue: vi.fn(),
   playNow: vi.fn(),
   skipToNext: vi.fn(),
-  ensurePlaybackOnHost: vi.fn(),
   getCurrentlyPlaying: vi.fn(),
-  findHostDevice: vi.fn(),
+  findActiveDevice: vi.fn(),
 }));
 
 vi.mock("../src/db.js", () => ({
@@ -153,7 +152,7 @@ describe("slash command channel authorization", () => {
   it("calls Spotify play with the searched URI when /play is invoked from the jam channel", async () => {
     const spotify = await import("../src/spotify/client.js");
     (spotify.playNow as ReturnType<typeof vi.fn>).mockClear().mockResolvedValue(undefined);
-    (spotify.ensurePlaybackOnHost as ReturnType<typeof vi.fn>).mockResolvedValue({
+    (spotify.findActiveDevice as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "DEV-1",
       name: "Jam Host",
       isActive: true,
@@ -197,7 +196,7 @@ describe("intent classifier routing in channel messages", () => {
       intent: "play",
       query: "bohemian rhapsody",
     });
-    (spotify.ensurePlaybackOnHost as ReturnType<typeof vi.fn>).mockResolvedValue({
+    (spotify.findActiveDevice as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "DEV-99",
       name: "Jam Host",
       isActive: true,
@@ -236,7 +235,7 @@ describe("intent classifier routing in channel messages", () => {
     (llm.classifyIntent as ReturnType<typeof vi.fn>).mockResolvedValue({
       intent: "skip",
     });
-    (spotify.findHostDevice as ReturnType<typeof vi.fn>).mockResolvedValue({
+    (spotify.findActiveDevice as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "DEV-77",
       name: "Jam Host",
       isActive: true,
@@ -309,7 +308,7 @@ describe("intent classifier routing in channel messages", () => {
       summary: "test set",
       trackIds: ["a", "b", "c", "d"],
     });
-    (spotify.ensurePlaybackOnHost as ReturnType<typeof vi.fn>).mockResolvedValue({
+    (spotify.findActiveDevice as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "DEV-X",
       name: "Jam Host",
       isActive: true,

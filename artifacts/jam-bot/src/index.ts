@@ -1,8 +1,7 @@
 import { logger } from "./logger.js";
-import { ensurePlaybackOnHost } from "./spotify/client.js";
+import { findActiveDevice } from "./spotify/client.js";
 import { startSlackBot, stopWrappedScheduler } from "./slack/bot.js";
 import { nowPlayingWatcher } from "./now-playing.js";
-import { config } from "./config.js";
 
 function dbg(msg: string) {
   process.stdout.write(`[DBG ${new Date().toISOString()}] ${msg}\n`);
@@ -14,24 +13,24 @@ async function main() {
   dbg("main:after-logger");
 
   try {
-    dbg("main:before-ensurePlaybackOnHost");
-    const host = await Promise.race([
-      ensurePlaybackOnHost(),
+    dbg("main:before-findActiveDevice");
+    const device = await Promise.race([
+      findActiveDevice(),
       new Promise((_r, rej) =>
-        setTimeout(() => rej(new Error("ensurePlaybackOnHost wall-clock timeout 20s")), 20_000),
+        setTimeout(() => rej(new Error("findActiveDevice wall-clock timeout 20s")), 20_000),
       ),
-    ]) as Awaited<ReturnType<typeof ensurePlaybackOnHost>>;
-    dbg("main:after-ensurePlaybackOnHost");
-    if (host) {
-      logger.info(`Found host device "${host.name}"`);
+    ]) as Awaited<ReturnType<typeof findActiveDevice>>;
+    dbg("main:after-findActiveDevice");
+    if (device) {
+      logger.info(`Active Spotify device: "${device.name}"`);
     } else {
-      logger.warn(
-        `Host device "${config.SPOTIFY_DEVICE_NAME}" not visible to Spotify yet — make sure librespot is running and a Jam is active.`,
+      logger.info(
+        "No active Spotify device yet — open Spotify and start playing something to enable playback.",
       );
     }
   } catch (err) {
-    dbg(`main:ensurePlaybackOnHost-catch ${String(err)}`);
-    logger.warn("Could not transfer playback at startup", {
+    dbg(`main:findActiveDevice-catch ${String(err)}`);
+    logger.warn("Could not look up active device at startup", {
       error: String(err),
     });
   }

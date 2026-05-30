@@ -219,22 +219,11 @@ export async function listDevices(): Promise<DeviceInfo[]> {
   });
 }
 
-export async function findHostDevice(): Promise<DeviceInfo | null> {
-  const devices = await listDevices();
-  return devices.find((d) => d.name === config.SPOTIFY_DEVICE_NAME) ?? null;
-}
-
-export async function transferPlaybackTo(deviceId: string, play = false) {
-  return withOnce("transferMyPlayback", async () => {
-    await api.transferMyPlayback([deviceId], { play });
-  });
-}
-
 /**
  * Returns the device id that Spotify currently considers active for
- * playback, or null if no device is. Used to debounce stale
- * `is_active` flags from `/me/player/devices`, which sometimes report
- * a device as inactive for a few seconds even while it's playing.
+ * playback, or null if no device is. `/me/player` updates in lockstep with
+ * playback, so it's the most reliable signal for "what is the account
+ * playing on right now".
  */
 export async function getActivePlaybackDeviceId(): Promise<string | null> {
   return withRetry("getMyCurrentPlaybackState", async () => {
@@ -243,25 +232,32 @@ export async function getActivePlaybackDeviceId(): Promise<string | null> {
   });
 }
 
-export async function ensurePlaybackOnHost(): Promise<DeviceInfo | null> {
-  const host = await findHostDevice();
-  if (!host) return null;
-  if (host.isActive) return host;
-
-  // The `/me/player/devices` `is_active` flag is laggy — it can read
-  // false for several seconds after a track change even though the
-  // host is actively playing. Confirm with `/me/player` (which Spotify
-  // updates in lockstep with playback) before firing a transfer; an
-  // unnecessary transferMyPlayback occasionally restarts the current
-  // track, which friends saw as "the bot keeps restarting the song."
-  const activeDeviceId = await getActivePlaybackDeviceId().catch(() => null);
-  if (activeDeviceId === host.id) {
-    return host;
+/**
+ * Resolve the Spotify device the bot should act on: whatever the account is
+ * currently playing on (phone, laptop, speaker — whatever). Prefers the
+ * device Spotify reports as active for the live playback session
+ * (`/me/player`), then falls back to any device flagged active in the device
+ * list (the `is_active` flag can lag the live session by a few seconds).
+ * Returns null when nothing is active — callers should then tell the user to
+ * open Spotify and start playing something.
+ */
+export async function findActiveDevice(): Promise<DeviceInfo | null> {
+  const [devices, activeId] = await Promise.all([
+    listDevices(),
+    getActivePlaybackDeviceId().catch(() => null),
+  ]);
+  // `/me/player` is authoritative for the live session. Prefer the matching
+  // entry (full name/flags); if the device list hasn't caught up yet — a brief
+  // eventual-consistency window where `/me/player` reports an id that
+  // `/me/player/devices` doesn't list — still target that id directly so we
+  // don't falsely report "no active device".
+  if (activeId) {
+    const match = devices.find((d) => d.id === activeId);
+    if (match) return match;
+    return { id: activeId, name: "active device", isActive: true };
   }
-
-  await transferPlaybackTo(host.id, false);
-  logger.info(`Transferred playback to host device "${host.name}"`);
-  return host;
+  // No live session id — fall back to whatever device the list flags active.
+  return devices.find((d) => d.isActive) ?? null;
 }
 
 export async function getArtistInfo(artistId: string) {

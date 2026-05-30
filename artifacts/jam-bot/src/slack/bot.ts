@@ -7,9 +7,8 @@ import {
   addToQueue,
   playNow,
   skipToNext,
-  ensurePlaybackOnHost,
   getCurrentlyPlaying,
-  findHostDevice,
+  findActiveDevice,
 } from "../spotify/client.js";
 import {
   withPlaybackLock,
@@ -199,7 +198,7 @@ async function handlePlayOrQueue(args: {
   // critical section. Slack responses + DB bookkeeping happen AFTER the
   // lock is released so they don't extend the contended window.
   type Outcome =
-    | { kind: "no_host" }
+    | { kind: "no_device" }
     | { kind: "already_playing" }
     | { kind: "played" }
     | { kind: "queued" };
@@ -207,8 +206,8 @@ async function handlePlayOrQueue(args: {
   let outcome: Outcome;
   try {
     outcome = await withPlaybackLock(async (): Promise<Outcome> => {
-      const host = await ensurePlaybackOnHost();
-      if (!host) return { kind: "no_host" };
+      const device = await findActiveDevice();
+      if (!device) return { kind: "no_device" };
       if (asPlay) {
         // Don't restart the song someone is already listening to. Common
         // scenario: a friend hears a song they like, runs `/play <title>`,
@@ -221,10 +220,10 @@ async function handlePlayOrQueue(args: {
         // Use the play endpoint with explicit URI so we always start
         // *this* track rather than queueing and hoping skipToNext lands
         // on it.
-        await playNow(track.uri, host.id);
+        await playNow(track.uri, device.id);
         return { kind: "played" };
       }
-      await addToQueue(track.uri, host.id);
+      await addToQueue(track.uri, device.id);
       return { kind: "queued" };
     });
   } catch (err) {
@@ -238,9 +237,9 @@ async function handlePlayOrQueue(args: {
   }
 
   switch (outcome.kind) {
-    case "no_host":
+    case "no_device":
       await respond(
-        `:warning: No active Spotify device named \`${config.SPOTIFY_DEVICE_NAME}\`. Restart the Jam from your phone first.`,
+        ":warning: No active Spotify device. Open Spotify on your phone (or any device) and start playing something, then try again.",
       );
       return;
     case "already_playing":
@@ -639,20 +638,20 @@ slackApp.command(
       let firstPlayed: string | null = null;
       let aborted = false;
       let abortErr: unknown = null;
-      let hostFound = false;
+      let deviceFound = false;
       try {
         await withPlaybackLock(async () => {
-          const host = await ensurePlaybackOnHost();
-          if (!host) return;
-          hostFound = true;
+          const device = await findActiveDevice();
+          if (!device) return;
+          deviceFound = true;
           for (const id of set.trackIds) {
             const uri = `spotify:track:${id}`;
             try {
               if (queued === 0) {
-                await playNow(uri, host.id);
+                await playNow(uri, device.id);
                 firstPlayed = uri;
               } else {
-                await addToQueue(uri, host.id);
+                await addToQueue(uri, device.id);
               }
               recordPendingRequest(id, userId, `memory: ${text}`);
               queued++;
@@ -682,9 +681,9 @@ slackApp.command(
         }
         throw err;
       }
-      if (!hostFound) {
+      if (!deviceFound) {
         await say(
-          `:warning: No active Spotify device named \`${config.SPOTIFY_DEVICE_NAME}\`. Restart the Jam from your phone first.`,
+          ":warning: No active Spotify device. Open Spotify on your phone (or any device) and start playing something, then try again.",
         );
         return;
       }
@@ -693,7 +692,7 @@ slackApp.command(
         const status = (abortErr as { statusCode?: number })?.statusCode;
         const deviceGone = status === 404;
         const reason = deviceGone
-          ? `Spotify device \`${config.SPOTIFY_DEVICE_NAME}\` is no longer reachable. Restart the Jam from your phone and try again.`
+          ? "Your Spotify device went away mid-queue. Make sure Spotify is still playing and try again."
           : "Spotify rejected the request — try again in a moment.";
         await say(
           queued > 0
@@ -1171,17 +1170,17 @@ async function castSkipVote(
 
   // Threshold reached — try the actual skip. Only mark `skipped` after the
   // Spotify call succeeds, so a transient failure doesn't dead-end the vote.
-  const host = await findHostDevice().catch(() => null);
-  if (!host) {
+  const device = await findActiveDevice().catch(() => null);
+  if (!device) {
     return {
       kind: "skip_failed",
       count,
       threshold,
-      reason: `no active device named \`${config.SPOTIFY_DEVICE_NAME}\``,
+      reason: "no active Spotify device — start playing something in Spotify first",
     };
   }
   try {
-    await withPlaybackLock(() => skipToNext(host.id));
+    await withPlaybackLock(() => skipToNext(device.id));
   } catch (err) {
     if (err instanceof PlaybackLockBusyError) {
       return {
@@ -1324,10 +1323,8 @@ nowPlayingWatcher.on("trackChange", async (event) => {
 // noise nobody actually wants — log them for debugging from the droplet
 // shell and that's it. No channel post, no DM, even when quiet mode is
 // off. If you need to debug a dropped connection: `journalctl -u jam-bot`.
-nowPlayingWatcher.on("noActiveDevice", (info?: { hostVisible?: boolean }) => {
-  logger.info("No active Spotify playback detected", {
-    hostVisible: info?.hostVisible ?? false,
-  });
+nowPlayingWatcher.on("noActiveDevice", () => {
+  logger.info("No active Spotify playback detected");
 });
 
 nowPlayingWatcher.on("resumed", () => {
