@@ -15,6 +15,7 @@ type EventHandler = (ctx: {
 const captured: {
   commands: Record<string, CmdHandler>;
   events: Record<string, EventHandler>;
+  client?: { chat: { postMessage: ReturnType<typeof vi.fn> } };
 } = { commands: {}, events: {} };
 
 vi.mock("@slack/bolt", () => {
@@ -28,6 +29,11 @@ vi.mock("@slack/bolt", () => {
           .mockResolvedValue({ user: { profile: { display_name: "Tester" } } }),
       },
     };
+    constructor() {
+      // Expose this app's client so tests can assert on chat.postMessage
+      // (used by the turntable announcement routing).
+      captured.client = this.client;
+    }
     command(name: string, handler: CmdHandler) {
       captured.commands[name] = handler;
     }
@@ -1284,5 +1290,86 @@ describe("origin-based routing and ambient Jam gate", () => {
     expect(spotify.playNow).not.toHaveBeenCalled();
     expect(client.chat.postMessage).not.toHaveBeenCalled();
     expect(post).not.toHaveBeenCalled();
+  });
+});
+
+describe("/turntable announcement origin routing (#32)", () => {
+  const CH = process.env.SLACK_CHANNEL_ID!;
+  const HOST = process.env.JAM_QUIET_DM_USER!;
+
+  const runStart = async (channelId: string, userId: string) => {
+    const spotify = await import("../src/spotify/client.js");
+    (spotify.findActiveDevice as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "DEV-TT",
+      name: "Jam Host",
+      isActive: true,
+    });
+    const handler = captured.commands["/turntable"];
+    expect(handler).toBeDefined();
+    await handler!({
+      command: { channel_id: channelId, user_id: userId, text: "start", command: "/turntable" },
+      ack: vi.fn().mockResolvedValue(undefined),
+      respond: vi.fn().mockResolvedValue(undefined),
+    });
+  };
+
+  const fireTrackConfirmed = async () => {
+    const { turntableSession } = await import("../src/turntable/session.js");
+    turntableSession.emit("trackConfirmed", {
+      track: {
+        id: "trk-tt",
+        uri: "spotify:track:trk-tt",
+        title: "Vinyl Cut",
+        artist: "Wax",
+        album: "Pressing",
+        durationMs: 200000,
+      },
+      match: {
+        acrid: "acr-tt",
+        title: "Vinyl Cut",
+        artist: "Wax",
+        album: "Pressing",
+        isrc: "USABC1234567",
+        playOffsetMs: 0,
+        score: 100,
+      },
+      viaIsrc: true,
+    });
+    // Listener is async (awaits isJamActive + postMessage); let it settle.
+    await flush();
+    await flush();
+  };
+
+  it("posts to the CHANNEL when the host runs /turntable start IN the channel (Jam-gated)", async () => {
+    const jam = await import("../src/spotify/jam.js");
+    (jam.isJamActive as ReturnType<typeof vi.fn>).mockResolvedValue(true);
+    const post = captured.client!.chat.postMessage;
+    post.mockClear();
+
+    // Even though the *caller* is the configured host, running in the channel
+    // must route announcements to the channel — not the host's DM.
+    await runStart(CH, HOST);
+    await fireTrackConfirmed();
+
+    const tt = post.mock.calls.find(([m]) =>
+      String((m as { text?: string }).text).includes("from the turntable"),
+    );
+    expect(tt).toBeDefined();
+    expect((tt![0] as { channel: string }).channel).toBe(CH);
+  });
+
+  it("DMs the host when /turntable start is run IN the host DM", async () => {
+    const post = captured.client!.chat.postMessage;
+    post.mockClear();
+
+    // Slack DM channel ids start with "D"; the host is the configured user.
+    await runStart("D_HOST_IM", HOST);
+    await fireTrackConfirmed();
+
+    const tt = post.mock.calls.find(([m]) =>
+      String((m as { text?: string }).text).includes("from the turntable"),
+    );
+    expect(tt).toBeDefined();
+    expect((tt![0] as { channel: string }).channel).toBe(HOST);
   });
 });

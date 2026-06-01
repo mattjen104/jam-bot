@@ -24,3 +24,11 @@ process.env.LOG_LEVEL ??= "error";
 process.env.SKIP_VOTE_THRESHOLD ??= "1";
 // Disable the auto-Wrapped scheduler in tests so it never spins up timers.
 process.env.JAM_ENABLE_WEEKLY_WRAPPED ??= "false";
+// Turntable sync config — enables turntableConfigured() so the /turntable
+// command and its origin-based announcement routing can be exercised. The
+// ingest server is only started from index.ts (not imported in tests), so
+// these don't open a socket.
+process.env.ACRCLOUD_HOST ??= "identify-eu-west-1.acrcloud.com";
+process.env.ACRCLOUD_ACCESS_KEY ??= "test-acr-key";
+process.env.ACRCLOUD_ACCESS_SECRET ??= "test-acr-secret";
+process.env.TURNTABLE_INGEST_SECRET ??= "test-ingest-secret";

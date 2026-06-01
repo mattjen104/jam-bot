@@ -386,6 +386,8 @@ function slashHandler(
   fn: (args: {
     text: string;
     userId: string;
+    isDm: boolean;
+    channelId: string;
     say: (text: string, blocks?: KnownBlock[]) => Promise<void>;
     sayEphemeral: (text: string) => Promise<void>;
   }) => Promise<void>,
@@ -423,7 +425,14 @@ function slashHandler(
       await respond({ response_type: "ephemeral", text });
     };
     try {
-      await fn({ text: command.text.trim(), userId: command.user_id, say, sayEphemeral });
+      await fn({
+        text: command.text.trim(),
+        userId: command.user_id,
+        isDm,
+        channelId: command.channel_id,
+        say,
+        sayEphemeral,
+      });
     } catch (err) {
       logger.error(`Slash command /${command.command} failed`, {
         error: String(err),
@@ -802,7 +811,7 @@ let turntableOrigin: ReplyOrigin | null = null;
 
 slackApp.command(
   "/turntable",
-  slashHandler(async ({ text, userId, say, sayEphemeral }) => {
+  slashHandler(async ({ text, userId, isDm, say, sayEphemeral }) => {
     if (!turntableConfigured()) {
       await sayEphemeral(
         ":warning: Turntable sync isn't configured. Set `ACRCLOUD_HOST`, " +
@@ -812,7 +821,11 @@ slackApp.command(
       return;
     }
     const sub = text.trim().toLowerCase().split(/\s+/)[0] || "status";
-    const isDm = !!config.JAM_QUIET_DM_USER && userId === config.JAM_QUIET_DM_USER;
+    // Record where the command actually ran (real channel-vs-DM context), so
+    // later "now playing from the turntable" announcements follow the same
+    // reply-routing as everything else: channel-started -> channel, DM-started
+    // -> host DM. Deriving this from user identity is wrong — the host running
+    // `/turntable start` *in the channel* must announce to the channel.
     const origin: ReplyOrigin = isDm
       ? { kind: "dm", userId }
       : { kind: "channel" };
