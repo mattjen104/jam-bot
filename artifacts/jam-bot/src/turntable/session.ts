@@ -91,19 +91,37 @@ export class TrackChangeDebouncer {
     }
 
     if (key === this.candidateKey) {
-      this.candidateCount += 1;
+      // Cap the count: once at/over threshold we keep returning "changed" on
+      // every agreeing sample so the caller can RETRY a failed switch, without
+      // the counter growing unbounded.
+      this.candidateCount = Math.min(this.candidateCount + 1, this.threshold);
     } else {
       this.candidateKey = key;
       this.candidateCount = 1;
     }
 
+    // We deliberately do NOT set confirmedKey here. A switch is only
+    // "confirmed" once the caller has actually driven Spotify to it and calls
+    // commit(). Until then every agreeing sample re-returns "changed", so a
+    // failed resolve/play/seek is retried instead of stranding the session on
+    // a track it never actually switched to.
     if (this.candidateCount >= this.threshold) {
-      this.confirmedKey = key;
-      this.candidateKey = null;
-      this.candidateCount = 0;
       return { kind: "changed", key };
     }
     return { kind: "pending" };
+  }
+
+  /**
+   * Promote a track to "current" — called by the session ONLY after Spotify
+   * playback for it actually succeeded. Clears the candidate streak so the
+   * next agreeing sample reads as confirmed-current. A switch that fails never
+   * gets committed, so the debouncer keeps returning "changed" and the engine
+   * retries on the next clip.
+   */
+  commit(key: string): void {
+    this.confirmedKey = key;
+    this.candidateKey = null;
+    this.candidateCount = 0;
   }
 }
 
@@ -381,6 +399,10 @@ export class TurntableSession extends EventEmitter {
       return;
     }
 
+    // Only now — after Spotify actually switched — is the track "confirmed".
+    // If anything above had failed we'd have returned without committing, and
+    // the next agreeing clip would retry the switch.
+    this.debouncer.commit(matchKey(match));
     this.anchor = anchor;
     this.currentTrack = track;
     logger.info("Turntable: switched host to matched track", {

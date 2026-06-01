@@ -86,7 +86,11 @@ describe("TrackChangeDebouncer", () => {
   it("reports re-confirmation of the current track and drops partial streaks", () => {
     const d = new TrackChangeDebouncer(2);
     d.observe(mkMatch({ isrc: "A" }));
-    d.observe(mkMatch({ isrc: "A" })); // confirmed A
+    expect(d.observe(mkMatch({ isrc: "A" }))).toEqual({
+      kind: "changed",
+      key: "isrc:A",
+    });
+    d.commit("isrc:A"); // the session commits only after Spotify actually switched
     expect(d.observe(mkMatch({ isrc: "A" }))).toEqual({
       kind: "confirmed-current",
     });
@@ -97,6 +101,30 @@ describe("TrackChangeDebouncer", () => {
       kind: "confirmed-current",
     });
     expect(d.observe(mkMatch({ isrc: "B" })).kind).toBe("pending");
+  });
+
+  it("keeps signalling 'changed' until commit so a failed switch is retried", () => {
+    const d = new TrackChangeDebouncer(2);
+    d.observe(mkMatch({ isrc: "A" }));
+    expect(d.observe(mkMatch({ isrc: "A" }))).toEqual({
+      kind: "changed",
+      key: "isrc:A",
+    });
+    // The caller's switch failed -> no commit. Every further agreeing sample
+    // re-signals "changed" so the engine retries instead of getting stranded.
+    expect(d.observe(mkMatch({ isrc: "A" }))).toEqual({
+      kind: "changed",
+      key: "isrc:A",
+    });
+    expect(d.observe(mkMatch({ isrc: "A" }))).toEqual({
+      kind: "changed",
+      key: "isrc:A",
+    });
+    // Once the caller finally drives Spotify and commits, it reads as current.
+    d.commit("isrc:A");
+    expect(d.observe(mkMatch({ isrc: "A" }))).toEqual({
+      kind: "confirmed-current",
+    });
   });
 
   it("treats threshold 1 as immediate", () => {
@@ -310,5 +338,31 @@ describe("TurntableSession", () => {
     await s.observe(mkMatch({ isrc: "A" }));
     expect(client.playNow).not.toHaveBeenCalled();
     expect(errs).toHaveLength(1);
+  });
+
+  it("retries the switch on the next clip after a transient playback failure", async () => {
+    vi.mocked(client.findActiveDevice).mockResolvedValue({
+      id: "dev1",
+      name: "Host",
+      isActive: true,
+    });
+    vi.mocked(client.searchTrackByIsrc).mockResolvedValue(spTrack("t1"));
+    // First switch attempt fails at playback, second succeeds.
+    vi.mocked(client.playNow)
+      .mockRejectedValueOnce(new Error("spotify hiccup"))
+      .mockResolvedValue(undefined);
+    const s = new TurntableSession();
+    const confirmed: unknown[] = [];
+    const errs: unknown[] = [];
+    s.on("trackConfirmed", (e) => confirmed.push(e));
+    s.on("error", (e) => errs.push(e));
+    s.start();
+    await s.observe(mkMatch({ isrc: "A" }));
+    await s.observe(mkMatch({ isrc: "A" })); // confirmed -> attempt 1 fails
+    expect(confirmed).toHaveLength(0);
+    // The debouncer must NOT be stranded on A: the next agreeing clip retries.
+    await s.observe(mkMatch({ isrc: "A" })); // attempt 2 succeeds
+    expect(client.playNow).toHaveBeenCalledTimes(2);
+    expect(confirmed).toHaveLength(1);
   });
 });
