@@ -2,6 +2,10 @@ import { logger } from "./logger.js";
 import { findActiveDevice } from "./spotify/client.js";
 import { startSlackBot, stopWrappedScheduler } from "./slack/bot.js";
 import { nowPlayingWatcher } from "./now-playing.js";
+import {
+  startTurntableIngestServer,
+  stopTurntableIngestServer,
+} from "./turntable/ingest-server.js";
 
 function dbg(msg: string) {
   process.stdout.write(`[DBG ${new Date().toISOString()}] ${msg}\n`);
@@ -40,6 +44,8 @@ async function main() {
   dbg("main:after-startSlackBot");
   nowPlayingWatcher.start();
   dbg("main:after-nowPlayingWatcher");
+  startTurntableIngestServer();
+  dbg("main:after-turntableIngest");
 
   logger.info("Jam Bot is up.");
 }
@@ -48,6 +54,7 @@ function shutdown(signal: string) {
   logger.info(`Received ${signal}, shutting down`);
   nowPlayingWatcher.stop();
   stopWrappedScheduler();
+  stopTurntableIngestServer();
   process.exit(0);
 }
 process.on("SIGINT", () => shutdown("SIGINT"));

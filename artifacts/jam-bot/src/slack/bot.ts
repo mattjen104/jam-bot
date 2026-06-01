@@ -58,6 +58,8 @@ import {
   isJamActive,
 } from "../spotify/jam.js";
 import { nowPlayingWatcher, type TrackChangeEvent } from "../now-playing.js";
+import { turntableSession } from "../turntable/session.js";
+import { turntableConfigured } from "../turntable/ingest-server.js";
 import {
   historyBlocks,
   nowPlayingBlocks,
@@ -101,6 +103,14 @@ export const slackApp = new App({
 type ReplyOrigin =
   | { kind: "channel" }
   | { kind: "dm"; userId: string };
+
+/** Format a millisecond position as m:ss for the turntable status lines. */
+function fmtClock(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
 
 // ---- Guided music tour ---------------------------------------------------
 // A tour is a curated set of real tracks queued onto the active device. Its
@@ -777,6 +787,106 @@ slackApp.command(
       `:warning: Couldn't start a Jam automatically. Reason: \`${result.reason}\`\n\n` +
         manualJamInstructions(),
     );
+  }),
+);
+
+// ---- Turntable sync ------------------------------------------------------
+// `/turntable start|stop|resync|status` controls the analog-source -> Spotify
+// Jam bridge. The host plays a record (or any line-in/mic source); a desktop
+// helper streams clips to the ingest server, ACRCloud identifies them, and the
+// bot drives the host's single Spotify account so the native Jam cascades the
+// same track + offset to every guest. `turntableOrigin` remembers WHERE it was
+// started so the "now playing from the turntable" announcement follows the
+// reply-routing model (channel-started -> channel, DM-started -> host DM).
+let turntableOrigin: ReplyOrigin | null = null;
+
+slackApp.command(
+  "/turntable",
+  slashHandler(async ({ text, userId, say, sayEphemeral }) => {
+    if (!turntableConfigured()) {
+      await sayEphemeral(
+        ":warning: Turntable sync isn't configured. Set `ACRCLOUD_HOST`, " +
+          "`ACRCLOUD_ACCESS_KEY`, `ACRCLOUD_ACCESS_SECRET`, and " +
+          "`TURNTABLE_INGEST_SECRET` in the bot's .env — see SETUP.md.",
+      );
+      return;
+    }
+    const sub = text.trim().toLowerCase().split(/\s+/)[0] || "status";
+    const isDm = !!config.JAM_QUIET_DM_USER && userId === config.JAM_QUIET_DM_USER;
+    const origin: ReplyOrigin = isDm
+      ? { kind: "dm", userId }
+      : { kind: "channel" };
+
+    switch (sub) {
+      case "start": {
+        turntableOrigin = origin;
+        const device = await findActiveDevice();
+        if (!device) {
+          await say(
+            ":warning: No active Spotify device — open Spotify on the host " +
+              "account and start playing anything first, then run " +
+              "`/turntable start` again.",
+          );
+          return;
+        }
+        turntableSession.start(device.id || undefined);
+        // Make sure a Jam is running so guests actually receive the cascade.
+        const jam = await startSpotifyJam();
+        const jamLine = jam.ok
+          ? jam.existed
+            ? `A Jam is already live — guests can join: ${jam.joinUrl}`
+            : `Started a Jam — guests can join: ${jam.joinUrl}`
+          : `:warning: Couldn't auto-start a Jam (\`${jam.reason}\`). Guests won't hear it until one is running — start it from the Spotify app.`;
+        await say(
+          `:record_button: *Turntable sync on.* Drop the needle — I'll follow ` +
+            `the record on \`${device.name}\` and keep everyone in sync.\n${jamLine}`,
+        );
+        return;
+      }
+      case "stop": {
+        turntableSession.stop();
+        turntableOrigin = null;
+        await say(
+          ":black_square_for_stop: Turntable sync off. Whatever's playing keeps going — I just stop following the record.",
+        );
+        return;
+      }
+      case "resync": {
+        if (!turntableSession.isActive()) {
+          await sayEphemeral(
+            "Turntable sync isn't on. Run `/turntable start` first.",
+          );
+          return;
+        }
+        const r = await turntableSession.resync();
+        if (!r) {
+          await sayEphemeral(
+            "Nothing to resync yet — waiting on the first confident match from the record.",
+          );
+          return;
+        }
+        await say(
+          `:arrows_counterclockwise: Resynced to *${r.track.title}* — ${r.track.artist} at ${fmtClock(r.positionMs)}.`,
+        );
+        return;
+      }
+      case "status":
+      default: {
+        const s = turntableSession.status();
+        if (!s.active) {
+          await sayEphemeral(
+            "Turntable sync is *off*. Run `/turntable start` to follow a record.",
+          );
+          return;
+        }
+        const where =
+          s.track && s.positionMs != null
+            ? `Following *${s.track.title}* — ${s.track.artist} at ${fmtClock(s.positionMs)}.`
+            : "On, waiting for the first confident match from the record.";
+        await sayEphemeral(`:record_button: Turntable sync is *on*. ${where}`);
+        return;
+      }
+    }
   }),
 );
 
@@ -1860,6 +1970,18 @@ nowPlayingWatcher.on("trackChange", async (event) => {
       return;
     }
 
+    // Turntable sync owns the now-playing surface while it's active: every
+    // track switch here was driven by the turntable engine, which posts its
+    // own "now playing from the turntable" card (see the trackConfirmed
+    // listener below). Suppress the ambient path so we never double-post or
+    // fight the turntable's own announcement.
+    if (turntableSession.isActive()) {
+      logger.info("Suppressed ambient now-playing post (turntable owns it)", {
+        track: event.current.title,
+      });
+      return;
+    }
+
     // Ambient (non-tour) track: only post a now-playing card when the host
     // Spotify account is actually in an active Jam. No Jam -> stay quiet (the
     // track still plays + gets logged elsewhere). isJamActive fails SAFE, so
@@ -1886,6 +2008,52 @@ nowPlayingWatcher.on("noActiveDevice", () => {
 
 nowPlayingWatcher.on("resumed", () => {
   logger.info("Playback resumed");
+});
+
+// ---- Turntable sync announcements --------------------------------------
+// When the turntable engine confirms a new record side and drives the host
+// account to it, announce it where turntable mode was started. Channel
+// announcements are gated on an active Jam (isJamActive fails SAFE) — exactly
+// like ambient now-playing cards — so we never claim "now playing" to a
+// channel whose guests aren't actually in the Jam to hear it.
+turntableSession.on("trackConfirmed", async ({ track, viaIsrc }) => {
+  try {
+    const url = `https://open.spotify.com/track/${track.id}`;
+    const text = `:record_button: Now playing from the turntable: ${track.title} by ${track.artist}`;
+    const blocks: KnownBlock[] = [
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text:
+            `:record_button: *Now playing from the turntable*\n` +
+            `*<${url}|${track.title}>*\n${track.artist}` +
+            (viaIsrc ? "" : "\n_(matched by title — couldn't confirm the exact pressing)_"),
+        },
+      },
+    ];
+    if (turntableOrigin?.kind === "dm") {
+      await postDMToUser(turntableOrigin.userId, text, blocks);
+      return;
+    }
+    // Channel-started (or origin lost across a restart): only post when a Jam
+    // is actually live, so the cascade really is reaching guests.
+    if (await isJamActive()) {
+      await postToChannel(blocks, text);
+    } else {
+      logger.info("Suppressed turntable now-playing post (no active Jam)", {
+        track: track.title,
+      });
+    }
+  } catch (err) {
+    logger.error("Failed to post turntable now-playing", {
+      error: String(err),
+    });
+  }
+});
+
+turntableSession.on("error", ({ stage, error }) => {
+  logger.warn("Turntable engine error", { stage, error });
 });
 
 setInterval(() => {

@@ -53,6 +53,10 @@ features:
       description: Opt out of (or back into) personal Wrapped stats
       usage_hint: "[off]"
       should_escape: false
+    - command: /turntable
+      description: Sync the Jam to a record playing on the host's turntable
+      usage_hint: "start | stop | resync | status"
+      should_escape: false
 oauth_config:
   scopes:
     bot:

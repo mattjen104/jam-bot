@@ -1,0 +1,17 @@
+{
+  "name": "turntable-helper",
+  "version": "1.0.0",
+  "description": "Desktop capture helper for Jam Bot turntable sync. Records short rolling audio clips from a line-in / vinyl / mic device and POSTs them to the bot's ingest endpoint for ACRCloud identification. Audio is used only to identify the track and is never stored or redistributed.",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.mjs",
+    "devices": "node index.mjs --list-devices"
+  },
+  "dependencies": {
+    "naudiodon": "^2.3.6"
+  }
+}

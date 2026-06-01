@@ -270,6 +270,74 @@ You should see a "Now playing" card, a confirmation that the song was queued/pla
 
 ---
 
+## 8. Turntable sync (optional)
+
+Want guests to hear what's on your **record player**? Turntable sync lets the
+host play an analog source (vinyl, line-in, a mic by the speakers) while the bot
+identifies each track with [ACRCloud](https://www.acrcloud.com/), drives the host
+Spotify account to the matching song + offset, and lets the Spotify Jam cascade
+the *streamed* version to everyone. The captured audio is used **only** to
+identify the track — it's never stored and never re-broadcast.
+
+This is entirely optional. Skip it and everything else works unchanged.
+
+### 8a. Get ACRCloud credentials
+
+1. Sign up at <https://console.acrcloud.com/> and create an **Audio & Video
+   Recognition** project.
+2. Copy the project's **Host**, **Access Key**, and **Access Secret**.
+
+### 8b. Configure the bot
+
+Add to `/opt/jam-bot/.env` (then `sudo systemctl restart jam-bot`):
+
+```bash
+ACRCLOUD_HOST=identify-eu-west-1.acrcloud.com   # your project's host
+ACRCLOUD_ACCESS_KEY=...
+ACRCLOUD_ACCESS_SECRET=...
+TURNTABLE_INGEST_PORT=8645                       # default
+TURNTABLE_INGEST_SECRET=$(openssl rand -hex 24)  # save this for the helper
+TURNTABLE_TRACK_CHANGE_CONFIRMATIONS=2           # debounce; default 2
+```
+
+On startup the bot logs `Turntable ingest server listening` when these are set.
+Expose the ingest port to your capture machine — ideally via the same kind of
+Cloudflare tunnel you may already use for the token relay, or any reverse proxy
+that lands on `/turntable/identify`. Reuse a tunnel/HTTPS rather than opening the
+raw port to the internet.
+
+### 8c. Run the capture helper on the machine by the turntable
+
+The helper depends on a native audio module, so it lives **outside** the pnpm
+workspace in [`tools/turntable-helper`](../../tools/turntable-helper/) and runs
+on the machine next to your record player — not the droplet. Full instructions
+are in that folder's `README.md`. The short version:
+
+```bash
+cd tools/turntable-helper
+npm install
+npm run devices            # find your input device id
+INGEST_URL=https://<your-bot-host>/turntable/identify \
+INGEST_SECRET=<TURNTABLE_INGEST_SECRET> \
+DEVICE="USB Audio" \
+npm start
+```
+
+### 8d. Use it from Slack
+
+```
+/turntable start     # begin following the turntable (needs an active Jam to cascade)
+/turntable status    # what it's tracking right now
+/turntable resync    # nudge Spotify's position back in line if it drifts
+/turntable stop      # end the session; the bot goes back to normal
+```
+
+While turntable mode is on, the bot suppresses its ambient "Now playing" cards
+(the turntable owns that surface) and instead posts a "Now playing from the
+turntable" card for each confirmed record side.
+
+---
+
 ## Troubleshooting
 
 **Bot logs say `Host device "Jam Host" not visible to Spotify yet`.**

@@ -219,6 +219,15 @@ Every "Now playing" card has a **Vote skip (X/3)** button. The card updates as v
 
 For the long version, see [`SETUP.md` § Troubleshooting](./SETUP.md#troubleshooting).
 
+### Sync the Jam to a record player (optional)
+
+Got a turntable? The bot can listen to what's on the platter, identify it with
+ACRCloud, and drive the Jam to the streamed version so guests hear it too. Set
+the `ACRCLOUD_*` and `TURNTABLE_*` values in `.env`, run the capture helper in
+[`tools/turntable-helper`](../../tools/turntable-helper/) on the machine by your
+record player, then `/turntable start` in Slack. Full walkthrough:
+[`SETUP.md` § 8](./SETUP.md#8-turntable-sync-optional).
+
 ---
 
 ## Part 3 — Updating the bot

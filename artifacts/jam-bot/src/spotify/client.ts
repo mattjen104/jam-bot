@@ -196,6 +196,51 @@ export async function skipToNext(deviceId?: string) {
   });
 }
 
+/**
+ * Seek the current playback to an absolute position (ms from the track
+ * start). Used by turntable sync to line the host account up with the
+ * analog source. Non-idempotent (it mutates the live player) so it runs
+ * through `withOnce` — but unlike skip/queue, a blind retry of a seek is
+ * harmless (seeking to the same absolute position twice is a no-op), so a
+ * caller that wants to retry can safely do so. Position is clamped to >= 0
+ * and rounded; Spotify rejects negative/float positions.
+ */
+export async function seek(positionMs: number, deviceId?: string) {
+  const pos = Math.max(0, Math.round(positionMs));
+  return withOnce("seek", async () => {
+    await api.seek(pos, deviceId ? { device_id: deviceId } : undefined);
+  });
+}
+
+/**
+ * Resolve a recording to a Spotify track by its ISRC (International
+ * Standard Recording Code). ACRCloud returns an ISRC for most commercial
+ * releases, and `isrc:` is an exact Spotify search filter, so this is the
+ * most precise way to map a fingerprint match to the right Spotify track
+ * (correct mix/master, not a random cover or live version). Returns null
+ * when the ISRC is missing or Spotify has no matching track — callers
+ * should then fall back to a title/artist `searchTrack`.
+ */
+export async function searchTrackByIsrc(
+  isrc: string,
+): Promise<SearchResultTrack | null> {
+  const clean = isrc.trim();
+  if (!clean) return null;
+  return withRetry("searchTracksByIsrc", async () => {
+    const res = await api.searchTracks(`isrc:${clean}`, { limit: 1 });
+    const t = res.body.tracks?.items[0];
+    if (!t) return null;
+    return {
+      id: t.id,
+      uri: t.uri,
+      title: t.name,
+      artist: t.artists.map((a) => a.name).join(", "),
+      album: t.album.name,
+      durationMs: t.duration_ms,
+    };
+  });
+}
+
 export async function getRecentlyPlayed(limit = 20) {
   return withRetry("getMyRecentlyPlayedTracks", async () => {
     const res = await api.getMyRecentlyPlayedTracks({ limit });

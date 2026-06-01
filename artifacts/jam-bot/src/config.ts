@@ -131,6 +131,50 @@ const schema = z.object({
   // SPOTIFY_TOKEN_RELAY_URL is set. Generate with:
   //   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
   SPOTIFY_TOKEN_RELAY_SECRET: z.string().optional(),
+
+  // ---- Turntable sync (analog source -> Spotify Jam) --------------------
+  // OPTIONAL feature: a desktop helper (tools/turntable-helper) captures
+  // short clips of an analog source (record player, line-in, mic), POSTs
+  // them to the ingest server below, the bot identifies the track via
+  // ACRCloud's audio-fingerprint API, then drives the host's single Spotify
+  // account to the matched track + offset. Spotify's native Jam cascades
+  // that to every guest. The audio is used ONLY for identification — it is
+  // never streamed or redistributed. Leave the ACRCloud vars unset to keep
+  // the whole feature dormant; the bot runs exactly as before.
+  //
+  // ACRCloud project credentials (console.acrcloud.com -> Audio & Video
+  // Recognition project). Host looks like "identify-eu-west-1.acrcloud.com".
+  ACRCLOUD_HOST: z.string().optional(),
+  ACRCLOUD_ACCESS_KEY: z.string().optional(),
+  ACRCLOUD_ACCESS_SECRET: z.string().optional(),
+
+  // TCP port the turntable ingest HTTP server listens on (the desktop
+  // helper POSTs clips here). Only started when the feature is configured.
+  TURNTABLE_INGEST_PORT: z.coerce.number().int().positive().default(8645),
+  // Shared secret the helper must send (X-Turntable-Secret header) so only
+  // your capture machine can drive playback. Required for the feature to
+  // arm. Generate with:
+  //   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+  TURNTABLE_INGEST_SECRET: z.string().optional(),
+
+  // How many consecutive confident identifications must agree on a NEW
+  // track before the bot switches the host account to it. Higher = steadier
+  // (ignores a single mis-ID mid-track) but slower to follow a real track
+  // change. Misses / low-confidence samples never count toward this.
+  TURNTABLE_TRACK_CHANGE_CONFIRMATIONS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(2),
+
+  // Extra latency (ms) to add when computing the seek target, on top of the
+  // submitted clip's own length. ACRCloud's play_offset_ms points at the
+  // START of the clip, and there's network + fingerprinting delay between a
+  // clip ending and the bot acting on it, so the host account would otherwise
+  // land slightly BEHIND the real record. Tune this to your round-trip if the
+  // Spotify playback consistently trails the turntable. Default 0 (the clip
+  // length is always compensated automatically; this is just the extra slack).
+  TURNTABLE_SYNC_LATENCY_MS: z.coerce.number().int().min(0).default(0),
 });
 
 function loadConfig() {
