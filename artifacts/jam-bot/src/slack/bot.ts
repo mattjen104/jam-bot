@@ -52,8 +52,12 @@ import {
   type ChatMessage,
 } from "../llm/openrouter.js";
 import { extractUrls, fetchLinkContext } from "../llm/links.js";
-import { startSpotifyJam, manualJamInstructions } from "../spotify/jam.js";
-import { nowPlayingWatcher } from "../now-playing.js";
+import {
+  startSpotifyJam,
+  manualJamInstructions,
+  isJamActive,
+} from "../spotify/jam.js";
+import { nowPlayingWatcher, type TrackChangeEvent } from "../now-playing.js";
 import {
   historyBlocks,
   nowPlayingBlocks,
@@ -82,30 +86,21 @@ export const slackApp = new App({
   logLevel: LogLevel.WARN,
 });
 
-// ---- Quiet (test) mode ---------------------------------------------------
-// While quiet mode is on, only the *automated background* posts the bot
-// makes on its own (now-playing card, "no active device" notice, "Jam is
-// back online", scheduled Wrapped) get rerouted to a private DM to
-// JAM_QUIET_DM_USER. Friend interactions are unaffected: slash command
-// replies, @mention answers, and vote-skip outcomes still post to the
-// channel normally, so other people in the Jam still get the responses
-// they asked for.
+// ---- Reply routing -------------------------------------------------------
+// Routing model: the bot replies wherever it was addressed. A message in
+// the Jam channel (slash command, @mention, engaged-thread reply) is
+// answered in the channel; a DM from the host is answered in the DM. The
+// only proactive posts the bot makes on its own are the ambient now-playing
+// cards (gated on an active Jam — see the trackChange handler) and the
+// scheduled Wrapped (always to the channel). A guided tour follows its
+// origin: a tour started in a DM stays entirely in that DM, a channel tour
+// stays in the channel.
 //
-// Toggle from Slack with `/quiet`, `/quiet on`, `/quiet off`, `/quiet status`.
-// Resets to OFF on bot restart — intentional, so a forgotten test mode
-// doesn't silently swallow real Wrapped/now-playing posts forever.
-let silentMode = false;
-export function isSilent(): boolean {
-  return silentMode;
-}
-export function setSilent(on: boolean): void {
-  silentMode = on;
-  logger.info("Quiet mode toggled", { silent: silentMode });
-  // Drop any in-flight vote-card reference. The card we'd update is now
-  // either nonexistent (background DM'd) or stale; a fresh card will be
-  // set up on the next trackChange.
-  if (on) activeVote = null;
-}
+// `ReplyOrigin` records where a natural-language interaction came from so a
+// tour's per-track narration can be routed back to that same surface.
+type ReplyOrigin =
+  | { kind: "channel" }
+  | { kind: "dm"; userId: string };
 
 // ---- Guided music tour ---------------------------------------------------
 // A tour is a curated set of real tracks queued onto the active device. Its
@@ -120,6 +115,9 @@ interface ActiveTour {
   tidbits: Map<string, string>;
   // ids not yet played; when this empties the tour is complete.
   remaining: Set<string>;
+  // Where the tour was started, so each track's card + narration is routed
+  // back to that surface (DM tour -> DM, channel tour -> channel).
+  origin: ReplyOrigin;
 }
 let activeTour: ActiveTour | null = null;
 
@@ -141,19 +139,23 @@ let lastSavableTour: {
  * tidbit. Consumption is synchronous so a track can't be narrated twice, and
  * the tour clears itself once its last track starts playing.
  */
-function consumeTourTidbit(trackId: string): string | null {
+function consumeTourTidbit(
+  trackId: string,
+): { tidbit: string; origin: ReplyOrigin } | null {
   if (!activeTour) return null;
   const tidbit = activeTour.tidbits.get(trackId);
   if (tidbit === undefined) return null;
+  // Capture the origin before the tour may clear itself on its last track.
+  const origin = activeTour.origin;
   activeTour.tidbits.delete(trackId);
   activeTour.remaining.delete(trackId);
   if (activeTour.remaining.size === 0) activeTour = null;
-  return tidbit;
+  return { tidbit, origin };
 }
 
 // Plain channel posters — used by interactive paths (vote-skip pass
-// announcements, etc). These are NOT gated by quiet mode because they're
-// reactions to friend actions, not background noise.
+// announcements, etc). These always post to the channel because they're
+// reactions to friend actions in the channel.
 async function postToChannel(blocks: KnownBlock[], text: string) {
   await slackApp.client.chat.postMessage({
     channel: config.SLACK_CHANNEL_ID,
@@ -190,52 +192,21 @@ async function postDMToUser(
 }
 
 /**
- * Background channel poster — used by automated events (now-playing,
- * device-gone, Jam-back, scheduled Wrapped). When quiet mode is on, the
- * post is rerouted as a DM to JAM_QUIET_DM_USER instead of going to the
- * channel, so friends in the Jam aren't notified by every track change
- * while you're testing. If quiet mode is on but no DM target is
- * configured, the post is dropped + logged (rather than leaking to the
- * channel).
+ * Background channel poster — used by automated events (device-gone,
+ * Jam-back, scheduled Wrapped). Always posts to the channel. Callers that
+ * should only fire under specific conditions (e.g. ambient now-playing
+ * cards, which require an active Jam) gate themselves before calling.
  */
 async function postBackgroundToChannel(
   blocks: KnownBlock[] | undefined,
   text: string,
-  context: string,
+  _context: string,
 ) {
-  if (silentMode) {
-    if (config.JAM_QUIET_DM_USER) {
-      await postDMToUser(config.JAM_QUIET_DM_USER, text, blocks);
-    } else {
-      logger.info("Suppressed background post (quiet mode, no DM target)", {
-        context,
-        text,
-      });
-    }
-    return;
-  }
   await slackApp.client.chat.postMessage({
     channel: config.SLACK_CHANNEL_ID,
     text,
     ...(blocks ? { blocks } : {}),
   });
-}
-
-/**
- * Day-of-week gate for the "Now playing" card. Friends only get pinged
- * with track-change cards on the days listed in JAM_NOWPLAYING_DAYS
- * (UTC). Tracks still play and get logged on every day — only the Slack
- * post is suppressed.
- */
-function isNowPlayingPostAllowedToday(now: Date = new Date()): boolean {
-  const allowed = new Set(
-    config.JAM_NOWPLAYING_DAYS
-      .split(",")
-      .map((s) => parseInt(s.trim(), 10))
-      .filter((n) => Number.isInteger(n) && n >= 0 && n <= 6),
-  );
-  if (allowed.size === 0) return true; // misconfigured -> fail-open
-  return allowed.has(now.getUTCDay());
 }
 
 async function handlePlayOrQueue(args: {
@@ -431,11 +402,10 @@ function slashHandler(
       });
       return;
     }
-    // Slash command replies always post to the channel — quiet mode does
-    // NOT touch friend interactions. If a friend runs /play during a test,
-    // they (and the channel) still see the normal "Playing X" reply. In a
-    // DM the response_type is moot (it's a 1:1 channel), so the same
-    // in_channel reply just lands in the DM.
+    // Slash command replies post wherever the command was run: a /command in
+    // the channel replies in_channel (the channel sees the normal "Playing X"
+    // reply); the same command in the host DM lands in that DM, since
+    // response_type is moot in a 1:1 channel.
     const say = async (text: string, blocks?: KnownBlock[]) => {
       await respond({ response_type: "in_channel", text, blocks });
     };
@@ -789,34 +759,6 @@ slackApp.command(
 );
 
 slackApp.command(
-  "/quiet",
-  slashHandler(async ({ text, sayEphemeral }) => {
-    const arg = text.trim().toLowerCase();
-    if (arg === "status" || arg === "?") {
-      await sayEphemeral(
-        silentMode
-          ? ":mute: Quiet mode is *on* — automated background posts are DM'd to the host instead of the channel."
-          : ":loud_sound: Quiet mode is *off* — automated background posts go to the channel.",
-      );
-      return;
-    }
-    let next: boolean;
-    if (arg === "on" || arg === "true" || arg === "1") next = true;
-    else if (arg === "off" || arg === "false" || arg === "0") next = false;
-    else next = !silentMode; // bare `/quiet` toggles
-    setSilent(next);
-    const target = config.JAM_QUIET_DM_USER
-      ? `<@${config.JAM_QUIET_DM_USER}>`
-      : "(no DM target set — posts will be dropped instead)";
-    await sayEphemeral(
-      next
-        ? `:mute: Quiet mode *on*. Now-playing cards, "no device" / "back online" notices, and the scheduled Wrapped will DM ${target} instead of posting in the channel. Friend interactions (slash commands, @mentions, vote-skip) still post normally.`
-        : ":loud_sound: Quiet mode *off*. Automated background posts will go to the channel again.",
-    );
-  }),
-);
-
-slackApp.command(
   "/jam",
   slashHandler(async ({ say }) => {
     const result = await startSpotifyJam();
@@ -1108,8 +1050,9 @@ async function handleTour(args: {
   rawText: string;
   slackUserId: string;
   respond: (t: string) => Promise<void>;
+  origin: ReplyOrigin;
 }) {
-  const { theme, rawText, slackUserId, respond } = args;
+  const { theme, rawText, slackUserId, respond, origin } = args;
 
   const used = countUserRequestsLastHour(slackUserId);
   if (used >= config.MAX_PLAYS_PER_USER_PER_HOUR) {
@@ -1187,6 +1130,7 @@ async function handleTour(args: {
       theme: tour.theme,
       tidbits: new Map(queuedTracks.map((t) => [t.trackId, t.tidbit])),
       remaining: new Set(queuedTracks.map((t) => t.trackId)),
+      origin,
     };
     // Retain the full queued set (uris + tidbits) so "save this tour" can
     // persist it as a playlist later, even after every track has played.
@@ -1300,6 +1244,7 @@ async function handleNaturalLanguage(
   userId: string,
   respond: (t: string, blocks?: KnownBlock[]) => Promise<void>,
   convKey: string,
+  origin: ReplyOrigin,
   engaged = false,
 ) {
   if (!text) {
@@ -1451,6 +1396,7 @@ async function handleNaturalLanguage(
           rawText: text,
           slackUserId: userId,
           respond: (t) => respond(t),
+          origin,
         });
         return;
       }
@@ -1494,8 +1440,8 @@ slackApp.event("app_mention", async ({ event, say }) => {
   const threadTs = event.thread_ts ?? event.ts;
   const channel = event.channel;
 
-  // @mention replies always post to the channel/thread — quiet mode only
-  // affects automated background posts, not direct friend interactions.
+  // @mention replies post to the channel/thread where the mention happened —
+  // the bot replies wherever it's addressed.
   const respond = async (t: string, blocks?: KnownBlock[]) => {
     await say({ text: t, blocks, thread_ts: threadTs });
   };
@@ -1513,6 +1459,7 @@ slackApp.event("app_mention", async ({ event, say }) => {
     userId,
     respond,
     threadConvKey(channel, threadTs),
+    { kind: "channel" },
     true,
   );
 });
@@ -1589,6 +1536,7 @@ slackApp.event("message", async ({ event, client }) => {
       e.user,
       respond,
       threadConvKey(e.channel, threadTs),
+      { kind: "channel" },
       true,
     );
     return;
@@ -1610,7 +1558,10 @@ slackApp.event("message", async ({ event, client }) => {
       ...(blocks ? { blocks } : {}),
     });
   };
-  await handleNaturalLanguage(text, e.user, respond, `dm:${e.user}`);
+  await handleNaturalLanguage(text, e.user, respond, `dm:${e.user}`, {
+    kind: "dm",
+    userId: e.user,
+  });
 });
 
 // ---- Vote-to-skip --------------------------------------------------------
@@ -1649,10 +1600,10 @@ type SkipVoteResult =
   | { kind: "skip_failed"; count: number; threshold: number; reason: string };
 
 async function refreshNowPlayingCard(state: VoteState, count: number, threshold: number) {
-  // No public card to update? That's fine — happens when quiet mode was on
-  // when the trackChange fired (we DM'd the card instead) or we never
-  // posted one (off-day). Vote tally still progresses; nothing visible to
-  // refresh.
+  // No public card to update? That's fine — happens when the trackChange
+  // fired with no active Jam (ambient card suppressed) or as a DM-tour track
+  // (card DM'd, not posted to the channel). Vote tally still progresses;
+  // nothing visible to refresh.
   if (!state.messageTs || !state.channel) return;
   try {
     await slackApp.client.chat.update({
@@ -1833,80 +1784,93 @@ slackApp.action(VOTE_SKIP_ACTION_ID, async ({ ack, body, action, respond }) => {
 
 // ---- Wire up now-playing watcher ---------------------------------------
 
+/**
+ * Post a track's now-playing card to the channel, register the vote card so
+ * `/skip` and the vote buttons can update it, and (for tours) attach the
+ * track's tidbit as a threaded reply so commentary stays with the music.
+ */
+async function postNowPlayingCardToChannel(
+  event: TrackChangeEvent,
+  tourTidbit?: string,
+) {
+  const blocks = nowPlayingBlocks(
+    event.current,
+    event.requestedBySlackUser,
+    event.requestedQuery,
+    { count: 0, threshold: config.SKIP_VOTE_THRESHOLD },
+  );
+  const text = `Now playing: ${event.current.title} by ${event.current.artist}`;
+  const res = await slackApp.client.chat.postMessage({
+    channel: config.SLACK_CHANNEL_ID,
+    text,
+    blocks,
+  });
+  if (res.ts && res.channel) {
+    activeVote = {
+      trackId: event.current.id,
+      votes: new Map(),
+      channel: res.channel,
+      messageTs: res.ts,
+      current: event.current,
+      requestedBy: event.requestedBySlackUser,
+      requestedQuery: event.requestedQuery,
+      skipped: false,
+    };
+    // Attach the tour tidbit as a threaded reply under THIS track's card so
+    // the commentary stays with the music, never dumped up front.
+    if (tourTidbit) {
+      await slackApp.client.chat.postMessage({
+        channel: res.channel,
+        thread_ts: res.ts,
+        text: tourTidbit,
+      });
+    }
+  }
+}
+
 nowPlayingWatcher.on("trackChange", async (event) => {
   // Reset votes — any prior card is now stale.
   activeVote = null;
 
   // If this track belongs to the active tour, pull (and consume) its tidbit
   // up front — synchronously, before any await, so it's never double-narrated.
-  const tourTidbit = consumeTourTidbit(event.current.id);
-
-  // In quiet mode, the now-playing card is rerouted as a DM to the host
-  // (handled inside postBackgroundToChannel). The day-of-week gate is
-  // bypassed in quiet mode — testing should always show you the cards.
-  // Out of quiet mode, the day-gate applies (default: Fridays only) — but a
-  // tour tidbit forces the card through so the commentary has a card to sit
-  // with (the user explicitly started the tour).
-  if (!silentMode && !isNowPlayingPostAllowedToday() && !tourTidbit) {
-    logger.info("Suppressed now-playing post (off-day)", {
-      track: event.current.title,
-      utcDay: new Date().getUTCDay(),
-      allowed: config.JAM_NOWPLAYING_DAYS,
-    });
-    return;
-  }
+  // Capturing the origin here too means a tour's narration follows where the
+  // tour was started, even on the last track (when the tour clears itself).
+  const tour = consumeTourTidbit(event.current.id);
 
   try {
-    const blocks = nowPlayingBlocks(
-      event.current,
-      event.requestedBySlackUser,
-      event.requestedQuery,
-      { count: 0, threshold: config.SKIP_VOTE_THRESHOLD },
-    );
-    const text = `Now playing: ${event.current.title} by ${event.current.artist}`;
-    if (silentMode) {
-      // DM the card to the host. No public message means no vote-button
-      // card to attach to — vote tallying still works via /skip but we
-      // can't update a card the channel can't see. A tour tidbit follows
-      // the card into the DM so quiet-mode tours still narrate.
-      if (config.JAM_QUIET_DM_USER) {
-        await postDMToUser(config.JAM_QUIET_DM_USER, text, blocks);
-        if (tourTidbit) {
-          await postDMToUser(config.JAM_QUIET_DM_USER, tourTidbit);
-        }
+    if (tour) {
+      // A tour track always narrates — to wherever the tour was started.
+      if (tour.origin.kind === "dm") {
+        // DM tours stay entirely in the DM. No public card means no vote
+        // card to attach to (vote tallying still works via /skip), so the
+        // card + tidbit go straight to the host as DMs.
+        const blocks = nowPlayingBlocks(
+          event.current,
+          event.requestedBySlackUser,
+          event.requestedQuery,
+          { count: 0, threshold: config.SKIP_VOTE_THRESHOLD },
+        );
+        const text = `Now playing: ${event.current.title} by ${event.current.artist}`;
+        await postDMToUser(tour.origin.userId, text, blocks);
+        await postDMToUser(tour.origin.userId, tour.tidbit);
       } else {
-        logger.info("Suppressed now-playing post (quiet mode, no DM target)", {
-          track: event.current.title,
-        });
+        await postNowPlayingCardToChannel(event, tour.tidbit);
       }
       return;
     }
-    const res = await slackApp.client.chat.postMessage({
-      channel: config.SLACK_CHANNEL_ID,
-      text,
-      blocks,
-    });
-    if (res.ts && res.channel) {
-      activeVote = {
-        trackId: event.current.id,
-        votes: new Map(),
-        channel: res.channel,
-        messageTs: res.ts,
-        current: event.current,
-        requestedBy: event.requestedBySlackUser,
-        requestedQuery: event.requestedQuery,
-        skipped: false,
-      };
-      // Attach the tour tidbit as a threaded reply under THIS track's card so
-      // the commentary stays with the music, never dumped up front.
-      if (tourTidbit) {
-        await slackApp.client.chat.postMessage({
-          channel: res.channel,
-          thread_ts: res.ts,
-          text: tourTidbit,
-        });
-      }
+
+    // Ambient (non-tour) track: only post a now-playing card when the host
+    // Spotify account is actually in an active Jam. No Jam -> stay quiet (the
+    // track still plays + gets logged elsewhere). isJamActive fails SAFE, so
+    // a relay/network error resolves to "no Jam" and the card is suppressed.
+    if (!(await isJamActive())) {
+      logger.info("Suppressed ambient now-playing post (no active Jam)", {
+        track: event.current.title,
+      });
+      return;
     }
+    await postNowPlayingCardToChannel(event);
   } catch (err) {
     logger.error("Failed to post now-playing", { error: String(err) });
   }
@@ -1914,8 +1878,8 @@ nowPlayingWatcher.on("trackChange", async (event) => {
 
 // Connection-state notices ("no active device", "Jam is back online") are
 // noise nobody actually wants — log them for debugging from the droplet
-// shell and that's it. No channel post, no DM, even when quiet mode is
-// off. If you need to debug a dropped connection: `journalctl -u jam-bot`.
+// shell and that's it. No channel post, no DM. If you need to debug a
+// dropped connection: `journalctl -u jam-bot`.
 nowPlayingWatcher.on("noActiveDevice", () => {
   logger.info("No active Spotify playback detected");
 });

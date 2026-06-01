@@ -49,10 +49,6 @@ features:
     - command: /jam
       description: Start a Spotify Jam (social listening) session
       should_escape: false
-    - command: /quiet
-      description: Toggle quiet mode (suppress all bot channel posts while testing)
-      usage_hint: "[on|off|status]"
-      should_escape: false
     - command: /jamoptout
       description: Opt out of (or back into) personal Wrapped stats
       usage_hint: "[off]"
@@ -69,9 +65,9 @@ oauth_config:
       - chat:write
       - commands
       - users:read
-      # Required for /quiet test mode to DM the configured JAM_QUIET_DM_USER
-      # via chat.postMessage with a user ID as the channel, and for the
-      # host to DM the bot natural-language commands.
+      # Required for the bot to DM the configured JAM_QUIET_DM_USER (host) —
+      # both for the host to DM the bot natural-language commands and for the
+      # bot to route a DM-started tour's cards/tidbits back to that DM.
       - im:write
       - im:history
       - im:read

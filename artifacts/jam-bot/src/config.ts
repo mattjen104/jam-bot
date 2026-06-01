@@ -88,19 +88,22 @@ const schema = z.object({
     .positive()
     .default(10 * 60 * 1000),
 
-  // ---- Now-playing post schedule -----------------------------------------
-  // Comma-separated list of UTC day-of-week numbers (0=Sun..6=Sat) on which
-  // the "Now playing" card is allowed to post. Defaults to Friday only so
-  // friends only get pinged with track-change cards on Fridays. Other days,
-  // tracks still play and get logged to history — they just don't post.
-  // Set to "0,1,2,3,4,5,6" to post every day.
-  JAM_NOWPLAYING_DAYS: z.string().default("5"),
+  // ---- Ambient now-playing cards ----------------------------------------
+  // The automated "Now playing" card posts to the channel ONLY while the
+  // host Spotify account is in an active Jam (social listening session) —
+  // whether the host started it or joined someone else's. When no Jam is
+  // active, tracks still play and get logged to history; only the Slack
+  // card is suppressed. This is the TTL (ms) for caching that Jam-active
+  // lookup so the per-track now-playing path never hammers the relay.
+  JAM_ACTIVE_CACHE_MS: z.coerce.number().int().positive().default(15000),
 
-  // ---- Quiet (test) mode -------------------------------------------------
-  // Slack user ID (e.g. U01ABC...) to receive bot output as DMs while quiet
-  // mode is on. When set, slash command replies and @mention answers DM
-  // this user instead of posting in-channel. If unset, quiet mode falls
-  // back to ephemeral messages visible only to the slash-command caller.
+  // ---- Host DM surface --------------------------------------------------
+  // Slack user ID (e.g. U01ABC...) of the host allowed to DM the bot
+  // directly. DMs from anyone else are ignored. A command — or a guided
+  // tour — started in the host's DM is answered entirely in that DM, so the
+  // host can drive or privately preview the bot (tours included) without
+  // anything reaching the channel. Leave unset to disable the DM surface.
+  // (Historical name kept to avoid breaking existing .env files.)
   JAM_QUIET_DM_USER: z.string().optional(),
 
   // ---- Spotify Jam (social listening) -----------------------------------

@@ -8,7 +8,7 @@ A self-hosted Slack bot that runs a permanent Spotify Jam from a single Linux bo
 - Listens in one Slack channel:
   - Slash commands: `/play <query>`, `/queue <query>`, `/skip`, `/nowplaying`, `/history`
   - Natural messages: "play some lo-fi", "queue Bohemian Rhapsody", "skip", "what's playing", "who produced this", "recommend something similar"
-- Posts a "Now playing" Block Kit card (with album art) every time the track changes, tagging the requester when known.
+- Posts a "Now playing" Block Kit card (with album art) to the channel on each track change **while the host is in an active Spotify Jam** (no Jam → no ambient cards; the bot stays quiet but still logs every track). Tags the requester when known. Guided-tour cards instead follow where the tour was started (channel tour → channel, host-DM tour → DM).
 - Persists every played track in SQLite so the LLM can answer "what did we play last Friday" or "have we played this before".
 - Auto-refreshes the Spotify access token, retries transient API errors with backoff, reconnects the Slack socket on drop, and posts a clear message in-channel when the host device goes offline.
 

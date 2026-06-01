@@ -12,6 +12,9 @@ process.env.SLACK_BOT_TOKEN ??= "xoxb-test";
 process.env.SLACK_APP_TOKEN ??= "xapp-test";
 process.env.SLACK_SIGNING_SECRET ??= "test-signing-secret";
 process.env.SLACK_CHANNEL_ID ??= "C_TEST_CHANNEL";
+// Host allowed to DM the bot — enables the DM surface so origin-based
+// routing (DM-started tour stays in the DM) can be exercised in tests.
+process.env.JAM_QUIET_DM_USER ??= "U_HOST";
 process.env.OPENROUTER_API_KEY ??= "test-openrouter-key";
 process.env.DATABASE_PATH = path.join(tmp, "jam-test.db");
 process.env.NOW_PLAYING_POLL_MS ??= "1000";

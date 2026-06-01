@@ -175,6 +175,14 @@ vi.mock("../src/now-playing.js", async () => {
   return { nowPlayingWatcher: new EventEmitter() };
 });
 
+vi.mock("../src/spotify/jam.js", () => ({
+  // Default: no active Jam, so ambient now-playing cards stay suppressed.
+  // Tests that want ambient cards override this per-case.
+  isJamActive: vi.fn().mockResolvedValue(false),
+  startSpotifyJam: vi.fn().mockResolvedValue({ ok: false, reason: "test" }),
+  manualJamInstructions: vi.fn(() => "manual instructions"),
+}));
+
 vi.mock("../src/slack/format.js", () => ({
   historyBlocks: () => [],
   noDeviceBlocks: () => [],
@@ -1112,5 +1120,169 @@ describe("guided music tour", () => {
     expect(reply.text).toContain("https://open.spotify.com/playlist/PL1");
     expect(reply.text).toContain("Marvin tidbit.");
     expect(reply.text).toContain("Sam tidbit.");
+  });
+});
+
+describe("origin-based routing and ambient Jam gate", () => {
+  const CH = process.env.SLACK_CHANNEL_ID!;
+  const HOST = process.env.JAM_QUIET_DM_USER!;
+
+  function trackEvent(id: string) {
+    return {
+      current: {
+        id,
+        title: `Title ${id}`,
+        artist: "Artist",
+        album: "Album",
+        albumImageUrl: null,
+        durationMs: 1000,
+        progressMs: 0,
+        spotifyUrl: `https://open.spotify.com/track/${id}`,
+        artistIds: [],
+      },
+      requestedBySlackUser: HOST,
+      requestedQuery: null,
+    };
+  }
+
+  it("keeps a DM-started tour entirely in the DM, never the channel", async () => {
+    const llm = await import("../src/llm/openrouter.js");
+    const spotify = await import("../src/spotify/client.js");
+    const bot = await import("../src/slack/bot.js");
+    const { nowPlayingWatcher } = await import("../src/now-playing.js");
+    const jam = await import("../src/spotify/jam.js");
+
+    // Even if a Jam happens to be active, a DM tour's tracks must NOT leak
+    // to the channel — origin wins over the ambient gate.
+    (jam.isJamActive as ReturnType<typeof vi.fn>).mockResolvedValue(true);
+
+    (llm.classifyIntent as ReturnType<typeof vi.fn>).mockResolvedValue({
+      intent: "tour",
+      query: "Bossa Nova",
+    });
+    (llm.curateTourPicks as ReturnType<typeof vi.fn>).mockResolvedValue({
+      intro: "Welcome.",
+      picks: [{ title: "Corcovado", artist: "João Gilberto" }],
+    });
+    (spotify.searchTrack as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "dm1",
+      uri: "spotify:track:dm1",
+      title: "Corcovado",
+      artist: "João Gilberto",
+      album: "Getz/Gilberto",
+      durationMs: 1,
+    });
+    (llm.writeTourTidbits as ReturnType<typeof vi.fn>).mockResolvedValue([
+      "Bossa tidbit.",
+    ]);
+    (spotify.findActiveDevice as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "DEV-DM",
+      name: "Jam Host",
+      isActive: true,
+    });
+    (spotify.playNow as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+
+    const post = bot.slackApp.client.chat.postMessage as ReturnType<typeof vi.fn>;
+    post.mockResolvedValue({ ts: "DMCARD", channel: HOST });
+
+    // Host DMs the bot to start the tour.
+    const msg = captured.events["message"];
+    const client = { chat: { postMessage: vi.fn().mockResolvedValue({}) } };
+    await msg!({
+      event: {
+        user: HOST,
+        channel: "D_HOST_DM",
+        type: "message",
+        channel_type: "im",
+        text: "give us a tour of Bossa Nova",
+        ts: "1700010000.000100",
+      },
+      say: vi.fn(),
+      client,
+    } as never);
+
+    // Kickoff reply went to the DM channel, not the public channel.
+    expect(client.chat.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ channel: "D_HOST_DM" }),
+    );
+
+    // Now the tour track plays. Card + tidbit must DM the host; nothing to CH.
+    post.mockClear();
+    nowPlayingWatcher.emit("trackChange", trackEvent("dm1"));
+    await flush();
+
+    const channels = post.mock.calls.map(
+      (c) => (c[0] as { channel: string }).channel,
+    );
+    expect(channels).toContain(HOST); // card + tidbit DM'd to host
+    expect(channels).not.toContain(CH); // never leaked to the channel
+    const texts = post.mock.calls.map((c) => (c[0] as { text?: string }).text);
+    expect(texts).toContain("Bossa tidbit.");
+  });
+
+  it("suppresses the ambient now-playing card when no Jam is active", async () => {
+    const bot = await import("../src/slack/bot.js");
+    const { nowPlayingWatcher } = await import("../src/now-playing.js");
+    const jam = await import("../src/spotify/jam.js");
+
+    (jam.isJamActive as ReturnType<typeof vi.fn>).mockResolvedValue(false);
+
+    const post = bot.slackApp.client.chat.postMessage as ReturnType<typeof vi.fn>;
+    post.mockClear().mockResolvedValue({ ts: "X", channel: CH });
+
+    nowPlayingWatcher.emit("trackChange", trackEvent("ambient1"));
+    await flush();
+
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it("posts the ambient now-playing card to the channel when a Jam is active", async () => {
+    const bot = await import("../src/slack/bot.js");
+    const { nowPlayingWatcher } = await import("../src/now-playing.js");
+    const jam = await import("../src/spotify/jam.js");
+
+    (jam.isJamActive as ReturnType<typeof vi.fn>).mockResolvedValue(true);
+
+    const post = bot.slackApp.client.chat.postMessage as ReturnType<typeof vi.fn>;
+    post.mockClear().mockResolvedValue({ ts: "Y", channel: CH });
+
+    nowPlayingWatcher.emit("trackChange", trackEvent("ambient2"));
+    await flush();
+
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(post).toHaveBeenCalledWith(
+      expect.objectContaining({ channel: CH }),
+    );
+  });
+
+  it("ignores a DM from a non-host user — no Spotify action, no reply", async () => {
+    const llm = await import("../src/llm/openrouter.js");
+    const spotify = await import("../src/spotify/client.js");
+    const bot = await import("../src/slack/bot.js");
+
+    (llm.classifyIntent as ReturnType<typeof vi.fn>).mockClear();
+    (spotify.playNow as ReturnType<typeof vi.fn>).mockClear();
+    const post = bot.slackApp.client.chat.postMessage as ReturnType<typeof vi.fn>;
+    post.mockClear();
+
+    const msg = captured.events["message"];
+    const client = { chat: { postMessage: vi.fn().mockResolvedValue({}) } };
+    await msg!({
+      event: {
+        user: "U_NOT_HOST",
+        channel: "D_OTHER_DM",
+        type: "message",
+        channel_type: "im",
+        text: "play something for me",
+        ts: "1700011000.000100",
+      },
+      say: vi.fn(),
+      client,
+    } as never);
+
+    expect(llm.classifyIntent).not.toHaveBeenCalled();
+    expect(spotify.playNow).not.toHaveBeenCalled();
+    expect(client.chat.postMessage).not.toHaveBeenCalled();
+    expect(post).not.toHaveBeenCalled();
   });
 });

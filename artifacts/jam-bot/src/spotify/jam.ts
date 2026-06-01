@@ -136,6 +136,46 @@ async function getCurrentJam(
   return { joinUrl: url, sessionId: data.session_id };
 }
 
+interface JamActiveCache {
+  value: boolean;
+  expiresAt: number;
+}
+let jamActiveCache: JamActiveCache | null = null;
+
+/**
+ * Whether the host Spotify account is currently in an active Jam (social
+ * listening session) — true whether the host *started* it or *joined*
+ * someone else's. Used to gate ambient now-playing cards: no Jam, no cards.
+ *
+ * Fails SAFE: any relay/network/auth error (including the relay being down,
+ * or the relay/secret not being configured at all) resolves to `false`, so
+ * the bot stays quiet rather than leaking cards when it genuinely can't tell
+ * whether a Jam is running. The result is cached for JAM_ACTIVE_CACHE_MS so
+ * the per-track now-playing hot path never hammers the relay.
+ */
+export async function isJamActive(): Promise<boolean> {
+  if (jamActiveCache && Date.now() < jamActiveCache.expiresAt) {
+    return jamActiveCache.value;
+  }
+  let value = false;
+  try {
+    const token = await fetchInternalAccessToken();
+    value = (await getCurrentJam(token)) !== null;
+  } catch (err) {
+    // Drop any cached token so a stale/expired one is refetched next time.
+    cachedInternalToken = null;
+    logger.warn("isJamActive check failed; treating as no active Jam", {
+      error: String(err),
+    });
+    value = false;
+  }
+  jamActiveCache = {
+    value,
+    expiresAt: Date.now() + config.JAM_ACTIVE_CACHE_MS,
+  };
+  return value;
+}
+
 interface RelayJamStartResponse {
   ok?: boolean;
   joinUrl?: string;

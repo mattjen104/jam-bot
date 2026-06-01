@@ -137,13 +137,29 @@ All commands work in the configured Slack channel. You can also just *talk* to t
 | `/memory <question>` | Free-form recall over Jam history, e.g. "who introduced us to Khruangbin?" — or **"play me a 5-track set from last weekend"** to actually queue tracks. |
 | `/jam` | Start a Spotify Jam (social listening session). Tries the unofficial Spotify endpoint when `SPOTIFY_SP_DC` is set; otherwise prints clear "tap Start a Jam in your Spotify app on `Jam Host`" instructions, which always work. |
 | `/jamoptout` / `/jamoptout off` | Hide your personal stats from `/wrapped`, `/dna`, `/compat` (your plays still count toward channel totals). Run `off` to undo. |
-| `/quiet` / `/quiet on` / `/quiet off` / `/quiet status` | **Test mode.** Reroutes only the *automated background posts* — now-playing cards, "no active device", "Jam is back online", and the scheduled Wrapped — to a DM to `JAM_QUIET_DM_USER`. **Friend interactions (slash commands, @mentions, vote-skip) post in the channel normally**, so people in the Jam still get the responses they asked for. Resets to off when the bot restarts. |
 
-### Notification-friendly defaults
+### Where the bot replies (notification-friendly by design)
 
-- **Now-playing cards only post on Fridays** by default. Tracks still play and get logged to history every day — but the channel only sees the "Now playing" card on Friday so friends aren't notified on every track change. Override with `JAM_NOWPLAYING_DAYS` (UTC, comma-separated 0=Sun..6=Sat). Set to `0,1,2,3,4,5,6` to restore the every-day behavior.
-- **Quiet mode → DMs the background posts to you.** Set `JAM_QUIET_DM_USER=U01YourSlackId` and run `/quiet on` while testing. The now-playing cards and connect/disconnect notices DM you instead of posting in the channel; friends interacting with the bot still get their normal channel responses. In quiet mode the day-of-week gate is bypassed, so you see every track-change card in your DMs regardless of day.
-- **`@Jam Bot`, slash commands, and vote-skip outcomes always post in-channel** — those are direct interactions, never background noise.
+- **She replies wherever she was addressed.** A slash command, `@Jam Bot`
+  mention, or engaged-thread reply in the channel is answered in the channel;
+  a DM from the host is answered in the DM. Nothing you ask in a DM ever leaks
+  to the channel.
+- **Ambient "Now playing" cards only post while a Jam is active.** The
+  automated track-change card posts to the channel **only when the host
+  Spotify account is in an active Jam** (whether the host started it or joined
+  someone else's). No Jam → no cards: tracks still play and get logged to
+  history, the channel just stays quiet. This needs the relay configured
+  (`SPOTIFY_TOKEN_RELAY_URL` / `SPOTIFY_TOKEN_RELAY_SECRET`) so the bot can
+  check Jam status; if the relay is unreachable it **fails quiet** (no cards)
+  rather than spamming the channel. The Jam check is cached for
+  `JAM_ACTIVE_CACHE_MS` (default 15s) so the per-track path never hammers the
+  relay.
+- **A guided tour follows its origin.** A tour started with `@Jam Bot give us
+  a tour of …` in the channel narrates each track in the channel; a tour
+  started in the host DM narrates entirely in the DM — the per-track cards and
+  tidbits never reach the channel, even if a Jam is active.
+- **Connect/disconnect notices** ("no active device", "Jam is back online")
+  are only logged to the droplet journal, never posted.
 
 ### Natural language (must @-mention the bot)
 
@@ -162,11 +178,13 @@ To avoid the bot interpreting every message in the channel — and answering que
 
 Slash commands (`/play`, `/skip`, etc.) don't need a mention — they're already directed at the bot.
 
-### DM testing (host only)
+### DM the host surface (private control + testing)
 
-If you set `JAM_QUIET_DM_USER` to your Slack user ID, **you can DM the bot directly** and it will respond exactly as if you'd typed the message in the channel — no `@Jam Bot` prefix needed in a DM, since it's already a 1:1 conversation. Slash commands (`/play`, `/jam`, etc.) also work in the DM. Both natural-language and slash commands trigger the same real Spotify operations (the music actually plays on the host device); only the Slack reply lands in your DM instead of the channel.
+Set `JAM_QUIET_DM_USER` to your Slack user ID and **you can DM the bot directly** — it responds exactly as if you'd typed the message in the channel, no `@Jam Bot` prefix needed (a DM is already a 1:1 conversation). Slash commands (`/play`, `/jam`, etc.) work in the DM too. Both natural-language and slash commands trigger the same real Spotify operations (the music actually plays on the host device); the **reply lands in your DM, not the channel** — and that includes a guided tour: a tour you start in the DM narrates each track privately in the DM.
 
-This is the recommended way to freely test new behavior without notifying anyone in the Jam channel. DMs from anyone other than `JAM_QUIET_DM_USER` are ignored.
+This is the recommended way to drive or test the bot without notifying anyone in the Jam channel. DMs from anyone other than `JAM_QUIET_DM_USER` are ignored.
+
+> **Note:** `JAM_QUIET_DM_USER` is just the historical name for "the host allowed to DM the bot" — there's no separate quiet/test mode toggle anymore. The bot is quiet by default in the channel (ambient cards only post during an active Jam), so you no longer need to flip a mode to keep it from spamming.
 
 ### Starting a Spotify Jam
 
