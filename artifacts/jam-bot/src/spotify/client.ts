@@ -312,6 +312,115 @@ export async function getArtistInfo(artistId: string) {
   return withRetry("getArtist", async () => (await api.getArtist(artistId)).body);
 }
 
+export interface SpotifyArtistRef {
+  id: string;
+  name: string;
+  url: string;
+}
+
+/**
+ * Resolve an artist NAME to its Spotify artist (best match). Used to build the
+ * card catalogue for sources that don't carry Spotify artist ids (e.g. the
+ * turntable path, where the card was matched by ISRC/title). Returns null when
+ * nothing resolves.
+ */
+export async function searchArtist(
+  name: string,
+): Promise<SpotifyArtistRef | null> {
+  const q = name.trim();
+  if (!q) return null;
+  return withRetry("searchArtists", async () => {
+    const res = await api.searchArtists(q, { limit: 1 });
+    const a = res.body.artists?.items[0];
+    if (!a) return null;
+    return {
+      id: a.id,
+      name: a.name,
+      url: a.external_urls?.spotify ?? `https://open.spotify.com/artist/${a.id}`,
+    };
+  });
+}
+
+export interface CatalogueTrack {
+  id: string;
+  uri: string;
+  title: string;
+}
+
+/** An artist's top tracks (Spotify's popularity-ordered list for a market). */
+export async function getArtistTopTracksList(
+  artistId: string,
+  country = "US",
+): Promise<CatalogueTrack[]> {
+  return withRetry("getArtistTopTracks", async () => {
+    const res = await api.getArtistTopTracks(artistId, country);
+    return (res.body.tracks ?? []).map((t) => ({
+      id: t.id,
+      uri: t.uri,
+      title: t.name,
+    }));
+  });
+}
+
+export interface CatalogueAlbum {
+  id: string;
+  name: string;
+  year?: number;
+  url: string;
+}
+
+/**
+ * An artist's full-length albums, deduped by name (Spotify lists reissues /
+ * remasters / market variants of the same album many times). Newest pressing of
+ * each title wins by insertion order from the API.
+ */
+export async function getArtistAlbumsList(
+  artistId: string,
+  country = "US",
+): Promise<CatalogueAlbum[]> {
+  return withRetry("getArtistAlbums", async () => {
+    const res = await api.getArtistAlbums(artistId, {
+      include_groups: "album",
+      country,
+      limit: 50,
+    });
+    const seen = new Set<string>();
+    const out: CatalogueAlbum[] = [];
+    for (const a of res.body.items ?? []) {
+      const key = a.name.trim().toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      const yr = a.release_date
+        ? Number.parseInt(a.release_date.slice(0, 4), 10)
+        : NaN;
+      out.push({
+        id: a.id,
+        name: a.name,
+        year: Number.isFinite(yr) ? yr : undefined,
+        url:
+          a.external_urls?.spotify ??
+          `https://open.spotify.com/album/${a.id}`,
+      });
+    }
+    return out;
+  });
+}
+
+/** Track URIs for an album, in order, capped so a queue-album tap can't flood. */
+export async function getAlbumTrackUris(
+  albumId: string,
+  cap = 12,
+): Promise<string[]> {
+  const limit = Math.min(50, Math.max(1, cap));
+  return withRetry("getAlbumTracks", async () => {
+    const res = await api.getAlbumTracks(albumId, { limit });
+    return (res.body.items ?? [])
+      .map((t) => t.uri)
+      .filter((u): u is string => !!u)
+      .slice(0, cap);
+  });
+}
+
 export interface CreatedPlaylist {
   id: string;
   url: string;

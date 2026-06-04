@@ -2,7 +2,11 @@ import type { KnownBlock } from "@slack/types";
 import type { CurrentlyPlaying } from "../spotify/client.js";
 import { VOTE_SKIP_ACTION_ID, type VoteSkipState } from "./format.js";
 import { type TrackKnowledge, groupPersonnel } from "../turntable/knowledge.js";
-import { contextBlocks, type TrackContext } from "../turntable/context.js";
+import type { TrackContext } from "../turntable/context.js";
+import {
+  type ArtistCatalogue,
+  catalogueHasContent,
+} from "../turntable/catalogue.js";
 import type { Credit } from "../turntable/musicbrainz.js";
 import type { TrackLinks } from "../turntable/odesli.js";
 import type { PersonInfo } from "../turntable/person.js";
@@ -47,6 +51,21 @@ export const CARD_CRUMB_ACTION_RE = new RegExp(`^${CARD_CRUMB_ACTION}:`);
 // "Play their sessions": queue a capped handful of this person's notable work
 // onto the host playback. Single action; value carries the person's artist id.
 export const CARD_SESSIONS_ACTION = "jam_card_sessions";
+// Catalogue (Context tab): queue one of the artist's top tracks. Each button's
+// action_id is suffixed with an index for uniqueness; value carries the Spotify
+// track URI. The bot registers the handler with CARD_QUEUE_ACTION_RE.
+export const CARD_QUEUE_ACTION = "jam_card_queue";
+export const CARD_QUEUE_ACTION_RE = new RegExp(`^${CARD_QUEUE_ACTION}:`);
+// Catalogue (Context tab): queue an album via dropdown; value carries the
+// Spotify album id.
+export const CARD_ALBUM_ACTION = "jam_card_album";
+/**
+ * How many top-track quick-queue buttons the catalogue shows. Rendered 5 per
+ * Slack actions block (its element cap), so 10 → two navigable rows.
+ */
+export const CATALOGUE_TRACK_BUTTONS = 10;
+/** How many albums the catalogue dropdown lists. */
+export const CATALOGUE_ALBUM_OPTIONS = 24;
 /**
  * Max people kept in a hop trail. Bounds the breadcrumb so it (plus the leading
  * tab crumb) never exceeds Slack's 5-element actions-row cap, and keeps the trail
@@ -98,6 +117,8 @@ export interface TrackCardState {
   knowledgeSummary?: string | null;
   context?: TrackContext | null;
   contextSummary?: string | null;
+  /** Artist's playable catalogue (top tracks + albums) for the Context tab. */
+  catalogue?: ArtistCatalogue | null;
   links?: TrackLinks | null;
   view: CardView;
   /** Lazily-populated person sub-page cache, keyed by MusicBrainz artist id. */
@@ -135,10 +156,17 @@ export function linksHasContent(l?: TrackLinks | null): boolean {
   return !!l && (l.platforms.length > 0 || !!l.pageUrl);
 }
 
+/** The Context tab shows when there's genre/lyrics context OR a catalogue. */
+function contextTabHasContent(state: TrackCardState): boolean {
+  return (
+    contextHasContent(state.context) || catalogueHasContent(state.catalogue)
+  );
+}
+
 function availableTabs(state: TrackCardState): CardTab[] {
   const tabs: CardTab[] = ["now"];
   if (knowledgeHasContent(state.knowledge)) tabs.push("credits");
-  if (contextHasContent(state.context)) tabs.push("context");
+  if (contextTabHasContent(state)) tabs.push("context");
   if (linksHasContent(state.links)) tabs.push("links");
   return tabs;
 }
@@ -345,6 +373,133 @@ function linksViewBlocks(state: TrackCardState): KnownBlock[] {
   }
   if (l.pageUrl) lines.push(`<${l.pageUrl}|All platforms ↗>`);
   return [{ type: "section", text: { type: "mrkdwn", text: lines.join("\n") } }];
+}
+
+/** Plain (un-linked) credited names, for a readable prose blurb. */
+function plainNames(credits: Credit[]): string {
+  return credits.map((c) => c.name).join(", ");
+}
+
+/**
+ * The short, SONG-specific blurb at the top of the Context tab. Built only from
+ * facts we already have — the album this track is on, its top genre tag, and its
+ * real writers/producers — so it changes per song instead of repeating the same
+ * artist bio on every card, and can never fabricate. Returns [] when there's
+ * nothing song-specific to say.
+ */
+function songBlurbLines(state: TrackCardState): string[] {
+  const lines: string[] = [];
+  const album = state.track.album?.trim();
+  const topTag = state.context?.tags?.[0];
+  const title = state.track.title;
+  const intro =
+    topTag && album
+      ? `*“${title}”* — a ${topTag} track from *${album}*.`
+      : album
+        ? `*“${title}”* — from *${album}*.`
+        : topTag
+          ? `*“${title}”* — ${topTag}.`
+          : "";
+  if (intro) lines.push(intro);
+
+  const k = state.knowledge;
+  if (k && knowledgeHasContent(k)) {
+    const { producers, writers } = groupPersonnel(k.personnel);
+    const credit: string[] = [];
+    if (writers.length) credit.push(`Written by ${plainNames(writers)}`);
+    if (producers.length) credit.push(`produced by ${plainNames(producers)}`);
+    if (credit.length) lines.push(`${credit.join(", ")}.`);
+  }
+  return lines;
+}
+
+/**
+ * The navigable, queueable catalogue: the artist's top tracks as one-tap queue
+ * buttons (chunked into Slack's 5-per-row actions blocks) plus a dropdown that
+ * queues a full album. Returns [] when there's no catalogue to show.
+ */
+function catalogueBlocks(state: TrackCardState): KnownBlock[] {
+  const cat = state.catalogue;
+  if (!catalogueHasContent(cat) || !cat) return [];
+
+  const blocks: KnownBlock[] = [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `:notes: *More from <${cat.artistUrl}|${cat.artistName}>*`,
+      },
+    },
+  ];
+
+  const tracks = cat.topTracks.slice(0, CATALOGUE_TRACK_BUTTONS);
+  if (tracks.length) {
+    const buttons = tracks.map((t, i) => ({
+      type: "button" as const,
+      action_id: `${CARD_QUEUE_ACTION}:${i}`,
+      text: {
+        type: "plain_text" as const,
+        text: truncate(`:arrow_forward: ${t.title}`, 75),
+        emoji: true,
+      },
+      value: t.uri,
+    }));
+    // Slack caps an actions block at 5 elements, so chunk into rows.
+    for (let i = 0; i < buttons.length; i += 5) {
+      blocks.push({ type: "actions", elements: buttons.slice(i, i + 5) });
+    }
+  }
+
+  const albums = cat.albums.slice(0, CATALOGUE_ALBUM_OPTIONS);
+  if (albums.length) {
+    blocks.push({
+      type: "actions",
+      elements: [
+        {
+          type: "static_select",
+          action_id: CARD_ALBUM_ACTION,
+          placeholder: {
+            type: "plain_text",
+            text: ":cd: Queue an album…",
+            emoji: true,
+          },
+          options: albums.map((a) => ({
+            text: {
+              type: "plain_text",
+              text: truncate(a.year ? `${a.name} (${a.year})` : a.name, 75),
+              emoji: true,
+            },
+            value: a.id,
+          })),
+        },
+      ],
+    });
+  }
+  return blocks;
+}
+
+/**
+ * The whole Context tab: a song-specific blurb up top, then the genre + lyrics
+ * line, then the navigable catalogue. Deliberately omits the old artist-level
+ * Wikipedia bio (it repeated on every track and often resolved to the wrong
+ * page); the catalogue is the actionable, song-relevant replacement.
+ */
+function contextViewBlocks(state: TrackCardState): KnownBlock[] {
+  const lines: string[] = [":headphones: *Genre & context*"];
+  lines.push(...songBlurbLines(state));
+
+  const c = state.context;
+  if (c?.tags?.length) lines.push(`*Genre:* ${c.tags.join(" · ")}`);
+  if (c?.geniusUrl) {
+    const note = c.approximate ? " _(matched by title)_" : "";
+    lines.push(`*Lyrics:* <${c.geniusUrl}|Genius>${note}`);
+  }
+
+  const blocks: KnownBlock[] = [
+    { type: "section", text: { type: "mrkdwn", text: lines.join("\n") } },
+  ];
+  blocks.push(...catalogueBlocks(state));
+  return blocks;
 }
 
 /** A display name for a trail person, resolvable even before enrichment loads. */
@@ -559,7 +714,7 @@ export function renderTrackCard(state: TrackCardState): {
         body = creditsViewBlocks(state);
         break;
       case "context":
-        body = contextBlocks(state.context!, state.contextSummary);
+        body = contextViewBlocks(state);
         break;
       case "links":
         body = linksViewBlocks(state);

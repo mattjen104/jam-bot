@@ -10,6 +10,7 @@ import {
   getCurrentlyPlaying,
   findActiveDevice,
   createPlaylistWithTracks,
+  getAlbumTrackUris,
   type SearchResultTrack,
 } from "../spotify/client.js";
 import {
@@ -85,6 +86,7 @@ import {
 import { fetchTrackLinks, trackLinksEnabled } from "../turntable/odesli.js";
 import { enrichPerson } from "../turntable/person.js";
 import { resolvePersonSessions } from "../turntable/sessions.js";
+import { fetchArtistCatalogue } from "../turntable/catalogue.js";
 import {
   renderTrackCard,
   putCard,
@@ -96,6 +98,8 @@ import {
   CARD_CRUMB_ACTION,
   CARD_BACK_ACTION,
   CARD_SESSIONS_ACTION,
+  CARD_QUEUE_ACTION_RE,
+  CARD_ALBUM_ACTION,
   TAB_ACTION_RE,
   pushPersonTrail,
   type TrackCardState,
@@ -2292,6 +2296,180 @@ slackApp.action(CARD_SESSIONS_ACTION, async ({ ack, body, action, respond }) => 
   }
 });
 
+/** Strip a Spotify track URI down to its bare id for request bookkeeping. */
+function uriTrackId(uri: string): string {
+  return uri.split(":").pop() ?? uri;
+}
+
+const NO_ACTIVE_DEVICE_MSG =
+  ":warning: No active Spotify device. Open Spotify on your phone (or any " +
+  "device) and start playing something, then try again.";
+
+// Catalogue: queue a single one of the artist's top tracks. Same locking +
+// rate-limit + device discipline as the play/sessions paths.
+slackApp.action(CARD_QUEUE_ACTION_RE, async ({ ack, body, action, respond }) => {
+  await ack();
+  const ephemeral = (text: string) =>
+    respond({ response_type: "ephemeral", replace_original: false, text });
+  try {
+    const uri = action.type === "button" ? action.value : undefined;
+    const userId = body.user?.id;
+    const { channel, ts } = actionMessageRef(body);
+    if (!uri || !channel || !ts) return;
+    const card = getCard(cardKey(channel, ts));
+    if (!card) {
+      await ephemeral(CARD_EXPIRED_MSG);
+      return;
+    }
+    const title =
+      card.catalogue?.topTracks.find((t) => t.uri === uri)?.title ??
+      "that track";
+
+    if (userId) {
+      const used = countUserRequestsLastHour(userId);
+      if (used >= config.MAX_PLAYS_PER_USER_PER_HOUR) {
+        await ephemeral(
+          `:hourglass_flowing_sand: You've hit your hourly play budget (${used}/${config.MAX_PLAYS_PER_USER_PER_HOUR}). Try again later.`,
+        );
+        return;
+      }
+    }
+
+    let queued = false;
+    let deviceFound = false;
+    try {
+      await withPlaybackLock(async () => {
+        const device = await findActiveDevice();
+        if (!device) return;
+        deviceFound = true;
+        await addToQueue(uri, device.id);
+        queued = true;
+      });
+    } catch (err) {
+      if (err instanceof PlaybackLockBusyError) {
+        await ephemeral(
+          ":hourglass_flowing_sand: Another track is being queued right now — try again in a sec.",
+        );
+        return;
+      }
+      throw err;
+    }
+
+    if (!deviceFound) {
+      await ephemeral(NO_ACTIVE_DEVICE_MSG);
+      return;
+    }
+    if (!queued) {
+      await ephemeral(
+        ":warning: Couldn't queue that track right now — try again in a sec.",
+      );
+      return;
+    }
+    if (userId) {
+      recordPendingRequest(uriTrackId(uri), userId, `catalogue: ${title}`);
+      recordUserRequest(userId);
+    }
+    await ephemeral(`:musical_note: Queued *${title}*.`);
+  } catch (err) {
+    logger.error("Card queue action failed", { error: String(err) });
+  }
+});
+
+// Catalogue: queue a full album (capped) from the dropdown.
+slackApp.action(CARD_ALBUM_ACTION, async ({ ack, body, action, respond }) => {
+  await ack();
+  const ephemeral = (text: string) =>
+    respond({ response_type: "ephemeral", replace_original: false, text });
+  try {
+    const albumId =
+      action.type === "static_select"
+        ? action.selected_option?.value
+        : undefined;
+    const userId = body.user?.id;
+    const { channel, ts } = actionMessageRef(body);
+    if (!albumId || !channel || !ts) return;
+    const card = getCard(cardKey(channel, ts));
+    if (!card) {
+      await ephemeral(CARD_EXPIRED_MSG);
+      return;
+    }
+    const albumName =
+      card.catalogue?.albums.find((a) => a.id === albumId)?.name ?? "that album";
+
+    if (userId) {
+      const used = countUserRequestsLastHour(userId);
+      if (used >= config.MAX_PLAYS_PER_USER_PER_HOUR) {
+        await ephemeral(
+          `:hourglass_flowing_sand: You've hit your hourly play budget (${used}/${config.MAX_PLAYS_PER_USER_PER_HOUR}). Try again later.`,
+        );
+        return;
+      }
+    }
+
+    // Resolve album tracks OUTSIDE the playback lock (it hits the network);
+    // only the device lookup + queue loop run inside it.
+    const uris = await getAlbumTrackUris(albumId);
+    if (!uris.length) {
+      await ephemeral(
+        `:see_no_evil: I couldn't load *${albumName}*'s tracks right now.`,
+      );
+      return;
+    }
+
+    let queued = 0;
+    let deviceFound = false;
+    try {
+      await withPlaybackLock(async () => {
+        const device = await findActiveDevice();
+        if (!device) return;
+        deviceFound = true;
+        for (const uri of uris) {
+          try {
+            await addToQueue(uri, device.id);
+            if (userId) {
+              recordPendingRequest(uriTrackId(uri), userId, `album: ${albumName}`);
+            }
+            queued++;
+          } catch (err) {
+            logger.warn("Album queue: aborting after enqueue failure", {
+              queuedSoFar: queued,
+              error: String(err),
+            });
+            break;
+          }
+        }
+      });
+    } catch (err) {
+      if (err instanceof PlaybackLockBusyError) {
+        await ephemeral(
+          ":hourglass_flowing_sand: Another track is being queued right now — try again in a sec.",
+        );
+        return;
+      }
+      throw err;
+    }
+
+    if (!deviceFound) {
+      await ephemeral(NO_ACTIVE_DEVICE_MSG);
+      return;
+    }
+    if (!queued) {
+      await ephemeral(
+        ":warning: Couldn't queue that album right now — try again in a sec.",
+      );
+      return;
+    }
+    if (userId) recordUserRequest(userId);
+    await ephemeral(
+      `:musical_note: Queued ${queued} ${
+        queued === 1 ? "track" : "tracks"
+      } from *${albumName}*.`,
+    );
+  } catch (err) {
+    logger.error("Card album action failed", { error: String(err) });
+  }
+});
+
 // ---- Consolidated track card: post + enrich ----------------------------
 // Enrichment args shared by the knowledge/context layers — synthesized from
 // whatever (Spotify track / turntable match) the caller already has.
@@ -2363,6 +2541,22 @@ function enrichCard(state: TrackCardState, args: CardEnrichArgs): void {
           }
         } catch (err) {
           logger.error("Card context enrichment failed", {
+            error: String(err),
+          });
+        }
+      }
+      // The artist's playable catalogue powers the Context tab's navigable
+      // "More from <artist>" section. It lives in the context tab, so it's
+      // gated by the same flag. Best-effort; failure leaves the tab to its
+      // other content (genre/lyrics).
+      if (trackContextEnabled()) {
+        try {
+          state.catalogue = await fetchArtistCatalogue({
+            artistName: state.knowledge?.artistName || state.track.artist,
+            spotifyArtistId: state.track.artistIds?.[0] ?? null,
+          });
+        } catch (err) {
+          logger.error("Card catalogue enrichment failed", {
             error: String(err),
           });
         }
