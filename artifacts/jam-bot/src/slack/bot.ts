@@ -89,7 +89,7 @@ import {
   putCard,
   getCard,
   cardKey,
-  CARD_PERSON_ACTION,
+  CARD_PERSON_ACTION_RE,
   CARD_BACK_ACTION,
   TAB_ACTION_RE,
   type TrackCardState,
@@ -2013,13 +2013,15 @@ slackApp.action(TAB_ACTION_RE, async ({ ack, body, action, respond }) => {
   }
 });
 
-slackApp.action(CARD_PERSON_ACTION, async ({ ack, body, action, respond }) => {
+slackApp.action(CARD_PERSON_ACTION_RE, async ({ ack, body, action, respond }) => {
   await ack();
   try {
     const artistId =
       action.type === "static_select"
         ? action.selected_option?.value
-        : undefined;
+        : action.type === "button"
+          ? action.value
+          : undefined;
     const { channel, ts } = actionMessageRef(body);
     if (!artistId || !channel || !ts) return;
     const card = getCard(cardKey(channel, ts));

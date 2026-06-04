@@ -28,6 +28,13 @@ export const CARD_TAB_ACTION = "jam_card_tab";
 export const CARD_PERSON_ACTION = "jam_card_person";
 export const CARD_BACK_ACTION = "jam_card_back";
 export const TAB_ACTION_RE = new RegExp(`^${CARD_TAB_ACTION}:`);
+// Each explorable person is its own button (action_id suffixed with an index so
+// every element is unique), but a long credit list falls back to a single
+// dropdown. Both shapes carry the artist id and route through one handler, which
+// the bot registers with CARD_PERSON_ACTION_RE.
+export const CARD_PERSON_ACTION_RE = new RegExp(`^${CARD_PERSON_ACTION}(?::|$)`);
+/** At or below this many explorable people, render buttons; above, a dropdown. */
+export const PERSON_BUTTON_MAX = 10;
 
 export type CardTab = "now" | "credits" | "context" | "links";
 
@@ -224,34 +231,66 @@ function creditsViewBlocks(state: TrackCardState): KnownBlock[] {
     { type: "section", text: { type: "mrkdwn", text: lines.join("\n") } },
   ];
 
-  // Explore-a-person menu — only people we have a canonical artist id for, so
-  // every drill-down is grounded (no name-search guessing).
-  const explorable = uniqueExplorable(k.personnel);
-  if (explorable.length) {
-    blocks.push({
-      type: "actions",
-      elements: [
-        {
-          type: "static_select",
-          action_id: CARD_PERSON_ACTION,
-          placeholder: {
-            type: "plain_text",
-            text: ":mag: Explore a person",
-            emoji: true,
-          },
-          options: explorable.slice(0, 25).map((c) => ({
-            text: {
+  // Explore — only people we have a canonical artist id for, so every
+  // drill-down is grounded (no name-search guessing). A short list renders as a
+  // button per person; a long one falls back to a single dropdown.
+  blocks.push(...exploreBlocks(uniqueExplorable(k.personnel)));
+  return blocks;
+}
+
+/**
+ * Render the "explore a person" affordance for the credits view. Each explorable
+ * person becomes a tappable button (grouped into Slack's 5-per-row action
+ * blocks); past PERSON_BUTTON_MAX it collapses to a single dropdown so big
+ * sessions never overflow the card. Returns [] when no one is explorable.
+ */
+function exploreBlocks(explorable: Credit[]): KnownBlock[] {
+  if (!explorable.length) return [];
+
+  if (explorable.length > PERSON_BUTTON_MAX) {
+    return [
+      {
+        type: "actions",
+        elements: [
+          {
+            type: "static_select",
+            action_id: CARD_PERSON_ACTION,
+            placeholder: {
               type: "plain_text",
-              text: truncate(`${c.name} — ${c.role}`, 75),
+              text: ":mag: Explore a person",
               emoji: true,
             },
-            value: c.artistId!,
-          })),
-        },
-      ],
-    });
+            options: explorable.slice(0, 25).map((c) => ({
+              text: {
+                type: "plain_text",
+                text: truncate(`${c.name} — ${c.role}`, 75),
+                emoji: true,
+              },
+              value: c.artistId!,
+            })),
+          },
+        ],
+      },
+    ];
   }
-  return blocks;
+
+  const buttons = explorable.map((c, i) => ({
+    type: "button" as const,
+    action_id: `${CARD_PERSON_ACTION}:${i}`,
+    text: {
+      type: "plain_text" as const,
+      text: truncate(`:mag: ${c.name}`, 75),
+      emoji: true,
+    },
+    value: c.artistId!,
+  }));
+
+  // Slack caps an actions block at 5 elements, so chunk into rows.
+  const rows: KnownBlock[] = [];
+  for (let i = 0; i < buttons.length; i += 5) {
+    rows.push({ type: "actions", elements: buttons.slice(i, i + 5) });
+  }
+  return rows;
 }
 
 /** Distinct credited people that carry an artist id, first role wins. */

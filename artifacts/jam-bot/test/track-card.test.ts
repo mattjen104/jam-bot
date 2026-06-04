@@ -9,6 +9,7 @@ import {
   CARD_TAB_ACTION,
   CARD_PERSON_ACTION,
   CARD_BACK_ACTION,
+  PERSON_BUTTON_MAX,
   type TrackCardState,
   type CardTrack,
 } from "../src/slack/track-card.js";
@@ -82,6 +83,36 @@ function rendered(blocks: unknown[]): string {
   return JSON.stringify(blocks);
 }
 
+/** Person explore buttons: action_id `jam_card_person:<idx>`, value = artistId. */
+function personButtons(
+  blocks: unknown[],
+): Array<{ action_id: string; value: string; text: { text: string } }> {
+  const out: Array<{ action_id: string; value: string; text: { text: string } }> =
+    [];
+  for (const b of blocks as Array<{
+    elements?: Array<{
+      type?: string;
+      action_id?: string;
+      value?: string;
+      text?: { text?: string };
+    }>;
+  }>) {
+    for (const el of b.elements ?? []) {
+      if (
+        el.type === "button" &&
+        el.action_id?.startsWith(`${CARD_PERSON_ACTION}:`)
+      ) {
+        out.push({
+          action_id: el.action_id,
+          value: el.value ?? "",
+          text: { text: el.text?.text ?? "" },
+        });
+      }
+    }
+  }
+  return out;
+}
+
 describe("renderTrackCard", () => {
   it("now-only card has no tab nav when nothing is enriched yet", () => {
     const { blocks, text } = renderTrackCard(baseState());
@@ -113,7 +144,7 @@ describe("renderTrackCard", () => {
     expect(ids).not.toContain(`${CARD_TAB_ACTION}:context`);
   });
 
-  it("credits view hyperlinks names with an artist id and offers an explore menu", () => {
+  it("credits view hyperlinks ids, keeps name-only plain, and buttons only id-carriers", () => {
     const state = baseState({
       knowledge,
       view: { kind: "tab", tab: "credits" },
@@ -124,8 +155,64 @@ describe("renderTrackCard", () => {
     expect(json).toContain("musicbrainz.org/artist/art-jmj");
     // Performer without an artistId appears as plain text.
     expect(json).toContain("Anthony Gonzalez");
-    // Explore menu only lists people we have an id for.
+
+    // One explore button — only the id-carrying producer, not the name-only one.
+    const btns = personButtons(blocks);
+    expect(btns).toHaveLength(1);
+    expect(btns[0].value).toBe("art-jmj");
+    expect(btns[0].text.text).toContain("Justin Meldal-Johnsen");
+    // Short list: no dropdown.
+    expect(actionIds(blocks)).not.toContain(CARD_PERSON_ACTION);
+  });
+
+  it("renders nothing explorable when no credit carries an artist id", () => {
+    const state = baseState({
+      knowledge: {
+        recordingId: "rec1",
+        approximate: false,
+        personnel: [{ role: "guitar", name: "Unknown Session Player" }],
+      },
+      view: { kind: "tab", tab: "credits" },
+    });
+    const { blocks } = renderTrackCard(state);
+    expect(personButtons(blocks)).toHaveLength(0);
+    expect(actionIds(blocks)).not.toContain(CARD_PERSON_ACTION);
+    // The name still shows as plain text.
+    expect(rendered(blocks)).toContain("Unknown Session Player");
+  });
+
+  it("falls back to a dropdown when the explorable list is long", () => {
+    const many = Array.from({ length: PERSON_BUTTON_MAX + 1 }, (_, i) => ({
+      role: "performer",
+      name: `Player ${i}`,
+      artistId: `art-${i}`,
+    }));
+    const state = baseState({
+      knowledge: { recordingId: "rec1", approximate: false, personnel: many },
+      view: { kind: "tab", tab: "credits" },
+    });
+    const { blocks } = renderTrackCard(state);
+    // Past the cap: a single dropdown, no per-person buttons.
     expect(actionIds(blocks)).toContain(CARD_PERSON_ACTION);
+    expect(personButtons(blocks)).toHaveLength(0);
+  });
+
+  it("chunks person buttons into rows of at most five", () => {
+    const seven = Array.from({ length: 7 }, (_, i) => ({
+      role: "performer",
+      name: `Player ${i}`,
+      artistId: `art-${i}`,
+    }));
+    const state = baseState({
+      knowledge: { recordingId: "rec1", approximate: false, personnel: seven },
+      view: { kind: "tab", tab: "credits" },
+    });
+    const { blocks } = renderTrackCard(state);
+    expect(personButtons(blocks)).toHaveLength(7);
+    // No single actions block exceeds Slack's 5-element cap.
+    for (const b of blocks as Array<{ type: string; elements?: unknown[] }>) {
+      if (b.type === "actions") expect((b.elements ?? []).length).toBeLessThanOrEqual(5);
+    }
   });
 
   it("links view lists platforms and the all-platforms page", () => {
