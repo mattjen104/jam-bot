@@ -175,6 +175,44 @@ const schema = z.object({
   // Spotify playback consistently trails the turntable. Default 0 (the clip
   // length is always compensated automatically; this is just the extra slack).
   TURNTABLE_SYNC_LATENCY_MS: z.coerce.number().int().min(0).default(0),
+
+  // ---- Track knowledge (liner-notes credits) ----------------------------
+  // OPTIONAL feature layered on top of turntable sync. When a record is
+  // identified, the bot queries open music databases on demand for real
+  // production credits (personnel, producer, engineer, writers) plus
+  // pressing/label detail, then posts a "liner notes" follow-up card. All
+  // enrichment runs asynchronously, OFF the playback hot path — it can never
+  // delay resolve/play/seek. Every source is independently optional; with
+  // none configured the bot behaves exactly as before.
+  //
+  // Master switch. Even when true, enrichment only does anything if at least
+  // one source below is configured.
+  TRACK_KNOWLEDGE_ENABLED: boolFromEnv.default(true),
+
+  // MusicBrainz requires a descriptive User-Agent with a contact (an email or
+  // app URL) per its API rules. Set this to enable MusicBrainz lookups
+  // (canonical recording/artist IDs + personnel credits). Leave unset to skip
+  // MusicBrainz entirely. Example: "JamBot/1.0 (you@example.com)".
+  MUSICBRAINZ_CONTACT: z.string().optional(),
+
+  // Personal access token from discogs.com/settings/developers. Enables
+  // Discogs lookups for pressing/label/release-year detail. Leave unset to
+  // skip Discogs.
+  DISCOGS_TOKEN: z.string().optional(),
+
+  // How long (days) a resolved knowledge result is cached, keyed by canonical
+  // recording id, before it is re-queried. Credits rarely change, so this can
+  // be generous.
+  TRACK_KNOWLEDGE_CACHE_TTL_DAYS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(30),
+
+  // When true, the liner-notes card also includes a one-line summary phrased
+  // in the bot's voice — built STRICTLY from the fetched facts (never
+  // fabricated). Off by default to avoid extra LLM calls on every new record.
+  TRACK_KNOWLEDGE_LLM_SUMMARY: boolFromEnv.default(false),
 });
 
 function loadConfig() {

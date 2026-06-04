@@ -2,3 +2,4 @@
 - [jam-bot persona & escalation](jam-bot-persona.md) — music-teacher voice that escalates when razzed; uses in-memory turn buffer (no Slack history scope) fed to askLLM.
 - [jam-bot persona isolation & intent fast-paths](jam-bot-persona-and-intents.md) — keep she/her but never retone voice/taste: add behavior as layered askLLM opts blocks, leave base SYSTEM_PROMPT alone; every intent needs a deterministic fast-path regex off the LLM hot path.
 - [jam-bot reply routing & ambient gating](jam-bot-reply-routing.md) — no quiet mode: reply where addressed (DM→DM, channel→channel), ambient cards post only when host Jam active (isJamActive fails SAFE + TTL cache); tours follow origin; keep JAM_QUIET_DM_USER name.
+- [track-knowledge (liner-notes) pipeline](track-knowledge-pipeline.md) — enrich confirmed tracks with real credits/pressing: off hot path, canonical MB-recording-id cache convergence, never-fabricate grounding guard on LLM one-liner, query-on-demand not warehouse.

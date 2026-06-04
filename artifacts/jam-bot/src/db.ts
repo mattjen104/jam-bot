@@ -101,6 +101,19 @@ db.exec(`
     last_activity_ms INTEGER NOT NULL,
     PRIMARY KEY (channel, thread_ts)
   );
+
+  -- On-demand cache of liner-notes "track knowledge" (production credits,
+  -- pressing/label detail) fetched from external music databases. Keyed by a
+  -- canonical key (MusicBrainz recording id when resolved, else ISRC, else a
+  -- title|artist digest). The payload column is the JSON-serialized
+  -- TrackKnowledge; fetched_at_ms drives TTL expiry so replays of the same
+  -- record do not re-hit the APIs. We cache rather than warehouse — entries
+  -- are disposable.
+  CREATE TABLE IF NOT EXISTS track_knowledge (
+    cache_key TEXT PRIMARY KEY,
+    payload TEXT NOT NULL,
+    fetched_at_ms INTEGER NOT NULL
+  );
 `);
 
 // Migrate older deployments where pending_requests had track_id PRIMARY KEY
@@ -680,6 +693,45 @@ export function kvGet(key: string): string | null {
 }
 export function kvSet(key: string, value: string) {
   kvSetStmt.run(key, value);
+}
+
+// ---- Track knowledge cache (liner-notes credits) -----------------------
+
+const trackKnowledgeGetStmt = db.prepare<
+  [string],
+  { payload: string; fetched_at_ms: number }
+>(`SELECT payload, fetched_at_ms FROM track_knowledge WHERE cache_key = ?`);
+const trackKnowledgeSetStmt = db.prepare(
+  `INSERT INTO track_knowledge (cache_key, payload, fetched_at_ms)
+   VALUES (?, ?, ?)
+   ON CONFLICT(cache_key) DO UPDATE SET
+     payload = excluded.payload,
+     fetched_at_ms = excluded.fetched_at_ms`,
+);
+
+/**
+ * Read a cached, still-fresh track-knowledge payload (raw JSON string) for a
+ * canonical cache key. Returns null on a miss or when the entry is older than
+ * `ttlMs`. Callers parse the JSON into their own typed shape.
+ */
+export function getTrackKnowledge(
+  cacheKey: string,
+  ttlMs: number,
+  nowMs: number = Date.now(),
+): string | null {
+  const row = trackKnowledgeGetStmt.get(cacheKey);
+  if (!row) return null;
+  if (nowMs - row.fetched_at_ms > ttlMs) return null;
+  return row.payload;
+}
+
+/** Upsert a track-knowledge payload (raw JSON string) under a canonical key. */
+export function setTrackKnowledge(
+  cacheKey: string,
+  payload: string,
+  nowMs: number = Date.now(),
+) {
+  trackKnowledgeSetStmt.run(cacheKey, payload, nowMs);
 }
 
 // ---- Per-user remembered facts -----------------------------------------

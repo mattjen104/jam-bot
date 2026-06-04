@@ -61,6 +61,12 @@ import { nowPlayingWatcher, type TrackChangeEvent } from "../now-playing.js";
 import { turntableSession } from "../turntable/session.js";
 import { turntableConfigured } from "../turntable/ingest-server.js";
 import {
+  buildKnowledgeSummary,
+  enrichTrack,
+  knowledgeBlocks,
+  trackKnowledgeEnabled,
+} from "../turntable/knowledge.js";
+import {
   historyBlocks,
   nowPlayingBlocks,
   wrappedBlocks,
@@ -2029,7 +2035,30 @@ nowPlayingWatcher.on("resumed", () => {
 // announcements are gated on an active Jam (isJamActive fails SAFE) — exactly
 // like ambient now-playing cards — so we never claim "now playing" to a
 // channel whose guests aren't actually in the Jam to hear it.
-turntableSession.on("trackConfirmed", async ({ track, viaIsrc }) => {
+/**
+ * Deliver a turntable card to wherever the session was started: a DM goes
+ * straight to the host; a channel-started session (or one whose origin was
+ * lost across a restart) only posts when a Jam is actually live, so the
+ * cascade really is reaching guests. Returns true when something was posted.
+ * Shared by the now-playing card and the async liner-notes follow-up so both
+ * obey the same routing + gating.
+ */
+async function deliverTurntableCard(
+  blocks: KnownBlock[],
+  text: string,
+): Promise<boolean> {
+  if (turntableOrigin?.kind === "dm") {
+    await postDMToUser(turntableOrigin.userId, text, blocks);
+    return true;
+  }
+  if (await isJamActive()) {
+    await postToChannel(blocks, text);
+    return true;
+  }
+  return false;
+}
+
+turntableSession.on("trackConfirmed", async ({ track, match, viaIsrc }) => {
   try {
     const url = `https://open.spotify.com/track/${track.id}`;
     const text = `:record_button: Now playing from the turntable: ${track.title} by ${track.artist}`;
@@ -2045,15 +2074,8 @@ turntableSession.on("trackConfirmed", async ({ track, viaIsrc }) => {
         },
       },
     ];
-    if (turntableOrigin?.kind === "dm") {
-      await postDMToUser(turntableOrigin.userId, text, blocks);
-      return;
-    }
-    // Channel-started (or origin lost across a restart): only post when a Jam
-    // is actually live, so the cascade really is reaching guests.
-    if (await isJamActive()) {
-      await postToChannel(blocks, text);
-    } else {
+    const posted = await deliverTurntableCard(blocks, text);
+    if (!posted) {
       logger.info("Suppressed turntable now-playing post (no active Jam)", {
         track: track.title,
       });
@@ -2063,6 +2085,27 @@ turntableSession.on("trackConfirmed", async ({ track, viaIsrc }) => {
       error: String(err),
     });
   }
+
+  // Liner-notes enrichment runs asynchronously, OFF the playback hot path:
+  // resolve/play/seek already happened upstream, and the now-playing card
+  // above isn't blocked on it. We fetch credits/pressing on demand (cached),
+  // then post a follow-up card to the same destination + gating.
+  if (!trackKnowledgeEnabled()) return;
+  void (async () => {
+    try {
+      const knowledge = await enrichTrack({ track, match, viaIsrc });
+      if (!knowledge) return;
+      const summary = await buildKnowledgeSummary(track, knowledge);
+      const blocks = knowledgeBlocks(knowledge, summary);
+      if (!blocks.length) return;
+      const text = `:notebook_with_decorative_cover: Liner notes for ${track.title} by ${track.artist}`;
+      await deliverTurntableCard(blocks, text);
+    } catch (err) {
+      logger.error("Failed to post turntable liner notes", {
+        error: String(err),
+      });
+    }
+  })();
 });
 
 turntableSession.on("error", ({ stage, error }) => {
