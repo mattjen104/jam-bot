@@ -253,6 +253,34 @@ const schema = z.object({
   // the bot's voice — built STRICTLY from the fetched facts (never
   // fabricated). Off by default to avoid extra LLM calls on every new record.
   TRACK_CONTEXT_LLM_SUMMARY: boolFromEnv.default(false),
+
+  // ---- Track knowledge: live timestamped insights -----------------------
+  // OPTIONAL payoff layer on top of turntable sync. As a record plays, the
+  // bot surfaces short, hand-curated musical/production notes at the right
+  // moment — e.g. "at 4:07 the hard-rock section kicks in" — aligned to the
+  // live position on the turntable clock so the note lands for everyone in the
+  // Jam at once. It reads the EXISTING clock anchor only: no extra seeks, and
+  // it never touches the resolve/play/seek hot path. It is config + DATA
+  // gated: with no curated seed entries present, the feature is a no-op, and
+  // notes only ever come from the curated set (never fabricated/LLM-generated).
+  //
+  // Master switch. Even when true, nothing fires unless the curated seed has
+  // at least one entry (see src/turntable/insights-seed.ts).
+  TRACK_INSIGHTS_ENABLED: boolFromEnv.default(true),
+
+  // How often (ms) the insight scheduler samples the live clock position to
+  // decide whether a curated note is now due. Cheap (an in-memory status read
+  // + array scan); kept off the playback hot path on its own timer.
+  TRACK_INSIGHTS_POLL_MS: z.coerce.number().int().positive().default(1000),
+
+  // Minimum gap (ms) between two insight posts, so even closely-spaced curated
+  // notes never flood the channel. At most one note fires per gap; any others
+  // that came due wait their turn on a later tick.
+  TRACK_INSIGHTS_MIN_GAP_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(8000),
 });
 
 function loadConfig() {

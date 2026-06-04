@@ -74,6 +74,12 @@ import {
   trackContextEnabled,
 } from "../turntable/context.js";
 import {
+  getInsightsFor,
+  insightsEnabled,
+  InsightScheduler,
+  type TrackInsight,
+} from "../turntable/insights.js";
+import {
   historyBlocks,
   nowPlayingBlocks,
   wrappedBlocks,
@@ -872,6 +878,7 @@ slackApp.command(
       case "stop": {
         turntableSession.stop();
         turntableOrigin = null;
+        insightScheduler.disarm();
         await say(
           ":black_square_for_stop: Turntable sync off. Whatever's playing keeps going — I just stop following the record.",
         );
@@ -2065,6 +2072,38 @@ async function deliverTurntableCard(
   return false;
 }
 
+// ---- Live timestamped insights -----------------------------------------
+// Surfaces short, hand-curated musical notes at the right moment as a record
+// plays. The scheduler reads the live position from the turntable clock anchor
+// (turntableSession.status().positionMs) — never seeking, never on the
+// resolve/play/seek hot path — and posts a due note through the SAME origin
+// routing + Jam gating as every other turntable card. Armed per confirmed
+// track below; ticked on its own timer started in startSlackBot().
+async function postInsightCard(insight: TrackInsight): Promise<void> {
+  const text = `:musical_note: ${insight.text}`;
+  const blocks: KnownBlock[] = [
+    {
+      type: "context",
+      elements: [{ type: "mrkdwn", text: `:musical_note: ${insight.text}` }],
+    },
+  ];
+  const posted = await deliverTurntableCard(blocks, text);
+  if (!posted) {
+    logger.info("Suppressed turntable insight (no active Jam)", {
+      positionMs: insight.positionMs,
+    });
+  }
+}
+
+const insightScheduler = new InsightScheduler(
+  () => {
+    const s = turntableSession.status();
+    return s.active ? s.positionMs : null;
+  },
+  postInsightCard,
+  { minGapMs: config.TRACK_INSIGHTS_MIN_GAP_MS },
+);
+
 turntableSession.on("trackConfirmed", async ({ track, match, viaIsrc }) => {
   try {
     const url = `https://open.spotify.com/track/${track.id}`;
@@ -2091,6 +2130,24 @@ turntableSession.on("trackConfirmed", async ({ track, match, viaIsrc }) => {
     logger.error("Failed to post turntable now-playing", {
       error: String(err),
     });
+  }
+
+  // Arm live timestamped insights for this record. We key off the ISRC the
+  // match already carries (no API call, no dependency on the knowledge layer),
+  // and baseline at the position the record is at RIGHT NOW so we never fire a
+  // note for a moment already passed when we tuned in mid-track. The scheduler
+  // reads the live clock on its own timer and posts due notes; an empty lookup
+  // simply leaves it disarmed, so tracks with no curated notes stay silent.
+  if (insightsEnabled()) {
+    try {
+      const insights = getInsightsFor({ isrc: match.isrc });
+      const pos = turntableSession.status().positionMs ?? 0;
+      insightScheduler.arm(insights, pos);
+    } catch (err) {
+      logger.error("Failed to arm turntable insights", {
+        error: String(err),
+      });
+    }
   }
 
   // Track-knowledge enrichment runs asynchronously, OFF the playback hot path:
@@ -2161,6 +2218,7 @@ export async function startSlackBot() {
     });
   }
   wrappedScheduler.start();
+  if (insightsEnabled()) insightScheduler.start();
   logger.info(`Slack bot connected (channel ${config.SLACK_CHANNEL_ID})`);
   logger.info(
     "Active engagement (thread mode) needs the `message.channels` event " +
@@ -2171,4 +2229,5 @@ export async function startSlackBot() {
 
 export function stopWrappedScheduler() {
   wrappedScheduler.stop();
+  insightScheduler.stop();
 }
