@@ -73,16 +73,28 @@ import { turntableConfigured } from "../turntable/ingest-server.js";
 import {
   buildKnowledgeSummary,
   enrichTrack,
-  knowledgeBlocks,
   trackKnowledgeEnabled,
   type TrackKnowledge,
 } from "../turntable/knowledge.js";
 import {
   buildContextSummary,
-  contextBlocks,
   enrichContext,
   trackContextEnabled,
 } from "../turntable/context.js";
+import { fetchTrackLinks, trackLinksEnabled } from "../turntable/odesli.js";
+import { enrichPerson } from "../turntable/person.js";
+import {
+  renderTrackCard,
+  putCard,
+  getCard,
+  cardKey,
+  CARD_PERSON_ACTION,
+  CARD_BACK_ACTION,
+  TAB_ACTION_RE,
+  type TrackCardState,
+  type CardTrack,
+  type CardTab,
+} from "./track-card.js";
 import {
   getInsightsFor,
   insightsEnabled,
@@ -1730,6 +1742,10 @@ interface VoteState {
   requestedBy: string | null;
   requestedQuery: string | null;
   skipped: boolean;
+  // Registry key of the consolidated track card backing this vote, when the
+  // vote rides on a unified card (the normal case). Lets the refresh re-render
+  // the live card (preserving its current tab) instead of the legacy blocks.
+  cardKey?: string;
 }
 
 function pruneVotes(state: VoteState): number {
@@ -1758,6 +1774,18 @@ async function refreshNowPlayingCard(state: VoteState, count: number, threshold:
   // (card DM'd, not posted to the channel). Vote tally still progresses;
   // nothing visible to refresh.
   if (!state.messageTs || !state.channel) return;
+  // The vote rides on a consolidated track card: bump its vote count and
+  // re-render it in place, preserving whatever tab the listener is on.
+  const key = state.cardKey ?? cardKey(state.channel, state.messageTs);
+  const card = getCard(key);
+  if (card) {
+    card.vote = { count, threshold };
+    await updateCardMessage(card);
+    return;
+  }
+  // Fallback for a vote with no live card (e.g. created lazily by `/skip`
+  // before any card was posted, or one evicted/lost across a restart): render
+  // the standalone now-playing blocks so the tally is still visible.
   try {
     await slackApp.client.chat.update({
       channel: state.channel,
@@ -1935,51 +1963,297 @@ slackApp.action(VOTE_SKIP_ACTION_ID, async ({ ack, body, action, respond }) => {
   }
 });
 
-// ---- Wire up now-playing watcher ---------------------------------------
+// ---- Consolidated track-card interactions ------------------------------
+// The track card lives on a single Slack message and swaps its body in place
+// via chat.update as listeners tap tabs / explore a person / go back. Each
+// handler acks immediately, finds the live card by (channel, message ts), and
+// re-renders. A card that's gone (bot restarted, or evicted from the capped
+// registry) yields a quiet ephemeral nudge rather than a dead button.
 
-/**
- * Post a track's now-playing card to the channel, register the vote card so
- * `/skip` and the vote buttons can update it, and (for tours) attach the
- * track's tidbit as a threaded reply so commentary stays with the music.
- */
-async function postNowPlayingCardToChannel(
-  event: TrackChangeEvent,
-  tourTidbit?: string,
-) {
-  const blocks = nowPlayingBlocks(
-    event.current,
-    event.requestedBySlackUser,
-    event.requestedQuery,
-    { count: 0, threshold: config.SKIP_VOTE_THRESHOLD },
-  );
-  const text = `Now playing: ${event.current.title} by ${event.current.artist}`;
-  const res = await slackApp.client.chat.postMessage({
-    channel: config.SLACK_CHANNEL_ID,
-    text,
-    blocks,
-  });
-  if (res.ts && res.channel) {
-    activeVote = {
-      trackId: event.current.id,
-      votes: new Map(),
-      channel: res.channel,
-      messageTs: res.ts,
-      current: event.current,
-      requestedBy: event.requestedBySlackUser,
-      requestedQuery: event.requestedQuery,
-      skipped: false,
-    };
-    // Attach the tour tidbit as a threaded reply under THIS track's card so
-    // the commentary stays with the music, never dumped up front.
-    if (tourTidbit) {
-      await slackApp.client.chat.postMessage({
-        channel: res.channel,
-        thread_ts: res.ts,
-        text: tourTidbit,
-      });
+/** Pull (channel, ts) for the message an action fired on. */
+function actionMessageRef(body: unknown): { channel?: string; ts?: string } {
+  const b = body as {
+    channel?: { id?: string };
+    container?: { channel_id?: string; message_ts?: string };
+    message?: { ts?: string };
+  };
+  return {
+    channel: b.channel?.id ?? b.container?.channel_id,
+    ts: b.container?.message_ts ?? b.message?.ts,
+  };
+}
+
+const CARD_EXPIRED_MSG =
+  ":hourglass: That card has aged out — play the track again for a fresh one.";
+
+slackApp.action(TAB_ACTION_RE, async ({ ack, body, action, respond }) => {
+  await ack();
+  try {
+    const tab = ("value" in action ? action.value : undefined) as
+      | CardTab
+      | undefined;
+    const { channel, ts } = actionMessageRef(body);
+    if (!tab || !channel || !ts) return;
+    const card = getCard(cardKey(channel, ts));
+    if (!card) {
+      await respond({ response_type: "ephemeral", replace_original: false, text: CARD_EXPIRED_MSG });
+      return;
     }
+    card.view = { kind: "tab", tab };
+    await updateCardMessage(card);
+  } catch (err) {
+    logger.error("Card tab action failed", { error: String(err) });
+  }
+});
+
+slackApp.action(CARD_PERSON_ACTION, async ({ ack, body, action, respond }) => {
+  await ack();
+  try {
+    const artistId =
+      action.type === "static_select"
+        ? action.selected_option?.value
+        : undefined;
+    const { channel, ts } = actionMessageRef(body);
+    if (!artistId || !channel || !ts) return;
+    const card = getCard(cardKey(channel, ts));
+    if (!card) {
+      await respond({ response_type: "ephemeral", replace_original: false, text: CARD_EXPIRED_MSG });
+      return;
+    }
+    const from: CardTab = card.view.kind === "tab" ? card.view.tab : "credits";
+    card.view = { kind: "person", artistId, from };
+    // First look-up: render the sub-page in a loading state, then fetch the
+    // grounded person info (cached after the first time) and re-render.
+    if (!card.people.has(artistId)) {
+      await updateCardMessage(card);
+      const credit = card.knowledge?.personnel.find(
+        (c) => c.artistId === artistId,
+      );
+      const info = await enrichPerson({ name: credit?.name ?? "", artistId });
+      card.people.set(artistId, info);
+    }
+    await updateCardMessage(card);
+  } catch (err) {
+    logger.error("Card person action failed", { error: String(err) });
+  }
+});
+
+slackApp.action(CARD_BACK_ACTION, async ({ ack, body, action, respond }) => {
+  await ack();
+  try {
+    const tab = (("value" in action ? action.value : undefined) ??
+      "now") as CardTab;
+    const { channel, ts } = actionMessageRef(body);
+    if (!channel || !ts) return;
+    const card = getCard(cardKey(channel, ts));
+    if (!card) {
+      await respond({ response_type: "ephemeral", replace_original: false, text: CARD_EXPIRED_MSG });
+      return;
+    }
+    card.view = { kind: "tab", tab };
+    await updateCardMessage(card);
+  } catch (err) {
+    logger.error("Card back action failed", { error: String(err) });
+  }
+});
+
+// ---- Consolidated track card: post + enrich ----------------------------
+// Enrichment args shared by the knowledge/context layers — synthesized from
+// whatever (Spotify track / turntable match) the caller already has.
+type CardEnrichArgs = {
+  track: SearchResultTrack;
+  match: AcrMatch;
+  viaIsrc: boolean;
+};
+
+/** Re-render a card's current view onto its Slack message. */
+async function updateCardMessage(state: TrackCardState): Promise<void> {
+  if (!state.channel || !state.ts) return;
+  const { blocks, text } = renderTrackCard(state);
+  try {
+    await slackApp.client.chat.update({
+      channel: state.channel,
+      ts: state.ts,
+      text,
+      blocks,
+    });
+  } catch (err) {
+    logger.warn("Failed to update track card", { error: String(err) });
   }
 }
+
+/**
+ * Fetch the async layers (liner notes + context + cross-platform links) for a
+ * card OFF the playback hot path, then reveal the now-populated tabs with a
+ * single in-place update. Fire-and-forget: each layer is independently
+ * best-effort and config-gated, fetches are cached, and nothing here can throw
+ * into the caller.
+ */
+function enrichCard(state: TrackCardState, args: CardEnrichArgs): void {
+  if (
+    !trackKnowledgeEnabled() &&
+    !trackContextEnabled() &&
+    !trackLinksEnabled()
+  ) {
+    return;
+  }
+  void (async () => {
+    try {
+      let knowledge: TrackKnowledge | null = null;
+      if (trackKnowledgeEnabled()) {
+        try {
+          knowledge = await enrichTrack(args);
+          state.knowledge = knowledge;
+          if (knowledge) {
+            state.knowledgeSummary = await buildKnowledgeSummary(
+              args.track,
+              knowledge,
+            );
+          }
+        } catch (err) {
+          logger.error("Card knowledge enrichment failed", {
+            error: String(err),
+          });
+        }
+      }
+      if (trackContextEnabled()) {
+        try {
+          const context = await enrichContext({ ...args, knowledge });
+          state.context = context;
+          if (context) {
+            state.contextSummary = await buildContextSummary(
+              args.track,
+              context,
+            );
+          }
+        } catch (err) {
+          logger.error("Card context enrichment failed", {
+            error: String(err),
+          });
+        }
+      }
+      if (trackLinksEnabled()) {
+        try {
+          state.links = await fetchTrackLinks(state.track.id);
+        } catch (err) {
+          logger.error("Card links enrichment failed", {
+            error: String(err),
+          });
+        }
+      }
+      await updateCardMessage(state);
+    } catch (err) {
+      logger.error("Card enrichment failed", { error: String(err) });
+    }
+  })();
+}
+
+/** Build a CardTrack from a turntable search result + its ACR match. */
+function cardTrackFromSearch(
+  track: SearchResultTrack,
+  match: AcrMatch,
+): CardTrack {
+  return {
+    id: track.id,
+    title: track.title,
+    artist: track.artist,
+    album: track.album,
+    durationMs: track.durationMs,
+    progressMs: 0,
+    spotifyUrl: `https://open.spotify.com/track/${track.id}`,
+    artistIds: [],
+    isrc: match.isrc,
+  };
+}
+
+/**
+ * Post a consolidated track card to the chosen destination, wire up vote-skip
+ * (channel only), attach any tour tidbit, and kick off async enrichment that
+ * reveals the extra tabs in place. Returns true when a card was posted.
+ */
+async function serveTrackCard(args: {
+  dest: { kind: "channel" } | { kind: "dm"; userId: string };
+  source: TrackCardState["source"];
+  track: CardTrack;
+  requestedBy: string | null;
+  requestedQuery: string | null;
+  viaIsrc: boolean;
+  vote: boolean;
+  enrichArgs: CardEnrichArgs;
+  tourTidbit?: string;
+}): Promise<boolean> {
+  const threshold = config.SKIP_VOTE_THRESHOLD;
+  const wantsVote = args.vote && args.dest.kind === "channel";
+  const state: TrackCardState = {
+    channel: "",
+    ts: "",
+    source: args.source,
+    track: args.track,
+    requestedBy: args.requestedBy,
+    requestedQuery: args.requestedQuery,
+    viaIsrc: args.viaIsrc,
+    vote: wantsVote ? { count: 0, threshold } : undefined,
+    view: { kind: "tab", tab: "now" },
+    people: new Map(),
+  };
+  const channel =
+    args.dest.kind === "dm" ? args.dest.userId : config.SLACK_CHANNEL_ID;
+
+  let res;
+  try {
+    const rendered = renderTrackCard(state);
+    res = await slackApp.client.chat.postMessage({
+      channel,
+      text: rendered.text,
+      blocks: rendered.blocks,
+    });
+  } catch (err) {
+    logger.warn("Failed to post track card", { error: String(err) });
+    return false;
+  }
+  if (!res.ts || !res.channel) return false;
+  state.channel = res.channel;
+  state.ts = res.ts;
+  putCard(state);
+
+  if (wantsVote) {
+    activeVote = {
+      trackId: state.track.id,
+      votes: new Map(),
+      channel: state.channel,
+      messageTs: state.ts,
+      current: state.track,
+      requestedBy: args.requestedBy,
+      requestedQuery: args.requestedQuery,
+      skipped: false,
+      cardKey: cardKey(state.channel, state.ts),
+    };
+  }
+
+  if (args.tourTidbit) {
+    try {
+      if (args.dest.kind === "dm") {
+        await slackApp.client.chat.postMessage({
+          channel,
+          text: args.tourTidbit,
+        });
+      } else {
+        await slackApp.client.chat.postMessage({
+          channel: state.channel,
+          thread_ts: state.ts,
+          text: args.tourTidbit,
+        });
+      }
+    } catch (err) {
+      logger.warn("Failed to post tour tidbit", { error: String(err) });
+    }
+  }
+
+  enrichCard(state, args.enrichArgs);
+  return true;
+}
+
+// ---- Wire up now-playing watcher ---------------------------------------
 
 nowPlayingWatcher.on("trackChange", async (event) => {
   // Reset votes — any prior card is now stale.
@@ -1994,22 +2268,24 @@ nowPlayingWatcher.on("trackChange", async (event) => {
   try {
     if (tour) {
       // A tour track always narrates — to wherever the tour was started.
-      if (tour.origin.kind === "dm") {
-        // DM tours stay entirely in the DM. No public card means no vote
-        // card to attach to (vote tallying still works via /skip), so the
-        // card + tidbit go straight to the host as DMs.
-        const blocks = nowPlayingBlocks(
-          event.current,
-          event.requestedBySlackUser,
-          event.requestedQuery,
-          { count: 0, threshold: config.SKIP_VOTE_THRESHOLD },
-        );
-        const text = `Now playing: ${event.current.title} by ${event.current.artist}`;
-        await postDMToUser(tour.origin.userId, text, blocks);
-        await postDMToUser(tour.origin.userId, tour.tidbit);
-      } else {
-        await postNowPlayingCardToChannel(event, tour.tidbit);
-      }
+      // DM tours stay entirely in the DM (no public card, so no vote); channel
+      // tours post the consolidated card with vote-skip wired up. Either way
+      // the tidbit rides along (DM follow-up / threaded reply) and the extra
+      // tabs fill in via async enrichment.
+      await serveTrackCard({
+        dest:
+          tour.origin.kind === "dm"
+            ? { kind: "dm", userId: tour.origin.userId }
+            : { kind: "channel" },
+        source: "tour",
+        track: event.current,
+        requestedBy: event.requestedBySlackUser,
+        requestedQuery: event.requestedQuery,
+        viaIsrc: !!event.current.isrc,
+        vote: true,
+        enrichArgs: nowPlayingToEnrichArgs(event.current),
+        tourTidbit: tour.tidbit,
+      });
       return;
     }
 
@@ -2035,15 +2311,25 @@ nowPlayingWatcher.on("trackChange", async (event) => {
       });
       return;
     }
-    await postNowPlayingCardToChannel(event);
-
-    // The knowledge + insights layer rides along on a NORMAL Spotify Jam too,
-    // not just record mode. Spotify is the source of truth here: we drive
+    // Post the consolidated track card (now-playing tab). Its liner-notes /
+    // context / links tabs fill in via async enrichment off the hot path — the
+    // knowledge + context + links layer rides along on a NORMAL Spotify Jam
+    // too, not just record mode. Spotify is the source of truth here: we drive
     // enrichment + curated notes off the track's own ISRC and Spotify's
     // reported position — no fingerprinting, no mic, no extra capture. (The
     // turntable path above owns this whole surface when it's active; this
     // branch only runs when it isn't, so the two never double-post.)
-    //
+    await serveTrackCard({
+      dest: { kind: "channel" },
+      source: "jam",
+      track: event.current,
+      requestedBy: event.requestedBySlackUser,
+      requestedQuery: event.requestedQuery,
+      viaIsrc: !!event.current.isrc,
+      vote: true,
+      enrichArgs: nowPlayingToEnrichArgs(event.current),
+    });
+
     // Re-anchor the local Jam clock to THIS track synchronously — don't wait
     // for the next position poll. Otherwise the scheduler would evaluate the
     // freshly-armed insights against the *previous* track's still-advancing
@@ -2065,7 +2351,6 @@ nowPlayingWatcher.on("trackChange", async (event) => {
         logger.error("Failed to arm Jam insights", { error: String(err) });
       }
     }
-    postKnowledgeCards(nowPlayingToEnrichArgs(event.current));
   } catch (err) {
     logger.error("Failed to post now-playing", { error: String(err) });
   }
@@ -2182,57 +2467,6 @@ const insightScheduler = new InsightScheduler(
 );
 
 /**
- * Post the two async knowledge layers (liner-notes credits + genre/era/story
- * context) for a confirmed track. Shared by BOTH the turntable path and a
- * normal Spotify Jam so the enrichment logic lives in exactly one place and
- * can't drift. Runs OFF the playback hot path (fire-and-forget): fetches are
- * cached and each layer is config-gated, posting on its own to the same
- * destination + Jam gating as every other card. The context layer reuses any
- * canonical ids the credits layer resolved.
- */
-function postKnowledgeCards(args: {
-  track: SearchResultTrack;
-  match: AcrMatch;
-  viaIsrc: boolean;
-}): void {
-  const { track, match, viaIsrc } = args;
-  if (!trackKnowledgeEnabled() && !trackContextEnabled()) return;
-  void (async () => {
-    let knowledge: TrackKnowledge | null = null;
-    if (trackKnowledgeEnabled()) {
-      try {
-        knowledge = await enrichTrack({ track, match, viaIsrc });
-        if (knowledge) {
-          const summary = await buildKnowledgeSummary(track, knowledge);
-          const blocks = knowledgeBlocks(knowledge, summary);
-          if (blocks.length) {
-            const text = `:notebook_with_decorative_cover: Liner notes for ${track.title} by ${track.artist}`;
-            await deliverCard(blocks, text);
-          }
-        }
-      } catch (err) {
-        logger.error("Failed to post liner notes", { error: String(err) });
-      }
-    }
-    if (trackContextEnabled()) {
-      try {
-        const context = await enrichContext({ track, match, viaIsrc, knowledge });
-        if (context) {
-          const summary = await buildContextSummary(track, context);
-          const blocks = contextBlocks(context, summary);
-          if (blocks.length) {
-            const text = `:headphones: Context for ${track.title} by ${track.artist}`;
-            await deliverCard(blocks, text);
-          }
-        }
-      } catch (err) {
-        logger.error("Failed to post context", { error: String(err) });
-      }
-    }
-  })();
-}
-
-/**
  * Adapt a track Spotify is already playing into the {match, track} shape the
  * enrichment + insight lookups expect. There's no fingerprint here — Spotify is
  * the source of truth — so we synthesize a match from the track's own metadata
@@ -2265,22 +2499,28 @@ function nowPlayingToEnrichArgs(track: NonNullable<CurrentlyPlaying["track"]>): 
 
 turntableSession.on("trackConfirmed", async ({ track, match, viaIsrc }) => {
   try {
-    const url = `https://open.spotify.com/track/${track.id}`;
-    const text = `:record_button: Now playing from the turntable: ${track.title} by ${track.artist}`;
-    const blocks: KnownBlock[] = [
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text:
-            `:record_button: *Now playing from the turntable*\n` +
-            `*<${url}|${track.title}>*\n${track.artist}` +
-            (viaIsrc ? "" : "\n_(matched by title — couldn't confirm the exact pressing)_"),
-        },
-      },
-    ];
-    const posted = await deliverCard(blocks, text);
-    if (!posted) {
+    // Resolve the destination with the SAME routing + Jam gating deliverCard
+    // uses: a DM-started session goes straight to the host; a channel session
+    // only posts when a Jam is actually live (so the cascade really is reaching
+    // guests), otherwise the card is suppressed entirely.
+    const dest: { kind: "channel" } | { kind: "dm"; userId: string } | null =
+      turntableOrigin?.kind === "dm"
+        ? { kind: "dm", userId: turntableOrigin.userId }
+        : (await isJamActive())
+          ? { kind: "channel" }
+          : null;
+    if (dest) {
+      await serveTrackCard({
+        dest,
+        source: "turntable",
+        track: cardTrackFromSearch(track, match),
+        requestedBy: null,
+        requestedQuery: null,
+        viaIsrc,
+        vote: true,
+        enrichArgs: { track, match, viaIsrc },
+      });
+    } else {
       logger.info("Suppressed turntable now-playing post (no active Jam)", {
         track: track.title,
       });
@@ -2308,10 +2548,6 @@ turntableSession.on("trackConfirmed", async ({ track, match, viaIsrc }) => {
       });
     }
   }
-
-  // Knowledge layers (credits + context) via the shared poster — same code the
-  // normal-Jam path uses, off the playback hot path.
-  postKnowledgeCards({ track, match, viaIsrc });
 });
 
 turntableSession.on("error", ({ stage, error }) => {

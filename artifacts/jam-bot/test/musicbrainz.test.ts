@@ -3,6 +3,7 @@ import {
   parseIsrcRecordingId,
   parseRecordingCredits,
   parseWorkWriters,
+  parseArtistReleaseGroups,
 } from "../src/turntable/musicbrainz.js";
 
 describe("MusicBrainz ISRC lookup parsing", () => {
@@ -87,5 +88,55 @@ describe("MusicBrainz work writers parsing", () => {
       { role: "composer", name: "Composer A" },
       { role: "lyricist", name: "Lyricist B" },
     ]);
+  });
+});
+
+describe("MusicBrainz artist release-group parsing", () => {
+  it("keeps primary works newest-first, drops secondary types and dups, caps", () => {
+    const groups = parseArtistReleaseGroups({
+      "release-groups": [
+        {
+          id: "rg-old",
+          title: "Dead Cities",
+          "first-release-date": "2003-03-01",
+          "primary-type": "Album",
+        },
+        {
+          id: "rg-new",
+          title: "Hurry Up",
+          "first-release-date": "2011-10-18",
+          "primary-type": "Album",
+        },
+        // Secondary-typed (compilation/live) is excluded.
+        {
+          id: "rg-comp",
+          title: "Best Of",
+          "first-release-date": "2015-01-01",
+          "primary-type": "Album",
+          "secondary-types": ["Compilation"],
+        },
+        // Duplicate title is dropped.
+        { id: "rg-dup", title: "Hurry Up", "primary-type": "Album" },
+        // No id/title -> skipped.
+        { title: "No Id" },
+      ],
+    });
+    expect(groups.map((g) => g.title)).toEqual(["Hurry Up", "Dead Cities"]);
+    expect(groups[0]).toMatchObject({ id: "rg-new", year: 2011 });
+    expect(groups.some((g) => g.title === "Best Of")).toBe(false);
+  });
+
+  it("caps the list and tolerates junk input", () => {
+    const many = {
+      "release-groups": Array.from({ length: 10 }, (_, i) => ({
+        id: `rg-${i}`,
+        title: `Album ${i}`,
+        "first-release-date": `20${10 + i}-01-01`,
+        "primary-type": "Album",
+      })),
+    };
+    expect(parseArtistReleaseGroups(many, 3)).toHaveLength(3);
+    expect(parseArtistReleaseGroups(null)).toEqual([]);
+    expect(parseArtistReleaseGroups({})).toEqual([]);
   });
 });

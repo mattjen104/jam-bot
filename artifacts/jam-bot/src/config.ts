@@ -254,6 +254,19 @@ const schema = z.object({
   // fabricated). Off by default to avoid extra LLM calls on every new record.
   TRACK_CONTEXT_LLM_SUMMARY: boolFromEnv.default(false),
 
+  // ---- Track knowledge: cross-platform links (Odesli/Songlink) ----------
+  // OPTIONAL "Links" tab on the consolidated track card. When a track is
+  // identified, the bot asks Odesli (song.link) for the same track on other
+  // platforms (Apple Music, YouTube, Tidal, etc.) keyed by the Spotify track
+  // id. No API key is required for modest volume; set ODESLI_API_KEY only if
+  // you have one. Runs OFF the playback hot path, cached, and never fabricated
+  // (links come straight from Odesli). Set false to drop the Links tab.
+  TRACK_LINKS_ENABLED: boolFromEnv.default(true),
+
+  // Optional Odesli API key (only needed at higher volume). Leave unset to use
+  // the free, unauthenticated endpoint.
+  ODESLI_API_KEY: z.string().optional(),
+
   // ---- Track knowledge: live timestamped insights -----------------------
   // OPTIONAL payoff layer on top of turntable sync. As a record plays, the
   // bot surfaces short, hand-curated musical/production notes at the right

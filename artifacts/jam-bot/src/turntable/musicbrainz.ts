@@ -29,6 +29,21 @@ export interface Credit {
   role: string;
   /** Person or group name. */
   name: string;
+  /**
+   * MusicBrainz artist id, when the relation carried one. Enables hyperlinking
+   * the name to its canonical artist page and the person rabbit-hole drill-down.
+   */
+  artistId?: string;
+}
+
+/** A release group (album/EP/single) credited to an artist. */
+export interface ArtistReleaseGroup {
+  id: string;
+  title: string;
+  /** First-release year, when MusicBrainz reported a date. */
+  year?: number;
+  /** Primary type, e.g. "Album", "EP", "Single". */
+  primaryType?: string;
 }
 
 export interface RecordingCredits {
@@ -89,7 +104,7 @@ export function parseRecordingCredits(
     relations?: Array<{
       type?: string;
       direction?: string;
-      artist?: { name?: string };
+      artist?: { id?: string; name?: string };
       work?: { id?: string };
       attributes?: string[];
     }>;
@@ -101,6 +116,7 @@ export function parseRecordingCredits(
     if (rel?.work?.id) workIds.push(rel.work.id);
     const name = rel?.artist?.name?.trim();
     if (!name) continue;
+    const artistId = rel?.artist?.id?.trim() || undefined;
     const type = (rel.type ?? "").toLowerCase();
     // Performer rels carry the instrument/voice in `attributes`; everything
     // else (producer, engineer, mix, mastering, etc.) uses the rel type.
@@ -109,9 +125,9 @@ export function parseRecordingCredits(
         .map((a) => a.trim())
         .filter(Boolean);
       const role = attrs.length ? attrs.join(", ") : "performer";
-      personnel.push({ role, name });
+      personnel.push({ role, name, ...(artistId ? { artistId } : {}) });
     } else if (type) {
-      personnel.push({ role: type, name });
+      personnel.push({ role: type, name, ...(artistId ? { artistId } : {}) });
     }
   }
   return {
@@ -126,15 +142,16 @@ export function parseRecordingCredits(
 /** Pure: writer credits (composer / lyricist / writer) from a work body. */
 export function parseWorkWriters(body: unknown): Credit[] {
   const b = body as {
-    relations?: Array<{ type?: string; artist?: { name?: string } }>;
+    relations?: Array<{ type?: string; artist?: { id?: string; name?: string } }>;
   };
   const writers: Credit[] = [];
   for (const rel of b?.relations ?? []) {
     const name = rel?.artist?.name?.trim();
     if (!name) continue;
+    const artistId = rel?.artist?.id?.trim() || undefined;
     const type = (rel.type ?? "").toLowerCase();
     if (type === "composer" || type === "lyricist" || type === "writer") {
-      writers.push({ role: type, name });
+      writers.push({ role: type, name, ...(artistId ? { artistId } : {}) });
     }
   }
   return dedupeCredits(writers);
@@ -230,4 +247,73 @@ export async function fetchMusicBrainzCredits(
   const id = await resolveRecordingId(isrc);
   if (!id) return null;
   return fetchRecordingCredits(id);
+}
+
+/**
+ * Pure: an artist's release groups (their albums/EPs/singles), most recent
+ * first, capped. Powers the "known for" list on a person sub-page. MusicBrainz
+ * is the canonical, grounded source here — these are real release groups linked
+ * to the artist, never invented.
+ */
+export function parseArtistReleaseGroups(
+  body: unknown,
+  cap = 6,
+): ArtistReleaseGroup[] {
+  const b = body as {
+    "release-groups"?: Array<{
+      id?: string;
+      title?: string;
+      "first-release-date"?: string;
+      "primary-type"?: string;
+      "secondary-types"?: string[];
+    }>;
+  };
+  const out: ArtistReleaseGroup[] = [];
+  const seen = new Set<string>();
+  for (const rg of b?.["release-groups"] ?? []) {
+    const id = rg?.id?.trim();
+    const title = rg?.title?.trim();
+    if (!id || !title) continue;
+    // Skip compilations/live/remix secondary types — keep the list to the
+    // artist's primary body of work so "known for" reads true.
+    if ((rg["secondary-types"]?.length ?? 0) > 0) continue;
+    const key = title.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const yearStr = rg["first-release-date"]?.slice(0, 4);
+    const year = yearStr && /^\d{4}$/.test(yearStr) ? Number(yearStr) : undefined;
+    out.push({
+      id,
+      title,
+      year,
+      primaryType: rg["primary-type"]?.trim() || undefined,
+    });
+  }
+  // Most recent first; undated entries sink to the bottom.
+  out.sort((a, b2) => (b2.year ?? 0) - (a.year ?? 0));
+  return out.slice(0, cap);
+}
+
+/**
+ * Fetch an artist's release groups (albums/EPs/singles). Best-effort — returns
+ * [] on any failure or when MusicBrainz is unconfigured; never throws.
+ */
+export async function fetchArtistReleaseGroups(
+  artistId: string,
+): Promise<ArtistReleaseGroup[]> {
+  if (!musicbrainzEnabled() || !artistId.trim()) return [];
+  try {
+    const body = await mbFetch(
+      `/release-group?artist=${encodeURIComponent(
+        artistId.trim(),
+      )}&type=album|ep&limit=25&fmt=json`,
+    );
+    return parseArtistReleaseGroups(body);
+  } catch (err) {
+    logger.warn("MusicBrainz release-group lookup failed", {
+      artistId,
+      error: String(err),
+    });
+    return [];
+  }
 }

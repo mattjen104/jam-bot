@@ -210,6 +210,30 @@ const isWriter = (r: string) =>
   r === "composer" || r === "lyricist" || r === "writer";
 
 /**
+ * Group personnel into producers / writers / engineers / performers. Shared by
+ * the standalone liner-notes card and the consolidated track card's Credits tab
+ * so the two never drift in how a role is bucketed.
+ */
+export function groupPersonnel(personnel: Credit[]): {
+  producers: Credit[];
+  writers: Credit[];
+  engineers: Credit[];
+  performers: Credit[];
+} {
+  return {
+    producers: pick(personnel, isProducer),
+    writers: pick(personnel, isWriter),
+    engineers: pick(personnel, isEngineer),
+    performers: personnel.filter(
+      (c) =>
+        !isProducer(c.role.toLowerCase()) &&
+        !isEngineer(c.role.toLowerCase()) &&
+        !isWriter(c.role.toLowerCase()),
+    ),
+  };
+}
+
+/**
  * Pure: render the liner-notes section blocks. Returns [] when there's nothing
  * worth showing. `summary` is an optional one-line, fact-only bot-voice intro.
  */
@@ -227,14 +251,8 @@ export function knowledgeBlocks(
 
   if (summary?.trim()) lines.push(`_${summary.trim()}_`);
 
-  const producers = pick(knowledge.personnel, isProducer);
-  const engineers = pick(knowledge.personnel, isEngineer);
-  const writers = pick(knowledge.personnel, isWriter);
-  const performers = knowledge.personnel.filter(
-    (c) =>
-      !isProducer(c.role.toLowerCase()) &&
-      !isEngineer(c.role.toLowerCase()) &&
-      !isWriter(c.role.toLowerCase()),
+  const { producers, engineers, writers, performers } = groupPersonnel(
+    knowledge.personnel,
   );
 
   if (producers.length) lines.push(`*Produced by:* ${names(producers)}`);
