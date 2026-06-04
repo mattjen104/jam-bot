@@ -10,6 +10,7 @@ import {
   getCurrentlyPlaying,
   findActiveDevice,
   createPlaylistWithTracks,
+  type SearchResultTrack,
 } from "../spotify/client.js";
 import {
   withPlaybackLock,
@@ -57,8 +58,17 @@ import {
   manualJamInstructions,
   isJamActive,
 } from "../spotify/jam.js";
-import { nowPlayingWatcher, type TrackChangeEvent } from "../now-playing.js";
-import { turntableSession } from "../turntable/session.js";
+import {
+  nowPlayingWatcher,
+  type TrackChangeEvent,
+  type PositionEvent,
+} from "../now-playing.js";
+import {
+  turntableSession,
+  computeTargetPositionMs,
+  type ClockAnchor,
+} from "../turntable/session.js";
+import type { AcrMatch } from "../turntable/acrcloud.js";
 import { turntableConfigured } from "../turntable/ingest-server.js";
 import {
   buildKnowledgeSummary,
@@ -2026,9 +2036,59 @@ nowPlayingWatcher.on("trackChange", async (event) => {
       return;
     }
     await postNowPlayingCardToChannel(event);
+
+    // The knowledge + insights layer rides along on a NORMAL Spotify Jam too,
+    // not just record mode. Spotify is the source of truth here: we drive
+    // enrichment + curated notes off the track's own ISRC and Spotify's
+    // reported position — no fingerprinting, no mic, no extra capture. (The
+    // turntable path above owns this whole surface when it's active; this
+    // branch only runs when it isn't, so the two never double-post.)
+    //
+    // Re-anchor the local Jam clock to THIS track synchronously — don't wait
+    // for the next position poll. Otherwise the scheduler would evaluate the
+    // freshly-armed insights against the *previous* track's still-advancing
+    // position and dump a burst of notes at the wrong moment.
+    nowPlayingAnchor = {
+      offsetMs: event.current.progressMs,
+      anchoredAtMs: Date.now(),
+      durationMs: event.current.durationMs,
+    };
+    if (insightsEnabled()) {
+      try {
+        // No ISRC -> no insight lookup, and arm([]) disarms the scheduler so a
+        // track we can't identify can't inherit the previous track's notes.
+        const insights = event.current.isrc
+          ? getInsightsFor({ isrc: event.current.isrc })
+          : [];
+        insightScheduler.arm(insights, event.current.progressMs);
+      } catch (err) {
+        logger.error("Failed to arm Jam insights", { error: String(err) });
+      }
+    }
+    postKnowledgeCards(nowPlayingToEnrichArgs(event.current));
   } catch (err) {
     logger.error("Failed to post now-playing", { error: String(err) });
   }
+});
+
+// Keep the normal-Jam clock anchor fresh from each poll's reported position so
+// insights can interpolate the live playhead between polls. No extra Spotify
+// calls — this is the data the watcher already fetched. Ignored while the
+// turntable owns the clock (its own anchor wins in the scheduler).
+nowPlayingWatcher.on("position", (event: PositionEvent) => {
+  // Paused playback still reports a position, but the playhead isn't moving —
+  // drop the anchor so the scheduler stands down instead of interpolating
+  // forward (and firing notes) against a frozen track. The next playing tick
+  // re-anchors it.
+  if (!event.isPlaying) {
+    nowPlayingAnchor = null;
+    return;
+  }
+  nowPlayingAnchor = {
+    offsetMs: event.progressMs,
+    anchoredAtMs: Date.now(),
+    durationMs: event.durationMs,
+  };
 });
 
 // Connection-state notices ("no active device", "Jam is back online") are
@@ -2036,6 +2096,9 @@ nowPlayingWatcher.on("trackChange", async (event) => {
 // shell and that's it. No channel post, no DM. If you need to debug a
 // dropped connection: `journalctl -u jam-bot`.
 nowPlayingWatcher.on("noActiveDevice", () => {
+  // Nothing's playing — drop the stale clock anchor so insights stand down
+  // instead of firing against a frozen position.
+  nowPlayingAnchor = null;
   logger.info("No active Spotify playback detected");
 });
 
@@ -2057,7 +2120,7 @@ nowPlayingWatcher.on("resumed", () => {
  * Shared by the now-playing card and the async liner-notes follow-up so both
  * obey the same routing + gating.
  */
-async function deliverTurntableCard(
+async function deliverCard(
   blocks: KnownBlock[],
   text: string,
 ): Promise<boolean> {
@@ -2073,12 +2136,13 @@ async function deliverTurntableCard(
 }
 
 // ---- Live timestamped insights -----------------------------------------
-// Surfaces short, hand-curated musical notes at the right moment as a record
-// plays. The scheduler reads the live position from the turntable clock anchor
-// (turntableSession.status().positionMs) — never seeking, never on the
-// resolve/play/seek hot path — and posts a due note through the SAME origin
-// routing + Jam gating as every other turntable card. Armed per confirmed
-// track below; ticked on its own timer started in startSlackBot().
+// Surfaces short, hand-curated musical notes at the right moment as a track
+// plays — in record mode AND in a normal Spotify Jam. The scheduler reads the
+// live position from whichever clock is in play (the turntable needle anchor,
+// or Spotify's reported position for a normal Jam) — never seeking, never on
+// the resolve/play/seek hot path — and posts a due note through the SAME
+// routing + Jam gating as every other card. Armed per confirmed track; ticked
+// on its own timer started in startSlackBot().
 async function postInsightCard(insight: TrackInsight): Promise<void> {
   const text = `:musical_note: ${insight.text}`;
   const blocks: KnownBlock[] = [
@@ -2087,22 +2151,117 @@ async function postInsightCard(insight: TrackInsight): Promise<void> {
       elements: [{ type: "mrkdwn", text: `:musical_note: ${insight.text}` }],
     },
   ];
-  const posted = await deliverTurntableCard(blocks, text);
+  const posted = await deliverCard(blocks, text);
   if (!posted) {
-    logger.info("Suppressed turntable insight (no active Jam)", {
+    logger.info("Suppressed insight (no active Jam)", {
       positionMs: insight.positionMs,
     });
   }
 }
 
+// Local clock anchor for a NORMAL Spotify Jam. Refreshed every now-playing
+// poll tick straight from Spotify's reported position (no extra API calls), so
+// we can interpolate the live playhead between polls — the same maths the
+// turntable uses for its needle clock. Null when nothing is playing.
+let nowPlayingAnchor: ClockAnchor | null = null;
+
+// Single insight scheduler, one position source pluggable by mode: the
+// turntable's needle clock when a record session is live, otherwise the normal
+// Jam's Spotify-derived clock. Only one path arms it at a time (turntable mode
+// suppresses the ambient path), so they never fight over the same scheduler.
 const insightScheduler = new InsightScheduler(
   () => {
     const s = turntableSession.status();
-    return s.active ? s.positionMs : null;
+    if (s.active) return s.positionMs;
+    return nowPlayingAnchor
+      ? computeTargetPositionMs(nowPlayingAnchor, Date.now())
+      : null;
   },
   postInsightCard,
   { minGapMs: config.TRACK_INSIGHTS_MIN_GAP_MS },
 );
+
+/**
+ * Post the two async knowledge layers (liner-notes credits + genre/era/story
+ * context) for a confirmed track. Shared by BOTH the turntable path and a
+ * normal Spotify Jam so the enrichment logic lives in exactly one place and
+ * can't drift. Runs OFF the playback hot path (fire-and-forget): fetches are
+ * cached and each layer is config-gated, posting on its own to the same
+ * destination + Jam gating as every other card. The context layer reuses any
+ * canonical ids the credits layer resolved.
+ */
+function postKnowledgeCards(args: {
+  track: SearchResultTrack;
+  match: AcrMatch;
+  viaIsrc: boolean;
+}): void {
+  const { track, match, viaIsrc } = args;
+  if (!trackKnowledgeEnabled() && !trackContextEnabled()) return;
+  void (async () => {
+    let knowledge: TrackKnowledge | null = null;
+    if (trackKnowledgeEnabled()) {
+      try {
+        knowledge = await enrichTrack({ track, match, viaIsrc });
+        if (knowledge) {
+          const summary = await buildKnowledgeSummary(track, knowledge);
+          const blocks = knowledgeBlocks(knowledge, summary);
+          if (blocks.length) {
+            const text = `:notebook_with_decorative_cover: Liner notes for ${track.title} by ${track.artist}`;
+            await deliverCard(blocks, text);
+          }
+        }
+      } catch (err) {
+        logger.error("Failed to post liner notes", { error: String(err) });
+      }
+    }
+    if (trackContextEnabled()) {
+      try {
+        const context = await enrichContext({ track, match, viaIsrc, knowledge });
+        if (context) {
+          const summary = await buildContextSummary(track, context);
+          const blocks = contextBlocks(context, summary);
+          if (blocks.length) {
+            const text = `:headphones: Context for ${track.title} by ${track.artist}`;
+            await deliverCard(blocks, text);
+          }
+        }
+      } catch (err) {
+        logger.error("Failed to post context", { error: String(err) });
+      }
+    }
+  })();
+}
+
+/**
+ * Adapt a track Spotify is already playing into the {match, track} shape the
+ * enrichment + insight lookups expect. There's no fingerprint here — Spotify is
+ * the source of truth — so we synthesize a match from the track's own metadata
+ * and real ISRC. `viaIsrc` is true whenever Spotify gave us an ISRC, since the
+ * track IS the exact recording (not a fuzzy title match).
+ */
+function nowPlayingToEnrichArgs(track: NonNullable<CurrentlyPlaying["track"]>): {
+  track: SearchResultTrack;
+  match: AcrMatch;
+  viaIsrc: boolean;
+} {
+  const match: AcrMatch = {
+    acrid: track.id,
+    title: track.title,
+    artist: track.artist,
+    album: track.album,
+    isrc: track.isrc,
+    playOffsetMs: 0,
+  };
+  const searchTrack: SearchResultTrack = {
+    id: track.id,
+    uri: `spotify:track:${track.id}`,
+    title: track.title,
+    artist: track.artist,
+    album: track.album,
+    durationMs: track.durationMs,
+  };
+  return { track: searchTrack, match, viaIsrc: !!track.isrc };
+}
 
 turntableSession.on("trackConfirmed", async ({ track, match, viaIsrc }) => {
   try {
@@ -2120,7 +2279,7 @@ turntableSession.on("trackConfirmed", async ({ track, match, viaIsrc }) => {
         },
       },
     ];
-    const posted = await deliverTurntableCard(blocks, text);
+    const posted = await deliverCard(blocks, text);
     if (!posted) {
       logger.info("Suppressed turntable now-playing post (no active Jam)", {
         track: track.title,
@@ -2150,51 +2309,9 @@ turntableSession.on("trackConfirmed", async ({ track, match, viaIsrc }) => {
     }
   }
 
-  // Track-knowledge enrichment runs asynchronously, OFF the playback hot path:
-  // resolve/play/seek already happened upstream, and the now-playing card above
-  // isn't blocked on it. We fetch on demand (cached) then post follow-up cards
-  // to the same destination + gating. Two independent layers: liner-notes
-  // credits (MusicBrainz/Discogs) and genre/era/story context (Last.fm/
-  // Wikipedia/Genius). Each is config-gated and posts on its own; the context
-  // layer reuses any canonical ids the credits layer resolved.
-  if (!trackKnowledgeEnabled() && !trackContextEnabled()) return;
-  void (async () => {
-    let knowledge: TrackKnowledge | null = null;
-    if (trackKnowledgeEnabled()) {
-      try {
-        knowledge = await enrichTrack({ track, match, viaIsrc });
-        if (knowledge) {
-          const summary = await buildKnowledgeSummary(track, knowledge);
-          const blocks = knowledgeBlocks(knowledge, summary);
-          if (blocks.length) {
-            const text = `:notebook_with_decorative_cover: Liner notes for ${track.title} by ${track.artist}`;
-            await deliverTurntableCard(blocks, text);
-          }
-        }
-      } catch (err) {
-        logger.error("Failed to post turntable liner notes", {
-          error: String(err),
-        });
-      }
-    }
-    if (trackContextEnabled()) {
-      try {
-        const context = await enrichContext({ track, match, viaIsrc, knowledge });
-        if (context) {
-          const summary = await buildContextSummary(track, context);
-          const blocks = contextBlocks(context, summary);
-          if (blocks.length) {
-            const text = `:headphones: Context for ${track.title} by ${track.artist}`;
-            await deliverTurntableCard(blocks, text);
-          }
-        }
-      } catch (err) {
-        logger.error("Failed to post turntable context", {
-          error: String(err),
-        });
-      }
-    }
-  })();
+  // Knowledge layers (credits + context) via the shared poster — same code the
+  // normal-Jam path uses, off the playback hot path.
+  postKnowledgeCards({ track, match, viaIsrc });
 });
 
 turntableSession.on("error", ({ stage, error }) => {

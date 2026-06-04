@@ -1261,6 +1261,49 @@ describe("origin-based routing and ambient Jam gate", () => {
     );
   });
 
+  it("suppresses the ambient now-playing path while the turntable is active (record-vs-normal mutual exclusion)", async () => {
+    const spotify = await import("../src/spotify/client.js");
+    const bot = await import("../src/slack/bot.js");
+    const { nowPlayingWatcher } = await import("../src/now-playing.js");
+    const jam = await import("../src/spotify/jam.js");
+
+    // Jam IS active, so the ONLY thing that can keep the ambient now-playing
+    // path quiet is the turntable owning the surface. The knowledge + insights
+    // layer rides this same ambient branch, so suppressing the card proves the
+    // record-vs-normal paths never double-fire.
+    (jam.isJamActive as ReturnType<typeof vi.fn>).mockResolvedValue(true);
+    (spotify.findActiveDevice as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "DEV-TT",
+      name: "Jam Host",
+      isActive: true,
+    });
+
+    // Turn record mode on so turntableSession.isActive() === true.
+    const tt = captured.commands["/turntable"];
+    await tt!({
+      command: { channel_id: CH, user_id: HOST, text: "start", command: "/turntable" },
+      ack: vi.fn().mockResolvedValue(undefined),
+      respond: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const post = bot.slackApp.client.chat.postMessage as ReturnType<typeof vi.fn>;
+    post.mockClear().mockResolvedValue({ ts: "TT", channel: CH });
+
+    nowPlayingWatcher.emit("trackChange", trackEvent("tt-owned"));
+    await flush();
+
+    // Turntable owns the surface: the ambient path (card + knowledge + insights)
+    // stays silent even though a Jam is active.
+    expect(post).not.toHaveBeenCalled();
+
+    // Clean up so later tests see an inactive turntable.
+    await tt!({
+      command: { channel_id: CH, user_id: HOST, text: "stop", command: "/turntable" },
+      ack: vi.fn().mockResolvedValue(undefined),
+      respond: vi.fn().mockResolvedValue(undefined),
+    });
+  });
+
   it("ignores a DM from a non-host user — no Spotify action, no reply", async () => {
     const llm = await import("../src/llm/openrouter.js");
     const spotify = await import("../src/spotify/client.js");

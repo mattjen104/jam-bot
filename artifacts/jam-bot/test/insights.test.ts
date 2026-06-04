@@ -168,6 +168,20 @@ describe("InsightScheduler.tick", () => {
     expect(sched.isArmed()).toBe(false);
   });
 
+  it("re-arming with [] clears a previously-armed track's pending notes", () => {
+    // Guards the normal-Jam path: when the next track has no ISRC we arm([]),
+    // which must drop the prior track's insights so none of them leak onto the
+    // new (unidentified) track.
+    const { sched, posts, state } = mk({ minGapMs: 0 });
+    sched.arm(sample, 0);
+    sched.arm([], 0); // next track: nothing curated / no ISRC
+    expect(sched.isArmed()).toBe(false);
+    state.pos = 3000; // all of the OLD notes would be "due" by position
+    sched.tick(0);
+    sched.tick(100);
+    expect(posts).toEqual([]);
+  });
+
   it("fires the earliest due note, one per tick, and dedupes", () => {
     const { sched, posts, state } = mk({ minGapMs: 0 });
     sched.arm(sample, 0);

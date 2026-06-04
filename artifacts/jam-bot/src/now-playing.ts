@@ -14,8 +14,27 @@ export interface TrackChangeEvent {
   requestedQuery: string | null;
 }
 
+export interface PositionEvent {
+  trackId: string;
+  progressMs: number;
+  durationMs: number;
+  /**
+   * Whether Spotify reports playback as actively progressing right now. A
+   * paused track still has a position, but a consumer's local clock must NOT
+   * keep interpolating past it — so this lets the anchor stand down on pause.
+   */
+  isPlaying: boolean;
+}
+
 export type NowPlayingEvents = {
   trackChange: (event: TrackChangeEvent) => void;
+  /**
+   * Fired every poll tick while a track is playing, carrying the live
+   * playback position straight from Spotify. Lets a consumer keep a cheap
+   * local clock anchor (no extra Spotify calls) for things like timed
+   * insights during a normal Jam — independent of track CHANGE detection.
+   */
+  position: (event: PositionEvent) => void;
   noActiveDevice: () => void;
   resumed: () => void;
 };
@@ -73,6 +92,15 @@ class NowPlayingWatcher extends EventEmitter {
         this.wasNoDevice = false;
         this.emit("resumed");
       }
+      // Surface the live position every tick (not just on track change) so a
+      // consumer can keep a fresh local clock anchor without extra Spotify
+      // calls — straight from the data this poll already fetched.
+      this.emit("position", {
+        trackId: cp.track.id,
+        progressMs: cp.track.progressMs,
+        durationMs: cp.track.durationMs,
+        isPlaying: cp.isPlaying,
+      });
       if (cp.track.id !== this.lastTrackId) {
         this.lastTrackId = cp.track.id;
         const pending = popPendingRequest(cp.track.id);

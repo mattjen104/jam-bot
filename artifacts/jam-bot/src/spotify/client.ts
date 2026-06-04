@@ -122,6 +122,8 @@ export interface CurrentlyPlaying {
     progressMs: number;
     spotifyUrl: string;
     artistIds: string[];
+    /** International Standard Recording Code, when Spotify exposes one. */
+    isrc?: string;
   };
 }
 
@@ -143,6 +145,7 @@ export async function getCurrentlyPlaying(): Promise<CurrentlyPlaying> {
         progressMs: res.body.progress_ms ?? 0,
         spotifyUrl: t.external_urls.spotify,
         artistIds: t.artists.map((a) => a.id),
+        isrc: t.external_ids?.isrc,
       },
     };
   });
