@@ -19,7 +19,7 @@ import { getTrackContext, setTrackContext } from "../db.js";
  *    spacing gate so overlapping enrichments stay polite.
  */
 
-const ODESLI_BASE = "https://api.song.link/v1-links";
+const ODESLI_BASE = "https://api.song.link/v1-alpha.1/links";
 const ODESLI_MIN_INTERVAL_MS = 250;
 const ODESLI_TIMEOUT_MS = 10_000;
 

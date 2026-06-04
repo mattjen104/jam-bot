@@ -6,3 +6,4 @@
 - [jam-bot live track insights](jam-bot-track-insights.md) — baseline firing INCLUSIVE so 0:00 notes fire (never backfill mid-join); arm off ISRC not recordingId; off-hot-path scheduler reads status() only, hand-curated seed never fabricated.
 - [jam-bot test DB sharing](jam-bot-test-db-sharing.md) — vitest DB is per-file (shared within a file, isolated across files): use unique artist/ISRC per test to avoid cache-key collisions; wrapped.test.ts is order/load-flaky on timestamp ties.
 - [track-knowledge (liner-notes) pipeline](track-knowledge-pipeline.md) — enrich confirmed tracks with real credits/pressing: off hot path, canonical MB-recording-id cache convergence, never-fabricate grounding guard on LLM one-liner, query-on-demand not warehouse.
+- [Odesli links API endpoint](odesli-endpoint.md) — use `api.song.link/v1-alpha.1/links`; old `/v1-links` 404s site-wide via Fastly (looks like a deploy/track bug but is just the wrong path).
