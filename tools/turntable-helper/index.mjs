@@ -41,6 +41,13 @@
 // cascades from Spotify's servers based on playback state, not local speakers.
 
 import { Buffer } from "node:buffer";
+import {
+  COMPUTER_SOURCE_ALIASES,
+  DEFAULT_INPUT_DEVICE_ID,
+  findLoopbackDevice,
+  isLoopbackName,
+  resolveDeviceId as resolveDeviceIdPure,
+} from "./device-detection.mjs";
 
 const LIST_DEVICES = process.argv.includes("--list-devices");
 
@@ -57,7 +64,6 @@ const DEVICE = process.env.DEVICE ?? "";
 //     loopback / monitor INPUT so the helper follows whatever the computer is
 //     playing, without hunting for a device id. An explicit DEVICE still wins.
 const SOURCE = (process.env.SOURCE ?? "device").toLowerCase();
-const COMPUTER_SOURCE_ALIASES = ["computer", "system", "loopback", "desktop"];
 const SOURCE_IS_COMPUTER = COMPUTER_SOURCE_ALIASES.includes(SOURCE);
 if (SOURCE !== "device" && !SOURCE_IS_COMPUTER) {
   console.warn(
@@ -91,46 +97,10 @@ function loadPortAudio() {
   });
 }
 
-// Heuristics for spotting an OS loopback / monitor INPUT device by name. These
-// are the devices that carry "whatever the computer is playing":
-//   - Linux / PulseAudio: a "Monitor of <sink>" source (always present, no
-//     setup needed).
-//   - Windows: "Stereo Mix" (must be enabled in Sound settings) or a virtual
-//     cable (VB-Audio "CABLE Output", VoiceMeeter, Creative "What U Hear").
-//   - macOS: a virtual loopback device must be installed (BlackHole, Loopback,
-//     or the legacy Soundflower) — macOS has no built-in loopback.
-// portaudio/naudiodon does not expose WASAPI's loopback flag as a separate
-// stream, so across all three platforms we capture by selecting one of these
-// loopback INPUT devices by name.
-const LOOPBACK_NAME_PATTERNS = [
-  /monitor/i, // PulseAudio "Monitor of ..."
-  /stereo mix/i, // Windows built-in (enable in Sound settings)
-  /\bloopback\b/i, // generic / macOS "Loopback" by Rogue Amoeba
-  /blackhole/i, // macOS BlackHole
-  /soundflower/i, // macOS Soundflower (legacy)
-  /voicemeeter/i, // Windows VoiceMeeter virtual outputs
-  /cable output/i, // VB-Audio Virtual Cable (Windows)
-  /wave ?out mix/i, // some Windows drivers
-  /what ?u ?hear/i, // Creative "What U Hear"
-];
-
-function isLoopbackName(name) {
-  return LOOPBACK_NAME_PATTERNS.some((re) => re.test(name));
-}
-
-// Find the best loopback / monitor INPUT device for computer-audio mode, or
-// null if none is present. Prefers a device whose name suggests the system's
-// primary/default sink so we follow "what's actually playing".
-function findLoopbackDevice(portAudio) {
-  const loopbacks = portAudio
-    .getDevices()
-    .filter((d) => d.maxInputChannels > 0 && isLoopbackName(d.name));
-  if (loopbacks.length === 0) return null;
-  return (
-    loopbacks.find((d) => /default|stereo mix|blackhole/i.test(d.name)) ??
-    loopbacks[0]
-  );
-}
+// The loopback/monitor name heuristics and device-selection logic live in
+// ./device-detection.mjs so they can be unit-tested without the native audio
+// module. See that file for the per-OS patterns (PulseAudio "Monitor of …",
+// Windows "Stereo Mix", macOS BlackHole, virtual cables, etc.).
 
 function loopbackSetupHint() {
   if (process.platform === "win32") {
@@ -178,26 +148,13 @@ function listDevices(portAudio) {
 }
 
 function resolveDeviceId(portAudio) {
-  // An explicit DEVICE always wins, in any source mode.
-  if (DEVICE !== "") {
-    if (/^\d+$/.test(DEVICE)) return Number(DEVICE);
-    const wanted = DEVICE.toLowerCase();
-    const match = portAudio
-      .getDevices()
-      .find(
-        (d) => d.maxInputChannels > 0 && d.name.toLowerCase().includes(wanted),
-      );
-    if (!match) {
-      throw new Error(
-        `No input device matching "${DEVICE}". Run \`npm run devices\` to list them.`,
-      );
-    }
-    return match.id;
-  }
+  const devices = portAudio.getDevices();
 
-  // Computer-audio mode: auto-pick the OS loopback / monitor input.
-  if (SOURCE_IS_COMPUTER) {
-    const dev = findLoopbackDevice(portAudio);
+  // Computer-audio mode (no explicit DEVICE) is handled here rather than via the
+  // pure resolver so we can attach an OS-specific setup hint to the "no loopback
+  // found" error and log which loopback we auto-picked.
+  if (DEVICE === "" && SOURCE_IS_COMPUTER) {
+    const dev = findLoopbackDevice(devices);
     if (!dev) {
       throw new Error(
         "SOURCE=computer but no loopback / monitor input device was found.\n" +
@@ -212,7 +169,12 @@ function resolveDeviceId(portAudio) {
     return dev.id;
   }
 
-  return -1; // portaudio default input (original behavior)
+  // Explicit DEVICE precedence and the default-input fallback are pure logic.
+  return resolveDeviceIdPure({
+    devices,
+    device: DEVICE,
+    sourceIsComputer: SOURCE_IS_COMPUTER,
+  });
 }
 
 // Build a minimal 16-bit PCM WAV file from raw little-endian PCM samples.
@@ -296,7 +258,9 @@ async function main() {
   const clipBytes = SAMPLE_RATE * CHANNELS * BYTES_PER_SAMPLE * SAMPLE_SECONDS;
 
   console.log(
-    `Capturing from device ${deviceId === -1 ? "(default)" : deviceId} ` +
+    `Capturing from device ${
+      deviceId === DEFAULT_INPUT_DEVICE_ID ? "(default)" : deviceId
+    } ` +
       `@ ${SAMPLE_RATE}Hz x${CHANNELS}, ${SAMPLE_SECONDS}s clips every ` +
       `${INTERVAL_SECONDS}s -> ${INGEST_URL}`,
   );
@@ -306,7 +270,7 @@ async function main() {
   // device that itself looks like a loopback/monitor. Don't warn when the user
   // overrode SOURCE=computer with a physical DEVICE — the loop can't happen.
   const selected =
-    deviceId === -1
+    deviceId === DEFAULT_INPUT_DEVICE_ID
       ? null
       : portAudio.getDevices().find((d) => d.id === deviceId);
   const capturingLoopback =

@@ -152,6 +152,18 @@ on playback state, not your local speakers. (Capturing the host's own Spotify is
 also pointless: Jam already cascades it natively.) The startup banner prints
 this reminder whenever `SOURCE=computer`.
 
+## Tests
+
+The device-selection logic (loopback/monitor detection, explicit-`DEVICE`
+precedence, computer-audio auto-pick) lives in `device-detection.mjs` — a pure
+module with no native imports — so it can be unit-tested without `naudiodon` or
+any audio hardware. Run the tests with Node's built-in runner (no extra deps):
+
+```bash
+cd tools/turntable-helper
+npm test
+```
+
 ## Notes
 
 - Run the helper on the **same machine or LAN** as the source; only the short

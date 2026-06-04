@@ -9,7 +9,8 @@
   },
   "scripts": {
     "start": "node index.mjs",
-    "devices": "node index.mjs --list-devices"
+    "devices": "node index.mjs --list-devices",
+    "test": "node --test"
   },
   "dependencies": {
     "naudiodon": "^2.3.6"
