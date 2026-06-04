@@ -106,6 +106,14 @@ const schema = z.object({
   // (Historical name kept to avoid breaking existing .env files.)
   JAM_QUIET_DM_USER: z.string().optional(),
 
+  // Quiet mode: route the ambient now-playing deep-knowledge cards (plus
+  // their async tabs and live insights) to the host's DM instead of the
+  // channel, and DROP the relay-based Jam gate entirely. Use this to preview
+  // the full card experience privately when you can't run the home relay
+  // (so isJamActive() can never return true) without spamming the channel.
+  // Requires JAM_QUIET_DM_USER to be set; otherwise this flag is a no-op.
+  JAM_QUIET_MODE: boolFromEnv.default(false),
+
   // ---- Spotify Jam (social listening) -----------------------------------
   // Optional `sp_dc` cookie value from open.spotify.com (DevTools ->
   // Application -> Cookies). Used by /jam to attempt programmatic Jam

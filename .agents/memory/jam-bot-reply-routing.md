@@ -1,12 +1,11 @@
 ---
-name: jam-bot reply routing & ambient card gating
-description: Why jam-bot uses origin-based routing + Jam-gated ambient cards instead of a quiet-mode toggle, and why the JAM_QUIET_DM_USER env name was kept.
+name: jam-bot reply routing, ambient card gating & quiet mode
+description: How jam-bot routes replies (origin-based), gates ambient cards on an active Jam, and the JAM_QUIET_MODE escape hatch for relay-less private testing.
 ---
 
-# Jam-bot: origin-based routing + Jam-gated ambient cards
+# Jam-bot: origin-based routing + Jam-gated ambient cards + quiet mode
 
-The bot replies **wherever it was addressed** (DM→DM, channel→channel). There is
-no quiet/test-mode toggle anymore — `/quiet` + `silentMode` were retired.
+The bot replies **wherever it was addressed** (DM→DM, channel→channel).
 
 **Rules:**
 - Ambient (non-tour) now-playing cards post to the channel ONLY when the host
@@ -16,16 +15,33 @@ no quiet/test-mode toggle anymore — `/quiet` + `silentMode` were retired.
   tour's `origin` is captured at consume time so the last track still routes
   correctly even though the tour clears itself on its last track.
 
-**Why:** the old model leaked DM-started tours to the channel, and ambient
-cards spammed the channel even when nobody was listening together. Gating on an
-active Jam means "no Jam = silence" by default, removing the need for a manual
-mode.
+**Why:** the old `/quiet` + `silentMode` toggle leaked DM-started tours to the
+channel, and ambient cards spammed the channel even when nobody was listening
+together. Gating on an active Jam means "no Jam = silence" by default.
 
 **`isJamActive()` MUST fail SAFE:** any relay/network/auth error (including the
 relay being unconfigured) resolves to `false` (suppress cards), never throws.
-Result is cached for `JAM_ACTIVE_CACHE_MS` (default 15s) so the per-track
-now-playing hot path never hammers the relay.
+Cached for `JAM_ACTIVE_CACHE_MS` (default 15s) so the now-playing hot path never
+hammers the relay.
 
-**`JAM_QUIET_DM_USER` name was intentionally NOT renamed** — it now means "the
-host allowed to DM the bot" (DM-auth identity). Kept the old name to avoid
-churning the droplet's hand-maintained `.env`. Don't "fix" this name.
+**`JAM_QUIET_DM_USER` name was intentionally NOT renamed** — it means "the host
+allowed to DM the bot" (DM-auth identity). Kept to avoid churning the droplet's
+hand-maintained `.env`. Don't "fix" this name.
+
+## Quiet mode (`JAM_QUIET_MODE`)
+A deliberate escape hatch reintroduced after the relay became unrunnable: with
+no relay, `isJamActive()` can never be true, so ambient cards stay suppressed
+forever. `JAM_QUIET_MODE=true` (no-op unless `JAM_QUIET_DM_USER` is also set)
+makes the **ambient** now-playing path route the full deep-knowledge card — its
+async enrichment tabs and live insights too — to the host's DM and **bypass the
+relay Jam gate** entirely.
+
+**How to apply:** single source of truth is `quietDmTarget()` in `bot.ts`
+(returns the DM user id when both env vars are set, else null). It gates two
+spots: the ambient `trackChange` handler (skips `isJamActive()`, sets
+`serveTrackCard` dest to the DM) and `deliverCard` (DM branch before the
+`isJamActive()` channel branch; turntable-DM precedence stays first).
+`enrichCard` tab updates already follow `state.channel`, so the DM card updates
+in place with no extra change. Skip-votes auto-disable in a DM
+(`serveTrackCard`: `wantsVote = vote && dest.kind === "channel"`). Default off,
+so the normal channel path is unchanged.

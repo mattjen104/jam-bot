@@ -2496,11 +2496,15 @@ nowPlayingWatcher.on("trackChange", async (event) => {
       return;
     }
 
-    // Ambient (non-tour) track: only post a now-playing card when the host
-    // Spotify account is actually in an active Jam. No Jam -> stay quiet (the
-    // track still plays + gets logged elsewhere). isJamActive fails SAFE, so
-    // a relay/network error resolves to "no Jam" and the card is suppressed.
-    if (!(await isJamActive())) {
+    // Ambient (non-tour) track. Normally only post a now-playing card when the
+    // host Spotify account is actually in an active Jam. No Jam -> stay quiet
+    // (the track still plays + gets logged elsewhere). isJamActive fails SAFE,
+    // so a relay/network error resolves to "no Jam" and the card is suppressed.
+    // Quiet mode is the escape hatch: route the full deep-knowledge card to the
+    // host's DM and skip the relay Jam gate entirely (for private testing when
+    // the home relay can't run, so isJamActive() can never be true).
+    const quietUser = quietDmTarget();
+    if (!quietUser && !(await isJamActive())) {
       logger.info("Suppressed ambient now-playing post (no active Jam)", {
         track: event.current.title,
       });
@@ -2515,7 +2519,9 @@ nowPlayingWatcher.on("trackChange", async (event) => {
     // turntable path above owns this whole surface when it's active; this
     // branch only runs when it isn't, so the two never double-post.)
     await serveTrackCard({
-      dest: { kind: "channel" },
+      dest: quietUser
+        ? { kind: "dm", userId: quietUser }
+        : { kind: "channel" },
       source: "jam",
       track: event.current,
       requestedBy: event.requestedBySlackUser,
@@ -2593,6 +2599,19 @@ nowPlayingWatcher.on("resumed", () => {
 // like ambient now-playing cards — so we never claim "now playing" to a
 // channel whose guests aren't actually in the Jam to hear it.
 /**
+ * The Slack user ID to route ambient now-playing surfaces to when quiet mode
+ * is on, or null when quiet mode is off. Quiet mode requires both
+ * JAM_QUIET_MODE and JAM_QUIET_DM_USER; with it on, ambient cards/insights go
+ * to that DM and the relay-based Jam gate is bypassed entirely (handy when the
+ * home relay can't run, so isJamActive() can never be true).
+ */
+function quietDmTarget(): string | null {
+  return config.JAM_QUIET_MODE && config.JAM_QUIET_DM_USER
+    ? config.JAM_QUIET_DM_USER
+    : null;
+}
+
+/**
  * Deliver a turntable card to wherever the session was started: a DM goes
  * straight to the host; a channel-started session (or one whose origin was
  * lost across a restart) only posts when a Jam is actually live, so the
@@ -2606,6 +2625,12 @@ async function deliverCard(
 ): Promise<boolean> {
   if (turntableOrigin?.kind === "dm") {
     await postDMToUser(turntableOrigin.userId, text, blocks);
+    return true;
+  }
+  // Quiet mode: deliver privately to the host DM and skip the relay Jam gate.
+  const quietUser = quietDmTarget();
+  if (quietUser) {
+    await postDMToUser(quietUser, text, blocks);
     return true;
   }
   if (await isJamActive()) {
