@@ -213,6 +213,46 @@ const schema = z.object({
   // in the bot's voice — built STRICTLY from the fetched facts (never
   // fabricated). Off by default to avoid extra LLM calls on every new record.
   TRACK_KNOWLEDGE_LLM_SUMMARY: boolFromEnv.default(false),
+
+  // ---- Track knowledge: context layer (genre/era/story) -----------------
+  // OPTIONAL second enrichment layer on top of liner-notes credits. When a
+  // record is identified, the bot queries open sources on demand for genre
+  // tags + similar artists (Last.fm), a short artist bio (Wikipedia), and a
+  // Genius lyrics link, then posts a "context" follow-up card. Same rules as
+  // the credits layer: async OFF the playback hot path, every source
+  // independently optional, cached by canonical artist/recording id, and it
+  // NEVER fabricates. With none configured the bot behaves exactly as before.
+  //
+  // Master switch for the context layer. Even when true, nothing happens
+  // unless at least one source below is configured.
+  TRACK_CONTEXT_ENABLED: boolFromEnv.default(true),
+
+  // Last.fm API key (last.fm/api/account/create). Enables genre tags +
+  // similar artists keyed to the canonical artist. Leave unset to skip Last.fm.
+  LASTFM_API_KEY: z.string().optional(),
+
+  // Whether to fetch a short artist bio/infobox snippet from Wikipedia.
+  // Wikipedia needs no key — just a descriptive User-Agent — so this is a
+  // plain on/off toggle (default on). It only does anything when the context
+  // layer is enabled. Set false to skip Wikipedia.
+  TRACK_CONTEXT_WIKIPEDIA: boolFromEnv.default(true),
+
+  // Genius API access token (genius.com/api-clients). Enables a lyrics /
+  // annotations link for the recording. Leave unset to skip Genius.
+  GENIUS_ACCESS_TOKEN: z.string().optional(),
+
+  // How long (days) a resolved context result is cached, keyed by canonical
+  // artist/recording id, before it is re-queried. Genre/bio rarely change.
+  TRACK_CONTEXT_CACHE_TTL_DAYS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(30),
+
+  // When true, the context card also includes a one-line summary phrased in
+  // the bot's voice — built STRICTLY from the fetched facts (never
+  // fabricated). Off by default to avoid extra LLM calls on every new record.
+  TRACK_CONTEXT_LLM_SUMMARY: boolFromEnv.default(false),
 });
 
 function loadConfig() {

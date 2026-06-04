@@ -65,7 +65,14 @@ import {
   enrichTrack,
   knowledgeBlocks,
   trackKnowledgeEnabled,
+  type TrackKnowledge,
 } from "../turntable/knowledge.js";
+import {
+  buildContextSummary,
+  contextBlocks,
+  enrichContext,
+  trackContextEnabled,
+} from "../turntable/context.js";
 import {
   historyBlocks,
   nowPlayingBlocks,
@@ -2086,24 +2093,49 @@ turntableSession.on("trackConfirmed", async ({ track, match, viaIsrc }) => {
     });
   }
 
-  // Liner-notes enrichment runs asynchronously, OFF the playback hot path:
-  // resolve/play/seek already happened upstream, and the now-playing card
-  // above isn't blocked on it. We fetch credits/pressing on demand (cached),
-  // then post a follow-up card to the same destination + gating.
-  if (!trackKnowledgeEnabled()) return;
+  // Track-knowledge enrichment runs asynchronously, OFF the playback hot path:
+  // resolve/play/seek already happened upstream, and the now-playing card above
+  // isn't blocked on it. We fetch on demand (cached) then post follow-up cards
+  // to the same destination + gating. Two independent layers: liner-notes
+  // credits (MusicBrainz/Discogs) and genre/era/story context (Last.fm/
+  // Wikipedia/Genius). Each is config-gated and posts on its own; the context
+  // layer reuses any canonical ids the credits layer resolved.
+  if (!trackKnowledgeEnabled() && !trackContextEnabled()) return;
   void (async () => {
-    try {
-      const knowledge = await enrichTrack({ track, match, viaIsrc });
-      if (!knowledge) return;
-      const summary = await buildKnowledgeSummary(track, knowledge);
-      const blocks = knowledgeBlocks(knowledge, summary);
-      if (!blocks.length) return;
-      const text = `:notebook_with_decorative_cover: Liner notes for ${track.title} by ${track.artist}`;
-      await deliverTurntableCard(blocks, text);
-    } catch (err) {
-      logger.error("Failed to post turntable liner notes", {
-        error: String(err),
-      });
+    let knowledge: TrackKnowledge | null = null;
+    if (trackKnowledgeEnabled()) {
+      try {
+        knowledge = await enrichTrack({ track, match, viaIsrc });
+        if (knowledge) {
+          const summary = await buildKnowledgeSummary(track, knowledge);
+          const blocks = knowledgeBlocks(knowledge, summary);
+          if (blocks.length) {
+            const text = `:notebook_with_decorative_cover: Liner notes for ${track.title} by ${track.artist}`;
+            await deliverTurntableCard(blocks, text);
+          }
+        }
+      } catch (err) {
+        logger.error("Failed to post turntable liner notes", {
+          error: String(err),
+        });
+      }
+    }
+    if (trackContextEnabled()) {
+      try {
+        const context = await enrichContext({ track, match, viaIsrc, knowledge });
+        if (context) {
+          const summary = await buildContextSummary(track, context);
+          const blocks = contextBlocks(context, summary);
+          if (blocks.length) {
+            const text = `:headphones: Context for ${track.title} by ${track.artist}`;
+            await deliverTurntableCard(blocks, text);
+          }
+        }
+      } catch (err) {
+        logger.error("Failed to post turntable context", {
+          error: String(err),
+        });
+      }
     }
   })();
 });

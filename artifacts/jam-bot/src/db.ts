@@ -114,6 +114,20 @@ db.exec(`
     payload TEXT NOT NULL,
     fetched_at_ms INTEGER NOT NULL
   );
+
+  -- On-demand cache of "track context" (genre tags, similar artists, a short
+  -- artist bio, and a Genius lyrics link) fetched from Last.fm / Wikipedia /
+  -- Genius. Keyed by a canonical key: artist-level data lives under an artist
+  -- key (MusicBrainz artist id when known, else a normalized artist-name
+  -- digest) and the song-level Genius link under a recording/song key. payload
+  -- is the JSON-serialized cache entry; fetched_at_ms drives TTL expiry so
+  -- replays don't re-hit the APIs. Cache, not warehouse — entries are
+  -- disposable.
+  CREATE TABLE IF NOT EXISTS track_context (
+    cache_key TEXT PRIMARY KEY,
+    payload TEXT NOT NULL,
+    fetched_at_ms INTEGER NOT NULL
+  );
 `);
 
 // Migrate older deployments where pending_requests had track_id PRIMARY KEY
@@ -732,6 +746,45 @@ export function setTrackKnowledge(
   nowMs: number = Date.now(),
 ) {
   trackKnowledgeSetStmt.run(cacheKey, payload, nowMs);
+}
+
+// ---- Track context cache (genre/era/story) -----------------------------
+
+const trackContextGetStmt = db.prepare<
+  [string],
+  { payload: string; fetched_at_ms: number }
+>(`SELECT payload, fetched_at_ms FROM track_context WHERE cache_key = ?`);
+const trackContextSetStmt = db.prepare(
+  `INSERT INTO track_context (cache_key, payload, fetched_at_ms)
+   VALUES (?, ?, ?)
+   ON CONFLICT(cache_key) DO UPDATE SET
+     payload = excluded.payload,
+     fetched_at_ms = excluded.fetched_at_ms`,
+);
+
+/**
+ * Read a cached, still-fresh track-context payload (raw JSON string) for a
+ * canonical cache key. Returns null on a miss or when the entry is older than
+ * `ttlMs`. Callers parse the JSON into their own typed shape.
+ */
+export function getTrackContext(
+  cacheKey: string,
+  ttlMs: number,
+  nowMs: number = Date.now(),
+): string | null {
+  const row = trackContextGetStmt.get(cacheKey);
+  if (!row) return null;
+  if (nowMs - row.fetched_at_ms > ttlMs) return null;
+  return row.payload;
+}
+
+/** Upsert a track-context payload (raw JSON string) under a canonical key. */
+export function setTrackContext(
+  cacheKey: string,
+  payload: string,
+  nowMs: number = Date.now(),
+) {
+  trackContextSetStmt.run(cacheKey, payload, nowMs);
 }
 
 // ---- Per-user remembered facts -----------------------------------------
