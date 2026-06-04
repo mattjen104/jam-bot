@@ -407,18 +407,56 @@ async function handleSkip(
   }
 }
 
-async function handleNowPlaying(
-  respond: (text: string, blocks?: KnownBlock[]) => Promise<void>,
-) {
+// On-demand now-playing. Unlike the ambient watcher (which only fires when a
+// poll detects a track CHANGE), this renders the full deep-knowledge card —
+// now / liner-notes / context / links tabs + live insights — for whatever is
+// playing right now, on request. In quiet mode it always lands in the host DM
+// (the private test surface), otherwise it follows where the request came from.
+// No skip-vote is wired up here: this is an info pull, not a fresh now-playing
+// announcement competing for votes, so it never clobbers the ambient card's vote.
+async function handleNowPlaying(args: {
+  origin: ReplyOrigin;
+  respond: (text: string, blocks?: KnownBlock[]) => Promise<void>;
+  notifyEphemeral?: (text: string) => Promise<void>;
+}) {
+  const { origin, respond, notifyEphemeral } = args;
   const cp = await getCurrentlyPlaying();
   if (!cp.track) {
     await respond(":mute: Nothing is playing right now.");
     return;
   }
-  await respond(
-    `Now playing: ${cp.track.title} by ${cp.track.artist}`,
-    nowPlayingBlocks(cp.track, null, null),
-  );
+  const quietUser = quietDmTarget();
+  const dest: ReplyOrigin = quietUser
+    ? { kind: "dm", userId: quietUser }
+    : origin;
+  const posted = await serveTrackCard({
+    dest,
+    source: "jam",
+    track: cp.track,
+    requestedBy: null,
+    requestedQuery: null,
+    viaIsrc: !!cp.track.isrc,
+    vote: false,
+    enrichArgs: nowPlayingToEnrichArgs(cp.track),
+  });
+  if (!posted) {
+    // postMessage failed (e.g. bot can't DM the host yet) — fall back to the
+    // minimal inline card so the request never silently does nothing.
+    await respond(
+      `Now playing: ${cp.track.title} by ${cp.track.artist}`,
+      nowPlayingBlocks(cp.track, null, null),
+    );
+    return;
+  }
+  // Deep card was routed to the host DM (quiet mode) but the request came from
+  // the channel: tell the requester where it landed rather than leaving silence.
+  // Anyone in the Jam channel can run this, so the card lands in the configured
+  // host DM, not necessarily the requester's — say "host DM" to avoid confusion.
+  if (dest.kind === "dm" && origin.kind === "channel") {
+    const note =
+      ":speech_balloon: Quiet mode is on — sent the full now-playing card to the host's DM.";
+    await (notifyEphemeral ?? respond)(note);
+  }
 }
 
 async function handleHistory(
@@ -541,8 +579,12 @@ slackApp.command(
 
 slackApp.command(
   "/nowplaying",
-  slashHandler(async ({ say }) => {
-    await handleNowPlaying(say);
+  slashHandler(async ({ say, sayEphemeral, isDm, userId }) => {
+    await handleNowPlaying({
+      origin: isDm ? { kind: "dm", userId } : { kind: "channel" },
+      respond: say,
+      notifyEphemeral: sayEphemeral,
+    });
   }),
 );
 
@@ -1537,7 +1579,7 @@ async function handleNaturalLanguage(
         await handleSkip(userId, (t) => respond(t));
         return;
       case "nowplaying":
-        await handleNowPlaying(respond);
+        await handleNowPlaying({ origin, respond });
         return;
       case "history":
         await handleHistory(respond);
@@ -2796,6 +2838,12 @@ export async function startSlackBot() {
   wrappedScheduler.start();
   if (insightsEnabled()) insightScheduler.start();
   logger.info(`Slack bot connected (channel ${config.SLACK_CHANNEL_ID})`);
+  const quietUser = quietDmTarget();
+  logger.info(
+    quietUser
+      ? `Quiet mode ACTIVE — ambient + /nowplaying deep cards route to DM ${quietUser}`
+      : "Quiet mode OFF — set JAM_QUIET_MODE=true AND JAM_QUIET_DM_USER=<your Slack user id> to DM deep cards",
+  );
   logger.info(
     "Active engagement (thread mode) needs the `message.channels` event " +
       "subscription + `channels:history` scope. If she only replies when " +

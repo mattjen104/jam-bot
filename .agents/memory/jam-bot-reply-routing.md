@@ -45,3 +45,24 @@ spots: the ambient `trackChange` handler (skips `isJamActive()`, sets
 in place with no extra change. Skip-votes auto-disable in a DM
 (`serveTrackCard`: `wantsVote = vote && dest.kind === "channel"`). Default off,
 so the normal channel path is unchanged.
+
+## On-demand deep card (`/nowplaying`)
+The ambient deep card only fires on a track CHANGE the polling watcher catches —
+flaky to trigger and impossible to verify on a remote droplet. So `/nowplaying`
+(and the "what's playing" NL intent) renders the **same full deep card** on
+demand via `serveTrackCard`, routed to the host DM whenever quiet mode is active,
+else to the request origin. Use `vote:false` for these — an info pull must not
+create an `activeVote` that clobbers the real ambient card's skip-vote.
+
+**Invariant — deep cards never thread:** `serveTrackCard` always posts a
+top-level message (channel = `SLACK_CHANNEL_ID` or the DM user id); it has no
+`thread_ts` path. So an in-thread NL request gets its deep card at channel
+top-level, consistent with how ambient cards already post. Don't add threading
+to deep cards without also moving the card-state/vote keys (`cardKey`) — they're
+keyed on channel+ts and assume one canonical surface.
+
+**Why:** operator (the host) lost the home relay, so the ambient path can never
+self-trigger for them; an on-demand pull into the DM is the only reliable way to
+see/verify the deep card. **Startup log** prints quiet-mode status (`ACTIVE → DM
+<id>` vs `OFF`) so the operator can confirm both env vars loaded after a
+`systemctl restart` without reading code.
