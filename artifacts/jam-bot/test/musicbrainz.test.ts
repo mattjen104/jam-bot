@@ -4,6 +4,7 @@ import {
   parseRecordingCredits,
   parseWorkWriters,
   parseArtistReleaseGroups,
+  parseArtistRelations,
 } from "../src/turntable/musicbrainz.js";
 
 describe("MusicBrainz ISRC lookup parsing", () => {
@@ -138,5 +139,38 @@ describe("MusicBrainz artist release-group parsing", () => {
     expect(parseArtistReleaseGroups(many, 3)).toHaveLength(3);
     expect(parseArtistReleaseGroups(null)).toEqual([]);
     expect(parseArtistReleaseGroups({})).toEqual([]);
+  });
+});
+
+describe("MusicBrainz artist relations parsing", () => {
+  it("keeps id-carrying related artists, drops self/dups/url rels, caps", () => {
+    const collabs = parseArtistRelations({
+      id: "art-self",
+      relations: [
+        { type: "member of band", artist: { id: "art-beck", name: "Beck" } },
+        { type: "collaboration", artist: { id: "art-nin", name: "Nine Inch Nails" } },
+        // Self-reference is dropped.
+        { type: "is person", artist: { id: "art-self", name: "Me" } },
+        // Duplicate id is dropped.
+        { type: "supporting musician", artist: { id: "art-beck", name: "Beck" } },
+        // No artist id (e.g. a url relation) -> skipped.
+        { type: "wikipedia" },
+        { type: "tribute", artist: { name: "Nameless Id" } },
+      ],
+    });
+    expect(collabs.map((c) => c.artistId)).toEqual(["art-beck", "art-nin"]);
+    expect(collabs[0]).toMatchObject({ name: "Beck", relation: "member of band" });
+  });
+
+  it("caps the list and tolerates junk input", () => {
+    const many = {
+      relations: Array.from({ length: 12 }, (_, i) => ({
+        type: "collaboration",
+        artist: { id: `art-${i}`, name: `Artist ${i}` },
+      })),
+    };
+    expect(parseArtistRelations(many, 3)).toHaveLength(3);
+    expect(parseArtistRelations(null)).toEqual([]);
+    expect(parseArtistRelations({})).toEqual([]);
   });
 });

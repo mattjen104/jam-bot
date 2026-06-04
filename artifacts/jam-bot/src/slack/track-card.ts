@@ -36,11 +36,39 @@ export const CARD_PERSON_ACTION_RE = new RegExp(`^${CARD_PERSON_ACTION}(?::|$)`)
 /** At or below this many explorable people, render buttons; above, a dropdown. */
 export const PERSON_BUTTON_MAX = 10;
 
+// Hop from a person to a grounded collaborator (action_id suffixed with an index
+// for uniqueness; value carries the collaborator's artist id).
+export const CARD_HOP_ACTION = "jam_card_hop";
+export const CARD_HOP_ACTION_RE = new RegExp(`^${CARD_HOP_ACTION}:`);
+// Breadcrumb crumbs: ":tab" returns to the originating tab; ":<index>" jumps to
+// that level in the person trail.
+export const CARD_CRUMB_ACTION = "jam_card_crumb";
+export const CARD_CRUMB_ACTION_RE = new RegExp(`^${CARD_CRUMB_ACTION}:`);
+/**
+ * Max people kept in a hop trail. Bounds the breadcrumb so it (plus the leading
+ * tab crumb) never exceeds Slack's 5-element actions-row cap, and keeps the trail
+ * readable. Pushing past it slides the window, dropping the oldest person.
+ */
+export const MAX_PERSON_DEPTH = 4;
+
 export type CardTab = "now" | "credits" | "context" | "links";
 
 export type CardView =
   | { kind: "tab"; tab: CardTab }
-  | { kind: "person"; artistId: string; from: CardTab };
+  | { kind: "person"; trail: string[]; from: CardTab };
+
+type PersonView = Extract<CardView, { kind: "person" }>;
+
+/**
+ * Push a person onto a hop trail, sliding the window so the trail never exceeds
+ * MAX_PERSON_DEPTH (the oldest person drops off). Keeps the breadcrumb bounded.
+ */
+export function pushPersonTrail(trail: string[], artistId: string): string[] {
+  const next = [...trail, artistId];
+  return next.length > MAX_PERSON_DEPTH
+    ? next.slice(next.length - MAX_PERSON_DEPTH)
+    : next;
+}
 
 /** Where the card came from — drives the Now Playing header + honesty note. */
 export type CardSource = "jam" | "turntable" | "tour";
@@ -316,13 +344,99 @@ function linksViewBlocks(state: TrackCardState): KnownBlock[] {
   return [{ type: "section", text: { type: "mrkdwn", text: lines.join("\n") } }];
 }
 
+/** A display name for a trail person, resolvable even before enrichment loads. */
+function personName(state: TrackCardState, artistId: string): string {
+  const info = state.people.get(artistId);
+  if (info?.name && info.name !== "this person") return info.name;
+  const credit = state.knowledge?.personnel.find((c) => c.artistId === artistId);
+  if (credit?.name) return credit.name;
+  // Fall back to a parent's collaborator list (the button we hopped from carries
+  // the name before that person's own page has been fetched).
+  for (const cached of state.people.values()) {
+    const hit = cached?.collaborators?.find((c) => c.artistId === artistId);
+    if (hit) return hit.name;
+  }
+  return info?.name ?? "this person";
+}
+
+/**
+ * Clickable breadcrumb: a leading crumb back to the originating tab, then one
+ * crumb per person in the trail (the current person highlighted). Each crumb is
+ * a button — Slack has no native breadcrumb. Bounded by MAX_PERSON_DEPTH so the
+ * row stays within Slack's 5-element cap.
+ */
+function breadcrumbRow(state: TrackCardState, view: PersonView): KnownBlock {
+  const elements: Array<{
+    type: "button";
+    action_id: string;
+    text: { type: "plain_text"; text: string; emoji: boolean };
+    value: string;
+    style?: "primary";
+  }> = [
+    {
+      type: "button",
+      action_id: `${CARD_CRUMB_ACTION}:tab`,
+      text: {
+        type: "plain_text",
+        text: truncate(TAB_LABELS[view.from], 24),
+        emoji: true,
+      },
+      value: view.from,
+    },
+  ];
+  view.trail.forEach((id, i) => {
+    const el: (typeof elements)[number] = {
+      type: "button",
+      action_id: `${CARD_CRUMB_ACTION}:${i}`,
+      text: {
+        type: "plain_text",
+        text: truncate(personName(state, id), 24),
+        emoji: true,
+      },
+      value: String(i),
+    };
+    if (i === view.trail.length - 1) el.style = "primary";
+    elements.push(el);
+  });
+  return { type: "actions", elements };
+}
+
+/** Grounded collaborator hop buttons (each carries a canonical artist id). */
+function collaboratorBlocks(info: PersonInfo | null): KnownBlock[] {
+  const collabs = (info?.collaborators ?? []).filter((c) => c.artistId);
+  if (!collabs.length) return [];
+  const buttons = collabs.slice(0, PERSON_BUTTON_MAX).map((c, i) => ({
+    type: "button" as const,
+    action_id: `${CARD_HOP_ACTION}:${i}`,
+    text: {
+      type: "plain_text" as const,
+      text: truncate(`:arrow_right: ${c.name}`, 75),
+      emoji: true,
+    },
+    value: c.artistId,
+  }));
+  const rows: KnownBlock[] = [
+    {
+      type: "section",
+      text: { type: "mrkdwn", text: ":busts_in_silhouette: *Explore collaborators*" },
+    },
+  ];
+  // Slack caps an actions block at 5 elements, so chunk into rows.
+  for (let i = 0; i < buttons.length; i += 5) {
+    rows.push({ type: "actions", elements: buttons.slice(i, i + 5) });
+  }
+  return rows;
+}
+
 function personViewBlocks(state: TrackCardState): KnownBlock[] {
   if (state.view.kind !== "person") return [];
-  const { artistId, from } = state.view;
+  const view = state.view;
+  const artistId = view.trail[view.trail.length - 1];
+  if (!artistId) return [];
   const fetched = state.people.has(artistId);
   const info = state.people.get(artistId) ?? null;
   const credit = state.knowledge?.personnel.find((c) => c.artistId === artistId);
-  const name = info?.name ?? credit?.name ?? "this person";
+  const name = personName(state, artistId);
   const roleLine = credit
     ? `_${credit.role} on “${state.track.title}”_`
     : undefined;
@@ -350,7 +464,9 @@ function personViewBlocks(state: TrackCardState): KnownBlock[] {
   }
 
   return [
+    breadcrumbRow(state, view),
     { type: "section", text: { type: "mrkdwn", text: lines.join("\n") } },
+    ...collaboratorBlocks(info),
     {
       type: "actions",
       elements: [
@@ -358,7 +474,7 @@ function personViewBlocks(state: TrackCardState): KnownBlock[] {
           type: "button",
           action_id: CARD_BACK_ACTION,
           text: { type: "plain_text", text: ":arrow_left: Back", emoji: true },
-          value: from,
+          value: view.from,
         },
       ],
     },

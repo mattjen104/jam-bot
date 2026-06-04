@@ -9,10 +9,15 @@ import {
   CARD_TAB_ACTION,
   CARD_PERSON_ACTION,
   CARD_BACK_ACTION,
+  CARD_HOP_ACTION,
+  CARD_CRUMB_ACTION,
   PERSON_BUTTON_MAX,
+  MAX_PERSON_DEPTH,
+  pushPersonTrail,
   type TrackCardState,
   type CardTrack,
 } from "../src/slack/track-card.js";
+import type { PersonInfo } from "../src/turntable/person.js";
 import type { TrackKnowledge } from "../src/turntable/knowledge.js";
 import type { TrackContext } from "../src/turntable/context.js";
 import type { TrackLinks } from "../src/turntable/odesli.js";
@@ -81,6 +86,51 @@ function actionIds(blocks: unknown[]): string[] {
 
 function rendered(blocks: unknown[]): string {
   return JSON.stringify(blocks);
+}
+
+function personInfo(overrides: Partial<PersonInfo> = {}): PersonInfo {
+  return {
+    name: "Someone",
+    knownFor: [],
+    tags: [],
+    collaborators: [],
+    fetchedAtMs: 0,
+    ...overrides,
+  };
+}
+
+/** Buttons whose action_id starts with the given prefix; returns id+value+text. */
+function buttonsWithPrefix(
+  blocks: unknown[],
+  prefix: string,
+): Array<{ action_id: string; value: string; text: string; style?: string }> {
+  const out: Array<{
+    action_id: string;
+    value: string;
+    text: string;
+    style?: string;
+  }> = [];
+  for (const b of blocks as Array<{
+    elements?: Array<{
+      type?: string;
+      action_id?: string;
+      value?: string;
+      style?: string;
+      text?: { text?: string };
+    }>;
+  }>) {
+    for (const el of b.elements ?? []) {
+      if (el.type === "button" && el.action_id?.startsWith(prefix)) {
+        out.push({
+          action_id: el.action_id,
+          value: el.value ?? "",
+          text: el.text?.text ?? "",
+          style: el.style,
+        });
+      }
+    }
+  }
+  return out;
 }
 
 /** Person explore buttons: action_id `jam_card_person:<idx>`, value = artistId. */
@@ -225,7 +275,7 @@ describe("renderTrackCard", () => {
   it("person sub-page shows a back button and grounded info; falls back while loading", () => {
     const loading = baseState({
       knowledge,
-      view: { kind: "person", artistId: "art-jmj", from: "credits" },
+      view: { kind: "person", trail: ["art-jmj"], from: "credits" },
     });
     const loadingJson = rendered(renderTrackCard(loading).blocks);
     expect(loadingJson).toContain("Looking up");
@@ -233,11 +283,11 @@ describe("renderTrackCard", () => {
 
     const loaded = baseState({
       knowledge,
-      view: { kind: "person", artistId: "art-jmj", from: "credits" },
+      view: { kind: "person", trail: ["art-jmj"], from: "credits" },
       people: new Map([
         [
           "art-jmj",
-          {
+          personInfo({
             name: "Justin Meldal-Johnsen",
             artistId: "art-jmj",
             mbUrl: "https://musicbrainz.org/artist/art-jmj",
@@ -247,8 +297,7 @@ describe("renderTrackCard", () => {
             tags: ["producer"],
             bio: "A bassist and producer.",
             wikipediaUrl: "https://en.wikipedia.org/wiki/JMJ",
-            fetchedAtMs: 0,
-          },
+          }),
         ],
       ]),
     });
@@ -256,6 +305,106 @@ describe("renderTrackCard", () => {
     expect(loadedJson).toContain("Some Album");
     expect(loadedJson).toContain("A bassist and producer");
     expect(loadedJson).not.toContain("Looking up");
+  });
+
+  it("person sub-page renders a breadcrumb: a tab crumb then the current person", () => {
+    const state = baseState({
+      knowledge,
+      view: { kind: "person", trail: ["art-jmj"], from: "credits" },
+      people: new Map([
+        ["art-jmj", personInfo({ name: "Justin Meldal-Johnsen", artistId: "art-jmj" })],
+      ]),
+    });
+    const crumbs = buttonsWithPrefix(renderTrackCard(state).blocks, CARD_CRUMB_ACTION);
+    // Tab crumb (back to Liner Notes) + the current person crumb.
+    expect(crumbs).toHaveLength(2);
+    expect(crumbs[0].action_id).toBe(`${CARD_CRUMB_ACTION}:tab`);
+    expect(crumbs[0].value).toBe("credits");
+    expect(crumbs[1].action_id).toBe(`${CARD_CRUMB_ACTION}:0`);
+    // Current person is highlighted.
+    expect(crumbs[1].style).toBe("primary");
+    expect(crumbs[1].text).toContain("Justin Meldal-Johnsen");
+  });
+
+  it("surfaces grounded collaborators as hop buttons carrying their artist id", () => {
+    const state = baseState({
+      knowledge,
+      view: { kind: "person", trail: ["art-jmj"], from: "credits" },
+      people: new Map([
+        [
+          "art-jmj",
+          personInfo({
+            name: "Justin Meldal-Johnsen",
+            artistId: "art-jmj",
+            mbUrl: "https://musicbrainz.org/artist/art-jmj",
+            collaborators: [
+              { artistId: "art-beck", name: "Beck", relation: "member of band" },
+              { artistId: "art-ngrr", name: "Nine Inch Nails" },
+            ],
+          }),
+        ],
+      ]),
+    });
+    const hops = buttonsWithPrefix(renderTrackCard(state).blocks, CARD_HOP_ACTION);
+    expect(hops).toHaveLength(2);
+    expect(hops.map((h) => h.value)).toEqual(["art-beck", "art-ngrr"]);
+    expect(hops[0].text).toContain("Beck");
+  });
+
+  it("shows no hop buttons when a person has no resolvable collaborators", () => {
+    const state = baseState({
+      knowledge,
+      view: { kind: "person", trail: ["art-jmj"], from: "credits" },
+      people: new Map([
+        ["art-jmj", personInfo({ name: "Justin Meldal-Johnsen", artistId: "art-jmj" })],
+      ]),
+    });
+    expect(buttonsWithPrefix(renderTrackCard(state).blocks, CARD_HOP_ACTION)).toHaveLength(0);
+  });
+
+  it("a deeper trail renders a crumb per level and resolves names from parent collaborators", () => {
+    const state = baseState({
+      knowledge,
+      view: { kind: "person", trail: ["art-jmj", "art-beck"], from: "credits" },
+      people: new Map([
+        [
+          "art-jmj",
+          personInfo({
+            name: "Justin Meldal-Johnsen",
+            artistId: "art-jmj",
+            // art-beck not yet fetched; its name comes from this collaborator list.
+            collaborators: [{ artistId: "art-beck", name: "Beck" }],
+          }),
+        ],
+      ]),
+    });
+    const blocks = renderTrackCard(state).blocks;
+    const crumbs = buttonsWithPrefix(blocks, CARD_CRUMB_ACTION);
+    // tab crumb + two person crumbs.
+    expect(crumbs).toHaveLength(3);
+    expect(crumbs[2].style).toBe("primary");
+    expect(crumbs[2].text).toContain("Beck");
+    // Header still shows the (not-yet-fetched) current person by name + loading.
+    expect(rendered(blocks)).toContain("Beck");
+    expect(rendered(blocks)).toContain("Looking up");
+  });
+
+  it("pushPersonTrail slides the window so the trail never exceeds the depth cap", () => {
+    let trail: string[] = [];
+    for (let i = 0; i < MAX_PERSON_DEPTH + 3; i++) {
+      trail = pushPersonTrail(trail, `art-${i}`);
+      expect(trail.length).toBeLessThanOrEqual(MAX_PERSON_DEPTH);
+    }
+    // The most recent people survive; the oldest dropped off.
+    expect(trail[trail.length - 1]).toBe(`art-${MAX_PERSON_DEPTH + 2}`);
+    expect(trail).not.toContain("art-0");
+    // Breadcrumb (tab crumb + capped trail) stays within Slack's 5-element row.
+    const state = baseState({
+      view: { kind: "person", trail, from: "credits" },
+      people: new Map(),
+    });
+    expect(buttonsWithPrefix(renderTrackCard(state).blocks, CARD_CRUMB_ACTION).length)
+      .toBeLessThanOrEqual(5);
   });
 
   it("falls back to the now view when the selected tab lost its content", () => {

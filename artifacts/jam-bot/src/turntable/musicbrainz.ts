@@ -46,6 +46,18 @@ export interface ArtistReleaseGroup {
   primaryType?: string;
 }
 
+/**
+ * Another artist this artist is related to (band member, frequent collaborator,
+ * etc.). Carries a canonical artist id so the card's person rabbit-hole can hop
+ * to a grounded sub-page — never a name-search guess.
+ */
+export interface ArtistCollaborator {
+  artistId: string;
+  name: string;
+  /** Relationship label from MusicBrainz, e.g. "member of band". */
+  relation?: string;
+}
+
 export interface RecordingCredits {
   recordingId: string;
   artistId?: string;
@@ -311,6 +323,60 @@ export async function fetchArtistReleaseGroups(
     return parseArtistReleaseGroups(body);
   } catch (err) {
     logger.warn("MusicBrainz release-group lookup failed", {
+      artistId,
+      error: String(err),
+    });
+    return [];
+  }
+}
+
+/**
+ * Pure: an artist's related artists (band members, collaborators, etc.) from
+ * artist-rels. Only relations carrying a canonical artist id survive — these
+ * are the grounded hops the person rabbit-hole can follow, never name guesses.
+ * Self-links and duplicates are dropped; the list is capped.
+ */
+export function parseArtistRelations(
+  body: unknown,
+  cap = 8,
+): ArtistCollaborator[] {
+  const b = body as {
+    id?: string;
+    relations?: Array<{
+      type?: string;
+      artist?: { id?: string; name?: string };
+    }>;
+  };
+  const selfId = b?.id?.trim();
+  const out: ArtistCollaborator[] = [];
+  const seen = new Set<string>();
+  for (const rel of b?.relations ?? []) {
+    const artistId = rel?.artist?.id?.trim();
+    const name = rel?.artist?.name?.trim();
+    if (!artistId || !name) continue;
+    if (artistId === selfId || seen.has(artistId)) continue;
+    seen.add(artistId);
+    const relation = rel.type?.trim() || undefined;
+    out.push({ artistId, name, ...(relation ? { relation } : {}) });
+  }
+  return out.slice(0, cap);
+}
+
+/**
+ * Fetch an artist's related artists (band members / collaborators). Best-effort
+ * — returns [] on any failure or when MusicBrainz is unconfigured; never throws.
+ */
+export async function fetchArtistRelations(
+  artistId: string,
+): Promise<ArtistCollaborator[]> {
+  if (!musicbrainzEnabled() || !artistId.trim()) return [];
+  try {
+    const body = await mbFetch(
+      `/artist/${encodeURIComponent(artistId.trim())}?inc=artist-rels&fmt=json`,
+    );
+    return parseArtistRelations(body);
+  } catch (err) {
+    logger.warn("MusicBrainz artist-rels lookup failed", {
       artistId,
       error: String(err),
     });

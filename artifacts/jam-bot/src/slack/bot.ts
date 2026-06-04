@@ -90,8 +90,12 @@ import {
   getCard,
   cardKey,
   CARD_PERSON_ACTION_RE,
+  CARD_HOP_ACTION_RE,
+  CARD_CRUMB_ACTION_RE,
+  CARD_CRUMB_ACTION,
   CARD_BACK_ACTION,
   TAB_ACTION_RE,
+  pushPersonTrail,
   type TrackCardState,
   type CardTrack,
   type CardTab,
@@ -2013,6 +2017,25 @@ slackApp.action(TAB_ACTION_RE, async ({ ack, body, action, respond }) => {
   }
 });
 
+/**
+ * Render a person sub-page, fetching the grounded person info on first visit:
+ * show a loading state, enrich (cached after the first time), then re-render.
+ * `nameHint` seeds the enrichment lookup (and the loading title) when we know
+ * the name from a credit or a parent's collaborator list.
+ */
+async function ensurePersonAndRender(
+  card: TrackCardState,
+  artistId: string,
+  nameHint: string,
+): Promise<void> {
+  if (!card.people.has(artistId)) {
+    await updateCardMessage(card);
+    const info = await enrichPerson({ name: nameHint, artistId });
+    card.people.set(artistId, info);
+  }
+  await updateCardMessage(card);
+}
+
 slackApp.action(CARD_PERSON_ACTION_RE, async ({ ack, body, action, respond }) => {
   await ack();
   try {
@@ -2030,28 +2053,48 @@ slackApp.action(CARD_PERSON_ACTION_RE, async ({ ack, body, action, respond }) =>
       return;
     }
     const from: CardTab = card.view.kind === "tab" ? card.view.tab : "credits";
-    card.view = { kind: "person", artistId, from };
-    // First look-up: render the sub-page in a loading state, then fetch the
-    // grounded person info (cached after the first time) and re-render.
-    if (!card.people.has(artistId)) {
-      await updateCardMessage(card);
-      const credit = card.knowledge?.personnel.find(
-        (c) => c.artistId === artistId,
-      );
-      const info = await enrichPerson({ name: credit?.name ?? "", artistId });
-      card.people.set(artistId, info);
-    }
-    await updateCardMessage(card);
+    // Entering from a tab starts a fresh trail at this person.
+    card.view = { kind: "person", trail: [artistId], from };
+    const credit = card.knowledge?.personnel.find((c) => c.artistId === artistId);
+    await ensurePersonAndRender(card, artistId, credit?.name ?? "");
   } catch (err) {
     logger.error("Card person action failed", { error: String(err) });
   }
 });
 
-slackApp.action(CARD_BACK_ACTION, async ({ ack, body, action, respond }) => {
+slackApp.action(CARD_HOP_ACTION_RE, async ({ ack, body, action, respond }) => {
   await ack();
   try {
-    const tab = (("value" in action ? action.value : undefined) ??
-      "now") as CardTab;
+    const artistId = action.type === "button" ? action.value : undefined;
+    const { channel, ts } = actionMessageRef(body);
+    if (!artistId || !channel || !ts) return;
+    const card = getCard(cardKey(channel, ts));
+    if (!card) {
+      await respond({ response_type: "ephemeral", replace_original: false, text: CARD_EXPIRED_MSG });
+      return;
+    }
+    // Hops only make sense from an open person page; push onto the trail.
+    if (card.view.kind !== "person") return;
+    const fromId = card.view.trail[card.view.trail.length - 1];
+    const hint = fromId
+      ? (card.people
+          .get(fromId)
+          ?.collaborators?.find((c) => c.artistId === artistId)?.name ?? "")
+      : "";
+    card.view = {
+      kind: "person",
+      trail: pushPersonTrail(card.view.trail, artistId),
+      from: card.view.from,
+    };
+    await ensurePersonAndRender(card, artistId, hint);
+  } catch (err) {
+    logger.error("Card hop action failed", { error: String(err) });
+  }
+});
+
+slackApp.action(CARD_CRUMB_ACTION_RE, async ({ ack, body, action, respond }) => {
+  await ack();
+  try {
     const { channel, ts } = actionMessageRef(body);
     if (!channel || !ts) return;
     const card = getCard(cardKey(channel, ts));
@@ -2059,6 +2102,50 @@ slackApp.action(CARD_BACK_ACTION, async ({ ack, body, action, respond }) => {
       await respond({ response_type: "ephemeral", replace_original: false, text: CARD_EXPIRED_MSG });
       return;
     }
+    if (card.view.kind !== "person") return;
+    const actionId = "action_id" in action ? action.action_id : "";
+    const suffix = actionId.slice(`${CARD_CRUMB_ACTION}:`.length);
+    if (suffix === "tab") {
+      card.view = { kind: "tab", tab: card.view.from };
+      await updateCardMessage(card);
+      return;
+    }
+    const idx = Number(suffix);
+    if (!Number.isInteger(idx) || idx < 0 || idx >= card.view.trail.length) return;
+    const trail = card.view.trail.slice(0, idx + 1);
+    const targetId = trail[trail.length - 1];
+    if (!targetId) return;
+    card.view = { kind: "person", trail, from: card.view.from };
+    await ensurePersonAndRender(card, targetId, "");
+  } catch (err) {
+    logger.error("Card crumb action failed", { error: String(err) });
+  }
+});
+
+slackApp.action(CARD_BACK_ACTION, async ({ ack, body, action, respond }) => {
+  await ack();
+  try {
+    const { channel, ts } = actionMessageRef(body);
+    if (!channel || !ts) return;
+    const card = getCard(cardKey(channel, ts));
+    if (!card) {
+      await respond({ response_type: "ephemeral", replace_original: false, text: CARD_EXPIRED_MSG });
+      return;
+    }
+    // Mid-trail, Back pops one person; at the root it returns to the tab.
+    if (card.view.kind === "person" && card.view.trail.length > 1) {
+      const trail = card.view.trail.slice(0, -1);
+      const targetId = trail[trail.length - 1];
+      if (targetId) {
+        card.view = { kind: "person", trail, from: card.view.from };
+        await ensurePersonAndRender(card, targetId, "");
+        return;
+      }
+    }
+    const fallback =
+      card.view.kind === "person" ? card.view.from : ("now" as CardTab);
+    const tab = (("value" in action ? action.value : undefined) ??
+      fallback) as CardTab;
     card.view = { kind: "tab", tab };
     await updateCardMessage(card);
   } catch (err) {

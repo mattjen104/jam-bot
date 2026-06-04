@@ -3,7 +3,9 @@ import { logger } from "../logger.js";
 import { getTrackContext, setTrackContext } from "../db.js";
 import {
   type ArtistReleaseGroup,
+  type ArtistCollaborator,
   fetchArtistReleaseGroups,
+  fetchArtistRelations,
   musicbrainzEnabled,
 } from "./musicbrainz.js";
 import { fetchArtistTags, lastfmEnabled } from "./lastfm.js";
@@ -34,6 +36,11 @@ export interface PersonInfo {
   /** Short bio snippet (Wikipedia). */
   bio?: string;
   wikipediaUrl?: string;
+  /**
+   * Grounded related artists (band members / collaborators) the card can hop to.
+   * Each carries a canonical MusicBrainz artist id; empty when none resolved.
+   */
+  collaborators: ArtistCollaborator[];
   fetchedAtMs: number;
 }
 
@@ -57,7 +64,13 @@ function releaseGroupUrl(id: string): string {
 }
 
 function hasContent(p: PersonInfo): boolean {
-  return !!p.mbUrl || p.knownFor.length > 0 || p.tags.length > 0 || !!p.bio;
+  return (
+    !!p.mbUrl ||
+    p.knownFor.length > 0 ||
+    p.tags.length > 0 ||
+    !!p.bio ||
+    (p.collaborators?.length ?? 0) > 0
+  );
 }
 
 function toKnownFor(groups: ArtistReleaseGroup[]): PersonInfo["knownFor"] {
@@ -94,7 +107,7 @@ export async function enrichPerson(args: {
   }
 
   // Fetch every available source in parallel; each is independently best-effort.
-  const [groups, tags, bio] = await Promise.all([
+  const [groups, tags, bio, collaborators] = await Promise.all([
     artistId && musicbrainzEnabled()
       ? fetchArtistReleaseGroups(artistId)
       : Promise.resolve<ArtistReleaseGroup[]>([]),
@@ -102,6 +115,9 @@ export async function enrichPerson(args: {
       ? fetchArtistTags(name, artistId)
       : Promise.resolve<string[]>([]),
     wikipediaEnabled() && name ? fetchArtistBio(name) : Promise.resolve(null),
+    artistId && musicbrainzEnabled()
+      ? fetchArtistRelations(artistId)
+      : Promise.resolve<ArtistCollaborator[]>([]),
   ]);
 
   const info: PersonInfo = {
@@ -112,6 +128,7 @@ export async function enrichPerson(args: {
     tags,
     bio: bio?.extract,
     wikipediaUrl: bio?.url,
+    collaborators,
     fetchedAtMs: Date.now(),
   };
 
