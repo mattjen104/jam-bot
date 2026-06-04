@@ -6,6 +6,7 @@ import { contextBlocks, type TrackContext } from "../turntable/context.js";
 import type { Credit } from "../turntable/musicbrainz.js";
 import type { TrackLinks } from "../turntable/odesli.js";
 import type { PersonInfo } from "../turntable/person.js";
+import type { TurntableSource } from "../turntable/session.js";
 
 /**
  * The consolidated track card: ONE in-chat Block Kit message per track with
@@ -47,6 +48,12 @@ export interface TrackCardState {
   requestedBy: string | null;
   requestedQuery: string | null;
   viaIsrc: boolean;
+  /**
+   * For turntable cards: whether the Jam is following a physical record or the
+   * computer's own audio. Defaults to "record" when absent so older callers
+   * (and non-turntable sources) keep their original look.
+   */
+  turntableSource?: TurntableSource;
   /** Present only on the channel card that backs vote-skip. */
   vote?: VoteSkipState;
   knowledge?: TrackKnowledge | null;
@@ -122,12 +129,18 @@ function nowViewBlocks(state: TrackCardState): KnownBlock[] {
     source === "turntable" && !state.viaIsrc
       ? "\n_(matched by title — couldn't confirm the exact pressing)_"
       : "";
+  const sourceNote =
+    source === "turntable"
+      ? `\n_Following ${
+          state.turntableSource === "computer" ? "computer audio" : "a record"
+        }_`
+      : "";
   const blocks: KnownBlock[] = [
     {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `${header}\n*<${track.spotifyUrl}|${track.title}>*\n${track.artist}\n_${track.album}_  •  ${fmtMs(track.durationMs)}${requesterLine}${matchNote}`,
+        text: `${header}\n*<${track.spotifyUrl}|${track.title}>*\n${track.artist}\n_${track.album}_  •  ${fmtMs(track.durationMs)}${requesterLine}${matchNote}${sourceNote}`,
       },
       ...(track.albumImageUrl
         ? {

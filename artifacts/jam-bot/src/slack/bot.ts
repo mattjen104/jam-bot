@@ -67,6 +67,7 @@ import {
   turntableSession,
   computeTargetPositionMs,
   type ClockAnchor,
+  type TurntableSource,
 } from "../turntable/session.js";
 import type { AcrMatch } from "../turntable/acrcloud.js";
 import { turntableConfigured } from "../turntable/ingest-server.js";
@@ -151,6 +152,11 @@ function fmtClock(ms: number): string {
   const m = Math.floor(total / 60);
   const s = total % 60;
   return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+/** Human label for the turntable's active capture source. */
+function fmtTurntableSource(source: TurntableSource): string {
+  return source === "computer" ? "computer audio" : "a record";
 }
 
 // ---- Guided music tour ---------------------------------------------------
@@ -934,10 +940,11 @@ slackApp.command(
           );
           return;
         }
+        const src = fmtTurntableSource(s.source);
         const where =
           s.track && s.positionMs != null
-            ? `Following *${s.track.title}* — ${s.track.artist} at ${fmtClock(s.positionMs)}.`
-            : "On, waiting for the first confident match from the record.";
+            ? `Following *${s.track.title}* — ${s.track.artist} at ${fmtClock(s.positionMs)} (from ${src}).`
+            : `On, following ${src} — waiting for the first confident match.`;
         await sayEphemeral(`:record_button: Turntable sync is *on*. ${where}`);
         return;
       }
@@ -2174,6 +2181,7 @@ function cardTrackFromSearch(
 async function serveTrackCard(args: {
   dest: { kind: "channel" } | { kind: "dm"; userId: string };
   source: TrackCardState["source"];
+  turntableSource?: TrackCardState["turntableSource"];
   track: CardTrack;
   requestedBy: string | null;
   requestedQuery: string | null;
@@ -2188,6 +2196,7 @@ async function serveTrackCard(args: {
     channel: "",
     ts: "",
     source: args.source,
+    turntableSource: args.turntableSource,
     track: args.track,
     requestedBy: args.requestedBy,
     requestedQuery: args.requestedQuery,
@@ -2513,6 +2522,9 @@ turntableSession.on("trackConfirmed", async ({ track, match, viaIsrc }) => {
       await serveTrackCard({
         dest,
         source: "turntable",
+        // Surface whether the Jam is following a physical record or the
+        // computer's own audio, from the latest clip the helper labelled.
+        turntableSource: turntableSession.status().source,
         track: cardTrackFromSearch(track, match),
         requestedBy: null,
         requestedQuery: null,

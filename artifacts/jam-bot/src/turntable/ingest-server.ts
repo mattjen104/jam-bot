@@ -142,7 +142,21 @@ export function createIngestServer(): Server {
           ? parsedDur
           : undefined;
 
-      const decision = await turntableSession.observe(match, { clipDurationMs });
+      // The helper labels each clip with where the audio came from: "record"
+      // (a physical input / line-in / mic) or "computer" (the OS loopback).
+      // Optional + validated; older helpers that don't send it leave the
+      // session's source at its default, so old clips keep working.
+      const rawSource = req.headers["x-capture-source"];
+      const sourceStr = Array.isArray(rawSource) ? rawSource[0] : rawSource;
+      const captureSource =
+        sourceStr === "record" || sourceStr === "computer"
+          ? sourceStr
+          : undefined;
+
+      const decision = await turntableSession.observe(match, {
+        clipDurationMs,
+        captureSource,
+      });
       sendJson(res, 200, {
         accepted: true,
         matched: !!match,

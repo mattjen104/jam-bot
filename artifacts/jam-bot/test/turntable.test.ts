@@ -322,6 +322,28 @@ describe("TurntableSession", () => {
     expect(await s.resync()).toBeNull();
   });
 
+  it("defaults the source to 'record' and tracks the helper's label", async () => {
+    const s = new TurntableSession();
+    s.start();
+    // No header yet -> the original record default.
+    expect(s.status().source).toBe("record");
+    // A clip labelled computer flips it, even on a miss.
+    await s.observe(null, { captureSource: "computer" });
+    expect(s.status().source).toBe("computer");
+    // And back to record when the helper switches inputs.
+    await s.observe(mkMatch({ isrc: "A" }), { captureSource: "record" });
+    expect(s.status().source).toBe("record");
+  });
+
+  it("resets the source to the record default on start()", async () => {
+    const s = new TurntableSession();
+    s.start();
+    await s.observe(null, { captureSource: "computer" });
+    expect(s.status().source).toBe("computer");
+    s.start();
+    expect(s.status().source).toBe("record");
+  });
+
   it("emits an error (no playback) when no Spotify track resolves", async () => {
     vi.mocked(client.findActiveDevice).mockResolvedValue({
       id: "dev1",

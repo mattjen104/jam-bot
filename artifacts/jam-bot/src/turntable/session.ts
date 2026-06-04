@@ -20,7 +20,20 @@ import type { AcrMatch } from "./acrcloud.js";
  */
 export interface ObserveMeta {
   clipDurationMs?: number;
+  /**
+   * Where the captured audio came from, per the helper's `x-capture-source`
+   * header: a physical input ("record") or the computer's loopback audio
+   * ("computer"). Absent for older helpers that don't send the header.
+   */
+  captureSource?: TurntableSource;
 }
+
+/**
+ * Audio source the capture helper is following.
+ *   - "record"   — a physical input: turntable, line-in, or mic.
+ *   - "computer" — the computer's own audio via an OS loopback / monitor.
+ */
+export type TurntableSource = "record" | "computer";
 
 /**
  * Turntable sync engine.
@@ -155,6 +168,12 @@ export interface TurntableStatus {
   track: { title: string; artist: string; spotifyUrl?: string } | null;
   /** Computed current position (ms) from the live anchor, when active. */
   positionMs: number | null;
+  /**
+   * The audio source the helper is feeding us, from the latest clip's
+   * `x-capture-source` header. Defaults to "record" until a clip says
+   * otherwise, so older helpers (no header) show the original record default.
+   */
+  source: TurntableSource;
 }
 
 export interface TurntableConfirmedEvent {
@@ -208,6 +227,12 @@ export class TurntableSession extends EventEmitter {
   private anchor: ClockAnchor | null = null;
   private currentTrack: SearchResultTrack | null = null;
   private deviceId: string | undefined;
+  /**
+   * The audio source of the most recent clip. Defaults to "record" so that
+   * before any header arrives (and for older helpers that never send one) the
+   * status reflects the original physical-input behavior.
+   */
+  private source: TurntableSource = "record";
   /** Serializes observe()/resync() so overlapping clips can't race the player. */
   private chain: Promise<unknown> = Promise.resolve();
   /**
@@ -264,6 +289,7 @@ export class TurntableSession extends EventEmitter {
     this.anchor = null;
     this.currentTrack = null;
     this.deviceId = deviceId;
+    this.source = "record";
     logger.info("Turntable session started", { deviceId: deviceId ?? null });
   }
 
@@ -274,6 +300,7 @@ export class TurntableSession extends EventEmitter {
     this.anchor = null;
     this.currentTrack = null;
     this.deviceId = undefined;
+    this.source = "record";
     logger.info("Turntable session stopped");
   }
 
@@ -290,6 +317,7 @@ export class TurntableSession extends EventEmitter {
       positionMs: this.anchor
         ? computeTargetPositionMs(this.anchor, Date.now())
         : null,
+      source: this.source,
     };
   }
 
@@ -310,6 +338,9 @@ export class TurntableSession extends EventEmitter {
     meta?: ObserveMeta,
   ): Promise<DebounceResult> {
     if (!this.active) return { kind: "miss" };
+    // Remember the live source from the latest clip (even on a miss) so status
+    // stays accurate the moment the helper switches between record/computer.
+    if (meta?.captureSource) this.source = meta.captureSource;
     const result = this.debouncer.observe(match);
 
     if (result.kind === "confirmed-current" && match) {

@@ -179,7 +179,7 @@ function resolveDeviceId(portAudio) {
   });
 }
 
-async function postClip(wav, clipDurationMs) {
+async function postClip(wav, clipDurationMs, captureSource) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
   try {
@@ -191,6 +191,10 @@ async function postClip(wav, clipDurationMs) {
         // Lets the bot compensate for the clip window when seeking, since
         // ACRCloud's matched offset points at the START of this clip.
         "x-clip-duration-ms": String(Math.round(clipDurationMs)),
+        // Tells the bot WHERE this audio came from so `/turntable status` can
+        // show whether the Jam is following a physical record/line-in
+        // ("record") or the computer's own loopback audio ("computer").
+        "x-capture-source": captureSource,
       },
       body: wav,
       signal: controller.signal,
@@ -260,6 +264,10 @@ async function main() {
     selectedDeviceName: selected ? selected.name : null,
   });
 
+  // Label every clip with the active source so the bot can show whether the
+  // Jam is following the computer's own audio or a physical record/line-in.
+  const captureSource = warnLoopback ? "computer" : "record";
+
   if (warnLoopback) {
     console.warn(
       "\nWARNING: computer-audio mode captures whatever this machine plays.\n" +
@@ -308,6 +316,7 @@ async function main() {
       await postClip(
         wavFromPcm(pcm, { sampleRate: SAMPLE_RATE, channels: CHANNELS }),
         clipDurationMs,
+        captureSource,
       );
     } finally {
       sending = false;
