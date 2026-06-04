@@ -42,11 +42,14 @@
 
 import { Buffer } from "node:buffer";
 import {
+  BYTES_PER_SAMPLE,
   COMPUTER_SOURCE_ALIASES,
   DEFAULT_INPUT_DEVICE_ID,
+  capturingLoopback as capturingLoopbackPure,
   findLoopbackDevice,
   isLoopbackName,
   resolveDeviceId as resolveDeviceIdPure,
+  wavFromPcm,
 } from "./device-detection.mjs";
 
 const LIST_DEVICES = process.argv.includes("--list-devices");
@@ -80,7 +83,6 @@ const SAMPLE_SECONDS = Number(process.env.SAMPLE_SECONDS ?? 12);
 // don't overlap heavily. The bot debounces, so over-sending is harmless aside
 // from ACRCloud quota.
 const INTERVAL_SECONDS = Number(process.env.INTERVAL_SECONDS ?? 20);
-const BYTES_PER_SAMPLE = 2; // 16-bit PCM
 
 function loadPortAudio() {
   // Imported lazily so `--list-devices` failures give a clear install hint
@@ -177,27 +179,6 @@ function resolveDeviceId(portAudio) {
   });
 }
 
-// Build a minimal 16-bit PCM WAV file from raw little-endian PCM samples.
-function wavFromPcm(pcm, { sampleRate, channels }) {
-  const blockAlign = channels * BYTES_PER_SAMPLE;
-  const byteRate = sampleRate * blockAlign;
-  const header = Buffer.alloc(44);
-  header.write("RIFF", 0);
-  header.writeUInt32LE(36 + pcm.length, 4);
-  header.write("WAVE", 8);
-  header.write("fmt ", 12);
-  header.writeUInt32LE(16, 16); // PCM fmt chunk size
-  header.writeUInt16LE(1, 20); // audio format = PCM
-  header.writeUInt16LE(channels, 22);
-  header.writeUInt32LE(sampleRate, 24);
-  header.writeUInt32LE(byteRate, 28);
-  header.writeUInt16LE(blockAlign, 32);
-  header.writeUInt16LE(BYTES_PER_SAMPLE * 8, 34); // bits per sample
-  header.write("data", 36);
-  header.writeUInt32LE(pcm.length, 40);
-  return Buffer.concat([header, pcm]);
-}
-
 async function postClip(wav, clipDurationMs) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
@@ -273,11 +254,13 @@ async function main() {
     deviceId === DEFAULT_INPUT_DEVICE_ID
       ? null
       : portAudio.getDevices().find((d) => d.id === deviceId);
-  const capturingLoopback =
-    (SOURCE_IS_COMPUTER && DEVICE === "") ||
-    (selected ? isLoopbackName(selected.name) : false);
+  const warnLoopback = capturingLoopbackPure({
+    sourceIsComputer: SOURCE_IS_COMPUTER,
+    device: DEVICE,
+    selectedDeviceName: selected ? selected.name : null,
+  });
 
-  if (capturingLoopback) {
+  if (warnLoopback) {
     console.warn(
       "\nWARNING: computer-audio mode captures whatever this machine plays.\n" +
         "  The bot also drives YOUR Spotify to feed the Jam. Keep that Spotify\n" +

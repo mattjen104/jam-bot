@@ -10,11 +10,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
+import { Buffer } from "node:buffer";
+
 import {
+  BYTES_PER_SAMPLE,
   DEFAULT_INPUT_DEVICE_ID,
+  capturingLoopback,
   findLoopbackDevice,
   isLoopbackName,
   resolveDeviceId,
+  wavFromPcm,
 } from "./device-detection.mjs";
 
 // A small fixture mimicking naudiodon's getDevices() shape.
@@ -151,4 +156,137 @@ test("ordinary input device names are not treated as loopbacks", () => {
   for (const name of nonLoopbackNames) {
     assert.ok(!isLoopbackName(name), `did not expect loopback: "${name}"`);
   }
+});
+
+// --- wavFromPcm: 44-byte RIFF/WAVE header correctness ----------------------
+
+// Read the header fields back out so the test fails loudly if any offset,
+// endianness, or derived value (byteRate, blockAlign) is wrong.
+const readWavHeader = (buf) => ({
+  riff: buf.toString("ascii", 0, 4),
+  riffSize: buf.readUInt32LE(4),
+  wave: buf.toString("ascii", 8, 12),
+  fmt: buf.toString("ascii", 12, 16),
+  fmtChunkSize: buf.readUInt32LE(16),
+  audioFormat: buf.readUInt16LE(20),
+  channels: buf.readUInt16LE(22),
+  sampleRate: buf.readUInt32LE(24),
+  byteRate: buf.readUInt32LE(28),
+  blockAlign: buf.readUInt16LE(32),
+  bitsPerSample: buf.readUInt16LE(34),
+  data: buf.toString("ascii", 36, 40),
+  dataSize: buf.readUInt32LE(40),
+});
+
+test("wavFromPcm writes a 44-byte header and appends the PCM payload", () => {
+  const pcm = Buffer.alloc(160);
+  const wav = wavFromPcm(pcm, { sampleRate: 44100, channels: 1 });
+  assert.equal(wav.length, 44 + pcm.length);
+  // The data after the header is exactly the PCM bytes we passed in.
+  assert.ok(wav.subarray(44).equals(pcm));
+});
+
+test("wavFromPcm header is correct for mono @ 44100Hz", () => {
+  const pcm = Buffer.alloc(1000);
+  const h = readWavHeader(wavFromPcm(pcm, { sampleRate: 44100, channels: 1 }));
+  assert.equal(h.riff, "RIFF");
+  assert.equal(h.wave, "WAVE");
+  assert.equal(h.fmt, "fmt ");
+  assert.equal(h.data, "data");
+  assert.equal(h.fmtChunkSize, 16);
+  assert.equal(h.audioFormat, 1, "PCM");
+  assert.equal(h.channels, 1);
+  assert.equal(h.sampleRate, 44100);
+  assert.equal(h.bitsPerSample, BYTES_PER_SAMPLE * 8);
+  assert.equal(h.bitsPerSample, 16);
+  assert.equal(h.blockAlign, 1 * BYTES_PER_SAMPLE); // 2
+  assert.equal(h.byteRate, 44100 * 1 * BYTES_PER_SAMPLE); // 88200
+  assert.equal(h.dataSize, pcm.length);
+  assert.equal(h.riffSize, 36 + pcm.length);
+});
+
+test("wavFromPcm header is correct for stereo @ 48000Hz", () => {
+  const pcm = Buffer.alloc(2048);
+  const h = readWavHeader(wavFromPcm(pcm, { sampleRate: 48000, channels: 2 }));
+  assert.equal(h.channels, 2);
+  assert.equal(h.sampleRate, 48000);
+  assert.equal(h.blockAlign, 2 * BYTES_PER_SAMPLE); // 4
+  assert.equal(h.byteRate, 48000 * 2 * BYTES_PER_SAMPLE); // 384000
+  assert.equal(h.bitsPerSample, 16);
+  assert.equal(h.dataSize, pcm.length);
+  assert.equal(h.riffSize, 36 + pcm.length);
+});
+
+test("wavFromPcm header is correct for stereo @ 22050Hz", () => {
+  const pcm = Buffer.alloc(64);
+  const h = readWavHeader(wavFromPcm(pcm, { sampleRate: 22050, channels: 2 }));
+  assert.equal(h.channels, 2);
+  assert.equal(h.sampleRate, 22050);
+  assert.equal(h.blockAlign, 4);
+  assert.equal(h.byteRate, 22050 * 2 * BYTES_PER_SAMPLE); // 88200
+  assert.equal(h.dataSize, 64);
+  assert.equal(h.riffSize, 36 + 64);
+});
+
+test("wavFromPcm handles an empty PCM payload", () => {
+  const h = readWavHeader(wavFromPcm(Buffer.alloc(0), { sampleRate: 44100, channels: 1 }));
+  assert.equal(h.dataSize, 0);
+  assert.equal(h.riffSize, 36);
+});
+
+// --- capturingLoopback: feedback-loop warning decision ---------------------
+
+test("capturingLoopback warns for an auto-picked loopback (computer, no DEVICE)", () => {
+  assert.equal(
+    capturingLoopback({
+      sourceIsComputer: true,
+      device: "",
+      selectedDeviceName: "Monitor of Built-in Audio Analog Stereo",
+    }),
+    true,
+  );
+});
+
+test("capturingLoopback warns for an explicit DEVICE that looks like a loopback", () => {
+  assert.equal(
+    capturingLoopback({
+      sourceIsComputer: false,
+      device: "blackhole",
+      selectedDeviceName: "BlackHole 2ch",
+    }),
+    true,
+  );
+});
+
+test("capturingLoopback does NOT warn when computer is overridden by a physical DEVICE", () => {
+  assert.equal(
+    capturingLoopback({
+      sourceIsComputer: true,
+      device: "usb audio",
+      selectedDeviceName: "USB Audio CODEC",
+    }),
+    false,
+  );
+});
+
+test("capturingLoopback does NOT warn for the system default input (no name)", () => {
+  assert.equal(
+    capturingLoopback({
+      sourceIsComputer: false,
+      device: "",
+      selectedDeviceName: null,
+    }),
+    false,
+  );
+});
+
+test("capturingLoopback does NOT warn for an ordinary explicit DEVICE", () => {
+  assert.equal(
+    capturingLoopback({
+      sourceIsComputer: false,
+      device: "scarlett",
+      selectedDeviceName: "Scarlett 2i2 USB",
+    }),
+    false,
+  );
 });

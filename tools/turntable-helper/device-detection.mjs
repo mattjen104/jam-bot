@@ -1,14 +1,18 @@
-// Jam Bot — turntable capture helper: pure device-selection logic.
+// Jam Bot — turntable capture helper: pure, native-free helpers.
 // ---------------------------------------------------------------------------
-// This module contains ONLY the source-selection logic (loopback/monitor
-// detection, explicit-device precedence, computer-audio auto-pick). It takes a
-// plain device list as input and imports NOTHING native — in particular it does
-// NOT import `naudiodon`. That keeps it importable (and unit-testable) inside an
-// environment with no audio hardware, while `index.mjs` supplies the real
-// device list from portaudio at runtime.
+// This module contains the pure pieces of the helper that need no audio
+// hardware: the source-selection logic (loopback/monitor detection,
+// explicit-device precedence, computer-audio auto-pick), the WAV file builder
+// that wraps captured PCM bytes before upload, and the feedback-loop warning
+// decision. Everything here takes plain inputs and imports NOTHING native — in
+// particular it does NOT import `naudiodon`. That keeps it importable (and
+// unit-testable) inside an environment with no audio hardware, while
+// `index.mjs` supplies the real device list and PCM from portaudio at runtime.
 //
 // A "device" here is the shape naudiodon's `getDevices()` returns, of which we
 // only use: { id: number, name: string, maxInputChannels: number }.
+
+import { Buffer } from "node:buffer";
 
 // Aliases that all mean "follow whatever the computer is playing".
 export const COMPUTER_SOURCE_ALIASES = [
@@ -101,4 +105,47 @@ export function resolveDeviceId({ devices, device = "", sourceIsComputer = false
   }
 
   return DEFAULT_INPUT_DEVICE_ID; // portaudio default input (original behavior)
+}
+
+// Bytes per sample for the 16-bit PCM the helper captures and uploads.
+export const BYTES_PER_SAMPLE = 2; // 16-bit PCM
+
+// Build a minimal 16-bit PCM WAV file (44-byte RIFF/WAVE header + data) from
+// raw little-endian PCM samples. `pcm` is a Buffer of the captured samples.
+// A wrong header here would silently make every clip fail to identify, so the
+// field layout is exercised directly by the unit tests.
+export function wavFromPcm(pcm, { sampleRate, channels }) {
+  const blockAlign = channels * BYTES_PER_SAMPLE;
+  const byteRate = sampleRate * blockAlign;
+  const header = Buffer.alloc(44);
+  header.write("RIFF", 0);
+  header.writeUInt32LE(36 + pcm.length, 4);
+  header.write("WAVE", 8);
+  header.write("fmt ", 12);
+  header.writeUInt32LE(16, 16); // PCM fmt chunk size
+  header.writeUInt16LE(1, 20); // audio format = PCM
+  header.writeUInt16LE(channels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(BYTES_PER_SAMPLE * 8, 34); // bits per sample
+  header.write("data", 36);
+  header.writeUInt32LE(pcm.length, 40);
+  return Buffer.concat([header, pcm]);
+}
+
+// Decide whether to warn about the Spotify feedback loop. We're following
+// computer audio (and so at risk of hearing the bot's own Spotify) when:
+//   - we auto-picked an OS loopback (SOURCE=computer with no explicit DEVICE), or
+//   - the explicitly selected device's name itself looks like a loopback/monitor.
+// We must NOT warn when SOURCE=computer was overridden by a physical DEVICE —
+// the loop can't happen through a real input. `selectedDeviceName` is the name
+// of the resolved device, or null when capturing from the system default input.
+export function capturingLoopback({
+  sourceIsComputer = false,
+  device = "",
+  selectedDeviceName = null,
+}) {
+  if (sourceIsComputer && device === "") return true;
+  return selectedDeviceName ? isLoopbackName(selectedDeviceName) : false;
 }
