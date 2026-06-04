@@ -219,14 +219,20 @@ Every "Now playing" card has a **Vote skip (X/3)** button. The card updates as v
 
 For the long version, see [`SETUP.md` § Troubleshooting](./SETUP.md#troubleshooting).
 
-### Sync the Jam to a record player (optional)
+### Sync the Jam to a record player or your computer audio (optional)
 
-Got a turntable? The bot can listen to what's on the platter, identify it with
-ACRCloud, and drive the Jam to the streamed version so guests hear it too. Set
-the `ACRCLOUD_*` and `TURNTABLE_*` values in `.env`, run the capture helper in
-[`tools/turntable-helper`](../../tools/turntable-helper/) on the machine by your
-record player, then `/turntable start` in Slack. Full walkthrough:
-[`SETUP.md` § 8](./SETUP.md#8-turntable-sync-optional).
+Got a turntable — or just a YouTube/Apple Music tab playing? The bot can listen
+to it, identify it with ACRCloud, and drive the Jam to the streamed version so
+guests hear it too. Set the `ACRCLOUD_*` and `TURNTABLE_*` values in `.env`, then
+run the capture helper in [`tools/turntable-helper`](../../tools/turntable-helper/)
+on the host machine and `/turntable start` in Slack:
+
+- **Follow my record** (vinyl / line-in / mic): `DEVICE="USB Audio" npm start`.
+- **Follow my computer audio** (any non-Spotify app, via OS loopback):
+  `SOURCE=computer npm start` — auto-picks the loopback/monitor device. Keep the
+  bot's own Spotify muted locally or on a different output so it isn't captured.
+
+Full walkthrough: [`SETUP.md` § 8](./SETUP.md#8-turntable-sync-optional).
 
 ---
 

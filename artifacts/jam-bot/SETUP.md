@@ -306,22 +306,52 @@ Cloudflare tunnel you may already use for the token relay, or any reverse proxy
 that lands on `/turntable/identify`. Reuse a tunnel/HTTPS rather than opening the
 raw port to the internet.
 
-### 8c. Run the capture helper on the machine by the turntable
+### 8c. Run the capture helper on the host machine
 
 The helper depends on a native audio module, so it lives **outside** the pnpm
 workspace in [`tools/turntable-helper`](../../tools/turntable-helper/) and runs
-on the machine next to your record player — not the droplet. Full instructions
-are in that folder's `README.md`. The short version:
+on the machine playing the source — not the droplet. It can follow **two kinds
+of source**: a physical input ("follow my record") or the computer's own audio
+("follow my computer audio"). Full instructions are in that folder's
+`README.md`. The short version:
 
 ```bash
 cd tools/turntable-helper
 npm install
-npm run devices            # find your input device id
+npm run devices            # list devices; loopback inputs are tagged <loopback>
+```
+
+**Follow my record** (vinyl / line-in / mic — a physical input):
+
+```bash
 INGEST_URL=https://<your-bot-host>/turntable/identify \
 INGEST_SECRET=<TURNTABLE_INGEST_SECRET> \
 DEVICE="USB Audio" \
 npm start
 ```
+
+**Follow my computer audio** (a YouTube/Apple Music tab, DJ software, a local
+file — anything *except* the host's own Spotify). This auto-picks the OS
+loopback/monitor device, so no `DEVICE` id is needed:
+
+```bash
+SOURCE=computer \
+INGEST_URL=https://<your-bot-host>/turntable/identify \
+INGEST_SECRET=<TURNTABLE_INGEST_SECRET> \
+npm start
+```
+
+Loopback support per OS: **Linux** exposes a "Monitor of …" source for free (no
+setup); **Windows** needs "Stereo Mix" enabled or a virtual cable (VB-Audio /
+VoiceMeeter); **macOS** needs a virtual device (BlackHole / Loopback). See the
+helper README for the per-OS walkthrough.
+
+> **Don't capture the bot's own Spotify.** Spotify Jam already cascades the
+> host's Spotify natively, so computer-audio mode is for **non-Spotify** sources.
+> The bot drives your Spotify as a silent robot to feed the Jam — keep it muted
+> locally or on a different output than the one being captured, or
+> identification loops on itself. Muting locally does **not** stop guests hearing
+> it (Jam cascades from Spotify's servers, not your local speakers).
 
 ### 8d. Use it from Slack
 
