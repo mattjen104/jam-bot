@@ -11,6 +11,7 @@ import {
   CARD_BACK_ACTION,
   CARD_HOP_ACTION,
   CARD_CRUMB_ACTION,
+  CARD_SESSIONS_ACTION,
   PERSON_BUTTON_MAX,
   MAX_PERSON_DEPTH,
   pushPersonTrail,
@@ -349,6 +350,49 @@ describe("renderTrackCard", () => {
     expect(hops).toHaveLength(2);
     expect(hops.map((h) => h.value)).toEqual(["art-beck", "art-ngrr"]);
     expect(hops[0].text).toContain("Beck");
+  });
+
+  it("offers 'Play their sessions' carrying the artist id once known work is loaded", () => {
+    const state = baseState({
+      knowledge,
+      view: { kind: "person", trail: ["art-jmj"], from: "credits" },
+      people: new Map([
+        [
+          "art-jmj",
+          personInfo({
+            name: "Justin Meldal-Johnsen",
+            artistId: "art-jmj",
+            knownFor: [{ title: "Some Album", year: 2011, mbUrl: "https://mb/rg/1" }],
+          }),
+        ],
+      ]),
+    });
+    const sessions = buttonsWithPrefix(renderTrackCard(state).blocks, CARD_SESSIONS_ACTION);
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].value).toBe("art-jmj");
+    expect(sessions[0].text).toContain("Play their sessions");
+  });
+
+  it("hides 'Play their sessions' when the person has no resolvable known work", () => {
+    const loading = baseState({
+      knowledge,
+      // Not yet fetched -> no info -> no sessions button (only Back).
+      view: { kind: "person", trail: ["art-jmj"], from: "credits" },
+    });
+    expect(
+      buttonsWithPrefix(renderTrackCard(loading).blocks, CARD_SESSIONS_ACTION),
+    ).toHaveLength(0);
+
+    const noWork = baseState({
+      knowledge,
+      view: { kind: "person", trail: ["art-jmj"], from: "credits" },
+      people: new Map([
+        ["art-jmj", personInfo({ name: "Justin Meldal-Johnsen", artistId: "art-jmj" })],
+      ]),
+    });
+    expect(
+      buttonsWithPrefix(renderTrackCard(noWork).blocks, CARD_SESSIONS_ACTION),
+    ).toHaveLength(0);
   });
 
   it("shows no hop buttons when a person has no resolvable collaborators", () => {

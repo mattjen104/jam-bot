@@ -44,6 +44,9 @@ export const CARD_HOP_ACTION_RE = new RegExp(`^${CARD_HOP_ACTION}:`);
 // that level in the person trail.
 export const CARD_CRUMB_ACTION = "jam_card_crumb";
 export const CARD_CRUMB_ACTION_RE = new RegExp(`^${CARD_CRUMB_ACTION}:`);
+// "Play their sessions": queue a capped handful of this person's notable work
+// onto the host playback. Single action; value carries the person's artist id.
+export const CARD_SESSIONS_ACTION = "jam_card_sessions";
 /**
  * Max people kept in a hop trail. Bounds the breadcrumb so it (plus the leading
  * tab crumb) never exceeds Slack's 5-element actions-row cap, and keeps the trail
@@ -463,21 +466,36 @@ function personViewBlocks(state: TrackCardState): KnownBlock[] {
     if (info.mbUrl) lines.push(`<${info.mbUrl}|Full discography on MusicBrainz ↗>`);
   }
 
+  const controls: Array<{
+    type: "button";
+    action_id: string;
+    text: { type: "plain_text"; text: string; emoji: boolean };
+    value: string;
+    style?: "primary" | "danger";
+  }> = [];
+  // Only offer "Play their sessions" when there's notable work to resolve, so
+  // the card never advertises an action that can't queue anything.
+  if ((info?.knownFor?.length ?? 0) > 0) {
+    controls.push({
+      type: "button",
+      action_id: CARD_SESSIONS_ACTION,
+      text: { type: "plain_text", text: ":notes: Play their sessions", emoji: true },
+      value: artistId,
+      style: "primary",
+    });
+  }
+  controls.push({
+    type: "button",
+    action_id: CARD_BACK_ACTION,
+    text: { type: "plain_text", text: ":arrow_left: Back", emoji: true },
+    value: view.from,
+  });
+
   return [
     breadcrumbRow(state, view),
     { type: "section", text: { type: "mrkdwn", text: lines.join("\n") } },
     ...collaboratorBlocks(info),
-    {
-      type: "actions",
-      elements: [
-        {
-          type: "button",
-          action_id: CARD_BACK_ACTION,
-          text: { type: "plain_text", text: ":arrow_left: Back", emoji: true },
-          value: view.from,
-        },
-      ],
-    },
+    { type: "actions", elements: controls },
   ];
 }
 

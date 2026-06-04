@@ -84,6 +84,7 @@ import {
 } from "../turntable/context.js";
 import { fetchTrackLinks, trackLinksEnabled } from "../turntable/odesli.js";
 import { enrichPerson } from "../turntable/person.js";
+import { resolvePersonSessions } from "../turntable/sessions.js";
 import {
   renderTrackCard,
   putCard,
@@ -94,6 +95,7 @@ import {
   CARD_CRUMB_ACTION_RE,
   CARD_CRUMB_ACTION,
   CARD_BACK_ACTION,
+  CARD_SESSIONS_ACTION,
   TAB_ACTION_RE,
   pushPersonTrail,
   type TrackCardState,
@@ -2150,6 +2152,101 @@ slackApp.action(CARD_BACK_ACTION, async ({ ack, body, action, respond }) => {
     await updateCardMessage(card);
   } catch (err) {
     logger.error("Card back action failed", { error: String(err) });
+  }
+});
+
+slackApp.action(CARD_SESSIONS_ACTION, async ({ ack, body, action, respond }) => {
+  await ack();
+  const ephemeral = (text: string) =>
+    respond({ response_type: "ephemeral", replace_original: false, text });
+  try {
+    const artistId = "value" in action ? action.value : undefined;
+    const userId = body.user?.id;
+    const { channel, ts } = actionMessageRef(body);
+    if (!artistId || !channel || !ts) return;
+    const card = getCard(cardKey(channel, ts));
+    if (!card) {
+      await ephemeral(CARD_EXPIRED_MSG);
+      return;
+    }
+    const person = card.people.get(artistId) ?? null;
+    if (!person) {
+      await ephemeral(":hourglass: Still looking this person up — try again in a moment.");
+      return;
+    }
+    const who = person.name;
+
+    // Rate-limit consistent with the other playback paths (play / tour).
+    if (userId) {
+      const used = countUserRequestsLastHour(userId);
+      if (used >= config.MAX_PLAYS_PER_USER_PER_HOUR) {
+        await ephemeral(
+          `:hourglass_flowing_sand: You've hit your hourly play budget (${used}/${config.MAX_PLAYS_PER_USER_PER_HOUR}). Try again later.`,
+        );
+        return;
+      }
+    }
+
+    // Resolve known work to confident Spotify tracks OUTSIDE the playback lock
+    // (it hits the network); only the device lookup + queue loop run inside it.
+    const tracks = await resolvePersonSessions(person);
+    if (!tracks.length) {
+      await ephemeral(
+        `:see_no_evil: I couldn't confidently match any of *${who}*'s work to Spotify right now.`,
+      );
+      return;
+    }
+
+    let queued = 0;
+    let deviceFound = false;
+    try {
+      await withPlaybackLock(async () => {
+        const device = await findActiveDevice();
+        if (!device) return;
+        deviceFound = true;
+        for (const t of tracks) {
+          try {
+            await addToQueue(t.uri, device.id);
+            if (userId) recordPendingRequest(t.trackId, userId, `sessions: ${who}`);
+            queued++;
+          } catch (err) {
+            logger.warn("Sessions queue: aborting after enqueue failure", {
+              id: t.trackId,
+              queuedSoFar: queued,
+              error: String(err),
+            });
+            break;
+          }
+        }
+      });
+    } catch (err) {
+      if (err instanceof PlaybackLockBusyError) {
+        await ephemeral(
+          ":hourglass_flowing_sand: Another track is being queued right now — try again in a sec.",
+        );
+        return;
+      }
+      throw err;
+    }
+
+    if (!deviceFound) {
+      await ephemeral(
+        ":warning: No active Spotify device. Open Spotify on your phone (or any device) and start playing something, then try again.",
+      );
+      return;
+    }
+    if (!queued) {
+      await ephemeral(":warning: Couldn't queue those tracks right now — try again in a sec.");
+      return;
+    }
+    if (userId) recordUserRequest(userId);
+    const list = tracks
+      .slice(0, queued)
+      .map((t) => `• *${t.title}* — ${t.artist}`)
+      .join("\n");
+    await ephemeral(`:musical_note: Queued ${queued} from *${who}*:\n${list}`);
+  } catch (err) {
+    logger.error("Card sessions action failed", { error: String(err) });
   }
 });
 
