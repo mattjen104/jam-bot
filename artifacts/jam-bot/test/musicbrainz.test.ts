@@ -5,6 +5,7 @@ import {
   parseWorkWriters,
   parseArtistReleaseGroups,
   parseArtistRelations,
+  parseSongRelationships,
 } from "../src/turntable/musicbrainz.js";
 
 describe("MusicBrainz ISRC lookup parsing", () => {
@@ -172,5 +173,156 @@ describe("MusicBrainz artist relations parsing", () => {
     expect(parseArtistRelations(many, 3)).toHaveLength(3);
     expect(parseArtistRelations(null)).toEqual([]);
     expect(parseArtistRelations({})).toEqual([]);
+  });
+});
+
+describe("MusicBrainz song relationship parsing", () => {
+  it("classifies kinds, honors direction, and pulls recording target metadata", () => {
+    const rels = parseSongRelationships({
+      relations: [
+        {
+          type: "samples material",
+          direction: "forward",
+          "target-type": "recording",
+          recording: {
+            id: "rec-source",
+            title: "Amen, Brother",
+            "first-release-date": "1969-06-15",
+            "artist-credit": [{ name: "The Winstons" }],
+          },
+        },
+        {
+          type: "remix",
+          direction: "backward",
+          "target-type": "recording",
+          recording: {
+            id: "rec-remix",
+            title: "Club Mix",
+            "first-release-date": "2002",
+            "artist-credit": [
+              { name: "DJ A", artist: { name: "ignored" } },
+              { name: " & " },
+              { artist: { name: "DJ B" } },
+            ],
+          },
+        },
+      ],
+    });
+
+    expect(rels).toEqual([
+      {
+        kind: "sample",
+        direction: "forward",
+        label: "samples",
+        title: "Amen, Brother",
+        artist: "The Winstons",
+        year: 1969,
+        targetType: "recording",
+        targetId: "rec-source",
+        mbUrl: "https://musicbrainz.org/recording/rec-source",
+      },
+      {
+        kind: "remix",
+        direction: "backward",
+        label: "remixed by",
+        title: "Club Mix",
+        artist: "DJ A, &, DJ B",
+        year: 2002,
+        targetType: "recording",
+        targetId: "rec-remix",
+        mbUrl: "https://musicbrainz.org/recording/rec-remix",
+      },
+    ]);
+  });
+
+  it("handles work targets (cover/interpolation) without recording metadata", () => {
+    const rels = parseSongRelationships({
+      relations: [
+        {
+          type: "cover",
+          direction: "forward",
+          "target-type": "work",
+          work: { id: "work-1", title: "Hallelujah" },
+        },
+        {
+          type: "based on",
+          direction: "backward",
+          "target-type": "work",
+          work: { id: "work-2", title: "Some Theme" },
+        },
+      ],
+    });
+
+    expect(rels).toEqual([
+      {
+        kind: "cover",
+        direction: "forward",
+        label: "cover of",
+        title: "Hallelujah",
+        targetType: "work",
+        targetId: "work-1",
+        mbUrl: "https://musicbrainz.org/work/work-1",
+      },
+      {
+        kind: "interpolation",
+        direction: "backward",
+        label: "interpolated by",
+        title: "Some Theme",
+        targetType: "work",
+        targetId: "work-2",
+        mbUrl: "https://musicbrainz.org/work/work-2",
+      },
+    ]);
+  });
+
+  it("drops unrelated types, targetless rels, and dedupes by kind+direction+target", () => {
+    const rels = parseSongRelationships({
+      relations: [
+        // Not one of our four families -> dropped.
+        { type: "performance", "target-type": "work", work: { id: "w", title: "X" } },
+        // Missing target id -> dropped.
+        { type: "cover", "target-type": "work", work: { title: "No Id" } },
+        // Missing title -> dropped.
+        {
+          type: "samples",
+          "target-type": "recording",
+          recording: { id: "rec-only" },
+        },
+        // Unknown target-type -> dropped.
+        { type: "remix", "target-type": "artist", recording: { id: "a", title: "A" } },
+        {
+          type: "samples",
+          direction: "forward",
+          "target-type": "recording",
+          recording: { id: "rec-dup", title: "Dup" },
+        },
+        // Exact dup (same kind+direction+target) -> dropped.
+        {
+          type: "samples",
+          direction: "forward",
+          "target-type": "recording",
+          recording: { id: "rec-dup", title: "Dup" },
+        },
+      ],
+    });
+
+    expect(rels.map((r) => `${r.kind}|${r.direction}|${r.targetId}`)).toEqual([
+      "sample|forward|rec-dup",
+    ]);
+  });
+
+  it("caps the list and tolerates junk input", () => {
+    const many = {
+      relations: Array.from({ length: 20 }, (_, i) => ({
+        type: "samples",
+        direction: "forward",
+        "target-type": "recording",
+        recording: { id: `rec-${i}`, title: `T ${i}` },
+      })),
+    };
+    expect(parseSongRelationships(many)).toHaveLength(12);
+    expect(parseSongRelationships(many, 3)).toHaveLength(3);
+    expect(parseSongRelationships(null)).toEqual([]);
+    expect(parseSongRelationships({})).toEqual([]);
   });
 });

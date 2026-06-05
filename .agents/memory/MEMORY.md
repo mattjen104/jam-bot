@@ -9,3 +9,4 @@
 - [track-knowledge (liner-notes) pipeline](track-knowledge-pipeline.md) — enrich confirmed tracks with real credits/pressing: off hot path, canonical MB-recording-id cache convergence, never-fabricate grounding guard on LLM one-liner, query-on-demand not warehouse.
 - [Shared-lib seam wiring vs vitest mocks](lib-seam-wiring-vitest-mocks.md) — a host wiring a shared lib's seams in a global vitest setupFile must import a leaf-only entry, never the barrel, or it pre-evaluates subjects and defeats per-file vi.mock.
 - [Odesli links API endpoint](odesli-endpoint.md) — use `api.song.link/v1-alpha.1/links`; old `/v1-links` 404s site-wide via Fastly (looks like a deploy/track bug but is just the wrong path).
+- [Song-to-song relationships shape](song-relationships-shape.md) — typed MB rels (samples/covers/remixes/interpolations) live on TrackKnowledge; required in TS but read defensively (old caches), optional in OpenAPI.

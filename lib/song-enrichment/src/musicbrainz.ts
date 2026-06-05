@@ -58,6 +58,44 @@ export interface ArtistCollaborator {
   relation?: string;
 }
 
+/**
+ * One of the four typed song-to-song relationship families the graph vision
+ * wants. Kept deliberately small so both the Slack card and the web graph can
+ * switch on it.
+ */
+export type SongRelationKind = "sample" | "cover" | "remix" | "interpolation";
+
+/**
+ * A typed, directional link from THIS song to another recording/work, parsed
+ * from MusicBrainz recording-rels / work-rels.
+ *
+ * `direction` describes the relationship from this song's point of view:
+ *   - "forward":  this song is the source — it samples / is a cover of / is a
+ *     remix of / interpolates the related target.
+ *   - "backward": this song is the target — the related entity samples / covers
+ *     / remixes / interpolates THIS song.
+ * `label` is the directional human phrasing ("samples", "sampled by", …) so the
+ * card and graph never have to re-derive it.
+ */
+export interface SongRelationship {
+  kind: SongRelationKind;
+  direction: "forward" | "backward";
+  /** Directional label, e.g. "samples", "sampled by", "remix of". */
+  label: string;
+  /** Related entity's title. */
+  title: string;
+  /** Related entity's artist, when MusicBrainz embedded an artist-credit. */
+  artist?: string;
+  /** Related entity's year, when MusicBrainz reported a date. */
+  year?: number;
+  /** Whether the related entity is a recording or a work. */
+  targetType: "recording" | "work";
+  /** Canonical MusicBrainz id of the related entity. */
+  targetId: string;
+  /** Canonical MusicBrainz page URL for the related entity. */
+  mbUrl: string;
+}
+
 export interface RecordingCredits {
   recordingId: string;
   artistId?: string;
@@ -65,6 +103,13 @@ export interface RecordingCredits {
   personnel: Credit[];
   /** Linked work ids (used to fetch writers in a second lookup). */
   workIds: string[];
+  /**
+   * Typed song-to-song relationships (samples / covers / remixes /
+   * interpolations) parsed from recording-rels + the linked work's work-rels.
+   * Optional so the pure credits parser (and older cached results) can omit it;
+   * `fetchRecordingCredits` populates it best-effort.
+   */
+  relationships?: SongRelationship[];
 }
 
 /** Whether MusicBrainz lookups are configured (a contact UA is required). */
@@ -169,6 +214,129 @@ export function parseWorkWriters(body: unknown): Credit[] {
   return dedupeCredits(writers);
 }
 
+/** Directional labels for each relationship family. */
+const REL_LABELS: Record<
+  SongRelationKind,
+  { forward: string; backward: string }
+> = {
+  sample: { forward: "samples", backward: "sampled by" },
+  cover: { forward: "cover of", backward: "covered by" },
+  remix: { forward: "remix of", backward: "remixed by" },
+  interpolation: { forward: "interpolates", backward: "interpolated by" },
+};
+
+/**
+ * Classify a MusicBrainz relationship `type` into one of our four families, or
+ * null if it isn't one we surface. Substring matching keeps us robust to the
+ * exact MusicBrainz wording ("samples", "samples material", "remix", "cover",
+ * "based on") without enumerating every variant.
+ */
+function classifyRelKind(type: string): SongRelationKind | null {
+  const t = type.toLowerCase();
+  if (t.includes("sampl")) return "sample";
+  if (t.includes("remix")) return "remix";
+  if (t.includes("cover")) return "cover";
+  if (t.includes("interpolat") || t.includes("based on")) {
+    return "interpolation";
+  }
+  return null;
+}
+
+/** Best-effort credited-artist name from an embedded artist-credit array. */
+function artistCreditName(
+  ac?: Array<{ name?: string; artist?: { name?: string } }>,
+): string | undefined {
+  if (!ac?.length) return undefined;
+  const parts = ac
+    .map((c) => (c.name?.trim() || c.artist?.name?.trim() || "").trim())
+    .filter(Boolean);
+  return parts.length ? parts.join(", ") : undefined;
+}
+
+/**
+ * Pure: typed song-to-song relationships (samples / covers / remixes /
+ * interpolations) from a recording OR work body's `relations` array. Only
+ * relations that classify into one of the four families AND carry a usable
+ * recording/work target (id + title) survive. Direction is taken verbatim from
+ * MusicBrainz; the human label is derived from kind + direction. Dups (same
+ * kind+direction+target) are dropped and the list is capped.
+ */
+export function parseSongRelationships(
+  body: unknown,
+  cap = 12,
+): SongRelationship[] {
+  const b = body as {
+    relations?: Array<{
+      type?: string;
+      direction?: string;
+      "target-type"?: string;
+      recording?: {
+        id?: string;
+        title?: string;
+        "first-release-date"?: string;
+        "artist-credit"?: Array<{ name?: string; artist?: { name?: string } }>;
+      };
+      work?: { id?: string; title?: string };
+    }>;
+  };
+  const out: SongRelationship[] = [];
+  const seen = new Set<string>();
+  for (const rel of b?.relations ?? []) {
+    const kind = classifyRelKind(rel?.type ?? "");
+    if (!kind) continue;
+    const targetType =
+      rel["target-type"] === "work"
+        ? "work"
+        : rel["target-type"] === "recording"
+          ? "recording"
+          : null;
+    if (!targetType) continue;
+    const entity = targetType === "recording" ? rel.recording : rel.work;
+    const targetId = entity?.id?.trim();
+    const title = entity?.title?.trim();
+    if (!targetId || !title) continue;
+    const direction = rel.direction === "backward" ? "backward" : "forward";
+    const dedupeKey = `${kind}|${direction}|${targetId}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+
+    let artist: string | undefined;
+    let year: number | undefined;
+    if (targetType === "recording" && rel.recording) {
+      artist = artistCreditName(rel.recording["artist-credit"]);
+      const yearStr = rel.recording["first-release-date"]?.slice(0, 4);
+      year =
+        yearStr && /^\d{4}$/.test(yearStr) ? Number(yearStr) : undefined;
+    }
+
+    out.push({
+      kind,
+      direction,
+      label: REL_LABELS[kind][direction],
+      title,
+      ...(artist ? { artist } : {}),
+      ...(year != null ? { year } : {}),
+      targetType,
+      targetId,
+      mbUrl: `https://musicbrainz.org/${targetType}/${targetId}`,
+    });
+  }
+  return out.slice(0, cap);
+}
+
+/** Drop duplicate relationships (same kind+direction+target), preserving order. */
+function dedupeRelationships(rels: SongRelationship[]): SongRelationship[] {
+  const seen = new Set<string>();
+  const out: SongRelationship[] = [];
+  for (const r of rels) {
+    const key = `${r.kind}|${r.direction}|${r.targetId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(r);
+  }
+  return out;
+}
+
 /** Drop exact (role+name) duplicates while preserving order. */
 function dedupeCredits(credits: Credit[]): Credit[] {
   const seen = new Set<string>();
@@ -218,19 +386,23 @@ export async function fetchRecordingCredits(
   if (!musicbrainzEnabled() || !recordingId) return null;
   try {
     const recBody = await mbFetch(
-      `/recording/${recordingId}?inc=artist-credits+artist-rels+work-rels&fmt=json`,
+      `/recording/${recordingId}?inc=artist-credits+artist-rels+work-rels+recording-rels&fmt=json`,
     );
     const credits = parseRecordingCredits(recordingId, recBody);
+    // Recording-level relationships (samples / remixes between recordings).
+    const relationships: SongRelationship[] = parseSongRelationships(recBody);
 
     if (credits.workIds[0]) {
       try {
         const workBody = await mbFetch(
-          `/work/${credits.workIds[0]}?inc=artist-rels&fmt=json`,
+          `/work/${credits.workIds[0]}?inc=artist-rels+work-rels&fmt=json`,
         );
         credits.personnel = [
           ...credits.personnel,
           ...parseWorkWriters(workBody),
         ];
+        // Work-level relationships (covers / interpolations between works).
+        relationships.push(...parseSongRelationships(workBody));
       } catch (err) {
         logger.warn("MusicBrainz work lookup failed", {
           work: credits.workIds[0],
@@ -238,6 +410,7 @@ export async function fetchRecordingCredits(
         });
       }
     }
+    credits.relationships = dedupeRelationships(relationships);
     return credits;
   } catch (err) {
     logger.warn("MusicBrainz recording lookup failed", {

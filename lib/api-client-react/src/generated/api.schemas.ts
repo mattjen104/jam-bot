@@ -31,6 +31,49 @@ export interface DiscogsPressing {
   format?: string | null;
 }
 
+export type SongRelationshipKind =
+  (typeof SongRelationshipKind)[keyof typeof SongRelationshipKind];
+
+export const SongRelationshipKind = {
+  sample: "sample",
+  cover: "cover",
+  remix: "remix",
+  interpolation: "interpolation",
+} as const;
+
+export type SongRelationshipDirection =
+  (typeof SongRelationshipDirection)[keyof typeof SongRelationshipDirection];
+
+export const SongRelationshipDirection = {
+  forward: "forward",
+  backward: "backward",
+} as const;
+
+export type SongRelationshipTargetType =
+  (typeof SongRelationshipTargetType)[keyof typeof SongRelationshipTargetType];
+
+export const SongRelationshipTargetType = {
+  recording: "recording",
+  work: "work",
+} as const;
+
+/**
+ * A typed, directional song-to-song relationship parsed from MusicBrainz. direction="forward" means THIS song is the source (it samples / is a cover of / is a remix of / interpolates the target); "backward" means the related entity does so to THIS song. The web graph renders each as a typed edge to a node identified by targetType + targetId.
+ */
+export interface SongRelationship {
+  kind: SongRelationshipKind;
+  direction: SongRelationshipDirection;
+  label: string;
+  title: string;
+  /** @nullable */
+  artist?: string | null;
+  /** @nullable */
+  year?: number | null;
+  targetType: SongRelationshipTargetType;
+  targetId: string;
+  mbUrl: string;
+}
+
 export interface TrackKnowledge {
   /** @nullable */
   recordingId?: string | null;
@@ -40,6 +83,7 @@ export interface TrackKnowledge {
   artistName?: string | null;
   personnel: Credit[];
   pressing?: DiscogsPressing | null;
+  relationships?: SongRelationship[];
   /** @nullable */
   summary?: string | null;
   approximate: boolean;

@@ -79,6 +79,25 @@ export const GetSongContextResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        relationships: zod
+          .array(
+            zod
+              .object({
+                kind: zod.enum(["sample", "cover", "remix", "interpolation"]),
+                direction: zod.enum(["forward", "backward"]),
+                label: zod.string(),
+                title: zod.string(),
+                artist: zod.string().nullish(),
+                year: zod.number().nullish(),
+                targetType: zod.enum(["recording", "work"]),
+                targetId: zod.string(),
+                mbUrl: zod.string(),
+              })
+              .describe(
+                'A typed, directional song-to-song relationship parsed from MusicBrainz. direction=\"forward\" means THIS song is the source (it samples \/ is a cover of \/ is a remix of \/ interpolates the target); \"backward\" means the related entity does so to THIS song. The web graph renders each as a typed edge to a node identified by targetType + targetId.',
+              ),
+          )
+          .optional(),
         summary: zod.string().nullish(),
         approximate: zod.boolean(),
         fetchedAtMs: zod.number(),

@@ -7,6 +7,7 @@
  */
 import type { Credit } from "./credit";
 import type { DiscogsPressing } from "./discogsPressing";
+import type { SongRelationship } from "./songRelationship";
 
 export interface TrackKnowledge {
   /** @nullable */
@@ -17,6 +18,7 @@ export interface TrackKnowledge {
   artistName?: string | null;
   personnel: Credit[];
   pressing?: DiscogsPressing | null;
+  relationships?: SongRelationship[];
   /** @nullable */
   summary?: string | null;
   approximate: boolean;

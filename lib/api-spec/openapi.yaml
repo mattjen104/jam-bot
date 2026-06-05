@@ -165,6 +165,44 @@ components:
           type: ["string", "null"]
         format:
           type: ["string", "null"]
+    SongRelationship:
+      type: object
+      description: >-
+        A typed, directional song-to-song relationship parsed from MusicBrainz.
+        direction="forward" means THIS song is the source (it samples / is a
+        cover of / is a remix of / interpolates the target); "backward" means the
+        related entity does so to THIS song. The web graph renders each as a
+        typed edge to a node identified by targetType + targetId.
+      properties:
+        kind:
+          type: string
+          enum: [sample, cover, remix, interpolation]
+        direction:
+          type: string
+          enum: [forward, backward]
+        label:
+          type: string
+        title:
+          type: string
+        artist:
+          type: ["string", "null"]
+        year:
+          type: ["integer", "null"]
+        targetType:
+          type: string
+          enum: [recording, work]
+        targetId:
+          type: string
+        mbUrl:
+          type: string
+      required:
+        - kind
+        - direction
+        - label
+        - title
+        - targetType
+        - targetId
+        - mbUrl
     TrackKnowledge:
       type: object
       properties:
@@ -182,6 +220,10 @@ components:
           anyOf:
             - $ref: "#/components/schemas/DiscogsPressing"
             - type: "null"
+        relationships:
+          type: array
+          items:
+            $ref: "#/components/schemas/SongRelationship"
         summary:
           type: ["string", "null"]
         approximate:

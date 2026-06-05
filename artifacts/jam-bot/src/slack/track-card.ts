@@ -1,7 +1,11 @@
 import type { KnownBlock } from "@slack/types";
 import type { CurrentlyPlaying } from "../spotify/client.js";
 import { VOTE_SKIP_ACTION_ID, type VoteSkipState } from "./format.js";
-import { type TrackKnowledge, groupPersonnel } from "../turntable/knowledge.js";
+import {
+  type TrackKnowledge,
+  groupPersonnel,
+  relationshipLines,
+} from "../turntable/knowledge.js";
 import type { TrackContext } from "../turntable/context.js";
 import {
   type ArtistCatalogue,
@@ -139,7 +143,12 @@ function mbArtistUrl(id: string): string {
 // ---- content presence -----------------------------------------------------
 
 export function knowledgeHasContent(k?: TrackKnowledge | null): boolean {
-  return !!k && (k.personnel.length > 0 || !!k.pressing);
+  return (
+    !!k &&
+    (k.personnel.length > 0 ||
+      !!k.pressing ||
+      (k.relationships?.length ?? 0) > 0)
+  );
 }
 
 export function contextHasContent(c?: TrackContext | null): boolean {
@@ -291,14 +300,31 @@ function creditsViewBlocks(state: TrackCardState): KnownBlock[] {
     if (parts.length) lines.push(`*Pressing:* ${parts.join(" · ")}`);
   }
 
-  const blocks: KnownBlock[] = [
-    { type: "section", text: { type: "mrkdwn", text: lines.join("\n") } },
-  ];
+  // Liner content present only when we added a credit/pressing line beyond the
+  // header (+ optional summary). A track with relationships but no credits skips
+  // the liner-notes section and shows just the connections section below.
+  const minLines = state.knowledgeSummary?.trim() ? 2 : 1;
+  const blocks: KnownBlock[] = [];
+  if (lines.length > minLines) {
+    blocks.push({
+      type: "section",
+      text: { type: "mrkdwn", text: lines.join("\n") },
+    });
+    // Explore — only people we have a canonical artist id for, so every
+    // drill-down is grounded (no name-search guessing). A short list renders as
+    // a button per person; a long one falls back to a single dropdown.
+    blocks.push(...exploreBlocks(uniqueExplorable(k.personnel)));
+  }
 
-  // Explore — only people we have a canonical artist id for, so every
-  // drill-down is grounded (no name-search guessing). A short list renders as a
-  // button per person; a long one falls back to a single dropdown.
-  blocks.push(...exploreBlocks(uniqueExplorable(k.personnel)));
+  // Compact, typed song-to-song relationships (samples / covers / remixes /
+  // interpolations) when present — silent otherwise.
+  const relLines = relationshipLines(k.relationships);
+  if (relLines.length) {
+    blocks.push({
+      type: "section",
+      text: { type: "mrkdwn", text: relLines.join("\n") },
+    });
+  }
   return blocks;
 }
 

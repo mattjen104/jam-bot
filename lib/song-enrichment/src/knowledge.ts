@@ -10,6 +10,7 @@ import type { AcrMatch } from "./types.js";
 import type { SearchResultTrack } from "./types.js";
 import {
   type Credit,
+  type SongRelationship,
   fetchRecordingCredits,
   musicbrainzEnabled,
   resolveRecordingId,
@@ -35,6 +36,13 @@ export interface TrackKnowledge {
   artistName?: string;
   personnel: Credit[];
   pressing?: DiscogsPressing;
+  /**
+   * Typed song-to-song relationships (samples / covers / remixes /
+   * interpolations) for this recording, parsed from MusicBrainz. Always an
+   * array (possibly empty); the web graph renders each as a typed edge/node and
+   * the Slack card shows a compact section when non-empty.
+   */
+  relationships: SongRelationship[];
   /**
    * True when the facts are NOT guaranteed to match this exact recording —
    * i.e. we fell back to title/artist matching, MusicBrainz didn't resolve, or
@@ -68,7 +76,11 @@ export function buildCacheKey(match: AcrMatch): string {
 }
 
 function hasContent(k: TrackKnowledge): boolean {
-  return k.personnel.length > 0 || !!k.pressing;
+  return (
+    k.personnel.length > 0 ||
+    !!k.pressing ||
+    (k.relationships?.length ?? 0) > 0
+  );
 }
 
 const ttlMs = (): number =>
@@ -157,6 +169,7 @@ export async function enrichTrack(args: {
     artistName: credits?.artistName,
     personnel: credits?.personnel ?? [],
     pressing: pressing ?? undefined,
+    relationships: credits?.relationships ?? [],
     // Recording-exact only when we matched the Spotify track by ISRC AND got
     // canonical MusicBrainz credits for that recording. Anything else is
     // approximate (pressing-level / title-matched).
@@ -234,6 +247,46 @@ export function groupPersonnel(personnel: Credit[]): {
 }
 
 /**
+ * Capitalize a directional relationship label for use as a line heading
+ * ("samples" -> "Samples", "sampled by" -> "Sampled by").
+ */
+function relLabelHeading(label: string): string {
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+/** Render one related entity as a linked, optionally annotated mrkdwn fragment. */
+function relTargetText(rel: SongRelationship): string {
+  const meta = [rel.artist, rel.year ? String(rel.year) : null]
+    .filter(Boolean)
+    .join(", ");
+  const label = meta ? `${rel.title} — ${meta}` : rel.title;
+  return `<${rel.mbUrl}|${label}>`;
+}
+
+/**
+ * Pure: compact relationship lines for the Slack card, grouped by directional
+ * label (one line per "Samples:", "Remix of:", …) with linked targets. Returns
+ * [] when there are no relationships. Shared by the standalone liner-notes card
+ * and the consolidated track card so the two never drift.
+ */
+export function relationshipLines(rels?: SongRelationship[] | null): string[] {
+  if (!rels?.length) return [];
+  const groups = new Map<string, SongRelationship[]>();
+  for (const r of rels) {
+    const list = groups.get(r.label) ?? [];
+    list.push(r);
+    groups.set(r.label, list);
+  }
+  const lines: string[] = [":link: *Connections*"];
+  for (const [label, list] of groups) {
+    lines.push(
+      `*${relLabelHeading(label)}:* ${list.map(relTargetText).join(", ")}`,
+    );
+  }
+  return lines;
+}
+
+/**
  * Pure: render the liner-notes section blocks. Returns [] when there's nothing
  * worth showing. `summary` is an optional one-line, fact-only bot-voice intro.
  */
@@ -268,15 +321,26 @@ export function knowledgeBlocks(
     if (parts.length) lines.push(`*Pressing:* ${parts.join(" · ")}`);
   }
 
-  // Only header (+ maybe summary) and nothing else — not worth a card.
-  if (lines.length <= (summary?.trim() ? 2 : 1)) return [];
+  const relLines = relationshipLines(knowledge.relationships);
 
-  return [
-    {
+  // Only header (+ maybe summary) and no credits/pressing/relationships — not
+  // worth a card.
+  if (lines.length <= (summary?.trim() ? 2 : 1) && !relLines.length) return [];
+
+  const blocks: KnownBlock[] = [];
+  if (lines.length > (summary?.trim() ? 2 : 1)) {
+    blocks.push({
       type: "section",
       text: { type: "mrkdwn", text: lines.join("\n") },
-    },
-  ];
+    });
+  }
+  if (relLines.length) {
+    blocks.push({
+      type: "section",
+      text: { type: "mrkdwn", text: relLines.join("\n") },
+    });
+  }
+  return blocks;
 }
 
 /** Compact, fact-only digest fed to the LLM for the optional one-liner. */
