@@ -35,3 +35,17 @@ track knowledge) and never LLM-fabricated.
 - Catalogue fetch is gated by `trackContextEnabled()` (it lives in the context
   tab), resolves artist id from `track.artistIds[0]` else name search, and
   `fetchArtistCatalogue` never throws (cache keyed by resolved artist id).
+
+## Catalogue silently empty (debugging gotcha)
+If the Context tab shows the blurb but the catalogue (queue buttons + album dropdown)
+and genre are missing, the cause is almost always a swallowed Spotify failure.
+`fetchArtistCatalogue` runs top-tracks + albums and any error there must surface a log —
+a bare `.catch(() => [])` makes both lists empty, the catalogue resolves to null, and
+**nothing is logged**, so a journalctl grep finds nothing. Two durable rules:
+- **Never** swallow the per-endpoint catches without logging the artistId + error.
+- **Never cache a null catalogue.** A transient Spotify hiccup would poison that artist
+  for the whole TTL (6h) and blank the tab on every later track until restart. Only cache
+  real content; let true misses re-fetch.
+Also: the tab gate (`contextTabHasContent`) must key off what `contextViewBlocks` actually
+renders (catalogue / tags / Genius) — NOT `contextHasContent`, which still counts the
+no-longer-rendered Wikipedia bio and would surface a thin blurb-only tab.

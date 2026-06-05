@@ -61,20 +61,44 @@ export async function fetchArtistCatalogue(args: {
     if (cached && Date.now() - cached.at < TTL_MS) return cached.value;
 
     const [topTracks, albums] = await Promise.all([
-      getArtistTopTracksList(id).catch(() => [] as CatalogueTrack[]),
-      getArtistAlbumsList(id).catch(() => [] as CatalogueAlbum[]),
+      getArtistTopTracksList(id).catch((err) => {
+        logger.warn("Artist top-tracks fetch failed", {
+          artistId: id,
+          error: String(err),
+        });
+        return [] as CatalogueTrack[];
+      }),
+      getArtistAlbumsList(id).catch((err) => {
+        logger.warn("Artist albums fetch failed", {
+          artistId: id,
+          error: String(err),
+        });
+        return [] as CatalogueAlbum[];
+      }),
     ]);
+
+    logger.info("Artist catalogue resolved", {
+      artistId: id,
+      artistName: name,
+      topTracks: topTracks.length,
+      albums: albums.length,
+    });
 
     const value: ArtistCatalogue | null =
       topTracks.length || albums.length
         ? { artistId: id, artistName: name, artistUrl: url, topTracks, albums }
         : null;
 
-    cache.set(id, { at: Date.now(), value });
-    while (cache.size > MAX) {
-      const oldest = cache.keys().next().value;
-      if (oldest === undefined) break;
-      cache.delete(oldest);
+    // Only cache real content. Caching a null (a transient Spotify failure)
+    // would poison the artist for the whole TTL and blank the tab on every
+    // later track by that artist.
+    if (value) {
+      cache.set(id, { at: Date.now(), value });
+      while (cache.size > MAX) {
+        const oldest = cache.keys().next().value;
+        if (oldest === undefined) break;
+        cache.delete(oldest);
+      }
     }
     return value;
   } catch (err) {

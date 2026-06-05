@@ -156,11 +156,16 @@ export function linksHasContent(l?: TrackLinks | null): boolean {
   return !!l && (l.platforms.length > 0 || !!l.pageUrl);
 }
 
-/** The Context tab shows when there's genre/lyrics context OR a catalogue. */
+/**
+ * The Context tab shows only when it has something we actually RENDER: the
+ * playable catalogue, a genre tag, or a Genius link. The old artist Wikipedia
+ * bio is deliberately excluded — `contextHasContent` still counts it, but we no
+ * longer render it, so gating on it would surface a near-empty tab.
+ */
 function contextTabHasContent(state: TrackCardState): boolean {
-  return (
-    contextHasContent(state.context) || catalogueHasContent(state.catalogue)
-  );
+  if (catalogueHasContent(state.catalogue)) return true;
+  const c = state.context;
+  return !!c && ((c.tags?.length ?? 0) > 0 || !!c.geniusUrl);
 }
 
 function availableTabs(state: TrackCardState): CardTab[] {
