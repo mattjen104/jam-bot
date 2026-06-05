@@ -6,6 +6,7 @@ import {
   startTurntableIngestServer,
   stopTurntableIngestServer,
 } from "./turntable/ingest-server.js";
+import { wireEnrichment } from "./turntable/enrichment-wiring.js";
 
 function dbg(msg: string) {
   process.stdout.write(`[DBG ${new Date().toISOString()}] ${msg}\n`);
@@ -13,6 +14,7 @@ function dbg(msg: string) {
 
 async function main() {
   dbg("main:enter");
+  wireEnrichment();
   logger.info("Starting Jam Bot...");
   dbg("main:after-logger");
 

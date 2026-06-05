@@ -7,4 +7,5 @@
 - [jam-bot test DB sharing](jam-bot-test-db-sharing.md) — vitest DB is per-file (shared within a file, isolated across files): use unique artist/ISRC per test to avoid cache-key collisions; wrapped.test.ts is order/load-flaky on timestamp ties.
 - [Context tab = blurb + catalogue](jam-bot-context-tab-catalogue.md) — dropped repeating artist bio; per-song fact blurb + queueable Spotify catalogue (buttons 5/row, queue handlers mirror CARD_SESSIONS_ACTION).
 - [track-knowledge (liner-notes) pipeline](track-knowledge-pipeline.md) — enrich confirmed tracks with real credits/pressing: off hot path, canonical MB-recording-id cache convergence, never-fabricate grounding guard on LLM one-liner, query-on-demand not warehouse.
+- [Shared-lib seam wiring vs vitest mocks](lib-seam-wiring-vitest-mocks.md) — a host wiring a shared lib's seams in a global vitest setupFile must import a leaf-only entry, never the barrel, or it pre-evaluates subjects and defeats per-file vi.mock.
 - [Odesli links API endpoint](odesli-endpoint.md) — use `api.song.link/v1-alpha.1/links`; old `/v1-links` 404s site-wide via Fastly (looks like a deploy/track bug but is just the wrong path).

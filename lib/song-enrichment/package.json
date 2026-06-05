@@ -1,0 +1,16 @@
+{
+  "name": "@workspace/song-enrichment",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./wiring": "./src/wiring.ts"
+  },
+  "dependencies": {
+    "@slack/types": "^2.20.1"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:"
+  }
+}

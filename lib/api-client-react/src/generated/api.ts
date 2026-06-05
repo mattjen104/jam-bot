@@ -13,7 +13,15 @@ import type {
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { HealthStatus } from "./api.schemas";
+import type {
+  ApiError,
+  GetOembedParams,
+  HealthStatus,
+  OEmbed,
+  ResolveSongParams,
+  ResolvedSong,
+  SongContext,
+} from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
 import type { ErrorType } from "../custom-fetch";
@@ -92,6 +100,287 @@ export function useHealthCheck<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getHealthCheckQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Resolves a free-text query (e.g. "kashmir led zeppelin") to a single best-match Spotify track, including the public Spotify oEmbed embed HTML for the anchor player node.
+
+ * @summary Resolve free-text to a Spotify track
+ */
+export const getResolveSongUrl = (params: ResolveSongParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/song/resolve?${stringifiedParams}`
+    : `/api/song/resolve`;
+};
+
+export const resolveSong = async (
+  params: ResolveSongParams,
+  options?: RequestInit,
+): Promise<ResolvedSong> => {
+  return customFetch<ResolvedSong>(getResolveSongUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getResolveSongQueryKey = (params?: ResolveSongParams) => {
+  return [`/api/song/resolve`, ...(params ? [params] : [])] as const;
+};
+
+export const getResolveSongQueryOptions = <
+  TData = Awaited<ReturnType<typeof resolveSong>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: ResolveSongParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof resolveSong>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getResolveSongQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof resolveSong>>> = ({
+    signal,
+  }) => resolveSong(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof resolveSong>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ResolveSongQueryResult = NonNullable<
+  Awaited<ReturnType<typeof resolveSong>>
+>;
+export type ResolveSongQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Resolve free-text to a Spotify track
+ */
+
+export function useResolveSong<
+  TData = Awaited<ReturnType<typeof resolveSong>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: ResolveSongParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof resolveSong>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getResolveSongQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns the same enrichment the jam-bot Slack track card serves — credits/pressing (knowledge), genre/era/bio/links (context), the artist's playable catalogue, cross-platform links, and timed insights. Every section degrades to null/empty when its source is unconfigured or has no data.
+
+ * @summary Consolidated song-context dossier
+ */
+export const getGetSongContextUrl = (trackId: string) => {
+  return `/api/song/${trackId}/context`;
+};
+
+export const getSongContext = async (
+  trackId: string,
+  options?: RequestInit,
+): Promise<SongContext> => {
+  return customFetch<SongContext>(getGetSongContextUrl(trackId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetSongContextQueryKey = (trackId: string) => {
+  return [`/api/song/${trackId}/context`] as const;
+};
+
+export const getGetSongContextQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSongContext>>,
+  TError = ErrorType<ApiError>,
+>(
+  trackId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSongContext>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetSongContextQueryKey(trackId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getSongContext>>> = ({
+    signal,
+  }) => getSongContext(trackId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!trackId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSongContext>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSongContextQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSongContext>>
+>;
+export type GetSongContextQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Consolidated song-context dossier
+ */
+
+export function useGetSongContext<
+  TData = Awaited<ReturnType<typeof getSongContext>>,
+  TError = ErrorType<ApiError>,
+>(
+  trackId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSongContext>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSongContextQueryOptions(trackId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Public Spotify oEmbed passthrough for an open.spotify.com URL. Requires no Spotify credentials.
+
+ * @summary Spotify oEmbed passthrough
+ */
+export const getGetOembedUrl = (params: GetOembedParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/song/oembed?${stringifiedParams}`
+    : `/api/song/oembed`;
+};
+
+export const getOembed = async (
+  params: GetOembedParams,
+  options?: RequestInit,
+): Promise<OEmbed> => {
+  return customFetch<OEmbed>(getGetOembedUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetOembedQueryKey = (params?: GetOembedParams) => {
+  return [`/api/song/oembed`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetOembedQueryOptions = <
+  TData = Awaited<ReturnType<typeof getOembed>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: GetOembedParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getOembed>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetOembedQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getOembed>>> = ({
+    signal,
+  }) => getOembed(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getOembed>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetOembedQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getOembed>>
+>;
+export type GetOembedQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Spotify oEmbed passthrough
+ */
+
+export function useGetOembed<
+  TData = Awaited<ReturnType<typeof getOembed>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: GetOembedParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getOembed>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetOembedQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

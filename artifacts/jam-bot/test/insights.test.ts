@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // lookup/gate tests don't break when the real seed is edited. The timing
 // logic (selectDueInsights / InsightScheduler) takes insights directly and
 // doesn't touch the seed at all.
-vi.mock("../src/turntable/insights-seed.js", () => ({
+vi.mock("../../../lib/song-enrichment/src/insights-seed.js", () => ({
   seedTrackInsights: [
     {
       label: "Track One",
@@ -28,7 +28,11 @@ vi.mock("../src/turntable/insights-seed.js", () => ({
   ],
 }));
 
-vi.mock("../src/config.js", () => ({
+// insights.ts now lives in @workspace/song-enrichment and reads config/logger by
+// the lib's own relative paths, so the mocks must target the lib modules. The
+// logger mock also re-provides setEnrichmentLogger so the lib's barrel (and the
+// test-setup wiring) keep their named export.
+vi.mock("../../../lib/song-enrichment/src/config.js", () => ({
   config: {
     TRACK_INSIGHTS_ENABLED: true,
     TRACK_INSIGHTS_POLL_MS: 1000,
@@ -36,8 +40,9 @@ vi.mock("../src/config.js", () => ({
   },
 }));
 
-vi.mock("../src/logger.js", () => ({
+vi.mock("../../../lib/song-enrichment/src/logger.js", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  setEnrichmentLogger: vi.fn(),
 }));
 
 const {
@@ -46,8 +51,8 @@ const {
   getInsightsFor,
   selectDueInsights,
   InsightScheduler,
-} = await import("../src/turntable/insights.js");
-const { config } = await import("../src/config.js");
+} = await import("../../../lib/song-enrichment/src/insights.js");
+const { config } = await import("../../../lib/song-enrichment/src/config.js");
 
 type Insight = { positionMs: number; text: string };
 

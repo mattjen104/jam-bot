@@ -32,3 +32,13 @@ process.env.ACRCLOUD_HOST ??= "identify-eu-west-1.acrcloud.com";
 process.env.ACRCLOUD_ACCESS_KEY ??= "test-acr-key";
 process.env.ACRCLOUD_ACCESS_SECRET ??= "test-acr-secret";
 process.env.TURNTABLE_INGEST_SECRET ??= "test-ingest-secret";
+
+// Wire jam-bot's concrete dependencies (sqlite cache, logger, Spotify, LLM)
+// into the shared enrichment lib so the bot's behavior is identical under test.
+// Deferred dynamic import: db.ts opens its sqlite DB at module load using
+// DATABASE_PATH, which is only set above — a static import would be hoisted and
+// run before that assignment.
+const { wireEnrichment } = await import(
+  "../src/turntable/enrichment-wiring.js"
+);
+wireEnrichment();

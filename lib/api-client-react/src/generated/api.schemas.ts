@@ -8,3 +8,148 @@
 export interface HealthStatus {
   status: string;
 }
+
+export interface ApiError {
+  error: string;
+}
+
+export interface Credit {
+  role: string;
+  name: string;
+  /** @nullable */
+  artistId?: string | null;
+}
+
+export interface DiscogsPressing {
+  /** @nullable */
+  label?: string | null;
+  /** @nullable */
+  year?: number | null;
+  /** @nullable */
+  country?: string | null;
+  /** @nullable */
+  format?: string | null;
+}
+
+export interface TrackKnowledge {
+  /** @nullable */
+  recordingId?: string | null;
+  /** @nullable */
+  artistId?: string | null;
+  /** @nullable */
+  artistName?: string | null;
+  personnel: Credit[];
+  pressing?: DiscogsPressing | null;
+  /** @nullable */
+  summary?: string | null;
+  approximate: boolean;
+  fetchedAtMs: number;
+}
+
+export interface TrackContext {
+  /** @nullable */
+  artistId?: string | null;
+  /** @nullable */
+  artistName?: string | null;
+  tags: string[];
+  similarArtists: string[];
+  /** @nullable */
+  bio?: string | null;
+  /** @nullable */
+  wikipediaUrl?: string | null;
+  /** @nullable */
+  geniusUrl?: string | null;
+  /** @nullable */
+  summary?: string | null;
+  approximate: boolean;
+  fetchedAtMs: number;
+}
+
+export interface CatalogueTrack {
+  id: string;
+  uri: string;
+  title: string;
+}
+
+export interface CatalogueAlbum {
+  id: string;
+  name: string;
+  /** @nullable */
+  year?: number | null;
+  url: string;
+}
+
+export interface ArtistCatalogue {
+  artistId: string;
+  artistName: string;
+  artistUrl: string;
+  topTracks: CatalogueTrack[];
+  albums: CatalogueAlbum[];
+}
+
+export interface TrackLink {
+  name: string;
+  url: string;
+}
+
+export interface TrackLinks {
+  platforms: TrackLink[];
+  /** @nullable */
+  pageUrl?: string | null;
+  fetchedAtMs: number;
+}
+
+export interface TrackInsight {
+  positionMs: number;
+  text: string;
+}
+
+export interface ResolvedSong {
+  id: string;
+  name: string;
+  artists: string[];
+  /** @nullable */
+  album?: string | null;
+  /** @nullable */
+  imageUrl?: string | null;
+  spotifyUrl: string;
+  /** @nullable */
+  oEmbedHtml?: string | null;
+}
+
+export interface SongContext {
+  track: ResolvedSong;
+  knowledge?: TrackKnowledge | null;
+  context?: TrackContext | null;
+  catalogue?: ArtistCatalogue | null;
+  links?: TrackLinks | null;
+  insights: TrackInsight[];
+}
+
+export interface OEmbed {
+  html: string;
+  /** @nullable */
+  title?: string | null;
+  /** @nullable */
+  thumbnail_url?: string | null;
+  /** @nullable */
+  width?: number | null;
+  /** @nullable */
+  height?: number | null;
+  /** @nullable */
+  provider_name?: string | null;
+}
+
+export type ResolveSongParams = {
+  /**
+   * @minLength 1
+   */
+  q: string;
+};
+
+export type GetOembedParams = {
+  /**
+   * @minLength 1
+   */
+  url: string;
+};

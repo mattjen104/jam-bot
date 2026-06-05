@@ -6,4 +6,20 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./apiError";
+export * from "./artistCatalogue";
+export * from "./catalogueAlbum";
+export * from "./catalogueTrack";
+export * from "./credit";
+export * from "./discogsPressing";
+export * from "./getOembedParams";
 export * from "./healthStatus";
+export * from "./oEmbed";
+export * from "./resolvedSong";
+export * from "./resolveSongParams";
+export * from "./songContext";
+export * from "./trackContext";
+export * from "./trackInsight";
+export * from "./trackKnowledge";
+export * from "./trackLink";
+export * from "./trackLinks";

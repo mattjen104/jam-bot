@@ -1,19 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { AcrMatch } from "../src/turntable/acrcloud.js";
 
-vi.mock("../src/turntable/musicbrainz.js", () => ({
+// The enrichment logic now lives in @workspace/song-enrichment; knowledge.ts
+// imports its MusicBrainz/Discogs collaborators by the lib's own relative paths,
+// so the mocks (and the handles we read back) must target those lib modules.
+vi.mock("../../../lib/song-enrichment/src/musicbrainz.js", () => ({
   musicbrainzEnabled: vi.fn(() => true),
   resolveRecordingId: vi.fn(),
   fetchRecordingCredits: vi.fn(),
 }));
-vi.mock("../src/turntable/discogs.js", () => ({
+vi.mock("../../../lib/song-enrichment/src/discogs.js", () => ({
   discogsEnabled: vi.fn(() => true),
   fetchDiscogsPressing: vi.fn(),
 }));
 
-const knowledge = await import("../src/turntable/knowledge.js");
-const mb = await import("../src/turntable/musicbrainz.js");
-const dc = await import("../src/turntable/discogs.js");
+const knowledge = await import("../../../lib/song-enrichment/src/knowledge.js");
+const mb = await import("../../../lib/song-enrichment/src/musicbrainz.js");
+const dc = await import("../../../lib/song-enrichment/src/discogs.js");
 
 function mkMatch(over: Partial<AcrMatch> = {}): AcrMatch {
   return {

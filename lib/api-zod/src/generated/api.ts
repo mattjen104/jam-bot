@@ -14,3 +14,158 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
+
+/**
+ * Resolves a free-text query (e.g. "kashmir led zeppelin") to a single best-match Spotify track, including the public Spotify oEmbed embed HTML for the anchor player node.
+
+ * @summary Resolve free-text to a Spotify track
+ */
+
+export const ResolveSongQueryParams = zod.object({
+  q: zod.coerce.string().min(1),
+});
+
+export const ResolveSongResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  artists: zod.array(zod.string()),
+  album: zod.string().nullish(),
+  imageUrl: zod.string().nullish(),
+  spotifyUrl: zod.string(),
+  oEmbedHtml: zod.string().nullish(),
+});
+
+/**
+ * Returns the same enrichment the jam-bot Slack track card serves — credits/pressing (knowledge), genre/era/bio/links (context), the artist's playable catalogue, cross-platform links, and timed insights. Every section degrades to null/empty when its source is unconfigured or has no data.
+
+ * @summary Consolidated song-context dossier
+ */
+
+export const GetSongContextParams = zod.object({
+  trackId: zod.coerce.string().min(1),
+});
+
+export const GetSongContextResponse = zod.object({
+  track: zod.object({
+    id: zod.string(),
+    name: zod.string(),
+    artists: zod.array(zod.string()),
+    album: zod.string().nullish(),
+    imageUrl: zod.string().nullish(),
+    spotifyUrl: zod.string(),
+    oEmbedHtml: zod.string().nullish(),
+  }),
+  knowledge: zod
+    .union([
+      zod.object({
+        recordingId: zod.string().nullish(),
+        artistId: zod.string().nullish(),
+        artistName: zod.string().nullish(),
+        personnel: zod.array(
+          zod.object({
+            role: zod.string(),
+            name: zod.string(),
+            artistId: zod.string().nullish(),
+          }),
+        ),
+        pressing: zod
+          .union([
+            zod.object({
+              label: zod.string().nullish(),
+              year: zod.number().nullish(),
+              country: zod.string().nullish(),
+              format: zod.string().nullish(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        summary: zod.string().nullish(),
+        approximate: zod.boolean(),
+        fetchedAtMs: zod.number(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  context: zod
+    .union([
+      zod.object({
+        artistId: zod.string().nullish(),
+        artistName: zod.string().nullish(),
+        tags: zod.array(zod.string()),
+        similarArtists: zod.array(zod.string()),
+        bio: zod.string().nullish(),
+        wikipediaUrl: zod.string().nullish(),
+        geniusUrl: zod.string().nullish(),
+        summary: zod.string().nullish(),
+        approximate: zod.boolean(),
+        fetchedAtMs: zod.number(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  catalogue: zod
+    .union([
+      zod.object({
+        artistId: zod.string(),
+        artistName: zod.string(),
+        artistUrl: zod.string(),
+        topTracks: zod.array(
+          zod.object({
+            id: zod.string(),
+            uri: zod.string(),
+            title: zod.string(),
+          }),
+        ),
+        albums: zod.array(
+          zod.object({
+            id: zod.string(),
+            name: zod.string(),
+            year: zod.number().nullish(),
+            url: zod.string(),
+          }),
+        ),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  links: zod
+    .union([
+      zod.object({
+        platforms: zod.array(
+          zod.object({
+            name: zod.string(),
+            url: zod.string(),
+          }),
+        ),
+        pageUrl: zod.string().nullish(),
+        fetchedAtMs: zod.number(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  insights: zod.array(
+    zod.object({
+      positionMs: zod.number(),
+      text: zod.string(),
+    }),
+  ),
+});
+
+/**
+ * Public Spotify oEmbed passthrough for an open.spotify.com URL. Requires no Spotify credentials.
+
+ * @summary Spotify oEmbed passthrough
+ */
+
+export const GetOembedQueryParams = zod.object({
+  url: zod.coerce.string().min(1),
+});
+
+export const GetOembedResponse = zod.object({
+  html: zod.string(),
+  title: zod.string().nullish(),
+  thumbnail_url: zod.string().nullish(),
+  width: zod.number().nullish(),
+  height: zod.number().nullish(),
+  provider_name: zod.string().nullish(),
+});

@@ -1,16 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { AcrMatch } from "../src/turntable/acrcloud.js";
 
-vi.mock("../src/turntable/lastfm.js", () => ({
+// The enrichment logic now lives in @workspace/song-enrichment; context.ts
+// imports its Last.fm/Wikipedia/Genius collaborators by the lib's own relative
+// paths, so the mocks (and the handles we read back) must target those lib
+// modules.
+vi.mock("../../../lib/song-enrichment/src/lastfm.js", () => ({
   lastfmEnabled: vi.fn(() => true),
   fetchArtistTags: vi.fn(),
   fetchSimilarArtists: vi.fn(),
 }));
-vi.mock("../src/turntable/wikipedia.js", () => ({
+vi.mock("../../../lib/song-enrichment/src/wikipedia.js", () => ({
   wikipediaEnabled: vi.fn(() => true),
   fetchArtistBio: vi.fn(),
 }));
-vi.mock("../src/turntable/genius.js", () => ({
+vi.mock("../../../lib/song-enrichment/src/genius.js", () => ({
   geniusEnabled: vi.fn(() => true),
   fetchGeniusUrl: vi.fn(),
 }));
@@ -18,10 +22,10 @@ vi.mock("../src/llm/openrouter.js", () => ({
   askLLM: vi.fn(),
 }));
 
-const context = await import("../src/turntable/context.js");
-const lf = await import("../src/turntable/lastfm.js");
-const wiki = await import("../src/turntable/wikipedia.js");
-const gen = await import("../src/turntable/genius.js");
+const context = await import("../../../lib/song-enrichment/src/context.js");
+const lf = await import("../../../lib/song-enrichment/src/lastfm.js");
+const wiki = await import("../../../lib/song-enrichment/src/wikipedia.js");
+const gen = await import("../../../lib/song-enrichment/src/genius.js");
 const llm = await import("../src/llm/openrouter.js");
 
 function mkMatch(over: Partial<AcrMatch> = {}): AcrMatch {
