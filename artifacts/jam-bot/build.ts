@@ -1,7 +1,7 @@
 import path from "path";
 import { fileURLToPath } from "url";
 import { build as esbuild } from "esbuild";
-import { rm, readFile } from "fs/promises";
+import { rm, readFile, writeFile } from "fs/promises";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,13 +41,21 @@ async function buildAll() {
     target: "node20",
     bundle: true,
     format: "cjs",
-    outfile: path.resolve(distDir, "index.cjs"),
+    outfile: path.resolve(distDir, "index.js"),
     define: {
       "process.env.NODE_ENV": '"production"',
     },
     external: externals,
     logLevel: "info",
   });
+
+  // jam-bot's package.json declares "type": "module", so node would otherwise
+  // parse dist/index.js as ESM. Mark the dist folder as CommonJS so the bundled
+  // CJS output runs under the existing `node ./dist/index.js` entrypoint.
+  await writeFile(
+    path.resolve(distDir, "package.json"),
+    JSON.stringify({ type: "commonjs" }, null, 2) + "\n",
+  );
 }
 
 buildAll().catch((err) => {
