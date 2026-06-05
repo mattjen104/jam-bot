@@ -239,9 +239,15 @@ importers:
       dotenv:
         specifier: ^16.4.5
         version: 16.6.1
+      esbuild:
+        specifier: 0.27.3
+        version: 0.27.3
       spotify-web-api-node:
         specifier: ^5.0.2
         version: 5.0.2
+      tsx:
+        specifier: 'catalog:'
+        version: 4.21.0
       zod:
         specifier: 'catalog:'
         version: 3.25.76
@@ -255,12 +261,6 @@ importers:
       '@types/spotify-web-api-node':
         specifier: ^5.0.11
         version: 5.0.11
-      esbuild:
-        specifier: 0.27.3
-        version: 0.27.3
-      tsx:
-        specifier: 'catalog:'
-        version: 4.21.0
       typescript:
         specifier: ^5.9.0
         version: 5.9.3
