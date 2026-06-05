@@ -157,6 +157,11 @@ export interface ResolvedSong {
   /** @nullable */
   imageUrl?: string | null;
   spotifyUrl: string;
+  /**
+   * International Standard Recording Code, when Spotify exposes it. The canonical identifier for sample-clearance requests.
+   * @nullable
+   */
+  isrc?: string | null;
   /** @nullable */
   oEmbedHtml?: string | null;
 }

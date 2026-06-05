@@ -156,6 +156,22 @@ export default function Home() {
     setQuery(q);
   };
 
+  // Follow a thread: re-anchor the graph onto a related track/artist and update
+  // the ?track= deep-link. A direct Spotify id navigates immediately; a free-text
+  // target (similar artist, MB connection) routes through /song/resolve.
+  const onTrace = ({ trackId: targetId, query: q }: { trackId?: string; query?: string }) => {
+    if (targetId) {
+      setTrackId(targetId);
+      setSelectedId(ANCHOR_ID);
+      syncTrackParam(targetId);
+      return;
+    }
+    const next = q?.trim();
+    if (!next) return;
+    setInput(next);
+    setQuery(next);
+  };
+
   const isSearching = resolve.isLoading && resolve.fetchStatus !== "idle";
   const isLoadingContext = context.isLoading && context.fetchStatus !== "idle";
   const activeError = resolve.error ?? context.error;
@@ -203,6 +219,7 @@ export default function Home() {
               context={context.data}
               selectedNode={selectedNode}
               onClearSelection={() => setSelectedId(ANCHOR_ID)}
+              onTrace={onTrace}
             />
           ) : (
             <DossierPlaceholder />

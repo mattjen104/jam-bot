@@ -28,8 +28,23 @@ async function toResolvedSong(track: SpotifyTrackRaw) {
     album: track.album,
     imageUrl: track.imageUrl,
     spotifyUrl: track.spotifyUrl,
+    isrc: track.isrc ?? null,
     oEmbedHtml: oembed?.html ?? null,
   };
+}
+
+/**
+ * Extract a Spotify track id from a pasted track URL or URI so producers can
+ * drop a link straight into the search box. Returns null for anything that
+ * isn't a recognizable track reference (free-text, album/artist links, etc.),
+ * leaving the caller to fall back to a free-text search.
+ */
+function parseSpotifyTrackId(q: string): string | null {
+  const uri = q.match(/spotify:track:([A-Za-z0-9]+)/);
+  if (uri) return uri[1];
+  const url = q.match(/open\.spotify\.com\/(?:[a-z-]+\/)?track\/([A-Za-z0-9]+)/);
+  if (url) return url[1];
+  return null;
 }
 
 // GET /api/song/resolve?q=...
@@ -50,7 +65,12 @@ router.get("/song/resolve", async (req, res) => {
       .json({ error: "Spotify is not configured (set SPOTIFY_CLIENT_ID/SECRET)" });
   }
   try {
-    const track = await searchTrack(parsed.data.q);
+    // Producers often paste a Spotify track link/URI — resolve it by id
+    // directly; otherwise treat the query as free text.
+    const trackId = parseSpotifyTrackId(parsed.data.q);
+    const track = trackId
+      ? await getTrackById(trackId)
+      : await searchTrack(parsed.data.q);
     if (!track) {
       return res.status(404).json({ error: "No matching track found" });
     }

@@ -368,6 +368,9 @@ components:
           type: ["string", "null"]
         spotifyUrl:
           type: string
+        isrc:
+          type: ["string", "null"]
+          description: International Standard Recording Code, when Spotify exposes it. The canonical identifier for sample-clearance requests.
         oEmbedHtml:
           type: ["string", "null"]
       required:

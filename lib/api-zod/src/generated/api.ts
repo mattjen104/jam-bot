@@ -32,6 +32,12 @@ export const ResolveSongResponse = zod.object({
   album: zod.string().nullish(),
   imageUrl: zod.string().nullish(),
   spotifyUrl: zod.string(),
+  isrc: zod
+    .string()
+    .nullish()
+    .describe(
+      "International Standard Recording Code, when Spotify exposes it. The canonical identifier for sample-clearance requests.",
+    ),
   oEmbedHtml: zod.string().nullish(),
 });
 
@@ -53,6 +59,12 @@ export const GetSongContextResponse = zod.object({
     album: zod.string().nullish(),
     imageUrl: zod.string().nullish(),
     spotifyUrl: zod.string(),
+    isrc: zod
+      .string()
+      .nullish()
+      .describe(
+        "International Standard Recording Code, when Spotify exposes it. The canonical identifier for sample-clearance requests.",
+      ),
     oEmbedHtml: zod.string().nullish(),
   }),
   knowledge: zod

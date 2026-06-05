@@ -1,4 +1,4 @@
-import { ExternalLink, Mail, Clock, Disc3, Tag, Users, Music2, Link2, AlertTriangle } from "lucide-react";
+import { ExternalLink, Mail, Clock, Disc3, Tag, Users, Music2, Link2, AlertTriangle, GitBranch } from "lucide-react";
 import type { SongContext } from "@workspace/api-client-react";
 import type { GraphNode } from "@/lib/graph";
 import { ANCHOR_ID, formatPosition } from "@/lib/graph";
@@ -7,10 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 
+export type TraceTarget = { trackId?: string; query?: string };
+
 interface DossierProps {
   context: SongContext;
   selectedNode: GraphNode | null;
   onClearSelection: () => void;
+  onTrace: (target: TraceTarget) => void;
 }
 
 function trackUrl(id: string) {
@@ -20,17 +23,24 @@ function trackUrl(id: string) {
 function sampleMailto(context: SongContext, line?: string) {
   const artists = context.track.artists.join(", ");
   const subject = `Sample clearance request: "${context.track.name}" by ${artists}`;
+  const label = context.knowledge?.pressing?.label;
   const bodyLines = [
     "Hello,",
     "",
     `I'm a producer interested in clearing a sample from "${context.track.name}" by ${artists}.`,
     line ? line : "",
-    context.knowledge?.recordingId
-      ? `MusicBrainz recording: ${context.knowledge.recordingId}`
-      : "",
-    `Reference: ${context.track.spotifyUrl}`,
     "",
-    "Could you point me to the rights holder or publishing contact?",
+    "Track details for identification:",
+    context.track.isrc ? `• ISRC: ${context.track.isrc}` : "",
+    context.knowledge?.recordingId
+      ? `• MusicBrainz recording: ${context.knowledge.recordingId}`
+      : "",
+    label ? `• Label / publisher (per pressing): ${label}` : "",
+    `• Reference: ${context.track.spotifyUrl}`,
+    "",
+    "Intended use: [please describe — e.g. a 4-bar drum loop in an original hip-hop track for commercial release].",
+    "",
+    "Could you point me to the rights holder or publishing contact, and outline the clearance terms?",
     "",
     "Thank you,",
   ].filter(Boolean);
@@ -165,9 +175,11 @@ function AnchorDossier({ context }: { context: SongContext }) {
 function NodeDossier({
   context,
   node,
+  onTrace,
 }: {
   context: SongContext;
   node: GraphNode;
+  onTrace: (target: TraceTarget) => void;
 }) {
   switch (node.kind) {
     case "hub":
@@ -226,6 +238,15 @@ function NodeDossier({
           <p className="text-sm text-muted-foreground">
             Sits in the same lineage as {context.context?.artistName ?? "this artist"}.
           </p>
+          <Button
+            type="button"
+            className="w-full gap-2"
+            onClick={() => onTrace({ query: node.artistName ?? node.label })}
+            data-testid="button-trace-similar"
+          >
+            <GitBranch className="h-4 w-4" />
+            Trace this artist
+          </Button>
           <a
             href={`https://open.spotify.com/search/${encodeURIComponent(node.label)}`}
             target="_blank"
@@ -261,6 +282,15 @@ function NodeDossier({
         <div className="space-y-3" data-testid="dossier-track">
           <SectionLabel icon={Music2}>Top Track</SectionLabel>
           <h3 className="font-mono text-xl">{track.title}</h3>
+          <Button
+            type="button"
+            className="w-full gap-2"
+            onClick={() => onTrace({ trackId: track.id })}
+            data-testid="button-trace-track"
+          >
+            <GitBranch className="h-4 w-4" />
+            Trace this track
+          </Button>
           <a
             href={trackUrl(track.id)}
             target="_blank"
@@ -313,6 +343,17 @@ function NodeDossier({
             A typed song-to-song relationship parsed from MusicBrainz — the
             lineage thread linking "{context.track.name}" to this {rel.targetType}.
           </p>
+          <Button
+            type="button"
+            className="w-full gap-2"
+            onClick={() =>
+              onTrace({ query: [rel.title, rel.artist].filter(Boolean).join(" ") })
+            }
+            data-testid="button-trace-connection"
+          >
+            <GitBranch className="h-4 w-4" />
+            Trace this connection
+          </Button>
           <a
             href={rel.mbUrl}
             target="_blank"
@@ -331,7 +372,7 @@ function NodeDossier({
   }
 }
 
-export function Dossier({ context, selectedNode, onClearSelection }: DossierProps) {
+export function Dossier({ context, selectedNode, onClearSelection, onTrace }: DossierProps) {
   const showAnchor = !selectedNode || selectedNode.id === ANCHOR_ID;
   return (
     <ScrollArea className="h-full">
@@ -349,7 +390,7 @@ export function Dossier({ context, selectedNode, onClearSelection }: DossierProp
         {showAnchor ? (
           <AnchorDossier context={context} />
         ) : (
-          <NodeDossier context={context} node={selectedNode!} />
+          <NodeDossier context={context} node={selectedNode!} onTrace={onTrace} />
         )}
       </div>
     </ScrollArea>
