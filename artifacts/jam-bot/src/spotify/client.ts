@@ -22,6 +22,57 @@ async function ensureAccessToken(): Promise<void> {
 
 const SPOTIFY_CALL_TIMEOUT_MS = 15_000;
 
+/**
+ * Spotify rate-limit circuit breaker.
+ *
+ * When Spotify returns 429 it includes a `Retry-After` (seconds). That value
+ * can be tiny (a transient burst) or huge — a quota-level limit can return
+ * `Retry-After: 7911` (~2.2h). The old behavior slept `Retry-After+1` seconds
+ * *inside the call* and then retried, so a single call could block for hours
+ * AND every poll tick spawned another one, hammering the limited endpoint and
+ * extending the window. This breaker records a shared "don't call Spotify until"
+ * timestamp; while it's open, all calls fail fast WITHOUT touching the network,
+ * so polling pauses for the duration Spotify asked for instead of spiraling.
+ *
+ * Short transient 429s (<= INLINE_RETRY_MAX_S) are still retried in-call as
+ * before, so the common "recover from a brief burst" path is unchanged.
+ */
+let rateLimitedUntil = 0;
+const INLINE_RETRY_MAX_S = 5;
+
+class SpotifyRateLimitedError extends Error {
+  readonly statusCode = 429;
+  constructor(public readonly remainingMs: number) {
+    super(
+      `Spotify rate-limited; backing off for ${Math.ceil(
+        remainingMs / 1000,
+      )}s before any further calls`,
+    );
+    this.name = "SpotifyRateLimitedError";
+  }
+}
+
+/** Milliseconds remaining on the active rate-limit pause, or 0 if none. */
+export function spotifyRateLimitRemainingMs(): number {
+  return Math.max(0, rateLimitedUntil - Date.now());
+}
+
+function openRateLimitBreaker(retryAfterSec: number): void {
+  const until = Date.now() + (retryAfterSec + 1) * 1000;
+  if (until <= rateLimitedUntil) return;
+  rateLimitedUntil = until;
+  logger.warn("Spotify rate-limited; pausing all Spotify calls", {
+    retryAfterSec,
+    until: new Date(rateLimitedUntil).toISOString(),
+  });
+}
+
+/** Throws fast (no network) when the breaker is open. */
+function assertRateLimitBreakerClosed(): void {
+  const remaining = spotifyRateLimitRemainingMs();
+  if (remaining > 0) throw new SpotifyRateLimitedError(remaining);
+}
+
 function withTimeout<T>(label: string, p: Promise<T>, ms = SPOTIFY_CALL_TIMEOUT_MS): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const t = setTimeout(
@@ -45,11 +96,18 @@ async function withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
   let lastErr: unknown;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
+      // Fail fast if Spotify already told us to back off — don't touch the
+      // network (token refresh OR the call) while the breaker is open.
+      assertRateLimitBreakerClosed();
       await withTimeout(`${label}:refreshToken`, ensureAccessToken());
       return await withTimeout(label, fn());
     } catch (err: unknown) {
       lastErr = err;
       const status = (err as { statusCode?: number })?.statusCode;
+      if (err instanceof SpotifyRateLimitedError) {
+        // Breaker is open — stop retrying, surface immediately.
+        throw err;
+      }
       if (status === 401) {
         accessTokenExpiresAt = 0;
         continue;
@@ -61,6 +119,13 @@ async function withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
               "retry-after"
             ],
           ) || 1;
+        // Big quota-level limits open the shared breaker and bail fast so we
+        // don't sleep for hours in-call or let every poll tick re-hammer the
+        // limited endpoint. Small transient bursts retry in-call as before.
+        if (retryAfter > INLINE_RETRY_MAX_S) {
+          openRateLimitBreaker(retryAfter);
+          throw new SpotifyRateLimitedError(spotifyRateLimitRemainingMs());
+        }
         await new Promise((r) => setTimeout(r, (retryAfter + 1) * 1000));
         continue;
       }
@@ -92,15 +157,29 @@ async function withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
  */
 async function withOnce<T>(label: string, fn: () => Promise<T>): Promise<T> {
   try {
+    // Honor an open rate-limit breaker for mutations too — bail before any
+    // network call so a queued skip/queue can't re-poke a limited endpoint.
+    assertRateLimitBreakerClosed();
     await withTimeout(`${label}:refreshToken`, ensureAccessToken());
     return await withTimeout(label, fn());
   } catch (err: unknown) {
     const status = (err as { statusCode?: number })?.statusCode;
+    if (err instanceof SpotifyRateLimitedError) throw err;
     if (status === 401) {
       // Token was just-expired; safe to retry once after refresh.
       accessTokenExpiresAt = 0;
       await withTimeout(`${label}:refreshToken`, ensureAccessToken());
       return await withTimeout(label, fn());
+    }
+    // A 429 on a mutation opens the shared breaker so subsequent polling pauses.
+    if (status === 429) {
+      const retryAfter =
+        Number(
+          (err as { headers?: Record<string, string> })?.headers?.[
+            "retry-after"
+          ],
+        ) || 1;
+      openRateLimitBreaker(retryAfter);
     }
     logger.warn(`Spotify mutation failed (no retry): ${label}`, {
       status,

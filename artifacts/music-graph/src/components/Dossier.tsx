@@ -298,6 +298,34 @@ function NodeDossier({
         </div>
       );
     }
+    case "connection": {
+      const rel = node.relationship!;
+      const meta = [rel.artist, rel.year != null ? String(rel.year) : null]
+        .filter(Boolean)
+        .join(" · ");
+      return (
+        <div className="space-y-3" data-testid="dossier-connection">
+          <SectionLabel icon={Link2}>Connection</SectionLabel>
+          <p className="text-sm capitalize text-primary/90">{rel.label}</p>
+          <h3 className="font-mono text-xl">{rel.title}</h3>
+          {meta && <p className="text-sm text-muted-foreground">{meta}</p>}
+          <p className="text-sm text-muted-foreground">
+            A typed song-to-song relationship parsed from MusicBrainz — the
+            lineage thread linking "{context.track.name}" to this {rel.targetType}.
+          </p>
+          <a
+            href={rel.mbUrl}
+            target="_blank"
+            rel="noreferrer"
+            data-testid="link-connection-mb"
+          >
+            <Button variant="secondary" className="w-full gap-2">
+              View on MusicBrainz <ExternalLink className="h-4 w-4" />
+            </Button>
+          </a>
+        </div>
+      );
+    }
     default:
       return null;
   }

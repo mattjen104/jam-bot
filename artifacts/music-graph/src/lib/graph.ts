@@ -5,6 +5,7 @@ import type {
   CatalogueTrack,
   TrackLink,
   TrackInsight,
+  SongRelationship,
 } from "@workspace/api-client-react";
 
 export type NodeKind =
@@ -16,10 +17,12 @@ export type NodeKind =
   | "album"
   | "track"
   | "link"
-  | "insight";
+  | "insight"
+  | "connection";
 
 export type HubCategory =
   | "personnel"
+  | "connections"
   | "genres"
   | "similar"
   | "albums"
@@ -38,6 +41,7 @@ export interface GraphNode {
   track?: CatalogueTrack;
   platform?: TrackLink;
   insight?: TrackInsight;
+  relationship?: SongRelationship;
   artistName?: string;
   // mutable simulation fields
   x?: number;
@@ -60,6 +64,7 @@ export interface GraphData {
 
 const HUB_META: Record<HubCategory, string> = {
   personnel: "Personnel",
+  connections: "Connections",
   genres: "Genres & Tags",
   similar: "Similar Artists",
   albums: "Albums",
@@ -70,6 +75,7 @@ const HUB_META: Record<HubCategory, string> = {
 
 const CAPS: Record<HubCategory, number> = {
   personnel: 16,
+  connections: 16,
   genres: 14,
   similar: 12,
   albums: 12,
@@ -122,6 +128,31 @@ export function buildGraph(context: SongContext): GraphData {
         sublabel: credit.role,
         category: "personnel",
         credit,
+      })) {
+        links.push({ source: hub, target: id });
+      }
+    });
+  }
+
+  const relationships = context.knowledge?.relationships ?? [];
+  if (relationships.length > 0) {
+    const hub = addHub("connections");
+    relationships.slice(0, CAPS.connections).forEach((rel, i) => {
+      const id = `connection:${i}:${rel.targetId}`;
+      const sublabel = [
+        rel.label,
+        rel.artist,
+        rel.year != null ? String(rel.year) : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      if (push({
+        id,
+        kind: "connection",
+        label: rel.title,
+        sublabel: sublabel || undefined,
+        category: "connections",
+        relationship: rel,
       })) {
         links.push({ source: hub, target: id });
       }

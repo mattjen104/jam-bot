@@ -244,6 +244,7 @@
 
   /* Category tints */
   .node-credit { border-color: hsl(32 70% 50% / 0.55); }
+  .node-connection { border-color: hsl(350 65% 55% / 0.55); }
   .node-genre { border-color: hsl(190 60% 45% / 0.5); }
   .node-similar { border-color: hsl(280 50% 60% / 0.5); }
   .node-album { border-color: hsl(140 45% 45% / 0.5); }
