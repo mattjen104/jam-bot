@@ -60,8 +60,9 @@ const schema = z.object({
 
   // ---- Jam Memory (Wrapped / DNA / Compat / Memory) -----------------------
   // Whether the auto-weekly Wrapped post is enabled. /wrapped on demand
-  // works regardless of this flag.
-  JAM_ENABLE_WEEKLY_WRAPPED: boolFromEnv.default(true),
+  // works regardless of this flag. Disabled by default for now; set
+  // JAM_ENABLE_WEEKLY_WRAPPED=true to re-enable the automatic weekly post.
+  JAM_ENABLE_WEEKLY_WRAPPED: boolFromEnv.default(false),
   // When the auto-weekly post fires. Format: "<Day> HH:MM" in UTC, where
   // Day is one of Sun/Mon/Tue/Wed/Thu/Fri/Sat. The scheduler checks every
   // 30s and only fires once per day.
