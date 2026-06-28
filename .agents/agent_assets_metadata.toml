@@ -36,6 +36,24 @@ uri = "file://artifacts/mockup-sandbox/public/images/vintage-concert-haze.png"
 type = "image"
 title = "vintage concert haze"
 
+[[generated]]
+id = "X-el6jNSC2IuTGJqKQccJ"
+uri = "file://artifacts/mockup-sandbox/public/images/ph-album-art.png"
+type = "image"
+title = "Prismatic 1970s album art"
+
+[[generated]]
+id = "RW05fcGtwMgbCCkIN0UBx"
+uri = "file://artifacts/mockup-sandbox/public/images/ph-needle.png"
+type = "image"
+title = "Glowing amber record needle"
+
+[[generated]]
+id = "1KcOTkAfKPlOktqxMpN3Y"
+uri = "file://artifacts/mockup-sandbox/public/images/ph-haze.png"
+type = "image"
+title = "Warm 1970s stage haze"
+
 [[outputs]]
 id = "OuS-Jv-RPd2iSfRx2DCZ9"
 uri = "file://artifacts/jam-bot/QUICKSTART.md"
