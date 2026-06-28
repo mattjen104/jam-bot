@@ -1,0 +1,85 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap');
+
+:root {
+  --thread-bg: #F4F1EA;
+  --thread-fg: #1F1D1A;
+  --thread-muted: #8C867C;
+  --thread-card: #FFFFFF;
+  --thread-border: #E6E2D8;
+  --thread-accent: #D33F33; /* The "red thread" */
+  
+  --font-serif: 'Fraunces', serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-sans: 'Plus Jakarta Sans', sans-serif;
+}
+
+.thread-theme {
+  background-color: var(--thread-bg);
+  color: var(--thread-fg);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+}
+
+.font-serif {
+  font-family: var(--font-serif);
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+.fact-door {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  border-bottom: 1px dotted var(--thread-muted);
+}
+
+.fact-door:hover {
+  color: var(--thread-accent);
+  border-bottom-color: var(--thread-accent);
+}
+
+.fact-door:hover .door-arrow {
+  transform: translateX(2px) translateY(-2px);
+  opacity: 1;
+}
+
+.door-arrow {
+  opacity: 0;
+  transition: all 0.2s ease;
+  color: var(--thread-accent);
+}
+
+.connecting-line {
+  position: absolute;
+  left: 1.5rem;
+  top: 3rem;
+  bottom: -1rem;
+  width: 2px;
+  background-color: var(--thread-accent);
+  opacity: 0.2;
+  z-index: 0;
+}
+
+.provenance-chip {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.chip-wd { background: #E8F1FA; color: #105EAC; }
+.chip-mb { background: #F3EAF4; color: #7B328C; }
+.chip-sf { background: #E9F6ED; color: #1DB954; }
+.chip-dg { background: #F2F2F2; color: #333333; }
+.chip-wc { background: #F0F0F0; color: #000000; }
+.chip-lf { background: #FCE8E8; color: #D51007; }
+.chip-gn { background: #FFF9E6; color: #000000; }
+.chip-od { background: #EFEAF6; color: #5B2B9F; }

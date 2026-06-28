@@ -1,8 +1,61 @@
 uploads = []
-generated = []
+
+[[generated]]
+id = "BjxMm4PBIkdq8PLEG4Kzb"
+uri = "file://artifacts/mockup-sandbox/public/images/map-queen-stage.png"
+type = "image"
+title = "Queen stage lights 1970s"
+
+[[generated]]
+id = "COghz346UgeUpRCO5nVPq"
+uri = "file://artifacts/mockup-sandbox/public/images/map-vinyl.png"
+type = "image"
+title = "Vinyl record prismatic light"
+
+[[generated]]
+id = "mu5dyUohXW2YgljK882Rl"
+uri = "file://artifacts/mockup-sandbox/public/images/map-album.png"
+type = "image"
+title = "A Night at the Opera silhouette"
+
+[[generated]]
+id = "2kZwCUk-4pSougGEtMscK"
+uri = "file://artifacts/mockup-sandbox/public/images/map-bowie.png"
+type = "image"
+title = "David Bowie glam rock abstract"
+
+[[generated]]
+id = "dlSXpybBmBFos8N-RGq0i"
+uri = "file://artifacts/mockup-sandbox/public/images/thread-hero.png"
+type = "image"
+title = "70s concert stage lights"
+
+[[generated]]
+id = "ExiDilbE7nnGw8CMsd60d"
+uri = "file://artifacts/mockup-sandbox/public/images/vintage-concert-haze.png"
+type = "image"
+title = "vintage concert haze"
 
 [[outputs]]
 id = "OuS-Jv-RPd2iSfRx2DCZ9"
 uri = "file://artifacts/jam-bot/QUICKSTART.md"
 type = "text"
 title = "Jam Bot — Quick Start"
+
+[[outputs]]
+id = "w2onxFycJe04bwAtgmQX_"
+uri = "file://attached_assets/screenshots/328c7e60-1e3e-4285-858c-1e54fe82d9e8-00-cucr4lh7nj5q_worf_replit_dev_mockup_preview_music-explore_TheMap.png"
+type = "image"
+title = "Direction A — The Map (graph-primary)"
+
+[[outputs]]
+id = "b-cQIQbmhqNvEVk2yxCr2"
+uri = "file://attached_assets/screenshots/328c7e60-1e3e-4285-858c-1e54fe82d9e8-00-cucr4lh7nj5q_worf_replit_dev_mockup_preview_music-explore_TheCaseFile.png"
+type = "image"
+title = "Direction B — The Case File (dossier-primary)"
+
+[[outputs]]
+id = "Es9HLjQVDJOxPAMojck1h"
+uri = "file://attached_assets/screenshots/328c7e60-1e3e-4285-858c-1e54fe82d9e8-00-cucr4lh7nj5q_worf_replit_dev_mockup_preview_music-explore_TheThread.png"
+type = "image"
+title = "Direction C — The Thread (lineage spine)"

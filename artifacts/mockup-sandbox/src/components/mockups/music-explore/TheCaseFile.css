@@ -1,0 +1,108 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap');
+
+:root {
+  --case-bg: #f4f1ea;
+  --case-text: #1c1c1a;
+  --case-accent: #d32f2f;
+  --case-muted: #8b8982;
+  --case-border: #d4d0c5;
+}
+
+.case-file-wrapper {
+  background-color: var(--case-bg);
+  color: var(--case-text);
+  font-family: 'Playfair Display', serif;
+  min-height: 100vh;
+  position: relative;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.04'/%3E%3C/svg%3E");
+}
+
+.case-font-mono {
+  font-family: 'Space Mono', monospace;
+}
+
+.case-door {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-bottom: 1px dashed var(--case-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.case-door:hover {
+  color: var(--case-accent);
+  border-bottom-color: var(--case-accent);
+}
+
+.case-door:hover .case-door-arrow {
+  transform: translateX(2px) rotate(-45deg);
+  color: var(--case-accent);
+}
+
+.case-door-arrow {
+  display: inline-block;
+  transition: all 0.2s ease;
+  font-size: 0.8em;
+  color: var(--case-muted);
+}
+
+.prov-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.1rem 0.3rem;
+  border-radius: 2px;
+  font-family: 'Space Mono', monospace;
+  margin-left: 0.5rem;
+}
+
+.prov-wd { background: #e8e8e8; color: #000; border: 1px solid #ccc; }
+.prov-mb { background: #eb743b; color: #fff; }
+.prov-sp { background: #1db954; color: #fff; }
+.prov-di { background: #000; color: #fff; }
+.prov-co { background: #0a49aa; color: #fff; }
+.prov-lf { background: #d51007; color: #fff; }
+.prov-ge { background: #ffff64; color: #000; }
+.prov-od { background: #333; color: #fff; }
+
+.dossier-section {
+  position: relative;
+  padding: 2rem 0;
+  border-bottom: 1px solid var(--case-border);
+}
+
+.dossier-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2rem;
+  height: 1px;
+  background: var(--case-accent);
+}
+
+.dossier-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--case-muted);
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.spotify-dock {
+  background: #121212;
+  color: white;
+  border-radius: 12px;
+  padding: 1rem;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  font-family: 'Inter', sans-serif;
+}

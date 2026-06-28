@@ -1,0 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Inter:wght@300;400;500;600&display=swap');
+
+:root {
+  --map-bg: #09090b;
+  --map-panel: #18181b;
+  --map-border: #27272a;
+  --map-text: #f4f4f5;
+  --map-text-muted: #a1a1aa;
+  --map-accent: #3b82f6;
+  
+  --prov-wd: #e5e7eb;
+  --prov-mb: #f472b6;
+  --prov-spotify: #22c55e;
+  --prov-discogs: #d97706;
+  --prov-commons: #3b82f6;
+  --prov-lastfm: #ef4444;
+  --prov-odesli: #8b5cf6;
+  --prov-genius: #eab308;
+}
+
+.map-container {
+  font-family: 'Inter', sans-serif;
+  background-color: var(--map-bg);
+  color: var(--map-text);
+}
+
+.map-mono {
+  font-family: 'Space Mono', monospace;
+}
+
+.graph-node {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.graph-node:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+  z-index: 50;
+}
+
+.node-pulse {
+  animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.95); opacity: 0.5; }
+  50% { transform: scale(1.1); opacity: 0.1; }
+  100% { transform: scale(0.95); opacity: 0.5; }
+}
+
+.edge-line {
+  stroke-dasharray: 4;
+  animation: dash 20s linear infinite;
+}
+
+@keyframes dash {
+  to {
+    stroke-dashoffset: -100;
+  }
+}
