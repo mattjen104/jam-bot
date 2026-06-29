@@ -5,5 +5,7 @@ export const modules: ModuleMap = {
   "./components/mockups/music-explore/TheMap.tsx": () => import("../components/mockups/music-explore/TheMap.tsx"),
   "./components/mockups/music-explore/TheThread.tsx": () => import("../components/mockups/music-explore/TheThread.tsx"),
   "./components/mockups/playhead/PlayheadDesktop.tsx": () => import("../components/mockups/playhead/PlayheadDesktop.tsx"),
-  "./components/mockups/playhead/PlayheadMobile.tsx": () => import("../components/mockups/playhead/PlayheadMobile.tsx")
+  "./components/mockups/playhead/PlayheadMobile.tsx": () => import("../components/mockups/playhead/PlayheadMobile.tsx"),
+  "./components/mockups/playhead-unified/OneSpineDesktop.tsx": () => import("../components/mockups/playhead-unified/OneSpineDesktop.tsx"),
+  "./components/mockups/playhead-unified/OneSpineMobile.tsx": () => import("../components/mockups/playhead-unified/OneSpineMobile.tsx")
 };
