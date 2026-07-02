@@ -34,6 +34,7 @@ import type {
   PickerArchive,
   PickerList,
   PickerRunDetail,
+  RecordingKnowledge,
   RecordingNode,
   RecordingPreview,
   RecordingSpins,
@@ -50,6 +51,7 @@ import type {
   StationArchive,
   StationList,
   StationNowPlaying,
+  StationPulseList,
   StationRunDetail,
   TracklistRequest,
   TracklistResult,
@@ -500,6 +502,84 @@ export function useListStations<
 }
 
 /**
+ * The latest logged spin for each station in the directory — artwork, raw title/artist, best-effort recording resolution, and show/DJ attribution when the source exposes it. Powers the dial's live album covers. Stations with nothing logged yet return a null `nowPlaying`.
+
+ * @summary Current track on every station, in one call (dial pulse)
+ */
+export const getListStationsNowPlayingUrl = () => {
+  return `/api/stations/now-playing`;
+};
+
+export const listStationsNowPlaying = async (
+  options?: RequestInit,
+): Promise<StationPulseList> => {
+  return customFetch<StationPulseList>(getListStationsNowPlayingUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListStationsNowPlayingQueryKey = () => {
+  return [`/api/stations/now-playing`] as const;
+};
+
+export const getListStationsNowPlayingQueryOptions = <
+  TData = Awaited<ReturnType<typeof listStationsNowPlaying>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listStationsNowPlaying>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListStationsNowPlayingQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listStationsNowPlaying>>
+  > = ({ signal }) => listStationsNowPlaying({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listStationsNowPlaying>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListStationsNowPlayingQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listStationsNowPlaying>>
+>;
+export type ListStationsNowPlayingQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Current track on every station, in one call (dial pulse)
+ */
+
+export function useListStationsNowPlaying<
+  TData = Awaited<ReturnType<typeof listStationsNowPlaying>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listStationsNowPlaying>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListStationsNowPlayingQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * The most recent spin logged for a station, resolved (best-effort) to a MusicBrainz Recording ID with cross-service deep links and artwork. The `nowPlaying` field is null when nothing has been logged yet.
 
  * @summary Current track on a station, resolved to the MBID spine
@@ -670,6 +750,97 @@ export function useGetRecording<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetRecordingQueryOptions(mbid, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Real liner-notes enrichment for a recording on the spine — personnel credits, original pressing detail, and typed song relationships — resolved from MusicBrainz/Discogs and cached. `knowledge` is null when the sources are unconfigured or nothing verifiable was found; Lore never fabricates credits.
+
+ * @summary Liner-notes knowledge for a recording (credits, pressing)
+ */
+export const getGetRecordingKnowledgeUrl = (mbid: string) => {
+  return `/api/recordings/${mbid}/knowledge`;
+};
+
+export const getRecordingKnowledge = async (
+  mbid: string,
+  options?: RequestInit,
+): Promise<RecordingKnowledge> => {
+  return customFetch<RecordingKnowledge>(getGetRecordingKnowledgeUrl(mbid), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetRecordingKnowledgeQueryKey = (mbid: string) => {
+  return [`/api/recordings/${mbid}/knowledge`] as const;
+};
+
+export const getGetRecordingKnowledgeQueryOptions = <
+  TData = Awaited<ReturnType<typeof getRecordingKnowledge>>,
+  TError = ErrorType<ApiError>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecordingKnowledge>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetRecordingKnowledgeQueryKey(mbid);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getRecordingKnowledge>>
+  > = ({ signal }) =>
+    getRecordingKnowledge(mbid, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!mbid,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getRecordingKnowledge>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetRecordingKnowledgeQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getRecordingKnowledge>>
+>;
+export type GetRecordingKnowledgeQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Liner-notes knowledge for a recording (credits, pressing)
+ */
+
+export function useGetRecordingKnowledge<
+  TData = Awaited<ReturnType<typeof getRecordingKnowledge>>,
+  TError = ErrorType<ApiError>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecordingKnowledge>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetRecordingKnowledgeQueryOptions(mbid, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

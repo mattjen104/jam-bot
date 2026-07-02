@@ -7,6 +7,7 @@
  */
 import type { NowPlayingConfidence } from "./nowPlayingConfidence";
 import type { NowPlayingRecording } from "./nowPlayingRecording";
+import type { ShowRef } from "./showRef";
 
 /**
  * The most recent spin on a station. `recording` is null when the track could not be resolved to the MusicBrainz spine (raw metadata preserved).
@@ -21,4 +22,6 @@ export interface NowPlaying {
   /** @nullable */
   artworkUrl?: string | null;
   recording?: NowPlayingRecording | null;
+  /** Show + DJ on air for this spin, when the source exposes it. */
+  show?: ShowRef | null;
 }

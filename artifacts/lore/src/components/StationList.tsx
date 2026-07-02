@@ -1,12 +1,14 @@
-import type { Station } from "@workspace/api-client-react";
+import type { NowPlaying, Station } from "@workspace/api-client-react";
 import { QualityBadge } from "./QualityBadge";
-import { Pause, Play, Radio } from "lucide-react";
+import { Mic, Pause, Play, Radio } from "lucide-react";
 import type { PlayerStatus } from "../hooks/useRadioPlayer";
 
 interface StationListProps {
   stations: Station[];
   activeSlug: string | null;
   status: PlayerStatus;
+  /** The dial pulse: latest spin per station slug (album art + show/DJ). */
+  pulse?: Map<string, NowPlaying | null>;
   onToggle: (station: Station) => void;
   onSelect: (station: Station) => void;
 }
@@ -15,6 +17,7 @@ export function StationList({
   stations,
   activeSlug,
   status,
+  pulse,
   onToggle,
   onSelect,
 }: StationListProps) {
@@ -24,6 +27,13 @@ export function StationList({
         const isActive = station.slug === activeSlug;
         const isPlaying = isActive && status === "playing";
         const isLoading = isActive && status === "loading";
+        const np = pulse?.get(station.slug) ?? null;
+        const artwork = np?.recording?.artworkUrl ?? np?.artworkUrl ?? null;
+        const trackLine = np
+          ? [np.recording?.title ?? np.rawTitle, np.recording?.artist ?? np.rawArtist]
+              .filter(Boolean)
+              .join(" · ")
+          : null;
         return (
           <li key={station.slug}>
             <div
@@ -51,15 +61,36 @@ export function StationList({
                 }}
                 aria-label={isPlaying ? `Pause ${station.name}` : `Play ${station.name}`}
                 data-testid={`toggle-${station.slug}`}
-                className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-primary-border bg-primary text-primary-foreground shadow-sm transition-transform active:scale-95"
+                className={`relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border shadow-sm transition-transform active:scale-95 ${
+                  artwork
+                    ? "border-border bg-muted"
+                    : "border-primary-border bg-primary text-primary-foreground"
+                }`}
               >
-                {isLoading ? (
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/40 border-t-primary-foreground" />
-                ) : isPlaying ? (
-                  <Pause className="h-4 w-4 fill-current" />
-                ) : (
-                  <Play className="ml-0.5 h-4 w-4 fill-current" />
+                {artwork && (
+                  <>
+                    <img
+                      src={artwork}
+                      alt=""
+                      aria-hidden
+                      className="absolute inset-0 h-full w-full object-cover"
+                      data-testid={`pulse-artwork-${station.slug}`}
+                    />
+                    {/* Scrim so the play glyph stays readable over any cover. */}
+                    <span className="absolute inset-0 bg-black/35 transition-colors group-hover:bg-black/45" />
+                  </>
                 )}
+                <span
+                  className={`relative ${artwork ? "text-white drop-shadow" : ""}`}
+                >
+                  {isLoading ? (
+                    <span className="block h-4 w-4 animate-spin rounded-full border-2 border-current/40 border-t-current" />
+                  ) : isPlaying ? (
+                    <Pause className="h-4 w-4 fill-current" />
+                  ) : (
+                    <Play className="ml-0.5 h-4 w-4 fill-current" />
+                  )}
+                </span>
               </button>
 
               <div className="min-w-0 flex-1">
@@ -79,11 +110,31 @@ export function StationList({
                     </span>
                   )}
                 </div>
-                <p className="mt-0.5 flex items-center gap-1.5 truncate font-mono text-xs text-muted-foreground">
-                  <Radio className="h-3 w-3" />
-                  {[station.org, station.country].filter(Boolean).join(" · ") ||
-                    "Independent"}
-                </p>
+                {trackLine ? (
+                  <p
+                    className="mt-0.5 truncate text-xs text-foreground/80"
+                    data-testid={`pulse-track-${station.slug}`}
+                  >
+                    {trackLine}
+                  </p>
+                ) : (
+                  <p className="mt-0.5 flex items-center gap-1.5 truncate font-mono text-xs text-muted-foreground">
+                    <Radio className="h-3 w-3" />
+                    {[station.org, station.country].filter(Boolean).join(" · ") ||
+                      "Independent"}
+                  </p>
+                )}
+                {np?.show && (
+                  <p
+                    className="mt-0.5 flex items-center gap-1.5 truncate font-mono text-[11px] text-muted-foreground"
+                    data-testid={`pulse-show-${station.slug}`}
+                  >
+                    <Mic className="h-3 w-3 text-primary/70" />
+                    {np.show.djName
+                      ? `${np.show.djName} · ${np.show.name}`
+                      : np.show.name}
+                  </p>
+                )}
               </div>
 
               <div className="shrink-0">

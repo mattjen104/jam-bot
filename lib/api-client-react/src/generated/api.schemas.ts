@@ -287,6 +287,15 @@ export const NowPlayingConfidence = {
 } as const;
 
 /**
+ * Show + DJ attribution for a spin, when the source exposes it.
+ */
+export interface ShowRef {
+  name: string;
+  /** @nullable */
+  djName?: string | null;
+}
+
+/**
  * The most recent spin on a station. `recording` is null when the track could not be resolved to the MusicBrainz spine (raw metadata preserved).
  */
 export interface NowPlaying {
@@ -299,11 +308,29 @@ export interface NowPlaying {
   /** @nullable */
   artworkUrl?: string | null;
   recording?: NowPlayingRecording | null;
+  /** Show + DJ on air for this spin, when the source exposes it. */
+  show?: ShowRef | null;
 }
 
 export interface StationNowPlaying {
   station: Station;
   nowPlaying?: NowPlaying | null;
+}
+
+/**
+ * One station's latest spin, for the dial's live pulse.
+ */
+export interface StationPulse {
+  slug: string;
+  nowPlaying?: NowPlaying | null;
+}
+
+export interface StationPulseList {
+  items: StationPulse[];
+}
+
+export interface RecordingKnowledge {
+  knowledge: TrackKnowledge | null;
 }
 
 /**
@@ -313,15 +340,6 @@ export interface StationRef {
   slug: string;
   name: string;
   stationClass: string;
-}
-
-/**
- * Show + DJ attribution for a spin, when the source exposes it.
- */
-export interface ShowRef {
-  name: string;
-  /** @nullable */
-  djName?: string | null;
 }
 
 export type RecordingSpinConfidence =

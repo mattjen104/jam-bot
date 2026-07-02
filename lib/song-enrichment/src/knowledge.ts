@@ -183,6 +183,65 @@ export async function enrichTrack(args: {
   return hasContent(knowledge) ? knowledge : null;
 }
 
+/**
+ * Resolve liner-notes knowledge when the caller ALREADY has the canonical
+ * MusicBrainz recording id (e.g. the radio spine, where spins are resolved to
+ * an MBID before enrichment is ever asked for). Skips the ISRC→recording
+ * resolution step and converges on the same canonical `mbrec:<id>` cache entry
+ * `enrichTrack` uses, so the turntable and radio paths share one cache. Never
+ * throws; returns null when the feature is off, nothing useful resolved, or on
+ * any failure.
+ */
+export async function enrichRecording(args: {
+  recordingId: string;
+  title: string;
+  artist: string;
+  isrc?: string | null;
+}): Promise<TrackKnowledge | null> {
+  if (!trackKnowledgeEnabled()) return null;
+
+  const canonKey = recordingKey(args.recordingId);
+  const canon = readCache(canonKey);
+  if (canon) return hasContent(canon) ? canon : null;
+
+  const [credits, pressing] = await Promise.all([
+    musicbrainzEnabled()
+      ? fetchRecordingCredits(args.recordingId)
+      : Promise.resolve(null),
+    fetchDiscogsPressing(args.title, args.artist),
+  ]);
+
+  const knowledge: TrackKnowledge = {
+    recordingId: args.recordingId,
+    artistId: credits?.artistId,
+    artistName: credits?.artistName,
+    personnel: credits?.personnel ?? [],
+    pressing: pressing ?? undefined,
+    relationships: credits?.relationships ?? [],
+    // Credits are exact when present (fetched for this exact recording id);
+    // a pressing-only result is still an approximate title/artist match.
+    approximate: !credits,
+    fetchedAtMs: Date.now(),
+  };
+
+  writeCache(canonKey, knowledge);
+  // Alias under the cheap pre-resolution key so turntable plays of the same
+  // record (which look up by ISRC or title|artist first) hit cache instantly.
+  writeCache(
+    buildCacheKey({
+      acrid: "",
+      title: args.title,
+      artist: args.artist,
+      album: "",
+      isrc: args.isrc ?? undefined,
+      playOffsetMs: 0,
+    }),
+    knowledge,
+  );
+
+  return hasContent(knowledge) ? knowledge : null;
+}
+
 // ---- Credit grouping / formatting --------------------------------------
 
 function pick(personnel: Credit[], pred: (role: string) => boolean): Credit[] {

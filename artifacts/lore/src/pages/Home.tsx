@@ -4,6 +4,8 @@ import {
   useListStations,
   useGetStationNowPlaying,
   getGetStationNowPlayingQueryKey,
+  useListStationsNowPlaying,
+  getListStationsNowPlayingQueryKey,
   type Station,
 } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
@@ -29,6 +31,22 @@ export default function Home() {
   const focusedSlug = selectedSlug ?? activeSlug;
   const focusedStation =
     stations.find((s) => s.slug === focusedSlug) ?? player.station ?? null;
+
+  // The dial pulse: latest spin per station in one call, refreshed gently so
+  // every play button wears the album art of what's on right now.
+  const { data: pulse } = useListStationsNowPlaying({
+    query: {
+      queryKey: getListStationsNowPlayingQueryKey(),
+      refetchInterval: 30000,
+      refetchIntervalInBackground: false,
+    },
+  });
+  const pulseBySlug = useMemo(() => {
+    const map = new Map(
+      (pulse?.items ?? []).map((i) => [i.slug, i.nowPlaying ?? null]),
+    );
+    return map;
+  }, [pulse]);
 
   const { data: nowPlaying, isLoading: npLoading } = useGetStationNowPlaying(
     focusedSlug ?? "",
@@ -135,6 +153,7 @@ export default function Home() {
                 stations={stations}
                 activeSlug={activeSlug}
                 status={player.status}
+                pulse={pulseBySlug}
                 onToggle={handleToggle}
                 onSelect={handleSelect}
               />

@@ -230,6 +230,83 @@ export const ListStationsResponse = zod.object({
 });
 
 /**
+ * The latest logged spin for each station in the directory — artwork, raw title/artist, best-effort recording resolution, and show/DJ attribution when the source exposes it. Powers the dial's live album covers. Stations with nothing logged yet return a null `nowPlaying`.
+
+ * @summary Current track on every station, in one call (dial pulse)
+ */
+export const ListStationsNowPlayingResponse = zod.object({
+  items: zod.array(
+    zod
+      .object({
+        slug: zod.string(),
+        nowPlaying: zod
+          .union([
+            zod
+              .object({
+                rawArtist: zod.string(),
+                rawTitle: zod.string(),
+                source: zod.string().nullish(),
+                confidence: zod.enum([
+                  "recording_id",
+                  "isrc",
+                  "text",
+                  "unresolved",
+                ]),
+                playedAt: zod.string(),
+                artworkUrl: zod.string().nullish(),
+                recording: zod
+                  .union([
+                    zod
+                      .object({
+                        mbid: zod.string(),
+                        title: zod.string(),
+                        artist: zod.string(),
+                        artworkUrl: zod.string().nullish(),
+                        links: zod.array(
+                          zod
+                            .object({
+                              name: zod.string(),
+                              url: zod.string(),
+                              kind: zod.enum(["exact", "search"]),
+                            })
+                            .describe(
+                              'A cross-service deep link. kind=\"exact\" points at the precise recording (resolved via Odesli); kind=\"search\" is a best-effort artist+title search on that service.',
+                            ),
+                        ),
+                      })
+                      .describe("The MBID-keyed recording a spin resolved to."),
+                    zod.null(),
+                  ])
+                  .optional(),
+                show: zod
+                  .union([
+                    zod
+                      .object({
+                        name: zod.string(),
+                        djName: zod.string().nullish(),
+                      })
+                      .describe(
+                        "Show + DJ attribution for a spin, when the source exposes it.",
+                      ),
+                    zod.null(),
+                  ])
+                  .optional()
+                  .describe(
+                    "Show + DJ on air for this spin, when the source exposes it.",
+                  ),
+              })
+              .describe(
+                "The most recent spin on a station. `recording` is null when the track could not be resolved to the MusicBrainz spine (raw metadata preserved).",
+              ),
+            zod.null(),
+          ])
+          .optional(),
+      })
+      .describe("One station's latest spin, for the dial's live pulse."),
+  ),
+});
+
+/**
  * The most recent spin logged for a station, resolved (best-effort) to a MusicBrainz Recording ID with cross-service deep links and artwork. The `nowPlaying` field is null when nothing has been logged yet.
 
  * @summary Current track on a station, resolved to the MBID spine
@@ -292,6 +369,22 @@ export const GetStationNowPlayingResponse = zod.object({
               zod.null(),
             ])
             .optional(),
+          show: zod
+            .union([
+              zod
+                .object({
+                  name: zod.string(),
+                  djName: zod.string().nullish(),
+                })
+                .describe(
+                  "Show + DJ attribution for a spin, when the source exposes it.",
+                ),
+              zod.null(),
+            ])
+            .optional()
+            .describe(
+              "Show + DJ on air for this spin, when the source exposes it.",
+            ),
         })
         .describe(
           "The most recent spin on a station. `recording` is null when the track could not be resolved to the MusicBrainz spine (raw metadata preserved).",
@@ -334,6 +427,67 @@ export const GetRecordingResponse = zod
   .describe(
     "A recording's own metadata, keyed by MusicBrainz Recording ID, for the song page. artistMbid powers artist-level attribution; artwork and links are best-effort and may be absent.",
   );
+
+/**
+ * Real liner-notes enrichment for a recording on the spine — personnel credits, original pressing detail, and typed song relationships — resolved from MusicBrainz/Discogs and cached. `knowledge` is null when the sources are unconfigured or nothing verifiable was found; Lore never fabricates credits.
+
+ * @summary Liner-notes knowledge for a recording (credits, pressing)
+ */
+
+export const GetRecordingKnowledgeParams = zod.object({
+  mbid: zod.coerce.string().min(1),
+});
+
+export const GetRecordingKnowledgeResponse = zod.object({
+  knowledge: zod.union([
+    zod.object({
+      recordingId: zod.string().nullish(),
+      artistId: zod.string().nullish(),
+      artistName: zod.string().nullish(),
+      personnel: zod.array(
+        zod.object({
+          role: zod.string(),
+          name: zod.string(),
+          artistId: zod.string().nullish(),
+        }),
+      ),
+      pressing: zod
+        .union([
+          zod.object({
+            label: zod.string().nullish(),
+            year: zod.number().nullish(),
+            country: zod.string().nullish(),
+            format: zod.string().nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      relationships: zod
+        .array(
+          zod
+            .object({
+              kind: zod.enum(["sample", "cover", "remix", "interpolation"]),
+              direction: zod.enum(["forward", "backward"]),
+              label: zod.string(),
+              title: zod.string(),
+              artist: zod.string().nullish(),
+              year: zod.number().nullish(),
+              targetType: zod.enum(["recording", "work"]),
+              targetId: zod.string(),
+              mbUrl: zod.string(),
+            })
+            .describe(
+              'A typed, directional song-to-song relationship parsed from MusicBrainz. direction=\"forward\" means THIS song is the source (it samples \/ is a cover of \/ is a remix of \/ interpolates the target); \"backward\" means the related entity does so to THIS song. The web graph renders each as a typed edge to a node identified by targetType + targetId.',
+            ),
+        )
+        .optional(),
+      summary: zod.string().nullish(),
+      approximate: zod.boolean(),
+      fetchedAtMs: zod.number(),
+    }),
+    zod.null(),
+  ]),
+});
 
 /**
  * Every logged spin of a recording (newest first), each attributed to the station and — when the source exposes it — the show and DJ. This is the play-history surface for a track page.

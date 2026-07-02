@@ -151,6 +151,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/StationList"
+  /stations/now-playing:
+    get:
+      operationId: listStationsNowPlaying
+      tags: [stations]
+      summary: Current track on every station, in one call (dial pulse)
+      description: >
+        The latest logged spin for each station in the directory — artwork,
+        raw title/artist, best-effort recording resolution, and show/DJ
+        attribution when the source exposes it. Powers the dial's live album
+        covers. Stations with nothing logged yet return a null `nowPlaying`.
+      responses:
+        "200":
+          description: Latest spin per station
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationPulseList"
   /stations/{slug}/now-playing:
     get:
       operationId: getStationNowPlaying
@@ -203,6 +220,37 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RecordingNode"
+        "404":
+          description: Recording not on the spine
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /recordings/{mbid}/knowledge:
+    get:
+      operationId: getRecordingKnowledge
+      tags: [recordings]
+      summary: Liner-notes knowledge for a recording (credits, pressing)
+      description: >
+        Real liner-notes enrichment for a recording on the spine — personnel
+        credits, original pressing detail, and typed song relationships —
+        resolved from MusicBrainz/Discogs and cached. `knowledge` is null when
+        the sources are unconfigured or nothing verifiable was found; Lore
+        never fabricates credits.
+      parameters:
+        - name: mbid
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: The recording's liner-notes knowledge (or null)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecordingKnowledge"
         "404":
           description: Recording not on the spine
           content:
@@ -1481,6 +1529,11 @@ components:
           anyOf:
             - $ref: "#/components/schemas/NowPlayingRecording"
             - type: "null"
+        show:
+          description: Show + DJ on air for this spin, when the source exposes it.
+          anyOf:
+            - $ref: "#/components/schemas/ShowRef"
+            - type: "null"
       required:
         - rawArtist
         - rawTitle
@@ -1497,6 +1550,36 @@ components:
             - type: "null"
       required:
         - station
+    StationPulse:
+      type: object
+      description: One station's latest spin, for the dial's live pulse.
+      properties:
+        slug:
+          type: string
+        nowPlaying:
+          anyOf:
+            - $ref: "#/components/schemas/NowPlaying"
+            - type: "null"
+      required:
+        - slug
+    StationPulseList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/StationPulse"
+      required:
+        - items
+    RecordingKnowledge:
+      type: object
+      properties:
+        knowledge:
+          anyOf:
+            - $ref: "#/components/schemas/TrackKnowledge"
+            - type: "null"
+      required:
+        - knowledge
     StationRef:
       type: object
       description: A station reference used in spin/segue attribution.

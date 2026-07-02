@@ -5,7 +5,7 @@ import {
   getPickerArchive,
 } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
-import { useFollows, toggleFollow } from "../lib/local";
+import { useFollows, toggleFollow, parseDjFollowId } from "../lib/local";
 import { runDate } from "../lib/format";
 import {
   ArrowLeft,
@@ -39,6 +39,7 @@ export default function Following() {
   const follows = useFollows();
   const stationFollows = follows.filter((f) => f.kind === "station");
   const pickerFollows = follows.filter((f) => f.kind === "picker");
+  const djFollows = follows.filter((f) => f.kind === "dj");
 
   const stationQueries = useQueries({
     queries: stationFollows.map((f) => ({
@@ -54,10 +55,23 @@ export default function Following() {
       staleTime: 60_000,
     })),
   });
+  // A followed DJ reads that station's archive, filtered to their shows below.
+  const djQueries = useQueries({
+    queries: djFollows.map((f) => {
+      const parsed = parseDjFollowId(f.id);
+      return {
+        queryKey: ["following", "dj", f.id],
+        queryFn: () => getStationArchive(parsed?.stationSlug ?? ""),
+        staleTime: 60_000,
+        enabled: !!parsed,
+      };
+    }),
+  });
 
   const loading =
     stationQueries.some((q) => q.isLoading) ||
-    pickerQueries.some((q) => q.isLoading);
+    pickerQueries.some((q) => q.isLoading) ||
+    djQueries.some((q) => q.isLoading);
 
   const items: FeedItem[] = [];
   stationQueries.forEach((q, i) => {
@@ -71,6 +85,25 @@ export default function Following() {
         byline: r.show?.djName
           ? `${q.data.station.name} · ${r.show.djName}`
           : q.data.station.name,
+        sourceKind: "station",
+        date: r.date ?? null,
+        trackCount: r.spinCount,
+        resolvedCount: r.resolvedCount,
+      });
+    }
+  });
+  djQueries.forEach((q, i) => {
+    const f = djFollows[i];
+    if (!q.data || !f) return;
+    const parsed = parseDjFollowId(f.id);
+    if (!parsed) return;
+    for (const r of q.data.runs) {
+      if (r.show?.djName !== parsed.djName) continue;
+      items.push({
+        key: `dj-run-${r.runId}`,
+        href: `/archive/station-runs/${r.runId}`,
+        title: r.show?.name ?? "Station stream",
+        byline: `${parsed.djName} · ${q.data.station.name}`,
         sourceKind: "station",
         date: r.date ?? null,
         trackCount: r.spinCount,
@@ -143,6 +176,8 @@ export default function Following() {
               >
                 {f.kind === "station" ? (
                   <Radio className="h-3 w-3 text-primary" />
+                ) : f.kind === "dj" ? (
+                  <UserCheck className="h-3 w-3 text-primary" />
                 ) : (
                   <Users className="h-3 w-3 text-primary" />
                 )}
@@ -150,7 +185,9 @@ export default function Following() {
                   href={
                     f.kind === "station"
                       ? `/archive/stations/${f.id}`
-                      : `/archive/pickers/${f.id}`
+                      : f.kind === "dj"
+                        ? `/archive/stations/${parseDjFollowId(f.id)?.stationSlug ?? ""}`
+                        : `/archive/pickers/${f.id}`
                   }
                   className="hover:text-primary"
                 >

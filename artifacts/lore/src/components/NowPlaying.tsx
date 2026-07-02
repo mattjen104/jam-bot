@@ -1,16 +1,23 @@
 import { Link } from "wouter";
-import type {
-  RecordingLink,
-  Station,
-  StationNowPlaying,
+import {
+  useGetRecordingKnowledge,
+  getGetRecordingKnowledgeQueryKey,
+  type Credit,
+  type RecordingLink,
+  type Station,
+  type StationNowPlaying,
+  type TrackKnowledge,
 } from "@workspace/api-client-react";
 import { clockTime, timeAgo } from "../lib/format";
 import { LikeButton } from "./LikeButton";
+import { FollowButton } from "./FollowButton";
+import { djFollowId } from "../lib/local";
 import {
   ArrowUpRight,
   Disc3,
   ExternalLink,
   Heart,
+  Mic,
   Music4,
   Search,
 } from "lucide-react";
@@ -102,11 +109,44 @@ export function NowPlaying({ data, isLoading, fallbackStation }: NowPlayingProps
               {rec?.artist ?? np.rawArtist}
             </p>
 
+            {np.show && (
+              <div
+                className="mt-4 rounded-xl border border-border bg-secondary/40 p-3"
+                data-testid="on-air-show"
+              >
+                <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+                  <Mic className="mr-1.5 inline h-3 w-3 text-primary" />
+                  On air
+                </p>
+                <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    {np.show.djName && (
+                      <p className="truncate font-serif text-base font-semibold text-foreground">
+                        {np.show.djName}
+                      </p>
+                    )}
+                    <p className="truncate text-xs text-muted-foreground">
+                      {np.show.name}
+                    </p>
+                  </div>
+                  {np.show.djName && (
+                    <FollowButton
+                      kind="dj"
+                      id={djFollowId(station.slug, np.show.djName)}
+                      name={`${np.show.djName} (${station.name})`}
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+
             {rec && (
               <div className="mt-4">
                 <LikeButton mbid={rec.mbid} />
               </div>
             )}
+
+            {rec && <LinerNotes mbid={rec.mbid} />}
 
             {rec && (
               <a
@@ -140,6 +180,108 @@ export function NowPlaying({ data, isLoading, fallbackStation }: NowPlayingProps
 
         <StationFooter station={station} playedAt={np?.playedAt} />
       </div>
+    </div>
+  );
+}
+
+/** Group raw credits into reader-friendly buckets, mirroring the Slack card. */
+export function groupCredits(personnel: Credit[]): Array<{
+  label: string;
+  names: string;
+}> {
+  const seen = (list: Credit[], cap = 4): string => {
+    const names = [...new Set(list.map((c) => c.name))];
+    return names.length <= cap
+      ? names.join(", ")
+      : `${names.slice(0, cap).join(", ")} +${names.length - cap} more`;
+  };
+  const lower = (c: Credit) => c.role.toLowerCase();
+  const producers = personnel.filter((c) => lower(c).includes("produc"));
+  const writers = personnel.filter((c) =>
+    ["composer", "lyricist", "writer"].includes(lower(c)),
+  );
+  const engineers = personnel.filter(
+    (c) =>
+      lower(c).includes("engineer") ||
+      ["mix", "mastering", "recording"].includes(lower(c)),
+  );
+  const bucketed = new Set([...producers, ...writers, ...engineers]);
+  const performers = personnel.filter((c) => !bucketed.has(c));
+  const rows: Array<{ label: string; names: string }> = [];
+  if (producers.length) rows.push({ label: "Produced by", names: seen(producers) });
+  if (writers.length) rows.push({ label: "Written by", names: seen(writers) });
+  if (engineers.length) rows.push({ label: "Engineered by", names: seen(engineers) });
+  if (performers.length) {
+    const byName = new Map<string, string[]>();
+    for (const c of performers) {
+      const roles = byName.get(c.name) ?? [];
+      if (c.role && c.role !== "performer" && !roles.includes(c.role)) {
+        roles.push(c.role);
+      }
+      byName.set(c.name, roles);
+    }
+    const entries = [...byName.entries()].map(([name, roles]) =>
+      roles.length ? `${name} (${roles.join(", ")})` : name,
+    );
+    rows.push({
+      label: "Performed by",
+      names:
+        entries.length <= 4
+          ? entries.join(", ")
+          : `${entries.slice(0, 4).join(", ")} +${entries.length - 4} more`,
+    });
+  }
+  return rows;
+}
+
+export function pressingLine(k: TrackKnowledge): string | null {
+  const p = k.pressing;
+  if (!p) return null;
+  return (
+    [p.label, p.year ? String(p.year) : null, p.country]
+      .filter(Boolean)
+      .join(" · ") || null
+  );
+}
+
+/**
+ * Real liner-notes credits for the confirmed recording, fetched lazily and
+ * shown only when something verifiable came back — Lore never fabricates.
+ */
+function LinerNotes({ mbid }: { mbid: string }) {
+  const { data } = useGetRecordingKnowledge(mbid, {
+    query: {
+      queryKey: getGetRecordingKnowledgeQueryKey(mbid),
+      staleTime: 10 * 60_000,
+    },
+  });
+  const knowledge = data?.knowledge ?? null;
+  if (!knowledge) return null;
+
+  const rows = groupCredits(knowledge.personnel);
+  const pressing = pressingLine(knowledge);
+  if (rows.length === 0 && !pressing) return null;
+
+  return (
+    <div className="mt-5" data-testid="liner-notes">
+      <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+        Liner notes
+        {knowledge.approximate ? " · matched by title" : ""}
+      </p>
+      <dl className="space-y-1.5">
+        {rows.map((row) => (
+          <div key={row.label} className="text-sm leading-snug">
+            <dt className="inline font-medium text-foreground">{row.label} </dt>
+            <dd className="inline text-muted-foreground">{row.names}</dd>
+          </div>
+        ))}
+        {pressing && (
+          <div className="text-sm leading-snug">
+            <dt className="inline font-medium text-foreground">Pressing </dt>
+            <dd className="inline text-muted-foreground">{pressing}</dd>
+          </div>
+        )}
+      </dl>
     </div>
   );
 }

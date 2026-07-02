@@ -24,11 +24,28 @@ export interface JournalEntry {
 }
 
 export interface FollowEntry {
-  kind: "station" | "picker";
-  /** Station slug or picker handle. */
+  kind: "station" | "picker" | "dj";
+  /**
+   * Station slug, picker handle, or — for a DJ — `<stationSlug>::<djName>`
+   * (DJs have no standalone identity yet; they're followed as "this person on
+   * this station", and their feed is that station's runs filtered to them).
+   */
   id: string;
   name: string;
   followedAt: string;
+}
+
+/** Compose/parse the device-local DJ follow id (`<stationSlug>::<djName>`). */
+export function djFollowId(stationSlug: string, djName: string): string {
+  return `${stationSlug}::${djName}`;
+}
+
+export function parseDjFollowId(
+  id: string,
+): { stationSlug: string; djName: string } | null {
+  const sep = id.indexOf("::");
+  if (sep <= 0 || sep + 2 >= id.length) return null;
+  return { stationSlug: id.slice(0, sep), djName: id.slice(sep + 2) };
 }
 
 const JOURNAL_KEY = "lore:journal:v1";

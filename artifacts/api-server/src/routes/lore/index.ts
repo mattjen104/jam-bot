@@ -1,8 +1,11 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
   ListStationsResponse,
+  ListStationsNowPlayingResponse,
   GetStationNowPlayingParams,
   GetStationNowPlayingResponse,
+  GetRecordingKnowledgeParams,
+  GetRecordingKnowledgeResponse,
   GetRecordingParams,
   GetRecordingResponse,
   GetRecordingSpinsParams,
@@ -59,6 +62,10 @@ import { ingestBlogFeed } from "../../lore/blog.js";
 import { ingestDiscogsList, addRymPicker } from "../../lore/collector.js";
 import { resolveEntry } from "../../lore/entry.js";
 import { supportsBackfill, stationArchiveUrl } from "../../lore/adapters.js";
+import { enrichRecording } from "@workspace/song-enrichment";
+import { wireSongEnrichment } from "../../song/wire.js";
+
+wireSongEnrichment();
 
 const router: IRouter = Router();
 
@@ -129,6 +136,89 @@ router.get("/stations", async (_req, res) => {
   }
 });
 
+/** Shape a joined spin/recording/show row into the public NowPlaying payload. */
+function toNowPlaying(row: {
+  rawArtist: string | null;
+  rawTitle: string | null;
+  source: string | null;
+  confidence: string;
+  playedAt: Date;
+  mbid: string | null;
+  title: string | null;
+  artist: string | null;
+  artworkUrl: string | null;
+  links: unknown;
+  showName: string | null;
+  showDj: string | null;
+}) {
+  return {
+    rawArtist: row.rawArtist ?? "",
+    rawTitle: row.rawTitle ?? "",
+    source: row.source,
+    confidence: row.confidence,
+    playedAt: row.playedAt.toISOString(),
+    artworkUrl: row.artworkUrl ?? null,
+    recording: row.mbid
+      ? {
+          mbid: row.mbid,
+          title: row.title ?? row.rawTitle ?? "",
+          artist: row.artist ?? row.rawArtist ?? "",
+          artworkUrl: row.artworkUrl ?? null,
+          links: row.links ?? [],
+        }
+      : null,
+    show: row.showName
+      ? { name: row.showName, djName: row.showDj ?? null }
+      : null,
+  };
+}
+
+// GET /api/stations/now-playing — latest spin per station, one call (the dial pulse).
+router.get("/stations/now-playing", async (_req, res) => {
+  try {
+    const stations = await db
+      .select({ id: stationsTable.id, slug: stationsTable.slug })
+      .from(stationsTable)
+      .orderBy(asc(stationsTable.sortOrder), asc(stationsTable.name));
+
+    // Latest spin per station in one pass (DISTINCT ON), joined to its
+    // resolved recording (artwork) and show/DJ attribution.
+    const rows = await db
+      .selectDistinctOn([spinsTable.stationId], {
+        stationId: spinsTable.stationId,
+        rawArtist: spinsTable.rawArtist,
+        rawTitle: spinsTable.rawTitle,
+        source: spinsTable.source,
+        confidence: spinsTable.confidence,
+        playedAt: spinsTable.playedAt,
+        mbid: recordingsTable.mbid,
+        title: recordingsTable.title,
+        artist: recordingsTable.artist,
+        artworkUrl: recordingsTable.artworkUrl,
+        links: recordingsTable.links,
+        showName: showsTable.name,
+        showDj: showsTable.djName,
+      })
+      .from(spinsTable)
+      .leftJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
+      .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id))
+      .where(isNotNull(spinsTable.stationId))
+      .orderBy(asc(spinsTable.stationId), desc(spinsTable.playedAt));
+
+    const byStation = new Map(rows.map((r) => [r.stationId, r]));
+    const items = stations.map((s) => {
+      const row = byStation.get(s.id);
+      return { slug: s.slug, nowPlaying: row ? toNowPlaying(row) : null };
+    });
+
+    const data = ListStationsNowPlayingResponse.parse({ items });
+    return res.json(data);
+  } catch (err) {
+    console.error("[lore] bulk now-playing failed", err);
+    return res.status(503).json({ error: "Could not load now-playing" });
+  }
+});
+
 // GET /api/stations/:slug/now-playing
 router.get("/stations/:slug/now-playing", async (req, res) => {
   const parsed = GetStationNowPlayingParams.safeParse(req.params);
@@ -145,7 +235,8 @@ router.get("/stations/:slug/now-playing", async (req, res) => {
       return res.status(404).json({ error: "Station not found" });
     }
 
-    // Most recent spin for this station, joined with its resolved recording.
+    // Most recent spin for this station, joined with its resolved recording
+    // and show/DJ attribution.
     const [row] = await db
       .select({
         rawArtist: spinsTable.rawArtist,
@@ -158,32 +249,17 @@ router.get("/stations/:slug/now-playing", async (req, res) => {
         artist: recordingsTable.artist,
         artworkUrl: recordingsTable.artworkUrl,
         links: recordingsTable.links,
+        showName: showsTable.name,
+        showDj: showsTable.djName,
       })
       .from(spinsTable)
       .leftJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
+      .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id))
       .where(eq(spinsTable.stationId, station.id))
       .orderBy(desc(spinsTable.playedAt))
       .limit(1);
 
-    const nowPlaying = row
-      ? {
-          rawArtist: row.rawArtist ?? "",
-          rawTitle: row.rawTitle ?? "",
-          source: row.source,
-          confidence: row.confidence,
-          playedAt: row.playedAt.toISOString(),
-          artworkUrl: row.artworkUrl ?? null,
-          recording: row.mbid
-            ? {
-                mbid: row.mbid,
-                title: row.title ?? row.rawTitle ?? "",
-                artist: row.artist ?? row.rawArtist ?? "",
-                artworkUrl: row.artworkUrl ?? null,
-                links: row.links ?? [],
-              }
-            : null,
-        }
-      : null;
+    const nowPlaying = row ? toNowPlaying(row) : null;
 
     const data = GetStationNowPlayingResponse.parse({
       station: toStation(station),
@@ -232,6 +308,42 @@ router.get("/recordings/:mbid", async (req, res) => {
   } catch (err) {
     console.error("[lore] get recording failed", err);
     return res.status(503).json({ error: "Could not load recording" });
+  }
+});
+
+// GET /api/recordings/:mbid/knowledge — liner-notes credits/pressing for the
+// live player. Enrichment runs off the hot path and caches by recording id;
+// `knowledge` is null when sources are unconfigured or nothing verifiable
+// resolved — Lore never fabricates credits.
+router.get("/recordings/:mbid/knowledge", async (req, res) => {
+  const parsed = GetRecordingKnowledgeParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(404).json({ error: "Recording not found" });
+  }
+  try {
+    const [rec] = await db
+      .select()
+      .from(recordingsTable)
+      .where(eq(recordingsTable.mbid, parsed.data.mbid))
+      .limit(1);
+    if (!rec) {
+      return res.status(404).json({ error: "Recording not found" });
+    }
+
+    const knowledge = await enrichRecording({
+      recordingId: rec.mbid,
+      title: rec.title,
+      artist: rec.artist,
+      isrc: rec.isrc,
+    });
+
+    const data = GetRecordingKnowledgeResponse.parse({
+      knowledge: knowledge ?? null,
+    });
+    return res.json(data);
+  } catch (err) {
+    console.error("[lore] recording knowledge failed", err);
+    return res.status(503).json({ error: "Could not load liner notes" });
   }
 });
 
