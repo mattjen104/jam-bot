@@ -12,6 +12,8 @@ tags:
     description: Health operations
   - name: song
     description: Song-context enrichment (graph + dossier)
+  - name: stations
+    description: Lore — curated radio stations + now-playing resolution
 paths:
   /healthz:
     get:
@@ -122,6 +124,51 @@ paths:
                 $ref: "#/components/schemas/OEmbed"
         "400":
           description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /stations:
+    get:
+      operationId: listStations
+      tags: [stations]
+      summary: List curated radio stations
+      description: >
+        The public directory of curated, high-quality radio stations. Each
+        station carries its own sanctioned live stream URL (played unmodified),
+        a quality badge, and attribution links (homepage + donate).
+      responses:
+        "200":
+          description: Station directory
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationList"
+  /stations/{slug}/now-playing:
+    get:
+      operationId: getStationNowPlaying
+      tags: [stations]
+      summary: Current track on a station, resolved to the MBID spine
+      description: >
+        The most recent spin logged for a station, resolved (best-effort) to a
+        MusicBrainz Recording ID with cross-service deep links and artwork. The
+        `nowPlaying` field is null when nothing has been logged yet.
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Station with its current now-playing track
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationNowPlaying"
+        "404":
+          description: Station not found
           content:
             application/json:
               schema:
@@ -423,3 +470,126 @@ components:
           type: ["string", "null"]
       required:
         - html
+    Station:
+      type: object
+      description: A curated radio station in the public directory.
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+        org:
+          type: ["string", "null"]
+        country:
+          type: ["string", "null"]
+        streamUrl:
+          type: string
+        streamQuality:
+          type: ["string", "null"]
+        streamFormat:
+          type: string
+          description: Playback hint — "aac", "mp3", "hls", or "flac".
+        mode:
+          type: string
+        homepageUrl:
+          type: ["string", "null"]
+        donateUrl:
+          type: ["string", "null"]
+        logoUrl:
+          type: ["string", "null"]
+        attribution:
+          type: boolean
+      required:
+        - slug
+        - name
+        - streamUrl
+        - streamFormat
+        - mode
+        - attribution
+    StationList:
+      type: object
+      properties:
+        stations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Station"
+      required:
+        - stations
+    RecordingLink:
+      type: object
+      description: >-
+        A cross-service deep link. kind="exact" points at the precise recording
+        (resolved via Odesli); kind="search" is a best-effort artist+title search
+        on that service.
+      properties:
+        name:
+          type: string
+        url:
+          type: string
+        kind:
+          type: string
+          enum: [exact, search]
+      required:
+        - name
+        - url
+        - kind
+    NowPlayingRecording:
+      type: object
+      description: The MBID-keyed recording a spin resolved to.
+      properties:
+        mbid:
+          type: string
+        title:
+          type: string
+        artist:
+          type: string
+        artworkUrl:
+          type: ["string", "null"]
+        links:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecordingLink"
+      required:
+        - mbid
+        - title
+        - artist
+        - links
+    NowPlaying:
+      type: object
+      description: >-
+        The most recent spin on a station. `recording` is null when the track
+        could not be resolved to the MusicBrainz spine (raw metadata preserved).
+      properties:
+        rawArtist:
+          type: string
+        rawTitle:
+          type: string
+        source:
+          type: ["string", "null"]
+        confidence:
+          type: string
+          enum: [recording_id, isrc, text, unresolved]
+        playedAt:
+          type: string
+        artworkUrl:
+          type: ["string", "null"]
+        recording:
+          anyOf:
+            - $ref: "#/components/schemas/NowPlayingRecording"
+            - type: "null"
+      required:
+        - rawArtist
+        - rawTitle
+        - confidence
+        - playedAt
+    StationNowPlaying:
+      type: object
+      properties:
+        station:
+          $ref: "#/components/schemas/Station"
+        nowPlaying:
+          anyOf:
+            - $ref: "#/components/schemas/NowPlaying"
+            - type: "null"
+      required:
+        - station

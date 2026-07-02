@@ -556,3 +556,93 @@ export async function fetchArtistRelations(
     return [];
   }
 }
+
+/** A recording resolved from a free-text (artist + title) MusicBrainz search. */
+export interface RecordingTextMatch {
+  recordingId: string;
+  /** MusicBrainz search score (0–100); higher = more confident. */
+  score: number;
+  title: string;
+  artist?: string;
+  artistMbid?: string;
+  isrc?: string;
+  durationMs?: number;
+}
+
+/**
+ * Pure: pick the best recording from a MusicBrainz recording-search body, or
+ * null. Radio now-playing sources usually give only artist + title (no ISRC), so
+ * this is the text path onto the MBID spine. We take MusicBrainz's own score,
+ * and the caller applies a confidence threshold.
+ */
+export function parseRecordingSearch(body: unknown): RecordingTextMatch | null {
+  const b = body as {
+    recordings?: Array<{
+      id?: string;
+      score?: number;
+      title?: string;
+      length?: number;
+      isrcs?: string[];
+      "artist-credit"?: Array<{
+        name?: string;
+        artist?: { id?: string; name?: string };
+      }>;
+    }>;
+  };
+  const best = b?.recordings?.find((r) => !!r?.id);
+  if (!best?.id) return null;
+  const ac = best["artist-credit"]?.[0];
+  const artist = ac?.name?.trim() || ac?.artist?.name?.trim() || undefined;
+  const artistMbid = ac?.artist?.id?.trim() || undefined;
+  const durationMs =
+    typeof best.length === "number" && best.length > 0 ? best.length : undefined;
+  const isrc = best.isrcs?.find((x) => !!x?.trim())?.trim() || undefined;
+  return {
+    recordingId: best.id,
+    score: typeof best.score === "number" ? best.score : 0,
+    title: best.title?.trim() || "",
+    ...(artist ? { artist } : {}),
+    ...(artistMbid ? { artistMbid } : {}),
+    ...(isrc ? { isrc } : {}),
+    ...(durationMs != null ? { durationMs } : {}),
+  };
+}
+
+/** Escape a term for a Lucene-style MusicBrainz query. */
+function escapeQuery(s: string): string {
+  return s.replace(/[+\-!(){}[\]^"~*?:\\/&|]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Resolve an artist + title (the shape radio now-playing metadata gives us) to a
+ * canonical MusicBrainz recording. Best-effort — returns null when MusicBrainz
+ * is unconfigured, inputs are empty, nothing matches above `minScore`, or on any
+ * failure; never throws. `minScore` guards against low-confidence junk matches
+ * so a bad text search doesn't poison the spine.
+ */
+export async function resolveRecordingByText(
+  artist: string,
+  title: string,
+  minScore = 90,
+): Promise<RecordingTextMatch | null> {
+  if (!musicbrainzEnabled() || !artist.trim() || !title.trim()) return null;
+  const a = escapeQuery(artist);
+  const t = escapeQuery(title);
+  if (!a || !t) return null;
+  try {
+    const query = `recording:"${t}" AND artist:"${a}"`;
+    const body = await mbFetch(
+      `/recording?query=${encodeURIComponent(query)}&limit=5&fmt=json`,
+    );
+    const match = parseRecordingSearch(body);
+    if (!match || match.score < minScore) return null;
+    return match;
+  } catch (err) {
+    logger.warn("MusicBrainz text resolve failed", {
+      artist,
+      title,
+      error: String(err),
+    });
+    return null;
+  }
+}

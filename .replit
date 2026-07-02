@@ -27,3 +27,8 @@ timeoutMs = 20000
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+MUSICBRAINZ_CONTACT = "Lore Radio Library (https://replit.com; +radio now-playing resolver)"

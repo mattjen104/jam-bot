@@ -61,9 +61,14 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-async function odesliFetch(spotifyTrackId: string): Promise<unknown> {
+/**
+ * Query Odesli for a single entity URL (e.g. `spotify:track:<id>`). Kept generic
+ * — not Spotify-ID-first — so a track resolved from radio can be looked up by
+ * whatever platform reference we managed to find for it.
+ */
+async function odesliFetch(entityUrl: string): Promise<unknown> {
   const params = new URLSearchParams({
-    url: `spotify:track:${spotifyTrackId}`,
+    url: entityUrl,
     userCountry: "US",
     songIfSingle: "true",
   });
@@ -75,7 +80,7 @@ async function odesliFetch(spotifyTrackId: string): Promise<unknown> {
       headers: { Accept: "application/json" },
       signal: AbortSignal.timeout(ODESLI_TIMEOUT_MS),
     });
-    if (!res.ok) throw new Error(`Odesli ${res.status} for ${spotifyTrackId}`);
+    if (!res.ok) throw new Error(`Odesli ${res.status} for ${entityUrl}`);
     return res.json();
   });
   // Keep the chain alive even when a call rejects.
@@ -135,7 +140,7 @@ export async function fetchTrackLinks(
 
   let links: TrackLinks;
   try {
-    const body = await odesliFetch(spotifyTrackId.trim());
+    const body = await odesliFetch(`spotify:track:${spotifyTrackId.trim()}`);
     const { platforms, pageUrl } = parseOdesliLinks(body);
     links = { platforms, pageUrl, fetchedAtMs: Date.now() };
   } catch (err) {
@@ -150,6 +155,106 @@ export async function fetchTrackLinks(
     setTrackContext(key, JSON.stringify(links));
   } catch (err) {
     logger.warn("Odesli cache write failed", { key, error: String(err) });
+  }
+
+  return links.platforms.length || links.pageUrl ? links : null;
+}
+
+/** A deep link tagged by how precisely it points at the track. */
+export interface RecordingLink {
+  name: string;
+  url: string;
+  /** "exact" = resolved via Odesli; "search" = artist+title search on a service. */
+  kind: "exact" | "search";
+}
+
+export interface RecordingLinks {
+  platforms: RecordingLink[];
+  /** Odesli landing page, when we had a platform reference to resolve. */
+  pageUrl?: string;
+  fetchedAtMs: number;
+}
+
+/** Universal per-service search links, built from artist + title. */
+const SEARCH_LINK_BUILDERS: Array<{ name: string; build: (q: string) => string }> = [
+  { name: "Spotify", build: (q) => `https://open.spotify.com/search/${encodeURIComponent(q)}` },
+  { name: "Apple Music", build: (q) => `https://music.apple.com/us/search?term=${encodeURIComponent(q)}` },
+  { name: "YouTube Music", build: (q) => `https://music.youtube.com/search?q=${encodeURIComponent(q)}` },
+  { name: "YouTube", build: (q) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}` },
+  { name: "Bandcamp", build: (q) => `https://bandcamp.com/search?q=${encodeURIComponent(q)}` },
+];
+
+/**
+ * Pure: universal search deep links for a track. These always work (no API, no
+ * auth) so a listener can always click through to a service — the reliable floor
+ * beneath Odesli's exact links.
+ */
+export function buildSearchLinks(artist: string, title: string): RecordingLink[] {
+  const q = `${artist} ${title}`.trim();
+  if (!q) return [];
+  return SEARCH_LINK_BUILDERS.map(({ name, build }) => ({
+    name,
+    url: build(q),
+    kind: "search" as const,
+  }));
+}
+
+function recordingCacheKey(recordingId: string): string {
+  return `odesli:mbrec:${recordingId}`;
+}
+
+/**
+ * Resolve cross-service deep links for a track keyed by its MusicBrainz Recording
+ * ID (the spine), caching per MBID (`odesli:mbrec:<id>`). Exact links come from
+ * Odesli when a `spotifyTrackId` reference is available; universal artist+title
+ * search links are always appended so a listener can click through even when no
+ * exact match exists (e.g. Spotify unconfigured). Never throws.
+ */
+export async function fetchRecordingLinks(args: {
+  recordingId: string;
+  artist: string;
+  title: string;
+  spotifyTrackId?: string;
+}): Promise<RecordingLinks | null> {
+  const recordingId = args.recordingId?.trim();
+  if (!recordingId) return null;
+  const key = recordingCacheKey(recordingId);
+
+  try {
+    const raw = getTrackContext(key, ttlMs());
+    if (raw) return JSON.parse(raw) as RecordingLinks;
+  } catch (err) {
+    logger.warn("Odesli recording cache read failed", { key, error: String(err) });
+  }
+
+  const searchLinks = buildSearchLinks(args.artist ?? "", args.title ?? "");
+  let exact: RecordingLink[] = [];
+  let pageUrl: string | undefined;
+
+  const spotifyTrackId = args.spotifyTrackId?.trim();
+  if (spotifyTrackId && trackLinksEnabled()) {
+    try {
+      const body = await odesliFetch(`spotify:track:${spotifyTrackId}`);
+      const parsed = parseOdesliLinks(body);
+      exact = parsed.platforms.map((p) => ({ ...p, kind: "exact" as const }));
+      pageUrl = parsed.pageUrl;
+    } catch (err) {
+      logger.warn("Odesli recording lookup failed", {
+        recordingId,
+        error: String(err),
+      });
+    }
+  }
+
+  // Exact links win; fill remaining services with search links (dedup by name).
+  const seen = new Set(exact.map((p) => p.name));
+  const platforms = [...exact, ...searchLinks.filter((s) => !seen.has(s.name))];
+  const links: RecordingLinks = { platforms, pageUrl, fetchedAtMs: Date.now() };
+
+  try {
+    setTrackContext(key, JSON.stringify(links));
+  } catch (err) {
+    logger.warn("Odesli recording cache write failed", { key, error: String(err) });
   }
 
   return links.platforms.length || links.pageUrl ? links : null;

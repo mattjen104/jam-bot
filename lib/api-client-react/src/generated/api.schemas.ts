@@ -189,6 +189,94 @@ export interface OEmbed {
   provider_name?: string | null;
 }
 
+/**
+ * A curated radio station in the public directory.
+ */
+export interface Station {
+  slug: string;
+  name: string;
+  /** @nullable */
+  org?: string | null;
+  /** @nullable */
+  country?: string | null;
+  streamUrl: string;
+  /** @nullable */
+  streamQuality?: string | null;
+  /** Playback hint — "aac", "mp3", "hls", or "flac". */
+  streamFormat: string;
+  mode: string;
+  /** @nullable */
+  homepageUrl?: string | null;
+  /** @nullable */
+  donateUrl?: string | null;
+  /** @nullable */
+  logoUrl?: string | null;
+  attribution: boolean;
+}
+
+export interface StationList {
+  stations: Station[];
+}
+
+export type RecordingLinkKind =
+  (typeof RecordingLinkKind)[keyof typeof RecordingLinkKind];
+
+export const RecordingLinkKind = {
+  exact: "exact",
+  search: "search",
+} as const;
+
+/**
+ * A cross-service deep link. kind="exact" points at the precise recording (resolved via Odesli); kind="search" is a best-effort artist+title search on that service.
+ */
+export interface RecordingLink {
+  name: string;
+  url: string;
+  kind: RecordingLinkKind;
+}
+
+/**
+ * The MBID-keyed recording a spin resolved to.
+ */
+export interface NowPlayingRecording {
+  mbid: string;
+  title: string;
+  artist: string;
+  /** @nullable */
+  artworkUrl?: string | null;
+  links: RecordingLink[];
+}
+
+export type NowPlayingConfidence =
+  (typeof NowPlayingConfidence)[keyof typeof NowPlayingConfidence];
+
+export const NowPlayingConfidence = {
+  recording_id: "recording_id",
+  isrc: "isrc",
+  text: "text",
+  unresolved: "unresolved",
+} as const;
+
+/**
+ * The most recent spin on a station. `recording` is null when the track could not be resolved to the MusicBrainz spine (raw metadata preserved).
+ */
+export interface NowPlaying {
+  rawArtist: string;
+  rawTitle: string;
+  /** @nullable */
+  source?: string | null;
+  confidence: NowPlayingConfidence;
+  playedAt: string;
+  /** @nullable */
+  artworkUrl?: string | null;
+  recording?: NowPlayingRecording | null;
+}
+
+export interface StationNowPlaying {
+  station: Station;
+  nowPlaying?: NowPlaying | null;
+}
+
 export type ResolveSongParams = {
   /**
    * @minLength 1

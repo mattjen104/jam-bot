@@ -1,4 +1,7 @@
 import app from "./app";
+import { wireSongEnrichment } from "./song/wire.js";
+import { seedStations } from "./lore/seed.js";
+import { startLorePoller } from "./lore/poller.js";
 
 const rawPort = process.env["PORT"];
 
@@ -17,3 +20,20 @@ if (Number.isNaN(port) || port <= 0) {
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
+
+/**
+ * Boot the Lore radio pipeline: wire the enrichment lib, seed the curated
+ * stations, then start the now-playing pollers. All best-effort — failures here
+ * log but never take the API down.
+ */
+async function bootLore(): Promise<void> {
+  try {
+    wireSongEnrichment();
+    await seedStations();
+    await startLorePoller();
+  } catch (err) {
+    console.error("[lore] boot failed", err);
+  }
+}
+
+void bootLore();

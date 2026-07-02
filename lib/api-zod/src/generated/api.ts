@@ -200,3 +200,103 @@ export const GetOembedResponse = zod.object({
   height: zod.number().nullish(),
   provider_name: zod.string().nullish(),
 });
+
+/**
+ * The public directory of curated, high-quality radio stations. Each station carries its own sanctioned live stream URL (played unmodified), a quality badge, and attribution links (homepage + donate).
+
+ * @summary List curated radio stations
+ */
+export const ListStationsResponse = zod.object({
+  stations: zod.array(
+    zod
+      .object({
+        slug: zod.string(),
+        name: zod.string(),
+        org: zod.string().nullish(),
+        country: zod.string().nullish(),
+        streamUrl: zod.string(),
+        streamQuality: zod.string().nullish(),
+        streamFormat: zod
+          .string()
+          .describe('Playback hint — \"aac\", \"mp3\", \"hls\", or \"flac\".'),
+        mode: zod.string(),
+        homepageUrl: zod.string().nullish(),
+        donateUrl: zod.string().nullish(),
+        logoUrl: zod.string().nullish(),
+        attribution: zod.boolean(),
+      })
+      .describe("A curated radio station in the public directory."),
+  ),
+});
+
+/**
+ * The most recent spin logged for a station, resolved (best-effort) to a MusicBrainz Recording ID with cross-service deep links and artwork. The `nowPlaying` field is null when nothing has been logged yet.
+
+ * @summary Current track on a station, resolved to the MBID spine
+ */
+
+export const GetStationNowPlayingParams = zod.object({
+  slug: zod.coerce.string().min(1),
+});
+
+export const GetStationNowPlayingResponse = zod.object({
+  station: zod
+    .object({
+      slug: zod.string(),
+      name: zod.string(),
+      org: zod.string().nullish(),
+      country: zod.string().nullish(),
+      streamUrl: zod.string(),
+      streamQuality: zod.string().nullish(),
+      streamFormat: zod
+        .string()
+        .describe('Playback hint — \"aac\", \"mp3\", \"hls\", or \"flac\".'),
+      mode: zod.string(),
+      homepageUrl: zod.string().nullish(),
+      donateUrl: zod.string().nullish(),
+      logoUrl: zod.string().nullish(),
+      attribution: zod.boolean(),
+    })
+    .describe("A curated radio station in the public directory."),
+  nowPlaying: zod
+    .union([
+      zod
+        .object({
+          rawArtist: zod.string(),
+          rawTitle: zod.string(),
+          source: zod.string().nullish(),
+          confidence: zod.enum(["recording_id", "isrc", "text", "unresolved"]),
+          playedAt: zod.string(),
+          artworkUrl: zod.string().nullish(),
+          recording: zod
+            .union([
+              zod
+                .object({
+                  mbid: zod.string(),
+                  title: zod.string(),
+                  artist: zod.string(),
+                  artworkUrl: zod.string().nullish(),
+                  links: zod.array(
+                    zod
+                      .object({
+                        name: zod.string(),
+                        url: zod.string(),
+                        kind: zod.enum(["exact", "search"]),
+                      })
+                      .describe(
+                        'A cross-service deep link. kind=\"exact\" points at the precise recording (resolved via Odesli); kind=\"search\" is a best-effort artist+title search on that service.',
+                      ),
+                  ),
+                })
+                .describe("The MBID-keyed recording a spin resolved to."),
+              zod.null(),
+            ])
+            .optional(),
+        })
+        .describe(
+          "The most recent spin on a station. `recording` is null when the track could not be resolved to the MusicBrainz spine (raw metadata preserved).",
+        ),
+      zod.null(),
+    ])
+    .optional(),
+});

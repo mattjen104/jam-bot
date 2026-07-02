@@ -21,6 +21,8 @@ import type {
   ResolveSongParams,
   ResolvedSong,
   SongContext,
+  StationList,
+  StationNowPlaying,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -381,6 +383,173 @@ export function useGetOembed<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetOembedQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * The public directory of curated, high-quality radio stations. Each station carries its own sanctioned live stream URL (played unmodified), a quality badge, and attribution links (homepage + donate).
+
+ * @summary List curated radio stations
+ */
+export const getListStationsUrl = () => {
+  return `/api/stations`;
+};
+
+export const listStations = async (
+  options?: RequestInit,
+): Promise<StationList> => {
+  return customFetch<StationList>(getListStationsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListStationsQueryKey = () => {
+  return [`/api/stations`] as const;
+};
+
+export const getListStationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listStations>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listStations>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListStationsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listStations>>> = ({
+    signal,
+  }) => listStations({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listStations>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListStationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listStations>>
+>;
+export type ListStationsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List curated radio stations
+ */
+
+export function useListStations<
+  TData = Awaited<ReturnType<typeof listStations>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listStations>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListStationsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * The most recent spin logged for a station, resolved (best-effort) to a MusicBrainz Recording ID with cross-service deep links and artwork. The `nowPlaying` field is null when nothing has been logged yet.
+
+ * @summary Current track on a station, resolved to the MBID spine
+ */
+export const getGetStationNowPlayingUrl = (slug: string) => {
+  return `/api/stations/${slug}/now-playing`;
+};
+
+export const getStationNowPlaying = async (
+  slug: string,
+  options?: RequestInit,
+): Promise<StationNowPlaying> => {
+  return customFetch<StationNowPlaying>(getGetStationNowPlayingUrl(slug), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetStationNowPlayingQueryKey = (slug: string) => {
+  return [`/api/stations/${slug}/now-playing`] as const;
+};
+
+export const getGetStationNowPlayingQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStationNowPlaying>>,
+  TError = ErrorType<ApiError>,
+>(
+  slug: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationNowPlaying>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStationNowPlayingQueryKey(slug);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStationNowPlaying>>
+  > = ({ signal }) => getStationNowPlaying(slug, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!slug,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStationNowPlaying>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStationNowPlayingQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStationNowPlaying>>
+>;
+export type GetStationNowPlayingQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Current track on a station, resolved to the MBID spine
+ */
+
+export function useGetStationNowPlaying<
+  TData = Awaited<ReturnType<typeof getStationNowPlaying>>,
+  TError = ErrorType<ApiError>,
+>(
+  slug: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationNowPlaying>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStationNowPlayingQueryOptions(slug, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
