@@ -1,5 +1,6 @@
 import {
   pgTable,
+  pgView,
   serial,
   text,
   integer,
@@ -253,3 +254,147 @@ export const segueEdgesTable = pgTable(
 
 export type SegueEdge = typeof segueEdgesTable.$inferSelect;
 export type InsertSegueEdge = typeof segueEdgesTable.$inferInsert;
+
+// ---- Pickers & picks (generalized taste sources) -----------------------
+
+/**
+ * A **picker** — any trusted human (or human-run entity) whose selections we
+ * trust enough to "ride". A radio DJ is one picker type among labels, blogs,
+ * curators, collectors and events. This is the generalization of the DJ/show
+ * model: an obscure track that radio never touches can still be entered through
+ * the label that released it, the blog that championed it, or the collector who
+ * catalogued it.
+ *
+ * `pickerType` is a text tag (not a pg enum, to match the rest of this schema's
+ * "text with a documented set" convention): one of
+ * "dj" | "label" | "blog" | "curator" | "collector" | "event".
+ *
+ * `sourceRef` carries the external ids that let a worker re-sync the picker
+ * (e.g. a MusicBrainz label MBID, an RSS feed URL, a Discogs list id). No
+ * secrets belong here — it's public attribution metadata.
+ */
+export const pickersTable = pgTable(
+  "pickers",
+  {
+    id: serial("id").primaryKey(),
+    /** dj | label | blog | curator | collector | event. */
+    pickerType: text("picker_type").notNull(),
+    name: text("name").notNull(),
+    /** Stable slug for idempotent upserts and public URLs. */
+    handle: text("handle").notNull().unique(),
+    /** Canonical home page (label site, blog, Discogs/RYM list, festival). */
+    homeUrl: text("home_url"),
+    /** External ids for re-sync: { labelMbid, feedUrl, discogsListId, ... }. */
+    sourceRef: jsonb("source_ref").$type<Record<string, unknown>>(),
+    /**
+     * Trust weight, lower = stronger, mirroring the fallback ladder rungs:
+     * 1 = label, 2 = blog/curator, 3 = collector/event. DJ trust still comes
+     * from station class via the spins path; a picker default is 2.
+     */
+    trustTier: integer("trust_tier").notNull().default(2),
+    description: text("description"),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [index("pickers_type_idx").on(t.pickerType)],
+);
+
+export type Picker = typeof pickersTable.$inferSelect;
+export type InsertPicker = typeof pickersTable.$inferInsert;
+
+/**
+ * A **pick** — one selection by a picker, resolved (best-effort) to the MBID
+ * spine with a link back to the picker's own source. This is the generalized
+ * edge table: a DJ's spin, a label's release, a blog's featured track, a
+ * curator's list entry, a collector's catalogued item, an event's lineup slot.
+ *
+ * A pick is ALWAYS logged, even when resolution is approximate/unresolved
+ * (`mbid` null), so the honesty gradient stays visible and backfill converges
+ * later — exactly like `spins`.
+ *
+ * Ordered sources (a dated show, a sequenced release, a ranked list) carry an
+ * `ordinal` so consecutive picks form rideable edges (the generalized segue
+ * notion). Unordered sources (a bag of reviewed tracks) leave `ordinal` null
+ * and are ridden as a set, never as a sequence.
+ */
+export const picksTable = pgTable(
+  "picks",
+  {
+    id: serial("id").primaryKey(),
+    pickerId: integer("picker_id")
+      .notNull()
+      .references(() => pickersTable.id),
+    /** Resolved MusicBrainz Recording ID, when matched. Null = unresolved. */
+    mbid: text("mbid").references(() => recordingsTable.mbid),
+    /** MusicBrainz Artist ID, when known — powers the artist-level ladder rung. */
+    artistMbid: text("artist_mbid"),
+    /** Raw metadata as the source reported it, preserved for backfill. */
+    rawArtist: text("raw_artist"),
+    rawTitle: text("raw_title"),
+    /**
+     * spin | label_release | blog_post | curator_list | discogs_list |
+     * event_lineup | user_seed.
+     */
+    source: text("source").notNull(),
+    /** Free-text context: show name, release title, post/list title, etc. */
+    context: text("context"),
+    /** Link back to the picker's own source (post, release, list, video). */
+    sourceUrl: text("source_url"),
+    /**
+     * Position within an ordered source (sequenced release, ranked list). Null
+     * for unordered sources — those have no segue and are ridden as a set.
+     */
+    ordinal: integer("ordinal"),
+    /** Source's stable id for this pick, when it exposes one — idempotent dedup. */
+    externalId: text("external_id"),
+    /** When the picker made this pick (release/post/list date). Nullable. */
+    pickedAt: timestamp("picked_at"),
+    /** "recording_id" | "isrc" | "text" | "unresolved". */
+    confidence: text("confidence").notNull().default("unresolved"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    // The entry-flow ladder fans out from a song (this recording) and from an
+    // artist (artist-level rung).
+    index("picks_mbid_idx").on(t.mbid),
+    index("picks_artist_mbid_idx").on(t.artistMbid),
+    index("picks_picker_picked_at_idx").on(t.pickerId, t.pickedAt),
+    // Idempotent ingest: a given source pick id is logged once per picker.
+    // Null externalIds are distinct in Postgres, so change-detection-style
+    // sources are unaffected.
+    uniqueIndex("picks_picker_external_idx").on(t.pickerId, t.externalId),
+  ],
+);
+
+export type Pick = typeof picksTable.$inferSelect;
+export type InsertPick = typeof picksTable.$inferInsert;
+
+/**
+ * Unified read model over every taste source. UNION of real `picks` (joined to
+ * their picker) with a projection of `spins` into the same shape (a DJ is just
+ * another picker). This is what lets the entry-flow ladder read ONE surface —
+ * "spins read through the unified picks model" — without rebuilding the spin
+ * ingestion path or dual-writing rows.
+ *
+ * Marked `.existing()` so drizzle-kit never tries to push it (avoiding view
+ * drift on a push-based project); it is created idempotently via a
+ * `CREATE OR REPLACE VIEW` at boot. `picker_type='dj'` and `trust_tier=3` label
+ * the spin rows; `picker_id` is null for spins (their attribution lives in the
+ * stations/shows tables the spins path already maintains).
+ */
+export const picksUnifiedView = pgView("picks_unified", {
+  source: text("source").notNull(),
+  mbid: text("mbid"),
+  artistMbid: text("artist_mbid"),
+  pickedAt: timestamp("picked_at"),
+  context: text("context"),
+  sourceUrl: text("source_url"),
+  confidence: text("confidence").notNull(),
+  ordinal: integer("ordinal"),
+  pickerId: integer("picker_id"),
+  pickerType: text("picker_type").notNull(),
+  pickerName: text("picker_name").notNull(),
+  pickerHandle: text("picker_handle").notNull(),
+  trustTier: integer("trust_tier").notNull(),
+}).existing();

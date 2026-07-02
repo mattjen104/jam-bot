@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 import {
   ListStationsResponse,
   GetStationNowPlayingParams,
@@ -8,19 +8,76 @@ import {
   GetRecordingSeguesParams,
   GetRecordingSeguesResponse,
   CreateManualSpinBody,
+  ListPickersResponse,
+  GetRecordingEntryParams,
+  GetRecordingEntryResponse,
+  UpsertPickerBody,
+  LogTracklistParams,
+  LogTracklistBody,
+  SeedLabelBody,
+  IngestBlogBody,
+  IngestDiscogsListBody,
+  AddRymListBody,
 } from "@workspace/api-zod";
 import {
   db,
   stationsTable,
   spinsTable,
   recordingsTable,
+  pickersTable,
   type Station,
+  type Picker,
 } from "@workspace/db";
 import { eq, asc, desc } from "drizzle-orm";
-import { nextSegues, spinsForRecording } from "../../lore/segue.js";
+import { nextRideable, spinsForRecording } from "../../lore/segue.js";
 import { ingestManualSpin } from "../../lore/resolve.js";
+import {
+  upsertPicker,
+  getPickerByHandle,
+  logTracklist,
+  type PickerType,
+  type PickSource,
+} from "../../lore/picks.js";
+import { seedLabelPicker } from "../../lore/label.js";
+import { ingestBlogFeed } from "../../lore/blog.js";
+import { ingestDiscogsList, addRymPicker } from "../../lore/collector.js";
+import { resolveEntry } from "../../lore/entry.js";
 
 const router: IRouter = Router();
+
+/**
+ * Shared admin-token gate, matching the /admin/spins pattern: absent env =>
+ * disabled (503), never silently open; mismatch => 401. Returns true when the
+ * request may proceed (and has already been rejected otherwise). Never logs the
+ * token.
+ */
+function requireAdmin(req: Request, res: Response): boolean {
+  const adminToken = process.env["LORE_ADMIN_TOKEN"];
+  if (!adminToken) {
+    res.status(503).json({ error: "Admin entry is not configured" });
+    return false;
+  }
+  const provided = req.header("x-admin-token");
+  if (!provided || provided !== adminToken) {
+    res.status(401).json({ error: "Invalid admin token" });
+    return false;
+  }
+  return true;
+}
+
+/** Shape a DB picker row into the public Picker payload. */
+function toPicker(p: Picker) {
+  return {
+    id: p.id,
+    pickerType: p.pickerType,
+    name: p.name,
+    handle: p.handle,
+    homeUrl: p.homeUrl,
+    trustTier: p.trustTier,
+    description: p.description,
+    active: p.active,
+  };
+}
 
 /** Shape a DB station row into the public Station payload. */
 function toStation(s: Station) {
@@ -154,7 +211,7 @@ router.get("/recordings/:mbid/segues", async (req, res) => {
     return res.status(404).json({ error: "Recording not found" });
   }
   try {
-    const next = await nextSegues(parsed.data.mbid);
+    const next = await nextRideable(parsed.data.mbid);
     const data = GetRecordingSeguesResponse.parse({
       mbid: parsed.data.mbid,
       next,
@@ -226,6 +283,207 @@ router.post("/admin/spins", async (req, res) => {
     console.error("[lore] manual spin failed", err);
     const message =
       err instanceof Error ? err.message : "Could not log manual spin";
+    return res.status(400).json({ error: message });
+  }
+});
+
+// GET /api/pickers — public list of taste sources beyond radio DJs.
+router.get("/pickers", async (_req, res) => {
+  try {
+    const rows = await db
+      .select()
+      .from(pickersTable)
+      .where(eq(pickersTable.active, true))
+      .orderBy(asc(pickersTable.trustTier), asc(pickersTable.name));
+    const data = ListPickersResponse.parse({ pickers: rows.map(toPicker) });
+    return res.json(data);
+  } catch (err) {
+    console.error("[lore] list pickers failed", err);
+    return res.status(503).json({ error: "Could not load pickers" });
+  }
+});
+
+// GET /api/recordings/:mbid/entry — the source-agnostic fallback ladder.
+router.get("/recordings/:mbid/entry", async (req, res) => {
+  const parsed = GetRecordingEntryParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(404).json({ error: "Recording not found" });
+  }
+  try {
+    // The artist-level rung needs the recording's artist MBID; resolve it from
+    // the spine so the ladder needs no client-supplied hint.
+    const [rec] = await db
+      .select({ artistMbid: recordingsTable.artistMbid })
+      .from(recordingsTable)
+      .where(eq(recordingsTable.mbid, parsed.data.mbid))
+      .limit(1);
+    const result = await resolveEntry(
+      parsed.data.mbid,
+      rec?.artistMbid ?? undefined,
+    );
+    const data = GetRecordingEntryResponse.parse(result);
+    return res.json(data);
+  } catch (err) {
+    console.error("[lore] recording entry failed", err);
+    return res.status(503).json({ error: "Could not load entry" });
+  }
+});
+
+// POST /api/admin/pickers — admin-only create/update of a picker.
+router.post("/admin/pickers", async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const parsed = UpsertPickerBody.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid picker" });
+  }
+  const b = parsed.data;
+  try {
+    const picker = await upsertPicker({
+      pickerType: b.pickerType as PickerType,
+      name: b.name,
+      ...(b.handle ? { handle: b.handle } : {}),
+      ...(b.homeUrl ? { homeUrl: b.homeUrl } : {}),
+      ...(b.trustTier != null ? { trustTier: b.trustTier } : {}),
+      ...(b.description ? { description: b.description } : {}),
+    });
+    return res.status(201).json(toPicker(picker));
+  } catch (err) {
+    console.error("[lore] upsert picker failed", err);
+    const message = err instanceof Error ? err.message : "Could not save picker";
+    return res.status(400).json({ error: message });
+  }
+});
+
+// POST /api/admin/pickers/:handle/picks — admin-only tracklist ingest.
+router.post("/admin/pickers/:handle/picks", async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const params = LogTracklistParams.safeParse(req.params);
+  if (!params.success) {
+    return res.status(404).json({ error: "Picker not found" });
+  }
+  const parsed = LogTracklistBody.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid tracklist" });
+  }
+  try {
+    const picker = await getPickerByHandle(params.data.handle);
+    if (!picker) {
+      return res.status(404).json({ error: "Picker not found" });
+    }
+    const b = parsed.data;
+    const summary = await logTracklist({
+      pickerId: picker.id,
+      source: b.source as PickSource,
+      entries: b.entries,
+      ...(b.ordered != null ? { ordered: b.ordered } : {}),
+      ...(b.sourceUrl ? { sourceUrl: b.sourceUrl } : {}),
+      ...(b.context ? { context: b.context } : {}),
+    });
+    return res.status(201).json(summary);
+  } catch (err) {
+    console.error("[lore] log tracklist failed", err);
+    return res.status(400).json({ error: "Could not log tracklist" });
+  }
+});
+
+// POST /api/admin/labels — admin-only label seed by MusicBrainz MBID.
+router.post("/admin/labels", async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const parsed = SeedLabelBody.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid label seed" });
+  }
+  const b = parsed.data;
+  try {
+    const summary = await seedLabelPicker({
+      labelMbid: b.labelMbid,
+      ...(b.name ? { name: b.name } : {}),
+      ...(b.homeUrl ? { homeUrl: b.homeUrl } : {}),
+    });
+    return res.status(201).json({ ...summary, matched: null });
+  } catch (err) {
+    console.error("[lore] seed label failed", err);
+    const message = err instanceof Error ? err.message : "Could not seed label";
+    return res.status(400).json({ error: message });
+  }
+});
+
+// POST /api/admin/blogs — admin-only blog/critic RSS ingest.
+router.post("/admin/blogs", async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const parsed = IngestBlogBody.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid blog ingest" });
+  }
+  const b = parsed.data;
+  try {
+    const r = await ingestBlogFeed({
+      feedUrl: b.feedUrl,
+      name: b.name,
+      ...(b.homeUrl ? { homeUrl: b.homeUrl } : {}),
+    });
+    return res.status(201).json({
+      pickerId: r.pickerId,
+      handle: r.handle,
+      name: r.name,
+      found: r.items,
+      matched: r.matched,
+      logged: r.logged,
+    });
+  } catch (err) {
+    console.error("[lore] ingest blog failed", err);
+    const message = err instanceof Error ? err.message : "Could not ingest blog";
+    return res.status(400).json({ error: message });
+  }
+});
+
+// POST /api/admin/discogs-lists — admin-only Discogs list ingest (collector).
+router.post("/admin/discogs-lists", async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const parsed = IngestDiscogsListBody.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid Discogs list ingest" });
+  }
+  const b = parsed.data;
+  try {
+    const r = await ingestDiscogsList({
+      listId: b.listId,
+      ...(b.name ? { name: b.name } : {}),
+    });
+    return res.status(201).json({
+      pickerId: r.pickerId,
+      handle: r.handle,
+      name: r.name,
+      found: r.items,
+      matched: null,
+      logged: r.logged,
+    });
+  } catch (err) {
+    console.error("[lore] ingest discogs list failed", err);
+    const message =
+      err instanceof Error ? err.message : "Could not ingest Discogs list";
+    return res.status(400).json({ error: message });
+  }
+});
+
+// POST /api/admin/rym-lists — admin-only RateYourMusic link-out picker.
+router.post("/admin/rym-lists", async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const parsed = AddRymListBody.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid RYM list" });
+  }
+  const b = parsed.data;
+  try {
+    const r = await addRymPicker({ name: b.name, url: b.url });
+    const picker = await getPickerByHandle(r.handle);
+    if (!picker) {
+      return res.status(400).json({ error: "Could not create RYM picker" });
+    }
+    return res.status(201).json(toPicker(picker));
+  } catch (err) {
+    console.error("[lore] add rym list failed", err);
+    const message = err instanceof Error ? err.message : "Could not add RYM list";
     return res.status(400).json({ error: message });
   }
 });

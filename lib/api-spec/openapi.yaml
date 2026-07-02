@@ -272,6 +272,339 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /pickers:
+    get:
+      operationId: listPickers
+      tags: [pickers]
+      summary: All active pickers (labels, blogs, curators, collectors, events)
+      description: >
+        The trusted taste sources Lore rides beyond radio DJs. A DJ is one
+        picker type; this lists the rest (and any DJ-typed pickers), so a client
+        can browse who is doing the picking.
+      responses:
+        "200":
+          description: The active pickers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PickerList"
+  /recordings/{mbid}/entry:
+    get:
+      operationId: getRecordingEntry
+      tags: [recordings]
+      summary: Strongest human attribution for a track (entry-flow ladder)
+      description: >
+        Source-agnostic fallback ladder. Returns the strongest available human
+        attribution for a recording — DJ spin, then label, then blog/curator,
+        then collector/event, then artist-level — and stops there. Lore never
+        falls through to algorithmic similar-tracks: when no human has picked the
+        track it returns an empty rung with a "be the first" invitation.
+      parameters:
+        - name: mbid
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: The strongest rung of attribution found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntryResult"
+  /admin/pickers:
+    post:
+      operationId: upsertPicker
+      tags: [admin]
+      summary: Admin-only create/update of a picker
+      description: >
+        Create or update a picker (label, blog, curator, collector, event),
+        idempotent by handle. Guarded by the `x-admin-token` header matching the
+        LORE_ADMIN_TOKEN env var; returns 503 when unconfigured.
+      parameters:
+        - name: x-admin-token
+          in: header
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertPickerRequest"
+      responses:
+        "201":
+          description: The picker
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Picker"
+        "400":
+          description: Invalid picker
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Admin entry not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /admin/pickers/{handle}/picks:
+    post:
+      operationId: logTracklist
+      tags: [admin]
+      summary: Admin-only tracklist ingest for a picker (curator lists, lineups)
+      description: >
+        Log a whole tracklist against an existing picker — the generic write path
+        behind curator lists and event lineups. Ordered lists form rideable
+        edges; unordered lists are ridden as a set. Every entry is logged even
+        when it resolves only approximately. Token-guarded.
+      parameters:
+        - name: handle
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - name: x-admin-token
+          in: header
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TracklistRequest"
+      responses:
+        "201":
+          description: Ingest summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TracklistResult"
+        "400":
+          description: Invalid tracklist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Picker not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Admin entry not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /admin/labels:
+    post:
+      operationId: seedLabel
+      tags: [admin]
+      summary: Admin-only label seed by MusicBrainz MBID
+      description: >
+        Create a label picker and log a pick for every recording MusicBrainz
+        reports on the label's releases (recording-id confidence, no text
+        resolution). One MusicBrainz request, honoring the 1 req/sec budget.
+        Token-guarded.
+      parameters:
+        - name: x-admin-token
+          in: header
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LabelSeedRequest"
+      responses:
+        "201":
+          description: Ingest summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestResult"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Admin entry not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /admin/blogs:
+    post:
+      operationId: ingestBlog
+      tags: [admin]
+      summary: Admin-only blog/critic RSS ingest
+      description: >
+        Poll a tastemaker RSS/Atom feed and log a pick per post that yields a
+        confident artist/track match. Only the resolved pick and a link to the
+        exact post are stored — never the post body. Posts with no confident
+        match are skipped. Token-guarded.
+      parameters:
+        - name: x-admin-token
+          in: header
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BlogIngestRequest"
+      responses:
+        "201":
+          description: Ingest summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestResult"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Admin entry not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /admin/discogs-lists:
+    post:
+      operationId: ingestDiscogsList
+      tags: [admin]
+      summary: Admin-only Discogs list ingest (collector)
+      description: >
+        Ingest a public Discogs list via the Discogs API and log a pick per
+        catalogued item, resolving "Artist - Title" where possible and logging
+        unresolved otherwise. Token-guarded.
+      parameters:
+        - name: x-admin-token
+          in: header
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DiscogsListRequest"
+      responses:
+        "201":
+          description: Ingest summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestResult"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Admin entry not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /admin/rym-lists:
+    post:
+      operationId: addRymList
+      tags: [admin]
+      summary: Admin-only RateYourMusic link-out picker
+      description: >
+        Register a RateYourMusic list as a link-out-only picker. RYM forbids
+        scraping, so no items are ingested — only the picker and its home link
+        are stored, so the entry flow can point listeners at it without touching
+        RYM. Token-guarded.
+      parameters:
+        - name: x-admin-token
+          in: header
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RymListRequest"
+      responses:
+        "201":
+          description: The picker
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Picker"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Admin entry not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 components:
   schemas:
     HealthStatus:
@@ -769,6 +1102,14 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/StationRef"
+        pickers:
+          type: array
+          description: >-
+            Pickers whose ordered list (label release, ranked list, event
+            lineup) places this song right after the queried one. Present only
+            for pick-derived segue edges.
+          items:
+            $ref: "#/components/schemas/SeguePickerRef"
       required:
         - mbid
         - title
@@ -776,6 +1117,23 @@ components:
         - count
         - score
         - stations
+    SeguePickerRef:
+      type: object
+      description: A picker reference used in pick-derived segue attribution.
+      properties:
+        name:
+          type: string
+        handle:
+          type: string
+        pickerType:
+          type: string
+        trustTier:
+          type: integer
+      required:
+        - name
+        - handle
+        - pickerType
+        - trustTier
     SegueNextList:
       type: object
       properties:
@@ -831,3 +1189,257 @@ components:
       required:
         - logged
         - confidence
+    Picker:
+      type: object
+      description: A trusted taste source (label, blog, curator, collector, event, DJ).
+      properties:
+        id:
+          type: integer
+        pickerType:
+          type: string
+          enum: [dj, label, blog, curator, collector, event]
+        name:
+          type: string
+        handle:
+          type: string
+        homeUrl:
+          type: ["string", "null"]
+        trustTier:
+          type: integer
+        description:
+          type: ["string", "null"]
+        active:
+          type: boolean
+      required:
+        - id
+        - pickerType
+        - name
+        - handle
+        - trustTier
+        - active
+    PickerList:
+      type: object
+      properties:
+        pickers:
+          type: array
+          items:
+            $ref: "#/components/schemas/Picker"
+      required:
+        - pickers
+    EntryPick:
+      type: object
+      description: One attributed pick surfaced by the entry-flow ladder.
+      properties:
+        source:
+          type: string
+        pickerType:
+          type: string
+        pickerName:
+          type: string
+        pickerHandle:
+          type: string
+        trustTier:
+          type: integer
+        mbid:
+          type: ["string", "null"]
+        artistMbid:
+          type: ["string", "null"]
+        context:
+          type: ["string", "null"]
+        sourceUrl:
+          type: ["string", "null"]
+        confidence:
+          type: string
+        pickedAt:
+          type: ["string", "null"]
+      required:
+        - source
+        - pickerType
+        - pickerName
+        - pickerHandle
+        - trustTier
+        - confidence
+    EntryInvitation:
+      type: object
+      description: The "be the first" invitation returned on the empty rung.
+      properties:
+        message:
+          type: string
+        seedSource:
+          type: string
+          enum: [user_seed]
+      required:
+        - message
+        - seedSource
+    EntryResult:
+      type: object
+      description: The strongest rung of human attribution found for a recording.
+      properties:
+        rung:
+          type: string
+          enum: [dj, label, blog, curator, collector, event, artist, scene, empty]
+        framing:
+          type: string
+        picks:
+          type: array
+          items:
+            $ref: "#/components/schemas/EntryPick"
+        invitation:
+          anyOf:
+            - $ref: "#/components/schemas/EntryInvitation"
+            - type: "null"
+      required:
+        - rung
+        - framing
+        - picks
+    UpsertPickerRequest:
+      type: object
+      description: Admin create/update of a picker, idempotent by handle.
+      properties:
+        pickerType:
+          type: string
+          enum: [dj, label, blog, curator, collector, event]
+        name:
+          type: string
+          minLength: 1
+        handle:
+          type: string
+        homeUrl:
+          type: string
+        trustTier:
+          type: integer
+        description:
+          type: string
+      required:
+        - pickerType
+        - name
+    TrackEntry:
+      type: object
+      description: One entry in an admin-supplied tracklist.
+      properties:
+        artist:
+          type: string
+          minLength: 1
+        title:
+          type: string
+          minLength: 1
+        recordingId:
+          type: string
+        isrc:
+          type: string
+        sourceUrl:
+          type: string
+        context:
+          type: string
+        externalId:
+          type: string
+      required:
+        - artist
+        - title
+    TracklistRequest:
+      type: object
+      description: A curator list or event lineup logged against a picker.
+      properties:
+        source:
+          type: string
+          enum: [curator_list, event_lineup, user_seed]
+        ordered:
+          type: boolean
+          description: When true, entries form rideable edges via an ordinal.
+        sourceUrl:
+          type: string
+        context:
+          type: string
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrackEntry"
+      required:
+        - source
+        - entries
+    TracklistResult:
+      type: object
+      properties:
+        logged:
+          type: integer
+        resolved:
+          type: integer
+        total:
+          type: integer
+      required:
+        - logged
+        - resolved
+        - total
+    LabelSeedRequest:
+      type: object
+      description: Seed a label picker from a MusicBrainz label MBID.
+      properties:
+        labelMbid:
+          type: string
+          minLength: 1
+        name:
+          type: string
+        homeUrl:
+          type: string
+      required:
+        - labelMbid
+    BlogIngestRequest:
+      type: object
+      description: Ingest a blog/critic RSS feed as a picker.
+      properties:
+        feedUrl:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+        homeUrl:
+          type: string
+      required:
+        - feedUrl
+        - name
+    DiscogsListRequest:
+      type: object
+      description: Ingest a public Discogs list as a collector picker.
+      properties:
+        listId:
+          type: string
+          minLength: 1
+        name:
+          type: string
+      required:
+        - listId
+    RymListRequest:
+      type: object
+      description: Register a RateYourMusic list as a link-out-only picker.
+      properties:
+        name:
+          type: string
+          minLength: 1
+        url:
+          type: string
+          minLength: 1
+      required:
+        - name
+        - url
+    IngestResult:
+      type: object
+      description: Summary of a worker ingest run.
+      properties:
+        pickerId:
+          type: integer
+        handle:
+          type: string
+        name:
+          type: string
+        found:
+          type: ["integer", "null"]
+        matched:
+          type: ["integer", "null"]
+        logged:
+          type: integer
+      required:
+        - pickerId
+        - handle
+        - name
+        - logged

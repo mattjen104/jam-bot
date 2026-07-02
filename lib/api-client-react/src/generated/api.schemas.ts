@@ -323,6 +323,16 @@ export interface RecordingSpins {
 }
 
 /**
+ * A picker reference used in pick-derived segue attribution.
+ */
+export interface SeguePickerRef {
+  name: string;
+  handle: string;
+  pickerType: string;
+  trustTier: number;
+}
+
+/**
  * A song observed playing after the queried recording.
  */
 export interface SegueNext {
@@ -334,6 +344,8 @@ export interface SegueNext {
   count: number;
   score: number;
   stations: StationRef[];
+  /** Pickers whose ordered list (label release, ranked list, event lineup) places this song right after the queried one. Present only for pick-derived segue edges. */
+  pickers?: SeguePickerRef[];
 }
 
 export interface SegueNextList {
@@ -375,6 +387,221 @@ export interface ManualSpinResponse {
   /** @nullable */
   mbid?: string | null;
   confidence: ManualSpinResponseConfidence;
+}
+
+export type PickerPickerType =
+  (typeof PickerPickerType)[keyof typeof PickerPickerType];
+
+export const PickerPickerType = {
+  dj: "dj",
+  label: "label",
+  blog: "blog",
+  curator: "curator",
+  collector: "collector",
+  event: "event",
+} as const;
+
+/**
+ * A trusted taste source (label, blog, curator, collector, event, DJ).
+ */
+export interface Picker {
+  id: number;
+  pickerType: PickerPickerType;
+  name: string;
+  handle: string;
+  /** @nullable */
+  homeUrl?: string | null;
+  trustTier: number;
+  /** @nullable */
+  description?: string | null;
+  active: boolean;
+}
+
+export interface PickerList {
+  pickers: Picker[];
+}
+
+/**
+ * One attributed pick surfaced by the entry-flow ladder.
+ */
+export interface EntryPick {
+  source: string;
+  pickerType: string;
+  pickerName: string;
+  pickerHandle: string;
+  trustTier: number;
+  /** @nullable */
+  mbid?: string | null;
+  /** @nullable */
+  artistMbid?: string | null;
+  /** @nullable */
+  context?: string | null;
+  /** @nullable */
+  sourceUrl?: string | null;
+  confidence: string;
+  /** @nullable */
+  pickedAt?: string | null;
+}
+
+export type EntryInvitationSeedSource =
+  (typeof EntryInvitationSeedSource)[keyof typeof EntryInvitationSeedSource];
+
+export const EntryInvitationSeedSource = {
+  user_seed: "user_seed",
+} as const;
+
+/**
+ * The "be the first" invitation returned on the empty rung.
+ */
+export interface EntryInvitation {
+  message: string;
+  seedSource: EntryInvitationSeedSource;
+}
+
+export type EntryResultRung =
+  (typeof EntryResultRung)[keyof typeof EntryResultRung];
+
+export const EntryResultRung = {
+  dj: "dj",
+  label: "label",
+  blog: "blog",
+  curator: "curator",
+  collector: "collector",
+  event: "event",
+  artist: "artist",
+  scene: "scene",
+  empty: "empty",
+} as const;
+
+/**
+ * The strongest rung of human attribution found for a recording.
+ */
+export interface EntryResult {
+  rung: EntryResultRung;
+  framing: string;
+  picks: EntryPick[];
+  invitation?: EntryInvitation | null;
+}
+
+export type UpsertPickerRequestPickerType =
+  (typeof UpsertPickerRequestPickerType)[keyof typeof UpsertPickerRequestPickerType];
+
+export const UpsertPickerRequestPickerType = {
+  dj: "dj",
+  label: "label",
+  blog: "blog",
+  curator: "curator",
+  collector: "collector",
+  event: "event",
+} as const;
+
+/**
+ * Admin create/update of a picker, idempotent by handle.
+ */
+export interface UpsertPickerRequest {
+  pickerType: UpsertPickerRequestPickerType;
+  /** @minLength 1 */
+  name: string;
+  handle?: string;
+  homeUrl?: string;
+  trustTier?: number;
+  description?: string;
+}
+
+/**
+ * One entry in an admin-supplied tracklist.
+ */
+export interface TrackEntry {
+  /** @minLength 1 */
+  artist: string;
+  /** @minLength 1 */
+  title: string;
+  recordingId?: string;
+  isrc?: string;
+  sourceUrl?: string;
+  context?: string;
+  externalId?: string;
+}
+
+export type TracklistRequestSource =
+  (typeof TracklistRequestSource)[keyof typeof TracklistRequestSource];
+
+export const TracklistRequestSource = {
+  curator_list: "curator_list",
+  event_lineup: "event_lineup",
+  user_seed: "user_seed",
+} as const;
+
+/**
+ * A curator list or event lineup logged against a picker.
+ */
+export interface TracklistRequest {
+  source: TracklistRequestSource;
+  /** When true, entries form rideable edges via an ordinal. */
+  ordered?: boolean;
+  sourceUrl?: string;
+  context?: string;
+  entries: TrackEntry[];
+}
+
+export interface TracklistResult {
+  logged: number;
+  resolved: number;
+  total: number;
+}
+
+/**
+ * Seed a label picker from a MusicBrainz label MBID.
+ */
+export interface LabelSeedRequest {
+  /** @minLength 1 */
+  labelMbid: string;
+  name?: string;
+  homeUrl?: string;
+}
+
+/**
+ * Ingest a blog/critic RSS feed as a picker.
+ */
+export interface BlogIngestRequest {
+  /** @minLength 1 */
+  feedUrl: string;
+  /** @minLength 1 */
+  name: string;
+  homeUrl?: string;
+}
+
+/**
+ * Ingest a public Discogs list as a collector picker.
+ */
+export interface DiscogsListRequest {
+  /** @minLength 1 */
+  listId: string;
+  name?: string;
+}
+
+/**
+ * Register a RateYourMusic list as a link-out-only picker.
+ */
+export interface RymListRequest {
+  /** @minLength 1 */
+  name: string;
+  /** @minLength 1 */
+  url: string;
+}
+
+/**
+ * Summary of a worker ingest run.
+ */
+export interface IngestResult {
+  pickerId: number;
+  handle: string;
+  name: string;
+  /** @nullable */
+  found?: number | null;
+  /** @nullable */
+  matched?: number | null;
+  logged: number;
 }
 
 export type ResolveSongParams = {

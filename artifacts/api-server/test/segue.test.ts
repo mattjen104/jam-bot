@@ -1,9 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   deriveEdges,
+  deriveEdgesFromPicks,
   stationClassWeight,
   SEGUE_GAP_MS,
   type SpinForSegue,
+  type PickForSegue,
 } from "../src/lore/segue.js";
 
 const t = (iso: string) => new Date(iso);
@@ -81,5 +83,64 @@ describe("stationClassWeight", () => {
   it("defaults unknown classes to the curated weight", () => {
     expect(stationClassWeight(null)).toBe(stationClassWeight("curated"));
     expect(stationClassWeight("whatever")).toBe(stationClassWeight("curated"));
+  });
+});
+
+describe("deriveEdgesFromPicks", () => {
+  it("links consecutive ordered picks within one picker's list", () => {
+    const picks: PickForSegue[] = [
+      { pickerId: 1, mbid: "a", ordinal: 0 },
+      { pickerId: 1, mbid: "b", ordinal: 1 },
+      { pickerId: 1, mbid: "c", ordinal: 2 },
+    ];
+    const edges = deriveEdgesFromPicks(picks);
+    expect(edges.map((e) => [e.fromMbid, e.toMbid])).toEqual([
+      ["a", "b"],
+      ["b", "c"],
+    ]);
+    expect(edges[0]).toMatchObject({ pickerId: 1 });
+  });
+
+  it("sorts by ordinal before pairing (input order independent)", () => {
+    const picks: PickForSegue[] = [
+      { pickerId: 1, mbid: "b", ordinal: 1 },
+      { pickerId: 1, mbid: "a", ordinal: 0 },
+    ];
+    expect(deriveEdgesFromPicks(picks).map((e) => [e.fromMbid, e.toMbid])).toEqual([
+      ["a", "b"],
+    ]);
+  });
+
+  it("never bridges across an unresolved pick (hole breaks the chain)", () => {
+    const picks: PickForSegue[] = [
+      { pickerId: 1, mbid: "a", ordinal: 0 },
+      { pickerId: 1, mbid: null, ordinal: 1 },
+      { pickerId: 1, mbid: "c", ordinal: 2 },
+    ];
+    expect(deriveEdgesFromPicks(picks)).toHaveLength(0);
+  });
+
+  it("does not link picks from different pickers", () => {
+    const picks: PickForSegue[] = [
+      { pickerId: 1, mbid: "a", ordinal: 0 },
+      { pickerId: 2, mbid: "b", ordinal: 1 },
+    ];
+    expect(deriveEdgesFromPicks(picks)).toHaveLength(0);
+  });
+
+  it("skips unordered picks (ordinal null) — a set is not a sequence", () => {
+    const picks: PickForSegue[] = [
+      { pickerId: 1, mbid: "a", ordinal: null },
+      { pickerId: 1, mbid: "b", ordinal: null },
+    ];
+    expect(deriveEdgesFromPicks(picks)).toHaveLength(0);
+  });
+
+  it("drops self-loops (same track twice in a row)", () => {
+    const picks: PickForSegue[] = [
+      { pickerId: 1, mbid: "a", ordinal: 0 },
+      { pickerId: 1, mbid: "a", ordinal: 1 },
+    ];
+    expect(deriveEdgesFromPicks(picks)).toHaveLength(0);
   });
 });

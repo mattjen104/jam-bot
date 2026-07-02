@@ -1,8 +1,10 @@
 import app from "./app";
 import { wireSongEnrichment } from "./song/wire.js";
-import { seedStations } from "./lore/seed.js";
+import { seedStations, seedPickers } from "./lore/seed.js";
 import { startLorePoller } from "./lore/poller.js";
+import { startBlogPoller } from "./lore/blog-poller.js";
 import { startSegueJob } from "./lore/segue-job.js";
+import { ensurePicksUnifiedView } from "./lore/view.js";
 
 const rawPort = process.env["PORT"];
 
@@ -30,8 +32,11 @@ app.listen(port, () => {
 async function bootLore(): Promise<void> {
   try {
     wireSongEnrichment();
+    await ensurePicksUnifiedView();
     await seedStations();
+    await seedPickers();
     await startLorePoller();
+    await startBlogPoller();
     startSegueJob();
   } catch (err) {
     console.error("[lore] boot failed", err);

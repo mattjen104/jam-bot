@@ -92,6 +92,64 @@ export function parseDiscogsSearch(body: unknown): DiscogsPressing | null {
   return pressing;
 }
 
+/** One entry in a public Discogs list — a collector's catalogued item. */
+export interface DiscogsListItem {
+  /** Discogs item id (release/master), used for idempotent dedup. */
+  id: string;
+  /** "Artist - Title" as Discogs renders it; parsed downstream. */
+  displayTitle: string;
+  /** Public Discogs URL for the item (the link-out we store). */
+  url?: string;
+  /** The collector's own note on the item, when present. */
+  comment?: string;
+}
+
+export interface DiscogsList {
+  name?: string;
+  items: DiscogsListItem[];
+}
+
+/** Pure: flatten a Discogs `/lists/{id}` body into a DiscogsList. */
+export function parseDiscogsList(body: unknown): DiscogsList {
+  const b = body as {
+    name?: string;
+    items?: Array<{
+      id?: string | number;
+      display_title?: string;
+      uri?: string;
+      resource_url?: string;
+      comment?: string;
+    }>;
+  };
+  const items: DiscogsListItem[] = [];
+  for (const it of b?.items ?? []) {
+    const id = it?.id != null ? String(it.id) : undefined;
+    const displayTitle = it?.display_title?.trim();
+    if (!id || !displayTitle) continue;
+    items.push({
+      id,
+      displayTitle,
+      ...(it.uri?.trim() ? { url: it.uri.trim() } : {}),
+      ...(it.comment?.trim() ? { comment: it.comment.trim() } : {}),
+    });
+  }
+  return { name: b?.name?.trim() || undefined, items };
+}
+
+/** Fetch a public Discogs list's items. Best-effort — never throws. */
+export async function fetchDiscogsList(
+  listId: string,
+): Promise<DiscogsList | null> {
+  if (!discogsEnabled() || !listId.trim()) return null;
+  try {
+    const body = await discogsFetch(`/lists/${encodeURIComponent(listId.trim())}`);
+    return parseDiscogsList(body);
+  } catch (err) {
+    logger.warn("Discogs list lookup failed", { listId, error: String(err) });
+    return null;
+  }
+}
+
 /** Best-effort Discogs pressing lookup by artist + track. Never throws. */
 export async function fetchDiscogsPressing(
   title: string,

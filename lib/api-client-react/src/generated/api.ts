@@ -18,18 +18,29 @@ import type {
 
 import type {
   ApiError,
+  BlogIngestRequest,
+  DiscogsListRequest,
+  EntryResult,
   GetOembedParams,
   HealthStatus,
+  IngestResult,
+  LabelSeedRequest,
   ManualSpinRequest,
   ManualSpinResponse,
   OEmbed,
+  Picker,
+  PickerList,
   RecordingSpins,
   ResolveSongParams,
   ResolvedSong,
+  RymListRequest,
   SegueNextList,
   SongContext,
   StationList,
   StationNowPlaying,
+  TracklistRequest,
+  TracklistResult,
+  UpsertPickerRequest,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -830,4 +841,699 @@ export const useCreateManualSpin = <
   TContext
 > => {
   return useMutation(getCreateManualSpinMutationOptions(options));
+};
+
+/**
+ * The trusted taste sources Lore rides beyond radio DJs. A DJ is one picker type; this lists the rest (and any DJ-typed pickers), so a client can browse who is doing the picking.
+
+ * @summary All active pickers (labels, blogs, curators, collectors, events)
+ */
+export const getListPickersUrl = () => {
+  return `/api/pickers`;
+};
+
+export const listPickers = async (
+  options?: RequestInit,
+): Promise<PickerList> => {
+  return customFetch<PickerList>(getListPickersUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListPickersQueryKey = () => {
+  return [`/api/pickers`] as const;
+};
+
+export const getListPickersQueryOptions = <
+  TData = Awaited<ReturnType<typeof listPickers>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listPickers>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListPickersQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listPickers>>> = ({
+    signal,
+  }) => listPickers({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listPickers>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListPickersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listPickers>>
+>;
+export type ListPickersQueryError = ErrorType<unknown>;
+
+/**
+ * @summary All active pickers (labels, blogs, curators, collectors, events)
+ */
+
+export function useListPickers<
+  TData = Awaited<ReturnType<typeof listPickers>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listPickers>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListPickersQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Source-agnostic fallback ladder. Returns the strongest available human attribution for a recording — DJ spin, then label, then blog/curator, then collector/event, then artist-level — and stops there. Lore never falls through to algorithmic similar-tracks: when no human has picked the track it returns an empty rung with a "be the first" invitation.
+
+ * @summary Strongest human attribution for a track (entry-flow ladder)
+ */
+export const getGetRecordingEntryUrl = (mbid: string) => {
+  return `/api/recordings/${mbid}/entry`;
+};
+
+export const getRecordingEntry = async (
+  mbid: string,
+  options?: RequestInit,
+): Promise<EntryResult> => {
+  return customFetch<EntryResult>(getGetRecordingEntryUrl(mbid), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetRecordingEntryQueryKey = (mbid: string) => {
+  return [`/api/recordings/${mbid}/entry`] as const;
+};
+
+export const getGetRecordingEntryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getRecordingEntry>>,
+  TError = ErrorType<unknown>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecordingEntry>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetRecordingEntryQueryKey(mbid);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getRecordingEntry>>
+  > = ({ signal }) => getRecordingEntry(mbid, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!mbid,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getRecordingEntry>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetRecordingEntryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getRecordingEntry>>
+>;
+export type GetRecordingEntryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Strongest human attribution for a track (entry-flow ladder)
+ */
+
+export function useGetRecordingEntry<
+  TData = Awaited<ReturnType<typeof getRecordingEntry>>,
+  TError = ErrorType<unknown>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecordingEntry>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetRecordingEntryQueryOptions(mbid, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Create or update a picker (label, blog, curator, collector, event), idempotent by handle. Guarded by the `x-admin-token` header matching the LORE_ADMIN_TOKEN env var; returns 503 when unconfigured.
+
+ * @summary Admin-only create/update of a picker
+ */
+export const getUpsertPickerUrl = () => {
+  return `/api/admin/pickers`;
+};
+
+export const upsertPicker = async (
+  upsertPickerRequest: UpsertPickerRequest,
+  options?: RequestInit,
+): Promise<Picker> => {
+  return customFetch<Picker>(getUpsertPickerUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(upsertPickerRequest),
+  });
+};
+
+export const getUpsertPickerMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof upsertPicker>>,
+    TError,
+    { data: BodyType<UpsertPickerRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof upsertPicker>>,
+  TError,
+  { data: BodyType<UpsertPickerRequest> },
+  TContext
+> => {
+  const mutationKey = ["upsertPicker"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof upsertPicker>>,
+    { data: BodyType<UpsertPickerRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return upsertPicker(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpsertPickerMutationResult = NonNullable<
+  Awaited<ReturnType<typeof upsertPicker>>
+>;
+export type UpsertPickerMutationBody = BodyType<UpsertPickerRequest>;
+export type UpsertPickerMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Admin-only create/update of a picker
+ */
+export const useUpsertPicker = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof upsertPicker>>,
+    TError,
+    { data: BodyType<UpsertPickerRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof upsertPicker>>,
+  TError,
+  { data: BodyType<UpsertPickerRequest> },
+  TContext
+> => {
+  return useMutation(getUpsertPickerMutationOptions(options));
+};
+
+/**
+ * Log a whole tracklist against an existing picker — the generic write path behind curator lists and event lineups. Ordered lists form rideable edges; unordered lists are ridden as a set. Every entry is logged even when it resolves only approximately. Token-guarded.
+
+ * @summary Admin-only tracklist ingest for a picker (curator lists, lineups)
+ */
+export const getLogTracklistUrl = (handle: string) => {
+  return `/api/admin/pickers/${handle}/picks`;
+};
+
+export const logTracklist = async (
+  handle: string,
+  tracklistRequest: TracklistRequest,
+  options?: RequestInit,
+): Promise<TracklistResult> => {
+  return customFetch<TracklistResult>(getLogTracklistUrl(handle), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(tracklistRequest),
+  });
+};
+
+export const getLogTracklistMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof logTracklist>>,
+    TError,
+    { handle: string; data: BodyType<TracklistRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof logTracklist>>,
+  TError,
+  { handle: string; data: BodyType<TracklistRequest> },
+  TContext
+> => {
+  const mutationKey = ["logTracklist"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof logTracklist>>,
+    { handle: string; data: BodyType<TracklistRequest> }
+  > = (props) => {
+    const { handle, data } = props ?? {};
+
+    return logTracklist(handle, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type LogTracklistMutationResult = NonNullable<
+  Awaited<ReturnType<typeof logTracklist>>
+>;
+export type LogTracklistMutationBody = BodyType<TracklistRequest>;
+export type LogTracklistMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Admin-only tracklist ingest for a picker (curator lists, lineups)
+ */
+export const useLogTracklist = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof logTracklist>>,
+    TError,
+    { handle: string; data: BodyType<TracklistRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof logTracklist>>,
+  TError,
+  { handle: string; data: BodyType<TracklistRequest> },
+  TContext
+> => {
+  return useMutation(getLogTracklistMutationOptions(options));
+};
+
+/**
+ * Create a label picker and log a pick for every recording MusicBrainz reports on the label's releases (recording-id confidence, no text resolution). One MusicBrainz request, honoring the 1 req/sec budget. Token-guarded.
+
+ * @summary Admin-only label seed by MusicBrainz MBID
+ */
+export const getSeedLabelUrl = () => {
+  return `/api/admin/labels`;
+};
+
+export const seedLabel = async (
+  labelSeedRequest: LabelSeedRequest,
+  options?: RequestInit,
+): Promise<IngestResult> => {
+  return customFetch<IngestResult>(getSeedLabelUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(labelSeedRequest),
+  });
+};
+
+export const getSeedLabelMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof seedLabel>>,
+    TError,
+    { data: BodyType<LabelSeedRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof seedLabel>>,
+  TError,
+  { data: BodyType<LabelSeedRequest> },
+  TContext
+> => {
+  const mutationKey = ["seedLabel"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof seedLabel>>,
+    { data: BodyType<LabelSeedRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return seedLabel(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SeedLabelMutationResult = NonNullable<
+  Awaited<ReturnType<typeof seedLabel>>
+>;
+export type SeedLabelMutationBody = BodyType<LabelSeedRequest>;
+export type SeedLabelMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Admin-only label seed by MusicBrainz MBID
+ */
+export const useSeedLabel = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof seedLabel>>,
+    TError,
+    { data: BodyType<LabelSeedRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof seedLabel>>,
+  TError,
+  { data: BodyType<LabelSeedRequest> },
+  TContext
+> => {
+  return useMutation(getSeedLabelMutationOptions(options));
+};
+
+/**
+ * Poll a tastemaker RSS/Atom feed and log a pick per post that yields a confident artist/track match. Only the resolved pick and a link to the exact post are stored — never the post body. Posts with no confident match are skipped. Token-guarded.
+
+ * @summary Admin-only blog/critic RSS ingest
+ */
+export const getIngestBlogUrl = () => {
+  return `/api/admin/blogs`;
+};
+
+export const ingestBlog = async (
+  blogIngestRequest: BlogIngestRequest,
+  options?: RequestInit,
+): Promise<IngestResult> => {
+  return customFetch<IngestResult>(getIngestBlogUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(blogIngestRequest),
+  });
+};
+
+export const getIngestBlogMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof ingestBlog>>,
+    TError,
+    { data: BodyType<BlogIngestRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof ingestBlog>>,
+  TError,
+  { data: BodyType<BlogIngestRequest> },
+  TContext
+> => {
+  const mutationKey = ["ingestBlog"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof ingestBlog>>,
+    { data: BodyType<BlogIngestRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return ingestBlog(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type IngestBlogMutationResult = NonNullable<
+  Awaited<ReturnType<typeof ingestBlog>>
+>;
+export type IngestBlogMutationBody = BodyType<BlogIngestRequest>;
+export type IngestBlogMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Admin-only blog/critic RSS ingest
+ */
+export const useIngestBlog = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof ingestBlog>>,
+    TError,
+    { data: BodyType<BlogIngestRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof ingestBlog>>,
+  TError,
+  { data: BodyType<BlogIngestRequest> },
+  TContext
+> => {
+  return useMutation(getIngestBlogMutationOptions(options));
+};
+
+/**
+ * Ingest a public Discogs list via the Discogs API and log a pick per catalogued item, resolving "Artist - Title" where possible and logging unresolved otherwise. Token-guarded.
+
+ * @summary Admin-only Discogs list ingest (collector)
+ */
+export const getIngestDiscogsListUrl = () => {
+  return `/api/admin/discogs-lists`;
+};
+
+export const ingestDiscogsList = async (
+  discogsListRequest: DiscogsListRequest,
+  options?: RequestInit,
+): Promise<IngestResult> => {
+  return customFetch<IngestResult>(getIngestDiscogsListUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(discogsListRequest),
+  });
+};
+
+export const getIngestDiscogsListMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof ingestDiscogsList>>,
+    TError,
+    { data: BodyType<DiscogsListRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof ingestDiscogsList>>,
+  TError,
+  { data: BodyType<DiscogsListRequest> },
+  TContext
+> => {
+  const mutationKey = ["ingestDiscogsList"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof ingestDiscogsList>>,
+    { data: BodyType<DiscogsListRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return ingestDiscogsList(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type IngestDiscogsListMutationResult = NonNullable<
+  Awaited<ReturnType<typeof ingestDiscogsList>>
+>;
+export type IngestDiscogsListMutationBody = BodyType<DiscogsListRequest>;
+export type IngestDiscogsListMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Admin-only Discogs list ingest (collector)
+ */
+export const useIngestDiscogsList = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof ingestDiscogsList>>,
+    TError,
+    { data: BodyType<DiscogsListRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof ingestDiscogsList>>,
+  TError,
+  { data: BodyType<DiscogsListRequest> },
+  TContext
+> => {
+  return useMutation(getIngestDiscogsListMutationOptions(options));
+};
+
+/**
+ * Register a RateYourMusic list as a link-out-only picker. RYM forbids scraping, so no items are ingested — only the picker and its home link are stored, so the entry flow can point listeners at it without touching RYM. Token-guarded.
+
+ * @summary Admin-only RateYourMusic link-out picker
+ */
+export const getAddRymListUrl = () => {
+  return `/api/admin/rym-lists`;
+};
+
+export const addRymList = async (
+  rymListRequest: RymListRequest,
+  options?: RequestInit,
+): Promise<Picker> => {
+  return customFetch<Picker>(getAddRymListUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(rymListRequest),
+  });
+};
+
+export const getAddRymListMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addRymList>>,
+    TError,
+    { data: BodyType<RymListRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addRymList>>,
+  TError,
+  { data: BodyType<RymListRequest> },
+  TContext
+> => {
+  const mutationKey = ["addRymList"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addRymList>>,
+    { data: BodyType<RymListRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return addRymList(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddRymListMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addRymList>>
+>;
+export type AddRymListMutationBody = BodyType<RymListRequest>;
+export type AddRymListMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Admin-only RateYourMusic link-out picker
+ */
+export const useAddRymList = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addRymList>>,
+    TError,
+    { data: BodyType<RymListRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addRymList>>,
+  TError,
+  { data: BodyType<RymListRequest> },
+  TContext
+> => {
+  return useMutation(getAddRymListMutationOptions(options));
 };

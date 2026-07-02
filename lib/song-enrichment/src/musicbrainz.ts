@@ -557,6 +557,143 @@ export async function fetchArtistRelations(
   }
 }
 
+/**
+ * One recording released on a label, as surfaced by a label -> releases lookup.
+ * Because MusicBrainz hands us the canonical recording id directly, these land
+ * on the spine at "recording_id" confidence with no text resolution — they are
+ * real, grounded picks, never invented.
+ */
+export interface LabelRecording {
+  recordingId: string;
+  title: string;
+  artist?: string;
+  artistMbid?: string;
+  /** Owning release's id + title, for the "released on" source link/context. */
+  releaseId: string;
+  releaseTitle?: string;
+  /** Release year, when MusicBrainz reported a date. */
+  year?: number;
+}
+
+/**
+ * Pure: flatten a MusicBrainz `/release?label=...&inc=recordings+artist-credits`
+ * body into LabelRecording[]. Every track on every release the label put out
+ * becomes a grounded pick. De-duped by recording id (a track pressed on several
+ * releases appears once, earliest release wins). Capped so one giant back
+ * catalogue can't explode into thousands of picks in a single sync.
+ */
+export function parseLabelReleaseRecordings(
+  body: unknown,
+  cap = 200,
+): LabelRecording[] {
+  const b = body as {
+    releases?: Array<{
+      id?: string;
+      title?: string;
+      date?: string;
+      "artist-credit"?: Array<{
+        name?: string;
+        artist?: { id?: string; name?: string };
+      }>;
+      media?: Array<{
+        tracks?: Array<{
+          recording?: {
+            id?: string;
+            title?: string;
+            "artist-credit"?: Array<{
+              name?: string;
+              artist?: { id?: string; name?: string };
+            }>;
+          };
+        }>;
+      }>;
+    }>;
+  };
+  const out: LabelRecording[] = [];
+  const seen = new Set<string>();
+  // Oldest release first so the earliest pressing wins the de-dupe.
+  const releases = [...(b?.releases ?? [])].sort((r1, r2) =>
+    (r1.date ?? "9999").localeCompare(r2.date ?? "9999"),
+  );
+  for (const rel of releases) {
+    const releaseId = rel?.id?.trim();
+    if (!releaseId) continue;
+    const releaseTitle = rel.title?.trim() || undefined;
+    const yearStr = rel.date?.slice(0, 4);
+    const year = yearStr && /^\d{4}$/.test(yearStr) ? Number(yearStr) : undefined;
+    const relAc = rel["artist-credit"]?.[0];
+    for (const medium of rel.media ?? []) {
+      for (const track of medium.tracks ?? []) {
+        const rec = track.recording;
+        const recordingId = rec?.id?.trim();
+        const title = rec?.title?.trim();
+        if (!recordingId || !title || seen.has(recordingId)) continue;
+        seen.add(recordingId);
+        const ac = rec?.["artist-credit"]?.[0] ?? relAc;
+        const artist = ac?.name?.trim() || ac?.artist?.name?.trim() || undefined;
+        const artistMbid = ac?.artist?.id?.trim() || undefined;
+        out.push({
+          recordingId,
+          title,
+          releaseId,
+          ...(artist ? { artist } : {}),
+          ...(artistMbid ? { artistMbid } : {}),
+          ...(releaseTitle ? { releaseTitle } : {}),
+          ...(year != null ? { year } : {}),
+        });
+        if (out.length >= cap) return out;
+      }
+    }
+  }
+  return out;
+}
+
+/** A MusicBrainz label's display name, when resolvable. */
+export async function fetchLabelName(labelId: string): Promise<string | null> {
+  if (!musicbrainzEnabled() || !labelId.trim()) return null;
+  try {
+    const body = (await mbFetch(
+      `/label/${encodeURIComponent(labelId.trim())}?fmt=json`,
+    )) as { name?: string };
+    return body?.name?.trim() || null;
+  } catch (err) {
+    logger.warn("MusicBrainz label lookup failed", {
+      labelId,
+      error: String(err),
+    });
+    return null;
+  }
+}
+
+/**
+ * Fetch the recordings a label released (across its releases). Best-effort —
+ * returns [] on any failure or when MusicBrainz is unconfigured; never throws.
+ * A single request pulls up to `limit` releases with their embedded recordings,
+ * so a label seed costs one MusicBrainz call, honoring the 1 req/sec budget.
+ */
+export async function fetchLabelReleaseRecordings(
+  labelId: string,
+  limit = 100,
+): Promise<LabelRecording[]> {
+  if (!musicbrainzEnabled() || !labelId.trim()) return [];
+  try {
+    const body = await mbFetch(
+      `/release?label=${encodeURIComponent(labelId.trim())}` +
+        `&inc=recordings+artist-credits&limit=${Math.min(
+          Math.max(limit, 1),
+          100,
+        )}&fmt=json`,
+    );
+    return parseLabelReleaseRecordings(body);
+  } catch (err) {
+    logger.warn("MusicBrainz label releases lookup failed", {
+      labelId,
+      error: String(err),
+    });
+    return [];
+  }
+}
+
 /** A recording resolved from a free-text (artist + title) MusicBrainz search. */
 export interface RecordingTextMatch {
   recordingId: string;

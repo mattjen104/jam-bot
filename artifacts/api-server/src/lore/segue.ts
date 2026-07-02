@@ -5,9 +5,11 @@ import {
   recordingsTable,
   stationsTable,
   showsTable,
+  picksTable,
+  pickersTable,
   type InsertSegueEdge,
 } from "@workspace/db";
-import { eq, asc, desc } from "drizzle-orm";
+import { eq, asc, desc, and, isNotNull, inArray } from "drizzle-orm";
 
 /**
  * Segue edges — the "song A was followed by song B on this station/show" graph
@@ -143,6 +145,14 @@ export function stationClassWeight(stationClass: string | null): number {
   }
 }
 
+/** A picker whose ordered list produced a rideable pick-segue edge. */
+export interface SeguePickerRef {
+  name: string;
+  handle: string;
+  pickerType: string;
+  trustTier: number;
+}
+
 /** One candidate "what plays next" song, aggregated across observed segues. */
 export interface SegueNext {
   mbid: string;
@@ -153,8 +163,14 @@ export interface SegueNext {
   count: number;
   /** Class-weighted score used for ranking. */
   score: number;
-  /** Stations where this transition was seen (for attribution). */
+  /** Stations where this transition was seen (DJ/spin attribution). */
   stations: Array<{ slug: string; name: string; stationClass: string }>;
+  /**
+   * Pickers whose ORDERED list places this song right after the queried one
+   * (label release sequence, ranked curator list, event lineup). Present only
+   * when the edge came from ordered picks rather than radio spins.
+   */
+  pickers?: SeguePickerRef[];
 }
 
 /**
@@ -221,6 +237,212 @@ export async function nextSegues(
     console.error("[lore] nextSegues failed", fromMbid, err);
     return [];
   }
+}
+
+// ---- Pick-based segues (generalized beyond DJ spins) --------------------
+
+/** A pick, reduced to what ordered-pick edge derivation needs. */
+export interface PickForSegue {
+  pickerId: number;
+  mbid: string | null;
+  /** Position within the picker's ordered list; null = unordered (no segue). */
+  ordinal: number | null;
+}
+
+/** A rideable edge derived from two consecutive picks in one picker's list. */
+export interface PickEdge {
+  fromMbid: string;
+  toMbid: string;
+  pickerId: number;
+}
+
+/**
+ * Pure: derive rideable edges from ORDERED picks, the generalization of
+ * `deriveEdges` from radio spins to any sequenced source (a label's release
+ * tracklist, a ranked curator list, an event lineup). Picks are grouped by
+ * picker — two songs only segue if the SAME picker placed them back-to-back —
+ * then ordered by `ordinal`; each adjacent pair of distinct resolved MBIDs
+ * becomes one edge. A pick with no ordinal is unordered (ridden as a set, never
+ * a sequence) and is skipped; an unresolved pick (mbid null) breaks the chain
+ * exactly like an unresolved spin, so we never forge an edge across a hole.
+ * Deterministic and side-effect free for exhaustive unit testing.
+ */
+export function deriveEdgesFromPicks(picks: PickForSegue[]): PickEdge[] {
+  const groups = new Map<number, PickForSegue[]>();
+  for (const p of picks) {
+    if (p.ordinal === null || p.ordinal === undefined) continue;
+    const list = groups.get(p.pickerId) ?? [];
+    list.push(p);
+    groups.set(p.pickerId, list);
+  }
+
+  const edges: PickEdge[] = [];
+  for (const [pickerId, list] of groups) {
+    const sorted = [...list].sort((a, b) => a.ordinal! - b.ordinal!);
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = sorted[i - 1]!;
+      const cur = sorted[i]!;
+      if (!prev.mbid || !cur.mbid) continue;
+      if (prev.mbid === cur.mbid) continue;
+      edges.push({ fromMbid: prev.mbid, toMbid: cur.mbid, pickerId });
+    }
+  }
+  return edges;
+}
+
+/**
+ * Segue mode over ORDERED picks: given a song, the songs a picker's own
+ * sequence places right after it, ranked by a trust-tier-weighted frequency
+ * (lower tier = stronger, so a label's own release order outranks a looser
+ * list). Computed on read (ordered lists are small) by re-deriving edges for
+ * every picker that has this track in a sequence, so the "hole breaks the
+ * chain" semantics match the pure deriver exactly. Best-effort — [] on failure.
+ */
+export async function nextPickSegues(
+  fromMbid: string,
+  limit = 10,
+): Promise<SegueNext[]> {
+  try {
+    // Pickers whose ordered list contains this exact track.
+    const owners = await db
+      .selectDistinct({ pickerId: picksTable.pickerId })
+      .from(picksTable)
+      .where(
+        and(eq(picksTable.mbid, fromMbid), isNotNull(picksTable.ordinal)),
+      );
+    if (!owners.length) return [];
+    const ownerIds = owners.map((o) => o.pickerId);
+
+    // Every ordered pick for those pickers, so adjacency (incl. holes) is exact.
+    const rows = await db
+      .select({
+        pickerId: picksTable.pickerId,
+        mbid: picksTable.mbid,
+        ordinal: picksTable.ordinal,
+      })
+      .from(picksTable)
+      .where(
+        and(
+          inArray(picksTable.pickerId, ownerIds),
+          isNotNull(picksTable.ordinal),
+        ),
+      );
+
+    const edges = deriveEdgesFromPicks(rows).filter(
+      (e) => e.fromMbid === fromMbid,
+    );
+    if (!edges.length) return [];
+
+    const targetMbids = [...new Set(edges.map((e) => e.toMbid))];
+    const [recs, pickers] = await Promise.all([
+      db
+        .select({
+          mbid: recordingsTable.mbid,
+          title: recordingsTable.title,
+          artist: recordingsTable.artist,
+          artworkUrl: recordingsTable.artworkUrl,
+        })
+        .from(recordingsTable)
+        .where(inArray(recordingsTable.mbid, targetMbids)),
+      db
+        .select({
+          id: pickersTable.id,
+          name: pickersTable.name,
+          handle: pickersTable.handle,
+          pickerType: pickersTable.pickerType,
+          trustTier: pickersTable.trustTier,
+        })
+        .from(pickersTable)
+        .where(inArray(pickersTable.id, ownerIds)),
+    ]);
+    const recById = new Map(recs.map((r) => [r.mbid, r]));
+    const pickerById = new Map(pickers.map((p) => [p.id, p]));
+
+    const byTarget = new Map<string, SegueNext>();
+    for (const e of edges) {
+      const rec = recById.get(e.toMbid);
+      if (!rec) continue; // target not on the spine yet — skip, never invent.
+      const picker = pickerById.get(e.pickerId);
+      const entry: SegueNext =
+        byTarget.get(e.toMbid) ??
+        {
+          mbid: rec.mbid,
+          title: rec.title,
+          artist: rec.artist,
+          artworkUrl: rec.artworkUrl ?? null,
+          count: 0,
+          score: 0,
+          stations: [],
+          pickers: [],
+        };
+      entry.count += 1;
+      // Lower trustTier = stronger, so invert into a positive weight.
+      entry.score += Math.max(1, 4 - (picker?.trustTier ?? 3));
+      if (
+        picker &&
+        !entry.pickers!.some((p) => p.handle === picker.handle)
+      ) {
+        entry.pickers!.push({
+          name: picker.name,
+          handle: picker.handle,
+          pickerType: picker.pickerType,
+          trustTier: picker.trustTier,
+        });
+      }
+      byTarget.set(e.toMbid, entry);
+    }
+
+    return [...byTarget.values()]
+      .sort((a, b) => b.score - a.score || b.count - a.count)
+      .slice(0, limit);
+  } catch (err) {
+    console.error("[lore] nextPickSegues failed", fromMbid, err);
+    return [];
+  }
+}
+
+/**
+ * Unified "what plays next": radio-spin segues and ordered-pick segues merged
+ * onto one surface, keyed by target song. A track that appears in both keeps
+ * its station AND picker attribution and its scores sum, so DJ practice and
+ * curatorial sequence reinforce each other. Ranked by combined score.
+ */
+export async function nextRideable(
+  fromMbid: string,
+  limit = 10,
+): Promise<SegueNext[]> {
+  const [spinNext, pickNext] = await Promise.all([
+    nextSegues(fromMbid, limit * 2),
+    nextPickSegues(fromMbid, limit * 2),
+  ]);
+
+  const byTarget = new Map<string, SegueNext>();
+  for (const n of [...spinNext, ...pickNext]) {
+    const existing = byTarget.get(n.mbid);
+    if (!existing) {
+      byTarget.set(n.mbid, { ...n });
+      continue;
+    }
+    existing.count += n.count;
+    existing.score += n.score;
+    for (const s of n.stations) {
+      if (!existing.stations.some((x) => x.slug === s.slug)) {
+        existing.stations.push(s);
+      }
+    }
+    if (n.pickers?.length) {
+      existing.pickers = existing.pickers ?? [];
+      for (const p of n.pickers) {
+        if (!existing.pickers.some((x) => x.handle === p.handle)) {
+          existing.pickers.push(p);
+        }
+      }
+    }
+  }
+
+  return [...byTarget.values()]
+    .sort((a, b) => b.score - a.score || b.count - a.count)
+    .slice(0, limit);
 }
 
 /** Recent spins of a recording, with station + show/DJ attribution. */

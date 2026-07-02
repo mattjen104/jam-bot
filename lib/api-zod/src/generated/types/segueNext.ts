@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { SeguePickerRef } from "./seguePickerRef";
 import type { StationRef } from "./stationRef";
 
 /**
@@ -19,4 +20,6 @@ export interface SegueNext {
   count: number;
   score: number;
   stations: StationRef[];
+  /** Pickers whose ordered list (label release, ranked list, event lineup) places this song right after the queried one. Present only for pick-derived segue edges. */
+  pickers?: SeguePickerRef[];
 }

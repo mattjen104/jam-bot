@@ -1,5 +1,6 @@
 import { db, stationsTable, type InsertStation } from "@workspace/db";
 import { sql } from "drizzle-orm";
+import { upsertPicker } from "./picks.js";
 
 /**
  * Curated seed of high-quality, real radio stations. A smaller reliable set
@@ -99,5 +100,121 @@ export async function seedStations(): Promise<void> {
           updatedAt: sql`now()`,
         },
       });
+  }
+}
+
+/**
+ * Wedge labels — the trusted independent rosters whose catalogues are exactly
+ * the obscure music radio never touches. We register each as a `label` picker
+ * (the taste-source registry) with its verified home page; we deliberately do
+ * NOT hardcode MusicBrainz label MBIDs (an inaccurate MBID would poison the
+ * spine — "never fabricate"). Catalogue ingest is admin-triggered via
+ * POST /admin/labels with a verified MBID, which reuses the same picker by
+ * handle. Idempotent — safe on every boot.
+ */
+const SEED_LABEL_PICKERS = [
+  {
+    handle: "rise-above-records",
+    name: "Rise Above Records",
+    homeUrl: "https://riseaboverecords.com",
+  },
+  {
+    handle: "relapse-records",
+    name: "Relapse Records",
+    homeUrl: "https://www.relapse.com",
+  },
+  {
+    handle: "sacred-bones-records",
+    name: "Sacred Bones Records",
+    homeUrl: "https://sacredbonesrecords.com",
+  },
+  {
+    handle: "thrill-jockey",
+    name: "Thrill Jockey",
+    homeUrl: "https://www.thrilljockey.com",
+  },
+  {
+    handle: "rvng-intl",
+    name: "RVNG Intl.",
+    homeUrl: "https://rvngintl.com",
+  },
+  {
+    handle: "sargent-house",
+    name: "Sargent House",
+    homeUrl: "https://sargenthouse.com",
+  },
+  {
+    handle: "profound-lore-records",
+    name: "Profound Lore Records",
+    homeUrl: "https://profoundlorerecords.com",
+  },
+  {
+    handle: "southern-lord",
+    name: "Southern Lord",
+    homeUrl: "https://southernlord.com",
+  },
+] as const;
+
+/**
+ * Wedge blog pickers — long-running music blogs with public RSS feeds. Seeded
+ * with their feed URL in `sourceRef` so the blog poller can ride them; ingest is
+ * best-effort and conservative (only confidently-parsed "Artist – Track" posts
+ * become picks, feed body text is never stored). A feed that moves or 404s just
+ * logs and is skipped, so a stale URL never harms boot or the spine.
+ */
+const SEED_BLOG_PICKERS = [
+  {
+    handle: "stereogum",
+    name: "Stereogum",
+    homeUrl: "https://www.stereogum.com",
+    feedUrl: "https://www.stereogum.com/feed/",
+  },
+  {
+    handle: "gorilla-vs-bear",
+    name: "Gorilla vs. Bear",
+    homeUrl: "https://www.gorillavsbear.net",
+    feedUrl: "https://www.gorillavsbear.net/feed/",
+  },
+  {
+    handle: "brooklyn-vegan",
+    name: "BrooklynVegan",
+    homeUrl: "https://www.brooklynvegan.com",
+    feedUrl: "https://www.brooklynvegan.com/feed/",
+  },
+] as const;
+
+/**
+ * Register the wedge label pickers. Best-effort — a failure here logs but never
+ * takes boot down (and needs no network: it only writes the registry rows).
+ */
+export async function seedPickers(): Promise<void> {
+  for (const l of SEED_LABEL_PICKERS) {
+    try {
+      await upsertPicker({
+        pickerType: "label",
+        name: l.name,
+        handle: l.handle,
+        homeUrl: l.homeUrl,
+        trustTier: 1,
+        description: `Rideable roster — releases on ${l.name}. Catalogue ingest pending a verified MusicBrainz MBID.`,
+      });
+    } catch (err) {
+      console.error("[lore] seedPickers failed for", l.handle, err);
+    }
+  }
+  for (const b of SEED_BLOG_PICKERS) {
+    try {
+      await upsertPicker({
+        pickerType: "blog",
+        name: b.name,
+        handle: b.handle,
+        homeUrl: b.homeUrl,
+        trustTier: 2,
+        sourceRef: { feedUrl: b.feedUrl },
+        description: `Championed on ${b.name} — tracks it writes up become rideable picks.`,
+      });
+    } catch (err) {
+      console.error("[lore] seedPickers failed for", b.handle, err);
+    }
   }
 }

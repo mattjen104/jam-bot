@@ -376,6 +376,23 @@ export const GetRecordingSeguesResponse = zod.object({
             })
             .describe("A station reference used in spin\/segue attribution."),
         ),
+        pickers: zod
+          .array(
+            zod
+              .object({
+                name: zod.string(),
+                handle: zod.string(),
+                pickerType: zod.string(),
+                trustTier: zod.number(),
+              })
+              .describe(
+                "A picker reference used in pick-derived segue attribution.",
+              ),
+          )
+          .optional()
+          .describe(
+            "Pickers whose ordered list (label release, ranked list, event lineup) places this song right after the queried one. Present only for pick-derived segue edges.",
+          ),
       })
       .describe("A song observed playing after the queried recording."),
   ),
@@ -405,3 +422,223 @@ export const CreateManualSpinBody = zod
     durationMs: zod.number().optional(),
   })
   .describe("Admin manual\/historical spin entry.");
+
+/**
+ * The trusted taste sources Lore rides beyond radio DJs. A DJ is one picker type; this lists the rest (and any DJ-typed pickers), so a client can browse who is doing the picking.
+
+ * @summary All active pickers (labels, blogs, curators, collectors, events)
+ */
+export const ListPickersResponse = zod.object({
+  pickers: zod.array(
+    zod
+      .object({
+        id: zod.number(),
+        pickerType: zod.enum([
+          "dj",
+          "label",
+          "blog",
+          "curator",
+          "collector",
+          "event",
+        ]),
+        name: zod.string(),
+        handle: zod.string(),
+        homeUrl: zod.string().nullish(),
+        trustTier: zod.number(),
+        description: zod.string().nullish(),
+        active: zod.boolean(),
+      })
+      .describe(
+        "A trusted taste source (label, blog, curator, collector, event, DJ).",
+      ),
+  ),
+});
+
+/**
+ * Source-agnostic fallback ladder. Returns the strongest available human attribution for a recording — DJ spin, then label, then blog/curator, then collector/event, then artist-level — and stops there. Lore never falls through to algorithmic similar-tracks: when no human has picked the track it returns an empty rung with a "be the first" invitation.
+
+ * @summary Strongest human attribution for a track (entry-flow ladder)
+ */
+
+export const GetRecordingEntryParams = zod.object({
+  mbid: zod.coerce.string().min(1),
+});
+
+export const GetRecordingEntryResponse = zod
+  .object({
+    rung: zod.enum([
+      "dj",
+      "label",
+      "blog",
+      "curator",
+      "collector",
+      "event",
+      "artist",
+      "scene",
+      "empty",
+    ]),
+    framing: zod.string(),
+    picks: zod.array(
+      zod
+        .object({
+          source: zod.string(),
+          pickerType: zod.string(),
+          pickerName: zod.string(),
+          pickerHandle: zod.string(),
+          trustTier: zod.number(),
+          mbid: zod.string().nullish(),
+          artistMbid: zod.string().nullish(),
+          context: zod.string().nullish(),
+          sourceUrl: zod.string().nullish(),
+          confidence: zod.string(),
+          pickedAt: zod.string().nullish(),
+        })
+        .describe("One attributed pick surfaced by the entry-flow ladder."),
+    ),
+    invitation: zod
+      .union([
+        zod
+          .object({
+            message: zod.string(),
+            seedSource: zod.enum(["user_seed"]),
+          })
+          .describe(
+            'The \"be the first\" invitation returned on the empty rung.',
+          ),
+        zod.null(),
+      ])
+      .optional(),
+  })
+  .describe("The strongest rung of human attribution found for a recording.");
+
+/**
+ * Create or update a picker (label, blog, curator, collector, event), idempotent by handle. Guarded by the `x-admin-token` header matching the LORE_ADMIN_TOKEN env var; returns 503 when unconfigured.
+
+ * @summary Admin-only create/update of a picker
+ */
+export const UpsertPickerHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const UpsertPickerBody = zod
+  .object({
+    pickerType: zod.enum([
+      "dj",
+      "label",
+      "blog",
+      "curator",
+      "collector",
+      "event",
+    ]),
+    name: zod.string().min(1),
+    handle: zod.string().optional(),
+    homeUrl: zod.string().optional(),
+    trustTier: zod.number().optional(),
+    description: zod.string().optional(),
+  })
+  .describe("Admin create\/update of a picker, idempotent by handle.");
+
+/**
+ * Log a whole tracklist against an existing picker — the generic write path behind curator lists and event lineups. Ordered lists form rideable edges; unordered lists are ridden as a set. Every entry is logged even when it resolves only approximately. Token-guarded.
+
+ * @summary Admin-only tracklist ingest for a picker (curator lists, lineups)
+ */
+
+export const LogTracklistParams = zod.object({
+  handle: zod.coerce.string().min(1),
+});
+
+export const LogTracklistHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const LogTracklistBody = zod
+  .object({
+    source: zod.enum(["curator_list", "event_lineup", "user_seed"]),
+    ordered: zod
+      .boolean()
+      .optional()
+      .describe("When true, entries form rideable edges via an ordinal."),
+    sourceUrl: zod.string().optional(),
+    context: zod.string().optional(),
+    entries: zod.array(
+      zod
+        .object({
+          artist: zod.string().min(1),
+          title: zod.string().min(1),
+          recordingId: zod.string().optional(),
+          isrc: zod.string().optional(),
+          sourceUrl: zod.string().optional(),
+          context: zod.string().optional(),
+          externalId: zod.string().optional(),
+        })
+        .describe("One entry in an admin-supplied tracklist."),
+    ),
+  })
+  .describe("A curator list or event lineup logged against a picker.");
+
+/**
+ * Create a label picker and log a pick for every recording MusicBrainz reports on the label's releases (recording-id confidence, no text resolution). One MusicBrainz request, honoring the 1 req/sec budget. Token-guarded.
+
+ * @summary Admin-only label seed by MusicBrainz MBID
+ */
+export const SeedLabelHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const SeedLabelBody = zod
+  .object({
+    labelMbid: zod.string().min(1),
+    name: zod.string().optional(),
+    homeUrl: zod.string().optional(),
+  })
+  .describe("Seed a label picker from a MusicBrainz label MBID.");
+
+/**
+ * Poll a tastemaker RSS/Atom feed and log a pick per post that yields a confident artist/track match. Only the resolved pick and a link to the exact post are stored — never the post body. Posts with no confident match are skipped. Token-guarded.
+
+ * @summary Admin-only blog/critic RSS ingest
+ */
+export const IngestBlogHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const IngestBlogBody = zod
+  .object({
+    feedUrl: zod.string().min(1),
+    name: zod.string().min(1),
+    homeUrl: zod.string().optional(),
+  })
+  .describe("Ingest a blog\/critic RSS feed as a picker.");
+
+/**
+ * Ingest a public Discogs list via the Discogs API and log a pick per catalogued item, resolving "Artist - Title" where possible and logging unresolved otherwise. Token-guarded.
+
+ * @summary Admin-only Discogs list ingest (collector)
+ */
+export const IngestDiscogsListHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const IngestDiscogsListBody = zod
+  .object({
+    listId: zod.string().min(1),
+    name: zod.string().optional(),
+  })
+  .describe("Ingest a public Discogs list as a collector picker.");
+
+/**
+ * Register a RateYourMusic list as a link-out-only picker. RYM forbids scraping, so no items are ingested — only the picker and its home link are stored, so the entry flow can point listeners at it without touching RYM. Token-guarded.
+
+ * @summary Admin-only RateYourMusic link-out picker
+ */
+export const AddRymListHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const AddRymListBody = zod
+  .object({
+    name: zod.string().min(1),
+    url: zod.string().min(1),
+  })
+  .describe("Register a RateYourMusic list as a link-out-only picker.");
