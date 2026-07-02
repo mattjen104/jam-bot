@@ -16,6 +16,8 @@ export interface StationRunSummary {
   date: string;
   show?: ShowRef | null;
   spinCount: number;
+  /** Spins resolved to the MBID spine (replayable tracks). */
+  resolvedCount: number;
   startedAt: string;
   endedAt: string;
 }

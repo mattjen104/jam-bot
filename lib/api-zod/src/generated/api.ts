@@ -557,6 +557,9 @@ export const GetStationArchiveResponse = zod.object({
           ])
           .optional(),
         spinCount: zod.number(),
+        resolvedCount: zod
+          .number()
+          .describe("Spins resolved to the MBID spine (replayable tracks)."),
         startedAt: zod.string(),
         endedAt: zod.string(),
       })
@@ -601,6 +604,9 @@ export const GetStationRunResponse = zod.object({
         ])
         .optional(),
       spinCount: zod.number(),
+      resolvedCount: zod
+        .number()
+        .describe("Spins resolved to the MBID spine (replayable tracks)."),
       startedAt: zod.string(),
       endedAt: zod.string(),
     })
@@ -692,6 +698,9 @@ export const GetPickerArchiveResponse = zod.object({
           .nullish()
           .describe("When the picker documented this run (broadcast date)."),
         trackCount: zod.number(),
+        resolvedCount: zod
+          .number()
+          .describe("Picks resolved to the MBID spine (replayable tracks)."),
       })
       .describe(
         "One documented picker run — all picks sharing one source URL (an NTS episode page, a list, a post), replayed in documented order.",
@@ -743,6 +752,9 @@ export const GetPickerRunResponse = zod.object({
         .nullish()
         .describe("When the picker documented this run (broadcast date)."),
       trackCount: zod.number(),
+      resolvedCount: zod
+        .number()
+        .describe("Picks resolved to the MBID spine (replayable tracks)."),
     })
     .describe(
       "One documented picker run — all picks sharing one source URL (an NTS episode page, a list, a post), replayed in documented order.",
@@ -782,6 +794,49 @@ export const GetPickerRunResponse = zod.object({
       })
       .describe(
         "One slot of an archived run, in documented order. `recording` is null when the track never resolved to the spine (raw metadata preserved — the honesty gradient stays visible even in replay).",
+      ),
+  ),
+});
+
+/**
+ * Observability for the archive: per-station depth (oldest documented spin, backfill progress) and per-picker run counts, each with resolved vs. total track counts so "how good is ghost radio" is answerable at a glance.
+
+ * @summary How deep the ghost radio archive goes, per source
+ */
+export const GetArchiveCoverageResponse = zod.object({
+  stations: zod.array(
+    zod
+      .object({
+        slug: zod.string(),
+        name: zod.string(),
+        spinCount: zod.number(),
+        resolvedCount: zod.number(),
+        oldestSpinAt: zod.string().nullable(),
+        newestSpinAt: zod.string().nullable(),
+        supportsBackfill: zod.boolean(),
+        backfillDone: zod.boolean(),
+        backfillCursor: zod
+          .string()
+          .nullable()
+          .describe("Where the backward walk currently stands, when digging."),
+      })
+      .describe(
+        "Archive depth for one station: how far back documented spins reach, how many resolved to the spine, and whether the deep backfill is still digging (`backfillDone=false` with a cursor means the walk is mid-way; no cursor means the source only supports live polling).",
+      ),
+  ),
+  pickers: zod.array(
+    zod
+      .object({
+        handle: zod.string(),
+        name: zod.string(),
+        runCount: zod.number(),
+        pickCount: zod.number(),
+        resolvedCount: zod.number(),
+        oldestPickedAt: zod.string().nullable(),
+        newestPickedAt: zod.string().nullable(),
+      })
+      .describe(
+        "Archive depth for one picker: documented runs (source-cited groups), total picks, and how many resolved to the spine.",
       ),
   ),
 });

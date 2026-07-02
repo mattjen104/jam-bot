@@ -471,6 +471,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /archive/coverage:
+    get:
+      operationId: getArchiveCoverage
+      tags: [archive]
+      summary: How deep the ghost radio archive goes, per source
+      description: >
+        Observability for the archive: per-station depth (oldest documented
+        spin, backfill progress) and per-picker run counts, each with resolved
+        vs. total track counts so "how good is ghost radio" is answerable at
+        a glance.
+      responses:
+        "200":
+          description: Per-source archive depth and resolution quality
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArchiveCoverage"
   /recordings/{mbid}/entry:
     get:
       operationId: getRecordingEntry
@@ -1458,6 +1475,9 @@ components:
             - type: "null"
         spinCount:
           type: integer
+        resolvedCount:
+          type: integer
+          description: Spins resolved to the MBID spine (replayable tracks).
         startedAt:
           type: string
         endedAt:
@@ -1466,6 +1486,7 @@ components:
         - runId
         - date
         - spinCount
+        - resolvedCount
         - startedAt
         - endedAt
     StationArchive:
@@ -1540,10 +1561,14 @@ components:
           description: When the picker documented this run (broadcast date).
         trackCount:
           type: integer
+        resolvedCount:
+          type: integer
+          description: Picks resolved to the MBID spine (replayable tracks).
       required:
         - runId
         - sourceUrl
         - trackCount
+        - resolvedCount
     PickerArchive:
       type: object
       properties:
@@ -1571,6 +1596,85 @@ components:
         - picker
         - run
         - tracks
+    StationCoverage:
+      type: object
+      description: >-
+        Archive depth for one station: how far back documented spins reach,
+        how many resolved to the spine, and whether the deep backfill is still
+        digging (`backfillDone=false` with a cursor means the walk is mid-way;
+        no cursor means the source only supports live polling).
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+        spinCount:
+          type: integer
+        resolvedCount:
+          type: integer
+        oldestSpinAt:
+          type: ["string", "null"]
+        newestSpinAt:
+          type: ["string", "null"]
+        supportsBackfill:
+          type: boolean
+        backfillDone:
+          type: boolean
+        backfillCursor:
+          type: ["string", "null"]
+          description: Where the backward walk currently stands, when digging.
+      required:
+        - slug
+        - name
+        - spinCount
+        - resolvedCount
+        - oldestSpinAt
+        - newestSpinAt
+        - supportsBackfill
+        - backfillDone
+        - backfillCursor
+    PickerCoverage:
+      type: object
+      description: >-
+        Archive depth for one picker: documented runs (source-cited groups),
+        total picks, and how many resolved to the spine.
+      properties:
+        handle:
+          type: string
+        name:
+          type: string
+        runCount:
+          type: integer
+        pickCount:
+          type: integer
+        resolvedCount:
+          type: integer
+        oldestPickedAt:
+          type: ["string", "null"]
+        newestPickedAt:
+          type: ["string", "null"]
+      required:
+        - handle
+        - name
+        - runCount
+        - pickCount
+        - resolvedCount
+        - oldestPickedAt
+        - newestPickedAt
+    ArchiveCoverage:
+      type: object
+      properties:
+        stations:
+          type: array
+          items:
+            $ref: "#/components/schemas/StationCoverage"
+        pickers:
+          type: array
+          items:
+            $ref: "#/components/schemas/PickerCoverage"
+      required:
+        - stations
+        - pickers
     SegueNext:
       type: object
       description: A song observed playing after the queried recording.

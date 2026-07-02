@@ -21,6 +21,7 @@ import {
   GetPickerArchiveResponse,
   GetPickerRunParams,
   GetPickerRunResponse,
+  GetArchiveCoverageResponse,
   GetRecordingEntryParams,
   GetRecordingEntryResponse,
   UpsertPickerBody,
@@ -57,6 +58,7 @@ import { seedLabelPicker } from "../../lore/label.js";
 import { ingestBlogFeed } from "../../lore/blog.js";
 import { ingestDiscogsList, addRymPicker } from "../../lore/collector.js";
 import { resolveEntry } from "../../lore/entry.js";
+import { supportsBackfill } from "../../lore/adapters.js";
 
 const router: IRouter = Router();
 
@@ -435,6 +437,7 @@ router.get("/stations/:slug/archive", async (req, res) => {
         date: spinDayExpr,
         showId: spinsTable.showId,
         spinCount: sql<number>`count(*)::int`,
+        resolvedCount: sql<number>`count(*) filter (where ${spinsTable.mbid} is not null)::int`,
         startedAt: sql<string>`min(${spinsTable.playedAt})`,
         endedAt: sql<string>`max(${spinsTable.playedAt})`,
         showName: showsTable.name,
@@ -454,6 +457,7 @@ router.get("/stations/:slug/archive", async (req, res) => {
         date: r.date,
         show: r.showName ? { name: r.showName, djName: r.djName ?? null } : null,
         spinCount: r.spinCount,
+        resolvedCount: r.resolvedCount,
         startedAt: new Date(r.startedAt).toISOString(),
         endedAt: new Date(r.endedAt).toISOString(),
       })),
@@ -542,6 +546,7 @@ router.get("/archive/station-runs/:runId", async (req, res) => {
           ? { name: first.showName, djName: first.djName ?? null }
           : null,
         spinCount: rows.length,
+        resolvedCount: rows.filter((r) => r.mbid != null).length,
         startedAt: first.playedAt.toISOString(),
         endedAt: last.playedAt.toISOString(),
       },
@@ -581,6 +586,7 @@ router.get("/pickers/:handle/archive", async (req, res) => {
         title: sql<string | null>`max(${picksTable.context})`,
         pickedAt: sql<string | null>`min(${picksTable.pickedAt})`,
         trackCount: sql<number>`count(*)::int`,
+        resolvedCount: sql<number>`count(*) filter (where ${picksTable.mbid} is not null)::int`,
       })
       .from(picksTable)
       .where(
@@ -601,6 +607,7 @@ router.get("/pickers/:handle/archive", async (req, res) => {
         sourceUrl: r.sourceUrl as string,
         pickedAt: r.pickedAt ? new Date(r.pickedAt).toISOString() : null,
         trackCount: r.trackCount,
+        resolvedCount: r.resolvedCount,
       })),
     });
     return res.json(data);
@@ -680,6 +687,7 @@ router.get("/archive/picker-runs/:runId", async (req, res) => {
         sourceUrl: anchor.sourceUrl,
         pickedAt: pickedAt ? pickedAt.toISOString() : null,
         trackCount: rows.length,
+        resolvedCount: rows.filter((r) => r.mbid != null).length,
       },
       tracks: rows.map((r, i) => ({
         position: r.ordinal ?? i,
@@ -694,6 +702,87 @@ router.get("/archive/picker-runs/:runId", async (req, res) => {
   } catch (err) {
     console.error("[lore] picker run failed", err);
     return res.status(503).json({ error: "Could not load run" });
+  }
+});
+
+// GET /api/archive/coverage — how deep the archive goes, per source. This is
+// the observability surface the spec asks for: "how good is ghost radio" must
+// be answerable at a glance (depth reached, backfill progress, resolution rate).
+router.get("/archive/coverage", async (_req, res) => {
+  try {
+    const stationRows = await db
+      .select({
+        slug: stationsTable.slug,
+        name: stationsTable.name,
+        source: stationsTable.nowPlayingSource,
+        backfillDone: stationsTable.backfillDone,
+        backfillCursor: stationsTable.backfillCursor,
+        spinCount: sql<number>`count(${spinsTable.id})::int`,
+        resolvedCount: sql<number>`count(*) filter (where ${spinsTable.mbid} is not null)::int`,
+        oldestSpinAt: sql<string | null>`min(${spinsTable.playedAt})`,
+        newestSpinAt: sql<string | null>`max(${spinsTable.playedAt})`,
+      })
+      .from(stationsTable)
+      .leftJoin(spinsTable, eq(spinsTable.stationId, stationsTable.id))
+      .groupBy(
+        stationsTable.id,
+        stationsTable.slug,
+        stationsTable.name,
+        stationsTable.nowPlayingSource,
+        stationsTable.backfillDone,
+        stationsTable.backfillCursor,
+      )
+      .orderBy(sql`count(${spinsTable.id}) desc`);
+
+    const pickerRows = await db
+      .select({
+        handle: pickersTable.handle,
+        name: pickersTable.name,
+        runCount: sql<number>`count(distinct ${picksTable.sourceUrl}) filter (where ${picksTable.sourceUrl} is not null)::int`,
+        pickCount: sql<number>`count(${picksTable.id})::int`,
+        resolvedCount: sql<number>`count(*) filter (where ${picksTable.mbid} is not null)::int`,
+        oldestPickedAt: sql<string | null>`min(${picksTable.pickedAt})`,
+        newestPickedAt: sql<string | null>`max(${picksTable.pickedAt})`,
+      })
+      .from(pickersTable)
+      .innerJoin(picksTable, eq(picksTable.pickerId, pickersTable.id))
+      .groupBy(pickersTable.id, pickersTable.handle, pickersTable.name)
+      .orderBy(sql`count(${picksTable.id}) desc`);
+
+    const data = GetArchiveCoverageResponse.parse({
+      stations: stationRows.map((r) => ({
+        slug: r.slug,
+        name: r.name,
+        spinCount: r.spinCount,
+        resolvedCount: r.resolvedCount,
+        oldestSpinAt: r.oldestSpinAt
+          ? new Date(r.oldestSpinAt).toISOString()
+          : null,
+        newestSpinAt: r.newestSpinAt
+          ? new Date(r.newestSpinAt).toISOString()
+          : null,
+        supportsBackfill: supportsBackfill(r.source),
+        backfillDone: r.backfillDone,
+        backfillCursor: r.backfillCursor ?? null,
+      })),
+      pickers: pickerRows.map((r) => ({
+        handle: r.handle,
+        name: r.name,
+        runCount: r.runCount,
+        pickCount: r.pickCount,
+        resolvedCount: r.resolvedCount,
+        oldestPickedAt: r.oldestPickedAt
+          ? new Date(r.oldestPickedAt).toISOString()
+          : null,
+        newestPickedAt: r.newestPickedAt
+          ? new Date(r.newestPickedAt).toISOString()
+          : null,
+      })),
+    });
+    return res.json(data);
+  } catch (err) {
+    console.error("[lore] archive coverage failed", err);
+    return res.status(503).json({ error: "Could not load coverage" });
   }
 });
 

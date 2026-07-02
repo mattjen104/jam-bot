@@ -2,15 +2,18 @@ import { Link } from "wouter";
 import {
   useListStations,
   useListPickers,
+  useGetArchiveCoverage,
 } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
-import { ArrowLeft, ArrowUpRight, Ghost, Radio, Users } from "lucide-react";
+import { runDate } from "../lib/format";
+import { ArrowLeft, ArrowUpRight, Gauge, Ghost, Radio, Users } from "lucide-react";
 
 /** The ghost radio hub: every archive you can replay, by picker. */
 export default function Archive() {
   const { ride, radio } = usePlayer();
   const { data: stationsData, isLoading: stationsLoading } = useListStations();
   const { data: pickersData, isLoading: pickersLoading } = useListPickers();
+  const { data: coverage } = useGetArchiveCoverage();
 
   const stations = stationsData?.stations ?? [];
   const pickers = (pickersData?.pickers ?? []).filter((p) => p.active);
@@ -42,6 +45,66 @@ export default function Archive() {
             order. Real sequences from real people, never an algorithm.
           </p>
         </header>
+
+        {coverage ? (
+          <section
+            className="mb-10 rounded-xl border border-card-border bg-card p-4"
+            data-testid="archive-coverage"
+          >
+            <h2 className="mb-3 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] text-primary">
+              <Gauge className="h-4 w-4" />
+              How deep the vault goes
+            </h2>
+            <ul className="flex flex-col gap-1.5">
+              {coverage.stations
+                .filter((s) => s.spinCount > 0)
+                .map((s) => (
+                  <li
+                    key={s.slug}
+                    className="font-mono text-[11px] text-muted-foreground"
+                    data-testid={`coverage-station-${s.slug}`}
+                  >
+                    <span className="text-foreground">{s.name}</span>
+                    {s.oldestSpinAt
+                      ? ` · back to ${runDate(s.oldestSpinAt)}`
+                      : ""}
+                    {" · "}
+                    {s.spinCount.toLocaleString()} spins ·{" "}
+                    <span className="text-primary">
+                      {Math.round((s.resolvedCount / s.spinCount) * 100)}%
+                      resolved
+                    </span>
+                    {s.supportsBackfill
+                      ? s.backfillDone
+                        ? " · backfill complete"
+                        : " · still digging back"
+                      : ""}
+                  </li>
+                ))}
+              {coverage.pickers
+                .filter((p) => p.pickCount > 0)
+                .map((p) => (
+                  <li
+                    key={p.handle}
+                    className="font-mono text-[11px] text-muted-foreground"
+                    data-testid={`coverage-picker-${p.handle}`}
+                  >
+                    <span className="text-foreground">{p.name}</span>
+                    {p.oldestPickedAt
+                      ? ` · back to ${runDate(p.oldestPickedAt)}`
+                      : ""}
+                    {" · "}
+                    {p.runCount} run{p.runCount === 1 ? "" : "s"} ·{" "}
+                    {p.pickCount.toLocaleString()} picks ·{" "}
+                    <span className="text-primary">
+                      {Math.round((p.resolvedCount / p.pickCount) * 100)}%
+                      resolved
+                    </span>
+                  </li>
+                ))}
+            </ul>
+          </section>
+        ) : null}
 
         <section className="mb-10">
           <h2 className="mb-4 flex items-center gap-2 font-serif text-xl font-semibold text-foreground">

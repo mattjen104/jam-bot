@@ -72,7 +72,14 @@ export default function StationArchive() {
                         </p>
                         <p className="truncate font-mono text-[11px] text-muted-foreground">
                           {runDate(r.date)} · {r.spinCount} track
-                          {r.spinCount === 1 ? "" : "s"}
+                          {r.spinCount === 1 ? "" : "s"} ·{" "}
+                          <span
+                            className={
+                              r.resolvedCount > 0 ? "text-primary" : ""
+                            }
+                          >
+                            {r.resolvedCount}/{r.spinCount} resolved
+                          </span>
                         </p>
                       </div>
                       <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground" />

@@ -18,6 +18,7 @@ import type {
 
 import type {
   ApiError,
+  ArchiveCoverage,
   BlogIngestRequest,
   DiscogsListRequest,
   EntryResult,
@@ -1458,6 +1459,83 @@ export function useGetPickerRun<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetPickerRunQueryOptions(runId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Observability for the archive: per-station depth (oldest documented spin, backfill progress) and per-picker run counts, each with resolved vs. total track counts so "how good is ghost radio" is answerable at a glance.
+
+ * @summary How deep the ghost radio archive goes, per source
+ */
+export const getGetArchiveCoverageUrl = () => {
+  return `/api/archive/coverage`;
+};
+
+export const getArchiveCoverage = async (
+  options?: RequestInit,
+): Promise<ArchiveCoverage> => {
+  return customFetch<ArchiveCoverage>(getGetArchiveCoverageUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetArchiveCoverageQueryKey = () => {
+  return [`/api/archive/coverage`] as const;
+};
+
+export const getGetArchiveCoverageQueryOptions = <
+  TData = Awaited<ReturnType<typeof getArchiveCoverage>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getArchiveCoverage>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetArchiveCoverageQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getArchiveCoverage>>
+  > = ({ signal }) => getArchiveCoverage({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getArchiveCoverage>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetArchiveCoverageQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getArchiveCoverage>>
+>;
+export type GetArchiveCoverageQueryError = ErrorType<unknown>;
+
+/**
+ * @summary How deep the ghost radio archive goes, per source
+ */
+
+export function useGetArchiveCoverage<
+  TData = Awaited<ReturnType<typeof getArchiveCoverage>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getArchiveCoverage>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetArchiveCoverageQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

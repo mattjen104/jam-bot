@@ -360,6 +360,8 @@ export interface StationRunSummary {
   date: string;
   show?: ShowRef | null;
   spinCount: number;
+  /** Spins resolved to the MBID spine (replayable tracks). */
+  resolvedCount: number;
   startedAt: string;
   endedAt: string;
 }
@@ -415,6 +417,8 @@ export interface PickerRunSummary {
    */
   pickedAt?: string | null;
   trackCount: number;
+  /** Picks resolved to the MBID spine (replayable tracks). */
+  resolvedCount: number;
 }
 
 export type PickerPickerType =
@@ -454,6 +458,47 @@ export interface PickerRunDetail {
   picker: Picker;
   run: PickerRunSummary;
   tracks: ArchiveTrack[];
+}
+
+/**
+ * Archive depth for one station: how far back documented spins reach, how many resolved to the spine, and whether the deep backfill is still digging (`backfillDone=false` with a cursor means the walk is mid-way; no cursor means the source only supports live polling).
+ */
+export interface StationCoverage {
+  slug: string;
+  name: string;
+  spinCount: number;
+  resolvedCount: number;
+  /** @nullable */
+  oldestSpinAt: string | null;
+  /** @nullable */
+  newestSpinAt: string | null;
+  supportsBackfill: boolean;
+  backfillDone: boolean;
+  /**
+   * Where the backward walk currently stands, when digging.
+   * @nullable
+   */
+  backfillCursor: string | null;
+}
+
+/**
+ * Archive depth for one picker: documented runs (source-cited groups), total picks, and how many resolved to the spine.
+ */
+export interface PickerCoverage {
+  handle: string;
+  name: string;
+  runCount: number;
+  pickCount: number;
+  resolvedCount: number;
+  /** @nullable */
+  oldestPickedAt: string | null;
+  /** @nullable */
+  newestPickedAt: string | null;
+}
+
+export interface ArchiveCoverage {
+  stations: StationCoverage[];
+  pickers: PickerCoverage[];
 }
 
 /**

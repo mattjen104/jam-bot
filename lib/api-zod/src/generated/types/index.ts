@@ -7,6 +7,7 @@
  */
 
 export * from "./apiError";
+export * from "./archiveCoverage";
 export * from "./archiveTrack";
 export * from "./archiveTrackConfidence";
 export * from "./artistCatalogue";
@@ -34,6 +35,7 @@ export * from "./nowPlayingRecording";
 export * from "./oEmbed";
 export * from "./picker";
 export * from "./pickerArchive";
+export * from "./pickerCoverage";
 export * from "./pickerList";
 export * from "./pickerPickerType";
 export * from "./pickerRunDetail";
@@ -64,6 +66,7 @@ export * from "./spotifyPlayResultMatchSource";
 export * from "./spotifyStatus";
 export * from "./station";
 export * from "./stationArchive";
+export * from "./stationCoverage";
 export * from "./stationList";
 export * from "./stationNowPlaying";
 export * from "./stationRef";

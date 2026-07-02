@@ -23,4 +23,6 @@ export interface PickerRunSummary {
    */
   pickedAt?: string | null;
   trackCount: number;
+  /** Picks resolved to the MBID spine (replayable tracks). */
+  resolvedCount: number;
 }
