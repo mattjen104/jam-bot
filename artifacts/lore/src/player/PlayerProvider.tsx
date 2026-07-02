@@ -131,6 +131,11 @@ export interface RideApi {
    * playback fell back: broadcast stream (live) or 30s preview (past/curated).
    */
   fallbackUsed: boolean;
+  /**
+   * True when the fallback was triggered because the listener's Spotify device
+   * went offline mid-session (vs. the track simply not being on Spotify).
+   */
+  deviceLost: boolean;
   start: (seed: RideSeed, opts?: StartRideOpts) => void;
   /** Play a documented run as it aired: a fixed queue, no lookahead. */
   startReplay: (
@@ -218,7 +223,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
      * single blip (Spotify's own gapless transition, flaky snapshot) never
      * skips a track early. */
     endedPolls: number;
+    /** Consecutive polls where the device never confirmed playing (sawPlaying
+     * still false). After the threshold we treat the device as lost and fall
+     * back rather than stalling in "loading" indefinitely. */
+    noDevicePolls: number;
   } | null>(null);
+  // MBIDs where the fallback was triggered by a lost device (not a missing
+  // track) — used to show a distinct "device lost" message in the UI.
+  const spotifyDeviceLostRef = useRef<Set<string>>(new Set());
   // MBID currently being commanded, so effect re-runs never double-play.
   const spotifyCommandingRef = useRef<string | null>(null);
   // Tracks that failed on Spotify this ride — they fall back to previews.
@@ -263,6 +275,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     spotifyCommandingRef.current = null;
     spotifyPausedRef.current = false;
     spotifyFailedRef.current.clear();
+    spotifyDeviceLostRef.current.clear();
     sourceRef.current = null;
     setSource(null);
     setActive(false);
@@ -286,6 +299,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       spotifyCommandingRef.current = null;
       spotifyPausedRef.current = false;
       spotifyFailedRef.current.clear();
+      spotifyDeviceLostRef.current.clear();
       sourceRef.current = null;
       liveStationSlugRef.current = opts?.stationSlug ?? null;
       setSource(null);
@@ -329,6 +343,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       spotifyCommandingRef.current = null;
       spotifyPausedRef.current = false;
       spotifyFailedRef.current.clear();
+      spotifyDeviceLostRef.current.clear();
       sourceRef.current = null;
       liveStationSlugRef.current = null;
       setSource(null);
@@ -417,6 +432,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     // Switching to service-ride: clear failed set so tracks get a fresh attempt.
     if (newMode === "resolve_to_service") {
       spotifyFailedRef.current.clear();
+      spotifyDeviceLostRef.current.clear();
       setSpotifyFallbackTick(0);
       // Ensure audio element is silenced so Spotify can take over.
       const el = audioRef.current;
@@ -493,6 +509,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     !!currentMbid &&
     spotifyFailedRef.current.has(currentMbid);
 
+  // Whether the fallback was triggered by a lost device (vs. track missing on Spotify).
+  const deviceLost =
+    playbackMode === "resolve_to_service" &&
+    !!currentMbid &&
+    spotifyDeviceLostRef.current.has(currentMbid);
+
   // For live+service-ride, advances come from the station now-playing poll, not
   // Spotify's playback-end signal. Read in the Spotify poll interval via ref.
   const isLiveSvcRide = isLiveServiceRide(playbackMode, timeOrientation);
@@ -530,6 +552,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           uri: res.trackUri,
           sawPlaying: false,
           endedPolls: 0,
+          noDevicePolls: 0,
         };
         setStatus("playing");
       })
@@ -582,7 +605,21 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             setStatus("playing");
             return;
           }
-          if (!cur.sawPlaying) return; // still spinning up
+          if (!cur.sawPlaying) {
+            // Device hasn't confirmed playback yet. Count the poll and, after
+            // the threshold (~15 s), treat the device as lost: fall back for
+            // this track so the ride isn't silently stuck in "loading".
+            cur.noDevicePolls += 1;
+            const DEVICE_LOST_POLLS = 5; // 5 × 3 s = 15 s
+            if (cur.noDevicePolls < DEVICE_LOST_POLLS) return;
+            spotifyFailedRef.current.add(currentMbid);
+            spotifyDeviceLostRef.current.add(currentMbid);
+            spotifyNowRef.current = null;
+            sourceRef.current = null;
+            setSource(null);
+            setSpotifyFallbackTick((t) => t + 1);
+            return;
+          }
 
           if (!ours && st.active && st.isPlaying) {
             // The listener started something else: they took the wheel — the
@@ -879,6 +916,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         timeOrientation,
         playbackMode,
         fallbackUsed,
+        deviceLost,
         start,
         startReplay,
         stop,
@@ -909,6 +947,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       timeOrientation,
       playbackMode,
       fallbackUsed,
+      deviceLost,
       start,
       startReplay,
       stop,

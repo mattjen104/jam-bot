@@ -107,9 +107,13 @@ export function RideBar({
                   data-testid="ride-fallback-indicator"
                 >
                   <AlertTriangle className="h-3.5 w-3.5" />
-                  {ride.timeOrientation === "live"
-                    ? "Unavailable on Spotify · listening to broadcast"
-                    : "Unavailable on Spotify · playing preview"}
+                  {ride.deviceLost
+                    ? ride.timeOrientation === "live"
+                      ? "Spotify device lost · listening to broadcast"
+                      : "Spotify device lost · playing preview"
+                    : ride.timeOrientation === "live"
+                      ? "Unavailable on Spotify · listening to broadcast"
+                      : "Unavailable on Spotify · playing preview"}
                 </span>
               ) : (
                 <span className="font-mono text-[11px] text-muted-foreground">
