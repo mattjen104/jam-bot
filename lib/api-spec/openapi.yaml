@@ -536,6 +536,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ArchiveCoverage"
+  /recordings/{mbid}/lyrics:
+    get:
+      operationId: getRecordingLyrics
+      tags: [recordings]
+      summary: Synced lyric lines for a recording (LRCLIB)
+      description: >
+        Returns time-indexed lyric lines from LRCLIB. Each line carries an
+        offset_ms so the UI can highlight the active cue during playback.
+        Returns an empty lines array when LRCLIB has no synced version.
+        Fetched and cached on first request — subsequent calls are instant.
+      parameters:
+        - name: mbid
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Synced lyric lines (empty when unavailable)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecordingLyrics"
+        "404":
+          description: Recording not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /recordings/{mbid}/entry:
     get:
       operationId: getRecordingEntry
@@ -1571,6 +1601,33 @@ components:
             $ref: "#/components/schemas/StationPulse"
       required:
         - items
+    LyricLine:
+      type: object
+      description: >
+        One time-indexed lyric cue from a synced lyrics source (LRCLIB).
+        offset_ms is the millisecond offset from the start of the recording.
+      properties:
+        offsetMs:
+          type: integer
+          description: Milliseconds from the start of the recording.
+        text:
+          type: string
+          description: The lyric text for this cue.
+      required:
+        - offsetMs
+        - text
+    RecordingLyrics:
+      type: object
+      description: >
+        Synced lyric lines for a recording. lines is empty when LRCLIB has no
+        synced version for this track.
+      properties:
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/LyricLine"
+      required:
+        - lines
     TrackClaim:
       type: object
       description: >

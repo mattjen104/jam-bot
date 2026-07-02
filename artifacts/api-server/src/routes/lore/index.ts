@@ -27,6 +27,8 @@ import {
   GetArchiveCoverageResponse,
   GetRecordingEntryParams,
   GetRecordingEntryResponse,
+  GetRecordingLyricsParams,
+  GetRecordingLyricsResponse,
   UpsertPickerBody,
   LogTracklistParams,
   LogTracklistBody,
@@ -62,6 +64,7 @@ import { seedLabelPicker } from "../../lore/label.js";
 import { ingestBlogFeed } from "../../lore/blog.js";
 import { ingestDiscogsList, addRymPicker } from "../../lore/collector.js";
 import { resolveEntry } from "../../lore/entry.js";
+import { getLyrics } from "../../lore/lrclib.js";
 import { supportsBackfill, stationArchiveUrl } from "../../lore/adapters.js";
 import { enrichRecording } from "@workspace/song-enrichment";
 import { wireSongEnrichment } from "../../song/wire.js";
@@ -357,6 +360,28 @@ router.get("/recordings/:mbid/knowledge", async (req, res) => {
   } catch (err) {
     console.error("[lore] recording knowledge failed", err);
     return res.status(503).json({ error: "Could not load liner notes" });
+  }
+});
+
+// GET /api/recordings/:mbid/lyrics — synced lyric lines from LRCLIB
+router.get("/recordings/:mbid/lyrics", async (req, res) => {
+  const parsed = GetRecordingLyricsParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(404).json({ error: "Recording not found" });
+  }
+  try {
+    const [rec] = await db
+      .select({ mbid: recordingsTable.mbid })
+      .from(recordingsTable)
+      .where(eq(recordingsTable.mbid, parsed.data.mbid))
+      .limit(1);
+    if (!rec) return res.status(404).json({ error: "Recording not found" });
+
+    const lines = await getLyrics(rec.mbid);
+    return res.json(GetRecordingLyricsResponse.parse({ lines }));
+  } catch (err) {
+    console.error("[lore] recording lyrics failed", err);
+    return res.status(503).json({ error: "Could not load lyrics" });
   }
 });
 

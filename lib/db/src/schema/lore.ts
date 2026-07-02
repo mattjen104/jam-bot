@@ -474,3 +474,39 @@ export const trackClaimsTable = pgTable(
 
 export type TrackClaim = typeof trackClaimsTable.$inferSelect;
 export type InsertTrackClaim = typeof trackClaimsTable.$inferInsert;
+
+/**
+ * LRCLIB synced-lyric lines. Each row is one timed cue from an LRC file,
+ * keyed to the MBID spine. The timeline axis (offset_ms) is what makes this
+ * table structurally different from liner-note claims: it enables highlight-
+ * in-time during playback.
+ *
+ * A miss-sentinel row (offset_ms = -1) is stored when LRCLIB has no synced
+ * lyrics for an mbid, so the fetch is never retried on every page load.
+ *
+ * Policy: we store only the text of each line, never raw full-lyric prose
+ * beyond what is needed to render the currently active cue.
+ */
+export const lyricLinesTable = pgTable(
+  "lyric_lines",
+  {
+    id: serial("id").primaryKey(),
+    mbid: text("mbid")
+      .notNull()
+      .references(() => recordingsTable.mbid),
+    /** Millisecond offset from the start of the recording. -1 = miss sentinel. */
+    offsetMs: integer("offset_ms").notNull(),
+    /** The lyric text for this cue. Empty string for miss-sentinel rows. */
+    text: text("text").notNull(),
+    /** Source identifier, e.g. "lrclib". */
+    source: text("source").notNull().default("lrclib"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("lyric_lines_mbid_idx").on(t.mbid),
+    uniqueIndex("lyric_lines_mbid_offset_idx").on(t.mbid, t.offsetMs),
+  ],
+);
+
+export type LyricLineRow = typeof lyricLinesTable.$inferSelect;
+export type InsertLyricLineRow = typeof lyricLinesTable.$inferInsert;

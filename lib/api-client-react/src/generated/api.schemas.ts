@@ -330,6 +330,25 @@ export interface StationPulseList {
 }
 
 /**
+ * One time-indexed lyric cue from a synced lyrics source (LRCLIB). offset_ms is the millisecond offset from the start of the recording.
+
+ */
+export interface LyricLine {
+  /** Milliseconds from the start of the recording. */
+  offsetMs: number;
+  /** The lyric text for this cue. */
+  text: string;
+}
+
+/**
+ * Synced lyric lines for a recording. lines is empty when LRCLIB has no synced version for this track.
+
+ */
+export interface RecordingLyrics {
+  lines: LyricLine[];
+}
+
+/**
  * One grounded fact about a recording, extracted systematically from an official documentary source (e.g. a Classic Albums making-of clip). `sourceUrl` deep-links to the exact moment in the official source that supports the claim, so every fact is one tap from its evidence.
 
  */

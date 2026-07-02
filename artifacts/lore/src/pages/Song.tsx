@@ -9,6 +9,7 @@ import {
   type RecordingSpin,
   type SegueNext,
 } from "@workspace/api-client-react";
+import { LyricView } from "../components/LyricView";
 import { usePlayer } from "../player/PlayerProvider";
 import { DeepLinks } from "../components/NowPlaying";
 import { CONFIDENCE_LABEL } from "../lib/format";
@@ -181,6 +182,7 @@ export default function Song() {
             )}
 
             <EntryLadder entry={entry} artist={rec.artist} />
+            <LyricView mbid={rec.mbid} progressMs={ride.progressMs} />
             <Segues next={seguesData?.next ?? []} />
             <Spins spins={spinsData?.spins ?? []} />
           </>

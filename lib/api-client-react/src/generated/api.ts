@@ -35,6 +35,7 @@ import type {
   PickerList,
   PickerRunDetail,
   RecordingKnowledge,
+  RecordingLyrics,
   RecordingNode,
   RecordingPreview,
   RecordingSpins,
@@ -1709,6 +1710,96 @@ export function useGetArchiveCoverage<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetArchiveCoverageQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns time-indexed lyric lines from LRCLIB. Each line carries an offset_ms so the UI can highlight the active cue during playback. Returns an empty lines array when LRCLIB has no synced version. Fetched and cached on first request — subsequent calls are instant.
+
+ * @summary Synced lyric lines for a recording (LRCLIB)
+ */
+export const getGetRecordingLyricsUrl = (mbid: string) => {
+  return `/api/recordings/${mbid}/lyrics`;
+};
+
+export const getRecordingLyrics = async (
+  mbid: string,
+  options?: RequestInit,
+): Promise<RecordingLyrics> => {
+  return customFetch<RecordingLyrics>(getGetRecordingLyricsUrl(mbid), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetRecordingLyricsQueryKey = (mbid: string) => {
+  return [`/api/recordings/${mbid}/lyrics`] as const;
+};
+
+export const getGetRecordingLyricsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getRecordingLyrics>>,
+  TError = ErrorType<ApiError>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecordingLyrics>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetRecordingLyricsQueryKey(mbid);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getRecordingLyrics>>
+  > = ({ signal }) => getRecordingLyrics(mbid, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!mbid,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getRecordingLyrics>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetRecordingLyricsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getRecordingLyrics>>
+>;
+export type GetRecordingLyricsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Synced lyric lines for a recording (LRCLIB)
+ */
+
+export function useGetRecordingLyrics<
+  TData = Awaited<ReturnType<typeof getRecordingLyrics>>,
+  TError = ErrorType<ApiError>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecordingLyrics>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetRecordingLyricsQueryOptions(mbid, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

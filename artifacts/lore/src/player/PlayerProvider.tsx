@@ -107,6 +107,12 @@ export interface RideApi {
   seeking: boolean;
   /** No further attributed transition exists after the current track. */
   atTrailEnd: boolean;
+  /**
+   * Current playhead position in milliseconds — updated from the preview
+   * audio element (via timeupdate) or the Spotify poll (via progressMs).
+   * Null when not playing or when position is unknown.
+   */
+  progressMs: number | null;
   /** What is sounding right now: the listener's own Spotify (full track) or
    * the 30s preview element. Null before playback begins. */
   source: "spotify" | "preview" | null;
@@ -201,6 +207,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [source, setSource] = useState<"spotify" | "preview" | null>(null);
   const [mode, setMode] = useState<"trail" | "replay">("trail");
   const [replayLabel, setReplayLabel] = useState<string | null>(null);
+  const [progressMs, setProgressMs] = useState<number | null>(null);
   const [timeOrientation, setTimeOrientation] =
     useState<TimeOrientation>("curated");
   // Read from localStorage once on mount; default to 'passthrough' (safe).
@@ -218,6 +225,19 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const previewFetchingRef = useRef<Set<string>>(new Set());
   // Station slug for live-orientation rides — drives the now-playing subscription.
   const liveStationSlugRef = useRef<string | null>(null);
+
+  // Track preview playhead for lyric sync (fires ~4×/s from the audio element).
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    const onTimeUpdate = () => {
+      if (sourceRef.current === "preview") {
+        setProgressMs(Math.round(el.currentTime * 1000));
+      }
+    };
+    el.addEventListener("timeupdate", onTimeUpdate);
+    return () => el.removeEventListener("timeupdate", onTimeUpdate);
+  }, []); // audioRef.current is a singleton created during render — stable
 
   // --- Spotify full-track path (remote-controls the listener's own app) ----
   // What the ride commanded Spotify to play, so polls can tell "our track
@@ -629,6 +649,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
               cur.sawPlaying = true;
               cur.endedPolls = 0;
               spotifyPausedRef.current = false;
+              setProgressMs(st.progressMs ?? null);
               setStatus("playing");
               return;
             }
@@ -669,6 +690,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             // from the Spotify app itself (progress retained). Mirror it.
             cur.endedPolls = 0;
             spotifyPausedRef.current = true;
+            setProgressMs(st.progressMs ?? null);
             setStatus("paused");
             return;
           }
@@ -940,6 +962,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           mode === "replay"
             ? index === queue.length - 1
             : atTrailEnd && index === queue.length - 1,
+        progressMs,
         source,
         mode,
         replayLabel,
@@ -972,6 +995,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       index,
       seeking,
       atTrailEnd,
+      progressMs,
       source,
       mode,
       replayLabel,

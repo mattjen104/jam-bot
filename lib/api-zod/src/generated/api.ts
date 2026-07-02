@@ -1026,6 +1026,35 @@ export const GetArchiveCoverageResponse = zod.object({
 });
 
 /**
+ * Returns time-indexed lyric lines from LRCLIB. Each line carries an offset_ms so the UI can highlight the active cue during playback. Returns an empty lines array when LRCLIB has no synced version. Fetched and cached on first request — subsequent calls are instant.
+
+ * @summary Synced lyric lines for a recording (LRCLIB)
+ */
+
+export const GetRecordingLyricsParams = zod.object({
+  mbid: zod.coerce.string().min(1),
+});
+
+export const GetRecordingLyricsResponse = zod
+  .object({
+    lines: zod.array(
+      zod
+        .object({
+          offsetMs: zod
+            .number()
+            .describe("Milliseconds from the start of the recording."),
+          text: zod.string().describe("The lyric text for this cue."),
+        })
+        .describe(
+          "One time-indexed lyric cue from a synced lyrics source (LRCLIB). offset_ms is the millisecond offset from the start of the recording.\n",
+        ),
+    ),
+  })
+  .describe(
+    "Synced lyric lines for a recording. lines is empty when LRCLIB has no synced version for this track.\n",
+  );
+
+/**
  * Source-agnostic fallback ladder. Returns the strongest available human attribution for a recording — DJ spin, then label, then blog/curator, then collector/event, then artist-level — and stops there. Lore never falls through to algorithmic similar-tracks: when no human has picked the track it returns an empty rung with a "be the first" invitation.
 
  * @summary Strongest human attribution for a track (entry-flow ladder)
