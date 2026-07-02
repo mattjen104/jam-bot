@@ -1,0 +1,14 @@
+/* Lore × Slack mockups — shared base */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+button {
+  font-family: inherit;
+}
+
+select {
+  font-family: inherit;
+}
