@@ -32,7 +32,7 @@ import {
   isLiveServiceRide,
   readStoredPlaybackMode,
   writeStoredPlaybackMode,
-  tickNoDevicePoll,
+  processDeviceConfirmation,
 } from "./playbackSession";
 
 /** How we arrived at a track in the ride — the attribution for this transition. */
@@ -619,30 +619,36 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           if (!cur || cur.mbid !== currentMbid) return;
           const ours = st.trackUri === cur.uri;
 
-          if (ours && st.isPlaying) {
-            // Our track is sounding — also covers a resume made in the app.
-            cur.sawPlaying = true;
-            cur.endedPolls = 0;
-            spotifyPausedRef.current = false;
-            setStatus("playing");
-            return;
-          }
-          if (!cur.sawPlaying) {
-            // Device hasn't confirmed playback yet. Count the poll and, after
-            // the threshold (~15 s), treat the device as lost: fall back for
-            // this track so the ride isn't silently stuck in "loading".
-            const pollResult = tickNoDevicePoll(cur.noDevicePolls);
-            if (pollResult.outcome === "wait") {
-              cur.noDevicePolls = pollResult.noDevicePolls;
+          {
+            // Decide the device-confirmation outcome for this poll tick.
+            // Pure helper — extracted to playbackSession.ts so the reconnect
+            // and device-lost paths are unit-testable without React or timers.
+            const confirmation = processDeviceConfirmation(cur, { ours, isPlaying: st.isPlaying });
+            if (confirmation.type === "confirmed") {
+              // Our track is sounding — also covers a resume made in the app.
+              cur.sawPlaying = true;
+              cur.endedPolls = 0;
+              spotifyPausedRef.current = false;
+              setStatus("playing");
               return;
             }
-            spotifyFailedRef.current.add(currentMbid);
-            spotifyDeviceLostRef.current.add(currentMbid);
-            spotifyNowRef.current = null;
-            sourceRef.current = null;
-            setSource(null);
-            setSpotifyFallbackTick((t) => t + 1);
-            return;
+            if (confirmation.type === "device-lost") {
+              // Device hasn't confirmed after ~15 s: treat as lost and fall back
+              // so the ride isn't silently stuck in "loading".
+              spotifyFailedRef.current.add(currentMbid);
+              spotifyDeviceLostRef.current.add(currentMbid);
+              spotifyNowRef.current = null;
+              sourceRef.current = null;
+              setSource(null);
+              setSpotifyFallbackTick((t) => t + 1);
+              return;
+            }
+            if (confirmation.type === "wait") {
+              cur.noDevicePolls = confirmation.noDevicePolls;
+              return;
+            }
+            // confirmation.type === "already-confirmed": fall through to the
+            // paused / other-device / track-end branches below.
           }
 
           if (!ours && st.active && st.isPlaying) {

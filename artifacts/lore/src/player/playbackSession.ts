@@ -151,6 +151,54 @@ export function rideFallbackLabel(
 }
 
 /**
+ * Outcome of one Spotify-player poll tick for the pre-confirmation phase of a
+ * track (before the device has acknowledged it is playing our URI).
+ *
+ * - "confirmed"        : device just reported our track playing → set sawPlaying=true
+ * - "wait"             : device silent but below the threshold → increment counter
+ * - "device-lost"      : threshold reached → trigger the device-lost fallback
+ * - "already-confirmed": sawPlaying was already true AND the device is not
+ *                        reporting our track as playing → caller handles
+ *                        paused/other-device/track-end branches
+ */
+export type DeviceConfirmationOutcome =
+  | { type: "confirmed" }
+  | { type: "wait"; noDevicePolls: number }
+  | { type: "device-lost" }
+  | { type: "already-confirmed" };
+
+/**
+ * Decide the device-confirmation outcome for one Spotify poll tick.
+ *
+ * Encapsulates the first two branches of the Spotify poll effect in
+ * PlayerProvider so the reconnect and device-lost paths are testable without
+ * React, timers, or module mocks:
+ *
+ *   if (ours && isPlaying)   → "confirmed"
+ *   if (!sawPlaying)         → tickNoDevicePoll → "wait" | "device-lost"
+ *   (sawPlaying && not ours-playing) → "already-confirmed"
+ *
+ * The caller applies state mutations (cur.sawPlaying, spotifyFailedRef, etc.)
+ * based on the returned outcome.
+ *
+ * Pure — no side-effects.
+ */
+export function processDeviceConfirmation(
+  cur: { sawPlaying: boolean; noDevicePolls: number },
+  poll: { ours: boolean; isPlaying: boolean },
+): DeviceConfirmationOutcome {
+  if (poll.ours && poll.isPlaying) {
+    return { type: "confirmed" };
+  }
+  if (!cur.sawPlaying) {
+    const tick = tickNoDevicePoll(cur.noDevicePolls);
+    if (tick.outcome === "wait") return { type: "wait", noDevicePolls: tick.noDevicePolls };
+    return { type: "device-lost" };
+  }
+  return { type: "already-confirmed" };
+}
+
+/**
  * True when the session is in the combination that suppresses the default
  * Spotify-poll advance (now-playing MBID change drives advances instead).
  */

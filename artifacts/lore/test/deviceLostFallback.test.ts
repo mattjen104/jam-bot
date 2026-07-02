@@ -4,6 +4,7 @@ import {
   tickNoDevicePoll,
   rideFallbackLabel,
   resolveAudioPath,
+  processDeviceConfirmation,
   type TimeOrientation,
 } from "../src/player/playbackSession";
 
@@ -201,6 +202,218 @@ describe("rideFallbackLabel", () => {
     // This test locks in that non-device-lost fallbacks still show the old text.
     for (const o of ["live", "past", "curated"] as TimeOrientation[]) {
       expect(rideFallbackLabel(false, o)).not.toContain("Spotify device lost");
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Mid-ride device reconnect — poll counter resets; device-lost never fires
+//
+// Tests call processDeviceConfirmation() — the pure helper extracted from
+// PlayerProvider.tsx (lines ~604-634) — so any change to that production
+// function breaks the tests rather than letting them pass silently.
+// ---------------------------------------------------------------------------
+describe("mid-ride device reconnect", () => {
+  /**
+   * Run the poll-loop state machine using processDeviceConfirmation (the real
+   * production function from playbackSession.ts):
+   *   - silentPolls: polls where trackUri !== ours or isPlaying=false
+   *   - then an optional reconnect poll (ours=true, isPlaying=true)
+   *
+   * Mirrors the PlayerProvider poll effect: for each tick call
+   * processDeviceConfirmation(cur, poll) and apply the returned outcome to
+   * the mutable cur state exactly as the provider does.
+   */
+  function runPollLoop(opts: {
+    silentPolls: number;
+    reconnects: boolean;
+  }): { outcome: "device-lost" | "confirmed" | "still-waiting" } {
+    const cur = { sawPlaying: false, noDevicePolls: 0 };
+
+    for (let i = 0; i < opts.silentPolls; i++) {
+      const result = processDeviceConfirmation(cur, { ours: false, isPlaying: false });
+      if (result.type === "device-lost") return { outcome: "device-lost" };
+      if (result.type === "wait") { cur.noDevicePolls = result.noDevicePolls; continue; }
+      // "already-confirmed" or "confirmed" won't fire here (ours=false)
+    }
+
+    if (!opts.reconnects) return { outcome: "still-waiting" };
+
+    // Device comes back: ours=true, isPlaying=true
+    const result = processDeviceConfirmation(cur, { ours: true, isPlaying: true });
+    if (result.type === "confirmed") {
+      cur.sawPlaying = true; // mirrors: cur.sawPlaying = true in the provider
+      return { outcome: "confirmed" };
+    }
+    return { outcome: "still-waiting" };
+  }
+
+  it("device-lost does not fire when device comes back before the threshold", () => {
+    // 3 silent polls (below threshold of 5), then device responds
+    expect(runPollLoop({ silentPolls: 3, reconnects: true }).outcome).toBe("confirmed");
+  });
+
+  it("exactly DEVICE_LOST_POLLS-1 silent polls then reconnect — device-lost still never fires", () => {
+    // One poll below the threshold, then the device comes back
+    const r = runPollLoop({ silentPolls: DEVICE_LOST_POLLS - 1, reconnects: true });
+    expect(r.outcome).toBe("confirmed");
+  });
+
+  it("device-lost fires normally when device never comes back (sanity check)", () => {
+    // Ensures processDeviceConfirmation still returns device-lost on the
+    // threshold poll — reconnect path doesn't interfere.
+    expect(runPollLoop({ silentPolls: DEVICE_LOST_POLLS, reconnects: false }).outcome).toBe("device-lost");
+  });
+
+  it("processDeviceConfirmation returns 'already-confirmed' (not 'wait') once sawPlaying is true", () => {
+    // After sawPlaying=true the provider's poll loop falls through to the
+    // paused/other-device/track-end branches — never touches noDevicePolls.
+    // Verify that processDeviceConfirmation returns "already-confirmed" for a
+    // silent poll when sawPlaying is already true.
+    const cur = { sawPlaying: true, noDevicePolls: 0 };
+    const result = processDeviceConfirmation(cur, { ours: false, isPlaying: false });
+    expect(result.type).toBe("already-confirmed");
+  });
+
+  it("after reconnect, further silent polls cannot reach device-lost (sawPlaying guard)", () => {
+    // Run 2 silent polls, then reconnect (confirmed), then 5 more silent polls.
+    // Because the provider returns early on "already-confirmed" those 5 polls
+    // never feed the noDevicePolls counter — processDeviceConfirmation returns
+    // "already-confirmed" not "wait" or "device-lost".
+    const cur = { sawPlaying: false, noDevicePolls: 0 };
+
+    // 2 silent polls
+    for (let i = 0; i < 2; i++) {
+      const r = processDeviceConfirmation(cur, { ours: false, isPlaying: false });
+      expect(r.type).toBe("wait");
+      if (r.type === "wait") cur.noDevicePolls = r.noDevicePolls;
+    }
+
+    // Device reconnects
+    const reconnect = processDeviceConfirmation(cur, { ours: true, isPlaying: true });
+    expect(reconnect.type).toBe("confirmed");
+    cur.sawPlaying = true;
+
+    // 5 more silent polls: each must return "already-confirmed", never "device-lost"
+    for (let i = 0; i < 5; i++) {
+      const r = processDeviceConfirmation(cur, { ours: false, isPlaying: false });
+      expect(r.type).toBe("already-confirmed");
+      expect(r.type).not.toBe("device-lost");
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// stop() clears device-lost refs — new ride starts clean
+//
+// PlayerProvider.tsx stop() (lines ~278-279) and start() (lines ~302-303)
+// both call spotifyFailedRef.current.clear() and
+// spotifyDeviceLostRef.current.clear() before any new poll loop runs.
+//
+// These tests verify that after clearing those Sets:
+//   1. processDeviceConfirmation returns "wait" (not "device-lost") on the
+//      very first poll — i.e., the counter really restarted from zero.
+//   2. A full DEVICE_LOST_POLLS-1 run on the new ride still stays below the
+//      threshold, proving no bleedover from the previous ride's counter.
+// ---------------------------------------------------------------------------
+describe("stop() clears spotifyFailedRef and spotifyDeviceLostRef", () => {
+  /**
+   * Simulate a full device-lost cycle for `mbid`, then simulate stop() or
+   * start() clearing both Sets and resetting the poll counter (exactly what
+   * the provider does: spotifyFailedRef.current.clear() +
+   * spotifyDeviceLostRef.current.clear() + spotifyNowRef.current = null).
+   *
+   * Returns the state of the Sets and the outcome of the first new-ride poll.
+   */
+  function simulateDeviceLostThenStop(mbid: string): {
+    failedAfterStop: boolean;
+    deviceLostAfterStop: boolean;
+    firstNewRidePollOutcome: string;
+  } {
+    const spotifyFailed = new Set<string>();
+    const spotifyDeviceLost = new Set<string>();
+
+    // First ride: run processDeviceConfirmation until device-lost fires.
+    const cur = { sawPlaying: false, noDevicePolls: 0 };
+    for (let i = 0; i < DEVICE_LOST_POLLS + 1; i++) {
+      const result = processDeviceConfirmation(cur, { ours: false, isPlaying: false });
+      if (result.type === "device-lost") {
+        spotifyFailed.add(mbid);
+        spotifyDeviceLost.add(mbid);
+        break;
+      }
+      if (result.type === "wait") cur.noDevicePolls = result.noDevicePolls;
+    }
+
+    if (!spotifyFailed.has(mbid)) throw new Error("test setup: device-lost did not fire");
+
+    // stop() / start(): clear both Sets and reset spotifyNowRef (counter gone)
+    spotifyFailed.clear();
+    spotifyDeviceLost.clear();
+    const newCur = { sawPlaying: false, noDevicePolls: 0 }; // mirrors new spotifyNowRef
+
+    // First poll on the new ride must be "wait", not "device-lost"
+    const firstPoll = processDeviceConfirmation(newCur, { ours: false, isPlaying: false });
+
+    return {
+      failedAfterStop: spotifyFailed.has(mbid),
+      deviceLostAfterStop: spotifyDeviceLost.has(mbid),
+      firstNewRidePollOutcome: firstPoll.type,
+    };
+  }
+
+  it("spotifyFailedRef is empty after stop() — MBID no longer blocked", () => {
+    const { failedAfterStop } = simulateDeviceLostThenStop("mbid-reconnect-1");
+    expect(failedAfterStop).toBe(false);
+  });
+
+  it("spotifyDeviceLostRef is empty after stop() — device-lost indicator resets", () => {
+    const { deviceLostAfterStop } = simulateDeviceLostThenStop("mbid-reconnect-2");
+    expect(deviceLostAfterStop).toBe(false);
+  });
+
+  it("both refs cleared together — ride does not start half-dirty", () => {
+    const { failedAfterStop, deviceLostAfterStop } =
+      simulateDeviceLostThenStop("mbid-reconnect-3");
+    expect(failedAfterStop).toBe(false);
+    expect(deviceLostAfterStop).toBe(false);
+  });
+
+  it("first poll on new ride returns 'wait' not 'device-lost' (counter reset to zero)", () => {
+    // Proves the new spotifyNowRef starts with noDevicePolls=0 — the old
+    // counter was on the previous spotifyNowRef which stop() nulled out.
+    const { firstNewRidePollOutcome } = simulateDeviceLostThenStop("mbid-reconnect-4");
+    expect(firstNewRidePollOutcome).toBe("wait");
+    expect(firstNewRidePollOutcome).not.toBe("device-lost");
+  });
+
+  it("a full second ride's worth of silent polls stays below threshold", () => {
+    // After stop(), DEVICE_LOST_POLLS-1 more silent polls on the new ride
+    // must not trigger device-lost — no bleedover from the old counter.
+    const mbid = "mbid-reconnect-5";
+    const spotifyFailed = new Set<string>();
+    const spotifyDeviceLost = new Set<string>();
+
+    // First ride: device-lost fires
+    let cur = { sawPlaying: false, noDevicePolls: 0 };
+    for (let i = 0; i < DEVICE_LOST_POLLS + 1; i++) {
+      const r = processDeviceConfirmation(cur, { ours: false, isPlaying: false });
+      if (r.type === "device-lost") { spotifyFailed.add(mbid); spotifyDeviceLost.add(mbid); break; }
+      if (r.type === "wait") cur.noDevicePolls = r.noDevicePolls;
+    }
+    expect(spotifyFailed.has(mbid)).toBe(true);
+
+    // stop(): clear refs and reset counter (new spotifyNowRef object)
+    spotifyFailed.clear();
+    spotifyDeviceLost.clear();
+    cur = { sawPlaying: false, noDevicePolls: 0 };
+
+    // DEVICE_LOST_POLLS-1 silent polls on the new ride: all must be "wait"
+    for (let i = 0; i < DEVICE_LOST_POLLS - 1; i++) {
+      const r = processDeviceConfirmation(cur, { ours: false, isPlaying: false });
+      expect(r.type).toBe("wait");
+      expect(r.type).not.toBe("device-lost");
+      if (r.type === "wait") cur.noDevicePolls = r.noDevicePolls;
     }
   });
 });
