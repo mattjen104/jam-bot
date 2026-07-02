@@ -5,8 +5,11 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { TrackClaim } from "./trackClaim";
 import type { TrackKnowledge } from "./trackKnowledge";
 
 export interface RecordingKnowledge {
   knowledge: TrackKnowledge | null;
+  /** Grounded documentary-sourced facts (may be empty). */
+  claims?: TrackClaim[];
 }

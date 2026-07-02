@@ -750,6 +750,141 @@ function escapeQuery(s: string): string {
   return s.replace(/[+\-!(){}[\]^"~*?:\\/&|]/g, " ").replace(/\s+/g, " ").trim();
 }
 
+/** One ordered track from an album's canonical MusicBrainz tracklist. */
+export interface AlbumTrack {
+  /** 1-based position across the whole release (disc boundaries flattened). */
+  position: number;
+  recordingId: string;
+  title: string;
+  artist?: string;
+  artistMbid?: string;
+  durationMs?: number;
+}
+
+/** An album resolved to a concrete MusicBrainz release with its tracklist. */
+export interface AlbumTracklist {
+  releaseId: string;
+  releaseTitle: string;
+  /** Release year, when MusicBrainz reported a date. */
+  year?: number;
+  tracks: AlbumTrack[];
+}
+
+/**
+ * Pure: pick the best release id from a MusicBrainz release-search body —
+ * highest score wins, with official releases preferred over bootlegs/promos.
+ */
+export function parseReleaseSearch(body: unknown): string | null {
+  const b = body as {
+    releases?: Array<{ id?: string; score?: number; status?: string }>;
+  };
+  const releases = (b?.releases ?? []).filter((r) => r?.id?.trim());
+  if (!releases.length) return null;
+  const ranked = [...releases].sort((r1, r2) => {
+    const official1 = r1.status === "Official" ? 1 : 0;
+    const official2 = r2.status === "Official" ? 1 : 0;
+    if (official1 !== official2) return official2 - official1;
+    return (r2.score ?? 0) - (r1.score ?? 0);
+  });
+  return ranked[0]!.id!.trim();
+}
+
+/**
+ * Pure: flatten a `/release/{id}?inc=recordings+artist-credits` lookup body
+ * into an ordered AlbumTracklist. Multi-disc releases keep global ordering
+ * (disc 2 track 1 follows disc 1's last track).
+ */
+export function parseReleaseTracklist(body: unknown): AlbumTracklist | null {
+  const b = body as {
+    id?: string;
+    title?: string;
+    date?: string;
+    "artist-credit"?: Array<{
+      name?: string;
+      artist?: { id?: string; name?: string };
+    }>;
+    media?: Array<{
+      tracks?: Array<{
+        length?: number;
+        recording?: {
+          id?: string;
+          title?: string;
+          length?: number;
+          "artist-credit"?: Array<{
+            name?: string;
+            artist?: { id?: string; name?: string };
+          }>;
+        };
+      }>;
+    }>;
+  };
+  const releaseId = b?.id?.trim();
+  const releaseTitle = b?.title?.trim();
+  if (!releaseId || !releaseTitle) return null;
+  const yearStr = b.date?.slice(0, 4);
+  const year = yearStr && /^\d{4}$/.test(yearStr) ? Number(yearStr) : undefined;
+  const relAc = b["artist-credit"]?.[0];
+  const tracks: AlbumTrack[] = [];
+  let position = 0;
+  for (const medium of b.media ?? []) {
+    for (const track of medium.tracks ?? []) {
+      const rec = track.recording;
+      const recordingId = rec?.id?.trim();
+      const title = rec?.title?.trim();
+      if (!recordingId || !title) continue;
+      position += 1;
+      const ac = rec?.["artist-credit"]?.[0] ?? relAc;
+      const artist = ac?.name?.trim() || ac?.artist?.name?.trim() || undefined;
+      const artistMbid = ac?.artist?.id?.trim() || undefined;
+      const durationMs = rec?.length ?? track.length ?? undefined;
+      tracks.push({
+        position,
+        recordingId,
+        title,
+        ...(artist ? { artist } : {}),
+        ...(artistMbid ? { artistMbid } : {}),
+        ...(durationMs != null ? { durationMs } : {}),
+      });
+    }
+  }
+  if (!tracks.length) return null;
+  return { releaseId, releaseTitle, ...(year != null ? { year } : {}), tracks };
+}
+
+/**
+ * Resolve an album (artist + title) to its canonical MusicBrainz release and
+ * ordered tracklist. Two budgeted requests: a release search, then a lookup
+ * with embedded recordings. Best-effort — null on any failure; never throws.
+ */
+export async function fetchAlbumTracklist(
+  artist: string,
+  album: string,
+): Promise<AlbumTracklist | null> {
+  if (!musicbrainzEnabled() || !artist.trim() || !album.trim()) return null;
+  const a = escapeQuery(artist);
+  const r = escapeQuery(album);
+  if (!a || !r) return null;
+  try {
+    const query = `release:"${r}" AND artist:"${a}" AND status:official`;
+    const searchBody = await mbFetch(
+      `/release?query=${encodeURIComponent(query)}&limit=5&fmt=json`,
+    );
+    const releaseId = parseReleaseSearch(searchBody);
+    if (!releaseId) return null;
+    const lookupBody = await mbFetch(
+      `/release/${encodeURIComponent(releaseId)}?inc=recordings+artist-credits&fmt=json`,
+    );
+    return parseReleaseTracklist(lookupBody);
+  } catch (err) {
+    logger.warn("MusicBrainz album tracklist fetch failed", {
+      artist,
+      album,
+      error: String(err),
+    });
+    return null;
+  }
+}
+
 /**
  * Resolve an artist + title (the shape radio now-playing metadata gives us) to a
  * canonical MusicBrainz recording. Best-effort — returns null when MusicBrainz

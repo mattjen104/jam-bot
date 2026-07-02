@@ -36,6 +36,7 @@ export type EntryRung =
   | "curator"
   | "collector"
   | "event"
+  | "series"
   | "artist"
   | "empty";
 
@@ -76,6 +77,7 @@ function rungForType(pickerType: string): EntryRung {
     case "curator":
     case "collector":
     case "event":
+    case "series":
       return pickerType;
     default:
       return "curator";

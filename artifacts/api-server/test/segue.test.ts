@@ -136,6 +136,33 @@ describe("deriveEdgesFromPicks", () => {
     expect(deriveEdgesFromPicks(picks)).toHaveLength(0);
   });
 
+  it("never links across list boundaries when one picker holds several ordered lists", () => {
+    // A series picker with two albums whose ordinals both restart at 1: the
+    // externalId prefix names the list, so tied ordinals must not interleave.
+    const picks: PickForSegue[] = [
+      { pickerId: 1, mbid: "rio1", ordinal: 1, externalId: "classicalbums:rio:1" },
+      { pickerId: 1, mbid: "rio2", ordinal: 2, externalId: "classicalbums:rio:2" },
+      { pickerId: 1, mbid: "rum1", ordinal: 1, externalId: "classicalbums:rumours:1" },
+      { pickerId: 1, mbid: "rum2", ordinal: 2, externalId: "classicalbums:rumours:2" },
+    ];
+    const pairs = deriveEdgesFromPicks(picks).map((e) => [e.fromMbid, e.toMbid]);
+    expect(pairs).toHaveLength(2);
+    expect(pairs).toContainEqual(["rio1", "rio2"]);
+    expect(pairs).toContainEqual(["rum1", "rum2"]);
+  });
+
+  it("keeps one chain when a picker's externalIds share a constant prefix (label roster)", () => {
+    const picks: PickForSegue[] = [
+      { pickerId: 1, mbid: "a", ordinal: 0, externalId: "label:mb-1:rec-a" },
+      { pickerId: 1, mbid: "b", ordinal: 1, externalId: "label:mb-1:rec-b" },
+      { pickerId: 1, mbid: "c", ordinal: 2, externalId: "label:mb-1:rec-c" },
+    ];
+    expect(deriveEdgesFromPicks(picks).map((e) => [e.fromMbid, e.toMbid])).toEqual([
+      ["a", "b"],
+      ["b", "c"],
+    ]);
+  });
+
   it("drops self-loops (same track twice in a row)", () => {
     const picks: PickForSegue[] = [
       { pickerId: 1, mbid: "a", ordinal: 0 },

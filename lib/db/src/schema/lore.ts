@@ -436,3 +436,41 @@ export const spotifyConnectionsTable = pgTable("spotify_connections", {
 
 export type SpotifyConnection = typeof spotifyConnectionsTable.$inferSelect;
 export type InsertSpotifyConnection = typeof spotifyConnectionsTable.$inferInsert;
+
+/**
+ * A **track claim** — one grounded, citable fact about a recording, extracted
+ * systematically from an official source (e.g. an official Classic Albums
+ * making-of clip's transcript). We store the paraphrased claim and a pointer to
+ * the exact moment in the source — never the transcript, never the media.
+ *
+ * `positionMs` optionally anchors the claim to a moment WITHIN the song (the
+ * within-track time axis); null = a track-level fact shown in liner notes.
+ * `sourceUrl` deep-links to the supporting moment in the source itself
+ * (e.g. a YouTube `&t=` link), so every claim is one tap from its evidence.
+ */
+export const trackClaimsTable = pgTable(
+  "track_claims",
+  {
+    id: serial("id").primaryKey(),
+    mbid: text("mbid")
+      .notNull()
+      .references(() => recordingsTable.mbid),
+    /** Optional anchor within the song; null = track-level fact. */
+    positionMs: integer("position_ms"),
+    /** The paraphrased, grounded claim (never verbatim transcript prose). */
+    text: text("text").notNull(),
+    /** Human-readable source label, e.g. "Classic Albums: Rio". */
+    sourceLabel: text("source_label").notNull(),
+    /** Deep link to the supporting moment (e.g. youtube.com/watch?v=..&t=123s). */
+    sourceUrl: text("source_url").notNull(),
+    /** Picker handle this claim came through, e.g. "classic-albums". */
+    sourceHandle: text("source_handle").notNull(),
+    /** Stable id for idempotent re-extraction, e.g. "yt:{videoId}:{n}". */
+    externalId: text("external_id").notNull().unique(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [index("track_claims_mbid_idx").on(t.mbid)],
+);
+
+export type TrackClaim = typeof trackClaimsTable.$inferSelect;
+export type InsertTrackClaim = typeof trackClaimsTable.$inferInsert;

@@ -247,6 +247,26 @@ export interface PickForSegue {
   mbid: string | null;
   /** Position within the picker's ordered list; null = unordered (no segue). */
   ordinal: number | null;
+  /**
+   * Idempotency id, e.g. `nts:{episode}:{ordinal}` or `label:{mbid}:{recId}`.
+   * Its prefix (everything before the last `:`) names the LIST a pick belongs
+   * to, so a picker with several sequenced lists (a series' albums, a show's
+   * episodes) never forges an edge across list boundaries on tied ordinals.
+   */
+  externalId?: string | null;
+}
+
+/**
+ * The list a pick belongs to, for adjacency grouping: the externalId minus its
+ * last `:`-segment. Sources with one global sequence per picker (label roster,
+ * one Discogs list) collapse to a single group because their prefix is
+ * constant; per-list sources (NTS episodes, Classic Albums albums) split into
+ * one chain per list. Null externalId falls back to a single per-picker group.
+ */
+export function pickListKey(externalId: string | null | undefined): string {
+  if (!externalId) return "";
+  const cut = externalId.lastIndexOf(":");
+  return cut === -1 ? externalId : externalId.slice(0, cut);
 }
 
 /** A rideable edge derived from two consecutive picks in one picker's list. */
@@ -268,16 +288,21 @@ export interface PickEdge {
  * Deterministic and side-effect free for exhaustive unit testing.
  */
 export function deriveEdgesFromPicks(picks: PickForSegue[]): PickEdge[] {
-  const groups = new Map<number, PickForSegue[]>();
+  // Adjacency is only meaningful within one picker's one LIST — a series'
+  // albums or a show's episodes each restart their ordinals at 1, so grouping
+  // by picker alone would interleave lists on tied ordinals and forge edges
+  // across list boundaries.
+  const groups = new Map<string, { pickerId: number; list: PickForSegue[] }>();
   for (const p of picks) {
     if (p.ordinal === null || p.ordinal === undefined) continue;
-    const list = groups.get(p.pickerId) ?? [];
-    list.push(p);
-    groups.set(p.pickerId, list);
+    const key = `${p.pickerId}|${pickListKey(p.externalId)}`;
+    const group = groups.get(key) ?? { pickerId: p.pickerId, list: [] };
+    group.list.push(p);
+    groups.set(key, group);
   }
 
   const edges: PickEdge[] = [];
-  for (const [pickerId, list] of groups) {
+  for (const { pickerId, list } of groups.values()) {
     const sorted = [...list].sort((a, b) => a.ordinal! - b.ordinal!);
     for (let i = 1; i < sorted.length; i++) {
       const prev = sorted[i - 1]!;
@@ -319,6 +344,7 @@ export async function nextPickSegues(
         pickerId: picksTable.pickerId,
         mbid: picksTable.mbid,
         ordinal: picksTable.ordinal,
+        externalId: picksTable.externalId,
       })
       .from(picksTable)
       .where(

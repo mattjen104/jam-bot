@@ -329,8 +329,21 @@ export interface StationPulseList {
   items: StationPulse[];
 }
 
+/**
+ * One grounded fact about a recording, extracted systematically from an official documentary source (e.g. a Classic Albums making-of clip). `sourceUrl` deep-links to the exact moment in the official source that supports the claim, so every fact is one tap from its evidence.
+
+ */
+export interface TrackClaim {
+  text: string;
+  sourceLabel: string;
+  sourceUrl: string;
+  positionMs?: number | null;
+}
+
 export interface RecordingKnowledge {
   knowledge: TrackKnowledge | null;
+  /** Grounded documentary-sourced facts (may be empty). */
+  claims?: TrackClaim[];
 }
 
 /**
@@ -454,6 +467,7 @@ export const PickerPickerType = {
   curator: "curator",
   collector: "collector",
   event: "event",
+  series: "series",
 } as const;
 
 /**
@@ -642,6 +656,7 @@ export const EntryResultRung = {
   curator: "curator",
   collector: "collector",
   event: "event",
+  series: "series",
   artist: "artist",
   scene: "scene",
   empty: "empty",
@@ -667,6 +682,7 @@ export const UpsertPickerRequestPickerType = {
   curator: "curator",
   collector: "collector",
   event: "event",
+  series: "series",
 } as const;
 
 /**

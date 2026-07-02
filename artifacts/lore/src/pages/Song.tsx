@@ -33,6 +33,7 @@ const RUNG_FRAMING: Record<string, string> = {
   curator: "A curator placed this",
   collector: "A collector filed this",
   event: "An event booked this",
+  series: "A documentary featured this",
   artist: "Traced to the artist",
   scene: "Rooted in a scene",
   empty: "Nobody has claimed this yet",

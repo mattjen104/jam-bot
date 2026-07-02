@@ -16,4 +16,5 @@ export const PickerPickerType = {
   curator: "curator",
   collector: "collector",
   event: "event",
+  series: "series",
 } as const;

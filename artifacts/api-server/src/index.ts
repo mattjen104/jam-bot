@@ -6,6 +6,10 @@ import { startBlogPoller } from "./lore/blog-poller.js";
 import { startBackfillJob } from "./lore/backfill.js";
 import { startReconcileJob } from "./lore/reconcile.js";
 import { startNtsPoller } from "./lore/nts.js";
+import {
+  seedClassicAlbumsPicker,
+  startClassicAlbumsPoller,
+} from "./lore/classic-albums.js";
 import { startSegueJob } from "./lore/segue-job.js";
 import { ensurePicksUnifiedView } from "./lore/view.js";
 
@@ -41,6 +45,12 @@ async function bootLore(): Promise<void> {
     await startLorePoller();
     await startBlogPoller();
     await startNtsPoller();
+    try {
+      await seedClassicAlbumsPicker();
+    } catch (err) {
+      console.error("[lore] classic-albums picker seed failed", err);
+    }
+    startClassicAlbumsPoller();
     await startBackfillJob();
     await startReconcileJob();
     startSegueJob();

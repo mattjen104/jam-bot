@@ -25,3 +25,4 @@
 - [Fast Refresh mixed exports](fast-refresh-mixed-exports.md) — component files must export only components; mixed exports split HMR module instances → phantom "must be used within Provider" crashes despite correct tree.
 - [Share-card SSRF guard](share-card-ssrf-guard.md) — server-side artwork fetch off DB URLs is attacker-influenced: https-only + private-IP block, re-validate every redirect hop (CAA 307s, so redirect:"error" kills artwork).
 - [Lore local-first listener layer](lore-local-first-listener-layer.md) — journal/follows are localStorage-only by design (no accounts); logger trigger key must be ≥ dedup identity or listens drop.
+- [Classic Albums series](classic-albums-series.md) — official clips caption-less (claims dormant by design); listKey-scoped segue adjacency; new enum values must also hit OpenAPI.

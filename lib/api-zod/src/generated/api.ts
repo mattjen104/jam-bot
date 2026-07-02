@@ -487,6 +487,21 @@ export const GetRecordingKnowledgeResponse = zod.object({
     }),
     zod.null(),
   ]),
+  claims: zod
+    .array(
+      zod
+        .object({
+          text: zod.string(),
+          sourceLabel: zod.string(),
+          sourceUrl: zod.string(),
+          positionMs: zod.union([zod.number(), zod.null()]).optional(),
+        })
+        .describe(
+          "One grounded fact about a recording, extracted systematically from an official documentary source (e.g. a Classic Albums making-of clip). `sourceUrl` deep-links to the exact moment in the official source that supports the claim, so every fact is one tap from its evidence.\n",
+        ),
+    )
+    .optional()
+    .describe("Grounded documentary-sourced facts (may be empty)."),
 });
 
 /**
@@ -649,6 +664,7 @@ export const ListPickersResponse = zod.object({
           "curator",
           "collector",
           "event",
+          "series",
         ]),
         name: zod.string(),
         handle: zod.string(),
@@ -839,6 +855,7 @@ export const GetPickerArchiveResponse = zod.object({
         "curator",
         "collector",
         "event",
+        "series",
       ]),
       name: zod.string(),
       handle: zod.string(),
@@ -894,6 +911,7 @@ export const GetPickerRunResponse = zod.object({
         "curator",
         "collector",
         "event",
+        "series",
       ]),
       name: zod.string(),
       handle: zod.string(),
@@ -1026,6 +1044,7 @@ export const GetRecordingEntryResponse = zod
       "curator",
       "collector",
       "event",
+      "series",
       "artist",
       "scene",
       "empty",
@@ -1082,6 +1101,7 @@ export const UpsertPickerBody = zod
       "curator",
       "collector",
       "event",
+      "series",
     ]),
     name: zod.string().min(1),
     handle: zod.string().optional(),

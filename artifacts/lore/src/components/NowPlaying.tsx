@@ -188,32 +188,63 @@ function LinerNotes({ mbid }: { mbid: string }) {
     },
   });
   const knowledge = data?.knowledge ?? null;
-  if (!knowledge) return null;
+  const claims = data?.claims ?? [];
 
-  const rows = groupCredits(knowledge.personnel);
-  const pressing = pressingLine(knowledge);
-  if (rows.length === 0 && !pressing) return null;
+  const rows = knowledge ? groupCredits(knowledge.personnel) : [];
+  const pressing = knowledge ? pressingLine(knowledge) : null;
+  const hasNotes = rows.length > 0 || Boolean(pressing);
+  if (!hasNotes && claims.length === 0) return null;
 
   return (
     <div className="mt-5" data-testid="liner-notes">
-      <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
-        Liner notes
-        {knowledge.approximate ? " · matched by title" : ""}
-      </p>
-      <dl className="space-y-1.5">
-        {rows.map((row) => (
-          <div key={row.label} className="text-sm leading-snug">
-            <dt className="inline font-medium text-foreground">{row.label} </dt>
-            <dd className="inline text-muted-foreground">{row.names}</dd>
-          </div>
-        ))}
-        {pressing && (
-          <div className="text-sm leading-snug">
-            <dt className="inline font-medium text-foreground">Pressing </dt>
-            <dd className="inline text-muted-foreground">{pressing}</dd>
-          </div>
-        )}
-      </dl>
+      {hasNotes && (
+        <>
+          <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+            Liner notes
+            {knowledge?.approximate ? " · matched by title" : ""}
+          </p>
+          <dl className="space-y-1.5">
+            {rows.map((row) => (
+              <div key={row.label} className="text-sm leading-snug">
+                <dt className="inline font-medium text-foreground">
+                  {row.label}{" "}
+                </dt>
+                <dd className="inline text-muted-foreground">{row.names}</dd>
+              </div>
+            ))}
+            {pressing && (
+              <div className="text-sm leading-snug">
+                <dt className="inline font-medium text-foreground">Pressing </dt>
+                <dd className="inline text-muted-foreground">{pressing}</dd>
+              </div>
+            )}
+          </dl>
+        </>
+      )}
+      {claims.length > 0 && (
+        <div className={hasNotes ? "mt-4" : undefined} data-testid="track-claims">
+          <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+            From {claims[0]!.sourceLabel}
+          </p>
+          <ul className="space-y-2">
+            {claims.map((claim) => (
+              <li key={claim.sourceUrl + claim.text} className="text-sm leading-snug">
+                <span className="text-muted-foreground">{claim.text} </span>
+                <a
+                  href={claim.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 whitespace-nowrap text-primary hover:underline"
+                  title="Watch the moment that backs this up"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  watch
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

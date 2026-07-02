@@ -77,6 +77,7 @@ export * from "./stationPulseList";
 export * from "./stationRef";
 export * from "./stationRunDetail";
 export * from "./stationRunSummary";
+export * from "./trackClaim";
 export * from "./trackContext";
 export * from "./trackEntry";
 export * from "./trackInsight";

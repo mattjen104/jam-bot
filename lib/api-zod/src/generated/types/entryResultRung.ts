@@ -16,6 +16,7 @@ export const EntryResultRung = {
   curator: "curator",
   collector: "collector",
   event: "event",
+  series: "series",
   artist: "artist",
   scene: "scene",
   empty: "empty",

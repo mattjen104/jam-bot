@@ -43,6 +43,7 @@ import {
   recordingsTable,
   pickersTable,
   picksTable,
+  trackClaimsTable,
   type Station,
   type Picker,
 } from "@workspace/db";
@@ -337,8 +338,20 @@ router.get("/recordings/:mbid/knowledge", async (req, res) => {
       isrc: rec.isrc,
     });
 
+    const claimRows = await db
+      .select()
+      .from(trackClaimsTable)
+      .where(eq(trackClaimsTable.mbid, rec.mbid))
+      .orderBy(trackClaimsTable.id);
+
     const data = GetRecordingKnowledgeResponse.parse({
       knowledge: knowledge ?? null,
+      claims: claimRows.map((c) => ({
+        text: c.text,
+        sourceLabel: c.sourceLabel,
+        sourceUrl: c.sourceUrl,
+        positionMs: c.positionMs,
+      })),
     });
     return res.json(data);
   } catch (err) {

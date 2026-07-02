@@ -25,6 +25,7 @@ export type PickSource =
   | "curator_list"
   | "discogs_list"
   | "event_lineup"
+  | "series_episode"
   | "user_seed";
 
 export type PickerType =
@@ -33,7 +34,8 @@ export type PickerType =
   | "blog"
   | "curator"
   | "collector"
-  | "event";
+  | "event"
+  | "series";
 
 /** A slug-safe handle from arbitrary text (lowercase, hyphenated). */
 export function slugify(input: string): string {
@@ -88,7 +90,12 @@ export async function upsertPicker(input: UpsertPickerInput): Promise<Picker> {
         pickerType: values.pickerType,
         name: values.name,
         homeUrl: values.homeUrl ?? null,
-        sourceRef: values.sourceRef ?? null,
+        // Only clobber sourceRef when the caller actually supplied one —
+        // adapters use it as durable sync state (e.g. a completion ledger),
+        // which a plain re-seed on boot must not wipe.
+        ...(input.sourceRef !== undefined
+          ? { sourceRef: values.sourceRef ?? null }
+          : {}),
         trustTier: values.trustTier ?? 2,
         description: values.description ?? null,
         updatedAt: sql`now()`,

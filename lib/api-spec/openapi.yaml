@@ -1571,6 +1571,28 @@ components:
             $ref: "#/components/schemas/StationPulse"
       required:
         - items
+    TrackClaim:
+      type: object
+      description: >
+        One grounded fact about a recording, extracted systematically from an
+        official documentary source (e.g. a Classic Albums making-of clip).
+        `sourceUrl` deep-links to the exact moment in the official source that
+        supports the claim, so every fact is one tap from its evidence.
+      properties:
+        text:
+          type: string
+        sourceLabel:
+          type: string
+        sourceUrl:
+          type: string
+        positionMs:
+          anyOf:
+            - type: integer
+            - type: "null"
+      required:
+        - text
+        - sourceLabel
+        - sourceUrl
     RecordingKnowledge:
       type: object
       properties:
@@ -1578,6 +1600,11 @@ components:
           anyOf:
             - $ref: "#/components/schemas/TrackKnowledge"
             - type: "null"
+        claims:
+          type: array
+          description: Grounded documentary-sourced facts (may be empty).
+          items:
+            $ref: "#/components/schemas/TrackClaim"
       required:
         - knowledge
     StationRef:
@@ -1976,7 +2003,7 @@ components:
           type: integer
         pickerType:
           type: string
-          enum: [dj, label, blog, curator, collector, event]
+          enum: [dj, label, blog, curator, collector, event, series]
         name:
           type: string
         handle:
@@ -2056,7 +2083,7 @@ components:
       properties:
         rung:
           type: string
-          enum: [dj, label, blog, curator, collector, event, artist, scene, empty]
+          enum: [dj, label, blog, curator, collector, event, series, artist, scene, empty]
         framing:
           type: string
         picks:
@@ -2077,7 +2104,7 @@ components:
       properties:
         pickerType:
           type: string
-          enum: [dj, label, blog, curator, collector, event]
+          enum: [dj, label, blog, curator, collector, event, series]
         name:
           type: string
           minLength: 1

@@ -16,4 +16,5 @@ export const UpsertPickerRequestPickerType = {
   curator: "curator",
   collector: "collector",
   event: "event",
+  series: "series",
 } as const;
