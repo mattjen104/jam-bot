@@ -1,0 +1,94 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+:root {
+  --lore-bg: #0C0A08;
+  --lore-surface: #16130F;
+  --lore-elevated: #211C16;
+  --lore-line: #2E2820;
+  --lore-text: #F1EADD;
+  --lore-muted: #A99E8B;
+  --lore-faint: #6F665A;
+  --lore-amber: #E8A44C;
+  --lore-amber-deep: #C77F2E;
+  --lore-live: #FF5A3C;
+
+  --chip-wiki: #7c766b;
+  --chip-pod: #8b5cf6;
+  --chip-sos: #0f9d8f;
+  --chip-beato: #ea7a1c;
+  --chip-genius: #eab308;
+  --chip-p4k: #ef4444;
+  --chip-rym: #3b82f6;
+
+  /* playback services (brand-ish, for the service-agnostic switcher) */
+  --svc-spotify: #1DB954;
+  --svc-apple: #FA243C;
+  --svc-ytm: #FF3B30;
+  --svc-tidal: #38b6ff;
+}
+
+.font-serif-lore { font-family: 'Fraunces', serif; }
+.font-sans-lore { font-family: 'Inter', sans-serif; }
+.font-mono-lore { font-family: 'JetBrains Mono', monospace; }
+
+.lore-grain { position: relative; }
+.lore-grain::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 50;
+}
+
+.lore-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.lore-scroll::-webkit-scrollbar-track { background: transparent; }
+.lore-scroll::-webkit-scrollbar-thumb { background: var(--lore-elevated); border-radius: 6px; }
+
+@keyframes eq {
+  0%, 100% { transform: scaleY(0.35); }
+  50% { transform: scaleY(1); }
+}
+.eq-bar { transform-origin: bottom; animation: eq 0.9s ease-in-out infinite; }
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.8); opacity: 0.6; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+.pulse-dot { position: relative; }
+.pulse-dot::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 1px solid var(--lore-live);
+  animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+.now-glow { box-shadow: 0 0 22px 2px rgba(232, 164, 76, 0.35); }
+
+/* ---- The annotation timeline (the hero) ---- */
+/* A horizontal scrub track: the song laid left→right, annotations pinned to it. */
+.tlq-track {
+  background:
+    repeating-linear-gradient(90deg, rgba(110,102,90,0.18) 0 1px, transparent 1px 100%) 0 0 / 60px 100%,
+    linear-gradient(90deg, rgba(232,164,76,0.10), rgba(232,164,76,0.02));
+}
+.tlq-played { background: linear-gradient(90deg, rgba(232,164,76,0.30), rgba(232,164,76,0.10)); }
+.tlq-region { background: linear-gradient(90deg, rgba(232,164,76,0.22), rgba(232,164,76,0.05)); }
+.tlq-playhead {
+  box-shadow: 0 0 12px 1px rgba(232,164,76,0.6);
+}
+@keyframes tlq-drift {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+.tlq-pin { animation: tlq-drift 3s ease-in-out infinite; }
+
+/* vertical spine for the mobile hero */
+.tlq-spine {
+  background: linear-gradient(to bottom, rgba(110,102,90,0.15) 0%, var(--lore-amber) 10%, var(--lore-amber) 90%, rgba(110,102,90,0.15) 100%);
+}
+
+/* connect-line for a source citation */
+.tlq-cite { background: linear-gradient(to bottom, var(--lore-amber), transparent); }
