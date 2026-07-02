@@ -915,6 +915,102 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /spotify/save:
+    post:
+      operationId: spotifySave
+      tags: [spotify]
+      summary: Save a recording to the listener's Spotify Liked Songs
+      description: >
+        Resolves the MBID to a Spotify track (exact link > ISRC > artist+title
+        search) and saves it to the listener's library. Works on any Spotify
+        tier (no Premium requirement). A 403 with code `insufficient_scope`
+        means the connection predates library access — reconnect to grant it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SpotifyPlayRequest"
+      responses:
+        "200":
+          description: Track saved to Liked Songs (idempotent)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpotifySaveResult"
+        "401":
+          description: No Spotify connection for this session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Connection lacks library scope — reconnect required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Recording unknown or not found on Spotify
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: Spotify library request failed upstream
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Spotify not configured on the server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /spotify/saved:
+    get:
+      operationId: getSpotifySaved
+      tags: [spotify]
+      summary: Whether a recording is already in the listener's Liked Songs
+      parameters:
+        - name: mbid
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Saved state for the resolved Spotify track
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpotifySaveResult"
+        "401":
+          description: No Spotify connection for this session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Connection lacks library scope — reconnect required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Recording unknown or not found on Spotify
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: Spotify library request failed upstream
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /spotify/player:
     get:
       operationId: getSpotifyPlayer
@@ -2090,6 +2186,14 @@ components:
       required:
         - trackUri
         - matchSource
+    SpotifySaveResult:
+      type: object
+      description: Liked Songs state for a resolved track.
+      properties:
+        saved:
+          type: boolean
+      required:
+        - saved
     SpotifyPlayerState:
       type: object
       description: >

@@ -5,6 +5,7 @@ import type {
   StationNowPlaying,
 } from "@workspace/api-client-react";
 import { clockTime, timeAgo } from "../lib/format";
+import { LikeButton } from "./LikeButton";
 import {
   ArrowUpRight,
   Disc3,
@@ -100,6 +101,12 @@ export function NowPlaying({ data, isLoading, fallbackStation }: NowPlayingProps
             <p className="mt-1 text-base text-muted-foreground" data-testid="now-playing-artist">
               {rec?.artist ?? np.rawArtist}
             </p>
+
+            {rec && (
+              <div className="mt-4">
+                <LikeButton mbid={rec.mbid} />
+              </div>
+            )}
 
             {rec && (
               <a

@@ -17,6 +17,10 @@ import {
   resumePlayback,
   getPlayerState,
   SpotifyPlayError,
+  saveTrackToLibrary,
+  isTrackSaved,
+  trackIdFromUri,
+  SpotifyLibraryError,
 } from "../../lore/spotifyConnect.js";
 
 /**
@@ -221,6 +225,75 @@ router.post("/spotify/resume", async (req: Request, res: Response) => {
       return;
     }
     throw err;
+  }
+});
+
+/** Resolve an mbid (from body or query) to a Spotify track id, or answer 404. */
+async function resolveTrackIdOr404(
+  mbid: string,
+  res: Response,
+): Promise<string | null> {
+  const rows = await db
+    .select()
+    .from(recordingsTable)
+    .where(eq(recordingsTable.mbid, mbid))
+    .limit(1);
+  const recording = rows[0];
+  if (!recording) {
+    res.status(404).json({ error: "Recording not on the spine" });
+    return null;
+  }
+  const track = await resolveSpotifyTrack(recording);
+  const trackId = track ? trackIdFromUri(track.uri) : null;
+  if (!trackId) {
+    res.status(404).json({ error: "This recording could not be found on Spotify" });
+    return null;
+  }
+  return trackId;
+}
+
+function handleLibraryError(err: unknown, res: Response): void {
+  if (err instanceof SpotifyLibraryError) {
+    const status = err.code === "insufficient_scope" ? 403 : 502;
+    res.status(status).json({ error: err.message, code: err.code });
+    return;
+  }
+  throw err;
+}
+
+router.post("/spotify/save", async (req: Request, res: Response) => {
+  const parsed = SpotifyPlayBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "mbid is required" });
+    return;
+  }
+  const conn = await requireConnection(req, res);
+  if (!conn) return;
+  const trackId = await resolveTrackIdOr404(parsed.data.mbid, res);
+  if (!trackId) return;
+  try {
+    await saveTrackToLibrary(conn.accessToken, trackId);
+    res.json({ saved: true });
+  } catch (err) {
+    handleLibraryError(err, res);
+  }
+});
+
+router.get("/spotify/saved", async (req: Request, res: Response) => {
+  const mbid = typeof req.query.mbid === "string" ? req.query.mbid : "";
+  if (!mbid) {
+    res.status(400).json({ error: "mbid is required" });
+    return;
+  }
+  const conn = await requireConnection(req, res);
+  if (!conn) return;
+  const trackId = await resolveTrackIdOr404(mbid, res);
+  if (!trackId) return;
+  try {
+    const saved = await isTrackSaved(conn.accessToken, trackId);
+    res.json({ saved });
+  } catch (err) {
+    handleLibraryError(err, res);
   }
 });
 

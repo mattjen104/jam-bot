@@ -24,11 +24,14 @@ import { searchTrack } from "../spotify/appClient.js";
 const ACCOUNTS_BASE = "https://accounts.spotify.com";
 const API_BASE = "https://api.spotify.com/v1";
 
-/** Scopes: read player state (auto-advance), control playback, read product tier. */
+/** Scopes: read player state (auto-advance), control playback, read product
+ * tier, and read/save Liked Songs (the heart button). */
 export const SPOTIFY_SCOPES = [
   "user-read-playback-state",
   "user-modify-playback-state",
   "user-read-private",
+  "user-library-read",
+  "user-library-modify",
 ].join(" ");
 
 export function spotifyConnectConfigured(): boolean {
@@ -434,6 +437,82 @@ export async function resumePlayback(accessToken: string): Promise<void> {
     return;
   }
   throwPlayError(result, "resume");
+}
+
+// ---------------------------------------------------------------------------
+// Library (Liked Songs)
+// ---------------------------------------------------------------------------
+
+/**
+ * Library failure with an honest machine-readable code. `insufficient_scope`
+ * means the connection predates the library scopes — the fix is a reconnect
+ * (fresh consent), which the route layer must surface, never swallow.
+ */
+export class SpotifyLibraryError extends Error {
+  constructor(
+    readonly code: "insufficient_scope" | "spotify_error",
+    message: string,
+  ) {
+    super(message);
+    this.name = "SpotifyLibraryError";
+  }
+}
+
+function throwLibraryError(result: PlayerRequestResult, context: string): never {
+  if (result.status === 403 && result.body.toLowerCase().includes("scope")) {
+    throw new SpotifyLibraryError(
+      "insufficient_scope",
+      "This Spotify connection predates library access — reconnect to grant it",
+    );
+  }
+  throw new SpotifyLibraryError(
+    "spotify_error",
+    `Spotify ${context} failed (${result.status}): ${result.body.slice(0, 200)}`,
+  );
+}
+
+/** Save a track to the listener's Liked Songs (idempotent on Spotify's side). */
+export async function saveTrackToLibrary(
+  accessToken: string,
+  trackId: string,
+): Promise<void> {
+  const res = await fetch(
+    `${API_BASE}/me/tracks?ids=${encodeURIComponent(trackId)}`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ ids: [trackId] }),
+    },
+  );
+  if (res.ok) return;
+  const body = await res.text().catch(() => "");
+  throwLibraryError({ status: res.status, body }, "save track");
+}
+
+/** Whether a track is already in the listener's Liked Songs. */
+export async function isTrackSaved(
+  accessToken: string,
+  trackId: string,
+): Promise<boolean> {
+  const res = await fetch(
+    `${API_BASE}/me/tracks/contains?ids=${encodeURIComponent(trackId)}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throwLibraryError({ status: res.status, body }, "check saved");
+  }
+  const parsed = (await res.json()) as unknown;
+  return Array.isArray(parsed) && parsed[0] === true;
+}
+
+/** `spotify:track:ID` -> `ID`; null when the URI is not a track URI. */
+export function trackIdFromUri(uri: string): string | null {
+  const m = /^spotify:track:([A-Za-z0-9]+)$/.exec(uri);
+  return m ? m[1] : null;
 }
 
 export interface PlayerStateSnapshot {

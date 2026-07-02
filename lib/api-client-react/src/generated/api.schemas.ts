@@ -811,6 +811,13 @@ export interface SpotifyPlayResult {
 }
 
 /**
+ * Liked Songs state for a resolved track.
+ */
+export interface SpotifySaveResult {
+  saved: boolean;
+}
+
+/**
  * Snapshot of the listener's Spotify player (Connect API). `active` is false when Spotify reports no playback session anywhere.
 
  */
@@ -837,4 +844,11 @@ export type GetOembedParams = {
    * @minLength 1
    */
   url: string;
+};
+
+export type GetSpotifySavedParams = {
+  /**
+   * @minLength 1
+   */
+  mbid: string;
 };

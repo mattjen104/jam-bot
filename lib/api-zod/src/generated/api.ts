@@ -1086,6 +1086,36 @@ export const SpotifyPlayResponse = zod
   .describe("Full-track playback started on the listener's own device.");
 
 /**
+ * Resolves the MBID to a Spotify track (exact link > ISRC > artist+title search) and saves it to the listener's library. Works on any Spotify tier (no Premium requirement). A 403 with code `insufficient_scope` means the connection predates library access — reconnect to grant it.
+
+ * @summary Save a recording to the listener's Spotify Liked Songs
+ */
+
+export const SpotifySaveBody = zod.object({
+  mbid: zod.string().min(1),
+});
+
+export const SpotifySaveResponse = zod
+  .object({
+    saved: zod.boolean(),
+  })
+  .describe("Liked Songs state for a resolved track.");
+
+/**
+ * @summary Whether a recording is already in the listener's Liked Songs
+ */
+
+export const GetSpotifySavedQueryParams = zod.object({
+  mbid: zod.coerce.string().min(1),
+});
+
+export const GetSpotifySavedResponse = zod
+  .object({
+    saved: zod.boolean(),
+  })
+  .describe("Liked Songs state for a resolved track.");
+
+/**
  * Polled by the ride player to detect track end (auto-advance). `active` is false when Spotify reports no active playback session.
 
  * @summary Snapshot of the listener's Spotify player state

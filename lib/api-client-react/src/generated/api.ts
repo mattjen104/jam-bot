@@ -23,6 +23,7 @@ import type {
   DiscogsListRequest,
   EntryResult,
   GetOembedParams,
+  GetSpotifySavedParams,
   HealthStatus,
   IngestResult,
   LabelSeedRequest,
@@ -44,6 +45,7 @@ import type {
   SpotifyPlayRequest,
   SpotifyPlayResult,
   SpotifyPlayerState,
+  SpotifySaveResult,
   SpotifyStatus,
   StationArchive,
   StationList,
@@ -2563,6 +2565,188 @@ export const useSpotifyResume = <
 > => {
   return useMutation(getSpotifyResumeMutationOptions(options));
 };
+
+/**
+ * Resolves the MBID to a Spotify track (exact link > ISRC > artist+title search) and saves it to the listener's library. Works on any Spotify tier (no Premium requirement). A 403 with code `insufficient_scope` means the connection predates library access — reconnect to grant it.
+
+ * @summary Save a recording to the listener's Spotify Liked Songs
+ */
+export const getSpotifySaveUrl = () => {
+  return `/api/spotify/save`;
+};
+
+export const spotifySave = async (
+  spotifyPlayRequest: SpotifyPlayRequest,
+  options?: RequestInit,
+): Promise<SpotifySaveResult> => {
+  return customFetch<SpotifySaveResult>(getSpotifySaveUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(spotifyPlayRequest),
+  });
+};
+
+export const getSpotifySaveMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof spotifySave>>,
+    TError,
+    { data: BodyType<SpotifyPlayRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof spotifySave>>,
+  TError,
+  { data: BodyType<SpotifyPlayRequest> },
+  TContext
+> => {
+  const mutationKey = ["spotifySave"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof spotifySave>>,
+    { data: BodyType<SpotifyPlayRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return spotifySave(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SpotifySaveMutationResult = NonNullable<
+  Awaited<ReturnType<typeof spotifySave>>
+>;
+export type SpotifySaveMutationBody = BodyType<SpotifyPlayRequest>;
+export type SpotifySaveMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Save a recording to the listener's Spotify Liked Songs
+ */
+export const useSpotifySave = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof spotifySave>>,
+    TError,
+    { data: BodyType<SpotifyPlayRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof spotifySave>>,
+  TError,
+  { data: BodyType<SpotifyPlayRequest> },
+  TContext
+> => {
+  return useMutation(getSpotifySaveMutationOptions(options));
+};
+
+/**
+ * @summary Whether a recording is already in the listener's Liked Songs
+ */
+export const getGetSpotifySavedUrl = (params: GetSpotifySavedParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/spotify/saved?${stringifiedParams}`
+    : `/api/spotify/saved`;
+};
+
+export const getSpotifySaved = async (
+  params: GetSpotifySavedParams,
+  options?: RequestInit,
+): Promise<SpotifySaveResult> => {
+  return customFetch<SpotifySaveResult>(getGetSpotifySavedUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetSpotifySavedQueryKey = (params?: GetSpotifySavedParams) => {
+  return [`/api/spotify/saved`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetSpotifySavedQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSpotifySaved>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: GetSpotifySavedParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSpotifySaved>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetSpotifySavedQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getSpotifySaved>>> = ({
+    signal,
+  }) => getSpotifySaved(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSpotifySaved>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSpotifySavedQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSpotifySaved>>
+>;
+export type GetSpotifySavedQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Whether a recording is already in the listener's Liked Songs
+ */
+
+export function useGetSpotifySaved<
+  TData = Awaited<ReturnType<typeof getSpotifySaved>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: GetSpotifySavedParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSpotifySaved>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSpotifySavedQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * Polled by the ride player to detect track end (auto-advance). `active` is false when Spotify reports no active playback session.
