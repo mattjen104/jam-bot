@@ -20,6 +20,7 @@ const SEED_STATIONS: InsertStation[] = [
     donateUrl: "https://radioparadise.com/support",
     nowPlayingSource: "radio_paradise",
     nowPlayingConfig: { chan: "0" },
+    stationClass: "curated",
     sortOrder: 10,
   },
   {
@@ -34,6 +35,7 @@ const SEED_STATIONS: InsertStation[] = [
     donateUrl: "https://radioparadise.com/support",
     nowPlayingSource: "radio_paradise",
     nowPlayingConfig: { chan: "1" },
+    stationClass: "curated",
     sortOrder: 20,
   },
   {
@@ -48,6 +50,7 @@ const SEED_STATIONS: InsertStation[] = [
     donateUrl: "https://radioparadise.com/support",
     nowPlayingSource: "radio_paradise",
     nowPlayingConfig: { chan: "2" },
+    stationClass: "curated",
     sortOrder: 30,
   },
   {
@@ -60,8 +63,9 @@ const SEED_STATIONS: InsertStation[] = [
     streamFormat: "aac",
     homepageUrl: "https://kexp.org",
     donateUrl: "https://www.kexp.org/donate/",
-    nowPlayingSource: "kexp",
+    nowPlayingSource: "kexp_api",
     nowPlayingConfig: {},
+    stationClass: "community",
     sortOrder: 40,
   },
 ];
@@ -90,6 +94,7 @@ export async function seedStations(): Promise<void> {
           donateUrl: s.donateUrl ?? null,
           nowPlayingSource: s.nowPlayingSource ?? null,
           nowPlayingConfig: s.nowPlayingConfig ?? null,
+          stationClass: s.stationClass ?? "curated",
           sortOrder: s.sortOrder ?? 0,
           updatedAt: sql`now()`,
         },

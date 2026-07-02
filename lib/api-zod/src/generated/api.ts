@@ -300,3 +300,108 @@ export const GetStationNowPlayingResponse = zod.object({
     ])
     .optional(),
 });
+
+/**
+ * Every logged spin of a recording (newest first), each attributed to the station and — when the source exposes it — the show and DJ. This is the play-history surface for a track page.
+
+ * @summary Where a recording has been played, with attribution
+ */
+
+export const GetRecordingSpinsParams = zod.object({
+  mbid: zod.coerce.string().min(1),
+});
+
+export const GetRecordingSpinsResponse = zod.object({
+  mbid: zod.string(),
+  spins: zod.array(
+    zod
+      .object({
+        playedAt: zod.string(),
+        source: zod.string().nullish(),
+        confidence: zod.enum(["recording_id", "isrc", "text", "unresolved"]),
+        station: zod
+          .object({
+            slug: zod.string(),
+            name: zod.string(),
+            stationClass: zod.string(),
+          })
+          .describe("A station reference used in spin\/segue attribution."),
+        show: zod
+          .union([
+            zod
+              .object({
+                name: zod.string(),
+                djName: zod.string().nullish(),
+              })
+              .describe(
+                "Show + DJ attribution for a spin, when the source exposes it.",
+              ),
+            zod.null(),
+          ])
+          .optional(),
+      })
+      .describe(
+        "One logged play of a recording, with station + show attribution.",
+      ),
+  ),
+});
+
+/**
+ * Real DJ transitions observed after this recording, ranked by a station-class-weighted frequency so curated/community segues outrank commercial ones. Powers Segue mode.
+
+ * @summary Songs observed playing next (Segue mode)
+ */
+
+export const GetRecordingSeguesParams = zod.object({
+  mbid: zod.coerce.string().min(1),
+});
+
+export const GetRecordingSeguesResponse = zod.object({
+  mbid: zod.string(),
+  next: zod.array(
+    zod
+      .object({
+        mbid: zod.string(),
+        title: zod.string(),
+        artist: zod.string(),
+        artworkUrl: zod.string().nullish(),
+        count: zod.number(),
+        score: zod.number(),
+        stations: zod.array(
+          zod
+            .object({
+              slug: zod.string(),
+              name: zod.string(),
+              stationClass: zod.string(),
+            })
+            .describe("A station reference used in spin\/segue attribution."),
+        ),
+      })
+      .describe("A song observed playing after the queried recording."),
+  ),
+});
+
+/**
+ * Log a spin by hand for historical reconstruction, resolved to the MBID spine and stored with source="manual" and a required citation. Guarded by the `x-admin-token` header matching the LORE_ADMIN_TOKEN env var; returns 503 when the admin token is not configured.
+
+ * @summary Admin-only manual/historical spin entry
+ */
+export const CreateManualSpinHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const CreateManualSpinBody = zod
+  .object({
+    stationSlug: zod.string().min(1),
+    artist: zod.string().min(1),
+    title: zod.string().min(1),
+    citation: zod.string().min(1),
+    playedAt: zod
+      .string()
+      .optional()
+      .describe("ISO timestamp; defaults to now when omitted."),
+    showName: zod.string().optional(),
+    djName: zod.string().optional(),
+    durationMs: zod.number().optional(),
+  })
+  .describe("Admin manual\/historical spin entry.");

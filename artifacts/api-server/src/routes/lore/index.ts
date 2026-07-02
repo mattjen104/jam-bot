@@ -3,6 +3,11 @@ import {
   ListStationsResponse,
   GetStationNowPlayingParams,
   GetStationNowPlayingResponse,
+  GetRecordingSpinsParams,
+  GetRecordingSpinsResponse,
+  GetRecordingSeguesParams,
+  GetRecordingSeguesResponse,
+  CreateManualSpinBody,
 } from "@workspace/api-zod";
 import {
   db,
@@ -12,6 +17,8 @@ import {
   type Station,
 } from "@workspace/db";
 import { eq, asc, desc } from "drizzle-orm";
+import { nextSegues, spinsForRecording } from "../../lore/segue.js";
+import { ingestManualSpin } from "../../lore/resolve.js";
 
 const router: IRouter = Router();
 
@@ -112,6 +119,114 @@ router.get("/stations/:slug/now-playing", async (req, res) => {
   } catch (err) {
     console.error("[lore] now-playing failed", err);
     return res.status(503).json({ error: "Could not load now-playing" });
+  }
+});
+
+// GET /api/recordings/:mbid/spins
+router.get("/recordings/:mbid/spins", async (req, res) => {
+  const parsed = GetRecordingSpinsParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(404).json({ error: "Recording not found" });
+  }
+  try {
+    const spins = await spinsForRecording(parsed.data.mbid);
+    const data = GetRecordingSpinsResponse.parse({
+      mbid: parsed.data.mbid,
+      spins: spins.map((s) => ({
+        playedAt: s.playedAt.toISOString(),
+        source: s.source,
+        confidence: s.confidence,
+        station: s.station,
+        show: s.show,
+      })),
+    });
+    return res.json(data);
+  } catch (err) {
+    console.error("[lore] recording spins failed", err);
+    return res.status(503).json({ error: "Could not load spins" });
+  }
+});
+
+// GET /api/recordings/:mbid/segues
+router.get("/recordings/:mbid/segues", async (req, res) => {
+  const parsed = GetRecordingSeguesParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(404).json({ error: "Recording not found" });
+  }
+  try {
+    const next = await nextSegues(parsed.data.mbid);
+    const data = GetRecordingSeguesResponse.parse({
+      mbid: parsed.data.mbid,
+      next,
+    });
+    return res.json(data);
+  } catch (err) {
+    console.error("[lore] recording segues failed", err);
+    return res.status(503).json({ error: "Could not load segues" });
+  }
+});
+
+// POST /api/admin/spins — admin-only manual/historical spin entry.
+router.post("/admin/spins", async (req, res) => {
+  // Gate on a server-side token. Absent env => the endpoint is disabled (503),
+  // never silently open. Never log the token.
+  const adminToken = process.env["LORE_ADMIN_TOKEN"];
+  if (!adminToken) {
+    return res.status(503).json({ error: "Manual entry is not configured" });
+  }
+  const provided = req.header("x-admin-token");
+  if (!provided || provided !== adminToken) {
+    return res.status(401).json({ error: "Invalid admin token" });
+  }
+
+  const parsed = CreateManualSpinBody.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid manual spin" });
+  }
+  const body = parsed.data;
+
+  try {
+    const [station] = await db
+      .select()
+      .from(stationsTable)
+      .where(eq(stationsTable.slug, body.stationSlug))
+      .limit(1);
+    if (!station) {
+      return res.status(404).json({ error: "Station not found" });
+    }
+
+    const playedAt = body.playedAt ? new Date(body.playedAt) : new Date();
+    if (Number.isNaN(playedAt.getTime())) {
+      return res.status(400).json({ error: "Invalid playedAt timestamp" });
+    }
+
+    const { logged, resolution } = await ingestManualSpin({
+      station,
+      artist: body.artist,
+      title: body.title,
+      citation: body.citation,
+      playedAt,
+      ...(body.showName
+        ? {
+            show: {
+              name: body.showName,
+              ...(body.djName ? { djName: body.djName } : {}),
+            },
+          }
+        : {}),
+      ...(body.durationMs != null ? { durationMs: body.durationMs } : {}),
+    });
+
+    return res.status(201).json({
+      logged,
+      mbid: resolution.mbid,
+      confidence: resolution.confidence,
+    });
+  } catch (err) {
+    console.error("[lore] manual spin failed", err);
+    const message =
+      err instanceof Error ? err.message : "Could not log manual spin";
+    return res.status(400).json({ error: message });
   }
 });
 

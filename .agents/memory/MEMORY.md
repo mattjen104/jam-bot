@@ -14,3 +14,4 @@
 - [Playhead "One Spine" model](playhead-one-spine-model.md) — unified interface direction (on/off-spine, liquid→crystal, Peek→Card→Dive, Lens, enqueue-never-cut); canonical demo = Fleetwood Mac "Go Your Own Way".
 - [Mockup screenshot verification](mockup-screenshot-verification.md) — external_url screenshot shows heavy-CSS mockups as blank (paints early); verify with app_preview, which uses the real browser + returns console logs.
 - [Lore now-playing contract](lore-nowplaying-contract.md) — confidence tiers (recording_id>isrc>text>unresolved); artwork+exact links are best-effort/often absent, so UI must degrade and tests must not assert their presence.
+- [Postgres NUL in text columns](postgres-nul-in-text.md) — NUL (U+0000) is illegal in Postgres text (err 22021); never use it as a DB key separator, use U+001F. Silently-empty table + try/catch = swallowed DB error.

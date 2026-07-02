@@ -173,6 +173,105 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /recordings/{mbid}/spins:
+    get:
+      operationId: getRecordingSpins
+      tags: [recordings]
+      summary: Where a recording has been played, with attribution
+      description: >
+        Every logged spin of a recording (newest first), each attributed to the
+        station and — when the source exposes it — the show and DJ. This is the
+        play-history surface for a track page.
+      parameters:
+        - name: mbid
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: The recording's spins
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecordingSpins"
+  /recordings/{mbid}/segues:
+    get:
+      operationId: getRecordingSegues
+      tags: [recordings]
+      summary: Songs observed playing next (Segue mode)
+      description: >
+        Real DJ transitions observed after this recording, ranked by a
+        station-class-weighted frequency so curated/community segues outrank
+        commercial ones. Powers Segue mode.
+      parameters:
+        - name: mbid
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Ranked next-song candidates
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SegueNextList"
+  /admin/spins:
+    post:
+      operationId: createManualSpin
+      tags: [admin]
+      summary: Admin-only manual/historical spin entry
+      description: >
+        Log a spin by hand for historical reconstruction, resolved to the MBID
+        spine and stored with source="manual" and a required citation. Guarded
+        by the `x-admin-token` header matching the LORE_ADMIN_TOKEN env var;
+        returns 503 when the admin token is not configured.
+      parameters:
+        - name: x-admin-token
+          in: header
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ManualSpinRequest"
+      responses:
+        "201":
+          description: The spin was logged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManualSpinResponse"
+        "400":
+          description: Invalid manual spin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Station not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Admin entry not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 components:
   schemas:
     HealthStatus:
@@ -593,3 +692,142 @@ components:
             - type: "null"
       required:
         - station
+    StationRef:
+      type: object
+      description: A station reference used in spin/segue attribution.
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+        stationClass:
+          type: string
+      required:
+        - slug
+        - name
+        - stationClass
+    ShowRef:
+      type: object
+      description: Show + DJ attribution for a spin, when the source exposes it.
+      properties:
+        name:
+          type: string
+        djName:
+          type: ["string", "null"]
+      required:
+        - name
+    RecordingSpin:
+      type: object
+      description: One logged play of a recording, with station + show attribution.
+      properties:
+        playedAt:
+          type: string
+        source:
+          type: ["string", "null"]
+        confidence:
+          type: string
+          enum: [recording_id, isrc, text, unresolved]
+        station:
+          $ref: "#/components/schemas/StationRef"
+        show:
+          anyOf:
+            - $ref: "#/components/schemas/ShowRef"
+            - type: "null"
+      required:
+        - playedAt
+        - confidence
+        - station
+    RecordingSpins:
+      type: object
+      properties:
+        mbid:
+          type: string
+        spins:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecordingSpin"
+      required:
+        - mbid
+        - spins
+    SegueNext:
+      type: object
+      description: A song observed playing after the queried recording.
+      properties:
+        mbid:
+          type: string
+        title:
+          type: string
+        artist:
+          type: string
+        artworkUrl:
+          type: ["string", "null"]
+        count:
+          type: integer
+        score:
+          type: number
+        stations:
+          type: array
+          items:
+            $ref: "#/components/schemas/StationRef"
+      required:
+        - mbid
+        - title
+        - artist
+        - count
+        - score
+        - stations
+    SegueNextList:
+      type: object
+      properties:
+        mbid:
+          type: string
+        next:
+          type: array
+          items:
+            $ref: "#/components/schemas/SegueNext"
+      required:
+        - mbid
+        - next
+    ManualSpinRequest:
+      type: object
+      description: Admin manual/historical spin entry.
+      properties:
+        stationSlug:
+          type: string
+          minLength: 1
+        artist:
+          type: string
+          minLength: 1
+        title:
+          type: string
+          minLength: 1
+        citation:
+          type: string
+          minLength: 1
+        playedAt:
+          type: string
+          description: ISO timestamp; defaults to now when omitted.
+        showName:
+          type: string
+        djName:
+          type: string
+        durationMs:
+          type: integer
+      required:
+        - stationSlug
+        - artist
+        - title
+        - citation
+    ManualSpinResponse:
+      type: object
+      properties:
+        logged:
+          type: boolean
+        mbid:
+          type: ["string", "null"]
+        confidence:
+          type: string
+          enum: [recording_id, isrc, text, unresolved]
+      required:
+        - logged
+        - confidence

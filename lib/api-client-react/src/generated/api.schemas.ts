@@ -277,6 +277,106 @@ export interface StationNowPlaying {
   nowPlaying?: NowPlaying | null;
 }
 
+/**
+ * A station reference used in spin/segue attribution.
+ */
+export interface StationRef {
+  slug: string;
+  name: string;
+  stationClass: string;
+}
+
+/**
+ * Show + DJ attribution for a spin, when the source exposes it.
+ */
+export interface ShowRef {
+  name: string;
+  /** @nullable */
+  djName?: string | null;
+}
+
+export type RecordingSpinConfidence =
+  (typeof RecordingSpinConfidence)[keyof typeof RecordingSpinConfidence];
+
+export const RecordingSpinConfidence = {
+  recording_id: "recording_id",
+  isrc: "isrc",
+  text: "text",
+  unresolved: "unresolved",
+} as const;
+
+/**
+ * One logged play of a recording, with station + show attribution.
+ */
+export interface RecordingSpin {
+  playedAt: string;
+  /** @nullable */
+  source?: string | null;
+  confidence: RecordingSpinConfidence;
+  station: StationRef;
+  show?: ShowRef | null;
+}
+
+export interface RecordingSpins {
+  mbid: string;
+  spins: RecordingSpin[];
+}
+
+/**
+ * A song observed playing after the queried recording.
+ */
+export interface SegueNext {
+  mbid: string;
+  title: string;
+  artist: string;
+  /** @nullable */
+  artworkUrl?: string | null;
+  count: number;
+  score: number;
+  stations: StationRef[];
+}
+
+export interface SegueNextList {
+  mbid: string;
+  next: SegueNext[];
+}
+
+/**
+ * Admin manual/historical spin entry.
+ */
+export interface ManualSpinRequest {
+  /** @minLength 1 */
+  stationSlug: string;
+  /** @minLength 1 */
+  artist: string;
+  /** @minLength 1 */
+  title: string;
+  /** @minLength 1 */
+  citation: string;
+  /** ISO timestamp; defaults to now when omitted. */
+  playedAt?: string;
+  showName?: string;
+  djName?: string;
+  durationMs?: number;
+}
+
+export type ManualSpinResponseConfidence =
+  (typeof ManualSpinResponseConfidence)[keyof typeof ManualSpinResponseConfidence];
+
+export const ManualSpinResponseConfidence = {
+  recording_id: "recording_id",
+  isrc: "isrc",
+  text: "text",
+  unresolved: "unresolved",
+} as const;
+
+export interface ManualSpinResponse {
+  logged: boolean;
+  /** @nullable */
+  mbid?: string | null;
+  confidence: ManualSpinResponseConfidence;
+}
+
 export type ResolveSongParams = {
   /**
    * @minLength 1

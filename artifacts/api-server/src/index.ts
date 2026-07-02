@@ -2,6 +2,7 @@ import app from "./app";
 import { wireSongEnrichment } from "./song/wire.js";
 import { seedStations } from "./lore/seed.js";
 import { startLorePoller } from "./lore/poller.js";
+import { startSegueJob } from "./lore/segue-job.js";
 
 const rawPort = process.env["PORT"];
 
@@ -31,6 +32,7 @@ async function bootLore(): Promise<void> {
     wireSongEnrichment();
     await seedStations();
     await startLorePoller();
+    startSegueJob();
   } catch (err) {
     console.error("[lore] boot failed", err);
   }

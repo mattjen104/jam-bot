@@ -5,10 +5,13 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
+  MutationFunction,
   QueryFunction,
   QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult,
 } from "@tanstack/react-query";
@@ -17,16 +20,20 @@ import type {
   ApiError,
   GetOembedParams,
   HealthStatus,
+  ManualSpinRequest,
+  ManualSpinResponse,
   OEmbed,
+  RecordingSpins,
   ResolveSongParams,
   ResolvedSong,
+  SegueNextList,
   SongContext,
   StationList,
   StationNowPlaying,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
-import type { ErrorType } from "../custom-fetch";
+import type { ErrorType, BodyType } from "../custom-fetch";
 
 type AwaitedInput<T> = PromiseLike<T> | T;
 
@@ -557,3 +564,270 @@ export function useGetStationNowPlaying<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Every logged spin of a recording (newest first), each attributed to the station and — when the source exposes it — the show and DJ. This is the play-history surface for a track page.
+
+ * @summary Where a recording has been played, with attribution
+ */
+export const getGetRecordingSpinsUrl = (mbid: string) => {
+  return `/api/recordings/${mbid}/spins`;
+};
+
+export const getRecordingSpins = async (
+  mbid: string,
+  options?: RequestInit,
+): Promise<RecordingSpins> => {
+  return customFetch<RecordingSpins>(getGetRecordingSpinsUrl(mbid), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetRecordingSpinsQueryKey = (mbid: string) => {
+  return [`/api/recordings/${mbid}/spins`] as const;
+};
+
+export const getGetRecordingSpinsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getRecordingSpins>>,
+  TError = ErrorType<unknown>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecordingSpins>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetRecordingSpinsQueryKey(mbid);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getRecordingSpins>>
+  > = ({ signal }) => getRecordingSpins(mbid, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!mbid,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getRecordingSpins>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetRecordingSpinsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getRecordingSpins>>
+>;
+export type GetRecordingSpinsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Where a recording has been played, with attribution
+ */
+
+export function useGetRecordingSpins<
+  TData = Awaited<ReturnType<typeof getRecordingSpins>>,
+  TError = ErrorType<unknown>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecordingSpins>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetRecordingSpinsQueryOptions(mbid, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Real DJ transitions observed after this recording, ranked by a station-class-weighted frequency so curated/community segues outrank commercial ones. Powers Segue mode.
+
+ * @summary Songs observed playing next (Segue mode)
+ */
+export const getGetRecordingSeguesUrl = (mbid: string) => {
+  return `/api/recordings/${mbid}/segues`;
+};
+
+export const getRecordingSegues = async (
+  mbid: string,
+  options?: RequestInit,
+): Promise<SegueNextList> => {
+  return customFetch<SegueNextList>(getGetRecordingSeguesUrl(mbid), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetRecordingSeguesQueryKey = (mbid: string) => {
+  return [`/api/recordings/${mbid}/segues`] as const;
+};
+
+export const getGetRecordingSeguesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getRecordingSegues>>,
+  TError = ErrorType<unknown>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecordingSegues>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetRecordingSeguesQueryKey(mbid);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getRecordingSegues>>
+  > = ({ signal }) => getRecordingSegues(mbid, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!mbid,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getRecordingSegues>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetRecordingSeguesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getRecordingSegues>>
+>;
+export type GetRecordingSeguesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Songs observed playing next (Segue mode)
+ */
+
+export function useGetRecordingSegues<
+  TData = Awaited<ReturnType<typeof getRecordingSegues>>,
+  TError = ErrorType<unknown>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecordingSegues>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetRecordingSeguesQueryOptions(mbid, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Log a spin by hand for historical reconstruction, resolved to the MBID spine and stored with source="manual" and a required citation. Guarded by the `x-admin-token` header matching the LORE_ADMIN_TOKEN env var; returns 503 when the admin token is not configured.
+
+ * @summary Admin-only manual/historical spin entry
+ */
+export const getCreateManualSpinUrl = () => {
+  return `/api/admin/spins`;
+};
+
+export const createManualSpin = async (
+  manualSpinRequest: ManualSpinRequest,
+  options?: RequestInit,
+): Promise<ManualSpinResponse> => {
+  return customFetch<ManualSpinResponse>(getCreateManualSpinUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(manualSpinRequest),
+  });
+};
+
+export const getCreateManualSpinMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createManualSpin>>,
+    TError,
+    { data: BodyType<ManualSpinRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createManualSpin>>,
+  TError,
+  { data: BodyType<ManualSpinRequest> },
+  TContext
+> => {
+  const mutationKey = ["createManualSpin"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createManualSpin>>,
+    { data: BodyType<ManualSpinRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createManualSpin(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateManualSpinMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createManualSpin>>
+>;
+export type CreateManualSpinMutationBody = BodyType<ManualSpinRequest>;
+export type CreateManualSpinMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Admin-only manual/historical spin entry
+ */
+export const useCreateManualSpin = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createManualSpin>>,
+    TError,
+    { data: BodyType<ManualSpinRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createManualSpin>>,
+  TError,
+  { data: BodyType<ManualSpinRequest> },
+  TContext
+> => {
+  return useMutation(getCreateManualSpinMutationOptions(options));
+};

@@ -16,11 +16,53 @@ export interface NowPlayingRaw {
   durationMs?: number;
 }
 
+/** Show + DJ attribution for a spin, when the source exposes it. */
+export interface ShowAttribution {
+  name: string;
+  djName?: string;
+}
+
+/**
+ * A single play from a station's history feed. Extends the now-playing shape
+ * with the fields the ingestion pipeline needs to log continuously and
+ * idempotently: the source's stable id (dedup + cursor), the timestamp the
+ * source reported, and show/DJ attribution.
+ */
+export interface RawSpin extends NowPlayingRaw {
+  /** Source's stable id for this play, when it exposes one. */
+  externalId?: string;
+  /** When the source says it was played. Defaults to ingest time when absent. */
+  playedAt?: Date;
+  /** Show/DJ attribution, when the source exposes program metadata. */
+  show?: ShowAttribution;
+}
+
 /**
  * A now-playing adapter fetches + normalizes one station's current track. It is
  * best-effort: returns null when nothing is on air, the source is silent, or on
  * any failure. Adapters must never throw — the poller depends on that.
+ *
+ * Kept for change-detection sources (Radio Paradise) that only expose "the
+ * current track" with no timestamp or stable id.
  */
 export type NowPlayingAdapter = (
   config: Record<string, unknown>,
 ) => Promise<NowPlayingRaw | null>;
+
+/** Options for a batch history fetch. */
+export interface FetchRecentOptions {
+  /** Max plays to return (backfill uses a large value, live poll a small one). */
+  limit?: number;
+}
+
+/**
+ * A history adapter fetches a station's recent plays (newest-first or
+ * oldest-first — the pipeline sorts before ingesting) as a batch. Sources with
+ * a proper play-history feed (KEXP, Spinitron, BBC) implement this; the
+ * pipeline dedups by `externalId` and advances a per-station cursor. Like
+ * now-playing adapters, these are best-effort and must never throw.
+ */
+export type HistoryAdapter = (
+  config: Record<string, unknown>,
+  opts?: FetchRecentOptions,
+) => Promise<RawSpin[]>;
