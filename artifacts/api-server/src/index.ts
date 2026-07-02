@@ -4,6 +4,7 @@ import { seedStations, seedPickers } from "./lore/seed.js";
 import { startLorePoller } from "./lore/poller.js";
 import { startBlogPoller } from "./lore/blog-poller.js";
 import { startBackfillJob } from "./lore/backfill.js";
+import { startReconcileJob } from "./lore/reconcile.js";
 import { startNtsPoller } from "./lore/nts.js";
 import { startSegueJob } from "./lore/segue-job.js";
 import { ensurePicksUnifiedView } from "./lore/view.js";
@@ -41,6 +42,7 @@ async function bootLore(): Promise<void> {
     await startBlogPoller();
     await startNtsPoller();
     await startBackfillJob();
+    await startReconcileJob();
     startSegueJob();
   } catch (err) {
     console.error("[lore] boot failed", err);

@@ -442,10 +442,18 @@ export async function ingestRawSpins(
      * into hundreds of link fetches. Links converge later.
      */
     backfill?: boolean;
+    /**
+     * Reconciliation mode: like backfill, never touch `lastSeenCursor` (the
+     * live poller owns it, and a gap-fill sweep must not yank it around) — but
+     * KEEP link enrichment, because the window is small and bounded and these
+     * spins should end up indistinguishable from live-polled ones.
+     */
+    reconcile?: boolean;
   },
 ): Promise<number> {
   if (!spins.length) return 0;
   const backfill = opts?.backfill ?? false;
+  const skipCursor = backfill || (opts?.reconcile ?? false);
   try {
     // Oldest-first so segue derivation and now-playing ordering read naturally.
     const ordered = [...spins].sort((a, b) => {
@@ -499,7 +507,7 @@ export async function ingestRawSpins(
       if (cursorValue) newestCursor = cursorValue;
     }
 
-    if (!backfill && newestCursor && newestCursor !== station.lastSeenCursor) {
+    if (!skipCursor && newestCursor && newestCursor !== station.lastSeenCursor) {
       await db
         .update(stationsTable)
         .set({ lastSeenCursor: newestCursor })
