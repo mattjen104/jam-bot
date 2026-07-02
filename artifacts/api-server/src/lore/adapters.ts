@@ -199,8 +199,9 @@ async function kexpShowInfo(
 
 const kexpApi: HistoryAdapter = async (_config, opts) => {
   const limit = Math.min(Math.max(opts?.limit ?? 20, 1), 200);
+  const offset = Math.max(opts?.page ?? 0, 0) * limit;
   const body = (await getJson(
-    `https://api.kexp.org/v2/plays/?format=json&limit=${limit}`,
+    `https://api.kexp.org/v2/plays/?format=json&limit=${limit}&offset=${offset}`,
   )) as { results?: Array<Record<string, unknown>> };
   // Resolve the (small, recurring) set of show ids referenced in this batch.
   const showIds = new Set<number>();
@@ -279,6 +280,7 @@ const spinitron: HistoryAdapter = async (config, opts) => {
   const token = str(config.apiKey) ?? str(config.accessToken);
   if (!token) return [];
   const count = Math.min(Math.max(opts?.limit ?? 20, 1), 200);
+  const page = Math.max(opts?.page ?? 0, 0) + 1; // Spinitron pages are 1-based.
   const auth = `access-token=${encodeURIComponent(token)}`;
   // Playlists first (bounded) so we can attribute show + DJ to each spin.
   let playlistMap = new Map<number, { name: string; djName?: string }>();
@@ -291,7 +293,7 @@ const spinitron: HistoryAdapter = async (config, opts) => {
     // Attribution is best-effort; spins are still logged without it.
   }
   const spinsBody = await getJson(
-    `https://spinitron.com/api/spins?${auth}&count=${count}`,
+    `https://spinitron.com/api/spins?${auth}&count=${count}&page=${page}`,
   );
   return parseSpinitronSpins(spinsBody, playlistMap);
 };

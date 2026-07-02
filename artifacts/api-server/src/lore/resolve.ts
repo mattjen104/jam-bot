@@ -109,6 +109,36 @@ async function writeResolutionCache(
     });
 }
 
+/** Cache read that never throws — a read failure just falls through to MB. */
+async function readResolutionCacheSafe(
+  key: string,
+): Promise<{ mbid: string | null; confidence: string } | undefined> {
+  try {
+    return await readResolutionCache(key);
+  } catch (err) {
+    console.error("[lore] resolution cache read failed", err);
+    return undefined;
+  }
+}
+
+/** Cache write that never throws — a write failure must not break resolution. */
+async function writeResolutionCacheSafe(
+  key: string,
+  mbid: string | null,
+  confidence: string,
+): Promise<void> {
+  try {
+    await writeResolutionCache(key, mbid, confidence);
+  } catch (err) {
+    console.error("[lore] resolution cache write failed", err);
+  }
+}
+
+/** Cache key for an ISRC lookup — namespaced away from text keys on purpose. */
+function isrcKey(isrc: string): string {
+  return `isrc\u001f${isrc.trim().toUpperCase()}`;
+}
+
 /**
  * Resolve a raw artist+title to a MusicBrainz Recording ID (the spine key).
  *
@@ -130,57 +160,47 @@ export async function resolveToMbid(
 ): Promise<MbidResolution> {
   const base = { title: rawTitle, artist: rawArtist };
 
-  // Source handed us the canonical id — nothing to resolve or cache.
+  // 1. Source handed us the canonical id — strongest, free, nothing to cache.
   if (opts?.recordingId) {
     return { mbid: opts.recordingId, confidence: "recording_id", ...base };
   }
 
-  const key = normalizeKey(rawArtist, rawTitle);
-
-  // Cache first — this is what keeps us under the MusicBrainz 1 req/sec budget.
-  try {
-    const cached = await readResolutionCache(key);
-    if (cached) {
-      const confidence = (cached.confidence as MbidResolution["confidence"]) ||
-        "unresolved";
-      return { mbid: cached.mbid, confidence, ...base };
-    }
-  } catch (err) {
-    // A cache read failure must not block resolution — fall through to MB.
-    console.error("[lore] resolution cache read failed", err);
-  }
-
-  const result = await resolveUncached(rawArtist, rawTitle, durationMs, opts);
-
-  // Persist hit AND miss so we never re-query this pair.
-  try {
-    if (result.confidence !== "recording_id") {
-      await writeResolutionCache(key, result.mbid, result.confidence);
-    }
-  } catch (err) {
-    console.error("[lore] resolution cache write failed", err);
-  }
-
-  return result;
-}
-
-/** The actual (rate-limited) MusicBrainz resolution, behind the cache. */
-async function resolveUncached(
-  rawArtist: string,
-  rawTitle: string,
-  durationMs: number | undefined,
-  opts: { isrc?: string } | undefined,
-): Promise<MbidResolution> {
-  const base = { title: rawTitle, artist: rawArtist };
-
+  // 2. ISRC — a strong identifier, tried BEFORE the text cache and under its
+  //    own key namespace. This is what lets a spin that was only ever seen as
+  //    text-unresolved converge later: a weaker text-keyed miss can never
+  //    short-circuit an ISRC that a subsequent spin carries. Hits AND misses
+  //    are cached under the ISRC key, so we still honor the 1 req/sec budget.
   if (opts?.isrc) {
-    const mbid = await resolveRecordingId(opts.isrc);
-    if (mbid) return { mbid, confidence: "isrc", isrc: opts.isrc, ...base };
+    const ik = isrcKey(opts.isrc);
+    const cached = await readResolutionCacheSafe(ik);
+    if (cached === undefined) {
+      let mbid: string | null = null;
+      try {
+        mbid = await resolveRecordingId(opts.isrc);
+      } catch (err) {
+        console.error("[lore] isrc resolution failed", opts.isrc, err);
+      }
+      await writeResolutionCacheSafe(ik, mbid, mbid ? "isrc" : "unresolved");
+      if (mbid) return { mbid, confidence: "isrc", isrc: opts.isrc, ...base };
+    } else if (cached.mbid) {
+      return { mbid: cached.mbid, confidence: "isrc", isrc: opts.isrc, ...base };
+    }
+    // Cached miss OR live miss — fall through to a text search.
+  }
+
+  // 3. Scored artist+title search — keyed on the normalized pair. The cache
+  //    (hit or miss) keeps us under the MusicBrainz 1 req/sec budget.
+  const key = normalizeKey(rawArtist, rawTitle);
+  const cached = await readResolutionCacheSafe(key);
+  if (cached) {
+    const confidence =
+      (cached.confidence as MbidResolution["confidence"]) || "unresolved";
+    return { mbid: cached.mbid, confidence, ...base };
   }
 
   const match = await resolveRecordingByText(rawArtist, rawTitle);
   if (match && !durationMismatch(durationMs, match.durationMs)) {
-    return {
+    const result: MbidResolution = {
       mbid: match.recordingId,
       confidence: "text",
       title: match.title || rawTitle,
@@ -189,8 +209,12 @@ async function resolveUncached(
       ...(match.isrc ? { isrc: match.isrc } : {}),
       ...(match.durationMs != null ? { durationMs: match.durationMs } : {}),
     };
+    await writeResolutionCacheSafe(key, result.mbid, "text");
+    return result;
   }
 
+  // Cache the miss so an unresolvable pair isn't re-queried on every spin.
+  await writeResolutionCacheSafe(key, null, "unresolved");
   return { mbid: null, confidence: "unresolved", ...base };
 }
 

@@ -6,6 +6,7 @@ import {
   isPollable,
 } from "./adapters.js";
 import { logSpinIfChanged, ingestRawSpins } from "./resolve.js";
+import type { HistoryAdapter, RawSpin } from "./types.js";
 
 /**
  * Minimal, safe ingestion poller. No background-worker infra exists in the
@@ -17,10 +18,11 @@ import { logSpinIfChanged, ingestRawSpins } from "./resolve.js";
  * adapters or resolver.
  *
  * Two ingest paths, chosen per source:
- *  - History adapters (KEXP/Spinitron/BBC) fetch a batch of recent plays and
- *    ingest idempotently against a per-station cursor. On first enroll (no
- *    cursor yet) we pull a larger backfill window once, then poll a small
- *    increment.
+ *  - History adapters (KEXP/Spinitron/BBC) page recent plays newest-first and
+ *    ingest idempotently against a per-station cursor. Every poll walks pages
+ *    back until it reaches the last-seen cursor (bounded by a catch-up cap), so
+ *    a gap longer than one page — e.g. after downtime — never silently drops
+ *    plays. On first enroll (no cursor) it pages a bounded backfill window.
  *  - Now-playing adapters (Radio Paradise / station_page) fetch "the current
  *    track" and log on change.
  */
@@ -37,15 +39,54 @@ const POLL_INTERVALS_MS: Record<string, number> = {
 const DEFAULT_POLL_MS = 90_000;
 const STAGGER_MS = 4_000;
 
-// Live increment vs first-enroll backfill window (in plays).
-const LIVE_LIMIT = 20;
-const BACKFILL_LIMIT = 200;
+// Paging: plays per page, and the max plays a single poll will walk back. A
+// steady-state poll finds the cursor on page 0 (one request); the cap bounds
+// catch-up after downtime and the first-enroll backfill. ingestRawSpins dedups
+// the overlap, so a generous page size costs no extra MusicBrainz calls.
+const PAGE_SIZE = 50;
+const MAX_CATCHUP = 200;
 
 let started = false;
 const timers: NodeJS.Timeout[] = [];
 
 function intervalFor(source: string | null | undefined): number {
   return (source && POLL_INTERVALS_MS[source]) || DEFAULT_POLL_MS;
+}
+
+/**
+ * Page a history source newest-first until the batch reaches `cursor` (the
+ * newest externalId we've already ingested), a page runs short (source has no
+ * more history), or we hit `maxPlays`. Returns the union of pages; the ingest
+ * path dedups the overlap. On first enroll (`cursor` null) it simply pages the
+ * bounded backfill window. Never throws — a failed page just ends paging with
+ * whatever was collected so far.
+ */
+export async function fetchPlaysUntilCursor(
+  history: HistoryAdapter,
+  config: Record<string, unknown>,
+  cursor: string | null,
+  maxPlays: number,
+  pageSize: number = PAGE_SIZE,
+): Promise<RawSpin[]> {
+  const collected: RawSpin[] = [];
+  for (let page = 0; collected.length < maxPlays; page++) {
+    const limit = Math.min(pageSize, maxPlays - collected.length);
+    let batch: RawSpin[];
+    try {
+      batch = await history(config, { limit, page });
+    } catch (err) {
+      console.error("[lore] history page fetch failed", page, err);
+      break;
+    }
+    if (!batch.length) break;
+    collected.push(...batch);
+    // This page already contains the newest play we've ingested — everything
+    // older is known, so stop.
+    if (cursor && batch.some((s) => s.externalId === cursor)) break;
+    // A short page means the source has no deeper history to walk.
+    if (batch.length < limit) break;
+  }
+  return collected;
 }
 
 /**
@@ -65,9 +106,14 @@ async function pollStation(station: Station): Promise<void> {
         .where(eq(stationsTable.id, station.id))
         .limit(1);
       const current = fresh ?? station;
-      const firstEnroll = !current.lastSeenCursor;
-      const limit = firstEnroll ? BACKFILL_LIMIT : LIVE_LIMIT;
-      const spins = await history(current.nowPlayingConfig ?? {}, { limit });
+      const cursor = current.lastSeenCursor ?? null;
+      const firstEnroll = !cursor;
+      const spins = await fetchPlaysUntilCursor(
+        history,
+        current.nowPlayingConfig ?? {},
+        cursor,
+        MAX_CATCHUP,
+      );
       const logged = await ingestRawSpins(current, spins, source ?? "unknown");
       if (logged > 0) {
         console.info(

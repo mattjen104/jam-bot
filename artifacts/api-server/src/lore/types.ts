@@ -51,8 +51,16 @@ export type NowPlayingAdapter = (
 
 /** Options for a batch history fetch. */
 export interface FetchRecentOptions {
-  /** Max plays to return (backfill uses a large value, live poll a small one). */
+  /** Max plays to return per page (backfill uses a larger value than a live poll). */
   limit?: number;
+  /**
+   * Zero-based page offset for cursor-driven paging. The poller walks pages
+   * back from newest until it reaches the last-seen cursor, so no plays are
+   * dropped after downtime longer than one page. Adapters translate this to
+   * whatever their API uses (KEXP: `offset` = page*limit; Spinitron: `page`,
+   * 1-based). Sources with no history/pagination (BBC latest) ignore it.
+   */
+  page?: number;
 }
 
 /**
