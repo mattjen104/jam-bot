@@ -184,6 +184,32 @@ const SEED_BLOG_PICKERS = [
 ] as const;
 
 /**
+ * NTS archive curator pickers — long-running NTS resident shows whose full,
+ * dated episode archives NTS publishes through its own public API. Each show
+ * becomes a `curator` picker with its show alias in `sourceRef`, so the NTS
+ * poller can walk the archive backwards, a few episodes at a time. Both
+ * aliases verified live against the NTS API.
+ */
+const SEED_NTS_PICKERS = [
+  {
+    handle: "nts-questing-w-zakia",
+    name: "Questing w/ Zakia",
+    homeUrl: "https://www.nts.live/shows/questing-w-zakia",
+    ntsShowAlias: "questing-w-zakia",
+    description:
+      "Zakia Sewell's spiritual jazz, folk and soul odyssey on NTS — every archived episode is a dated, ordered run of picks.",
+  },
+  {
+    handle: "nts-floating-points",
+    name: "Floating Points (NTS)",
+    homeUrl: "https://www.nts.live/shows/floating-points",
+    ntsShowAlias: "floating-points",
+    description:
+      "Sam Shepherd's NTS residency — deep crate-digging across jazz, electronics and beyond, archived as ordered tracklists.",
+  },
+] as const;
+
+/**
  * Register the wedge label pickers. Best-effort — a failure here logs but never
  * takes boot down (and needs no network: it only writes the registry rows).
  */
@@ -215,6 +241,21 @@ export async function seedPickers(): Promise<void> {
       });
     } catch (err) {
       console.error("[lore] seedPickers failed for", b.handle, err);
+    }
+  }
+  for (const n of SEED_NTS_PICKERS) {
+    try {
+      await upsertPicker({
+        pickerType: "curator",
+        name: n.name,
+        handle: n.handle,
+        homeUrl: n.homeUrl,
+        trustTier: 2,
+        sourceRef: { ntsShowAlias: n.ntsShowAlias },
+        description: n.description,
+      });
+    } catch (err) {
+      console.error("[lore] seedPickers failed for", n.handle, err);
     }
   }
 }

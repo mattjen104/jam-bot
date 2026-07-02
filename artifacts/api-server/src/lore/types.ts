@@ -61,6 +61,14 @@ export interface FetchRecentOptions {
    * 1-based). Sources with no history/pagination (BBC latest) ignore it.
    */
   page?: number;
+  /**
+   * Only return plays strictly OLDER than this ISO timestamp. This is the
+   * deep-history lever: the backfill job walks backwards by moving `before`
+   * to the oldest play of each ingested slice. Only sources whose API supports
+   * time-anchored history honor it (KEXP: `airdate_before`); others ignore it
+   * and must not be enrolled for backfill (see `supportsBackfill`).
+   */
+  before?: string;
 }
 
 /**

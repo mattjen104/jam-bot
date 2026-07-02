@@ -17,3 +17,19 @@ export function clockTime(iso: string): string {
   if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
+
+/** Human date for an archived run ("Jun 2, 2024"). Accepts "YYYY-MM-DD" (a
+ * UTC broadcast day) or a full ISO timestamp — both render in UTC so the
+ * label always matches the documented air date. */
+export function runDate(isoOrDay: string): string {
+  const d = new Date(
+    /^\d{4}-\d{2}-\d{2}$/.test(isoOrDay) ? `${isoOrDay}T00:00:00Z` : isoOrDay,
+  );
+  if (Number.isNaN(d.getTime())) return isoOrDay;
+  return d.toLocaleDateString([], {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}

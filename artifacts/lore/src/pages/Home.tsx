@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "wouter";
 import {
   useListStations,
   useGetStationNowPlaying,
@@ -8,7 +9,7 @@ import {
 import { usePlayer } from "../player/PlayerProvider";
 import { StationList } from "../components/StationList";
 import { NowPlaying } from "../components/NowPlaying";
-import { AudioLines, ShieldCheck, Waypoints } from "lucide-react";
+import { AudioLines, Ghost, ShieldCheck, Waypoints } from "lucide-react";
 
 export default function Home() {
   const { data, isLoading, isError } = useListStations();
@@ -61,6 +62,16 @@ export default function Home() {
             unmodified from its broadcaster — and every track is resolved to its
             canonical identity, with credits and deep links.
           </p>
+          <div className="mt-5">
+            <Link
+              href="/archive"
+              data-testid="link-archive"
+              className="hover-elevate inline-flex items-center gap-2 rounded-full border border-primary-border bg-primary/10 px-4 py-2 font-mono text-[11px] uppercase tracking-wide text-primary"
+            >
+              <Ghost className="h-3.5 w-3.5" />
+              Ghost radio — replay archived runs
+            </Link>
+          </div>
           <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
             <span className="inline-flex items-center gap-1.5">
               <ShieldCheck className="h-3.5 w-3.5 text-primary" /> Unmodified streams

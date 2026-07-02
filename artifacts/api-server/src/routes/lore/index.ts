@@ -13,6 +13,14 @@ import {
   GetRecordingSeguesResponse,
   CreateManualSpinBody,
   ListPickersResponse,
+  GetStationArchiveParams,
+  GetStationArchiveResponse,
+  GetStationRunParams,
+  GetStationRunResponse,
+  GetPickerArchiveParams,
+  GetPickerArchiveResponse,
+  GetPickerRunParams,
+  GetPickerRunResponse,
   GetRecordingEntryParams,
   GetRecordingEntryResponse,
   UpsertPickerBody,
@@ -27,12 +35,14 @@ import {
   db,
   stationsTable,
   spinsTable,
+  showsTable,
   recordingsTable,
   pickersTable,
+  picksTable,
   type Station,
   type Picker,
 } from "@workspace/db";
-import { eq, asc, desc } from "drizzle-orm";
+import { eq, and, asc, desc, isNull, isNotNull, sql } from "drizzle-orm";
 import { nextRideable, spinsForRecording } from "../../lore/segue.js";
 import { resolvePreview } from "../../lore/preview.js";
 import { ingestManualSpin } from "../../lore/resolve.js";
@@ -376,6 +386,314 @@ router.get("/pickers", async (_req, res) => {
   } catch (err) {
     console.error("[lore] list pickers failed", err);
     return res.status(503).json({ error: "Could not load pickers" });
+  }
+});
+
+/** UTC broadcast day of a spin, as YYYY-MM-DD (the run grouping key). */
+const spinDayExpr = sql<string>`to_char(${spinsTable.playedAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`;
+
+/** Shape a joined recording row into a NowPlayingRecording payload, or null. */
+function toArchiveRecording(row: {
+  mbid: string | null;
+  recTitle: string | null;
+  recArtist: string | null;
+  artworkUrl: string | null;
+  links: unknown;
+}) {
+  return row.mbid
+    ? {
+        mbid: row.mbid,
+        title: row.recTitle ?? "",
+        artist: row.recArtist ?? "",
+        artworkUrl: row.artworkUrl ?? null,
+        links: row.links ?? [],
+      }
+    : null;
+}
+
+// GET /api/stations/:slug/archive — a station's documented runs, newest first.
+router.get("/stations/:slug/archive", async (req, res) => {
+  const parsed = GetStationArchiveParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(404).json({ error: "Station not found" });
+  }
+  try {
+    const [station] = await db
+      .select()
+      .from(stationsTable)
+      .where(eq(stationsTable.slug, parsed.data.slug))
+      .limit(1);
+    if (!station) {
+      return res.status(404).json({ error: "Station not found" });
+    }
+
+    // One run per (show, UTC broadcast day). runId = the run's smallest spin
+    // id — opaque, stable, and enough to reconstruct the group on detail read.
+    const runs = await db
+      .select({
+        runId: sql<number>`min(${spinsTable.id})`,
+        date: spinDayExpr,
+        showId: spinsTable.showId,
+        spinCount: sql<number>`count(*)::int`,
+        startedAt: sql<string>`min(${spinsTable.playedAt})`,
+        endedAt: sql<string>`max(${spinsTable.playedAt})`,
+        showName: showsTable.name,
+        djName: showsTable.djName,
+      })
+      .from(spinsTable)
+      .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id))
+      .where(eq(spinsTable.stationId, station.id))
+      .groupBy(spinDayExpr, spinsTable.showId, showsTable.name, showsTable.djName)
+      .orderBy(sql`max(${spinsTable.playedAt}) desc`)
+      .limit(120);
+
+    const data = GetStationArchiveResponse.parse({
+      station: toStation(station),
+      runs: runs.map((r) => ({
+        runId: r.runId,
+        date: r.date,
+        show: r.showName ? { name: r.showName, djName: r.djName ?? null } : null,
+        spinCount: r.spinCount,
+        startedAt: new Date(r.startedAt).toISOString(),
+        endedAt: new Date(r.endedAt).toISOString(),
+      })),
+    });
+    return res.json(data);
+  } catch (err) {
+    console.error("[lore] station archive failed", err);
+    return res.status(503).json({ error: "Could not load archive" });
+  }
+});
+
+// GET /api/archive/station-runs/:runId — one run's tracklist, as it aired.
+router.get("/archive/station-runs/:runId", async (req, res) => {
+  const parsed = GetStationRunParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(404).json({ error: "Run not found" });
+  }
+  try {
+    // The anchor spin defines the run: its station + show + UTC broadcast day.
+    const [anchor] = await db
+      .select({
+        stationId: spinsTable.stationId,
+        showId: spinsTable.showId,
+        day: spinDayExpr,
+      })
+      .from(spinsTable)
+      .where(eq(spinsTable.id, parsed.data.runId))
+      .limit(1);
+    if (!anchor) {
+      return res.status(404).json({ error: "Run not found" });
+    }
+
+    const [station] = await db
+      .select()
+      .from(stationsTable)
+      .where(eq(stationsTable.id, anchor.stationId))
+      .limit(1);
+    if (!station) {
+      return res.status(404).json({ error: "Run not found" });
+    }
+
+    const rows = await db
+      .select({
+        id: spinsTable.id,
+        playedAt: spinsTable.playedAt,
+        rawArtist: spinsTable.rawArtist,
+        rawTitle: spinsTable.rawTitle,
+        confidence: spinsTable.confidence,
+        mbid: recordingsTable.mbid,
+        recTitle: recordingsTable.title,
+        recArtist: recordingsTable.artist,
+        artworkUrl: recordingsTable.artworkUrl,
+        links: recordingsTable.links,
+        showName: showsTable.name,
+        djName: showsTable.djName,
+      })
+      .from(spinsTable)
+      .leftJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
+      .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id))
+      .where(
+        and(
+          eq(spinsTable.stationId, anchor.stationId),
+          anchor.showId == null
+            ? isNull(spinsTable.showId)
+            : eq(spinsTable.showId, anchor.showId),
+          sql`${spinDayExpr} = ${anchor.day}`,
+        ),
+      )
+      .orderBy(asc(spinsTable.playedAt), asc(spinsTable.id));
+    if (!rows.length) {
+      return res.status(404).json({ error: "Run not found" });
+    }
+
+    const first = rows[0]!;
+    const last = rows[rows.length - 1]!;
+    const data = GetStationRunResponse.parse({
+      station: {
+        slug: station.slug,
+        name: station.name,
+        stationClass: station.stationClass,
+      },
+      run: {
+        runId: parsed.data.runId,
+        date: anchor.day,
+        show: first.showName
+          ? { name: first.showName, djName: first.djName ?? null }
+          : null,
+        spinCount: rows.length,
+        startedAt: first.playedAt.toISOString(),
+        endedAt: last.playedAt.toISOString(),
+      },
+      tracks: rows.map((r, i) => ({
+        position: i,
+        playedAt: r.playedAt.toISOString(),
+        rawArtist: r.rawArtist ?? "",
+        rawTitle: r.rawTitle ?? "",
+        confidence: r.confidence,
+        recording: toArchiveRecording(r),
+      })),
+    });
+    return res.json(data);
+  } catch (err) {
+    console.error("[lore] station run failed", err);
+    return res.status(503).json({ error: "Could not load run" });
+  }
+});
+
+// GET /api/pickers/:handle/archive — a picker's documented runs, newest first.
+router.get("/pickers/:handle/archive", async (req, res) => {
+  const parsed = GetPickerArchiveParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(404).json({ error: "Picker not found" });
+  }
+  try {
+    const picker = await getPickerByHandle(parsed.data.handle);
+    if (!picker) {
+      return res.status(404).json({ error: "Picker not found" });
+    }
+
+    // One run per source URL (an NTS episode page, a list, a post).
+    const runs = await db
+      .select({
+        runId: sql<number>`min(${picksTable.id})`,
+        sourceUrl: picksTable.sourceUrl,
+        title: sql<string | null>`max(${picksTable.context})`,
+        pickedAt: sql<string | null>`min(${picksTable.pickedAt})`,
+        trackCount: sql<number>`count(*)::int`,
+      })
+      .from(picksTable)
+      .where(
+        and(eq(picksTable.pickerId, picker.id), isNotNull(picksTable.sourceUrl)),
+      )
+      .groupBy(picksTable.sourceUrl)
+      .orderBy(
+        sql`min(${picksTable.pickedAt}) desc nulls last`,
+        sql`min(${picksTable.id}) desc`,
+      )
+      .limit(200);
+
+    const data = GetPickerArchiveResponse.parse({
+      picker: toPicker(picker),
+      runs: runs.map((r) => ({
+        runId: r.runId,
+        title: r.title ?? null,
+        sourceUrl: r.sourceUrl as string,
+        pickedAt: r.pickedAt ? new Date(r.pickedAt).toISOString() : null,
+        trackCount: r.trackCount,
+      })),
+    });
+    return res.json(data);
+  } catch (err) {
+    console.error("[lore] picker archive failed", err);
+    return res.status(503).json({ error: "Could not load archive" });
+  }
+});
+
+// GET /api/archive/picker-runs/:runId — one run's picks, in documented order.
+router.get("/archive/picker-runs/:runId", async (req, res) => {
+  const parsed = GetPickerRunParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(404).json({ error: "Run not found" });
+  }
+  try {
+    // The anchor pick defines the run: its picker + source URL.
+    const [anchor] = await db
+      .select({
+        pickerId: picksTable.pickerId,
+        sourceUrl: picksTable.sourceUrl,
+      })
+      .from(picksTable)
+      .where(eq(picksTable.id, parsed.data.runId))
+      .limit(1);
+    if (!anchor || !anchor.sourceUrl) {
+      return res.status(404).json({ error: "Run not found" });
+    }
+
+    const [picker] = await db
+      .select()
+      .from(pickersTable)
+      .where(eq(pickersTable.id, anchor.pickerId))
+      .limit(1);
+    if (!picker) {
+      return res.status(404).json({ error: "Run not found" });
+    }
+
+    const rows = await db
+      .select({
+        id: picksTable.id,
+        ordinal: picksTable.ordinal,
+        pickedAt: picksTable.pickedAt,
+        context: picksTable.context,
+        rawArtist: picksTable.rawArtist,
+        rawTitle: picksTable.rawTitle,
+        confidence: picksTable.confidence,
+        mbid: recordingsTable.mbid,
+        recTitle: recordingsTable.title,
+        recArtist: recordingsTable.artist,
+        artworkUrl: recordingsTable.artworkUrl,
+        links: recordingsTable.links,
+      })
+      .from(picksTable)
+      .leftJoin(recordingsTable, eq(picksTable.mbid, recordingsTable.mbid))
+      .where(
+        and(
+          eq(picksTable.pickerId, anchor.pickerId),
+          eq(picksTable.sourceUrl, anchor.sourceUrl),
+        ),
+      )
+      .orderBy(
+        sql`${picksTable.ordinal} asc nulls last`,
+        asc(picksTable.id),
+      );
+    if (!rows.length) {
+      return res.status(404).json({ error: "Run not found" });
+    }
+
+    const pickedAt =
+      rows.map((r) => r.pickedAt).find((d) => d != null) ?? null;
+    const data = GetPickerRunResponse.parse({
+      picker: toPicker(picker),
+      run: {
+        runId: parsed.data.runId,
+        title: rows[0]!.context ?? null,
+        sourceUrl: anchor.sourceUrl,
+        pickedAt: pickedAt ? pickedAt.toISOString() : null,
+        trackCount: rows.length,
+      },
+      tracks: rows.map((r, i) => ({
+        position: r.ordinal ?? i,
+        playedAt: r.pickedAt ? r.pickedAt.toISOString() : null,
+        rawArtist: r.rawArtist ?? "",
+        rawTitle: r.rawTitle ?? "",
+        confidence: r.confidence,
+        recording: toArchiveRecording(r),
+      })),
+    });
+    return res.json(data);
+  } catch (err) {
+    console.error("[lore] picker run failed", err);
+    return res.status(503).json({ error: "Could not load run" });
   }
 });
 

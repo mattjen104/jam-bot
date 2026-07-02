@@ -101,6 +101,19 @@ export const stationsTable = pgTable("stations", {
    * spin already ingested, so polling only logs genuinely new plays.
    */
   lastSeenCursor: text("last_seen_cursor"),
+  /**
+   * Deep-history backfill cursor: the ISO airdate of the OLDEST play already
+   * ingested by the backfill job. The job walks backwards from here in budgeted
+   * slices, so it is resumable across restarts. Null = backfill has not started
+   * (the first slice begins at "now"). Independent of `lastSeenCursor`, which
+   * only ever moves forward with live polling.
+   */
+  backfillCursor: text("backfill_cursor"),
+  /**
+   * True once the backfill job walked past the source's oldest play (an empty
+   * page came back) or reached the configured floor — nothing older remains.
+   */
+  backfillDone: boolean("backfill_done").notNull().default(false),
   /** Whether attribution (station/show/DJ links) must be shown. Always true. */
   attribution: boolean("attribution").notNull().default(true),
   /** Display order in the directory (lower first). */

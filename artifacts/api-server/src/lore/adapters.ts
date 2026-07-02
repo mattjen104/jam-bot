@@ -200,8 +200,13 @@ async function kexpShowInfo(
 const kexpApi: HistoryAdapter = async (_config, opts) => {
   const limit = Math.min(Math.max(opts?.limit ?? 20, 1), 200);
   const offset = Math.max(opts?.page ?? 0, 0) * limit;
+  // Deep-history anchor: KEXP's `airdate_before` returns plays strictly older
+  // than the ISO timestamp, newest-first — the backfill job walks it backwards.
+  const before = opts?.before
+    ? `&airdate_before=${encodeURIComponent(opts.before)}`
+    : "";
   const body = (await getJson(
-    `https://api.kexp.org/v2/plays/?format=json&limit=${limit}&offset=${offset}`,
+    `https://api.kexp.org/v2/plays/?format=json&limit=${limit}&offset=${offset}${before}`,
   )) as { results?: Array<Record<string, unknown>> };
   // Resolve the (small, recurring) set of show ids referenced in this batch.
   const showIds = new Set<number>();
@@ -371,4 +376,16 @@ export function getHistoryAdapter(
 /** Whether any adapter (either family) handles this source. */
 export function isPollable(source: string | null | undefined): boolean {
   return !!getNowPlayingAdapter(source) || !!getHistoryAdapter(source);
+}
+
+/**
+ * Sources whose history API honors `FetchRecentOptions.before` (time-anchored
+ * deep paging). Only these can be enrolled for the deep-history backfill job —
+ * offset-only sources would skip/duplicate plays as new ones land.
+ */
+const BACKFILL_SOURCES = new Set(["kexp_api"]);
+
+/** Whether this source supports resumable deep-history backfill. */
+export function supportsBackfill(source: string | null | undefined): boolean {
+  return !!source && BACKFILL_SOURCES.has(source);
 }

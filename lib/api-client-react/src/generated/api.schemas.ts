@@ -352,6 +352,111 @@ export interface RecordingSpins {
 }
 
 /**
+ * One documented station run — a show's plays on one UTC broadcast day. `runId` is opaque (fetch the tracklist via /archive/station-runs).
+ */
+export interface StationRunSummary {
+  runId: number;
+  /** UTC broadcast day, YYYY-MM-DD. */
+  date: string;
+  show?: ShowRef | null;
+  spinCount: number;
+  startedAt: string;
+  endedAt: string;
+}
+
+export interface StationArchive {
+  station: Station;
+  runs: StationRunSummary[];
+}
+
+export type ArchiveTrackConfidence =
+  (typeof ArchiveTrackConfidence)[keyof typeof ArchiveTrackConfidence];
+
+export const ArchiveTrackConfidence = {
+  recording_id: "recording_id",
+  isrc: "isrc",
+  text: "text",
+  unresolved: "unresolved",
+} as const;
+
+/**
+ * One slot of an archived run, in documented order. `recording` is null when the track never resolved to the spine (raw metadata preserved — the honesty gradient stays visible even in replay).
+ */
+export interface ArchiveTrack {
+  position: number;
+  /** @nullable */
+  playedAt?: string | null;
+  rawArtist: string;
+  rawTitle: string;
+  confidence: ArchiveTrackConfidence;
+  recording?: NowPlayingRecording | null;
+}
+
+export interface StationRunDetail {
+  station: StationRef;
+  run: StationRunSummary;
+  tracks: ArchiveTrack[];
+}
+
+/**
+ * One documented picker run — all picks sharing one source URL (an NTS episode page, a list, a post), replayed in documented order.
+ */
+export interface PickerRunSummary {
+  runId: number;
+  /**
+   * The run's own name (episode/list title), when known.
+   * @nullable
+   */
+  title?: string | null;
+  sourceUrl: string;
+  /**
+   * When the picker documented this run (broadcast date).
+   * @nullable
+   */
+  pickedAt?: string | null;
+  trackCount: number;
+}
+
+export type PickerPickerType =
+  (typeof PickerPickerType)[keyof typeof PickerPickerType];
+
+export const PickerPickerType = {
+  dj: "dj",
+  label: "label",
+  blog: "blog",
+  curator: "curator",
+  collector: "collector",
+  event: "event",
+} as const;
+
+/**
+ * A trusted taste source (label, blog, curator, collector, event, DJ).
+ */
+export interface Picker {
+  id: number;
+  pickerType: PickerPickerType;
+  name: string;
+  handle: string;
+  /** @nullable */
+  homeUrl?: string | null;
+  trustTier: number;
+  /** @nullable */
+  description?: string | null;
+  active: boolean;
+}
+
+export interface PickerArchive {
+  picker: Picker;
+  runs: PickerRunSummary[];
+}
+
+export interface PickerRunDetail {
+  picker: Picker;
+  run: PickerRunSummary;
+  tracks: ArchiveTrack[];
+}
+
+/**
  * A picker reference used in pick-derived segue attribution.
  */
 export interface SeguePickerRef {
@@ -416,34 +521,6 @@ export interface ManualSpinResponse {
   /** @nullable */
   mbid?: string | null;
   confidence: ManualSpinResponseConfidence;
-}
-
-export type PickerPickerType =
-  (typeof PickerPickerType)[keyof typeof PickerPickerType];
-
-export const PickerPickerType = {
-  dj: "dj",
-  label: "label",
-  blog: "blog",
-  curator: "curator",
-  collector: "collector",
-  event: "event",
-} as const;
-
-/**
- * A trusted taste source (label, blog, curator, collector, event, DJ).
- */
-export interface Picker {
-  id: number;
-  pickerType: PickerPickerType;
-  name: string;
-  handle: string;
-  /** @nullable */
-  homeUrl?: string | null;
-  trustTier: number;
-  /** @nullable */
-  description?: string | null;
-  active: boolean;
 }
 
 export interface PickerList {

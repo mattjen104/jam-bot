@@ -29,7 +29,9 @@ import type {
   ManualSpinResponse,
   OEmbed,
   Picker,
+  PickerArchive,
   PickerList,
+  PickerRunDetail,
   RecordingNode,
   RecordingPreview,
   RecordingSpins,
@@ -42,8 +44,10 @@ import type {
   SpotifyPlayResult,
   SpotifyPlayerState,
   SpotifyStatus,
+  StationArchive,
   StationList,
   StationNowPlaying,
+  StationRunDetail,
   TracklistRequest,
   TracklistResult,
   UpsertPickerRequest,
@@ -1097,6 +1101,363 @@ export function useListPickers<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getListPickersQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * The station's play history grouped into runs — one run per show per UTC broadcast day — newest first. Each run is a real, documented sequence a DJ actually aired; the `runId` is an opaque id for fetching the full tracklist via /archive/station-runs/{runId}.
+
+ * @summary A station's documented runs (ghost radio browse surface)
+ */
+export const getGetStationArchiveUrl = (slug: string) => {
+  return `/api/stations/${slug}/archive`;
+};
+
+export const getStationArchive = async (
+  slug: string,
+  options?: RequestInit,
+): Promise<StationArchive> => {
+  return customFetch<StationArchive>(getGetStationArchiveUrl(slug), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetStationArchiveQueryKey = (slug: string) => {
+  return [`/api/stations/${slug}/archive`] as const;
+};
+
+export const getGetStationArchiveQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStationArchive>>,
+  TError = ErrorType<ApiError>,
+>(
+  slug: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationArchive>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetStationArchiveQueryKey(slug);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStationArchive>>
+  > = ({ signal }) => getStationArchive(slug, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!slug,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStationArchive>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStationArchiveQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStationArchive>>
+>;
+export type GetStationArchiveQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary A station's documented runs (ghost radio browse surface)
+ */
+
+export function useGetStationArchive<
+  TData = Awaited<ReturnType<typeof getStationArchive>>,
+  TError = ErrorType<ApiError>,
+>(
+  slug: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationArchive>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStationArchiveQueryOptions(slug, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * The full tracklist of one documented station run (a show's UTC broadcast day), oldest first — exactly as it aired. Tracks resolved to the spine carry their recording node; unresolved tracks keep raw metadata so the honesty gradient stays visible.
+
+ * @summary One archived station run, in airing order
+ */
+export const getGetStationRunUrl = (runId: number) => {
+  return `/api/archive/station-runs/${runId}`;
+};
+
+export const getStationRun = async (
+  runId: number,
+  options?: RequestInit,
+): Promise<StationRunDetail> => {
+  return customFetch<StationRunDetail>(getGetStationRunUrl(runId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetStationRunQueryKey = (runId: number) => {
+  return [`/api/archive/station-runs/${runId}`] as const;
+};
+
+export const getGetStationRunQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStationRun>>,
+  TError = ErrorType<ApiError>,
+>(
+  runId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationRun>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetStationRunQueryKey(runId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getStationRun>>> = ({
+    signal,
+  }) => getStationRun(runId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!runId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStationRun>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStationRunQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStationRun>>
+>;
+export type GetStationRunQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary One archived station run, in airing order
+ */
+
+export function useGetStationRun<
+  TData = Awaited<ReturnType<typeof getStationRun>>,
+  TError = ErrorType<ApiError>,
+>(
+  runId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationRun>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStationRunQueryOptions(runId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * The picker's picks grouped into runs — one run per source URL (an NTS episode page, a list, a post) — newest first by pick date. The `runId` is an opaque id for fetching the ordered tracklist via /archive/picker-runs/{runId}.
+
+ * @summary A picker's documented runs (archived episodes / lists)
+ */
+export const getGetPickerArchiveUrl = (handle: string) => {
+  return `/api/pickers/${handle}/archive`;
+};
+
+export const getPickerArchive = async (
+  handle: string,
+  options?: RequestInit,
+): Promise<PickerArchive> => {
+  return customFetch<PickerArchive>(getGetPickerArchiveUrl(handle), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPickerArchiveQueryKey = (handle: string) => {
+  return [`/api/pickers/${handle}/archive`] as const;
+};
+
+export const getGetPickerArchiveQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPickerArchive>>,
+  TError = ErrorType<ApiError>,
+>(
+  handle: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPickerArchive>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPickerArchiveQueryKey(handle);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPickerArchive>>
+  > = ({ signal }) => getPickerArchive(handle, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!handle,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPickerArchive>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPickerArchiveQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPickerArchive>>
+>;
+export type GetPickerArchiveQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary A picker's documented runs (archived episodes / lists)
+ */
+
+export function useGetPickerArchive<
+  TData = Awaited<ReturnType<typeof getPickerArchive>>,
+  TError = ErrorType<ApiError>,
+>(
+  handle: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPickerArchive>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPickerArchiveQueryOptions(handle, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * The ordered tracklist of one picker run (an archived episode or list), in the order the picker documented it. Ordinals are preserved; tracks resolved to the spine carry their recording node.
+
+ * @summary One archived picker run, in documented order
+ */
+export const getGetPickerRunUrl = (runId: number) => {
+  return `/api/archive/picker-runs/${runId}`;
+};
+
+export const getPickerRun = async (
+  runId: number,
+  options?: RequestInit,
+): Promise<PickerRunDetail> => {
+  return customFetch<PickerRunDetail>(getGetPickerRunUrl(runId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPickerRunQueryKey = (runId: number) => {
+  return [`/api/archive/picker-runs/${runId}`] as const;
+};
+
+export const getGetPickerRunQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPickerRun>>,
+  TError = ErrorType<ApiError>,
+>(
+  runId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPickerRun>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPickerRunQueryKey(runId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getPickerRun>>> = ({
+    signal,
+  }) => getPickerRun(runId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!runId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPickerRun>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPickerRunQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPickerRun>>
+>;
+export type GetPickerRunQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary One archived picker run, in documented order
+ */
+
+export function useGetPickerRun<
+  TData = Awaited<ReturnType<typeof getPickerRun>>,
+  TError = ErrorType<ApiError>,
+>(
+  runId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPickerRun>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPickerRunQueryOptions(runId, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

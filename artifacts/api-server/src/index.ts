@@ -3,6 +3,8 @@ import { wireSongEnrichment } from "./song/wire.js";
 import { seedStations, seedPickers } from "./lore/seed.js";
 import { startLorePoller } from "./lore/poller.js";
 import { startBlogPoller } from "./lore/blog-poller.js";
+import { startBackfillJob } from "./lore/backfill.js";
+import { startNtsPoller } from "./lore/nts.js";
 import { startSegueJob } from "./lore/segue-job.js";
 import { ensurePicksUnifiedView } from "./lore/view.js";
 
@@ -37,6 +39,8 @@ async function bootLore(): Promise<void> {
     await seedPickers();
     await startLorePoller();
     await startBlogPoller();
+    await startNtsPoller();
+    await startBackfillJob();
     startSegueJob();
   } catch (err) {
     console.error("[lore] boot failed", err);

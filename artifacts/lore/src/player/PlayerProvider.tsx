@@ -83,7 +83,14 @@ export interface RideApi {
   /** What is sounding right now: the listener's own Spotify (full track) or
    * the 30s preview element. Null before playback begins. */
   source: "spotify" | "preview" | null;
+  /** "trail" follows live segues hop by hop; "replay" plays a fixed,
+   * documented run in its original order (ghost radio). */
+  mode: "trail" | "replay";
+  /** Attribution line for a replay ("KEXP · Early · 2024-06-02"), else null. */
+  replayLabel: string | null;
   start: (seed: RideSeed) => void;
+  /** Play a documented run as it aired: a fixed queue, no lookahead. */
+  startReplay: (seeds: RideSeed[], label: string) => void;
   stop: () => void;
   next: () => void;
   prev: () => void;
@@ -131,6 +138,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [seeking, setSeeking] = useState(false);
   const [atTrailEnd, setAtTrailEnd] = useState(false);
   const [source, setSource] = useState<"spotify" | "preview" | null>(null);
+  const [mode, setMode] = useState<"trail" | "replay">("trail");
+  const [replayLabel, setReplayLabel] = useState<string | null>(null);
 
   // Guards so async resolves don't stack up or race a stopped ride.
   const rideRef = useRef(0); // bumped on every start/stop to invalidate stale async work
@@ -198,6 +207,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setIndex(0);
     setSeeking(false);
     setAtTrailEnd(false);
+    setMode("trail");
+    setReplayLabel(null);
   }, []);
 
   const start = useCallback(
@@ -216,6 +227,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setStatus("loading");
       setAtTrailEnd(false);
       setSeeking(false);
+      setMode("trail");
+      setReplayLabel(null);
       setQueue([
         {
           mbid: seed.mbid,
@@ -226,6 +239,43 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           attribution: null,
         },
       ]);
+      setIndex(0);
+    },
+    [pauseRadio],
+  );
+
+  // Ghost radio: play a documented run exactly as it aired. The queue is
+  // fixed up front — no segue lookahead ever runs — and the ride ends when
+  // the last documented track ends.
+  const startReplay = useCallback(
+    (seeds: RideSeed[], label: string) => {
+      if (!seeds.length) return;
+      pauseRadio?.();
+      rideRef.current += 1;
+      previewFetchingRef.current.clear();
+      playingUrlRef.current = null;
+      spotifyNowRef.current = null;
+      spotifyCommandingRef.current = null;
+      spotifyPausedRef.current = false;
+      spotifyFailedRef.current.clear();
+      sourceRef.current = null;
+      setSource(null);
+      setActive(true);
+      setStatus("loading");
+      setAtTrailEnd(false);
+      setSeeking(false);
+      setMode("replay");
+      setReplayLabel(label);
+      setQueue(
+        seeds.map((seed) => ({
+          mbid: seed.mbid,
+          title: seed.title,
+          artist: seed.artist,
+          artworkUrl: seed.artworkUrl,
+          links: seed.links,
+          attribution: null,
+        })),
+      );
       setIndex(0);
     },
     [pauseRadio],
@@ -275,8 +325,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Lookahead: keep at least one attributed hop staged after the current track.
+  // Replays never look ahead — the documented queue IS the ride.
   useEffect(() => {
     if (!active) return;
+    if (mode === "replay") return;
     if (index < queue.length - 1) return; // already have a next hop
     if (fetchingNextRef.current) return;
     const from = queue[index];
@@ -607,9 +659,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         index,
         current: queue[index] ?? null,
         seeking,
-        atTrailEnd: atTrailEnd && index === queue.length - 1,
+        atTrailEnd:
+          mode === "replay"
+            ? index === queue.length - 1
+            : atTrailEnd && index === queue.length - 1,
         source,
+        mode,
+        replayLabel,
         start,
+        startReplay,
         stop,
         next,
         prev,
@@ -632,7 +690,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       seeking,
       atTrailEnd,
       source,
+      mode,
+      replayLabel,
       start,
+      startReplay,
       stop,
       next,
       prev,

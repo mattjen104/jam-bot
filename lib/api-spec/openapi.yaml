@@ -354,6 +354,123 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PickerList"
+  /stations/{slug}/archive:
+    get:
+      operationId: getStationArchive
+      tags: [archive]
+      summary: A station's documented runs (ghost radio browse surface)
+      description: >
+        The station's play history grouped into runs — one run per show per UTC
+        broadcast day — newest first. Each run is a real, documented sequence a
+        DJ actually aired; the `runId` is an opaque id for fetching the full
+        tracklist via /archive/station-runs/{runId}.
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: The station's archived runs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationArchive"
+        "404":
+          description: Station not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /archive/station-runs/{runId}:
+    get:
+      operationId: getStationRun
+      tags: [archive]
+      summary: One archived station run, in airing order
+      description: >
+        The full tracklist of one documented station run (a show's UTC broadcast
+        day), oldest first — exactly as it aired. Tracks resolved to the spine
+        carry their recording node; unresolved tracks keep raw metadata so the
+        honesty gradient stays visible.
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: The run with its ordered tracks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationRunDetail"
+        "404":
+          description: Run not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /pickers/{handle}/archive:
+    get:
+      operationId: getPickerArchive
+      tags: [archive]
+      summary: A picker's documented runs (archived episodes / lists)
+      description: >
+        The picker's picks grouped into runs — one run per source URL (an NTS
+        episode page, a list, a post) — newest first by pick date. The `runId`
+        is an opaque id for fetching the ordered tracklist via
+        /archive/picker-runs/{runId}.
+      parameters:
+        - name: handle
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: The picker's archived runs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PickerArchive"
+        "404":
+          description: Picker not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /archive/picker-runs/{runId}:
+    get:
+      operationId: getPickerRun
+      tags: [archive]
+      summary: One archived picker run, in documented order
+      description: >
+        The ordered tracklist of one picker run (an archived episode or list),
+        in the order the picker documented it. Ordinals are preserved; tracks
+        resolved to the spine carry their recording node.
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: The run with its ordered tracks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PickerRunDetail"
+        "404":
+          description: Run not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /recordings/{mbid}/entry:
     get:
       operationId: getRecordingEntry
@@ -1324,6 +1441,136 @@ components:
       required:
         - mbid
         - spins
+    StationRunSummary:
+      type: object
+      description: >-
+        One documented station run — a show's plays on one UTC broadcast day.
+        `runId` is opaque (fetch the tracklist via /archive/station-runs).
+      properties:
+        runId:
+          type: integer
+        date:
+          type: string
+          description: UTC broadcast day, YYYY-MM-DD.
+        show:
+          anyOf:
+            - $ref: "#/components/schemas/ShowRef"
+            - type: "null"
+        spinCount:
+          type: integer
+        startedAt:
+          type: string
+        endedAt:
+          type: string
+      required:
+        - runId
+        - date
+        - spinCount
+        - startedAt
+        - endedAt
+    StationArchive:
+      type: object
+      properties:
+        station:
+          $ref: "#/components/schemas/Station"
+        runs:
+          type: array
+          items:
+            $ref: "#/components/schemas/StationRunSummary"
+      required:
+        - station
+        - runs
+    ArchiveTrack:
+      type: object
+      description: >-
+        One slot of an archived run, in documented order. `recording` is null
+        when the track never resolved to the spine (raw metadata preserved —
+        the honesty gradient stays visible even in replay).
+      properties:
+        position:
+          type: integer
+        playedAt:
+          type: ["string", "null"]
+        rawArtist:
+          type: string
+        rawTitle:
+          type: string
+        confidence:
+          type: string
+          enum: [recording_id, isrc, text, unresolved]
+        recording:
+          anyOf:
+            - $ref: "#/components/schemas/NowPlayingRecording"
+            - type: "null"
+      required:
+        - position
+        - rawArtist
+        - rawTitle
+        - confidence
+    StationRunDetail:
+      type: object
+      properties:
+        station:
+          $ref: "#/components/schemas/StationRef"
+        run:
+          $ref: "#/components/schemas/StationRunSummary"
+        tracks:
+          type: array
+          items:
+            $ref: "#/components/schemas/ArchiveTrack"
+      required:
+        - station
+        - run
+        - tracks
+    PickerRunSummary:
+      type: object
+      description: >-
+        One documented picker run — all picks sharing one source URL (an NTS
+        episode page, a list, a post), replayed in documented order.
+      properties:
+        runId:
+          type: integer
+        title:
+          type: ["string", "null"]
+          description: The run's own name (episode/list title), when known.
+        sourceUrl:
+          type: string
+        pickedAt:
+          type: ["string", "null"]
+          description: When the picker documented this run (broadcast date).
+        trackCount:
+          type: integer
+      required:
+        - runId
+        - sourceUrl
+        - trackCount
+    PickerArchive:
+      type: object
+      properties:
+        picker:
+          $ref: "#/components/schemas/Picker"
+        runs:
+          type: array
+          items:
+            $ref: "#/components/schemas/PickerRunSummary"
+      required:
+        - picker
+        - runs
+    PickerRunDetail:
+      type: object
+      properties:
+        picker:
+          $ref: "#/components/schemas/Picker"
+        run:
+          $ref: "#/components/schemas/PickerRunSummary"
+        tracks:
+          type: array
+          items:
+            $ref: "#/components/schemas/ArchiveTrack"
+      required:
+        - picker
+        - run
+        - tracks
     SegueNext:
       type: object
       description: A song observed playing after the queried recording.

@@ -510,6 +510,283 @@ export const ListPickersResponse = zod.object({
 });
 
 /**
+ * The station's play history grouped into runs — one run per show per UTC broadcast day — newest first. Each run is a real, documented sequence a DJ actually aired; the `runId` is an opaque id for fetching the full tracklist via /archive/station-runs/{runId}.
+
+ * @summary A station's documented runs (ghost radio browse surface)
+ */
+
+export const GetStationArchiveParams = zod.object({
+  slug: zod.coerce.string().min(1),
+});
+
+export const GetStationArchiveResponse = zod.object({
+  station: zod
+    .object({
+      slug: zod.string(),
+      name: zod.string(),
+      org: zod.string().nullish(),
+      country: zod.string().nullish(),
+      streamUrl: zod.string(),
+      streamQuality: zod.string().nullish(),
+      streamFormat: zod
+        .string()
+        .describe('Playback hint — \"aac\", \"mp3\", \"hls\", or \"flac\".'),
+      mode: zod.string(),
+      homepageUrl: zod.string().nullish(),
+      donateUrl: zod.string().nullish(),
+      logoUrl: zod.string().nullish(),
+      attribution: zod.boolean(),
+    })
+    .describe("A curated radio station in the public directory."),
+  runs: zod.array(
+    zod
+      .object({
+        runId: zod.number(),
+        date: zod.string().describe("UTC broadcast day, YYYY-MM-DD."),
+        show: zod
+          .union([
+            zod
+              .object({
+                name: zod.string(),
+                djName: zod.string().nullish(),
+              })
+              .describe(
+                "Show + DJ attribution for a spin, when the source exposes it.",
+              ),
+            zod.null(),
+          ])
+          .optional(),
+        spinCount: zod.number(),
+        startedAt: zod.string(),
+        endedAt: zod.string(),
+      })
+      .describe(
+        "One documented station run — a show's plays on one UTC broadcast day. `runId` is opaque (fetch the tracklist via \/archive\/station-runs).",
+      ),
+  ),
+});
+
+/**
+ * The full tracklist of one documented station run (a show's UTC broadcast day), oldest first — exactly as it aired. Tracks resolved to the spine carry their recording node; unresolved tracks keep raw metadata so the honesty gradient stays visible.
+
+ * @summary One archived station run, in airing order
+ */
+export const GetStationRunParams = zod.object({
+  runId: zod.coerce.number(),
+});
+
+export const GetStationRunResponse = zod.object({
+  station: zod
+    .object({
+      slug: zod.string(),
+      name: zod.string(),
+      stationClass: zod.string(),
+    })
+    .describe("A station reference used in spin\/segue attribution."),
+  run: zod
+    .object({
+      runId: zod.number(),
+      date: zod.string().describe("UTC broadcast day, YYYY-MM-DD."),
+      show: zod
+        .union([
+          zod
+            .object({
+              name: zod.string(),
+              djName: zod.string().nullish(),
+            })
+            .describe(
+              "Show + DJ attribution for a spin, when the source exposes it.",
+            ),
+          zod.null(),
+        ])
+        .optional(),
+      spinCount: zod.number(),
+      startedAt: zod.string(),
+      endedAt: zod.string(),
+    })
+    .describe(
+      "One documented station run — a show's plays on one UTC broadcast day. `runId` is opaque (fetch the tracklist via \/archive\/station-runs).",
+    ),
+  tracks: zod.array(
+    zod
+      .object({
+        position: zod.number(),
+        playedAt: zod.string().nullish(),
+        rawArtist: zod.string(),
+        rawTitle: zod.string(),
+        confidence: zod.enum(["recording_id", "isrc", "text", "unresolved"]),
+        recording: zod
+          .union([
+            zod
+              .object({
+                mbid: zod.string(),
+                title: zod.string(),
+                artist: zod.string(),
+                artworkUrl: zod.string().nullish(),
+                links: zod.array(
+                  zod
+                    .object({
+                      name: zod.string(),
+                      url: zod.string(),
+                      kind: zod.enum(["exact", "search"]),
+                    })
+                    .describe(
+                      'A cross-service deep link. kind=\"exact\" points at the precise recording (resolved via Odesli); kind=\"search\" is a best-effort artist+title search on that service.',
+                    ),
+                ),
+              })
+              .describe("The MBID-keyed recording a spin resolved to."),
+            zod.null(),
+          ])
+          .optional(),
+      })
+      .describe(
+        "One slot of an archived run, in documented order. `recording` is null when the track never resolved to the spine (raw metadata preserved — the honesty gradient stays visible even in replay).",
+      ),
+  ),
+});
+
+/**
+ * The picker's picks grouped into runs — one run per source URL (an NTS episode page, a list, a post) — newest first by pick date. The `runId` is an opaque id for fetching the ordered tracklist via /archive/picker-runs/{runId}.
+
+ * @summary A picker's documented runs (archived episodes / lists)
+ */
+
+export const GetPickerArchiveParams = zod.object({
+  handle: zod.coerce.string().min(1),
+});
+
+export const GetPickerArchiveResponse = zod.object({
+  picker: zod
+    .object({
+      id: zod.number(),
+      pickerType: zod.enum([
+        "dj",
+        "label",
+        "blog",
+        "curator",
+        "collector",
+        "event",
+      ]),
+      name: zod.string(),
+      handle: zod.string(),
+      homeUrl: zod.string().nullish(),
+      trustTier: zod.number(),
+      description: zod.string().nullish(),
+      active: zod.boolean(),
+    })
+    .describe(
+      "A trusted taste source (label, blog, curator, collector, event, DJ).",
+    ),
+  runs: zod.array(
+    zod
+      .object({
+        runId: zod.number(),
+        title: zod
+          .string()
+          .nullish()
+          .describe("The run's own name (episode\/list title), when known."),
+        sourceUrl: zod.string(),
+        pickedAt: zod
+          .string()
+          .nullish()
+          .describe("When the picker documented this run (broadcast date)."),
+        trackCount: zod.number(),
+      })
+      .describe(
+        "One documented picker run — all picks sharing one source URL (an NTS episode page, a list, a post), replayed in documented order.",
+      ),
+  ),
+});
+
+/**
+ * The ordered tracklist of one picker run (an archived episode or list), in the order the picker documented it. Ordinals are preserved; tracks resolved to the spine carry their recording node.
+
+ * @summary One archived picker run, in documented order
+ */
+export const GetPickerRunParams = zod.object({
+  runId: zod.coerce.number(),
+});
+
+export const GetPickerRunResponse = zod.object({
+  picker: zod
+    .object({
+      id: zod.number(),
+      pickerType: zod.enum([
+        "dj",
+        "label",
+        "blog",
+        "curator",
+        "collector",
+        "event",
+      ]),
+      name: zod.string(),
+      handle: zod.string(),
+      homeUrl: zod.string().nullish(),
+      trustTier: zod.number(),
+      description: zod.string().nullish(),
+      active: zod.boolean(),
+    })
+    .describe(
+      "A trusted taste source (label, blog, curator, collector, event, DJ).",
+    ),
+  run: zod
+    .object({
+      runId: zod.number(),
+      title: zod
+        .string()
+        .nullish()
+        .describe("The run's own name (episode\/list title), when known."),
+      sourceUrl: zod.string(),
+      pickedAt: zod
+        .string()
+        .nullish()
+        .describe("When the picker documented this run (broadcast date)."),
+      trackCount: zod.number(),
+    })
+    .describe(
+      "One documented picker run — all picks sharing one source URL (an NTS episode page, a list, a post), replayed in documented order.",
+    ),
+  tracks: zod.array(
+    zod
+      .object({
+        position: zod.number(),
+        playedAt: zod.string().nullish(),
+        rawArtist: zod.string(),
+        rawTitle: zod.string(),
+        confidence: zod.enum(["recording_id", "isrc", "text", "unresolved"]),
+        recording: zod
+          .union([
+            zod
+              .object({
+                mbid: zod.string(),
+                title: zod.string(),
+                artist: zod.string(),
+                artworkUrl: zod.string().nullish(),
+                links: zod.array(
+                  zod
+                    .object({
+                      name: zod.string(),
+                      url: zod.string(),
+                      kind: zod.enum(["exact", "search"]),
+                    })
+                    .describe(
+                      'A cross-service deep link. kind=\"exact\" points at the precise recording (resolved via Odesli); kind=\"search\" is a best-effort artist+title search on that service.',
+                    ),
+                ),
+              })
+              .describe("The MBID-keyed recording a spin resolved to."),
+            zod.null(),
+          ])
+          .optional(),
+      })
+      .describe(
+        "One slot of an archived run, in documented order. `recording` is null when the track never resolved to the spine (raw metadata preserved — the honesty gradient stays visible even in replay).",
+      ),
+  ),
+});
+
+/**
  * Source-agnostic fallback ladder. Returns the strongest available human attribution for a recording — DJ spin, then label, then blog/curator, then collector/event, then artist-level — and stops there. Lore never falls through to algorithmic similar-tracks: when no human has picked the track it returns an empty rung with a "be the first" invitation.
 
  * @summary Strongest human attribution for a track (entry-flow ladder)

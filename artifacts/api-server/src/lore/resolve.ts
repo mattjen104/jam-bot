@@ -246,10 +246,16 @@ async function resolveLinks(
   return links?.platforms ?? [];
 }
 
-/** Upsert the recording node for a resolved MBID, fetching links when missing. */
+/**
+ * Upsert the recording node for a resolved MBID, fetching links when missing.
+ * `enrichLinks: false` (deep backfill) skips the per-recording Spotify/Odesli
+ * fetch entirely — the spine node still lands, and links converge later when
+ * the track is viewed or spun live.
+ */
 async function upsertRecording(
   r: MbidResolution,
   artworkUrl?: string,
+  enrichLinks = true,
 ): Promise<void> {
   const [existing] = await db
     .select({ mbid: recordingsTable.mbid, links: recordingsTable.links })
@@ -258,7 +264,7 @@ async function upsertRecording(
     .limit(1);
 
   let links = existing?.links ?? null;
-  if (!links || links.length === 0) {
+  if (enrichLinks && (!links || links.length === 0)) {
     const fetched = await resolveLinks(r.mbid as string, r.artist, r.title);
     links = fetched.length ? fetched : null;
   }
@@ -341,10 +347,11 @@ async function persistSpin(args: {
   showId: number | null;
   source: string;
   citation?: string;
+  enrichLinks?: boolean;
 }): Promise<boolean> {
   const { station, resolution: r, raw, showId, source, citation } = args;
 
-  if (r.mbid) await upsertRecording(r, raw.artworkUrl);
+  if (r.mbid) await upsertRecording(r, raw.artworkUrl, args.enrichLinks ?? true);
 
   const inserted = await db
     .insert(spinsTable)
@@ -427,8 +434,18 @@ export async function ingestRawSpins(
   station: Station,
   spins: RawSpin[],
   source: string,
+  opts?: {
+    /**
+     * Deep-backfill mode: don't advance `lastSeenCursor` (that cursor belongs
+     * to LIVE polling and only ever moves forward) and skip per-recording link
+     * enrichment (Spotify/Odesli) so a big historical slice never fans out
+     * into hundreds of link fetches. Links converge later.
+     */
+    backfill?: boolean;
+  },
 ): Promise<number> {
   if (!spins.length) return 0;
+  const backfill = opts?.backfill ?? false;
   try {
     // Oldest-first so segue derivation and now-playing ordering read naturally.
     const ordered = [...spins].sort((a, b) => {
@@ -476,12 +493,13 @@ export async function ingestRawSpins(
         raw,
         showId,
         source,
+        enrichLinks: !backfill,
       });
       if (wrote) logged++;
       if (cursorValue) newestCursor = cursorValue;
     }
 
-    if (newestCursor && newestCursor !== station.lastSeenCursor) {
+    if (!backfill && newestCursor && newestCursor !== station.lastSeenCursor) {
       await db
         .update(stationsTable)
         .set({ lastSeenCursor: newestCursor })

@@ -7,6 +7,8 @@
  */
 
 export * from "./apiError";
+export * from "./archiveTrack";
+export * from "./archiveTrackConfidence";
 export * from "./artistCatalogue";
 export * from "./blogIngestRequest";
 export * from "./catalogueAlbum";
@@ -31,8 +33,11 @@ export * from "./nowPlayingConfidence";
 export * from "./nowPlayingRecording";
 export * from "./oEmbed";
 export * from "./picker";
+export * from "./pickerArchive";
 export * from "./pickerList";
 export * from "./pickerPickerType";
+export * from "./pickerRunDetail";
+export * from "./pickerRunSummary";
 export * from "./recordingLink";
 export * from "./recordingLinkKind";
 export * from "./recordingNode";
@@ -58,9 +63,12 @@ export * from "./spotifyPlayResult";
 export * from "./spotifyPlayResultMatchSource";
 export * from "./spotifyStatus";
 export * from "./station";
+export * from "./stationArchive";
 export * from "./stationList";
 export * from "./stationNowPlaying";
 export * from "./stationRef";
+export * from "./stationRunDetail";
+export * from "./stationRunSummary";
 export * from "./trackContext";
 export * from "./trackEntry";
 export * from "./trackInsight";

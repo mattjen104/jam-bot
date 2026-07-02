@@ -4,6 +4,7 @@ import type { RideApi } from "../player/PlayerProvider";
 import type { SpotifyConnectApi } from "../player/useSpotifyConnect";
 import {
   ExternalLink,
+  History,
   Loader2,
   Music2,
   Pause,
@@ -17,6 +18,9 @@ import {
 function attributionLine(ride: RideApi): string {
   const cur = ride.current;
   if (!cur) return "";
+  if (ride.mode === "replay") {
+    return ride.replayLabel ? `Replaying ${ride.replayLabel}` : "Replaying a run";
+  }
   if (!cur.attribution) return "Riding from here";
   const picker = cur.attribution.pickers[0];
   if (picker) return `Sequenced by ${picker.name}`;
@@ -79,9 +83,18 @@ export function RideBar({
         </div>
       ) : null}
       <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3 sm:px-6">
-        <span className="hidden shrink-0 items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 font-mono text-[11px] uppercase tracking-wide text-primary sm:inline-flex">
-          <RouteIcon className="h-3.5 w-3.5" />
-          Riding
+        <span
+          className="hidden shrink-0 items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 font-mono text-[11px] uppercase tracking-wide text-primary sm:inline-flex"
+          data-testid="ride-mode-badge"
+        >
+          {ride.mode === "replay" ? (
+            <History className="h-3.5 w-3.5" />
+          ) : (
+            <RouteIcon className="h-3.5 w-3.5" />
+          )}
+          {ride.mode === "replay"
+            ? `Replay ${ride.index + 1}/${ride.queue.length}`
+            : "Riding"}
         </span>
 
         <button
