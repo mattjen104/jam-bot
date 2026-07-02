@@ -150,6 +150,12 @@ export interface RideApi {
   togglePause: () => void;
   /** Persist the user's mode choice and switch immediately. */
   setPlaybackMode: (mode: PlaybackMode) => void;
+  /**
+   * Clear the current track from the Spotify failed/device-lost sets and retry
+   * the service-ride command. If Spotify succeeds the fallback indicator
+   * disappears; if it fails again the message returns.
+   */
+  retrySpotify: () => void;
 }
 
 interface PlayerContextValue {
@@ -491,6 +497,21 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const currentPreview = currentItem?.previewUrl; // string | null | undefined
   const currentNeedsLinks = !!currentItem && currentItem.links.length === 0;
   const hasNextHop = index + 1 < queue.length;
+
+  /**
+   * Clear the current track from the Spotify failed/device-lost sets and retry
+   * the service-ride command for it. Bumps spotifyFallbackTick so the derived
+   * `spotifyModeForCurrent` recomputes and the command effect re-fires.
+   */
+  const retrySpotify = useCallback(() => {
+    if (!currentMbid) return;
+    spotifyFailedRef.current.delete(currentMbid);
+    spotifyDeviceLostRef.current.delete(currentMbid);
+    // Reset the commanding guard so the effect is allowed to re-issue the play.
+    spotifyCommandingRef.current = null;
+    spotifyNowRef.current = null;
+    setSpotifyFallbackTick((t) => t + 1);
+  }, [currentMbid]);
 
   // Whether THIS track rides the listener's Spotify (full track) or the
   // preview ladder. Requires an explicit opt-in (playbackMode) in addition to
@@ -927,6 +948,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         prev,
         togglePause,
         setPlaybackMode,
+        retrySpotify,
       },
       spotify,
     }),
@@ -958,6 +980,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       prev,
       togglePause,
       setPlaybackMode,
+      retrySpotify,
       spotify,
     ],
   );

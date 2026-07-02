@@ -12,6 +12,7 @@ import {
   Pause,
   Play,
   Radio,
+  RefreshCw,
   Route as RouteIcon,
   SkipForward,
   X,
@@ -109,6 +110,16 @@ export function RideBar({
                 >
                   <AlertTriangle className="h-3.5 w-3.5" />
                   {rideFallbackLabel(ride.deviceLost, ride.timeOrientation)}
+                  <button
+                    type="button"
+                    onClick={ride.retrySpotify}
+                    data-testid="ride-retry-spotify"
+                    className="hover-elevate inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-amber-600 transition-opacity hover:bg-amber-500/20 dark:border-amber-400/40 dark:text-amber-400"
+                    title="Retry playing this track on your Spotify"
+                  >
+                    <RefreshCw className="h-2.5 w-2.5" />
+                    Retry
+                  </button>
                 </span>
               ) : (
                 <span className="font-mono text-[11px] text-muted-foreground">
