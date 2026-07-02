@@ -633,6 +633,71 @@ export interface IngestResult {
   logged: number;
 }
 
+/**
+ * Spotify Connect status for this browser session. When `configured` is false the feature is honestly absent (server has no app credentials).
+
+ */
+export interface SpotifyStatus {
+  configured: boolean;
+  connected: boolean;
+  /** @nullable */
+  displayName?: string | null;
+  /**
+   * Spotify product tier ("premium", "free", ...).
+   * @nullable
+   */
+  product?: string | null;
+}
+
+export interface SpotifyPlayRequest {
+  /** @minLength 1 */
+  mbid: string;
+}
+
+/**
+ * How the MBID was matched to Spotify — exact stored link, ISRC lookup, or best-effort artist+title search (honest gradient).
+
+ */
+export type SpotifyPlayResultMatchSource =
+  (typeof SpotifyPlayResultMatchSource)[keyof typeof SpotifyPlayResultMatchSource];
+
+export const SpotifyPlayResultMatchSource = {
+  link: "link",
+  isrc: "isrc",
+  search: "search",
+} as const;
+
+/**
+ * Full-track playback started on the listener's own device.
+ */
+export interface SpotifyPlayResult {
+  trackUri: string;
+  /** @nullable */
+  trackUrl?: string | null;
+  /** How the MBID was matched to Spotify — exact stored link, ISRC lookup, or best-effort artist+title search (honest gradient).
+   */
+  matchSource: SpotifyPlayResultMatchSource;
+  /** @nullable */
+  deviceName?: string | null;
+  /** @nullable */
+  durationMs?: number | null;
+}
+
+/**
+ * Snapshot of the listener's Spotify player (Connect API). `active` is false when Spotify reports no playback session anywhere.
+
+ */
+export interface SpotifyPlayerState {
+  active: boolean;
+  isPlaying: boolean;
+  /** @nullable */
+  progressMs?: number | null;
+  /** @nullable */
+  durationMs?: number | null;
+  /** @nullable */
+  trackUri?: string | null;
+}
+
 export type ResolveSongParams = {
   /**
    * @minLength 1

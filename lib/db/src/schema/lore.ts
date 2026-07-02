@@ -398,3 +398,28 @@ export const picksUnifiedView = pgView("picks_unified", {
   pickerHandle: text("picker_handle").notNull(),
   trustTier: integer("trust_tier").notNull(),
 }).existing();
+
+/**
+ * A listener's Spotify Connect link. Lore has no accounts, so the identity IS
+ * an opaque random session id stored in an httpOnly cookie; this table maps
+ * that sid to the listener's Spotify OAuth tokens. The tokens let the server
+ * remote-control the listener's OWN Spotify player (Connect API) — Lore never
+ * receives or proxies any audio. Rows are deleted on disconnect.
+ */
+export const spotifyConnectionsTable = pgTable("spotify_connections", {
+  /** Opaque random session id (httpOnly cookie value). */
+  sid: text("sid").primaryKey(),
+  accessToken: text("access_token").notNull(),
+  refreshToken: text("refresh_token").notNull(),
+  /** When the current access token expires. */
+  expiresAt: timestamp("expires_at").notNull(),
+  /** Spotify display name, for the "connected as" UI. */
+  displayName: text("display_name"),
+  /** Spotify product tier ("premium", "free", ...) — playback needs premium. */
+  product: text("product"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type SpotifyConnection = typeof spotifyConnectionsTable.$inferSelect;
+export type InsertSpotifyConnection = typeof spotifyConnectionsTable.$inferInsert;

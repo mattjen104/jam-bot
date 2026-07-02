@@ -38,6 +38,10 @@ import type {
   RymListRequest,
   SegueNextList,
   SongContext,
+  SpotifyPlayRequest,
+  SpotifyPlayResult,
+  SpotifyPlayerState,
+  SpotifyStatus,
   StationList,
   StationNowPlaying,
   TracklistRequest,
@@ -1718,3 +1722,482 @@ export const useAddRymList = <
 > => {
   return useMutation(getAddRymListMutationOptions(options));
 };
+
+/**
+ * `configured` is false when the server has no Spotify app credentials (feature honestly absent). `connected` is true when this session's cookie maps to stored OAuth tokens.
+
+ * @summary Whether this browser session has Spotify connected
+ */
+export const getGetSpotifyStatusUrl = () => {
+  return `/api/spotify/status`;
+};
+
+export const getSpotifyStatus = async (
+  options?: RequestInit,
+): Promise<SpotifyStatus> => {
+  return customFetch<SpotifyStatus>(getGetSpotifyStatusUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetSpotifyStatusQueryKey = () => {
+  return [`/api/spotify/status`] as const;
+};
+
+export const getGetSpotifyStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSpotifyStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSpotifyStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetSpotifyStatusQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getSpotifyStatus>>
+  > = ({ signal }) => getSpotifyStatus({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSpotifyStatus>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSpotifyStatusQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSpotifyStatus>>
+>;
+export type GetSpotifyStatusQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Whether this browser session has Spotify connected
+ */
+
+export function useGetSpotifyStatus<
+  TData = Awaited<ReturnType<typeof getSpotifyStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSpotifyStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSpotifyStatusQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Disconnect Spotify (delete stored tokens, clear cookie)
+ */
+export const getSpotifyLogoutUrl = () => {
+  return `/api/spotify/logout`;
+};
+
+export const spotifyLogout = async (options?: RequestInit): Promise<void> => {
+  return customFetch<void>(getSpotifyLogoutUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getSpotifyLogoutMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof spotifyLogout>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof spotifyLogout>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["spotifyLogout"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof spotifyLogout>>,
+    void
+  > = () => {
+    return spotifyLogout(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SpotifyLogoutMutationResult = NonNullable<
+  Awaited<ReturnType<typeof spotifyLogout>>
+>;
+
+export type SpotifyLogoutMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Disconnect Spotify (delete stored tokens, clear cookie)
+ */
+export const useSpotifyLogout = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof spotifyLogout>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof spotifyLogout>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getSpotifyLogoutMutationOptions(options));
+};
+
+/**
+ * Resolves the MBID to a Spotify track (exact link > ISRC > artist+title search) and starts playback on the listener's active Spotify device via the Connect API. Requires Premium and an open Spotify app somewhere.
+
+ * @summary Play a recording (full track) on the listener's own Spotify
+ */
+export const getSpotifyPlayUrl = () => {
+  return `/api/spotify/play`;
+};
+
+export const spotifyPlay = async (
+  spotifyPlayRequest: SpotifyPlayRequest,
+  options?: RequestInit,
+): Promise<SpotifyPlayResult> => {
+  return customFetch<SpotifyPlayResult>(getSpotifyPlayUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(spotifyPlayRequest),
+  });
+};
+
+export const getSpotifyPlayMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof spotifyPlay>>,
+    TError,
+    { data: BodyType<SpotifyPlayRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof spotifyPlay>>,
+  TError,
+  { data: BodyType<SpotifyPlayRequest> },
+  TContext
+> => {
+  const mutationKey = ["spotifyPlay"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof spotifyPlay>>,
+    { data: BodyType<SpotifyPlayRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return spotifyPlay(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SpotifyPlayMutationResult = NonNullable<
+  Awaited<ReturnType<typeof spotifyPlay>>
+>;
+export type SpotifyPlayMutationBody = BodyType<SpotifyPlayRequest>;
+export type SpotifyPlayMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Play a recording (full track) on the listener's own Spotify
+ */
+export const useSpotifyPlay = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof spotifyPlay>>,
+    TError,
+    { data: BodyType<SpotifyPlayRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof spotifyPlay>>,
+  TError,
+  { data: BodyType<SpotifyPlayRequest> },
+  TContext
+> => {
+  return useMutation(getSpotifyPlayMutationOptions(options));
+};
+
+/**
+ * @summary Pause the listener's Spotify playback
+ */
+export const getSpotifyPauseUrl = () => {
+  return `/api/spotify/pause`;
+};
+
+export const spotifyPause = async (options?: RequestInit): Promise<void> => {
+  return customFetch<void>(getSpotifyPauseUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getSpotifyPauseMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof spotifyPause>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof spotifyPause>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["spotifyPause"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof spotifyPause>>,
+    void
+  > = () => {
+    return spotifyPause(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SpotifyPauseMutationResult = NonNullable<
+  Awaited<ReturnType<typeof spotifyPause>>
+>;
+
+export type SpotifyPauseMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Pause the listener's Spotify playback
+ */
+export const useSpotifyPause = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof spotifyPause>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof spotifyPause>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getSpotifyPauseMutationOptions(options));
+};
+
+/**
+ * @summary Resume the listener's Spotify playback
+ */
+export const getSpotifyResumeUrl = () => {
+  return `/api/spotify/resume`;
+};
+
+export const spotifyResume = async (options?: RequestInit): Promise<void> => {
+  return customFetch<void>(getSpotifyResumeUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getSpotifyResumeMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof spotifyResume>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof spotifyResume>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["spotifyResume"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof spotifyResume>>,
+    void
+  > = () => {
+    return spotifyResume(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SpotifyResumeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof spotifyResume>>
+>;
+
+export type SpotifyResumeMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Resume the listener's Spotify playback
+ */
+export const useSpotifyResume = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof spotifyResume>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof spotifyResume>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getSpotifyResumeMutationOptions(options));
+};
+
+/**
+ * Polled by the ride player to detect track end (auto-advance). `active` is false when Spotify reports no active playback session.
+
+ * @summary Snapshot of the listener's Spotify player state
+ */
+export const getGetSpotifyPlayerUrl = () => {
+  return `/api/spotify/player`;
+};
+
+export const getSpotifyPlayer = async (
+  options?: RequestInit,
+): Promise<SpotifyPlayerState> => {
+  return customFetch<SpotifyPlayerState>(getGetSpotifyPlayerUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetSpotifyPlayerQueryKey = () => {
+  return [`/api/spotify/player`] as const;
+};
+
+export const getGetSpotifyPlayerQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSpotifyPlayer>>,
+  TError = ErrorType<ApiError>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSpotifyPlayer>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetSpotifyPlayerQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getSpotifyPlayer>>
+  > = ({ signal }) => getSpotifyPlayer({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSpotifyPlayer>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSpotifyPlayerQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSpotifyPlayer>>
+>;
+export type GetSpotifyPlayerQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Snapshot of the listener's Spotify player state
+ */
+
+export function useGetSpotifyPlayer<
+  TData = Awaited<ReturnType<typeof getSpotifyPlayer>>,
+  TError = ErrorType<ApiError>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSpotifyPlayer>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSpotifyPlayerQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}

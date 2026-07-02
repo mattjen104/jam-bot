@@ -1,9 +1,11 @@
 import { Link } from "wouter";
 import type { RecordingLink } from "@workspace/api-client-react";
 import type { RideApi } from "../player/PlayerProvider";
+import type { SpotifyConnectApi } from "../player/useSpotifyConnect";
 import {
   ExternalLink,
   Loader2,
+  Music2,
   Pause,
   Play,
   Route as RouteIcon,
@@ -23,13 +25,20 @@ function attributionLine(ride: RideApi): string {
   return "A real transition";
 }
 
-export function RideBar({ ride }: { ride: RideApi }) {
+export function RideBar({
+  ride,
+  spotify,
+}: {
+  ride: RideApi;
+  spotify: SpotifyConnectApi;
+}) {
   const cur = ride.current;
   if (!cur) return null;
 
   const isPlaying = ride.status === "playing";
   const isLoading = ride.status === "loading" || ride.seeking;
-  const noPreview = cur.previewUrl === null;
+  const onSpotify = ride.source === "spotify";
+  const noPreview = cur.previewUrl === null && !onSpotify;
   const bestLink =
     cur.links.find((l: RecordingLink) => l.kind === "exact") ??
     cur.links[0] ??
@@ -40,6 +49,35 @@ export function RideBar({ ride }: { ride: RideApi }) {
       className="fixed inset-x-0 bottom-0 z-40 border-t border-primary-border bg-card/95 backdrop-blur-md"
       data-testid="ride-bar"
     >
+      {spotify.configured && !spotify.connected ? (
+        <div className="border-b border-border/60 bg-background/60">
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-1.5 sm:px-6">
+            <p className="truncate font-mono text-[11px] text-muted-foreground">
+              Rides play 30s previews. Connect Spotify to ride full tracks on
+              your own player.
+            </p>
+            <button
+              type="button"
+              onClick={spotify.connect}
+              data-testid="spotify-connect"
+              className="hover-elevate inline-flex shrink-0 items-center gap-1.5 rounded-full border border-primary-border bg-primary/10 px-3 py-1 font-mono text-[11px] uppercase tracking-wide text-primary"
+            >
+              <Music2 className="h-3.5 w-3.5" />
+              Connect Spotify
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {spotify.connected && !spotify.premium ? (
+        <div className="border-b border-border/60 bg-background/60">
+          <div className="mx-auto max-w-6xl px-4 py-1.5 sm:px-6">
+            <p className="truncate font-mono text-[11px] text-muted-foreground">
+              Spotify connected, but full-track control needs Premium — rides
+              stay on 30s previews.
+            </p>
+          </div>
+        </div>
+      ) : null}
       <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3 sm:px-6">
         <span className="hidden shrink-0 items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 font-mono text-[11px] uppercase tracking-wide text-primary sm:inline-flex">
           <RouteIcon className="h-3.5 w-3.5" />
@@ -49,7 +87,7 @@ export function RideBar({ ride }: { ride: RideApi }) {
         <button
           type="button"
           onClick={ride.togglePause}
-          disabled={noPreview}
+          disabled={noPreview && ride.source !== "spotify"}
           aria-label={isPlaying ? "Pause ride" : "Play ride"}
           data-testid="ride-toggle"
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-primary-border bg-primary text-primary-foreground shadow-sm transition-transform active:scale-95 disabled:opacity-40"
@@ -83,6 +121,7 @@ export function RideBar({ ride }: { ride: RideApi }) {
             {cur.artist}
             {" · "}
             {noPreview ? "No preview — open externally" : attributionLine(ride)}
+            {onSpotify ? " · Full track on your Spotify" : ""}
             {ride.status === "ended" ? " · trail ends here" : ""}
           </p>
         </div>

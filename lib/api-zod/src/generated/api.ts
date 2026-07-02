@@ -697,3 +697,63 @@ export const AddRymListBody = zod
     url: zod.string().min(1),
   })
   .describe("Register a RateYourMusic list as a link-out-only picker.");
+
+/**
+ * `configured` is false when the server has no Spotify app credentials (feature honestly absent). `connected` is true when this session's cookie maps to stored OAuth tokens.
+
+ * @summary Whether this browser session has Spotify connected
+ */
+export const GetSpotifyStatusResponse = zod
+  .object({
+    configured: zod.boolean(),
+    connected: zod.boolean(),
+    displayName: zod.string().nullish(),
+    product: zod
+      .string()
+      .nullish()
+      .describe('Spotify product tier (\"premium\", \"free\", ...).'),
+  })
+  .describe(
+    "Spotify Connect status for this browser session. When `configured` is false the feature is honestly absent (server has no app credentials).\n",
+  );
+
+/**
+ * Resolves the MBID to a Spotify track (exact link > ISRC > artist+title search) and starts playback on the listener's active Spotify device via the Connect API. Requires Premium and an open Spotify app somewhere.
+
+ * @summary Play a recording (full track) on the listener's own Spotify
+ */
+
+export const SpotifyPlayBody = zod.object({
+  mbid: zod.string().min(1),
+});
+
+export const SpotifyPlayResponse = zod
+  .object({
+    trackUri: zod.string(),
+    trackUrl: zod.string().nullish(),
+    matchSource: zod
+      .enum(["link", "isrc", "search"])
+      .describe(
+        "How the MBID was matched to Spotify — exact stored link, ISRC lookup, or best-effort artist+title search (honest gradient).\n",
+      ),
+    deviceName: zod.string().nullish(),
+    durationMs: zod.number().nullish(),
+  })
+  .describe("Full-track playback started on the listener's own device.");
+
+/**
+ * Polled by the ride player to detect track end (auto-advance). `active` is false when Spotify reports no active playback session.
+
+ * @summary Snapshot of the listener's Spotify player state
+ */
+export const GetSpotifyPlayerResponse = zod
+  .object({
+    active: zod.boolean(),
+    isPlaying: zod.boolean(),
+    progressMs: zod.number().nullish(),
+    durationMs: zod.number().nullish(),
+    trackUri: zod.string().nullish(),
+  })
+  .describe(
+    "Snapshot of the listener's Spotify player (Connect API). `active` is false when Spotify reports no playback session anywhere.\n",
+  );

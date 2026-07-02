@@ -14,6 +14,13 @@ tags:
     description: Song-context enrichment (graph + dossier)
   - name: stations
     description: Lore — curated radio stations + now-playing resolution
+  - name: spotify
+    description: >
+      Lore — Spotify Connect. Remote-controls the LISTENER'S OWN Spotify app
+      via the Web API (no SDK, no audio proxying) so rides can play full
+      tracks. Identity is an opaque httpOnly session cookie; browser-navigation
+      OAuth endpoints (/spotify/login, /spotify/callback) are deliberately not
+      in this spec — they are redirects, not JSON APIs.
 paths:
   /healthz:
     get:
@@ -660,6 +667,137 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "503":
           description: Admin entry not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /spotify/status:
+    get:
+      operationId: getSpotifyStatus
+      tags: [spotify]
+      summary: Whether this browser session has Spotify connected
+      description: >
+        `configured` is false when the server has no Spotify app credentials
+        (feature honestly absent). `connected` is true when this session's
+        cookie maps to stored OAuth tokens.
+      responses:
+        "200":
+          description: Connection status for this session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpotifyStatus"
+  /spotify/logout:
+    post:
+      operationId: spotifyLogout
+      tags: [spotify]
+      summary: Disconnect Spotify (delete stored tokens, clear cookie)
+      responses:
+        "204":
+          description: Disconnected (idempotent)
+  /spotify/play:
+    post:
+      operationId: spotifyPlay
+      tags: [spotify]
+      summary: Play a recording (full track) on the listener's own Spotify
+      description: >
+        Resolves the MBID to a Spotify track (exact link > ISRC > artist+title
+        search) and starts playback on the listener's active Spotify device via
+        the Connect API. Requires Premium and an open Spotify app somewhere.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SpotifyPlayRequest"
+      responses:
+        "200":
+          description: Playback started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpotifyPlayResult"
+        "401":
+          description: No Spotify connection for this session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Spotify Premium required for remote playback
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Recording unknown or not found on Spotify
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: No active Spotify device (open Spotify on any device)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Spotify not configured on the server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /spotify/pause:
+    post:
+      operationId: spotifyPause
+      tags: [spotify]
+      summary: Pause the listener's Spotify playback
+      responses:
+        "204":
+          description: Paused (idempotent; also 204 when nothing was playing)
+        "401":
+          description: No Spotify connection for this session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /spotify/resume:
+    post:
+      operationId: spotifyResume
+      tags: [spotify]
+      summary: Resume the listener's Spotify playback
+      responses:
+        "204":
+          description: Resumed
+        "401":
+          description: No Spotify connection for this session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: No active Spotify device
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /spotify/player:
+    get:
+      operationId: getSpotifyPlayer
+      tags: [spotify]
+      summary: Snapshot of the listener's Spotify player state
+      description: >
+        Polled by the ride player to detect track end (auto-advance). `active`
+        is false when Spotify reports no active playback session.
+      responses:
+        "200":
+          description: Player state snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpotifyPlayerState"
+        "401":
+          description: No Spotify connection for this session
           content:
             application/json:
               schema:
@@ -1547,3 +1685,69 @@ components:
         - handle
         - name
         - logged
+    SpotifyStatus:
+      type: object
+      description: >
+        Spotify Connect status for this browser session. When `configured` is
+        false the feature is honestly absent (server has no app credentials).
+      properties:
+        configured:
+          type: boolean
+        connected:
+          type: boolean
+        displayName:
+          type: ["string", "null"]
+        product:
+          type: ["string", "null"]
+          description: Spotify product tier ("premium", "free", ...).
+      required:
+        - configured
+        - connected
+    SpotifyPlayRequest:
+      type: object
+      properties:
+        mbid:
+          type: string
+          minLength: 1
+      required:
+        - mbid
+    SpotifyPlayResult:
+      type: object
+      description: Full-track playback started on the listener's own device.
+      properties:
+        trackUri:
+          type: string
+        trackUrl:
+          type: ["string", "null"]
+        matchSource:
+          type: string
+          enum: [link, isrc, search]
+          description: >
+            How the MBID was matched to Spotify — exact stored link, ISRC
+            lookup, or best-effort artist+title search (honest gradient).
+        deviceName:
+          type: ["string", "null"]
+        durationMs:
+          type: ["integer", "null"]
+      required:
+        - trackUri
+        - matchSource
+    SpotifyPlayerState:
+      type: object
+      description: >
+        Snapshot of the listener's Spotify player (Connect API). `active` is
+        false when Spotify reports no playback session anywhere.
+      properties:
+        active:
+          type: boolean
+        isPlaying:
+          type: boolean
+        progressMs:
+          type: ["integer", "null"]
+        durationMs:
+          type: ["integer", "null"]
+        trackUri:
+          type: ["string", "null"]
+      required:
+        - active
+        - isPlaying

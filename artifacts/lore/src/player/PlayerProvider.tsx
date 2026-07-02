@@ -12,11 +12,19 @@ import {
   getRecording,
   getRecordingSegues,
   getRecordingPreview,
+  spotifyPlay,
+  spotifyPause,
+  spotifyResume,
+  getSpotifyPlayer,
   type RecordingLink,
   type SegueNext,
   type Station,
 } from "@workspace/api-client-react";
 import { useRadioPlayer, type PlayerStatus } from "../hooks/useRadioPlayer";
+import {
+  useSpotifyConnect,
+  type SpotifyConnectApi,
+} from "./useSpotifyConnect";
 
 /** How we arrived at a track in the ride — the attribution for this transition. */
 export interface RideAttribution {
@@ -72,6 +80,9 @@ export interface RideApi {
   seeking: boolean;
   /** No further attributed transition exists after the current track. */
   atTrailEnd: boolean;
+  /** What is sounding right now: the listener's own Spotify (full track) or
+   * the 30s preview element. Null before playback begins. */
+  source: "spotify" | "preview" | null;
   start: (seed: RideSeed) => void;
   stop: () => void;
   next: () => void;
@@ -82,6 +93,7 @@ export interface RideApi {
 interface PlayerContextValue {
   radio: RadioApi;
   ride: RideApi;
+  spotify: SpotifyConnectApi;
 }
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
@@ -103,6 +115,7 @@ function segueToItem(n: SegueNext): RideItem {
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const radio = useRadioPlayer();
+  const spotify = useSpotifyConnect();
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   if (audioRef.current === null && typeof Audio !== "undefined") {
@@ -117,6 +130,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [index, setIndex] = useState(0);
   const [seeking, setSeeking] = useState(false);
   const [atTrailEnd, setAtTrailEnd] = useState(false);
+  const [source, setSource] = useState<"spotify" | "preview" | null>(null);
 
   // Guards so async resolves don't stack up or race a stopped ride.
   const rideRef = useRef(0); // bumped on every start/stop to invalidate stale async work
@@ -126,6 +140,35 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const playingUrlRef = useRef<string | null>(null);
   // MBIDs whose preview is being fetched, so we never double-fetch one.
   const previewFetchingRef = useRef<Set<string>>(new Set());
+
+  // --- Spotify full-track path (remote-controls the listener's own app) ----
+  // What the ride commanded Spotify to play, so polls can tell "our track
+  // ended" from "listener is playing something else".
+  const spotifyNowRef = useRef<{
+    mbid: string;
+    uri: string;
+    sawPlaying: boolean;
+    /** Consecutive polls that looked like "track over" — advance needs 2 so a
+     * single blip (Spotify's own gapless transition, flaky snapshot) never
+     * skips a track early. */
+    endedPolls: number;
+  } | null>(null);
+  // MBID currently being commanded, so effect re-runs never double-play.
+  const spotifyCommandingRef = useRef<string | null>(null);
+  // Tracks that failed on Spotify this ride — they fall back to previews.
+  const spotifyFailedRef = useRef<Set<string>>(new Set());
+  // Bumped when a track falls back so mode recomputes (refs don't re-render).
+  const [spotifyFallbackTick, setSpotifyFallbackTick] = useState(0);
+  // Pause commanded by us (or observed from the Spotify app) — the poll must
+  // not mistake it for track-ended.
+  const spotifyPausedRef = useRef(false);
+  // Mirror of `source` readable inside stable callbacks.
+  const sourceRef = useRef<"spotify" | "preview" | null>(null);
+  // Queue length readable inside the poll interval without re-arming it.
+  const queueLenRef = useRef(0);
+  queueLenRef.current = queue.length;
+
+  const spotifyEligible = spotify.connected && spotify.premium;
 
   const stopRadio = radio.stop;
   const pauseRadio = (radio as unknown as { pause: () => void }).pause;
@@ -139,6 +182,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       el.pause();
       el.removeAttribute("src");
     }
+    // Leave the listener's Spotify quiet when the ride commanded it.
+    if (sourceRef.current === "spotify") {
+      void spotifyPause().catch(() => {});
+    }
+    spotifyNowRef.current = null;
+    spotifyCommandingRef.current = null;
+    spotifyPausedRef.current = false;
+    spotifyFailedRef.current.clear();
+    sourceRef.current = null;
+    setSource(null);
     setActive(false);
     setStatus("idle");
     setQueue([]);
@@ -153,6 +206,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       // sources never play at once — enqueue-never-cut, but audio is exclusive.
       pauseRadio?.();
       rideRef.current += 1;
+      spotifyNowRef.current = null;
+      spotifyCommandingRef.current = null;
+      spotifyPausedRef.current = false;
+      spotifyFailedRef.current.clear();
+      sourceRef.current = null;
+      setSource(null);
       setActive(true);
       setStatus("loading");
       setAtTrailEnd(false);
@@ -185,6 +244,27 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const togglePause = useCallback(() => {
+    // Full-track path: command the listener's own Spotify, not the <audio> el.
+    // The paused flag only flips after the API confirms, so a failed command
+    // never leaves our idea of the player out of sync with reality.
+    if (sourceRef.current === "spotify") {
+      if (spotifyPausedRef.current) {
+        void spotifyResume()
+          .then(() => {
+            spotifyPausedRef.current = false;
+            setStatus("playing");
+          })
+          .catch(() => setStatus("error"));
+      } else {
+        void spotifyPause()
+          .then(() => {
+            spotifyPausedRef.current = true;
+            setStatus("paused");
+          })
+          .catch(() => setStatus("error"));
+      }
+      return;
+    }
     const el = audioRef.current;
     if (!el) return;
     if (el.paused) {
@@ -239,9 +319,145 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const currentNeedsLinks = !!currentItem && currentItem.links.length === 0;
   const hasNextHop = index + 1 < queue.length;
 
+  // Whether THIS track rides the listener's Spotify (full track) or the
+  // preview ladder. A Spotify failure marks the track and bumps the tick so
+  // this recomputes and the preview path takes over.
+  const spotifyModeForCurrent =
+    active &&
+    spotifyEligible &&
+    !!currentMbid &&
+    spotifyFallbackTick >= 0 &&
+    !spotifyFailedRef.current.has(currentMbid);
+
+  // Command the listener's own Spotify to play the current track (full).
+  const refreshSpotify = spotify.refresh;
+  useEffect(() => {
+    if (!spotifyModeForCurrent || !currentMbid) return;
+    if (spotifyNowRef.current?.mbid === currentMbid) return;
+    if (spotifyCommandingRef.current === currentMbid) return;
+
+    const token = rideRef.current;
+    const targetMbid = currentMbid;
+    spotifyCommandingRef.current = targetMbid;
+    spotifyPausedRef.current = false;
+    sourceRef.current = "spotify";
+    setSource("spotify");
+    setStatus("loading");
+    // Audio is exclusive: silence the preview element while Spotify plays.
+    const el = audioRef.current;
+    if (el) {
+      el.pause();
+      el.removeAttribute("src");
+      playingUrlRef.current = null;
+    }
+
+    void spotifyPlay({ mbid: targetMbid })
+      .then((res) => {
+        if (token !== rideRef.current) return;
+        spotifyNowRef.current = {
+          mbid: targetMbid,
+          uri: res.trackUri,
+          sawPlaying: false,
+          endedPolls: 0,
+        };
+        setStatus("playing");
+      })
+      .catch((err: unknown) => {
+        if (token !== rideRef.current) return;
+        // This track can't ride Spotify (not found, no device, revoked...):
+        // fall back to the preview ladder for it, honestly and per-track.
+        spotifyFailedRef.current.add(targetMbid);
+        spotifyNowRef.current = null;
+        sourceRef.current = null;
+        setSource(null);
+        setSpotifyFallbackTick((t) => t + 1);
+        const httpStatus = (err as { status?: number }).status;
+        if (httpStatus === 401 || httpStatus === 403) {
+          // Connection is gone or not Premium — re-sync the status chip.
+          refreshSpotify();
+        }
+      })
+      .finally(() => {
+        if (spotifyCommandingRef.current === targetMbid) {
+          spotifyCommandingRef.current = null;
+        }
+      });
+  }, [spotifyModeForCurrent, currentMbid, refreshSpotify]);
+
+  // Poll the listener's player while Spotify carries the ride: mirror pauses,
+  // and advance the ride when the track runs out. If the listener starts
+  // playing something else in Spotify, the ride yields (never fights them).
+  useEffect(() => {
+    if (!spotifyModeForCurrent || !currentMbid) return undefined;
+    const token = rideRef.current;
+    const id = setInterval(() => {
+      const now = spotifyNowRef.current;
+      if (!now || now.mbid !== currentMbid) return;
+      // Note: we keep polling even while paused — the live snapshot is the
+      // authority, so a resume made directly in the Spotify app is picked up.
+      void getSpotifyPlayer()
+        .then((st) => {
+          if (token !== rideRef.current) return;
+          const cur = spotifyNowRef.current;
+          if (!cur || cur.mbid !== currentMbid) return;
+          const ours = st.trackUri === cur.uri;
+
+          if (ours && st.isPlaying) {
+            // Our track is sounding — also covers a resume made in the app.
+            cur.sawPlaying = true;
+            cur.endedPolls = 0;
+            spotifyPausedRef.current = false;
+            setStatus("playing");
+            return;
+          }
+          if (!cur.sawPlaying) return; // still spinning up
+
+          if (!ours && st.active && st.isPlaying) {
+            // The listener started something else: they took the wheel — the
+            // ride yields immediately and never fights their device.
+            spotifyNowRef.current = null;
+            spotifyPausedRef.current = false;
+            setStatus("ended");
+            return;
+          }
+
+          if (
+            ours &&
+            !st.isPlaying &&
+            (spotifyPausedRef.current || (st.progressMs ?? 0) > 0)
+          ) {
+            // Paused — either by us (trust our command even at progress 0) or
+            // from the Spotify app itself (progress retained). Mirror it.
+            cur.endedPolls = 0;
+            spotifyPausedRef.current = true;
+            setStatus("paused");
+            return;
+          }
+
+          // Looks like the track ran out (inactive player, or ours stopped at
+          // progress 0). Require two consecutive such polls so a transient
+          // blip never skips a track early.
+          cur.endedPolls += 1;
+          if (cur.endedPolls < 2) return;
+          spotifyNowRef.current = null;
+          spotifyPausedRef.current = false;
+          setIndex((i) => {
+            if (i + 1 < queueLenRef.current) return i + 1;
+            setStatus("ended");
+            return i;
+          });
+        })
+        .catch(() => {
+          // Transient poll failure — keep riding; the next tick retries.
+        });
+    }, 3000);
+    return () => clearInterval(id);
+  }, [spotifyModeForCurrent, currentMbid]);
+
   // Drive playback of the current item: resolve its preview, then play it.
   useEffect(() => {
     if (!active) return undefined;
+    if (spotifyModeForCurrent) return undefined; // Spotify carries this track
     const el = audioRef.current;
     if (!el) return undefined;
     if (!currentMbid) return undefined;
@@ -312,6 +528,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     // so re-runs triggered by unrelated state never restart the current clip.
     if (playingUrlRef.current !== currentPreview) {
       playingUrlRef.current = currentPreview;
+      sourceRef.current = "preview";
+      setSource("preview");
       el.src = currentPreview;
       el.load();
       void el.play().catch(() => {
@@ -319,7 +537,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       });
     }
     return undefined;
-  }, [active, index, currentMbid, currentPreview, currentNeedsLinks, hasNextHop]);
+  }, [
+    active,
+    index,
+    currentMbid,
+    currentPreview,
+    currentNeedsLinks,
+    hasNextHop,
+    spotifyModeForCurrent,
+  ]);
 
   // Audio element lifecycle — status wiring + auto-advance on clip end.
   useEffect(() => {
@@ -382,12 +608,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         current: queue[index] ?? null,
         seeking,
         atTrailEnd: atTrailEnd && index === queue.length - 1,
+        source,
         start,
         stop,
         next,
         prev,
         togglePause,
       },
+      spotify,
     }),
     [
       radio.status,
@@ -403,11 +631,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       index,
       seeking,
       atTrailEnd,
+      source,
       start,
       stop,
       next,
       prev,
       togglePause,
+      spotify,
     ],
   );
 

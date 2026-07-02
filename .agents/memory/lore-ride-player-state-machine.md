@@ -41,3 +41,26 @@ playback/preview effects. Also relevant: the app is served under base path
 (root resolves to a different artifact and 404s). The detached `new Audio()`
 element is not in the DOM, so browser test probes for an `<audio>` tag return
 null — verify playback via the ride status/UI, not a DOM audio probe.
+
+## Remote (Spotify Connect) playback rules
+When the ride remote-controls the listener's own Spotify instead of the
+`<audio>` element:
+1. **The live player snapshot is the authority — never gate polling on a local
+   paused flag.** If polling stops while "paused", a resume made directly in
+   the Spotify app is never seen and the ride deadlocks.
+2. **Flip the local paused flag only after the pause/resume API confirms**
+   (rollback semantics), or a failed command desyncs local state from the
+   device.
+3. **End-of-track detection needs a grace window** (two consecutive
+   "ended-looking" polls) — a single `!isPlaying` blip during Spotify's own
+   transitions must not skip tracks. Distinguish: ours+playing → playing;
+   ours+stopped+progress>0 (or we commanded pause) → paused; other track
+   actively playing → listener took the wheel, ride yields (`ended`), never
+   fight their device; else count toward ended.
+4. **Per-track fallback, not mode-wide:** a track that fails on Spotify goes
+   into a failed set and rides the preview ladder; later tracks retry Spotify.
+   Refs don't re-render — bump a state tick so the mode recomputes.
+
+**Why:** an architect review caught the pause-poll deadlock, optimistic pause
+flag, and brittle end detection as ride-breaking bugs in the first Spotify
+Connect implementation.
