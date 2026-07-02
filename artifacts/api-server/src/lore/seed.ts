@@ -55,6 +55,21 @@ const SEED_STATIONS: InsertStation[] = [
     sortOrder: 30,
   },
   {
+    slug: "radio-paradise-world",
+    name: "Radio Paradise — World/Etc Mix",
+    org: "Radio Paradise",
+    country: "US",
+    streamUrl: "https://stream.radioparadise.com/world-etc-320",
+    streamQuality: "320kbps AAC",
+    streamFormat: "aac",
+    homepageUrl: "https://radioparadise.com",
+    donateUrl: "https://radioparadise.com/support",
+    nowPlayingSource: "radio_paradise",
+    nowPlayingConfig: { chan: "3" },
+    stationClass: "curated",
+    sortOrder: 35,
+  },
+  {
     slug: "kexp",
     name: "KEXP 90.3 FM",
     org: "KEXP",
@@ -69,7 +84,70 @@ const SEED_STATIONS: InsertStation[] = [
     stationClass: "community",
     sortOrder: 40,
   },
+  {
+    slug: "kcrw-eclectic24",
+    name: "KCRW — Eclectic 24",
+    org: "KCRW",
+    country: "US",
+    streamUrl: "https://streams.kcrw.com/e24_mp3",
+    streamQuality: "128kbps MP3",
+    streamFormat: "mp3",
+    homepageUrl: "https://www.kcrw.com/music/shows/eclectic24",
+    donateUrl: "https://join.kcrw.com",
+    nowPlayingSource: "kcrw",
+    nowPlayingConfig: { feed: "Music" },
+    stationClass: "community",
+    sortOrder: 50,
+  },
+  ...somaFmStations(),
 ];
+
+/**
+ * SomaFM's channel bouquet — one listener-supported org, many hand-programmed
+ * channels, one recent-songs feed shape. Streams and feeds were each verified
+ * live before enrolling. 256kbps streams exist only for the flagship channels;
+ * the rest ship SomaFM's standard 128kbps MP3.
+ */
+function somaFmStations(): InsertStation[] {
+  const channels: Array<{
+    channel: string;
+    title: string;
+    hi?: boolean;
+  }> = [
+    { channel: "groovesalad", title: "Groove Salad", hi: true },
+    { channel: "dronezone", title: "Drone Zone", hi: true },
+    { channel: "deepspaceone", title: "Deep Space One" },
+    { channel: "spacestation", title: "Space Station Soma" },
+    { channel: "lush", title: "Lush" },
+    { channel: "indiepop", title: "Indie Pop Rocks!" },
+    { channel: "secretagent", title: "Secret Agent" },
+    { channel: "thetrip", title: "The Trip" },
+    { channel: "sonicuniverse", title: "Sonic Universe" },
+    { channel: "bootliquor", title: "Boot Liquor" },
+    { channel: "thistle", title: "ThistleRadio" },
+    { channel: "folkfwd", title: "Folk Forward" },
+    { channel: "fluid", title: "Fluid" },
+    { channel: "suburbsofgoa", title: "Suburbs of Goa" },
+    { channel: "poptron", title: "PopTron" },
+  ];
+  return channels.map(({ channel, title, hi }, i) => ({
+    slug: `somafm-${channel}`,
+    name: `SomaFM — ${title}`,
+    org: "SomaFM",
+    country: "US",
+    streamUrl: hi
+      ? `https://ice1.somafm.com/${channel}-256-mp3`
+      : `https://ice1.somafm.com/${channel}-128-mp3`,
+    streamQuality: hi ? "256kbps MP3" : "128kbps MP3",
+    streamFormat: "mp3",
+    homepageUrl: `https://somafm.com/${channel}/`,
+    donateUrl: "https://somafm.com/support/",
+    nowPlayingSource: "somafm",
+    nowPlayingConfig: { channel },
+    stationClass: "curated",
+    sortOrder: 100 + i * 10,
+  }));
+}
 
 /**
  * Upsert the curated stations by slug. Idempotent — safe to run on every boot.

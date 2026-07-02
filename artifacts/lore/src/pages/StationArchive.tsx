@@ -2,6 +2,7 @@ import { Link, useParams } from "wouter";
 import { useGetStationArchive } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { FollowButton } from "../components/FollowButton";
+import { ShareButton } from "../components/ShareButton";
 import { runDate } from "../lib/format";
 import { ArrowLeft, ArrowUpRight, Radio } from "lucide-react";
 
@@ -47,6 +48,10 @@ export default function StationArchive() {
                   kind="station"
                   id={data.station.slug}
                   name={data.station.name}
+                />
+                <ShareButton
+                  sharePath={`stations/${data.station.slug}`}
+                  kind="station"
                 />
               </div>
               <p className="mt-2 font-mono text-xs text-muted-foreground">

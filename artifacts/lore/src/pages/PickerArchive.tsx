@@ -2,6 +2,7 @@ import { Link, useParams } from "wouter";
 import { useGetPickerArchive } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { FollowButton } from "../components/FollowButton";
+import { ShareButton } from "../components/ShareButton";
 import { runDate } from "../lib/format";
 import { ArrowLeft, ArrowUpRight, ExternalLink, Users } from "lucide-react";
 
@@ -47,6 +48,10 @@ export default function PickerArchive() {
                   kind="picker"
                   id={data.picker.handle}
                   name={data.picker.name}
+                />
+                <ShareButton
+                  sharePath={`pickers/${data.picker.handle}`}
+                  kind="picker"
                 />
               </div>
               <p className="mt-2 max-w-[52ch] text-sm text-muted-foreground">

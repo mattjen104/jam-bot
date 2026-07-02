@@ -33,6 +33,8 @@ const POLL_INTERVALS_MS: Record<string, number> = {
   spinitron: 150_000, // 2.5 min
   kexp_api: 120_000, // 2 min
   bbc_api: 120_000, // 2 min
+  somafm: 120_000, // 2 min — feed holds ~20 songs, no risk of gaps
+  kcrw: 90_000, // 1.5 min — single current track, cheap endpoint
   station_page: 60_000, // 1 min
   radio_paradise: 60_000, // 1 min
 };

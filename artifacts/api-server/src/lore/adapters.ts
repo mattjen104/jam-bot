@@ -3,6 +3,7 @@ import type {
   NowPlayingRaw,
   HistoryAdapter,
   RawSpin,
+  ShowAttribution,
 } from "./types.js";
 
 /**
@@ -344,6 +345,92 @@ const bbcApi: HistoryAdapter = async (config) => {
   return parseBbcSegments(body);
 };
 
+// ---- SomaFM (history via recent-songs feed) -----------------------------
+
+/**
+ * Pure: SomaFM `songs/{channel}.json` → RawSpin[]. Newest-first, ~20 entries,
+ * each with an epoch-seconds `date` that (with the channel) makes a stable
+ * external id — SomaFM never plays two songs in the same second on one
+ * channel. Station-ID/break entries (artist "SomaFM") are dropped.
+ */
+export function parseSomaFmSongs(body: unknown, channel: string): RawSpin[] {
+  const b = (body ?? {}) as { songs?: unknown };
+  const songs = Array.isArray(b.songs)
+    ? (b.songs as Array<Record<string, unknown>>)
+    : [];
+  const out: RawSpin[] = [];
+  for (const song of songs) {
+    const rawArtist = str(song.artist);
+    const rawTitle = str(song.title);
+    if (!rawArtist || !rawTitle) continue;
+    if (/somafm/i.test(rawArtist)) continue; // station IDs / breaks
+    const spin: RawSpin = { rawArtist, rawTitle };
+    const epoch = Number(str(song.date));
+    if (Number.isFinite(epoch) && epoch > 0) {
+      spin.externalId = `somafm:${channel}:${epoch}`;
+      spin.playedAt = new Date(epoch * 1000);
+    }
+    const album = str(song.album);
+    if (album) spin.album = album;
+    const artwork = str(song.albumArt);
+    if (artwork) spin.artworkUrl = artwork;
+    out.push(spin);
+  }
+  return out;
+}
+
+const somaFm: HistoryAdapter = async (config, opts) => {
+  const channel = str(config.channel);
+  if (!channel) return [];
+  // Single fixed-size feed — no pagination. Deeper pages are empty.
+  if ((opts?.page ?? 0) > 0) return [];
+  const body = await getJson(
+    `https://somafm.com/songs/${encodeURIComponent(channel)}.json`,
+  );
+  return parseSomaFmSongs(body, channel);
+};
+
+// ---- KCRW (history via tracklist API, one current track) ----------------
+
+/**
+ * Pure: KCRW tracklist API body (a single current-track object) → RawSpin[].
+ * `play_id` gives idempotent dedup; `program_title` + `host` give show
+ * attribution. During talk programming artist/title are absent → empty batch.
+ */
+export function parseKcrwTrack(body: unknown, feed: string): RawSpin[] {
+  const t = (body ?? {}) as Record<string, unknown>;
+  const rawArtist = str(t.artist);
+  const rawTitle = str(t.title);
+  if (!rawArtist || !rawTitle) return [];
+  const spin: RawSpin = { rawArtist, rawTitle };
+  const playId = t.play_id != null ? String(t.play_id) : undefined;
+  if (playId) spin.externalId = `kcrw:${feed}:${playId}`;
+  const playedAt = toDate(t.datetime);
+  if (playedAt) spin.playedAt = playedAt;
+  const album = str(t.album);
+  if (album) spin.album = album;
+  const artwork = str(t.albumImageLarge) ?? str(t.albumImage);
+  if (artwork) spin.artworkUrl = artwork;
+  const showName = str(t.program_title);
+  if (showName) {
+    const show: ShowAttribution = { name: showName };
+    const djName = str(t.host);
+    if (djName) show.djName = djName;
+    spin.show = show;
+  }
+  return [spin];
+}
+
+const kcrw: HistoryAdapter = async (config, opts) => {
+  const feed = str(config.feed) ?? "Music";
+  // The API exposes only the current track — no history pages.
+  if ((opts?.page ?? 0) > 0) return [];
+  const body = await getJson(
+    `https://tracklist-api.kcrw.com/${encodeURIComponent(feed)}`,
+  );
+  return parseKcrwTrack(body, feed);
+};
+
 // ---- Registry -----------------------------------------------------------
 
 const NOW_PLAYING_ADAPTERS: Record<string, NowPlayingAdapter> = {
@@ -355,6 +442,8 @@ const HISTORY_ADAPTERS: Record<string, HistoryAdapter> = {
   kexp_api: kexpApi,
   spinitron,
   bbc_api: bbcApi,
+  somafm: somaFm,
+  kcrw,
 };
 
 /** Look up a now-playing (change-detection) adapter, or null. */

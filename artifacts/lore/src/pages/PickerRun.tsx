@@ -2,6 +2,7 @@ import { Link, useParams } from "wouter";
 import { useGetPickerRun } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { ArchiveTracklist } from "../components/ArchiveTracklist";
+import { ShareButton } from "../components/ShareButton";
 import { runDate } from "../lib/format";
 import { ArrowLeft, ExternalLink, Ghost } from "lucide-react";
 
@@ -39,9 +40,15 @@ export default function PickerRun() {
                 <Ghost className="h-4 w-4" />
                 Dated reconstruction
               </div>
-              <h1 className="mt-3 font-serif text-3xl font-semibold text-foreground">
-                {data.run.title ?? "Untitled run"}
-              </h1>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <h1 className="font-serif text-3xl font-semibold text-foreground">
+                  {data.run.title ?? "Untitled run"}
+                </h1>
+                <ShareButton
+                  sharePath={`picker-runs/${runId}`}
+                  kind="picker-run"
+                />
+              </div>
               <p className="mt-2 font-mono text-xs text-muted-foreground">
                 Picked by {data.picker.name}
                 {data.run.pickedAt ? ` · ${runDate(data.run.pickedAt)}` : ""}

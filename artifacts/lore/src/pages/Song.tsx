@@ -11,6 +11,7 @@ import {
 } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { DeepLinks, CONFIDENCE_LABEL } from "../components/NowPlaying";
+import { ShareButton } from "../components/ShareButton";
 import { clockTime, timeAgo } from "../lib/format";
 import {
   ArrowLeft,
@@ -149,6 +150,7 @@ export default function Song() {
                     <RouteIcon className="h-4 w-4" />
                     {isRidingThis ? "Stop riding" : "Ride from here"}
                   </button>
+                  <ShareButton sharePath={`songs/${rec.mbid}`} kind="song" />
                   <a
                     href={`https://musicbrainz.org/recording/${rec.mbid}`}
                     target="_blank"

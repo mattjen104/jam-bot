@@ -2,6 +2,7 @@ import { Link, useParams } from "wouter";
 import { useGetStationRun } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { ArchiveTracklist } from "../components/ArchiveTracklist";
+import { ShareButton } from "../components/ShareButton";
 import { runDate } from "../lib/format";
 import { ArrowLeft, ExternalLink, Ghost } from "lucide-react";
 
@@ -39,10 +40,16 @@ export default function StationRun() {
                 <Ghost className="h-4 w-4" />
                 Dated reconstruction
               </div>
-              <h1 className="mt-3 font-serif text-3xl font-semibold text-foreground">
-                {data.run.show?.name ?? "Station stream"}
-                <span className="text-muted-foreground"> · {runDate(data.run.date)}</span>
-              </h1>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <h1 className="font-serif text-3xl font-semibold text-foreground">
+                  {data.run.show?.name ?? "Station stream"}
+                  <span className="text-muted-foreground"> · {runDate(data.run.date)}</span>
+                </h1>
+                <ShareButton
+                  sharePath={`station-runs/${runId}`}
+                  kind="station-run"
+                />
+              </div>
               <p className="mt-2 font-mono text-xs text-muted-foreground">
                 {data.station.name}
                 {data.run.show?.djName ? ` · hosted by ${data.run.show.djName}` : ""} ·
