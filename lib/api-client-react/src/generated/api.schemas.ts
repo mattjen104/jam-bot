@@ -362,6 +362,11 @@ export interface StationRunSummary {
   spinCount: number;
   /** Spins resolved to the MBID spine (replayable tracks). */
   resolvedCount: number;
+  /**
+   * Outbound link to the source's own archive for this run (e.g. the station's dated playlist page, or a manual spin's citation). Null when the source has no public per-day archive.
+   * @nullable
+   */
+  sourceUrl: string | null;
   startedAt: string;
   endedAt: string;
 }

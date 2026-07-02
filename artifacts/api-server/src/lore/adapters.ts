@@ -389,3 +389,26 @@ const BACKFILL_SOURCES = new Set(["kexp_api"]);
 export function supportsBackfill(source: string | null | undefined): boolean {
   return !!source && BACKFILL_SOURCES.has(source);
 }
+
+/**
+ * Outbound link to a source's own public archive page for one UTC broadcast
+ * day (`day` is YYYY-MM-DD). This is the station-run citation — every replayed
+ * run must attribute back to where the sequence is documented. Returns null
+ * for sources without a public per-day archive (the UI then omits the link;
+ * it never fabricates one).
+ */
+export function stationArchiveUrl(
+  source: string | null | undefined,
+  day: string,
+): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  if (!source || !m) return null;
+  const [, year, month, dayOfMonth] = m;
+  switch (source) {
+    // KEXP publishes a dated playlist archive; month/day are unpadded.
+    case "kexp_api":
+      return `https://www.kexp.org/playlist/${year}/${Number(month)}/${Number(dayOfMonth)}/`;
+    default:
+      return null;
+  }
+}

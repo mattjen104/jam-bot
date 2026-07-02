@@ -58,7 +58,7 @@ import { seedLabelPicker } from "../../lore/label.js";
 import { ingestBlogFeed } from "../../lore/blog.js";
 import { ingestDiscogsList, addRymPicker } from "../../lore/collector.js";
 import { resolveEntry } from "../../lore/entry.js";
-import { supportsBackfill } from "../../lore/adapters.js";
+import { supportsBackfill, stationArchiveUrl } from "../../lore/adapters.js";
 
 const router: IRouter = Router();
 
@@ -438,6 +438,7 @@ router.get("/stations/:slug/archive", async (req, res) => {
         showId: spinsTable.showId,
         spinCount: sql<number>`count(*)::int`,
         resolvedCount: sql<number>`count(*) filter (where ${spinsTable.mbid} is not null)::int`,
+        citation: sql<string | null>`max(${spinsTable.citation})`,
         startedAt: sql<string>`min(${spinsTable.playedAt})`,
         endedAt: sql<string>`max(${spinsTable.playedAt})`,
         showName: showsTable.name,
@@ -458,6 +459,10 @@ router.get("/stations/:slug/archive", async (req, res) => {
         show: r.showName ? { name: r.showName, djName: r.djName ?? null } : null,
         spinCount: r.spinCount,
         resolvedCount: r.resolvedCount,
+        sourceUrl:
+          stationArchiveUrl(station.nowPlayingSource, r.date) ??
+          r.citation ??
+          null,
         startedAt: new Date(r.startedAt).toISOString(),
         endedAt: new Date(r.endedAt).toISOString(),
       })),
@@ -506,6 +511,7 @@ router.get("/archive/station-runs/:runId", async (req, res) => {
         rawArtist: spinsTable.rawArtist,
         rawTitle: spinsTable.rawTitle,
         confidence: spinsTable.confidence,
+        citation: spinsTable.citation,
         mbid: recordingsTable.mbid,
         recTitle: recordingsTable.title,
         recArtist: recordingsTable.artist,
@@ -547,6 +553,10 @@ router.get("/archive/station-runs/:runId", async (req, res) => {
           : null,
         spinCount: rows.length,
         resolvedCount: rows.filter((r) => r.mbid != null).length,
+        sourceUrl:
+          stationArchiveUrl(station.nowPlayingSource, anchor.day) ??
+          rows.map((r) => r.citation).find((c) => c != null) ??
+          null,
         startedAt: first.playedAt.toISOString(),
         endedAt: last.playedAt.toISOString(),
       },

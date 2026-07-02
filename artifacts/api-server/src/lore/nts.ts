@@ -59,7 +59,7 @@ export interface NtsTrack {
 
 /** Pure: NTS `/shows/{alias}/episodes` body → episode list (newest-first). */
 export function parseNtsEpisodes(body: unknown): NtsEpisode[] {
-  const b = body as { results?: Array<Record<string, unknown>> };
+  const b = (body ?? {}) as { results?: Array<Record<string, unknown>> };
   const out: NtsEpisode[] = [];
   for (const ep of b.results ?? []) {
     if (ep.status && ep.status !== "published") continue;
@@ -80,7 +80,7 @@ export function parseNtsEpisodes(body: unknown): NtsEpisode[] {
 
 /** Pure: NTS episode detail body → ordered tracklist. */
 export function parseNtsTracklist(body: unknown): NtsTrack[] {
-  const b = body as {
+  const b = (body ?? {}) as {
     embeds?: { tracklist?: { results?: Array<Record<string, unknown>> } };
   };
   const out: NtsTrack[] = [];

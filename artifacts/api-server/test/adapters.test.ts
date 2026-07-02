@@ -6,6 +6,8 @@ import {
   parseSpinitronSpins,
   parseSpinitronPlaylists,
   parseBbcSegments,
+  stationArchiveUrl,
+  supportsBackfill,
 } from "../src/lore/adapters.js";
 
 describe("pickPath", () => {
@@ -165,5 +167,36 @@ describe("parseBbcSegments", () => {
       rawTitle: "Introvert",
       externalId: "bbc:seg-1",
     });
+  });
+});
+
+describe("stationArchiveUrl", () => {
+  it("builds KEXP's dated playlist URL with unpadded month/day", () => {
+    expect(stationArchiveUrl("kexp_api", "2026-07-01")).toBe(
+      "https://www.kexp.org/playlist/2026/7/1/",
+    );
+    expect(stationArchiveUrl("kexp_api", "2024-12-25")).toBe(
+      "https://www.kexp.org/playlist/2024/12/25/",
+    );
+  });
+
+  it("returns null for sources without a public per-day archive", () => {
+    expect(stationArchiveUrl("radio_paradise", "2026-07-01")).toBeNull();
+    expect(stationArchiveUrl(null, "2026-07-01")).toBeNull();
+    expect(stationArchiveUrl(undefined, "2026-07-01")).toBeNull();
+  });
+
+  it("never fabricates a link from a malformed day", () => {
+    expect(stationArchiveUrl("kexp_api", "not-a-day")).toBeNull();
+    expect(stationArchiveUrl("kexp_api", "2026-7-1")).toBeNull();
+    expect(stationArchiveUrl("kexp_api", "")).toBeNull();
+  });
+});
+
+describe("supportsBackfill", () => {
+  it("only time-anchored history sources qualify", () => {
+    expect(supportsBackfill("kexp_api")).toBe(true);
+    expect(supportsBackfill("radio_paradise")).toBe(false);
+    expect(supportsBackfill(null)).toBe(false);
   });
 });

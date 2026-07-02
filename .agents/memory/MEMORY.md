@@ -19,5 +19,6 @@
 - [drizzle-kit + NULLS NOT DISTINCT drift](drizzle-kit-nulls-not-distinct.md) — drizzle-kit 0.31 doesn't introspect indnullsnotdistinct, so a nullsNotDistinct() unique key causes permanent push drift (tries to re-ADD an existing constraint); avoid it on a push-based project.
 - [Orval params name collision](orval-params-name-collision.md) — an op with BOTH path + query params emits a duplicate `<Op>Params` that breaks the api-zod barrel; resolve the query value server-side.
 - [Pickers/picks generalization](lore-pickers-picks-model.md) — generalize DJ spins to any taste source; ladder stops at artist (never algorithmic), ordered picks are rideable segues, unresolved always logged.
+- [api-server test location](api-server-test-location.md) — vitest only runs `test/**`; colocated src/*.test.ts files are silently skipped, so verify the suite count grows after adding tests.
 - [Lore archive runs model](lore-archive-runs-model.md) — runs are derived groupings (runId=min(id) anchor, null-safe showId), replay is a player mode with fixed queue + honest gaps, backfill 1s-nudge loop-guard.
 - [Ride player state machine](lore-ride-player-state-machine.md) — key effects off current-item identity not whole queue; patch async results by MBID never captured index; remote (Spotify) playback: live snapshot is authority.

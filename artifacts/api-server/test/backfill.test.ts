@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { oldestPlayedAt, nextCursor } from "./backfill.js";
-import type { RawSpin } from "./types.js";
+import { oldestPlayedAt, nextCursor } from "../src/lore/backfill.js";
+import type { RawSpin } from "../src/lore/types.js";
 
 function spin(playedAt: Date | null): RawSpin {
   return {

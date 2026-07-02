@@ -4,7 +4,7 @@ import {
   parseNtsTracklist,
   ntsExternalId,
   ntsEpisodeUrl,
-} from "./nts.js";
+} from "../src/lore/nts.js";
 
 describe("parseNtsEpisodes", () => {
   it("handles malformed bodies without throwing", () => {

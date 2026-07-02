@@ -3,7 +3,7 @@ import { useGetStationRun } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { ArchiveTracklist } from "../components/ArchiveTracklist";
 import { runDate } from "../lib/format";
-import { ArrowLeft, Ghost } from "lucide-react";
+import { ArrowLeft, ExternalLink, Ghost } from "lucide-react";
 
 /** One archived station run — its full tracklist, exactly as it aired. */
 export default function StationRun() {
@@ -49,6 +49,18 @@ export default function StationRun() {
                 aired {runDate(data.run.date)} · rebuilt from the station's
                 public playlist
               </p>
+              {data.run.sourceUrl ? (
+                <a
+                  href={data.run.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wide text-primary hover:underline"
+                  data-testid="run-source-link"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Original source
+                </a>
+              ) : null}
             </header>
 
             <ArchiveTracklist

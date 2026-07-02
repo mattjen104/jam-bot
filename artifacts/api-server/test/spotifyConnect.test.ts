@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractSpotifyTrackId } from "./spotifyConnect.js";
+import { extractSpotifyTrackId } from "../src/lore/spotifyConnect.js";
 import type { RecordingLink } from "@workspace/db";
 
 describe("extractSpotifyTrackId", () => {

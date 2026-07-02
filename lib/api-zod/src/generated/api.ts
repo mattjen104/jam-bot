@@ -560,6 +560,12 @@ export const GetStationArchiveResponse = zod.object({
         resolvedCount: zod
           .number()
           .describe("Spins resolved to the MBID spine (replayable tracks)."),
+        sourceUrl: zod
+          .string()
+          .nullable()
+          .describe(
+            "Outbound link to the source's own archive for this run (e.g. the station's dated playlist page, or a manual spin's citation). Null when the source has no public per-day archive.",
+          ),
         startedAt: zod.string(),
         endedAt: zod.string(),
       })
@@ -607,6 +613,12 @@ export const GetStationRunResponse = zod.object({
       resolvedCount: zod
         .number()
         .describe("Spins resolved to the MBID spine (replayable tracks)."),
+      sourceUrl: zod
+        .string()
+        .nullable()
+        .describe(
+          "Outbound link to the source's own archive for this run (e.g. the station's dated playlist page, or a manual spin's citation). Null when the source has no public per-day archive.",
+        ),
       startedAt: zod.string(),
       endedAt: zod.string(),
     })

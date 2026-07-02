@@ -1478,6 +1478,12 @@ components:
         resolvedCount:
           type: integer
           description: Spins resolved to the MBID spine (replayable tracks).
+        sourceUrl:
+          type: ["string", "null"]
+          description: >-
+            Outbound link to the source's own archive for this run (e.g. the
+            station's dated playlist page, or a manual spin's citation). Null
+            when the source has no public per-day archive.
         startedAt:
           type: string
         endedAt:
@@ -1487,6 +1493,7 @@ components:
         - date
         - spinCount
         - resolvedCount
+        - sourceUrl
         - startedAt
         - endedAt
     StationArchive:
