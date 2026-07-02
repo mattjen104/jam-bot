@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { djFollowId, parseDjFollowId } from "../src/lib/local";
-import { groupCredits, pressingLine } from "../src/components/NowPlaying";
+import { groupCredits, pressingLine } from "../src/lib/linerNotes";
 import type { Credit, TrackKnowledge } from "@workspace/api-client-react";
 
 describe("DJ follow ids", () => {

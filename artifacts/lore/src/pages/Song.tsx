@@ -10,7 +10,8 @@ import {
   type SegueNext,
 } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
-import { DeepLinks, CONFIDENCE_LABEL } from "../components/NowPlaying";
+import { DeepLinks } from "../components/NowPlaying";
+import { CONFIDENCE_LABEL } from "../lib/format";
 import { ShareButton } from "../components/ShareButton";
 import { clockTime, timeAgo } from "../lib/format";
 import {

@@ -33,3 +33,10 @@ export function runDate(isoOrDay: string): string {
     timeZone: "UTC",
   });
 }
+
+export const CONFIDENCE_LABEL: Record<string, string> = {
+  recording_id: "Confirmed recording",
+  isrc: "Matched by ISRC",
+  text: "Matched by title",
+  unresolved: "Unidentified",
+};

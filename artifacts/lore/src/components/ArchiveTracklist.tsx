@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import type { ArchiveTrack } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import type { TimeOrientation } from "../player/playbackSession";
-import { CONFIDENCE_LABEL } from "./NowPlaying";
+import { CONFIDENCE_LABEL } from "../lib/format";
 import { clockTime } from "../lib/format";
 import { Ghost, Play } from "lucide-react";
 
