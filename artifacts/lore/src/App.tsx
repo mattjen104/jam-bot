@@ -4,6 +4,9 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
+import Song from "@/pages/Song";
+import { PlayerProvider } from "./player/PlayerProvider";
+import { PlayerDock } from "./components/PlayerDock";
 
 const queryClient = new QueryClient();
 
@@ -11,6 +14,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/song/:mbid" component={Song} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -20,10 +24,13 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
+        <PlayerProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <Router />
+          </WouterRouter>
+          <PlayerDock />
+          <Toaster />
+        </PlayerProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

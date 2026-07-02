@@ -1,3 +1,4 @@
+import { Link } from "wouter";
 import type {
   RecordingLink,
   Station,
@@ -19,7 +20,7 @@ interface NowPlayingProps {
   fallbackStation: Station | null;
 }
 
-const CONFIDENCE_LABEL: Record<string, string> = {
+export const CONFIDENCE_LABEL: Record<string, string> = {
   recording_id: "Confirmed recording",
   isrc: "Matched by ISRC",
   text: "Matched by title",
@@ -80,12 +81,22 @@ export function NowPlaying({ data, isLoading, fallbackStation }: NowPlayingProps
               {" · "}
               {np.playedAt ? timeAgo(np.playedAt) : ""}
             </p>
-            <h2
-              className="mt-1.5 font-serif text-2xl font-semibold leading-tight text-foreground"
-              data-testid="now-playing-title"
-            >
-              {rec?.title ?? np.rawTitle}
-            </h2>
+            {rec ? (
+              <Link
+                href={`/song/${rec.mbid}`}
+                className="mt-1.5 block font-serif text-2xl font-semibold leading-tight text-foreground hover:text-primary"
+                data-testid="now-playing-title"
+              >
+                {rec.title}
+              </Link>
+            ) : (
+              <h2
+                className="mt-1.5 font-serif text-2xl font-semibold leading-tight text-foreground"
+                data-testid="now-playing-title"
+              >
+                {np.rawTitle}
+              </h2>
+            )}
             <p className="mt-1 text-base text-muted-foreground" data-testid="now-playing-artist">
               {rec?.artist ?? np.rawArtist}
             </p>
@@ -126,7 +137,7 @@ export function NowPlaying({ data, isLoading, fallbackStation }: NowPlayingProps
   );
 }
 
-function DeepLinks({ links }: { links: RecordingLink[] }) {
+export function DeepLinks({ links }: { links: RecordingLink[] }) {
   return (
     <div className="mt-5">
       <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">

@@ -236,6 +236,35 @@ export interface RecordingLink {
 }
 
 /**
+ * A recording's own metadata, keyed by MusicBrainz Recording ID, for the song page. artistMbid powers artist-level attribution; artwork and links are best-effort and may be absent.
+ */
+export interface RecordingNode {
+  mbid: string;
+  title: string;
+  artist: string;
+  /** @nullable */
+  artistMbid?: string | null;
+  /** @nullable */
+  durationMs?: number | null;
+  /** @nullable */
+  artworkUrl?: string | null;
+  links: RecordingLink[];
+}
+
+/**
+ * A best-effort 30s preview clip for a recording. All fields may be null when no preview was found; the audio streams directly from the source's CDN, never through Lore.
+ */
+export interface RecordingPreview {
+  mbid: string;
+  /** @nullable */
+  previewUrl?: string | null;
+  /** @nullable */
+  artworkUrl?: string | null;
+  /** @nullable */
+  source?: string | null;
+}
+
+/**
  * The MBID-keyed recording a spin resolved to.
  */
 export interface NowPlayingRecording {

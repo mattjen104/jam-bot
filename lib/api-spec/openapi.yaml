@@ -173,6 +173,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /recordings/{mbid}:
+    get:
+      operationId: getRecording
+      tags: [recordings]
+      summary: A recording's own metadata (song-page header)
+      description: >
+        The MBID-keyed recording node — title, artist, artwork and cross-service
+        deep links — for rendering a shareable song page. 404 when the MBID is
+        not (yet) on the spine.
+      parameters:
+        - name: mbid
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: The recording node
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecordingNode"
+        "404":
+          description: Recording not on the spine
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /recordings/{mbid}/spins:
     get:
       operationId: getRecordingSpins
@@ -196,6 +225,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RecordingSpins"
+  /recordings/{mbid}/preview:
+    get:
+      operationId: getRecordingPreview
+      tags: [recordings]
+      summary: A 30-second preview clip for a recording (for riding)
+      description: >
+        Best-effort 30s preview resolved via the public iTunes Search API and
+        streamed directly from Apple's CDN to the client (Lore never hosts or
+        proxies the audio bytes). previewUrl is null when none was found; the UI
+        then degrades to deep links.
+      parameters:
+        - name: mbid
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: The recording's preview (fields may be null)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecordingPreview"
+        "404":
+          description: Recording not on the spine
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /recordings/{mbid}/segues:
     get:
       operationId: getRecordingSegues
@@ -965,6 +1024,51 @@ components:
         - name
         - url
         - kind
+    RecordingNode:
+      type: object
+      description: >-
+        A recording's own metadata, keyed by MusicBrainz Recording ID, for the
+        song page. artistMbid powers artist-level attribution; artwork and links
+        are best-effort and may be absent.
+      properties:
+        mbid:
+          type: string
+        title:
+          type: string
+        artist:
+          type: string
+        artistMbid:
+          type: ["string", "null"]
+        durationMs:
+          type: ["integer", "null"]
+        artworkUrl:
+          type: ["string", "null"]
+        links:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecordingLink"
+      required:
+        - mbid
+        - title
+        - artist
+        - links
+    RecordingPreview:
+      type: object
+      description: >-
+        A best-effort 30s preview clip for a recording. All fields may be null
+        when no preview was found; the audio streams directly from the source's
+        CDN, never through Lore.
+      properties:
+        mbid:
+          type: string
+        previewUrl:
+          type: ["string", "null"]
+        artworkUrl:
+          type: ["string", "null"]
+        source:
+          type: ["string", "null"]
+      required:
+        - mbid
     NowPlayingRecording:
       type: object
       description: The MBID-keyed recording a spin resolved to.

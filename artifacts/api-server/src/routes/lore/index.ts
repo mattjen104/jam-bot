@@ -3,8 +3,12 @@ import {
   ListStationsResponse,
   GetStationNowPlayingParams,
   GetStationNowPlayingResponse,
+  GetRecordingParams,
+  GetRecordingResponse,
   GetRecordingSpinsParams,
   GetRecordingSpinsResponse,
+  GetRecordingPreviewParams,
+  GetRecordingPreviewResponse,
   GetRecordingSeguesParams,
   GetRecordingSeguesResponse,
   CreateManualSpinBody,
@@ -30,6 +34,7 @@ import {
 } from "@workspace/db";
 import { eq, asc, desc } from "drizzle-orm";
 import { nextRideable, spinsForRecording } from "../../lore/segue.js";
+import { resolvePreview } from "../../lore/preview.js";
 import { ingestManualSpin } from "../../lore/resolve.js";
 import {
   upsertPicker,
@@ -179,6 +184,45 @@ router.get("/stations/:slug/now-playing", async (req, res) => {
   }
 });
 
+// GET /api/recordings/:mbid — the recording's own metadata (song-page header).
+router.get("/recordings/:mbid", async (req, res) => {
+  const parsed = GetRecordingParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(404).json({ error: "Recording not found" });
+  }
+  try {
+    const [rec] = await db
+      .select({
+        mbid: recordingsTable.mbid,
+        title: recordingsTable.title,
+        artist: recordingsTable.artist,
+        artistMbid: recordingsTable.artistMbid,
+        durationMs: recordingsTable.durationMs,
+        artworkUrl: recordingsTable.artworkUrl,
+        links: recordingsTable.links,
+      })
+      .from(recordingsTable)
+      .where(eq(recordingsTable.mbid, parsed.data.mbid))
+      .limit(1);
+    if (!rec) {
+      return res.status(404).json({ error: "Recording not found" });
+    }
+    const data = GetRecordingResponse.parse({
+      mbid: rec.mbid,
+      title: rec.title,
+      artist: rec.artist,
+      artistMbid: rec.artistMbid,
+      durationMs: rec.durationMs,
+      artworkUrl: rec.artworkUrl ?? null,
+      links: rec.links ?? [],
+    });
+    return res.json(data);
+  } catch (err) {
+    console.error("[lore] get recording failed", err);
+    return res.status(503).json({ error: "Could not load recording" });
+  }
+});
+
 // GET /api/recordings/:mbid/spins
 router.get("/recordings/:mbid/spins", async (req, res) => {
   const parsed = GetRecordingSpinsParams.safeParse(req.params);
@@ -201,6 +245,38 @@ router.get("/recordings/:mbid/spins", async (req, res) => {
   } catch (err) {
     console.error("[lore] recording spins failed", err);
     return res.status(503).json({ error: "Could not load spins" });
+  }
+});
+
+// GET /api/recordings/:mbid/preview — best-effort 30s clip (for riding).
+router.get("/recordings/:mbid/preview", async (req, res) => {
+  const parsed = GetRecordingPreviewParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(404).json({ error: "Recording not found" });
+  }
+  try {
+    const [rec] = await db
+      .select({
+        title: recordingsTable.title,
+        artist: recordingsTable.artist,
+      })
+      .from(recordingsTable)
+      .where(eq(recordingsTable.mbid, parsed.data.mbid))
+      .limit(1);
+    if (!rec) {
+      return res.status(404).json({ error: "Recording not found" });
+    }
+    const preview = await resolvePreview(parsed.data.mbid, rec.artist, rec.title);
+    const data = GetRecordingPreviewResponse.parse({
+      mbid: parsed.data.mbid,
+      previewUrl: preview.previewUrl,
+      artworkUrl: preview.artworkUrl,
+      source: preview.source,
+    });
+    return res.json(data);
+  } catch (err) {
+    console.error("[lore] recording preview failed", err);
+    return res.status(503).json({ error: "Could not load preview" });
   }
 });
 

@@ -5,15 +5,14 @@ import {
   getGetStationNowPlayingQueryKey,
   type Station,
 } from "@workspace/api-client-react";
-import { useRadioPlayer } from "../hooks/useRadioPlayer";
+import { usePlayer } from "../player/PlayerProvider";
 import { StationList } from "../components/StationList";
 import { NowPlaying } from "../components/NowPlaying";
-import { PlayerBar } from "../components/PlayerBar";
 import { AudioLines, ShieldCheck, Waypoints } from "lucide-react";
 
 export default function Home() {
   const { data, isLoading, isError } = useListStations();
-  const player = useRadioPlayer();
+  const { radio: player } = usePlayer();
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
 
   const stations = useMemo(() => data?.stations ?? [], [data]);
@@ -123,18 +122,6 @@ export default function Home() {
           via MusicBrainz and partners.
         </footer>
       </div>
-
-      {player.station && (
-        <PlayerBar
-          station={player.station}
-          status={player.status}
-          volume={player.volume}
-          error={player.error}
-          onToggle={player.toggle}
-          onStop={player.stop}
-          onVolume={player.setVolume}
-        />
-      )}
     </div>
   );
 }

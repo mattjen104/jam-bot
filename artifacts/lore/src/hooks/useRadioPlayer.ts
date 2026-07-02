@@ -144,6 +144,15 @@ export function useRadioPlayer() {
     setState((s) => ({ ...s, status: "idle", station: null }));
   }, [teardownHls]);
 
+  /**
+   * Pause the live stream without tearing it down — used when the ride takes
+   * over audio so the listener can resume the same station afterwards.
+   */
+  const pause = useCallback(() => {
+    const el = audioRef.current;
+    if (el && !el.paused) el.pause();
+  }, []);
+
   const setVolume = useCallback((v: number) => {
     const el = audioRef.current;
     if (el) el.volume = v;
@@ -159,6 +168,7 @@ export function useRadioPlayer() {
     error: state.error,
     toggle,
     stop,
+    pause,
     setVolume,
   };
 }

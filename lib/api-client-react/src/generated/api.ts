@@ -30,6 +30,8 @@ import type {
   OEmbed,
   Picker,
   PickerList,
+  RecordingNode,
+  RecordingPreview,
   RecordingSpins,
   ResolveSongParams,
   ResolvedSong,
@@ -577,6 +579,95 @@ export function useGetStationNowPlaying<
 }
 
 /**
+ * The MBID-keyed recording node — title, artist, artwork and cross-service deep links — for rendering a shareable song page. 404 when the MBID is not (yet) on the spine.
+
+ * @summary A recording's own metadata (song-page header)
+ */
+export const getGetRecordingUrl = (mbid: string) => {
+  return `/api/recordings/${mbid}`;
+};
+
+export const getRecording = async (
+  mbid: string,
+  options?: RequestInit,
+): Promise<RecordingNode> => {
+  return customFetch<RecordingNode>(getGetRecordingUrl(mbid), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetRecordingQueryKey = (mbid: string) => {
+  return [`/api/recordings/${mbid}`] as const;
+};
+
+export const getGetRecordingQueryOptions = <
+  TData = Awaited<ReturnType<typeof getRecording>>,
+  TError = ErrorType<ApiError>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecording>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetRecordingQueryKey(mbid);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getRecording>>> = ({
+    signal,
+  }) => getRecording(mbid, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!mbid,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getRecording>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetRecordingQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getRecording>>
+>;
+export type GetRecordingQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary A recording's own metadata (song-page header)
+ */
+
+export function useGetRecording<
+  TData = Awaited<ReturnType<typeof getRecording>>,
+  TError = ErrorType<ApiError>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecording>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetRecordingQueryOptions(mbid, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * Every logged spin of a recording (newest first), each attributed to the station and — when the source exposes it — the show and DJ. This is the play-history surface for a track page.
 
  * @summary Where a recording has been played, with attribution
@@ -657,6 +748,96 @@ export function useGetRecordingSpins<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetRecordingSpinsQueryOptions(mbid, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Best-effort 30s preview resolved via the public iTunes Search API and streamed directly from Apple's CDN to the client (Lore never hosts or proxies the audio bytes). previewUrl is null when none was found; the UI then degrades to deep links.
+
+ * @summary A 30-second preview clip for a recording (for riding)
+ */
+export const getGetRecordingPreviewUrl = (mbid: string) => {
+  return `/api/recordings/${mbid}/preview`;
+};
+
+export const getRecordingPreview = async (
+  mbid: string,
+  options?: RequestInit,
+): Promise<RecordingPreview> => {
+  return customFetch<RecordingPreview>(getGetRecordingPreviewUrl(mbid), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetRecordingPreviewQueryKey = (mbid: string) => {
+  return [`/api/recordings/${mbid}/preview`] as const;
+};
+
+export const getGetRecordingPreviewQueryOptions = <
+  TData = Awaited<ReturnType<typeof getRecordingPreview>>,
+  TError = ErrorType<ApiError>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecordingPreview>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetRecordingPreviewQueryKey(mbid);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getRecordingPreview>>
+  > = ({ signal }) => getRecordingPreview(mbid, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!mbid,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getRecordingPreview>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetRecordingPreviewQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getRecordingPreview>>
+>;
+export type GetRecordingPreviewQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary A 30-second preview clip for a recording (for riding)
+ */
+
+export function useGetRecordingPreview<
+  TData = Awaited<ReturnType<typeof getRecordingPreview>>,
+  TError = ErrorType<ApiError>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecordingPreview>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetRecordingPreviewQueryOptions(mbid, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

@@ -35,6 +35,8 @@ export * from "./pickerList";
 export * from "./pickerPickerType";
 export * from "./recordingLink";
 export * from "./recordingLinkKind";
+export * from "./recordingNode";
+export * from "./recordingPreview";
 export * from "./recordingSpin";
 export * from "./recordingSpinConfidence";
 export * from "./recordingSpins";

@@ -302,6 +302,40 @@ export const GetStationNowPlayingResponse = zod.object({
 });
 
 /**
+ * The MBID-keyed recording node — title, artist, artwork and cross-service deep links — for rendering a shareable song page. 404 when the MBID is not (yet) on the spine.
+
+ * @summary A recording's own metadata (song-page header)
+ */
+
+export const GetRecordingParams = zod.object({
+  mbid: zod.coerce.string().min(1),
+});
+
+export const GetRecordingResponse = zod
+  .object({
+    mbid: zod.string(),
+    title: zod.string(),
+    artist: zod.string(),
+    artistMbid: zod.string().nullish(),
+    durationMs: zod.number().nullish(),
+    artworkUrl: zod.string().nullish(),
+    links: zod.array(
+      zod
+        .object({
+          name: zod.string(),
+          url: zod.string(),
+          kind: zod.enum(["exact", "search"]),
+        })
+        .describe(
+          'A cross-service deep link. kind=\"exact\" points at the precise recording (resolved via Odesli); kind=\"search\" is a best-effort artist+title search on that service.',
+        ),
+    ),
+  })
+  .describe(
+    "A recording's own metadata, keyed by MusicBrainz Recording ID, for the song page. artistMbid powers artist-level attribution; artwork and links are best-effort and may be absent.",
+  );
+
+/**
  * Every logged spin of a recording (newest first), each attributed to the station and — when the source exposes it — the show and DJ. This is the play-history surface for a track page.
 
  * @summary Where a recording has been played, with attribution
@@ -345,6 +379,27 @@ export const GetRecordingSpinsResponse = zod.object({
       ),
   ),
 });
+
+/**
+ * Best-effort 30s preview resolved via the public iTunes Search API and streamed directly from Apple's CDN to the client (Lore never hosts or proxies the audio bytes). previewUrl is null when none was found; the UI then degrades to deep links.
+
+ * @summary A 30-second preview clip for a recording (for riding)
+ */
+
+export const GetRecordingPreviewParams = zod.object({
+  mbid: zod.coerce.string().min(1),
+});
+
+export const GetRecordingPreviewResponse = zod
+  .object({
+    mbid: zod.string(),
+    previewUrl: zod.string().nullish(),
+    artworkUrl: zod.string().nullish(),
+    source: zod.string().nullish(),
+  })
+  .describe(
+    "A best-effort 30s preview clip for a recording. All fields may be null when no preview was found; the audio streams directly from the source's CDN, never through Lore.",
+  );
 
 /**
  * Real DJ transitions observed after this recording, ranked by a station-class-weighted frequency so curated/community segues outrank commercial ones. Powers Segue mode.
