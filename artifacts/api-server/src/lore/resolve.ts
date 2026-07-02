@@ -228,11 +228,15 @@ async function resolveLinks(
   recordingId: string,
   artist: string,
   title: string,
-): Promise<RecordingLink[]> {
+): Promise<{ links: RecordingLink[]; spotifyArtworkUrl: string | null }> {
   let spotifyTrackId: string | undefined;
+  let spotifyArtworkUrl: string | null = null;
   try {
     const hit = await searchTrack(`${artist} ${title}`);
-    if (hit) spotifyTrackId = hit.id;
+    if (hit) {
+      spotifyTrackId = hit.id;
+      spotifyArtworkUrl = hit.imageUrl;
+    }
   } catch {
     // Spotify unconfigured / rate-limited — fall back to search links.
   }
@@ -243,7 +247,36 @@ async function resolveLinks(
   };
   if (spotifyTrackId) args.spotifyTrackId = spotifyTrackId;
   const links = await fetchRecordingLinks(args);
-  return links?.platforms ?? [];
+  return { links: links?.platforms ?? [], spotifyArtworkUrl };
+}
+
+/**
+ * Artwork-only Spotify lookup for recordings whose links already converged but
+ * whose station feed never carried a cover (SomaFM et al). Skips Odesli
+ * entirely, so it never spends the rate-limited budget. Known misses are
+ * memoized (in-memory, TTL) so a coverless track that re-spins all day doesn't
+ * re-issue the same failing search on every ingestion.
+ */
+const ARTWORK_MISS_TTL_MS = 24 * 60 * 60 * 1000;
+const artworkMissUntil = new Map<string, number>();
+
+async function lookupSpotifyArtwork(
+  mbid: string,
+  artist: string,
+  title: string,
+): Promise<string | null> {
+  const missUntil = artworkMissUntil.get(mbid);
+  if (missUntil && Date.now() < missUntil) return null;
+  try {
+    const hit = await searchTrack(`${artist} ${title}`);
+    const url = hit?.imageUrl ?? null;
+    if (!url) artworkMissUntil.set(mbid, Date.now() + ARTWORK_MISS_TTL_MS);
+    else artworkMissUntil.delete(mbid);
+    return url;
+  } catch {
+    // Transient failure (rate limit, network): don't memoize as a miss.
+    return null;
+  }
 }
 
 /**
@@ -258,16 +291,33 @@ async function upsertRecording(
   enrichLinks = true,
 ): Promise<void> {
   const [existing] = await db
-    .select({ mbid: recordingsTable.mbid, links: recordingsTable.links })
+    .select({
+      mbid: recordingsTable.mbid,
+      links: recordingsTable.links,
+      artworkUrl: recordingsTable.artworkUrl,
+    })
     .from(recordingsTable)
     .where(eq(recordingsTable.mbid, r.mbid as string))
     .limit(1);
 
   let links = existing?.links ?? null;
+  // Feed-provided art always wins; Spotify's album cover is the fallback for
+  // stations (SomaFM et al) whose feed never carries one.
+  let fallbackArtwork: string | null = null;
+  const artworkMissing = !artworkUrl && !existing?.artworkUrl;
   if (enrichLinks && (!links || links.length === 0)) {
     const fetched = await resolveLinks(r.mbid as string, r.artist, r.title);
-    links = fetched.length ? fetched : null;
+    links = fetched.links.length ? fetched.links : null;
+    fallbackArtwork = fetched.spotifyArtworkUrl;
+  } else if (enrichLinks && artworkMissing) {
+    // Links already converged but the cover never did — artwork-only lookup.
+    fallbackArtwork = await lookupSpotifyArtwork(
+      r.mbid as string,
+      r.artist,
+      r.title,
+    );
   }
+  const newArtwork = artworkUrl ?? (artworkMissing ? fallbackArtwork : null);
 
   await db
     .insert(recordingsTable)
@@ -278,7 +328,7 @@ async function upsertRecording(
       artistMbid: r.artistMbid ?? null,
       isrc: r.isrc ?? null,
       durationMs: r.durationMs ?? null,
-      artworkUrl: artworkUrl ?? null,
+      artworkUrl: newArtwork,
       links,
     })
     .onConflictDoUpdate({
@@ -288,7 +338,7 @@ async function upsertRecording(
         artist: r.artist,
         artistMbid: r.artistMbid ?? null,
         ...(r.isrc ? { isrc: r.isrc } : {}),
-        ...(artworkUrl ? { artworkUrl } : {}),
+        ...(newArtwork ? { artworkUrl: newArtwork } : {}),
         ...(links ? { links } : {}),
         updatedAt: sql`now()`,
       },
