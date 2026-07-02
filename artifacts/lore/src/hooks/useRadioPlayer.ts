@@ -153,6 +153,17 @@ export function useRadioPlayer() {
     if (el && !el.paused) el.pause();
   }, []);
 
+  /**
+   * Resume a previously paused stream without changing the source. Used when
+   * a service-ride falls back to the broadcast for one track.
+   */
+  const resume = useCallback(() => {
+    const el = audioRef.current;
+    if (el && el.paused && el.src) {
+      void el.play().catch(() => {});
+    }
+  }, []);
+
   const setVolume = useCallback((v: number) => {
     const el = audioRef.current;
     if (el) el.volume = v;
@@ -169,6 +180,7 @@ export function useRadioPlayer() {
     toggle,
     stop,
     pause,
+    resume,
     setVolume,
   };
 }

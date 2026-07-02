@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import type { ArchiveTrack } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
+import type { TimeOrientation } from "../player/playbackSession";
 import { CONFIDENCE_LABEL } from "./NowPlaying";
 import { clockTime } from "../lib/format";
 import { Ghost, Play } from "lucide-react";
@@ -9,13 +10,19 @@ import { Ghost, Play } from "lucide-react";
  * The ordered tracklist of one documented run, with a single "replay" action.
  * Unresolved tracks stay visible as honest gaps — they are listed but skipped
  * during playback, never papered over.
+ *
+ * `timeOrientation` distinguishes the session shape:
+ * - 'past'    : ghost-radio station run (as it aired)
+ * - 'curated' : picker run (ordered list from a human taste source)
  */
 export function ArchiveTracklist({
   tracks,
   replayLabel,
+  timeOrientation = "past",
 }: {
   tracks: ArchiveTrack[];
   replayLabel: string;
+  timeOrientation?: TimeOrientation;
 }) {
   const { ride } = usePlayer();
 
@@ -32,6 +39,7 @@ export function ArchiveTracklist({
         links: t.recording!.links ?? [],
       })),
       replayLabel,
+      { timeOrientation },
     );
   };
 

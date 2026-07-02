@@ -12,6 +12,7 @@ import {
   getRecording,
   getRecordingSegues,
   getRecordingPreview,
+  getStationNowPlaying,
   spotifyPlay,
   spotifyPause,
   spotifyResume,
@@ -25,6 +26,13 @@ import {
   useSpotifyConnect,
   type SpotifyConnectApi,
 } from "./useSpotifyConnect";
+import {
+  type TimeOrientation,
+  type PlaybackMode,
+  isLiveServiceRide,
+  readStoredPlaybackMode,
+  writeStoredPlaybackMode,
+} from "./playbackSession";
 
 /** How we arrived at a track in the ride — the attribution for this transition. */
 export interface RideAttribution {
@@ -60,6 +68,24 @@ export interface RideSeed {
   links: RecordingLink[];
 }
 
+/** Options for starting a trail ride. */
+export interface StartRideOpts {
+  /**
+   * Distinguishes session shape:
+   * - 'live': advance on station now-playing MBID change (requires stationSlug)
+   * - 'past': ghost-radio replay, fixed queue
+   * - 'curated': picker or segue trail, step-through queue
+   * Defaults to 'curated' when not provided.
+   */
+  timeOrientation?: TimeOrientation;
+  /**
+   * Station slug for live orientation. When provided and the user is in
+   * service-ride mode, advances are driven by the station's now-playing MBID
+   * change rather than Spotify's playback-end signal.
+   */
+  stationSlug?: string;
+}
+
 interface RadioApi {
   status: PlayerStatus;
   station: Station | null;
@@ -88,13 +114,36 @@ export interface RideApi {
   mode: "trail" | "replay";
   /** Attribution line for a replay ("KEXP · Early · 2024-06-02"), else null. */
   replayLabel: string | null;
-  start: (seed: RideSeed) => void;
+  /**
+   * How the session relates to time: 'live' drives advances from the station's
+   * now-playing; 'past' is a ghost-radio fixed queue; 'curated' steps through
+   * ordered picks. All three share this playback module.
+   */
+  timeOrientation: TimeOrientation;
+  /**
+   * Whether audio goes through the broadcast (passthrough) or the listener's
+   * connected service (resolve_to_service). Default is always 'passthrough'.
+   * Only switches to 'resolve_to_service' when the user explicitly opts in.
+   */
+  playbackMode: PlaybackMode;
+  /**
+   * True when the current track is unavailable on the connected service and
+   * playback fell back: broadcast stream (live) or 30s preview (past/curated).
+   */
+  fallbackUsed: boolean;
+  start: (seed: RideSeed, opts?: StartRideOpts) => void;
   /** Play a documented run as it aired: a fixed queue, no lookahead. */
-  startReplay: (seeds: RideSeed[], label: string) => void;
+  startReplay: (
+    seeds: RideSeed[],
+    label: string,
+    opts?: { timeOrientation?: TimeOrientation },
+  ) => void;
   stop: () => void;
   next: () => void;
   prev: () => void;
   togglePause: () => void;
+  /** Persist the user's mode choice and switch immediately. */
+  setPlaybackMode: (mode: PlaybackMode) => void;
 }
 
 interface PlayerContextValue {
@@ -140,6 +189,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [source, setSource] = useState<"spotify" | "preview" | null>(null);
   const [mode, setMode] = useState<"trail" | "replay">("trail");
   const [replayLabel, setReplayLabel] = useState<string | null>(null);
+  const [timeOrientation, setTimeOrientation] =
+    useState<TimeOrientation>("curated");
+  // Read from localStorage once on mount; default to 'passthrough' (safe).
+  const [playbackMode, setPlaybackModeState] = useState<PlaybackMode>(
+    readStoredPlaybackMode,
+  );
 
   // Guards so async resolves don't stack up or race a stopped ride.
   const rideRef = useRef(0); // bumped on every start/stop to invalidate stale async work
@@ -149,6 +204,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const playingUrlRef = useRef<string | null>(null);
   // MBIDs whose preview is being fetched, so we never double-fetch one.
   const previewFetchingRef = useRef<Set<string>>(new Set());
+  // Station slug for live-orientation rides — drives the now-playing subscription.
+  const liveStationSlugRef = useRef<string | null>(null);
 
   // --- Spotify full-track path (remote-controls the listener's own app) ----
   // What the ride commanded Spotify to play, so polls can tell "our track
@@ -176,16 +233,23 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // Queue length readable inside the poll interval without re-arming it.
   const queueLenRef = useRef(0);
   queueLenRef.current = queue.length;
+  // Refs for reading latest mode/orientation inside stable interval callbacks.
+  const playbackModeRef = useRef<PlaybackMode>(playbackMode);
+  playbackModeRef.current = playbackMode;
+  const timeOrientationRef = useRef<TimeOrientation>(timeOrientation);
+  timeOrientationRef.current = timeOrientation;
 
   const spotifyEligible = spotify.connected && spotify.premium;
 
   const stopRadio = radio.stop;
   const pauseRadio = (radio as unknown as { pause: () => void }).pause;
+  const resumeRadio = (radio as unknown as { resume: () => void }).resume;
 
   const stop = useCallback(() => {
     rideRef.current += 1;
     previewFetchingRef.current.clear();
     playingUrlRef.current = null;
+    liveStationSlugRef.current = null;
     const el = audioRef.current;
     if (el) {
       el.pause();
@@ -209,10 +273,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setAtTrailEnd(false);
     setMode("trail");
     setReplayLabel(null);
+    setTimeOrientation("curated");
   }, []);
 
   const start = useCallback(
-    (seed: RideSeed) => {
+    (seed: RideSeed, opts?: StartRideOpts) => {
       // The ride takes over audio: pause the live stream (resumable) so two
       // sources never play at once — enqueue-never-cut, but audio is exclusive.
       pauseRadio?.();
@@ -222,6 +287,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       spotifyPausedRef.current = false;
       spotifyFailedRef.current.clear();
       sourceRef.current = null;
+      liveStationSlugRef.current = opts?.stationSlug ?? null;
       setSource(null);
       setActive(true);
       setStatus("loading");
@@ -229,6 +295,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setSeeking(false);
       setMode("trail");
       setReplayLabel(null);
+      setTimeOrientation(opts?.timeOrientation ?? "curated");
       setQueue([
         {
           mbid: seed.mbid,
@@ -244,11 +311,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     [pauseRadio],
   );
 
-  // Ghost radio: play a documented run exactly as it aired. The queue is
-  // fixed up front — no segue lookahead ever runs — and the ride ends when
-  // the last documented track ends.
+  // Ghost radio / curated picker replay: play a documented run exactly as it
+  // aired (or was ordered). The queue is fixed up front — no segue lookahead
+  // ever runs — and the ride ends when the last documented track ends.
   const startReplay = useCallback(
-    (seeds: RideSeed[], label: string) => {
+    (
+      seeds: RideSeed[],
+      label: string,
+      opts?: { timeOrientation?: TimeOrientation },
+    ) => {
       if (!seeds.length) return;
       pauseRadio?.();
       rideRef.current += 1;
@@ -259,6 +330,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       spotifyPausedRef.current = false;
       spotifyFailedRef.current.clear();
       sourceRef.current = null;
+      liveStationSlugRef.current = null;
       setSource(null);
       setActive(true);
       setStatus("loading");
@@ -266,6 +338,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setSeeking(false);
       setMode("replay");
       setReplayLabel(label);
+      // Ghost-radio station runs are 'past'; curated picker runs are 'curated'.
+      setTimeOrientation(opts?.timeOrientation ?? "past");
       setQueue(
         seeds.map((seed) => ({
           mbid: seed.mbid,
@@ -324,6 +398,36 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  /** Persist the user's mode choice and switch immediately. */
+  const setPlaybackMode = useCallback((newMode: PlaybackMode) => {
+    writeStoredPlaybackMode(newMode);
+    setPlaybackModeState(newMode);
+    // Switching away from service-ride mid-session: clear any Spotify state
+    // so the preview ladder takes over cleanly for the current track.
+    if (newMode === "passthrough") {
+      spotifyNowRef.current = null;
+      spotifyCommandingRef.current = null;
+      spotifyPausedRef.current = false;
+      if (sourceRef.current === "spotify") {
+        void spotifyPause().catch(() => {});
+        sourceRef.current = null;
+        setSource(null);
+      }
+    }
+    // Switching to service-ride: clear failed set so tracks get a fresh attempt.
+    if (newMode === "resolve_to_service") {
+      spotifyFailedRef.current.clear();
+      setSpotifyFallbackTick(0);
+      // Ensure audio element is silenced so Spotify can take over.
+      const el = audioRef.current;
+      if (el) {
+        el.pause();
+        el.removeAttribute("src");
+        playingUrlRef.current = null;
+      }
+    }
+  }, []);
+
   // Lookahead: keep at least one attributed hop staged after the current track.
   // Replays never look ahead — the documented queue IS the ride.
   useEffect(() => {
@@ -372,14 +476,26 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const hasNextHop = index + 1 < queue.length;
 
   // Whether THIS track rides the listener's Spotify (full track) or the
-  // preview ladder. A Spotify failure marks the track and bumps the tick so
-  // this recomputes and the preview path takes over.
+  // preview ladder. Requires an explicit opt-in (playbackMode) in addition to
+  // the service being eligible. A Spotify failure marks the track and bumps
+  // the tick so this recomputes and the fallback path takes over.
   const spotifyModeForCurrent =
     active &&
+    playbackMode === "resolve_to_service" &&
     spotifyEligible &&
     !!currentMbid &&
     spotifyFallbackTick >= 0 &&
     !spotifyFailedRef.current.has(currentMbid);
+
+  // Whether the current track fell back (Spotify failed, using broadcast/preview).
+  const fallbackUsed =
+    playbackMode === "resolve_to_service" &&
+    !!currentMbid &&
+    spotifyFailedRef.current.has(currentMbid);
+
+  // For live+service-ride, advances come from the station now-playing poll, not
+  // Spotify's playback-end signal. Read in the Spotify poll interval via ref.
+  const isLiveSvcRide = isLiveServiceRide(playbackMode, timeOrientation);
 
   // Command the listener's own Spotify to play the current track (full).
   const refreshSpotify = spotify.refresh;
@@ -395,13 +511,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     sourceRef.current = "spotify";
     setSource("spotify");
     setStatus("loading");
-    // Audio is exclusive: silence the preview element while Spotify plays.
+    // Audio is exclusive: silence both the preview element and the radio
+    // broadcast while Spotify plays.
     const el = audioRef.current;
     if (el) {
       el.pause();
       el.removeAttribute("src");
       playingUrlRef.current = null;
     }
+    // Also silence the broadcast if it was resumed as a fallback.
+    pauseRadio?.();
 
     void spotifyPlay({ mbid: targetMbid })
       .then((res) => {
@@ -417,7 +536,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       .catch((err: unknown) => {
         if (token !== rideRef.current) return;
         // This track can't ride Spotify (not found, no device, revoked...):
-        // fall back to the preview ladder for it, honestly and per-track.
+        // fall back for this track only.
         spotifyFailedRef.current.add(targetMbid);
         spotifyNowRef.current = null;
         sourceRef.current = null;
@@ -434,11 +553,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           spotifyCommandingRef.current = null;
         }
       });
-  }, [spotifyModeForCurrent, currentMbid, refreshSpotify]);
+  }, [spotifyModeForCurrent, currentMbid, refreshSpotify, pauseRadio]);
 
   // Poll the listener's player while Spotify carries the ride: mirror pauses,
   // and advance the ride when the track runs out. If the listener starts
   // playing something else in Spotify, the ride yields (never fights them).
+  // For live+service-ride, the now-playing poll (below) drives advances instead.
   useEffect(() => {
     if (!spotifyModeForCurrent || !currentMbid) return undefined;
     const token = rideRef.current;
@@ -486,6 +606,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             return;
           }
 
+          // For live+service-ride, the now-playing poll drives advances; do not
+          // advance here on track-end to avoid a double-skip.
+          if (playbackModeRef.current === "resolve_to_service" &&
+              timeOrientationRef.current === "live") {
+            return;
+          }
+
           // Looks like the track ran out (inactive player, or ours stopped at
           // progress 0). Require two consecutive such polls so a transient
           // blip never skips a track early.
@@ -506,10 +633,90 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(id);
   }, [spotifyModeForCurrent, currentMbid]);
 
+  // Now-playing subscription for live+service-ride: advance the queue when
+  // the station moves to a new MBID, rather than polling Spotify for track-end.
+  // This keeps the ride in sync with the actual broadcast clock without needing
+  // fingerprinting or audio analysis.
+  useEffect(() => {
+    if (!active) return undefined;
+    if (!isLiveSvcRide) return undefined;
+    const slug = liveStationSlugRef.current;
+    if (!slug) return undefined;
+
+    const token = rideRef.current;
+    let lastSeenMbid: string | null = null;
+    let initialized = false;
+
+    const id = setInterval(() => {
+      void getStationNowPlaying(slug)
+        .then((np) => {
+          if (token !== rideRef.current) return;
+          const mbid = np.nowPlaying?.recording?.mbid ?? null;
+          if (!mbid) return;
+
+          if (!initialized) {
+            // First successful poll — set baseline; the current MBID is what
+            // we're already playing, so don't advance.
+            lastSeenMbid = mbid;
+            initialized = true;
+            return;
+          }
+
+          if (mbid === lastSeenMbid) return; // same track still on air
+          lastSeenMbid = mbid;
+
+          // Station moved to a new track — advance the ride.
+          // If the radio was used as fallback for the previous track, the
+          // Spotify command effect will pause it when it takes over the new one.
+          setIndex((i) => {
+            if (i + 1 < queueLenRef.current) return i + 1;
+            setStatus("ended");
+            return i;
+          });
+        })
+        .catch(() => {
+          // Best-effort — a poll failure just skips this tick.
+        });
+    }, 5000);
+
+    return () => clearInterval(id);
+  }, [active, isLiveSvcRide]);
+
+  // Live fallback: when in live+service-ride and Spotify fails for a track,
+  // resume the broadcast so the listener always hears audio. The now-playing
+  // poll above drives the advance to the next track.
+  useEffect(() => {
+    if (!active) return;
+    if (playbackMode !== "resolve_to_service") return;
+    if (timeOrientation !== "live") return;
+    if (spotifyModeForCurrent) return; // Spotify is carrying this track
+    if (!currentMbid) return;
+    if (!spotifyFailedRef.current.has(currentMbid)) return;
+    // This track failed on Spotify in a live ride → resume the broadcast.
+    resumeRadio?.();
+  }, [
+    active,
+    playbackMode,
+    timeOrientation,
+    spotifyModeForCurrent,
+    currentMbid,
+    resumeRadio,
+    spotifyFallbackTick,
+  ]);
+
   // Drive playback of the current item: resolve its preview, then play it.
   useEffect(() => {
     if (!active) return undefined;
     if (spotifyModeForCurrent) return undefined; // Spotify carries this track
+    // For live fallback, the broadcast carries the audio — no preview needed.
+    if (
+      playbackMode === "resolve_to_service" &&
+      timeOrientation === "live" &&
+      currentMbid &&
+      spotifyFailedRef.current.has(currentMbid)
+    ) {
+      return undefined;
+    }
     const el = audioRef.current;
     if (!el) return undefined;
     if (!currentMbid) return undefined;
@@ -597,6 +804,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     currentNeedsLinks,
     hasNextHop,
     spotifyModeForCurrent,
+    playbackMode,
+    timeOrientation,
+    spotifyFallbackTick,
   ]);
 
   // Audio element lifecycle — status wiring + auto-advance on clip end.
@@ -666,12 +876,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         source,
         mode,
         replayLabel,
+        timeOrientation,
+        playbackMode,
+        fallbackUsed,
         start,
         startReplay,
         stop,
         next,
         prev,
         togglePause,
+        setPlaybackMode,
       },
       spotify,
     }),
@@ -692,12 +906,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       source,
       mode,
       replayLabel,
+      timeOrientation,
+      playbackMode,
+      fallbackUsed,
       start,
       startReplay,
       stop,
       next,
       prev,
       togglePause,
+      setPlaybackMode,
       spotify,
     ],
   );

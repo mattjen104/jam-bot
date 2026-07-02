@@ -75,6 +75,7 @@ export default function StationRun() {
               replayLabel={`${data.station.name} · ${
                 data.run.show?.name ?? "stream"
               } · ${runDate(data.run.date)}`}
+              timeOrientation="past"
             />
           </>
         )}

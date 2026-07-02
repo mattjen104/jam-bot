@@ -70,6 +70,7 @@ export default function PickerRun() {
               replayLabel={`${data.picker.name}${
                 data.run.pickedAt ? ` · ${runDate(data.run.pickedAt)}` : ""
               }`}
+              timeOrientation="curated"
             />
           </>
         )}
