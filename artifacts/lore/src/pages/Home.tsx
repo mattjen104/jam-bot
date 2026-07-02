@@ -9,7 +9,14 @@ import {
 import { usePlayer } from "../player/PlayerProvider";
 import { StationList } from "../components/StationList";
 import { NowPlaying } from "../components/NowPlaying";
-import { AudioLines, Ghost, ShieldCheck, Waypoints } from "lucide-react";
+import {
+  AudioLines,
+  BookOpen,
+  Ghost,
+  ShieldCheck,
+  UserCheck,
+  Waypoints,
+} from "lucide-react";
 
 export default function Home() {
   const { data, isLoading, isError } = useListStations();
@@ -62,7 +69,7 @@ export default function Home() {
             unmodified from its broadcaster — and every track is resolved to its
             canonical identity, with credits and deep links.
           </p>
-          <div className="mt-5">
+          <div className="mt-5 flex flex-wrap gap-2">
             <Link
               href="/archive"
               data-testid="link-archive"
@@ -70,6 +77,22 @@ export default function Home() {
             >
               <Ghost className="h-3.5 w-3.5" />
               Ghost radio — replay archived runs
+            </Link>
+            <Link
+              href="/journal"
+              data-testid="link-journal"
+              className="hover-elevate inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 font-mono text-[11px] uppercase tracking-wide text-foreground"
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+              Your journal
+            </Link>
+            <Link
+              href="/following"
+              data-testid="link-following"
+              className="hover-elevate inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 font-mono text-[11px] uppercase tracking-wide text-foreground"
+            >
+              <UserCheck className="h-3.5 w-3.5" />
+              Following
             </Link>
           </div>
           <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 font-mono text-[11px] uppercase tracking-wide text-muted-foreground">

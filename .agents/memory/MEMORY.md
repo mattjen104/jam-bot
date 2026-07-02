@@ -22,3 +22,4 @@
 - [api-server test location](api-server-test-location.md) — vitest only runs `test/**`; colocated src/*.test.ts files are silently skipped, so verify the suite count grows after adding tests.
 - [Lore archive runs model](lore-archive-runs-model.md) — runs are derived groupings (runId=min(id) anchor, null-safe showId), replay is a player mode with fixed queue + honest gaps, backfill 1s-nudge loop-guard.
 - [Ride player state machine](lore-ride-player-state-machine.md) — key effects off current-item identity not whole queue; patch async results by MBID never captured index; remote (Spotify) playback: live snapshot is authority.
+- [Lore local-first listener layer](lore-local-first-listener-layer.md) — journal/follows are localStorage-only by design (no accounts); logger trigger key must be ≥ dedup identity or listens drop.

@@ -10,8 +10,11 @@ import StationArchive from "@/pages/StationArchive";
 import StationRun from "@/pages/StationRun";
 import PickerArchive from "@/pages/PickerArchive";
 import PickerRun from "@/pages/PickerRun";
+import Journal from "@/pages/Journal";
+import Following from "@/pages/Following";
 import { PlayerProvider } from "./player/PlayerProvider";
 import { PlayerDock } from "./components/PlayerDock";
+import { ListeningLogger } from "./components/ListeningLogger";
 
 const queryClient = new QueryClient();
 
@@ -25,6 +28,8 @@ function Router() {
       <Route path="/archive/station-runs/:runId" component={StationRun} />
       <Route path="/archive/pickers/:handle" component={PickerArchive} />
       <Route path="/archive/picker-runs/:runId" component={PickerRun} />
+      <Route path="/journal" component={Journal} />
+      <Route path="/following" component={Following} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -35,6 +40,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <PlayerProvider>
+          <ListeningLogger />
           <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
             <Router />
           </WouterRouter>

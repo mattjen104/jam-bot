@@ -1,6 +1,7 @@
 import { Link, useParams } from "wouter";
 import { useGetPickerArchive } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
+import { FollowButton } from "../components/FollowButton";
 import { runDate } from "../lib/format";
 import { ArrowLeft, ArrowUpRight, ExternalLink, Users } from "lucide-react";
 
@@ -38,9 +39,16 @@ export default function PickerArchive() {
                 <Users className="h-4 w-4" />
                 Picker archive
               </div>
-              <h1 className="mt-3 font-serif text-3xl font-semibold text-foreground">
-                {data.picker.name}
-              </h1>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <h1 className="font-serif text-3xl font-semibold text-foreground">
+                  {data.picker.name}
+                </h1>
+                <FollowButton
+                  kind="picker"
+                  id={data.picker.handle}
+                  name={data.picker.name}
+                />
+              </div>
               <p className="mt-2 max-w-[52ch] text-sm text-muted-foreground">
                 {data.picker.description ?? ""}
               </p>

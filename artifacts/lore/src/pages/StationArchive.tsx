@@ -1,6 +1,7 @@
 import { Link, useParams } from "wouter";
 import { useGetStationArchive } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
+import { FollowButton } from "../components/FollowButton";
 import { runDate } from "../lib/format";
 import { ArrowLeft, ArrowUpRight, Radio } from "lucide-react";
 
@@ -38,9 +39,16 @@ export default function StationArchive() {
                 <Radio className="h-4 w-4" />
                 Station archive
               </div>
-              <h1 className="mt-3 font-serif text-3xl font-semibold text-foreground">
-                {data.station.name}
-              </h1>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <h1 className="font-serif text-3xl font-semibold text-foreground">
+                  {data.station.name}
+                </h1>
+                <FollowButton
+                  kind="station"
+                  id={data.station.slug}
+                  name={data.station.name}
+                />
+              </div>
               <p className="mt-2 font-mono text-xs text-muted-foreground">
                 {data.runs.length} documented run{data.runs.length === 1 ? "" : "s"} ·
                 grouped by show and broadcast day (UTC)
