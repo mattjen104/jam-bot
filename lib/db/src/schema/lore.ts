@@ -232,6 +232,14 @@ export const segueEdgesTable = pgTable(
   },
   (t) => [
     // One edge per concrete transition occurrence — idempotent re-derivation.
+    // `played_at` is the timestamp of the `to` spin, and a single broadcast
+    // stream plays exactly one track at any instant, so (station_id, played_at)
+    // already maps to at most one spin — hence one show_id and one from_mbid.
+    // Adding show_id to this key therefore cannot separate any distinct real
+    // transition; it would only add a nullable column (show_id is null for
+    // stations without program data) whose default NULLS-DISTINCT handling would
+    // break dedup on re-derivation. show_id is still stored on every edge for
+    // attribution — it just isn't part of the identity key.
     uniqueIndex("segue_edges_unique_idx").on(
       t.fromMbid,
       t.toMbid,

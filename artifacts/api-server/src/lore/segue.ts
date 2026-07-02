@@ -7,7 +7,7 @@ import {
   showsTable,
   type InsertSegueEdge,
 } from "@workspace/db";
-import { eq, isNotNull, asc, desc } from "drizzle-orm";
+import { eq, asc, desc } from "drizzle-orm";
 
 /**
  * Segue edges — the "song A was followed by song B on this station/show" graph
@@ -72,7 +72,11 @@ export function deriveEdges(
 }
 
 /**
- * Nightly job: derive segue edges from all resolved spins and upsert them.
+ * Nightly job: derive segue edges from the full spin history and upsert them.
+ * ALL spins are fetched — including unresolved ones (mbid null) — because an
+ * unresolved spin between two resolved ones is a real hole that must break the
+ * chain (otherwise we'd forge an A->C edge across a song we couldn't identify).
+ * `deriveEdges` only emits an edge when both endpoints carry an MBID.
  * Idempotent — the unique (from,to,station,playedAt) index means re-running only
  * fills gaps, never duplicates. Returns the number of edges written. Never
  * throws.
@@ -87,7 +91,6 @@ export async function runSegueDerivation(): Promise<number> {
         showId: spinsTable.showId,
       })
       .from(spinsTable)
-      .where(isNotNull(spinsTable.mbid))
       .orderBy(asc(spinsTable.playedAt));
 
     const edges = deriveEdges(
