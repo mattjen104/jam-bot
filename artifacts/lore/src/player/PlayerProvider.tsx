@@ -32,6 +32,7 @@ import {
   isLiveServiceRide,
   readStoredPlaybackMode,
   writeStoredPlaybackMode,
+  tickNoDevicePoll,
 } from "./playbackSession";
 
 /** How we arrived at a track in the ride — the attribution for this transition. */
@@ -609,9 +610,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             // Device hasn't confirmed playback yet. Count the poll and, after
             // the threshold (~15 s), treat the device as lost: fall back for
             // this track so the ride isn't silently stuck in "loading".
-            cur.noDevicePolls += 1;
-            const DEVICE_LOST_POLLS = 5; // 5 × 3 s = 15 s
-            if (cur.noDevicePolls < DEVICE_LOST_POLLS) return;
+            const pollResult = tickNoDevicePoll(cur.noDevicePolls);
+            if (pollResult.outcome === "wait") {
+              cur.noDevicePolls = pollResult.noDevicePolls;
+              return;
+            }
             spotifyFailedRef.current.add(currentMbid);
             spotifyDeviceLostRef.current.add(currentMbid);
             spotifyNowRef.current = null;

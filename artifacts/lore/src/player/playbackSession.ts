@@ -96,6 +96,60 @@ export function resolveAudioPath(
   return resolveFallback(serviceOk, session.timeOrientation, opts.previewAvailable);
 }
 
+// ---------------------------------------------------------------------------
+// Device-lost fallback — pure poll counter and label helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Consecutive no-confirmation polls before the Spotify device is declared lost.
+ * Each poll fires every 3 s, so 5 polls ≈ 15 s before falling back.
+ */
+export const DEVICE_LOST_POLLS = 5;
+
+/** Outcome of one no-device-confirmation poll tick. */
+export type NoDevicePollResult =
+  | { outcome: "wait"; noDevicePolls: number }
+  | { outcome: "device-lost" };
+
+/**
+ * Advance the no-device-seen counter for a Spotify track whose playback has
+ * not yet been confirmed (sawPlaying still false).  After DEVICE_LOST_POLLS
+ * consecutive polls without confirmation the device is treated as lost and
+ * the caller must trigger the fallback path.
+ *
+ * Pure — no side-effects; called from the Spotify poll interval in
+ * PlayerProvider so the threshold is testable without React or timers.
+ */
+export function tickNoDevicePoll(noDevicePolls: number): NoDevicePollResult {
+  const next = noDevicePolls + 1;
+  if (next >= DEVICE_LOST_POLLS) return { outcome: "device-lost" };
+  return { outcome: "wait", noDevicePolls: next };
+}
+
+/**
+ * Human-readable label shown in the RideBar fallback indicator.
+ *
+ * - deviceLost=true  → "Spotify device lost · …"
+ * - deviceLost=false → "Unavailable on Spotify · …"
+ *
+ * The suffix distinguishes live (broadcast) from past/curated (preview) so
+ * the listener knows which fallback audio is playing.
+ *
+ * Pure — extracted from the inline JSX ternary in RideBar so it can be
+ * unit-tested and kept consistent between the component and any future toast.
+ */
+export function rideFallbackLabel(
+  deviceLost: boolean,
+  timeOrientation: TimeOrientation,
+): string {
+  const prefix = deviceLost ? "Spotify device lost" : "Unavailable on Spotify";
+  const suffix =
+    timeOrientation === "live"
+      ? "listening to broadcast"
+      : "playing preview";
+  return `${prefix} · ${suffix}`;
+}
+
 /**
  * True when the session is in the combination that suppresses the default
  * Spotify-poll advance (now-playing MBID change drives advances instead).

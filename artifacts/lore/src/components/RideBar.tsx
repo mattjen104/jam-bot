@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import type { RecordingLink } from "@workspace/api-client-react";
 import type { RideApi } from "../player/PlayerProvider";
 import type { SpotifyConnectApi } from "../player/useSpotifyConnect";
+import { rideFallbackLabel } from "../player/playbackSession";
 import {
   AlertTriangle,
   ExternalLink,
@@ -107,13 +108,7 @@ export function RideBar({
                   data-testid="ride-fallback-indicator"
                 >
                   <AlertTriangle className="h-3.5 w-3.5" />
-                  {ride.deviceLost
-                    ? ride.timeOrientation === "live"
-                      ? "Spotify device lost · listening to broadcast"
-                      : "Spotify device lost · playing preview"
-                    : ride.timeOrientation === "live"
-                      ? "Unavailable on Spotify · listening to broadcast"
-                      : "Unavailable on Spotify · playing preview"}
+                  {rideFallbackLabel(ride.deviceLost, ride.timeOrientation)}
                 </span>
               ) : (
                 <span className="font-mono text-[11px] text-muted-foreground">
