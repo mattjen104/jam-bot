@@ -63,7 +63,25 @@ export function LyricView({ mbid, progressMs }: LyricViewProps) {
     return best;
   }
 
-  if (isLoading || !lines.length) return null;
+  if (isLoading) {
+    return (
+      <div className="px-5 py-4">
+        <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground animate-pulse">
+          Loading lyrics…
+        </p>
+      </div>
+    );
+  }
+
+  if (!lines.length) {
+    return (
+      <div className="px-5 py-4">
+        <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          No synced lyrics found for this track.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="overflow-hidden rounded-2xl border border-card-border bg-card">
