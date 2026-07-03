@@ -16,14 +16,18 @@ import {
   getGetRecordingsAvailabilityQueryKey,
   useLookupPickedMbids,
   getLookupPickedMbidsQueryKey,
+  useGetPickersDial,
+  getGetPickersDialQueryKey,
   type Station,
   type PickedLookupItem,
   type StationScheduleRun,
   type StationRecentSpin,
   type RecordingAvailabilityItem,
+  type PickerDialItem,
 } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { StationList } from "../components/StationList";
+import { PickerDial } from "../components/PickerDial";
 import { NowPlaying } from "../components/NowPlaying";
 import { FollowingStrip } from "../components/FollowingStrip";
 import {
@@ -247,6 +251,19 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
     return map;
   }, [recentSpinsData]);
 
+  // Curated picker dial — all active lists with mosaic artwork.
+  // Fetched once; no polling (lists update infrequently).
+  const { data: pickerDialData } = useGetPickersDial({
+    query: {
+      queryKey: getGetPickersDialQueryKey(),
+      staleTime: 5 * 60 * 1000,
+    },
+  });
+  const pickerItems = useMemo(
+    (): PickerDialItem[] => pickerDialData?.items ?? [],
+    [pickerDialData],
+  );
+
   const pulseBySlug = useMemo(() => {
     return new Map(
       (pulse?.items ?? []).map((i) => [i.slug, i.nowPlaying ?? null]),
@@ -371,6 +388,9 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
           onSelect={handleSelect}
         />
       )}
+
+      {/* Curated lists — always visible on the dial, never behind a mode toggle */}
+      <PickerDial items={pickerItems} />
 
       {/* Now-playing sidebar only shown in live mode — not meaningful for ghost snapshots */}
       {!selectedDate && (

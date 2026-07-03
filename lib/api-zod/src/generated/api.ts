@@ -931,6 +931,42 @@ export const ListPickersResponse = zod.object({
 });
 
 /**
+ * All active pickers with their latest run + first 4 tracks for the dial mosaic.
+ * Single query; no polling needed (curated lists update infrequently).
+ */
+export const GetPickersDialResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      picker: zod.object({
+        id: zod.number(),
+        pickerType: zod.string(),
+        name: zod.string(),
+        handle: zod.string(),
+        homeUrl: zod.string().nullable(),
+        trustTier: zod.number(),
+        description: zod.string().nullable(),
+      }),
+      run: zod.object({
+        runId: zod.number(),
+        title: zod.string().nullable(),
+        sourceUrl: zod.string(),
+        trackCount: zod.number(),
+        resolvedCount: zod.number(),
+        pickedAt: zod.string().nullable(),
+      }),
+      previewTracks: zod.array(
+        zod.object({
+          mbid: zod.string().nullable(),
+          title: zod.string(),
+          artist: zod.string(),
+          artworkUrl: zod.string().nullable(),
+        }),
+      ),
+    }),
+  ),
+});
+
+/**
  * The station's play history grouped into runs — one run per show per UTC broadcast day — newest first. Each run is a real, documented sequence a DJ actually aired; the `runId` is an opaque id for fetching the full tracklist via /archive/station-runs/{runId}.
 
  * @summary A station's documented runs (ghost radio browse surface)

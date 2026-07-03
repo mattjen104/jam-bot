@@ -4288,6 +4288,82 @@ export const getListSongExploderEpisodesQueryOptions = <
 export type ListSongExploderEpisodesQueryResult = NonNullable<Awaited<ReturnType<typeof listSongExploderEpisodes>>>;
 export type ListSongExploderEpisodesQueryError = ErrorType<ApiError>;
 
+// ---------------------------------------------------------------------------
+// Pickers dial — all active curated lists with latest-run mosaic data.
+// Powers the PickerDial section on the home page.
+// ---------------------------------------------------------------------------
+
+export interface PickerDialPreviewTrack {
+  mbid: string | null;
+  title: string;
+  artist: string;
+  artworkUrl: string | null;
+}
+
+export interface PickerDialItem {
+  picker: {
+    id: number;
+    pickerType: string;
+    name: string;
+    handle: string;
+    homeUrl: string | null;
+    trustTier: number;
+    description: string | null;
+  };
+  run: {
+    runId: number;
+    title: string | null;
+    sourceUrl: string;
+    trackCount: number;
+    resolvedCount: number;
+    pickedAt: string | null;
+  };
+  previewTracks: PickerDialPreviewTrack[];
+}
+
+export interface PickerDialList {
+  items: PickerDialItem[];
+}
+
+export const getGetPickersDialUrl = () => `/api/pickers/dial`;
+
+export const getPickersDial = async (
+  options?: RequestInit,
+): Promise<PickerDialList> => {
+  return customFetch<PickerDialList>(getGetPickersDialUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPickersDialQueryKey = () =>
+  [`/api/pickers/dial`] as const;
+
+export function useGetPickersDial<
+  TData = Awaited<ReturnType<typeof getPickersDial>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPickersDial>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getGetPickersDialQueryKey();
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getPickersDial>>> = ({
+    signal,
+  }) => getPickersDial({ signal, ...requestOptions });
+  const query = useQuery({
+    queryKey,
+    queryFn,
+    ...queryOptions,
+  }) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  query.queryKey = queryKey;
+  return query;
+}
+
 export function useListSongExploderEpisodes<
   TData = Awaited<ReturnType<typeof listSongExploderEpisodes>>,
   TError = ErrorType<ApiError>,

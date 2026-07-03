@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import {
+  GetPickersDialResponse,
   ListPickersResponse,
   GetPickerArchiveParams,
   GetPickerArchiveResponse,
@@ -22,6 +23,140 @@ import { h } from "../../middlewares/asyncHandler.js";
 import { toPicker } from "./shared.js";
 
 const router: IRouter = Router();
+
+// GET /api/pickers/dial — all active pickers with latest-run mosaic data.
+// Returns one item per picker: run metadata + first 4 tracks for the artwork
+// mosaic. Single CTE query; no per-picker round trips.
+router.get("/pickers/dial", h(async (_req, res) => {
+  type DialRow = {
+    picker_id: number;
+    name: string;
+    handle: string;
+    picker_type: string;
+    trust_tier: number;
+    home_url: string | null;
+    description: string | null;
+    run_id: number | null;
+    run_title: string | null;
+    track_count: number | null;
+    resolved_count: number | null;
+    source_url: string | null;
+    picked_at: Date | null;
+    mbid: string | null;
+    track_title: string | null;
+    track_artist: string | null;
+    artwork_url: string | null;
+    rn: number | null;
+  };
+
+  const result = await db.execute<DialRow>(sql`
+    WITH grouped AS (
+      SELECT picker_id, source_url,
+        MIN(id)::int      AS run_id,
+        MAX(context)      AS title,
+        COUNT(*)::int     AS track_count,
+        COUNT(mbid)::int  AS resolved_count,
+        MAX(picked_at)    AS latest_at,
+        MIN(picked_at)    AS first_at
+      FROM picks
+      WHERE source_url IS NOT NULL
+      GROUP BY picker_id, source_url
+    ),
+    latest AS (
+      SELECT DISTINCT ON (picker_id) *
+      FROM grouped
+      ORDER BY picker_id, latest_at DESC NULLS LAST, run_id ASC
+    ),
+    preview AS (
+      SELECT
+        p.picker_id,
+        COALESCE(r.title,  p.raw_title,  '') AS track_title,
+        COALESCE(r.artist, p.raw_artist, '') AS track_artist,
+        r.artwork_url,
+        p.mbid,
+        ROW_NUMBER() OVER (
+          PARTITION BY p.picker_id
+          ORDER BY COALESCE(p.ordinal, 2147483647), p.id
+        ) AS rn
+      FROM picks p
+      INNER JOIN latest lr ON p.picker_id = lr.picker_id
+                          AND p.source_url = lr.source_url
+      LEFT JOIN recordings r ON p.mbid = r.mbid
+    )
+    SELECT
+      pk.id          AS picker_id,
+      pk.name,
+      pk.handle,
+      pk.picker_type,
+      pk.trust_tier,
+      pk.home_url,
+      pk.description,
+      lr.run_id,
+      lr.title       AS run_title,
+      lr.track_count,
+      lr.resolved_count,
+      lr.source_url,
+      lr.first_at    AS picked_at,
+      pr.mbid,
+      pr.track_title,
+      pr.track_artist,
+      pr.artwork_url,
+      pr.rn
+    FROM pickers pk
+    LEFT JOIN latest  lr ON lr.picker_id = pk.id
+    LEFT JOIN preview pr ON pr.picker_id = pk.id AND pr.rn <= 4
+    WHERE pk.active = true
+    ORDER BY pk.trust_tier, pk.name, pr.rn ASC NULLS LAST
+  `);
+
+  // Group rows into one item per picker.
+  const itemMap = new Map<number, {
+    picker: { id: number; pickerType: string; name: string; handle: string; homeUrl: string | null; trustTier: number; description: string | null };
+    run: { runId: number; title: string | null; sourceUrl: string; trackCount: number; resolvedCount: number; pickedAt: string | null } | null;
+    previewTracks: { mbid: string | null; title: string; artist: string; artworkUrl: string | null }[];
+  }>();
+
+  for (const row of result.rows) {
+    if (!itemMap.has(row.picker_id)) {
+      itemMap.set(row.picker_id, {
+        picker: {
+          id: row.picker_id,
+          pickerType: row.picker_type,
+          name: row.name,
+          handle: row.handle,
+          homeUrl: row.home_url,
+          trustTier: row.trust_tier,
+          description: row.description,
+        },
+        run: row.run_id != null && row.source_url != null
+          ? {
+              runId: row.run_id,
+              title: row.run_title,
+              sourceUrl: row.source_url,
+              trackCount: row.track_count ?? 0,
+              resolvedCount: row.resolved_count ?? 0,
+              pickedAt: row.picked_at ? new Date(row.picked_at).toISOString() : null,
+            }
+          : null,
+        previewTracks: [],
+      });
+    }
+    const item = itemMap.get(row.picker_id)!;
+    if (row.rn != null) {
+      item.previewTracks.push({
+        mbid: row.mbid,
+        title: row.track_title ?? "",
+        artist: row.track_artist ?? "",
+        artworkUrl: row.artwork_url,
+      });
+    }
+  }
+
+  // Only return pickers that have at least one documented run.
+  const items = [...itemMap.values()].filter((it) => it.run != null);
+
+  return res.json(GetPickersDialResponse.parse({ items }));
+}));
 
 // GET /api/pickers — public list of taste sources beyond radio DJs.
 // Optional ?type= filter narrows to a specific pickerType (e.g. "editorial").
