@@ -14,6 +14,10 @@ import {
   seedSongExploderPicker,
   startSongExploderPoller,
 } from "./lore/song-exploder.js";
+import {
+  seedBandcampDailyPicker,
+  startBandcampDailyPoller,
+} from "./lore/bandcamp-daily.js";
 import { startSegueJob } from "./lore/segue-job.js";
 import { startWikipediaJob } from "./lore/wikipedia-job.js";
 import { ensurePicksUnifiedView } from "./lore/view.js";
@@ -62,6 +66,12 @@ async function bootLore(): Promise<void> {
       console.error("[lore] song-exploder picker seed failed", err);
     }
     startSongExploderPoller();
+    try {
+      await seedBandcampDailyPicker();
+    } catch (err) {
+      console.error("[lore] bandcamp-daily picker seed failed", err);
+    }
+    startBandcampDailyPoller();
     await startBackfillJob();
     await startReconcileJob();
     startSegueJob();

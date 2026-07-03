@@ -6,7 +6,10 @@ import {
   getGetStationNowPlayingQueryKey,
   useListStationsNowPlaying,
   getListStationsNowPlayingQueryKey,
+  useListPickers,
+  getListPickersQueryKey,
   type Station,
+  type Picker,
 } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { StationList } from "../components/StationList";
@@ -15,6 +18,7 @@ import {
   AudioLines,
   BookOpen,
   Ghost,
+  List,
   ShieldCheck,
   UserCheck,
   Waypoints,
@@ -32,8 +36,6 @@ export default function Home() {
   const focusedStation =
     stations.find((s) => s.slug === focusedSlug) ?? player.station ?? null;
 
-  // The dial pulse: latest spin per station in one call, refreshed gently so
-  // every play button wears the album art of what's on right now.
   const { data: pulse } = useListStationsNowPlaying({
     query: {
       queryKey: getListStationsNowPlayingQueryKey(),
@@ -59,6 +61,17 @@ export default function Home() {
       },
     },
   );
+
+  const { data: editorialData } = useListPickers(
+    { type: "editorial" },
+    {
+      query: {
+        queryKey: getListPickersQueryKey({ type: "editorial" }),
+        staleTime: 5 * 60 * 1000,
+      },
+    },
+  );
+  const editorialPickers = editorialData?.pickers ?? [];
 
   const handleSelect = (station: Station) => setSelectedSlug(station.slug);
   const handleToggle = (station: Station) => {
@@ -169,6 +182,24 @@ export default function Home() {
           </aside>
         </div>
 
+        {editorialPickers.length > 0 && (
+          <section className="mt-12">
+            <div className="mb-4 flex items-baseline justify-between">
+              <h2 className="font-serif text-xl font-semibold text-foreground">
+                Editorial playlists
+              </h2>
+              <span className="font-mono text-xs text-muted-foreground">
+                real humans, real picks
+              </span>
+            </div>
+            <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {editorialPickers.map((picker) => (
+                <EditorialPickerCard key={picker.id} picker={picker} />
+              ))}
+            </ul>
+          </section>
+        )}
+
         <footer className="mt-16 border-t border-border pt-6 font-mono text-[11px] text-muted-foreground">
           Lore never hosts, proxies, or re-encodes audio. Streams are played
           directly from each broadcaster. Track identities and links are provided
@@ -176,6 +207,32 @@ export default function Home() {
         </footer>
       </div>
     </div>
+  );
+}
+
+function EditorialPickerCard({ picker }: { picker: Picker }) {
+  return (
+    <li>
+      <Link
+        href={`/pickers/${picker.handle}`}
+        className="hover-elevate flex h-full flex-col gap-2 rounded-xl border border-card-border bg-card p-4 transition-colors hover:border-primary-border"
+      >
+        <div className="flex items-start justify-between gap-2">
+          <span className="font-semibold leading-tight text-foreground">
+            {picker.name}
+          </span>
+          <List className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+        </div>
+        {picker.description && (
+          <p className="line-clamp-2 text-xs text-muted-foreground">
+            {picker.description}
+          </p>
+        )}
+        <span className="mt-auto font-mono text-[10px] uppercase tracking-wide text-primary">
+          Browse picks →
+        </span>
+      </Link>
+    </li>
   );
 }
 

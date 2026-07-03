@@ -504,7 +504,6 @@ export const GetRecordingKnowledgeResponse = zod.object({
           anchorType: zod.union([zod.literal("section"), zod.null()]).optional(),
           anchorValue: zod.union([zod.string(), zod.null()]).optional(),
           status: zod.enum(["draft", "published", "rejected"]).optional(),
-          sourceHandle: zod.string().optional(),
           verified: zod
             .boolean()
             .optional()
@@ -706,6 +705,7 @@ export const ListPickersResponse = zod.object({
           "collector",
           "event",
           "series",
+          "editorial",
         ]),
         name: zod.string(),
         handle: zod.string(),
@@ -897,6 +897,7 @@ export const GetPickerArchiveResponse = zod.object({
         "collector",
         "event",
         "series",
+        "editorial",
       ]),
       name: zod.string(),
       handle: zod.string(),
@@ -953,6 +954,7 @@ export const GetPickerRunResponse = zod.object({
         "collector",
         "event",
         "series",
+        "editorial",
       ]),
       name: zod.string(),
       handle: zod.string(),
@@ -1172,6 +1174,7 @@ export const UpsertPickerBody = zod
       "collector",
       "event",
       "series",
+      "editorial",
     ]),
     name: zod.string().min(1),
     handle: zod.string().optional(),

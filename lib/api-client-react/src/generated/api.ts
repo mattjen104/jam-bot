@@ -1218,41 +1218,48 @@ export const useCreateManualSpin = <
 
  * @summary All active pickers (labels, blogs, curators, collectors, events)
  */
-export const getListPickersUrl = () => {
-  return `/api/pickers`;
+export const getListPickersUrl = (params?: { type?: string }) => {
+  const searchParams = new URLSearchParams();
+  if (params?.type != null) searchParams.set("type", params.type);
+  const qs = searchParams.toString();
+  return qs ? `/api/pickers?${qs}` : `/api/pickers`;
 };
 
 export const listPickers = async (
+  params?: { type?: string },
   options?: RequestInit,
 ): Promise<PickerList> => {
-  return customFetch<PickerList>(getListPickersUrl(), {
+  return customFetch<PickerList>(getListPickersUrl(params), {
     ...options,
     method: "GET",
   });
 };
 
-export const getListPickersQueryKey = () => {
-  return [`/api/pickers`] as const;
+export const getListPickersQueryKey = (params?: { type?: string }) => {
+  return [`/api/pickers`, ...(params ? [params] : [])] as const;
 };
 
 export const getListPickersQueryOptions = <
   TData = Awaited<ReturnType<typeof listPickers>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof listPickers>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
+>(
+  params?: { type?: string },
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPickers>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
-  const queryKey = queryOptions?.queryKey ?? getListPickersQueryKey();
+  const queryKey = queryOptions?.queryKey ?? getListPickersQueryKey(params);
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof listPickers>>> = ({
     signal,
-  }) => listPickers({ signal, ...requestOptions });
+  }) => listPickers(params, { signal, ...requestOptions });
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof listPickers>>,
@@ -1273,15 +1280,18 @@ export type ListPickersQueryError = ErrorType<unknown>;
 export function useListPickers<
   TData = Awaited<ReturnType<typeof listPickers>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof listPickers>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getListPickersQueryOptions(options);
+>(
+  params?: { type?: string },
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPickers>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListPickersQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

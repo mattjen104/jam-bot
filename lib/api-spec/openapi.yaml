@@ -394,7 +394,15 @@ paths:
       description: >
         The trusted taste sources Lore rides beyond radio DJs. A DJ is one
         picker type; this lists the rest (and any DJ-typed pickers), so a client
-        can browse who is doing the picking.
+        can browse who is doing the picking. Filter by pickerType with the
+        optional `type` query parameter.
+      parameters:
+        - name: type
+          in: query
+          required: false
+          description: Filter to a specific pickerType (e.g. "editorial").
+          schema:
+            type: string
       responses:
         "200":
           description: The active pickers
@@ -2534,7 +2542,7 @@ components:
           type: integer
         pickerType:
           type: string
-          enum: [dj, label, blog, curator, collector, event, series]
+          enum: [dj, label, blog, curator, collector, event, series, editorial]
         name:
           type: string
         handle:
@@ -2635,7 +2643,7 @@ components:
       properties:
         pickerType:
           type: string
-          enum: [dj, label, blog, curator, collector, event, series]
+          enum: [dj, label, blog, curator, collector, event, series, editorial]
         name:
           type: string
           minLength: 1

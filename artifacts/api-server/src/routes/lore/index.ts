@@ -557,17 +557,25 @@ router.post("/admin/spins", async (req, res) => {
 });
 
 // GET /api/pickers — public list of taste sources beyond radio DJs.
-router.get("/pickers", async (_req, res) => {
+// Optional ?type= filter narrows to a specific pickerType (e.g. "editorial").
+router.get("/pickers", async (req, res) => {
   try {
+    const typeFilter = typeof req.query["type"] === "string"
+      ? req.query["type"].trim()
+      : null;
     const rows = await db
       .select()
       .from(pickersTable)
-      .where(eq(pickersTable.active, true))
+      .where(
+        typeFilter
+          ? and(eq(pickersTable.active, true), eq(pickersTable.pickerType, typeFilter))
+          : eq(pickersTable.active, true),
+      )
       .orderBy(asc(pickersTable.trustTier), asc(pickersTable.name));
     const data = ListPickersResponse.parse({ pickers: rows.map(toPicker) });
     return res.json(data);
   } catch (err) {
-    console.error("[lore] list pickers failed", err);
+    console.error("[lore] list pickers failed", err instanceof Error ? err.message : String(err));
     return res.status(503).json({ error: "Could not load pickers" });
   }
 });

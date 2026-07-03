@@ -35,7 +35,8 @@ export type PickerType =
   | "curator"
   | "collector"
   | "event"
-  | "series";
+  | "series"
+  | "editorial";
 
 /** A slug-safe handle from arbitrary text (lowercase, hyphenated). */
 export function slugify(input: string): string {
@@ -112,6 +113,7 @@ export function defaultTrustTier(type: PickerType): number {
       return 1;
     case "blog":
     case "curator":
+    case "editorial":
       return 2;
     default:
       return 3;
