@@ -1,5 +1,59 @@
-import { db, picksTable } from "@workspace/db";
+import { db, picksTable, spinsTable } from "@workspace/db";
 import { eq, and, or, sql } from "drizzle-orm";
+
+/**
+ * The run's stable id for a station broadcast group: smallest spin id within
+ * its (station + show + UTC broadcast day) partition.  Use this expression
+ * everywhere you GROUP BY a station run so the derivation is never duplicated.
+ */
+export const spinRunIdExpr = sql<number>`min(${spinsTable.id})`;
+
+/**
+ * Given a list of resolved spin-group keys (stationId, showId, day), look up
+ * the anchor spin id for each group — i.e. min(spin.id) for that partition.
+ * Returns Map<"stationId|showId|day", runId>.
+ *
+ * Useful when the caller already knows which groups exist and needs their
+ * runIds without re-running the full aggregation query.
+ */
+export async function resolveSpinRunAnchors(
+  keys: Array<{ stationId: number; showId: number | null; day: string }>,
+): Promise<Map<string, number>> {
+  if (keys.length === 0) return new Map();
+
+  const rows = await db
+    .select({
+      stationId: spinsTable.stationId,
+      showId: spinsTable.showId,
+      day: sql<string>`to_char(${spinsTable.playedAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
+      runId: sql<number>`min(${spinsTable.id})`,
+    })
+    .from(spinsTable)
+    .where(
+      or(
+        ...keys.map((k) =>
+          and(
+            eq(spinsTable.stationId, k.stationId),
+            k.showId == null
+              ? sql`${spinsTable.showId} is null`
+              : eq(spinsTable.showId, k.showId),
+            sql`to_char(${spinsTable.playedAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD') = ${k.day}`,
+          ),
+        ),
+      )!,
+    )
+    .groupBy(
+      spinsTable.stationId,
+      spinsTable.showId,
+      sql`to_char(${spinsTable.playedAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
+    );
+
+  const result = new Map<string, number>();
+  for (const r of rows) {
+    result.set(`${r.stationId}|${r.showId ?? "null"}|${r.day}`, r.runId);
+  }
+  return result;
+}
 
 /**
  * Run-anchor resolution for picker lists.

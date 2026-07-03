@@ -22,6 +22,7 @@ import { eq, ne, and, asc, desc, isNotNull, inArray, sql } from "drizzle-orm";
 import { stationArchiveUrl } from "../../lore/adapters.js";
 import { h } from "../../middlewares/asyncHandler.js";
 import { toStation, toNowPlaying, toArchiveRecording, spinDayExpr } from "./shared.js";
+import { spinRunIdExpr } from "../../lore/runs.js";
 
 const router: IRouter = Router();
 
@@ -136,7 +137,7 @@ router.get("/stations/:slug/archive", h(async (req, res) => {
 
   const runs = await db
     .select({
-      runId: sql<number>`min(${spinsTable.id})`,
+      runId: spinRunIdExpr,
       date: spinDayExpr,
       showId: spinsTable.showId,
       spinCount: sql<number>`count(*)::int`,
