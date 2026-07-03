@@ -1,0 +1,304 @@
+import { Router, type IRouter } from "express";
+import {
+  GetRecordingParams,
+  GetRecordingResponse,
+  GetRecordingKnowledgeParams,
+  GetRecordingKnowledgeResponse,
+  GetRecordingLyricsParams,
+  GetRecordingLyricsResponse,
+  GetRecordingSpinsParams,
+  GetRecordingSpinsResponse,
+  GetRecordingPicksParams,
+  GetRecordingPicksResponse,
+  GetRecordingPreviewParams,
+  GetRecordingPreviewResponse,
+  GetRecordingSeguesParams,
+  GetRecordingSeguesResponse,
+  GetRecordingEntryParams,
+  GetRecordingEntryResponse,
+} from "@workspace/api-zod";
+import {
+  db,
+  recordingsTable,
+  pickersTable,
+  picksTable,
+  trackClaimsTable,
+} from "@workspace/db";
+import { eq, and, asc, sql } from "drizzle-orm";
+import { nextRideable, spinsForRecording } from "../../lore/segue.js";
+import { resolvePreview } from "../../lore/preview.js";
+import { resolveEntry } from "../../lore/entry.js";
+import { getLyrics } from "../../lore/lrclib.js";
+import { enrichRecording } from "@workspace/song-enrichment";
+import { wireSongEnrichment } from "../../song/wire.js";
+import { fetchWikipediaClaims } from "../../lore/wikipedia.js";
+import { resolvePickRunAnchors } from "../../lore/runs.js";
+import { h } from "../../middlewares/asyncHandler.js";
+
+wireSongEnrichment();
+
+const router: IRouter = Router();
+
+// GET /api/recordings/:mbid — recording metadata (song-page header).
+router.get("/recordings/:mbid", h(async (req, res) => {
+  const parsed = GetRecordingParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(404).json({ error: "Recording not found" });
+  }
+
+  const [rec] = await db
+    .select({
+      mbid: recordingsTable.mbid,
+      title: recordingsTable.title,
+      artist: recordingsTable.artist,
+      artistMbid: recordingsTable.artistMbid,
+      durationMs: recordingsTable.durationMs,
+      artworkUrl: recordingsTable.artworkUrl,
+      links: recordingsTable.links,
+    })
+    .from(recordingsTable)
+    .where(eq(recordingsTable.mbid, parsed.data.mbid))
+    .limit(1);
+  if (!rec) {
+    return res.status(404).json({ error: "Recording not found" });
+  }
+
+  return res.json(
+    GetRecordingResponse.parse({
+      mbid: rec.mbid,
+      title: rec.title,
+      artist: rec.artist,
+      artistMbid: rec.artistMbid,
+      durationMs: rec.durationMs,
+      artworkUrl: rec.artworkUrl ?? null,
+      links: rec.links ?? [],
+    }),
+  );
+}));
+
+// GET /api/recordings/:mbid/knowledge — liner-notes credits for the live player.
+// Enrichment runs off the hot path and caches by recording id.
+router.get("/recordings/:mbid/knowledge", h(async (req, res) => {
+  const parsed = GetRecordingKnowledgeParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(404).json({ error: "Recording not found" });
+  }
+
+  const [rec] = await db
+    .select()
+    .from(recordingsTable)
+    .where(eq(recordingsTable.mbid, parsed.data.mbid))
+    .limit(1);
+  if (!rec) {
+    return res.status(404).json({ error: "Recording not found" });
+  }
+
+  const knowledge = await enrichRecording({
+    recordingId: rec.mbid,
+    title: rec.title,
+    artist: rec.artist,
+    isrc: rec.isrc,
+  });
+
+  const claimRows = await db
+    .select()
+    .from(trackClaimsTable)
+    .where(
+      and(
+        eq(trackClaimsTable.mbid, rec.mbid),
+        eq(trackClaimsTable.status, "published"),
+      ),
+    )
+    .orderBy(trackClaimsTable.id);
+
+  // Fire-and-forget Wikipedia check — off the hot path, idempotent.
+  fetchWikipediaClaims(rec.mbid).catch((err) =>
+    console.warn("[lore] wikipedia fire-and-forget failed", rec.mbid, err),
+  );
+
+  return res.json(
+    GetRecordingKnowledgeResponse.parse({
+      knowledge: knowledge ?? null,
+      claims: claimRows.map((c) => ({
+        id: c.id,
+        text: c.text,
+        sourceLabel: c.sourceLabel,
+        sourceUrl: c.sourceUrl,
+        sourceHandle: c.sourceHandle,
+        positionMs: c.positionMs,
+        anchorType: c.anchorType ?? null,
+        anchorValue: c.anchorValue ?? null,
+        status: c.status,
+        verified: c.verified,
+      })),
+    }),
+  );
+}));
+
+// GET /api/recordings/:mbid/lyrics — synced lyric lines from LRCLIB.
+router.get("/recordings/:mbid/lyrics", h(async (req, res) => {
+  const parsed = GetRecordingLyricsParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(404).json({ error: "Recording not found" });
+  }
+
+  const [rec] = await db
+    .select({ mbid: recordingsTable.mbid })
+    .from(recordingsTable)
+    .where(eq(recordingsTable.mbid, parsed.data.mbid))
+    .limit(1);
+  if (!rec) return res.status(404).json({ error: "Recording not found" });
+
+  const lines = await getLyrics(rec.mbid);
+  return res.json(GetRecordingLyricsResponse.parse({ lines }));
+}));
+
+// GET /api/recordings/:mbid/spins
+router.get("/recordings/:mbid/spins", h(async (req, res) => {
+  const parsed = GetRecordingSpinsParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(404).json({ error: "Recording not found" });
+  }
+
+  const spins = await spinsForRecording(parsed.data.mbid);
+  return res.json(
+    GetRecordingSpinsResponse.parse({
+      mbid: parsed.data.mbid,
+      spins: spins.map((s) => ({
+        playedAt: s.playedAt.toISOString(),
+        source: s.source,
+        confidence: s.confidence,
+        station: s.station,
+        show: s.show,
+        runId: s.runId,
+      })),
+    }),
+  );
+}));
+
+// GET /api/recordings/:mbid/picks — every curated list containing this recording.
+// Each pick names its picker and (when sourceUrl present) its archived run.
+router.get("/recordings/:mbid/picks", h(async (req, res) => {
+  const parsed = GetRecordingPicksParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(404).json({ error: "Recording not found" });
+  }
+
+  const rows = await db
+    .select({
+      pickerId: picksTable.pickerId,
+      sourceUrl: picksTable.sourceUrl,
+      context: picksTable.context,
+      pickedAt: picksTable.pickedAt,
+      ordinal: picksTable.ordinal,
+      confidence: picksTable.confidence,
+      pickerName: pickersTable.name,
+      pickerHandle: pickersTable.handle,
+      pickerType: pickersTable.pickerType,
+      trustTier: pickersTable.trustTier,
+    })
+    .from(picksTable)
+    .innerJoin(pickersTable, eq(picksTable.pickerId, pickersTable.id))
+    .where(
+      and(eq(picksTable.mbid, parsed.data.mbid), eq(pickersTable.active, true)),
+    )
+    .orderBy(
+      asc(pickersTable.trustTier),
+      sql`${picksTable.pickedAt} desc nulls last`,
+      asc(picksTable.id),
+    )
+    .limit(50);
+
+  // Resolve run anchors for picks that have a sourceUrl.
+  const withUrl = rows
+    .filter((r) => r.sourceUrl != null)
+    .map((r) => ({ pickerId: r.pickerId, sourceUrl: r.sourceUrl! }));
+  const runByKey = await resolvePickRunAnchors(withUrl);
+
+  return res.json(
+    GetRecordingPicksResponse.parse({
+      mbid: parsed.data.mbid,
+      picks: rows.map((r) => {
+        const runKey =
+          r.sourceUrl != null ? `${r.pickerId}|${r.sourceUrl}` : null;
+        const run = runKey ? runByKey.get(runKey) ?? null : null;
+        return {
+          picker: {
+            name: r.pickerName,
+            handle: r.pickerHandle,
+            pickerType: r.pickerType,
+            trustTier: r.trustTier,
+          },
+          runId: run?.runId ?? null,
+          listTitle: r.context ?? null,
+          sourceUrl: r.sourceUrl ?? null,
+          pickedAt: r.pickedAt ? r.pickedAt.toISOString() : null,
+          ordinal: r.ordinal ?? null,
+          trackCount: run?.trackCount ?? 0,
+          confidence: r.confidence,
+        };
+      }),
+    }),
+  );
+}));
+
+// GET /api/recordings/:mbid/preview — best-effort 30s clip (for riding).
+router.get("/recordings/:mbid/preview", h(async (req, res) => {
+  const parsed = GetRecordingPreviewParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(404).json({ error: "Recording not found" });
+  }
+
+  const [rec] = await db
+    .select({ title: recordingsTable.title, artist: recordingsTable.artist })
+    .from(recordingsTable)
+    .where(eq(recordingsTable.mbid, parsed.data.mbid))
+    .limit(1);
+  if (!rec) {
+    return res.status(404).json({ error: "Recording not found" });
+  }
+
+  const preview = await resolvePreview(parsed.data.mbid, rec.artist, rec.title);
+  return res.json(
+    GetRecordingPreviewResponse.parse({
+      mbid: parsed.data.mbid,
+      previewUrl: preview.previewUrl,
+      artworkUrl: preview.artworkUrl,
+      source: preview.source,
+    }),
+  );
+}));
+
+// GET /api/recordings/:mbid/segues
+router.get("/recordings/:mbid/segues", h(async (req, res) => {
+  const parsed = GetRecordingSeguesParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(404).json({ error: "Recording not found" });
+  }
+
+  const next = await nextRideable(parsed.data.mbid);
+  return res.json(
+    GetRecordingSeguesResponse.parse({ mbid: parsed.data.mbid, next }),
+  );
+}));
+
+// GET /api/recordings/:mbid/entry — source-agnostic fallback ladder.
+router.get("/recordings/:mbid/entry", h(async (req, res) => {
+  const parsed = GetRecordingEntryParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(404).json({ error: "Recording not found" });
+  }
+
+  const [rec] = await db
+    .select({ artistMbid: recordingsTable.artistMbid })
+    .from(recordingsTable)
+    .where(eq(recordingsTable.mbid, parsed.data.mbid))
+    .limit(1);
+  const result = await resolveEntry(
+    parsed.data.mbid,
+    rec?.artistMbid ?? undefined,
+  );
+  return res.json(GetRecordingEntryResponse.parse(result));
+}));
+
+export default router;
