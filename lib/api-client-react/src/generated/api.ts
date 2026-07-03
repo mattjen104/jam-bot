@@ -597,6 +597,67 @@ export function useListStationsNowPlaying<
 }
 
 // ---------------------------------------------------------------------------
+// Batch metadata availability — lyrics + SE episode, per MBID.
+// Powers the metadata chips on station dial cards.
+// ---------------------------------------------------------------------------
+
+export interface RecordingAvailabilityItem {
+  mbid: string;
+  hasLyrics: boolean;
+  hasSe: boolean;
+}
+
+export interface RecordingsAvailabilityList {
+  items: RecordingAvailabilityItem[];
+}
+
+export const getGetRecordingsAvailabilityUrl = (mbids: string) =>
+  `/api/recordings/availability?mbids=${encodeURIComponent(mbids)}`;
+
+export const getRecordingsAvailability = async (
+  mbids: string,
+  options?: RequestInit,
+): Promise<RecordingsAvailabilityList> => {
+  return customFetch<RecordingsAvailabilityList>(
+    getGetRecordingsAvailabilityUrl(mbids),
+    { ...options, method: "GET" },
+  );
+};
+
+export const getGetRecordingsAvailabilityQueryKey = (mbids: string) =>
+  [`/api/recordings/availability`, mbids] as const;
+
+export function useGetRecordingsAvailability<
+  TData = Awaited<ReturnType<typeof getRecordingsAvailability>>,
+  TError = ErrorType<unknown>,
+>(
+  mbids: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecordingsAvailability>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey =
+    queryOptions?.queryKey ?? getGetRecordingsAvailabilityQueryKey(mbids);
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getRecordingsAvailability>>
+  > = ({ signal }) =>
+    getRecordingsAvailability(mbids, { signal, ...requestOptions });
+  const query = useQuery({
+    queryKey,
+    queryFn,
+    enabled: !!mbids,
+    ...queryOptions,
+  }) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey };
+}
+
+// ---------------------------------------------------------------------------
 // Station show schedule — all show blocks for every station on a given date.
 // Powers the timeline strip on each station card.
 // ---------------------------------------------------------------------------

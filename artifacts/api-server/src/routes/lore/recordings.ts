@@ -18,6 +18,7 @@ import {
   GetRecordingEntryResponse,
   GetRecordingSongExploderParams,
   GetRecordingSongExploderResponse,
+  GetRecordingsAvailabilityResponse,
 } from "@workspace/api-zod";
 import {
   db,
@@ -26,8 +27,9 @@ import {
   picksTable,
   trackClaimsTable,
   songExploderEpisodesTable,
+  lyricLinesTable,
 } from "@workspace/db";
-import { eq, and, asc, sql } from "drizzle-orm";
+import { eq, and, asc, sql, inArray, gte, isNotNull } from "drizzle-orm";
 import { nextRideable, spinsForRecording } from "../../lore/segue.js";
 import { resolvePreview } from "../../lore/preview.js";
 import { resolveEntry } from "../../lore/entry.js";
@@ -55,6 +57,45 @@ const WIKI_COOLDOWN_MS = 5 * 60_000;
 const WIKI_COOLDOWN_MAX = 2_000;
 
 const router: IRouter = Router();
+
+// GET /api/recordings/availability?mbids=m1,m2,...
+// Batch availability check: which MBIDs have synced lyrics and/or a SE episode.
+// NOTE: must be registered before /recordings/:mbid so Express doesn't treat
+// "availability" as a param value.
+router.get("/recordings/availability", h(async (req, res) => {
+  const raw = typeof req.query.mbids === "string" ? req.query.mbids.trim() : "";
+  const mbids = raw.split(",").map((s) => s.trim()).filter(Boolean).slice(0, 100);
+  if (mbids.length === 0) {
+    return res.json(GetRecordingsAvailabilityResponse.parse({ items: [] }));
+  }
+
+  const [lyricRows, seRows] = await Promise.all([
+    db
+      .selectDistinct({ mbid: lyricLinesTable.mbid })
+      .from(lyricLinesTable)
+      .where(and(inArray(lyricLinesTable.mbid, mbids), gte(lyricLinesTable.offsetMs, 0))),
+    db
+      .selectDistinct({ mbid: songExploderEpisodesTable.mbid })
+      .from(songExploderEpisodesTable)
+      .where(
+        and(
+          inArray(songExploderEpisodesTable.mbid, mbids),
+          isNotNull(songExploderEpisodesTable.mbid),
+        ),
+      ),
+  ]);
+
+  const lyricSet = new Set(lyricRows.map((r) => r.mbid));
+  const seSet = new Set(seRows.map((r) => r.mbid));
+
+  const items = mbids.map((mbid) => ({
+    mbid,
+    hasLyrics: lyricSet.has(mbid),
+    hasSe: seSet.has(mbid),
+  }));
+
+  return res.json(GetRecordingsAvailabilityResponse.parse({ items }));
+}));
 
 // GET /api/recordings/:mbid — recording metadata (song-page header).
 router.get("/recordings/:mbid", h(async (req, res) => {

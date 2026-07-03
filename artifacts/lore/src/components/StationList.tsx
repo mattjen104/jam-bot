@@ -2,11 +2,12 @@ import { Link } from "wouter";
 import type {
   NowPlaying,
   PickedLookupItem,
+  RecordingAvailabilityItem,
   Station,
   StationScheduleRun,
 } from "@workspace/api-client-react";
 import { QualityBadge } from "./QualityBadge";
-import { BadgeCheck, Mic, Pause, Play, Radio } from "lucide-react";
+import { BadgeCheck, Mic, Mic2, Music2, Pause, Play, Radio } from "lucide-react";
 import type { PlayerStatus } from "../hooks/useRadioPlayer";
 
 interface StationListProps {
@@ -25,6 +26,11 @@ interface StationListProps {
    * When provided, a horizontal timeline strip is rendered on each card.
    */
   schedule?: Map<string, StationScheduleRun[]>;
+  /**
+   * Metadata availability for the currently-playing recording per station.
+   * When present, shows lyrics / SE episode chips on each card.
+   */
+  availability?: Map<string, RecordingAvailabilityItem>;
   onToggle: (station: Station) => void;
   onSelect: (station: Station) => void;
 }
@@ -36,6 +42,7 @@ export function StationList({
   pulse,
   picked,
   schedule,
+  availability,
   onToggle,
   onSelect,
 }: StationListProps) {
@@ -48,6 +55,7 @@ export function StationList({
         const np = pulse?.get(station.slug) ?? null;
         const pick = picked?.get(station.slug) ?? null;
         const runs = schedule?.get(station.slug) ?? null;
+        const avail = availability?.get(station.slug) ?? null;
         const artwork = np?.recording?.artworkUrl ?? np?.artworkUrl ?? null;
         const trackLine = np
           ? [np.recording?.title ?? np.rawTitle, np.recording?.artist ?? np.rawArtist]
@@ -188,6 +196,32 @@ export function StationList({
                       </span>
                     </span>
                   ))}
+
+                {/* Metadata availability chips for the current track */}
+                {avail && (avail.hasLyrics || avail.hasSe) && (
+                  <div className="mt-1 flex gap-1">
+                    {avail.hasLyrics && (
+                      <span
+                        className="inline-flex items-center gap-1 rounded-full border border-border bg-background/60 px-2 py-0.5 font-mono text-[10px] text-muted-foreground"
+                        title="Synced lyrics available"
+                        data-testid={`chip-lyrics-${station.slug}`}
+                      >
+                        <Music2 className="h-2.5 w-2.5 shrink-0" />
+                        Lyrics
+                      </span>
+                    )}
+                    {avail.hasSe && (
+                      <span
+                        className="inline-flex items-center gap-1 rounded-full border border-border bg-background/60 px-2 py-0.5 font-mono text-[10px] text-muted-foreground"
+                        title="Song Exploder episode available"
+                        data-testid={`chip-se-${station.slug}`}
+                      >
+                        <Mic2 className="h-2.5 w-2.5 shrink-0" />
+                        SE
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 {/* Show timeline — horizontal scrollable strip of today's blocks */}
                 {runs && runs.length > 0 && (

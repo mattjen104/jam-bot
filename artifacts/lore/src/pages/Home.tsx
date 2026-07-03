@@ -12,6 +12,8 @@ import {
   getListStationsAtDateQueryKey,
   useGetStationsSchedule,
   getGetStationsScheduleQueryKey,
+  useGetRecordingsAvailability,
+  getGetRecordingsAvailabilityQueryKey,
   useListPickers,
   getListPickersQueryKey,
   useGetArchiveRecentRuns,
@@ -23,6 +25,7 @@ import {
   type RecentStationRun,
   type PickedLookupItem,
   type StationScheduleRun,
+  type RecordingAvailabilityItem,
 } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { StationList } from "../components/StationList";
@@ -284,6 +287,28 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
     return map;
   }, [pulse, pickedData]);
 
+  // Metadata availability — which current tracks have lyrics / SE episodes.
+  const { data: availabilityData } = useGetRecordingsAvailability(pulseMbids, {
+    query: {
+      queryKey: getGetRecordingsAvailabilityQueryKey(pulseMbids),
+      enabled: pulseMbids.length > 0,
+      staleTime: 60_000,
+    },
+  });
+  const availabilityBySlug = useMemo((): Map<string, RecordingAvailabilityItem> => {
+    const byMbid = new Map<string, RecordingAvailabilityItem>(
+      (availabilityData?.items ?? []).map((it) => [it.mbid, it]),
+    );
+    const map = new Map<string, RecordingAvailabilityItem>();
+    for (const item of pulse?.items ?? []) {
+      const mbid = item.nowPlaying?.recording?.mbid;
+      if (!mbid) continue;
+      const hit = byMbid.get(mbid);
+      if (hit) map.set(item.slug, hit);
+    }
+    return map;
+  }, [pulse, availabilityData]);
+
   const { data: nowPlaying, isLoading: npLoading } = useGetStationNowPlaying(
     focusedSlug ?? "",
     {
@@ -341,6 +366,7 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
           pulse={pulseBySlug}
           picked={pickedBySlug}
           schedule={scheduleBySlug}
+          availability={availabilityBySlug}
           onToggle={handleToggle}
           onSelect={handleSelect}
         />

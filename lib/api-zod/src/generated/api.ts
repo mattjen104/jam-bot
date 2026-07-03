@@ -1835,6 +1835,21 @@ export const GetSongExploderChaptersResponse = zod.object({
 });
 
 /**
+ * Batch metadata availability for a set of MBIDs.
+ * Tells the caller which recordings have synced lyrics and/or a Song Exploder episode.
+ * Pure DB lookup — no external calls.
+ */
+export const GetRecordingsAvailabilityResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      mbid: zod.string(),
+      hasLyrics: zod.boolean(),
+      hasSe: zod.boolean(),
+    }),
+  ),
+});
+
+/**
  * All show blocks (runs) for every station on a given UTC calendar day.
  * One call powers the show timeline on every station card.
  */
