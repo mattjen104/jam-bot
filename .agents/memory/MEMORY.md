@@ -28,3 +28,5 @@
 - [zod.coerce missing query param](zod-coerce-missing-query-param.md) — generated `zod.coerce.string().min(1)` turns an absent query param into the string "undefined"; add explicit presence guards on required params.
 - [Classic Albums series](classic-albums-series.md) — official clips caption-less (claims dormant by design); listKey-scoped segue adjacency; new enum values must also hit OpenAPI.
 - [Lore UI component tests](lore-ui-component-tests.md) — per-file jsdom pragma + barrel mock + media stubs; wouter memoryLocation searchPath must NOT start with "?" or params silently vanish.
+- [Lore admin router catch-all](lore-admin-router-catchall.md) — admin router has rate-limit + auth middleware for ALL paths; new /api/* routers must be mounted before loreRouter in routes/index.ts or they get 503 "Admin entry not configured".
+- [db lib dist rebuild](db-lib-dist-rebuild.md) — lib/db has no build script; run `tsc -p tsconfig.json` inside lib/db after schema changes, or api-server sees stale .d.ts and reports "no exported member".

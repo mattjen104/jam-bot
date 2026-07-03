@@ -126,6 +126,7 @@ async function refreshTokens(refreshToken: string): Promise<TokenResponse> {
 // ---------------------------------------------------------------------------
 
 export interface SpotifyProfile {
+  spotifyUserId: string | null;
   displayName: string | null;
   product: string | null;
 }
@@ -134,9 +135,14 @@ export async function fetchProfile(accessToken: string): Promise<SpotifyProfile>
   const res = await fetch(`${API_BASE}/me`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  if (!res.ok) return { displayName: null, product: null };
-  const body = (await res.json()) as { display_name?: string; product?: string };
+  if (!res.ok) return { spotifyUserId: null, displayName: null, product: null };
+  const body = (await res.json()) as {
+    id?: string;
+    display_name?: string;
+    product?: string;
+  };
   return {
+    spotifyUserId: body.id ?? null,
     displayName: body.display_name ?? null,
     product: body.product ?? null,
   };
@@ -163,6 +169,7 @@ export async function createConnection(
     expiresAt: expiryDate(tokens.expires_in),
     displayName: profile.displayName,
     product: profile.product,
+    spotifyUserId: profile.spotifyUserId,
   });
   return sid;
 }

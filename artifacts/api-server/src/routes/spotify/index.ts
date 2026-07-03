@@ -22,6 +22,7 @@ import {
   trackIdFromUri,
   SpotifyLibraryError,
 } from "../../lore/spotifyConnect.js";
+import { upsertLoreUserForSid } from "../../lore/userSession.js";
 
 /**
  * Spotify Connect routes. The listener's identity is an opaque httpOnly
@@ -106,6 +107,12 @@ router.get("/spotify/callback", async (req: Request, res: Response) => {
     if (oldSid) await deleteConnection(oldSid).catch(() => {});
     const sid = await createConnection(tokens, profile);
     res.cookie(SID_COOKIE, sid, cookieOpts(SID_MAX_AGE_MS));
+    // Bootstrap persistent user identity keyed by Spotify user id.
+    if (profile.spotifyUserId) {
+      await upsertLoreUserForSid(profile.spotifyUserId, sid).catch((err) => {
+        console.error("[spotify] lore_users upsert failed", err);
+      });
+    }
     res.redirect(`${APP_RETURN_PATH}?spotify=connected`);
   } catch (err) {
     console.error("[spotify] OAuth callback failed", err);

@@ -430,6 +430,8 @@ export const spotifyConnectionsTable = pgTable("spotify_connections", {
   displayName: text("display_name"),
   /** Spotify product tier ("premium", "free", ...) — playback needs premium. */
   product: text("product"),
+  /** Spotify canonical user id (from /me), used to link lore_users rows. */
+  spotifyUserId: text("spotify_user_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -645,3 +647,141 @@ export type GeniusAnnotationDraft =
   typeof geniusAnnotationDraftsTable.$inferSelect;
 export type InsertGeniusAnnotationDraft =
   typeof geniusAnnotationDraftsTable.$inferInsert;
+
+// ---- Library, Keep & Taste Overlap (meta-library) ---------------------
+
+/**
+ * A Lore listener identity. Lore has no traditional accounts; a user row is
+ * bootstrapped the first time a listener connects Spotify for playback and is
+ * keyed by their Spotify user id. The `spotifyConnectionId` FK points at their
+ * current `spotify_connections` session so `getUserFromSession` can resolve
+ * user identity from the `lore_sid` cookie without a separate id token.
+ */
+export const loreUsersTable = pgTable("lore_users", {
+  id: serial("id").primaryKey(),
+  /** Spotify canonical user id — the upsert key. */
+  spotifyUserId: text("spotify_user_id").notNull().unique(),
+  /** FK to the most-recent spotify_connections row for this listener. */
+  spotifyConnectionId: text("spotify_connection_id").references(
+    () => spotifyConnectionsTable.sid,
+    { onDelete: "set null" },
+  ),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type LoreUser = typeof loreUsersTable.$inferSelect;
+export type InsertLoreUser = typeof loreUsersTable.$inferInsert;
+
+/**
+ * A streaming-service OAuth connection belonging to a lore_user, used for
+ * library import and optional Keep mirroring. One row per (user, service).
+ * Tokens here are for the *library* scope, distinct from the playback-scoped
+ * tokens in `spotify_connections`.
+ */
+export const serviceConnectionsTable = pgTable(
+  "service_connections",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => loreUsersTable.id),
+    /** "spotify" — the only supported value in this version. */
+    service: text("service").notNull(),
+    accessToken: text("access_token").notNull(),
+    refreshToken: text("refresh_token").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    /** Space-separated OAuth scopes granted by the user. */
+    scopes: text("scopes"),
+    /** True when user-library-modify scope was granted. */
+    canWrite: boolean("can_write").notNull().default(false),
+    connectedAt: timestamp("connected_at").defaultNow().notNull(),
+    lastImportAt: timestamp("last_import_at"),
+  },
+  (t) => [
+    uniqueIndex("service_connections_user_service_idx").on(t.userId, t.service),
+  ],
+);
+
+export type ServiceConnection = typeof serviceConnectionsTable.$inferSelect;
+export type InsertServiceConnection =
+  typeof serviceConnectionsTable.$inferInsert;
+
+export interface LibraryItemProvenance {
+  kind: "keep" | "import";
+  service?: string;
+  [k: string]: unknown;
+}
+
+/**
+ * One recording in a listener's meta-library — either explicitly kept (heart
+ * button) or imported from a streaming service. The UNIQUE (user_id, mbid)
+ * constraint keeps the set clean across multiple import passes.
+ */
+export const libraryItemsTable = pgTable(
+  "library_items",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => loreUsersTable.id),
+    mbid: text("mbid")
+      .notNull()
+      .references(() => recordingsTable.mbid),
+    provenance: jsonb("provenance")
+      .$type<LibraryItemProvenance>()
+      .notNull(),
+    addedAt: timestamp("added_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("library_items_user_mbid_idx").on(t.userId, t.mbid),
+    index("library_items_user_added_idx").on(t.userId, t.addedAt),
+  ],
+);
+
+export type LibraryItem = typeof libraryItemsTable.$inferSelect;
+export type InsertLibraryItem = typeof libraryItemsTable.$inferInsert;
+
+/**
+ * Background library-import job. The worker pages the connector's
+ * `importLibrary` async iterable, resolves each track to an MBID, and upserts
+ * into `library_items`. `total` is set once the first page comes back; each
+ * resolved+upserted row increments `resolved`.
+ */
+export const libraryImportJobsTable = pgTable("library_import_jobs", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => loreUsersTable.id),
+  service: text("service").notNull(),
+  /** "pending" | "running" | "done" | "error" */
+  status: text("status").notNull().default("pending"),
+  total: integer("total").notNull().default(0),
+  resolved: integer("resolved").notNull().default(0),
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  finishedAt: timestamp("finished_at"),
+  error: text("error"),
+});
+
+export type LibraryImportJob = typeof libraryImportJobsTable.$inferSelect;
+export type InsertLibraryImportJob = typeof libraryImportJobsTable.$inferInsert;
+
+/**
+ * Per-user, per-service toggle: whether the Keep action should mirror to that
+ * service's library. Defaults to enabled on first successful connection.
+ */
+export const keepTargetsTable = pgTable(
+  "keep_targets",
+  {
+    userId: integer("user_id")
+      .notNull()
+      .references(() => loreUsersTable.id),
+    service: text("service").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+  },
+  (t) => [
+    uniqueIndex("keep_targets_user_service_idx").on(t.userId, t.service),
+  ],
+);
+
+export type KeepTarget = typeof keepTargetsTable.$inferSelect;
+export type InsertKeepTarget = typeof keepTargetsTable.$inferInsert;
