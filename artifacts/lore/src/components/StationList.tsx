@@ -4,6 +4,7 @@ import type {
   PickedLookupItem,
   RecordingAvailabilityItem,
   Station,
+  StationRecentSpin,
   StationScheduleRun,
 } from "@workspace/api-client-react";
 import { QualityBadge } from "./QualityBadge";
@@ -27,6 +28,12 @@ interface StationListProps {
    */
   schedule?: Map<string, StationScheduleRun[]>;
   /**
+   * Recent individual spins: station slug → last N spins for the day.
+   * Used for showless stations (e.g. Radio Paradise) where every run has
+   * show: null — renders a per-track chip strip instead of run blocks.
+   */
+  recentSpins?: Map<string, StationRecentSpin[]>;
+  /**
    * Metadata availability for the currently-playing recording per station.
    * When present, shows lyrics / SE episode chips on each card.
    */
@@ -42,6 +49,7 @@ export function StationList({
   pulse,
   picked,
   schedule,
+  recentSpins,
   availability,
   onToggle,
   onSelect,
@@ -55,6 +63,12 @@ export function StationList({
         const np = pulse?.get(station.slug) ?? null;
         const pick = picked?.get(station.slug) ?? null;
         const runs = schedule?.get(station.slug) ?? null;
+        const spins = recentSpins?.get(station.slug) ?? null;
+        // Showless = every run has show: null (e.g. Radio Paradise). Use
+        // per-track chips instead of show-block chips for these stations.
+        const isShowless = runs
+          ? runs.length === 0 || runs.every((r) => !r.show)
+          : false;
         const avail = availability?.get(station.slug) ?? null;
         const artwork = np?.recording?.artworkUrl ?? np?.artworkUrl ?? null;
         const trackLine = np
@@ -236,13 +250,19 @@ export function StationList({
                   </div>
                 )}
 
-                {/* Show timeline — horizontal scrollable strip of today's blocks */}
-                {runs && runs.length > 0 && (
+                {/* Timeline strip — show-blocks for named stations, track chips for showless ones */}
+                {isShowless && spins && spins.length > 0 ? (
+                  <TrackTimeline
+                    spins={spins}
+                    currentMbid={np?.recording?.mbid ?? null}
+                    stationSlug={station.slug}
+                  />
+                ) : runs && runs.length > 0 && !isShowless ? (
                   <ShowTimeline
                     runs={runs}
                     stationSlug={station.slug}
                   />
-                )}
+                ) : null}
               </div>
 
               <div className="shrink-0">
@@ -253,6 +273,66 @@ export function StationList({
         );
       })}
     </ul>
+  );
+}
+
+/**
+ * Horizontal scrollable strip of individual track chips for showless stations
+ * (e.g. Radio Paradise). The most-recent spin is matched to the current MBID
+ * and highlighted; all previous chips link to the song's detail page.
+ */
+function TrackTimeline({
+  spins,
+  currentMbid,
+  stationSlug,
+}: {
+  spins: StationRecentSpin[];
+  currentMbid: string | null;
+  stationSlug: string;
+}) {
+  return (
+    <div
+      className="mt-1.5 flex gap-1 overflow-x-auto"
+      style={{ scrollbarWidth: "none" }}
+      data-testid={`track-timeline-${stationSlug}`}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {spins.map((spin, i) => {
+        const label = [spin.title, spin.artist].filter(Boolean).join(" · ");
+        // The first spin (newest) that matches the live now-playing MBID is active.
+        const isActive = i === 0 && !!currentMbid && spin.mbid === currentMbid;
+        const chipClass = `inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[10px] whitespace-nowrap transition-colors ${
+          isActive
+            ? "border-primary/40 bg-primary/15 text-primary"
+            : "border-border bg-background/50 text-muted-foreground hover:border-primary/30 hover:text-foreground"
+        }`;
+        if (spin.mbid && !isActive) {
+          return (
+            <Link
+              key={i}
+              href={`/songs/${spin.mbid}`}
+              onClick={(e) => e.stopPropagation()}
+              title={label}
+              data-testid={`track-chip-${spin.mbid}`}
+              className={chipClass}
+            >
+              <span className="max-w-[14ch] truncate">{label}</span>
+            </Link>
+          );
+        }
+        return (
+          <span
+            key={i}
+            title={label}
+            data-testid={isActive ? `track-chip-active-${stationSlug}` : `track-chip-unresolved-${i}`}
+            className={chipClass}
+          >
+            {isActive && <span className="mr-0.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />}
+            <span className="max-w-[14ch] truncate">{label || "—"}</span>
+          </span>
+        );
+      })}
+    </div>
   );
 }
 

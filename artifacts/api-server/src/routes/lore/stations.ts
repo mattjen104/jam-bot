@@ -8,6 +8,7 @@ import {
   GetStationArchiveResponse,
   GetStationPickerOverlapsParams,
   GetStationPickerOverlapsResponse,
+  GetStationsRecentSpinsResponse,
   GetStationsScheduleResponse,
 } from "@workspace/api-zod";
 import {
@@ -259,6 +260,69 @@ router.get("/stations/:slug/overlaps/pickers", h(async (req, res) => {
       })),
     }),
   );
+}));
+
+// GET /api/stations/recent-spins?date=YYYY-MM-DD
+// Last 8 spins per station for the given calendar day, ordered newest first.
+// Uses a window function so all stations are fetched in one query.
+// Powers the track-chip timeline on showless station cards (e.g. Radio Paradise).
+router.get("/stations/recent-spins", h(async (req, res) => {
+  const rawDate = typeof req.query.date === "string" ? req.query.date.trim() : null;
+  const dateFilter = rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null;
+  if (!dateFilter) {
+    return res.status(400).json({ error: "date query param required (YYYY-MM-DD)" });
+  }
+
+  const rows = await db.execute<{
+    station_slug: string;
+    mbid: string | null;
+    title: string | null;
+    artist: string | null;
+    raw_title: string | null;
+    raw_artist: string | null;
+    played_at: string;
+  }>(sql`
+    WITH ranked AS (
+      SELECT
+        s.slug AS station_slug,
+        sp.mbid,
+        r.title,
+        r.artist,
+        sp.raw_title,
+        sp.raw_artist,
+        sp.played_at,
+        ROW_NUMBER() OVER (PARTITION BY sp.station_id ORDER BY sp.played_at DESC) AS rn
+      FROM spins sp
+      JOIN stations s ON s.id = sp.station_id
+      LEFT JOIN recordings r ON r.mbid = sp.mbid
+      WHERE sp.played_at::date = ${dateFilter}::date
+        AND sp.station_id IS NOT NULL
+    )
+    SELECT station_slug, mbid, title, artist, raw_title, raw_artist, played_at
+    FROM ranked
+    WHERE rn <= 8
+    ORDER BY station_slug, played_at DESC
+  `);
+
+  const bySlug = new Map<string, { mbid: string | null; title: string; artist: string; playedAt: string }[]>();
+  for (const row of rows.rows) {
+    const spin = {
+      mbid: row.mbid ?? null,
+      title: row.title ?? row.raw_title ?? "",
+      artist: row.artist ?? row.raw_artist ?? "",
+      playedAt: new Date(row.played_at).toISOString(),
+    };
+    const arr = bySlug.get(row.station_slug);
+    if (arr) arr.push(spin);
+    else bySlug.set(row.station_slug, [spin]);
+  }
+
+  const items = [...bySlug.entries()].map(([stationSlug, spins]) => ({
+    stationSlug,
+    spins,
+  }));
+
+  return res.json(GetStationsRecentSpinsResponse.parse({ items }));
 }));
 
 // GET /api/stations/schedule?date=YYYY-MM-DD

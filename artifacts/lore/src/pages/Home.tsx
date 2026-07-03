@@ -1,8 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
-import { useQueries } from "@tanstack/react-query";
 import {
-  getPickerArchive,
   useListStations,
   useGetStationNowPlaying,
   getGetStationNowPlayingQueryKey,
@@ -12,30 +10,27 @@ import {
   getListStationsAtDateQueryKey,
   useGetStationsSchedule,
   getGetStationsScheduleQueryKey,
+  useGetStationsRecentSpins,
+  getGetStationsRecentSpinsQueryKey,
   useGetRecordingsAvailability,
   getGetRecordingsAvailabilityQueryKey,
-  useListPickers,
-  getListPickersQueryKey,
   useLookupPickedMbids,
   getLookupPickedMbidsQueryKey,
   type Station,
-  type Picker,
   type PickedLookupItem,
   type StationScheduleRun,
+  type StationRecentSpin,
   type RecordingAvailabilityItem,
 } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { StationList } from "../components/StationList";
 import { NowPlaying } from "../components/NowPlaying";
 import { FollowingStrip } from "../components/FollowingStrip";
-import { runDate } from "../lib/format";
 import {
   AudioLines,
   BookMarked,
   BookOpen,
   CalendarDays,
-  List,
-  Play,
   Radio,
   ShieldCheck,
   UserCheck,
@@ -117,11 +112,7 @@ export default function Home() {
           onChange={setSelectedDate}
         />
 
-        {/* Parallel layout — Live left, Curated right */}
-        <div className="grid gap-10 lg:grid-cols-[1fr_360px]">
-          <LiveMode selectedDate={selectedDate} />
-          <CuratedMode />
-        </div>
+        <LiveMode selectedDate={selectedDate} />
 
         <footer className="mt-16 border-t border-border pt-6 font-mono text-[11px] text-muted-foreground">
           Lore never hosts, proxies, or re-encodes audio. Streams are played
@@ -239,6 +230,22 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
     }
     return map;
   }, [scheduleData]);
+
+  // Recent individual spins — powers the track-chip timeline on showless cards.
+  const { data: recentSpinsData } = useGetStationsRecentSpins(scheduleDate, {
+    query: {
+      queryKey: getGetStationsRecentSpinsQueryKey(scheduleDate),
+      staleTime: selectedDate ? 5 * 60 * 1000 : 60_000,
+      refetchInterval: selectedDate ? false : 2 * 60 * 1000,
+    },
+  });
+  const recentSpinsBySlug = useMemo((): Map<string, StationRecentSpin[]> => {
+    const map = new Map<string, StationRecentSpin[]>();
+    for (const item of recentSpinsData?.items ?? []) {
+      map.set(item.stationSlug, item.spins);
+    }
+    return map;
+  }, [recentSpinsData]);
 
   const pulseBySlug = useMemo(() => {
     return new Map(
@@ -358,6 +365,7 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
           pulse={pulseBySlug}
           picked={pickedBySlug}
           schedule={scheduleBySlug}
+          recentSpins={recentSpinsBySlug}
           availability={availabilityBySlug}
           onToggle={handleToggle}
           onSelect={handleSelect}
@@ -375,166 +383,6 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
         </aside>
       )}
     </section>
-  );
-}
-
-/** The freshness summary of a picker's newest documented list. */
-interface LatestList {
-  runId: number;
-  title: string | null;
-  pickedAt: string | null;
-  trackCount: number;
-  resolvedCount: number;
-  /** Newest run with at least one resolved track — the one "Replay latest" plays. */
-  playableRunId: number | null;
-}
-
-/** Picker types that count as curated lists on home. */
-const CURATED_TYPES = new Set(["editorial", "blog", "label"]);
-
-/** Mode 2 — editorial, blog, and label playlists from real humans. */
-function CuratedMode() {
-  const { data, isLoading } = useListPickers(undefined, {
-    query: {
-      queryKey: getListPickersQueryKey(),
-      staleTime: 5 * 60 * 1000,
-    },
-  });
-  const pickers = (data?.pickers ?? []).filter((p) =>
-    CURATED_TYPES.has(p.pickerType),
-  );
-
-  // Freshness fan-out: each card shows its picker's newest list (title, date,
-  // "x of y playable") from the same archive endpoint the detail page uses.
-  const archiveQueries = useQueries({
-    queries: pickers.map((p) => ({
-      queryKey: ["picker-archive-latest", p.handle],
-      queryFn: () => getPickerArchive(p.handle),
-      staleTime: 5 * 60 * 1000,
-    })),
-  });
-  const latestByHandle = new Map<string, LatestList>();
-  archiveQueries.forEach((q) => {
-    const run = q.data?.runs[0];
-    if (!q.data || !run) return;
-    latestByHandle.set(q.data.picker.handle, {
-      runId: run.runId,
-      title: run.title ?? null,
-      pickedAt: run.pickedAt ?? null,
-      trackCount: run.trackCount,
-      resolvedCount: run.resolvedCount,
-      playableRunId:
-        q.data.runs.find((r) => r.resolvedCount > 0)?.runId ?? null,
-    });
-  });
-
-  return (
-    <section>
-      <div className="mb-4 flex items-baseline justify-between">
-        <h2 className="font-serif text-xl font-semibold text-foreground">
-          Curated lists
-        </h2>
-        <span className="font-mono text-xs text-muted-foreground">
-          real humans, real picks
-        </span>
-      </div>
-      {isLoading ? (
-        <ul className="grid gap-3 sm:grid-cols-2">
-          {[0, 1, 2].map((i) => (
-            <li
-              key={i}
-              className="h-32 animate-pulse rounded-xl border border-card-border bg-card"
-            />
-          ))}
-        </ul>
-      ) : pickers.length === 0 ? (
-        <div className="rounded-xl border border-card-border bg-card p-6 text-sm text-muted-foreground">
-          No curated lists yet — they appear as editors document their picks.
-        </div>
-      ) : (
-        <ul className="grid gap-3 sm:grid-cols-2">
-          {pickers.map((picker) => (
-            <EditorialPickerCard
-              key={picker.id}
-              picker={picker}
-              latest={latestByHandle.get(picker.handle) ?? null}
-            />
-          ))}
-        </ul>
-      )}
-      <Link
-        href="/archive"
-        className="mt-5 inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wide text-muted-foreground hover:text-primary"
-        data-testid="link-all-pickers"
-      >
-        Browse every archive →
-      </Link>
-    </section>
-  );
-}
-
-function EditorialPickerCard({
-  picker,
-  latest,
-}: {
-  picker: Picker;
-  latest: LatestList | null;
-}) {
-  const replayRunId = latest
-    ? latest.playableRunId
-    : (picker.latestRunId ?? null);
-  return (
-    <li className="flex flex-col">
-      <div className="hover-elevate flex h-full flex-col gap-2 rounded-xl border border-card-border bg-card p-4 transition-colors hover:border-primary-border">
-        <div className="flex items-start justify-between gap-2">
-          <Link
-            href={`/archive/pickers/${picker.handle}`}
-            className="font-semibold leading-tight text-foreground hover:text-primary"
-          >
-            {picker.name}
-          </Link>
-          <List className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-        </div>
-        {picker.description && (
-          <p className="line-clamp-2 text-xs text-muted-foreground">
-            {picker.description}
-          </p>
-        )}
-        {latest && (
-          <div
-            className="rounded-lg border border-border bg-background/60 px-3 py-2"
-            data-testid={`picker-latest-${picker.handle}`}
-          >
-            <p className="line-clamp-1 text-xs font-medium text-foreground">
-              {latest.title ?? "Latest list"}
-            </p>
-            <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">
-              {latest.pickedAt ? `${runDate(latest.pickedAt)} · ` : ""}
-              <span className={latest.resolvedCount > 0 ? "text-primary" : ""}>
-                {latest.resolvedCount} of {latest.trackCount} playable
-              </span>
-            </p>
-          </div>
-        )}
-        <div className="mt-auto flex items-center gap-3">
-          {replayRunId != null ? (
-            <Link
-              href={`/archive/picker-runs/${replayRunId}?play=1`}
-              className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wide text-primary-foreground bg-primary rounded-full px-3 py-1.5 hover:opacity-90"
-            >
-              <Play className="h-3 w-3" />
-              Replay latest
-            </Link>
-          ) : null}
-          <Link
-            href={`/archive/pickers/${picker.handle}`}
-            className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground hover:text-primary"
-          >
-            Browse all →
-          </Link>
-        </div>
-      </div>
-    </li>
   );
 }
 

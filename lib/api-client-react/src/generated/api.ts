@@ -658,6 +658,73 @@ export function useGetRecordingsAvailability<
 }
 
 // ---------------------------------------------------------------------------
+// Recent individual spins per station — last 8 per station for a given date.
+// Powers the track-chip timeline on showless station cards (e.g. Radio Paradise).
+// ---------------------------------------------------------------------------
+
+export interface StationRecentSpin {
+  mbid: string | null;
+  title: string;
+  artist: string;
+  playedAt: string;
+}
+
+export interface StationRecentSpinsItem {
+  stationSlug: string;
+  spins: StationRecentSpin[];
+}
+
+export interface StationRecentSpinsList {
+  items: StationRecentSpinsItem[];
+}
+
+export const getGetStationsRecentSpinsUrl = (date: string) =>
+  `/api/stations/recent-spins?date=${encodeURIComponent(date)}`;
+
+export const getStationsRecentSpins = async (
+  date: string,
+  options?: RequestInit,
+): Promise<StationRecentSpinsList> => {
+  return customFetch<StationRecentSpinsList>(
+    getGetStationsRecentSpinsUrl(date),
+    { ...options, method: "GET" },
+  );
+};
+
+export const getGetStationsRecentSpinsQueryKey = (date: string) =>
+  [`/api/stations/recent-spins`, date] as const;
+
+export function useGetStationsRecentSpins<
+  TData = Awaited<ReturnType<typeof getStationsRecentSpins>>,
+  TError = ErrorType<unknown>,
+>(
+  date: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationsRecentSpins>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStationsRecentSpinsQueryKey(date);
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStationsRecentSpins>>
+  > = ({ signal }) =>
+    getStationsRecentSpins(date, { signal, ...requestOptions });
+  const query = useQuery({
+    queryKey,
+    queryFn,
+    enabled: !!date,
+    ...queryOptions,
+  }) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey };
+}
+
+// ---------------------------------------------------------------------------
 // Station show schedule — all show blocks for every station on a given date.
 // Powers the timeline strip on each station card.
 // ---------------------------------------------------------------------------

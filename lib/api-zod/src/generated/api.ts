@@ -1835,6 +1835,30 @@ export const GetSongExploderChaptersResponse = zod.object({
 });
 
 /**
+ * Recent individual spins for every station on a given date — last 8 per station.
+ * Powers the track-chip timeline on showless station cards (e.g. Radio Paradise).
+ */
+export const GetStationsRecentSpinsQueryParams = zod.object({
+  date: zod.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+export const GetStationsRecentSpinsResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      stationSlug: zod.string(),
+      spins: zod.array(
+        zod.object({
+          mbid: zod.string().nullable(),
+          title: zod.string(),
+          artist: zod.string(),
+          playedAt: zod.string(),
+        }),
+      ),
+    }),
+  ),
+});
+
+/**
  * Batch metadata availability for a set of MBIDs.
  * Tells the caller which recordings have synced lyrics and/or a Song Exploder episode.
  * Pure DB lookup — no external calls.
