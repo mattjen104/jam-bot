@@ -1,5 +1,32 @@
 {pkgs}: {
   deps = [
+    pkgs.udev
+    pkgs.eudev
+    pkgs.chromium
+    pkgs.wayland
+    pkgs.vulkan-loader
+    pkgs.libgbm
+    pkgs.gtk3
+    pkgs.libxkbcommon
+    pkgs.xorg.libXrandr
+    pkgs.xorg.libXfixes
+    pkgs.xorg.libXext
+    pkgs.xorg.libXdamage
+    pkgs.xorg.libXcomposite
+    pkgs.xorg.libxcb
+    pkgs.xorg.libX11
+    pkgs.mesa
+    pkgs.alsa-lib
+    pkgs.expat
+    pkgs.cairo
+    pkgs.pango
+    pkgs.libdrm
+    pkgs.cups
+    pkgs.atk
+    pkgs.dbus
+    pkgs.nspr
+    pkgs.nss
+    pkgs.glib
     pkgs.python3
   ];
 }
