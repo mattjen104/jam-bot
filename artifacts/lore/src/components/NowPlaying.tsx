@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Link } from "wouter";
 import {
   useGetRecordingKnowledge,
@@ -11,6 +11,7 @@ import {
 } from "@workspace/api-client-react";
 import { CONFIDENCE_LABEL, clockTime, timeAgo } from "../lib/format";
 import { groupCredits, pressingLine } from "../lib/linerNotes";
+import { cn } from "../lib/utils";
 import { LikeButton } from "./LikeButton";
 import { KeepButton } from "./KeepButton";
 import { FollowButton } from "./FollowButton";
@@ -27,8 +28,9 @@ import {
   MicVocal,
   Music4,
   Search,
-  X,
 } from "lucide-react";
+
+type ArtMode = "art" | "lyrics" | "exploder";
 
 interface NowPlayingProps {
   data: StationNowPlaying | undefined;
@@ -43,12 +45,24 @@ export function NowPlaying({ data, isLoading, fallbackStation }: NowPlayingProps
   const artwork = rec?.artworkUrl ?? np?.artworkUrl ?? null;
 
   const { ride } = usePlayer();
-  const [showLyrics, setShowLyrics] = useState(false);
+  const [artMode, setArtMode] = useState<ArtMode>("art");
 
   const hasMbid = Boolean(rec?.mbid);
   const progressMs = ride.active && ride.current?.mbid === rec?.mbid
     ? ride.progressMs
     : null;
+
+  // Reset to art view whenever the track changes.
+  const prevMbidRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (rec?.mbid !== prevMbidRef.current) {
+      prevMbidRef.current = rec?.mbid ?? null;
+      setArtMode("art");
+    }
+  }, [rec?.mbid]);
+
+  const toggleLyrics = () => setArtMode((m) => (m === "lyrics" ? "art" : "lyrics"));
+  const toggleExploder = () => setArtMode((m) => (m === "exploder" ? "art" : "exploder"));
 
   if (!station) {
     return (
@@ -88,17 +102,25 @@ export function NowPlaying({ data, isLoading, fallbackStation }: NowPlayingProps
             On air · {station.name}
           </span>
         </div>
-        {/* Corner toggle cluster — bottom-right of album art */}
+
+        {/* Corner toggle cluster — knowledge-layer panels: Song Exploder + Lyrics */}
         <div className="absolute bottom-3 right-3 flex items-center gap-1.5">
+          {hasMbid && rec && (
+            <SEToggleBtn
+              mbid={rec.mbid}
+              active={artMode === "exploder"}
+              onToggle={toggleExploder}
+            />
+          )}
           <button
             type="button"
-            onClick={() => setShowLyrics((v) => !v)}
-            title={showLyrics ? "Hide lyrics" : "Show lyrics"}
-            aria-label={showLyrics ? "Hide lyrics" : "Show lyrics"}
+            onClick={toggleLyrics}
+            title={artMode === "lyrics" ? "Hide lyrics" : "Show lyrics"}
+            aria-label={artMode === "lyrics" ? "Hide lyrics" : "Show lyrics"}
             data-testid="lyrics-toggle"
             className={[
               "flex h-7 w-7 cursor-pointer items-center justify-center rounded-full backdrop-blur transition-colors",
-              showLyrics
+              artMode === "lyrics"
                 ? "bg-primary text-primary-foreground"
                 : "bg-background/70 text-foreground/80 hover:bg-background/90",
             ].join(" ")}
@@ -109,7 +131,7 @@ export function NowPlaying({ data, isLoading, fallbackStation }: NowPlayingProps
       </div>
 
       {/* Lyrics panel — slides open beneath the album art */}
-      {showLyrics && (
+      {artMode === "lyrics" && (
         <div
           className="border-b border-card-border animate-in fade-in slide-in-from-top-1 duration-200"
           data-testid="lyrics-panel"
@@ -123,6 +145,16 @@ export function NowPlaying({ data, isLoading, fallbackStation }: NowPlayingProps
               </p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Song Exploder panel — knowledge layer, parallel to lyrics */}
+      {artMode === "exploder" && hasMbid && rec && (
+        <div
+          className="border-b border-card-border animate-in fade-in slide-in-from-top-1 duration-200"
+          data-testid="se-panel"
+        >
+          <SongExploderPanel mbid={rec.mbid} progressMs={progressMs} />
         </div>
       )}
 
@@ -153,8 +185,6 @@ export function NowPlaying({ data, isLoading, fallbackStation }: NowPlayingProps
             <p className="mt-1 text-base text-muted-foreground" data-testid="now-playing-artist">
               {rec?.artist ?? np.rawArtist}
             </p>
-
-            {rec && <SongExploderBadge mbid={rec.mbid} />}
 
             {np.show && (
               <div
@@ -201,9 +231,6 @@ export function NowPlaying({ data, isLoading, fallbackStation }: NowPlayingProps
             )}
 
             {rec && <LinerNotes mbid={rec.mbid} />}
-            {rec && progressMs !== null && (
-              <SongExploderSignpost mbid={rec.mbid} progressMs={progressMs} />
-            )}
 
             {rec && (
               <a
@@ -242,23 +269,170 @@ export function NowPlaying({ data, isLoading, fallbackStation }: NowPlayingProps
 }
 
 /**
- * Small pill badge that appears below the artist name on the Now Playing card
- * whenever the recording has a linked Song Exploder episode.  Clicking it
- * navigates to the Song page and scrolls to the Song Exploder section.
+ * Renders the Mic2 toggle button only when the recording has a Song Exploder
+ * episode — fetches SE data internally so the parent doesn't need to know.
+ * Internal component only; not exported.
  */
-function SongExploderBadge({ mbid }: { mbid: string }) {
+function SEToggleBtn({
+  mbid,
+  active,
+  onToggle,
+}: {
+  mbid: string;
+  active: boolean;
+  onToggle: () => void;
+}) {
   const { data } = useGetRecordingSongExploder(mbid);
   if (!data?.episode) return null;
   return (
-    <div className="mt-2" data-testid="se-badge">
-      <Link
-        href={`/song/${mbid}#song-exploder`}
-        className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wide text-primary transition-colors hover:bg-primary/10"
-        title="This track has a Song Exploder episode — tap to explore"
-      >
-        <Mic2 className="h-3 w-3 shrink-0" />
-        Song Exploder
-      </Link>
+    <button
+      type="button"
+      onClick={onToggle}
+      title={active ? "Hide Song Exploder" : "Song Exploder"}
+      aria-label={active ? "Hide Song Exploder" : "Show Song Exploder"}
+      data-testid="se-toggle"
+      className={[
+        "flex h-7 w-7 cursor-pointer items-center justify-center rounded-full backdrop-blur transition-colors",
+        active
+          ? "bg-primary text-primary-foreground"
+          : "bg-background/70 text-foreground/80 hover:bg-background/90",
+      ].join(" ")}
+    >
+      <Mic2 className="h-3.5 w-3.5" />
+    </button>
+  );
+}
+
+/** Formats milliseconds as M:SS or H:MM:SS. */
+function msToTimecode(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+  return `${m}:${String(sec).padStart(2, "0")}`;
+}
+
+/**
+ * Song Exploder knowledge panel — parallel to LyricView.
+ *
+ * Shows the episode's anchor timeline with the current anchor highlighted
+ * as progressMs advances. Auto-scrolls to the active anchor like lyrics.
+ * No popup, no fire-and-dismiss: the panel is always visible while open.
+ */
+function SongExploderPanel({
+  mbid,
+  progressMs,
+}: {
+  mbid: string;
+  progressMs: number | null;
+}) {
+  const { data, isLoading } = useGetRecordingSongExploder(mbid);
+  const episode = data?.episode ?? null;
+  const anchors: SongExploderAnchor[] = data?.anchors ?? [];
+
+  // Highest anchor whose positionMs has been passed — null when not started.
+  const activeAnchorId = useMemo(() => {
+    if (progressMs === null || !anchors.length) return null;
+    let best: SongExploderAnchor | null = null;
+    for (const a of anchors) {
+      if (a.positionMs <= progressMs) best = a;
+    }
+    return best?.id ?? null;
+  }, [progressMs, anchors]);
+
+  const activeRef = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [activeAnchorId]);
+
+  if (isLoading) {
+    return (
+      <div className="px-5 py-4">
+        <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground animate-pulse">
+          Loading…
+        </p>
+      </div>
+    );
+  }
+
+  if (!episode) {
+    return (
+      <div className="px-5 py-4">
+        <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          No Song Exploder episode for this track.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div data-testid="se-panel-inner">
+      <div className="flex items-center justify-between px-5 pb-2 pt-4">
+        <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          Song Exploder
+        </p>
+        <a
+          href={episode.episodeUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 font-mono text-[10px] text-primary hover:underline"
+        >
+          Full episode
+          <ExternalLink className="h-2.5 w-2.5" />
+        </a>
+      </div>
+
+      {anchors.length === 0 ? (
+        <p className="px-5 pb-4 text-sm text-muted-foreground">
+          Episode cued up — timestamped anchors haven't been added yet.
+        </p>
+      ) : (
+        <ul
+          className="max-h-56 overflow-y-auto px-5 pb-4 [&::-webkit-scrollbar]:hidden"
+          style={{ scrollbarWidth: "none" }}
+        >
+          {anchors.map((anchor) => {
+            const isActive = anchor.id === activeAnchorId;
+            const isPast = progressMs !== null && anchor.positionMs <= progressMs;
+            return (
+              <li
+                key={anchor.id}
+                ref={isActive ? activeRef : null}
+                className={cn(
+                  "py-1 text-sm leading-relaxed transition-colors duration-300",
+                  isActive
+                    ? "font-semibold text-foreground"
+                    : isPast
+                      ? "text-muted-foreground/60"
+                      : progressMs !== null
+                        ? "text-muted-foreground/30"
+                        : "text-muted-foreground/70",
+                )}
+              >
+                <div className="flex items-start gap-2">
+                  <span className="mt-0.5 shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground/50">
+                    {msToTimecode(anchor.positionMs)}
+                  </span>
+                  <span className="flex-1">{anchor.text}</span>
+                  <a
+                    href={anchor.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={cn(
+                      "mt-0.5 shrink-0 transition-colors",
+                      isActive ? "text-primary" : "text-muted-foreground/40 hover:text-primary",
+                    )}
+                    aria-label="Hear this moment in the episode"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
@@ -364,89 +538,6 @@ export function DeepLinks({ links }: { links: RecordingLink[] }) {
             {link.name}
           </a>
         ))}
-      </div>
-    </div>
-  );
-}
-
-/**
- * Playback-synced Song Exploder anchor signpost.
- *
- * Fires a dismissable card when `progressMs` crosses an anchor's `positionMs`.
- * Resets when the MBID changes (new track). Auto-dismisses after 14 seconds.
- * Uses a ref-based "fired" Set to avoid re-firing on each render tick.
- */
-export function SongExploderSignpost({
-  mbid,
-  progressMs,
-}: {
-  mbid: string;
-  progressMs: number | null;
-}) {
-  const { data } = useGetRecordingSongExploder(mbid);
-  const anchors: SongExploderAnchor[] = data?.anchors ?? [];
-
-  const firedRef = useRef<Set<number>>(new Set());
-  const [activeAnchor, setActiveAnchor] = useState<SongExploderAnchor | null>(null);
-  const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Reset fired set and dismiss any shown anchor when the MBID changes.
-  useEffect(() => {
-    firedRef.current = new Set();
-    setActiveAnchor(null);
-    if (dismissTimer.current) clearTimeout(dismissTimer.current);
-  }, [mbid]);
-
-  // Detect when progressMs crosses an unfired anchor.
-  useEffect(() => {
-    if (progressMs === null || !anchors.length) return;
-    for (const anchor of anchors) {
-      if (anchor.positionMs <= progressMs && !firedRef.current.has(anchor.id)) {
-        firedRef.current.add(anchor.id);
-        setActiveAnchor(anchor);
-        if (dismissTimer.current) clearTimeout(dismissTimer.current);
-        dismissTimer.current = setTimeout(() => setActiveAnchor(null), 14_000);
-      }
-    }
-  }, [progressMs, anchors]);
-
-  if (!activeAnchor) return null;
-
-  return (
-    <div
-      className="mt-4 animate-in fade-in slide-in-from-bottom-2 duration-300"
-      data-testid="se-signpost"
-    >
-      <div className="flex items-start gap-3 rounded-xl border border-primary/30 bg-primary/5 p-3">
-        <Mic2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-        <div className="min-w-0 flex-1">
-          <p className="font-mono text-[10px] uppercase tracking-wide text-primary">
-            Song Exploder
-          </p>
-          <p className="mt-0.5 text-sm leading-snug text-foreground">
-            {activeAnchor.text}
-          </p>
-          <a
-            href={activeAnchor.sourceUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-1.5 inline-flex items-center gap-1 font-mono text-[11px] text-primary hover:underline"
-          >
-            <ExternalLink className="h-2.5 w-2.5" />
-            Hear this in the episode
-          </a>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            setActiveAnchor(null);
-            if (dismissTimer.current) clearTimeout(dismissTimer.current);
-          }}
-          aria-label="Dismiss"
-          className="shrink-0 rounded-full p-1 text-muted-foreground hover:text-foreground"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
       </div>
     </div>
   );

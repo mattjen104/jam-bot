@@ -25,6 +25,7 @@
 - [Fast Refresh mixed exports](fast-refresh-mixed-exports.md) — component files must export only components; mixed exports split HMR module instances → phantom "must be used within Provider" crashes despite correct tree.
 - [Share-card SSRF guard](share-card-ssrf-guard.md) — server-side artwork fetch off DB URLs is attacker-influenced: https-only + private-IP block, re-validate every redirect hop (CAA 307s, so redirect:"error" kills artwork).
 - [Lore local-first listener layer](lore-local-first-listener-layer.md) — journal/follows are localStorage-only by design (no accounts); logger trigger key must be ≥ dedup identity or listens drop.
+- [Song Exploder is knowledge, not a picker](se-knowledge-layer.md) — SE + Wikipedia live on the knowledge layer (parallel to lyrics), never in Curated/picker pages; panel toggle in NowPlaying corner cluster, not a dismissable signpost.
 - [zod.coerce missing query param](zod-coerce-missing-query-param.md) — generated `zod.coerce.string().min(1)` turns an absent query param into the string "undefined"; add explicit presence guards on required params.
 - [Classic Albums series](classic-albums-series.md) — official clips caption-less (claims dormant by design); listKey-scoped segue adjacency; new enum values must also hit OpenAPI.
 - [Lore UI component tests](lore-ui-component-tests.md) — per-file jsdom pragma + barrel mock + media stubs; wouter memoryLocation searchPath must NOT start with "?" or params silently vanish.
