@@ -376,7 +376,7 @@ export function DeepLinks({ links }: { links: RecordingLink[] }) {
  * Resets when the MBID changes (new track). Auto-dismisses after 14 seconds.
  * Uses a ref-based "fired" Set to avoid re-firing on each render tick.
  */
-function SongExploderSignpost({
+export function SongExploderSignpost({
   mbid,
   progressMs,
 }: {
