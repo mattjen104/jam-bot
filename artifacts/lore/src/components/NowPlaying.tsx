@@ -154,6 +154,8 @@ export function NowPlaying({ data, isLoading, fallbackStation }: NowPlayingProps
               {rec?.artist ?? np.rawArtist}
             </p>
 
+            {rec && <SongExploderBadge mbid={rec.mbid} />}
+
             {np.show && (
               <div
                 className="mt-4 rounded-xl border border-border bg-secondary/40 p-3"
@@ -235,6 +237,28 @@ export function NowPlaying({ data, isLoading, fallbackStation }: NowPlayingProps
 
         <StationFooter station={station} playedAt={np?.playedAt} />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Small pill badge that appears below the artist name on the Now Playing card
+ * whenever the recording has a linked Song Exploder episode.  Clicking it
+ * navigates to the Song page and scrolls to the Song Exploder section.
+ */
+function SongExploderBadge({ mbid }: { mbid: string }) {
+  const { data } = useGetRecordingSongExploder(mbid);
+  if (!data?.episode) return null;
+  return (
+    <div className="mt-2" data-testid="se-badge">
+      <Link
+        href={`/song/${mbid}#song-exploder`}
+        className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wide text-primary transition-colors hover:bg-primary/10"
+        title="This track has a Song Exploder episode — tap to explore"
+      >
+        <Mic2 className="h-3 w-3 shrink-0" />
+        Song Exploder
+      </Link>
     </div>
   );
 }

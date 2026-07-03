@@ -550,7 +550,7 @@ function SongExploderSection({
   })();
 
   return (
-    <section data-testid="song-exploder-section">
+    <section id="song-exploder" data-testid="song-exploder-section">
       <SectionHeading
         icon={<Mic2 className="h-5 w-5" />}
         title="Song Exploder"
