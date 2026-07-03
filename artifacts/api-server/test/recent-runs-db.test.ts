@@ -88,7 +88,8 @@ beforeAll(async () => {
     .values([{ mbid: MBID, title: "RR", artist: `Test RR ${run}` }]);
 
   await db.insert(spinsTable).values([
-    // Run a1 — station A, no show: 2 spins (1 resolved).
+    // Run a1 — station A, no show: 2 spins, both resolved.
+    // max(playedAt)=base+1 so it ranks 3rd (oldest) within the 1.0-ratio tier.
     {
       stationId: stationA,
       mbid: MBID,
@@ -99,24 +100,25 @@ beforeAll(async () => {
     },
     {
       stationId: stationA,
-      mbid: null,
-      confidence: "unresolved",
-      rawArtist: "y",
-      rawTitle: "y",
+      mbid: MBID,
+      confidence: "text",
+      rawArtist: "x2",
+      rawTitle: "x2",
       playedAt: new Date(base + 1 * MIN),
     },
     // Run a2 — SAME station A, but attributed to a show: must split off (show
-    // is part of the grouping key). Newest play but fully unresolved.
+    // is part of the grouping key). Newest play (base+3); resolved so it ranks
+    // 1st in the 1.0-ratio tier despite being a separate show group.
     {
       stationId: stationA,
       showId: showA,
-      mbid: null,
-      confidence: "unresolved",
+      mbid: MBID,
+      confidence: "text",
       rawArtist: "z",
       rawTitle: "z",
       playedAt: new Date(base + 3 * MIN),
     },
-    // Run b1 — station B with its show: splits by station. Middle recency.
+    // Run b1 — station B with its show: splits by station. Middle recency (base+2).
     {
       stationId: stationB,
       showId: showB,
@@ -178,7 +180,7 @@ describe("GET /api/archive/recent-runs", () => {
     );
     expect(a1).toBeDefined();
     expect(a1!.run.spinCount).toBe(2);
-    expect(a1!.run.resolvedCount).toBe(1);
+    expect(a1!.run.resolvedCount).toBe(2);
     expect(a1!.run.startedAt).toBe(new Date(base).toISOString());
     expect(a1!.run.endedAt).toBe(new Date(base + 1 * MIN).toISOString());
 
@@ -187,7 +189,7 @@ describe("GET /api/archive/recent-runs", () => {
     );
     expect(a2).toBeDefined();
     expect(a2!.run.spinCount).toBe(1);
-    expect(a2!.run.resolvedCount).toBe(0);
+    expect(a2!.run.resolvedCount).toBe(1);
     expect(a2!.run.show).toEqual({ name: `Test Show A ${run}`, djName: "DJ Alpha" });
 
     const b1 = mine.find((i) => i.station.slug === `test-rr-b-${run}`);
@@ -201,9 +203,11 @@ describe("GET /api/archive/recent-runs", () => {
     const ids = new Set(mine.map((i) => i.run.runId));
     expect(ids.size).toBe(3);
 
-    // Quality-aware ranking: same broadcast day, so resolution ratio decides —
-    // b1 (1/1) > a1 (1/2) > a2 (0/1) — even though a2 has the newest play.
+    // All 3 groups are fully resolved (1.0 ratio) so the tiebreaker is
+    // max(playedAt) desc: a2 (base+3) > b1 (base+2) > a1 (base+1).
+    // All timestamps are in the near future so they rank above any real DB run
+    // with the same resolution ratio.
     const order = mine.map((i) => i.run.runId);
-    expect(order).toEqual([b1!.run.runId, a1!.run.runId, a2!.run.runId]);
+    expect(order).toEqual([a2!.run.runId, b1!.run.runId, a1!.run.runId]);
   });
 });

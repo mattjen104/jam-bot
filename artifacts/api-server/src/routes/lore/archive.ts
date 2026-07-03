@@ -21,7 +21,6 @@ import { stationArchiveUrl, supportsBackfill } from "../../lore/adapters.js";
 import { getPickerByHandle } from "../../lore/picks.js";
 import { h } from "../../middlewares/asyncHandler.js";
 import { toArchiveRecording, toPicker, spinDayExpr } from "./shared.js";
-import { spinRunIdExpr } from "../../lore/runs.js";
 
 const router: IRouter = Router();
 
@@ -210,7 +209,7 @@ router.get("/archive/picker-runs/:runId", h(async (req, res) => {
 router.get("/archive/recent-runs", h(async (_req, res) => {
   const runs = await db
     .select({
-      runId: spinRunIdExpr,
+      runId: sql<number>`min(${spinsTable.id})`,
       date: spinDayExpr,
       stationId: spinsTable.stationId,
       showId: spinsTable.showId,
