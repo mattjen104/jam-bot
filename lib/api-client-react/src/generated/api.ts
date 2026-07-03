@@ -597,6 +597,76 @@ export function useListStationsNowPlaying<
 }
 
 // ---------------------------------------------------------------------------
+// Station show schedule — all show blocks for every station on a given date.
+// Powers the timeline strip on each station card.
+// ---------------------------------------------------------------------------
+
+export interface StationScheduleRun {
+  runId: number;
+  show: { name: string; djName?: string | null } | null;
+  spinCount: number;
+  resolvedCount: number;
+  /** ISO timestamp of first spin in this block. */
+  startedAt: string;
+  /** ISO timestamp of last spin in this block. */
+  endedAt: string;
+}
+
+export interface StationScheduleItem {
+  stationSlug: string;
+  runs: StationScheduleRun[];
+}
+
+export interface StationScheduleList {
+  items: StationScheduleItem[];
+}
+
+export const getGetStationsScheduleUrl = (date: string) =>
+  `/api/stations/schedule?date=${encodeURIComponent(date)}`;
+
+export const getStationsSchedule = async (
+  date: string,
+  options?: RequestInit,
+): Promise<StationScheduleList> => {
+  return customFetch<StationScheduleList>(getGetStationsScheduleUrl(date), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetStationsScheduleQueryKey = (date: string) =>
+  [`/api/stations/schedule`, date] as const;
+
+export function useGetStationsSchedule<
+  TData = Awaited<ReturnType<typeof getStationsSchedule>>,
+  TError = ErrorType<unknown>,
+>(
+  date: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationsSchedule>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStationsScheduleQueryKey(date);
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStationsSchedule>>
+  > = ({ signal }) => getStationsSchedule(date, { signal, ...requestOptions });
+  const query = useQuery({
+    queryKey,
+    queryFn,
+    enabled: !!date,
+    ...queryOptions,
+  }) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey };
+}
+
+// ---------------------------------------------------------------------------
 // Date-filtered dial pulse — same shape as the live now-playing but scoped to
 // a single calendar day.  Powers the ghost-dial date sweep on the home page.
 // ---------------------------------------------------------------------------

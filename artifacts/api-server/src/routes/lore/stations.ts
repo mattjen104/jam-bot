@@ -8,6 +8,7 @@ import {
   GetStationArchiveResponse,
   GetStationPickerOverlapsParams,
   GetStationPickerOverlapsResponse,
+  GetStationsScheduleResponse,
 } from "@workspace/api-zod";
 import {
   db,
@@ -258,6 +259,68 @@ router.get("/stations/:slug/overlaps/pickers", h(async (req, res) => {
       })),
     }),
   );
+}));
+
+// GET /api/stations/schedule?date=YYYY-MM-DD
+// Returns all show blocks (runs) for every station on a given UTC calendar day,
+// ordered chronologically. One call powers the show timeline on every station card.
+router.get("/stations/schedule", h(async (req, res) => {
+  const rawDate = typeof req.query.date === "string" ? req.query.date.trim() : null;
+  const dateFilter = rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null;
+  if (!dateFilter) {
+    return res.status(400).json({ error: "date query param required (YYYY-MM-DD)" });
+  }
+
+  const rows = await db
+    .select({
+      stationSlug: stationsTable.slug,
+      runId: spinRunIdExpr,
+      spinCount: sql<number>`count(*)::int`,
+      resolvedCount: sql<number>`count(*) filter (where ${spinsTable.mbid} is not null)::int`,
+      startedAt: sql<string>`min(${spinsTable.playedAt})`,
+      endedAt: sql<string>`max(${spinsTable.playedAt})`,
+      showName: showsTable.name,
+      djName: showsTable.djName,
+    })
+    .from(spinsTable)
+    .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
+    .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id))
+    .where(
+      and(
+        isNotNull(spinsTable.stationId),
+        sql`${spinsTable.playedAt}::date = ${dateFilter}::date`,
+      ),
+    )
+    .groupBy(
+      stationsTable.slug,
+      spinDayExpr,
+      spinsTable.showId,
+      showsTable.name,
+      showsTable.djName,
+    )
+    .orderBy(stationsTable.slug, sql`min(${spinsTable.playedAt})`);
+
+  // Group into per-station arrays, preserving chronological order within each.
+  const bySlug = new Map<string, (typeof rows)[number][]>();
+  for (const row of rows) {
+    const arr = bySlug.get(row.stationSlug);
+    if (arr) arr.push(row);
+    else bySlug.set(row.stationSlug, [row]);
+  }
+
+  const items = [...bySlug.entries()].map(([stationSlug, stationRuns]) => ({
+    stationSlug,
+    runs: stationRuns.map((r) => ({
+      runId: r.runId,
+      show: r.showName ? { name: r.showName, djName: r.djName ?? null } : null,
+      spinCount: r.spinCount,
+      resolvedCount: r.resolvedCount,
+      startedAt: new Date(r.startedAt).toISOString(),
+      endedAt: new Date(r.endedAt).toISOString(),
+    })),
+  }));
+
+  return res.json(GetStationsScheduleResponse.parse({ items }));
 }));
 
 export default router;

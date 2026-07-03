@@ -3,6 +3,7 @@ import type {
   NowPlaying,
   PickedLookupItem,
   Station,
+  StationScheduleRun,
 } from "@workspace/api-client-react";
 import { QualityBadge } from "./QualityBadge";
 import { BadgeCheck, Mic, Pause, Play, Radio } from "lucide-react";
@@ -19,6 +20,11 @@ interface StationListProps {
    * the song it's spinning right now ("KEXP is playing a Pitchfork pick").
    */
   picked?: Map<string, PickedLookupItem>;
+  /**
+   * Show timeline: station slug → ordered array of that day's show blocks.
+   * When provided, a horizontal timeline strip is rendered on each card.
+   */
+  schedule?: Map<string, StationScheduleRun[]>;
   onToggle: (station: Station) => void;
   onSelect: (station: Station) => void;
 }
@@ -29,6 +35,7 @@ export function StationList({
   status,
   pulse,
   picked,
+  schedule,
   onToggle,
   onSelect,
 }: StationListProps) {
@@ -40,6 +47,7 @@ export function StationList({
         const isLoading = isActive && status === "loading";
         const np = pulse?.get(station.slug) ?? null;
         const pick = picked?.get(station.slug) ?? null;
+        const runs = schedule?.get(station.slug) ?? null;
         const artwork = np?.recording?.artworkUrl ?? np?.artworkUrl ?? null;
         const trackLine = np
           ? [np.recording?.title ?? np.rawTitle, np.recording?.artist ?? np.rawArtist]
@@ -88,7 +96,6 @@ export function StationList({
                       className="absolute inset-0 h-full w-full object-cover"
                       data-testid={`pulse-artwork-${station.slug}`}
                     />
-                    {/* Scrim so the play glyph stays readable over any cover. */}
                     <span className="absolute inset-0 bg-black/35 transition-colors group-hover:bg-black/45" />
                   </>
                 )}
@@ -105,7 +112,7 @@ export function StationList({
                 </span>
               </button>
 
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 overflow-hidden">
                 <div className="flex items-center gap-2">
                   <h3 className="truncate font-serif text-lg font-semibold leading-tight text-foreground">
                     {station.name}
@@ -181,6 +188,14 @@ export function StationList({
                       </span>
                     </span>
                   ))}
+
+                {/* Show timeline — horizontal scrollable strip of today's blocks */}
+                {runs && runs.length > 0 && (
+                  <ShowTimeline
+                    runs={runs}
+                    stationSlug={station.slug}
+                  />
+                )}
               </div>
 
               <div className="shrink-0">
@@ -191,5 +206,62 @@ export function StationList({
         );
       })}
     </ul>
+  );
+}
+
+/** Horizontal scrollable row of show/block chips for a station's day. */
+function ShowTimeline({
+  runs,
+  stationSlug,
+}: {
+  runs: StationScheduleRun[];
+  stationSlug: string;
+}) {
+  const now = Date.now();
+  // "Active" = the block that contains right now, or the most recent one if
+  // none span the current moment (e.g. station hasn't logged in a while).
+  const activeRunId =
+    runs.find(
+      (r) =>
+        new Date(r.startedAt).getTime() <= now &&
+        new Date(r.endedAt).getTime() >= now - 4 * 60 * 60 * 1000,
+    )?.runId ?? runs[runs.length - 1]?.runId;
+
+  return (
+    <div
+      className="mt-1.5 flex gap-1 overflow-x-auto"
+      style={{ scrollbarWidth: "none" }}
+      data-testid={`show-timeline-${stationSlug}`}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {runs.map((run) => {
+        const label = run.show?.name ?? "Station stream";
+        const isActive = run.runId === activeRunId;
+        const replayable = run.resolvedCount > 0;
+        return (
+          <Link
+            key={run.runId}
+            href={`/archive/station-runs/${run.runId}${replayable ? "?play=1" : ""}`}
+            onClick={(e) => e.stopPropagation()}
+            title={
+              run.show?.djName
+                ? `${run.show.djName} · ${label} · ${run.resolvedCount}/${run.spinCount} tracks playable`
+                : `${label} · ${run.resolvedCount}/${run.spinCount} tracks playable`
+            }
+            data-testid={`show-chip-${run.runId}`}
+            className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[10px] whitespace-nowrap transition-colors ${
+              isActive
+                ? "border-primary/40 bg-primary/15 text-primary"
+                : "border-border bg-background/50 text-muted-foreground hover:border-primary/30 hover:text-foreground"
+            }`}
+          >
+            {replayable && (
+              <Play className="h-2 w-2 shrink-0 fill-current" />
+            )}
+            <span className="max-w-[12ch] truncate">{label}</span>
+          </Link>
+        );
+      })}
+    </div>
   );
 }

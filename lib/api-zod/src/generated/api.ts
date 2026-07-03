@@ -1833,3 +1833,39 @@ export const GetSongExploderChaptersResponse = zod.object({
     }),
   ),
 });
+
+/**
+ * All show blocks (runs) for every station on a given UTC calendar day.
+ * One call powers the show timeline on every station card.
+ */
+export const GetStationsScheduleQueryParams = zod.object({
+  date: zod.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+export const GetStationsScheduleResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      stationSlug: zod.string(),
+      runs: zod.array(
+        zod.object({
+          runId: zod.number(),
+          show: zod
+            .union([
+              zod
+                .object({
+                  name: zod.string(),
+                  djName: zod.string().nullish(),
+                })
+                .describe("Show + DJ attribution for this run block."),
+              zod.null(),
+            ])
+            .optional(),
+          spinCount: zod.number(),
+          resolvedCount: zod.number(),
+          startedAt: zod.string().describe("ISO timestamp of first spin in this block."),
+          endedAt: zod.string().describe("ISO timestamp of last spin in this block."),
+        }),
+      ),
+    }),
+  ),
+});

@@ -10,6 +10,8 @@ import {
   getListStationsNowPlayingQueryKey,
   useListStationsAtDate,
   getListStationsAtDateQueryKey,
+  useGetStationsSchedule,
+  getGetStationsScheduleQueryKey,
   useListPickers,
   getListPickersQueryKey,
   useGetArchiveRecentRuns,
@@ -20,6 +22,7 @@ import {
   type Picker,
   type RecentStationRun,
   type PickedLookupItem,
+  type StationScheduleRun,
 } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { StationList } from "../components/StationList";
@@ -199,6 +202,12 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
   const focusedStation =
     stations.find((s) => s.slug === focusedSlug) ?? player.station ?? null;
 
+  // Schedule date: when sweeping to a past date use that; otherwise today.
+  const scheduleDate = useMemo(
+    () => selectedDate ?? todayStr(),
+    [selectedDate],
+  );
+
   // Live pulse — refetch every 30s when no date is selected.
   const { data: livePulse } = useListStationsNowPlaying({
     query: {
@@ -219,6 +228,22 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
   });
 
   const pulse = selectedDate ? datePulse : livePulse;
+
+  // Show timeline — all blocks for every station on the schedule date.
+  const { data: scheduleData } = useGetStationsSchedule(scheduleDate, {
+    query: {
+      queryKey: getGetStationsScheduleQueryKey(scheduleDate),
+      staleTime: selectedDate ? 5 * 60 * 1000 : 60_000,
+      refetchInterval: selectedDate ? false : 2 * 60 * 1000,
+    },
+  });
+  const scheduleBySlug = useMemo((): Map<string, StationScheduleRun[]> => {
+    const map = new Map<string, StationScheduleRun[]>();
+    for (const item of scheduleData?.items ?? []) {
+      map.set(item.stationSlug, item.runs);
+    }
+    return map;
+  }, [scheduleData]);
 
   const pulseBySlug = useMemo(() => {
     return new Map(
@@ -315,6 +340,7 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
           status={player.status}
           pulse={pulseBySlug}
           picked={pickedBySlug}
+          schedule={scheduleBySlug}
           onToggle={handleToggle}
           onSelect={handleSelect}
         />
