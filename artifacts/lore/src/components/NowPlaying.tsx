@@ -77,7 +77,7 @@ export function NowPlaying({ data, isLoading, fallbackStation }: NowPlayingProps
             />
           </div>
         )}
-        <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-card via-card/70 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-card via-card/70 to-transparent" />
         <div className="absolute left-4 top-4">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-background/70 px-2.5 py-1 font-mono text-[11px] uppercase tracking-wide text-primary backdrop-blur">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
@@ -88,17 +88,15 @@ export function NowPlaying({ data, isLoading, fallbackStation }: NowPlayingProps
         <div className="absolute bottom-3 right-3 flex items-center gap-1.5">
           <button
             type="button"
-            onClick={() => hasMbid && setShowLyrics((v) => !v)}
-            title={hasMbid ? (showLyrics ? "Hide lyrics" : "Show lyrics") : "Lyrics not yet matched"}
-            aria-label={hasMbid ? (showLyrics ? "Hide lyrics" : "Show lyrics") : "Lyrics unavailable"}
+            onClick={() => setShowLyrics((v) => !v)}
+            title={showLyrics ? "Hide lyrics" : "Show lyrics"}
+            aria-label={showLyrics ? "Hide lyrics" : "Show lyrics"}
             data-testid="lyrics-toggle"
             className={[
               "flex h-7 w-7 items-center justify-center rounded-full backdrop-blur transition-colors",
-              hasMbid
-                ? showLyrics
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-background/70 text-foreground/80 hover:bg-background/90"
-                : "cursor-not-allowed bg-background/40 text-foreground/30",
+              showLyrics
+                ? "bg-primary text-primary-foreground"
+                : "bg-background/70 text-foreground/80 hover:bg-background/90",
             ].join(" ")}
           >
             <MicVocal className="h-3.5 w-3.5" />
@@ -107,12 +105,20 @@ export function NowPlaying({ data, isLoading, fallbackStation }: NowPlayingProps
       </div>
 
       {/* Lyrics panel — slides open beneath the album art */}
-      {showLyrics && hasMbid && rec && (
+      {showLyrics && (
         <div
           className="border-b border-card-border animate-in fade-in slide-in-from-top-1 duration-200"
           data-testid="lyrics-panel"
         >
-          <LyricView mbid={rec.mbid} progressMs={progressMs} />
+          {hasMbid && rec ? (
+            <LyricView mbid={rec.mbid} progressMs={progressMs} />
+          ) : (
+            <div className="px-5 py-4">
+              <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+                Track not yet identified — lyrics unavailable
+              </p>
+            </div>
+          )}
         </div>
       )}
 
