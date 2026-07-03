@@ -440,13 +440,23 @@ export type InsertSpotifyConnection = typeof spotifyConnectionsTable.$inferInser
 /**
  * A **track claim** — one grounded, citable fact about a recording, extracted
  * systematically from an official source (e.g. an official Classic Albums
- * making-of clip's transcript). We store the paraphrased claim and a pointer to
- * the exact moment in the source — never the transcript, never the media.
+ * making-of clip's transcript, or a Wikipedia article section). We store the
+ * paraphrased claim and a pointer to the source — never the source prose.
  *
  * `positionMs` optionally anchors the claim to a moment WITHIN the song (the
  * within-track time axis); null = a track-level fact shown in liner notes.
  * `sourceUrl` deep-links to the supporting moment in the source itself
- * (e.g. a YouTube `&t=` link), so every claim is one tap from its evidence.
+ * (e.g. a YouTube `&t=` link, or a Wikipedia section anchor), so every claim
+ * is one tap from its evidence.
+ *
+ * `anchorType` distinguishes claim categories:
+ *   null      — timestamp-anchored (positionMs carries the offset)
+ *   'section' — section-anchored (anchorValue carries the section label, e.g. "Recording")
+ *
+ * `status` drives the Wikipedia admin review workflow:
+ *   'published' — visible on the song page (default for all existing claims)
+ *   'draft'     — pending admin review (Wikipedia candidates start here)
+ *   'rejected'  — discarded by admin (or sentinel for "no sections found")
  */
 export const trackClaimsTable = pgTable(
   "track_claims",
@@ -457,19 +467,37 @@ export const trackClaimsTable = pgTable(
       .references(() => recordingsTable.mbid),
     /** Optional anchor within the song; null = track-level fact. */
     positionMs: integer("position_ms"),
-    /** The paraphrased, grounded claim (never verbatim transcript prose). */
+    /**
+     * Anchor type for section-level facts (Wikipedia claims):
+     * null = timestamp-anchored; 'section' = section-anchored.
+     */
+    anchorType: text("anchor_type"),
+    /**
+     * Anchor value: the section label when anchorType='section'
+     * (e.g. "Recording", "Production", "Composition").
+     */
+    anchorValue: text("anchor_value"),
+    /**
+     * Review status. Existing Classic Albums claims default to 'published'.
+     * Wikipedia candidates start as 'draft' and require admin review.
+     */
+    status: text("status").notNull().default("published"),
+    /** The paraphrased, grounded claim (never verbatim source prose). */
     text: text("text").notNull(),
     /** Human-readable source label, e.g. "Classic Albums: Rio". */
     sourceLabel: text("source_label").notNull(),
     /** Deep link to the supporting moment (e.g. youtube.com/watch?v=..&t=123s). */
     sourceUrl: text("source_url").notNull(),
-    /** Picker handle this claim came through, e.g. "classic-albums". */
+    /** Picker handle this claim came through, e.g. "classic-albums", "wikipedia". */
     sourceHandle: text("source_handle").notNull(),
     /** Stable id for idempotent re-extraction, e.g. "yt:{videoId}:{n}". */
     externalId: text("external_id").notNull().unique(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
-  (t) => [index("track_claims_mbid_idx").on(t.mbid)],
+  (t) => [
+    index("track_claims_mbid_idx").on(t.mbid),
+    index("track_claims_mbid_status_idx").on(t.mbid, t.status),
+  ],
 );
 
 export type TrackClaim = typeof trackClaimsTable.$inferSelect;

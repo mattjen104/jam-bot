@@ -15,6 +15,7 @@ import {
   startSongExploderPoller,
 } from "./lore/song-exploder.js";
 import { startSegueJob } from "./lore/segue-job.js";
+import { startWikipediaJob } from "./lore/wikipedia-job.js";
 import { ensurePicksUnifiedView } from "./lore/view.js";
 
 const rawPort = process.env["PORT"];
@@ -64,6 +65,7 @@ async function bootLore(): Promise<void> {
     await startBackfillJob();
     await startReconcileJob();
     startSegueJob();
+    startWikipediaJob();
   } catch (err) {
     console.error("[lore] boot failed", err);
   }

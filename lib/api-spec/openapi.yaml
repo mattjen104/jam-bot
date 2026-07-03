@@ -949,6 +949,111 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /admin/wikipedia-drafts:
+    get:
+      operationId: getWikipediaDrafts
+      tags: [admin]
+      summary: Pending Wikipedia section draft claims for a recording
+      description: >
+        Returns all draft track claims with source_handle='wikipedia' for the
+        given recording MBID. The admin reads the linked Wikipedia section, then
+        uses PATCH /admin/claims/:id to paraphrase and publish or reject each
+        draft. Token-guarded.
+      parameters:
+        - name: x-admin-token
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: mbid
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Pending draft claims for this recording
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WikipediaDraftList"
+        "400":
+          description: Missing mbid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Admin entry not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /admin/claims/{id}:
+    patch:
+      operationId: patchClaim
+      tags: [admin]
+      summary: Admin review — paraphrase and publish or reject a draft claim
+      description: >
+        Set the status of a draft track claim to 'published' or 'rejected'. When
+        publishing, `text` is required and must be the admin-written paraphrase
+        of the Wikipedia section's key fact — never verbatim Wikipedia prose.
+        Token-guarded.
+      parameters:
+        - name: x-admin-token
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchClaimRequest"
+      responses:
+        "200":
+          description: The updated claim
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WikipediaDraftClaim"
+        "400":
+          description: Invalid request (e.g. missing text when publishing)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Claim not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Admin entry not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /spotify/status:
     get:
       operationId: getSpotifyStatus
@@ -1698,10 +1803,17 @@ components:
       type: object
       description: >
         One grounded fact about a recording, extracted systematically from an
-        official documentary source (e.g. a Classic Albums making-of clip).
-        `sourceUrl` deep-links to the exact moment in the official source that
-        supports the claim, so every fact is one tap from its evidence.
+        official source (Classic Albums documentary clips, Wikipedia article
+        sections). `sourceUrl` deep-links to the supporting moment or section
+        in the original source, so every claim is one tap from its evidence.
+        `anchorType` distinguishes timestamp-anchored (null) from
+        section-anchored ('section') claims. Section claims carry `anchorValue`
+        (the Wikipedia section label, e.g. "Recording") and a `sourceUrl` that
+        is a Wikipedia deep link to that section.
       properties:
+        id:
+          type: integer
+          description: Database row id (needed for admin PATCH).
         text:
           type: string
         sourceLabel:
@@ -1712,10 +1824,99 @@ components:
           anyOf:
             - type: integer
             - type: "null"
+        anchorType:
+          anyOf:
+            - type: string
+              enum: ["section"]
+            - type: "null"
+          description: >
+            'section' for Wikipedia section claims; null for timestamp-anchored
+            claims (positionMs carries the offset).
+        anchorValue:
+          anyOf:
+            - type: string
+            - type: "null"
+          description: >
+            Section label when anchorType='section' (e.g. "Recording",
+            "Production", "Composition", "Background",
+            "Critical reception"). Null for timestamp-anchored claims.
+        status:
+          type: string
+          enum: ["draft", "published", "rejected"]
+          description: >
+            Review status. Only 'published' claims are surfaced to end users
+            on the song page. 'draft' = awaiting admin review (Wikipedia
+            candidates). 'rejected' = discarded by admin.
+        sourceHandle:
+          type: string
+          description: >
+            Origin handle for the claim. 'classic-albums' for Classic Albums
+            documentary clips. 'wikipedia' for track-level Wikipedia section
+            claims. 'wikipedia-album' for album-level Wikipedia section claims
+            (sourced from the recording's canonical album article).
       required:
         - text
         - sourceLabel
         - sourceUrl
+    WikipediaDraftList:
+      type: object
+      properties:
+        claims:
+          type: array
+          items:
+            $ref: "#/components/schemas/WikipediaDraftClaim"
+      required:
+        - claims
+    WikipediaDraftClaim:
+      type: object
+      description: >
+        A Wikipedia draft track claim awaiting admin review. The admin fills in
+        `text` (a paraphrase of the section's key fact) before publishing.
+        No Wikipedia prose is stored — only the section URL pointer and the
+        admin-written paraphrase.
+      properties:
+        id:
+          type: integer
+        mbid:
+          type: string
+        anchorValue:
+          type: string
+          description: Section label (e.g. "Recording", "Production").
+        sourceLabel:
+          type: string
+          description: "Wikipedia article title, e.g. 'Wikipedia — Go Your Own Way'."
+        sourceUrl:
+          type: string
+          description: Deep link to the Wikipedia section.
+        status:
+          type: string
+          enum: ["draft", "published", "rejected"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - mbid
+        - anchorValue
+        - sourceLabel
+        - sourceUrl
+        - status
+        - createdAt
+    PatchClaimRequest:
+      type: object
+      description: >
+        Admin claim review: provide the paraphrased claim text and set status
+        to 'published' (to publish) or 'rejected' (to discard). Text is
+        required when publishing — it must be the admin-written paraphrase of
+        the Wikipedia section's key fact, never verbatim Wikipedia prose.
+      properties:
+        text:
+          type: string
+          minLength: 1
+        status:
+          type: string
+          enum: ["published", "rejected"]
+      required:
+        - status
     RecordingKnowledge:
       type: object
       properties:

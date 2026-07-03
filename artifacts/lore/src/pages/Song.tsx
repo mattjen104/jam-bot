@@ -6,6 +6,7 @@ import {
   useGetRecordingKnowledge,
   useGetRecordingSpins,
   useGetRecordingSegues,
+  useGetRecordingKnowledge,
   type EntryPick,
   type RecordingSpin,
   type SegueNext,
@@ -20,6 +21,7 @@ import { clockTime, timeAgo } from "../lib/format";
 import {
   ArrowLeft,
   ArrowUpRight,
+  BookOpen,
   Disc3,
   ExternalLink,
   MessageSquareQuote,
@@ -51,7 +53,7 @@ export default function Song() {
   const { data: rec, isLoading, isError, error } = useGetRecording(mbid);
   const { data: preview } = useGetRecordingPreview(mbid);
   const { data: entry } = useGetRecordingEntry(mbid);
-  const { data: knowledge } = useGetRecordingKnowledge(mbid);
+  const { data: knowledgeData } = useGetRecordingKnowledge(mbid);
   const { data: spinsData } = useGetRecordingSpins(mbid);
   const { data: seguesData } = useGetRecordingSegues(mbid);
 
@@ -186,7 +188,8 @@ export default function Song() {
             )}
 
             <EntryLadder entry={entry} artist={rec.artist} />
-            <Claims claims={knowledge?.claims ?? []} />
+            <Claims claims={knowledgeData?.claims ?? []} />
+            <WikipediaClaims claims={knowledgeData?.claims ?? []} />
             <LyricView mbid={rec.mbid} progressMs={ride.progressMs} />
             <Segues next={seguesData?.next ?? []} />
             <Spins spins={spinsData?.spins ?? []} />
@@ -396,17 +399,19 @@ function Spins({ spins }: { spins: RecordingSpin[] }) {
   );
 }
 
+/** Song Exploder and other timestamp-anchored claims (non-Wikipedia). */
 function Claims({ claims }: { claims: TrackClaim[] }) {
-  if (claims.length === 0) return null;
+  const timestampClaims = claims.filter((c) => c.anchorType !== "section");
+  if (timestampClaims.length === 0) return null;
   return (
     <section>
       <SectionHeading
         icon={<MessageSquareQuote className="h-5 w-5" />}
         title="From the source"
-        hint={`${claims.length} claim${claims.length === 1 ? "" : "s"}`}
+        hint={`${timestampClaims.length} claim${timestampClaims.length === 1 ? "" : "s"}`}
       />
       <ul className="flex flex-col gap-2" data-testid="track-claims">
-        {claims.map((c, i) => (
+        {timestampClaims.map((c, i) => (
           <li
             key={i}
             className="rounded-xl border border-card-border bg-card p-4"
@@ -430,6 +435,116 @@ function Claims({ claims }: { claims: TrackClaim[] }) {
               </a>
             </div>
           </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** Prefix shown before each section-anchored Wikipedia claim. */
+const SECTION_PREFIX: Record<string, string> = {
+  Recording: "On the recording",
+  Production: "On the production",
+  Composition: "On the composition",
+  Background: "Background",
+  "Critical reception": "Critical reception",
+};
+
+type WikipediaClaim = {
+  id?: number;
+  text: string;
+  sourceLabel: string;
+  sourceUrl: string;
+  anchorType?: string | null;
+  anchorValue?: string | null;
+  status?: string;
+  sourceHandle?: string;
+};
+
+/** Render one Wikipedia section claim card. */
+function WikipediaClaimCard({
+  claim,
+  index,
+  scopePrefix,
+}: {
+  claim: WikipediaClaim;
+  index: number;
+  scopePrefix: string;
+}) {
+  const sectionLabel =
+    claim.anchorValue
+      ? (SECTION_PREFIX[claim.anchorValue] ?? claim.anchorValue)
+      : null;
+  const label = sectionLabel ? `${scopePrefix} · ${sectionLabel}` : scopePrefix;
+
+  return (
+    <li
+      key={claim.id ?? index}
+      className="rounded-xl border border-card-border bg-card p-4"
+    >
+      <p className="mb-1 font-mono text-[11px] uppercase tracking-wide text-primary">
+        {label}
+      </p>
+      <p className="text-sm text-foreground">{claim.text}</p>
+      <a
+        href={claim.sourceUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="mt-1.5 inline-flex items-center gap-1 font-mono text-[11px] text-muted-foreground/70 hover:text-primary"
+        title={claim.sourceLabel}
+      >
+        <BookOpen className="h-3 w-3" />
+        Wikipedia · {claim.anchorValue ?? "article"}
+        <ArrowUpRight className="h-3 w-3" />
+      </a>
+    </li>
+  );
+}
+
+/**
+ * Wikipedia section-anchored claims block.
+ *
+ * Track-level claims (sourceHandle='wikipedia') and album-level claims
+ * (sourceHandle='wikipedia-album') are surfaced together but labelled
+ * distinctly: "Track" vs "Album" scope prefix before the section label.
+ * Only published section claims with non-empty admin-written text are shown.
+ */
+function WikipediaClaims({ claims }: { claims: WikipediaClaim[] }) {
+  const sectionClaims = claims.filter(
+    (c) => c.anchorType === "section" && c.text && c.text.trim().length > 0,
+  );
+  if (sectionClaims.length === 0) return null;
+
+  const trackClaims = sectionClaims.filter(
+    (c) => !c.sourceHandle || c.sourceHandle === "wikipedia",
+  );
+  const albumClaims = sectionClaims.filter(
+    (c) => c.sourceHandle === "wikipedia-album",
+  );
+
+  return (
+    <section>
+      <SectionHeading
+        icon={<BookOpen className="h-5 w-5" />}
+        title="From Wikipedia"
+        hint={`${sectionClaims.length} section fact${sectionClaims.length === 1 ? "" : "s"}`}
+      />
+      <ul className="flex flex-col gap-2" data-testid="wikipedia-claims">
+        {trackClaims.map((claim, i) => (
+          <WikipediaClaimCard
+            key={claim.id ?? `t-${i}`}
+            claim={claim}
+            index={i}
+            scopePrefix="Track"
+          />
+        ))}
+        {albumClaims.map((claim, i) => (
+          <WikipediaClaimCard
+            key={claim.id ?? `a-${i}`}
+            claim={claim}
+            index={i}
+            scopePrefix="Album"
+          />
         ))}
       </ul>
     </section>

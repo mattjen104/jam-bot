@@ -38,6 +38,10 @@ import {
   IngestBlogBody,
   IngestDiscogsListBody,
   AddRymListBody,
+  GetWikipediaDraftsParams,
+  GetWikipediaDraftsResponse,
+  PatchClaimParams,
+  PatchClaimBody,
 } from "@workspace/api-zod";
 import {
   db,
@@ -71,6 +75,7 @@ import { getLyrics } from "../../lore/lrclib.js";
 import { supportsBackfill, stationArchiveUrl } from "../../lore/adapters.js";
 import { enrichRecording } from "@workspace/song-enrichment";
 import { wireSongEnrichment } from "../../song/wire.js";
+import { fetchWikipediaClaims } from "../../lore/wikipedia.js";
 
 wireSongEnrichment();
 
@@ -347,16 +352,31 @@ router.get("/recordings/:mbid/knowledge", async (req, res) => {
     const claimRows = await db
       .select()
       .from(trackClaimsTable)
-      .where(eq(trackClaimsTable.mbid, rec.mbid))
+      .where(
+        and(
+          eq(trackClaimsTable.mbid, rec.mbid),
+          eq(trackClaimsTable.status, "published"),
+        ),
+      )
       .orderBy(trackClaimsTable.id);
+
+    // Fire-and-forget Wikipedia check — off the hot path, idempotent.
+    fetchWikipediaClaims(rec.mbid).catch((err) =>
+      console.warn("[lore] wikipedia fire-and-forget failed", rec.mbid, err),
+    );
 
     const data = GetRecordingKnowledgeResponse.parse({
       knowledge: knowledge ?? null,
       claims: claimRows.map((c) => ({
+        id: c.id,
         text: c.text,
         sourceLabel: c.sourceLabel,
         sourceUrl: c.sourceUrl,
         positionMs: c.positionMs,
+        anchorType: c.anchorType ?? null,
+        anchorValue: c.anchorValue ?? null,
+        status: c.status,
+        sourceHandle: c.sourceHandle,
       })),
     });
     return res.json(data);
@@ -1145,6 +1165,102 @@ router.post("/admin/song-exploder/:episodeId/claims", async (req, res) => {
     }
     console.error("[lore] song-exploder claim failed", err);
     return res.status(400).json({ error: "Could not store claim" });
+  }
+});
+
+// GET /api/admin/wikipedia-drafts?mbid= — draft Wikipedia claims pending review.
+router.get("/admin/wikipedia-drafts", async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const parsed = GetWikipediaDraftsParams.safeParse({ mbid: req.query["mbid"] });
+  if (!parsed.success) {
+    return res.status(400).json({ error: "mbid query parameter is required" });
+  }
+  try {
+    const rows = await db
+      .select()
+      .from(trackClaimsTable)
+      .where(
+        and(
+          eq(trackClaimsTable.mbid, parsed.data.mbid),
+          eq(trackClaimsTable.sourceHandle, "wikipedia"),
+          eq(trackClaimsTable.status, "draft"),
+        ),
+      )
+      .orderBy(trackClaimsTable.id);
+
+    const data = GetWikipediaDraftsResponse.parse({
+      claims: rows.map((c) => ({
+        id: c.id,
+        mbid: c.mbid,
+        anchorValue: c.anchorValue ?? "",
+        sourceLabel: c.sourceLabel,
+        sourceUrl: c.sourceUrl,
+        status: c.status,
+        createdAt: c.createdAt.toISOString(),
+      })),
+    });
+    return res.json(data);
+  } catch (err) {
+    console.error("[lore] wikipedia drafts failed", err);
+    return res.status(503).json({ error: "Could not load drafts" });
+  }
+});
+
+// PATCH /api/admin/claims/:id — admin review: paraphrase + publish or reject.
+router.patch("/admin/claims/:id", async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const params = PatchClaimParams.safeParse(req.params);
+  if (!params.success) {
+    return res.status(400).json({ error: "Invalid claim id" });
+  }
+  const body = PatchClaimBody.safeParse(req.body);
+  if (!body.success) {
+    return res.status(400).json({ error: "Invalid request body" });
+  }
+  const b = body.data;
+
+  // When publishing, text is required (the admin-written paraphrase).
+  if (b.status === "published" && (!b.text || !b.text.trim())) {
+    return res
+      .status(400)
+      .json({ error: "text is required when publishing a claim" });
+  }
+
+  try {
+    const [existing] = await db
+      .select()
+      .from(trackClaimsTable)
+      .where(eq(trackClaimsTable.id, params.data.id))
+      .limit(1);
+    if (!existing) {
+      return res.status(404).json({ error: "Claim not found" });
+    }
+
+    const [updated] = await db
+      .update(trackClaimsTable)
+      .set({
+        status: b.status,
+        ...(b.text ? { text: b.text.trim() } : {}),
+      })
+      .where(eq(trackClaimsTable.id, params.data.id))
+      .returning();
+
+    if (!updated) {
+      return res.status(404).json({ error: "Claim not found" });
+    }
+
+    return res.json({
+      id: updated.id,
+      mbid: updated.mbid,
+      anchorValue: updated.anchorValue ?? "",
+      sourceLabel: updated.sourceLabel,
+      sourceUrl: updated.sourceUrl,
+      status: updated.status,
+      createdAt: updated.createdAt.toISOString(),
+    });
+  } catch (err) {
+    console.error("[lore] patch claim failed", err);
+    return res.status(503).json({ error: "Could not update claim" });
   }
 });
 

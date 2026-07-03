@@ -491,17 +491,49 @@ export const GetRecordingKnowledgeResponse = zod.object({
     .array(
       zod
         .object({
+          id: zod.number().int().optional(),
           text: zod.string(),
           sourceLabel: zod.string(),
           sourceUrl: zod.string(),
           positionMs: zod.union([zod.number(), zod.null()]).optional(),
+          anchorType: zod.union([zod.literal("section"), zod.null()]).optional(),
+          anchorValue: zod.union([zod.string(), zod.null()]).optional(),
+          status: zod.enum(["draft", "published", "rejected"]).optional(),
+          sourceHandle: zod.string().optional(),
         })
         .describe(
-          "One grounded fact about a recording, extracted systematically from an official documentary source (e.g. a Classic Albums making-of clip). `sourceUrl` deep-links to the exact moment in the official source that supports the claim, so every fact is one tap from its evidence.\n",
+          "One grounded fact about a recording. section-anchored claims have anchorType='section' and anchorValue set to the Wikipedia section label.",
         ),
     )
     .optional()
-    .describe("Grounded documentary-sourced facts (may be empty)."),
+    .describe("Grounded facts (published only). Empty when no published claims exist."),
+});
+
+export const GetWikipediaDraftsParams = zod.object({
+  mbid: zod.string().min(1),
+});
+
+export const GetWikipediaDraftsResponse = zod.object({
+  claims: zod.array(
+    zod.object({
+      id: zod.number().int(),
+      mbid: zod.string(),
+      anchorValue: zod.string(),
+      sourceLabel: zod.string(),
+      sourceUrl: zod.string(),
+      status: zod.enum(["draft", "published", "rejected"]),
+      createdAt: zod.string(),
+    }),
+  ),
+});
+
+export const PatchClaimParams = zod.object({
+  id: zod.coerce.number().int(),
+});
+
+export const PatchClaimBody = zod.object({
+  text: zod.string().optional(),
+  status: zod.enum(["published", "rejected"]),
 });
 
 /**
