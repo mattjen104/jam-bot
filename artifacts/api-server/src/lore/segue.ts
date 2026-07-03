@@ -9,7 +9,8 @@ import {
   pickersTable,
   type InsertSegueEdge,
 } from "@workspace/db";
-import { eq, asc, desc, and, isNotNull, inArray, sql } from "drizzle-orm";
+import { eq, asc, desc, and, isNotNull, inArray } from "drizzle-orm";
+import { resolveSpinRunAnchors, spinDayExpr } from "./runs.js";
 
 /**
  * Segue edges — the "song A was followed by song B on this station/show" graph
@@ -491,7 +492,6 @@ export async function spinsForRecording(
   limit = 50,
 ): Promise<RecordingSpin[]> {
   try {
-    const spinDay = sql<string>`to_char(${spinsTable.playedAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`;
     const rows = await db
       .select({
         playedAt: spinsTable.playedAt,
@@ -499,7 +499,7 @@ export async function spinsForRecording(
         confidence: spinsTable.confidence,
         stationId: spinsTable.stationId,
         showId: spinsTable.showId,
-        day: spinDay,
+        day: spinDayExpr,
         stationSlug: stationsTable.slug,
         stationName: stationsTable.name,
         stationClass: stationsTable.stationClass,
@@ -514,28 +514,14 @@ export async function spinsForRecording(
       .limit(limit);
 
     // Resolve each spin's archived run anchor (min spin id in its
-    // station+show+UTC-day group). Computed over the whole spins table —
-    // a window over the mbid-filtered rows would name the wrong anchor.
-    const runByKey = new Map<string, number>();
-    if (rows.length > 0) {
-      const stationIds = [...new Set(rows.map((r) => r.stationId))];
-      const days = [...new Set(rows.map((r) => r.day))];
-      const anchors = await db
-        .select({
-          stationId: spinsTable.stationId,
-          showId: spinsTable.showId,
-          day: spinDay,
-          runId: sql<number>`min(${spinsTable.id})`,
-        })
-        .from(spinsTable)
-        .where(
-          and(inArray(spinsTable.stationId, stationIds), inArray(spinDay, days)),
-        )
-        .groupBy(spinsTable.stationId, spinsTable.showId, spinDay);
-      for (const a of anchors) {
-        runByKey.set(`${a.stationId}|${a.showId ?? "-"}|${a.day}`, a.runId);
-      }
-    }
+    // station+show+UTC-day group). Uses resolveSpinRunAnchors for exact
+    // (stationId, showId, day) filtering — no cartesian cross-product scan.
+    const keys = rows.map((r) => ({
+      stationId: r.stationId,
+      showId: r.showId,
+      day: r.day,
+    }));
+    const runByKey = await resolveSpinRunAnchors(keys);
 
     return rows.map((r) => ({
       playedAt: r.playedAt,
@@ -547,7 +533,7 @@ export async function spinsForRecording(
         stationClass: r.stationClass,
       },
       show: r.showName ? { name: r.showName, djName: r.djName ?? null } : null,
-      runId: runByKey.get(`${r.stationId}|${r.showId ?? "-"}|${r.day}`) ?? null,
+      runId: runByKey.get(`${r.stationId}|${r.showId ?? "null"}|${r.day}`) ?? null,
     }));
   } catch (err) {
     console.error("[lore] spinsForRecording failed", mbid, err);

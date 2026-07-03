@@ -1,9 +1,6 @@
-import { spinsTable } from "@workspace/db";
-import { sql } from "drizzle-orm";
 import type { Station, Picker } from "@workspace/db";
-
-/** UTC broadcast day of a spin, as YYYY-MM-DD (the run grouping key). */
-export const spinDayExpr = sql<string>`to_char(${spinsTable.playedAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`;
+// Re-export from the lore layer so route files have one import site.
+export { spinDayExpr } from "../../lore/runs.js";
 
 /** Shape a DB station row into the public Station payload. */
 export function toStation(s: Station) {

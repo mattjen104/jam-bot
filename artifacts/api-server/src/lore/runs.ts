@@ -2,6 +2,13 @@ import { db, picksTable, spinsTable } from "@workspace/db";
 import { eq, and, or, sql } from "drizzle-orm";
 
 /**
+ * UTC broadcast day of a spin as YYYY-MM-DD — the run grouping key.
+ * Defined here (not in the routes layer) so lore-layer code (segue.ts etc.)
+ * can import it without a cross-layer dependency.
+ */
+export const spinDayExpr = sql<string>`to_char(${spinsTable.playedAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`;
+
+/**
  * The run's stable id for a station broadcast group: smallest spin id within
  * its (station + show + UTC broadcast day) partition.  Use this expression
  * everywhere you GROUP BY a station run so the derivation is never duplicated.
