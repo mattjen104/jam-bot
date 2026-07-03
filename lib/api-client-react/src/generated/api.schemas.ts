@@ -431,6 +431,7 @@ export interface GeniusDraftReviewResponse {
 
  */
 export interface TrackClaim {
+  id?: number;
   text: string;
   sourceLabel: string;
   sourceUrl: string;
@@ -438,8 +439,13 @@ export interface TrackClaim {
    */
   sourceHandle: string;
   positionMs?: number | null;
+  /** 'section' for Wikipedia section claims; null for timestamp-anchored claims. */
+  anchorType?: "section" | null;
+  /** Section label when anchorType='section'. Null for timestamp-anchored claims. */
+  anchorValue?: string | null;
   /** True for artist-verified Genius annotations. */
   verified?: boolean;
+  status?: "draft" | "published" | "rejected";
 }
 
 export interface RecordingKnowledge {
@@ -586,6 +592,8 @@ export interface Picker {
   /** @nullable */
   description?: string | null;
   active: boolean;
+  /** @nullable */
+  latestRunId?: number | null;
 }
 
 export interface PickerArchive {

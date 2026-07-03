@@ -4,7 +4,9 @@ import { usePlayer } from "../player/PlayerProvider";
 import type { TimeOrientation } from "../player/playbackSession";
 import { CONFIDENCE_LABEL } from "../lib/format";
 import { clockTime } from "../lib/format";
-import { Ghost, Play } from "lucide-react";
+import { ExternalLink, Ghost, Play } from "lucide-react";
+
+const BANDCAMP_HOST_RE = /bandcamp\.com/i;
 
 /**
  * The ordered tracklist of one documented run, with a single "replay" action.
@@ -14,20 +16,28 @@ import { Ghost, Play } from "lucide-react";
  * `timeOrientation` distinguishes the session shape:
  * - 'past'    : ghost-radio station run (as it aired)
  * - 'curated' : picker run (ordered list from a human taste source)
+ *
+ * `runSourceUrl` is the source article/page URL for the whole run. When it
+ * points to Bandcamp, unresolved tracks show a "Listen on Bandcamp →" link so
+ * the listener can still reach the audio even if the track wasn't resolved to
+ * the spine.
  */
 export function ArchiveTracklist({
   tracks,
   replayLabel,
   timeOrientation = "past",
+  runSourceUrl,
 }: {
   tracks: ArchiveTrack[];
   replayLabel: string;
   timeOrientation?: TimeOrientation;
+  runSourceUrl?: string | null;
 }) {
   const { ride } = usePlayer();
 
   const resolved = tracks.filter((t) => t.recording != null);
   const gapCount = tracks.length - resolved.length;
+  const isBandcampRun = runSourceUrl ? BANDCAMP_HOST_RE.test(runSourceUrl) : false;
 
   const replay = () => {
     ride.startReplay(
@@ -107,11 +117,22 @@ export function ArchiveTracklist({
                 )}
                 <p className="truncate font-mono text-[11px] text-muted-foreground">
                   {rec ? rec.artist : t.rawArtist || "Unknown artist"}
-                  {!rec ? " · never resolved — skipped in replay" : ""}
+                  {!rec && !isBandcampRun ? " · never resolved — skipped in replay" : ""}
+                  {!rec && isBandcampRun ? " · unresolved — skipped in replay" : ""}
                 </p>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-0.5">
-                {t.playedAt ? (
+                {!rec && isBandcampRun && runSourceUrl ? (
+                  <a
+                    href={runSourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-wide text-primary hover:underline"
+                  >
+                    <ExternalLink className="h-2.5 w-2.5" />
+                    Listen on Bandcamp
+                  </a>
+                ) : t.playedAt ? (
                   <span className="font-mono text-[11px] text-muted-foreground">
                     {clockTime(t.playedAt)}
                   </span>

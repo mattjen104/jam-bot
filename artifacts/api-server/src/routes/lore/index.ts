@@ -61,7 +61,7 @@ import {
   type Station,
   type Picker,
 } from "@workspace/db";
-import { eq, and, asc, desc, isNull, isNotNull, sql } from "drizzle-orm";
+import { eq, and, asc, desc, isNull, isNotNull, inArray, sql } from "drizzle-orm";
 import { nextRideable, spinsForRecording } from "../../lore/segue.js";
 import { resolvePreview } from "../../lore/preview.js";
 import { ingestManualSpin } from "../../lore/resolve.js";
@@ -109,7 +109,7 @@ function requireAdmin(req: Request, res: Response): boolean {
 }
 
 /** Shape a DB picker row into the public Picker payload. */
-function toPicker(p: Picker) {
+function toPicker(p: Picker, latestRunId: number | null = null) {
   return {
     id: p.id,
     pickerType: p.pickerType,
@@ -119,6 +119,7 @@ function toPicker(p: Picker) {
     trustTier: p.trustTier,
     description: p.description,
     active: p.active,
+    latestRunId,
   };
 }
 
@@ -572,7 +573,37 @@ router.get("/pickers", async (req, res) => {
           : eq(pickersTable.active, true),
       )
       .orderBy(asc(pickersTable.trustTier), asc(pickersTable.name));
-    const data = ListPickersResponse.parse({ pickers: rows.map(toPicker) });
+
+    // Resolve the latest runId per picker (min pick.id of the most-recently-ingested sourceUrl).
+    const latestRunById = new Map<number, number>();
+    if (rows.length > 0) {
+      const ids = rows.map((r) => r.id);
+      // Group by (picker_id, source_url) to get one row per run; find the
+      // freshest run per picker in JS rather than fighting SQL ordering.
+      const runRows = await db
+        .select({
+          pickerId: picksTable.pickerId,
+          latestAt: sql<Date>`max(${picksTable.pickedAt})`,
+          runId: sql<number>`min(${picksTable.id})`,
+        })
+        .from(picksTable)
+        .where(and(inArray(picksTable.pickerId, ids), isNotNull(picksTable.sourceUrl)))
+        .groupBy(picksTable.pickerId, picksTable.sourceUrl);
+
+      const latestAtByPicker = new Map<number, Date>();
+      for (const r of runRows) {
+        if (r.pickerId == null || r.latestAt == null) continue;
+        const prev = latestAtByPicker.get(r.pickerId);
+        if (!prev || r.latestAt > prev) {
+          latestAtByPicker.set(r.pickerId, r.latestAt);
+          latestRunById.set(r.pickerId, r.runId);
+        }
+      }
+    }
+
+    const data = ListPickersResponse.parse({
+      pickers: rows.map((r) => toPicker(r, latestRunById.get(r.id) ?? null)),
+    });
     return res.json(data);
   } catch (err) {
     console.error("[lore] list pickers failed", err instanceof Error ? err.message : String(err));
@@ -899,7 +930,7 @@ router.get("/archive/picker-runs/:runId", async (req, res) => {
     });
     return res.json(data);
   } catch (err) {
-    console.error("[lore] picker run failed", err);
+    console.error("[lore] picker run failed", err instanceof Error ? err.message : String(err));
     return res.status(503).json({ error: "Could not load run" });
   }
 });

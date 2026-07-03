@@ -713,6 +713,7 @@ export const ListPickersResponse = zod.object({
         trustTier: zod.number(),
         description: zod.string().nullish(),
         active: zod.boolean(),
+        latestRunId: zod.number().nullish(),
       })
       .describe(
         "A trusted taste source (label, blog, curator, collector, event, DJ).",
@@ -905,6 +906,7 @@ export const GetPickerArchiveResponse = zod.object({
       trustTier: zod.number(),
       description: zod.string().nullish(),
       active: zod.boolean(),
+      latestRunId: zod.number().nullish(),
     })
     .describe(
       "A trusted taste source (label, blog, curator, collector, event, DJ).",
@@ -962,6 +964,7 @@ export const GetPickerRunResponse = zod.object({
       trustTier: zod.number(),
       description: zod.string().nullish(),
       active: zod.boolean(),
+      latestRunId: zod.number().nullish(),
     })
     .describe(
       "A trusted taste source (label, blog, curator, collector, event, DJ).",

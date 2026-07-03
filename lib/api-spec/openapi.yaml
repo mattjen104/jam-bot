@@ -2555,6 +2555,9 @@ components:
           type: ["string", "null"]
         active:
           type: boolean
+        latestRunId:
+          type: ["integer", "null"]
+          description: ID of the most recent run from this picker; present when at least one pick has been ingested.
       required:
         - id
         - pickerType

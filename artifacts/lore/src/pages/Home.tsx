@@ -19,6 +19,7 @@ import {
   BookOpen,
   Ghost,
   List,
+  Play,
   ShieldCheck,
   UserCheck,
   Waypoints,
@@ -212,15 +213,15 @@ export default function Home() {
 
 function EditorialPickerCard({ picker }: { picker: Picker }) {
   return (
-    <li>
-      <Link
-        href={`/pickers/${picker.handle}`}
-        className="hover-elevate flex h-full flex-col gap-2 rounded-xl border border-card-border bg-card p-4 transition-colors hover:border-primary-border"
-      >
+    <li className="flex flex-col">
+      <div className="hover-elevate flex h-full flex-col gap-2 rounded-xl border border-card-border bg-card p-4 transition-colors hover:border-primary-border">
         <div className="flex items-start justify-between gap-2">
-          <span className="font-semibold leading-tight text-foreground">
+          <Link
+            href={`/pickers/${picker.handle}`}
+            className="font-semibold leading-tight text-foreground hover:text-primary"
+          >
             {picker.name}
-          </span>
+          </Link>
           <List className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
         </div>
         {picker.description && (
@@ -228,10 +229,24 @@ function EditorialPickerCard({ picker }: { picker: Picker }) {
             {picker.description}
           </p>
         )}
-        <span className="mt-auto font-mono text-[10px] uppercase tracking-wide text-primary">
-          Browse picks →
-        </span>
-      </Link>
+        <div className="mt-auto flex items-center gap-3">
+          {picker.latestRunId != null ? (
+            <Link
+              href={`/pickers/runs/${picker.latestRunId}?play=1`}
+              className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wide text-primary-foreground bg-primary rounded-full px-3 py-1.5 hover:opacity-90"
+            >
+              <Play className="h-3 w-3" />
+              Replay latest
+            </Link>
+          ) : null}
+          <Link
+            href={`/pickers/${picker.handle}`}
+            className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground hover:text-primary"
+          >
+            Browse all →
+          </Link>
+        </div>
+      </div>
     </li>
   );
 }
