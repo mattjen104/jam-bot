@@ -55,47 +55,45 @@ export function FollowingStrip() {
 
   if (follows.length === 0) return null;
 
+  // Exactly ONE item per followed source — the newest run/list from each —
+  // so no source can crowd the others out of the strip.
   const items: StripItem[] = [];
   stationQueries.forEach((q) => {
-    if (!q.data) return;
-    for (const r of q.data.runs.slice(0, 3)) {
-      items.push({
-        key: `station-run-${r.runId}`,
-        href: `/archive/station-runs/${r.runId}`,
-        title: r.show?.name ?? "Station stream",
-        byline: q.data.station.name,
-        date: r.date ?? null,
-      });
-    }
+    const r = q.data?.runs[0];
+    if (!q.data || !r) return;
+    items.push({
+      key: `station-run-${r.runId}`,
+      href: `/archive/station-runs/${r.runId}`,
+      title: r.show?.name ?? "Station stream",
+      byline: q.data.station.name,
+      date: r.date ?? null,
+    });
   });
   djQueries.forEach((q, i) => {
     const f = djFollows[i];
     if (!q.data || !f) return;
     const parsed = parseDjFollowId(f.id);
     if (!parsed) return;
-    for (const r of q.data.runs.filter(
-      (r) => r.show?.djName === parsed.djName,
-    ).slice(0, 3)) {
-      items.push({
-        key: `dj-run-${r.runId}`,
-        href: `/archive/station-runs/${r.runId}`,
-        title: r.show?.name ?? "Station stream",
-        byline: `${parsed.djName} · ${q.data.station.name}`,
-        date: r.date ?? null,
-      });
-    }
+    const r = q.data.runs.find((r) => r.show?.djName === parsed.djName);
+    if (!r) return;
+    items.push({
+      key: `dj-run-${r.runId}`,
+      href: `/archive/station-runs/${r.runId}`,
+      title: r.show?.name ?? "Station stream",
+      byline: `${parsed.djName} · ${q.data.station.name}`,
+      date: r.date ?? null,
+    });
   });
   pickerQueries.forEach((q) => {
-    if (!q.data) return;
-    for (const r of q.data.runs.slice(0, 3)) {
-      items.push({
-        key: `picker-run-${r.runId}`,
-        href: `/archive/picker-runs/${r.runId}`,
-        title: r.title ?? "Untitled run",
-        byline: q.data.picker.name,
-        date: r.pickedAt ?? null,
-      });
-    }
+    const r = q.data?.runs[0];
+    if (!q.data || !r) return;
+    items.push({
+      key: `picker-run-${r.runId}`,
+      href: `/archive/picker-runs/${r.runId}`,
+      title: r.title ?? "Untitled run",
+      byline: q.data.picker.name,
+      date: r.pickedAt ?? null,
+    });
   });
 
   // Dedup (a station + its DJ follow can surface the same run), newest first.

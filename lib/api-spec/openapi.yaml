@@ -551,9 +551,9 @@ paths:
       summary: Recent documented runs across every station (ghost radio browse)
       description: >
         The newest documented runs from all stations in one list — each a real
-        show's plays on one UTC broadcast day, newest first, with resolution
-        counts so the client can favor well-resolved, replayable runs. Powers
-        the home screen's Ghost Radio mode.
+        show's plays on one UTC broadcast day. Ranked by recency and quality:
+        newest broadcast day first, best-resolved runs first within a day, so
+        replayable runs lead. Powers the home screen's Ghost Radio mode.
       responses:
         "200":
           description: Recent runs across all stations, newest first

@@ -938,9 +938,10 @@ router.get("/archive/picker-runs/:runId", async (req, res) => {
 
 // GET /api/archive/recent-runs — the newest documented runs across every
 // station, in one list. Same run derivation as the per-station archive
-// (group by station + show + UTC day, runId = min spin id), ordered by the
-// most recent play so the home screen's Ghost Radio mode has a live browse
-// surface without fanning out per station.
+// (group by station + show + UTC day, runId = min spin id). Ranking favors
+// recency AND resolution quality: newest broadcast day first, and within a
+// day the best-resolved runs lead (ties broken by most recent play), so the
+// home screen's Ghost Radio mode surfaces replayable runs before spotty ones.
 router.get("/archive/recent-runs", async (_req, res) => {
   try {
     const runs = await db
@@ -966,7 +967,11 @@ router.get("/archive/recent-runs", async (_req, res) => {
         showsTable.name,
         showsTable.djName,
       )
-      .orderBy(sql`max(${spinsTable.playedAt}) desc`)
+      .orderBy(
+        sql`${spinDayExpr} desc`,
+        sql`(count(*) filter (where ${spinsTable.mbid} is not null))::float / count(*) desc`,
+        sql`max(${spinsTable.playedAt}) desc`,
+      )
       .limit(40);
 
     const stationIds = [...new Set(runs.map((r) => r.stationId))];

@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
+import { useQueries } from "@tanstack/react-query";
 import {
+  getPickerArchive,
   useListStations,
   useGetStationNowPlaying,
   getGetStationNowPlayingQueryKey,
@@ -259,24 +261,61 @@ function LiveMode() {
   );
 }
 
-/** Mode 2 — editorial playlists from real humans. */
+/** The freshness summary of a picker's newest documented list. */
+interface LatestList {
+  runId: number;
+  title: string | null;
+  pickedAt: string | null;
+  trackCount: number;
+  resolvedCount: number;
+  /** Newest run with at least one resolved track — the one "Replay latest" plays. */
+  playableRunId: number | null;
+}
+
+/** Picker types that count as curated lists on home. */
+const CURATED_TYPES = new Set(["editorial", "blog", "label"]);
+
+/** Mode 2 — editorial, blog, and label playlists from real humans. */
 function CuratedMode() {
-  const { data, isLoading } = useListPickers(
-    { type: "editorial" },
-    {
-      query: {
-        queryKey: getListPickersQueryKey({ type: "editorial" }),
-        staleTime: 5 * 60 * 1000,
-      },
+  const { data, isLoading } = useListPickers(undefined, {
+    query: {
+      queryKey: getListPickersQueryKey(),
+      staleTime: 5 * 60 * 1000,
     },
+  });
+  const pickers = (data?.pickers ?? []).filter((p) =>
+    CURATED_TYPES.has(p.pickerType),
   );
-  const pickers = data?.pickers ?? [];
+
+  // Freshness fan-out: each card shows its picker's newest list (title, date,
+  // "x of y playable") from the same archive endpoint the detail page uses.
+  const archiveQueries = useQueries({
+    queries: pickers.map((p) => ({
+      queryKey: ["picker-archive-latest", p.handle],
+      queryFn: () => getPickerArchive(p.handle),
+      staleTime: 5 * 60 * 1000,
+    })),
+  });
+  const latestByHandle = new Map<string, LatestList>();
+  archiveQueries.forEach((q) => {
+    const run = q.data?.runs[0];
+    if (!q.data || !run) return;
+    latestByHandle.set(q.data.picker.handle, {
+      runId: run.runId,
+      title: run.title ?? null,
+      pickedAt: run.pickedAt ?? null,
+      trackCount: run.trackCount,
+      resolvedCount: run.resolvedCount,
+      playableRunId:
+        q.data.runs.find((r) => r.resolvedCount > 0)?.runId ?? null,
+    });
+  });
 
   return (
     <section>
       <div className="mb-4 flex items-baseline justify-between">
         <h2 className="font-serif text-xl font-semibold text-foreground">
-          Editorial playlists
+          Curated lists
         </h2>
         <span className="font-mono text-xs text-muted-foreground">
           real humans, real picks
@@ -298,7 +337,11 @@ function CuratedMode() {
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {pickers.map((picker) => (
-            <EditorialPickerCard key={picker.id} picker={picker} />
+            <EditorialPickerCard
+              key={picker.id}
+              picker={picker}
+              latest={latestByHandle.get(picker.handle) ?? null}
+            />
           ))}
         </ul>
       )}
@@ -404,13 +447,24 @@ function RecentRunCard({ item }: { item: RecentStationRun }) {
   );
 }
 
-function EditorialPickerCard({ picker }: { picker: Picker }) {
+function EditorialPickerCard({
+  picker,
+  latest,
+}: {
+  picker: Picker;
+  latest: LatestList | null;
+}) {
+  // Replay targets the newest run with playable tracks — the freshness block
+  // above may honestly show a newer, not-yet-resolved list.
+  const replayRunId = latest
+    ? latest.playableRunId
+    : (picker.latestRunId ?? null);
   return (
     <li className="flex flex-col">
       <div className="hover-elevate flex h-full flex-col gap-2 rounded-xl border border-card-border bg-card p-4 transition-colors hover:border-primary-border">
         <div className="flex items-start justify-between gap-2">
           <Link
-            href={`/pickers/${picker.handle}`}
+            href={`/archive/pickers/${picker.handle}`}
             className="font-semibold leading-tight text-foreground hover:text-primary"
           >
             {picker.name}
@@ -422,10 +476,26 @@ function EditorialPickerCard({ picker }: { picker: Picker }) {
             {picker.description}
           </p>
         )}
+        {latest && (
+          <div
+            className="rounded-lg border border-border bg-background/60 px-3 py-2"
+            data-testid={`picker-latest-${picker.handle}`}
+          >
+            <p className="line-clamp-1 text-xs font-medium text-foreground">
+              {latest.title ?? "Latest list"}
+            </p>
+            <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">
+              {latest.pickedAt ? `${runDate(latest.pickedAt)} · ` : ""}
+              <span className={latest.resolvedCount > 0 ? "text-primary" : ""}>
+                {latest.resolvedCount} of {latest.trackCount} playable
+              </span>
+            </p>
+          </div>
+        )}
         <div className="mt-auto flex items-center gap-3">
-          {picker.latestRunId != null ? (
+          {replayRunId != null ? (
             <Link
-              href={`/pickers/runs/${picker.latestRunId}?play=1`}
+              href={`/archive/picker-runs/${replayRunId}?play=1`}
               className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wide text-primary-foreground bg-primary rounded-full px-3 py-1.5 hover:opacity-90"
             >
               <Play className="h-3 w-3" />
@@ -433,7 +503,7 @@ function EditorialPickerCard({ picker }: { picker: Picker }) {
             </Link>
           ) : null}
           <Link
-            href={`/pickers/${picker.handle}`}
+            href={`/archive/pickers/${picker.handle}`}
             className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground hover:text-primary"
           >
             Browse all →

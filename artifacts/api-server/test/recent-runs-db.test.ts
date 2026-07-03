@@ -106,7 +106,7 @@ beforeAll(async () => {
       playedAt: new Date(base + 1 * MIN),
     },
     // Run a2 — SAME station A, but attributed to a show: must split off (show
-    // is part of the grouping key). Newest play of the three runs.
+    // is part of the grouping key). Newest play but fully unresolved.
     {
       stationId: stationA,
       showId: showA,
@@ -201,8 +201,9 @@ describe("GET /api/archive/recent-runs", () => {
     const ids = new Set(mine.map((i) => i.run.runId));
     expect(ids.size).toBe(3);
 
-    // Ordering by max(playedAt) desc: a2 (+3min) > b1 (+2min) > a1 (+1min).
+    // Quality-aware ranking: same broadcast day, so resolution ratio decides —
+    // b1 (1/1) > a1 (1/2) > a2 (0/1) — even though a2 has the newest play.
     const order = mine.map((i) => i.run.runId);
-    expect(order).toEqual([a2!.run.runId, b1!.run.runId, a1!.run.runId]);
+    expect(order).toEqual([b1!.run.runId, a1!.run.runId, a2!.run.runId]);
   });
 });
