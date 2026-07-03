@@ -1,4 +1,6 @@
-import { Router, type IRouter, type Request, type Response } from "express";
+import { Router, type IRouter } from "express";
+import { rateLimit } from "express-rate-limit";
+import { timingSafeEqual, createHash } from "node:crypto";
 import {
   CreateManualSpinBody,
   UpsertPickerBody,
@@ -49,29 +51,39 @@ import { toPicker } from "./shared.js";
 
 const router: IRouter = Router();
 
-/**
- * Shared admin-token gate. Absent env => disabled (503), never silently open;
- * mismatch => 401. Returns true when the request may proceed. Never logs the token.
- * NOTE: replaced with constant-time middleware in Task #134.
- */
-function requireAdmin(req: Request, res: Response): boolean {
+// Rate limit: 10 requests per 15 minutes per IP — brute-force protection.
+// Applied before auth so lockout happens before any token comparison.
+router.use(
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 10,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+  }),
+);
+
+// Structural auth gate — all routes on this router are automatically protected.
+// Absent env var → 503 (not silently open); token mismatch → 401.
+// Uses timingSafeEqual on SHA-256 digests to prevent timing side-channels.
+router.use((req, res, next) => {
   const adminToken = process.env["LORE_ADMIN_TOKEN"];
   if (!adminToken) {
     res.status(503).json({ error: "Admin entry is not configured" });
-    return false;
+    return;
   }
-  const provided = req.header("x-admin-token");
-  if (!provided || provided !== adminToken) {
+  const provided = req.header("x-admin-token") ?? "";
+  const expected = adminToken;
+  const aDigest = createHash("sha256").update(provided).digest();
+  const bDigest = createHash("sha256").update(expected).digest();
+  if (!timingSafeEqual(aDigest, bDigest)) {
     res.status(401).json({ error: "Invalid admin token" });
-    return false;
+    return;
   }
-  return true;
-}
+  next();
+});
 
 // POST /api/admin/spins — admin-only manual/historical spin entry.
 router.post("/admin/spins", h(async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
   const parsed = CreateManualSpinBody.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Invalid manual spin" });
@@ -115,8 +127,6 @@ router.post("/admin/spins", h(async (req, res) => {
 
 // POST /api/admin/pickers — admin-only create/update of a picker.
 router.post("/admin/pickers", h(async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
   const parsed = UpsertPickerBody.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Invalid picker" });
@@ -139,8 +149,6 @@ router.post("/admin/pickers", h(async (req, res) => {
 
 // POST /api/admin/pickers/:handle/picks — admin-only tracklist ingest.
 router.post("/admin/pickers/:handle/picks", h(async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
   const params = LogTracklistParams.safeParse(req.params);
   if (!params.success) {
     return res.status(404).json({ error: "Picker not found" });
@@ -171,8 +179,6 @@ router.post("/admin/pickers/:handle/picks", h(async (req, res) => {
 
 // POST /api/admin/labels — admin-only label seed by MusicBrainz MBID.
 router.post("/admin/labels", h(async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
   const parsed = SeedLabelBody.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Invalid label seed" });
@@ -192,8 +198,6 @@ router.post("/admin/labels", h(async (req, res) => {
 
 // POST /api/admin/blogs — admin-only blog/critic RSS ingest.
 router.post("/admin/blogs", h(async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
   const parsed = IngestBlogBody.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Invalid blog ingest" });
@@ -220,8 +224,6 @@ router.post("/admin/blogs", h(async (req, res) => {
 
 // POST /api/admin/discogs-lists — admin-only Discogs list ingest.
 router.post("/admin/discogs-lists", h(async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
   const parsed = IngestDiscogsListBody.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Invalid Discogs list ingest" });
@@ -248,8 +250,6 @@ router.post("/admin/discogs-lists", h(async (req, res) => {
 // POST /api/admin/song-exploder/:episodeId/claims — attach a timestamp-anchored
 // claim to the recording resolved from a Song Exploder episode.
 router.post("/admin/song-exploder/:episodeId/claims", h(async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
   const params = AddSongExploderClaimParams.safeParse(req.params);
   if (!params.success) {
     return res.status(400).json({ error: "Invalid episode id" });
@@ -281,8 +281,6 @@ router.post("/admin/song-exploder/:episodeId/claims", h(async (req, res) => {
 
 // GET /api/admin/claims?status=draft — all pending Wikipedia draft claims across all tracks.
 router.get("/admin/claims", h(async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
   const rows = await db
     .select({
       id: trackClaimsTable.id,
@@ -323,8 +321,6 @@ router.get("/admin/claims", h(async (req, res) => {
 
 // GET /api/admin/wikipedia-drafts?mbid= — draft Wikipedia claims pending review.
 router.get("/admin/wikipedia-drafts", h(async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
   const parsed = GetWikipediaDraftsParams.safeParse({ mbid: req.query["mbid"] });
   if (!parsed.success) {
     return res.status(400).json({ error: "mbid query parameter is required" });
@@ -359,8 +355,6 @@ router.get("/admin/wikipedia-drafts", h(async (req, res) => {
 
 // PATCH /api/admin/claims/:id — admin review: paraphrase + publish or reject.
 router.patch("/admin/claims/:id", h(async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
   const params = PatchClaimParams.safeParse(req.params);
   if (!params.success) {
     return res.status(400).json({ error: "Invalid claim id" });
@@ -406,8 +400,6 @@ router.patch("/admin/claims/:id", h(async (req, res) => {
 
 // GET /api/admin/genius-drafts?mbid=:mbid — list pending annotation drafts.
 router.get("/admin/genius-drafts", h(async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
   const parsed = ListGeniusDraftsQueryParams.safeParse(req.query);
   if (!parsed.success) {
     return res.status(400).json({ error: "mbid query parameter is required" });
@@ -450,8 +442,6 @@ router.get("/admin/genius-drafts", h(async (req, res) => {
 
 // POST /api/admin/genius-drafts/:id/review — publish or reject a draft.
 router.post("/admin/genius-drafts/:id/review", h(async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
   const params = ReviewGeniusDraftParams.safeParse(req.params);
   if (!params.success) {
     return res.status(400).json({ error: "Invalid draft id" });
@@ -486,8 +476,6 @@ router.post("/admin/genius-drafts/:id/review", h(async (req, res) => {
 
 // POST /api/admin/rym-lists — admin-only RateYourMusic link-out picker.
 router.post("/admin/rym-lists", h(async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-
   const parsed = AddRymListBody.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Invalid RYM list" });
@@ -504,6 +492,5 @@ router.post("/admin/rym-lists", h(async (req, res) => {
   }
   return res.status(201).json(toPicker(picker));
 }));
-
 
 export default router;
