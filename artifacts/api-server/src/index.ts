@@ -10,6 +10,10 @@ import {
   seedClassicAlbumsPicker,
   startClassicAlbumsPoller,
 } from "./lore/classic-albums.js";
+import {
+  seedSongExploderPicker,
+  startSongExploderPoller,
+} from "./lore/song-exploder.js";
 import { startSegueJob } from "./lore/segue-job.js";
 import { ensurePicksUnifiedView } from "./lore/view.js";
 
@@ -51,6 +55,12 @@ async function bootLore(): Promise<void> {
       console.error("[lore] classic-albums picker seed failed", err);
     }
     startClassicAlbumsPoller();
+    try {
+      await seedSongExploderPicker();
+    } catch (err) {
+      console.error("[lore] song-exploder picker seed failed", err);
+    }
+    startSongExploderPoller();
     await startBackfillJob();
     await startReconcileJob();
     startSegueJob();

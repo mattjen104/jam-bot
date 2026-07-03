@@ -1246,6 +1246,42 @@ export const AddRymListBody = zod
   .describe("Register a RateYourMusic list as a link-out-only picker.");
 
 /**
+ * Attach a paraphrased, timestamp-anchored claim to the recording resolved from a Song Exploder episode. Claims are admin-entered (never automated) because Song Exploder episode timestamps live in the audio, not the RSS feed text. The claim is stored as a track_claim with source attribution deep-linking to the episode, so every fact is one tap from its evidence. Token-guarded.
+
+ * @summary Admin-only timestamp-anchored claim entry for a Song Exploder episode
+ */
+export const AddSongExploderClaimParams = zod.object({
+  episodeId: zod.coerce.number(),
+});
+
+export const AddSongExploderClaimHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const AddSongExploderClaimBody = zod
+  .object({
+    offsetMs: zod
+      .number()
+      .nullish()
+      .describe(
+        "Millisecond offset within the song where this fact applies. Null or omitted = track-level fact (shown in liner notes without a timeline anchor).\n",
+      ),
+    text: zod
+      .string()
+      .min(1)
+      .describe("Paraphrased claim text (never verbatim transcript prose)."),
+    sourceUrl: zod
+      .string()
+      .min(1)
+      .describe(
+        "Deep link to the episode (or a timestamped link to the exact moment if the podcast player supports it), so every claim is one tap from its evidence.\n",
+      ),
+  })
+  .describe(
+    "Admin-entered, paraphrased claim attached to a Song Exploder episode's resolved recording. Never verbatim transcript — always a paraphrase with a deep link to the supporting moment in the episode.\n",
+  );
+
+/**
  * `configured` is false when the server has no Spotify app credentials (feature honestly absent). `connected` is true when this session's cookie maps to stored OAuth tokens.
 
  * @summary Whether this browser session has Spotify connected

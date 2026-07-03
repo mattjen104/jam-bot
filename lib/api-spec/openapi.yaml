@@ -883,6 +883,72 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /admin/song-exploder/{episodeId}/claims:
+    post:
+      operationId: addSongExploderClaim
+      tags: [admin]
+      summary: Admin-only timestamp-anchored claim entry for a Song Exploder episode
+      description: >
+        Attach a paraphrased, timestamp-anchored claim to the recording
+        resolved from a Song Exploder episode. Claims are admin-entered (never
+        automated) because Song Exploder episode timestamps live in the audio,
+        not the RSS feed text. The claim is stored as a track_claim with
+        source attribution deep-linking to the episode, so every fact is one
+        tap from its evidence. Token-guarded.
+      parameters:
+        - name: episodeId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: x-admin-token
+          in: header
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SongExploderClaimRequest"
+      responses:
+        "201":
+          description: The claim was stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SongExploderClaimResponse"
+        "400":
+          description: Invalid claim body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Episode not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Episode not yet resolved to a recording
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Admin entry not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /spotify/status:
     get:
       operationId: getSpotifyStatus
@@ -2380,3 +2446,46 @@ components:
       required:
         - active
         - isPlaying
+    SongExploderClaimRequest:
+      type: object
+      description: >
+        Admin-entered, paraphrased claim attached to a Song Exploder episode's
+        resolved recording. Never verbatim transcript — always a paraphrase with
+        a deep link to the supporting moment in the episode.
+      properties:
+        offsetMs:
+          type: ["integer", "null"]
+          description: >
+            Millisecond offset within the song where this fact applies.
+            Null or omitted = track-level fact (shown in liner notes without
+            a timeline anchor).
+        text:
+          type: string
+          minLength: 1
+          description: Paraphrased claim text (never verbatim transcript prose).
+        sourceUrl:
+          type: string
+          minLength: 1
+          description: >
+            Deep link to the episode (or a timestamped link to the exact
+            moment if the podcast player supports it), so every claim is
+            one tap from its evidence.
+      required:
+        - text
+        - sourceUrl
+    SongExploderClaimResponse:
+      type: object
+      properties:
+        claimId:
+          type: integer
+          description: The track_claims row id of the stored claim.
+        mbid:
+          type: string
+          description: The MusicBrainz Recording ID the claim is attached to.
+        episodeTitle:
+          type: string
+          description: The raw episode title from the Song Exploder feed.
+      required:
+        - claimId
+        - mbid
+        - episodeTitle

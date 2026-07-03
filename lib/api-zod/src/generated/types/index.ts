@@ -59,6 +59,8 @@ export * from "./segueNextList";
 export * from "./seguePickerRef";
 export * from "./showRef";
 export * from "./songContext";
+export * from "./songExploderClaimRequest";
+export * from "./songExploderClaimResponse";
 export * from "./songRelationship";
 export * from "./songRelationshipDirection";
 export * from "./songRelationshipKind";

@@ -44,6 +44,8 @@ import type {
   RymListRequest,
   SegueNextList,
   SongContext,
+  SongExploderClaimRequest,
+  SongExploderClaimResponse,
   SpotifyPlayRequest,
   SpotifyPlayResult,
   SpotifyPlayerState,
@@ -2424,6 +2426,99 @@ export const useAddRymList = <
   TContext
 > => {
   return useMutation(getAddRymListMutationOptions(options));
+};
+
+/**
+ * Attach a paraphrased, timestamp-anchored claim to the recording resolved from a Song Exploder episode. Claims are admin-entered (never automated) because Song Exploder episode timestamps live in the audio, not the RSS feed text. The claim is stored as a track_claim with source attribution deep-linking to the episode, so every fact is one tap from its evidence. Token-guarded.
+
+ * @summary Admin-only timestamp-anchored claim entry for a Song Exploder episode
+ */
+export const getAddSongExploderClaimUrl = (episodeId: number) => {
+  return `/api/admin/song-exploder/${episodeId}/claims`;
+};
+
+export const addSongExploderClaim = async (
+  episodeId: number,
+  songExploderClaimRequest: SongExploderClaimRequest,
+  options?: RequestInit,
+): Promise<SongExploderClaimResponse> => {
+  return customFetch<SongExploderClaimResponse>(
+    getAddSongExploderClaimUrl(episodeId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(songExploderClaimRequest),
+    },
+  );
+};
+
+export const getAddSongExploderClaimMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addSongExploderClaim>>,
+    TError,
+    { episodeId: number; data: BodyType<SongExploderClaimRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addSongExploderClaim>>,
+  TError,
+  { episodeId: number; data: BodyType<SongExploderClaimRequest> },
+  TContext
+> => {
+  const mutationKey = ["addSongExploderClaim"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addSongExploderClaim>>,
+    { episodeId: number; data: BodyType<SongExploderClaimRequest> }
+  > = (props) => {
+    const { episodeId, data } = props ?? {};
+
+    return addSongExploderClaim(episodeId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddSongExploderClaimMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addSongExploderClaim>>
+>;
+export type AddSongExploderClaimMutationBody =
+  BodyType<SongExploderClaimRequest>;
+export type AddSongExploderClaimMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Admin-only timestamp-anchored claim entry for a Song Exploder episode
+ */
+export const useAddSongExploderClaim = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addSongExploderClaim>>,
+    TError,
+    { episodeId: number; data: BodyType<SongExploderClaimRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addSongExploderClaim>>,
+  TError,
+  { episodeId: number; data: BodyType<SongExploderClaimRequest> },
+  TContext
+> => {
+  return useMutation(getAddSongExploderClaimMutationOptions(options));
 };
 
 /**

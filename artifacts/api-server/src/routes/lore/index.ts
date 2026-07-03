@@ -1,5 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
+  AddSongExploderClaimBody,
+  AddSongExploderClaimParams,
   ListStationsResponse,
   ListStationsNowPlayingResponse,
   GetStationNowPlayingParams,
@@ -61,6 +63,7 @@ import {
   type PickSource,
 } from "../../lore/picks.js";
 import { seedLabelPicker } from "../../lore/label.js";
+import { addSongExploderClaim } from "../../lore/song-exploder.js";
 import { ingestBlogFeed } from "../../lore/blog.js";
 import { ingestDiscogsList, addRymPicker } from "../../lore/collector.js";
 import { resolveEntry } from "../../lore/entry.js";
@@ -1106,6 +1109,42 @@ router.post("/admin/discogs-lists", async (req, res) => {
     const message =
       err instanceof Error ? err.message : "Could not ingest Discogs list";
     return res.status(400).json({ error: message });
+  }
+});
+
+// POST /api/admin/song-exploder/:episodeId/claims — attach a timestamp-anchored
+// claim to the recording resolved from a Song Exploder episode.
+router.post("/admin/song-exploder/:episodeId/claims", async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const params = AddSongExploderClaimParams.safeParse(req.params);
+  if (!params.success) {
+    return res.status(400).json({ error: "Invalid episode id" });
+  }
+  const parsed = AddSongExploderClaimBody.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid claim body" });
+  }
+  const b = parsed.data;
+  try {
+    const result = await addSongExploderClaim({
+      episodeId: params.data.episodeId,
+      offsetMs: b.offsetMs ?? null,
+      text: b.text,
+      sourceUrl: b.sourceUrl,
+    });
+    return res.status(201).json(result);
+  } catch (err) {
+    const status = (err as { status?: number }).status;
+    if (status === 404) {
+      return res.status(404).json({ error: "Episode not found" });
+    }
+    if (status === 409) {
+      return res.status(409).json({
+        error: "Episode not yet resolved to a recording — resolve it first",
+      });
+    }
+    console.error("[lore] song-exploder claim failed", err);
+    return res.status(400).json({ error: "Could not store claim" });
   }
 });
 

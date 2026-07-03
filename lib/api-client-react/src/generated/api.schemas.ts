@@ -885,6 +885,39 @@ export interface SpotifyPlayerState {
   trackUri?: string | null;
 }
 
+/**
+ * Admin-entered, paraphrased claim attached to a Song Exploder episode's resolved recording. Never verbatim transcript — always a paraphrase with a deep link to the supporting moment in the episode.
+
+ */
+export interface SongExploderClaimRequest {
+  /**
+   * Millisecond offset within the song where this fact applies. Null or omitted = track-level fact (shown in liner notes without a timeline anchor).
+
+   * @nullable
+   */
+  offsetMs?: number | null;
+  /**
+   * Paraphrased claim text (never verbatim transcript prose).
+   * @minLength 1
+   */
+  text: string;
+  /**
+   * Deep link to the episode (or a timestamped link to the exact moment if the podcast player supports it), so every claim is one tap from its evidence.
+
+   * @minLength 1
+   */
+  sourceUrl: string;
+}
+
+export interface SongExploderClaimResponse {
+  /** The track_claims row id of the stored claim. */
+  claimId: number;
+  /** The MusicBrainz Recording ID the claim is attached to. */
+  mbid: string;
+  /** The raw episode title from the Song Exploder feed. */
+  episodeTitle: string;
+}
+
 export type ResolveSongParams = {
   /**
    * @minLength 1

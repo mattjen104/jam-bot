@@ -3,11 +3,13 @@ import {
   useGetRecording,
   useGetRecordingPreview,
   useGetRecordingEntry,
+  useGetRecordingKnowledge,
   useGetRecordingSpins,
   useGetRecordingSegues,
   type EntryPick,
   type RecordingSpin,
   type SegueNext,
+  type TrackClaim,
 } from "@workspace/api-client-react";
 import { LyricView } from "../components/LyricView";
 import { usePlayer } from "../player/PlayerProvider";
@@ -20,6 +22,7 @@ import {
   ArrowUpRight,
   Disc3,
   ExternalLink,
+  MessageSquareQuote,
   Music4,
   Radio,
   Route as RouteIcon,
@@ -48,6 +51,7 @@ export default function Song() {
   const { data: rec, isLoading, isError, error } = useGetRecording(mbid);
   const { data: preview } = useGetRecordingPreview(mbid);
   const { data: entry } = useGetRecordingEntry(mbid);
+  const { data: knowledge } = useGetRecordingKnowledge(mbid);
   const { data: spinsData } = useGetRecordingSpins(mbid);
   const { data: seguesData } = useGetRecordingSegues(mbid);
 
@@ -182,6 +186,7 @@ export default function Song() {
             )}
 
             <EntryLadder entry={entry} artist={rec.artist} />
+            <Claims claims={knowledge?.claims ?? []} />
             <LyricView mbid={rec.mbid} progressMs={ride.progressMs} />
             <Segues next={seguesData?.next ?? []} />
             <Spins spins={spinsData?.spins ?? []} />
@@ -387,6 +392,46 @@ function Spins({ spins }: { spins: RecordingSpin[] }) {
           ))}
         </ul>
       )}
+    </section>
+  );
+}
+
+function Claims({ claims }: { claims: TrackClaim[] }) {
+  if (claims.length === 0) return null;
+  return (
+    <section>
+      <SectionHeading
+        icon={<MessageSquareQuote className="h-5 w-5" />}
+        title="From the source"
+        hint={`${claims.length} claim${claims.length === 1 ? "" : "s"}`}
+      />
+      <ul className="flex flex-col gap-2" data-testid="track-claims">
+        {claims.map((c, i) => (
+          <li
+            key={i}
+            className="rounded-xl border border-card-border bg-card p-4"
+          >
+            <p className="text-sm leading-relaxed text-foreground">{c.text}</p>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <p className="font-mono text-[11px] text-muted-foreground/70">
+                {c.sourceLabel}
+                {c.positionMs != null
+                  ? ` · ${Math.floor(c.positionMs / 60000)}:${String(Math.floor((c.positionMs % 60000) / 1000)).padStart(2, "0")}`
+                  : ""}
+              </p>
+              <a
+                href={c.sourceUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="hover-elevate inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-border px-2.5 text-xs text-muted-foreground"
+              >
+                <ExternalLink className="h-3 w-3" />
+                Source
+              </a>
+            </div>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

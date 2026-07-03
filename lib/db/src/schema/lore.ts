@@ -510,3 +510,40 @@ export const lyricLinesTable = pgTable(
 
 export type LyricLineRow = typeof lyricLinesTable.$inferSelect;
 export type InsertLyricLineRow = typeof lyricLinesTable.$inferInsert;
+
+/**
+ * Song Exploder episode records. Each episode deconstructs a single song; the
+ * RSS feed gives us "Artist, Song Title" episodes that are resolved to MBID
+ * and surfaced as `series` picker picks. A musician talking about their own
+ * track is the highest possible attribution source.
+ *
+ * `mbid` is filled after successful resolution; null = unresolved / pending.
+ * `resolvedAt` stamps when the MBID was first set so the poller can skip
+ * already-resolved rows cheaply.
+ */
+export const songExploderEpisodesTable = pgTable(
+  "song_exploder_episodes",
+  {
+    id: serial("id").primaryKey(),
+    /** RSS guid (or episode URL when the feed lacks one) — stable dedup key. */
+    externalId: text("external_id").notNull().unique(),
+    /** Raw episode title as fetched from the feed, e.g. "Doja Cat, Need to Know". */
+    title: text("title").notNull(),
+    /** Link to the episode page on Song Exploder. */
+    episodeUrl: text("episode_url").notNull(),
+    /** Audio enclosure URL (the .mp3 of the episode), when the feed provides one. */
+    audioUrl: text("audio_url"),
+    /** When the episode was published. */
+    publishedAt: timestamp("published_at"),
+    /** Resolved MusicBrainz Recording ID, when matched. Null = unresolved. */
+    mbid: text("mbid").references(() => recordingsTable.mbid),
+    /** When the MBID was first resolved. */
+    resolvedAt: timestamp("resolved_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [index("song_exploder_episodes_mbid_idx").on(t.mbid)],
+);
+
+export type SongExploderEpisode = typeof songExploderEpisodesTable.$inferSelect;
+export type InsertSongExploderEpisode =
+  typeof songExploderEpisodesTable.$inferInsert;
