@@ -1,11 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearch } from "wouter";
 import { useGetStationRun } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { ArchiveTracklist } from "../components/ArchiveTracklist";
 import { ShareButton } from "../components/ShareButton";
 import { runDate } from "../lib/format";
-import { ArrowLeft, ExternalLink, Ghost } from "lucide-react";
+import { ArrowLeft, ExternalLink, Ghost, X } from "lucide-react";
 
 /** One archived station run — its full tracklist, exactly as it aired. */
 export default function StationRun() {
@@ -18,6 +18,7 @@ export default function StationRun() {
   const { ride, radio } = usePlayer();
   const { data, isLoading, isError } = useGetStationRun(runId);
   const didAutoPlay = useRef(false);
+  const [showFallbackNotice, setShowFallbackNotice] = useState(false);
 
   const dockPadding = ride.active || radio.station ? "pb-32" : "pb-16";
 
@@ -28,12 +29,11 @@ export default function StationRun() {
     const resolved = data.tracks.filter((t) => t.recording != null);
     if (resolved.length === 0) return;
     didAutoPlay.current = true;
-    const startIndex = fromMbid
-      ? Math.max(
-          0,
-          resolved.findIndex((t) => t.recording!.mbid === fromMbid),
-        )
-      : 0;
+    const foundIndex = fromMbid
+      ? resolved.findIndex((t) => t.recording!.mbid === fromMbid)
+      : -1;
+    const startIndex = fromMbid ? Math.max(0, foundIndex) : 0;
+    if (fromMbid && foundIndex === -1) setShowFallbackNotice(true);
     ride.startReplay(
       resolved.map((t) => ({
         mbid: t.recording!.mbid,
@@ -101,6 +101,25 @@ export default function StationRun() {
                 </a>
               ) : null}
             </header>
+
+            {showFallbackNotice && (
+              <div
+                data-testid="from-fallback-notice"
+                className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
+              >
+                <span>
+                  That song isn't in this run's resolved tracklist — starting
+                  from the top.
+                </span>
+                <button
+                  aria-label="Dismiss"
+                  onClick={() => setShowFallbackNotice(false)}
+                  className="mt-0.5 shrink-0 text-amber-400 hover:text-amber-200"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
 
             <ArchiveTracklist
               tracks={data.tracks}

@@ -11,7 +11,7 @@
  * these tests pin the player dock's "Replay N/M" position.
  */
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Route, Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
 
@@ -185,6 +185,37 @@ describe("StationRun ?play=1&from= deep link", () => {
     await screen.findAllByText(/Early/);
     expect(screen.queryByTestId("ride-mode-badge")).toBeNull();
   });
+
+  it("shows the fallback notice when from mbid is not in the run", async () => {
+    renderRunPage("station", "play=1&from=mbid-does-not-exist");
+    await waitFor(() => {
+      expect(screen.getByTestId("from-fallback-notice")).toBeTruthy();
+    });
+    expect(screen.getByTestId("from-fallback-notice").textContent).toContain(
+      "isn't in this run's resolved tracklist",
+    );
+  });
+
+  it("does not show the fallback notice when the from mbid is found", async () => {
+    renderRunPage("station", "play=1&from=mbid-19");
+    await expectReplayBadge(`Replay 20/${RESOLVED}`);
+    expect(screen.queryByTestId("from-fallback-notice")).toBeNull();
+  });
+
+  it("does not show the fallback notice when there is no from param", async () => {
+    renderRunPage("station", "play=1");
+    await expectReplayBadge(`Replay 1/${RESOLVED}`);
+    expect(screen.queryByTestId("from-fallback-notice")).toBeNull();
+  });
+
+  it("dismisses the fallback notice when the X button is clicked", async () => {
+    renderRunPage("station", "play=1&from=mbid-does-not-exist");
+    await waitFor(() => {
+      expect(screen.getByTestId("from-fallback-notice")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(screen.queryByTestId("from-fallback-notice")).toBeNull();
+  });
 });
 
 describe("PickerRun ?play=1&from= deep link", () => {
@@ -201,5 +232,27 @@ describe("PickerRun ?play=1&from= deep link", () => {
   it("starts at pick 1 when no from param is given", async () => {
     renderRunPage("picker", "play=1");
     await expectReplayBadge(`Replay 1/${RESOLVED}`);
+  });
+
+  it("shows the fallback notice when from mbid is not in the run", async () => {
+    renderRunPage("picker", "play=1&from=mbid-does-not-exist");
+    await waitFor(() => {
+      expect(screen.getByTestId("from-fallback-notice")).toBeTruthy();
+    });
+    expect(screen.getByTestId("from-fallback-notice").textContent).toContain(
+      "isn't in this run's resolved tracklist",
+    );
+  });
+
+  it("does not show the fallback notice when the from mbid is found", async () => {
+    renderRunPage("picker", "play=1&from=mbid-19");
+    await expectReplayBadge(`Replay 20/${RESOLVED}`);
+    expect(screen.queryByTestId("from-fallback-notice")).toBeNull();
+  });
+
+  it("does not show the fallback notice when there is no from param", async () => {
+    renderRunPage("picker", "play=1");
+    await expectReplayBadge(`Replay 1/${RESOLVED}`);
+    expect(screen.queryByTestId("from-fallback-notice")).toBeNull();
   });
 });
