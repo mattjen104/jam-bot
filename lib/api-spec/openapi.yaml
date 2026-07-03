@@ -1086,6 +1086,47 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /admin/claims:
+    get:
+      operationId: listAllDraftClaims
+      tags: [admin]
+      summary: All pending Wikipedia draft claims across all tracks
+      description: >
+        Returns every track claim with status='draft' and
+        source_handle='wikipedia' or 'wikipedia-album', ordered by created_at
+        desc. Includes a joined track title when the recording is known.
+        Token-guarded.
+      parameters:
+        - name: x-admin-token
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ["draft"]
+      responses:
+        "200":
+          description: All draft claims
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AllDraftClaimsList"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Admin entry not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /admin/wikipedia-drafts:
     get:
       operationId: getWikipediaDrafts
@@ -2202,6 +2243,53 @@ components:
         - sourceLabel
         - sourceUrl
         - sourceHandle
+    AllDraftClaimsList:
+      type: object
+      properties:
+        claims:
+          type: array
+          items:
+            $ref: "#/components/schemas/AllDraftClaim"
+      required:
+        - claims
+    AllDraftClaim:
+      type: object
+      description: >
+        A Wikipedia draft claim awaiting admin review, enriched with a joined
+        track title when the recording is known.
+      properties:
+        id:
+          type: integer
+        mbid:
+          type: string
+        trackTitle:
+          type: ["string", "null"]
+          description: Recording title from the recordings table, if available.
+        trackArtist:
+          type: ["string", "null"]
+          description: Recording artist from the recordings table, if available.
+        anchorValue:
+          type: string
+          description: Section label (e.g. "Recording", "Production").
+        sourceLabel:
+          type: string
+          description: "Wikipedia article title."
+        sourceUrl:
+          type: string
+          description: Deep link to the Wikipedia section.
+        status:
+          type: string
+          enum: ["draft", "published", "rejected"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - mbid
+        - anchorValue
+        - sourceLabel
+        - sourceUrl
+        - status
+        - createdAt
     WikipediaDraftList:
       type: object
       properties:

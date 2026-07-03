@@ -517,6 +517,30 @@ export const GetRecordingKnowledgeResponse = zod.object({
     .describe("Grounded facts (published only). Empty when no published claims exist."),
 });
 
+export const ListAllDraftClaimsHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const ListAllDraftClaimsQueryParams = zod.object({
+  status: zod.enum(["draft"]).optional(),
+});
+
+export const ListAllDraftClaimsResponse = zod.object({
+  claims: zod.array(
+    zod.object({
+      id: zod.number().int(),
+      mbid: zod.string(),
+      trackTitle: zod.union([zod.string(), zod.null()]).optional(),
+      trackArtist: zod.union([zod.string(), zod.null()]).optional(),
+      anchorValue: zod.string(),
+      sourceLabel: zod.string(),
+      sourceUrl: zod.string(),
+      status: zod.enum(["draft", "published", "rejected"]),
+      createdAt: zod.string(),
+    }),
+  ),
+});
+
 export const GetWikipediaDraftsParams = zod.object({
   mbid: zod.string().min(1),
 });

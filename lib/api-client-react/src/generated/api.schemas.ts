@@ -1133,6 +1133,31 @@ export type GetOembedParams = {
   url: string;
 };
 
+export type AllDraftClaim = {
+  id: number;
+  mbid: string;
+  /** Recording title from the recordings table, if available. */
+  trackTitle?: string | null;
+  /** Recording artist from the recordings table, if available. */
+  trackArtist?: string | null;
+  /** Section label (e.g. "Recording", "Production"). */
+  anchorValue: string;
+  /** Wikipedia article title. */
+  sourceLabel: string;
+  /** Deep link to the Wikipedia section. */
+  sourceUrl: string;
+  status: "draft" | "published" | "rejected";
+  createdAt: string;
+};
+
+export type AllDraftClaimsList = {
+  claims: AllDraftClaim[];
+};
+
+export type ListAllDraftClaimsParams = {
+  status?: "draft";
+};
+
 export type ListGeniusDraftsParams = {
   /**
    * @minLength 1

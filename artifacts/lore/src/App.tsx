@@ -12,6 +12,7 @@ import PickerArchive from "@/pages/PickerArchive";
 import PickerRun from "@/pages/PickerRun";
 import Journal from "@/pages/Journal";
 import Following from "@/pages/Following";
+import AdminClaims from "@/pages/AdminClaims";
 import { PlayerProvider } from "./player/PlayerProvider";
 import { PlayerDock } from "./components/PlayerDock";
 import { ListeningLogger } from "./components/ListeningLogger";
@@ -30,6 +31,7 @@ function Router() {
       <Route path="/archive/picker-runs/:runId" component={PickerRun} />
       <Route path="/journal" component={Journal} />
       <Route path="/following" component={Following} />
+      <Route path="/admin" component={AdminClaims} />
       <Route component={NotFound} />
     </Switch>
   );

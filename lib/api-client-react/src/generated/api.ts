@@ -17,6 +17,8 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AllDraftClaim,
+  AllDraftClaimsList,
   ApiError,
   ArchiveCoverage,
   ArchiveRecentRuns,
@@ -31,6 +33,7 @@ import type {
   HealthStatus,
   IngestResult,
   LabelSeedRequest,
+  ListAllDraftClaimsParams,
   ListGeniusDraftsParams,
   ManualSpinRequest,
   ManualSpinResponse,
@@ -2616,6 +2619,107 @@ export const useAddSongExploderClaim = <
 > => {
   return useMutation(getAddSongExploderClaimMutationOptions(options));
 };
+
+/**
+ * Returns every track claim with status='draft' and source_handle='wikipedia' or 'wikipedia-album', ordered by created_at desc. Includes a joined track title when the recording is known. Token-guarded.
+
+ * @summary All pending Wikipedia draft claims across all tracks
+ */
+export const getListAllDraftClaimsUrl = (params?: ListAllDraftClaimsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) {
+        normalizedParams.append(key, value === null ? "null" : value.toString());
+      }
+    });
+  }
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/admin/claims?${stringifiedParams}`
+    : `/api/admin/claims`;
+};
+
+export const listAllDraftClaims = async (
+  params?: ListAllDraftClaimsParams,
+  options?: RequestInit,
+): Promise<AllDraftClaimsList> => {
+  return customFetch<AllDraftClaimsList>(getListAllDraftClaimsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListAllDraftClaimsQueryKey = (
+  params?: ListAllDraftClaimsParams,
+) => {
+  return [`/api/admin/claims`, ...(params ? [params] : [])] as const;
+};
+
+export const getListAllDraftClaimsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAllDraftClaims>>,
+  TError = ErrorType<ApiError>,
+>(
+  params?: ListAllDraftClaimsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAllDraftClaims>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListAllDraftClaimsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listAllDraftClaims>>
+  > = ({ signal }) => listAllDraftClaims(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAllDraftClaims>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListAllDraftClaimsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAllDraftClaims>>
+>;
+export type ListAllDraftClaimsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary All pending Wikipedia draft claims across all tracks
+ */
+
+export function useListAllDraftClaims<
+  TData = Awaited<ReturnType<typeof listAllDraftClaims>>,
+  TError = ErrorType<ApiError>,
+>(
+  params?: ListAllDraftClaimsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAllDraftClaims>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListAllDraftClaimsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * Returns all Genius annotation drafts in 'draft' status for a given recording MBID. Each draft carries the lyric fragment, projected timestamp anchor (when a matching LRCLIB line was found), Genius deep link, verified flag, and vote count. Admin reviews these and calls `/admin/genius-drafts/{id}/review` to publish or reject. Token-guarded.

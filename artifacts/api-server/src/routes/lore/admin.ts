@@ -10,6 +10,7 @@ import {
   AddSongExploderClaimParams,
   AddSongExploderClaimBody,
   AddRymListBody,
+  ListAllDraftClaimsResponse,
   GetWikipediaDraftsParams,
   GetWikipediaDraftsResponse,
   PatchClaimParams,
@@ -23,12 +24,13 @@ import {
 import {
   db,
   stationsTable,
+  recordingsTable,
   pickersTable,
   picksTable,
   trackClaimsTable,
   geniusAnnotationDraftsTable,
 } from "@workspace/db";
-import { eq, and, asc, desc } from "drizzle-orm";
+import { eq, and, asc, desc, sql } from "drizzle-orm";
 import { ingestManualSpin } from "../../lore/resolve.js";
 import {
   upsertPicker,
@@ -277,6 +279,48 @@ router.post("/admin/song-exploder/:episodeId/claims", h(async (req, res) => {
   return res.status(201).json(result);
 }));
 
+// GET /api/admin/claims?status=draft — all pending Wikipedia draft claims across all tracks.
+router.get("/admin/claims", h(async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+
+  const rows = await db
+    .select({
+      id: trackClaimsTable.id,
+      mbid: trackClaimsTable.mbid,
+      anchorValue: trackClaimsTable.anchorValue,
+      sourceLabel: trackClaimsTable.sourceLabel,
+      sourceUrl: trackClaimsTable.sourceUrl,
+      status: trackClaimsTable.status,
+      createdAt: trackClaimsTable.createdAt,
+      trackTitle: recordingsTable.title,
+      trackArtist: recordingsTable.artist,
+    })
+    .from(trackClaimsTable)
+    .leftJoin(recordingsTable, eq(trackClaimsTable.mbid, recordingsTable.mbid))
+    .where(
+      and(
+        eq(trackClaimsTable.status, "draft"),
+        sql`${trackClaimsTable.sourceHandle} in ('wikipedia', 'wikipedia-album')`,
+      ),
+    )
+    .orderBy(desc(trackClaimsTable.createdAt));
+
+  const data = ListAllDraftClaimsResponse.parse({
+    claims: rows.map((r) => ({
+      id: r.id,
+      mbid: r.mbid,
+      anchorValue: r.anchorValue ?? "",
+      sourceLabel: r.sourceLabel,
+      sourceUrl: r.sourceUrl,
+      status: r.status,
+      createdAt: r.createdAt.toISOString(),
+      trackTitle: r.trackTitle ?? null,
+      trackArtist: r.trackArtist ?? null,
+    })),
+  });
+  return res.json(data);
+}));
+
 // GET /api/admin/wikipedia-drafts?mbid= — draft Wikipedia claims pending review.
 router.get("/admin/wikipedia-drafts", h(async (req, res) => {
   if (!requireAdmin(req, res)) return;
@@ -460,5 +504,6 @@ router.post("/admin/rym-lists", h(async (req, res) => {
   }
   return res.status(201).json(toPicker(picker));
 }));
+
 
 export default router;
