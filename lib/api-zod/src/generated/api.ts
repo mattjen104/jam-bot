@@ -1820,3 +1820,16 @@ export const PatchSongExploderEpisodeResponse = zod.object({
   id: zod.number(),
   youtubeUrl: zod.string().nullable(),
 });
+
+export const GetSongExploderChaptersParams = zod.object({
+  episodeId: zod.coerce.number().int().positive(),
+});
+
+export const GetSongExploderChaptersResponse = zod.object({
+  chapters: zod.array(
+    zod.object({
+      positionMs: zod.number().int().nonnegative(),
+      text: zod.string(),
+    }),
+  ),
+});

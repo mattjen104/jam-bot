@@ -14,7 +14,8 @@ import {
   Loader2,
   Mic2,
   Plus,
-  X,
+  Trash2,
+  Youtube,
 } from "lucide-react";
 
 export default function AdminSongExploder() {
@@ -242,6 +243,114 @@ function EpisodeEditor({
   const [ytError, setYtError] = useState("");
   const [ytSaved, setYtSaved] = useState(false);
 
+  // Chapter import
+  type ChapterDraft = {
+    key: string;
+    positionMs: number;
+    text: string;
+    songPos: string;
+    submitting: boolean;
+    done: boolean;
+    error: string;
+  };
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState("");
+  const [chapterDrafts, setChapterDrafts] = useState<ChapterDraft[]>([]);
+
+  function msToTimecode(ms: number): string {
+    const totalSec = Math.floor(ms / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    return `${m}:${String(s).padStart(2, "0")}`;
+  }
+
+  async function importChapters() {
+    setImporting(true);
+    setImportError("");
+    try {
+      const res = await fetch(
+        `/api/admin/song-exploder/${episode.id}/chapters`,
+        { headers: adminHeaders() },
+      );
+      const body = (await res.json()) as { chapters?: { positionMs: number; text: string }[]; error?: string };
+      if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
+      const incoming = (body.chapters ?? []).filter(
+        (c) => !chapterDrafts.some((d) => d.positionMs === c.positionMs && d.text === c.text),
+      );
+      if (!incoming.length) {
+        setImportError("No chapter markers found in the video description.");
+        return;
+      }
+      setChapterDrafts((prev) => [
+        ...prev,
+        ...incoming.map((c) => ({
+          key: `${c.positionMs}-${c.text}`,
+          positionMs: c.positionMs,
+          text: c.text,
+          songPos: "",
+          submitting: false,
+          done: false,
+          error: "",
+        })),
+      ]);
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  function updateDraft(key: string, patch: Partial<ChapterDraft>) {
+    setChapterDrafts((prev) => prev.map((d) => (d.key === key ? { ...d, ...patch } : d)));
+  }
+
+  function removeDraft(key: string) {
+    setChapterDrafts((prev) => prev.filter((d) => d.key !== key));
+  }
+
+  async function submitChapterAnchor(draft: ChapterDraft) {
+    const songMs = parseTimecode(draft.songPos);
+    if (!songMs) {
+      updateDraft(draft.key, { error: "Enter song position as M:SS" });
+      return;
+    }
+    const epSecs = Math.floor(draft.positionMs / 1000);
+    let sourceUrl = episode.episodeUrl;
+    if (ytDraft.trim()) {
+      try {
+        const u = new URL(ytDraft.trim());
+        u.searchParams.set("t", String(epSecs));
+        sourceUrl = u.toString();
+      } catch {
+        sourceUrl = ytDraft.trim();
+      }
+    }
+    updateDraft(draft.key, { submitting: true, error: "" });
+    try {
+      const res = await fetch(
+        `/api/admin/song-exploder/${episode.id}/claims`,
+        {
+          method: "POST",
+          headers: adminHeaders(),
+          body: JSON.stringify({ offsetMs: songMs, text: draft.text, sourceUrl }),
+        },
+      );
+      if (!res.ok) {
+        const b = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(b.error ?? `HTTP ${res.status}`);
+      }
+      updateDraft(draft.key, { submitting: false, done: true });
+      onUpdated();
+    } catch (err) {
+      updateDraft(draft.key, {
+        submitting: false,
+        error: err instanceof Error ? err.message : "Submit failed",
+      });
+    }
+  }
+
   async function saveYoutubeUrl() {
     setYtSaving(true);
     setYtError("");
@@ -415,7 +524,109 @@ function EpisodeEditor({
         {ytSaved && (
           <p className="mt-1 font-mono text-[11px] text-primary">Saved ✓</p>
         )}
+
+        {/* Import chapters button — shown when a YouTube URL is entered (saved or unsaved) */}
+        {ytDraft.trim() && (
+          <div className="mt-2">
+            <button
+              type="button"
+              onClick={() => void importChapters()}
+              disabled={importing}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary/30 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary disabled:opacity-50"
+            >
+              {importing ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Youtube className="h-3 w-3" />
+              )}
+              Import chapters from YouTube
+            </button>
+            {importError && (
+              <p className="mt-1 text-xs text-destructive-foreground">{importError}</p>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Imported chapter drafts */}
+      {chapterDrafts.length > 0 && (
+        <div className="mt-5 rounded-xl border border-primary/20 bg-primary/5 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="font-mono text-[11px] uppercase tracking-wide text-primary">
+              {chapterDrafts.filter((d) => !d.done).length} chapter
+              {chapterDrafts.filter((d) => !d.done).length === 1 ? "" : "s"} to add
+            </p>
+            <button
+              type="button"
+              onClick={() => setChapterDrafts([])}
+              className="font-mono text-[10px] text-muted-foreground/60 hover:text-destructive-foreground"
+            >
+              Clear all
+            </button>
+          </div>
+          <ul className="flex flex-col gap-3">
+            {chapterDrafts.map((draft) => (
+              <li
+                key={draft.key}
+                className={[
+                  "rounded-lg border p-3 transition-opacity",
+                  draft.done
+                    ? "border-primary/20 bg-primary/10 opacity-60"
+                    : "border-border bg-card",
+                ].join(" ")}
+              >
+                <div className="flex items-start gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {draft.text}
+                    </p>
+                    <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+                      ep {msToTimecode(draft.positionMs)}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeDraft(draft.key)}
+                    className="shrink-0 text-muted-foreground/40 hover:text-destructive-foreground"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                {!draft.done && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={draft.songPos}
+                      onChange={(e) => updateDraft(draft.key, { songPos: e.target.value, error: "" })}
+                      placeholder="Song pos M:SS"
+                      className="w-28 rounded-md border border-border bg-secondary/40 px-2 py-1 font-mono text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void submitChapterAnchor(draft)}
+                      disabled={draft.submitting || !draft.songPos.trim()}
+                      className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                    >
+                      {draft.submitting ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Plus className="h-3 w-3" />
+                      )}
+                      Add anchor
+                    </button>
+                    {draft.error && (
+                      <p className="text-xs text-destructive-foreground">{draft.error}</p>
+                    )}
+                  </div>
+                )}
+                {draft.done && (
+                  <p className="mt-1 font-mono text-[11px] text-primary">✓ Added</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Anchor entry form */}
       <div className="mt-6 border-t border-border pt-5">

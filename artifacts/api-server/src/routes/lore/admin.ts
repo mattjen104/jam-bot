@@ -28,6 +28,8 @@ import {
   PatchSongExploderEpisodeParams,
   PatchSongExploderEpisodeBody,
   PatchSongExploderEpisodeResponse,
+  GetSongExploderChaptersParams,
+  GetSongExploderChaptersResponse,
 } from "@workspace/api-zod";
 import {
   db,
@@ -556,6 +558,120 @@ router.patch("/admin/song-exploder/:episodeId", h(async (req, res) => {
     }),
   );
 }));
+
+// GET /api/admin/song-exploder/:episodeId/chapters — fetch and parse YouTube
+// chapter markers from the episode's stored YouTube URL. Uses YouTube's
+// public innertube player endpoint so no API key is required.
+router.get("/admin/song-exploder/:episodeId/chapters", h(async (req, res) => {
+  const params = GetSongExploderChaptersParams.safeParse(req.params);
+  if (!params.success) {
+    return res.status(400).json({ error: "Invalid episode id" });
+  }
+
+  const [episode] = await db
+    .select({ youtubeUrl: songExploderEpisodesTable.youtubeUrl })
+    .from(songExploderEpisodesTable)
+    .where(eq(songExploderEpisodesTable.id, params.data.episodeId));
+
+  if (!episode) {
+    return res.status(404).json({ error: "Episode not found" });
+  }
+  if (!episode.youtubeUrl) {
+    return res.status(422).json({ error: "Episode has no YouTube URL — save one first" });
+  }
+
+  const videoId = extractYouTubeVideoId(episode.youtubeUrl);
+  if (!videoId) {
+    return res.status(422).json({ error: "Cannot parse video ID from the stored YouTube URL" });
+  }
+
+  const result = await fetchYouTubeVideoDescription(videoId);
+  if ("error" in result) {
+    const status = result.error === "YOUTUBE_API_KEY is not configured" ? 503 : 502;
+    return res.status(status).json({ error: result.error });
+  }
+
+  const chapters = parseYouTubeChapters(result.description);
+  return res.json(GetSongExploderChaptersResponse.parse({ chapters }));
+}));
+
+/** Pull the video ID out of common YouTube URL forms. */
+function extractYouTubeVideoId(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (u.hostname === "youtu.be") return u.pathname.slice(1) || null;
+    return u.searchParams.get("v");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch the video's description text via YouTube Data API v3.
+ * Requires YOUTUBE_API_KEY to be set in the environment.
+ * Returns { description: string } on success, { error: string } on failure.
+ */
+async function fetchYouTubeVideoDescription(
+  videoId: string,
+): Promise<{ description: string } | { error: string }> {
+  const apiKey = process.env["YOUTUBE_API_KEY"];
+  if (!apiKey) {
+    return { error: "YOUTUBE_API_KEY is not configured" };
+  }
+  try {
+    const url = new URL("https://www.googleapis.com/youtube/v3/videos");
+    url.searchParams.set("id", videoId);
+    url.searchParams.set("part", "snippet");
+    url.searchParams.set("key", apiKey);
+    const r = await fetch(url.toString(), {
+      headers: { "Accept": "application/json" },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!r.ok) {
+      const body = (await r.json().catch(() => ({}))) as { error?: { message?: string } };
+      return { error: body.error?.message ?? `YouTube API returned HTTP ${r.status}` };
+    }
+    const j = (await r.json()) as {
+      items?: Array<{ snippet?: { description?: string } }>;
+    };
+    const description = j.items?.[0]?.snippet?.description;
+    if (description == null) {
+      return { error: "Video not found or description unavailable" };
+    }
+    return { description };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Network error fetching YouTube data" };
+  }
+}
+
+/**
+ * Parse YouTube chapter markers from a video description.
+ * Accepts both M:SS and H:MM:SS formats. Returns chapters sorted by
+ * position; returns [] when fewer than two timestamps are found (YouTube's
+ * own threshold for treating them as chapters).
+ */
+function parseYouTubeChapters(description: string): { positionMs: number; text: string }[] {
+  const lines = description.split("\n");
+  const chapters: { positionMs: number; text: string }[] = [];
+
+  for (const line of lines) {
+    const m = line.match(/^(\d+:\d{2}(?::\d{2})?)\s+(.+)/);
+    if (!m) continue;
+    const [, ts, rawLabel] = m;
+    const parts = ts!.split(":").map((p) => parseInt(p, 10));
+    let posMs: number;
+    if (parts.length === 2) {
+      posMs = (parts[0]! * 60 + parts[1]!) * 1000;
+    } else {
+      posMs = (parts[0]! * 3600 + parts[1]! * 60 + parts[2]!) * 1000;
+    }
+    const text = rawLabel!.trim();
+    if (text) chapters.push({ positionMs: posMs, text });
+  }
+
+  chapters.sort((a, b) => a.positionMs - b.positionMs);
+  return chapters.length >= 2 ? chapters : [];
+}
 
 // POST /api/admin/rym-lists — admin-only RateYourMusic link-out picker.
 router.post("/admin/rym-lists", h(async (req, res) => {
