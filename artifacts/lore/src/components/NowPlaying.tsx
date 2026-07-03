@@ -62,7 +62,7 @@ export function NowPlaying({ data, isLoading, fallbackStation }: NowPlayingProps
 
   return (
     <div className="overflow-hidden rounded-2xl border border-card-border bg-card shadow-lg">
-      <div className="relative aspect-square w-full overflow-hidden bg-muted">
+      <div className="relative z-10 aspect-square w-full overflow-hidden bg-muted">
         {artwork ? (
           <img
             src={artwork}
