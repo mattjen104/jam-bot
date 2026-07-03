@@ -176,8 +176,8 @@ router.get("/recordings/:mbid/lyrics", h(async (req, res) => {
     .limit(1);
   if (!rec) return res.status(404).json({ error: "Recording not found" });
 
-  const lines = await getLyrics(rec.mbid);
-  return res.json(GetRecordingLyricsResponse.parse({ lines }));
+  const { lines, synced } = await getLyrics(rec.mbid);
+  return res.json(GetRecordingLyricsResponse.parse({ lines, synced }));
 }));
 
 // GET /api/recordings/:mbid/spins

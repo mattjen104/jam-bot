@@ -1355,16 +1355,17 @@ export const GetRecordingLyricsResponse = zod
         .object({
           offsetMs: zod
             .number()
-            .describe("Milliseconds from the start of the recording."),
+            .describe("Milliseconds from the start of the recording. Meaningful only when synced is true."),
           text: zod.string().describe("The lyric text for this cue."),
         })
         .describe(
-          "One time-indexed lyric cue from a synced lyrics source (LRCLIB). offset_ms is the millisecond offset from the start of the recording.\n",
+          "One lyric cue. offset_ms carries real timestamps when synced is true; plain lyrics use placeholder offsets.\n",
         ),
     ),
+    synced: zod.boolean().describe("True when lines carry real LRC timestamps; false for static plain lyrics."),
   })
   .describe(
-    "Synced lyric lines for a recording. lines is empty when LRCLIB has no synced version for this track.\n",
+    "Lyric lines for a recording. synced=true means time-coded (LRC); synced=false means static plain lyrics. lines is empty when LRCLIB has no lyrics at all.\n",
   );
 
 /**

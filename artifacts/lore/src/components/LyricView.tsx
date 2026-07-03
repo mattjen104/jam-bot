@@ -16,20 +16,21 @@ export function LyricView({ mbid, progressMs }: LyricViewProps) {
   const { data, isLoading } = useGetRecordingLyrics(mbid);
   const { data: knowledgeData } = useGetRecordingKnowledge(mbid);
   const lines = data?.lines ?? [];
+  const synced = data?.synced ?? false;
 
   const [openClaimIdx, setOpenClaimIdx] = useState<number | null>(null);
 
   const activeRef = useRef<HTMLLIElement>(null);
 
   const activeIndex = useMemo(() => {
-    if (progressMs === null || !lines.length) return -1;
+    if (!synced || progressMs === null || !lines.length) return -1;
     let idx = -1;
     for (let i = 0; i < lines.length; i++) {
       if ((lines[i]?.offsetMs ?? Infinity) <= progressMs) idx = i;
       else break;
     }
     return idx;
-  }, [lines, progressMs]);
+  }, [synced, lines, progressMs]);
 
   useEffect(() => {
     activeRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -77,7 +78,7 @@ export function LyricView({ mbid, progressMs }: LyricViewProps) {
     return (
       <div className="px-5 py-4">
         <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
-          No synced lyrics found for this track.
+          No lyrics found for this track.
         </p>
       </div>
     );
@@ -86,7 +87,7 @@ export function LyricView({ mbid, progressMs }: LyricViewProps) {
   return (
     <div className="overflow-hidden rounded-2xl border border-card-border bg-card">
       <p className="px-5 pt-4 pb-2 font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
-        Lyrics
+        {synced ? "Lyrics" : "Lyrics · unsynced"}
       </p>
       <ul
         className="max-h-56 overflow-y-auto px-5 pb-4 [&::-webkit-scrollbar]:hidden"
