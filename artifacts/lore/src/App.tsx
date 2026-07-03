@@ -16,6 +16,7 @@ import AdminClaims from "@/pages/AdminClaims";
 import { PlayerProvider } from "./player/PlayerProvider";
 import { PlayerDock } from "./components/PlayerDock";
 import { ListeningLogger } from "./components/ListeningLogger";
+import { AppLayout } from "./components/AppLayout";
 
 const queryClient = new QueryClient();
 
@@ -44,7 +45,9 @@ function App() {
         <PlayerProvider>
           <ListeningLogger />
           <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <Router />
+            <AppLayout>
+              <Router />
+            </AppLayout>
           </WouterRouter>
           <PlayerDock />
           <Toaster />

@@ -103,7 +103,7 @@ export function LyricView({ mbid, progressMs }: LyricViewProps) {
                     className={cn(
                       "shrink-0 rounded-full p-0.5 transition-colors",
                       lineClaims.some((c) => c.verified)
-                        ? "text-amber-400 hover:text-amber-300"
+                        ? "text-primary hover:text-primary/80"
                         : "text-primary/70 hover:text-primary",
                     )}
                     aria-label="Show Genius annotation"
@@ -125,7 +125,7 @@ export function LyricView({ mbid, progressMs }: LyricViewProps) {
                           className={cn(
                             "font-mono text-[10px] uppercase tracking-wide",
                             claim.verified
-                              ? "text-amber-400"
+                              ? "text-primary"
                               : "text-muted-foreground/70",
                           )}
                         >

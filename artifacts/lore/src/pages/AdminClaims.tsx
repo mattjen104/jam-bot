@@ -29,9 +29,8 @@ function TokenGate({ onSave }: { onSave: (t: string) => void }) {
   const [draft, setDraft] = useState("");
 
   return (
-    <div className="lore-grain relative min-h-screen">
-      <div className="lore-glow pointer-events-none absolute inset-0" />
-      <div className="relative z-10 flex min-h-screen items-center justify-center px-4">
+    <div className="min-h-screen">
+      <div className="flex min-h-screen items-center justify-center px-4">
         <div className="w-full max-w-sm rounded-2xl border border-card-border bg-card p-8 shadow-lg">
           <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wide text-primary">
             <KeyRound className="h-3.5 w-3.5" />
@@ -174,8 +173,7 @@ function ClaimsReview({
   }
 
   return (
-    <div className="lore-grain relative min-h-screen">
-      <div className="lore-glow pointer-events-none absolute inset-0" />
+    <div className="min-h-screen">
       <div className="relative z-10 mx-auto max-w-3xl px-4 py-10 sm:px-6">
         <div className="flex items-center justify-between">
           <div>

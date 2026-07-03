@@ -1,12 +1,16 @@
 import { useState } from "react";
 import { Link } from "wouter";
+import { useQueries } from "@tanstack/react-query";
+import { getPickerArchive, getPickerRun } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import {
   useJournal,
   clearJournal,
+  useFollows,
   type JournalEntry,
 } from "../lib/local";
 import { clockTime } from "../lib/format";
+import { KeepButton } from "../components/KeepButton";
 import {
   ArrowLeft,
   BookOpen,
@@ -14,6 +18,7 @@ import {
   Ghost,
   Radio,
   Trash2,
+  UserCheck,
   Waypoints,
 } from "lucide-react";
 
@@ -27,9 +32,8 @@ export default function Journal() {
   const days = groupByDay(entries);
 
   return (
-    <div className="lore-grain relative min-h-screen">
-      <div className="lore-glow pointer-events-none absolute inset-0" />
-      <div className={`relative z-10 mx-auto max-w-4xl px-4 pt-8 sm:px-6 ${dockPadding}`}>
+    <div className="min-h-screen">
+      <div className={`mx-auto max-w-4xl px-4 pt-8 sm:px-6 ${dockPadding}`}>
         <Link
           href="/"
           className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wide text-muted-foreground hover:text-primary"
@@ -94,6 +98,9 @@ export default function Journal() {
           </div>
         )}
 
+        {/* Inflow strip — new runs from followed pickers */}
+        <InflowRow />
+
         {entries.length === 0 ? (
           <div className="rounded-xl border border-card-border bg-card p-8 text-center">
             <Disc3 className="mx-auto h-10 w-10 text-muted-foreground/50" />
@@ -134,12 +141,12 @@ function JournalRow({ entry }: { entry: JournalEntry }) {
   const title = entry.mbid ? (
     <Link
       href={`/song/${entry.mbid}`}
-      className="truncate font-serif text-base font-semibold text-foreground hover:text-primary"
+      className="truncate text-base font-medium text-foreground hover:text-primary"
     >
       {entry.title}
     </Link>
   ) : (
-    <span className="truncate font-serif text-base font-semibold text-foreground">
+    <span className="truncate text-base font-medium text-foreground">
       {entry.title}
     </span>
   );
@@ -149,7 +156,15 @@ function JournalRow({ entry }: { entry: JournalEntry }) {
       className="flex items-center gap-3 rounded-xl border border-card-border bg-card p-3"
       data-testid="journal-entry"
     >
-      <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-muted">
+      {/* 42×42 artwork swatch with gradient fallback */}
+      <div
+        className="h-[42px] w-[42px] shrink-0 overflow-hidden rounded-lg"
+        style={{
+          background: entry.artworkUrl
+            ? undefined
+            : "linear-gradient(135deg, hsl(var(--secondary)), hsl(var(--muted)))",
+        }}
+      >
         {entry.artworkUrl ? (
           <img
             src={entry.artworkUrl}
@@ -159,25 +174,196 @@ function JournalRow({ entry }: { entry: JournalEntry }) {
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
-            <Disc3 className="h-5 w-5 text-muted-foreground/40" />
+            <Disc3 className="h-4 w-4 text-muted-foreground/40" />
           </div>
         )}
       </div>
+
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-baseline gap-2">{title}</div>
-        <p className="truncate text-sm text-muted-foreground">{entry.artist}</p>
-        <p className="mt-0.5 flex items-center gap-1.5 truncate font-mono text-[11px] text-muted-foreground/80">
+        <p className="truncate text-sm" style={{ color: "hsl(var(--dim))" }}>
+          {entry.artist}
+        </p>
+        {/* IBM Plex Mono source attribution — source name in violet */}
+        <p className="mt-0.5 flex items-center gap-1.5 truncate font-mono text-[11px]" style={{ color: "hsl(var(--faint))" }}>
           <SourceIcon kind={entry.kind} />
-          <SourceLabel entry={entry} />
+          <span className="text-primary">
+            <SourceLabel entry={entry} />
+          </span>
           {!entry.mbid && (
-            <span className="text-muted-foreground/60">· unidentified</span>
+            <span style={{ color: "hsl(var(--faint))" }}>· unresolved</span>
           )}
         </p>
       </div>
-      <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
-        {clockTime(entry.at)}
-      </span>
+
+      {/* Right side: time + service sync badge */}
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        <span className="font-mono text-[11px]" style={{ color: "hsl(var(--faint))" }}>
+          {clockTime(entry.at)}
+        </span>
+        {entry.mbid && <ServiceBadge mbid={entry.mbid} />}
+      </div>
     </li>
+  );
+}
+
+/** Right-aligned service sync badge — shows "Spotify ✓" when connected + resolved. */
+function ServiceBadge({ mbid }: { mbid: string }) {
+  const { spotify } = usePlayer();
+  if (!spotify.configured) {
+    return (
+      <span
+        className="rounded border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wide"
+        style={{ borderColor: "hsl(var(--faint))", color: "hsl(var(--dim))" }}
+      >
+        ID'd ✓
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={spotify.connected ? undefined : spotify.connect}
+      title={spotify.connected ? "Saved to Spotify Liked Songs" : "Connect Spotify to save"}
+      className="rounded border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wide transition-colors hover:border-primary/40 hover:text-primary"
+      style={{
+        borderColor: "hsl(var(--faint))",
+        color: spotify.connected ? "hsl(var(--dim))" : "hsl(var(--faint))",
+        cursor: spotify.connected ? "default" : "pointer",
+      }}
+    >
+      {spotify.connected ? "Spotify ✓" : "Spotify →"}
+    </button>
+  );
+  void mbid; // mbid available for future per-track saved-state checks
+}
+
+/**
+ * Horizontal-scroll inflow strip sourced from followed pickers.
+ * Two-level query: archive → run detail → first resolved track per picker.
+ * Each card: artwork, picker name in violet, track title in Fraunces,
+ * artist in --dim, lime KeepButton. Only renders when following pickers.
+ */
+function InflowRow() {
+  const follows = useFollows();
+  const pickerFollows = follows.filter((f) => f.kind === "picker");
+
+  // Level 1: latest run from each followed picker
+  const archiveQueries = useQueries({
+    queries: pickerFollows.map((f) => ({
+      queryKey: ["following", "picker", f.id],
+      queryFn: () => getPickerArchive(f.id),
+      staleTime: 60_000,
+    })),
+  });
+
+  // Level 2: run detail (tracks) for each picker's most recent run
+  const runDetailQueries = useQueries({
+    queries: archiveQueries.map((aq) => {
+      const runId = aq.data?.runs[0]?.runId ?? null;
+      return {
+        queryKey: ["picker-run", runId],
+        queryFn: () => getPickerRun(runId!),
+        staleTime: 300_000,
+        enabled: !!runId,
+      };
+    }),
+  });
+
+  if (pickerFollows.length === 0) return null;
+
+  interface InflowCard {
+    key: string;
+    runHref: string;
+    songHref: string;
+    pickerName: string;
+    mbid: string;
+    title: string;
+    artist: string;
+    artworkUrl: string | null;
+  }
+
+  const cards = runDetailQueries
+    .map((rq, i): InflowCard | null => {
+      if (!rq.data) return null;
+      const archiveData = archiveQueries[i]?.data;
+      const runId = archiveData?.runs[0]?.runId;
+      if (!archiveData || !runId) return null;
+      const pickerName = archiveData.picker.name;
+      const track = rq.data.tracks.find((t) => t.recording != null);
+      if (!track?.recording) return null;
+      return {
+        key: `picker-${i}-${track.recording.mbid}`,
+        runHref: `/archive/picker-runs/${runId}`,
+        songHref: `/song/${track.recording.mbid}`,
+        pickerName,
+        mbid: track.recording.mbid,
+        title: track.recording.title,
+        artist: track.recording.artist,
+        artworkUrl: track.recording.artworkUrl ?? null,
+      };
+    })
+    .filter((c): c is InflowCard => c !== null);
+
+  if (cards.length === 0) return null;
+
+  return (
+    <section className="mb-8">
+      <div className="mb-3 flex items-baseline justify-between">
+        <h2 className="inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
+          <UserCheck className="h-3.5 w-3.5" />
+          New from your pickers
+        </h2>
+        <Link
+          href="/archive"
+          className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground hover:text-primary"
+        >
+          See all →
+        </Link>
+      </div>
+      <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
+        {cards.map((card) => (
+          <div
+            key={card.key}
+            className="flex w-[160px] shrink-0 flex-col gap-2 rounded-xl border border-card-border bg-card p-3"
+          >
+            {/* Artwork swatch with gradient fallback */}
+            <Link href={card.songHref}>
+              <div
+                className="h-[100px] w-full overflow-hidden rounded-lg"
+                style={{
+                  background: card.artworkUrl
+                    ? undefined
+                    : "linear-gradient(135deg, hsl(var(--secondary)), hsl(var(--muted)))",
+                }}
+              >
+                {card.artworkUrl ? (
+                  <img src={card.artworkUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center">
+                    <Disc3 className="h-8 w-8 text-muted-foreground/30" />
+                  </div>
+                )}
+              </div>
+            </Link>
+            {/* Picker name in violet IBM Plex Mono */}
+            <Link href={card.runHref} className="truncate font-mono text-[10px] uppercase tracking-wide text-primary hover:opacity-80">
+              {card.pickerName}
+            </Link>
+            {/* Track title in Fraunces */}
+            <Link href={card.songHref} className="line-clamp-2 font-serif text-sm font-semibold leading-tight text-foreground hover:text-primary">
+              {card.title}
+            </Link>
+            {/* Artist in --dim */}
+            <p className="truncate font-mono text-[10px]" style={{ color: "hsl(var(--dim))" }}>
+              {card.artist}
+            </p>
+            {/* Lime Keep button */}
+            <KeepButton mbid={card.mbid} />
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

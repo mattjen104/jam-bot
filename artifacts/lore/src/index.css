@@ -56,6 +56,15 @@
   --color-sidebar-accent-border: var(--sidebar-accent-border);
   --color-sidebar-ring: hsl(var(--sidebar-ring));
 
+  /* Fable semantic extras */
+  --color-keep: hsl(var(--keep));
+  --color-keep-foreground: hsl(var(--keep-foreground));
+
+  /* --dim: readable muted label (active tabs, attribution) */
+  --color-dim: hsl(var(--dim));
+  /* --faint: barely-there label (inactive tabs, secondary hints) */
+  --color-faint: hsl(var(--faint));
+
   --font-sans: var(--app-font-sans);
   --font-serif: var(--app-font-serif);
   --font-mono: var(--app-font-mono);
@@ -93,73 +102,93 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* LORE — warm broadcast ink with an amber dial glow. Dark-first. */
+/* LORE — Fable design system: purple-black palette, IBM Plex Mono. Dark-first. */
 :root {
-  --button-outline: rgba(255,255,255, .10);
-  --badge-outline: rgba(255,255,255, .06);
+  --button-outline: rgba(139, 111, 232, .15);
+  --badge-outline: rgba(139, 111, 232, .10);
 
-  --opaque-button-border-intensity: 9;
+  --opaque-button-border-intensity: 6;
 
-  --elevate-1: rgba(255,255,255, .035);
-  --elevate-2: rgba(255,255,255, .08);
+  --elevate-1: rgba(255,255,255, .03);
+  --elevate-2: rgba(255,255,255, .07);
 
-  --background: 28 16% 7%;
-  --foreground: 40 34% 90%;
+  /* ── Fable raw palette tokens ──────────────────────────── */
+  /* void     #120D1C  */ /* H≈260 S≈37% L≈8%  */
+  /* panel    #1B1430  */ /* H≈255 S≈41% L≈13% */
+  /* panel2   #241A3E  */ /* H≈257 S≈41% L≈17% */
+  /* violet   #8B6FE8  */ /* H≈254 S≈73% L≈67% */
+  /* keep     #C6F53F  */ /* H≈76  S≈90% L≈60% */
 
-  --border: 32 14% 18%;
+  /* ── shadcn semantic mappings ──────────────────────────── */
+  --background: 260 37% 8%;
+  --foreground: 258 20% 92%;
 
-  --card: 28 14% 10%;
-  --card-foreground: 40 34% 90%;
-  --card-border: 32 14% 17%;
+  --border: 255 28% 22%;
 
-  --sidebar: 28 15% 9%;
-  --sidebar-foreground: 40 30% 86%;
-  --sidebar-border: 32 14% 17%;
-  --sidebar-primary: 36 92% 56%;
-  --sidebar-primary-foreground: 28 30% 10%;
-  --sidebar-accent: 32 14% 15%;
-  --sidebar-accent-foreground: 40 34% 90%;
-  --sidebar-ring: 36 92% 56%;
+  --card: 255 41% 13%;
+  --card-foreground: 258 20% 92%;
+  --card-border: 255 28% 20%;
 
-  --popover: 28 14% 10%;
-  --popover-foreground: 40 34% 90%;
-  --popover-border: 32 14% 17%;
+  --sidebar: 255 41% 13%;
+  --sidebar-foreground: 258 20% 92%;
+  --sidebar-border: 255 28% 20%;
+  --sidebar-primary: 254 73% 67%;
+  --sidebar-primary-foreground: 260 37% 8%;
+  --sidebar-accent: 257 41% 17%;
+  --sidebar-accent-foreground: 258 20% 92%;
+  --sidebar-ring: 254 73% 67%;
 
-  --primary: 36 92% 56%;
-  --primary-foreground: 28 34% 9%;
+  --popover: 255 41% 13%;
+  --popover-foreground: 258 20% 92%;
+  --popover-border: 255 28% 20%;
 
-  --secondary: 32 14% 15%;
-  --secondary-foreground: 40 32% 88%;
+  --primary: 254 73% 67%;
+  --primary-foreground: 260 37% 8%;
 
-  --muted: 30 12% 14%;
-  --muted-foreground: 38 14% 60%;
+  --secondary: 257 41% 17%;
+  --secondary-foreground: 258 20% 92%;
 
-  --accent: 18 72% 52%;
-  --accent-foreground: 40 40% 95%;
+  --muted: 257 30% 15%;
+  --muted-foreground: 258 14% 58%;
+
+  /* accent = keep/lime, used only on Keep actions + live indicators */
+  --accent: 76 90% 60%;
+  --accent-foreground: 80 40% 15%;
+
+  /* keep = lime alias — exposed as --color-keep for Tailwind */
+  --keep: 76 90% 60%;
+  --keep-foreground: 80 40% 15%;
+
+  /* dim: readable muted label — active tabs, attribution text */
+  --dim: 258 16% 68%;
+  /* faint: barely-visible — inactive tabs, secondary hints */
+  --faint: 258 10% 36%;
 
   --destructive: 4 68% 48%;
   --destructive-foreground: 40 34% 94%;
 
-  --input: 32 14% 22%;
-  --ring: 36 92% 56%;
-  --chart-1: 36 92% 56%;
-  --chart-2: 18 72% 52%;
-  --chart-3: 44 60% 62%;
-  --chart-4: 200 30% 55%;
-  --chart-5: 12 40% 45%;
+  --input: 255 30% 25%;
+  --ring: 254 73% 67%;
+
+  --chart-1: 254 73% 67%;
+  --chart-2: 76 90% 60%;
+  --chart-3: 200 50% 60%;
+  --chart-4: 300 40% 55%;
+  --chart-5: 220 40% 50%;
 
   --app-font-sans: 'Inter', system-ui, sans-serif;
   --app-font-serif: 'Fraunces', Georgia, serif;
-  --app-font-mono: 'JetBrains Mono', Menlo, monospace;
+  --app-font-mono: 'IBM Plex Mono', Menlo, monospace;
   --radius: .625rem;
-  --shadow-2xs: 0px 1px 2px 0px hsl(28 40% 3% / 0.30);
-  --shadow-xs: 0px 1px 2px 0px hsl(28 40% 3% / 0.30);
-  --shadow-sm: 0px 2px 4px -1px hsl(28 40% 3% / 0.35), 0px 1px 2px -1px hsl(28 40% 3% / 0.35);
-  --shadow: 0px 4px 8px -2px hsl(28 40% 3% / 0.40), 0px 2px 4px -2px hsl(28 40% 3% / 0.40);
-  --shadow-md: 0px 6px 12px -3px hsl(28 40% 3% / 0.45), 0px 2px 4px -2px hsl(28 40% 3% / 0.40);
-  --shadow-lg: 0px 12px 24px -6px hsl(28 40% 3% / 0.50), 0px 4px 8px -4px hsl(28 40% 3% / 0.45);
-  --shadow-xl: 0px 20px 40px -10px hsl(28 40% 3% / 0.55), 0px 8px 16px -8px hsl(28 40% 3% / 0.50);
-  --shadow-2xl: 0px 28px 56px -12px hsl(28 40% 3% / 0.65);
+
+  --shadow-2xs: 0px 1px 2px 0px hsl(260 40% 3% / 0.50);
+  --shadow-xs: 0px 1px 2px 0px hsl(260 40% 3% / 0.50);
+  --shadow-sm: 0px 2px 4px -1px hsl(260 40% 3% / 0.55), 0px 1px 2px -1px hsl(260 40% 3% / 0.55);
+  --shadow: 0px 4px 8px -2px hsl(260 40% 3% / 0.60), 0px 2px 4px -2px hsl(260 40% 3% / 0.55);
+  --shadow-md: 0px 6px 12px -3px hsl(260 40% 3% / 0.65), 0px 2px 4px -2px hsl(260 40% 3% / 0.60);
+  --shadow-lg: 0px 12px 24px -6px hsl(260 40% 3% / 0.70), 0px 4px 8px -4px hsl(260 40% 3% / 0.65);
+  --shadow-xl: 0px 20px 40px -10px hsl(260 40% 3% / 0.75), 0px 8px 16px -8px hsl(260 40% 3% / 0.70);
+  --shadow-2xl: 0px 28px 56px -12px hsl(260 40% 3% / 0.85);
   --tracking-normal: 0em;
   --spacing: 0.25rem;
 
@@ -267,24 +296,7 @@
   }
 }
 
-/* Grain + dial-glow atmosphere for the broadcast room. */
-.lore-grain::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  opacity: 0.35;
-  background-image: radial-gradient(hsl(36 92% 56% / 0.05) 1px, transparent 1px);
-  background-size: 3px 3px;
-}
-
-.lore-glow {
-  background:
-    radial-gradient(60% 55% at 78% -5%, hsl(36 92% 56% / 0.16), transparent 60%),
-    radial-gradient(50% 45% at 8% 8%, hsl(18 72% 52% / 0.10), transparent 55%);
-}
-
+/* EQ animation — shared by PlayerBar and RideBar */
 @keyframes lore-eq {
   0%, 100% { transform: scaleY(0.35); }
   50% { transform: scaleY(1); }

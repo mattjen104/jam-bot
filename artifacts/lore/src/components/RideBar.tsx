@@ -3,6 +3,7 @@ import type { RecordingLink } from "@workspace/api-client-react";
 import type { RideApi } from "../player/PlayerProvider";
 import type { SpotifyConnectApi } from "../player/useSpotifyConnect";
 import { rideFallbackLabel } from "../player/playbackSession";
+import { KeepButton } from "./KeepButton";
 import {
   AlertTriangle,
   ExternalLink,
@@ -62,13 +63,13 @@ export function RideBar({
 
   return (
     <div
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-primary-border bg-card/95 backdrop-blur-md"
+      className="fixed z-40 border border-border bg-secondary/95 backdrop-blur-md shadow-lg bottom-4 left-4 right-4 rounded-[18px] lg:bottom-0 lg:left-[220px] lg:right-0 lg:rounded-none lg:shadow-none lg:border-x-0 lg:border-b-0"
       data-testid="ride-bar"
     >
       {/* Connect Spotify prompt — shown when configured but not yet connected. */}
       {spotify.configured && !spotify.connected ? (
-        <div className="border-b border-border/60 bg-background/60">
-          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-1.5 sm:px-6">
+        <div className="border-b border-border/60 bg-background/40">
+          <div className="flex items-center justify-between gap-3 px-5 py-1.5">
             <p className="truncate font-mono text-[11px] text-muted-foreground">
               Rides play 30s previews. Connect Spotify to ride full tracks on
               your own player.
@@ -88,8 +89,8 @@ export function RideBar({
 
       {/* Non-premium notice. */}
       {spotify.connected && !spotify.premium ? (
-        <div className="border-b border-border/60 bg-background/60">
-          <div className="mx-auto max-w-6xl px-4 py-1.5 sm:px-6">
+        <div className="border-b border-border/60 bg-background/40">
+          <div className="px-5 py-1.5">
             <p className="truncate font-mono text-[11px] text-muted-foreground">
               Spotify connected, but full-track control needs Premium — rides
               stay on 30s previews.
@@ -100,12 +101,12 @@ export function RideBar({
 
       {/* Mode toggle + fallback indicator — only when Spotify Premium is ready. */}
       {canToggleMode ? (
-        <div className="border-b border-border/60 bg-background/60">
-          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-1.5 sm:px-6">
+        <div className="border-b border-border/60 bg-background/40">
+          <div className="flex items-center justify-between gap-3 px-5 py-1.5">
             <div className="flex items-center gap-2">
               {ride.fallbackUsed ? (
                 <span
-                  className="inline-flex items-center gap-1.5 font-mono text-[11px] text-amber-600 dark:text-amber-400"
+                  className="inline-flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground"
                   data-testid="ride-fallback-indicator"
                 >
                   <AlertTriangle className="h-3.5 w-3.5" />
@@ -114,7 +115,7 @@ export function RideBar({
                     type="button"
                     onClick={ride.retrySpotify}
                     data-testid="ride-retry-spotify"
-                    className="hover-elevate inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-amber-600 transition-opacity hover:bg-amber-500/20 dark:border-amber-400/40 dark:text-amber-400"
+                    className="hover-elevate inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-primary transition-opacity hover:bg-primary/20"
                     title="Retry playing this track on your Spotify"
                   >
                     <RefreshCw className="h-2.5 w-2.5" />
@@ -157,7 +158,7 @@ export function RideBar({
         </div>
       ) : null}
 
-      <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3 sm:px-6">
+      <div className="flex items-center gap-4 px-5 py-3">
         <span
           className="hidden shrink-0 items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 font-mono text-[11px] uppercase tracking-wide text-primary sm:inline-flex"
           data-testid="ride-mode-badge"
@@ -214,7 +215,29 @@ export function RideBar({
             {onSpotify ? " · Full track on your Spotify" : ""}
             {ride.status === "ended" ? " · trail ends here" : ""}
           </p>
+          {/* Hinge hint row — shortcut links to lean-in detail */}
+          {cur.mbid && (
+            <div
+              className="mt-0.5 flex items-center gap-2 font-mono text-[10px]"
+              style={{ color: "hsl(var(--faint))" }}
+            >
+              <Link
+                href={`/song/${cur.mbid}`}
+                className="transition-colors hover:text-primary"
+              >
+                Dive in ↗
+              </Link>
+              <span>·</span>
+              <span>What plays next →</span>
+            </div>
+          )}
         </div>
+
+        {cur.mbid && (
+          <span className="inline-flex shrink-0">
+            <KeepButton mbid={cur.mbid} />
+          </span>
+        )}
 
         {bestLink ? (
           <a

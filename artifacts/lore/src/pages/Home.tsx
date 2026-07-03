@@ -73,19 +73,14 @@ export default function Home() {
   const [mode, setMode] = useState<Mode>("live");
 
   return (
-    <div className="lore-grain relative min-h-screen">
-      <div className="lore-glow pointer-events-none absolute inset-0" />
+    <div className="min-h-screen">
       <div
-        className={`relative z-10 mx-auto max-w-6xl px-4 pt-10 sm:px-6 ${
+        className={`mx-auto max-w-6xl px-4 pt-8 sm:px-6 ${
           ride.active || radio.station ? "pb-32" : "pb-16"
         }`}
       >
         <header className="mb-8">
-          <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] text-primary">
-            <AudioLines className="h-4 w-4" />
-            Lore Radio
-          </div>
-          <h1 className="mt-3 max-w-[18ch] font-serif text-4xl font-semibold leading-[1.05] text-foreground sm:text-5xl">
+          <h1 className="max-w-[18ch] font-serif text-4xl font-semibold leading-[1.05] text-foreground sm:text-5xl">
             Borrow real humans' taste. Never an algorithm.
           </h1>
           <p className="mt-4 max-w-[52ch] text-base text-muted-foreground">

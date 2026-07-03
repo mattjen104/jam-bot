@@ -26,9 +26,8 @@ export default function PickerArchive() {
   const dockPadding = ride.active || radio.station ? "pb-32" : "pb-16";
 
   return (
-    <div className="lore-grain relative min-h-screen">
-      <div className="lore-glow pointer-events-none absolute inset-0" />
-      <div className={`relative z-10 mx-auto max-w-4xl px-4 pt-8 sm:px-6 ${dockPadding}`}>
+    <div className="min-h-screen">
+      <div className={`mx-auto max-w-4xl px-4 pt-8 sm:px-6 ${dockPadding}`}>
         <Link
           href="/archive"
           className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wide text-muted-foreground hover:text-primary"

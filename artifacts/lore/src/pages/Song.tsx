@@ -79,10 +79,14 @@ export default function Song() {
   };
 
   return (
-    <div className="lore-grain relative min-h-screen">
-      <div className="lore-glow pointer-events-none absolute inset-0" />
+    <div className="min-h-screen">
+      {/* Mobile lean-in sheet handle — visual affordance suggesting the page slid up */}
+      <div className="flex justify-center pb-1 pt-3 sm:hidden" aria-hidden>
+        <div className="h-1 w-10 rounded-full bg-muted-foreground/25" />
+      </div>
+
       <div
-        className={`relative z-10 mx-auto max-w-4xl px-4 pt-8 sm:px-6 ${
+        className={`mx-auto max-w-4xl px-4 pt-4 sm:px-6 sm:pt-8 ${
           ride.active ? "pb-32" : "pb-16"
         }`}
       >
@@ -325,7 +329,7 @@ function Segues({ next }: { next: SegueNext[] }) {
             <li key={n.mbid}>
               <Link
                 href={`/song/${n.mbid}`}
-                className="hover-elevate flex items-center gap-3 rounded-xl border border-card-border bg-card p-3"
+                className="hover-elevate flex items-center gap-3 rounded-xl border border-card-border bg-secondary p-3"
               >
                 <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-muted">
                   {n.artworkUrl ? (
@@ -337,7 +341,8 @@ function Segues({ next }: { next: SegueNext[] }) {
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium text-foreground">{n.title}</p>
+                  {/* Fraunces title for segue cards */}
+                  <p className="truncate font-serif font-semibold text-foreground">{n.title}</p>
                   <p className="truncate text-sm text-muted-foreground">{n.artist}</p>
                   <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground/70">
                     {n.pickers && n.pickers.length > 0
@@ -510,7 +515,7 @@ function Claims({ claims }: { claims: TrackClaim[] }) {
         {timestampClaims.map((c, i) => (
           <li
             key={i}
-            className="rounded-xl border border-card-border bg-card p-4"
+            className="rounded-xl border border-card-border border-l-2 border-l-primary bg-card p-4 pl-5"
           >
             <p className="text-sm leading-relaxed text-foreground">{c.text}</p>
             <div className="mt-2 flex items-center justify-between gap-2">
@@ -576,7 +581,7 @@ function WikipediaClaimCard({
   return (
     <li
       key={claim.id ?? index}
-      className="rounded-xl border border-card-border bg-card p-4"
+      className="rounded-xl border border-card-border border-l-2 border-l-primary bg-card p-4 pl-5"
     >
       <p className="mb-1 font-mono text-[11px] uppercase tracking-wide text-primary">
         {label}

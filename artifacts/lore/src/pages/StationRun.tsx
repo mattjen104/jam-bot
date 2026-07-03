@@ -48,9 +48,8 @@ export default function StationRun() {
   }, [autoPlay, fromMbid, data, ride]);
 
   return (
-    <div className="lore-grain relative min-h-screen">
-      <div className="lore-glow pointer-events-none absolute inset-0" />
-      <div className={`relative z-10 mx-auto max-w-4xl px-4 pt-8 sm:px-6 ${dockPadding}`}>
+    <div className="min-h-screen">
+      <div className={`mx-auto max-w-4xl px-4 pt-8 sm:px-6 ${dockPadding}`}>
         <Link
           href={data ? `/archive/stations/${data.station.slug}` : "/archive"}
           className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wide text-muted-foreground hover:text-primary"
@@ -105,7 +104,7 @@ export default function StationRun() {
             {showFallbackNotice && (
               <div
                 data-testid="from-fallback-notice"
-                className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
+                className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-border bg-muted/60 px-4 py-3 text-sm text-muted-foreground"
               >
                 <span>
                   That song isn't in this run's resolved tracklist — starting
@@ -114,7 +113,7 @@ export default function StationRun() {
                 <button
                   aria-label="Dismiss"
                   onClick={() => setShowFallbackNotice(false)}
-                  className="mt-0.5 shrink-0 text-amber-400 hover:text-amber-200"
+                  className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground"
                 >
                   <X className="h-4 w-4" />
                 </button>
