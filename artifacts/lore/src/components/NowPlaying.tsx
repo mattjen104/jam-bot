@@ -9,6 +9,7 @@ import {
 import { CONFIDENCE_LABEL, clockTime, timeAgo } from "../lib/format";
 import { groupCredits, pressingLine } from "../lib/linerNotes";
 import { LikeButton } from "./LikeButton";
+import { KeepButton } from "./KeepButton";
 import { FollowButton } from "./FollowButton";
 import { djFollowId } from "../lib/local";
 import {
@@ -133,7 +134,14 @@ export function NowPlaying({ data, isLoading, fallbackStation }: NowPlayingProps
             )}
 
             {rec && (
-              <div className="mt-4">
+              <div className="mt-4 flex flex-wrap gap-2">
+                <KeepButton
+                  mbid={rec.mbid}
+                  provenance={{
+                    kind: "keep",
+                    stationSlug: station?.slug,
+                  }}
+                />
                 <LikeButton mbid={rec.mbid} />
               </div>
             )}

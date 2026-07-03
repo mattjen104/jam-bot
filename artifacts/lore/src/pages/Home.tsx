@@ -26,6 +26,7 @@ import { FollowingStrip } from "../components/FollowingStrip";
 import { runDate } from "../lib/format";
 import {
   AudioLines,
+  BookMarked,
   BookOpen,
   Ghost,
   List,
@@ -104,6 +105,14 @@ export default function Home() {
             >
               <UserCheck className="h-3.5 w-3.5" />
               Following
+            </Link>
+            <Link
+              href="/library"
+              data-testid="link-library"
+              className="hover-elevate inline-flex items-center gap-2 rounded-full border border-[#C6F53F]/40 bg-[#C6F53F]/10 px-4 py-2 font-mono text-[11px] uppercase tracking-wide text-[#C6F53F]"
+            >
+              <BookMarked className="h-3.5 w-3.5" />
+              Your library
             </Link>
           </div>
           <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 font-mono text-[11px] uppercase tracking-wide text-muted-foreground">

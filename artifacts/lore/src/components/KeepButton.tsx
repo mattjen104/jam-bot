@@ -1,63 +1,96 @@
-import { useEffect, useState } from "react";
-import { Heart } from "lucide-react";
+import { useState } from "react";
+import { Heart, Check, Loader2 } from "lucide-react";
+import {
+  useMyKeepStatus,
+  useMutationKeep,
+  useMutationUnkeep,
+  startSpotifyLibraryConnect,
+  type LibraryProvenance,
+} from "../lib/meHooks";
+import { useMyConnections } from "../lib/meHooks";
 
-const KEPT_KEY = "lore-kept-mbids";
-
-function getKeptSet(): Set<string> {
-  try {
-    const raw = localStorage.getItem(KEPT_KEY);
-    return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
-  } catch {
-    return new Set();
-  }
-}
-
-function persistKept(mbids: Set<string>) {
-  localStorage.setItem(KEPT_KEY, JSON.stringify([...mbids]));
-}
-
-export function useIsKept(mbid: string) {
-  const [kept, setKept] = useState(() => getKeptSet().has(mbid));
-  useEffect(() => {
-    setKept(getKeptSet().has(mbid));
-  }, [mbid]);
-  return [kept, setKept] as const;
+interface KeepButtonProps {
+  mbid: string;
+  provenance?: Partial<LibraryProvenance>;
+  /** compact mode: just icon + minimal text, used on inflow cards */
+  compact?: boolean;
 }
 
 /**
- * Lime "Keep" button — local-first, no server round-trips.
- * Toggles to a muted "Kept ✓" state. Uses the --accent (lime) token for
- * the un-kept state per the Fable design spec.
+ * Keep a track in your Lore library (+ optional Spotify mirror).
+ *
+ * States:
+ * - Not authenticated → "Keep" (lime); clicking starts Spotify connect flow
+ * - Authenticated, not kept → lime "Keep"
+ * - Authenticated, kept → muted "Kept ✓" (toggle to un-keep)
+ * - Pending → spinner
  */
-export function KeepButton({ mbid }: { mbid: string }) {
-  const [kept, setKept] = useIsKept(mbid);
+export function KeepButton({ mbid, provenance, compact = false }: KeepButtonProps) {
+  const { data: connections, isLoading: connLoading } = useMyConnections();
+  const isAuthenticated = !connLoading && connections !== null;
 
-  const toggle = () => {
-    const all = getKeptSet();
-    if (kept) {
-      all.delete(mbid);
-    } else {
-      all.add(mbid);
+  const { data: keptSet } = useMyKeepStatus(isAuthenticated ? [mbid] : []);
+  const kept = keptSet?.has(mbid) === true;
+
+  const keepMutation = useMutationKeep();
+  const unkepMutation = useMutationUnkeep();
+  const [connectPending, setConnectPending] = useState(false);
+
+  const isPending = keepMutation.isPending || unkepMutation.isPending || connectPending;
+
+  const handleClick = async () => {
+    if (isPending) return;
+
+    if (!isAuthenticated) {
+      setConnectPending(true);
+      try {
+        await startSpotifyLibraryConnect();
+      } finally {
+        setConnectPending(false);
+      }
+      return;
     }
-    persistKept(all);
-    setKept(!kept);
+
+    if (kept) {
+      unkepMutation.mutate(mbid);
+    } else {
+      keepMutation.mutate({ mbid, provenance });
+    }
   };
+
+  if (connLoading) return null;
+
+  const title = !isAuthenticated
+    ? "Connect Spotify to keep this track in your Lore library"
+    : kept
+      ? "In your library — click to remove"
+      : "Keep this track in your Lore library";
+
+  const isKept = isAuthenticated && kept;
 
   return (
     <button
       type="button"
-      onClick={toggle}
-      aria-label={kept ? "Kept" : "Keep this track"}
-      aria-pressed={kept}
+      onClick={() => void handleClick()}
+      disabled={isPending}
+      title={title}
+      aria-label={title}
+      aria-pressed={isKept}
       data-testid="keep-button"
-      className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide transition-colors ${
-        kept
-          ? "border-border bg-muted/60 text-muted-foreground"
-          : "border-accent/50 bg-accent text-accent-foreground"
-      }`}
+      className={`hover-elevate inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide transition-colors ${
+        isKept
+          ? "border-[#C6F53F]/30 bg-[#C6F53F]/10 text-[#C6F53F]/60"
+          : "border-[#C6F53F]/50 bg-[#C6F53F]/15 text-[#C6F53F]"
+      } ${isPending ? "opacity-60" : ""}`}
     >
-      <Heart className={`h-3 w-3 ${kept ? "" : "fill-current"}`} />
-      {kept ? "Kept ✓" : "Keep"}
+      {isPending ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      ) : isKept ? (
+        <Check className="h-3.5 w-3.5" />
+      ) : (
+        <Heart className="h-3.5 w-3.5" />
+      )}
+      {compact ? (isKept ? "Kept" : "Keep") : isKept ? "Kept ✓" : "Keep"}
     </button>
   );
 }
