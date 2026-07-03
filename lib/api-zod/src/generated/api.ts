@@ -495,14 +495,23 @@ export const GetRecordingKnowledgeResponse = zod.object({
           text: zod.string(),
           sourceLabel: zod.string(),
           sourceUrl: zod.string(),
+          sourceHandle: zod
+            .string()
+            .describe(
+              'Machine-readable source identifier, e.g. \"genius\" or \"classic-albums\". Use this to filter claims by source in the UI.\n',
+            ),
           positionMs: zod.union([zod.number(), zod.null()]).optional(),
           anchorType: zod.union([zod.literal("section"), zod.null()]).optional(),
           anchorValue: zod.union([zod.string(), zod.null()]).optional(),
           status: zod.enum(["draft", "published", "rejected"]).optional(),
           sourceHandle: zod.string().optional(),
+          verified: zod
+            .boolean()
+            .optional()
+            .describe("True for artist-verified Genius annotations."),
         })
         .describe(
-          "One grounded fact about a recording. section-anchored claims have anchorType='section' and anchorValue set to the Wikipedia section label.",
+          'One grounded fact about a recording, extracted systematically from an official documentary source (e.g. a Classic Albums making-of clip or a Genius annotation). `sourceUrl` deep-links to the exact moment in the official source that supports the claim, so every fact is one tap from its evidence. `verified` is true for artist-verified Genius annotations. `sourceHandle` identifies the picker that produced this claim (e.g. \"genius\", \"classic-albums\") so UIs can apply source-specific treatment.\n',
         ),
     )
     .optional()
@@ -1312,6 +1321,82 @@ export const AddSongExploderClaimBody = zod
   .describe(
     "Admin-entered, paraphrased claim attached to a Song Exploder episode's resolved recording. Never verbatim transcript — always a paraphrase with a deep link to the supporting moment in the episode.\n",
   );
+
+/**
+ * Returns all Genius annotation drafts in 'draft' status for a given recording MBID. Each draft carries the lyric fragment, projected timestamp anchor (when a matching LRCLIB line was found), Genius deep link, verified flag, and vote count. Admin reviews these and calls `/admin/genius-drafts/{id}/review` to publish or reject. Token-guarded.
+
+ * @summary Admin-only list of pending Genius annotation drafts for a recording
+ */
+
+export const ListGeniusDraftsQueryParams = zod.object({
+  mbid: zod.coerce.string().min(1),
+});
+
+export const ListGeniusDraftsHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const ListGeniusDraftsResponse = zod.object({
+  mbid: zod.string(),
+  drafts: zod.array(
+    zod
+      .object({
+        id: zod.number(),
+        mbid: zod.string(),
+        geniusSongId: zod.number(),
+        geniusAnnotationId: zod.number(),
+        fragment: zod
+          .string()
+          .describe("The lyric fragment the annotation is anchored to."),
+        anchorType: zod.enum(["timestamp", "none"]),
+        offsetMs: zod.union([zod.number(), zod.null()]).optional(),
+        geniusUrl: zod.string(),
+        verified: zod.boolean(),
+        voteCount: zod.number(),
+        status: zod.enum(["draft", "published", "rejected"]),
+      })
+      .describe(
+        "A pending Genius annotation draft awaiting admin review. The lyric fragment is stored for context (never surfaced verbatim as a claim). `anchorType = 'timestamp'` means `offsetMs` is set and the claim will be anchored to the matching lyric line on publish.\n",
+      ),
+  ),
+});
+
+/**
+ * Publish or reject a pending Genius annotation draft. On publish, the admin supplies a paraphrase (`text` field) — never the verbatim Genius annotation — which is stored as a `track_claim` with `source_label = "Genius"` (or `"Genius · Verified"` for artist-verified annotations). The claim inherits the draft's `offset_ms` as `position_ms` when `anchor_type = 'timestamp'`. Token-guarded.
+
+ * @summary Admin-only publish or reject a Genius annotation draft
+ */
+export const ReviewGeniusDraftParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ReviewGeniusDraftHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const ReviewGeniusDraftBody = zod
+  .object({
+    action: zod.enum(["publish", "reject"]),
+    text: zod
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "Admin-written paraphrase of the Genius annotation — required when action = 'publish'. Never the verbatim annotation text.\n",
+      ),
+  })
+  .describe(
+    "Admin review action for a Genius annotation draft. `action = 'publish'` requires a non-empty `text` (the admin's paraphrase of the annotation). `action = 'reject'` requires no text.\n",
+  );
+
+export const ReviewGeniusDraftResponse = zod.object({
+  id: zod.number(),
+  action: zod.enum(["published", "rejected"]),
+  claimId: zod
+    .union([zod.number(), zod.null()])
+    .optional()
+    .describe("The new track_claim id when action = 'published'."),
+});
 
 /**
  * `configured` is false when the server has no Spotify app credentials (feature honestly absent). `connected` is true when this session's cookie maps to stored OAuth tokens.

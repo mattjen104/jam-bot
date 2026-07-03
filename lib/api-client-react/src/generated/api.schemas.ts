@@ -348,15 +348,98 @@ export interface RecordingLyrics {
   lines: LyricLine[];
 }
 
+export type GeniusDraftAnchorType =
+  (typeof GeniusDraftAnchorType)[keyof typeof GeniusDraftAnchorType];
+
+export const GeniusDraftAnchorType = {
+  timestamp: "timestamp",
+  none: "none",
+} as const;
+
+export type GeniusDraftStatus =
+  (typeof GeniusDraftStatus)[keyof typeof GeniusDraftStatus];
+
+export const GeniusDraftStatus = {
+  draft: "draft",
+  published: "published",
+  rejected: "rejected",
+} as const;
+
 /**
- * One grounded fact about a recording, extracted systematically from an official documentary source (e.g. a Classic Albums making-of clip). `sourceUrl` deep-links to the exact moment in the official source that supports the claim, so every fact is one tap from its evidence.
+ * A pending Genius annotation draft awaiting admin review. The lyric fragment is stored for context (never surfaced verbatim as a claim). `anchorType = 'timestamp'` means `offsetMs` is set and the claim will be anchored to the matching lyric line on publish.
+
+ */
+export interface GeniusDraft {
+  id: number;
+  mbid: string;
+  geniusSongId: number;
+  geniusAnnotationId: number;
+  /** The lyric fragment the annotation is anchored to. */
+  fragment: string;
+  anchorType: GeniusDraftAnchorType;
+  offsetMs?: number | null;
+  geniusUrl: string;
+  verified: boolean;
+  voteCount: number;
+  status: GeniusDraftStatus;
+}
+
+export interface GeniusDraftList {
+  mbid: string;
+  drafts: GeniusDraft[];
+}
+
+export type GeniusDraftReviewRequestAction =
+  (typeof GeniusDraftReviewRequestAction)[keyof typeof GeniusDraftReviewRequestAction];
+
+export const GeniusDraftReviewRequestAction = {
+  publish: "publish",
+  reject: "reject",
+} as const;
+
+/**
+ * Admin review action for a Genius annotation draft. `action = 'publish'` requires a non-empty `text` (the admin's paraphrase of the annotation). `action = 'reject'` requires no text.
+
+ */
+export interface GeniusDraftReviewRequest {
+  action: GeniusDraftReviewRequestAction;
+  /**
+   * Admin-written paraphrase of the Genius annotation — required when action = 'publish'. Never the verbatim annotation text.
+
+   * @minLength 1
+   */
+  text?: string;
+}
+
+export type GeniusDraftReviewResponseAction =
+  (typeof GeniusDraftReviewResponseAction)[keyof typeof GeniusDraftReviewResponseAction];
+
+export const GeniusDraftReviewResponseAction = {
+  published: "published",
+  rejected: "rejected",
+} as const;
+
+export interface GeniusDraftReviewResponse {
+  id: number;
+  action: GeniusDraftReviewResponseAction;
+  /** The new track_claim id when action = 'published'. */
+  claimId?: number | null;
+}
+
+/**
+ * One grounded fact about a recording, extracted systematically from an official documentary source (e.g. a Classic Albums making-of clip or a Genius annotation). `sourceUrl` deep-links to the exact moment in the official source that supports the claim, so every fact is one tap from its evidence. `verified` is true for artist-verified Genius annotations. `sourceHandle` identifies the picker that produced this claim (e.g. "genius", "classic-albums") so UIs can apply source-specific treatment.
 
  */
 export interface TrackClaim {
   text: string;
   sourceLabel: string;
   sourceUrl: string;
+  /** Machine-readable source identifier, e.g. "genius" or "classic-albums". Use this to filter claims by source in the UI.
+   */
+  sourceHandle: string;
   positionMs?: number | null;
+  /** True for artist-verified Genius annotations. */
+  verified?: boolean;
 }
 
 export interface RecordingKnowledge {
@@ -930,6 +1013,13 @@ export type GetOembedParams = {
    * @minLength 1
    */
   url: string;
+};
+
+export type ListGeniusDraftsParams = {
+  /**
+   * @minLength 1
+   */
+  mbid: string;
 };
 
 export type GetSpotifySavedParams = {

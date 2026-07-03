@@ -7,12 +7,17 @@
  */
 
 /**
- * One grounded fact about a recording, extracted systematically from an official documentary source (e.g. a Classic Albums making-of clip). `sourceUrl` deep-links to the exact moment in the official source that supports the claim, so every fact is one tap from its evidence.
+ * One grounded fact about a recording, extracted systematically from an official documentary source (e.g. a Classic Albums making-of clip or a Genius annotation). `sourceUrl` deep-links to the exact moment in the official source that supports the claim, so every fact is one tap from its evidence. `verified` is true for artist-verified Genius annotations. `sourceHandle` identifies the picker that produced this claim (e.g. "genius", "classic-albums") so UIs can apply source-specific treatment.
 
  */
 export interface TrackClaim {
   text: string;
   sourceLabel: string;
   sourceUrl: string;
+  /** Machine-readable source identifier, e.g. "genius" or "classic-albums". Use this to filter claims by source in the UI.
+   */
+  sourceHandle: string;
   positionMs?: number | null;
+  /** True for artist-verified Genius annotations. */
+  verified?: boolean;
 }

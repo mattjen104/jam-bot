@@ -96,3 +96,132 @@ export async function fetchGeniusUrl(
     return null;
   }
 }
+
+/**
+ * Pure: extract the Genius song id from a search response body.
+ * Prefers a hit whose primary artist name overlaps with `artist`.
+ */
+export function parseGeniusSongId(
+  body: unknown,
+  artist?: string,
+): number | null {
+  const b = body as {
+    response?: {
+      hits?: Array<{
+        result?: {
+          id?: number;
+          url?: string;
+          primary_artist?: { name?: string };
+        };
+      }>;
+    };
+  };
+  const hits = b?.response?.hits ?? [];
+  const want = artist ? norm(artist) : "";
+  let fallback: number | null = null;
+  for (const h of hits) {
+    const id = h?.result?.id;
+    if (typeof id !== "number") continue;
+    if (!fallback) fallback = id;
+    if (!want) return id;
+    const name = norm(h.result?.primary_artist?.name ?? "");
+    if (name && (name.includes(want) || want.includes(name))) return id;
+  }
+  return fallback;
+}
+
+/** One referent (lyric annotation anchor) from the Genius Referents API. */
+export interface GeniusReferent {
+  geniusAnnotationId: number;
+  /** The lyric fragment text the annotation is anchored to. */
+  fragment: string;
+  /** Deep link to this annotation on genius.com (song page with anchor). */
+  geniusUrl: string;
+  /** True when Genius marks the annotation as artist-verified. */
+  verified: boolean;
+  /** Net upvotes (votes_total) at fetch time. */
+  voteCount: number;
+}
+
+/**
+ * Fetch qualifying referents for a Genius song id.
+ * Filters to annotations with voteCount >= 5 OR verified=true.
+ * Never throws; returns [] on error or when token is absent.
+ */
+export async function fetchGeniusReferents(
+  songId: number,
+): Promise<GeniusReferent[]> {
+  if (!geniusEnabled()) return [];
+  try {
+    const body = await geniusFetch(
+      `/referents?song_id=${songId}&text_format=plain&per_page=50`,
+    );
+    const b = body as {
+      response?: {
+        referents?: Array<{
+          fragment?: string;
+          annotations?: Array<{
+            id?: number;
+            verified?: boolean;
+            votes_total?: number;
+            url?: string;
+          }>;
+        }>;
+      };
+    };
+    const referents = b?.response?.referents ?? [];
+    const results: GeniusReferent[] = [];
+    for (const ref of referents) {
+      const fragment = ref.fragment?.trim();
+      if (!fragment) continue;
+      for (const ann of ref.annotations ?? []) {
+        const id = ann.id;
+        if (typeof id !== "number") continue;
+        const verified = !!ann.verified;
+        const voteCount = ann.votes_total ?? 0;
+        if (!verified && voteCount < 5) continue;
+        const url = ann.url?.trim();
+        if (!url) continue;
+        results.push({ geniusAnnotationId: id, fragment, geniusUrl: url, verified, voteCount });
+      }
+    }
+    return results;
+  } catch (err) {
+    logger.warn("Genius referents fetch failed", { songId, error: String(err) });
+    return [];
+  }
+}
+
+/**
+ * Fetch the Genius song id for a recording.
+ *
+ * Resolution order (stops at first hit):
+ *  1. ISRC search — if an ISRC is available, query `q={isrc}` which returns
+ *     an exact match when Genius has it indexed (highest precision).
+ *  2. Title + artist search — existing fallback.
+ *
+ * Returns null on miss/error. Never throws.
+ */
+export async function fetchGeniusSongId(
+  title: string,
+  artist: string,
+  isrc?: string | null,
+): Promise<number | null> {
+  if (!geniusEnabled()) return null;
+  try {
+    if (isrc?.trim()) {
+      const body = await geniusFetch(
+        `/search?q=${encodeURIComponent(isrc.trim())}`,
+      );
+      const id = parseGeniusSongId(body, artist);
+      if (id !== null) return id;
+    }
+    const q = `${title} ${artist}`.trim();
+    if (!q) return null;
+    const body = await geniusFetch(`/search?q=${encodeURIComponent(q)}`);
+    return parseGeniusSongId(body, artist);
+  } catch (err) {
+    logger.warn("Genius song-id lookup failed", { title, artist, isrc, error: String(err) });
+    return null;
+  }
+}

@@ -492,6 +492,8 @@ export const trackClaimsTable = pgTable(
     sourceHandle: text("source_handle").notNull(),
     /** Stable id for idempotent re-extraction, e.g. "yt:{videoId}:{n}". */
     externalId: text("external_id").notNull().unique(),
+    /** True for artist-verified Genius annotations; false for all other sources. */
+    verified: boolean("verified").notNull().default(false),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => [
@@ -575,3 +577,71 @@ export const songExploderEpisodesTable = pgTable(
 export type SongExploderEpisode = typeof songExploderEpisodesTable.$inferSelect;
 export type InsertSongExploderEpisode =
   typeof songExploderEpisodesTable.$inferInsert;
+
+/**
+ * Genius annotation draft — a candidate annotation ingested from Genius (via
+ * the Referents API), awaiting admin review before being promoted to a
+ * published `track_claim`. We project each annotation's lyric fragment against
+ * the LRCLIB lyric_lines for the same recording to produce a timestamp anchor.
+ *
+ * Policy:
+ *  - We never store the verbatim Genius annotation text. Only the `fragment`
+ *    (the lyric snippet the annotation is anchored to) is kept so the admin can
+ *    find the matching lyric line; the full annotation is always read on Genius.
+ *  - On publish the admin supplies a paraphrase which is stored in track_claims.
+ *  - Only annotations with voteCount >= 5 OR verified=true are ingested.
+ *  - `anchorType = 'timestamp'` when the fragment matched a LRCLIB line;
+ *    'none' otherwise (still useful as a track-level claim).
+ */
+export const geniusAnnotationDraftsTable = pgTable(
+  "genius_annotation_drafts",
+  {
+    id: serial("id").primaryKey(),
+    mbid: text("mbid")
+      .notNull()
+      .references(() => recordingsTable.mbid),
+    /** Genius internal song id for the matched song page. */
+    geniusSongId: integer("genius_song_id").notNull(),
+    /** Genius internal referent/annotation id — dedup key. */
+    geniusAnnotationId: integer("genius_annotation_id").notNull(),
+    /**
+     * The lyric fragment text from Genius (the highlighted snippet the
+     * annotation is attached to). Stored for admin review context only;
+     * never surfaced verbatim as a claim.
+     */
+    fragment: text("fragment").notNull(),
+    /**
+     * How the draft is anchored:
+     * 'timestamp' — the fragment matched a LRCLIB line; offsetMs is set.
+     * 'none' — no lyric line match; the claim is track-level.
+     */
+    anchorType: text("anchor_type").notNull().default("none"),
+    /** Millisecond offset from the LRCLIB line that best matched the fragment. */
+    offsetMs: integer("offset_ms"),
+    /** Deep link to this specific annotation on genius.com. */
+    geniusUrl: text("genius_url").notNull(),
+    /** True when Genius marks this annotation as artist-verified. */
+    verified: boolean("verified").notNull().default(false),
+    /** Net upvotes on the annotation at ingest time. */
+    voteCount: integer("vote_count").notNull().default(0),
+    /**
+     * Review status:
+     * 'draft' — awaiting admin review.
+     * 'published' — admin approved and promoted to track_claims.
+     * 'rejected' — admin rejected; will not be promoted.
+     */
+    status: text("status").notNull().default("draft"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("genius_drafts_annotation_idx").on(t.geniusAnnotationId),
+    index("genius_drafts_mbid_idx").on(t.mbid),
+    index("genius_drafts_status_idx").on(t.status),
+  ],
+);
+
+export type GeniusAnnotationDraft =
+  typeof geniusAnnotationDraftsTable.$inferSelect;
+export type InsertGeniusAnnotationDraft =
+  typeof geniusAnnotationDraftsTable.$inferInsert;

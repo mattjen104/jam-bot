@@ -22,11 +22,15 @@ import type {
   BlogIngestRequest,
   DiscogsListRequest,
   EntryResult,
+  GeniusDraftList,
+  GeniusDraftReviewRequest,
+  GeniusDraftReviewResponse,
   GetOembedParams,
   GetSpotifySavedParams,
   HealthStatus,
   IngestResult,
   LabelSeedRequest,
+  ListGeniusDraftsParams,
   ManualSpinRequest,
   ManualSpinResponse,
   OEmbed,
@@ -2519,6 +2523,194 @@ export const useAddSongExploderClaim = <
   TContext
 > => {
   return useMutation(getAddSongExploderClaimMutationOptions(options));
+};
+
+/**
+ * Returns all Genius annotation drafts in 'draft' status for a given recording MBID. Each draft carries the lyric fragment, projected timestamp anchor (when a matching LRCLIB line was found), Genius deep link, verified flag, and vote count. Admin reviews these and calls `/admin/genius-drafts/{id}/review` to publish or reject. Token-guarded.
+
+ * @summary Admin-only list of pending Genius annotation drafts for a recording
+ */
+export const getListGeniusDraftsUrl = (params: ListGeniusDraftsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/admin/genius-drafts?${stringifiedParams}`
+    : `/api/admin/genius-drafts`;
+};
+
+export const listGeniusDrafts = async (
+  params: ListGeniusDraftsParams,
+  options?: RequestInit,
+): Promise<GeniusDraftList> => {
+  return customFetch<GeniusDraftList>(getListGeniusDraftsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListGeniusDraftsQueryKey = (
+  params?: ListGeniusDraftsParams,
+) => {
+  return [`/api/admin/genius-drafts`, ...(params ? [params] : [])] as const;
+};
+
+export const getListGeniusDraftsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listGeniusDrafts>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: ListGeniusDraftsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listGeniusDrafts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListGeniusDraftsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listGeniusDrafts>>
+  > = ({ signal }) => listGeniusDrafts(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listGeniusDrafts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListGeniusDraftsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listGeniusDrafts>>
+>;
+export type ListGeniusDraftsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Admin-only list of pending Genius annotation drafts for a recording
+ */
+
+export function useListGeniusDrafts<
+  TData = Awaited<ReturnType<typeof listGeniusDrafts>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: ListGeniusDraftsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listGeniusDrafts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListGeniusDraftsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Publish or reject a pending Genius annotation draft. On publish, the admin supplies a paraphrase (`text` field) — never the verbatim Genius annotation — which is stored as a `track_claim` with `source_label = "Genius"` (or `"Genius · Verified"` for artist-verified annotations). The claim inherits the draft's `offset_ms` as `position_ms` when `anchor_type = 'timestamp'`. Token-guarded.
+
+ * @summary Admin-only publish or reject a Genius annotation draft
+ */
+export const getReviewGeniusDraftUrl = (id: number) => {
+  return `/api/admin/genius-drafts/${id}/review`;
+};
+
+export const reviewGeniusDraft = async (
+  id: number,
+  geniusDraftReviewRequest: GeniusDraftReviewRequest,
+  options?: RequestInit,
+): Promise<GeniusDraftReviewResponse> => {
+  return customFetch<GeniusDraftReviewResponse>(getReviewGeniusDraftUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(geniusDraftReviewRequest),
+  });
+};
+
+export const getReviewGeniusDraftMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reviewGeniusDraft>>,
+    TError,
+    { id: number; data: BodyType<GeniusDraftReviewRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reviewGeniusDraft>>,
+  TError,
+  { id: number; data: BodyType<GeniusDraftReviewRequest> },
+  TContext
+> => {
+  const mutationKey = ["reviewGeniusDraft"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reviewGeniusDraft>>,
+    { id: number; data: BodyType<GeniusDraftReviewRequest> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return reviewGeniusDraft(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReviewGeniusDraftMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reviewGeniusDraft>>
+>;
+export type ReviewGeniusDraftMutationBody = BodyType<GeniusDraftReviewRequest>;
+export type ReviewGeniusDraftMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Admin-only publish or reject a Genius annotation draft
+ */
+export const useReviewGeniusDraft = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reviewGeniusDraft>>,
+    TError,
+    { id: number; data: BodyType<GeniusDraftReviewRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reviewGeniusDraft>>,
+  TError,
+  { id: number; data: BodyType<GeniusDraftReviewRequest> },
+  TContext
+> => {
+  return useMutation(getReviewGeniusDraftMutationOptions(options));
 };
 
 /**

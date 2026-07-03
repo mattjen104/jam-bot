@@ -996,6 +996,48 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /admin/genius-drafts:
+    get:
+      operationId: listGeniusDrafts
+      tags: [admin]
+      summary: Admin-only list of pending Genius annotation drafts for a recording
+      description: >
+        Returns all Genius annotation drafts in 'draft' status for a given
+        recording MBID. Each draft carries the lyric fragment, projected
+        timestamp anchor (when a matching LRCLIB line was found), Genius deep
+        link, verified flag, and vote count. Admin reviews these and calls
+        `/admin/genius-drafts/{id}/review` to publish or reject. Token-guarded.
+      parameters:
+        - name: x-admin-token
+          in: header
+          required: false
+          schema:
+            type: string
+        - name: mbid
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Pending drafts for the recording
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeniusDraftList"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Admin entry not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /admin/claims/{id}:
     patch:
       operationId: patchClaim
@@ -1044,6 +1086,66 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "404":
           description: Claim not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Admin entry not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /admin/genius-drafts/{id}/review:
+    post:
+      operationId: reviewGeniusDraft
+      tags: [admin]
+      summary: Admin-only publish or reject a Genius annotation draft
+      description: >
+        Publish or reject a pending Genius annotation draft. On publish,
+        the admin supplies a paraphrase (`text` field) — never the verbatim
+        Genius annotation — which is stored as a `track_claim` with
+        `source_label = "Genius"` (or `"Genius · Verified"` for artist-verified
+        annotations). The claim inherits the draft's `offset_ms` as
+        `position_ms` when `anchor_type = 'timestamp'`. Token-guarded.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: x-admin-token
+          in: header
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GeniusDraftReviewRequest"
+      responses:
+        "200":
+          description: Review result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeniusDraftReviewResponse"
+        "400":
+          description: Invalid request or draft not in reviewable state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Draft not found
           content:
             application/json:
               schema:
@@ -1799,17 +1901,112 @@ components:
             $ref: "#/components/schemas/LyricLine"
       required:
         - lines
+    GeniusDraft:
+      type: object
+      description: >
+        A pending Genius annotation draft awaiting admin review. The lyric
+        fragment is stored for context (never surfaced verbatim as a claim).
+        `anchorType = 'timestamp'` means `offsetMs` is set and the claim will
+        be anchored to the matching lyric line on publish.
+      properties:
+        id:
+          type: integer
+        mbid:
+          type: string
+        geniusSongId:
+          type: integer
+        geniusAnnotationId:
+          type: integer
+        fragment:
+          type: string
+          description: The lyric fragment the annotation is anchored to.
+        anchorType:
+          type: string
+          enum: [timestamp, none]
+        offsetMs:
+          anyOf:
+            - type: integer
+            - type: "null"
+        geniusUrl:
+          type: string
+        verified:
+          type: boolean
+        voteCount:
+          type: integer
+        status:
+          type: string
+          enum: [draft, published, rejected]
+      required:
+        - id
+        - mbid
+        - geniusSongId
+        - geniusAnnotationId
+        - fragment
+        - anchorType
+        - geniusUrl
+        - verified
+        - voteCount
+        - status
+    GeniusDraftList:
+      type: object
+      properties:
+        mbid:
+          type: string
+        drafts:
+          type: array
+          items:
+            $ref: "#/components/schemas/GeniusDraft"
+      required:
+        - mbid
+        - drafts
+    GeniusDraftReviewRequest:
+      type: object
+      description: >
+        Admin review action for a Genius annotation draft. `action = 'publish'`
+        requires a non-empty `text` (the admin's paraphrase of the annotation).
+        `action = 'reject'` requires no text.
+      properties:
+        action:
+          type: string
+          enum: [publish, reject]
+        text:
+          type: string
+          description: >
+            Admin-written paraphrase of the Genius annotation — required when
+            action = 'publish'. Never the verbatim annotation text.
+          minLength: 1
+      required:
+        - action
+    GeniusDraftReviewResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        action:
+          type: string
+          enum: [published, rejected]
+        claimId:
+          anyOf:
+            - type: integer
+            - type: "null"
+          description: The new track_claim id when action = 'published'.
+      required:
+        - id
+        - action
     TrackClaim:
       type: object
       description: >
         One grounded fact about a recording, extracted systematically from an
-        official source (Classic Albums documentary clips, Wikipedia article
-        sections). `sourceUrl` deep-links to the supporting moment or section
-        in the original source, so every claim is one tap from its evidence.
-        `anchorType` distinguishes timestamp-anchored (null) from
-        section-anchored ('section') claims. Section claims carry `anchorValue`
-        (the Wikipedia section label, e.g. "Recording") and a `sourceUrl` that
-        is a Wikipedia deep link to that section.
+        official documentary source (e.g. a Classic Albums making-of clip, a
+        Wikipedia article section, or a Genius annotation). `sourceUrl`
+        deep-links to the supporting moment or section in the original source,
+        so every claim is one tap from its evidence. `anchorType` distinguishes
+        timestamp-anchored (null) from section-anchored ('section') claims.
+        Section claims carry `anchorValue` (the Wikipedia section label, e.g.
+        "Recording") and a `sourceUrl` that is a Wikipedia deep link to that
+        section. `verified` is true for artist-verified Genius annotations.
+        `sourceHandle` identifies the picker that produced this claim (e.g.
+        "genius", "classic-albums") so UIs can apply source-specific treatment.
       properties:
         id:
           type: integer
@@ -1820,6 +2017,11 @@ components:
           type: string
         sourceUrl:
           type: string
+        sourceHandle:
+          type: string
+          description: >
+            Machine-readable source identifier, e.g. "genius" or
+            "classic-albums". Use this to filter claims by source in the UI.
         positionMs:
           anyOf:
             - type: integer
@@ -1854,10 +2056,15 @@ components:
             documentary clips. 'wikipedia' for track-level Wikipedia section
             claims. 'wikipedia-album' for album-level Wikipedia section claims
             (sourced from the recording's canonical album article).
+            'genius' for Genius annotation-derived claims.
+        verified:
+          type: boolean
+          description: True for artist-verified Genius annotations.
       required:
         - text
         - sourceLabel
         - sourceUrl
+        - sourceHandle
     WikipediaDraftList:
       type: object
       properties:

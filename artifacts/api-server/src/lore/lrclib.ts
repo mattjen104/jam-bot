@@ -1,5 +1,6 @@
 import { db, recordingsTable, lyricLinesTable } from "@workspace/db";
 import { eq, count } from "drizzle-orm";
+import { ingestGeniusAnnotations } from "./genius-annotations.js";
 
 /**
  * LRCLIB synced-lyrics pipeline.
@@ -155,5 +156,12 @@ export async function getLyrics(mbid: string): Promise<LyricLine[]> {
     .onConflictDoNothing();
 
   console.info(`[lore] lrclib ${rec.artist} – ${rec.title}: ${lines.length} synced line(s)`);
+
+  // Off hot path: trigger Genius annotation ingestion now that we have lyric
+  // lines to project against. Fire-and-forget — never blocks the lyrics response.
+  ingestGeniusAnnotations(mbid).catch((err) =>
+    console.warn("[lore] genius annotation trigger failed", mbid, err),
+  );
+
   return lines;
 }

@@ -42,6 +42,11 @@ import {
   GetWikipediaDraftsResponse,
   PatchClaimParams,
   PatchClaimBody,
+  ListGeniusDraftsQueryParams,
+  ReviewGeniusDraftParams,
+  ReviewGeniusDraftBody,
+  ListGeniusDraftsResponse,
+  ReviewGeniusDraftResponse,
 } from "@workspace/api-zod";
 import {
   db,
@@ -52,6 +57,7 @@ import {
   pickersTable,
   picksTable,
   trackClaimsTable,
+  geniusAnnotationDraftsTable,
   type Station,
   type Picker,
 } from "@workspace/db";
@@ -71,6 +77,7 @@ import { addSongExploderClaim } from "../../lore/song-exploder.js";
 import { ingestBlogFeed } from "../../lore/blog.js";
 import { ingestDiscogsList, addRymPicker } from "../../lore/collector.js";
 import { resolveEntry } from "../../lore/entry.js";
+import { publishGeniusDraft, rejectGeniusDraft } from "../../lore/genius-annotations.js";
 import { getLyrics } from "../../lore/lrclib.js";
 import { supportsBackfill, stationArchiveUrl } from "../../lore/adapters.js";
 import { enrichRecording } from "@workspace/song-enrichment";
@@ -372,11 +379,12 @@ router.get("/recordings/:mbid/knowledge", async (req, res) => {
         text: c.text,
         sourceLabel: c.sourceLabel,
         sourceUrl: c.sourceUrl,
+        sourceHandle: c.sourceHandle,
         positionMs: c.positionMs,
         anchorType: c.anchorType ?? null,
         anchorValue: c.anchorValue ?? null,
         status: c.status,
-        sourceHandle: c.sourceHandle,
+        verified: c.verified,
       })),
     });
     return res.json(data);
@@ -1261,6 +1269,98 @@ router.patch("/admin/claims/:id", async (req, res) => {
   } catch (err) {
     console.error("[lore] patch claim failed", err);
     return res.status(503).json({ error: "Could not update claim" });
+  }
+});
+
+// GET /api/admin/genius-drafts?mbid=:mbid — list pending annotation drafts.
+router.get("/admin/genius-drafts", async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const parsed = ListGeniusDraftsQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "mbid query parameter is required" });
+  }
+  try {
+    const rows = await db
+      .select()
+      .from(geniusAnnotationDraftsTable)
+      .where(
+        and(
+          eq(geniusAnnotationDraftsTable.mbid, parsed.data.mbid),
+          eq(geniusAnnotationDraftsTable.status, "draft"),
+        ),
+      )
+      .orderBy(
+        desc(geniusAnnotationDraftsTable.verified),
+        desc(geniusAnnotationDraftsTable.voteCount),
+        asc(geniusAnnotationDraftsTable.id),
+      );
+    const data = ListGeniusDraftsResponse.parse({
+      mbid: parsed.data.mbid,
+      drafts: rows.map((r) => ({
+        id: r.id,
+        mbid: r.mbid,
+        geniusSongId: r.geniusSongId,
+        geniusAnnotationId: r.geniusAnnotationId,
+        fragment: r.fragment,
+        anchorType: r.anchorType,
+        offsetMs: r.offsetMs ?? null,
+        geniusUrl: r.geniusUrl,
+        verified: r.verified,
+        voteCount: r.voteCount,
+        status: r.status,
+      })),
+    });
+    return res.json(data);
+  } catch (err) {
+    console.error("[lore] list genius drafts failed", err);
+    return res.status(503).json({ error: "Could not load genius drafts" });
+  }
+});
+
+// POST /api/admin/genius-drafts/:id/review — publish or reject a draft.
+router.post("/admin/genius-drafts/:id/review", async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const params = ReviewGeniusDraftParams.safeParse(req.params);
+  if (!params.success) {
+    return res.status(400).json({ error: "Invalid draft id" });
+  }
+  const parsed = ReviewGeniusDraftBody.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid review request" });
+  }
+  const { action, text } = parsed.data;
+  if (action === "publish" && !text) {
+    return res
+      .status(400)
+      .json({ error: "text (paraphrase) is required when publishing" });
+  }
+  try {
+    if (action === "reject") {
+      const ok = await rejectGeniusDraft(params.data.id);
+      if (!ok) return res.status(404).json({ error: "Draft not found" });
+      const data = ReviewGeniusDraftResponse.parse({
+        id: params.data.id,
+        action: "rejected",
+        claimId: null,
+      });
+      return res.json(data);
+    }
+    // action === "publish"
+    const claimId = await publishGeniusDraft(params.data.id, text!);
+    if (claimId === null) {
+      return res
+        .status(400)
+        .json({ error: "Draft not found or not in reviewable state" });
+    }
+    const data = ReviewGeniusDraftResponse.parse({
+      id: params.data.id,
+      action: "published",
+      claimId,
+    });
+    return res.json(data);
+  } catch (err) {
+    console.error("[lore] review genius draft failed", err);
+    return res.status(503).json({ error: "Could not review genius draft" });
   }
 });
 
