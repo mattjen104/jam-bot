@@ -596,6 +596,56 @@ export function useListStationsNowPlaying<
   return { ...query, queryKey: queryOptions.queryKey };
 }
 
+// ---------------------------------------------------------------------------
+// Date-filtered dial pulse — same shape as the live now-playing but scoped to
+// a single calendar day.  Powers the ghost-dial date sweep on the home page.
+// ---------------------------------------------------------------------------
+
+export const getListStationsAtDateUrl = (date: string) =>
+  `/api/stations/now-playing?date=${encodeURIComponent(date)}`;
+
+export const listStationsAtDate = async (
+  date: string,
+  options?: RequestInit,
+): Promise<StationPulseList> => {
+  return customFetch<StationPulseList>(getListStationsAtDateUrl(date), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListStationsAtDateQueryKey = (date: string) =>
+  [`/api/stations/now-playing`, date] as const;
+
+export function useListStationsAtDate<
+  TData = Awaited<ReturnType<typeof listStationsAtDate>>,
+  TError = ErrorType<unknown>,
+>(
+  date: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listStationsAtDate>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey =
+    queryOptions?.queryKey ?? getListStationsAtDateQueryKey(date);
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listStationsAtDate>>
+  > = ({ signal }) => listStationsAtDate(date, { signal, ...requestOptions });
+  const query = useQuery({
+    queryKey,
+    queryFn,
+    enabled: !!date,
+    ...queryOptions,
+  }) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey };
+}
+
 /**
  * The most recent spin logged for a station, resolved (best-effort) to a MusicBrainz Recording ID with cross-service deep links and artwork. The `nowPlaying` field is null when nothing has been logged yet.
 

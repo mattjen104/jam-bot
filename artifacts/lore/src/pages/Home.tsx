@@ -8,6 +8,8 @@ import {
   getGetStationNowPlayingQueryKey,
   useListStationsNowPlaying,
   getListStationsNowPlayingQueryKey,
+  useListStationsAtDate,
+  getListStationsAtDateQueryKey,
   useListPickers,
   getListPickersQueryKey,
   useGetArchiveRecentRuns,
@@ -28,6 +30,7 @@ import {
   AudioLines,
   BookMarked,
   BookOpen,
+  CalendarDays,
   Ghost,
   List,
   Play,
@@ -37,41 +40,16 @@ import {
   Waypoints,
 } from "lucide-react";
 
-type Mode = "live" | "curated" | "ghost";
-
-const MODES: {
-  id: Mode;
-  label: string;
-  suffix: string;
-  Icon: typeof Radio;
-  blurb: string;
-}[] = [
-  {
-    id: "live",
-    label: "Live",
-    suffix: " radio",
-    Icon: Radio,
-    blurb: "The dial — real stations, unmodified streams, right now.",
-  },
-  {
-    id: "curated",
-    label: "Curated",
-    suffix: " lists",
-    Icon: List,
-    blurb: "Editorial playlists — real humans, real picks, in order.",
-  },
-  {
-    id: "ghost",
-    label: "Ghost",
-    suffix: " radio",
-    Icon: Ghost,
-    blurb: "Replay documented broadcasts exactly as they aired.",
-  },
-];
+/** YYYY-MM-DD of today in local time. */
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 export default function Home() {
   const { radio, ride } = usePlayer();
-  const [mode, setMode] = useState<Mode>("live");
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const today = todayStr();
 
   return (
     <div className="min-h-screen">
@@ -85,9 +63,9 @@ export default function Home() {
             Borrow real humans' taste. Never an algorithm.
           </h1>
           <p className="mt-4 max-w-[52ch] text-base text-muted-foreground">
-            Three ways to listen — live stations, curated lists, and replays of
-            documented broadcasts. Every track resolved to its canonical
-            identity, with credits and deep links.
+            Live stations, curated lists, and replays of documented broadcasts —
+            all at once. Every track resolved to its canonical identity, with
+            credits and deep links.
           </p>
           <div className="mt-5 flex flex-wrap gap-2">
             <Link
@@ -130,43 +108,22 @@ export default function Home() {
 
         <FollowingStrip />
 
-        <nav
-          className="mb-2 flex gap-1 overflow-x-auto rounded-xl border border-card-border bg-card p-1"
-          role="tablist"
-          aria-label="Listening modes"
-        >
-          {MODES.map(({ id, label, suffix, Icon }) => {
-            const active = mode === id;
-            return (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setMode(id)}
-                data-testid={`mode-${id}`}
-                className={`hover-elevate inline-flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-2.5 font-mono text-[11px] uppercase tracking-wide transition-colors ${
-                  active
-                    ? "bg-primary/15 text-primary"
-                    : "text-muted-foreground"
-                }`}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                <span>
-                  {label}
-                  <span className="hidden sm:inline">{suffix}</span>
-                </span>
-              </button>
-            );
-          })}
-        </nav>
-        <p className="mb-6 px-1 font-mono text-[11px] text-muted-foreground">
-          {MODES.find((m) => m.id === mode)?.blurb}
-        </p>
+        {/* Time sweep — moves the whole dial to a past date */}
+        <DateSweep
+          selectedDate={selectedDate}
+          today={today}
+          onChange={setSelectedDate}
+        />
 
-        {mode === "live" && <LiveMode />}
-        {mode === "curated" && <CuratedMode />}
-        {mode === "ghost" && <GhostMode />}
+        {/* Parallel layout — Live left, Ghost+Curated right */}
+        <div className="grid gap-10 lg:grid-cols-[1fr_360px]">
+          <LiveMode selectedDate={selectedDate} />
+
+          <div className="flex flex-col gap-10">
+            <GhostMode selectedDate={selectedDate} />
+            <CuratedMode />
+          </div>
+        </div>
 
         <footer className="mt-16 border-t border-border pt-6 font-mono text-[11px] text-muted-foreground">
           Lore never hosts, proxies, or re-encodes audio. Streams are played
@@ -178,8 +135,59 @@ export default function Home() {
   );
 }
 
+/** The page-level time sweep control. */
+function DateSweep({
+  selectedDate,
+  today,
+  onChange,
+}: {
+  selectedDate: string | null;
+  today: string;
+  onChange: (date: string | null) => void;
+}) {
+  return (
+    <div className="mb-8 flex items-center gap-3">
+      <button
+        type="button"
+        onClick={() => onChange(null)}
+        data-testid="date-sweep-live"
+        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide transition-colors ${
+          selectedDate === null
+            ? "border-primary/40 bg-primary/10 text-primary"
+            : "border-border bg-card text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        <Radio className="h-3 w-3" />
+        Live
+      </button>
+      <label className="flex items-center gap-2">
+        <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+        <input
+          type="date"
+          max={today}
+          min="2014-01-01"
+          value={selectedDate ?? ""}
+          onChange={(e) => onChange(e.target.value || null)}
+          data-testid="date-sweep-input"
+          className={`rounded-lg border bg-card px-2 py-1 font-mono text-[11px] text-foreground transition-colors focus:outline-none focus:ring-1 focus:ring-primary ${
+            selectedDate
+              ? "border-primary/40"
+              : "border-border text-muted-foreground"
+          }`}
+        />
+      </label>
+      {selectedDate && (
+        <span className="inline-flex items-center gap-1 rounded-full border border-[#C6F53F]/30 bg-[#C6F53F]/10 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wide text-[#C6F53F]">
+          <Ghost className="h-3 w-3" />
+          Ghost mode
+        </span>
+      )}
+    </div>
+  );
+}
+
 /** Mode 1 — the live dial with the now-playing sidebar. */
-function LiveMode() {
+function LiveMode({ selectedDate }: { selectedDate: string | null }) {
   const { data, isLoading, isError } = useListStations();
   const { radio: player } = usePlayer();
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
@@ -191,13 +199,27 @@ function LiveMode() {
   const focusedStation =
     stations.find((s) => s.slug === focusedSlug) ?? player.station ?? null;
 
-  const { data: pulse } = useListStationsNowPlaying({
+  // Live pulse — refetch every 30s when no date is selected.
+  const { data: livePulse } = useListStationsNowPlaying({
     query: {
       queryKey: getListStationsNowPlayingQueryKey(),
-      refetchInterval: 30000,
+      refetchInterval: selectedDate ? false : 30000,
       refetchIntervalInBackground: false,
+      enabled: !selectedDate,
     },
   });
+
+  // Historical pulse — fetched once for a specific date; no polling.
+  const { data: datePulse } = useListStationsAtDate(selectedDate ?? "", {
+    query: {
+      queryKey: getListStationsAtDateQueryKey(selectedDate ?? ""),
+      enabled: !!selectedDate,
+      staleTime: 5 * 60 * 1000,
+    },
+  });
+
+  const pulse = selectedDate ? datePulse : livePulse;
+
   const pulseBySlug = useMemo(() => {
     return new Map(
       (pulse?.items ?? []).map((i) => [i.slug, i.nowPlaying ?? null]),
@@ -205,8 +227,7 @@ function LiveMode() {
   }, [pulse]);
 
   // Dial badges: batch every resolved now-playing MBID into one lookup —
-  // "which of these songs did a critic/label/curator vouch for?" Sorted so
-  // the query key (and 60s server cache) stays stable across poll ticks.
+  // "which of these songs did a critic/label/curator vouch for?"
   const pulseMbids = useMemo(() => {
     const ids = new Set<string>();
     for (const item of pulse?.items ?? []) {
@@ -243,8 +264,8 @@ function LiveMode() {
     {
       query: {
         queryKey: getGetStationNowPlayingQueryKey(focusedSlug ?? ""),
-        enabled: !!focusedSlug,
-        refetchInterval: 15000,
+        enabled: !!focusedSlug && !selectedDate,
+        refetchInterval: selectedDate ? false : 15000,
         refetchIntervalInBackground: false,
       },
     },
@@ -257,49 +278,59 @@ function LiveMode() {
   };
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
-      <section>
-        <div className="mb-4 flex items-baseline justify-between">
-          <h2 className="font-serif text-xl font-semibold text-foreground">
-            The dial
-          </h2>
-          <span className="font-mono text-xs text-muted-foreground">
-            {stations.length} station{stations.length === 1 ? "" : "s"}
-          </span>
+    <section>
+      <div className="mb-4 flex items-baseline justify-between">
+        <h2 className="font-serif text-xl font-semibold text-foreground">
+          {selectedDate ? (
+            <>
+              The dial <span className="text-muted-foreground">·</span>{" "}
+              <span className="font-mono text-base text-muted-foreground">
+                {selectedDate}
+              </span>
+            </>
+          ) : (
+            "The dial"
+          )}
+        </h2>
+        <span className="font-mono text-xs text-muted-foreground">
+          {stations.length} station{stations.length === 1 ? "" : "s"}
+        </span>
+      </div>
+
+      {isLoading && <StationListSkeleton />}
+      {isError && (
+        <div className="rounded-xl border border-destructive-border bg-destructive/10 p-4 text-sm text-destructive-foreground">
+          Couldn't load the station directory. Please refresh.
         </div>
-
-        {isLoading && <StationListSkeleton />}
-        {isError && (
-          <div className="rounded-xl border border-destructive-border bg-destructive/10 p-4 text-sm text-destructive-foreground">
-            Couldn't load the station directory. Please refresh.
-          </div>
-        )}
-        {!isLoading && !isError && stations.length === 0 && (
-          <div className="rounded-xl border border-card-border bg-card p-6 text-sm text-muted-foreground">
-            No stations are on the dial yet.
-          </div>
-        )}
-        {!isLoading && stations.length > 0 && (
-          <StationList
-            stations={stations}
-            activeSlug={activeSlug}
-            status={player.status}
-            pulse={pulseBySlug}
-            picked={pickedBySlug}
-            onToggle={handleToggle}
-            onSelect={handleSelect}
-          />
-        )}
-      </section>
-
-      <aside className="lg:sticky lg:top-8 lg:self-start">
-        <NowPlaying
-          data={nowPlaying}
-          isLoading={npLoading}
-          fallbackStation={focusedStation}
+      )}
+      {!isLoading && !isError && stations.length === 0 && (
+        <div className="rounded-xl border border-card-border bg-card p-6 text-sm text-muted-foreground">
+          No stations are on the dial yet.
+        </div>
+      )}
+      {!isLoading && stations.length > 0 && (
+        <StationList
+          stations={stations}
+          activeSlug={activeSlug}
+          status={player.status}
+          pulse={pulseBySlug}
+          picked={pickedBySlug}
+          onToggle={handleToggle}
+          onSelect={handleSelect}
         />
-      </aside>
-    </div>
+      )}
+
+      {/* Now-playing sidebar only shown in live mode — not meaningful for ghost snapshots */}
+      {!selectedDate && (
+        <aside className="mt-8 xl:hidden">
+          <NowPlaying
+            data={nowPlaying}
+            isLoading={npLoading}
+            fallbackStation={focusedStation}
+          />
+        </aside>
+      )}
+    </section>
   );
 }
 
@@ -364,7 +395,7 @@ function CuratedMode() {
         </span>
       </div>
       {isLoading ? (
-        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="grid gap-3 sm:grid-cols-2">
           {[0, 1, 2].map((i) => (
             <li
               key={i}
@@ -377,7 +408,7 @@ function CuratedMode() {
           No curated lists yet — they appear as editors document their picks.
         </div>
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="grid gap-3 sm:grid-cols-2">
           {pickers.map((picker) => (
             <EditorialPickerCard
               key={picker.id}
@@ -399,20 +430,35 @@ function CuratedMode() {
 }
 
 /** Mode 3 — recent documented runs from every station, ready to replay. */
-function GhostMode() {
+function GhostMode({ selectedDate }: { selectedDate: string | null }) {
   const { data, isLoading, isError } = useGetArchiveRecentRuns({
     query: {
       queryKey: getGetArchiveRecentRunsQueryKey(),
       staleTime: 60_000,
     },
   });
-  const items = data?.items ?? [];
+  const allItems = data?.items ?? [];
+
+  // When a date is selected, show only runs from that day; otherwise all recent.
+  const items = useMemo(() => {
+    if (!selectedDate) return allItems;
+    return allItems.filter((item) => item.run.date === selectedDate);
+  }, [allItems, selectedDate]);
+
+  const heading = selectedDate ? (
+    <>
+      <Ghost className="inline h-4 w-4 align-middle" />{" "}
+      <span>Broadcasts · {selectedDate}</span>
+    </>
+  ) : (
+    "Recent broadcasts"
+  );
 
   return (
     <section>
       <div className="mb-4 flex items-baseline justify-between">
         <h2 className="font-serif text-xl font-semibold text-foreground">
-          Recent broadcasts
+          {heading}
         </h2>
         <Link
           href="/archive"
@@ -424,7 +470,7 @@ function GhostMode() {
       </div>
       {isLoading ? (
         <ul className="flex flex-col gap-2">
-          {[0, 1, 2, 3].map((i) => (
+          {[0, 1, 2].map((i) => (
             <li
               key={i}
               className="h-[74px] animate-pulse rounded-xl border border-card-border bg-card"
@@ -437,7 +483,9 @@ function GhostMode() {
         </div>
       ) : items.length === 0 ? (
         <div className="rounded-xl border border-card-border bg-card p-6 text-sm text-muted-foreground">
-          Nothing documented yet — runs appear as station archives fill in.
+          {selectedDate
+            ? `No broadcasts documented for ${selectedDate}.`
+            : "Nothing documented yet — runs appear as station archives fill in."}
         </div>
       ) : (
         <ul className="flex flex-col gap-2" data-testid="ghost-runs">
@@ -496,8 +544,6 @@ function EditorialPickerCard({
   picker: Picker;
   latest: LatestList | null;
 }) {
-  // Replay targets the newest run with playable tracks — the freshness block
-  // above may honestly show a newer, not-yet-resolved list.
   const replayRunId = latest
     ? latest.playableRunId
     : (picker.latestRunId ?? null);

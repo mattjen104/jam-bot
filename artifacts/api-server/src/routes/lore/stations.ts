@@ -36,7 +36,12 @@ router.get("/stations", h(async (_req, res) => {
 }));
 
 // GET /api/stations/now-playing — latest spin per station (the dial pulse).
-router.get("/stations/now-playing", h(async (_req, res) => {
+// Optional ?date=YYYY-MM-DD returns the last spin per station on that calendar
+// day instead of the global latest — powers the ghost-dial date sweep.
+router.get("/stations/now-playing", h(async (req, res) => {
+  const rawDate = typeof req.query.date === "string" ? req.query.date.trim() : null;
+  const dateFilter = rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null;
+
   const stations = await db
     .select({ id: stationsTable.id, slug: stationsTable.slug })
     .from(stationsTable)
@@ -61,7 +66,11 @@ router.get("/stations/now-playing", h(async (_req, res) => {
     .from(spinsTable)
     .leftJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
     .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id))
-    .where(isNotNull(spinsTable.stationId))
+    .where(
+      dateFilter
+        ? and(isNotNull(spinsTable.stationId), sql`${spinsTable.playedAt}::date = ${dateFilter}::date`)
+        : isNotNull(spinsTable.stationId),
+    )
     .orderBy(asc(spinsTable.stationId), desc(spinsTable.playedAt));
 
   const byStation = new Map(rows.map((r) => [r.stationId, r]));
