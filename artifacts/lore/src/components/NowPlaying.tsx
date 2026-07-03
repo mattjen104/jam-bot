@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "wouter";
 import {
   useGetRecordingKnowledge,
@@ -11,6 +12,8 @@ import { groupCredits, pressingLine } from "../lib/linerNotes";
 import { LikeButton } from "./LikeButton";
 import { KeepButton } from "./KeepButton";
 import { FollowButton } from "./FollowButton";
+import { LyricView } from "./LyricView";
+import { usePlayer } from "../player/PlayerProvider";
 import { djFollowId } from "../lib/local";
 import {
   ArrowUpRight,
@@ -18,6 +21,7 @@ import {
   ExternalLink,
   Heart,
   Mic,
+  MicVocal,
   Music4,
   Search,
 } from "lucide-react";
@@ -33,6 +37,14 @@ export function NowPlaying({ data, isLoading, fallbackStation }: NowPlayingProps
   const np = data?.nowPlaying ?? null;
   const rec = np?.recording ?? null;
   const artwork = rec?.artworkUrl ?? np?.artworkUrl ?? null;
+
+  const { ride } = usePlayer();
+  const [showLyrics, setShowLyrics] = useState(false);
+
+  const hasMbid = Boolean(rec?.mbid);
+  const progressMs = ride.active && ride.current?.mbid === rec?.mbid
+    ? ride.progressMs
+    : null;
 
   if (!station) {
     return (
@@ -72,7 +84,37 @@ export function NowPlaying({ data, isLoading, fallbackStation }: NowPlayingProps
             On air · {station.name}
           </span>
         </div>
+        {/* Corner toggle cluster — bottom-right of album art */}
+        <div className="absolute bottom-3 right-3 flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => hasMbid && setShowLyrics((v) => !v)}
+            title={hasMbid ? (showLyrics ? "Hide lyrics" : "Show lyrics") : "Lyrics not yet matched"}
+            aria-label={hasMbid ? (showLyrics ? "Hide lyrics" : "Show lyrics") : "Lyrics unavailable"}
+            data-testid="lyrics-toggle"
+            className={[
+              "flex h-7 w-7 items-center justify-center rounded-full backdrop-blur transition-colors",
+              hasMbid
+                ? showLyrics
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-background/70 text-foreground/80 hover:bg-background/90"
+                : "cursor-not-allowed bg-background/40 text-foreground/30",
+            ].join(" ")}
+          >
+            <MicVocal className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
+
+      {/* Lyrics panel — slides open beneath the album art */}
+      {showLyrics && hasMbid && rec && (
+        <div
+          className="border-b border-card-border animate-in fade-in slide-in-from-top-1 duration-200"
+          data-testid="lyrics-panel"
+        >
+          <LyricView mbid={rec.mbid} progressMs={progressMs} />
+        </div>
+      )}
 
       <div className="relative -mt-10 p-6">
         {np ? (
