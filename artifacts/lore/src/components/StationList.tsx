@@ -199,10 +199,23 @@ export function StationList({
 
                 {/* Metadata availability chips for the current track */}
                 {avail && (avail.hasLyrics || avail.hasSe) && (
-                  <div className="mt-1 flex gap-1">
+                  <div
+                    className="mt-1 flex gap-1 overflow-x-auto"
+                    style={{ scrollbarWidth: "none" }}
+                  >
+                    {/* When there's no show/DJ name, embed the track title as
+                        the leading chip so the metadata chips have context */}
+                    {!np?.show && trackLine && (
+                      <span
+                        className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-background/40 px-2 py-0.5 font-mono text-[10px] text-muted-foreground/70 whitespace-nowrap"
+                        title={trackLine}
+                      >
+                        <span className="max-w-[18ch] truncate">{trackLine}</span>
+                      </span>
+                    )}
                     {avail.hasLyrics && (
                       <span
-                        className="inline-flex items-center gap-1 rounded-full border border-border bg-background/60 px-2 py-0.5 font-mono text-[10px] text-muted-foreground"
+                        className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-background/60 px-2 py-0.5 font-mono text-[10px] text-muted-foreground whitespace-nowrap"
                         title="Synced lyrics available"
                         data-testid={`chip-lyrics-${station.slug}`}
                       >
@@ -212,7 +225,7 @@ export function StationList({
                     )}
                     {avail.hasSe && (
                       <span
-                        className="inline-flex items-center gap-1 rounded-full border border-border bg-background/60 px-2 py-0.5 font-mono text-[10px] text-muted-foreground"
+                        className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-background/60 px-2 py-0.5 font-mono text-[10px] text-muted-foreground whitespace-nowrap"
                         title="Song Exploder episode available"
                         data-testid={`chip-se-${station.slug}`}
                       >
