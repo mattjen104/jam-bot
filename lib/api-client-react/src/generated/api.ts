@@ -35,15 +35,19 @@ import type {
   ManualSpinRequest,
   ManualSpinResponse,
   OEmbed,
+  PickedLookup,
   Picker,
   PickerArchive,
   PickerList,
   PickerRunDetail,
+  PickerStationOverlaps,
   RecordingKnowledge,
   RecordingLyrics,
   RecordingNode,
+  RecordingPicks,
   RecordingPreview,
   RecordingSpins,
+  StationPickerOverlaps,
   ResolveSongParams,
   ResolvedSong,
   RymListRequest,
@@ -3454,6 +3458,376 @@ export function useGetSpotifyPlayer<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetSpotifyPlayerQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Every curated pick of this recording — the reverse edge of the song–source graph. Each pick carries its picker, the specific list/run it belongs to, its ordinal within that list, and the run's size. Only real human selection edges — never inferred.
+
+ * @summary Curated lists that contain a recording ("Picked by")
+ */
+export const getGetRecordingPicksUrl = (mbid: string) => {
+  return `/api/recordings/${mbid}/picks`;
+};
+
+export const getRecordingPicks = async (
+  mbid: string,
+  options?: RequestInit,
+): Promise<RecordingPicks> => {
+  return customFetch<RecordingPicks>(getGetRecordingPicksUrl(mbid), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetRecordingPicksQueryKey = (mbid: string) => {
+  return [`/api/recordings/${mbid}/picks`] as const;
+};
+
+export const getGetRecordingPicksQueryOptions = <
+  TData = Awaited<ReturnType<typeof getRecordingPicks>>,
+  TError = ErrorType<unknown>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecordingPicks>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetRecordingPicksQueryKey(mbid);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getRecordingPicks>>
+  > = ({ signal }) => getRecordingPicks(mbid, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!mbid,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getRecordingPicks>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetRecordingPicksQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getRecordingPicks>>
+>;
+export type GetRecordingPicksQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Curated lists that contain a recording ("Picked by")
+ */
+
+export function useGetRecordingPicks<
+  TData = Awaited<ReturnType<typeof getRecordingPicks>>,
+  TError = ErrorType<unknown>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecordingPicks>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetRecordingPicksQueryOptions(mbid, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Pickers whose curated lists contain recordings this station has actually spun — exact MBID overlap only, never similarity.
+
+ * @summary Curated pickers sharing tracks with a station ("Critics agree")
+ */
+export const getGetStationPickerOverlapsUrl = (slug: string) => {
+  return `/api/stations/${slug}/overlaps/pickers`;
+};
+
+export const getStationPickerOverlaps = async (
+  slug: string,
+  options?: RequestInit,
+): Promise<StationPickerOverlaps> => {
+  return customFetch<StationPickerOverlaps>(
+    getGetStationPickerOverlapsUrl(slug),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetStationPickerOverlapsQueryKey = (slug: string) => {
+  return [`/api/stations/${slug}/overlaps/pickers`] as const;
+};
+
+export const getGetStationPickerOverlapsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStationPickerOverlaps>>,
+  TError = ErrorType<ApiError>,
+>(
+  slug: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationPickerOverlaps>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStationPickerOverlapsQueryKey(slug);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStationPickerOverlaps>>
+  > = ({ signal }) =>
+    getStationPickerOverlaps(slug, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!slug,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStationPickerOverlaps>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStationPickerOverlapsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStationPickerOverlaps>>
+>;
+export type GetStationPickerOverlapsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Curated pickers sharing tracks with a station ("Critics agree")
+ */
+
+export function useGetStationPickerOverlaps<
+  TData = Awaited<ReturnType<typeof getStationPickerOverlaps>>,
+  TError = ErrorType<ApiError>,
+>(
+  slug: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationPickerOverlaps>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStationPickerOverlapsQueryOptions(slug, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Stations whose logged spin history contains recordings this picker has picked — exact MBID overlap only, never similarity.
+
+ * @summary Stations that have spun a picker's tracks ("On the radio too")
+ */
+export const getGetPickerStationOverlapsUrl = (handle: string) => {
+  return `/api/pickers/${handle}/overlaps/stations`;
+};
+
+export const getPickerStationOverlaps = async (
+  handle: string,
+  options?: RequestInit,
+): Promise<PickerStationOverlaps> => {
+  return customFetch<PickerStationOverlaps>(
+    getGetPickerStationOverlapsUrl(handle),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetPickerStationOverlapsQueryKey = (handle: string) => {
+  return [`/api/pickers/${handle}/overlaps/stations`] as const;
+};
+
+export const getGetPickerStationOverlapsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPickerStationOverlaps>>,
+  TError = ErrorType<ApiError>,
+>(
+  handle: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPickerStationOverlaps>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPickerStationOverlapsQueryKey(handle);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPickerStationOverlaps>>
+  > = ({ signal }) =>
+    getPickerStationOverlaps(handle, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!handle,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPickerStationOverlaps>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPickerStationOverlapsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPickerStationOverlaps>>
+>;
+export type GetPickerStationOverlapsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Stations that have spun a picker's tracks ("On the radio too")
+ */
+
+export function useGetPickerStationOverlaps<
+  TData = Awaited<ReturnType<typeof getPickerStationOverlaps>>,
+  TError = ErrorType<ApiError>,
+>(
+  handle: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPickerStationOverlaps>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPickerStationOverlapsQueryOptions(handle, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Batched, cached lookup for the live dial: for each requested MBID that appears in at least one curated (non-DJ) picker's list, returns the strongest such pick. MBIDs with no editorial pick are simply absent.
+
+ * @summary Which of these MBIDs appear in an editorial list (dial badges)
+ */
+export const getLookupPickedMbidsUrl = (params: { mbids: string }) => {
+  const searchParams = new URLSearchParams();
+  searchParams.set("mbids", params.mbids);
+  const qs = searchParams.toString();
+  return `/api/picks/contains?${qs}`;
+};
+
+export const lookupPickedMbids = async (
+  params: { mbids: string },
+  options?: RequestInit,
+): Promise<PickedLookup> => {
+  return customFetch<PickedLookup>(getLookupPickedMbidsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getLookupPickedMbidsQueryKey = (params: { mbids: string }) => {
+  return [`/api/picks/contains`, params] as const;
+};
+
+export const getLookupPickedMbidsQueryOptions = <
+  TData = Awaited<ReturnType<typeof lookupPickedMbids>>,
+  TError = ErrorType<unknown>,
+>(
+  params: { mbids: string },
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof lookupPickedMbids>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getLookupPickedMbidsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof lookupPickedMbids>>
+  > = ({ signal }) => lookupPickedMbids(params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!params.mbids,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof lookupPickedMbids>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type LookupPickedMbidsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof lookupPickedMbids>>
+>;
+export type LookupPickedMbidsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Which of these MBIDs appear in an editorial list (dial badges)
+ */
+
+export function useLookupPickedMbids<
+  TData = Awaited<ReturnType<typeof lookupPickedMbids>>,
+  TError = ErrorType<unknown>,
+>(
+  params: { mbids: string },
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof lookupPickedMbids>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getLookupPickedMbidsQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

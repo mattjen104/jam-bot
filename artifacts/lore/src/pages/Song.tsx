@@ -6,7 +6,9 @@ import {
   useGetRecordingKnowledge,
   useGetRecordingSpins,
   useGetRecordingSegues,
+  useGetRecordingPicks,
   type EntryPick,
+  type RecordingPick,
   type RecordingSpin,
   type SegueNext,
   type TrackClaim,
@@ -23,8 +25,10 @@ import {
   BookOpen,
   Disc3,
   ExternalLink,
+  ListMusic,
   MessageSquareQuote,
   Music4,
+  Play,
   Radio,
   Route as RouteIcon,
   Sparkles,
@@ -55,6 +59,7 @@ export default function Song() {
   const { data: knowledgeData } = useGetRecordingKnowledge(mbid);
   const { data: spinsData } = useGetRecordingSpins(mbid);
   const { data: seguesData } = useGetRecordingSegues(mbid);
+  const { data: picksData } = useGetRecordingPicks(mbid);
 
   const notFound =
     isError && (error as { status?: number } | undefined)?.status === 404;
@@ -191,7 +196,8 @@ export default function Song() {
             <WikipediaClaims claims={knowledgeData?.claims ?? []} />
             <LyricView mbid={rec.mbid} progressMs={ride.progressMs} />
             <Segues next={seguesData?.next ?? []} />
-            <Spins spins={spinsData?.spins ?? []} />
+            <Spins spins={spinsData?.spins ?? []} mbid={rec.mbid} />
+            <Picks picks={picksData?.picks ?? []} mbid={rec.mbid} />
           </>
         )}
       </div>
@@ -352,7 +358,7 @@ function Segues({ next }: { next: SegueNext[] }) {
   );
 }
 
-function Spins({ spins }: { spins: RecordingSpin[] }) {
+function Spins({ spins, mbid }: { spins: RecordingSpin[]; mbid: string }) {
   return (
     <section>
       <SectionHeading
@@ -390,6 +396,97 @@ function Spins({ spins }: { spins: RecordingSpin[] }) {
                   {` · ${clockTime(s.playedAt)}`}
                 </p>
               </div>
+              {s.runId != null && (
+                <Link
+                  href={`/archive/station-runs/${s.runId}?play=1&from=${mbid}`}
+                  className="hover-elevate inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-border px-2.5 text-xs text-muted-foreground"
+                  title="Replay this run starting at this song"
+                  data-testid={`spin-replay-${i}`}
+                >
+                  <Play className="h-3 w-3" />
+                  Hear it in context
+                </Link>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/**
+ * "Picked by" — the other direction of the graph: every human source that
+ * vouched for this exact recording (labels, blogs, curators, series),
+ * trust-ordered. Each pick that belongs to a documented run links back into
+ * that run's archive, starting playback at this song ("hear it in context").
+ */
+function Picks({ picks, mbid }: { picks: RecordingPick[]; mbid: string }) {
+  return (
+    <section>
+      <SectionHeading
+        icon={<ListMusic className="h-5 w-5" />}
+        title="Picked by"
+        hint={picks.length ? `${picks.length} pick${picks.length === 1 ? "" : "s"}` : undefined}
+      />
+      {picks.length === 0 ? (
+        <div className="rounded-2xl border border-card-border bg-card p-5 text-sm text-muted-foreground">
+          No picker has vouched for this recording yet.
+        </div>
+      ) : (
+        <ul className="flex flex-col gap-2" data-testid="picked-by">
+          {picks.map((p, i) => (
+            <li
+              key={`${p.picker.handle}-${p.sourceUrl ?? ""}-${i}`}
+              className="flex items-center gap-3 rounded-xl border border-card-border bg-card p-3"
+            >
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 font-mono text-[11px] uppercase text-primary">
+                {p.picker.pickerType.slice(0, 2)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-foreground">
+                  <Link
+                    href={`/archive/pickers/${p.picker.handle}`}
+                    className="hover:text-primary"
+                    data-testid={`pick-picker-${i}`}
+                  >
+                    {p.picker.name}
+                  </Link>
+                  <span className="ml-2 font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+                    {p.picker.pickerType} · trust {p.picker.trustTier}
+                  </span>
+                </p>
+                <p className="truncate font-mono text-[11px] text-muted-foreground/70">
+                  {p.listTitle ?? "Untitled list"}
+                  {p.ordinal != null && p.trackCount != null
+                    ? ` · track ${p.ordinal + 1} of ${p.trackCount}`
+                    : ""}
+                  {p.pickedAt ? ` · ${timeAgo(p.pickedAt)}` : ""}
+                </p>
+              </div>
+              {p.runId != null && (
+                <Link
+                  href={`/archive/picker-runs/${p.runId}?play=1&from=${mbid}`}
+                  className="hover-elevate inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-border px-2.5 text-xs text-muted-foreground"
+                  title="Play this list starting at this song"
+                  data-testid={`pick-replay-${i}`}
+                >
+                  <Play className="h-3 w-3" />
+                  Hear it in context
+                </Link>
+              )}
+              {p.sourceUrl && (
+                <a
+                  href={p.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hover-elevate inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-border px-2.5 text-xs text-muted-foreground"
+                  title="Original source"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Source
+                </a>
+              )}
             </li>
           ))}
         </ul>

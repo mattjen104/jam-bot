@@ -280,6 +280,32 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RecordingSpins"
+  /recordings/{mbid}/picks:
+    get:
+      operationId: getRecordingPicks
+      tags: [recordings]
+      summary: Curated lists that contain a recording ("Picked by")
+      description: >
+        Every curated pick of this recording — the reverse edge of the
+        song–source graph. Each pick carries its picker, the specific list/run
+        it belongs to (runId, when the pick has a source URL), its ordinal
+        within that list, and the run's size, so a song page can link both to
+        the picker and to the exact list, and offer "hear it in context"
+        playback. Only real human selection edges — never inferred.
+      parameters:
+        - name: mbid
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: The recording's curated picks (empty when none)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecordingPicks"
   /recordings/{mbid}/preview:
     get:
       operationId: getRecordingPreview
@@ -561,6 +587,92 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ArchiveRecentRuns"
+  /stations/{slug}/overlaps/pickers:
+    get:
+      operationId: getStationPickerOverlaps
+      tags: [archive]
+      summary: Curated pickers sharing tracks with a station ("Critics agree")
+      description: >
+        Pickers whose curated lists contain recordings this station has
+        actually spun — exact MBID overlap only, never similarity. Ranked by
+        the number of distinct shared recordings. Empty when no picker shares
+        a track with the station's spin history.
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Pickers overlapping this station's spin history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationPickerOverlaps"
+        "404":
+          description: Station not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /pickers/{handle}/overlaps/stations:
+    get:
+      operationId: getPickerStationOverlaps
+      tags: [archive]
+      summary: Stations that have spun a picker's tracks ("On the radio too")
+      description: >
+        Stations whose logged spin history contains recordings this picker has
+        picked — exact MBID overlap only, never similarity. Ranked by the
+        number of distinct shared recordings. Empty when radio hasn't touched
+        any of the picker's tracks.
+      parameters:
+        - name: handle
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Stations overlapping this picker's picks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PickerStationOverlaps"
+        "404":
+          description: Picker not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /picks/contains:
+    get:
+      operationId: lookupPickedMbids
+      tags: [pickers]
+      summary: Which of these MBIDs appear in an editorial list (dial badges)
+      description: >
+        Batched, cached lookup for the live dial: given a comma-separated list
+        of recording MBIDs, returns — for each MBID that appears in at least
+        one curated (non-DJ) picker's list — the strongest such pick with its
+        picker and list runId. MBIDs with no editorial pick are simply absent.
+        Served from an in-memory cache so it never slows the dial poll.
+      parameters:
+        - name: mbids
+          in: query
+          required: true
+          description: Comma-separated recording MBIDs (max 30 per call).
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Editorial-list hits for the requested MBIDs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PickedLookup"
   /recordings/{mbid}/lyrics:
     get:
       operationId: getRecordingLyrics
@@ -2204,6 +2316,13 @@ components:
           anyOf:
             - $ref: "#/components/schemas/ShowRef"
             - type: "null"
+        runId:
+          type: ["integer", "null"]
+          description: >-
+            The archived station run (show + UTC broadcast day) this spin
+            belongs to — an opaque id for /archive/station-runs/{runId}, so a
+            song page can jump into the ghost run containing this play.
+            Optional for older cached payloads.
       required:
         - playedAt
         - confidence
@@ -2220,6 +2339,146 @@ components:
       required:
         - mbid
         - spins
+    PickerRef:
+      type: object
+      description: A picker reference used in pick attribution.
+      properties:
+        name:
+          type: string
+        handle:
+          type: string
+        pickerType:
+          type: string
+        trustTier:
+          type: integer
+      required:
+        - name
+        - handle
+        - pickerType
+        - trustTier
+    RecordingPick:
+      type: object
+      description: >-
+        One curated pick of a recording — the reverse edge of the song–source
+        graph. `runId` locates the specific list (null when the pick has no
+        source URL and therefore no archived run).
+      properties:
+        picker:
+          $ref: "#/components/schemas/PickerRef"
+        runId:
+          type: ["integer", "null"]
+        listTitle:
+          type: ["string", "null"]
+        sourceUrl:
+          type: ["string", "null"]
+        pickedAt:
+          type: ["string", "null"]
+        ordinal:
+          type: ["integer", "null"]
+          description: Position within an ordered list; null for unordered sources.
+        trackCount:
+          type: integer
+          description: Total picks in the same run (0 when the pick has no run).
+        confidence:
+          type: string
+          enum: [recording_id, isrc, text, unresolved]
+      required:
+        - picker
+        - runId
+        - listTitle
+        - sourceUrl
+        - pickedAt
+        - ordinal
+        - trackCount
+        - confidence
+    RecordingPicks:
+      type: object
+      properties:
+        mbid:
+          type: string
+        picks:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecordingPick"
+      required:
+        - mbid
+        - picks
+    PickerOverlap:
+      type: object
+      description: One picker sharing recordings with a station (exact MBID overlap).
+      properties:
+        picker:
+          $ref: "#/components/schemas/PickerRef"
+        sharedCount:
+          type: integer
+          description: Distinct recordings both the picker and the station touched.
+      required:
+        - picker
+        - sharedCount
+    StationPickerOverlaps:
+      type: object
+      properties:
+        station:
+          $ref: "#/components/schemas/StationRef"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PickerOverlap"
+      required:
+        - station
+        - items
+    StationOverlap:
+      type: object
+      description: One station sharing recordings with a picker (exact MBID overlap).
+      properties:
+        station:
+          $ref: "#/components/schemas/StationRef"
+        sharedCount:
+          type: integer
+          description: Distinct recordings both the station and the picker touched.
+      required:
+        - station
+        - sharedCount
+    PickerStationOverlaps:
+      type: object
+      properties:
+        picker:
+          $ref: "#/components/schemas/PickerRef"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/StationOverlap"
+      required:
+        - picker
+        - items
+    PickedLookupItem:
+      type: object
+      description: >-
+        The strongest editorial pick for one MBID — used by the live dial's
+        "also picked" badge.
+      properties:
+        mbid:
+          type: string
+        picker:
+          $ref: "#/components/schemas/PickerRef"
+        runId:
+          type: ["integer", "null"]
+        listTitle:
+          type: ["string", "null"]
+      required:
+        - mbid
+        - picker
+        - runId
+        - listTitle
+    PickedLookup:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PickedLookupItem"
+      required:
+        - items
     StationRunSummary:
       type: object
       description: >-

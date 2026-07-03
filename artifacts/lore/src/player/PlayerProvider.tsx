@@ -148,7 +148,7 @@ export interface RideApi {
   startReplay: (
     seeds: RideSeed[],
     label: string,
-    opts?: { timeOrientation?: TimeOrientation },
+    opts?: { timeOrientation?: TimeOrientation; startIndex?: number },
   ) => void;
   stop: () => void;
   next: () => void;
@@ -359,7 +359,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     (
       seeds: RideSeed[],
       label: string,
-      opts?: { timeOrientation?: TimeOrientation },
+      opts?: { timeOrientation?: TimeOrientation; startIndex?: number },
     ) => {
       if (!seeds.length) return;
       pauseRadio?.();
@@ -392,7 +392,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           attribution: null,
         })),
       );
-      setIndex(0);
+      // "Hear it in context": start mid-run when asked (clamped to the queue),
+      // with the earlier tracks still reachable via prev.
+      const startAt = opts?.startIndex ?? 0;
+      setIndex(
+        Number.isInteger(startAt) && startAt > 0 && startAt < seeds.length
+          ? startAt
+          : 0,
+      );
     },
     [pauseRadio],
   );

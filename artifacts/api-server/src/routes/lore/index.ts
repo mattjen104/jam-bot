@@ -12,6 +12,14 @@ import {
   GetRecordingResponse,
   GetRecordingSpinsParams,
   GetRecordingSpinsResponse,
+  GetRecordingPicksParams,
+  GetRecordingPicksResponse,
+  GetStationPickerOverlapsParams,
+  GetStationPickerOverlapsResponse,
+  GetPickerStationOverlapsParams,
+  GetPickerStationOverlapsResponse,
+  LookupPickedMbidsQueryParams,
+  LookupPickedMbidsResponse,
   GetRecordingPreviewParams,
   GetRecordingPreviewResponse,
   GetRecordingSeguesParams,
@@ -62,7 +70,7 @@ import {
   type Station,
   type Picker,
 } from "@workspace/db";
-import { eq, and, asc, desc, isNull, isNotNull, inArray, sql } from "drizzle-orm";
+import { eq, ne, and, asc, desc, isNull, isNotNull, inArray, sql } from "drizzle-orm";
 import { nextRideable, spinsForRecording } from "../../lore/segue.js";
 import { resolvePreview } from "../../lore/preview.js";
 import { ingestManualSpin } from "../../lore/resolve.js";
@@ -434,12 +442,113 @@ router.get("/recordings/:mbid/spins", async (req, res) => {
         confidence: s.confidence,
         station: s.station,
         show: s.show,
+        runId: s.runId,
       })),
     });
     return res.json(data);
   } catch (err) {
     console.error("[lore] recording spins failed", err);
     return res.status(503).json({ error: "Could not load spins" });
+  }
+});
+
+// GET /api/recordings/:mbid/picks — every curated list containing this
+// recording: the reverse edge of the song–source graph. Each pick names its
+// picker and (when the pick has a source URL) the archived run it belongs to,
+// so the song page can link straight into the list and replay it in context.
+router.get("/recordings/:mbid/picks", async (req, res) => {
+  const parsed = GetRecordingPicksParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(404).json({ error: "Recording not found" });
+  }
+  try {
+    const rows = await db
+      .select({
+        pickerId: picksTable.pickerId,
+        sourceUrl: picksTable.sourceUrl,
+        context: picksTable.context,
+        pickedAt: picksTable.pickedAt,
+        ordinal: picksTable.ordinal,
+        confidence: picksTable.confidence,
+        pickerName: pickersTable.name,
+        pickerHandle: pickersTable.handle,
+        pickerType: pickersTable.pickerType,
+        trustTier: pickersTable.trustTier,
+      })
+      .from(picksTable)
+      .innerJoin(pickersTable, eq(picksTable.pickerId, pickersTable.id))
+      .where(
+        and(eq(picksTable.mbid, parsed.data.mbid), eq(pickersTable.active, true)),
+      )
+      .orderBy(
+        asc(pickersTable.trustTier),
+        sql`${picksTable.pickedAt} desc nulls last`,
+        asc(picksTable.id),
+      )
+      .limit(50);
+
+    // Resolve each pick's run anchor + size (runId = min pick id in its
+    // picker+sourceUrl group) — computed over the whole picks table so the
+    // anchor matches the archive's run derivation exactly.
+    const runByKey = new Map<string, { runId: number; trackCount: number }>();
+    const withUrl = rows.filter((r) => r.sourceUrl != null);
+    if (withUrl.length > 0) {
+      const pickerIds = [...new Set(withUrl.map((r) => r.pickerId))];
+      const urls = [...new Set(withUrl.map((r) => r.sourceUrl as string))];
+      const anchors = await db
+        .select({
+          pickerId: picksTable.pickerId,
+          sourceUrl: picksTable.sourceUrl,
+          runId: sql<number>`min(${picksTable.id})`,
+          trackCount: sql<number>`count(*)::int`,
+        })
+        .from(picksTable)
+        .where(
+          and(
+            inArray(picksTable.pickerId, pickerIds),
+            inArray(picksTable.sourceUrl, urls),
+          ),
+        )
+        .groupBy(picksTable.pickerId, picksTable.sourceUrl);
+      for (const a of anchors) {
+        runByKey.set(`${a.pickerId}|${a.sourceUrl}`, {
+          runId: a.runId,
+          trackCount: a.trackCount,
+        });
+      }
+    }
+
+    const data = GetRecordingPicksResponse.parse({
+      mbid: parsed.data.mbid,
+      picks: rows.map((r) => {
+        const run =
+          r.sourceUrl != null
+            ? runByKey.get(`${r.pickerId}|${r.sourceUrl}`) ?? null
+            : null;
+        return {
+          picker: {
+            name: r.pickerName,
+            handle: r.pickerHandle,
+            pickerType: r.pickerType,
+            trustTier: r.trustTier,
+          },
+          runId: run?.runId ?? null,
+          listTitle: r.context ?? null,
+          sourceUrl: r.sourceUrl ?? null,
+          pickedAt: r.pickedAt ? r.pickedAt.toISOString() : null,
+          ordinal: r.ordinal ?? null,
+          trackCount: run?.trackCount ?? 0,
+          confidence: r.confidence,
+        };
+      }),
+    });
+    return res.json(data);
+  } catch (err) {
+    console.error(
+      "[lore] recording picks failed",
+      err instanceof Error ? err.message : String(err),
+    );
+    return res.status(503).json({ error: "Could not load picks" });
   }
 });
 
@@ -933,6 +1042,303 @@ router.get("/archive/picker-runs/:runId", async (req, res) => {
   } catch (err) {
     console.error("[lore] picker run failed", err instanceof Error ? err.message : String(err));
     return res.status(503).json({ error: "Could not load run" });
+  }
+});
+
+// GET /api/stations/:slug/overlaps/pickers — "Critics agree": curated (non-DJ)
+// pickers whose lists contain recordings this station has actually spun.
+// Exact MBID overlap only — never similarity.
+router.get("/stations/:slug/overlaps/pickers", async (req, res) => {
+  const parsed = GetStationPickerOverlapsParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(404).json({ error: "Station not found" });
+  }
+  try {
+    const [station] = await db
+      .select()
+      .from(stationsTable)
+      .where(eq(stationsTable.slug, parsed.data.slug))
+      .limit(1);
+    if (!station) {
+      return res.status(404).json({ error: "Station not found" });
+    }
+
+    const stationMbids = db
+      .select({ mbid: spinsTable.mbid })
+      .from(spinsTable)
+      .where(
+        and(eq(spinsTable.stationId, station.id), isNotNull(spinsTable.mbid)),
+      );
+
+    const sharedExpr = sql<number>`count(distinct ${picksTable.mbid})::int`;
+    const rows = await db
+      .select({
+        name: pickersTable.name,
+        handle: pickersTable.handle,
+        pickerType: pickersTable.pickerType,
+        trustTier: pickersTable.trustTier,
+        sharedCount: sharedExpr,
+      })
+      .from(picksTable)
+      .innerJoin(pickersTable, eq(picksTable.pickerId, pickersTable.id))
+      .where(
+        and(
+          eq(pickersTable.active, true),
+          ne(pickersTable.pickerType, "dj"),
+          isNotNull(picksTable.mbid),
+          inArray(picksTable.mbid, stationMbids),
+        ),
+      )
+      .groupBy(
+        pickersTable.id,
+        pickersTable.name,
+        pickersTable.handle,
+        pickersTable.pickerType,
+        pickersTable.trustTier,
+      )
+      .orderBy(
+        sql`count(distinct ${picksTable.mbid}) desc`,
+        asc(pickersTable.trustTier),
+        asc(pickersTable.name),
+      )
+      .limit(12);
+
+    const data = GetStationPickerOverlapsResponse.parse({
+      station: {
+        slug: station.slug,
+        name: station.name,
+        stationClass: station.stationClass,
+      },
+      items: rows.map((r) => ({
+        picker: {
+          name: r.name,
+          handle: r.handle,
+          pickerType: r.pickerType,
+          trustTier: r.trustTier,
+        },
+        sharedCount: r.sharedCount,
+      })),
+    });
+    return res.json(data);
+  } catch (err) {
+    console.error(
+      "[lore] station picker overlaps failed",
+      err instanceof Error ? err.message : String(err),
+    );
+    return res.status(503).json({ error: "Could not load overlaps" });
+  }
+});
+
+// GET /api/pickers/:handle/overlaps/stations — "On the radio too": stations
+// whose logged spin history contains recordings this picker has picked.
+// Exact MBID overlap only — never similarity.
+router.get("/pickers/:handle/overlaps/stations", async (req, res) => {
+  const parsed = GetPickerStationOverlapsParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(404).json({ error: "Picker not found" });
+  }
+  try {
+    const picker = await getPickerByHandle(parsed.data.handle);
+    if (!picker) {
+      return res.status(404).json({ error: "Picker not found" });
+    }
+
+    const pickerMbids = db
+      .select({ mbid: picksTable.mbid })
+      .from(picksTable)
+      .where(
+        and(eq(picksTable.pickerId, picker.id), isNotNull(picksTable.mbid)),
+      );
+
+    const sharedExpr = sql<number>`count(distinct ${spinsTable.mbid})::int`;
+    const rows = await db
+      .select({
+        slug: stationsTable.slug,
+        name: stationsTable.name,
+        stationClass: stationsTable.stationClass,
+        sharedCount: sharedExpr,
+      })
+      .from(spinsTable)
+      .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
+      .where(
+        and(isNotNull(spinsTable.mbid), inArray(spinsTable.mbid, pickerMbids)),
+      )
+      .groupBy(stationsTable.id, stationsTable.slug, stationsTable.name, stationsTable.stationClass)
+      .orderBy(
+        sql`count(distinct ${spinsTable.mbid}) desc`,
+        asc(stationsTable.name),
+      )
+      .limit(12);
+
+    const data = GetPickerStationOverlapsResponse.parse({
+      picker: {
+        name: picker.name,
+        handle: picker.handle,
+        pickerType: picker.pickerType,
+        trustTier: picker.trustTier,
+      },
+      items: rows.map((r) => ({
+        station: {
+          slug: r.slug,
+          name: r.name,
+          stationClass: r.stationClass,
+        },
+        sharedCount: r.sharedCount,
+      })),
+    });
+    return res.json(data);
+  } catch (err) {
+    console.error(
+      "[lore] picker station overlaps failed",
+      err instanceof Error ? err.message : String(err),
+    );
+    return res.status(503).json({ error: "Could not load overlaps" });
+  }
+});
+
+/**
+ * In-memory cache for the dial's "also picked" lookup. The dial polls every
+ * 30s with the same handful of MBIDs, so a short TTL keeps this endpoint off
+ * the database almost entirely. Entries cache misses too (null) so unpicked
+ * tracks don't re-query. Bounded: cleared wholesale if it ever grows past cap.
+ */
+type PickedHit = {
+  mbid: string;
+  picker: { name: string; handle: string; pickerType: string; trustTier: number };
+  runId: number | null;
+  listTitle: string | null;
+};
+const pickedLookupCache = new Map<string, { at: number; hit: PickedHit | null }>();
+const PICKED_CACHE_TTL_MS = 60_000;
+const PICKED_CACHE_MAX = 5_000;
+const PICKED_BATCH_MAX = 30;
+
+// GET /api/picks/contains?mbids=a,b,c — which of these recordings appear in an
+// editorial (non-DJ) picker's list. Batched + cached so it never slows the
+// live dial poll; MBIDs with no editorial pick are simply absent from items.
+router.get("/picks/contains", async (req, res) => {
+  // Explicit presence check: the generated zod schema coerces a missing
+  // param to the string "undefined", which would silently pass min(1).
+  if (typeof req.query["mbids"] !== "string") {
+    return res.status(400).json({ error: "mbids is required" });
+  }
+  const parsed = LookupPickedMbidsQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "mbids is required" });
+  }
+  const mbids = [
+    ...new Set(
+      parsed.data.mbids
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ),
+  ].slice(0, PICKED_BATCH_MAX);
+
+  try {
+    const now = Date.now();
+    const items: PickedHit[] = [];
+    const misses: string[] = [];
+    for (const mbid of mbids) {
+      const cached = pickedLookupCache.get(mbid);
+      if (cached && now - cached.at < PICKED_CACHE_TTL_MS) {
+        if (cached.hit) items.push(cached.hit);
+      } else {
+        misses.push(mbid);
+      }
+    }
+
+    if (misses.length > 0) {
+      const rows = await db
+        .select({
+          mbid: picksTable.mbid,
+          pickerId: picksTable.pickerId,
+          sourceUrl: picksTable.sourceUrl,
+          context: picksTable.context,
+          pickedAt: picksTable.pickedAt,
+          pickId: picksTable.id,
+          name: pickersTable.name,
+          handle: pickersTable.handle,
+          pickerType: pickersTable.pickerType,
+          trustTier: pickersTable.trustTier,
+        })
+        .from(picksTable)
+        .innerJoin(pickersTable, eq(picksTable.pickerId, pickersTable.id))
+        .where(
+          and(
+            inArray(picksTable.mbid, misses),
+            eq(pickersTable.active, true),
+            ne(pickersTable.pickerType, "dj"),
+          ),
+        )
+        .orderBy(
+          asc(pickersTable.trustTier),
+          sql`${picksTable.pickedAt} desc nulls last`,
+          asc(picksTable.id),
+        );
+
+      // Strongest pick per mbid = first row in the trust-ordered scan.
+      const bestByMbid = new Map<string, (typeof rows)[number]>();
+      for (const r of rows) {
+        if (r.mbid && !bestByMbid.has(r.mbid)) bestByMbid.set(r.mbid, r);
+      }
+
+      // Resolve run anchors for the chosen picks in one grouped query.
+      const runByKey = new Map<string, number>();
+      const chosen = [...bestByMbid.values()].filter((r) => r.sourceUrl != null);
+      if (chosen.length > 0) {
+        const pickerIds = [...new Set(chosen.map((r) => r.pickerId))];
+        const urls = [...new Set(chosen.map((r) => r.sourceUrl as string))];
+        const anchors = await db
+          .select({
+            pickerId: picksTable.pickerId,
+            sourceUrl: picksTable.sourceUrl,
+            runId: sql<number>`min(${picksTable.id})`,
+          })
+          .from(picksTable)
+          .where(
+            and(
+              inArray(picksTable.pickerId, pickerIds),
+              inArray(picksTable.sourceUrl, urls),
+            ),
+          )
+          .groupBy(picksTable.pickerId, picksTable.sourceUrl);
+        for (const a of anchors) {
+          runByKey.set(`${a.pickerId}|${a.sourceUrl}`, a.runId);
+        }
+      }
+
+      if (pickedLookupCache.size > PICKED_CACHE_MAX) pickedLookupCache.clear();
+      for (const mbid of misses) {
+        const best = bestByMbid.get(mbid);
+        const hit: PickedHit | null = best
+          ? {
+              mbid,
+              picker: {
+                name: best.name,
+                handle: best.handle,
+                pickerType: best.pickerType,
+                trustTier: best.trustTier,
+              },
+              runId:
+                best.sourceUrl != null
+                  ? runByKey.get(`${best.pickerId}|${best.sourceUrl}`) ?? null
+                  : null,
+              listTitle: best.context ?? null,
+            }
+          : null;
+        pickedLookupCache.set(mbid, { at: now, hit });
+        if (hit) items.push(hit);
+      }
+    }
+
+    return res.json(LookupPickedMbidsResponse.parse({ items }));
+  } catch (err) {
+    console.error(
+      "[lore] picks contains failed",
+      err instanceof Error ? err.message : String(err),
+    );
+    return res.status(503).json({ error: "Could not look up picks" });
   }
 });
 

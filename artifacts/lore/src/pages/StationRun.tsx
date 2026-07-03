@@ -12,7 +12,9 @@ export default function StationRun() {
   const params = useParams();
   const search = useSearch();
   const runId = Number(params.runId ?? "");
-  const autoPlay = new URLSearchParams(search).get("play") === "1";
+  const searchParams = new URLSearchParams(search);
+  const autoPlay = searchParams.get("play") === "1";
+  const fromMbid = searchParams.get("from");
   const { ride, radio } = usePlayer();
   const { data, isLoading, isError } = useGetStationRun(runId);
   const didAutoPlay = useRef(false);
@@ -20,11 +22,18 @@ export default function StationRun() {
   const dockPadding = ride.active || radio.station ? "pb-32" : "pb-16";
 
   // Auto-start replay when ?play=1 is present and tracks are ready.
+  // ?from=<mbid> starts mid-run at that track ("hear it in context").
   useEffect(() => {
     if (!autoPlay || !data || didAutoPlay.current) return;
     const resolved = data.tracks.filter((t) => t.recording != null);
     if (resolved.length === 0) return;
     didAutoPlay.current = true;
+    const startIndex = fromMbid
+      ? Math.max(
+          0,
+          resolved.findIndex((t) => t.recording!.mbid === fromMbid),
+        )
+      : 0;
     ride.startReplay(
       resolved.map((t) => ({
         mbid: t.recording!.mbid,
@@ -34,9 +43,9 @@ export default function StationRun() {
         links: t.recording!.links ?? [],
       })),
       `${data.station.name} · ${data.run.show?.name ?? "stream"} · ${runDate(data.run.date)}`,
-      { timeOrientation: "past" },
+      { timeOrientation: "past", startIndex },
     );
-  }, [autoPlay, data, ride]);
+  }, [autoPlay, fromMbid, data, ride]);
 
   return (
     <div className="lore-grain relative min-h-screen">

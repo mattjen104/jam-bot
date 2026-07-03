@@ -12,7 +12,9 @@ export default function PickerRun() {
   const params = useParams();
   const search = useSearch();
   const runId = Number(params.runId ?? "");
-  const autoPlay = new URLSearchParams(search).get("play") === "1";
+  const searchParams = new URLSearchParams(search);
+  const autoPlay = searchParams.get("play") === "1";
+  const fromMbid = searchParams.get("from");
   const { ride, radio } = usePlayer();
   const { data, isLoading, isError } = useGetPickerRun(runId);
   const didAutoPlay = useRef(false);
@@ -20,11 +22,18 @@ export default function PickerRun() {
   const dockPadding = ride.active || radio.station ? "pb-32" : "pb-16";
 
   // Auto-start replay when ?play=1 is present and tracks are ready.
+  // ?from=<mbid> starts mid-run at that pick ("hear it in context").
   useEffect(() => {
     if (!autoPlay || !data || didAutoPlay.current) return;
     const resolved = data.tracks.filter((t) => t.recording != null);
     if (resolved.length === 0) return;
     didAutoPlay.current = true;
+    const startIndex = fromMbid
+      ? Math.max(
+          0,
+          resolved.findIndex((t) => t.recording!.mbid === fromMbid),
+        )
+      : 0;
     ride.startReplay(
       resolved.map((t) => ({
         mbid: t.recording!.mbid,
@@ -34,9 +43,9 @@ export default function PickerRun() {
         links: t.recording!.links ?? [],
       })),
       `${data.picker.name}${data.run.pickedAt ? ` · ${runDate(data.run.pickedAt)}` : ""}`,
-      { timeOrientation: "curated" },
+      { timeOrientation: "curated", startIndex },
     );
-  }, [autoPlay, data, ride]);
+  }, [autoPlay, fromMbid, data, ride]);
 
   return (
     <div className="lore-grain relative min-h-screen">

@@ -1,6 +1,11 @@
-import type { NowPlaying, Station } from "@workspace/api-client-react";
+import { Link } from "wouter";
+import type {
+  NowPlaying,
+  PickedLookupItem,
+  Station,
+} from "@workspace/api-client-react";
 import { QualityBadge } from "./QualityBadge";
-import { Mic, Pause, Play, Radio } from "lucide-react";
+import { BadgeCheck, Mic, Pause, Play, Radio } from "lucide-react";
 import type { PlayerStatus } from "../hooks/useRadioPlayer";
 
 interface StationListProps {
@@ -9,6 +14,11 @@ interface StationListProps {
   status: PlayerStatus;
   /** The dial pulse: latest spin per station slug (album art + show/DJ). */
   pulse?: Map<string, NowPlaying | null>;
+  /**
+   * Mode intersection badges: station slug → the strongest editorial pick of
+   * the song it's spinning right now ("KEXP is playing a Pitchfork pick").
+   */
+  picked?: Map<string, PickedLookupItem>;
   onToggle: (station: Station) => void;
   onSelect: (station: Station) => void;
 }
@@ -18,6 +28,7 @@ export function StationList({
   activeSlug,
   status,
   pulse,
+  picked,
   onToggle,
   onSelect,
 }: StationListProps) {
@@ -28,6 +39,7 @@ export function StationList({
         const isPlaying = isActive && status === "playing";
         const isLoading = isActive && status === "loading";
         const np = pulse?.get(station.slug) ?? null;
+        const pick = picked?.get(station.slug) ?? null;
         const artwork = np?.recording?.artworkUrl ?? np?.artworkUrl ?? null;
         const trackLine = np
           ? [np.recording?.title ?? np.rawTitle, np.recording?.artist ?? np.rawArtist]
@@ -135,6 +147,40 @@ export function StationList({
                       : np.show.name}
                   </p>
                 )}
+                {pick &&
+                  (pick.runId != null ? (
+                    <Link
+                      href={`/archive/picker-runs/${pick.runId}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-1 inline-flex max-w-full items-center gap-1 truncate rounded-full border border-primary-border bg-primary/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-primary hover:bg-primary/20"
+                      title={
+                        pick.listTitle
+                          ? `${pick.picker.name} — ${pick.listTitle}`
+                          : pick.picker.name
+                      }
+                      data-testid={`picked-badge-${station.slug}`}
+                    >
+                      <BadgeCheck className="h-3 w-3 shrink-0" />
+                      <span className="truncate">
+                        {pick.picker.name} pick
+                      </span>
+                    </Link>
+                  ) : (
+                    <span
+                      className="mt-1 inline-flex max-w-full items-center gap-1 truncate rounded-full border border-primary-border bg-primary/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-primary"
+                      title={
+                        pick.listTitle
+                          ? `${pick.picker.name} — ${pick.listTitle}`
+                          : pick.picker.name
+                      }
+                      data-testid={`picked-badge-${station.slug}`}
+                    >
+                      <BadgeCheck className="h-3 w-3 shrink-0" />
+                      <span className="truncate">
+                        {pick.picker.name} pick
+                      </span>
+                    </span>
+                  ))}
               </div>
 
               <div className="shrink-0">

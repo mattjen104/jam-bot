@@ -582,9 +582,178 @@ export const GetRecordingSpinsResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        runId: zod
+          .number()
+          .nullish()
+          .describe(
+            "The archived station run (show + UTC broadcast day) this spin belongs to — an opaque id for /archive/station-runs/{runId}. Optional for older cached payloads.",
+          ),
       })
       .describe(
         "One logged play of a recording, with station + show attribution.",
+      ),
+  ),
+});
+
+/**
+ * Every curated pick of this recording — the reverse edge of the song–source graph. Each pick carries its picker, the specific list/run it belongs to (runId, when the pick has a source URL), its ordinal within that list, and the run's size. Only real human selection edges — never inferred.
+
+ * @summary Curated lists that contain a recording ("Picked by")
+ */
+
+export const GetRecordingPicksParams = zod.object({
+  mbid: zod.coerce.string().min(1),
+});
+
+export const GetRecordingPicksResponse = zod.object({
+  mbid: zod.string(),
+  picks: zod.array(
+    zod
+      .object({
+        picker: zod
+          .object({
+            name: zod.string(),
+            handle: zod.string(),
+            pickerType: zod.string(),
+            trustTier: zod.number(),
+          })
+          .describe("A picker reference used in pick attribution."),
+        runId: zod.number().nullable(),
+        listTitle: zod.string().nullable(),
+        sourceUrl: zod.string().nullable(),
+        pickedAt: zod.string().nullable(),
+        ordinal: zod
+          .number()
+          .nullable()
+          .describe(
+            "Position within an ordered list; null for unordered sources.",
+          ),
+        trackCount: zod
+          .number()
+          .describe(
+            "Total picks in the same run (0 when the pick has no run).",
+          ),
+        confidence: zod.enum(["recording_id", "isrc", "text", "unresolved"]),
+      })
+      .describe(
+        "One curated pick of a recording — the reverse edge of the song\/source graph. `runId` locates the specific list (null when the pick has no source URL and therefore no archived run).",
+      ),
+  ),
+});
+
+/**
+ * Pickers whose curated lists contain recordings this station has actually spun — exact MBID overlap only, never similarity.
+
+ * @summary Curated pickers sharing tracks with a station ("Critics agree")
+ */
+
+export const GetStationPickerOverlapsParams = zod.object({
+  slug: zod.coerce.string().min(1),
+});
+
+export const GetStationPickerOverlapsResponse = zod.object({
+  station: zod
+    .object({
+      slug: zod.string(),
+      name: zod.string(),
+      stationClass: zod.string(),
+    })
+    .describe("A station reference used in spin\/segue attribution."),
+  items: zod.array(
+    zod
+      .object({
+        picker: zod
+          .object({
+            name: zod.string(),
+            handle: zod.string(),
+            pickerType: zod.string(),
+            trustTier: zod.number(),
+          })
+          .describe("A picker reference used in pick attribution."),
+        sharedCount: zod
+          .number()
+          .describe(
+            "Distinct recordings both the picker and the station touched.",
+          ),
+      })
+      .describe(
+        "One picker sharing recordings with a station (exact MBID overlap).",
+      ),
+  ),
+});
+
+/**
+ * Stations whose logged spin history contains recordings this picker has picked — exact MBID overlap only, never similarity.
+
+ * @summary Stations that have spun a picker's tracks ("On the radio too")
+ */
+
+export const GetPickerStationOverlapsParams = zod.object({
+  handle: zod.coerce.string().min(1),
+});
+
+export const GetPickerStationOverlapsResponse = zod.object({
+  picker: zod
+    .object({
+      name: zod.string(),
+      handle: zod.string(),
+      pickerType: zod.string(),
+      trustTier: zod.number(),
+    })
+    .describe("A picker reference used in pick attribution."),
+  items: zod.array(
+    zod
+      .object({
+        station: zod
+          .object({
+            slug: zod.string(),
+            name: zod.string(),
+            stationClass: zod.string(),
+          })
+          .describe("A station reference used in spin\/segue attribution."),
+        sharedCount: zod
+          .number()
+          .describe(
+            "Distinct recordings both the station and the picker touched.",
+          ),
+      })
+      .describe(
+        "One station sharing recordings with a picker (exact MBID overlap).",
+      ),
+  ),
+});
+
+/**
+ * Batched, cached lookup for the live dial: for each requested MBID that appears in at least one curated (non-DJ) picker's list, returns the strongest such pick. MBIDs with no editorial pick are simply absent.
+
+ * @summary Which of these MBIDs appear in an editorial list (dial badges)
+ */
+
+export const LookupPickedMbidsQueryParams = zod.object({
+  mbids: zod.coerce
+    .string()
+    .min(1)
+    .describe("Comma-separated recording MBIDs (max 30 per call)."),
+});
+
+export const LookupPickedMbidsResponse = zod.object({
+  items: zod.array(
+    zod
+      .object({
+        mbid: zod.string(),
+        picker: zod
+          .object({
+            name: zod.string(),
+            handle: zod.string(),
+            pickerType: zod.string(),
+            trustTier: zod.number(),
+          })
+          .describe("A picker reference used in pick attribution."),
+        runId: zod.number().nullable(),
+        listTitle: zod.string().nullable(),
+      })
+      .describe(
+        "The strongest editorial pick for one MBID — used by the live dial's \"also picked\" badge.",
       ),
   ),
 });

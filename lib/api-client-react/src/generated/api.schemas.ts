@@ -483,11 +483,109 @@ export interface RecordingSpin {
   confidence: RecordingSpinConfidence;
   station: StationRef;
   show?: ShowRef | null;
+  /**
+   * The archived station run (show + UTC broadcast day) this spin belongs to — an opaque id for /archive/station-runs/{runId}, so a song page can jump into the ghost run containing this play. Optional for older cached payloads.
+   * @nullable
+   */
+  runId?: number | null;
 }
 
 export interface RecordingSpins {
   mbid: string;
   spins: RecordingSpin[];
+}
+
+/**
+ * A picker reference used in pick attribution.
+ */
+export interface PickerRef {
+  name: string;
+  handle: string;
+  pickerType: string;
+  trustTier: number;
+}
+
+export type RecordingPickConfidence =
+  (typeof RecordingPickConfidence)[keyof typeof RecordingPickConfidence];
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const RecordingPickConfidence = {
+  recording_id: "recording_id",
+  isrc: "isrc",
+  text: "text",
+  unresolved: "unresolved",
+} as const;
+
+/**
+ * One curated pick of a recording — the reverse edge of the song–source graph. `runId` locates the specific list (null when the pick has no source URL and therefore no archived run).
+ */
+export interface RecordingPick {
+  picker: PickerRef;
+  /** @nullable */
+  runId: number | null;
+  /** @nullable */
+  listTitle: string | null;
+  /** @nullable */
+  sourceUrl: string | null;
+  /** @nullable */
+  pickedAt: string | null;
+  /**
+   * Position within an ordered list; null for unordered sources.
+   * @nullable
+   */
+  ordinal: number | null;
+  /** Total picks in the same run (0 when the pick has no run). */
+  trackCount: number;
+  confidence: RecordingPickConfidence;
+}
+
+export interface RecordingPicks {
+  mbid: string;
+  picks: RecordingPick[];
+}
+
+/**
+ * One picker sharing recordings with a station (exact MBID overlap).
+ */
+export interface PickerOverlap {
+  picker: PickerRef;
+  /** Distinct recordings both the picker and the station touched. */
+  sharedCount: number;
+}
+
+export interface StationPickerOverlaps {
+  station: StationRef;
+  items: PickerOverlap[];
+}
+
+/**
+ * One station sharing recordings with a picker (exact MBID overlap).
+ */
+export interface StationOverlap {
+  station: StationRef;
+  /** Distinct recordings both the station and the picker touched. */
+  sharedCount: number;
+}
+
+export interface PickerStationOverlaps {
+  picker: PickerRef;
+  items: StationOverlap[];
+}
+
+/**
+ * The strongest editorial pick for one MBID — used by the live dial's "also picked" badge.
+ */
+export interface PickedLookupItem {
+  mbid: string;
+  picker: PickerRef;
+  /** @nullable */
+  runId: number | null;
+  /** @nullable */
+  listTitle: string | null;
+}
+
+export interface PickedLookup {
+  items: PickedLookupItem[];
 }
 
 /**

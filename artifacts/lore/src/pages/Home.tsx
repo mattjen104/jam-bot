@@ -12,9 +12,12 @@ import {
   getListPickersQueryKey,
   useGetArchiveRecentRuns,
   getGetArchiveRecentRunsQueryKey,
+  useLookupPickedMbids,
+  getLookupPickedMbidsQueryKey,
   type Station,
   type Picker,
   type RecentStationRun,
+  type PickedLookupItem,
 } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { StationList } from "../components/StationList";
@@ -197,6 +200,40 @@ function LiveMode() {
     );
   }, [pulse]);
 
+  // Dial badges: batch every resolved now-playing MBID into one lookup —
+  // "which of these songs did a critic/label/curator vouch for?" Sorted so
+  // the query key (and 60s server cache) stays stable across poll ticks.
+  const pulseMbids = useMemo(() => {
+    const ids = new Set<string>();
+    for (const item of pulse?.items ?? []) {
+      const mbid = item.nowPlaying?.recording?.mbid;
+      if (mbid) ids.add(mbid);
+    }
+    return [...ids].sort().join(",");
+  }, [pulse]);
+  const { data: pickedData } = useLookupPickedMbids(
+    { mbids: pulseMbids },
+    {
+      query: {
+        queryKey: getLookupPickedMbidsQueryKey({ mbids: pulseMbids }),
+        enabled: pulseMbids.length > 0,
+      },
+    },
+  );
+  const pickedBySlug = useMemo(() => {
+    const byMbid = new Map<string, PickedLookupItem>(
+      (pickedData?.items ?? []).map((it) => [it.mbid, it]),
+    );
+    const map = new Map<string, PickedLookupItem>();
+    for (const item of pulse?.items ?? []) {
+      const mbid = item.nowPlaying?.recording?.mbid;
+      if (!mbid) continue;
+      const hit = byMbid.get(mbid);
+      if (hit) map.set(item.slug, hit);
+    }
+    return map;
+  }, [pulse, pickedData]);
+
   const { data: nowPlaying, isLoading: npLoading } = useGetStationNowPlaying(
     focusedSlug ?? "",
     {
@@ -244,6 +281,7 @@ function LiveMode() {
             activeSlug={activeSlug}
             status={player.status}
             pulse={pulseBySlug}
+            picked={pickedBySlug}
             onToggle={handleToggle}
             onSelect={handleSelect}
           />

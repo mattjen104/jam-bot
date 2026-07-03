@@ -1,10 +1,13 @@
 import { Link, useParams } from "wouter";
-import { useGetStationArchive } from "@workspace/api-client-react";
+import {
+  useGetStationArchive,
+  useGetStationPickerOverlaps,
+} from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { FollowButton } from "../components/FollowButton";
 import { ShareButton } from "../components/ShareButton";
 import { runDate } from "../lib/format";
-import { ArrowLeft, ArrowUpRight, Radio } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Radio, Users } from "lucide-react";
 
 /** A station's documented runs — one per show and broadcast day. */
 export default function StationArchive() {
@@ -12,6 +15,7 @@ export default function StationArchive() {
   const slug = params.slug ?? "";
   const { ride, radio } = usePlayer();
   const { data, isLoading, isError } = useGetStationArchive(slug);
+  const { data: overlaps } = useGetStationPickerOverlaps(slug);
 
   const dockPadding = ride.active || radio.station ? "pb-32" : "pb-16";
 
@@ -100,6 +104,47 @@ export default function StationArchive() {
                   </li>
                 ))}
               </ul>
+            )}
+
+            {overlaps && overlaps.items.length > 0 && (
+              <section className="mt-10">
+                <h2 className="mb-1 flex items-center gap-2 font-serif text-xl font-semibold text-foreground">
+                  <Users className="h-5 w-5 text-primary" />
+                  Critics agree
+                </h2>
+                <p className="mb-3 text-sm text-muted-foreground">
+                  Pickers who vouched for the exact recordings this station has
+                  spun.
+                </p>
+                <ul
+                  className="flex flex-col gap-2"
+                  data-testid="station-picker-overlaps"
+                >
+                  {overlaps.items.map((o) => (
+                    <li key={o.picker.handle}>
+                      <Link
+                        href={`/archive/pickers/${o.picker.handle}`}
+                        className="hover-elevate flex items-center justify-between gap-3 rounded-xl border border-card-border bg-card p-3"
+                        data-testid={`overlap-picker-${o.picker.handle}`}
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-foreground">
+                            {o.picker.name}
+                            <span className="ml-2 font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+                              {o.picker.pickerType}
+                            </span>
+                          </p>
+                          <p className="truncate font-mono text-[11px] text-muted-foreground">
+                            {o.sharedCount} shared song
+                            {o.sharedCount === 1 ? "" : "s"}
+                          </p>
+                        </div>
+                        <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </section>
             )}
           </>
         )}
