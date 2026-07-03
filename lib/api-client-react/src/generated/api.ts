@@ -19,6 +19,7 @@ import type {
 import type {
   ApiError,
   ArchiveCoverage,
+  ArchiveRecentRuns,
   BlogIngestRequest,
   DiscogsListRequest,
   EntryResult,
@@ -1726,6 +1727,83 @@ export function useGetArchiveCoverage<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetArchiveCoverageQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * The newest documented runs from all stations in one list — each a real show's plays on one UTC broadcast day, newest first, with resolution counts so the client can favor well-resolved, replayable runs. Powers the home screen's Ghost Radio mode.
+
+ * @summary Recent documented runs across every station (ghost radio browse)
+ */
+export const getGetArchiveRecentRunsUrl = () => {
+  return `/api/archive/recent-runs`;
+};
+
+export const getArchiveRecentRuns = async (
+  options?: RequestInit,
+): Promise<ArchiveRecentRuns> => {
+  return customFetch<ArchiveRecentRuns>(getGetArchiveRecentRunsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetArchiveRecentRunsQueryKey = () => {
+  return [`/api/archive/recent-runs`] as const;
+};
+
+export const getGetArchiveRecentRunsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getArchiveRecentRuns>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getArchiveRecentRuns>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetArchiveRecentRunsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getArchiveRecentRuns>>
+  > = ({ signal }) => getArchiveRecentRuns({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getArchiveRecentRuns>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetArchiveRecentRunsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getArchiveRecentRuns>>
+>;
+export type GetArchiveRecentRunsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Recent documented runs across every station (ghost radio browse)
+ */
+
+export function useGetArchiveRecentRuns<
+  TData = Awaited<ReturnType<typeof getArchiveRecentRuns>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getArchiveRecentRuns>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetArchiveRecentRunsQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

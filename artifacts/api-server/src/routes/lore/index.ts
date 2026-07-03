@@ -27,6 +27,7 @@ import {
   GetPickerRunParams,
   GetPickerRunResponse,
   GetArchiveCoverageResponse,
+  GetArchiveRecentRunsResponse,
   GetRecordingEntryParams,
   GetRecordingEntryResponse,
   GetRecordingLyricsParams,
@@ -932,6 +933,88 @@ router.get("/archive/picker-runs/:runId", async (req, res) => {
   } catch (err) {
     console.error("[lore] picker run failed", err instanceof Error ? err.message : String(err));
     return res.status(503).json({ error: "Could not load run" });
+  }
+});
+
+// GET /api/archive/recent-runs — the newest documented runs across every
+// station, in one list. Same run derivation as the per-station archive
+// (group by station + show + UTC day, runId = min spin id), ordered by the
+// most recent play so the home screen's Ghost Radio mode has a live browse
+// surface without fanning out per station.
+router.get("/archive/recent-runs", async (_req, res) => {
+  try {
+    const runs = await db
+      .select({
+        runId: sql<number>`min(${spinsTable.id})`,
+        date: spinDayExpr,
+        stationId: spinsTable.stationId,
+        showId: spinsTable.showId,
+        spinCount: sql<number>`count(*)::int`,
+        resolvedCount: sql<number>`count(*) filter (where ${spinsTable.mbid} is not null)::int`,
+        citation: sql<string | null>`max(${spinsTable.citation})`,
+        startedAt: sql<string>`min(${spinsTable.playedAt})`,
+        endedAt: sql<string>`max(${spinsTable.playedAt})`,
+        showName: showsTable.name,
+        djName: showsTable.djName,
+      })
+      .from(spinsTable)
+      .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id))
+      .groupBy(
+        spinsTable.stationId,
+        spinDayExpr,
+        spinsTable.showId,
+        showsTable.name,
+        showsTable.djName,
+      )
+      .orderBy(sql`max(${spinsTable.playedAt}) desc`)
+      .limit(40);
+
+    const stationIds = [...new Set(runs.map((r) => r.stationId))];
+    const stations = stationIds.length
+      ? await db
+          .select()
+          .from(stationsTable)
+          .where(inArray(stationsTable.id, stationIds))
+      : [];
+    const stationById = new Map(stations.map((s) => [s.id, s]));
+
+    const data = GetArchiveRecentRunsResponse.parse({
+      items: runs.flatMap((r) => {
+        const station = stationById.get(r.stationId);
+        if (!station) return [];
+        return [
+          {
+            station: {
+              slug: station.slug,
+              name: station.name,
+              stationClass: station.stationClass,
+            },
+            run: {
+              runId: r.runId,
+              date: r.date,
+              show: r.showName
+                ? { name: r.showName, djName: r.djName ?? null }
+                : null,
+              spinCount: r.spinCount,
+              resolvedCount: r.resolvedCount,
+              sourceUrl:
+                stationArchiveUrl(station.nowPlayingSource, r.date) ??
+                r.citation ??
+                null,
+              startedAt: new Date(r.startedAt).toISOString(),
+              endedAt: new Date(r.endedAt).toISOString(),
+            },
+          },
+        ];
+      }),
+    });
+    return res.json(data);
+  } catch (err) {
+    console.error(
+      "[lore] recent runs failed",
+      err instanceof Error ? err.message : String(err),
+    );
+    return res.status(503).json({ error: "Could not load recent runs" });
   }
 });
 

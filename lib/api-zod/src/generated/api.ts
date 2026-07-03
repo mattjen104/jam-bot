@@ -1029,6 +1029,64 @@ export const GetPickerRunResponse = zod.object({
 });
 
 /**
+ * The newest documented runs from all stations in one list — each a real show's plays on one UTC broadcast day, newest first, with resolution counts so the client can favor well-resolved, replayable runs. Powers the home screen's Ghost Radio mode.
+
+ * @summary Recent documented runs across every station (ghost radio browse)
+ */
+export const GetArchiveRecentRunsResponse = zod.object({
+  items: zod.array(
+    zod
+      .object({
+        station: zod
+          .object({
+            slug: zod.string(),
+            name: zod.string(),
+            stationClass: zod.string(),
+          })
+          .describe("A station reference used in spin/segue attribution."),
+        run: zod
+          .object({
+            runId: zod.number(),
+            date: zod.string().describe("UTC broadcast day, YYYY-MM-DD."),
+            show: zod
+              .union([
+                zod
+                  .object({
+                    name: zod.string(),
+                    djName: zod.string().nullish(),
+                  })
+                  .describe(
+                    "Show + DJ attribution for a spin, when the source exposes it.",
+                  ),
+                zod.null(),
+              ])
+              .optional(),
+            spinCount: zod.number(),
+            resolvedCount: zod
+              .number()
+              .describe(
+                "Spins resolved to the MBID spine (replayable tracks).",
+              ),
+            sourceUrl: zod
+              .string()
+              .nullable()
+              .describe(
+                "Outbound link to the source's own archive for this run (e.g. the station's dated playlist page, or a manual spin's citation). Null when the source has no public per-day archive.",
+              ),
+            startedAt: zod.string(),
+            endedAt: zod.string(),
+          })
+          .describe(
+            "One documented station run — a show's plays on one UTC broadcast day. `runId` is opaque (fetch the tracklist via \/archive\/station-runs).",
+          ),
+      })
+      .describe(
+        "One recent documented run with its station attribution, for the cross-station ghost radio browse surface.",
+      ),
+  ),
+});
+
+/**
  * Observability for the archive: per-station depth (oldest documented spin, backfill progress) and per-picker run counts, each with resolved vs. total track counts so "how good is ghost radio" is answerable at a glance.
 
  * @summary How deep the ghost radio archive goes, per source

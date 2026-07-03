@@ -545,6 +545,18 @@ export interface StationRunDetail {
 }
 
 /**
+ * One recent documented run with its station attribution, for the cross-station ghost radio browse surface.
+ */
+export interface RecentStationRun {
+  station: StationRef;
+  run: StationRunSummary;
+}
+
+export interface ArchiveRecentRuns {
+  items: RecentStationRun[];
+}
+
+/**
  * One documented picker run — all picks sharing one source URL (an NTS episode page, a list, a post), replayed in documented order.
  */
 export interface PickerRunSummary {

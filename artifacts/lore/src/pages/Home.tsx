@@ -8,108 +8,87 @@ import {
   getListStationsNowPlayingQueryKey,
   useListPickers,
   getListPickersQueryKey,
+  useGetArchiveRecentRuns,
+  getGetArchiveRecentRunsQueryKey,
   type Station,
   type Picker,
+  type RecentStationRun,
 } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { StationList } from "../components/StationList";
 import { NowPlaying } from "../components/NowPlaying";
+import { FollowingStrip } from "../components/FollowingStrip";
+import { runDate } from "../lib/format";
 import {
   AudioLines,
   BookOpen,
   Ghost,
   List,
   Play,
+  Radio,
   ShieldCheck,
   UserCheck,
   Waypoints,
 } from "lucide-react";
 
+type Mode = "live" | "curated" | "ghost";
+
+const MODES: {
+  id: Mode;
+  label: string;
+  suffix: string;
+  Icon: typeof Radio;
+  blurb: string;
+}[] = [
+  {
+    id: "live",
+    label: "Live",
+    suffix: " radio",
+    Icon: Radio,
+    blurb: "The dial — real stations, unmodified streams, right now.",
+  },
+  {
+    id: "curated",
+    label: "Curated",
+    suffix: " lists",
+    Icon: List,
+    blurb: "Editorial playlists — real humans, real picks, in order.",
+  },
+  {
+    id: "ghost",
+    label: "Ghost",
+    suffix: " radio",
+    Icon: Ghost,
+    blurb: "Replay documented broadcasts exactly as they aired.",
+  },
+];
+
 export default function Home() {
-  const { data, isLoading, isError } = useListStations();
-  const { radio: player } = usePlayer();
-  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
-
-  const stations = useMemo(() => data?.stations ?? [], [data]);
-
-  const activeSlug = player.station?.slug ?? null;
-  const focusedSlug = selectedSlug ?? activeSlug;
-  const focusedStation =
-    stations.find((s) => s.slug === focusedSlug) ?? player.station ?? null;
-
-  const { data: pulse } = useListStationsNowPlaying({
-    query: {
-      queryKey: getListStationsNowPlayingQueryKey(),
-      refetchInterval: 30000,
-      refetchIntervalInBackground: false,
-    },
-  });
-  const pulseBySlug = useMemo(() => {
-    const map = new Map(
-      (pulse?.items ?? []).map((i) => [i.slug, i.nowPlaying ?? null]),
-    );
-    return map;
-  }, [pulse]);
-
-  const { data: nowPlaying, isLoading: npLoading } = useGetStationNowPlaying(
-    focusedSlug ?? "",
-    {
-      query: {
-        queryKey: getGetStationNowPlayingQueryKey(focusedSlug ?? ""),
-        enabled: !!focusedSlug,
-        refetchInterval: 15000,
-        refetchIntervalInBackground: false,
-      },
-    },
-  );
-
-  const { data: editorialData } = useListPickers(
-    { type: "editorial" },
-    {
-      query: {
-        queryKey: getListPickersQueryKey({ type: "editorial" }),
-        staleTime: 5 * 60 * 1000,
-      },
-    },
-  );
-  const editorialPickers = editorialData?.pickers ?? [];
-
-  const handleSelect = (station: Station) => setSelectedSlug(station.slug);
-  const handleToggle = (station: Station) => {
-    setSelectedSlug(station.slug);
-    void player.toggle(station);
-  };
+  const { radio, ride } = usePlayer();
+  const [mode, setMode] = useState<Mode>("live");
 
   return (
     <div className="lore-grain relative min-h-screen">
       <div className="lore-glow pointer-events-none absolute inset-0" />
       <div
         className={`relative z-10 mx-auto max-w-6xl px-4 pt-10 sm:px-6 ${
-          player.station ? "pb-32" : "pb-16"
+          ride.active || radio.station ? "pb-32" : "pb-16"
         }`}
       >
-        <header className="mb-10">
+        <header className="mb-8">
           <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] text-primary">
             <AudioLines className="h-4 w-4" />
             Lore Radio
           </div>
           <h1 className="mt-3 max-w-[18ch] font-serif text-4xl font-semibold leading-[1.05] text-foreground sm:text-5xl">
-            Live radio, tracked back to the source.
+            Borrow real humans' taste. Never an algorithm.
           </h1>
           <p className="mt-4 max-w-[52ch] text-base text-muted-foreground">
-            A small, curated dial of high-quality stations. Each stream plays
-            unmodified from its broadcaster — and every track is resolved to its
-            canonical identity, with credits and deep links.
+            Three ways to listen — live stations, curated lists, and replays of
+            documented broadcasts. Every track resolved to its canonical
+            identity, with credits and deep links.
           </p>
           <div className="mt-5 flex flex-wrap gap-2">
-            <Link
-              href="/archive"
-              data-testid="link-archive"
-              className="hover-elevate inline-flex items-center gap-2 rounded-full border border-primary-border bg-primary/10 px-4 py-2 font-mono text-[11px] uppercase tracking-wide text-primary"
-            >
-              <Ghost className="h-3.5 w-3.5" />
-              Ghost radio — replay archived runs
-            </Link>
             <Link
               href="/journal"
               data-testid="link-journal"
@@ -140,66 +119,45 @@ export default function Home() {
           </div>
         </header>
 
-        <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
-          <section>
-            <div className="mb-4 flex items-baseline justify-between">
-              <h2 className="font-serif text-xl font-semibold text-foreground">
-                The dial
-              </h2>
-              <span className="font-mono text-xs text-muted-foreground">
-                {stations.length} station{stations.length === 1 ? "" : "s"}
-              </span>
-            </div>
+        <FollowingStrip />
 
-            {isLoading && <StationListSkeleton />}
-            {isError && (
-              <div className="rounded-xl border border-destructive-border bg-destructive/10 p-4 text-sm text-destructive-foreground">
-                Couldn't load the station directory. Please refresh.
-              </div>
-            )}
-            {!isLoading && !isError && stations.length === 0 && (
-              <div className="rounded-xl border border-card-border bg-card p-6 text-sm text-muted-foreground">
-                No stations are on the dial yet.
-              </div>
-            )}
-            {!isLoading && stations.length > 0 && (
-              <StationList
-                stations={stations}
-                activeSlug={activeSlug}
-                status={player.status}
-                pulse={pulseBySlug}
-                onToggle={handleToggle}
-                onSelect={handleSelect}
-              />
-            )}
-          </section>
+        <nav
+          className="mb-2 flex gap-1 overflow-x-auto rounded-xl border border-card-border bg-card p-1"
+          role="tablist"
+          aria-label="Listening modes"
+        >
+          {MODES.map(({ id, label, suffix, Icon }) => {
+            const active = mode === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setMode(id)}
+                data-testid={`mode-${id}`}
+                className={`hover-elevate inline-flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-2.5 font-mono text-[11px] uppercase tracking-wide transition-colors ${
+                  active
+                    ? "bg-primary/15 text-primary"
+                    : "text-muted-foreground"
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                <span>
+                  {label}
+                  <span className="hidden sm:inline">{suffix}</span>
+                </span>
+              </button>
+            );
+          })}
+        </nav>
+        <p className="mb-6 px-1 font-mono text-[11px] text-muted-foreground">
+          {MODES.find((m) => m.id === mode)?.blurb}
+        </p>
 
-          <aside className="lg:sticky lg:top-8 lg:self-start">
-            <NowPlaying
-              data={nowPlaying}
-              isLoading={npLoading}
-              fallbackStation={focusedStation}
-            />
-          </aside>
-        </div>
-
-        {editorialPickers.length > 0 && (
-          <section className="mt-12">
-            <div className="mb-4 flex items-baseline justify-between">
-              <h2 className="font-serif text-xl font-semibold text-foreground">
-                Editorial playlists
-              </h2>
-              <span className="font-mono text-xs text-muted-foreground">
-                real humans, real picks
-              </span>
-            </div>
-            <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {editorialPickers.map((picker) => (
-                <EditorialPickerCard key={picker.id} picker={picker} />
-              ))}
-            </ul>
-          </section>
-        )}
+        {mode === "live" && <LiveMode />}
+        {mode === "curated" && <CuratedMode />}
+        {mode === "ghost" && <GhostMode />}
 
         <footer className="mt-16 border-t border-border pt-6 font-mono text-[11px] text-muted-foreground">
           Lore never hosts, proxies, or re-encodes audio. Streams are played
@@ -208,6 +166,241 @@ export default function Home() {
         </footer>
       </div>
     </div>
+  );
+}
+
+/** Mode 1 — the live dial with the now-playing sidebar. */
+function LiveMode() {
+  const { data, isLoading, isError } = useListStations();
+  const { radio: player } = usePlayer();
+  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+
+  const stations = useMemo(() => data?.stations ?? [], [data]);
+
+  const activeSlug = player.station?.slug ?? null;
+  const focusedSlug = selectedSlug ?? activeSlug;
+  const focusedStation =
+    stations.find((s) => s.slug === focusedSlug) ?? player.station ?? null;
+
+  const { data: pulse } = useListStationsNowPlaying({
+    query: {
+      queryKey: getListStationsNowPlayingQueryKey(),
+      refetchInterval: 30000,
+      refetchIntervalInBackground: false,
+    },
+  });
+  const pulseBySlug = useMemo(() => {
+    return new Map(
+      (pulse?.items ?? []).map((i) => [i.slug, i.nowPlaying ?? null]),
+    );
+  }, [pulse]);
+
+  const { data: nowPlaying, isLoading: npLoading } = useGetStationNowPlaying(
+    focusedSlug ?? "",
+    {
+      query: {
+        queryKey: getGetStationNowPlayingQueryKey(focusedSlug ?? ""),
+        enabled: !!focusedSlug,
+        refetchInterval: 15000,
+        refetchIntervalInBackground: false,
+      },
+    },
+  );
+
+  const handleSelect = (station: Station) => setSelectedSlug(station.slug);
+  const handleToggle = (station: Station) => {
+    setSelectedSlug(station.slug);
+    void player.toggle(station);
+  };
+
+  return (
+    <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
+      <section>
+        <div className="mb-4 flex items-baseline justify-between">
+          <h2 className="font-serif text-xl font-semibold text-foreground">
+            The dial
+          </h2>
+          <span className="font-mono text-xs text-muted-foreground">
+            {stations.length} station{stations.length === 1 ? "" : "s"}
+          </span>
+        </div>
+
+        {isLoading && <StationListSkeleton />}
+        {isError && (
+          <div className="rounded-xl border border-destructive-border bg-destructive/10 p-4 text-sm text-destructive-foreground">
+            Couldn't load the station directory. Please refresh.
+          </div>
+        )}
+        {!isLoading && !isError && stations.length === 0 && (
+          <div className="rounded-xl border border-card-border bg-card p-6 text-sm text-muted-foreground">
+            No stations are on the dial yet.
+          </div>
+        )}
+        {!isLoading && stations.length > 0 && (
+          <StationList
+            stations={stations}
+            activeSlug={activeSlug}
+            status={player.status}
+            pulse={pulseBySlug}
+            onToggle={handleToggle}
+            onSelect={handleSelect}
+          />
+        )}
+      </section>
+
+      <aside className="lg:sticky lg:top-8 lg:self-start">
+        <NowPlaying
+          data={nowPlaying}
+          isLoading={npLoading}
+          fallbackStation={focusedStation}
+        />
+      </aside>
+    </div>
+  );
+}
+
+/** Mode 2 — editorial playlists from real humans. */
+function CuratedMode() {
+  const { data, isLoading } = useListPickers(
+    { type: "editorial" },
+    {
+      query: {
+        queryKey: getListPickersQueryKey({ type: "editorial" }),
+        staleTime: 5 * 60 * 1000,
+      },
+    },
+  );
+  const pickers = data?.pickers ?? [];
+
+  return (
+    <section>
+      <div className="mb-4 flex items-baseline justify-between">
+        <h2 className="font-serif text-xl font-semibold text-foreground">
+          Editorial playlists
+        </h2>
+        <span className="font-mono text-xs text-muted-foreground">
+          real humans, real picks
+        </span>
+      </div>
+      {isLoading ? (
+        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <li
+              key={i}
+              className="h-32 animate-pulse rounded-xl border border-card-border bg-card"
+            />
+          ))}
+        </ul>
+      ) : pickers.length === 0 ? (
+        <div className="rounded-xl border border-card-border bg-card p-6 text-sm text-muted-foreground">
+          No curated lists yet — they appear as editors document their picks.
+        </div>
+      ) : (
+        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {pickers.map((picker) => (
+            <EditorialPickerCard key={picker.id} picker={picker} />
+          ))}
+        </ul>
+      )}
+      <Link
+        href="/archive"
+        className="mt-5 inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wide text-muted-foreground hover:text-primary"
+        data-testid="link-all-pickers"
+      >
+        Browse every archive →
+      </Link>
+    </section>
+  );
+}
+
+/** Mode 3 — recent documented runs from every station, ready to replay. */
+function GhostMode() {
+  const { data, isLoading, isError } = useGetArchiveRecentRuns({
+    query: {
+      queryKey: getGetArchiveRecentRunsQueryKey(),
+      staleTime: 60_000,
+    },
+  });
+  const items = data?.items ?? [];
+
+  return (
+    <section>
+      <div className="mb-4 flex items-baseline justify-between">
+        <h2 className="font-serif text-xl font-semibold text-foreground">
+          Recent broadcasts
+        </h2>
+        <Link
+          href="/archive"
+          className="font-mono text-xs text-muted-foreground hover:text-primary"
+          data-testid="link-archive"
+        >
+          All archives →
+        </Link>
+      </div>
+      {isLoading ? (
+        <ul className="flex flex-col gap-2">
+          {[0, 1, 2, 3].map((i) => (
+            <li
+              key={i}
+              className="h-[74px] animate-pulse rounded-xl border border-card-border bg-card"
+            />
+          ))}
+        </ul>
+      ) : isError ? (
+        <div className="rounded-xl border border-destructive-border bg-destructive/10 p-4 text-sm text-destructive-foreground">
+          Couldn't load recent broadcasts. Please refresh.
+        </div>
+      ) : items.length === 0 ? (
+        <div className="rounded-xl border border-card-border bg-card p-6 text-sm text-muted-foreground">
+          Nothing documented yet — runs appear as station archives fill in.
+        </div>
+      ) : (
+        <ul className="flex flex-col gap-2" data-testid="ghost-runs">
+          {items.map((item) => (
+            <RecentRunCard key={item.run.runId} item={item} />
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function RecentRunCard({ item }: { item: RecentStationRun }) {
+  const { station, run } = item;
+  const replayable = run.resolvedCount > 0;
+  return (
+    <li>
+      <div className="hover-elevate flex items-center justify-between gap-3 rounded-xl border border-card-border bg-card p-4">
+        <Link
+          href={`/archive/station-runs/${run.runId}`}
+          className="min-w-0 flex-1"
+          data-testid={`ghost-run-${run.runId}`}
+        >
+          <p className="truncate font-serif text-base font-semibold text-foreground">
+            {run.show?.name ?? "Station stream"}
+          </p>
+          <p className="truncate font-mono text-[11px] text-muted-foreground">
+            {station.name}
+            {run.show?.djName ? ` · ${run.show.djName}` : ""} ·{" "}
+            {runDate(run.date)} · {run.spinCount} track
+            {run.spinCount === 1 ? "" : "s"} ·{" "}
+            <span className={replayable ? "text-primary" : ""}>
+              {run.resolvedCount}/{run.spinCount} resolved
+            </span>
+          </p>
+        </Link>
+        {replayable ? (
+          <Link
+            href={`/archive/station-runs/${run.runId}?play=1`}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide text-primary-foreground hover:opacity-90"
+            data-testid={`ghost-play-${run.runId}`}
+          >
+            <Play className="h-3 w-3" />
+            Replay
+          </Link>
+        ) : null}
+      </div>
+    </li>
   );
 }
 

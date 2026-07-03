@@ -544,6 +544,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ArchiveCoverage"
+  /archive/recent-runs:
+    get:
+      operationId: getArchiveRecentRuns
+      tags: [archive]
+      summary: Recent documented runs across every station (ghost radio browse)
+      description: >
+        The newest documented runs from all stations in one list — each a real
+        show's plays on one UTC broadcast day, newest first, with resolution
+        counts so the client can favor well-resolved, replayable runs. Powers
+        the home screen's Ghost Radio mode.
+      responses:
+        "200":
+          description: Recent runs across all stations, newest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArchiveRecentRuns"
   /recordings/{mbid}/lyrics:
     get:
       operationId: getRecordingLyrics
@@ -2348,6 +2365,28 @@ components:
         - picker
         - run
         - tracks
+    RecentStationRun:
+      type: object
+      description: >-
+        One recent documented run with its station attribution, for the
+        cross-station ghost radio browse surface.
+      properties:
+        station:
+          $ref: "#/components/schemas/StationRef"
+        run:
+          $ref: "#/components/schemas/StationRunSummary"
+      required:
+        - station
+        - run
+    ArchiveRecentRuns:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecentStationRun"
+      required:
+        - items
     StationCoverage:
       type: object
       description: >-

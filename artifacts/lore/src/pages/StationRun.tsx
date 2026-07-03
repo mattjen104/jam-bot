@@ -1,4 +1,5 @@
-import { Link, useParams } from "wouter";
+import { useEffect, useRef } from "react";
+import { Link, useParams, useSearch } from "wouter";
 import { useGetStationRun } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { ArchiveTracklist } from "../components/ArchiveTracklist";
@@ -9,11 +10,33 @@ import { ArrowLeft, ExternalLink, Ghost } from "lucide-react";
 /** One archived station run — its full tracklist, exactly as it aired. */
 export default function StationRun() {
   const params = useParams();
+  const search = useSearch();
   const runId = Number(params.runId ?? "");
+  const autoPlay = new URLSearchParams(search).get("play") === "1";
   const { ride, radio } = usePlayer();
   const { data, isLoading, isError } = useGetStationRun(runId);
+  const didAutoPlay = useRef(false);
 
   const dockPadding = ride.active || radio.station ? "pb-32" : "pb-16";
+
+  // Auto-start replay when ?play=1 is present and tracks are ready.
+  useEffect(() => {
+    if (!autoPlay || !data || didAutoPlay.current) return;
+    const resolved = data.tracks.filter((t) => t.recording != null);
+    if (resolved.length === 0) return;
+    didAutoPlay.current = true;
+    ride.startReplay(
+      resolved.map((t) => ({
+        mbid: t.recording!.mbid,
+        title: t.recording!.title,
+        artist: t.recording!.artist,
+        artworkUrl: t.recording!.artworkUrl ?? null,
+        links: t.recording!.links ?? [],
+      })),
+      `${data.station.name} · ${data.run.show?.name ?? "stream"} · ${runDate(data.run.date)}`,
+      { timeOrientation: "past" },
+    );
+  }, [autoPlay, data, ride]);
 
   return (
     <div className="lore-grain relative min-h-screen">
