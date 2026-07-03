@@ -16,13 +16,10 @@ import {
   getGetRecordingsAvailabilityQueryKey,
   useListPickers,
   getListPickersQueryKey,
-  useGetArchiveRecentRuns,
-  getGetArchiveRecentRunsQueryKey,
   useLookupPickedMbids,
   getLookupPickedMbidsQueryKey,
   type Station,
   type Picker,
-  type RecentStationRun,
   type PickedLookupItem,
   type StationScheduleRun,
   type RecordingAvailabilityItem,
@@ -37,7 +34,6 @@ import {
   BookMarked,
   BookOpen,
   CalendarDays,
-  Ghost,
   List,
   Play,
   Radio,
@@ -121,14 +117,10 @@ export default function Home() {
           onChange={setSelectedDate}
         />
 
-        {/* Parallel layout — Live left, Ghost+Curated right */}
+        {/* Parallel layout — Live left, Curated right */}
         <div className="grid gap-10 lg:grid-cols-[1fr_360px]">
           <LiveMode selectedDate={selectedDate} />
-
-          <div className="flex flex-col gap-10">
-            <GhostMode selectedDate={selectedDate} />
-            <CuratedMode />
-          </div>
+          <CuratedMode />
         </div>
 
         <footer className="mt-16 border-t border-border pt-6 font-mono text-[11px] text-muted-foreground">
@@ -184,8 +176,8 @@ function DateSweep({
       </label>
       {selectedDate && (
         <span className="inline-flex items-center gap-1 rounded-full border border-[#C6F53F]/30 bg-[#C6F53F]/10 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wide text-[#C6F53F]">
-          <Ghost className="h-3 w-3" />
-          Ghost mode
+          <CalendarDays className="h-3 w-3" />
+          Past date
         </span>
       )}
     </div>
@@ -478,114 +470,6 @@ function CuratedMode() {
         Browse every archive →
       </Link>
     </section>
-  );
-}
-
-/** Mode 3 — recent documented runs from every station, ready to replay. */
-function GhostMode({ selectedDate }: { selectedDate: string | null }) {
-  const { data, isLoading, isError } = useGetArchiveRecentRuns({
-    query: {
-      queryKey: getGetArchiveRecentRunsQueryKey(),
-      staleTime: 60_000,
-    },
-  });
-  const allItems = data?.items ?? [];
-
-  // When a date is selected, show only runs from that day; otherwise all recent.
-  const items = useMemo(() => {
-    if (!selectedDate) return allItems;
-    return allItems.filter((item) => item.run.date === selectedDate);
-  }, [allItems, selectedDate]);
-
-  const heading = selectedDate ? (
-    <>
-      <Ghost className="inline h-4 w-4 align-middle" />{" "}
-      <span>Broadcasts · {selectedDate}</span>
-    </>
-  ) : (
-    "Recent broadcasts"
-  );
-
-  return (
-    <section>
-      <div className="mb-4 flex items-baseline justify-between">
-        <h2 className="font-serif text-xl font-semibold text-foreground">
-          {heading}
-        </h2>
-        <Link
-          href="/archive"
-          className="font-mono text-xs text-muted-foreground hover:text-primary"
-          data-testid="link-archive"
-        >
-          All archives →
-        </Link>
-      </div>
-      {isLoading ? (
-        <ul className="flex flex-col gap-2">
-          {[0, 1, 2].map((i) => (
-            <li
-              key={i}
-              className="h-[74px] animate-pulse rounded-xl border border-card-border bg-card"
-            />
-          ))}
-        </ul>
-      ) : isError ? (
-        <div className="rounded-xl border border-destructive-border bg-destructive/10 p-4 text-sm text-destructive-foreground">
-          Couldn't load recent broadcasts. Please refresh.
-        </div>
-      ) : items.length === 0 ? (
-        <div className="rounded-xl border border-card-border bg-card p-6 text-sm text-muted-foreground">
-          {selectedDate
-            ? `No broadcasts documented for ${selectedDate}.`
-            : "Nothing documented yet — runs appear as station archives fill in."}
-        </div>
-      ) : (
-        <ul className="flex flex-col gap-2" data-testid="ghost-runs">
-          {items.map((item) => (
-            <RecentRunCard key={item.run.runId} item={item} />
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-function RecentRunCard({ item }: { item: RecentStationRun }) {
-  const { station, run } = item;
-  const replayable = run.resolvedCount > 0;
-  return (
-    <li>
-      <div className="hover-elevate flex items-center justify-between gap-3 rounded-xl border border-card-border bg-card p-4">
-        <Link
-          href={`/archive/station-runs/${run.runId}`}
-          className="min-w-0 flex-1"
-          data-testid={`ghost-run-${run.runId}`}
-        >
-          <p className="truncate font-serif text-base font-semibold text-foreground">
-            {run.show?.name ?? "Station stream"}
-          </p>
-          <p className="truncate font-mono text-[11px] text-muted-foreground">
-            {station.name}
-            {run.show?.djName ? ` · ${run.show.djName}` : ""} ·{" "}
-            {runDate(run.date)} · {run.spinCount} track
-            {run.spinCount === 1 ? "" : "s"} ·{" "}
-            <span className={replayable ? "text-primary" : ""}>
-              {run.resolvedCount}/{run.spinCount} resolved
-            </span>
-          </p>
-        </Link>
-        {replayable ? (
-          <Link
-            href={`/archive/station-runs/${run.runId}?play=1`}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide text-primary-foreground hover:opacity-90"
-            data-testid={`ghost-play-${run.runId}`}
-          >
-            <Play className="h-3 w-3" />
-            Replay
-          </Link>
-        ) : null}
-      </div>
-    </li>
   );
 }
 
