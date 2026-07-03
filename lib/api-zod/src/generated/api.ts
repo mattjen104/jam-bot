@@ -568,6 +568,16 @@ export const PatchClaimBody = zod.object({
   status: zod.enum(["published", "rejected"]),
 });
 
+export const PatchClaimResponse = zod.object({
+  id: zod.number().int(),
+  mbid: zod.string(),
+  anchorValue: zod.string(),
+  sourceLabel: zod.string(),
+  sourceUrl: zod.string(),
+  status: zod.string(),
+  createdAt: zod.string(),
+});
+
 /**
  * Every logged spin of a recording (newest first), each attributed to the station and — when the source exposes it — the show and DJ. This is the play-history surface for a track page.
 
@@ -754,7 +764,7 @@ export const GetPickerStationOverlapsResponse = zod.object({
  */
 
 export const LookupPickedMbidsQueryParams = zod.object({
-  mbids: zod.coerce
+  mbids: zod
     .string()
     .min(1)
     .describe("Comma-separated recording MBIDs (max 30 per call)."),
@@ -879,6 +889,12 @@ export const CreateManualSpinBody = zod
     durationMs: zod.number().optional(),
   })
   .describe("Admin manual\/historical spin entry.");
+
+export const CreateManualSpinResponse = zod.object({
+  logged: zod.boolean(),
+  mbid: zod.string().nullable(),
+  confidence: zod.string(),
+});
 
 /**
  * The trusted taste sources Lore rides beyond radio DJs. A DJ is one picker type; this lists the rest (and any DJ-typed pickers), so a client can browse who is doing the picking.

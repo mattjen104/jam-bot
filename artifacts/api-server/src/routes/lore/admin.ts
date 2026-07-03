@@ -3,6 +3,7 @@ import { rateLimit } from "express-rate-limit";
 import { timingSafeEqual, createHash } from "node:crypto";
 import {
   CreateManualSpinBody,
+  CreateManualSpinResponse,
   UpsertPickerBody,
   LogTracklistParams,
   LogTracklistBody,
@@ -17,6 +18,7 @@ import {
   GetWikipediaDraftsResponse,
   PatchClaimParams,
   PatchClaimBody,
+  PatchClaimResponse,
   ListGeniusDraftsQueryParams,
   ReviewGeniusDraftParams,
   ReviewGeniusDraftBody,
@@ -118,11 +120,13 @@ router.post("/admin/spins", h(async (req, res) => {
     throw new HttpError(400, err instanceof Error ? err.message : "Could not log manual spin");
   });
 
-  return res.status(201).json({
-    logged,
-    mbid: resolution.mbid,
-    confidence: resolution.confidence,
-  });
+  return res.status(201).json(
+    CreateManualSpinResponse.parse({
+      logged,
+      mbid: resolution.mbid ?? null,
+      confidence: resolution.confidence,
+    }),
+  );
 }));
 
 // POST /api/admin/pickers — admin-only create/update of a picker.
@@ -193,7 +197,7 @@ router.post("/admin/labels", h(async (req, res) => {
     throw new HttpError(400, err instanceof Error ? err.message : "Could not seed label");
   });
 
-  return res.status(201).json({ ...summary, matched: null });
+  return res.status(201).json(summary);
 }));
 
 // POST /api/admin/blogs — admin-only blog/critic RSS ingest.
@@ -387,15 +391,17 @@ router.patch("/admin/claims/:id", h(async (req, res) => {
     return res.status(404).json({ error: "Claim not found" });
   }
 
-  return res.json({
-    id: updated.id,
-    mbid: updated.mbid,
-    anchorValue: updated.anchorValue ?? "",
-    sourceLabel: updated.sourceLabel,
-    sourceUrl: updated.sourceUrl,
-    status: updated.status,
-    createdAt: updated.createdAt.toISOString(),
-  });
+  return res.json(
+    PatchClaimResponse.parse({
+      id: updated.id,
+      mbid: updated.mbid,
+      anchorValue: updated.anchorValue ?? "",
+      sourceLabel: updated.sourceLabel,
+      sourceUrl: updated.sourceUrl,
+      status: updated.status,
+      createdAt: updated.createdAt.toISOString(),
+    }),
+  );
 }));
 
 // GET /api/admin/genius-drafts?mbid=:mbid — list pending annotation drafts.

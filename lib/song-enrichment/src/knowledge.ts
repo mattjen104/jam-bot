@@ -184,6 +184,20 @@ export async function enrichTrack(args: {
 }
 
 /**
+ * Synchronous cache peek for a recording's liner-notes knowledge.
+ * Returns the cached value immediately without making any external requests.
+ * Returns null on a cache miss or when the feature is disabled.
+ * Use this to implement stale-while-revalidate: return the peek result
+ * immediately, then fire `enrichRecording` in the background.
+ */
+export function peekEnrichedKnowledge(recordingId: string): TrackKnowledge | null {
+  if (!trackKnowledgeEnabled()) return null;
+  const canon = readCache(recordingKey(recordingId));
+  if (!canon) return null;
+  return hasContent(canon) ? canon : null;
+}
+
+/**
  * Resolve liner-notes knowledge when the caller ALREADY has the canonical
  * MusicBrainz recording id (e.g. the radio spine, where spins are resolved to
  * an MBID before enrichment is ever asked for). Skips the ISRC→recording

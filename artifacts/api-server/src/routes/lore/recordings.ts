@@ -29,13 +29,27 @@ import { nextRideable, spinsForRecording } from "../../lore/segue.js";
 import { resolvePreview } from "../../lore/preview.js";
 import { resolveEntry } from "../../lore/entry.js";
 import { getLyrics } from "../../lore/lrclib.js";
-import { enrichRecording } from "@workspace/song-enrichment";
+import { enrichRecording, peekEnrichedKnowledge } from "@workspace/song-enrichment";
 import { wireSongEnrichment } from "../../song/wire.js";
 import { fetchWikipediaClaims } from "../../lore/wikipedia.js";
 import { resolvePickRunAnchors } from "../../lore/runs.js";
 import { h } from "../../middlewares/asyncHandler.js";
 
 wireSongEnrichment();
+
+/**
+ * Stale-while-revalidate guard: prevents concurrent enrichment fan-out.
+ * If we're already enriching a recording, skip the second fire-and-forget.
+ */
+const enrichingNow = new Set<string>();
+
+/**
+ * Wikipedia cooldown: don't re-fetch claims for the same MBID within 5 min.
+ * Bounded: cleared wholesale when it grows past cap.
+ */
+const wikiRecentlyChecked = new Set<string>();
+const WIKI_COOLDOWN_MS = 5 * 60_000;
+const WIKI_COOLDOWN_MAX = 2_000;
 
 const router: IRouter = Router();
 
@@ -93,12 +107,19 @@ router.get("/recordings/:mbid/knowledge", h(async (req, res) => {
     return res.status(404).json({ error: "Recording not found" });
   }
 
-  const knowledge = await enrichRecording({
-    recordingId: rec.mbid,
-    title: rec.title,
-    artist: rec.artist,
-    isrc: rec.isrc,
-  });
+  // Stale-while-revalidate: return cached knowledge immediately, enrich async.
+  const knowledge = peekEnrichedKnowledge(rec.mbid);
+  if (!enrichingNow.has(rec.mbid)) {
+    enrichingNow.add(rec.mbid);
+    setImmediate(() => {
+      void enrichRecording({
+        recordingId: rec.mbid,
+        title: rec.title,
+        artist: rec.artist,
+        isrc: rec.isrc,
+      }).finally(() => enrichingNow.delete(rec.mbid));
+    });
+  }
 
   const claimRows = await db
     .select()
@@ -111,10 +132,16 @@ router.get("/recordings/:mbid/knowledge", h(async (req, res) => {
     )
     .orderBy(trackClaimsTable.id);
 
-  // Fire-and-forget Wikipedia check — off the hot path, idempotent.
-  fetchWikipediaClaims(rec.mbid).catch((err) =>
-    console.warn("[lore] wikipedia fire-and-forget failed", rec.mbid, err),
-  );
+  // Fire-and-forget Wikipedia check — off the hot path, with cooldown so a
+  // popular song page doesn't hammer Wikipedia on every request.
+  if (!wikiRecentlyChecked.has(rec.mbid)) {
+    if (wikiRecentlyChecked.size > WIKI_COOLDOWN_MAX) wikiRecentlyChecked.clear();
+    wikiRecentlyChecked.add(rec.mbid);
+    setTimeout(() => wikiRecentlyChecked.delete(rec.mbid), WIKI_COOLDOWN_MS);
+    fetchWikipediaClaims(rec.mbid).catch((err) =>
+      console.warn("[lore] wikipedia fire-and-forget failed", rec.mbid, err),
+    );
+  }
 
   return res.json(
     GetRecordingKnowledgeResponse.parse({

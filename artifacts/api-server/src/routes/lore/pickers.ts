@@ -195,9 +195,6 @@ const PICKED_BATCH_MAX = 30;
 // editorial (non-DJ) picker's list. Batched + cached so it never slows the
 // live dial poll; MBIDs with no editorial pick are simply absent from items.
 router.get("/picks/contains", h(async (req, res) => {
-  if (typeof req.query["mbids"] !== "string") {
-    return res.status(400).json({ error: "mbids is required" });
-  }
   const parsed = LookupPickedMbidsQueryParams.safeParse(req.query);
   if (!parsed.success) {
     return res.status(400).json({ error: "mbids is required" });
