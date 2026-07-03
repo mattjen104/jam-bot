@@ -7,11 +7,13 @@ import {
   useGetRecordingSpins,
   useGetRecordingSegues,
   useGetRecordingPicks,
+  useGetRecordingSongExploder,
   type EntryPick,
   type RecordingPick,
   type RecordingSpin,
   type SegueNext,
   type TrackClaim,
+  type SongExploderAnchor,
 } from "@workspace/api-client-react";
 import { LyricView } from "../components/LyricView";
 import { usePlayer } from "../player/PlayerProvider";
@@ -27,6 +29,7 @@ import {
   ExternalLink,
   ListMusic,
   MessageSquareQuote,
+  Mic2,
   Music4,
   Play,
   Radio,
@@ -60,6 +63,7 @@ export default function Song() {
   const { data: spinsData } = useGetRecordingSpins(mbid);
   const { data: seguesData } = useGetRecordingSegues(mbid);
   const { data: picksData } = useGetRecordingPicks(mbid);
+  const { data: seData } = useGetRecordingSongExploder(mbid);
 
   const notFound =
     isError && (error as { status?: number } | undefined)?.status === 404;
@@ -196,6 +200,11 @@ export default function Song() {
             )}
 
             <EntryLadder entry={entry} artist={rec.artist} />
+            <SongExploderSection
+              episode={seData?.episode ?? null}
+              anchors={seData?.anchors ?? []}
+              progressMs={ride.active && ride.current?.mbid === mbid ? ride.progressMs : null}
+            />
             <Claims claims={knowledgeData?.claims ?? []} />
             <WikipediaClaims claims={knowledgeData?.claims ?? []} />
             <LyricView mbid={rec.mbid} progressMs={ride.progressMs} />
@@ -496,6 +505,117 @@ function Picks({ picks, mbid }: { picks: RecordingPick[]; mbid: string }) {
           ))}
         </ul>
       )}
+    </section>
+  );
+}
+
+// ---- Song Exploder section ------------------------------------------------
+
+function msToTimecode(ms: number): string {
+  const totalSecs = Math.floor(ms / 1000);
+  const m = Math.floor(totalSecs / 60);
+  const s = totalSecs % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+/**
+ * Song Exploder timeline: Layer 1 (episode link) + Layer 2 (anchors).
+ *
+ * If the recording has a resolved Song Exploder episode, we always show the
+ * "🎙 Song Exploder" section with at minimum the episode link.  When the
+ * episode has timeline anchors, they are listed as signpost rows ordered by
+ * song position.  During active ride playback the row that most recently fired
+ * is highlighted so the listener knows which anchor they just passed.
+ */
+function SongExploderSection({
+  episode,
+  anchors,
+  progressMs,
+}: {
+  episode: { id: number; title: string; episodeUrl: string; youtubeUrl: string | null; publishedAt: string | null; resolvedAt: string | null } | null;
+  anchors: SongExploderAnchor[];
+  progressMs: number | null;
+}) {
+  if (!episode) return null;
+
+  // Find the most-recently-passed anchor (the last one whose positionMs ≤ progressMs).
+  const activeAnchorId: number | null = (() => {
+    if (progressMs === null || !anchors.length) return null;
+    let best: SongExploderAnchor | null = null;
+    for (const a of anchors) {
+      if (a.positionMs <= progressMs) best = a;
+      else break;
+    }
+    return best?.id ?? null;
+  })();
+
+  return (
+    <section data-testid="song-exploder-section">
+      <SectionHeading
+        icon={<Mic2 className="h-5 w-5" />}
+        title="Song Exploder"
+        hint={anchors.length ? `${anchors.length} anchor${anchors.length === 1 ? "" : "s"}` : undefined}
+      />
+      <div className="rounded-2xl border border-card-border bg-card p-5">
+        <a
+          href={episode.episodeUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="group flex items-start justify-between gap-3"
+          data-testid="se-episode-link"
+        >
+          <div className="min-w-0">
+            <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-primary">
+              The artist takes this apart →
+            </p>
+            <p className="mt-0.5 truncate text-sm font-medium text-foreground group-hover:text-primary">
+              {episode.title}
+            </p>
+          </div>
+          <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground group-hover:text-primary" />
+        </a>
+
+        {anchors.length > 0 && (
+          <ul className="mt-4 flex flex-col gap-1.5" data-testid="se-anchors">
+            {anchors.map((anchor) => {
+              const isActive = anchor.id === activeAnchorId;
+              return (
+                <li
+                  key={anchor.id}
+                  className={[
+                    "flex items-start gap-3 rounded-xl border px-3 py-2.5 text-sm transition-colors",
+                    isActive
+                      ? "border-primary/40 bg-primary/5"
+                      : "border-border bg-secondary/30",
+                  ].join(" ")}
+                >
+                  <span className="mt-0.5 shrink-0 font-mono text-[11px] text-muted-foreground/70 tabular-nums">
+                    {msToTimecode(anchor.positionMs)}
+                  </span>
+                  <span className="flex-1 text-muted-foreground leading-snug">
+                    {anchor.text}
+                  </span>
+                  <a
+                    href={anchor.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="Hear this in the episode"
+                    className="shrink-0 font-mono text-[11px] text-primary hover:underline whitespace-nowrap"
+                  >
+                    → hear it
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {anchors.length === 0 && (
+          <p className="mt-3 font-mono text-[11px] text-muted-foreground/70">
+            No timeline anchors yet — admin can add them on the Song Exploder admin page.
+          </p>
+        )}
+      </div>
     </section>
   );
 }

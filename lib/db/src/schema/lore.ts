@@ -571,6 +571,12 @@ export const songExploderEpisodesTable = pgTable(
     mbid: text("mbid").references(() => recordingsTable.mbid),
     /** When the MBID was first resolved. */
     resolvedAt: timestamp("resolved_at"),
+    /**
+     * Best timestamped deep-link target for this episode (YouTube preferred
+     * for reliable ?t= linking; fall back to episodeUrl when absent).
+     * Admins store this once per episode; used to build anchor sourceUrls.
+     */
+    youtubeUrl: text("youtube_url"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => [index("song_exploder_episodes_mbid_idx").on(t.mbid)],

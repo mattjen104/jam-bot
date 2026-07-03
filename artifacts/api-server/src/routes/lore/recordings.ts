@@ -16,6 +16,8 @@ import {
   GetRecordingSeguesResponse,
   GetRecordingEntryParams,
   GetRecordingEntryResponse,
+  GetRecordingSongExploderParams,
+  GetRecordingSongExploderResponse,
 } from "@workspace/api-zod";
 import {
   db,
@@ -23,6 +25,7 @@ import {
   pickersTable,
   picksTable,
   trackClaimsTable,
+  songExploderEpisodesTable,
 } from "@workspace/db";
 import { eq, and, asc, sql } from "drizzle-orm";
 import { nextRideable, spinsForRecording } from "../../lore/segue.js";
@@ -326,6 +329,68 @@ router.get("/recordings/:mbid/entry", h(async (req, res) => {
     rec?.artistMbid ?? undefined,
   );
   return res.json(GetRecordingEntryResponse.parse(result));
+}));
+
+// GET /api/recordings/:mbid/song-exploder — Song Exploder episode + timeline anchors.
+router.get("/recordings/:mbid/song-exploder", h(async (req, res) => {
+  const parsed = GetRecordingSongExploderParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(404).json({ error: "Recording not found" });
+  }
+  const { mbid } = parsed.data;
+
+  const [episode] = await db
+    .select()
+    .from(songExploderEpisodesTable)
+    .where(eq(songExploderEpisodesTable.mbid, mbid))
+    .limit(1);
+
+  if (!episode) {
+    return res.json(GetRecordingSongExploderResponse.parse({ episode: null, anchors: [] }));
+  }
+
+  // Fetch published claims for this MBID from the song-exploder source.
+  const claimRows = await db
+    .select({
+      id: trackClaimsTable.id,
+      positionMs: trackClaimsTable.positionMs,
+      text: trackClaimsTable.text,
+      sourceUrl: trackClaimsTable.sourceUrl,
+      sourceLabel: trackClaimsTable.sourceLabel,
+    })
+    .from(trackClaimsTable)
+    .where(
+      and(
+        eq(trackClaimsTable.mbid, mbid),
+        eq(trackClaimsTable.sourceHandle, "song-exploder"),
+        eq(trackClaimsTable.status, "published"),
+      ),
+    )
+    .orderBy(asc(trackClaimsTable.positionMs));
+
+  const anchors = claimRows
+    .filter((c) => c.positionMs != null)
+    .map((c) => ({
+      id: c.id,
+      positionMs: c.positionMs!,
+      text: c.text,
+      sourceUrl: c.sourceUrl,
+      sourceLabel: c.sourceLabel,
+    }));
+
+  return res.json(
+    GetRecordingSongExploderResponse.parse({
+      episode: {
+        id: episode.id,
+        title: episode.title,
+        episodeUrl: episode.episodeUrl,
+        youtubeUrl: episode.youtubeUrl ?? null,
+        publishedAt: episode.publishedAt?.toISOString() ?? null,
+        resolvedAt: episode.resolvedAt?.toISOString() ?? null,
+      },
+      anchors,
+    }),
+  );
 }));
 
 export default router;

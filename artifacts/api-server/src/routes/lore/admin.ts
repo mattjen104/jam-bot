@@ -24,6 +24,10 @@ import {
   ReviewGeniusDraftBody,
   ListGeniusDraftsResponse,
   ReviewGeniusDraftResponse,
+  ListSongExploderEpisodesResponse,
+  PatchSongExploderEpisodeParams,
+  PatchSongExploderEpisodeBody,
+  PatchSongExploderEpisodeResponse,
 } from "@workspace/api-zod";
 import {
   db,
@@ -33,8 +37,9 @@ import {
   picksTable,
   trackClaimsTable,
   geniusAnnotationDraftsTable,
+  songExploderEpisodesTable,
 } from "@workspace/db";
-import { eq, and, asc, desc, sql } from "drizzle-orm";
+import { eq, and, asc, desc, sql, count } from "drizzle-orm";
 import { ingestManualSpin } from "../../lore/resolve.js";
 import {
   upsertPicker,
@@ -477,6 +482,78 @@ router.post("/admin/genius-drafts/:id/review", h(async (req, res) => {
   }
   return res.json(
     ReviewGeniusDraftResponse.parse({ id: params.data.id, action: "published", claimId }),
+  );
+}));
+
+// GET /api/admin/song-exploder/episodes — list all Song Exploder episodes
+// (resolved + unresolved) with anchor counts. Resolved episodes have an MBID.
+router.get("/admin/song-exploder/episodes", h(async (req, res) => {
+  const rows = await db
+    .select({
+      id: songExploderEpisodesTable.id,
+      title: songExploderEpisodesTable.title,
+      episodeUrl: songExploderEpisodesTable.episodeUrl,
+      youtubeUrl: songExploderEpisodesTable.youtubeUrl,
+      mbid: songExploderEpisodesTable.mbid,
+      resolvedAt: songExploderEpisodesTable.resolvedAt,
+      publishedAt: songExploderEpisodesTable.publishedAt,
+      anchorCount: sql<number>`
+        cast(count(${trackClaimsTable.id}) filter (
+          where ${trackClaimsTable.sourceHandle} = 'song-exploder'
+            and ${trackClaimsTable.status} = 'published'
+        ) as int)
+      `,
+    })
+    .from(songExploderEpisodesTable)
+    .leftJoin(
+      trackClaimsTable,
+      eq(trackClaimsTable.mbid, songExploderEpisodesTable.mbid),
+    )
+    .groupBy(songExploderEpisodesTable.id)
+    .orderBy(desc(songExploderEpisodesTable.publishedAt));
+
+  return res.json(
+    ListSongExploderEpisodesResponse.parse({
+      episodes: rows.map((r) => ({
+        id: r.id,
+        title: r.title,
+        episodeUrl: r.episodeUrl,
+        youtubeUrl: r.youtubeUrl ?? null,
+        mbid: r.mbid ?? null,
+        resolvedAt: r.resolvedAt?.toISOString() ?? null,
+        publishedAt: r.publishedAt?.toISOString() ?? null,
+        anchorCount: r.anchorCount,
+      })),
+    }),
+  );
+}));
+
+// PATCH /api/admin/song-exploder/:episodeId — update the YouTube URL for an episode.
+router.patch("/admin/song-exploder/:episodeId", h(async (req, res) => {
+  const params = PatchSongExploderEpisodeParams.safeParse(req.params);
+  if (!params.success) {
+    return res.status(400).json({ error: "Invalid episode id" });
+  }
+  const body = PatchSongExploderEpisodeBody.safeParse(req.body);
+  if (!body.success) {
+    return res.status(400).json({ error: "Invalid request body — youtubeUrl must be a URL or null" });
+  }
+
+  const [updated] = await db
+    .update(songExploderEpisodesTable)
+    .set({ youtubeUrl: body.data.youtubeUrl })
+    .where(eq(songExploderEpisodesTable.id, params.data.episodeId))
+    .returning({ id: songExploderEpisodesTable.id, youtubeUrl: songExploderEpisodesTable.youtubeUrl });
+
+  if (!updated) {
+    return res.status(404).json({ error: "Episode not found" });
+  }
+
+  return res.json(
+    PatchSongExploderEpisodeResponse.parse({
+      id: updated.id,
+      youtubeUrl: updated.youtubeUrl ?? null,
+    }),
   );
 }));
 

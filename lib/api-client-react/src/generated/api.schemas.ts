@@ -1172,3 +1172,55 @@ export type GetSpotifySavedParams = {
    */
   mbid: string;
 };
+
+// ---- Song Exploder types --------------------------------------------------
+
+export type SongExploderAnchor = {
+  id: number;
+  /** Song offset in ms — when to surface this anchor during playback. */
+  positionMs: number;
+  /** Paraphrased topic label (never verbatim transcript). */
+  text: string;
+  /** Timestamped deep-link into the episode (YouTube ?t= or episode page). */
+  sourceUrl: string;
+  /** Human-readable source credit, e.g. "Song Exploder — Episode Title". */
+  sourceLabel: string;
+};
+
+export type SongExploderEpisodeMeta = {
+  id: number;
+  title: string;
+  episodeUrl: string;
+  youtubeUrl: string | null;
+  publishedAt: string | null;
+  resolvedAt: string | null;
+};
+
+export type RecordingSongExploder = {
+  episode: SongExploderEpisodeMeta | null;
+  anchors: SongExploderAnchor[];
+};
+
+export type SongExploderEpisodeListItem = {
+  id: number;
+  title: string;
+  episodeUrl: string;
+  youtubeUrl: string | null;
+  mbid: string | null;
+  resolvedAt: string | null;
+  publishedAt: string | null;
+  anchorCount: number;
+};
+
+export type SongExploderEpisodeList = {
+  episodes: SongExploderEpisodeListItem[];
+};
+
+export type SongExploderEpisodePatch = {
+  youtubeUrl: string | null;
+};
+
+export type SongExploderEpisodePatchResult = {
+  id: number;
+  youtubeUrl: string | null;
+};

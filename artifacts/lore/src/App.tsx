@@ -16,6 +16,7 @@ import Following from "@/pages/Following";
 import Library from "@/pages/Library";
 import TasteMap from "@/pages/TasteMap";
 import AdminClaims from "@/pages/AdminClaims";
+import AdminSongExploder from "@/pages/AdminSongExploder";
 import { PlayerProvider } from "./player/PlayerProvider";
 import { PlayerDock } from "./components/PlayerDock";
 import { ListeningLogger } from "./components/ListeningLogger";
@@ -60,6 +61,7 @@ function Router() {
         <Route path="/library" component={Library} />
         <Route path="/taste-map" component={TasteMap} />
         <Route path="/admin" component={AdminClaims} />
+        <Route path="/admin/song-exploder" component={AdminSongExploder} />
         <Route component={NotFound} />
       </Switch>
     </>

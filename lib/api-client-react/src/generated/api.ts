@@ -58,6 +58,8 @@ import type {
   SongContext,
   SongExploderClaimRequest,
   SongExploderClaimResponse,
+  RecordingSongExploder,
+  SongExploderEpisodeList,
   SpotifyPlayRequest,
   SpotifyPlayResult,
   SpotifyPlayerState,
@@ -3937,5 +3939,115 @@ export function useLookupPickedMbids<
     queryKey: QueryKey;
   };
 
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+// ---- Song Exploder — public recording hook --------------------------------
+
+export const getGetRecordingSongExploderUrl = (mbid: string) => {
+  return `/api/recordings/${mbid}/song-exploder`;
+};
+
+export const getRecordingSongExploder = async (
+  mbid: string,
+  options?: RequestInit,
+): Promise<RecordingSongExploder> => {
+  return customFetch<RecordingSongExploder>(getGetRecordingSongExploderUrl(mbid), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetRecordingSongExploderQueryKey = (mbid: string) => {
+  return [`/api/recordings/${mbid}/song-exploder`] as const;
+};
+
+export const getGetRecordingSongExploderQueryOptions = <
+  TData = Awaited<ReturnType<typeof getRecordingSongExploder>>,
+  TError = ErrorType<ApiError>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getRecordingSongExploder>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getGetRecordingSongExploderQueryKey(mbid);
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getRecordingSongExploder>>> = ({ signal }) =>
+    getRecordingSongExploder(mbid, { signal, ...requestOptions });
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!mbid,
+    staleTime: 5 * 60_000,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof getRecordingSongExploder>>, TError, TData> & { queryKey: QueryKey };
+};
+
+export type GetRecordingSongExploderQueryResult = NonNullable<Awaited<ReturnType<typeof getRecordingSongExploder>>>;
+export type GetRecordingSongExploderQueryError = ErrorType<ApiError>;
+
+export function useGetRecordingSongExploder<
+  TData = Awaited<ReturnType<typeof getRecordingSongExploder>>,
+  TError = ErrorType<ApiError>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getRecordingSongExploder>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetRecordingSongExploderQueryOptions(mbid, options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+// ---- Song Exploder — admin episodes list hook ----------------------------
+
+export const getListSongExploderEpisodesUrl = () => `/api/admin/song-exploder/episodes`;
+
+export const listSongExploderEpisodes = async (
+  options?: RequestInit,
+): Promise<SongExploderEpisodeList> => {
+  return customFetch<SongExploderEpisodeList>(getListSongExploderEpisodesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListSongExploderEpisodesQueryKey = () =>
+  [`/api/admin/song-exploder/episodes`] as const;
+
+export const getListSongExploderEpisodesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listSongExploderEpisodes>>,
+  TError = ErrorType<ApiError>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof listSongExploderEpisodes>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getListSongExploderEpisodesQueryKey();
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listSongExploderEpisodes>>> = ({ signal }) =>
+    listSongExploderEpisodes({ signal, ...requestOptions });
+  return {
+    queryKey,
+    queryFn,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof listSongExploderEpisodes>>, TError, TData> & { queryKey: QueryKey };
+};
+
+export type ListSongExploderEpisodesQueryResult = NonNullable<Awaited<ReturnType<typeof listSongExploderEpisodes>>>;
+export type ListSongExploderEpisodesQueryError = ErrorType<ApiError>;
+
+export function useListSongExploderEpisodes<
+  TData = Awaited<ReturnType<typeof listSongExploderEpisodes>>,
+  TError = ErrorType<ApiError>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof listSongExploderEpisodes>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListSongExploderEpisodesQueryOptions(options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
   return { ...query, queryKey: queryOptions.queryKey };
 }

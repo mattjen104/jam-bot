@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import {
   useGetRecordingKnowledge,
+  useGetRecordingSongExploder,
   getGetRecordingKnowledgeQueryKey,
   type RecordingLink,
   type Station,
   type StationNowPlaying,
+  type SongExploderAnchor,
 } from "@workspace/api-client-react";
 import { CONFIDENCE_LABEL, clockTime, timeAgo } from "../lib/format";
 import { groupCredits, pressingLine } from "../lib/linerNotes";
@@ -21,9 +23,11 @@ import {
   ExternalLink,
   Heart,
   Mic,
+  Mic2,
   MicVocal,
   Music4,
   Search,
+  X,
 } from "lucide-react";
 
 interface NowPlayingProps {
@@ -195,6 +199,9 @@ export function NowPlaying({ data, isLoading, fallbackStation }: NowPlayingProps
             )}
 
             {rec && <LinerNotes mbid={rec.mbid} />}
+            {rec && progressMs !== null && (
+              <SongExploderSignpost mbid={rec.mbid} progressMs={progressMs} />
+            )}
 
             {rec && (
               <a
@@ -333,6 +340,89 @@ export function DeepLinks({ links }: { links: RecordingLink[] }) {
             {link.name}
           </a>
         ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Playback-synced Song Exploder anchor signpost.
+ *
+ * Fires a dismissable card when `progressMs` crosses an anchor's `positionMs`.
+ * Resets when the MBID changes (new track). Auto-dismisses after 14 seconds.
+ * Uses a ref-based "fired" Set to avoid re-firing on each render tick.
+ */
+function SongExploderSignpost({
+  mbid,
+  progressMs,
+}: {
+  mbid: string;
+  progressMs: number | null;
+}) {
+  const { data } = useGetRecordingSongExploder(mbid);
+  const anchors: SongExploderAnchor[] = data?.anchors ?? [];
+
+  const firedRef = useRef<Set<number>>(new Set());
+  const [activeAnchor, setActiveAnchor] = useState<SongExploderAnchor | null>(null);
+  const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Reset fired set and dismiss any shown anchor when the MBID changes.
+  useEffect(() => {
+    firedRef.current = new Set();
+    setActiveAnchor(null);
+    if (dismissTimer.current) clearTimeout(dismissTimer.current);
+  }, [mbid]);
+
+  // Detect when progressMs crosses an unfired anchor.
+  useEffect(() => {
+    if (progressMs === null || !anchors.length) return;
+    for (const anchor of anchors) {
+      if (anchor.positionMs <= progressMs && !firedRef.current.has(anchor.id)) {
+        firedRef.current.add(anchor.id);
+        setActiveAnchor(anchor);
+        if (dismissTimer.current) clearTimeout(dismissTimer.current);
+        dismissTimer.current = setTimeout(() => setActiveAnchor(null), 14_000);
+      }
+    }
+  }, [progressMs, anchors]);
+
+  if (!activeAnchor) return null;
+
+  return (
+    <div
+      className="mt-4 animate-in fade-in slide-in-from-bottom-2 duration-300"
+      data-testid="se-signpost"
+    >
+      <div className="flex items-start gap-3 rounded-xl border border-primary/30 bg-primary/5 p-3">
+        <Mic2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+        <div className="min-w-0 flex-1">
+          <p className="font-mono text-[10px] uppercase tracking-wide text-primary">
+            Song Exploder
+          </p>
+          <p className="mt-0.5 text-sm leading-snug text-foreground">
+            {activeAnchor.text}
+          </p>
+          <a
+            href={activeAnchor.sourceUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-1.5 inline-flex items-center gap-1 font-mono text-[11px] text-primary hover:underline"
+          >
+            <ExternalLink className="h-2.5 w-2.5" />
+            Hear this in the episode
+          </a>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setActiveAnchor(null);
+            if (dismissTimer.current) clearTimeout(dismissTimer.current);
+          }}
+          aria-label="Dismiss"
+          className="shrink-0 rounded-full p-1 text-muted-foreground hover:text-foreground"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
       </div>
     </div>
   );

@@ -1761,3 +1761,62 @@ export const GetSpotifyPlayerResponse = zod
   .describe(
     "Snapshot of the listener's Spotify player (Connect API). `active` is false when Spotify reports no playback session anywhere.\n",
   );
+
+// ---- Song Exploder — public recording endpoint ----------------------------
+
+export const GetRecordingSongExploderParams = zod.object({
+  mbid: zod.coerce.string().min(1),
+});
+
+export const SongExploderAnchor = zod.object({
+  id: zod.number(),
+  positionMs: zod.number().describe("Song offset in ms — when to surface this anchor during playback."),
+  text: zod.string().describe("Paraphrased topic label (never verbatim transcript)."),
+  sourceUrl: zod.string().describe("Timestamped deep-link into the episode (YouTube ?t= or episode page)."),
+  sourceLabel: zod.string().describe("Human-readable source credit, e.g. 'Song Exploder — Episode Title'."),
+});
+
+export const GetRecordingSongExploderResponse = zod.object({
+  episode: zod
+    .object({
+      id: zod.number(),
+      title: zod.string(),
+      episodeUrl: zod.string(),
+      youtubeUrl: zod.string().nullable(),
+      publishedAt: zod.string().nullable(),
+      resolvedAt: zod.string().nullable(),
+    })
+    .nullable()
+    .describe("The resolved Song Exploder episode for this recording, or null if none."),
+  anchors: zod.array(SongExploderAnchor).describe("Timeline anchors ordered by positionMs."),
+});
+
+// ---- Song Exploder — admin endpoints -------------------------------------
+
+export const ListSongExploderEpisodesResponse = zod.object({
+  episodes: zod.array(
+    zod.object({
+      id: zod.number(),
+      title: zod.string(),
+      episodeUrl: zod.string(),
+      youtubeUrl: zod.string().nullable(),
+      mbid: zod.string().nullable(),
+      resolvedAt: zod.string().nullable(),
+      publishedAt: zod.string().nullable(),
+      anchorCount: zod.number(),
+    }),
+  ),
+});
+
+export const PatchSongExploderEpisodeParams = zod.object({
+  episodeId: zod.coerce.number().int().positive(),
+});
+
+export const PatchSongExploderEpisodeBody = zod.object({
+  youtubeUrl: zod.string().url().nullable(),
+});
+
+export const PatchSongExploderEpisodeResponse = zod.object({
+  id: zod.number(),
+  youtubeUrl: zod.string().nullable(),
+});
