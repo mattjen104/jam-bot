@@ -93,7 +93,7 @@ export function NowPlaying({ data, isLoading, fallbackStation }: NowPlayingProps
             aria-label={showLyrics ? "Hide lyrics" : "Show lyrics"}
             data-testid="lyrics-toggle"
             className={[
-              "flex h-7 w-7 items-center justify-center rounded-full backdrop-blur transition-colors",
+              "flex h-7 w-7 cursor-pointer items-center justify-center rounded-full backdrop-blur transition-colors",
               showLyrics
                 ? "bg-primary text-primary-foreground"
                 : "bg-background/70 text-foreground/80 hover:bg-background/90",
