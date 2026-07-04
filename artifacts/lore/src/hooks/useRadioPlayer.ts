@@ -28,7 +28,6 @@ export function useRadioPlayer() {
   if (audioRef.current === null && typeof Audio !== "undefined") {
     const el = new Audio();
     el.preload = "none";
-    el.crossOrigin = "anonymous";
     audioRef.current = el;
   }
 
