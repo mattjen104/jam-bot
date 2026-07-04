@@ -42,7 +42,7 @@ router.get("/artist/:mbid", h(async (req, res) => {
       lastSpunAt: sql<string>`max(${spinsTable.playedAt})`,
     })
     .from(recordingsTable)
-    .leftJoin(spinsTable, eq(spinsTable.mbid, recordingsTable.mbid))
+    .innerJoin(spinsTable, eq(spinsTable.mbid, recordingsTable.mbid))
     .where(eq(recordingsTable.artistMbid, artistMbid))
     .groupBy(
       recordingsTable.mbid,

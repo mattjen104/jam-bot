@@ -116,7 +116,20 @@ export function ArchiveTracklist({
                   </p>
                 )}
                 <p className="truncate font-mono text-[11px] text-muted-foreground">
-                  {rec ? rec.artist : t.rawArtist || "Unknown artist"}
+                  {rec ? (
+                    rec.artistMbid ? (
+                      <Link
+                        href={`/artist/${rec.artistMbid}`}
+                        className="hover:text-primary hover:underline"
+                      >
+                        {rec.artist}
+                      </Link>
+                    ) : (
+                      rec.artist
+                    )
+                  ) : (
+                    t.rawArtist || "Unknown artist"
+                  )}
                   {!rec && !isBandcampRun ? " · never resolved — skipped in replay" : ""}
                   {!rec && isBandcampRun ? " · unresolved — skipped in replay" : ""}
                 </p>

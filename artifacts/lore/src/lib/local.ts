@@ -14,6 +14,8 @@ export interface JournalEntry {
   /** How it was heard: live radio, a segue trail, or a ghost-radio replay. */
   kind: "radio" | "trail" | "replay";
   mbid: string | null;
+  /** MusicBrainz artist MBID, when resolved. Powers /artist/:mbid links. */
+  artistMbid?: string | null;
   title: string;
   artist: string;
   artworkUrl: string | null;

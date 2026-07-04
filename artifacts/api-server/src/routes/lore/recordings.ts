@@ -213,15 +213,40 @@ router.get("/recordings/:mbid/knowledge", h(async (req, res) => {
           ]);
 
           if (spotifyTrack && albumTracksRaw.length > 0) {
-            // Cross-reference album track ISRCs against our recordings table.
-            const isrcs = albumTracksRaw.map((t) => t.isrc).filter(Boolean) as string[];
-            const matched = isrcs.length > 0
-              ? await db
-                  .select({ mbid: recordingsTable.mbid, isrc: recordingsTable.isrc })
-                  .from(recordingsTable)
-                  .where(inArray(recordingsTable.isrc, isrcs))
-              : [];
-            const isrcToMbid = new Map(matched.map((r) => [r.isrc!, r.mbid]));
+            // Cross-reference album tracks against our recordings table via
+            // Spotify track ID embedded in recordings.links (exact Spotify URL).
+            // Spotify's album-track objects (SimplifiedTrackObject) do NOT
+            // include external_ids.isrc, so ISRC-based matching is unreliable.
+            // Instead we match by the Spotify track URL in the links jsonb array.
+            const trackIdToTrack = new Map(albumTracksRaw.map((t) => [t.id, t]));
+            const trackUrls = albumTracksRaw.map(
+              (t) => sql`${"https://open.spotify.com/track/" + t.id}`,
+            );
+
+            const linkedRecordings = await db
+              .select({ mbid: recordingsTable.mbid, links: recordingsTable.links })
+              .from(recordingsTable)
+              .where(
+                sql`EXISTS (
+                  SELECT 1 FROM jsonb_array_elements(${recordingsTable.links}::jsonb) AS lnk
+                  WHERE lnk->>'kind' = 'exact'
+                  AND lnk->>'url' = ANY(ARRAY[${sql.join(trackUrls, sql`, `)}])
+                )`,
+              );
+
+            const spotifyIdToMbid = new Map<string, string>();
+            for (const r of linkedRecordings) {
+              const links = r.links as { name: string; url: string; kind: string }[] | null;
+              if (!links) continue;
+              for (const l of links) {
+                if (l.kind !== "exact") continue;
+                const m = l.url.match(/open\.spotify\.com\/(?:[a-z-]+\/)?track\/([A-Za-z0-9]+)/);
+                if (m && trackIdToTrack.has(m[1])) {
+                  spotifyIdToMbid.set(m[1], r.mbid);
+                  break;
+                }
+              }
+            }
 
             album = {
               name: spotifyTrack.album ?? "",
@@ -230,7 +255,7 @@ router.get("/recordings/:mbid/knowledge", h(async (req, res) => {
               tracks: albumTracksRaw.map((t) => ({
                 title: t.name,
                 trackNumber: t.trackNumber,
-                mbid: t.isrc ? (isrcToMbid.get(t.isrc) ?? null) : null,
+                mbid: spotifyIdToMbid.get(t.id) ?? null,
               })),
             };
           }

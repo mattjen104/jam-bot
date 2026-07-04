@@ -51,6 +51,7 @@ export function ListeningLogger() {
       at: npPlayedAt ?? new Date().toISOString(),
       kind: "radio",
       mbid: npMbid,
+      artistMbid: rec?.artistMbid ?? null,
       title: npTitle,
       artist: npArtist,
       artworkUrl: npArtwork,

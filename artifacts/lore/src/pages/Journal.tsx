@@ -182,7 +182,16 @@ function JournalRow({ entry }: { entry: JournalEntry }) {
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-baseline gap-2">{title}</div>
         <p className="truncate text-sm" style={{ color: "hsl(var(--dim))" }}>
-          {entry.artist}
+          {entry.artistMbid ? (
+            <Link
+              href={`/artist/${entry.artistMbid}`}
+              className="hover:text-primary hover:underline"
+            >
+              {entry.artist}
+            </Link>
+          ) : (
+            entry.artist
+          )}
         </p>
         {/* IBM Plex Mono source attribution — source name in violet */}
         <p className="mt-0.5 flex items-center gap-1.5 truncate font-mono text-[11px]" style={{ color: "hsl(var(--faint))" }}>

@@ -221,7 +221,7 @@ export default function Song() {
             <Segues next={seguesData?.next ?? []} />
             <Spins spins={spinsData?.spins ?? []} mbid={rec.mbid} />
             <Picks picks={picksData?.picks ?? []} mbid={rec.mbid} />
-            <AlbumSection album={knowledgeData?.album ?? null} currentMbid={rec.mbid} />
+            <AlbumSection album={knowledgeData?.album ?? null} currentMbid={rec.mbid} artistMbid={rec.artistMbid} />
           </>
         )}
       </div>
@@ -232,9 +232,11 @@ export default function Song() {
 function AlbumSection({
   album,
   currentMbid,
+  artistMbid,
 }: {
   album: AlbumContext | null | undefined;
   currentMbid: string;
+  artistMbid?: string | null;
 }) {
   if (!album || album.tracks.length === 0) return null;
   return (
@@ -242,7 +244,15 @@ function AlbumSection({
       <SectionHeading
         icon={<Disc3 className="h-5 w-5" />}
         title="On the album"
-        hint={album.name}
+        hint={
+          artistMbid ? (
+            <Link href={`/artist/${artistMbid}`} className="hover:text-primary hover:underline">
+              {album.name}
+            </Link>
+          ) : (
+            album.name
+          )
+        }
       />
       <div className="rounded-2xl border border-card-border bg-card p-5">
         {album.year != null && (
@@ -297,7 +307,7 @@ function SectionHeading({
 }: {
   icon: React.ReactNode;
   title: string;
-  hint?: string;
+  hint?: React.ReactNode;
 }) {
   return (
     <div className="mb-3 mt-10 flex items-baseline justify-between">
