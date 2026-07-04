@@ -471,7 +471,12 @@ export function parseNtsLive(
   const rawTitle = broadcastTitle;
   const rawArtist = hostName ?? broadcastTitle;
   if (!rawArtist || !rawTitle) return null;
-  return { rawArtist, rawTitle };
+  const out: import("./types.js").NowPlayingRaw = { rawArtist, rawTitle };
+  if (broadcastTitle) {
+    out.show = { name: broadcastTitle };
+    if (hostName) out.show.djName = hostName;
+  }
+  return out;
 }
 
 /**

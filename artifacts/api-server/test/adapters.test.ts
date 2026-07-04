@@ -326,6 +326,7 @@ describe("parseNtsLive", () => {
     expect(parseNtsLive(fullBody)).toEqual({
       rawArtist: "Sam Shepherd",
       rawTitle: "Floating Points",
+      show: { name: "Floating Points", djName: "Sam Shepherd" },
     });
   });
 
@@ -334,6 +335,7 @@ describe("parseNtsLive", () => {
     expect(parseNtsLive(body)).toEqual({
       rawArtist: "Late Night Tales",
       rawTitle: "Late Night Tales",
+      show: { name: "Late Night Tales" },
     });
   });
 

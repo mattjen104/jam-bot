@@ -14,6 +14,8 @@ export interface NowPlayingRaw {
   /** ISRC, when the source provides one. */
   isrc?: string;
   durationMs?: number;
+  /** Show/DJ attribution, when the source exposes program metadata (e.g. NTS). */
+  show?: ShowAttribution;
 }
 
 /** Show + DJ attribution for a spin, when the source exposes it. */

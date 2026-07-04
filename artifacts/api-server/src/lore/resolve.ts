@@ -499,11 +499,13 @@ export async function logSpinIfChanged(
       ...(np.isrc ? { isrc: np.isrc } : {}),
     });
 
+    const showId = np.show ? await upsertShow(station.id, np.show) : null;
+
     return await persistSpin({
       station,
       resolution: r,
       raw: np,
-      showId: null,
+      showId,
       source: station.nowPlayingSource ?? "unknown",
     });
   } catch (err) {
