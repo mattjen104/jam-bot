@@ -26,6 +26,7 @@ import {
   type PickerDialItem,
 } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
+import { useFollows, isFollowed } from "../lib/local";
 import { StationList } from "../components/StationList";
 import { PickerDial } from "../components/PickerDial";
 import { NowPlaying } from "../components/NowPlaying";
@@ -179,11 +180,56 @@ function DateSweep({
   );
 }
 
+type DialFilterTab = "all" | "live" | "lists" | "following";
+
+/** Four-tab filter that narrows the dial to stations, lists, or followed items. */
+function DialFilter({
+  active,
+  onChange,
+  followCount,
+}: {
+  active: DialFilterTab;
+  onChange: (tab: DialFilterTab) => void;
+  followCount: number;
+}) {
+  const tabs: { id: DialFilterTab; label: string }[] = [
+    { id: "all", label: "All" },
+    { id: "live", label: "Live" },
+    { id: "lists", label: "Lists" },
+    { id: "following", label: "Following" },
+  ];
+  return (
+    <div className="mb-4 flex flex-wrap gap-1">
+      {tabs.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          onClick={() => onChange(tab.id)}
+          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-[11px] uppercase tracking-wide transition-colors ${
+            active === tab.id
+              ? "border-primary/40 bg-primary/10 text-primary"
+              : "border-border bg-card text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {tab.label}
+          {tab.id === "following" && followCount > 0 && (
+            <span className="rounded-full bg-primary/20 px-1.5 font-mono text-[9px] tabular-nums text-primary">
+              {followCount}
+            </span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** Mode 1 — the live dial with the now-playing sidebar. */
 function LiveMode({ selectedDate }: { selectedDate: string | null }) {
   const { data, isLoading, isError } = useListStations();
   const { radio: player } = usePlayer();
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+  const [dialFilter, setDialFilter] = useState<DialFilterTab>("all");
+  const follows = useFollows();
 
   const stations = useMemo(() => data?.stations ?? [], [data]);
 
@@ -264,6 +310,31 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
     [pickerDialData],
   );
 
+  // Derive follow counts for the badge on the Following tab.
+  const dialFollowCount = useMemo(
+    () => follows.filter((f) => f.kind === "station" || f.kind === "picker").length,
+    [follows],
+  );
+
+  // Client-side filter — no network traffic.
+  const filteredStations = useMemo((): Station[] => {
+    if (dialFilter === "live") return stations;
+    if (dialFilter === "lists") return [];
+    if (dialFilter === "following")
+      return stations.filter((s) => isFollowed(follows, "station", s.slug));
+    return stations;
+  }, [dialFilter, stations, follows]);
+
+  const filteredPickerItems = useMemo((): PickerDialItem[] => {
+    if (dialFilter === "live") return [];
+    if (dialFilter === "lists") return pickerItems;
+    if (dialFilter === "following")
+      return pickerItems.filter((it) =>
+        isFollowed(follows, "picker", it.picker.handle),
+      );
+    return pickerItems;
+  }, [dialFilter, pickerItems, follows]);
+
   const pulseBySlug = useMemo(() => {
     return new Map(
       (pulse?.items ?? []).map((i) => [i.slug, i.nowPlaying ?? null]),
@@ -343,9 +414,14 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
     void player.toggle(station);
   };
 
+  const followingEmpty =
+    dialFilter === "following" &&
+    filteredStations.length === 0 &&
+    filteredPickerItems.length === 0;
+
   return (
     <section>
-      <div className="mb-4 flex items-baseline justify-between">
+      <div className="mb-3 flex items-baseline justify-between">
         <h2 className="font-serif text-xl font-semibold text-foreground">
           {selectedDate ? (
             <>
@@ -363,6 +439,12 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
         </span>
       </div>
 
+      <DialFilter
+        active={dialFilter}
+        onChange={setDialFilter}
+        followCount={dialFollowCount}
+      />
+
       {isLoading && <StationListSkeleton />}
       {isError && (
         <div className="rounded-xl border border-destructive-border bg-destructive/10 p-4 text-sm text-destructive-foreground">
@@ -374,9 +456,16 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
           No stations are on the dial yet.
         </div>
       )}
-      {!isLoading && stations.length > 0 && (
+      {followingEmpty && (
+        <div className="rounded-xl border border-card-border bg-card p-6 text-sm text-muted-foreground">
+          Nothing followed yet — click{" "}
+          <span className="font-mono uppercase tracking-wide">Follow</span> on
+          any station or list below to see it here.
+        </div>
+      )}
+      {!isLoading && filteredStations.length > 0 && (
         <StationList
-          stations={stations}
+          stations={filteredStations}
           activeSlug={activeSlug}
           status={player.status}
           pulse={pulseBySlug}
@@ -389,8 +478,8 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
         />
       )}
 
-      {/* Curated lists — always visible on the dial, never behind a mode toggle */}
-      <PickerDial items={pickerItems} />
+      {/* Curated lists — filtered by dial tab */}
+      <PickerDial items={filteredPickerItems} />
 
       {/* Now-playing sidebar only shown in live mode — not meaningful for ghost snapshots */}
       {!selectedDate && (

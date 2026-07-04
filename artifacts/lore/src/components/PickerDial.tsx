@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { Loader2, Music2, Play } from "lucide-react";
 import { usePlayer } from "../player/PlayerProvider";
+import { FollowButton } from "./FollowButton";
 import { getPickerRun } from "@workspace/api-client-react";
 import type { PickerDialItem } from "@workspace/api-client-react";
 
@@ -121,8 +122,13 @@ function PickerCard({ item }: { item: PickerDialItem }) {
           </p>
         </div>
 
-        {/* Archive link */}
-        <div className="shrink-0">
+        {/* Right rail: follow picker + archive link */}
+        <div
+          className="flex shrink-0 flex-col items-end gap-2"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          <FollowButton kind="picker" id={item.picker.handle} name={item.picker.name} />
           <Link
             href={`/archive/pickers/${item.picker.handle}`}
             onClick={(e) => e.stopPropagation()}
