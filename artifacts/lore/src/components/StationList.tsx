@@ -160,6 +160,18 @@ export function StationList({
                   >
                     {trackLine}
                   </p>
+                ) : np?.show ? (
+                  /* No resolved track but show is known — surface show name
+                     in the primary subtitle slot so it's visible on the dial. */
+                  <p
+                    className="mt-0.5 flex items-center gap-1.5 truncate font-mono text-[11px] text-muted-foreground"
+                    data-testid={`pulse-show-${station.slug}`}
+                  >
+                    <Mic className="h-3 w-3 text-primary/70" />
+                    {np.show.djName
+                      ? `${np.show.djName} · ${np.show.name}`
+                      : np.show.name}
+                  </p>
                 ) : (
                   <p className="mt-0.5 flex items-center gap-1.5 truncate font-mono text-xs text-muted-foreground">
                     <Radio className="h-3 w-3" />
@@ -167,7 +179,8 @@ export function StationList({
                       "Independent"}
                   </p>
                 )}
-                {np?.show && (
+                {/* Show attribution below track line only when both are present */}
+                {np?.show && trackLine && (
                   <p
                     className="mt-0.5 flex items-center gap-1.5 truncate font-mono text-[11px] text-muted-foreground"
                     data-testid={`pulse-show-${station.slug}`}
