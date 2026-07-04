@@ -272,6 +272,8 @@ export interface NowPlayingRecording {
   title: string;
   artist: string;
   /** @nullable */
+  artistMbid?: string | null;
+  /** @nullable */
   artworkUrl?: string | null;
   links: RecordingLink[];
 }
@@ -449,10 +451,47 @@ export interface TrackClaim {
   status?: "draft" | "published" | "rejected";
 }
 
+export interface AlbumTrack {
+  title: string;
+  trackNumber: number;
+  /** @nullable */
+  mbid?: string | null;
+}
+
+export interface AlbumContext {
+  name: string;
+  /** @nullable */
+  year?: number | null;
+  /** @nullable */
+  spotifyAlbumId?: string | null;
+  tracks: AlbumTrack[];
+}
+
 export interface RecordingKnowledge {
   knowledge: TrackKnowledge | null;
+  /** Album context resolved from Spotify, with cross-referenced Lore MBIDs per track. */
+  album?: AlbumContext | null;
   /** Grounded documentary-sourced facts (may be empty). */
   claims?: TrackClaim[];
+}
+
+export interface ArtistTopTrack {
+  mbid: string;
+  title: string;
+  artist: string;
+  /** @nullable */
+  artworkUrl?: string | null;
+  spinCount: number;
+  /** @nullable */
+  lastSpunAt?: string | null;
+}
+
+export interface GetArtistResponse {
+  mbid: string;
+  name: string;
+  topTracks: ArtistTopTrack[];
+  /** @nullable */
+  catalogue?: ArtistCatalogue | null;
 }
 
 /**

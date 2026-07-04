@@ -39,6 +39,7 @@ import { wireSongEnrichment } from "../../song/wire.js";
 import { fetchWikipediaClaims } from "../../lore/wikipedia.js";
 import { resolvePickRunAnchors } from "../../lore/runs.js";
 import { h } from "../../middlewares/asyncHandler.js";
+import { getTrackById, getAlbumTracks, spotifyAppConfigured } from "../../spotify/appClient.js";
 
 wireSongEnrichment();
 
@@ -187,9 +188,63 @@ router.get("/recordings/:mbid/knowledge", h(async (req, res) => {
     );
   }
 
+  // Album context — resolve via Spotify on the off-hot-path side.
+  // Extract the Spotify track ID from the recording's deep links (exact only).
+  let album: {
+    name: string;
+    year: number | null;
+    spotifyAlbumId: string | null;
+    tracks: { title: string; trackNumber: number; mbid: string | null }[];
+  } | null = null;
+
+  if (spotifyAppConfigured()) {
+    const spotifyLink = (rec.links as { name: string; url: string; kind: string }[] | null)
+      ?.find((l) => l.kind === "exact" && l.url.includes("open.spotify.com/track/"));
+    if (spotifyLink) {
+      const match = spotifyLink.url.match(/open\.spotify\.com\/(?:[a-z-]+\/)?track\/([A-Za-z0-9]+)/);
+      const spotifyTrackId = match?.[1] ?? null;
+      if (spotifyTrackId) {
+        try {
+          const [spotifyTrack, albumTracksRaw] = await Promise.all([
+            getTrackById(spotifyTrackId),
+            getTrackById(spotifyTrackId).then((t) =>
+              t?.albumId ? getAlbumTracks(t.albumId) : Promise.resolve([]),
+            ),
+          ]);
+
+          if (spotifyTrack && albumTracksRaw.length > 0) {
+            // Cross-reference album track ISRCs against our recordings table.
+            const isrcs = albumTracksRaw.map((t) => t.isrc).filter(Boolean) as string[];
+            const matched = isrcs.length > 0
+              ? await db
+                  .select({ mbid: recordingsTable.mbid, isrc: recordingsTable.isrc })
+                  .from(recordingsTable)
+                  .where(inArray(recordingsTable.isrc, isrcs))
+              : [];
+            const isrcToMbid = new Map(matched.map((r) => [r.isrc!, r.mbid]));
+
+            album = {
+              name: spotifyTrack.album ?? "",
+              year: knowledge?.pressing?.year ?? null,
+              spotifyAlbumId: spotifyTrack.albumId,
+              tracks: albumTracksRaw.map((t) => ({
+                title: t.name,
+                trackNumber: t.trackNumber,
+                mbid: t.isrc ? (isrcToMbid.get(t.isrc) ?? null) : null,
+              })),
+            };
+          }
+        } catch (err) {
+          console.warn("[lore] album context fetch failed", rec.mbid, err);
+        }
+      }
+    }
+  }
+
   return res.json(
     GetRecordingKnowledgeResponse.parse({
       knowledge: knowledge ?? null,
+      album,
       claims: claimRows.map((c) => ({
         id: c.id,
         text: c.text,

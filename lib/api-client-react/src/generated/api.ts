@@ -28,6 +28,7 @@ import type {
   GeniusDraftList,
   GeniusDraftReviewRequest,
   GeniusDraftReviewResponse,
+  GetArtistResponse,
   GetOembedParams,
   GetSpotifySavedParams,
   HealthStatus,
@@ -4374,4 +4375,44 @@ export function useListSongExploderEpisodes<
   const queryOptions = getListSongExploderEpisodesQueryOptions(options);
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
   return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getGetArtistUrl = (mbid: string) => `/api/artist/${mbid}`;
+
+export const getArtist = async (
+  mbid: string,
+  options?: RequestInit,
+): Promise<GetArtistResponse> => {
+  return customFetch<GetArtistResponse>(getGetArtistUrl(mbid), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetArtistQueryKey = (mbid: string) =>
+  [`/api/artist/${mbid}`] as const;
+
+export function useGetArtist<
+  TData = Awaited<ReturnType<typeof getArtist>>,
+  TError = ErrorType<ApiError>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getArtist>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getGetArtistQueryKey(mbid);
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getArtist>>> = ({
+    signal,
+  }) => getArtist(mbid, { signal, ...requestOptions });
+  const query = useQuery({
+    queryKey,
+    queryFn,
+    enabled: !!mbid,
+    ...queryOptions,
+  }) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  query.queryKey = queryKey;
+  return query;
 }

@@ -261,6 +261,7 @@ export const ListStationsNowPlayingResponse = zod.object({
                         mbid: zod.string(),
                         title: zod.string(),
                         artist: zod.string(),
+                        artistMbid: zod.string().nullish(),
                         artworkUrl: zod.string().nullish(),
                         links: zod.array(
                           zod
@@ -352,6 +353,7 @@ export const GetStationNowPlayingResponse = zod.object({
                   mbid: zod.string(),
                   title: zod.string(),
                   artist: zod.string(),
+                  artistMbid: zod.string().nullish(),
                   artworkUrl: zod.string().nullish(),
                   links: zod.array(
                     zod
@@ -487,6 +489,23 @@ export const GetRecordingKnowledgeResponse = zod.object({
     }),
     zod.null(),
   ]),
+  album: zod
+    .union([
+      zod.object({
+        name: zod.string(),
+        year: zod.number().nullish(),
+        spotifyAlbumId: zod.string().nullish(),
+        tracks: zod.array(
+          zod.object({
+            title: zod.string(),
+            trackNumber: zod.number(),
+            mbid: zod.string().nullish(),
+          }),
+        ),
+      }),
+      zod.null(),
+    ])
+    .optional(),
   claims: zod
     .array(
       zod

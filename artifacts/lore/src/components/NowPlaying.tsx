@@ -183,7 +183,16 @@ export function NowPlaying({ data, isLoading, fallbackStation }: NowPlayingProps
               </h2>
             )}
             <p className="mt-1 text-base text-muted-foreground" data-testid="now-playing-artist">
-              {rec?.artist ?? np.rawArtist}
+              {rec?.artistMbid ? (
+                <Link
+                  href={`/artist/${rec.artistMbid}`}
+                  className="hover:text-primary hover:underline"
+                >
+                  {rec.artist}
+                </Link>
+              ) : (
+                rec?.artist ?? np.rawArtist
+              )}
             </p>
 
             {np.show && (

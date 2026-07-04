@@ -45,6 +45,7 @@ export function toNowPlaying(row: {
   mbid: string | null;
   title: string | null;
   artist: string | null;
+  artistMbid?: string | null;
   artworkUrl: string | null;
   links: unknown;
   showName: string | null;
@@ -62,6 +63,7 @@ export function toNowPlaying(row: {
           mbid: row.mbid,
           title: row.title ?? row.rawTitle ?? "",
           artist: row.artist ?? row.rawArtist ?? "",
+          artistMbid: row.artistMbid ?? null,
           artworkUrl: row.artworkUrl ?? null,
           links: row.links ?? [],
         }

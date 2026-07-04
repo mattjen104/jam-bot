@@ -43,6 +43,7 @@ export interface SpotifyTrackRaw {
   name: string;
   artists: { id: string; name: string }[];
   album: string | null;
+  albumId: string | null;
   imageUrl: string | null;
   spotifyUrl: string;
   isrc: string | null;
@@ -56,6 +57,7 @@ function toRaw(t: SpotifyApi.TrackObjectFull): SpotifyTrackRaw {
     name: t.name,
     artists: (t.artists ?? []).map((a) => ({ id: a.id, name: a.name })),
     album: t.album?.name ?? null,
+    albumId: t.album?.id ?? null,
     imageUrl: t.album?.images?.[0]?.url ?? null,
     spotifyUrl: t.external_urls?.spotify ?? `https://open.spotify.com/track/${t.id}`,
     isrc: t.external_ids?.isrc ?? null,
@@ -81,6 +83,29 @@ export async function getTrackById(trackId: string): Promise<SpotifyTrackRaw | n
     return toRaw(res.body);
   } catch {
     return null;
+  }
+}
+
+/**
+ * Fetch simplified track info for every track on a Spotify album (max 50 per page;
+ * we grab the first page which covers virtually all standard albums). Returns an
+ * empty array when Spotify is unconfigured or the album lookup fails.
+ */
+export async function getAlbumTracks(
+  albumId: string,
+): Promise<{ id: string; name: string; trackNumber: number; isrc: string | null }[]> {
+  const c = await getClient();
+  if (!c) return [];
+  try {
+    const res = await c.getAlbumTracks(albumId, { limit: 50 });
+    return (res.body.items ?? []).map((t) => ({
+      id: t.id,
+      name: t.name,
+      trackNumber: t.track_number ?? 0,
+      isrc: (t as { external_ids?: { isrc?: string } }).external_ids?.isrc ?? null,
+    }));
+  } catch {
+    return [];
   }
 }
 

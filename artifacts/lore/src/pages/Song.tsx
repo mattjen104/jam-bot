@@ -8,6 +8,7 @@ import {
   useGetRecordingSegues,
   useGetRecordingPicks,
   useGetRecordingSongExploder,
+  type AlbumContext,
   type EntryPick,
   type RecordingPick,
   type RecordingSpin,
@@ -158,7 +159,16 @@ export default function Song() {
                   className="mt-1 text-lg text-muted-foreground"
                   data-testid="song-artist"
                 >
-                  {rec.artist}
+                  {rec.artistMbid ? (
+                    <Link
+                      href={`/artist/${rec.artistMbid}`}
+                      className="hover:text-primary hover:underline"
+                    >
+                      {rec.artist}
+                    </Link>
+                  ) : (
+                    rec.artist
+                  )}
                 </p>
 
                 <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -211,10 +221,72 @@ export default function Song() {
             <Segues next={seguesData?.next ?? []} />
             <Spins spins={spinsData?.spins ?? []} mbid={rec.mbid} />
             <Picks picks={picksData?.picks ?? []} mbid={rec.mbid} />
+            <AlbumSection album={knowledgeData?.album ?? null} currentMbid={rec.mbid} />
           </>
         )}
       </div>
     </div>
+  );
+}
+
+function AlbumSection({
+  album,
+  currentMbid,
+}: {
+  album: AlbumContext | null | undefined;
+  currentMbid: string;
+}) {
+  if (!album || album.tracks.length === 0) return null;
+  return (
+    <section data-testid="album-section">
+      <SectionHeading
+        icon={<Disc3 className="h-5 w-5" />}
+        title="On the album"
+        hint={album.name}
+      />
+      <div className="rounded-2xl border border-card-border bg-card p-5">
+        {album.year != null && (
+          <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground/60">
+            {album.year}
+          </p>
+        )}
+        <ol className="flex flex-col gap-1" data-testid="album-tracks">
+          {album.tracks.map((track) => {
+            const isCurrent = track.mbid === currentMbid;
+            return (
+              <li
+                key={`${track.trackNumber}-${track.title}`}
+                className={[
+                  "flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm",
+                  isCurrent
+                    ? "bg-primary/8 font-medium text-foreground"
+                    : "text-muted-foreground",
+                ].join(" ")}
+              >
+                <span className="w-5 shrink-0 text-right font-mono text-[11px] text-muted-foreground/50 tabular-nums">
+                  {track.trackNumber}
+                </span>
+                {track.mbid && !isCurrent ? (
+                  <Link
+                    href={`/song/${track.mbid}`}
+                    className="truncate hover:text-primary hover:underline"
+                  >
+                    {track.title}
+                  </Link>
+                ) : (
+                  <span className="truncate">{track.title}</span>
+                )}
+                {isCurrent && (
+                  <span className="ml-auto shrink-0 font-mono text-[11px] text-primary">
+                    ← here
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+    </section>
   );
 }
 
