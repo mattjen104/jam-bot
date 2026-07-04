@@ -482,21 +482,18 @@ const ntsLive: NowPlayingAdapter = async (config) => {
 // ---- FIP (Radio France) now-playing, change-detection -------------------
 
 /**
- * FIP / Radio France livemeta — find the music step currently on air by
- * depth (deepest = most specific) where start ≤ now ≤ end. Returns null
- * during talk, silence, or when the API is unreachable.
+ * Pure: pick the active FIP step from a livemeta `steps` map at a given Unix
+ * epoch (seconds). Chooses the deepest step whose [start, end] window contains
+ * `nowSec`. Returns a NowPlayingRaw when a music step is active, or null
+ * during talk, silence, or when no window matches.
  *
- * Config: `{ stationId: "7" }` (7=FIP main, 64=Rock, 65=Jazz, 66=Groove,
- * 69=World, 71=Reggae, 74=Electro, 78=Metal).
+ * `steps` is the `body.steps` object from the livemeta pull endpoint — a
+ * keyed map of step objects (key is irrelevant, values carry start/end/depth).
  */
-const fip: NowPlayingAdapter = async (config) => {
-  const stationId = str(config.stationId) ?? "7";
-  const body = (await getJson(
-    `https://api.radiofrance.fr/livemeta/pull/${encodeURIComponent(stationId)}`,
-  )) as Record<string, unknown>;
-  const steps = body.steps as Record<string, Record<string, unknown>> | undefined;
-  if (!steps) return null;
-  const nowSec = Math.floor(Date.now() / 1000);
+export function parseFipSteps(
+  steps: Record<string, Record<string, unknown>>,
+  nowSec: number,
+): NowPlayingRaw | null {
   let best: Record<string, unknown> | null = null;
   let bestDepth = -Infinity;
   for (const step of Object.values(steps)) {
@@ -515,6 +512,25 @@ const fip: NowPlayingAdapter = async (config) => {
   const rawTitle = str(best.title);
   if (!rawArtist || !rawTitle) return null;
   return { rawArtist, rawTitle };
+}
+
+/**
+ * FIP / Radio France livemeta — find the music step currently on air by
+ * depth (deepest = most specific) where start ≤ now ≤ end. Returns null
+ * during talk, silence, or when the API is unreachable.
+ *
+ * Config: `{ stationId: "7" }` (7=FIP main, 64=Rock, 65=Jazz, 66=Groove,
+ * 69=World, 71=Reggae, 74=Electro, 78=Metal).
+ */
+const fip: NowPlayingAdapter = async (config) => {
+  const stationId = str(config.stationId) ?? "7";
+  const body = (await getJson(
+    `https://api.radiofrance.fr/livemeta/pull/${encodeURIComponent(stationId)}`,
+  )) as Record<string, unknown>;
+  const steps = body.steps as Record<string, Record<string, unknown>> | undefined;
+  if (!steps) return null;
+  const nowSec = Math.floor(Date.now() / 1000);
+  return parseFipSteps(steps, nowSec);
 };
 
 // ---- Registry -----------------------------------------------------------

@@ -7,6 +7,7 @@ import {
   parseSpinitronPlaylists,
   parseBbcSegments,
   parseNtsLive,
+  parseFipSteps,
   stationArchiveUrl,
   supportsBackfill,
 } from "../src/lore/adapters.js";
@@ -168,6 +169,146 @@ describe("parseBbcSegments", () => {
       rawTitle: "Introvert",
       externalId: "bbc:seg-1",
     });
+  });
+
+  it("drops non-music segment types as returned by BBC 6 Music (speech, weather, etc.)", () => {
+    const body = {
+      data: [
+        {
+          id: "6m-1",
+          segment_type: "music",
+          titles: { primary: "Caribou", secondary: "Can't Do Without You" },
+        },
+        {
+          id: "6m-2",
+          segment_type: "speech",
+          titles: { primary: "Lauren Laverne", secondary: "Morning show chat" },
+        },
+        {
+          id: "6m-3",
+          segment_type: "weather",
+          titles: { primary: "Weather", secondary: "UK forecast" },
+        },
+        {
+          id: "6m-4",
+          segment_type: "music",
+          titles: { primary: "Portishead", secondary: "Glory Box" },
+        },
+      ],
+    };
+    const spins = parseBbcSegments(body);
+    expect(spins).toHaveLength(2);
+    expect(spins[0]).toMatchObject({ rawArtist: "Caribou", rawTitle: "Can't Do Without You", externalId: "bbc:6m-1" });
+    expect(spins[1]).toMatchObject({ rawArtist: "Portishead", rawTitle: "Glory Box", externalId: "bbc:6m-4" });
+  });
+
+  it("keeps segments with no segment_type when they carry artist+title (best-effort)", () => {
+    const body = {
+      data: [
+        {
+          id: "6m-noType",
+          titles: { primary: "Massive Attack", secondary: "Teardrop" },
+        },
+      ],
+    };
+    const spins = parseBbcSegments(body);
+    expect(spins).toHaveLength(1);
+    expect(spins[0]).toMatchObject({ rawArtist: "Massive Attack", rawTitle: "Teardrop" });
+  });
+
+  it("returns empty array for an empty data payload", () => {
+    expect(parseBbcSegments({ data: [] })).toHaveLength(0);
+    expect(parseBbcSegments({})).toHaveLength(0);
+  });
+
+  it("drops music segments that are missing a title (silent/blank metadata)", () => {
+    const body = {
+      data: [
+        { id: "s1", segment_type: "music", titles: { primary: "Artist Only" } },
+        { id: "s2", segment_type: "music", titles: {} },
+      ],
+    };
+    expect(parseBbcSegments(body)).toHaveLength(0);
+  });
+});
+
+describe("parseFipSteps", () => {
+  const BASE = 1_000_000; // arbitrary Unix epoch anchor for tests
+
+  it("selects the deepest active step when multiple windows overlap", () => {
+    const steps = {
+      outer: { start: BASE - 60, end: BASE + 60, depth: 1, title: "Outer Show", authors: "Host" },
+      inner: { start: BASE - 10, end: BASE + 10, depth: 3, title: "Boléro", authors: "Ravel" },
+      mid:   { start: BASE - 30, end: BASE + 30, depth: 2, title: "Mid", authors: "Someone" },
+    };
+    const result = parseFipSteps(steps, BASE);
+    expect(result).toEqual({ rawArtist: "Ravel", rawTitle: "Boléro" });
+  });
+
+  it("returns null when no step window contains nowSec (between tracks / silence)", () => {
+    const steps = {
+      past:   { start: BASE - 120, end: BASE - 10, depth: 1, title: "Past Track", authors: "A" },
+      future: { start: BASE + 10,  end: BASE + 120, depth: 1, title: "Next Track", authors: "B" },
+    };
+    expect(parseFipSteps(steps, BASE)).toBeNull();
+  });
+
+  it("falls back to performers when authors is absent (talk programme handover)", () => {
+    const steps = {
+      s1: { start: BASE - 5, end: BASE + 5, depth: 1, title: "Gymnopedie No. 1", performers: "Erik Satie" },
+    };
+    expect(parseFipSteps(steps, BASE)).toEqual({
+      rawArtist: "Erik Satie",
+      rawTitle: "Gymnopedie No. 1",
+    });
+  });
+
+  it("prefers authors over performers when both are present", () => {
+    const steps = {
+      s1: { start: BASE - 5, end: BASE + 5, depth: 1, title: "Track", authors: "Composer", performers: "Orchestra" },
+    };
+    const result = parseFipSteps(steps, BASE);
+    expect(result?.rawArtist).toBe("Composer");
+  });
+
+  it("returns null for a talk/silence step that has no artist identity", () => {
+    const steps = {
+      s1: { start: BASE - 5, end: BASE + 5, depth: 1, title: "Talk segment" },
+    };
+    expect(parseFipSteps(steps, BASE)).toBeNull();
+  });
+
+  it("returns null for a step without a title even if an artist is present", () => {
+    const steps = {
+      s1: { start: BASE - 5, end: BASE + 5, depth: 1, authors: "Someone" },
+    };
+    expect(parseFipSteps(steps, BASE)).toBeNull();
+  });
+
+  it("returns null for an empty steps object", () => {
+    expect(parseFipSteps({}, BASE)).toBeNull();
+  });
+
+  it("uses depth 0 as default when depth key is absent, still selects the window", () => {
+    const steps = {
+      s1: { start: BASE - 5, end: BASE + 5, title: "No Depth Track", authors: "Artist" },
+    };
+    expect(parseFipSteps(steps, BASE)).toEqual({ rawArtist: "Artist", rawTitle: "No Depth Track" });
+  });
+
+  it("selects the step whose window exactly straddles nowSec (boundary inclusive)", () => {
+    const steps = {
+      exact: { start: BASE, end: BASE, depth: 1, title: "Exact", authors: "A" },
+    };
+    expect(parseFipSteps(steps, BASE)).toEqual({ rawArtist: "A", rawTitle: "Exact" });
+  });
+
+  it("skips steps with non-numeric start or end values", () => {
+    const steps = {
+      bad:  { start: "now", end: "later", depth: 1, title: "Bad Step", authors: "A" },
+      good: { start: BASE - 5, end: BASE + 5, depth: 0, title: "Good Track", authors: "B" },
+    };
+    expect(parseFipSteps(steps, BASE)).toEqual({ rawArtist: "B", rawTitle: "Good Track" });
   });
 });
 
