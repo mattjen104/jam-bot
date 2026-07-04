@@ -7,7 +7,7 @@ import {
   resolutionCacheTable,
   type Station,
 } from "@workspace/db";
-import { eq, and, desc, inArray, sql } from "drizzle-orm";
+import { eq, and, desc, inArray, sql, gte } from "drizzle-orm";
 import {
   resolveRecordingId,
   resolveRecordingByText,
@@ -428,27 +428,69 @@ async function persistSpin(args: {
 // ---- Ingestion paths ----------------------------------------------------
 
 /**
+ * How long (ms) a spin with the same signature must be absent before we treat
+ * it as a new play. This guards against brief API stale-data windows during
+ * show handoffs (e.g. NTS briefly serving the previous show): even if the most
+ * recent logged spin is a different show, we skip writing when the same sig
+ * was already logged within this window to avoid a false A→B→A→B bounce.
+ */
+const DEDUP_WINDOW_MS = 30_000;
+
+/**
  * Change-detection path for sources that only expose "the current track" with
- * no timestamp or stable id (Radio Paradise). Logs a spin iff the on-air track
- * changed since the last logged spin. Never throws.
+ * no timestamp or stable id (Radio Paradise, NTS). Logs a spin iff the on-air
+ * track changed since the last logged spin AND the same sig has not been
+ * written within the last DEDUP_WINDOW_MS. Never throws.
+ *
+ * The recency window catches a specific stale-data pattern: the API momentarily
+ * returns a previous show during handoff, causing an A→stale-B→A bounce. The
+ * second A arrives with a different "last spin" (stale B) so the ordinary sig
+ * check would pass — the window prevents writing a duplicate A.
  */
 export async function logSpinIfChanged(
   station: Station,
   np: NowPlayingRaw,
 ): Promise<boolean> {
   try {
+    const candidateSig = sig(np.rawArtist, np.rawTitle);
+
     const [last] = await db
-      .select({ rawArtist: spinsTable.rawArtist, rawTitle: spinsTable.rawTitle })
+      .select({
+        rawArtist: spinsTable.rawArtist,
+        rawTitle: spinsTable.rawTitle,
+        playedAt: spinsTable.playedAt,
+      })
       .from(spinsTable)
       .where(eq(spinsTable.stationId, station.id))
       .orderBy(desc(spinsTable.playedAt))
       .limit(1);
+
+    // Primary dedup: same track as the current last spin → nothing changed.
     if (
       last &&
       last.rawArtist &&
       last.rawTitle &&
-      sig(last.rawArtist, last.rawTitle) === sig(np.rawArtist, np.rawTitle)
+      sig(last.rawArtist, last.rawTitle) === candidateSig
     ) {
+      return false;
+    }
+
+    // Recency dedup: the same sig was already written within DEDUP_WINDOW_MS,
+    // even if a different spin landed in between (stale-data bounce guard).
+    const windowStart = new Date(Date.now() - DEDUP_WINDOW_MS);
+    const recentMatch = await db
+      .select({ id: spinsTable.id })
+      .from(spinsTable)
+      .where(
+        and(
+          eq(spinsTable.stationId, station.id),
+          eq(spinsTable.rawArtist, np.rawArtist),
+          eq(spinsTable.rawTitle, np.rawTitle),
+          gte(spinsTable.playedAt, windowStart),
+        ),
+      )
+      .limit(1);
+    if (recentMatch.length > 0) {
       return false;
     }
 

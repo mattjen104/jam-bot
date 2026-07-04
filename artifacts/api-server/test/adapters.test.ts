@@ -364,6 +364,48 @@ describe("parseNtsLive", () => {
     const body = { now: { broadcast_title: "   " } };
     expect(parseNtsLive(body)).toBeNull();
   });
+
+  it("returns null when start_timestamp is in the future (stale pre-handoff data)", () => {
+    const futureTs = new Date(Date.now() + 60_000).toISOString();
+    const body = {
+      now: { broadcast_title: "NTS Default", start_timestamp: futureTs },
+    };
+    expect(parseNtsLive(body)).toBeNull();
+  });
+
+  it("accepts a show whose start_timestamp is in the past", () => {
+    const pastTs = new Date(Date.now() - 5 * 60_000).toISOString();
+    const body = {
+      now: {
+        broadcast_title: "Hessle Audio",
+        start_timestamp: pastTs,
+        embeds: { details: { name: "Ben UFO" } },
+      },
+    };
+    expect(parseNtsLive(body)).toEqual({
+      rawArtist: "Ben UFO",
+      rawTitle: "Hessle Audio",
+    });
+  });
+
+  it("uses an injected now_ms so tests are deterministic", () => {
+    const fixedNow = 1_700_000_000_000;
+    const futureTs = new Date(fixedNow + 1).toISOString();
+    const pastTs = new Date(fixedNow - 1).toISOString();
+    const makeBody = (ts: string) => ({
+      now: { broadcast_title: "Test Show", start_timestamp: ts },
+    });
+    expect(parseNtsLive(makeBody(futureTs), fixedNow)).toBeNull();
+    expect(parseNtsLive(makeBody(pastTs), fixedNow)).not.toBeNull();
+  });
+
+  it("ignores start_timestamp when the field is absent or unparseable", () => {
+    const body = { now: { broadcast_title: "Late Night Tales" } };
+    expect(parseNtsLive(body)).not.toBeNull();
+
+    const badTs = { now: { broadcast_title: "Late Night Tales", start_timestamp: "not-a-date" } };
+    expect(parseNtsLive(badTs)).not.toBeNull();
+  });
 });
 
 describe("stationArchiveUrl", () => {

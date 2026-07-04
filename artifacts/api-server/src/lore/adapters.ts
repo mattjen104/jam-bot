@@ -444,11 +444,26 @@ const kcrw: HistoryAdapter = async (config, opts) => {
  *
  * Returns null when the payload is missing or both fields are absent (e.g.
  * nothing is on air, a test-card slot, or the API shape changes).
+ *
+ * Stale-data guard: during a show handoff the NTS API can briefly serve the
+ * previous show's metadata. A tell-tale sign is a `start_timestamp` that lies
+ * in the future — the next show has been pre-scheduled but hasn't actually
+ * started. We return null in that case so the change-detection path ignores
+ * the stale payload entirely.
  */
-export function parseNtsLive(body: unknown): NowPlayingRaw | null {
+export function parseNtsLive(
+  body: unknown,
+  now_ms: number = Date.now(),
+): NowPlayingRaw | null {
   const b = (body ?? {}) as Record<string, unknown>;
   const now = b.now as Record<string, unknown> | undefined;
   if (!now) return null;
+
+  // Guard: start_timestamp in the future means a pre-scheduled slot that
+  // hasn't begun yet — the API is serving stale data from the next show.
+  const startTs = toDate(now.start_timestamp);
+  if (startTs && startTs.getTime() > now_ms) return null;
+
   const broadcastTitle = str(now.broadcast_title);
   const embeds = now.embeds as Record<string, unknown> | undefined;
   const details = embeds?.details as Record<string, unknown> | undefined;
