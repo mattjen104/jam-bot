@@ -27,6 +27,7 @@ import {
 } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { useFollows, isFollowed } from "../lib/local";
+import { useNtsChannel1, useNtsChannel2 } from "../hooks/useNtsClientLive";
 import { StationList } from "../components/StationList";
 import { PickerDial } from "../components/PickerDial";
 import { NowPlaying } from "../components/NowPlaying";
@@ -231,6 +232,12 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
   const [dialFilter, setDialFilter] = useState<DialFilterTab>("all");
   const follows = useFollows();
 
+  // Client-side NTS show data — NTS blocks datacenter IPs but browser requests
+  // from residential IPs work fine. These queries run in the browser and refresh
+  // every 2 minutes, matching NTS show durations.
+  const { data: nts1Show } = useNtsChannel1();
+  const { data: nts2Show } = useNtsChannel2();
+
   const stations = useMemo(() => data?.stations ?? [], [data]);
 
   const activeSlug = player.station?.slug ?? null;
@@ -336,10 +343,32 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
   }, [dialFilter, pickerItems, follows]);
 
   const pulseBySlug = useMemo(() => {
-    return new Map(
+    const map = new Map(
       (pulse?.items ?? []).map((i) => [i.slug, i.nowPlaying ?? null]),
     );
-  }, [pulse]);
+    // Overlay client-side NTS show data when the server has nothing
+    // (NTS blocks server-to-server API calls; browser requests work fine).
+    const ntsOverlay: [string, typeof nts1Show][] = [
+      ["nts-1", nts1Show],
+      ["nts-2", nts2Show],
+    ];
+    for (const [slug, show] of ntsOverlay) {
+      if (!show) continue;
+      const existing = map.get(slug);
+      if (existing?.show) continue; // server already populated show
+      const withShow = existing
+        ? { ...existing, show: { name: show.showName, djName: show.djName ?? null } }
+        : {
+            rawArtist: show.djName ?? "",
+            rawTitle: show.showName,
+            confidence: "unresolved" as const,
+            playedAt: new Date().toISOString(),
+            show: { name: show.showName, djName: show.djName ?? null },
+          };
+      map.set(slug, withShow);
+    }
+    return map;
+  }, [pulse, nts1Show, nts2Show]);
 
   // Dial badges: batch every resolved now-playing MBID into one lookup —
   // "which of these songs did a critic/label/curator vouch for?"
