@@ -37,6 +37,8 @@ const POLL_INTERVALS_MS: Record<string, number> = {
   kcrw: 90_000, // 1.5 min — single current track, cheap endpoint
   station_page: 60_000, // 1 min
   radio_paradise: 60_000, // 1 min
+  nts_live: 120_000, // 2 min — show-level, changes infrequently
+  fip: 60_000, // 1 min — per-track metadata, songs ~3-5 min
 };
 const DEFAULT_POLL_MS = 90_000;
 const STAGGER_MS = 4_000;

@@ -99,8 +99,122 @@ const SEED_STATIONS: InsertStation[] = [
     stationClass: "community",
     sortOrder: 50,
   },
+  // NTS Radio (London) — streams confirmed reachable (302 redirect). NTS live
+  // API publishes show-level metadata only; per-track data comes from the
+  // existing NTS archive poller.
+  ...ntsliveStations(),
+  // BBC 6 Music — metadata arrives via the existing bbc_api adapter (confirmed
+  // live). Stream URL returns 400 from the Replit container (geo-block), so
+  // streamUrl is empty; the player falls back gracefully while metadata still
+  // ingests via the BBC segments API.
+  {
+    slug: "bbc-6music",
+    name: "BBC 6 Music",
+    org: "BBC",
+    country: "GB",
+    // Geo-blocked from the Replit container (returns 400). Leave empty so the
+    // player degrades gracefully; metadata still flows via bbc_api.
+    streamUrl: "",
+    streamQuality: "128kbps AAC",
+    streamFormat: "aac",
+    homepageUrl: "https://www.bbc.co.uk/6music",
+    donateUrl: null,
+    nowPlayingSource: "bbc_api",
+    nowPlayingConfig: { sid: "bbc_6music" },
+    stationClass: "community",
+    sortOrder: 57,
+  },
+  // FIP bouquet (Radio France) — all Icecast URLs confirmed 200. livemeta API
+  // confirmed live for IDs 7, 64, 65, 66, 69, 71, 74 (78/Metal API 404s but
+  // the stream is reachable; adapter returns null gracefully during talk/gaps).
+  ...fipStations(),
   ...somaFmStations(),
 ];
+
+/**
+ * NTS Radio (London) — two channels, each a continuous 24/7 stream of
+ * curated, genre-fluid programming. The NTS live API publishes show-level
+ * attribution (show title + host); per-track tracklists come from the
+ * existing NTS archive poller (Zakia, Floating Points, etc.). Stream URLs
+ * return 302 redirects from the Replit container, which is normal for audio
+ * streams behind a geo-load-balancer — confirmed reachable.
+ */
+function ntsliveStations(): InsertStation[] {
+  return [
+    {
+      slug: "nts-1",
+      name: "NTS 1",
+      org: "NTS",
+      country: "GB",
+      streamUrl: "https://stream-relay-geo.ntslive.net/stream",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://www.nts.live",
+      donateUrl: "https://www.nts.live/membership",
+      nowPlayingSource: "nts_live",
+      nowPlayingConfig: { channel: "1" },
+      stationClass: "community",
+      sortOrder: 55,
+    },
+    {
+      slug: "nts-2",
+      name: "NTS 2",
+      org: "NTS",
+      country: "GB",
+      streamUrl: "https://stream-relay-geo.ntslive.net/stream2",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://www.nts.live",
+      donateUrl: "https://www.nts.live/membership",
+      nowPlayingSource: "nts_live",
+      nowPlayingConfig: { channel: "2" },
+      stationClass: "community",
+      sortOrder: 56,
+    },
+  ];
+}
+
+/**
+ * FIP bouquet (Radio France) — FIP Main plus seven thematic sub-stations,
+ * all streaming at 192 kbps AAC from Icecast. Stream URLs and livemeta API
+ * confirmed reachable from the Replit container. The livemeta API for
+ * station 78 (Metal) 404s, so the fip adapter returns null gracefully during
+ * Metal polls — the stream still plays, metadata flows when available.
+ */
+function fipStations(): InsertStation[] {
+  const stations: Array<{
+    slug: string;
+    name: string;
+    stationId: string;
+    streamSlug: string;
+    sortOrder: number;
+  }> = [
+    { slug: "fip-main", name: "FIP", stationId: "7", streamSlug: "fip", sortOrder: 200 },
+    { slug: "fip-rock", name: "FIP Rock", stationId: "64", streamSlug: "fiprock", sortOrder: 210 },
+    { slug: "fip-jazz", name: "FIP Jazz", stationId: "65", streamSlug: "fipjazz", sortOrder: 220 },
+    { slug: "fip-groove", name: "FIP Groove", stationId: "66", streamSlug: "fipgroove", sortOrder: 230 },
+    { slug: "fip-world", name: "FIP World", stationId: "69", streamSlug: "fipworld", sortOrder: 240 },
+    { slug: "fip-reggae", name: "FIP Reggae", stationId: "71", streamSlug: "fipreggae", sortOrder: 250 },
+    { slug: "fip-electro", name: "FIP Electro", stationId: "74", streamSlug: "fipelectro", sortOrder: 260 },
+    // Stream confirmed 200; livemeta API (id=78) 404s — adapter returns null gracefully.
+    { slug: "fip-metal", name: "FIP Metal", stationId: "78", streamSlug: "fipmetal", sortOrder: 270 },
+  ];
+  return stations.map(({ slug, name, stationId, streamSlug, sortOrder }) => ({
+    slug,
+    name,
+    org: "Radio France",
+    country: "FR",
+    streamUrl: `https://icecast.radiofrance.fr/${streamSlug}-hifi.aac`,
+    streamQuality: "192kbps AAC",
+    streamFormat: "aac",
+    homepageUrl: "https://www.radiofrance.fr/fip",
+    donateUrl: null,
+    nowPlayingSource: "fip",
+    nowPlayingConfig: { stationId },
+    stationClass: "curated",
+    sortOrder,
+  }));
+}
 
 /**
  * SomaFM's channel bouquet — one listener-supported org, many hand-programmed

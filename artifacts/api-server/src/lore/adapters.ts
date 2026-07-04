@@ -431,11 +431,78 @@ const kcrw: HistoryAdapter = async (config, opts) => {
   return parseKcrwTrack(body, feed);
 };
 
+// ---- NTS Radio (now-playing, show-level, change-detection) --------------
+
+/**
+ * NTS Live — show-level attribution from the NTS Live API. NTS does not
+ * publish per-track data in the live endpoint; real track data flows from
+ * the existing NTS archive poller. Returns null when nothing is on air or
+ * the API is unreachable.
+ *
+ * Config: `{ channel: "1" }` (or "2" for NTS 2).
+ */
+const ntsLive: NowPlayingAdapter = async (config) => {
+  const channel = str(config.channel) ?? "1";
+  const body = (await getJson(
+    `https://www.nts.live/api/v2/live/${encodeURIComponent(channel)}`,
+  )) as Record<string, unknown>;
+  const now = body.now as Record<string, unknown> | undefined;
+  if (!now) return null;
+  const broadcastTitle = str(now.broadcast_title);
+  const embeds = now.embeds as Record<string, unknown> | undefined;
+  const details = embeds?.details as Record<string, unknown> | undefined;
+  const hostName = str(details?.name);
+  const rawTitle = broadcastTitle;
+  const rawArtist = hostName ?? broadcastTitle;
+  if (!rawArtist || !rawTitle) return null;
+  return { rawArtist, rawTitle };
+};
+
+// ---- FIP (Radio France) now-playing, change-detection -------------------
+
+/**
+ * FIP / Radio France livemeta — find the music step currently on air by
+ * depth (deepest = most specific) where start ≤ now ≤ end. Returns null
+ * during talk, silence, or when the API is unreachable.
+ *
+ * Config: `{ stationId: "7" }` (7=FIP main, 64=Rock, 65=Jazz, 66=Groove,
+ * 69=World, 71=Reggae, 74=Electro, 78=Metal).
+ */
+const fip: NowPlayingAdapter = async (config) => {
+  const stationId = str(config.stationId) ?? "7";
+  const body = (await getJson(
+    `https://api.radiofrance.fr/livemeta/pull/${encodeURIComponent(stationId)}`,
+  )) as Record<string, unknown>;
+  const steps = body.steps as Record<string, Record<string, unknown>> | undefined;
+  if (!steps) return null;
+  const nowSec = Math.floor(Date.now() / 1000);
+  let best: Record<string, unknown> | null = null;
+  let bestDepth = -Infinity;
+  for (const step of Object.values(steps)) {
+    const start = typeof step.start === "number" ? step.start : undefined;
+    const end = typeof step.end === "number" ? step.end : undefined;
+    const depth = typeof step.depth === "number" ? step.depth : 0;
+    if (start == null || end == null) continue;
+    if (nowSec < start || nowSec > end) continue;
+    if (depth > bestDepth) {
+      bestDepth = depth;
+      best = step;
+    }
+  }
+  if (!best) return null;
+  const rawArtist = str(best.authors) ?? str(best.performers);
+  const rawTitle = str(best.title);
+  if (!rawArtist || !rawTitle) return null;
+  return { rawArtist, rawTitle };
+};
+
 // ---- Registry -----------------------------------------------------------
 
 const NOW_PLAYING_ADAPTERS: Record<string, NowPlayingAdapter> = {
   radio_paradise: radioParadise,
   station_page: stationPage,
+  nts_live: ntsLive,
+  fip,
 };
 
 const HISTORY_ADAPTERS: Record<string, HistoryAdapter> = {
@@ -497,6 +564,12 @@ export function stationArchiveUrl(
     // KEXP publishes a dated playlist archive; month/day are unpadded.
     case "kexp_api":
       return `https://www.kexp.org/playlist/${year}/${Number(month)}/${Number(dayOfMonth)}/`;
+    // NTS publishes a dated episode/broadcast archive.
+    case "nts_live":
+      return `https://www.nts.live/explore?type=episode&broadcast=${year}-${month}-${dayOfMonth}`;
+    // FIP (Radio France) publishes a dated programme grid.
+    case "fip":
+      return `https://www.radiofrance.fr/fip/grille-programmes?date=${year}-${month}-${dayOfMonth}`;
     default:
       return null;
   }

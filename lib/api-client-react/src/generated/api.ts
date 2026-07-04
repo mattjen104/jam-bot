@@ -4392,6 +4392,28 @@ export const getArtist = async (
 export const getGetArtistQueryKey = (mbid: string) =>
   [`/api/artist/${mbid}`] as const;
 
+export const getGetArtistQueryOptions = <
+  TData = Awaited<ReturnType<typeof getArtist>>,
+  TError = ErrorType<ApiError>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getArtist>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getGetArtistQueryKey(mbid);
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getArtist>>> = ({
+    signal,
+  }) => getArtist(mbid, { signal, ...requestOptions });
+  return { queryKey, queryFn, enabled: !!mbid, ...queryOptions } satisfies UseQueryOptions<
+    Awaited<ReturnType<typeof getArtist>>,
+    TError
+  >;
+};
+
+
 export function useGetArtist<
   TData = Awaited<ReturnType<typeof getArtist>>,
   TError = ErrorType<ApiError>,
@@ -4402,17 +4424,9 @@ export function useGetArtist<
     request?: SecondParameter<typeof customFetch>;
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-  const queryKey = queryOptions?.queryKey ?? getGetArtistQueryKey(mbid);
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof getArtist>>> = ({
-    signal,
-  }) => getArtist(mbid, { signal, ...requestOptions });
-  const query = useQuery({
-    queryKey,
-    queryFn,
-    enabled: !!mbid,
-    ...queryOptions,
-  }) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
-  query.queryKey = queryKey;
-  return query;
+  const queryOptions = getGetArtistQueryOptions(mbid, options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+  return { ...query, queryKey: queryOptions.queryKey };
 }
