@@ -1,12 +1,15 @@
 import type { Station } from "@workspace/api-client-react";
 import type { PlayerStatus } from "../hooks/useRadioPlayer";
 import { Loader2, Pause, Play, Radio, Volume2, VolumeX, X } from "lucide-react";
+import { KeepButton } from "./KeepButton";
 
 interface PlayerBarProps {
   station: Station;
   status: PlayerStatus;
   volume: number;
   error: string | null;
+  /** MBID of the currently-identified track, if resolved. */
+  nowPlayingMbid?: string | null;
   onToggle: (station: Station) => void;
   onStop: () => void;
   onVolume: (v: number) => void;
@@ -17,6 +20,7 @@ export function PlayerBar({
   status,
   volume,
   error,
+  nowPlayingMbid,
   onToggle,
   onStop,
   onVolume,
@@ -107,6 +111,16 @@ export function PlayerBar({
 
         {/* Controls — mobile: rightmost; desktop: right column (flex justify-end) */}
         <div className="flex shrink-0 items-center gap-2 lg:order-3 lg:justify-end">
+          {/* Compact Keep — shown sm+ when a track is identified */}
+          {nowPlayingMbid && (
+            <span className="hidden sm:inline-flex">
+              <KeepButton
+                mbid={nowPlayingMbid}
+                compact
+                provenance={{ kind: "keep", stationSlug: station.slug }}
+              />
+            </span>
+          )}
           <div className="hidden items-center gap-2 sm:flex">
             {volume === 0 ? (
               <VolumeX className="h-4 w-4 text-muted-foreground" />

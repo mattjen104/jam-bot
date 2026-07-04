@@ -1,3 +1,4 @@
+import { useGetStationNowPlaying, getGetStationNowPlayingQueryKey } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { PlayerBar } from "./PlayerBar";
 import { RideBar } from "./RideBar";
@@ -8,6 +9,17 @@ import { RideBar } from "./RideBar";
  */
 export function PlayerDock() {
   const { radio, ride, spotify } = usePlayer();
+
+  const stationSlug = radio.station?.slug ?? "";
+  const { data: npData } = useGetStationNowPlaying(stationSlug, {
+    query: {
+      queryKey: getGetStationNowPlayingQueryKey(stationSlug),
+      enabled: !!radio.station && !ride.active,
+      refetchInterval: 30_000,
+      staleTime: 15_000,
+    },
+  });
+  const nowPlayingMbid = npData?.nowPlaying?.recording?.mbid ?? null;
 
   const notice = spotify.notice ? (
     <div
@@ -43,6 +55,7 @@ export function PlayerDock() {
         status={radio.status}
         volume={radio.volume}
         error={radio.error}
+        nowPlayingMbid={nowPlayingMbid}
         onToggle={radio.toggle}
         onStop={radio.stop}
         onVolume={radio.setVolume}
