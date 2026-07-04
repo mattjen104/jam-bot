@@ -13,6 +13,8 @@ import {
   AddSongExploderClaimParams,
   AddSongExploderClaimBody,
   AddRymListBody,
+  EnrollNtsShowBody,
+  EnrollNtsShowResponse,
   ListAllDraftClaimsResponse,
   GetWikipediaDraftsParams,
   GetWikipediaDraftsResponse,
@@ -47,9 +49,11 @@ import {
   upsertPicker,
   getPickerByHandle,
   logTracklist,
+  slugify,
   type PickerType,
   type PickSource,
 } from "../../lore/picks.js";
+import { validateNtsShowAlias } from "../../lore/nts.js";
 import { seedLabelPicker } from "../../lore/label.js";
 import { ingestBlogFeed } from "../../lore/blog.js";
 import { ingestDiscogsList, addRymPicker } from "../../lore/collector.js";
@@ -672,6 +676,47 @@ function parseYouTubeChapters(description: string): { positionMs: number; text: 
   chapters.sort((a, b) => a.positionMs - b.positionMs);
   return chapters.length >= 2 ? chapters : [];
 }
+
+// POST /api/admin/pickers/nts — admin-only NTS resident show enrolment.
+// Validates the alias against the NTS public API, upserts a curator picker,
+// and returns it. The existing NTS poller picks it up on its next cycle.
+router.post("/admin/pickers/nts", h(async (req, res) => {
+  const parsed = EnrollNtsShowBody.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid request — alias is required" });
+  }
+  const { alias, name: nameOverride } = parsed.data;
+
+  const validated = await validateNtsShowAlias(alias).catch((err) => {
+    throw new HttpError(400, err instanceof Error ? err.message : "NTS alias validation failed");
+  });
+
+  const displayName = nameOverride?.trim() || validated.name;
+  const handle = `nts-${slugify(alias)}`;
+  const homeUrl = `https://www.nts.live/shows/${alias}`;
+
+  const picker = await upsertPicker({
+    pickerType: "curator",
+    name: displayName,
+    handle,
+    homeUrl,
+    trustTier: 2,
+    sourceRef: { ntsShowAlias: alias },
+    description: `NTS resident show — archived tracklists ingested by the NTS poller.`,
+  }).catch((err) => {
+    throw new HttpError(400, err instanceof Error ? err.message : "Could not save NTS picker");
+  });
+
+  return res.status(201).json(
+    EnrollNtsShowResponse.parse({
+      pickerId: picker.id,
+      handle: picker.handle,
+      name: picker.name,
+      alias,
+      homeUrl,
+    }),
+  );
+}));
 
 // POST /api/admin/rym-lists — admin-only RateYourMusic link-out picker.
 router.post("/admin/rym-lists", h(async (req, res) => {

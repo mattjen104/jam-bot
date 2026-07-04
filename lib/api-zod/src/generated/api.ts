@@ -1616,6 +1616,32 @@ export const AddRymListBody = zod
   .describe("Register a RateYourMusic list as a link-out-only picker.");
 
 /**
+ * Validate an NTS show alias against the NTS public API and upsert a curator
+ * picker with sourceRef: { ntsShowAlias }. The existing NTS poller picks it
+ * up on its next cycle without a restart. Token-guarded.
+ *
+ * @summary Admin-only NTS show enrolment
+ */
+export const EnrollNtsShowHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const EnrollNtsShowBody = zod
+  .object({
+    alias: zod.string().min(1).describe("The NTS show slug, e.g. 'floating-points'."),
+    name: zod.string().optional().describe("Display name override; defaults to the show title from NTS."),
+  })
+  .describe("Enrol an NTS resident show as a curator picker.");
+
+export const EnrollNtsShowResponse = zod.object({
+  pickerId: zod.number(),
+  handle: zod.string(),
+  name: zod.string(),
+  alias: zod.string(),
+  homeUrl: zod.string(),
+});
+
+/**
  * Attach a paraphrased, timestamp-anchored claim to the recording resolved from a Song Exploder episode. Claims are admin-entered (never automated) because Song Exploder episode timestamps live in the audio, not the RSS feed text. The claim is stored as a track_claim with source attribution deep-linking to the episode, so every fact is one tap from its evidence. Token-guarded.
 
  * @summary Admin-only timestamp-anchored claim entry for a Song Exploder episode

@@ -257,36 +257,47 @@ async function pollNtsPicker(p: NtsPickerRef): Promise<void> {
 }
 
 /**
- * Start the NTS archive poller. Idempotent — safe to call once at boot. Each
- * tick ingests a bounded number of new episodes per show, so a deep archive
- * fills in gradually and resumably without ever bursting MusicBrainz.
+ * One full polling cycle: re-query the DB for active NTS pickers so that any
+ * shows enrolled since the last cycle (via POST /admin/pickers/nts) are
+ * automatically discovered without a process restart. Polls each picker with a
+ * staggered delay to avoid hammering NTS and MusicBrainz.
  */
-export async function startNtsPoller(): Promise<void> {
-  if (started) return;
-  started = true;
-
+async function runPollCycle(): Promise<void> {
   let pickers: NtsPickerRef[];
   try {
     pickers = await loadNtsPickers();
   } catch (err) {
-    console.error("[lore] nts poller could not load pickers; not started", err);
-    started = false;
+    console.error("[lore] nts poller failed to load pickers; skipping cycle", err);
     return;
   }
 
-  console.info(`[lore] starting nts poller for ${pickers.length} show(s)`);
-
   pickers.forEach((p, i) => {
-    const kickoff = setTimeout(
-      () => {
-        void pollNtsPicker(p);
-        const interval = setInterval(() => void pollNtsPicker(p), NTS_POLL_MS);
-        timers.push(interval);
-      },
-      WARMUP_MS + i * STAGGER_MS,
-    );
-    timers.push(kickoff);
+    // Fire each picker poll with an intra-cycle stagger — the stagger is within
+    // the cycle, not across cycles, so a new show added mid-cycle is still
+    // polled at the correct offset on the next full cycle.
+    setTimeout(() => void pollNtsPicker(p), i * STAGGER_MS);
   });
+}
+
+/**
+ * Start the NTS archive poller. Idempotent — safe to call once at boot. Each
+ * cycle re-queries the pickers table so newly enrolled shows are picked up on
+ * the next tick without a restart. Each tick ingests a bounded number of new
+ * episodes per show, so a deep archive fills in gradually and resumably
+ * without ever bursting MusicBrainz.
+ */
+export function startNtsPoller(): void {
+  if (started) return;
+  started = true;
+
+  const kickoff = setTimeout(() => {
+    void runPollCycle();
+    const interval = setInterval(() => void runPollCycle(), NTS_POLL_MS);
+    timers.push(interval);
+  }, WARMUP_MS);
+  timers.push(kickoff);
+
+  console.info("[lore] nts poller started (first cycle in 2 min)");
 }
 
 /** Stop the NTS poller (tests / graceful shutdown). */
@@ -294,4 +305,35 @@ export function stopNtsPoller(): void {
   for (const t of timers) clearTimeout(t);
   timers.length = 0;
   started = false;
+}
+
+/**
+ * Validate an NTS show alias by calling the NTS public API. Returns the
+ * show's canonical name on success; throws a descriptive Error when the
+ * alias does not exist (404) or the API is unreachable.
+ */
+export async function validateNtsShowAlias(
+  alias: string,
+): Promise<{ name: string }> {
+  const url = `https://www.nts.live/api/v2/shows/${encodeURIComponent(alias)}`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+  } catch (err) {
+    throw new Error(
+      `Could not reach the NTS API: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+  if (res.status === 404) {
+    throw new Error(`NTS show '${alias}' not found — check the alias`);
+  }
+  if (!res.ok) {
+    throw new Error(`NTS API returned HTTP ${res.status} for show '${alias}'`);
+  }
+  const body = (await res.json()) as { name?: unknown };
+  const name = typeof body.name === "string" && body.name.trim() ? body.name.trim() : alias;
+  return { name };
 }
