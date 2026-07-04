@@ -434,19 +434,20 @@ const kcrw: HistoryAdapter = async (config, opts) => {
 // ---- NTS Radio (now-playing, show-level, change-detection) --------------
 
 /**
- * NTS Live — show-level attribution from the NTS Live API. NTS does not
- * publish per-track data in the live endpoint; real track data flows from
- * the existing NTS archive poller. Returns null when nothing is on air or
- * the API is unreachable.
+ * Pure: shape the NTS Live API response body into a NowPlayingRaw.
  *
- * Config: `{ channel: "1" }` (or "2" for NTS 2).
+ * The NTS Live endpoint (`/api/v2/live/{channel}`) exposes a `now` object
+ * with `broadcast_title` (the show name) and an optional `embeds.details.name`
+ * (the resident/host). Because NTS does not publish per-track data in its live
+ * endpoint, the show title is mapped to `rawTitle` and the host to `rawArtist`;
+ * real per-track data flows separately via the NTS archive poller.
+ *
+ * Returns null when the payload is missing or both fields are absent (e.g.
+ * nothing is on air, a test-card slot, or the API shape changes).
  */
-const ntsLive: NowPlayingAdapter = async (config) => {
-  const channel = str(config.channel) ?? "1";
-  const body = (await getJson(
-    `https://www.nts.live/api/v2/live/${encodeURIComponent(channel)}`,
-  )) as Record<string, unknown>;
-  const now = body.now as Record<string, unknown> | undefined;
+export function parseNtsLive(body: unknown): NowPlayingRaw | null {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const now = b.now as Record<string, unknown> | undefined;
   if (!now) return null;
   const broadcastTitle = str(now.broadcast_title);
   const embeds = now.embeds as Record<string, unknown> | undefined;
@@ -456,6 +457,26 @@ const ntsLive: NowPlayingAdapter = async (config) => {
   const rawArtist = hostName ?? broadcastTitle;
   if (!rawArtist || !rawTitle) return null;
   return { rawArtist, rawTitle };
+}
+
+/**
+ * NTS Live — show-level attribution from the NTS Live API. NTS does not
+ * publish per-track data in the live endpoint; real track data flows from
+ * the existing NTS archive poller. Returns null when nothing is on air or
+ * the API is unreachable.
+ *
+ * Config: `{ channel: "1" }` (or "2" for NTS 2).
+ */
+const ntsLive: NowPlayingAdapter = async (config) => {
+  try {
+    const channel = str(config.channel) ?? "1";
+    const body = await getJson(
+      `https://www.nts.live/api/v2/live/${encodeURIComponent(channel)}`,
+    );
+    return parseNtsLive(body);
+  } catch {
+    return null;
+  }
 };
 
 // ---- FIP (Radio France) now-playing, change-detection -------------------

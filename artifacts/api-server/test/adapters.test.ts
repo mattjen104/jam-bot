@@ -6,6 +6,7 @@ import {
   parseSpinitronSpins,
   parseSpinitronPlaylists,
   parseBbcSegments,
+  parseNtsLive,
   stationArchiveUrl,
   supportsBackfill,
 } from "../src/lore/adapters.js";
@@ -167,6 +168,60 @@ describe("parseBbcSegments", () => {
       rawTitle: "Introvert",
       externalId: "bbc:seg-1",
     });
+  });
+});
+
+describe("parseNtsLive", () => {
+  const fullBody = {
+    now: {
+      broadcast_title: "Floating Points",
+      embeds: {
+        details: { name: "Sam Shepherd" },
+      },
+    },
+  };
+
+  it("extracts broadcast_title as rawTitle and host name as rawArtist", () => {
+    expect(parseNtsLive(fullBody)).toEqual({
+      rawArtist: "Sam Shepherd",
+      rawTitle: "Floating Points",
+    });
+  });
+
+  it("falls back to broadcast_title as rawArtist when host name is absent", () => {
+    const body = { now: { broadcast_title: "Late Night Tales" } };
+    expect(parseNtsLive(body)).toEqual({
+      rawArtist: "Late Night Tales",
+      rawTitle: "Late Night Tales",
+    });
+  });
+
+  it("returns null when broadcast_title is absent", () => {
+    const body = { now: { embeds: { details: { name: "DJ X" } } } };
+    expect(parseNtsLive(body)).toBeNull();
+  });
+
+  it("returns null when the now object is missing", () => {
+    expect(parseNtsLive({})).toBeNull();
+    expect(parseNtsLive(null)).toBeNull();
+    expect(parseNtsLive(undefined)).toBeNull();
+  });
+
+  it("trims whitespace from title and host fields", () => {
+    const body = {
+      now: {
+        broadcast_title: "  Hessle Audio  ",
+        embeds: { details: { name: "  Ben UFO  " } },
+      },
+    };
+    const result = parseNtsLive(body);
+    expect(result?.rawTitle).toBe("Hessle Audio");
+    expect(result?.rawArtist).toBe("Ben UFO");
+  });
+
+  it("returns null when broadcast_title is an empty / whitespace-only string", () => {
+    const body = { now: { broadcast_title: "   " } };
+    expect(parseNtsLive(body)).toBeNull();
   });
 });
 
