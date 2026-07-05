@@ -492,6 +492,9 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
           any station or list below to see it here.
         </div>
       )}
+      {/* Selectors — shown first to give human curation top billing */}
+      <SelectorDial items={filteredPickerItems} />
+
       {!isLoading && filteredStations.length > 0 && (
         <StationList
           stations={filteredStations}
@@ -506,9 +509,6 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
           onSelect={handleSelect}
         />
       )}
-
-      {/* Selectors — filtered by dial tab */}
-      <SelectorDial items={filteredPickerItems} />
 
       {/* Now-playing sidebar only shown in live mode — not meaningful for ghost snapshots */}
       {!selectedDate && (

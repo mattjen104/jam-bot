@@ -91,7 +91,7 @@ export default function TasteMap() {
               Connect to see your taste map.
             </h1>
             <p className="mt-4 max-w-[48ch] text-base text-muted-foreground">
-              Connect your Spotify library to discover pickers and stations that
+              Connect your Spotify library to discover selectors and stations that
               match your taste.
             </p>
             <button
@@ -131,7 +131,7 @@ export default function TasteMap() {
             Taste map
           </div>
           <h1 className="mt-3 font-serif text-4xl font-semibold leading-[1.05] text-foreground sm:text-5xl">
-            Pickers who share your taste.
+            Selectors who share your taste.
           </h1>
           <p className="mt-4 max-w-[52ch] text-base text-muted-foreground">
             Your Spotify library mapped to Lore's spine — every exact match
@@ -172,11 +172,11 @@ export default function TasteMap() {
           </div>
         )}
 
-        {/* Pickers section */}
-        <section className="mb-10" data-testid="overlap-pickers">
+        {/* Selectors section */}
+        <section className="mb-10" data-testid="overlap-selectors">
           <div className="mb-4 flex items-baseline gap-3">
             <h2 className="font-serif text-xl font-semibold text-foreground">
-              Pickers who share your taste
+              Selectors who share your taste
             </h2>
             {!pickersLoading && pickers.length > 0 && (
               <span className="font-mono text-xs text-muted-foreground">

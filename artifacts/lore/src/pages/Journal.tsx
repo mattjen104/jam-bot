@@ -303,7 +303,7 @@ function InflowRow() {
       if (!track?.recording) return null;
       return {
         key: `picker-${i}-${track.recording.mbid}`,
-        runHref: `/archive/picker-runs/${runId}`,
+        runHref: `/archive/selector-runs/${runId}`,
         songHref: `/song/${track.recording.mbid}`,
         pickerName,
         mbid: track.recording.mbid,
@@ -321,7 +321,7 @@ function InflowRow() {
       <div className="mb-3 flex items-baseline justify-between">
         <h2 className="inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
           <UserCheck className="h-3.5 w-3.5" />
-          New from your pickers
+          New from your selectors
         </h2>
         <Link
           href="/archive"

@@ -153,11 +153,13 @@ export default function Selectors() {
   const { recent, others } = useMemo(() => {
     const items = data?.items ?? [];
     // Sort: recently active first, then by resolved count desc
+    const toMs = (iso: string | null | undefined) =>
+      iso ? new Date(iso).getTime() : 0;
     const sorted = [...items].sort((a, b) => {
       const aRecent = isRecentlyActive(a.run.pickedAt) ? 1 : 0;
       const bRecent = isRecentlyActive(b.run.pickedAt) ? 1 : 0;
       if (aRecent !== bRecent) return bRecent - aRecent;
-      return b.run.resolvedCount - a.run.resolvedCount;
+      return toMs(b.run.pickedAt) - toMs(a.run.pickedAt);
     });
     const recentItems = sorted.filter((it) => isRecentlyActive(it.run.pickedAt));
     const otherItems = sorted.filter((it) => !isRecentlyActive(it.run.pickedAt));
