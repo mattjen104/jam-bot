@@ -4,7 +4,7 @@ import { BookOpen, Headphones, Users } from "lucide-react";
 const NAV_TABS = [
   { href: "/", label: "LISTEN", Icon: Headphones, exact: true },
   { href: "/journal", label: "LIBRARY", Icon: BookOpen, exact: false },
-  { href: "/archive", label: "PICKERS", Icon: Users, exact: false },
+  { href: "/selectors", label: "SELECTORS", Icon: Users, exact: false },
 ];
 
 function isActive(href: string, exact: boolean, location: string): boolean {

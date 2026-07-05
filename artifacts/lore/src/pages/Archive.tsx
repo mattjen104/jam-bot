@@ -140,22 +140,22 @@ export default function Archive() {
         <section>
           <h2 className="mb-4 flex items-center gap-2 font-serif text-xl font-semibold text-foreground">
             <Users className="h-4 w-4 text-primary" />
-            Picker archives
+            Selector archives
           </h2>
           {pickersLoading ? (
             <ListSkeleton />
           ) : pickers.length === 0 ? (
             <p className="rounded-xl border border-card-border bg-card p-4 font-mono text-xs text-muted-foreground">
-              No pickers with documented runs yet.
+              No selectors with documented runs yet.
             </p>
           ) : (
-            <ul className="flex flex-col gap-2" data-testid="archive-pickers">
+            <ul className="flex flex-col gap-2" data-testid="archive-selectors">
               {pickers.map((p) => (
                 <li key={p.handle}>
                   <Link
-                    href={`/archive/pickers/${p.handle}`}
+                    href={`/archive/selectors/${p.handle}`}
                     className="hover-elevate flex items-center justify-between gap-3 rounded-xl border border-card-border bg-card p-4"
-                    data-testid={`archive-picker-${p.handle}`}
+                    data-testid={`archive-selector-${p.handle}`}
                   >
                     <div className="min-w-0">
                       <p className="truncate font-serif text-base font-semibold text-foreground">

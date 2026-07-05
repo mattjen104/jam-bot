@@ -88,8 +88,8 @@ export function FollowingStrip() {
     const r = q.data?.runs[0];
     if (!q.data || !r) return;
     items.push({
-      key: `picker-run-${r.runId}`,
-      href: `/archive/picker-runs/${r.runId}`,
+      key: `selector-run-${r.runId}`,
+      href: `/archive/selector-runs/${r.runId}`,
       title: r.title ?? "Untitled run",
       byline: q.data.picker.name,
       date: r.pickedAt ?? null,

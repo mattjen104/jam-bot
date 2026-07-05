@@ -527,7 +527,7 @@ function Picks({ picks, mbid }: { picks: RecordingPick[]; mbid: string }) {
       />
       {picks.length === 0 ? (
         <div className="rounded-2xl border border-card-border bg-card p-5 text-sm text-muted-foreground">
-          No picker has vouched for this recording yet.
+          No selector has vouched for this recording yet.
         </div>
       ) : (
         <ul className="flex flex-col gap-2" data-testid="picked-by">
@@ -542,7 +542,7 @@ function Picks({ picks, mbid }: { picks: RecordingPick[]; mbid: string }) {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-foreground">
                   <Link
-                    href={`/archive/pickers/${p.picker.handle}`}
+                    href={`/archive/selectors/${p.picker.handle}`}
                     className="hover:text-primary"
                     data-testid={`pick-picker-${i}`}
                   >
@@ -562,7 +562,7 @@ function Picks({ picks, mbid }: { picks: RecordingPick[]; mbid: string }) {
               </div>
               {p.runId != null && (
                 <Link
-                  href={`/archive/picker-runs/${p.runId}?play=1&from=${mbid}`}
+                  href={`/archive/selector-runs/${p.runId}?play=1&from=${mbid}`}
                   className="hover-elevate inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-border px-2.5 text-xs text-muted-foreground"
                   title="Play this list starting at this song"
                   data-testid={`pick-replay-${i}`}

@@ -29,7 +29,7 @@ import { usePlayer } from "../player/PlayerProvider";
 import { useFollows, isFollowed } from "../lib/local";
 import { useNtsChannel1, useNtsChannel2 } from "../hooks/useNtsClientLive";
 import { StationList } from "../components/StationList";
-import { PickerDial } from "../components/PickerDial";
+import { SelectorDial } from "../components/SelectorDial";
 import { NowPlaying } from "../components/NowPlaying";
 import { FollowingStrip } from "../components/FollowingStrip";
 import {
@@ -507,8 +507,8 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
         />
       )}
 
-      {/* Curated lists — filtered by dial tab */}
-      <PickerDial items={filteredPickerItems} />
+      {/* Selectors — filtered by dial tab */}
+      <SelectorDial items={filteredPickerItems} />
 
       {/* Now-playing sidebar only shown in live mode — not meaningful for ghost snapshots */}
       {!selectedDate && (

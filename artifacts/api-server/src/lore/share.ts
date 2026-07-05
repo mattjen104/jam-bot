@@ -194,9 +194,9 @@ export async function getPickerShare(
   return {
     title: `${picker.name} · Lore`,
     description: `Borrow ${picker.name}'s taste: ${total} picks logged, ${resolved} resolved to the source. A real ${picker.pickerType}'s choices — never an algorithm.`,
-    redirectPath: `${loreBasePath()}/archive/pickers/${encodeURIComponent(handle)}`,
+    redirectPath: `${loreBasePath()}/archive/selectors/${encodeURIComponent(handle)}`,
     card: {
-      kicker: "A human taste source",
+      kicker: "A human selector",
       title: picker.name,
       subtitle: picker.pickerType,
       footer: `${total} picks · ${resolved} resolved`,
@@ -248,7 +248,7 @@ export async function getPickerRunShare(
   return {
     title: `${runTitle} — ${picker.name} · Lore`,
     description: `Ride ${picker.name}'s taste: ${total} picks in sequence, ${resolved} resolved to the source. A real human chose these — not an algorithm.`,
-    redirectPath: `${loreBasePath()}/archive/picker-runs/${runId}`,
+    redirectPath: `${loreBasePath()}/archive/selector-runs/${runId}`,
     card: {
       kicker: `Picked by ${picker.name}`,
       title: runTitle,

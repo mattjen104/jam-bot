@@ -116,8 +116,8 @@ export default function Following() {
     if (!q.data || !f) return;
     for (const r of q.data.runs) {
       items.push({
-        key: `picker-run-${r.runId}`,
-        href: `/archive/picker-runs/${r.runId}`,
+        key: `selector-run-${r.runId}`,
+        href: `/archive/selector-runs/${r.runId}`,
         title: r.title ?? "Untitled run",
         byline: q.data.picker.name,
         sourceKind: "picker",
@@ -160,7 +160,7 @@ export default function Following() {
             New runs from people you trust.
           </h1>
           <p className="mt-4 max-w-[52ch] text-base text-muted-foreground">
-            Follow the stations and pickers whose taste you keep coming back
+            Follow the stations and selectors whose taste you keep coming back
             to — their newest documented runs gather here. Your follow list
             lives only on this device.
           </p>
@@ -186,7 +186,7 @@ export default function Following() {
                       ? `/archive/stations/${f.id}`
                       : f.kind === "dj"
                         ? `/archive/stations/${parseDjFollowId(f.id)?.stationSlug ?? ""}`
-                        : `/archive/pickers/${f.id}`
+                        : `/archive/selectors/${f.id}`
                   }
                   className="hover:text-primary"
                 >
@@ -210,7 +210,7 @@ export default function Following() {
           <div className="rounded-xl border border-card-border bg-card p-8 text-center">
             <Users className="mx-auto h-10 w-10 text-muted-foreground/50" />
             <p className="mx-auto mt-4 max-w-[36ch] font-serif text-lg text-muted-foreground">
-              You're not following anyone yet. Find a station or picker whose
+              You're not following anyone yet. Find a station or selector whose
               taste you trust and hit Follow.
             </p>
             <Link

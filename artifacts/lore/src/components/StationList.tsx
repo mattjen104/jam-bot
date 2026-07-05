@@ -194,7 +194,7 @@ export function StationList({
                 {pick &&
                   (pick.runId != null ? (
                     <Link
-                      href={`/archive/picker-runs/${pick.runId}`}
+                      href={`/archive/selector-runs/${pick.runId}`}
                       onClick={(e) => e.stopPropagation()}
                       className="mt-1 inline-flex max-w-full items-center gap-1 truncate rounded-full border border-primary-border bg-primary/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-primary hover:bg-primary/20"
                       title={

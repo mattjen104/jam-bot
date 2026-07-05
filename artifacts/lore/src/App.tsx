@@ -1,4 +1,4 @@
-import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
+import { Switch, Route, Router as WouterRouter, useLocation, Redirect } from "wouter";
 import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -10,15 +10,16 @@ import Artist from "@/pages/Artist";
 import Archive from "@/pages/Archive";
 import StationArchive from "@/pages/StationArchive";
 import StationRun from "@/pages/StationRun";
-import PickerArchive from "@/pages/PickerArchive";
-import PickerRun from "@/pages/PickerRun";
+import SelectorArchive from "@/pages/SelectorArchive";
+import SelectorRun from "@/pages/SelectorRun";
+import Selectors from "@/pages/Selectors";
 import Journal from "@/pages/Journal";
 import Following from "@/pages/Following";
 import Library from "@/pages/Library";
 import TasteMap from "@/pages/TasteMap";
 import AdminClaims from "@/pages/AdminClaims";
 import AdminSongExploder from "@/pages/AdminSongExploder";
-import AdminPickers from "@/pages/AdminPickers";
+import AdminSelectors from "@/pages/AdminSelectors";
 import { PlayerProvider } from "./player/PlayerProvider";
 import { PlayerDock } from "./components/PlayerDock";
 import { ListeningLogger } from "./components/ListeningLogger";
@@ -57,15 +58,28 @@ function Router() {
         <Route path="/archive" component={Archive} />
         <Route path="/archive/stations/:slug" component={StationArchive} />
         <Route path="/archive/station-runs/:runId" component={StationRun} />
-        <Route path="/archive/pickers/:handle" component={PickerArchive} />
-        <Route path="/archive/picker-runs/:runId" component={PickerRun} />
+        {/* Canonical selector routes */}
+        <Route path="/selectors" component={Selectors} />
+        <Route path="/archive/selectors/:handle" component={SelectorArchive} />
+        <Route path="/archive/selector-runs/:runId" component={SelectorRun} />
+        {/* Legacy picker routes — redirect to canonical selector paths */}
+        <Route path="/archive/pickers/:handle">
+          {(params) => <Redirect to={`/archive/selectors/${params.handle}`} />}
+        </Route>
+        <Route path="/archive/picker-runs/:runId">
+          {(params) => <Redirect to={`/archive/selector-runs/${params.runId}`} />}
+        </Route>
         <Route path="/journal" component={Journal} />
         <Route path="/following" component={Following} />
         <Route path="/library" component={Library} />
         <Route path="/taste-map" component={TasteMap} />
         <Route path="/admin" component={AdminClaims} />
         <Route path="/admin/song-exploder" component={AdminSongExploder} />
-        <Route path="/admin/pickers" component={AdminPickers} />
+        <Route path="/admin/selectors" component={AdminSelectors} />
+        {/* Legacy admin route */}
+        <Route path="/admin/pickers">
+          {() => <Redirect to="/admin/selectors" />}
+        </Route>
         <Route component={NotFound} />
       </Switch>
     </>
