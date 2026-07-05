@@ -1,9 +1,12 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
-import { useGetPickersDial } from "@workspace/api-client-react";
+import {
+  useListPickers,
+  useGetPickersDial,
+  getPickerRun,
+} from "@workspace/api-client-react";
 import type { PickerDialItem } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
-import { getPickerRun } from "@workspace/api-client-react";
 import { FollowButton } from "../components/FollowButton";
 import { ArrowLeft, Loader2, Music2, Play, Users, Zap } from "lucide-react";
 
@@ -29,7 +32,7 @@ function timeAgoShort(iso: string | null | undefined): string {
 }
 
 /**
- * 2×2 mosaic of album artwork from the first 4 tracks of a curated list.
+ * 2×2 artwork mosaic from the first 4 tracks of a curated list.
  */
 function ArtworkMosaic({ tracks }: { tracks: { artworkUrl: string | null }[] }) {
   return (
@@ -46,7 +49,8 @@ function ArtworkMosaic({ tracks }: { tracks: { artworkUrl: string | null }[] }) 
   );
 }
 
-function SelectorGridCard({ item }: { item: PickerDialItem }) {
+/** Full card for a selector that has a documented run (with artwork mosaic). */
+function SelectorDialCard({ item }: { item: PickerDialItem }) {
   const { ride } = usePlayer();
   const [loading, setLoading] = useState(false);
   const recent = isRecentlyActive(item.run.pickedAt);
@@ -82,19 +86,17 @@ function SelectorGridCard({ item }: { item: PickerDialItem }) {
     <li className="flex flex-col">
       <Link
         href={`/archive/selectors/${item.picker.handle}`}
-        className="hover-elevate group flex flex-col rounded-2xl border border-card-border bg-card overflow-hidden"
+        className="hover-elevate group flex flex-col overflow-hidden rounded-2xl border border-card-border bg-card"
       >
         {/* Artwork mosaic */}
         <div className="relative h-32 w-full shrink-0 overflow-hidden bg-muted">
           <ArtworkMosaic tracks={item.previewTracks} />
-          {/* Recently active badge */}
           {recent && (
             <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full border border-primary/40 bg-background/80 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide text-primary backdrop-blur-sm">
               <Zap className="h-2.5 w-2.5" />
               Active
             </span>
           )}
-          {/* Play overlay */}
           <button
             type="button"
             onClick={handlePlay}
@@ -127,7 +129,13 @@ function SelectorGridCard({ item }: { item: PickerDialItem }) {
           )}
           <div className="mt-auto flex items-center gap-2 pt-2 font-mono text-[10px] text-muted-foreground">
             <Music2 className="h-3 w-3 text-primary/60" />
-            <span>{item.run.resolvedCount} playable</span>
+            <span>{item.run.trackCount} pick{item.run.trackCount === 1 ? "" : "s"}</span>
+            {item.run.resolvedCount > 0 && item.run.resolvedCount < item.run.trackCount && (
+              <>
+                <span>·</span>
+                <span className="text-primary">{item.run.resolvedCount} playable</span>
+              </>
+            )}
             {item.run.pickedAt && (
               <>
                 <span>·</span>
@@ -137,7 +145,6 @@ function SelectorGridCard({ item }: { item: PickerDialItem }) {
           </div>
         </div>
       </Link>
-      {/* Follow button sits outside the card link */}
       <div className="mt-2 flex justify-end px-1">
         <FollowButton kind="picker" id={item.picker.handle} name={item.picker.name} />
       </div>
@@ -145,26 +152,95 @@ function SelectorGridCard({ item }: { item: PickerDialItem }) {
   );
 }
 
+/** Simpler card for a selector that has no documented runs yet. */
+function SelectorSimpleCard({
+  picker,
+}: {
+  picker: {
+    handle: string;
+    name: string;
+    pickerType: string;
+    description?: string | null;
+  };
+}) {
+  return (
+    <li className="flex flex-col">
+      <Link
+        href={`/archive/selectors/${picker.handle}`}
+        className="hover-elevate flex flex-col overflow-hidden rounded-2xl border border-card-border bg-card"
+      >
+        <div className="flex h-32 w-full items-center justify-center bg-muted/40">
+          <Users className="h-10 w-10 text-muted-foreground/20" />
+        </div>
+        <div className="flex flex-1 flex-col gap-1 p-4">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="line-clamp-2 font-serif text-base font-semibold leading-snug text-foreground">
+              {picker.name}
+            </h3>
+            <span className="shrink-0 rounded-full border border-border px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide text-muted-foreground">
+              {picker.pickerType}
+            </span>
+          </div>
+          {picker.description && (
+            <p className="line-clamp-2 text-xs text-muted-foreground">
+              {picker.description}
+            </p>
+          )}
+          <p className="mt-auto pt-2 font-mono text-[10px] text-muted-foreground">
+            No runs documented yet
+          </p>
+        </div>
+      </Link>
+      <div className="mt-2 flex justify-end px-1">
+        <FollowButton kind="picker" id={picker.handle} name={picker.name} />
+      </div>
+    </li>
+  );
+}
+
 export default function Selectors() {
   const { ride, radio } = usePlayer();
-  const { data, isLoading, isError } = useGetPickersDial();
+  const { data: listData, isLoading: listLoading, isError: listError } = useListPickers();
+  const { data: dialData } = useGetPickersDial();
   const dockPadding = ride.active || radio.station ? "pb-32" : "pb-16";
 
+  // Build a lookup map of dial items by picker handle for O(1) merge.
+  const dialByHandle = useMemo((): Map<string, PickerDialItem> => {
+    const m = new Map<string, PickerDialItem>();
+    for (const item of dialData?.items ?? []) {
+      m.set(item.picker.handle, item);
+    }
+    return m;
+  }, [dialData]);
+
+  // Full selector list: all active pickers, sorted by most recently active first
+  // (using dial pickedAt for those that have runs), then alphabetically.
   const { recent, others } = useMemo(() => {
-    const items = data?.items ?? [];
-    // Sort: recently active first, then by resolved count desc
-    const toMs = (iso: string | null | undefined) =>
-      iso ? new Date(iso).getTime() : 0;
-    const sorted = [...items].sort((a, b) => {
-      const aRecent = isRecentlyActive(a.run.pickedAt) ? 1 : 0;
-      const bRecent = isRecentlyActive(b.run.pickedAt) ? 1 : 0;
+    const all = (listData?.pickers ?? []).filter((p) => p.active);
+    const toMs = (handle: string) => {
+      const dialItem = dialByHandle.get(handle);
+      if (!dialItem?.run.pickedAt) return 0;
+      return new Date(dialItem.run.pickedAt).getTime();
+    };
+    const sorted = [...all].sort((a, b) => {
+      const aRecent = isRecentlyActive(dialByHandle.get(a.handle)?.run.pickedAt) ? 1 : 0;
+      const bRecent = isRecentlyActive(dialByHandle.get(b.handle)?.run.pickedAt) ? 1 : 0;
       if (aRecent !== bRecent) return bRecent - aRecent;
-      return toMs(b.run.pickedAt) - toMs(a.run.pickedAt);
+      const timeDiff = toMs(b.handle) - toMs(a.handle);
+      if (timeDiff !== 0) return timeDiff;
+      return a.name.localeCompare(b.name);
     });
-    const recentItems = sorted.filter((it) => isRecentlyActive(it.run.pickedAt));
-    const otherItems = sorted.filter((it) => !isRecentlyActive(it.run.pickedAt));
+    const recentItems = sorted.filter((p) =>
+      isRecentlyActive(dialByHandle.get(p.handle)?.run.pickedAt),
+    );
+    const otherItems = sorted.filter(
+      (p) => !isRecentlyActive(dialByHandle.get(p.handle)?.run.pickedAt),
+    );
     return { recent: recentItems, others: otherItems };
-  }, [data]);
+  }, [listData, dialByHandle]);
+
+  const isLoading = listLoading;
+  const isError = listError;
 
   return (
     <div className="min-h-screen">
@@ -193,8 +269,8 @@ export default function Selectors() {
         </header>
 
         {isLoading && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {[0, 1, 2, 3, 4, 5].map((i) => (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {[0, 1, 2, 3].map((i) => (
               <div
                 key={i}
                 className="h-64 animate-pulse rounded-2xl border border-card-border bg-card"
@@ -209,7 +285,7 @@ export default function Selectors() {
           </p>
         )}
 
-        {!isLoading && !isError && data?.items.length === 0 && (
+        {!isLoading && !isError && recent.length === 0 && others.length === 0 && (
           <p className="rounded-xl border border-card-border bg-card p-6 text-sm text-muted-foreground">
             No selectors enrolled yet.
           </p>
@@ -221,10 +297,15 @@ export default function Selectors() {
               <Zap className="h-3.5 w-3.5" />
               Recently active
             </h2>
-            <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {recent.map((item) => (
-                <SelectorGridCard key={item.picker.handle} item={item} />
-              ))}
+            <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {recent.map((p) => {
+                const dialItem = dialByHandle.get(p.handle);
+                return dialItem ? (
+                  <SelectorDialCard key={p.handle} item={dialItem} />
+                ) : (
+                  <SelectorSimpleCard key={p.handle} picker={p} />
+                );
+              })}
             </ul>
           </section>
         )}
@@ -236,10 +317,15 @@ export default function Selectors() {
                 All selectors
               </h2>
             )}
-            <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {others.map((item) => (
-                <SelectorGridCard key={item.picker.handle} item={item} />
-              ))}
+            <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {others.map((p) => {
+                const dialItem = dialByHandle.get(p.handle);
+                return dialItem ? (
+                  <SelectorDialCard key={p.handle} item={dialItem} />
+                ) : (
+                  <SelectorSimpleCard key={p.handle} picker={p} />
+                );
+              })}
             </ul>
           </section>
         )}
