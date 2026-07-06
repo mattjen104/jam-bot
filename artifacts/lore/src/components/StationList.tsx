@@ -8,7 +8,6 @@ import type {
   StationScheduleRun,
 } from "@workspace/api-client-react";
 import { QualityBadge } from "./QualityBadge";
-import { KeepButton } from "./KeepButton";
 import { FollowButton } from "./FollowButton";
 import { BadgeCheck, Mic, Mic2, Music2, Pause, Play, Radio } from "lucide-react";
 import type { PlayerStatus } from "../hooks/useRadioPlayer";
@@ -280,15 +279,12 @@ export function StationList({
                 ) : null}
               </div>
 
-              {/* Right rail: keep current track, follow station, quality badge */}
+              {/* Right rail: follow station, quality badge */}
               <div
                 className="flex shrink-0 flex-col items-end gap-2"
                 onClick={(e) => e.stopPropagation()}
                 onKeyDown={(e) => e.stopPropagation()}
               >
-                {np?.recording?.mbid && (
-                  <KeepButton compact mbid={np.recording.mbid} />
-                )}
                 <FollowButton kind="station" id={station.slug} name={station.name} />
                 <QualityBadge quality={station.streamQuality} format={station.streamFormat} />
               </div>

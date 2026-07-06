@@ -111,15 +111,13 @@ export function PlayerBar({
 
         {/* Controls — mobile: rightmost; desktop: right column (flex justify-end) */}
         <div className="flex shrink-0 items-center gap-2 lg:order-3 lg:justify-end">
-          {/* Compact Keep — shown sm+ when a track is identified */}
+          {/* Compact Keep — shown whenever a track is identified */}
           {nowPlayingMbid && (
-            <span className="hidden sm:inline-flex">
-              <KeepButton
-                mbid={nowPlayingMbid}
-                compact
-                provenance={{ kind: "keep", stationSlug: station.slug }}
-              />
-            </span>
+            <KeepButton
+              mbid={nowPlayingMbid}
+              compact
+              provenance={{ kind: "keep", stationSlug: station.slug }}
+            />
           )}
           <div className="hidden items-center gap-2 sm:flex">
             {volume === 0 ? (
