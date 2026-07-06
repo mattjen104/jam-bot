@@ -105,7 +105,7 @@ router.get("/archive/station-runs/:runId", h(async (req, res) => {
         spinCount: rows.length,
         resolvedCount: rows.filter((r) => r.mbid != null).length,
         sourceUrl:
-          stationArchiveUrl(station.nowPlayingSource, anchor.day) ??
+          stationArchiveUrl(station.nowPlayingSource, anchor.day, station.nowPlayingConfig as Record<string, unknown> | null) ??
           rows.map((r) => r.citation).find((c) => c != null) ??
           null,
         startedAt: first.playedAt.toISOString(),

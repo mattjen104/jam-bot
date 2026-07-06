@@ -609,10 +609,14 @@ export function supportsBackfill(source: string | null | undefined): boolean {
  * run must attribute back to where the sequence is documented. Returns null
  * for sources without a public per-day archive (the UI then omits the link;
  * it never fabricates one).
+ *
+ * `config` is the station's `nowPlayingConfig` — some sources (Spinitron)
+ * need a station-specific handle to build the URL.
  */
 export function stationArchiveUrl(
   source: string | null | undefined,
   day: string,
+  config?: Record<string, unknown> | null,
 ): string | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
   if (!source || !m) return null;
@@ -627,6 +631,18 @@ export function stationArchiveUrl(
     // FIP (Radio France) publishes a dated programme grid.
     case "fip":
       return `https://www.radiofrance.fr/fip/grille-programmes?date=${year}-${month}-${dayOfMonth}`;
+    // Spinitron publishes a per-station calendar view. Requires the station's
+    // public handle (e.g. "WFMU") stored in nowPlayingConfig.stationHandle.
+    case "spinitron": {
+      const handle =
+        config &&
+        typeof config.stationHandle === "string" &&
+        config.stationHandle.trim()
+          ? config.stationHandle.trim()
+          : null;
+      if (!handle) return null;
+      return `https://spinitron.com/${encodeURIComponent(handle)}/calendar/date/${year}-${month}-${dayOfMonth}`;
+    }
     default:
       return null;
   }

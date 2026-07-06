@@ -7,7 +7,7 @@ import { usePlayer } from "../player/PlayerProvider";
 import { FollowButton } from "../components/FollowButton";
 import { ShareButton } from "../components/ShareButton";
 import { runDate } from "../lib/format";
-import { ArrowLeft, ArrowUpRight, Radio, Users } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Ghost, Radio, Users } from "lucide-react";
 
 /** A station's documented runs — one per show and broadcast day. */
 export default function StationArchive() {
@@ -68,41 +68,76 @@ export default function StationArchive() {
                 Nothing documented yet — the pollers are listening.
               </p>
             ) : (
-              <ul className="flex flex-col gap-2" data-testid="station-runs">
-                {data.runs.map((r) => (
-                  <li key={r.runId}>
+              <>
+                {/* "Ride most recent" shortcut — only shown when the newest run
+                    has at least one resolved track to queue. */}
+                {data.runs[0] && data.runs[0].resolvedCount > 0 && (
+                  <div className="mb-6">
                     <Link
-                      href={`/archive/station-runs/${r.runId}`}
-                      className="hover-elevate flex items-center justify-between gap-3 rounded-xl border border-card-border bg-card p-4"
-                      data-testid={`station-run-${r.runId}`}
+                      href={`/archive/station-runs/${data.runs[0].runId}?play=1`}
+                      data-testid="ride-most-recent"
+                      className="hover-elevate inline-flex items-center gap-2 rounded-full border border-primary-border bg-primary px-5 py-2.5 font-mono text-xs uppercase tracking-wide text-primary-foreground"
                     >
-                      <div className="min-w-0">
-                        <p className="truncate font-serif text-base font-semibold text-foreground">
-                          {r.show?.name ?? "Station stream"}
-                          {r.show?.djName ? (
-                            <span className="text-muted-foreground">
-                              {" "}
-                              · {r.show.djName}
-                            </span>
-                          ) : null}
-                        </p>
-                        <p className="truncate font-mono text-[11px] text-muted-foreground">
-                          {runDate(r.date)} · {r.spinCount} track
-                          {r.spinCount === 1 ? "" : "s"} ·{" "}
-                          <span
-                            className={
-                              r.resolvedCount > 0 ? "text-primary" : ""
-                            }
-                          >
-                            {r.resolvedCount}/{r.spinCount} resolved
-                          </span>
-                        </p>
-                      </div>
-                      <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <Ghost className="h-4 w-4" />
+                      Ride most recent · {data.runs[0].show?.name ?? "station stream"}
                     </Link>
-                  </li>
-                ))}
-              </ul>
+                  </div>
+                )}
+
+                <ul className="flex flex-col gap-2" data-testid="station-runs">
+                  {data.runs.map((r) => (
+                    <li key={r.runId}>
+                      <div
+                        className="flex items-center gap-3 rounded-xl border border-card-border bg-card p-4"
+                        data-testid={`station-run-${r.runId}`}
+                      >
+                        <Link
+                          href={`/archive/station-runs/${r.runId}`}
+                          className="min-w-0 flex-1"
+                        >
+                          <p className="truncate font-serif text-base font-semibold text-foreground">
+                            {r.show?.name ?? "Station stream"}
+                            {r.show?.djName ? (
+                              <span className="text-muted-foreground">
+                                {" "}
+                                · {r.show.djName}
+                              </span>
+                            ) : null}
+                          </p>
+                          <p className="truncate font-mono text-[11px] text-muted-foreground">
+                            {runDate(r.date)} · {r.spinCount} track
+                            {r.spinCount === 1 ? "" : "s"} ·{" "}
+                            <span
+                              className={
+                                r.resolvedCount > 0 ? "text-primary" : ""
+                              }
+                            >
+                              {r.resolvedCount}/{r.spinCount} resolved
+                            </span>
+                          </p>
+                        </Link>
+                        {r.resolvedCount > 0 ? (
+                          <Link
+                            href={`/archive/station-runs/${r.runId}?play=1`}
+                            data-testid={`ride-run-${r.runId}`}
+                            className="hover-elevate shrink-0 inline-flex items-center gap-1.5 rounded-full border border-primary-border bg-primary px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide text-primary-foreground"
+                          >
+                            <Ghost className="h-3.5 w-3.5" />
+                            Ride
+                          </Link>
+                        ) : (
+                          <Link
+                            href={`/archive/station-runs/${r.runId}`}
+                            className="shrink-0 text-muted-foreground"
+                          >
+                            <ArrowUpRight className="h-4 w-4" />
+                          </Link>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
 
             {overlaps && overlaps.items.length > 0 && (

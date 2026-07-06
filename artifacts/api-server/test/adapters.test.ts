@@ -420,6 +420,23 @@ describe("stationArchiveUrl", () => {
     );
   });
 
+  it("builds Spinitron's per-station calendar URL when stationHandle present", () => {
+    expect(
+      stationArchiveUrl("spinitron", "2026-07-01", { stationHandle: "WFMU" }),
+    ).toBe("https://spinitron.com/WFMU/calendar/date/2026-07-01");
+    expect(
+      stationArchiveUrl("spinitron", "2024-12-25", { stationHandle: "WXYC" }),
+    ).toBe("https://spinitron.com/WXYC/calendar/date/2024-12-25");
+  });
+
+  it("returns null for Spinitron when stationHandle is absent", () => {
+    expect(stationArchiveUrl("spinitron", "2026-07-01")).toBeNull();
+    expect(stationArchiveUrl("spinitron", "2026-07-01", {})).toBeNull();
+    expect(
+      stationArchiveUrl("spinitron", "2026-07-01", { stationHandle: "" }),
+    ).toBeNull();
+  });
+
   it("returns null for sources without a public per-day archive", () => {
     expect(stationArchiveUrl("radio_paradise", "2026-07-01")).toBeNull();
     expect(stationArchiveUrl(null, "2026-07-01")).toBeNull();

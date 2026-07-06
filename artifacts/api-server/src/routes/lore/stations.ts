@@ -178,7 +178,7 @@ router.get("/stations/:slug/archive", h(async (req, res) => {
         spinCount: r.spinCount,
         resolvedCount: r.resolvedCount,
         sourceUrl:
-          stationArchiveUrl(station.nowPlayingSource, r.date) ??
+          stationArchiveUrl(station.nowPlayingSource, r.date, station.nowPlayingConfig as Record<string, unknown> | null) ??
           r.citation ??
           null,
         startedAt: new Date(r.startedAt).toISOString(),
