@@ -580,6 +580,10 @@ function spinitronCollegeStations(): InsertStation[] {
  * Updates mutable fields (stream URL/quality, links, now-playing config) so a
  * fix in the seed propagates without a migration, but never clobbers the id so
  * existing spins keep pointing at the same station.
+ *
+ * After upserting, logs which Spinitron college stations have API keys
+ * configured and which are still pending — so a restart with a new key
+ * immediately confirms activation in the console without digging through config.
  */
 export async function seedStations(): Promise<void> {
   for (const s of SEED_STATIONS) {
@@ -604,6 +608,33 @@ export async function seedStations(): Promise<void> {
           updatedAt: sql`now()`,
         },
       });
+  }
+
+  // Diagnostic: report Spinitron key coverage so adding a key + restarting
+  // immediately shows up in logs without any further investigation.
+  const spinitronStations = SEED_STATIONS.filter(
+    (s) => s.nowPlayingSource === "spinitron",
+  );
+  const active = spinitronStations.filter(
+    (s) =>
+      s.nowPlayingConfig &&
+      typeof (s.nowPlayingConfig as Record<string, unknown>).apiKey === "string",
+  );
+  const pending = spinitronStations.filter(
+    (s) =>
+      !s.nowPlayingConfig ||
+      typeof (s.nowPlayingConfig as Record<string, unknown>).apiKey !== "string",
+  );
+
+  if (active.length > 0) {
+    console.info(
+      `[lore/spinitron] keys active (${active.length}): ${active.map((s) => s.slug.toUpperCase()).join(", ")}`,
+    );
+  }
+  if (pending.length > 0) {
+    console.info(
+      `[lore/spinitron] keys pending (${pending.length}): ${pending.map((s) => s.slug.toUpperCase()).join(", ")} — add SPINITRON_KEY_<CALLSIGN> secret and restart to activate`,
+    );
   }
 }
 
