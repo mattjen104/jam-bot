@@ -6,6 +6,11 @@ interface ShareButtonProps {
   sharePath: string;
   /** Testid suffix, e.g. "song" | "station" | "station-run" | "picker" | "picker-run". */
   kind: string;
+  /**
+   * When true, renders an icon-only square button (no text label) — fits in
+   * tight player bar contexts alongside KeepButton.
+   */
+  compact?: boolean;
 }
 
 /**
@@ -13,7 +18,7 @@ interface ShareButtonProps {
  * page (rich OG preview for unfurl bots), which instantly redirects human
  * visitors into the app.
  */
-export function ShareButton({ sharePath, kind }: ShareButtonProps) {
+export function ShareButton({ sharePath, kind, compact }: ShareButtonProps) {
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -32,6 +37,28 @@ export function ShareButton({ sharePath, kind }: ShareButtonProps) {
     clearTimeout(timer.current);
     timer.current = setTimeout(() => setCopied(false), 2000);
   };
+
+  if (compact) {
+    return (
+      <button
+        type="button"
+        onClick={copy}
+        data-testid={`share-${kind}`}
+        title="Copy a share link — unfurls with a preview card wherever you paste it"
+        className={
+          copied
+            ? "hover-elevate flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary-border bg-primary/15 text-primary"
+            : "hover-elevate flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground"
+        }
+      >
+        {copied ? (
+          <Check className="h-4 w-4" />
+        ) : (
+          <Share2 className="h-4 w-4" />
+        )}
+      </button>
+    );
+  }
 
   return (
     <button

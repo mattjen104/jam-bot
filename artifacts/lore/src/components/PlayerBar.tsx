@@ -2,6 +2,7 @@ import type { Station } from "@workspace/api-client-react";
 import type { PlayerStatus } from "../hooks/useRadioPlayer";
 import { Loader2, Pause, Play, Radio, Volume2, VolumeX, X } from "lucide-react";
 import { KeepButton } from "./KeepButton";
+import { ShareButton } from "./ShareButton";
 
 interface PlayerBarProps {
   station: Station;
@@ -111,13 +112,16 @@ export function PlayerBar({
 
         {/* Controls — mobile: rightmost; desktop: right column (flex justify-end) */}
         <div className="flex shrink-0 items-center gap-2 lg:order-3 lg:justify-end">
-          {/* Compact Keep — shown whenever a track is identified */}
+          {/* Compact Keep + Share — shown whenever a track is identified */}
           {nowPlayingMbid && (
-            <KeepButton
-              mbid={nowPlayingMbid}
-              compact
-              provenance={{ kind: "keep", stationSlug: station.slug }}
-            />
+            <>
+              <KeepButton
+                mbid={nowPlayingMbid}
+                compact
+                provenance={{ kind: "keep", stationSlug: station.slug }}
+              />
+              <ShareButton compact sharePath={`songs/${nowPlayingMbid}`} kind="song" />
+            </>
           )}
           <div className="hidden items-center gap-2 sm:flex">
             {volume === 0 ? (

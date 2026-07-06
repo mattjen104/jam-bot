@@ -4,6 +4,7 @@ import type { RideApi } from "../player/PlayerProvider";
 import type { SpotifyConnectApi } from "../player/useSpotifyConnect";
 import { rideFallbackLabel } from "../player/playbackSession";
 import { KeepButton } from "./KeepButton";
+import { ShareButton } from "./ShareButton";
 import {
   AlertTriangle,
   ExternalLink,
@@ -234,8 +235,9 @@ export function RideBar({
         </div>
 
         {cur.mbid && (
-          <span className="inline-flex shrink-0">
+          <span className="inline-flex shrink-0 items-center gap-1.5">
             <KeepButton mbid={cur.mbid} />
+            <ShareButton compact sharePath={`songs/${cur.mbid}`} kind="song" />
           </span>
         )}
 

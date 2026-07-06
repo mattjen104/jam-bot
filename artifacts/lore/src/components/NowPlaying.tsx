@@ -14,6 +14,7 @@ import { groupCredits, pressingLine } from "../lib/linerNotes";
 import { cn } from "../lib/utils";
 import { LikeButton } from "./LikeButton";
 import { KeepButton } from "./KeepButton";
+import { ShareButton } from "./ShareButton";
 import { FollowButton } from "./FollowButton";
 import { LyricView } from "./LyricView";
 import { usePlayer } from "../player/PlayerProvider";
@@ -236,6 +237,7 @@ export function NowPlaying({ data, isLoading, fallbackStation }: NowPlayingProps
                   }}
                 />
                 <LikeButton mbid={rec.mbid} />
+                <ShareButton sharePath={`songs/${rec.mbid}`} kind="song" />
               </div>
             )}
 
