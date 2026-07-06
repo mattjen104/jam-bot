@@ -54,13 +54,12 @@ export interface SongShareExtras {
   links: RecordingLink[];
   /**
    * Set when the song is playing on any station right now (within 5 min).
-   * When present, this is the ONLY Lore option shown — live always trumps
-   * the ghost-radio fallback.
+   * Shown above ghost run when both are present.
    */
   liveStation: { name: string; slug: string } | null;
   /**
    * The most recent archived broadcast run containing this song.
-   * Only shown when `liveStation` is null.
+   * Shown alongside live when both are present.
    */
   ghostRun: { stationName: string; runId: number; playedAt: string } | null;
 }
@@ -116,13 +115,20 @@ const SHARE_PLATFORM_LABELS: Array<[string, string]> = [
 ];
 
 /**
+ * Sentinel name stored inside a `kind:"search"` link entry to mark that this
+ * recording was already submitted to Odesli and came back empty (or errored).
+ * Filtered out before returning to callers so it is invisible to the UI.
+ */
+const ODESLI_ATTEMPTED_SENTINEL = "__odesli_searched__";
+
+/**
  * Lazy Odesli enrichment triggered on share-page hit.
  *
- * If the recording already has at least one `kind: "exact"` link in the DB,
- * those are returned immediately (no Odesli call). Otherwise the function
- * queries Odesli by ISRC (preferred) or by Spotify track ID extracted from an
- * existing search URL, merges exact links with universal search fallbacks, and
- * writes the result back to `recordings.links` so the next page hit is free.
+ * If the recording already has at least one `kind:"exact"` link, or has a
+ * sentinel marking a prior Odesli attempt, it is returned immediately (no
+ * Odesli call). Otherwise the function queries Odesli by ISRC, merges exact
+ * links with universal search fallbacks, and writes the result back to
+ * `recordings.links` so subsequent hits are free.
  *
  * Never throws — a failed enrichment falls back to search links silently.
  */
@@ -131,20 +137,32 @@ async function enrichShareLinksIfNeeded(
 ): Promise<RecordingLink[]> {
   const existing = (rec.links as RecordingLink[] | null) ?? [];
 
-  // Skip Odesli when at least one exact link is already cached — nothing to
-  // upgrade. Recordings with only search-kind links are still eligible: the
-  // share page hit is the right moment to try for exact deep links.
-  if (existing.some((l) => l.kind === "exact")) return existing;
+  // Return immediately (no Odesli call) when:
+  //   (a) at least one exact deep link is already stored, OR
+  //   (b) a prior Odesli attempt was recorded via the sentinel entry.
+  // This ensures search-only write-backs act as a true negative cache.
+  const alreadyAttempted = existing.some(
+    (l) => l.name === ODESLI_ATTEMPTED_SENTINEL,
+  );
+  if (alreadyAttempted || existing.some((l) => l.kind === "exact")) {
+    return existing.filter((l) => l.name !== ODESLI_ATTEMPTED_SENTINEL);
+  }
 
   // Build the Odesli lookup handle. ISRC is the only reliable vector here;
   // the recording must have one to get exact links from this path.
   const searchLinks = buildSearchLinks(rec.artist, rec.title);
 
+  /** Search links + sentinel so this branch never re-triggers Odesli. */
+  const searchLinksWithSentinel: RecordingLink[] = [
+    ...searchLinks,
+    { name: ODESLI_ATTEMPTED_SENTINEL, url: "", kind: "search" },
+  ];
+
   if (!rec.isrc?.trim()) {
-    // No ISRC and no other stable handle — write search links as a permanent
-    // negative-cache marker (we can never call Odesli for this recording).
+    // No ISRC — we can never call Odesli for this recording. Write search
+    // links + sentinel as a permanent negative-cache marker.
     db.update(recordingsTable)
-      .set({ links: searchLinks, updatedAt: new Date() })
+      .set({ links: searchLinksWithSentinel, updatedAt: new Date() })
       .where(eq(recordingsTable.mbid, rec.mbid))
       .catch((err) =>
         console.error("[share] search-link write-back failed", rec.mbid, err),
@@ -187,10 +205,11 @@ async function enrichShareLinksIfNeeded(
       exact.push({ name: label, url: u, kind: "exact" });
     }
 
-    // Odesli found no exact links — persist search links as negative cache.
+    // Odesli found no exact links — persist search links + sentinel as
+    // negative cache so the next hit skips the Odesli call entirely.
     if (exact.length === 0) {
       db.update(recordingsTable)
-        .set({ links: searchLinks, updatedAt: new Date() })
+        .set({ links: searchLinksWithSentinel, updatedAt: new Date() })
         .where(eq(recordingsTable.mbid, rec.mbid))
         .catch((err) =>
           console.error("[share] search-link write-back (no exact) failed", rec.mbid, err),
@@ -216,9 +235,10 @@ async function enrichShareLinksIfNeeded(
     return merged;
   } catch (err) {
     console.warn("[share] Odesli enrichment failed", rec.mbid, err);
-    // On error, persist search links so we don't hammer Odesli on every hit.
+    // On error, persist search links + sentinel so we don't hammer Odesli
+    // on every subsequent share-page hit for this recording.
     db.update(recordingsTable)
-      .set({ links: searchLinks, updatedAt: new Date() })
+      .set({ links: searchLinksWithSentinel, updatedAt: new Date() })
       .where(eq(recordingsTable.mbid, rec.mbid))
       .catch(() => undefined);
     return searchLinks;
@@ -305,11 +325,12 @@ export async function getSongShare(mbid: string): Promise<SongSharePayload | nul
 
   const liveStation = liveRow ?? null;
 
-  // 2. If not live, find the most recent archived run containing this song.
+  // 2. Find the most recent archived run containing this song (always — shown
+  //    alongside live when both are present, alone otherwise).
   //    Direct SQL: self-join spins to compute the run anchor (MIN spin id in
   //    the same station+show+UTC-day group) without a heuristic scan limit.
   let ghostRun: SongShareExtras["ghostRun"] = null;
-  if (!liveStation) {
+  {
     type GhostRow = {
       run_id: number;
       played_at: Date | string;
@@ -371,8 +392,8 @@ export async function getSongShare(mbid: string): Promise<SongSharePayload | nul
 /**
  * Song-specific share landing. Keeps full OG meta for bot unfurls but renders
  * a real service-chooser page for human visitors instead of a JS redirect.
- * Live station is always shown when present; ghost radio only appears when the
- * song is not currently on air anywhere.
+ * Live station and ghost archive CTA are independent — both appear when both
+ * conditions are met (live on air + has a prior archived broadcast).
  */
 export function renderSongShareHtml(
   payload: SongSharePayload,
@@ -403,24 +424,26 @@ export function renderSongShareHtml(
     )
     .join("\n");
 
-  // Lore button — live trumps ghost, only one is shown.
-  let loreBtnHtml = "";
+  // Lore CTAs — live and ghost are independent; both shown when both present.
+  const loreBtns: string[] = [];
   if (song.liveStation) {
     const stationUrl = escapeHtml(
       `${origin}${loreBasePath()}/archive/stations/${encodeURIComponent(song.liveStation.slug)}`,
     );
-    loreBtnHtml = `<a href="${stationUrl}" class="btn btn-live">
+    loreBtns.push(`<a href="${stationUrl}" class="btn btn-live">
       <span class="live-dot"></span>Live on ${escapeHtml(song.liveStation.name)} right now
-    </a>`;
-  } else if (song.ghostRun) {
+    </a>`);
+  }
+  if (song.ghostRun) {
     const runUrl = escapeHtml(
       `${origin}${loreBasePath()}/archive/station-runs/${song.ghostRun.runId}?play=1&from=${encodeURIComponent(payload.redirectPath.split("/").pop() ?? "")}`,
     );
     const date = song.ghostRun.playedAt.slice(0, 10);
-    loreBtnHtml = `<a href="${runUrl}" class="btn btn-ghost">
+    loreBtns.push(`<a href="${runUrl}" class="btn btn-ghost">
       Last played on ${escapeHtml(song.ghostRun.stationName)} · ${escapeHtml(date)} — listen to that broadcast
-    </a>`;
+    </a>`);
   }
+  const loreBtnHtml = loreBtns.join("\n    ");
 
   const loreFullHtml = `<a href="${loreUrl}" class="btn btn-lore">View full story on Lore →</a>`;
 
