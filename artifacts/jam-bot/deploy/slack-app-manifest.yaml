@@ -83,17 +83,6 @@ oauth_config:
       - links:write
 settings:
   event_subscriptions:
-    # Domains whose links trigger link_shared events. The bot will intercept
-    # any of these URLs posted anywhere in the workspace and replace the
-    # default Slack preview with a Lore card (artwork, live/ghost station
-    # link, service buttons). Add or remove domains here to control scope.
-    unfurl_domains:
-      - open.spotify.com
-      - music.apple.com
-      - music.youtube.com
-      - bandcamp.com
-      - soundcloud.com
-      - tidal.com
     bot_events:
       - app_mention
       # Music service link unfurling — fires whenever a subscribed domain URL
