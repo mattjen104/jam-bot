@@ -20,6 +20,7 @@ import {
   Loader2,
   Map,
   Music2,
+  RefreshCw,
   UserCheck,
   Users,
   Radio,
@@ -80,6 +81,34 @@ export default function TasteMap() {
   const { data: runs = [], isLoading: runsLoading } = useMyOverlapRuns();
 
   const [connectBusy, setConnectBusy] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
+
+  // Can trigger / retry an import when connected and no job is currently active.
+  const lastJobErrored = jobData?.status === "error";
+  const neverImported = hasSpotify && jobData === null;
+  const canTriggerImport = hasSpotify && !isActive && !importBusy;
+
+  // Human-readable explanation for empty overlap sections.
+  const importEmptyMessage = isActive
+    ? "Reading your library now — matches will appear here shortly."
+    : lastJobErrored
+      ? "Last import failed — hit Retry import above to try again."
+      : neverImported
+        ? "Hit Import Spotify library above to find your matches."
+        : "None of your library tracks have been spun on the dial yet. As stations play your music, matches appear here.";
+
+  const handleImport = async () => {
+    setImportBusy(true);
+    try {
+      await postStartImport("spotify");
+      // The useLatestImportJob hook will start polling automatically once
+      // the new job appears (staleTime: 0).
+    } catch {
+      // error will surface in the banner via the next poll
+    } finally {
+      setImportBusy(false);
+    }
+  };
 
   const handleConnect = async () => {
     setConnectBusy(true);
@@ -154,13 +183,47 @@ export default function TasteMap() {
             <Map className="h-4 w-4" />
             Taste map
           </div>
-          <h1 className="mt-3 font-serif text-4xl font-semibold leading-[1.05] text-foreground sm:text-5xl">
-            Your library vs. the dial.
-          </h1>
+          <div className="mt-3 flex flex-wrap items-start gap-3">
+            <h1 className="font-serif text-4xl font-semibold leading-[1.05] text-foreground sm:text-5xl">
+              Your library vs. the dial.
+            </h1>
+            {hasSpotify && (
+              <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-[#1DB954]/40 bg-[#1DB954]/10 px-3 py-1 font-mono text-[10px] uppercase tracking-wide text-[#1DB954]">
+                <CheckCircle2 className="h-3 w-3" />
+                Spotify connected
+              </span>
+            )}
+          </div>
           <p className="mt-4 max-w-[52ch] text-base text-muted-foreground">
             Your Spotify library mapped to every spin on the dial — see which
             stations already play your music, and which shows to ride first.
           </p>
+
+          {/* Import / retry CTA — shown when connected but no active job */}
+          {canTriggerImport && (neverImported || lastJobErrored) && (
+            <div className="mt-5 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => void handleImport()}
+                disabled={importBusy}
+                className="hover-elevate inline-flex items-center gap-2 rounded-full border border-[#C6F53F]/50 bg-[#C6F53F]/15 px-4 py-2 font-mono text-[11px] uppercase tracking-wide text-[#C6F53F] disabled:opacity-60"
+              >
+                {importBusy ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : lastJobErrored ? (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                ) : (
+                  <Music2 className="h-3.5 w-3.5" />
+                )}
+                {lastJobErrored ? "Retry import" : "Import Spotify library"}
+              </button>
+              {lastJobErrored && (
+                <p className="font-mono text-[11px] text-muted-foreground">
+                  Last import failed — retry to try again
+                </p>
+              )}
+            </div>
+          )}
         </header>
 
         {/* Import status banner */}
@@ -194,7 +257,7 @@ export default function TasteMap() {
               ))}
             </ul>
           ) : stations.length === 0 ? (
-            <EmptyOverlap message="Stations appear once your library is imported and matched." />
+            <EmptyOverlap message={importEmptyMessage} />
           ) : (
             <ul className="flex flex-col gap-2">
               {stations.map((s) => (
@@ -220,7 +283,7 @@ export default function TasteMap() {
           {pickersLoading || connLoading ? (
             <SkeletonCards />
           ) : pickers.length === 0 ? (
-            <EmptyOverlap message="Your taste map fills as your library imports." />
+            <EmptyOverlap message={importEmptyMessage} />
           ) : (
             <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {pickers.map((p) => (
@@ -253,7 +316,7 @@ export default function TasteMap() {
               ))}
             </ul>
           ) : runs.length === 0 ? (
-            <EmptyOverlap message="Runs appear once library matching finds shared spins." />
+            <EmptyOverlap message={importEmptyMessage} />
           ) : (
             <ul className="flex flex-col gap-2">
               {runs.map((r) => (
