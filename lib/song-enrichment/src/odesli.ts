@@ -181,8 +181,13 @@ const SEARCH_LINK_BUILDERS: Array<{ name: string; build: (q: string) => string }
   { name: "Apple Music", build: (q) => `https://music.apple.com/us/search?term=${encodeURIComponent(q)}` },
   { name: "YouTube Music", build: (q) => `https://music.youtube.com/search?q=${encodeURIComponent(q)}` },
   { name: "YouTube", build: (q) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}` },
+  { name: "Amazon Music", build: (q) => `https://music.amazon.com/search/${encodeURIComponent(q)}` },
+  { name: "Tidal", build: (q) => `https://listen.tidal.com/search?q=${encodeURIComponent(q)}` },
+  { name: "Deezer", build: (q) => `https://www.deezer.com/search/${encodeURIComponent(q)}` },
   { name: "Qobuz", build: (q) => `https://open.qobuz.com/search/${encodeURIComponent(q)}` },
   { name: "Bandcamp", build: (q) => `https://bandcamp.com/search?q=${encodeURIComponent(q)}` },
+  { name: "SoundCloud", build: (q) => `https://soundcloud.com/search?q=${encodeURIComponent(q)}` },
+  { name: "Pandora", build: (q) => `https://www.pandora.com/search/${encodeURIComponent(q)}/all` },
 ];
 
 /**
