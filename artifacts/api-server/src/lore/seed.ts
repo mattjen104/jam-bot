@@ -330,9 +330,9 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "WNUR 89.3 FM",
       org: "Northwestern University",
       country: "US",
-      // No HTTPS stream confirmed reachable; HTTP port 8000 is mixed-content
-      // blocked in HTTPS apps. Set empty until an HTTPS CDN endpoint is found.
-      streamUrl: "",
+      // RevMA CDN HTTPS stream confirmed reachable (200 audio/mpeg) from the
+      // Replit container. URL sourced from their AudioIgniter playlist config.
+      streamUrl: "https://stream.rcs.revma.com/w4pmmfkdx4zuv",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://wnur.northwestern.edu",
@@ -347,11 +347,12 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "WREK 91.1 FM",
       org: "Georgia Institute of Technology",
       country: "US",
-      // No HTTPS stream confirmed reachable; HTTP port 8000 is mixed-content
-      // blocked in HTTPS apps. Set empty until an HTTPS CDN endpoint is found.
+      // Only HTTP port-8000 stream confirmed (streaming.wrek.org:8000). No HTTPS
+      // CDN endpoint found after exhaustive search. Kept empty — mixed-content
+      // blocked in HTTPS apps.
       streamUrl: "",
-      streamQuality: "96kbps AAC",
-      streamFormat: "aac",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
       homepageUrl: "https://wrek.org",
       donateUrl: null,
       nowPlayingSource: "spinitron",
@@ -364,11 +365,11 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "KDVS 90.3 FM",
       org: "UC Davis",
       country: "US",
-      // No HTTPS stream confirmed reachable; HTTP port 8000 is mixed-content
-      // blocked in HTTPS apps. Set empty until an HTTPS CDN endpoint is found.
-      streamUrl: "",
-      streamQuality: "128kbps MP3",
-      streamFormat: "mp3",
+      // HTTPS stream confirmed reachable (200 audio/aac) from the Replit container.
+      // /listen redirects to /stream; using /stream directly to avoid extra hop.
+      streamUrl: "https://listen.kdvs.org/stream",
+      streamQuality: "128kbps AAC",
+      streamFormat: "aac",
       homepageUrl: "https://kdvs.org",
       donateUrl: null,
       nowPlayingSource: "spinitron",
@@ -381,9 +382,9 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "WHRB 95.3 FM",
       org: "Harvard University",
       country: "US",
-      // No HTTPS stream confirmed reachable; HTTP port 8000 is mixed-content
-      // blocked in HTTPS apps. Set empty until an HTTPS CDN endpoint is found.
-      streamUrl: "",
+      // HTTPS stream confirmed reachable (200 audio/mpeg) from the Replit container.
+      // URL sourced from their homepage embedded player.
+      streamUrl: "https://stream.whrb.org/whrb-mp3",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://whrb.org",
@@ -434,9 +435,9 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "WXYC 89.3 FM",
       org: "UNC Chapel Hill",
       country: "US",
-      // No HTTPS stream confirmed reachable; HTTP port 8000 is mixed-content
-      // blocked in HTTPS apps. Set empty until an HTTPS CDN endpoint is found.
-      streamUrl: "",
+      // HTTPS ibiblio.org CDN stream confirmed reachable (200 audio/mpeg) from the
+      // Replit container. URL found in their homepage HTML.
+      streamUrl: "https://audio-mp3.ibiblio.org/wxyc.mp3",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://wxyc.org",
@@ -467,10 +468,11 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "KVRX 91.7 FM",
       org: "UT Austin",
       country: "US",
-      // No HTTPS stream confirmed reachable; HTTP port 8000 is mixed-content
-      // blocked in HTTPS apps. Set empty until an HTTPS CDN endpoint is found.
-      streamUrl: "",
-      streamQuality: "128kbps MP3",
+      // HTTPS redirect endpoint confirmed browser-safe: 302 → https://streams.kut.org/5020_192.mp3
+      // (DAS/KUT CDN, audio/mpeg, CORS: *). <audio> follows redirects transparently.
+      // URL sourced from the Radio Browser directory; served from their own domain.
+      streamUrl: "https://kvrx.org/now_playing/stream",
+      streamQuality: "192kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://kvrx.org",
       donateUrl: null,
@@ -488,9 +490,10 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "WMBR 88.1 FM",
       org: "MIT",
       country: "US",
-      // No HTTPS stream confirmed reachable; HTTP port 8000 is mixed-content
-      // blocked in HTTPS apps. Set empty until an HTTPS CDN endpoint is found.
-      streamUrl: "",
+      // HTTPS stream on port 8002 confirmed reachable (200 audio/mpeg) from the
+      // Replit container. Direct link from their /www/listen page; HTTP port 8002
+      // is refused — TLS only.
+      streamUrl: "https://wmbr.org:8002/hi",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://wmbr.org",
@@ -505,9 +508,9 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "WUSB 90.1 FM",
       org: "Stony Brook University",
       country: "US",
-      // No HTTPS stream confirmed reachable; HTTP port 8000 is mixed-content
-      // blocked in HTTPS apps. Set empty until an HTTPS CDN endpoint is found.
-      streamUrl: "",
+      // HTTPS stream on port 8092 confirmed reachable (200 audio/mpeg) from the
+      // Replit container. URL found on their homepage listen widget.
+      streamUrl: "https://stream.wusb.stonybrook.edu:8092/listen.pl",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://wusb.fm",
@@ -522,8 +525,9 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "WUOG 90.5 FM",
       org: "University of Georgia",
       country: "US",
-      // No HTTPS stream confirmed reachable; HTTP port 8000 is mixed-content
-      // blocked in HTTPS apps. Set empty until an HTTPS CDN endpoint is found.
+      // Only HTTP port-8000 stream found (stream.wuog.org:8000/stream, referenced
+      // on their live-stream page). No HTTPS CDN endpoint found. Kept empty —
+      // mixed-content blocked in HTTPS apps.
       streamUrl: "",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
@@ -539,8 +543,8 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "WVUM 90.5 FM",
       org: "University of Miami",
       country: "US",
-      // No HTTPS stream confirmed reachable; HTTP port 8000 is mixed-content
-      // blocked in HTTPS apps. Set empty until an HTTPS CDN endpoint is found.
+      // No direct audio stream found. Their listen page embeds a Twitch stream
+      // (wvumfm), which cannot be used as an Audio src. Kept empty.
       streamUrl: "",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
@@ -556,9 +560,9 @@ function spinitronCollegeStations(): InsertStation[] {
       name: "KVSC 88.1 FM",
       org: "St. Cloud State University",
       country: "US",
-      // No HTTPS stream confirmed reachable; HTTP port 8000 is mixed-content
-      // blocked in HTTPS apps. Set empty until an HTTPS CDN endpoint is found.
-      streamUrl: "",
+      // HTTPS stream on port 443 confirmed reachable (200 audio/mpeg) from the
+      // Replit container. URL sourced from their jPlayer config on the listen page.
+      streamUrl: "https://corn.kvsc.org:443/broadband",
       streamQuality: "192kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://www.kvsc.org",
