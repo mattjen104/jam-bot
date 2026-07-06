@@ -132,8 +132,11 @@ async function enrichShareLinksIfNeeded(
 ): Promise<RecordingLink[]> {
   const existing = (rec.links as RecordingLink[] | null) ?? [];
 
-  // Already have exact links — nothing to do.
-  if (existing.some((l) => l.kind === "exact")) return existing;
+  // Any cached links (exact or search) are good enough — return immediately.
+  // This prevents repeated Odesli calls for recordings that were already tried:
+  // if we previously called Odesli and got no exact links, the search links are
+  // stored in the DB as a negative-cache, and we skip the call on future hits.
+  if (existing.length > 0) return existing;
 
   // Build a lookup handle. ISRC is the most reliable; fall back to extracting
   // a Spotify track ID from any Spotify URL already stored in the links JSONB.
@@ -153,7 +156,18 @@ async function enrichShareLinksIfNeeded(
   }
 
   const searchLinks = buildSearchLinks(rec.artist, rec.title);
-  if (!odesliQuery) return searchLinks;
+
+  // No Odesli handle available — persist search links as a negative-cache marker
+  // so future hits return immediately without another fruitless lookup.
+  if (!odesliQuery) {
+    db.update(recordingsTable)
+      .set({ links: searchLinks, updatedAt: new Date() })
+      .where(eq(recordingsTable.mbid, rec.mbid))
+      .catch((err) =>
+        console.error("[share] search-link write-back failed", rec.mbid, err),
+      );
+    return searchLinks;
+  }
 
   try {
     // Rate-limited fetch: enqueue behind the shared promise chain so
@@ -188,7 +202,16 @@ async function enrichShareLinksIfNeeded(
       exact.push({ name: label, url: u, kind: "exact" });
     }
 
-    if (exact.length === 0) return searchLinks;
+    // Odesli found no exact links — persist search links as negative cache.
+    if (exact.length === 0) {
+      db.update(recordingsTable)
+        .set({ links: searchLinks, updatedAt: new Date() })
+        .where(eq(recordingsTable.mbid, rec.mbid))
+        .catch((err) =>
+          console.error("[share] search-link write-back (no exact) failed", rec.mbid, err),
+        );
+      return searchLinks;
+    }
 
     // Merge: exact links first, then search links for any service not covered.
     const seenNames = new Set(exact.map((l) => l.name));
@@ -208,7 +231,12 @@ async function enrichShareLinksIfNeeded(
     return merged;
   } catch (err) {
     console.warn("[share] Odesli enrichment failed", rec.mbid, err);
-    return existing.length > 0 ? existing : searchLinks;
+    // On error, persist search links so we don't hammer Odesli on every hit.
+    db.update(recordingsTable)
+      .set({ links: searchLinks, updatedAt: new Date() })
+      .where(eq(recordingsTable.mbid, rec.mbid))
+      .catch(() => undefined);
+    return searchLinks;
   }
 }
 
@@ -293,11 +321,14 @@ export async function getSongShare(mbid: string): Promise<SongSharePayload | nul
   const liveStation = liveRow ?? null;
 
   // 2. If not live, find the most recent archived run containing this song.
+  //    Fetch a small window of recent spins and pick the first one that belongs
+  //    to a run (runId != null). The most recent spin may be a singleton (no
+  //    run context), so we scan a few to find the best available ghost option.
   let ghostRun: SongShareExtras["ghostRun"] = null;
   if (!liveStation) {
-    const recentSpins = await spinsForRecording(mbid, 1);
-    const top = recentSpins[0];
-    if (top?.runId != null) {
+    const recentSpins = await spinsForRecording(mbid, 10);
+    const top = recentSpins.find((s) => s.runId != null);
+    if (top != null && top.runId != null) {
       ghostRun = {
         stationName: top.station.name,
         runId: top.runId,
@@ -345,9 +376,9 @@ export function renderSongShareHtml(
   const image = escapeHtml(`${origin}${cardPath}`);
   const loreUrl = escapeHtml(`${origin}${payload.redirectPath}`);
 
-  // Prefer exact links; always show at least search fallbacks.
-  const exact = song.links.filter((l) => l.kind === "exact");
-  const serviceLinks = exact.length > 0 ? exact : song.links;
+  // song.links is already a merged list: exact links first for covered services,
+  // search fallbacks for everything else. Render the full list as-is.
+  const serviceLinks = song.links;
 
   const artworkHtml = payload.card.artworkUrl
     ? `<img src="${escapeHtml(payload.card.artworkUrl)}" alt="" class="artwork">`
