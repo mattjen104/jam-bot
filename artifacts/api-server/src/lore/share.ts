@@ -16,6 +16,7 @@ import {
 } from "@workspace/db";
 import { eq, and, isNull, sql, gt, desc } from "drizzle-orm";
 import type { RecordingLink } from "@workspace/db";
+import { buildSearchLinks } from "@workspace/song-enrichment";
 import { spinsForRecording } from "./segue.js";
 
 /**
@@ -84,6 +85,117 @@ const dayExpr = sql<string>`to_char(${spinsTable.playedAt} AT TIME ZONE 'UTC', '
 
 /** How recent a spin must be to count as "playing live right now". */
 const LIVE_WINDOW_MS = 5 * 60 * 1000;
+
+// ---- Lazy Odesli enrichment for share pages --------------------------------
+
+const ODESLI_BASE_URL = "https://api.song.link/v1-alpha.1/links";
+const ODESLI_SHARE_TIMEOUT_MS = 8_000;
+
+/**
+ * Platforms surfaced on the share landing page, in display order.
+ * Unlike the track-knowledge enrichment path, Spotify IS included here — the
+ * share recipient may use any service.
+ */
+const SHARE_PLATFORM_LABELS: Array<[string, string]> = [
+  ["spotify", "Spotify"],
+  ["appleMusic", "Apple Music"],
+  ["youtubeMusic", "YouTube Music"],
+  ["youtube", "YouTube"],
+  ["amazonMusic", "Amazon Music"],
+  ["tidal", "Tidal"],
+  ["deezer", "Deezer"],
+  ["soundcloud", "SoundCloud"],
+  ["pandora", "Pandora"],
+];
+
+/**
+ * Lazy Odesli enrichment triggered on share-page hit.
+ *
+ * If the recording already has at least one `kind: "exact"` link in the DB,
+ * those are returned immediately (no Odesli call). Otherwise the function
+ * queries Odesli by ISRC (preferred) or by Spotify track ID extracted from an
+ * existing search URL, merges exact links with universal search fallbacks, and
+ * writes the result back to `recordings.links` so the next page hit is free.
+ *
+ * Never throws — a failed enrichment falls back to search links silently.
+ */
+async function enrichShareLinksIfNeeded(
+  rec: typeof recordingsTable.$inferSelect,
+): Promise<RecordingLink[]> {
+  const existing = (rec.links as RecordingLink[] | null) ?? [];
+
+  // Already have exact links — nothing to do.
+  if (existing.some((l) => l.kind === "exact")) return existing;
+
+  // Build a lookup handle. ISRC is the most reliable; fall back to extracting
+  // a Spotify track ID from any Spotify URL already stored in the links JSONB.
+  let odesliQuery: string | null = null;
+  if (rec.isrc?.trim()) {
+    odesliQuery = `isrc=${encodeURIComponent(rec.isrc.trim())}`;
+  } else {
+    const spotifyLink = existing.find(
+      (l) => l.name === "Spotify" && l.url.includes("open.spotify.com/track/"),
+    );
+    if (spotifyLink) {
+      const m = spotifyLink.url.match(/open\.spotify\.com\/track\/([A-Za-z0-9]+)/);
+      if (m?.[1]) {
+        odesliQuery = `url=${encodeURIComponent(`spotify:track:${m[1]}`)}`;
+      }
+    }
+  }
+
+  const searchLinks = buildSearchLinks(rec.artist, rec.title);
+  if (!odesliQuery) return searchLinks;
+
+  try {
+    const res = await fetch(
+      `${ODESLI_BASE_URL}?${odesliQuery}&userCountry=US&songIfSingle=true`,
+      {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(ODESLI_SHARE_TIMEOUT_MS),
+      },
+    );
+    if (!res.ok) {
+      console.warn(`[share] Odesli ${res.status} for mbid=${rec.mbid}`);
+      return searchLinks;
+    }
+    const body = (await res.json()) as {
+      linksByPlatform?: Record<string, { url?: string }>;
+    };
+    const byPlatform = body.linksByPlatform ?? {};
+
+    const exact: RecordingLink[] = [];
+    const seenUrls = new Set<string>();
+    for (const [key, label] of SHARE_PLATFORM_LABELS) {
+      const u = byPlatform[key]?.url?.trim();
+      if (!u || seenUrls.has(u)) continue;
+      seenUrls.add(u);
+      exact.push({ name: label, url: u, kind: "exact" });
+    }
+
+    if (exact.length === 0) return searchLinks;
+
+    // Merge: exact links first, then search links for any service not covered.
+    const seenNames = new Set(exact.map((l) => l.name));
+    const merged: RecordingLink[] = [
+      ...exact,
+      ...searchLinks.filter((s) => !seenNames.has(s.name)),
+    ];
+
+    // Write back to DB (fire-and-forget — page still renders if this fails).
+    db.update(recordingsTable)
+      .set({ links: merged, updatedAt: new Date() })
+      .where(eq(recordingsTable.mbid, rec.mbid))
+      .catch((err) =>
+        console.error("[share] Odesli link write-back failed", rec.mbid, err),
+      );
+
+    return merged;
+  } catch (err) {
+    console.warn("[share] Odesli enrichment failed", rec.mbid, err);
+    return existing.length > 0 ? existing : searchLinks;
+  }
+}
 
 /**
  * Resolve a SongSharePayload from external service identifiers. Used by the
@@ -179,7 +291,9 @@ export async function getSongShare(mbid: string): Promise<SongSharePayload | nul
     }
   }
 
-  const links = (rec.links as RecordingLink[] | null) ?? [];
+  // Lazily enrich links via Odesli if the DB only has search-kind links (or
+  // none). The result is written back to the DB so subsequent hits are free.
+  const links = await enrichShareLinksIfNeeded(rec);
 
   return {
     title: `${rec.title} — ${rec.artist} · Lore`,
