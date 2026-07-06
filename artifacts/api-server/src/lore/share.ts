@@ -124,6 +124,109 @@ const SHARE_PLATFORM_LABELS: Array<[string, string]> = [
  */
 const odesliAttempted = new Set<string>();
 
+// ---- Odesli free-text query confidence helpers --------------------------------
+
+/**
+ * Normalize a string to a set of meaningful word tokens for fuzzy comparison.
+ * Converts to lowercase, expands `&` to `and`, strips non-alphanumeric chars,
+ * and drops tokens shorter than 2 characters (single letters, etc.).
+ */
+function _odesliNormTokens(s: string): Set<string> {
+  return new Set(
+    s
+      .toLowerCase()
+      .replace(/&/g, " and ")
+      .replace(/[^a-z0-9 ]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .split(" ")
+      .filter((t) => t.length >= 2),
+  );
+}
+
+/**
+ * Pure helper — exported for unit testing only.
+ *
+ * Returns true when `b` is a plausible token-level match for `a`. The check
+ * is directional: all tokens in the *shorter* set must appear in the *longer*
+ * set. This handles "feat." suffixes added by Odesli, the "The X" vs "X"
+ * prefix discrepancy, and minor punctuation differences, without the false
+ * positives of a raw substring-containment test.
+ *
+ * Only used when the Odesli query was a free-text `?q=` lookup — ISRC and
+ * Spotify-URL lookups are identifier-based and are always trusted.
+ */
+export function _odesliArtistMatches(a: string, b: string): boolean {
+  const ta = _odesliNormTokens(a);
+  const tb = _odesliNormTokens(b);
+  if (ta.size === 0 || tb.size === 0) return false;
+  const [shorter, longer] = ta.size <= tb.size ? [ta, tb] : [tb, ta];
+  return [...shorter].every((t) => longer.has(t));
+}
+
+/**
+ * Pure helper — exported for unit testing only.
+ *
+ * Same token-subset logic as `_odesliArtistMatches`, applied to song titles.
+ * Titles may have "(Live)", "(Radio Edit)", or "(feat. X)" suffixes on either
+ * the Odesli or the station-metadata side, which the shorter-subset rule
+ * handles naturally.
+ */
+export function _odesliTitleMatches(a: string, b: string): boolean {
+  const ta = _odesliNormTokens(a);
+  const tb = _odesliNormTokens(b);
+  if (ta.size === 0 || tb.size === 0) return false;
+  const [shorter, longer] = ta.size <= tb.size ? [ta, tb] : [tb, ta];
+  return [...shorter].every((t) => longer.has(t));
+}
+
+/**
+ * Pure helper — exported for unit testing only.
+ *
+ * Evaluates confidence in an Odesli `?q=` (free-text) response by comparing
+ * the entity metadata it returned against the recording's own artist and title.
+ *
+ * Returns:
+ *   "pass"        — entity metadata present and matches recording well enough
+ *   "mismatch"    — entity metadata present but artist or title don't match
+ *   "no-metadata" — entity metadata absent; the guard fails closed
+ *
+ * ISRC and Spotify-URL lookups are identifier-based and must NOT call this
+ * function — they are always trusted without a confidence check.
+ */
+export function _odesliConfidenceCheck(
+  body: unknown,
+  recordingArtist: string,
+  recordingTitle: string,
+): "pass" | "mismatch" | "no-metadata" {
+  type OdesliEntity = { artistName?: string; title?: string };
+  type OdesliBody = {
+    entityUniqueId?: string;
+    entitiesByUniqueId?: Record<string, OdesliEntity>;
+  };
+  const b = body as OdesliBody;
+  const entities = b.entitiesByUniqueId ?? {};
+  const primaryId = b.entityUniqueId;
+  const entity: OdesliEntity | undefined = primaryId
+    ? (entities[primaryId] ?? Object.values(entities)[0])
+    : Object.values(entities)[0];
+
+  const odesliArtist = entity?.artistName?.trim() ?? "";
+  const odesliTitle = entity?.title?.trim() ?? "";
+
+  // Fail closed: if the entity is absent or both fields are empty, we cannot
+  // validate the result and must not trust it.
+  if (!odesliArtist && !odesliTitle) return "no-metadata";
+
+  if (odesliArtist && !_odesliArtistMatches(recordingArtist, odesliArtist)) {
+    return "mismatch";
+  }
+  if (odesliTitle && !_odesliTitleMatches(recordingTitle, odesliTitle)) {
+    return "mismatch";
+  }
+  return "pass";
+}
+
 /**
  * Pure helper — exported for unit testing only.
  *
@@ -197,6 +300,7 @@ async function enrichShareLinksIfNeeded(
   const searchLinks = buildSearchLinks(rec.artist, rec.title);
 
   const odesliQuery = _odesliQueryForRecording(rec.isrc, existing, rec.artist, rec.title);
+  const isFreeTextQuery = odesliQuery?.startsWith("q=") ?? false;
 
   if (!odesliQuery) {
     // No lookup vector at all — write search links and mark as attempted so
@@ -234,6 +338,29 @@ async function enrichShareLinksIfNeeded(
     const byPlatform =
       ((body as { linksByPlatform?: Record<string, { url?: string }> })
         .linksByPlatform) ?? {};
+
+    // Confidence guard: free-text queries can match the wrong song when a
+    // title is common or an artist is ambiguous. Compare artist+title from the
+    // returned entity against the recording's own metadata before trusting the
+    // links. ISRC and Spotify-URL queries are identifier-based and skip this.
+    if (isFreeTextQuery) {
+      const verdict = _odesliConfidenceCheck(body, rec.artist, rec.title);
+      if (verdict !== "pass") {
+        console.warn(
+          "[share] Odesli q= match discarded —",
+          verdict,
+          { mbid: rec.mbid, recArtist: rec.artist, recTitle: rec.title },
+        );
+        odesliAttempted.add(rec.mbid);
+        db.update(recordingsTable)
+          .set({ links: searchLinks, updatedAt: new Date() })
+          .where(eq(recordingsTable.mbid, rec.mbid))
+          .catch((err) =>
+            console.error("[share] search-link write-back (confidence-fail) failed", rec.mbid, err),
+          );
+        return searchLinks;
+      }
+    }
 
     const exact: RecordingLink[] = [];
     const seenUrls = new Set<string>();

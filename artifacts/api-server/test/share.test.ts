@@ -7,6 +7,9 @@ import {
   isPrivateIp,
   isSafeArtworkUrl,
   _odesliQueryForRecording,
+  _odesliArtistMatches,
+  _odesliTitleMatches,
+  _odesliConfidenceCheck,
   type SharePayload,
 } from "../src/lore/share.js";
 
@@ -195,6 +198,149 @@ describe("_odesliQueryForRecording (Odesli lookup vector selection)", () => {
     ];
     const q = _odesliQueryForRecording("GBAYE0601498", links, "Artist", "Title");
     expect(q).toBe("isrc=GBAYE0601498");
+  });
+});
+
+describe("_odesliArtistMatches (token-subset artist matching)", () => {
+  it("accepts an exact artist match", () => {
+    expect(_odesliArtistMatches("Khruangbin", "Khruangbin")).toBe(true);
+  });
+
+  it("is case-insensitive", () => {
+    expect(_odesliArtistMatches("Madeleine Peyroux", "madeleine peyroux")).toBe(true);
+  });
+
+  it("accepts when Odesli artist has a feat. suffix the recording omits", () => {
+    expect(_odesliArtistMatches("Dua Lipa", "Dua Lipa feat. DaBaby")).toBe(true);
+  });
+
+  it("accepts when recording artist has a feat. suffix Odesli omits", () => {
+    expect(_odesliArtistMatches("Silk Sonic feat. Bruno Mars", "Silk Sonic")).toBe(true);
+  });
+
+  it("accepts & vs 'and' punctuation difference", () => {
+    expect(_odesliArtistMatches("Siouxsie & the Banshees", "Siouxsie and the Banshees")).toBe(true);
+  });
+
+  it("accepts when 'The' prefix is omitted on one side", () => {
+    expect(_odesliArtistMatches("The National", "National")).toBe(true);
+  });
+
+  it("rejects completely different artists (wrong-song case)", () => {
+    expect(_odesliArtistMatches("Taylor Swift", "Adele")).toBe(false);
+  });
+
+  it("rejects two multi-token artists with no token overlap", () => {
+    expect(_odesliArtistMatches("John Denver", "Elvis Presley")).toBe(false);
+  });
+
+  it("rejects single-character artist tokens (too ambiguous)", () => {
+    expect(_odesliArtistMatches("A", "A Tribe Called Quest")).toBe(false);
+    expect(_odesliArtistMatches("Radiohead", "R")).toBe(false);
+  });
+
+  it("rejects when either side is empty or whitespace-only", () => {
+    expect(_odesliArtistMatches("", "Radiohead")).toBe(false);
+    expect(_odesliArtistMatches("Radiohead", "")).toBe(false);
+    expect(_odesliArtistMatches("  ", "Radiohead")).toBe(false);
+  });
+});
+
+describe("_odesliTitleMatches (token-subset title matching)", () => {
+  it("accepts an exact title match", () => {
+    expect(_odesliTitleMatches("White Gloves", "White Gloves")).toBe(true);
+  });
+
+  it("accepts when Odesli title has a (Live) or (Radio Edit) suffix", () => {
+    expect(_odesliTitleMatches("White Gloves", "White Gloves (Live)")).toBe(true);
+    expect(_odesliTitleMatches("Silence", "Silence (Radio Edit)")).toBe(true);
+  });
+
+  it("accepts when recording title has a suffix Odesli omits", () => {
+    expect(_odesliTitleMatches("Go Your Own Way (Remaster)", "Go Your Own Way")).toBe(true);
+  });
+
+  it("rejects titles with no token overlap", () => {
+    expect(_odesliTitleMatches("Hallelujah", "Jolene")).toBe(false);
+  });
+
+  it("rejects when either side is empty", () => {
+    expect(_odesliTitleMatches("", "Hallelujah")).toBe(false);
+    expect(_odesliTitleMatches("Hallelujah", "")).toBe(false);
+  });
+});
+
+describe("_odesliConfidenceCheck (full body confidence verdict)", () => {
+  const makeBody = (artistName: string, title: string, entityId = "SPOTIFY_SONG::abc") => ({
+    entityUniqueId: entityId,
+    entitiesByUniqueId: {
+      [entityId]: { artistName, title },
+    },
+    linksByPlatform: {
+      spotify: { url: "https://open.spotify.com/track/abc" },
+    },
+  });
+
+  it("returns 'pass' when both artist and title match", () => {
+    expect(
+      _odesliConfidenceCheck(makeBody("Khruangbin", "White Gloves"), "Khruangbin", "White Gloves"),
+    ).toBe("pass");
+  });
+
+  it("returns 'pass' when Odesli has extra feat. tokens the recording omits", () => {
+    expect(
+      _odesliConfidenceCheck(
+        makeBody("Dua Lipa feat. DaBaby", "Levitating"),
+        "Dua Lipa",
+        "Levitating",
+      ),
+    ).toBe("pass");
+  });
+
+  it("returns 'mismatch' when artist differs (wrong-song case)", () => {
+    expect(
+      _odesliConfidenceCheck(makeBody("Adele", "Hello"), "Taylor Swift", "Hello"),
+    ).toBe("mismatch");
+  });
+
+  it("returns 'mismatch' when title differs despite matching artist", () => {
+    expect(
+      _odesliConfidenceCheck(makeBody("Radiohead", "Creep"), "Radiohead", "Karma Police"),
+    ).toBe("mismatch");
+  });
+
+  it("returns 'no-metadata' when entitiesByUniqueId is absent", () => {
+    expect(
+      _odesliConfidenceCheck(
+        { entityUniqueId: "x", linksByPlatform: {} },
+        "Radiohead",
+        "Creep",
+      ),
+    ).toBe("no-metadata");
+  });
+
+  it("returns 'no-metadata' when entity exists but both fields are empty strings", () => {
+    expect(
+      _odesliConfidenceCheck(
+        { entityUniqueId: "x", entitiesByUniqueId: { x: { artistName: "", title: "" } } },
+        "Radiohead",
+        "Creep",
+      ),
+    ).toBe("no-metadata");
+  });
+
+  it("returns 'no-metadata' for a completely empty body", () => {
+    expect(_odesliConfidenceCheck({}, "Radiohead", "Creep")).toBe("no-metadata");
+  });
+
+  it("falls back to first entity when entityUniqueId is absent", () => {
+    const body = {
+      entitiesByUniqueId: {
+        "SPOTIFY_SONG::xyz": { artistName: "Khruangbin", title: "White Gloves" },
+      },
+      linksByPlatform: {},
+    };
+    expect(_odesliConfidenceCheck(body, "Khruangbin", "White Gloves")).toBe("pass");
   });
 });
 
