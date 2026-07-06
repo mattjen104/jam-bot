@@ -1,6 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
   getSongShare,
+  resolveSongShareByIds,
   getStationShare,
   getStationRunShare,
   getPickerShare,
@@ -88,6 +89,42 @@ function handle(
     });
   };
 }
+
+// ---- Songs: resolve by external IDs (used by jam-bot link unfurler) --------
+
+/**
+ * Resolve a Lore song share payload from external identifiers.
+ * Called by the jam-bot when a music service link is pasted in Slack.
+ * Returns JSON (not HTML) — the jam-bot builds Block Kit blocks from it.
+ *
+ * Query params (at least one required):
+ *   spotifyId — Spotify track ID (most reliable, matched via links JSONB)
+ *   isrc      — ISRC code
+ *   artist    — artist name (used with title for fuzzy match)
+ *   title     — song title
+ */
+// Deliberately uses /share/resolve/song (not /share/songs/resolve) to avoid
+// Express param-route shadowing: /share/songs/:mbid would match "resolve" as
+// an mbid before the literal route could fire in some Express/tsx configs.
+router.get(
+  "/share/resolve/song",
+  handle(async (req, res) => {
+    const { spotifyId, isrc, artist, title } = req.query;
+    const payload = await resolveSongShareByIds({
+      spotifyTrackId: typeof spotifyId === "string" ? spotifyId : undefined,
+      isrc: typeof isrc === "string" ? isrc : undefined,
+      artist: typeof artist === "string" ? artist : undefined,
+      title: typeof title === "string" ? title : undefined,
+    });
+    if (!payload) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    res
+      .set("Cache-Control", "public, max-age=30")
+      .json(payload);
+  }),
+);
 
 // ---- Songs ---------------------------------------------------------------
 

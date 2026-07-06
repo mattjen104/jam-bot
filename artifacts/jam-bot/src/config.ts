@@ -276,6 +276,17 @@ const schema = z.object({
   // the free, unauthenticated endpoint.
   ODESLI_API_KEY: z.string().optional(),
 
+  // ---- Lore integration (link unfurling) --------------------------------
+  // Base URL of the Lore API server (used for internal lookups when the
+  // jam-bot unfurls music service links posted in Slack). Defaults to the
+  // local API server port used in development.
+  LORE_API_BASE: z.string().url().default("http://localhost:8080/api"),
+  // Public base URL of the Lore app (used to generate deep links inside
+  // Slack unfurl cards). Defaults to the Replit dev domain when available.
+  // Set this to your deployed domain (e.g. https://myapp.replit.app) in
+  // production so Slack cards link to the right place.
+  LORE_PUBLIC_URL: z.string().url().optional(),
+
   // ---- Track knowledge: live timestamped insights -----------------------
   // OPTIONAL payoff layer on top of turntable sync. As a record plays, the
   // bot surfaces short, hand-curated musical/production notes at the right

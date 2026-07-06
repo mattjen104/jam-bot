@@ -76,10 +76,29 @@ oauth_config:
       - im:history
       - im:read
       - mpim:history
+      # Required for music service link unfurling: links:read lets Slack
+      # deliver link_shared events to the bot; links:write lets the bot call
+      # chat.unfurl to replace the default Slack preview with a Lore card.
+      - links:read
+      - links:write
 settings:
   event_subscriptions:
+    # Domains whose links trigger link_shared events. The bot will intercept
+    # any of these URLs posted anywhere in the workspace and replace the
+    # default Slack preview with a Lore card (artwork, live/ghost station
+    # link, service buttons). Add or remove domains here to control scope.
+    unfurl_domains:
+      - open.spotify.com
+      - music.apple.com
+      - music.youtube.com
+      - bandcamp.com
+      - soundcloud.com
+      - tidal.com
     bot_events:
       - app_mention
+      # Music service link unfurling — fires whenever a subscribed domain URL
+      # is posted anywhere in the workspace. Handled by linkUnfurl.ts.
+      - link_shared
       # Lets the host DM the bot natural-language commands ("play X",
       # "skip", "start a jam", etc). The handler ignores DMs from anyone
       # other than the configured JAM_QUIET_DM_USER.

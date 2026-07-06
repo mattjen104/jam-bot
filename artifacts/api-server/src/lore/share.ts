@@ -85,6 +85,62 @@ const dayExpr = sql<string>`to_char(${spinsTable.playedAt} AT TIME ZONE 'UTC', '
 /** How recent a spin must be to count as "playing live right now". */
 const LIVE_WINDOW_MS = 5 * 60 * 1000;
 
+/**
+ * Resolve a SongSharePayload from external service identifiers. Used by the
+ * jam-bot's link-unfurl handler to turn a foreign Spotify/Apple Music/etc.
+ * URL into a Lore share card. Lookup order: Spotify track ID in links JSONB
+ * → ISRC → artist+title case-insensitive. Never throws.
+ */
+export async function resolveSongShareByIds(params: {
+  spotifyTrackId?: string;
+  isrc?: string;
+  artist?: string;
+  title?: string;
+}): Promise<(SongSharePayload & { mbid: string }) | null> {
+  let mbid: string | undefined;
+
+  // 1. Spotify track ID: look for exact link URL in recordings.links JSONB.
+  if (params.spotifyTrackId?.trim()) {
+    const spotifyUrl = `https://open.spotify.com/track/${params.spotifyTrackId.trim()}`;
+    const [row] = await db
+      .select({ mbid: recordingsTable.mbid })
+      .from(recordingsTable)
+      .where(sql`${recordingsTable.links} @> ${JSON.stringify([{ url: spotifyUrl }])}::jsonb`)
+      .limit(1);
+    mbid = row?.mbid;
+  }
+
+  // 2. ISRC column.
+  if (!mbid && params.isrc?.trim()) {
+    const [row] = await db
+      .select({ mbid: recordingsTable.mbid })
+      .from(recordingsTable)
+      .where(eq(recordingsTable.isrc, params.isrc.trim()))
+      .limit(1);
+    mbid = row?.mbid;
+  }
+
+  // 3. Artist + title case-insensitive.
+  if (!mbid && params.artist?.trim() && params.title?.trim()) {
+    const [row] = await db
+      .select({ mbid: recordingsTable.mbid })
+      .from(recordingsTable)
+      .where(
+        and(
+          sql`lower(${recordingsTable.artist}) = lower(${params.artist.trim()})`,
+          sql`lower(${recordingsTable.title}) = lower(${params.title.trim()})`,
+        ),
+      )
+      .limit(1);
+    mbid = row?.mbid;
+  }
+
+  if (!mbid) return null;
+  const payload = await getSongShare(mbid);
+  if (!payload) return null;
+  return { ...payload, mbid };
+}
+
 export async function getSongShare(mbid: string): Promise<SongSharePayload | null> {
   const [rec] = await db
     .select()

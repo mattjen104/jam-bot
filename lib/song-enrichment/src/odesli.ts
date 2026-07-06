@@ -210,6 +210,71 @@ function recordingCacheKey(recordingId: string): string {
  * search links are always appended so a listener can click through even when no
  * exact match exists (e.g. Spotify unconfigured). Never throws.
  */
+/** Parsed metadata returned when resolving an arbitrary music service URL. */
+export interface ResolvedSong {
+  artist: string;
+  title: string;
+  thumbnailUrl?: string;
+  /** Spotify track ID extracted from the Odesli response (when Spotify is in the entity map). */
+  spotifyTrackId?: string;
+  /** The song.link landing page. */
+  pageUrl?: string;
+}
+
+/**
+ * Resolve ANY music service URL (Spotify, Apple Music, Bandcamp, Tidal, etc.)
+ * to cross-platform metadata via Odesli. Used for inbound link unfurling in
+ * the jam-bot: a foreign URL comes in, this extracts artist/title/spotifyTrackId
+ * so the caller can look up the Lore recording.
+ *
+ * Never throws — a failure returns null and the caller skips the unfurl.
+ */
+export async function resolveAnyUrl(url: string): Promise<ResolvedSong | null> {
+  try {
+    const body = await odesliFetch(url);
+    const b = body as {
+      entityUniqueId?: string;
+      pageUrl?: string;
+      entitiesByUniqueId?: Record<
+        string,
+        {
+          id?: string;
+          type?: string;
+          title?: string;
+          artistName?: string;
+          thumbnailUrl?: string;
+          apiProvider?: string;
+        }
+      >;
+    };
+    const entities = b?.entitiesByUniqueId;
+    if (!entities) return null;
+
+    // Primary entity = the one that matched the input URL.
+    const primaryId = b.entityUniqueId;
+    const primary = (primaryId ? entities[primaryId] : null) ?? Object.values(entities)[0];
+    if (!primary) return null;
+
+    const artist = primary.artistName?.trim() ?? "";
+    const title = primary.title?.trim() ?? "";
+    const thumbnailUrl = primary.thumbnailUrl?.trim() || undefined;
+
+    // Find Spotify entity for its track ID (used for DB lookup).
+    const spotifyEntity = Object.values(entities).find(
+      (e) => e.apiProvider === "spotify",
+    );
+    const spotifyTrackId = spotifyEntity?.id?.trim() || undefined;
+
+    const pageUrl = b.pageUrl?.trim() || undefined;
+
+    if (!artist && !title) return null;
+    return { artist, title, thumbnailUrl, spotifyTrackId, pageUrl };
+  } catch (err) {
+    logger.warn("Odesli resolveAnyUrl failed", { url, error: String(err) });
+    return null;
+  }
+}
+
 export async function fetchRecordingLinks(args: {
   recordingId: string;
   artist: string;

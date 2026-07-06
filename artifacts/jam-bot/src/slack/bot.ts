@@ -1,6 +1,7 @@
 import { App, LogLevel } from "@slack/bolt";
 import type { KnownBlock } from "@slack/types";
 import { config } from "../config.js";
+import { handleLinkShared } from "./linkUnfurl.js";
 import { logger } from "../logger.js";
 import {
   searchTrack,
@@ -1636,6 +1637,22 @@ async function handleNaturalLanguage(
     );
   }
 }
+
+// Music service link unfurler. When someone pastes a Spotify, Apple Music,
+// Bandcamp, Tidal, or YouTube Music URL, Slack fires link_shared and we
+// replace the default preview with a Lore card (artwork, live/ghost station
+// link, service buttons). Requires `links:read` + `links:write` scopes and
+// the relevant domains registered in the Slack app manifest.
+slackApp.event("link_shared", async ({ event, client }) => {
+  await handleLinkShared(
+    {
+      channel: event.channel,
+      message_ts: event.message_ts,
+      links: (event.links ?? []) as Array<{ domain: string; url: string }>,
+    },
+    client,
+  );
+});
 
 // We use the `app_mention` event (not `message.channels`) so this only
 // fires when the bot is explicitly @-mentioned, and so it works even when
