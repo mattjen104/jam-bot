@@ -3,6 +3,7 @@ import { Router, type IRouter, type Request, type Response, type NextFunction } 
 import {
   db,
   serviceConnectionsTable,
+  spotifyConnectionsTable,
   libraryItemsTable,
   libraryImportJobsTable,
   keepTargetsTable,
@@ -19,7 +20,11 @@ import { eq, and, isNotNull, inArray, ne, desc, asc, sql } from "drizzle-orm";
 import {
   getUserFromSession,
   sidFromRequest,
+  upsertLoreUserForSid,
 } from "../../lore/userSession.js";
+import {
+  fetchProfile,
+} from "../../lore/spotifyConnect.js";
 import {
   getConnector,
   getFreshServiceToken,
@@ -39,6 +44,7 @@ const router: IRouter = Router();
 const SID_COOKIE = "lore_sid";
 const STATE_COOKIE = "lore_me_spotify_state";
 const STATE_MAX_AGE_MS = 1000 * 60 * 10; // 10 min
+const SID_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 180; // 180 days
 const APP_RETURN_PATH = process.env.LORE_APP_URL ?? "/lore/";
 /** Max MBIDs per batch keep-status check. */
 const KEEP_BATCH_MAX = 50;
@@ -78,6 +84,119 @@ async function requireUserMiddleware(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Spotify library OAuth — these two routes are intentionally BEFORE
+// requireUserMiddleware so they work for first-time visitors with no session.
+// ---------------------------------------------------------------------------
+
+/**
+ * POST /api/me/connect/spotify/start — return OAuth URL for the library
+ * permission dance (separate from the playback OAuth).
+ * No auth required: just generates the Spotify consent URL + CSRF state.
+ */
+router.post("/me/connect/spotify/start", h(async (req, res) => {
+  const connector = getConnector("spotify");
+  if (!connector) return res.status(503).json({ error: "Spotify connector not available" });
+
+  const state = randomBytes(16).toString("hex");
+  res.cookie(STATE_COOKIE, state, cookieOpts(STATE_MAX_AGE_MS));
+
+  const url = connector.authStart(state, meCallbackUri());
+  return res.json({ url });
+}));
+
+/**
+ * GET /api/me/connect/spotify/callback — OAuth callback for library connect.
+ * Stores tokens in service_connections, enables keep_targets.
+ * If no lore_sid session exists yet, bootstraps one from the library token
+ * so first-time visitors don't need to connect playback first.
+ */
+router.get("/me/connect/spotify/callback", async (req: Request, res: Response) => {
+  const { code, state, error } = req.query as Record<string, string | undefined>;
+  const cookies = (req as Request & { cookies?: Record<string, string> }).cookies;
+  const expectedState = cookies?.[STATE_COOKIE];
+  res.clearCookie(STATE_COOKIE, { path: "/" });
+
+  if (error) {
+    res.redirect(`${APP_RETURN_PATH}?library=denied`);
+    return;
+  }
+  if (!code || !state || !expectedState || state !== expectedState) {
+    res.redirect(`${APP_RETURN_PATH}?library=error`);
+    return;
+  }
+
+  try {
+    const connector = getConnector("spotify");
+    if (!connector) throw new Error("connector not available");
+
+    const tokens = await connector.authCallback(code, meCallbackUri());
+
+    // Resolve (or bootstrap) the lore_users identity.
+    let user = await getUserFromSession(req);
+    if (!user) {
+      // No session yet — fetch the Spotify profile from the library token and
+      // create a spotify_connections stub + lore_users row so every user who
+      // links Spotify gets a persistent identity without needing playback first.
+      const profile = await fetchProfile(tokens.accessToken);
+      if (!profile.spotifyUserId) {
+        res.redirect(`${APP_RETURN_PATH}?library=error&reason=no_profile`);
+        return;
+      }
+      const newSid = randomBytes(32).toString("hex");
+      await db.insert(spotifyConnectionsTable).values({
+        sid: newSid,
+        accessToken: encryptToken(tokens.accessToken),
+        refreshToken: encryptToken(tokens.refreshToken),
+        expiresAt: tokens.expiresAt,
+        displayName: profile.displayName ?? null,
+        spotifyUserId: profile.spotifyUserId,
+      });
+      user = await upsertLoreUserForSid(profile.spotifyUserId, newSid);
+      res.cookie(SID_COOKIE, newSid, cookieOpts(SID_MAX_AGE_MS));
+    }
+
+    const encAccessToken = encryptToken(tokens.accessToken);
+    const encRefreshToken = encryptToken(tokens.refreshToken);
+
+    await db
+      .insert(serviceConnectionsTable)
+      .values({
+        userId: user.id,
+        service: "spotify",
+        accessToken: encAccessToken,
+        refreshToken: encRefreshToken,
+        expiresAt: tokens.expiresAt,
+        scopes: tokens.scopes,
+        canWrite: tokens.canWrite,
+        connectedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: [serviceConnectionsTable.userId, serviceConnectionsTable.service],
+        set: {
+          accessToken: encAccessToken,
+          refreshToken: encRefreshToken,
+          expiresAt: tokens.expiresAt,
+          scopes: tokens.scopes,
+          canWrite: tokens.canWrite,
+          connectedAt: new Date(),
+        },
+      });
+
+    // Enable keep mirroring to Spotify by default on first connect.
+    await db
+      .insert(keepTargetsTable)
+      .values({ userId: user.id, service: "spotify", enabled: true })
+      .onConflictDoNothing();
+
+    res.redirect(`${APP_RETURN_PATH}?library=connected`);
+  } catch (err) {
+    console.error("[me] library OAuth callback failed", err);
+    res.redirect(`${APP_RETURN_PATH}?library=error`);
+  }
+});
+
+// All routes below this line require an authenticated lore session.
 router.use("/me", requireUserMiddleware);
 
 // ---------------------------------------------------------------------------
@@ -155,96 +274,6 @@ router.get("/me/connections", h(async (req, res) => {
   });
 }));
 
-/**
- * POST /api/me/connect/spotify/start — return OAuth URL for the library
- * permission dance (separate from the playback OAuth).
- */
-router.post("/me/connect/spotify/start", h(async (req, res) => {
-  const connector = getConnector("spotify");
-  if (!connector) return res.status(503).json({ error: "Spotify connector not available" });
-
-  const state = randomBytes(16).toString("hex");
-  res.cookie(STATE_COOKIE, state, cookieOpts(STATE_MAX_AGE_MS));
-
-  const url = connector.authStart(state, meCallbackUri());
-  return res.json({ url });
-}));
-
-/**
- * GET /api/me/connect/spotify/callback — OAuth callback for library connect.
- * Stores tokens in service_connections, enables keep_targets.
- */
-router.get("/me/connect/spotify/callback", async (req: Request, res: Response) => {
-  const { code, state, error } = req.query as Record<string, string | undefined>;
-  const cookies = (req as Request & { cookies?: Record<string, string> }).cookies;
-  const expectedState = cookies?.[STATE_COOKIE];
-  res.clearCookie(STATE_COOKIE, { path: "/" });
-
-  if (error) {
-    res.redirect(`${APP_RETURN_PATH}?library=denied`);
-    return;
-  }
-  if (!code || !state || !expectedState || state !== expectedState) {
-    res.redirect(`${APP_RETURN_PATH}?library=error`);
-    return;
-  }
-
-  const sid = sidFromRequest(req);
-  if (!sid) {
-    res.redirect(`${APP_RETURN_PATH}?library=error&reason=no_session`);
-    return;
-  }
-
-  const user = await getUserFromSession(req);
-  if (!user) {
-    res.redirect(`${APP_RETURN_PATH}?library=error&reason=no_user`);
-    return;
-  }
-
-  try {
-    const connector = getConnector("spotify");
-    if (!connector) throw new Error("connector not available");
-
-    const tokens = await connector.authCallback(code, meCallbackUri());
-    const encAccessToken = encryptToken(tokens.accessToken);
-    const encRefreshToken = encryptToken(tokens.refreshToken);
-
-    await db
-      .insert(serviceConnectionsTable)
-      .values({
-        userId: user.id,
-        service: "spotify",
-        accessToken: encAccessToken,
-        refreshToken: encRefreshToken,
-        expiresAt: tokens.expiresAt,
-        scopes: tokens.scopes,
-        canWrite: tokens.canWrite,
-        connectedAt: new Date(),
-      })
-      .onConflictDoUpdate({
-        target: [serviceConnectionsTable.userId, serviceConnectionsTable.service],
-        set: {
-          accessToken: encAccessToken,
-          refreshToken: encRefreshToken,
-          expiresAt: tokens.expiresAt,
-          scopes: tokens.scopes,
-          canWrite: tokens.canWrite,
-          connectedAt: new Date(),
-        },
-      });
-
-    // Enable keep mirroring to Spotify by default on first connect.
-    await db
-      .insert(keepTargetsTable)
-      .values({ userId: user.id, service: "spotify", enabled: true })
-      .onConflictDoNothing();
-
-    res.redirect(`${APP_RETURN_PATH}?library=connected`);
-  } catch (err) {
-    console.error("[me] library OAuth callback failed", err);
-    res.redirect(`${APP_RETURN_PATH}?library=error`);
-  }
-});
 
 // ---------------------------------------------------------------------------
 // Library import
