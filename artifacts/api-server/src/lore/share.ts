@@ -125,13 +125,53 @@ const SHARE_PLATFORM_LABELS: Array<[string, string]> = [
 const odesliAttempted = new Set<string>();
 
 /**
+ * Pure helper — exported for unit testing only.
+ *
+ * Given the recording metadata and any links already stored in the DB, returns
+ * the raw Odesli query-string fragment (e.g. `isrc=...`, `url=...`,
+ * `q=...`) that `enrichShareLinksIfNeeded` will append to the base URL, or
+ * `null` when no lookup vector is available (no ISRC, no Spotify URL in links,
+ * empty artist/title).
+ */
+export function _odesliQueryForRecording(
+  isrc: string | null | undefined,
+  existingLinks: RecordingLink[],
+  artist: string,
+  title: string,
+): string | null {
+  if (isrc?.trim()) {
+    return `isrc=${encodeURIComponent(isrc.trim())}`;
+  }
+  const spotifyTrackId = existingLinks
+    .map((l) => l.url.match(/^https:\/\/open\.spotify\.com\/track\/([A-Za-z0-9]+)/)?.[1])
+    .find(Boolean);
+  if (spotifyTrackId) {
+    return `url=${encodeURIComponent(`spotify:track:${spotifyTrackId}`)}`;
+  }
+  if (artist?.trim() && title?.trim()) {
+    return `q=${encodeURIComponent(`${artist.trim()} ${title.trim()}`)}`;
+  }
+  return null;
+}
+
+/**
  * Lazy Odesli enrichment triggered on share-page hit.
  *
  * If the recording already has at least one `kind:"exact"` link, or has a
  * sentinel marking a prior Odesli attempt, it is returned immediately (no
- * Odesli call). Otherwise the function queries Odesli by ISRC, merges exact
- * links with universal search fallbacks, and writes the result back to
- * `recordings.links` so subsequent hits are free.
+ * Odesli call). Otherwise the function tries to obtain exact platform links
+ * from Odesli using the best available lookup vector, in priority order:
+ *
+ *   1. ISRC — the most reliable identifier; used when present.
+ *   2. Spotify track ID — extracted from a `spotify.com/track/<id>` URL
+ *      already stored in the recording's links JSONB (covers recordings that
+ *      got a Spotify link written by an earlier enrichment pass).
+ *   3. Free-text `?q=artist title` query — the final fallback that reaches
+ *      songs from non-Spotify stations (KEXP, FIP, Radio Paradise) which
+ *      often have neither an ISRC nor a Spotify link on record.
+ *
+ * Exact links are merged with universal search fallbacks and written back to
+ * `recordings.links` so subsequent share hits are free.
  *
  * Never throws — a failed enrichment falls back to search links silently.
  */
@@ -148,13 +188,19 @@ async function enrichShareLinksIfNeeded(
     return existing;
   }
 
-  // Build the Odesli lookup handle. ISRC is the only reliable vector here;
-  // the recording must have one to get exact links from this path.
+  // Build the Odesli lookup handle.  Prefer ISRC; fall back to a Spotify
+  // track ID already stored in the links JSONB (songs ingested before an exact
+  // link was written may have an exact spotify.com/track URL from a prior
+  // enrichment pass); finally attempt a free-text artist+title query so that
+  // songs from non-Spotify stations (KEXP, FIP, Radio Paradise) — which often
+  // have neither an ISRC nor a Spotify link on record — still get exact links.
   const searchLinks = buildSearchLinks(rec.artist, rec.title);
 
-  if (!rec.isrc?.trim()) {
-    // No ISRC — we can never call Odesli for this recording. Mark as
-    // attempted in memory and write search links to DB.
+  const odesliQuery = _odesliQueryForRecording(rec.isrc, existing, rec.artist, rec.title);
+
+  if (!odesliQuery) {
+    // No lookup vector at all — write search links and mark as attempted so
+    // the next share hit skips Odesli entirely.
     odesliAttempted.add(rec.mbid);
     db.update(recordingsTable)
       .set({ links: searchLinks, updatedAt: new Date() })
@@ -164,8 +210,6 @@ async function enrichShareLinksIfNeeded(
       );
     return searchLinks;
   }
-
-  const odesliQuery = `isrc=${encodeURIComponent(rec.isrc.trim())}`;
 
   try {
     // Rate-limited fetch: enqueue behind the shared promise chain so

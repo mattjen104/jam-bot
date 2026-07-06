@@ -6,6 +6,7 @@ import {
   loreBasePath,
   isPrivateIp,
   isSafeArtworkUrl,
+  _odesliQueryForRecording,
   type SharePayload,
 } from "../src/lore/share.js";
 
@@ -142,6 +143,58 @@ describe("share HTML", () => {
 
   it("derives the SPA base path from env with default /lore", () => {
     expect(loreBasePath()).toBe("/lore");
+  });
+});
+
+describe("_odesliQueryForRecording (Odesli lookup vector selection)", () => {
+  it("prefers ISRC when present", () => {
+    const q = _odesliQueryForRecording("US-S1Z-99-00001", [], "Artist", "Title");
+    expect(q).toBe("isrc=US-S1Z-99-00001");
+  });
+
+  it("URL-encodes ISRC with special characters", () => {
+    const q = _odesliQueryForRecording("GBAYE0601498", [], "The Beatles", "Hey Jude");
+    expect(q).toBe("isrc=GBAYE0601498");
+  });
+
+  it("falls back to Spotify track ID extracted from existing links when ISRC is absent", () => {
+    const links = [
+      { name: "Spotify", url: "https://open.spotify.com/track/4iV5W9uYEdYUVa79Axb7Rh", kind: "exact" as const },
+    ];
+    const q = _odesliQueryForRecording(null, links, "Artist", "Title");
+    expect(q).toBe("url=spotify%3Atrack%3A4iV5W9uYEdYUVa79Axb7Rh");
+  });
+
+  it("ignores Spotify search URLs (not exact track URLs) when extracting track ID", () => {
+    const links = [
+      { name: "Spotify", url: "https://open.spotify.com/search/Artist%20Title", kind: "search" as const },
+    ];
+    const q = _odesliQueryForRecording(null, links, "Madeleine Peyroux", "Dance Me to the End of Love");
+    expect(q).toBe("q=Madeleine%20Peyroux%20Dance%20Me%20to%20the%20End%20of%20Love");
+  });
+
+  it("uses artist+title free-text query when ISRC and Spotify track URL are both absent", () => {
+    const q = _odesliQueryForRecording(null, [], "Khruangbin", "White Gloves");
+    expect(q).toBe("q=Khruangbin%20White%20Gloves");
+  });
+
+  it("uses artist+title even when ISRC is an empty string", () => {
+    const q = _odesliQueryForRecording("  ", [], "FIP Station Artist", "Ambient Track");
+    expect(q).toBe("q=FIP%20Station%20Artist%20Ambient%20Track");
+  });
+
+  it("returns null when no lookup vector is available", () => {
+    expect(_odesliQueryForRecording(null, [], "", "")).toBeNull();
+    expect(_odesliQueryForRecording("", [], "  ", "  ")).toBeNull();
+    expect(_odesliQueryForRecording(null, [], "", "Title Only")).toBeNull();
+  });
+
+  it("ISRC takes priority over a Spotify link already in the stored links", () => {
+    const links = [
+      { name: "Spotify", url: "https://open.spotify.com/track/4iV5W9uYEdYUVa79Axb7Rh", kind: "exact" as const },
+    ];
+    const q = _odesliQueryForRecording("GBAYE0601498", links, "Artist", "Title");
+    expect(q).toBe("isrc=GBAYE0601498");
   });
 });
 
