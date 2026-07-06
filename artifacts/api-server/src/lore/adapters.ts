@@ -286,20 +286,30 @@ const spinitron: HistoryAdapter = async (config, opts) => {
   const token = str(config.apiKey) ?? str(config.accessToken);
   if (!token) return [];
   const count = Math.min(Math.max(opts?.limit ?? 20, 1), 200);
-  const page = Math.max(opts?.page ?? 0, 0) + 1; // Spinitron pages are 1-based.
   const auth = `access-token=${encodeURIComponent(token)}`;
+
+  // Time-anchored mode: when `before` is provided, anchor on Spinitron's
+  // `end_date` param (ISO 8601 upper bound on played_at) and reset to page 1
+  // so successive cursor advances never overlap.  This is required for
+  // resumable deep-history backfill — offset-only walks would drift as new
+  // spins land while the cursor is mid-walk.
+  const endDate = opts?.before
+    ? `&end_date=${encodeURIComponent(opts.before)}`
+    : "";
+  const page = opts?.before ? 1 : Math.max(opts?.page ?? 0, 0) + 1;
+
   // Playlists first (bounded) so we can attribute show + DJ to each spin.
   let playlistMap = new Map<number, { name: string; djName?: string }>();
   try {
     const plBody = await getJson(
-      `https://spinitron.com/api/playlists?${auth}&count=50&expand=persona`,
+      `https://spinitron.com/api/playlists?${auth}&count=50&expand=persona${endDate}`,
     );
     playlistMap = parseSpinitronPlaylists(plBody);
   } catch {
     // Attribution is best-effort; spins are still logged without it.
   }
   const spinsBody = await getJson(
-    `https://spinitron.com/api/spins?${auth}&count=${count}&page=${page}`,
+    `https://spinitron.com/api/spins?${auth}&count=${count}&page=${page}${endDate}`,
   );
   return parseSpinitronSpins(spinsBody, playlistMap);
 };
@@ -596,7 +606,7 @@ export function isPollable(source: string | null | undefined): boolean {
  * deep paging). Only these can be enrolled for the deep-history backfill job —
  * offset-only sources would skip/duplicate plays as new ones land.
  */
-const BACKFILL_SOURCES = new Set(["kexp_api"]);
+const BACKFILL_SOURCES = new Set(["kexp_api", "spinitron"]);
 
 /** Whether this source supports resumable deep-history backfill. */
 export function supportsBackfill(source: string | null | undefined): boolean {

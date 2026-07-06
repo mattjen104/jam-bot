@@ -53,6 +53,11 @@ export interface OverlapPicker {
   sharedCount: number;
 }
 
+export interface OverlapStation {
+  station: { slug: string; name: string; stationClass: string };
+  sharedCount: number;
+}
+
 export interface OverlapRun {
   runId: number;
   day: string;
@@ -117,6 +122,7 @@ export const ME_CONNECTIONS_KEY = ["me", "connections"] as const;
 export const ME_LIBRARY_KEY = (cursor?: string) => ["me", "library", cursor ?? "start"] as const;
 export const ME_KEEP_STATUS_KEY = (joined: string) => ["me", "keep-status", joined] as const;
 export const ME_OVERLAP_PICKERS_KEY = ["me", "overlaps", "pickers"] as const;
+export const ME_OVERLAP_STATIONS_KEY = ["me", "overlaps", "stations"] as const;
 export const ME_OVERLAP_RUNS_KEY = ["me", "overlaps", "runs"] as const;
 export const ME_IMPORT_JOB_KEY = (jobId: number) => ["me", "import-job", jobId] as const;
 
@@ -264,6 +270,19 @@ export function useMyOverlapPickers() {
     queryKey: ME_OVERLAP_PICKERS_KEY,
     queryFn: () =>
       fetchOrNull<{ items: OverlapPicker[] }>("/api/me/overlaps/pickers").then(
+        (d) => d?.items ?? [],
+      ),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+/** Stations ranked by how many of the user's library tracks they've played. */
+export function useMyOverlapStations() {
+  return useQuery({
+    queryKey: ME_OVERLAP_STATIONS_KEY,
+    queryFn: () =>
+      fetchOrNull<{ items: OverlapStation[] }>("/api/me/overlaps/stations").then(
         (d) => d?.items ?? [],
       ),
     staleTime: 5 * 60_000,

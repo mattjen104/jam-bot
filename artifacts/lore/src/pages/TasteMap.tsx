@@ -3,12 +3,14 @@ import { Link, useLocation } from "wouter";
 import { usePlayer } from "../player/PlayerProvider";
 import {
   useMyOverlapPickers,
+  useMyOverlapStations,
   useMyOverlapRuns,
   useImportJobStatus,
   postStartImport,
   startSpotifyLibraryConnect,
   useMyConnections,
   type OverlapPicker,
+  type OverlapStation,
   type OverlapRun,
 } from "../lib/meHooks";
 import { toggleFollow, useFollows, isFollowed } from "../lib/local";
@@ -20,6 +22,7 @@ import {
   UserCheck,
   Users,
   Radio,
+  Antenna,
 } from "lucide-react";
 
 export default function TasteMap() {
@@ -53,6 +56,7 @@ export default function TasteMap() {
   const showBanner = jobId !== null && !importDone;
 
   const { data: pickers = [], isLoading: pickersLoading } = useMyOverlapPickers();
+  const { data: stations = [], isLoading: stationsLoading } = useMyOverlapStations();
   const { data: runs = [], isLoading: runsLoading } = useMyOverlapRuns();
 
   const [connectBusy, setConnectBusy] = useState(false);
@@ -131,11 +135,11 @@ export default function TasteMap() {
             Taste map
           </div>
           <h1 className="mt-3 font-serif text-4xl font-semibold leading-[1.05] text-foreground sm:text-5xl">
-            Selectors who share your taste.
+            Your library vs. the dial.
           </h1>
           <p className="mt-4 max-w-[52ch] text-base text-muted-foreground">
-            Your Spotify library mapped to Lore's spine — every exact match
-            surfaces a human whose picks overlap yours.
+            Your Spotify library mapped to every spin on the dial — see which
+            stations already play your music, and which shows to ride first.
           </p>
         </header>
 
@@ -171,6 +175,39 @@ export default function TasteMap() {
             )}
           </div>
         )}
+
+        {/* Stations section */}
+        <section className="mb-10" data-testid="overlap-stations">
+          <div className="mb-4 flex items-baseline gap-3">
+            <h2 className="font-serif text-xl font-semibold text-foreground">
+              Stations that play your music
+            </h2>
+            {!stationsLoading && stations.length > 0 && (
+              <span className="font-mono text-xs text-muted-foreground">
+                {stations.length} station{stations.length === 1 ? "" : "s"}
+              </span>
+            )}
+          </div>
+
+          {stationsLoading || connLoading ? (
+            <ul className="flex flex-col gap-2">
+              {[0, 1, 2].map((i) => (
+                <li
+                  key={i}
+                  className="h-[58px] animate-pulse rounded-xl border border-card-border bg-card"
+                />
+              ))}
+            </ul>
+          ) : stations.length === 0 ? (
+            <EmptyOverlap message="Stations appear once your library is imported and matched." />
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {stations.map((s) => (
+                <StationOverlapCard key={s.station.slug} item={s} />
+              ))}
+            </ul>
+          )}
+        </section>
 
         {/* Selectors section */}
         <section className="mb-10" data-testid="overlap-selectors">
@@ -237,6 +274,52 @@ export default function TasteMap() {
         </footer>
       </div>
     </div>
+  );
+}
+
+function StationOverlapCard({ item }: { item: OverlapStation }) {
+  const { station, sharedCount } = item;
+  const classLabel =
+    station.stationClass === "college"
+      ? "College"
+      : station.stationClass === "public"
+        ? "Public"
+        : station.stationClass === "curated"
+          ? "Curated"
+          : station.stationClass;
+
+  return (
+    <li data-testid={`station-overlap-${station.slug}`}>
+      <div className="hover-elevate flex items-center gap-3 rounded-xl border border-card-border bg-card px-4 py-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#C6F53F]/20 bg-[#C6F53F]/5">
+          <Antenna className="h-4 w-4 text-[#C6F53F]/70" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-serif text-base font-semibold text-foreground">
+            {station.name}
+          </p>
+          <p className="truncate font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+            {classLabel}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-3">
+          <span className="font-mono text-sm">
+            <span className="font-semibold text-[#C6F53F]">{sharedCount}</span>
+            <span className="ml-1 text-xs text-muted-foreground">
+              track{sharedCount === 1 ? "" : "s"}
+            </span>
+          </span>
+          <Link
+            href={`/archive/${station.slug}`}
+            data-testid={`archive-${station.slug}`}
+            className="hover-elevate inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 font-mono text-[10px] uppercase tracking-wide text-muted-foreground hover:border-primary-border hover:text-primary"
+          >
+            <Radio className="h-3 w-3" />
+            archive
+          </Link>
+        </div>
+      </div>
+    </li>
   );
 }
 

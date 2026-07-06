@@ -30,8 +30,9 @@ import type { RawSpin } from "./types.js";
 
 // One slice per tick. A slice is one API page; resolution dominates the time.
 const SLICE_PAGE_SIZE = 50;
-// Pause between slices — slow and steady; years accumulate in days.
-const TICK_MS = 60_000;
+// Pause between slices — 30 s halves the calendar distance per hour without
+// materially increasing API pressure (KEXP and Spinitron both handle this).
+const TICK_MS = 30_000;
 // Let boot (seed + live-poll catch-up) settle before the first slice.
 const WARMUP_MS = 90_000;
 
