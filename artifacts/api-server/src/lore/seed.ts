@@ -129,6 +129,7 @@ const SEED_STATIONS: InsertStation[] = [
   // the stream is reachable; adapter returns null gracefully during talk/gaps).
   ...fipStations(),
   ...somaFmStations(),
+  ...spinitronCollegeStations(),
 ];
 
 /**
@@ -261,6 +262,302 @@ function somaFmStations(): InsertStation[] {
     stationClass: "curated",
     sortOrder: 100 + i * 10,
   }));
+}
+
+/**
+ * Curated college and community radio stations sourced from Spinitron.
+ *
+ * These are stream-first: users tune in live just like KEXP or Radio Paradise.
+ * Spinitron history (DJ-attributed spin logs) enriches the track knowledge graph
+ * and will power ghost-radio / pick-riding in a future phase.
+ *
+ * API KEYS — each station issues its own Spinitron access token.
+ * To activate now-playing metadata for a station, set the corresponding secret:
+ *
+ *   SPINITRON_KEY_WPRB  — https://wprb.com      (music director)
+ *   SPINITRON_KEY_WNUR  — https://wnur.northwestern.edu
+ *   SPINITRON_KEY_WREK  — https://wrek.org
+ *   SPINITRON_KEY_KDVS  — https://kdvs.org
+ *   SPINITRON_KEY_WHRB  — https://whrb.org
+ *   SPINITRON_KEY_WKCR  — https://wkcr.org
+ *   SPINITRON_KEY_WFMU  — https://wfmu.org
+ *   SPINITRON_KEY_WXYC  — https://wxyc.org
+ *   SPINITRON_KEY_KALX  — https://kalx.berkeley.edu
+ *   SPINITRON_KEY_KVRX  — https://kvrx.org
+ *   SPINITRON_KEY_WMBR  — https://wmbr.org
+ *   SPINITRON_KEY_WUSB  — https://wusb.fm
+ *   SPINITRON_KEY_WUOG  — https://wuog.org
+ *   SPINITRON_KEY_WVUM  — https://wvum.org
+ *   SPINITRON_KEY_KVSC  — https://www.kvsc.org
+ *
+ * Without a key the station appears on the dial but shows no now-playing data
+ * (the Spinitron adapter returns [] gracefully when apiKey is absent).
+ *
+ * STREAM URLS — all stream directly to the user's browser (Audio element).
+ * Icecast streams on port 8000 are not reachable from the Replit container
+ * (outbound port 8000 is blocked) but are publicly accessible from browsers.
+ * Three stations use CDN-hosted HTTPS streams confirmed reachable from here:
+ * WPRB (streamguys1), WKCR (streamguys1), KALX (berkeley.edu:8443).
+ */
+function spinitronCollegeStations(): InsertStation[] {
+  const spinConfig = (callsign: string): Record<string, string> => {
+    const key = process.env[`SPINITRON_KEY_${callsign}`];
+    return key ? { apiKey: key } : {};
+  };
+
+  return [
+    // ── WEDGE CORE ─────────────────────────────────────────────────────────
+    // Heavy / jazz / experimental programming; the algorithmic blind-spot.
+
+    {
+      slug: "wprb",
+      name: "WPRB 103.3 FM",
+      org: "Princeton University",
+      country: "US",
+      // CDN stream confirmed reachable (200) from the Replit container.
+      streamUrl: "https://wprb.streamguys1.com/live",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://wprb.com",
+      donateUrl: null,
+      nowPlayingSource: "spinitron",
+      nowPlayingConfig: spinConfig("WPRB"),
+      stationClass: "community",
+      sortOrder: 300,
+    },
+    {
+      slug: "wnur",
+      name: "WNUR 89.3 FM",
+      org: "Northwestern University",
+      country: "US",
+      // Icecast on port 8000 — browser-accessible, container-blocked.
+      streamUrl: "http://wnur.northwestern.edu:8000/live",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://wnur.northwestern.edu",
+      donateUrl: null,
+      nowPlayingSource: "spinitron",
+      nowPlayingConfig: spinConfig("WNUR"),
+      stationClass: "community",
+      sortOrder: 310,
+    },
+    {
+      slug: "wrek",
+      name: "WREK 91.1 FM",
+      org: "Georgia Institute of Technology",
+      country: "US",
+      // AAC stream at 96 kbps — browser-accessible, container-blocked.
+      streamUrl: "http://wrek-stream.gatech.edu/wrek96k",
+      streamQuality: "96kbps AAC",
+      streamFormat: "aac",
+      homepageUrl: "https://wrek.org",
+      donateUrl: null,
+      nowPlayingSource: "spinitron",
+      nowPlayingConfig: spinConfig("WREK"),
+      stationClass: "community",
+      sortOrder: 320,
+    },
+    {
+      slug: "kdvs",
+      name: "KDVS 90.3 FM",
+      org: "UC Davis",
+      country: "US",
+      // Icecast on port 8000 — browser-accessible, container-blocked.
+      streamUrl: "http://kdvs.org:8000/stream",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://kdvs.org",
+      donateUrl: null,
+      nowPlayingSource: "spinitron",
+      nowPlayingConfig: spinConfig("KDVS"),
+      stationClass: "community",
+      sortOrder: 330,
+    },
+    {
+      slug: "whrb",
+      name: "WHRB 95.3 FM",
+      org: "Harvard University",
+      country: "US",
+      // Icecast on port 8000 — browser-accessible, container-blocked.
+      streamUrl: "http://whrb.org:8000/whrb-hi.mp3",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://whrb.org",
+      donateUrl: null,
+      nowPlayingSource: "spinitron",
+      nowPlayingConfig: spinConfig("WHRB"),
+      stationClass: "community",
+      sortOrder: 340,
+    },
+    {
+      slug: "wkcr",
+      name: "WKCR 89.9 FM",
+      org: "Columbia University",
+      country: "US",
+      // CDN stream confirmed reachable (200) from the Replit container.
+      streamUrl: "https://wkcr.streamguys1.com/live",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://wkcr.org",
+      donateUrl: null,
+      nowPlayingSource: "spinitron",
+      nowPlayingConfig: spinConfig("WKCR"),
+      stationClass: "community",
+      sortOrder: 350,
+    },
+
+    // ── FREEFORM GREATS ────────────────────────────────────────────────────
+    // Revered, broad, tastemaker credibility.
+
+    {
+      slug: "wfmu",
+      name: "WFMU 91.1 FM",
+      org: "WFMU",
+      country: "US",
+      // CDN stream confirmed reachable (200) from the Replit container.
+      streamUrl: "https://stream0.wfmu.org/freeform-128k",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://wfmu.org",
+      donateUrl: "https://www.wfmu.org/donate.html",
+      nowPlayingSource: "spinitron",
+      nowPlayingConfig: spinConfig("WFMU"),
+      stationClass: "community",
+      sortOrder: 400,
+    },
+    {
+      slug: "wxyc",
+      name: "WXYC 89.3 FM",
+      org: "UNC Chapel Hill",
+      country: "US",
+      // ibiblio-hosted Icecast stream — browser-accessible, container-blocked.
+      streamUrl: "http://audio-mp3.ibiblio.org/wxyc-stereo.mp3",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://wxyc.org",
+      donateUrl: null,
+      nowPlayingSource: "spinitron",
+      nowPlayingConfig: spinConfig("WXYC"),
+      stationClass: "community",
+      sortOrder: 410,
+    },
+    {
+      slug: "kalx",
+      name: "KALX 90.7 FM",
+      org: "UC Berkeley",
+      country: "US",
+      // HTTPS stream on port 8443 confirmed reachable (200) from the Replit container.
+      streamUrl: "https://stream.kalx.berkeley.edu:8443/kalx-128.mp3",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://kalx.berkeley.edu",
+      donateUrl: null,
+      nowPlayingSource: "spinitron",
+      nowPlayingConfig: spinConfig("KALX"),
+      stationClass: "community",
+      sortOrder: 420,
+    },
+    {
+      slug: "kvrx",
+      name: "KVRX 91.7 FM",
+      org: "UT Austin",
+      country: "US",
+      // Icecast on port 8000 — browser-accessible, container-blocked.
+      streamUrl: "http://kvrx.org:8000/kvrx.mp3",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://kvrx.org",
+      donateUrl: null,
+      nowPlayingSource: "spinitron",
+      nowPlayingConfig: spinConfig("KVRX"),
+      stationClass: "community",
+      sortOrder: 430,
+    },
+
+    // ── STRONG ADDITIONS ───────────────────────────────────────────────────
+    // Music-serious college radio, all on Spinitron.
+
+    {
+      slug: "wmbr",
+      name: "WMBR 88.1 FM",
+      org: "MIT",
+      country: "US",
+      // Icecast on port 8000 — browser-accessible, container-blocked.
+      streamUrl: "http://wmbr.org:8000/high",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://wmbr.org",
+      donateUrl: null,
+      nowPlayingSource: "spinitron",
+      nowPlayingConfig: spinConfig("WMBR"),
+      stationClass: "community",
+      sortOrder: 500,
+    },
+    {
+      slug: "wusb",
+      name: "WUSB 90.1 FM",
+      org: "Stony Brook University",
+      country: "US",
+      // Icecast on port 8000 — browser-accessible, container-blocked.
+      streamUrl: "http://wusb.fm:8000/wusb",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://wusb.fm",
+      donateUrl: null,
+      nowPlayingSource: "spinitron",
+      nowPlayingConfig: spinConfig("WUSB"),
+      stationClass: "community",
+      sortOrder: 510,
+    },
+    {
+      slug: "wuog",
+      name: "WUOG 90.5 FM",
+      org: "University of Georgia",
+      country: "US",
+      // Icecast on port 8000 — browser-accessible, container-blocked.
+      streamUrl: "http://wuog.org:8000/wuog-hi.mp3",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://wuog.org",
+      donateUrl: null,
+      nowPlayingSource: "spinitron",
+      nowPlayingConfig: spinConfig("WUOG"),
+      stationClass: "community",
+      sortOrder: 520,
+    },
+    {
+      slug: "wvum",
+      name: "WVUM 90.5 FM",
+      org: "University of Miami",
+      country: "US",
+      // Icecast on port 8000 — browser-accessible, container-blocked.
+      streamUrl: "http://wvum.org:8000/stream.mp3",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://wvum.org",
+      donateUrl: null,
+      nowPlayingSource: "spinitron",
+      nowPlayingConfig: spinConfig("WVUM"),
+      stationClass: "community",
+      sortOrder: 530,
+    },
+    {
+      slug: "kvsc",
+      name: "KVSC 88.1 FM",
+      org: "St. Cloud State University",
+      country: "US",
+      // Icecast on port 8000 — browser-accessible, container-blocked.
+      streamUrl: "http://www.kvsc.org:8000/kvsc192.mp3",
+      streamQuality: "192kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://www.kvsc.org",
+      donateUrl: null,
+      nowPlayingSource: "spinitron",
+      nowPlayingConfig: spinConfig("KVSC"),
+      stationClass: "community",
+      sortOrder: 540,
+    },
+  ];
 }
 
 /**
