@@ -181,6 +181,7 @@ const SEARCH_LINK_BUILDERS: Array<{ name: string; build: (q: string) => string }
   { name: "Apple Music", build: (q) => `https://music.apple.com/us/search?term=${encodeURIComponent(q)}` },
   { name: "YouTube Music", build: (q) => `https://music.youtube.com/search?q=${encodeURIComponent(q)}` },
   { name: "YouTube", build: (q) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}` },
+  { name: "Qobuz", build: (q) => `https://open.qobuz.com/search/${encodeURIComponent(q)}` },
   { name: "Bandcamp", build: (q) => `https://bandcamp.com/search?q=${encodeURIComponent(q)}` },
 ];
 

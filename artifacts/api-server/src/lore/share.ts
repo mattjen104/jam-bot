@@ -109,6 +109,7 @@ const SHARE_PLATFORM_LABELS: Array<[string, string]> = [
   ["amazonMusic", "Amazon Music"],
   ["tidal", "Tidal"],
   ["deezer", "Deezer"],
+  ["qobuz", "Qobuz"],
   ["bandcamp", "Bandcamp"],
   ["soundcloud", "SoundCloud"],
   ["pandora", "Pandora"],
