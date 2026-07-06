@@ -6,9 +6,11 @@ import {
   getPickerShare,
   getPickerRunShare,
   renderShareHtml,
+  renderSongShareHtml,
   renderNotFoundHtml,
   renderShareCardPng,
   type SharePayload,
+  type SongSharePayload,
 } from "../../lore/share.js";
 
 /**
@@ -89,11 +91,33 @@ function handle(
 
 // ---- Songs ---------------------------------------------------------------
 
+function sendSongShareHtml(
+  req: Request,
+  res: Response,
+  payload: SongSharePayload | null,
+  slugPath: string,
+): void {
+  if (!payload) {
+    res
+      .status(404)
+      .set("Content-Type", "text/html; charset=utf-8")
+      .send(renderNotFoundHtml());
+    return;
+  }
+  const sharePath = `/api/share/${slugPath}`;
+  const cardPath = `${sharePath}/card.png`;
+  res
+    .set("Content-Type", "text/html; charset=utf-8")
+    .set("Cache-Control", "public, max-age=30") // shorter TTL — live status changes
+    .send(renderSongShareHtml(payload, requestOrigin(req), sharePath, cardPath));
+}
+
 router.get(
   "/share/songs/:mbid",
   handle(async (req, res) => {
-    const payload = await getSongShare(param(req, "mbid"));
-    sendShareHtml(req, res, payload, `songs/${encodeURIComponent(param(req, "mbid"))}`);
+    const mbid = param(req, "mbid");
+    const payload = await getSongShare(mbid);
+    sendSongShareHtml(req, res, payload, `songs/${encodeURIComponent(mbid)}`);
   }),
 );
 

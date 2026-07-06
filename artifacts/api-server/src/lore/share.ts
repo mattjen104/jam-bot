@@ -14,7 +14,9 @@ import {
   pickersTable,
   picksTable,
 } from "@workspace/db";
-import { eq, and, isNull, sql } from "drizzle-orm";
+import { eq, and, isNull, sql, gt, desc } from "drizzle-orm";
+import type { RecordingLink } from "@workspace/db";
+import { spinsForRecording } from "./segue.js";
 
 /**
  * Share layer: server-rendered Open Graph pages + dynamic preview cards for
@@ -47,6 +49,24 @@ export interface SharePayload {
   card: ShareCard;
 }
 
+/** Extra data only present on song share pages. */
+export interface SongShareExtras {
+  links: RecordingLink[];
+  /**
+   * Set when the song is playing on any station right now (within 5 min).
+   * When present, this is the ONLY Lore option shown — live always trumps
+   * the ghost-radio fallback.
+   */
+  liveStation: { name: string; slug: string } | null;
+  /**
+   * The most recent archived broadcast run containing this song.
+   * Only shown when `liveStation` is null.
+   */
+  ghostRun: { stationName: string; runId: number; playedAt: string } | null;
+}
+
+export type SongSharePayload = SharePayload & { song: SongShareExtras };
+
 export interface ShareCard {
   /** Small mono kicker above the title (e.g. "STATION RUN — KEXP 90.3 FM"). */
   kicker: string;
@@ -62,13 +82,49 @@ export interface ShareCard {
 
 const dayExpr = sql<string>`to_char(${spinsTable.playedAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`;
 
-export async function getSongShare(mbid: string): Promise<SharePayload | null> {
+/** How recent a spin must be to count as "playing live right now". */
+const LIVE_WINDOW_MS = 5 * 60 * 1000;
+
+export async function getSongShare(mbid: string): Promise<SongSharePayload | null> {
   const [rec] = await db
     .select()
     .from(recordingsTable)
     .where(eq(recordingsTable.mbid, mbid))
     .limit(1);
   if (!rec) return null;
+
+  // 1. Is it playing anywhere right now?
+  const [liveRow] = await db
+    .select({ name: stationsTable.name, slug: stationsTable.slug })
+    .from(spinsTable)
+    .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
+    .where(
+      and(
+        eq(spinsTable.mbid, mbid),
+        gt(spinsTable.playedAt, new Date(Date.now() - LIVE_WINDOW_MS)),
+      ),
+    )
+    .orderBy(desc(spinsTable.playedAt))
+    .limit(1);
+
+  const liveStation = liveRow ?? null;
+
+  // 2. If not live, find the most recent archived run containing this song.
+  let ghostRun: SongShareExtras["ghostRun"] = null;
+  if (!liveStation) {
+    const recentSpins = await spinsForRecording(mbid, 1);
+    const top = recentSpins[0];
+    if (top?.runId != null) {
+      ghostRun = {
+        stationName: top.station.name,
+        runId: top.runId,
+        playedAt: top.playedAt.toISOString(),
+      };
+    }
+  }
+
+  const links = (rec.links as RecordingLink[] | null) ?? [];
+
   return {
     title: `${rec.title} — ${rec.artist} · Lore`,
     description:
@@ -81,7 +137,127 @@ export async function getSongShare(mbid: string): Promise<SharePayload | null> {
       footer: "lore · free radio, tracked to the source",
       artworkUrl: rec.artworkUrl,
     },
+    song: { links, liveStation, ghostRun },
   };
+}
+
+/**
+ * Song-specific share landing. Keeps full OG meta for bot unfurls but renders
+ * a real service-chooser page for human visitors instead of a JS redirect.
+ * Live station is always shown when present; ghost radio only appears when the
+ * song is not currently on air anywhere.
+ */
+export function renderSongShareHtml(
+  payload: SongSharePayload,
+  origin: string,
+  sharePath: string,
+  cardPath: string,
+): string {
+  const { song } = payload;
+  const title = escapeHtml(payload.title);
+  const desc = escapeHtml(payload.description);
+  const url = escapeHtml(`${origin}${sharePath}`);
+  const image = escapeHtml(`${origin}${cardPath}`);
+  const loreUrl = escapeHtml(`${origin}${payload.redirectPath}`);
+
+  // Prefer exact links; always show at least search fallbacks.
+  const exact = song.links.filter((l) => l.kind === "exact");
+  const serviceLinks = exact.length > 0 ? exact : song.links;
+
+  const artworkHtml = payload.card.artworkUrl
+    ? `<img src="${escapeHtml(payload.card.artworkUrl)}" alt="" class="artwork">`
+    : `<div class="artwork artwork-placeholder"></div>`;
+
+  // Service buttons — each opens the user's chosen platform directly.
+  const serviceBtns = serviceLinks
+    .map(
+      (l) =>
+        `<a href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-service">${escapeHtml(l.name)}</a>`,
+    )
+    .join("\n");
+
+  // Lore button — live trumps ghost, only one is shown.
+  let loreBtnHtml = "";
+  if (song.liveStation) {
+    const stationUrl = escapeHtml(
+      `${origin}${loreBasePath()}/archive/stations/${encodeURIComponent(song.liveStation.slug)}`,
+    );
+    loreBtnHtml = `<a href="${stationUrl}" class="btn btn-live">
+      <span class="live-dot"></span>Live on ${escapeHtml(song.liveStation.name)} right now
+    </a>`;
+  } else if (song.ghostRun) {
+    const runUrl = escapeHtml(
+      `${origin}${loreBasePath()}/archive/station-runs/${song.ghostRun.runId}?play=1&from=${encodeURIComponent(payload.redirectPath.split("/").pop() ?? "")}`,
+    );
+    const date = song.ghostRun.playedAt.slice(0, 10);
+    loreBtnHtml = `<a href="${runUrl}" class="btn btn-ghost">
+      Last played on ${escapeHtml(song.ghostRun.stationName)} · ${escapeHtml(date)} — listen to that broadcast
+    </a>`;
+  }
+
+  const loreFullHtml = `<a href="${loreUrl}" class="btn btn-lore">View full story on Lore →</a>`;
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>${title}</title>
+<meta name="description" content="${desc}">
+<meta property="og:title" content="${title}">
+<meta property="og:description" content="${desc}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Lore">
+<meta property="og:url" content="${url}">
+<meta property="og:image" content="${image}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${title}">
+<meta name="twitter:description" content="${desc}">
+<meta name="twitter:image" content="${image}">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#14110d;color:#f2ead9;font-family:ui-monospace,'IBM Plex Mono',monospace;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.card{max-width:520px;width:100%}
+.song-row{display:flex;gap:20px;align-items:flex-start;margin-bottom:28px}
+.artwork{width:88px;height:88px;border-radius:10px;object-fit:cover;flex-shrink:0;background:#2a2520}
+.artwork-placeholder{width:88px;height:88px;border-radius:10px;background:#2a2520;flex-shrink:0}
+.song-info{flex:1;min-width:0}
+.song-title{font-family:Georgia,'PT Serif',serif;font-size:clamp(18px,4vw,26px);font-weight:700;line-height:1.15;color:#f2ead9;margin-bottom:6px;word-break:break-word}
+.song-artist{font-size:13px;letter-spacing:.04em;color:#c8b895;text-transform:uppercase}
+.section-label{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#6b5f4e;margin-bottom:10px}
+.services{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border-radius:9999px;font-family:inherit;font-size:12px;letter-spacing:.06em;text-transform:uppercase;text-decoration:none;font-weight:500;transition:opacity .15s;cursor:pointer;border:none;white-space:nowrap}
+.btn:hover{opacity:.8}
+.btn-service{background:#2a2520;color:#f2ead9;border:1px solid #3a332a}
+.btn-live{background:#1a3a1a;color:#7eda7e;border:1px solid #2d5a2d;width:100%;justify-content:flex-start}
+.btn-ghost{background:#1a1a2e;color:#9b9bda;border:1px solid #2d2d4a;width:100%}
+.btn-lore{background:#1e1913;color:#c8b895;border:1px solid #3a332a;font-size:11px;margin-top:8px}
+.live-dot{width:8px;height:8px;border-radius:50%;background:#7eda7e;animation:pulse 1.4s ease-in-out infinite;flex-shrink:0}
+.lore-section{border-top:1px solid #3a332a;padding-top:20px;display:flex;flex-direction:column;gap:0}
+.wordmark{font-size:10px;letter-spacing:.1em;color:#6b5f4e;text-transform:uppercase;margin-bottom:16px}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="wordmark">Lore · free radio, tracked to the source</div>
+  <div class="song-row">
+    ${artworkHtml}
+    <div class="song-info">
+      <div class="song-title">${escapeHtml(payload.card.title)}</div>
+      <div class="song-artist">${escapeHtml(payload.card.subtitle)}</div>
+    </div>
+  </div>
+  ${serviceBtns ? `<div class="section-label">Listen on</div><div class="services">${serviceBtns}</div>` : ""}
+  <div class="lore-section">
+    ${loreBtnHtml}
+    ${loreFullHtml}
+  </div>
+</div>
+</body>
+</html>`;
 }
 
 export async function getStationShare(
