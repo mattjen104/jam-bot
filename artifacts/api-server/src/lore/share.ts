@@ -17,7 +17,6 @@ import {
 import { eq, and, isNull, sql, gt, desc } from "drizzle-orm";
 import type { RecordingLink } from "@workspace/db";
 import { buildSearchLinks } from "@workspace/song-enrichment";
-import { spinsForRecording } from "./segue.js";
 
 /**
  * Share layer: server-rendered Open Graph pages + dynamic preview cards for
@@ -132,34 +131,18 @@ async function enrichShareLinksIfNeeded(
 ): Promise<RecordingLink[]> {
   const existing = (rec.links as RecordingLink[] | null) ?? [];
 
-  // Any cached links (exact or search) are good enough — return immediately.
-  // This prevents repeated Odesli calls for recordings that were already tried:
-  // if we previously called Odesli and got no exact links, the search links are
-  // stored in the DB as a negative-cache, and we skip the call on future hits.
-  if (existing.length > 0) return existing;
+  // Skip Odesli when at least one exact link is already cached — nothing to
+  // upgrade. Recordings with only search-kind links are still eligible: the
+  // share page hit is the right moment to try for exact deep links.
+  if (existing.some((l) => l.kind === "exact")) return existing;
 
-  // Build a lookup handle. ISRC is the most reliable; fall back to extracting
-  // a Spotify track ID from any Spotify URL already stored in the links JSONB.
-  let odesliQuery: string | null = null;
-  if (rec.isrc?.trim()) {
-    odesliQuery = `isrc=${encodeURIComponent(rec.isrc.trim())}`;
-  } else {
-    const spotifyLink = existing.find(
-      (l) => l.name === "Spotify" && l.url.includes("open.spotify.com/track/"),
-    );
-    if (spotifyLink) {
-      const m = spotifyLink.url.match(/open\.spotify\.com\/track\/([A-Za-z0-9]+)/);
-      if (m?.[1]) {
-        odesliQuery = `url=${encodeURIComponent(`spotify:track:${m[1]}`)}`;
-      }
-    }
-  }
-
+  // Build the Odesli lookup handle. ISRC is the only reliable vector here;
+  // the recording must have one to get exact links from this path.
   const searchLinks = buildSearchLinks(rec.artist, rec.title);
 
-  // No Odesli handle available — persist search links as a negative-cache marker
-  // so future hits return immediately without another fruitless lookup.
-  if (!odesliQuery) {
+  if (!rec.isrc?.trim()) {
+    // No ISRC and no other stable handle — write search links as a permanent
+    // negative-cache marker (we can never call Odesli for this recording).
     db.update(recordingsTable)
       .set({ links: searchLinks, updatedAt: new Date() })
       .where(eq(recordingsTable.mbid, rec.mbid))
@@ -168,6 +151,8 @@ async function enrichShareLinksIfNeeded(
       );
     return searchLinks;
   }
+
+  const odesliQuery = `isrc=${encodeURIComponent(rec.isrc.trim())}`;
 
   try {
     // Rate-limited fetch: enqueue behind the shared promise chain so
@@ -321,18 +306,43 @@ export async function getSongShare(mbid: string): Promise<SongSharePayload | nul
   const liveStation = liveRow ?? null;
 
   // 2. If not live, find the most recent archived run containing this song.
-  //    Fetch a small window of recent spins and pick the first one that belongs
-  //    to a run (runId != null). The most recent spin may be a singleton (no
-  //    run context), so we scan a few to find the best available ghost option.
+  //    Direct SQL: self-join spins to compute the run anchor (MIN spin id in
+  //    the same station+show+UTC-day group) without a heuristic scan limit.
   let ghostRun: SongShareExtras["ghostRun"] = null;
   if (!liveStation) {
-    const recentSpins = await spinsForRecording(mbid, 10);
-    const top = recentSpins.find((s) => s.runId != null);
-    if (top != null && top.runId != null) {
+    const ghostRows = await db.execute<{
+      run_id: number;
+      played_at: Date | string;
+      station_name: string;
+      station_slug: string;
+    }>(sql`
+      SELECT
+        min(s2.id)      AS run_id,
+        s.played_at     AS played_at,
+        st.name         AS station_name,
+        st.slug         AS station_slug
+      FROM spins s
+      INNER JOIN stations st ON st.id = s.station_id
+      INNER JOIN spins s2 ON
+        s2.station_id = s.station_id AND
+        (s2.show_id IS NOT DISTINCT FROM s.show_id) AND
+        to_char(s2.played_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') =
+          to_char(s.played_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')
+      WHERE s.mbid = ${mbid}
+      GROUP BY s.id, s.played_at, s.station_id, st.name, st.slug
+      ORDER BY s.played_at DESC
+      LIMIT 1
+    `);
+    const top = ghostRows[0];
+    if (top) {
+      const playedAt =
+        top.played_at instanceof Date
+          ? top.played_at.toISOString()
+          : String(top.played_at);
       ghostRun = {
-        stationName: top.station.name,
-        runId: top.runId,
-        playedAt: top.playedAt.toISOString(),
+        stationName: top.station_name,
+        runId: Number(top.run_id),
+        playedAt,
       };
     }
   }
