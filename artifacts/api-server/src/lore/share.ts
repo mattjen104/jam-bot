@@ -115,11 +115,14 @@ const SHARE_PLATFORM_LABELS: Array<[string, string]> = [
 ];
 
 /**
- * Sentinel name stored inside a `kind:"search"` link entry to mark that this
- * recording was already submitted to Odesli and came back empty (or errored).
- * Filtered out before returning to callers so it is invisible to the UI.
+ * In-memory set of MBIDs for which Odesli enrichment was already attempted
+ * this process lifetime and came back empty or errored (negative cache).
+ * Kept in memory only — never persisted — so it cannot leak into the
+ * recordings API or SPA. One re-attempt per server restart is acceptable;
+ * successful enrichment writes exact links to the DB and gates future hits
+ * via the `existing.some(kind==="exact")` check independently.
  */
-const ODESLI_ATTEMPTED_SENTINEL = "__odesli_searched__";
+const odesliAttempted = new Set<string>();
 
 /**
  * Lazy Odesli enrichment triggered on share-page hit.
@@ -138,31 +141,23 @@ async function enrichShareLinksIfNeeded(
   const existing = (rec.links as RecordingLink[] | null) ?? [];
 
   // Return immediately (no Odesli call) when:
-  //   (a) at least one exact deep link is already stored, OR
-  //   (b) a prior Odesli attempt was recorded via the sentinel entry.
-  // This ensures search-only write-backs act as a true negative cache.
-  const alreadyAttempted = existing.some(
-    (l) => l.name === ODESLI_ATTEMPTED_SENTINEL,
-  );
-  if (alreadyAttempted || existing.some((l) => l.kind === "exact")) {
-    return existing.filter((l) => l.name !== ODESLI_ATTEMPTED_SENTINEL);
+  //   (a) at least one exact deep link is already stored in DB, OR
+  //   (b) this process already attempted Odesli for this recording (negative
+  //       cache tracked in memory — no DB pollution).
+  if (odesliAttempted.has(rec.mbid) || existing.some((l) => l.kind === "exact")) {
+    return existing;
   }
 
   // Build the Odesli lookup handle. ISRC is the only reliable vector here;
   // the recording must have one to get exact links from this path.
   const searchLinks = buildSearchLinks(rec.artist, rec.title);
 
-  /** Search links + sentinel so this branch never re-triggers Odesli. */
-  const searchLinksWithSentinel: RecordingLink[] = [
-    ...searchLinks,
-    { name: ODESLI_ATTEMPTED_SENTINEL, url: "", kind: "search" },
-  ];
-
   if (!rec.isrc?.trim()) {
-    // No ISRC — we can never call Odesli for this recording. Write search
-    // links + sentinel as a permanent negative-cache marker.
+    // No ISRC — we can never call Odesli for this recording. Mark as
+    // attempted in memory and write search links to DB.
+    odesliAttempted.add(rec.mbid);
     db.update(recordingsTable)
-      .set({ links: searchLinksWithSentinel, updatedAt: new Date() })
+      .set({ links: searchLinks, updatedAt: new Date() })
       .where(eq(recordingsTable.mbid, rec.mbid))
       .catch((err) =>
         console.error("[share] search-link write-back failed", rec.mbid, err),
@@ -205,11 +200,12 @@ async function enrichShareLinksIfNeeded(
       exact.push({ name: label, url: u, kind: "exact" });
     }
 
-    // Odesli found no exact links — persist search links + sentinel as
-    // negative cache so the next hit skips the Odesli call entirely.
+    // Odesli found no exact links — mark as attempted in memory and persist
+    // search links so subsequent share hits skip Odesli entirely.
     if (exact.length === 0) {
+      odesliAttempted.add(rec.mbid);
       db.update(recordingsTable)
-        .set({ links: searchLinksWithSentinel, updatedAt: new Date() })
+        .set({ links: searchLinks, updatedAt: new Date() })
         .where(eq(recordingsTable.mbid, rec.mbid))
         .catch((err) =>
           console.error("[share] search-link write-back (no exact) failed", rec.mbid, err),
@@ -235,10 +231,11 @@ async function enrichShareLinksIfNeeded(
     return merged;
   } catch (err) {
     console.warn("[share] Odesli enrichment failed", rec.mbid, err);
-    // On error, persist search links + sentinel so we don't hammer Odesli
-    // on every subsequent share-page hit for this recording.
+    // On error, mark as attempted in memory and persist search links so
+    // we don't hammer Odesli on every subsequent share-page hit.
+    odesliAttempted.add(rec.mbid);
     db.update(recordingsTable)
-      .set({ links: searchLinksWithSentinel, updatedAt: new Date() })
+      .set({ links: searchLinks, updatedAt: new Date() })
       .where(eq(recordingsTable.mbid, rec.mbid))
       .catch(() => undefined);
     return searchLinks;
