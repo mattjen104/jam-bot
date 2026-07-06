@@ -310,12 +310,13 @@ export async function getSongShare(mbid: string): Promise<SongSharePayload | nul
   //    the same station+show+UTC-day group) without a heuristic scan limit.
   let ghostRun: SongShareExtras["ghostRun"] = null;
   if (!liveStation) {
-    const ghostRows = await db.execute<{
+    type GhostRow = {
       run_id: number;
       played_at: Date | string;
       station_name: string;
       station_slug: string;
-    }>(sql`
+    };
+    const ghostResult = await db.execute<GhostRow>(sql`
       SELECT
         min(s2.id)      AS run_id,
         s.played_at     AS played_at,
@@ -333,7 +334,7 @@ export async function getSongShare(mbid: string): Promise<SongSharePayload | nul
       ORDER BY s.played_at DESC
       LIMIT 1
     `);
-    const top = ghostRows[0];
+    const top: GhostRow | undefined = ghostResult.rows[0];
     if (top) {
       const playedAt =
         top.played_at instanceof Date
