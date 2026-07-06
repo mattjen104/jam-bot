@@ -31,3 +31,4 @@
 - [Lore UI component tests](lore-ui-component-tests.md) — per-file jsdom pragma + barrel mock + media stubs; wouter memoryLocation searchPath must NOT start with "?" or params silently vanish.
 - [Lore admin router catch-all](lore-admin-router-catchall.md) — admin router has rate-limit + auth middleware for ALL paths; new /api/* routers must be mounted before loreRouter in routes/index.ts or they get 503 "Admin entry not configured".
 - [db lib dist rebuild](db-lib-dist-rebuild.md) — lib/db has no build script; run `tsc -p tsconfig.json` inside lib/db after schema changes, or api-server sees stale .d.ts and reports "no exported member".
+- [library_items FK guard](library-items-fk-guard.md) — library_items.mbid has a FK to recordings.mbid; import worker must check recordings table before inserting or gets 23503 and crashes the whole job.

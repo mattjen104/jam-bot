@@ -1,8 +1,10 @@
+import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { usePlayer } from "../player/PlayerProvider";
 import {
   useMyLibrary,
   useMyConnections,
+  useLatestImportJob,
   startSpotifyLibraryConnect,
   postStartImport,
 } from "../lib/meHooks";
@@ -11,12 +13,13 @@ import { LibraryRow } from "../components/LibraryRow";
 import {
   ArrowLeft,
   BookMarked,
+  CheckCircle2,
   Disc3,
   Radio,
   Loader2,
   Music2,
+  XCircle,
 } from "lucide-react";
-import { useState } from "react";
 
 export default function Library() {
   const { ride, radio } = usePlayer();
@@ -32,6 +35,29 @@ export default function Library() {
   // Split: kept (provenance.kind === 'keep') vs imported
   const kept = items.filter((i) => i.provenance.kind === "keep");
   const inflow = items.filter((i) => i.provenance.kind !== "keep").slice(0, 20);
+
+  // Poll latest import job so Library shows progress without needing ?import=1
+  const { data: jobData } = useLatestImportJob();
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+
+  useEffect(() => {
+    if (jobData?.status === "pending" || jobData?.status === "running") {
+      setBannerDismissed(false);
+    }
+  }, [jobData?.status]);
+
+  useEffect(() => {
+    if (jobData?.status !== "done") return;
+    const t = setTimeout(() => setBannerDismissed(true), 8_000);
+    return () => clearTimeout(t);
+  }, [jobData?.status]);
+
+  const isActive = jobData?.status === "pending" || jobData?.status === "running";
+  const isRecentlyFinished = (() => {
+    if (!jobData?.finishedAt) return false;
+    return Date.now() - new Date(jobData.finishedAt).getTime() < 10 * 60_000;
+  })();
+  const showImportBanner = !bannerDismissed && jobData != null && (isActive || isRecentlyFinished);
 
   const [connectBusy, setConnectBusy] = useState(false);
   const [importBusy, setImportBusy] = useState(false);
@@ -139,6 +165,14 @@ export default function Library() {
           )}
         </header>
 
+        {/* Import status banner */}
+        {showImportBanner && jobData && (
+          <LibraryImportBanner
+            job={jobData}
+            onDismiss={() => setBannerDismissed(true)}
+          />
+        )}
+
         {/* New from your pickers — inflow scroll row */}
         {inflow.length > 0 && (
           <section className="mb-10" data-testid="library-inflow">
@@ -209,6 +243,106 @@ export default function Library() {
           Spotify mirroring applies when you've granted write access.
         </footer>
       </div>
+    </div>
+  );
+}
+
+function LibraryImportBanner({
+  job,
+  onDismiss,
+}: {
+  job: { status: string; total: number; resolved: number; error: string | null };
+  onDismiss: () => void;
+}) {
+  const isError = job.status === "error";
+  const isDone = job.status === "done";
+
+  if (isError) {
+    return (
+      <div
+        className="mb-8 flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-4"
+        data-testid="library-import-banner"
+      >
+        <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+        <div className="min-w-0 flex-1">
+          <p className="font-mono text-[11px] uppercase tracking-wide text-red-400">
+            Import failed
+          </p>
+          <p className="mt-0.5 font-serif text-base text-foreground">
+            {job.error ?? "Something went wrong — try importing again."}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="shrink-0 font-mono text-[10px] uppercase tracking-wide text-muted-foreground hover:text-foreground"
+        >
+          dismiss
+        </button>
+      </div>
+    );
+  }
+
+  if (isDone) {
+    return (
+      <div
+        className="mb-8 flex items-center gap-3 rounded-xl border border-[#C6F53F]/30 bg-[#C6F53F]/10 px-5 py-4"
+        data-testid="library-import-banner"
+      >
+        <CheckCircle2 className="h-4 w-4 shrink-0 text-[#C6F53F]" />
+        <div className="min-w-0 flex-1">
+          <p className="font-mono text-[11px] uppercase tracking-wide text-[#C6F53F]">
+            Library imported
+          </p>
+          <p className="mt-0.5 font-serif text-base text-foreground">
+            {job.resolved.toLocaleString()} track{job.resolved === 1 ? "" : "s"} matched.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="shrink-0 font-mono text-[10px] uppercase tracking-wide text-muted-foreground hover:text-foreground"
+        >
+          dismiss
+        </button>
+      </div>
+    );
+  }
+
+  // pending / running
+  return (
+    <div
+      className="mb-8 overflow-hidden rounded-xl border border-[#C6F53F]/30 bg-[#C6F53F]/10"
+      data-testid="library-import-banner"
+    >
+      <div className="flex items-center justify-between gap-4 px-5 py-4">
+        <div className="min-w-0">
+          <p className="font-mono text-[11px] uppercase tracking-wide text-[#C6F53F]">
+            Reading your Spotify library…
+          </p>
+          {job.total > 0 ? (
+            <p className="mt-1 font-serif text-xl font-semibold text-foreground">
+              {job.resolved.toLocaleString()}{" "}
+              <span className="text-base font-normal text-muted-foreground">
+                / ~{job.total.toLocaleString()} tracks resolved
+              </span>
+            </p>
+          ) : (
+            <p className="mt-1 font-serif text-base text-muted-foreground">
+              Connecting to Spotify…
+            </p>
+          )}
+        </div>
+        <Loader2 className="h-5 w-5 shrink-0 animate-spin text-[#C6F53F]" />
+      </div>
+      {job.total > 0 && (
+        <div className="h-1 w-full bg-[#C6F53F]/10">
+          <div
+            className="h-full bg-[#C6F53F]/60 transition-all duration-700"
+            style={{ width: `${Math.min(100, (job.resolved / job.total) * 100)}%` }}
+          />
+        </div>
+      )}
     </div>
   );
 }

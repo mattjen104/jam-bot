@@ -325,6 +325,34 @@ router.post("/me/library/import", h(async (req, res) => {
 }));
 
 /**
+ * GET /api/me/library/import — return the most recent import job for the user,
+ * or 404 if no jobs exist yet.  Used by the frontend to detect in-progress or
+ * recently finished imports without needing to track a jobId across tabs.
+ */
+router.get("/me/library/import", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+  const [job] = await db
+    .select()
+    .from(libraryImportJobsTable)
+    .where(eq(libraryImportJobsTable.userId, user.id))
+    .orderBy(desc(libraryImportJobsTable.startedAt))
+    .limit(1);
+
+  if (!job) return res.status(404).json({ error: "No import jobs found" });
+
+  return res.json({
+    jobId: job.id,
+    service: job.service,
+    status: job.status,
+    total: job.total,
+    resolved: job.resolved,
+    startedAt: job.startedAt.toISOString(),
+    finishedAt: job.finishedAt ? job.finishedAt.toISOString() : null,
+    error: job.error ?? null,
+  });
+}));
+
+/**
  * GET /api/me/library/import/:jobId — poll import progress.
  */
 router.get("/me/library/import/:jobId", h(async (req, res) => {
@@ -401,17 +429,27 @@ async function runImportWorker(
       );
 
       if (resolution.mbid) {
-        const provenance: LibraryItemProvenance = { kind: "import", service };
-        await db
-          .insert(libraryItemsTable)
-          .values({
-            userId,
-            mbid: resolution.mbid,
-            provenance,
-            addedAt: new Date(),
-          })
-          .onConflictDoNothing();
-        resolved++;
+        // Only insert if the recording exists in our DB — the FK on
+        // library_items.mbid → recordings.mbid will reject unknown MBIDs.
+        const [rec] = await db
+          .select({ mbid: recordingsTable.mbid })
+          .from(recordingsTable)
+          .where(eq(recordingsTable.mbid, resolution.mbid))
+          .limit(1);
+
+        if (rec) {
+          const provenance: LibraryItemProvenance = { kind: "import", service };
+          await db
+            .insert(libraryItemsTable)
+            .values({
+              userId,
+              mbid: resolution.mbid,
+              provenance,
+              addedAt: new Date(),
+            })
+            .onConflictDoNothing();
+          resolved++;
+        }
       }
 
       // Update progress every 10 items so polling shows progress.

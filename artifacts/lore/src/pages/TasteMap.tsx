@@ -5,7 +5,7 @@ import {
   useMyOverlapPickers,
   useMyOverlapStations,
   useMyOverlapRuns,
-  useImportJobStatus,
+  useLatestImportJob,
   postStartImport,
   startSpotifyLibraryConnect,
   useMyConnections,
@@ -16,6 +16,7 @@ import {
 import { toggleFollow, useFollows, isFollowed } from "../lib/local";
 import {
   ArrowLeft,
+  CheckCircle2,
   Loader2,
   Map,
   Music2,
@@ -23,6 +24,7 @@ import {
   Users,
   Radio,
   Antenna,
+  XCircle,
 } from "lucide-react";
 
 export default function TasteMap() {
@@ -30,30 +32,48 @@ export default function TasteMap() {
   const dockPadding = ride.active || radio.station ? "pb-32" : "pb-16";
 
   const [, setLocation] = useLocation();
-  const [jobId, setJobId] = useState<number | null>(null);
 
   const { data: connections, isLoading: connLoading } = useMyConnections();
   const isAuthenticated = !connLoading && connections !== null;
   const hasSpotify =
     Array.isArray(connections) && connections.some((c) => c.service === "spotify");
 
-  // Kick off an import if Spotify is connected but no jobId yet, and we just
-  // landed here from the connect callback (via ?library=connected).
+  // Kick off an import when we land here from the connect callback (?import=1).
   const [importTriggered, setImportTriggered] = useState(false);
   useEffect(() => {
-    if (!hasSpotify || importTriggered || jobId !== null) return;
+    if (!hasSpotify || importTriggered) return;
     const params = new URLSearchParams(window.location.search);
     if (params.get("import") !== "1") return;
     setImportTriggered(true);
-    postStartImport("spotify")
-      .then((res) => setJobId(res.jobId))
-      .catch(() => {});
-  }, [hasSpotify, importTriggered, jobId]);
+    postStartImport("spotify").catch(() => {});
+  }, [hasSpotify, importTriggered]);
 
-  const importJob = useImportJobStatus(jobId);
-  const jobData = importJob.data;
-  const importDone = jobData?.status === "done" || jobData?.status === "error";
-  const showBanner = jobId !== null && !importDone;
+  // Always poll the latest import job — works across tabs so the user sees
+  // status even when OAuth completed in a different tab.
+  const { data: jobData } = useLatestImportJob();
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+
+  // Reset dismissed state when a new active job appears.
+  useEffect(() => {
+    if (jobData?.status === "pending" || jobData?.status === "running") {
+      setBannerDismissed(false);
+    }
+  }, [jobData?.status]);
+
+  // For terminal states, auto-hide the "done" banner after 8 s.
+  useEffect(() => {
+    if (jobData?.status !== "done") return;
+    const t = setTimeout(() => setBannerDismissed(true), 8_000);
+    return () => clearTimeout(t);
+  }, [jobData?.status]);
+
+  const isActive = jobData?.status === "pending" || jobData?.status === "running";
+  // Only show terminal banners for jobs that finished in the last 10 minutes.
+  const isRecentlyFinished = (() => {
+    if (!jobData?.finishedAt) return false;
+    return Date.now() - new Date(jobData.finishedAt).getTime() < 10 * 60_000;
+  })();
+  const showBanner = !bannerDismissed && (isActive || isRecentlyFinished);
 
   const { data: pickers = [], isLoading: pickersLoading } = useMyOverlapPickers();
   const { data: stations = [], isLoading: stationsLoading } = useMyOverlapStations();
@@ -143,37 +163,12 @@ export default function TasteMap() {
           </p>
         </header>
 
-        {/* Import progress banner */}
+        {/* Import status banner */}
         {showBanner && jobData && (
-          <div
-            className="mb-8 overflow-hidden rounded-xl border border-[#C6F53F]/30 bg-[#C6F53F]/10"
-            data-testid="import-banner"
-          >
-            <div className="flex items-center justify-between gap-4 px-5 py-4">
-              <div className="min-w-0">
-                <p className="font-mono text-[11px] uppercase tracking-wide text-[#C6F53F]">
-                  Reading your Spotify library
-                </p>
-                <p className="mt-1 font-serif text-xl font-semibold text-foreground">
-                  {jobData.resolved.toLocaleString()} / ~{jobData.total.toLocaleString()}{" "}
-                  <span className="text-base font-normal text-muted-foreground">
-                    tracks resolved
-                  </span>
-                </p>
-              </div>
-              <Loader2 className="h-5 w-5 shrink-0 animate-spin text-[#C6F53F]" />
-            </div>
-            {jobData.total > 0 && (
-              <div className="h-1 w-full bg-[#C6F53F]/10">
-                <div
-                  className="h-full bg-[#C6F53F]/60 transition-all duration-700"
-                  style={{
-                    width: `${Math.min(100, (jobData.resolved / jobData.total) * 100)}%`,
-                  }}
-                />
-              </div>
-            )}
-          </div>
+          <ImportStatusBanner
+            job={jobData}
+            onDismiss={() => setBannerDismissed(true)}
+          />
         )}
 
         {/* Stations section */}
@@ -333,6 +328,108 @@ function SkeletonCards() {
         />
       ))}
     </ul>
+  );
+}
+
+function ImportStatusBanner({
+  job,
+  onDismiss,
+}: {
+  job: { status: string; total: number; resolved: number; error: string | null };
+  onDismiss: () => void;
+}) {
+  const isActive = job.status === "pending" || job.status === "running";
+  const isDone = job.status === "done";
+  const isError = job.status === "error";
+
+  if (isError) {
+    return (
+      <div
+        className="mb-8 flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-4"
+        data-testid="import-banner"
+      >
+        <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+        <div className="min-w-0 flex-1">
+          <p className="font-mono text-[11px] uppercase tracking-wide text-red-400">
+            Import failed
+          </p>
+          <p className="mt-0.5 font-serif text-base text-foreground">
+            {job.error ?? "Something went wrong — try importing again."}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="shrink-0 font-mono text-[10px] uppercase tracking-wide text-muted-foreground hover:text-foreground"
+        >
+          dismiss
+        </button>
+      </div>
+    );
+  }
+
+  if (isDone) {
+    return (
+      <div
+        className="mb-8 flex items-center gap-3 rounded-xl border border-[#C6F53F]/30 bg-[#C6F53F]/10 px-5 py-4"
+        data-testid="import-banner"
+      >
+        <CheckCircle2 className="h-4 w-4 shrink-0 text-[#C6F53F]" />
+        <div className="min-w-0 flex-1">
+          <p className="font-mono text-[11px] uppercase tracking-wide text-[#C6F53F]">
+            Library imported
+          </p>
+          <p className="mt-0.5 font-serif text-base text-foreground">
+            {job.resolved.toLocaleString()} track{job.resolved === 1 ? "" : "s"} matched —
+            your taste map is ready below.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="shrink-0 font-mono text-[10px] uppercase tracking-wide text-muted-foreground hover:text-foreground"
+        >
+          dismiss
+        </button>
+      </div>
+    );
+  }
+
+  // pending / running
+  return (
+    <div
+      className="mb-8 overflow-hidden rounded-xl border border-[#C6F53F]/30 bg-[#C6F53F]/10"
+      data-testid="import-banner"
+    >
+      <div className="flex items-center justify-between gap-4 px-5 py-4">
+        <div className="min-w-0">
+          <p className="font-mono text-[11px] uppercase tracking-wide text-[#C6F53F]">
+            {isActive ? "Reading your Spotify library…" : "Starting import…"}
+          </p>
+          {job.total > 0 ? (
+            <p className="mt-1 font-serif text-xl font-semibold text-foreground">
+              {job.resolved.toLocaleString()}{" "}
+              <span className="text-base font-normal text-muted-foreground">
+                / ~{job.total.toLocaleString()} tracks resolved
+              </span>
+            </p>
+          ) : (
+            <p className="mt-1 font-serif text-base text-muted-foreground">
+              Connecting to Spotify…
+            </p>
+          )}
+        </div>
+        <Loader2 className="h-5 w-5 shrink-0 animate-spin text-[#C6F53F]" />
+      </div>
+      {job.total > 0 && (
+        <div className="h-1 w-full bg-[#C6F53F]/10">
+          <div
+            className="h-full bg-[#C6F53F]/60 transition-all duration-700"
+            style={{ width: `${Math.min(100, (job.resolved / job.total) * 100)}%` }}
+          />
+        </div>
+      )}
+    </div>
   );
 }
 

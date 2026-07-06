@@ -266,6 +266,28 @@ export function useImportJobStatus(jobId: number | null) {
   });
 }
 
+/**
+ * Polls the most recent import job for the authenticated user.
+ * Works across tabs — no jobId needed.  Returns null when the user has no
+ * jobs, or when unauthenticated.  Stops polling once the job reaches a
+ * terminal state (done / error).
+ */
+export function useLatestImportJob() {
+  return useQuery({
+    queryKey: ["me", "import-job", "latest"],
+    queryFn: () =>
+      fetchOrNull<ImportJobStatus>("/api/me/library/import"),
+    refetchInterval: (query) => {
+      const data = query.state.data as ImportJobStatus | null | undefined;
+      if (!data) return false;
+      if (data.status === "done" || data.status === "error") return false;
+      return 3_000;
+    },
+    staleTime: 0,
+    retry: false,
+  });
+}
+
 /** Pickers whose picks overlap the user's library. Empty when unauthenticated. */
 export function useMyOverlapPickers() {
   return useQuery({
