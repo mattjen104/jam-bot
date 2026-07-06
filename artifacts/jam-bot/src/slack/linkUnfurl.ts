@@ -157,6 +157,16 @@ function buildBlocks(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnySlackClient = any;
 
+/**
+ * Returns true if the channel should receive Lore unfurls.
+ * Allowed: the configured jam channel, or any DM (channel id starts with "D").
+ * Everything else (other public/private channels) is silently ignored so the
+ * bot doesn't replace previews in channels it wasn't set up for.
+ */
+function isAllowedChannel(channel: string, jamChannelId: string): boolean {
+  return channel === jamChannelId || channel.startsWith("D");
+}
+
 export async function handleLinkShared(
   event: {
     channel: string;
@@ -164,7 +174,10 @@ export async function handleLinkShared(
     links: Array<{ domain: string; url: string }>;
   },
   client: AnySlackClient,
+  jamChannelId: string,
 ): Promise<void> {
+  if (!isAllowedChannel(event.channel, jamChannelId)) return;
+
   const musicLinks = event.links.filter((l) => MUSIC_DOMAINS.has(l.domain));
   if (musicLinks.length === 0) return;
 

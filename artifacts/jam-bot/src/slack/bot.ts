@@ -1651,6 +1651,7 @@ slackApp.event("link_shared", async ({ event, client }) => {
       links: (event.links ?? []) as Array<{ domain: string; url: string }>,
     },
     client,
+    config.SLACK_CHANNEL_ID,
   );
 });
 
