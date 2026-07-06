@@ -90,11 +90,18 @@ const LIVE_WINDOW_MS = 5 * 60 * 1000;
 
 const ODESLI_BASE_URL = "https://api.song.link/v1-alpha.1/links";
 const ODESLI_SHARE_TIMEOUT_MS = 8_000;
+/**
+ * Minimum spacing between Odesli calls from the share path (250 ms = 4 req/s,
+ * safely under the public 10 req/s limit). Uses a promise chain so concurrent
+ * share-page hits queue behind each other rather than fanning out in parallel.
+ */
+const ODESLI_SHARE_MIN_INTERVAL_MS = 250;
+let odesliShareChain: Promise<unknown> = Promise.resolve();
 
 /**
  * Platforms surfaced on the share landing page, in display order.
- * Unlike the track-knowledge enrichment path, Spotify IS included here — the
- * share recipient may use any service.
+ * Unlike the track-knowledge enrichment path, Spotify AND Bandcamp ARE included
+ * here — the share recipient may use any service.
  */
 const SHARE_PLATFORM_LABELS: Array<[string, string]> = [
   ["spotify", "Spotify"],
@@ -104,6 +111,7 @@ const SHARE_PLATFORM_LABELS: Array<[string, string]> = [
   ["amazonMusic", "Amazon Music"],
   ["tidal", "Tidal"],
   ["deezer", "Deezer"],
+  ["bandcamp", "Bandcamp"],
   ["soundcloud", "SoundCloud"],
   ["pandora", "Pandora"],
 ];
@@ -148,21 +156,28 @@ async function enrichShareLinksIfNeeded(
   if (!odesliQuery) return searchLinks;
 
   try {
-    const res = await fetch(
-      `${ODESLI_BASE_URL}?${odesliQuery}&userCountry=US&songIfSingle=true`,
-      {
-        headers: { Accept: "application/json" },
-        signal: AbortSignal.timeout(ODESLI_SHARE_TIMEOUT_MS),
-      },
-    );
-    if (!res.ok) {
-      console.warn(`[share] Odesli ${res.status} for mbid=${rec.mbid}`);
-      return searchLinks;
-    }
-    const body = (await res.json()) as {
-      linksByPlatform?: Record<string, { url?: string }>;
-    };
-    const byPlatform = body.linksByPlatform ?? {};
+    // Rate-limited fetch: enqueue behind the shared promise chain so
+    // concurrent share hits don't fan out (max ~4 req/s, limit is 10).
+    const body = await ((): Promise<unknown> => {
+      const run = odesliShareChain.then(async () => {
+        await new Promise<void>((r) => setTimeout(r, ODESLI_SHARE_MIN_INTERVAL_MS));
+        const res = await fetch(
+          `${ODESLI_BASE_URL}?${odesliQuery}&userCountry=US&songIfSingle=true`,
+          {
+            headers: { Accept: "application/json" },
+            signal: AbortSignal.timeout(ODESLI_SHARE_TIMEOUT_MS),
+          },
+        );
+        if (!res.ok)
+          throw new Error(`Odesli ${res.status} for mbid=${rec.mbid}`);
+        return res.json();
+      });
+      odesliShareChain = run.catch(() => undefined);
+      return run;
+    })();
+    const byPlatform =
+      ((body as { linksByPlatform?: Record<string, { url?: string }> })
+        .linksByPlatform) ?? {};
 
     const exact: RecordingLink[] = [];
     const seenUrls = new Set<string>();
