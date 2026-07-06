@@ -69,15 +69,22 @@ export function useSpotifyConnect(): SpotifyConnectApi {
     }
 
     refresh();
+
+    // When the user returns from the OAuth new tab, re-check status so the
+    // connected state updates without requiring a manual page reload.
+    const onVisible = () => { if (!document.hidden) refresh(); };
+    document.addEventListener("visibilitychange", onVisible);
+
     return () => {
       aliveRef.current = false;
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [refresh]);
 
   const connect = useCallback(() => {
-    // Browser navigation (not fetch): the server 302s to Spotify's consent
-    // page and eventually redirects back to the app.
-    window.location.href = "/api/spotify/login";
+    // Open in a new tab so Spotify's X-Frame-Options doesn't block it when
+    // the app is running inside an iframe (e.g. Replit canvas preview).
+    window.open("/api/spotify/login", "_blank", "noopener");
   }, []);
 
   const disconnect = useCallback(() => {

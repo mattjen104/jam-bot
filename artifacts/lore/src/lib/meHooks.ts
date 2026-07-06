@@ -98,12 +98,13 @@ async function fetchOrNull<T>(url: string, options?: RequestInit): Promise<T | n
   }
 }
 
-/** Start the Spotify Library OAuth flow. Navigates away from the page. */
+/** Start the Spotify Library OAuth flow. Opens in a new tab so it works
+ *  both in iframe embeds (canvas preview, Replit) and direct browser visits. */
 export async function startSpotifyLibraryConnect(): Promise<void> {
   const res = await apiFetch<{ url: string }>("/api/me/connect/spotify/start", {
     method: "POST",
   });
-  window.location.href = res.url;
+  window.open(res.url, "_blank", "noopener");
 }
 
 /** Start a library import. Returns the job id on success. */
@@ -138,7 +139,8 @@ export function useMyConnections() {
       fetchOrNull<{ connections: MeConnection[] }>("/api/me/connections").then(
         (d) => d?.connections ?? null,
       ),
-    staleTime: 60_000,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
     retry: false,
   });
 }
