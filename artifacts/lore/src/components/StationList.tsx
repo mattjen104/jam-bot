@@ -9,7 +9,7 @@ import type {
 } from "@workspace/api-client-react";
 import { QualityBadge } from "./QualityBadge";
 import { FollowButton } from "./FollowButton";
-import { BadgeCheck, Mic, Mic2, Music2, Pause, Play, Radio } from "lucide-react";
+import { BadgeCheck, BookOpen, Mic, Mic2, Music2, Pause, Play, Radio } from "lucide-react";
 import type { PlayerStatus } from "../hooks/useRadioPlayer";
 
 interface StationListProps {
@@ -77,6 +77,7 @@ export function StationList({
               .filter(Boolean)
               .join(" · ")
           : null;
+        const hasStream = Boolean(station.streamUrl);
         return (
           <li key={station.slug}>
             <div
@@ -96,44 +97,58 @@ export function StationList({
                   : "border-card-border bg-card"
               }`}
             >
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggle(station);
-                }}
-                aria-label={isPlaying ? `Pause ${station.name}` : `Play ${station.name}`}
-                data-testid={`toggle-${station.slug}`}
-                className={`relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border shadow-sm transition-transform active:scale-95 ${
-                  artwork
-                    ? "border-border bg-muted"
-                    : "border-primary-border bg-primary text-primary-foreground"
-                }`}
-              >
-                {artwork && (
-                  <>
-                    <img
-                      src={artwork}
-                      alt=""
-                      aria-hidden
-                      className="absolute inset-0 h-full w-full object-cover"
-                      data-testid={`pulse-artwork-${station.slug}`}
-                    />
-                    <span className="absolute inset-0 bg-black/35 transition-colors group-hover:bg-black/45" />
-                  </>
-                )}
-                <span
-                  className={`relative ${artwork ? "text-white drop-shadow" : ""}`}
+              {hasStream ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggle(station);
+                  }}
+                  aria-label={isPlaying ? `Pause ${station.name}` : `Play ${station.name}`}
+                  data-testid={`toggle-${station.slug}`}
+                  className={`relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border shadow-sm transition-transform active:scale-95 ${
+                    artwork
+                      ? "border-border bg-muted"
+                      : "border-primary-border bg-primary text-primary-foreground"
+                  }`}
                 >
-                  {isLoading ? (
-                    <span className="block h-4 w-4 animate-spin rounded-full border-2 border-current/40 border-t-current" />
-                  ) : isPlaying ? (
-                    <Pause className="h-4 w-4 fill-current" />
-                  ) : (
-                    <Play className="ml-0.5 h-4 w-4 fill-current" />
+                  {artwork && (
+                    <>
+                      <img
+                        src={artwork}
+                        alt=""
+                        aria-hidden
+                        className="absolute inset-0 h-full w-full object-cover"
+                        data-testid={`pulse-artwork-${station.slug}`}
+                      />
+                      <span className="absolute inset-0 bg-black/35 transition-colors group-hover:bg-black/45" />
+                    </>
                   )}
-                </span>
-              </button>
+                  <span
+                    className={`relative ${artwork ? "text-white drop-shadow" : ""}`}
+                  >
+                    {isLoading ? (
+                      <span className="block h-4 w-4 animate-spin rounded-full border-2 border-current/40 border-t-current" />
+                    ) : isPlaying ? (
+                      <Pause className="h-4 w-4 fill-current" />
+                    ) : (
+                      <Play className="ml-0.5 h-4 w-4 fill-current" />
+                    )}
+                  </span>
+                </button>
+              ) : (
+                /* No live stream — link to archive instead of a broken play button */
+                <Link
+                  href={`/stations/${station.slug}/archive`}
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label={`Browse ${station.name} archive`}
+                  data-testid={`archive-link-${station.slug}`}
+                  title="No live stream — browse archive"
+                  className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted text-muted-foreground/50 shadow-sm transition-colors hover:border-primary/30 hover:text-muted-foreground"
+                >
+                  <BookOpen className="h-4 w-4" />
+                </Link>
+              )}
 
               <div className="min-w-0 flex-1 overflow-hidden">
                 <div className="flex items-center gap-2">

@@ -94,6 +94,15 @@ export function useRadioPlayer() {
     async (station: Station) => {
       const el = audioRef.current;
       if (!el) return;
+      if (!station.streamUrl) {
+        setState((s) => ({
+          ...s,
+          status: "error",
+          station,
+          error: "This station has no live stream configured.",
+        }));
+        return;
+      }
       setState((s) => ({ ...s, status: "loading", station, error: null }));
       try {
         await attachSource(el, station);
