@@ -84,7 +84,7 @@ async function fetchSharePayload(params: {
         title: params.title,
         thumbnailUrl: params.thumbnailUrl,
       }),
-      signal: AbortSignal.timeout(8_000),
+      signal: AbortSignal.timeout(20_000),
     });
     if (!res.ok) {
       let body = "";
