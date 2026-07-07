@@ -343,7 +343,7 @@ export const GetStationNowPlayingResponse = zod.object({
           rawArtist: zod.string(),
           rawTitle: zod.string(),
           source: zod.string().nullish(),
-          confidence: zod.enum(["recording_id", "isrc", "text", "unresolved"]),
+          confidence: zod.enum(["recording_id", "isrc", "text", "spotify", "unresolved"]),
           playedAt: zod.string(),
           artworkUrl: zod.string().nullish(),
           recording: zod
@@ -614,7 +614,7 @@ export const GetRecordingSpinsResponse = zod.object({
       .object({
         playedAt: zod.string(),
         source: zod.string().nullish(),
-        confidence: zod.enum(["recording_id", "isrc", "text", "unresolved"]),
+        confidence: zod.enum(["recording_id", "isrc", "text", "spotify", "unresolved"]),
         station: zod
           .object({
             slug: zod.string(),
@@ -686,7 +686,7 @@ export const GetRecordingPicksResponse = zod.object({
           .describe(
             "Total picks in the same run (0 when the pick has no run).",
           ),
-        confidence: zod.enum(["recording_id", "isrc", "text", "unresolved"]),
+        confidence: zod.enum(["recording_id", "isrc", "text", "spotify", "unresolved"]),
       })
       .describe(
         "One curated pick of a recording — the reverse edge of the song\/source graph. `runId` locates the specific list (null when the pick has no source URL and therefore no archived run).",
@@ -1108,7 +1108,7 @@ export const GetStationRunResponse = zod.object({
         playedAt: zod.string().nullish(),
         rawArtist: zod.string(),
         rawTitle: zod.string(),
-        confidence: zod.enum(["recording_id", "isrc", "text", "unresolved"]),
+        confidence: zod.enum(["recording_id", "isrc", "text", "spotify", "unresolved"]),
         recording: zod
           .union([
             zod
@@ -1260,7 +1260,7 @@ export const GetPickerRunResponse = zod.object({
         playedAt: zod.string().nullish(),
         rawArtist: zod.string(),
         rawTitle: zod.string(),
-        confidence: zod.enum(["recording_id", "isrc", "text", "unresolved"]),
+        confidence: zod.enum(["recording_id", "isrc", "text", "spotify", "unresolved"]),
         recording: zod
           .union([
             zod

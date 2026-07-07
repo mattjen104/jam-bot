@@ -20,7 +20,16 @@ import type { NowPlayingRaw, RawSpin, ShowAttribution } from "./types.js";
 /** Outcome of trying to place a now-playing track on the MusicBrainz spine. */
 export interface MbidResolution {
   mbid: string | null;
-  confidence: "recording_id" | "isrc" | "text" | "unresolved";
+  /**
+   * How the MBID was obtained:
+   *   recording_id — source supplied it directly (strongest)
+   *   isrc         — resolved via ISRC lookup on MusicBrainz
+   *   text         — resolved via scored artist+title search on MusicBrainz
+   *   spotify      — MusicBrainz failed; synthetic `sp:<spotifyTrackId>` MBID
+   *                  anchored by a Spotify track search (Odesli still fires)
+   *   unresolved   — all resolution paths failed; mbid is null
+   */
+  confidence: "recording_id" | "isrc" | "text" | "spotify" | "unresolved";
   title: string;
   artist: string;
   artistMbid?: string;
@@ -213,6 +222,29 @@ export async function resolveToMbid(
     return result;
   }
 
+  // 4. Spotify fallback — MusicBrainz couldn't place it (new release, niche
+  //    artist, etc.).  A Spotify track search is fast and doesn't carry
+  //    MusicBrainz's 1 req/sec constraint.  On a hit we generate a synthetic
+  //    `sp:<spotifyTrackId>` primary key so the track still lands in the
+  //    library and gets exact Odesli deep links.  The result is cached under
+  //    the same text key so subsequent spins of the same track are free.
+  try {
+    const hit = await searchTrack(`${rawArtist} ${rawTitle}`);
+    if (hit?.id) {
+      const syntheticMbid = `sp:${hit.id}`;
+      await writeResolutionCacheSafe(key, syntheticMbid, "spotify");
+      return {
+        mbid: syntheticMbid,
+        confidence: "spotify",
+        title: hit.name ?? rawTitle,
+        artist: rawArtist,
+        ...(hit.durationMs != null ? { durationMs: hit.durationMs } : {}),
+      };
+    }
+  } catch {
+    // Spotify unconfigured or rate-limited — fall through to unresolved.
+  }
+
   // Cache the miss so an unresolvable pair isn't re-queried on every spin.
   await writeResolutionCacheSafe(key, null, "unresolved");
   return { mbid: null, confidence: "unresolved", ...base };
@@ -231,15 +263,31 @@ async function resolveLinks(
 ): Promise<{ links: RecordingLink[]; spotifyArtworkUrl: string | null }> {
   let spotifyTrackId: string | undefined;
   let spotifyArtworkUrl: string | null = null;
-  try {
-    const hit = await searchTrack(`${artist} ${title}`);
-    if (hit) {
-      spotifyTrackId = hit.id;
-      spotifyArtworkUrl = hit.imageUrl;
+
+  // Synthetic `sp:<id>` MBIDs already carry the Spotify track ID — skip the
+  // search entirely and use it directly so we don't burn another API call.
+  const spMatch = recordingId.match(/^sp:([A-Za-z0-9]+)$/);
+  if (spMatch) {
+    spotifyTrackId = spMatch[1];
+    // Best-effort artwork lookup using the ID we already have.
+    try {
+      const hit = await searchTrack(`${artist} ${title}`);
+      if (hit?.imageUrl) spotifyArtworkUrl = hit.imageUrl;
+    } catch {
+      // Non-critical — the card still renders without art.
     }
-  } catch {
-    // Spotify unconfigured / rate-limited — fall back to search links.
+  } else {
+    try {
+      const hit = await searchTrack(`${artist} ${title}`);
+      if (hit) {
+        spotifyTrackId = hit.id;
+        spotifyArtworkUrl = hit.imageUrl;
+      }
+    } catch {
+      // Spotify unconfigured / rate-limited — fall back to search links.
+    }
   }
+
   const args: Parameters<typeof fetchRecordingLinks>[0] = {
     recordingId,
     artist,
