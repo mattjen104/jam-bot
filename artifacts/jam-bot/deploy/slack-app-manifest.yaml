@@ -3,6 +3,13 @@ display_information:
   description: Permanent Spotify Jam host for our channel.
   background_color: "#1DB954"
 features:
+  unfurl_domains:
+    - open.spotify.com
+    - music.apple.com
+    - music.youtube.com
+    - bandcamp.com
+    - soundcloud.com
+    - tidal.com
   app_home:
     # Show the Messages tab in the bot's App Home and allow users to type
     # there. Required so the host can DM the bot natural-language commands
