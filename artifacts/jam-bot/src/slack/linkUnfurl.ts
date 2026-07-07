@@ -86,9 +86,19 @@ async function fetchSharePayload(params: {
       }),
       signal: AbortSignal.timeout(8_000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      let body = "";
+      try { body = await res.text(); } catch { /* ignore */ }
+      logger.warn("[linkUnfurl] share API non-OK", {
+        status: res.status,
+        url: `${config.LORE_API_BASE}/share/resolve/song`,
+        body: body.slice(0, 300),
+      });
+      return null;
+    }
     return (await res.json()) as ShareResponse;
-  } catch {
+  } catch (err) {
+    logger.warn("[linkUnfurl] share API fetch threw", { error: String(err) });
     return null;
   }
 }
