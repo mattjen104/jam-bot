@@ -1667,13 +1667,26 @@ async function handleNaturalLanguage(
 // link, service buttons). Requires `links:read` + `links:write` scopes and
 // the relevant domains registered in the Slack app manifest.
 slackApp.event("link_shared", async ({ event, client }) => {
+  const e = event as {
+    channel: string;
+    message_ts: string;
+    links?: Array<{ domain: string; url: string }>;
+    unfurl_id?: string;
+    source?: string;
+  };
+  logger.info("[linkUnfurl] link_shared received", {
+    channel: e.channel,
+    domains: (e.links ?? []).map((l) => l.domain),
+    hasUnfurlId: Boolean(e.unfurl_id),
+    hasSource: Boolean(e.source),
+  });
   await handleLinkShared(
     {
-      channel: event.channel,
-      message_ts: event.message_ts,
-      links: (event.links ?? []) as Array<{ domain: string; url: string }>,
-      unfurl_id: (event as { unfurl_id?: string }).unfurl_id,
-      source: (event as { source?: string }).source,
+      channel: e.channel,
+      message_ts: e.message_ts,
+      links: (e.links ?? []) as Array<{ domain: string; url: string }>,
+      unfurl_id: e.unfurl_id,
+      source: e.source,
     },
     client,
     config.SLACK_CHANNEL_ID,
