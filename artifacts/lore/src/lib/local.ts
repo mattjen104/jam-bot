@@ -26,7 +26,7 @@ export interface JournalEntry {
 }
 
 export interface FollowEntry {
-  kind: "station" | "picker" | "dj";
+  kind: "station" | "picker" | "selector" | "dj";
   /**
    * Station slug, picker handle, or — for a DJ — `<stationSlug>::<djName>`
    * (DJs have no standalone identity yet; they're followed as "this person on

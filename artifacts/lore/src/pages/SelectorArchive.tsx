@@ -2,6 +2,7 @@ import { Link, useParams } from "wouter";
 import {
   useGetPickerArchive,
   useGetPickerStationOverlaps,
+  useGetSelectorRuns,
 } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { FollowButton } from "../components/FollowButton";
@@ -22,6 +23,9 @@ export default function SelectorArchive() {
   const { ride, radio } = usePlayer();
   const { data, isLoading, isError } = useGetPickerArchive(handle);
   const { data: overlaps } = useGetPickerStationOverlaps(handle);
+  const isDj = data?.picker.pickerType === "dj";
+  const { data: selectorRuns, isLoading: selectorRunsLoading } =
+    useGetSelectorRuns(handle, { query: { enabled: isDj } });
 
   const dockPadding = ride.active || radio.station ? "pb-32" : "pb-16";
 
@@ -46,15 +50,19 @@ export default function SelectorArchive() {
           <>
             <header className="mb-8 mt-6">
               <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] text-primary">
-                <Users className="h-4 w-4" />
-                Selector archive
+                {isDj ? (
+                  <Radio className="h-4 w-4" />
+                ) : (
+                  <Users className="h-4 w-4" />
+                )}
+                {isDj ? "Radio selector archive" : "Selector archive"}
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 <h1 className="font-serif text-3xl font-semibold text-foreground">
                   {data.picker.name}
                 </h1>
                 <FollowButton
-                  kind="picker"
+                  kind={isDj ? "selector" : "picker"}
                   id={data.picker.handle}
                   name={data.picker.name}
                 />
@@ -64,7 +72,9 @@ export default function SelectorArchive() {
                 />
               </div>
               <p className="mt-2 max-w-[52ch] text-sm text-muted-foreground">
-                {data.picker.description ?? ""}
+                {isDj
+                  ? "Every show aired on KEXP, browsable by date."
+                  : (data.picker.description ?? "")}
               </p>
               {data.picker.homeUrl ? (
                 <a
@@ -79,43 +89,78 @@ export default function SelectorArchive() {
               ) : null}
             </header>
 
-            {data.runs.length === 0 ? (
-              <p className="rounded-xl border border-card-border bg-card p-4 font-mono text-xs text-muted-foreground">
-                No documented runs yet — syncing happens in the background.
-              </p>
+            {isDj ? (
+              /* Station-run-backed archive for KEXP DJ selectors */
+              selectorRunsLoading ? (
+                <div className="h-40 animate-pulse rounded-xl border border-card-border bg-card" />
+              ) : !selectorRuns || selectorRuns.runs.length === 0 ? (
+                <p className="rounded-xl border border-card-border bg-card p-4 font-mono text-xs text-muted-foreground">
+                  No shows logged yet — spins appear as they air.
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-2" data-testid="selector-runs">
+                  {selectorRuns.runs.map((r) => (
+                    <li key={r.runId}>
+                      <Link
+                        href={`/archive/station-runs/${r.runId}`}
+                        className="hover-elevate flex items-center justify-between gap-3 rounded-xl border border-card-border bg-card p-4"
+                        data-testid={`selector-run-${r.runId}`}
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-serif text-base font-semibold text-foreground">
+                            {r.show?.name ?? data.picker.name}
+                          </p>
+                          <p className="truncate font-mono text-[11px] text-muted-foreground">
+                            {r.date ? `${runDate(r.date)} · ` : ""}
+                            {r.spinCount} spin{r.spinCount === 1 ? "" : "s"}
+                          </p>
+                        </div>
+                        <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )
             ) : (
-              <ul className="flex flex-col gap-2" data-testid="selector-runs">
-                {data.runs.map((r) => (
-                  <li key={r.runId}>
-                    <Link
-                      href={`/archive/selector-runs/${r.runId}`}
-                      className="hover-elevate flex items-center justify-between gap-3 rounded-xl border border-card-border bg-card p-4"
-                      data-testid={`selector-run-${r.runId}`}
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate font-serif text-base font-semibold text-foreground">
-                          {r.title ?? "Untitled run"}
-                        </p>
-                        <p className="truncate font-mono text-[11px] text-muted-foreground">
-                          {r.pickedAt ? `${runDate(r.pickedAt)} · ` : ""}
-                          {r.trackCount} track{r.trackCount === 1 ? "" : "s"} ·{" "}
-                          <span
-                            className={
-                              r.resolvedCount > 0 ? "text-primary" : ""
-                            }
-                          >
-                            {r.resolvedCount}/{r.trackCount} resolved
-                          </span>
-                        </p>
-                      </div>
-                      <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+              /* Picks-backed archive for curated selectors */
+              data.runs.length === 0 ? (
+                <p className="rounded-xl border border-card-border bg-card p-4 font-mono text-xs text-muted-foreground">
+                  No documented runs yet — syncing happens in the background.
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-2" data-testid="selector-runs">
+                  {data.runs.map((r) => (
+                    <li key={r.runId}>
+                      <Link
+                        href={`/archive/selector-runs/${r.runId}`}
+                        className="hover-elevate flex items-center justify-between gap-3 rounded-xl border border-card-border bg-card p-4"
+                        data-testid={`selector-run-${r.runId}`}
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-serif text-base font-semibold text-foreground">
+                            {r.title ?? "Untitled run"}
+                          </p>
+                          <p className="truncate font-mono text-[11px] text-muted-foreground">
+                            {r.pickedAt ? `${runDate(r.pickedAt)} · ` : ""}
+                            {r.trackCount} track{r.trackCount === 1 ? "" : "s"} ·{" "}
+                            <span
+                              className={
+                                r.resolvedCount > 0 ? "text-primary" : ""
+                              }
+                            >
+                              {r.resolvedCount}/{r.trackCount} resolved
+                            </span>
+                          </p>
+                        </div>
+                        <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )
             )}
 
-            {overlaps && overlaps.items.length > 0 && (
+            {!isDj && overlaps && overlaps.items.length > 0 && (
               <section className="mt-10">
                 <h2 className="mb-1 flex items-center gap-2 font-serif text-xl font-semibold text-foreground">
                   <Radio className="h-5 w-5 text-primary" />

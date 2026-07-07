@@ -1989,3 +1989,51 @@ export const GetStationsScheduleResponse = zod.object({
     }),
   ),
 });
+
+/**
+ * Public list of KEXP DJ selectors with recent spin activity.
+ * @summary List KEXP selectors
+ */
+export const ListSelectorsResponse = zod.object({
+  selectors: zod.array(
+    zod.object({
+      id: zod.number(),
+      name: zod.string(),
+      handle: zod.string(),
+      homeUrl: zod.string().nullish(),
+      recentSpinCount: zod.number(),
+      lastPlayedAt: zod.string().nullish(),
+    }),
+  ),
+});
+
+/**
+ * Station runs (show+day combos) for a KEXP DJ selector, newest first.
+ * @summary Station runs for a selector
+ */
+export const GetSelectorRunsParams = zod.object({
+  handle: zod.coerce.string().min(1),
+});
+
+export const GetSelectorRunsResponse = zod.object({
+  selector: zod.object({
+    id: zod.number(),
+    name: zod.string(),
+    handle: zod.string(),
+    homeUrl: zod.string().nullish(),
+  }),
+  runs: zod.array(
+    zod.object({
+      runId: zod.number(),
+      date: zod.string().nullish(),
+      show: zod
+        .object({
+          name: zod.string(),
+          djName: zod.string().nullish(),
+        })
+        .nullish(),
+      spinCount: zod.number(),
+      startedAt: zod.string().nullish(),
+    }),
+  ),
+});

@@ -3,6 +3,7 @@ import { useQueries } from "@tanstack/react-query";
 import {
   getStationArchive,
   getPickerArchive,
+  getSelectorRuns,
 } from "@workspace/api-client-react";
 import { useFollows, parseDjFollowId } from "../lib/local";
 import { runDate } from "../lib/format";
@@ -25,6 +26,7 @@ export function FollowingStrip() {
   const follows = useFollows();
   const stationFollows = follows.filter((f) => f.kind === "station");
   const pickerFollows = follows.filter((f) => f.kind === "picker");
+  const selectorFollows = follows.filter((f) => f.kind === "selector");
   const djFollows = follows.filter((f) => f.kind === "dj");
 
   const stationQueries = useQueries({
@@ -38,6 +40,13 @@ export function FollowingStrip() {
     queries: pickerFollows.map((f) => ({
       queryKey: ["following", "picker", f.id],
       queryFn: () => getPickerArchive(f.id),
+      staleTime: 60_000,
+    })),
+  });
+  const selectorQueries = useQueries({
+    queries: selectorFollows.map((f) => ({
+      queryKey: ["following", "selector", f.id],
+      queryFn: () => getSelectorRuns(f.id),
       staleTime: 60_000,
     })),
   });
@@ -93,6 +102,17 @@ export function FollowingStrip() {
       title: r.title ?? "Untitled run",
       byline: q.data.picker.name,
       date: r.pickedAt ?? null,
+    });
+  });
+  selectorQueries.forEach((q) => {
+    const r = q.data?.runs[0];
+    if (!q.data || !r) return;
+    items.push({
+      key: `kexp-run-${r.runId}`,
+      href: `/archive/station-runs/${r.runId}`,
+      title: r.show?.name ?? q.data.selector.name,
+      byline: `${q.data.selector.name} · KEXP`,
+      date: r.date ?? null,
     });
   });
 

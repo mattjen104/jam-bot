@@ -3,12 +3,13 @@ import { Link } from "wouter";
 import {
   useListPickers,
   useGetPickersDial,
+  useListSelectors,
   getPickerRun,
 } from "@workspace/api-client-react";
-import type { PickerDialItem } from "@workspace/api-client-react";
+import type { PickerDialItem, SelectorSummary } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { FollowButton } from "../components/FollowButton";
-import { ArrowLeft, Loader2, Music2, Play, Users, Zap } from "lucide-react";
+import { ArrowLeft, Loader2, Music2, Play, Radio, Users, Zap } from "lucide-react";
 
 const RECENTLY_ACTIVE_MS = 14 * 24 * 60 * 60 * 1000;
 
@@ -198,10 +199,65 @@ function SelectorSimpleCard({
   );
 }
 
+/** Card for a KEXP radio selector (spin-based, no curated artwork mosaic). */
+function KexpSelectorCard({ selector }: { selector: SelectorSummary }) {
+  const RECENTLY_ACTIVE_MS_30 = 30 * 24 * 60 * 60 * 1000;
+  const recentlyActive =
+    selector.lastPlayedAt != null &&
+    Date.now() - new Date(selector.lastPlayedAt).getTime() < RECENTLY_ACTIVE_MS_30;
+
+  return (
+    <li className="flex flex-col">
+      <Link
+        href={`/archive/selectors/${selector.handle}`}
+        className="hover-elevate flex flex-col overflow-hidden rounded-2xl border border-card-border bg-card"
+      >
+        <div className="flex h-20 w-full items-center justify-center gap-3 bg-muted/40 px-4">
+          <Radio className="h-6 w-6 shrink-0 text-primary/40" />
+          <span className="truncate font-serif text-lg font-semibold text-foreground">
+            {selector.name}
+          </span>
+          {recentlyActive && (
+            <span className="ml-auto shrink-0 inline-flex items-center gap-1 rounded-full border border-primary/40 bg-background/80 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide text-primary">
+              <Zap className="h-2.5 w-2.5" />
+              Active
+            </span>
+          )}
+        </div>
+        <div className="flex flex-1 flex-col gap-1 p-4">
+          <div className="flex items-start justify-between gap-2">
+            <span className="shrink-0 rounded-full border border-border px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide text-muted-foreground">
+              Selector
+            </span>
+          </div>
+          <div className="mt-auto flex items-center gap-2 pt-2 font-mono text-[10px] text-muted-foreground">
+            <Music2 className="h-3 w-3 text-primary/60" />
+            {selector.recentSpinCount > 0 ? (
+              <span>{selector.recentSpinCount} spin{selector.recentSpinCount === 1 ? "" : "s"} this month</span>
+            ) : (
+              <span>No recent spins</span>
+            )}
+            {selector.lastPlayedAt && (
+              <>
+                <span>·</span>
+                <span>{timeAgoShort(selector.lastPlayedAt)}</span>
+              </>
+            )}
+          </div>
+        </div>
+      </Link>
+      <div className="mt-2 flex justify-end px-1">
+        <FollowButton kind="selector" id={selector.handle} name={selector.name} />
+      </div>
+    </li>
+  );
+}
+
 export default function Selectors() {
   const { ride, radio } = usePlayer();
   const { data: listData, isLoading: listLoading, isError: listError } = useListPickers();
   const { data: dialData } = useGetPickersDial();
+  const { data: kexpData, isLoading: kexpLoading } = useListSelectors();
   const dockPadding = ride.active || radio.station ? "pb-32" : "pb-16";
 
   // Build a lookup map of dial items by picker handle for O(1) merge.
@@ -327,6 +383,37 @@ export default function Selectors() {
                 );
               })}
             </ul>
+          </section>
+        )}
+
+        {/* KEXP radio selectors — spin-backed DJ pickers */}
+        {(kexpLoading || (kexpData?.selectors ?? []).length > 0) && (
+          <section className="mt-12">
+            <div className="mb-4 flex items-center gap-2">
+              <Radio className="h-3.5 w-3.5 text-primary" />
+              <h2 className="font-mono text-[11px] uppercase tracking-[0.3em] text-primary">
+                Radio selectors
+              </h2>
+            </div>
+            <p className="mb-6 max-w-[52ch] text-sm text-muted-foreground">
+              KEXP DJs whose every spin is attributed and browsable by show.
+            </p>
+            {kexpLoading ? (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {[0, 1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="h-40 animate-pulse rounded-2xl border border-card-border bg-card"
+                  />
+                ))}
+              </div>
+            ) : (
+              <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {(kexpData?.selectors ?? []).map((s) => (
+                  <KexpSelectorCard key={s.handle} selector={s} />
+                ))}
+              </ul>
+            )}
           </section>
         )}
       </div>

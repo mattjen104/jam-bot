@@ -1263,3 +1263,37 @@ export type SongExploderEpisodePatchResult = {
   id: number;
   youtubeUrl: string | null;
 };
+
+export interface SelectorSummary {
+  id: number;
+  name: string;
+  handle: string;
+  homeUrl?: string | null;
+  recentSpinCount: number;
+  lastPlayedAt?: string | null;
+}
+
+export interface SelectorRunSummary {
+  runId: number;
+  date?: string | null;
+  show?: {
+    name: string;
+    djName?: string | null;
+  } | null;
+  spinCount: number;
+  startedAt?: string | null;
+}
+
+export interface SelectorRuns {
+  selector: {
+    id: number;
+    name: string;
+    handle: string;
+    homeUrl?: string | null;
+  };
+  runs: SelectorRunSummary[];
+}
+
+export interface SelectorList {
+  selectors: SelectorSummary[];
+}

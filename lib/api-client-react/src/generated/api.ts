@@ -55,6 +55,8 @@ import type {
   ResolveSongParams,
   ResolvedSong,
   RymListRequest,
+  SelectorList,
+  SelectorRuns,
   SegueNextList,
   SongContext,
   SongExploderClaimRequest,
@@ -4407,10 +4409,11 @@ export const getGetArtistQueryOptions = <
   const queryFn: QueryFunction<Awaited<ReturnType<typeof getArtist>>> = ({
     signal,
   }) => getArtist(mbid, { signal, ...requestOptions });
-  return { queryKey, queryFn, enabled: !!mbid, ...queryOptions } satisfies UseQueryOptions<
+  return { queryKey, queryFn, enabled: !!mbid, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof getArtist>>,
-    TError
-  >;
+    TError,
+    TData
+  > & { queryKey: QueryKey };
 };
 
 
@@ -4425,6 +4428,148 @@ export function useGetArtist<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetArtistQueryOptions(mbid, options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+// ── Selectors (KEXP DJ pickers) ───────────────────────────────────────────────
+
+export const getListSelectorsUrl = () => `/api/selectors`;
+
+export const listSelectors = async (
+  options?: RequestInit,
+): Promise<SelectorList> => {
+  return customFetch<SelectorList>(getListSelectorsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListSelectorsQueryKey = () =>
+  [`/api/selectors`] as const;
+
+export const getListSelectorsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listSelectors>>,
+  TError = ErrorType<ApiError>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listSelectors>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getListSelectorsQueryKey();
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listSelectors>>
+  > = ({ signal }) => listSelectors({ signal, ...requestOptions });
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listSelectors>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListSelectorsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listSelectors>>
+>;
+export type ListSelectorsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary List KEXP selectors (DJ pickers)
+ */
+export function useListSelectors<
+  TData = Awaited<ReturnType<typeof listSelectors>>,
+  TError = ErrorType<ApiError>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listSelectors>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListSelectorsQueryOptions(options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getGetSelectorRunsUrl = (handle: string) =>
+  `/api/selectors/${handle}/runs`;
+
+export const getSelectorRuns = async (
+  handle: string,
+  options?: RequestInit,
+): Promise<SelectorRuns> => {
+  return customFetch<SelectorRuns>(getGetSelectorRunsUrl(handle), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetSelectorRunsQueryKey = (handle: string) =>
+  [`/api/selectors/${handle}/runs`] as const;
+
+export const getGetSelectorRunsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSelectorRuns>>,
+  TError = ErrorType<ApiError>,
+>(
+  handle: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSelectorRuns>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey =
+    queryOptions?.queryKey ?? getGetSelectorRunsQueryKey(handle);
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getSelectorRuns>>
+  > = ({ signal }) => getSelectorRuns(handle, { signal, ...requestOptions });
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!handle,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSelectorRuns>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSelectorRunsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSelectorRuns>>
+>;
+export type GetSelectorRunsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Station runs for a KEXP DJ selector
+ */
+export function useGetSelectorRuns<
+  TData = Awaited<ReturnType<typeof getSelectorRuns>>,
+  TError = ErrorType<ApiError>,
+>(
+  handle: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSelectorRuns>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSelectorRunsQueryOptions(handle, options);
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
   };
