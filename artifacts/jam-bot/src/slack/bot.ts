@@ -1672,6 +1672,8 @@ slackApp.event("link_shared", async ({ event, client }) => {
       channel: event.channel,
       message_ts: event.message_ts,
       links: (event.links ?? []) as Array<{ domain: string; url: string }>,
+      unfurl_id: (event as { unfurl_id?: string }).unfurl_id,
+      source: (event as { source?: string }).source,
     },
     client,
     config.SLACK_CHANNEL_ID,

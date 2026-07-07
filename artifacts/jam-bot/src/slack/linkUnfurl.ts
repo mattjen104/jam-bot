@@ -195,6 +195,8 @@ export async function handleLinkShared(
     channel: string;
     message_ts: string;
     links: Array<{ domain: string; url: string }>;
+    unfurl_id?: string;
+    source?: string;
   },
   client: AnySlackClient,
   jamChannelId: string,
@@ -236,13 +238,14 @@ export async function handleLinkShared(
   if (Object.keys(unfurls).length === 0) return;
 
   try {
-    // unfurls is {[url]: MessageAttachment}; Bolt's WebClient types it as
-    // LinkUnfurls which is assignable — cast through unknown to satisfy TS.
-    await client.chat.unfurl({
-      channel: event.channel,
-      ts: event.message_ts,
-      unfurls,
-    });
+    // Slack uses two different unfurl patterns:
+    //   Channels: channel + ts  (old pattern, no unfurl_id)
+    //   DMs/IMs:  unfurl_id + source  (new pattern, Slack sends these fields)
+    // Using channel+ts in a DM silently fails — Slack ignores it.
+    const unfurlArgs = event.unfurl_id && event.source
+      ? { unfurl_id: event.unfurl_id, source: event.source, unfurls }
+      : { channel: event.channel, ts: event.message_ts, unfurls };
+    await client.chat.unfurl(unfurlArgs);
   } catch (err) {
     logger.warn("[linkUnfurl] chat.unfurl failed", { error: String(err) });
   }
