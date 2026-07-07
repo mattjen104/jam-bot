@@ -143,6 +143,16 @@ export const slackApp = new App({
   logLevel: LogLevel.WARN,
 });
 
+// Temporary diagnostic: log every event type Bolt receives so we can confirm
+// whether link_shared is arriving at all. Remove once unfurl is confirmed working.
+slackApp.use(async ({ payload, next }) => {
+  const type = (payload as { type?: string }).type;
+  if (type) {
+    logger.info("[bolt:event] received", { type });
+  }
+  await next();
+});
+
 // ---- Reply routing -------------------------------------------------------
 // Routing model: the bot replies wherever it was addressed. A message in
 // the Jam channel (slash command, @mention, engaged-thread reply) is
