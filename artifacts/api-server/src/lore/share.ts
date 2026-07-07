@@ -16,7 +16,8 @@ import {
 } from "@workspace/db";
 import { eq, and, isNull, sql, gt, desc } from "drizzle-orm";
 import type { RecordingLink } from "@workspace/db";
-import { buildSearchLinks } from "@workspace/song-enrichment";
+import { buildSearchLinks, fetchRecordingLinks } from "@workspace/song-enrichment";
+import { resolveToMbid } from "./resolve.js";
 
 /**
  * Share layer: server-rendered Open Graph pages + dynamic preview cards for
@@ -556,6 +557,118 @@ export async function getSongShare(mbid: string): Promise<SongSharePayload | nul
     },
     song: { links, liveStation, ghostRun },
   };
+}
+
+/**
+ * Card shown when a pasted link resolves to a song that has NO Lore presence
+ * (never aired on a station, not in the library). It carries the cross-service
+ * links (incl. Qobuz) so the paste is still useful, but no Lore story link or
+ * live/ghost context. The song is deliberately NOT persisted.
+ */
+export interface LinksOnlyPayload {
+  kind: "links-only";
+  card: { title: string; subtitle: string; artworkUrl: string | null };
+  song: { links: RecordingLink[]; liveStation: null; ghostRun: null };
+}
+
+/** A full Lore song payload (has a real song page + live/ghost context). */
+export type LoreSharePayload = { kind: "lore"; mbid: string } & SongSharePayload;
+
+export type ResolveOrLinksPayload = LoreSharePayload | LinksOnlyPayload;
+
+/** Build the no-Lore-context card from resolved metadata + service links. */
+async function buildLinksOnly(params: {
+  artist?: string;
+  title?: string;
+  thumbnailUrl?: string;
+  spotifyTrackId?: string;
+  mbid?: string;
+}): Promise<LinksOnlyPayload> {
+  const artist = params.artist ?? "";
+  const title = params.title ?? "";
+  let links: RecordingLink[] = [];
+  if (params.mbid) {
+    const rl = await fetchRecordingLinks({
+      recordingId: params.mbid,
+      artist,
+      title,
+      ...(params.spotifyTrackId ? { spotifyTrackId: params.spotifyTrackId } : {}),
+    });
+    links = rl?.platforms ?? [];
+  }
+  // Search-link fallback needs text; skip it for a bare id (exact links already
+  // cover that case, and empty-query search links are useless).
+  if (links.length === 0 && artist && title) {
+    links = buildSearchLinks(artist, title);
+  }
+  return {
+    kind: "links-only",
+    card: {
+      title: title || artist || "Unknown track",
+      subtitle: artist,
+      artworkUrl: params.thumbnailUrl ?? null,
+    },
+    song: { links, liveStation: null, ghostRun: null },
+  };
+}
+
+/**
+ * Resolve a pasted music link into either a full Lore card or a links-only
+ * card. Used by the jam-bot's Slack unfurler. Order:
+ *   1. DB-first by external ids (fast path — song already in the library).
+ *   2. Resolve a canonical MBID from isrc/artist+title (MusicBrainz, cached).
+ *   3. If that MBID is already a recording, return its Lore card (which carries
+ *      any live/ghost-radio context).
+ *   4. Otherwise return a links-only card.
+ *
+ * Provenance rule (Task #222): a pasted song is NEVER written to `recordings`
+ * on this path. Songs that have aired on a Lore station are already persisted
+ * by the ingest pipeline — `spins.mbid` has a foreign key to `recordings.mbid`,
+ * so any song with station history necessarily already has a recording row and
+ * is caught by step 3. Anything not already in the library is links-only.
+ *
+ * Never throws — falls back to links-only on any failure.
+ */
+export async function resolveSongShareOrLinks(params: {
+  spotifyTrackId?: string;
+  isrc?: string;
+  artist?: string;
+  title?: string;
+  thumbnailUrl?: string;
+}): Promise<ResolveOrLinksPayload> {
+  const artist = params.artist ?? "";
+  const title = params.title ?? "";
+  const hasText = Boolean(artist && title);
+
+  try {
+    // 1. Fast path: song already in the library, matched by external ids.
+    const dbHit = await resolveSongShareByIds(params);
+    if (dbHit) return { kind: "lore", ...dbHit };
+
+    // 2. Resolve a canonical MBID — only when we have something to resolve on
+    //    (ISRC, or artist+title text). A bare Spotify id with no metadata can't
+    //    be resolved to an MBID here, so it falls through to links-only.
+    if (!hasText && !params.isrc) return buildLinksOnly(params);
+    const resolution = await resolveToMbid(
+      artist,
+      title,
+      undefined,
+      params.isrc ? { isrc: params.isrc } : undefined,
+    );
+    const mbid = resolution.mbid;
+    if (!mbid) return buildLinksOnly(params);
+
+    // 3. Already a recording under this MBID (text search matched an existing
+    //    node that the id-based lookup missed) → return its Lore card.
+    const existing = await getSongShare(mbid);
+    if (existing) return { kind: "lore", mbid, ...existing };
+
+    // 4. Not in the library and never aired → links-only, no write.
+    return buildLinksOnly({ ...params, mbid });
+  } catch (err) {
+    console.error("[share] resolveSongShareOrLinks failed", artist, title, err);
+    return buildLinksOnly(params);
+  }
 }
 
 /**

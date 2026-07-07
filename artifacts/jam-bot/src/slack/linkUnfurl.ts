@@ -35,35 +35,55 @@ interface LoreLink {
   kind: "exact" | "search";
 }
 
-interface ShareResponse {
-  mbid: string;
-  redirectPath: string;
-  card: {
-    title: string;
-    subtitle: string;
-    artworkUrl?: string | null;
-  };
-  song: {
-    links: LoreLink[];
-    liveStation: { name: string; slug: string } | null;
-    ghostRun: { stationName: string; runId: number; playedAt: string } | null;
-  };
+interface ShareCard {
+  title: string;
+  subtitle: string;
+  artworkUrl?: string | null;
 }
+
+interface ShareSong {
+  links: LoreLink[];
+  liveStation: { name: string; slug: string } | null;
+  ghostRun: { stationName: string; runId: number; playedAt: string } | null;
+}
+
+/**
+ * The API returns one of two shapes, distinguished by `kind`:
+ *   - "lore": the song has a real Lore page (already in the library or it aired
+ *     on a station) — carries mbid + redirectPath + live/ghost context.
+ *   - "links-only": the song has no Lore presence — just cross-service links
+ *     (incl. Qobuz), no story link, and it is NOT persisted server-side.
+ */
+type ShareResponse =
+  | ({ kind: "lore"; mbid: string; redirectPath: string; card: ShareCard; song: ShareSong })
+  | { kind: "links-only"; card: ShareCard; song: ShareSong };
 
 async function fetchSharePayload(params: {
   spotifyTrackId?: string;
+  isrc?: string;
   artist?: string;
   title?: string;
+  thumbnailUrl?: string;
 }): Promise<ShareResponse | null> {
-  const qs = new URLSearchParams();
-  if (params.spotifyTrackId) qs.set("spotifyId", params.spotifyTrackId);
-  if (params.artist) qs.set("artist", params.artist);
-  if (params.title) qs.set("title", params.title);
-  if (!qs.toString()) return null;
+  // Need at least one strong identifier to resolve on: artist+title, a Spotify
+  // track id, or an ISRC. (A Spotify id alone still yields cross-service links.)
+  const hasText = Boolean(params.artist && params.title);
+  if (!hasText && !params.spotifyTrackId && !params.isrc) return null;
 
   try {
-    // /share/resolve/song avoids the :mbid param-shadow bug in Express
-    const res = await fetch(`${config.LORE_API_BASE}/share/resolve/song?${qs}`, {
+    // /share/resolve/song avoids the :mbid param-shadow bug in Express.
+    // POST is read-only w.r.t. the library: it never writes a pasted song
+    // (aired songs are already persisted, so they resolve as existing records).
+    const res = await fetch(`${config.LORE_API_BASE}/share/resolve/song`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        spotifyTrackId: params.spotifyTrackId,
+        isrc: params.isrc,
+        artist: params.artist,
+        title: params.title,
+        thumbnailUrl: params.thumbnailUrl,
+      }),
       signal: AbortSignal.timeout(8_000),
     });
     if (!res.ok) return null;
@@ -81,7 +101,10 @@ function getLorePublicUrl(): string | null {
 }
 
 /** Build the single Lore mrkdwn line: live station > ghost run > story link. */
-function loreLine(payload: ShareResponse, publicUrl: string): string {
+function loreLine(
+  payload: Extract<ShareResponse, { kind: "lore" }>,
+  publicUrl: string,
+): string {
   const { liveStation, ghostRun } = payload.song;
   const storyUrl = `${publicUrl}${payload.redirectPath}`;
 
@@ -132,7 +155,7 @@ function buildBlocks(
     },
   ];
 
-  if (publicUrl) {
+  if (publicUrl && payload.kind === "lore") {
     blocks.push({
       type: "section",
       text: { type: "mrkdwn", text: loreLine(payload, publicUrl) },
@@ -195,6 +218,7 @@ export async function handleLinkShared(
           spotifyTrackId: resolved.spotifyTrackId,
           artist: resolved.artist,
           title: resolved.title,
+          thumbnailUrl: resolved.thumbnailUrl,
         });
         if (!payload) return;
 

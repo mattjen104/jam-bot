@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
   getSongShare,
-  resolveSongShareByIds,
+  resolveSongShareOrLinks,
   getStationShare,
   getStationRunShare,
   getPickerShare,
@@ -93,36 +93,52 @@ function handle(
 // ---- Songs: resolve by external IDs (used by jam-bot link unfurler) --------
 
 /**
- * Resolve a Lore song share payload from external identifiers.
- * Called by the jam-bot when a music service link is pasted in Slack.
+ * Resolve a pasted music link into either a full Lore card or a links-only
+ * card. Called by the jam-bot when a music service link is pasted in Slack.
  * Returns JSON (not HTML) — the jam-bot builds Block Kit blocks from it.
  *
- * Query params (at least one required):
- *   spotifyId — Spotify track ID (most reliable, matched via links JSONB)
- *   isrc      — ISRC code
- *   artist    — artist name (used with title for fuzzy match)
- *   title     — song title
+ * POST. Read-only with respect to the library: a pasted song is NEVER written
+ * to `recordings` on this path. Songs that have aired are already persisted by
+ * the ingest pipeline (spins.mbid has a FK to recordings.mbid), so an aired song
+ * is found as an existing recording and returned as a "lore" card; anything not
+ * already in the library is returned "links-only". JSON body:
+ *   spotifyTrackId — Spotify track ID (most reliable, matched via links JSONB)
+ *   isrc           — ISRC code
+ *   artist         — artist name
+ *   title          — song title
+ *   thumbnailUrl   — best-effort artwork from the pasting service
+ *
+ * At least one strong identifier is required: either both artist AND title, or
+ * a spotifyTrackId, or an isrc. Response is always a payload (never 404) — the
+ * caller distinguishes the two shapes via the `kind` discriminant.
  */
 // Deliberately uses /share/resolve/song (not /share/songs/resolve) to avoid
 // Express param-route shadowing: /share/songs/:mbid would match "resolve" as
 // an mbid before the literal route could fire in some Express/tsx configs.
-router.get(
+router.post(
   "/share/resolve/song",
   handle(async (req, res) => {
-    const { spotifyId, isrc, artist, title } = req.query;
-    const payload = await resolveSongShareByIds({
-      spotifyTrackId: typeof spotifyId === "string" ? spotifyId : undefined,
-      isrc: typeof isrc === "string" ? isrc : undefined,
-      artist: typeof artist === "string" ? artist : undefined,
-      title: typeof title === "string" ? title : undefined,
-    });
-    if (!payload) {
-      res.status(404).json({ error: "Not found" });
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const str = (v: unknown): string | undefined =>
+      typeof v === "string" && v.trim() ? v.trim() : undefined;
+    const artist = str(body.artist);
+    const title = str(body.title);
+    const spotifyTrackId = str(body.spotifyTrackId);
+    const isrc = str(body.isrc);
+    if (!(artist && title) && !spotifyTrackId && !isrc) {
+      res.status(400).json({
+        error: "provide artist and title, or a spotifyTrackId, or an isrc",
+      });
       return;
     }
-    res
-      .set("Cache-Control", "public, max-age=30")
-      .json(payload);
+    const payload = await resolveSongShareOrLinks({
+      artist,
+      title,
+      spotifyTrackId,
+      isrc,
+      thumbnailUrl: str(body.thumbnailUrl),
+    });
+    res.json(payload);
   }),
 );
 
