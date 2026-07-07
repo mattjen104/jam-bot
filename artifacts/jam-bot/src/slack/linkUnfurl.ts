@@ -64,6 +64,9 @@ async function fetchSharePayload(params: {
   artist?: string;
   title?: string;
   thumbnailUrl?: string;
+  /** Exact platform links already resolved by the bot's Odesli call — passed
+   *  through so the API server skips its own second Odesli round-trip. */
+  platforms?: Array<{ name: string; url: string }>;
 }): Promise<ShareResponse | null> {
   // Need at least one strong identifier to resolve on: artist+title, a Spotify
   // track id, or an ISRC. (A Spotify id alone still yields cross-service links.)
@@ -83,6 +86,7 @@ async function fetchSharePayload(params: {
         artist: params.artist,
         title: params.title,
         thumbnailUrl: params.thumbnailUrl,
+        ...(params.platforms?.length ? { platforms: params.platforms } : {}),
       }),
       signal: AbortSignal.timeout(20_000),
     });
@@ -251,6 +255,7 @@ export async function handleLinkShared(
           artist: resolved.artist,
           title: resolved.title,
           thumbnailUrl: resolved.thumbnailUrl,
+          platforms: resolved.platforms,
         });
         if (!payload) {
           logger.warn("[linkUnfurl] fetchSharePayload returned null", {

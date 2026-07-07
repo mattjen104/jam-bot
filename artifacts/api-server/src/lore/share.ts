@@ -593,30 +593,48 @@ async function buildLinksOnly(params: {
   thumbnailUrl?: string;
   spotifyTrackId?: string;
   mbid?: string;
+  /** Pre-resolved exact platform links from the caller's Odesli call — when
+   *  present, skip any internal Odesli call entirely (avoids double round-trip
+   *  and rate-limit exposure on the server IP). */
+  preResolvedPlatforms?: Array<{ name: string; url: string }>;
 }): Promise<LinksOnlyPayload> {
   const artist = params.artist ?? "";
   const title = params.title ?? "";
   let links: RecordingLink[] = [];
-  // Use MBID as the canonical cache key when available; fall back to the
-  // Spotify track ID (as a synthetic key) so non-library tracks whose MBID
-  // MusicBrainz couldn't resolve still get exact Odesli deep links.
-  const recordingId = params.mbid ?? params.spotifyTrackId;
-  if (recordingId && params.spotifyTrackId) {
-    const rl = await fetchRecordingLinks({
-      recordingId,
-      artist,
-      title,
-      spotifyTrackId: params.spotifyTrackId,
-    });
-    links = rl?.platforms ?? [];
-  } else if (params.mbid) {
-    const rl = await fetchRecordingLinks({ recordingId: params.mbid, artist, title });
-    links = rl?.platforms ?? [];
-  }
-  // Search-link fallback needs text; skip it for a bare id (exact links already
-  // cover that case, and empty-query search links are useless).
-  if (links.length === 0 && artist && title) {
-    links = buildSearchLinks(artist, title);
+
+  if (params.preResolvedPlatforms?.length) {
+    // Caller already resolved exact links — convert and merge with search
+    // fallbacks for any services Odesli didn't return.
+    const exact: RecordingLink[] = params.preResolvedPlatforms.map((p) => ({
+      ...p,
+      kind: "exact" as const,
+    }));
+    const seen = new Set(exact.map((p) => p.name));
+    const searchFallbacks = (artist && title)
+      ? buildSearchLinks(artist, title).filter((s) => !seen.has(s.name))
+      : [];
+    links = [...exact, ...searchFallbacks];
+  } else {
+    // No pre-resolved links — attempt Odesli via fetchRecordingLinks using
+    // the MBID (canonical key) or Spotify ID (synthetic key) when available.
+    const recordingId = params.mbid ?? params.spotifyTrackId;
+    if (recordingId && params.spotifyTrackId) {
+      const rl = await fetchRecordingLinks({
+        recordingId,
+        artist,
+        title,
+        spotifyTrackId: params.spotifyTrackId,
+      });
+      links = rl?.platforms ?? [];
+    } else if (params.mbid) {
+      const rl = await fetchRecordingLinks({ recordingId: params.mbid, artist, title });
+      links = rl?.platforms ?? [];
+    }
+    // Search-link fallback needs text; skip it for a bare id (exact links
+    // already cover that case, and empty-query search links are useless).
+    if (links.length === 0 && artist && title) {
+      links = buildSearchLinks(artist, title);
+    }
   }
   return {
     kind: "links-only",
@@ -652,6 +670,10 @@ export async function resolveSongShareOrLinks(params: {
   artist?: string;
   title?: string;
   thumbnailUrl?: string;
+  /** Pre-resolved exact platform links from the caller (e.g. jam-bot unfurler
+   *  which already called Odesli).  When present the API skips its own Odesli
+   *  round-trip entirely — no duplicate call, no server-IP rate-limit risk. */
+  platforms?: Array<{ name: string; url: string }>;
 }): Promise<ResolveOrLinksPayload> {
   const artist = params.artist ?? "";
   const title = params.title ?? "";
@@ -665,7 +687,7 @@ export async function resolveSongShareOrLinks(params: {
     // 2. Resolve a canonical MBID — only when we have something to resolve on
     //    (ISRC, or artist+title text). A bare Spotify id with no metadata can't
     //    be resolved to an MBID here, so it falls through to links-only.
-    if (!hasText && !params.isrc) return buildLinksOnly(params);
+    if (!hasText && !params.isrc) return buildLinksOnly({ ...params, preResolvedPlatforms: params.platforms });
     const resolution = await resolveToMbid(
       artist,
       title,
@@ -673,7 +695,7 @@ export async function resolveSongShareOrLinks(params: {
       params.isrc ? { isrc: params.isrc } : undefined,
     );
     const mbid = resolution.mbid;
-    if (!mbid) return buildLinksOnly(params);
+    if (!mbid) return buildLinksOnly({ ...params, preResolvedPlatforms: params.platforms });
 
     // 3. Already a recording under this MBID (text search matched an existing
     //    node that the id-based lookup missed) → return its Lore card.
@@ -706,10 +728,10 @@ export async function resolveSongShareOrLinks(params: {
     }
 
     // 4. Not in the library and never aired → links-only, no write.
-    return buildLinksOnly({ ...params, mbid });
+    return buildLinksOnly({ ...params, mbid, preResolvedPlatforms: params.platforms });
   } catch (err) {
     console.error("[share] resolveSongShareOrLinks failed", artist, title, err);
-    return buildLinksOnly(params);
+    return buildLinksOnly({ ...params, preResolvedPlatforms: params.platforms });
   }
 }
 

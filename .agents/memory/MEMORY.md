@@ -33,3 +33,4 @@
 - [db lib dist rebuild](db-lib-dist-rebuild.md) — lib/db has no build script; run `tsc -p tsconfig.json` inside lib/db after schema changes, or api-server sees stale .d.ts and reports "no exported member".
 - [library_items FK guard](library-items-fk-guard.md) — library_items.mbid has a FK to recordings.mbid; import worker must check recordings table before inserting or gets 23503 and crashes the whole job.
 - [Lore share/paste provenance](lore-share-paste-provenance.md) — jam-bot link-unfurl NEVER writes on paste: spins.mbid→recordings FK means aired⟹already-recorded, so lore-iff-exists else links-only; accept any strong id (text OR spotifyId OR isrc).
+- [Odesli double-call rate-limit](odesli-double-call-rate-limit.md) — jam-bot already calls Odesli once (resolveAnyUrl); API server must NOT call it again for the same track or it hits the free-tier IP rate-limit silently; use platforms pass-through instead.

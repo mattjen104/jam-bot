@@ -225,7 +225,29 @@ export interface ResolvedSong {
   spotifyTrackId?: string;
   /** The song.link landing page. */
   pageUrl?: string;
+  /**
+   * Exact platform deep-links parsed from the Odesli response. Passed through
+   * to the API server so it doesn't need a second Odesli call for the same
+   * track (avoids rate-limit exposure on the server IP).
+   */
+  platforms?: TrackLink[];
 }
+
+/**
+ * Ordered platform list for unfurl cards — includes Spotify so a user who
+ * pasted an Apple Music link still gets an exact Spotify deep-link back.
+ */
+const UNFURL_PLATFORM_LABELS: Array<[string, string]> = [
+  ["spotify", "Spotify"],
+  ["appleMusic", "Apple Music"],
+  ["youtube", "YouTube"],
+  ["youtubeMusic", "YouTube Music"],
+  ["tidal", "Tidal"],
+  ["amazonMusic", "Amazon Music"],
+  ["deezer", "Deezer"],
+  ["soundcloud", "SoundCloud"],
+  ["pandora", "Pandora"],
+];
 
 /**
  * Resolve ANY music service URL (Spotify, Apple Music, Bandcamp, Tidal, etc.)
@@ -273,8 +295,28 @@ export async function resolveAnyUrl(url: string): Promise<ResolvedSong | null> {
 
     const pageUrl = b.pageUrl?.trim() || undefined;
 
+    // Parse exact platform links from the same response so the caller can
+    // pass them to the API server without a second Odesli round-trip.
+    const byPlatform = (b as { linksByPlatform?: Record<string, { url?: string }> })
+      ?.linksByPlatform ?? {};
+    const platforms: TrackLink[] = [];
+    const seenUrls = new Set<string>();
+    for (const [key, label] of UNFURL_PLATFORM_LABELS) {
+      const url = byPlatform[key]?.url?.trim();
+      if (!url || seenUrls.has(url)) continue;
+      seenUrls.add(url);
+      platforms.push({ name: label, url });
+    }
+
     if (!artist && !title) return null;
-    return { artist, title, thumbnailUrl, spotifyTrackId, pageUrl };
+    return {
+      artist,
+      title,
+      thumbnailUrl,
+      spotifyTrackId,
+      pageUrl,
+      platforms: platforms.length ? platforms : undefined,
+    };
   } catch (err) {
     logger.warn("Odesli resolveAnyUrl failed", { url, error: String(err) });
     return null;

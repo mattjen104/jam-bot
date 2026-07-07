@@ -131,12 +131,27 @@ router.post(
       });
       return;
     }
+    // Accept pre-resolved Odesli platform links from the caller (jam-bot unfurler).
+    // Validate as an array of {name, url} objects; silently ignore anything malformed.
+    const rawPlatforms = body.platforms;
+    const platforms: Array<{ name: string; url: string }> | undefined =
+      Array.isArray(rawPlatforms)
+        ? rawPlatforms.filter(
+            (p): p is { name: string; url: string } =>
+              typeof p === "object" &&
+              p !== null &&
+              typeof (p as { name?: unknown }).name === "string" &&
+              typeof (p as { url?: unknown }).url === "string",
+          )
+        : undefined;
+
     const payload = await resolveSongShareOrLinks({
       artist,
       title,
       spotifyTrackId,
       isrc,
       thumbnailUrl: str(body.thumbnailUrl),
+      platforms: platforms?.length ? platforms : undefined,
     });
     res.json(payload);
   }),
