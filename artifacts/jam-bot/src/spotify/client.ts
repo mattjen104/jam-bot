@@ -434,11 +434,25 @@ export interface CatalogueTrack {
 /** An artist's top tracks (Spotify's popularity-ordered list for a market). */
 export async function getArtistTopTracksList(
   artistId: string,
-  country = "US",
+  market = "US",
 ): Promise<CatalogueTrack[]> {
   return withRetry("getArtistTopTracks", async () => {
-    const res = await api.getArtistTopTracks(artistId, country);
-    return (res.body.tracks ?? []).map((t) => ({
+    // spotify-web-api-node v5 sends the legacy `country` param; Spotify's API
+    // renamed it to `market` and now returns 403 Forbidden on `country`. Use
+    // raw fetch so we control the exact query parameter name.
+    const token = api.getAccessToken();
+    const url = `https://api.spotify.com/v1/artists/${encodeURIComponent(artistId)}/top-tracks?market=${encodeURIComponent(market)}`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw Object.assign(new Error(`getArtistTopTracks ${res.status}: ${body}`), {
+        statusCode: res.status,
+      });
+    }
+    const data = (await res.json()) as { tracks?: Array<{ id: string; uri: string; name: string }> };
+    return (data.tracks ?? []).map((t) => ({
       id: t.id,
       uri: t.uri,
       title: t.name,
@@ -460,17 +474,39 @@ export interface CatalogueAlbum {
  */
 export async function getArtistAlbumsList(
   artistId: string,
-  country = "US",
+  market = "US",
 ): Promise<CatalogueAlbum[]> {
   return withRetry("getArtistAlbums", async () => {
-    const res = await api.getArtistAlbums(artistId, {
+    // spotify-web-api-node v5 sends the legacy `country` param; use raw fetch
+    // so we control the exact parameter names and avoid the "Invalid limit"
+    // rejection that results from passing the deprecated `country` key.
+    const token = api.getAccessToken();
+    const params = new URLSearchParams({
       include_groups: "album",
-      country,
-      limit: 50,
+      market,
+      limit: "50",
     });
+    const url = `https://api.spotify.com/v1/artists/${encodeURIComponent(artistId)}/albums?${params.toString()}`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw Object.assign(new Error(`getArtistAlbums ${res.status}: ${body}`), {
+        statusCode: res.status,
+      });
+    }
+    const data = (await res.json()) as {
+      items?: Array<{
+        id: string;
+        name: string;
+        release_date?: string;
+        external_urls?: { spotify?: string };
+      }>;
+    };
     const seen = new Set<string>();
     const out: CatalogueAlbum[] = [];
-    for (const a of res.body.items ?? []) {
+    for (const a of data.items ?? []) {
       const key = a.name.trim().toLowerCase();
       if (!key || seen.has(key)) continue;
       seen.add(key);
