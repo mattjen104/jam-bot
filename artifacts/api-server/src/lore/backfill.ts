@@ -28,11 +28,13 @@ import type { RawSpin } from "./types.js";
  * the floor bounds total depth.
  */
 
-// One slice per tick. A slice is one API page; resolution dominates the time.
-const SLICE_PAGE_SIZE = 50;
-// Pause between slices — 30 s halves the calendar distance per hour without
-// materially increasing API pressure (KEXP and Spinitron both handle this).
-const TICK_MS = 30_000;
+// One slice per tick. KEXP accepts up to 200 per page; larger slices mean
+// fewer ticks to walk years of history without extra API pressure.
+const SLICE_PAGE_SIZE = 200;
+// Pause between slices. 10 s gives ~72,000 plays/hour walking speed while
+// keeping MusicBrainz resolution comfortably under 1 req/sec (most modern
+// KEXP plays carry recording_id and skip the MB lookup entirely).
+const TICK_MS = 10_000;
 // Let boot (seed + live-poll catch-up) settle before the first slice.
 const WARMUP_MS = 90_000;
 
