@@ -434,14 +434,13 @@ export interface CatalogueTrack {
 /** An artist's top tracks (Spotify's popularity-ordered list for a market). */
 export async function getArtistTopTracksList(
   artistId: string,
-  market = "US",
 ): Promise<CatalogueTrack[]> {
   return withRetry("getArtistTopTracks", async () => {
-    // spotify-web-api-node v5 sends the legacy `country` param; Spotify's API
-    // renamed it to `market` and now returns 403 Forbidden on `country`. Use
-    // raw fetch so we control the exact query parameter name.
+    // spotify-web-api-node v5 hardcodes the legacy `country` param name.
+    // Spotify renamed it to `market`; `from_token` uses the authenticated
+    // user's own market (no cross-market rejection, no region mismatches).
     const token = api.getAccessToken();
-    const url = `https://api.spotify.com/v1/artists/${encodeURIComponent(artistId)}/top-tracks?market=${encodeURIComponent(market)}`;
+    const url = `https://api.spotify.com/v1/artists/${encodeURIComponent(artistId)}/top-tracks?market=from_token`;
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -474,16 +473,16 @@ export interface CatalogueAlbum {
  */
 export async function getArtistAlbumsList(
   artistId: string,
-  market = "US",
 ): Promise<CatalogueAlbum[]> {
   return withRetry("getArtistAlbums", async () => {
-    // spotify-web-api-node v5 sends the legacy `country` param; use raw fetch
-    // so we control the exact parameter names and avoid the "Invalid limit"
-    // rejection that results from passing the deprecated `country` key.
+    // Omit `include_groups` from the query — combining it with `market` and
+    // `limit` on the current Spotify API produces a misleading "Invalid limit"
+    // 400. Fetch all release types instead and filter to albums client-side.
+    // `from_token` avoids cross-market rejections by using the host user's
+    // own Spotify market.
     const token = api.getAccessToken();
     const params = new URLSearchParams({
-      include_groups: "album",
-      market,
+      market: "from_token",
       limit: "50",
     });
     const url = `https://api.spotify.com/v1/artists/${encodeURIComponent(artistId)}/albums?${params.toString()}`;
@@ -500,6 +499,8 @@ export async function getArtistAlbumsList(
       items?: Array<{
         id: string;
         name: string;
+        album_type?: string;
+        album_group?: string;
         release_date?: string;
         external_urls?: { spotify?: string };
       }>;
@@ -507,6 +508,9 @@ export async function getArtistAlbumsList(
     const seen = new Set<string>();
     const out: CatalogueAlbum[] = [];
     for (const a of data.items ?? []) {
+      // Keep full-length albums only (album_group "appears_on" → skip).
+      const group = (a.album_group ?? a.album_type ?? "").toLowerCase();
+      if (group && group !== "album") continue;
       const key = a.name.trim().toLowerCase();
       if (!key || seen.has(key)) continue;
       seen.add(key);
