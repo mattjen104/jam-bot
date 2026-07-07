@@ -148,17 +148,12 @@ function loreLine(
 function buildBlocks(
   payload: ShareResponse,
   publicUrl: string | null,
-  thumbnailUrl?: string,
+  _thumbnailUrl?: string,
 ): unknown[] {
   const { card, song } = payload;
-  const artworkUrl = card.artworkUrl ?? thumbnailUrl ?? null;
 
-  // song.links is the full merged set: exact deep-links first, then search
-  // fallbacks for services not covered (incl. Qobuz). Show every entry so
-  // no service is silently dropped. Exact links are labeled by service name;
-  // search fallbacks are labeled "Search <Service>" to be honest about confidence.
-  const displayLinks = song.links;
-
+  // No artwork accessory — the source platform's own unfurl (e.g. Spotify)
+  // already shows the cover art above us; duplicating it wastes space.
   const blocks: unknown[] = [
     {
       type: "section",
@@ -166,15 +161,6 @@ function buildBlocks(
         type: "mrkdwn",
         text: `*${card.title}*  ·  ${card.subtitle}`,
       },
-      ...(artworkUrl
-        ? {
-            accessory: {
-              type: "image",
-              image_url: artworkUrl,
-              alt_text: card.title,
-            },
-          }
-        : {}),
     },
   ];
 
@@ -185,18 +171,33 @@ function buildBlocks(
     });
   }
 
-  if (displayLinks.length > 0) {
-    blocks.push({
-      type: "context",
-      elements: [
-        {
-          type: "mrkdwn",
-          text: displayLinks
-            .map((l) => `<${l.url}|${l.kind === "search" ? `Search ${l.name}` : l.name}>`)
-            .join("  ·  "),
-        },
-      ],
+  // Split into two tiers:
+  //   exact  — deep-links resolved by Odesli; shown as plain service names
+  //   search — fallback search URLs; prefixed with ↗ so the user knows it's
+  //            a search, not a direct track link
+  const exactLinks = song.links.filter((l) => l.kind === "exact");
+  const searchLinks = song.links.filter((l) => l.kind === "search");
+
+  const contextElements: unknown[] = [];
+
+  if (exactLinks.length > 0) {
+    contextElements.push({
+      type: "mrkdwn",
+      text: exactLinks.map((l) => `<${l.url}|${l.name}>`).join("  ·  "),
     });
+  }
+
+  if (searchLinks.length > 0) {
+    contextElements.push({
+      type: "mrkdwn",
+      text:
+        "↗  " +
+        searchLinks.map((l) => `<${l.url}|${l.name}>`).join("  ·  "),
+    });
+  }
+
+  if (contextElements.length > 0) {
+    blocks.push({ type: "context", elements: contextElements });
   }
 
   return blocks;
