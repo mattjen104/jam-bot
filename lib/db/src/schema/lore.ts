@@ -134,6 +134,13 @@ export const showsTable = pgTable("shows", {
   name: text("name").notNull(),
   djName: text("dj_name"),
   scheduleNote: text("schedule_note"),
+  /**
+   * Links this show to a picker (selector). Set by the KEXP shows harvester
+   * for single-host shows so that DJ-attributed spins surface in the
+   * picks_unified view with a real picker_id — enabling the follow/feed path.
+   * Null for multi-host shows and non-KEXP stations (for now).
+   */
+  pickerId: integer("picker_id").references(() => pickersTable.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

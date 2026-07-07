@@ -216,17 +216,52 @@ export async function syncKexpShows(): Promise<void> {
     }
   }
 
-  let newPickers = 0;
+  // Upsert one picker per unique selector, collect host → picker_id mapping.
+  const hostToPickerId = new Map<string, number>();
   for (const [host, showIds] of hostToShowIds) {
     const id = await upsertKexpSelectorPicker(host, showIds).catch((err) => {
       console.error("[kexp-shows] picker upsert failed", host, err);
       return null;
     });
-    if (id) newPickers++;
+    if (id) hostToPickerId.set(host, id);
+  }
+
+  // Link single-host shows to their picker via shows.picker_id.
+  // Multi-host shows are skipped — no single picker owns them.
+  let linkedShows = 0;
+  for (const show of shows) {
+    if (show.host_names.length !== 1) continue;
+    const host = show.host_names[0];
+    if (!host) continue;
+    const pickerId = hostToPickerId.get(host);
+    if (!pickerId) continue;
+
+    const [existing] = await db
+      .select({ id: showsTable.id, pickerId: showsTable.pickerId })
+      .from(showsTable)
+      .where(
+        and(
+          eq(showsTable.stationId, station.id),
+          eq(showsTable.name, show.program_name),
+        ),
+      )
+      .limit(1);
+
+    if (!existing) continue;
+    if (existing.pickerId === pickerId) continue; // already linked
+
+    await db
+      .update(showsTable)
+      .set({ pickerId })
+      .where(eq(showsTable.id, existing.id))
+      .catch((err) =>
+        console.error("[kexp-shows] show picker_id update failed", show.program_name, err),
+      );
+    linkedShows++;
   }
 
   console.info(
-    `[kexp-shows] synced: ${shows.length} shows, ${newPickers} selectors (pickers)`,
+    `[kexp-shows] synced: ${shows.length} shows, ${hostToPickerId.size} selectors, ${linkedShows} show-picker links`,
   );
 }
 

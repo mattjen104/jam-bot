@@ -37,22 +37,23 @@ export async function ensurePicksUnifiedView(): Promise<void> {
         LEFT JOIN recordings r ON r.mbid = p.mbid
         UNION ALL
         SELECT
-          'spin'              AS source,
-          s.mbid              AS mbid,
-          r.artist_mbid       AS artist_mbid,
-          s.played_at         AS picked_at,
-          sh.name             AS context,
-          NULL::text          AS source_url,
-          s.confidence        AS confidence,
-          NULL::integer       AS ordinal,
-          NULL::integer       AS picker_id,
-          'dj'                AS picker_type,
-          COALESCE(sh.dj_name, st.name) AS picker_name,
-          st.slug             AS picker_handle,
-          3                   AS trust_tier
+          'spin'                              AS source,
+          s.mbid                              AS mbid,
+          r.artist_mbid                       AS artist_mbid,
+          s.played_at                         AS picked_at,
+          sh.name                             AS context,
+          NULL::text                          AS source_url,
+          s.confidence                        AS confidence,
+          NULL::integer                       AS ordinal,
+          pk.id                               AS picker_id,
+          'dj'                                AS picker_type,
+          COALESCE(pk.name, sh.dj_name, st.name) AS picker_name,
+          COALESCE(pk.handle, st.slug)        AS picker_handle,
+          COALESCE(pk.trust_tier, 3)          AS trust_tier
         FROM spins s
         JOIN stations st ON st.id = s.station_id
         LEFT JOIN shows sh ON sh.id = s.show_id
+        LEFT JOIN pickers pk ON pk.id = sh.picker_id
         LEFT JOIN recordings r ON r.mbid = s.mbid
     `);
   } catch (err) {
