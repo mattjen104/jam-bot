@@ -12,6 +12,8 @@ import {
   findActiveDevice,
   createPlaylistWithTracks,
   getAlbumTrackUris,
+  isSpotifyRateLimited,
+  spotifyRateLimitRemainingMs,
   type SearchResultTrack,
 } from "../spotify/client.js";
 import {
@@ -425,7 +427,20 @@ async function handleNowPlaying(args: {
   notifyEphemeral?: (text: string) => Promise<void>;
 }) {
   const { origin, respond, notifyEphemeral } = args;
-  const cp = await getCurrentlyPlaying();
+  let cp: Awaited<ReturnType<typeof getCurrentlyPlaying>>;
+  try {
+    cp = await getCurrentlyPlaying();
+  } catch (err) {
+    if (isSpotifyRateLimited(err)) {
+      const secs = Math.ceil(spotifyRateLimitRemainingMs() / 1000);
+      await respond(
+        `:hourglass_flowing_sand: Spotify's rate-limiting me right now — I'll be back in ~${secs}s.`,
+      );
+    } else {
+      await respond(":warning: Couldn't reach Spotify right now — try again in a moment.");
+    }
+    return;
+  }
   if (!cp.track) {
     await respond(":mute: Nothing is playing right now.");
     return;
@@ -1631,10 +1646,18 @@ async function handleNaturalLanguage(
       }
     }
   } catch (err) {
-    logger.error("NL handler failed", { error: String(err) });
-    await respond(
-      ":warning: Something went wrong handling that — check the bot logs.",
-    );
+    if (isSpotifyRateLimited(err)) {
+      const secs = Math.ceil(spotifyRateLimitRemainingMs() / 1000);
+      logger.warn("NL handler hit Spotify rate limit", { remainingSecs: secs });
+      await respond(
+        `:hourglass_flowing_sand: Spotify's rate-limiting me right now — I'll be back in ~${secs}s.`,
+      );
+    } else {
+      logger.error("NL handler failed", { error: String(err) });
+      await respond(
+        ":warning: Something went wrong handling that — check the bot logs.",
+      );
+    }
   }
 }
 

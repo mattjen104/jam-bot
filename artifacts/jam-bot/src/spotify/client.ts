@@ -57,6 +57,11 @@ export function spotifyRateLimitRemainingMs(): number {
   return Math.max(0, rateLimitedUntil - Date.now());
 }
 
+/** True when `err` is a Spotify rate-limit error thrown by this client. */
+export function isSpotifyRateLimited(err: unknown): err is Error {
+  return err instanceof Error && err.name === "SpotifyRateLimitedError";
+}
+
 function openRateLimitBreaker(retryAfterSec: number): void {
   const until = Date.now() + (retryAfterSec + 1) * 1000;
   if (until <= rateLimitedUntil) return;
