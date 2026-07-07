@@ -218,7 +218,16 @@ export async function handleLinkShared(
     musicLinks.map(async ({ url }) => {
       try {
         const resolved = await resolveAnyUrl(url);
-        if (!resolved) return;
+        if (!resolved) {
+          logger.warn("[linkUnfurl] odesli returned null", { url });
+          return;
+        }
+        logger.info("[linkUnfurl] odesli resolved", {
+          url,
+          spotifyTrackId: resolved.spotifyTrackId,
+          artist: resolved.artist,
+          title: resolved.title,
+        });
 
         const payload = await fetchSharePayload({
           spotifyTrackId: resolved.spotifyTrackId,
@@ -226,7 +235,18 @@ export async function handleLinkShared(
           title: resolved.title,
           thumbnailUrl: resolved.thumbnailUrl,
         });
-        if (!payload) return;
+        if (!payload) {
+          logger.warn("[linkUnfurl] fetchSharePayload returned null", {
+            url,
+            spotifyTrackId: resolved.spotifyTrackId,
+          });
+          return;
+        }
+        logger.info("[linkUnfurl] payload resolved", {
+          kind: payload.kind,
+          title: payload.card.title,
+          linkCount: payload.song.links.length,
+        });
 
         const blocks = buildBlocks(payload, publicUrl, resolved.thumbnailUrl);
         unfurls[url] = { blocks, color: "#2a2520" };
@@ -239,7 +259,10 @@ export async function handleLinkShared(
     }),
   );
 
-  if (Object.keys(unfurls).length === 0) return;
+  if (Object.keys(unfurls).length === 0) {
+    logger.warn("[linkUnfurl] no unfurls built, skipping chat.unfurl");
+    return;
+  }
 
   try {
     // Slack uses two different unfurl patterns:
