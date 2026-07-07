@@ -98,7 +98,14 @@ async function fetchSharePayload(params: {
     }
     return (await res.json()) as ShareResponse;
   } catch (err) {
-    logger.warn("[linkUnfurl] share API fetch threw", { error: String(err) });
+    const cause = (err instanceof Error && (err as NodeJS.ErrnoException).cause)
+      ? String((err as NodeJS.ErrnoException).cause)
+      : undefined;
+    logger.warn("[linkUnfurl] share API fetch threw", {
+      error: String(err),
+      cause,
+      url: `${config.LORE_API_BASE}/share/resolve/song`,
+    });
     return null;
   }
 }
