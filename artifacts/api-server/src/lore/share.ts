@@ -597,13 +597,20 @@ async function buildLinksOnly(params: {
   const artist = params.artist ?? "";
   const title = params.title ?? "";
   let links: RecordingLink[] = [];
-  if (params.mbid) {
+  // Use MBID as the canonical cache key when available; fall back to the
+  // Spotify track ID (as a synthetic key) so non-library tracks whose MBID
+  // MusicBrainz couldn't resolve still get exact Odesli deep links.
+  const recordingId = params.mbid ?? params.spotifyTrackId;
+  if (recordingId && params.spotifyTrackId) {
     const rl = await fetchRecordingLinks({
-      recordingId: params.mbid,
+      recordingId,
       artist,
       title,
-      ...(params.spotifyTrackId ? { spotifyTrackId: params.spotifyTrackId } : {}),
+      spotifyTrackId: params.spotifyTrackId,
     });
+    links = rl?.platforms ?? [];
+  } else if (params.mbid) {
+    const rl = await fetchRecordingLinks({ recordingId: params.mbid, artist, title });
     links = rl?.platforms ?? [];
   }
   // Search-link fallback needs text; skip it for a bare id (exact links already
