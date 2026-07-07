@@ -17,7 +17,7 @@ import {
 import { eq, and, isNull, sql, gt, desc } from "drizzle-orm";
 import type { RecordingLink } from "@workspace/db";
 import { buildSearchLinks, fetchRecordingLinks } from "@workspace/song-enrichment";
-import { resolveToMbid } from "./resolve.js";
+import { resolveToMbid, type MbidResolution } from "./resolve.js";
 
 /**
  * Share layer: server-rendered Open Graph pages + dynamic preview cards for
@@ -688,12 +688,32 @@ export async function resolveSongShareOrLinks(params: {
     //    (ISRC, or artist+title text). A bare Spotify id with no metadata can't
     //    be resolved to an MBID here, so it falls through to links-only.
     if (!hasText && !params.isrc) return buildLinksOnly({ ...params, preResolvedPlatforms: params.platforms });
-    const resolution = await resolveToMbid(
+
+    // Race against a hard deadline: MusicBrainz has a 10 s internal timeout,
+    // and the Spotify fallback adds more on top — the total can easily exceed
+    // the jam-bot's 20 s wall when the MB endpoint is slow.  For the share /
+    // unfurl path the track almost always isn't in the library (step 1 caught
+    // it if it was), so a slow MBID lookup returns nothing useful anyway.
+    // If the deadline fires we fall straight through to buildLinksOnly with
+    // the caller's pre-resolved platforms — still a useful, fast response.
+    const MBID_RESOLVE_DEADLINE_MS = 6_000;
+    const timeoutResolution: MbidResolution = {
+      mbid: null,
+      confidence: "unresolved",
+      title: artist,
       artist,
-      title,
-      undefined,
-      params.isrc ? { isrc: params.isrc } : undefined,
-    );
+    };
+    const resolution = await Promise.race([
+      resolveToMbid(
+        artist,
+        title,
+        undefined,
+        params.isrc ? { isrc: params.isrc } : undefined,
+      ),
+      new Promise<MbidResolution>((resolve) =>
+        setTimeout(() => resolve(timeoutResolution), MBID_RESOLVE_DEADLINE_MS),
+      ),
+    ]);
     const mbid = resolution.mbid;
     if (!mbid) return buildLinksOnly({ ...params, preResolvedPlatforms: params.platforms });
 
