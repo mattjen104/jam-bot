@@ -1,38 +1,26 @@
 ---
 name: Lore share/paste provenance rule
-description: How the jam-bot link-unfurl paste path decides lore vs links-only, and when it defensively writes to recordings.
+description: When the jam-bot link-unfurl paste path writes to recordings vs returns links-only, and how Qobuz is surfaced.
 ---
 
 # Paste-to-share provenance
 
-`resolveSongShareOrLinks` (api-server `src/lore/share.ts`, called by jam-bot's
-Slack link unfurler via `POST /share/resolve/song`) resolves a pasted music link
-to either a full **lore** card or a **links-only** card.
+**Normal rule:** a pasted song is never written to `recordings`. The DB FK
+(`spins.mbid → recordings.mbid`) ensures any song with station history is already
+persisted by the ingest pipeline and resolves as a `kind:"lore"` card. Anything not
+in the library never aired and returns `kind:"links-only"`, no write.
 
-**Normal path never writes:** `spins.mbid` has a FK to `recordings.mbid`
-(`spins_mbid_recordings_mbid_fk`), so a spin cannot exist without its recording.
-"Aired on a Lore station" ⟹ "already in `recordings`". A pasted song with any
-station history is found by the ingest pipeline FK — returned as `kind:"lore"`.
-Anything not in the library never aired → `kind:"links-only"`, no write.
+**Defensive exception (step 3b):** if MBID resolution succeeds but `getSongShare`
+returns null, the code checks `spins` directly for station history. A hit means an
+ingest-pipeline integrity gap — the function upserts from available metadata and
+returns a Lore card. This path should never fire and emits a `console.warn` when it
+does, so it is visible in logs.
 
-**Defensive integrity-gap path (step 3b) does write:** After `getSongShare(mbid)`
-returns null (no recordings row), `getMbidStationHistory(mbid)` queries `spins`
-directly. If history exists (live or ghost), the ingest pipeline has an integrity
-gap. The function upserts from available metadata (title/artist/isrc/artworkUrl)
-and returns the full Lore card. This path should never fire in a healthy system
-and emits a `console.warn` when it does.
+**Link set rule:** `song.links` in the API response is already the full merged set
+(exact deep-links first, then search fallbacks for uncovered services incl. Qobuz).
+The Slack card must render `song.links` in full — never filter to exact-only or
+truncate — so Qobuz is always present. Search fallbacks are labeled
+"Search <Service>" to be honest about confidence.
 
-**Station-history helper:** `getMbidStationHistory(mbid)` is extracted so both
-`getSongShare` (normal) and `resolveSongShareOrLinks` (defensive) share the same
-live+ghost spins queries without duplication.
-
-**Control flow:**
-1. `resolveSongShareByIds` — DB-first by spotifyTrackId/isrc/artist+title → lore
-2. `resolveToMbid` — only if artist+title OR isrc present; no mbid → links-only
-3. `getSongShare(mbid)` — if recording exists → lore
-3b. `getMbidStationHistory(mbid)` — if history despite missing row → upsert + lore
-4. links-only, no write
-
-**Contract:** at least one strong identifier required — artist+title, spotifyTrackId,
-or isrc. A bare Spotify id without metadata yields cross-service links (incl. Qobuz)
-via `buildLinksOnly`.
+**Why:** Qobuz is position 8+ in the exact-link list, so any `slice(0, 5)` or
+exact-only filter silently drops it from the Slack card.

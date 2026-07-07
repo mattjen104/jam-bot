@@ -132,9 +132,11 @@ function buildBlocks(
   const { card, song } = payload;
   const artworkUrl = card.artworkUrl ?? thumbnailUrl ?? null;
 
-  // Prefer exact links; cap at 5 for context row readability.
-  const exact = song.links.filter((l) => l.kind === "exact");
-  const displayLinks = (exact.length > 0 ? exact : song.links).slice(0, 5);
+  // song.links is the full merged set: exact deep-links first, then search
+  // fallbacks for services not covered (incl. Qobuz). Show every entry so
+  // no service is silently dropped. Exact links are labeled by service name;
+  // search fallbacks are labeled "Search <Service>" to be honest about confidence.
+  const displayLinks = song.links;
 
   const blocks: unknown[] = [
     {
