@@ -168,7 +168,9 @@ function buildBlocks(
       elements: [
         {
           type: "mrkdwn",
-          text: displayLinks.map((l) => `<${l.url}|${l.name}>`).join("  ·  "),
+          text: displayLinks
+            .map((l) => `<${l.url}|${l.kind === "search" ? `Search ${l.name}` : l.name}>`)
+            .join("  ·  "),
         },
       ],
     });

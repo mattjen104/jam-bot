@@ -1,29 +1,38 @@
 ---
 name: Lore share/paste provenance rule
-description: Why the jam-bot link-unfurl paste path never writes to recordings, and how it decides lore vs links-only.
+description: How the jam-bot link-unfurl paste path decides lore vs links-only, and when it defensively writes to recordings.
 ---
 
-# Paste-to-share never persists
+# Paste-to-share provenance
 
 `resolveSongShareOrLinks` (api-server `src/lore/share.ts`, called by jam-bot's
 Slack link unfurler via `POST /share/resolve/song`) resolves a pasted music link
-to either a full **lore** card or a **links-only** card. It NEVER writes to
-`recordings` on the paste path.
+to either a full **lore** card or a **links-only** card.
 
-**Why:** `spins.mbid` has a FK to `recordings.mbid` (`spins_mbid_recordings_mbid_fk`),
-so a spin cannot exist without its recording. Therefore "aired on a Lore station"
-⟹ "already in `recordings`". A pasted song that has any station history is
-already persisted by the ingest pipeline and is found as an existing recording
-(returned as `kind:"lore"`). Anything not already in the library never aired, so
-it's `kind:"links-only"` with no write. A manual upsert-on-paste branch would be
-unreachable dead code — and not writing at all is the strictest, safest reading
-of the product rule "DO NOT persist a pasted song unless it played on a station."
+**Normal path never writes:** `spins.mbid` has a FK to `recordings.mbid`
+(`spins_mbid_recordings_mbid_fk`), so a spin cannot exist without its recording.
+"Aired on a Lore station" ⟹ "already in `recordings`". A pasted song with any
+station history is found by the ingest pipeline FK — returned as `kind:"lore"`.
+Anything not in the library never aired → `kind:"links-only"`, no write.
 
-**How to apply:** Don't add an upsert/insert to this path. Control flow is:
-(1) `resolveSongShareByIds` DB-first by spotifyTrackId/isrc/text → lore;
-(2) `resolveToMbid` (only if artist+title OR isrc present) → if no mbid, links-only;
-(3) `getSongShare(mbid)` → if the recording exists, lore; else links-only.
+**Defensive integrity-gap path (step 3b) does write:** After `getSongShare(mbid)`
+returns null (no recordings row), `getMbidStationHistory(mbid)` queries `spins`
+directly. If history exists (live or ghost), the ingest pipeline has an integrity
+gap. The function upserts from available metadata (title/artist/isrc/artworkUrl)
+and returns the full Lore card. This path should never fire in a healthy system
+and emits a `console.warn` when it does.
 
-**Contract:** the route/jam-bot require at least one strong identifier — artist+title,
-OR spotifyTrackId, OR isrc — not artist+title unconditionally (honor "paste ANY
-link": a bare Spotify id still yields cross-service links incl. Qobuz).
+**Station-history helper:** `getMbidStationHistory(mbid)` is extracted so both
+`getSongShare` (normal) and `resolveSongShareOrLinks` (defensive) share the same
+live+ghost spins queries without duplication.
+
+**Control flow:**
+1. `resolveSongShareByIds` — DB-first by spotifyTrackId/isrc/artist+title → lore
+2. `resolveToMbid` — only if artist+title OR isrc present; no mbid → links-only
+3. `getSongShare(mbid)` — if recording exists → lore
+3b. `getMbidStationHistory(mbid)` — if history despite missing row → upsert + lore
+4. links-only, no write
+
+**Contract:** at least one strong identifier required — artist+title, spotifyTrackId,
+or isrc. A bare Spotify id without metadata yields cross-service links (incl. Qobuz)
+via `buildLinksOnly`.

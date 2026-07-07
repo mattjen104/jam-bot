@@ -471,15 +471,17 @@ export async function resolveSongShareByIds(params: {
   return { ...payload, mbid };
 }
 
-export async function getSongShare(mbid: string): Promise<SongSharePayload | null> {
-  const [rec] = await db
-    .select()
-    .from(recordingsTable)
-    .where(eq(recordingsTable.mbid, mbid))
-    .limit(1);
-  if (!rec) return null;
-
-  // 1. Is it playing anywhere right now?
+/**
+ * Query live + ghost station history for an MBID, independent of the
+ * recordings table lookup. Extracted so that both `getSongShare` (normal
+ * path) and `resolveSongShareOrLinks` (defensive integrity-gap path) can
+ * reuse it without duplicating the spins queries.
+ */
+async function getMbidStationHistory(mbid: string): Promise<{
+  liveStation: SongShareExtras["liveStation"];
+  ghostRun: SongShareExtras["ghostRun"];
+}> {
+  // Live: is it playing anywhere right now (within the LIVE_WINDOW_MS)?
   const [liveRow] = await db
     .select({ name: stationsTable.name, slug: stationsTable.slug })
     .from(spinsTable)
@@ -493,51 +495,59 @@ export async function getSongShare(mbid: string): Promise<SongSharePayload | nul
     .orderBy(desc(spinsTable.playedAt))
     .limit(1);
 
-  const liveStation = liveRow ?? null;
+  // Ghost: most recent archived run containing this song.
+  // Direct SQL: self-join spins to compute the run anchor (MIN spin id in
+  // the same station+show+UTC-day group) without a heuristic scan limit.
+  type GhostRow = {
+    run_id: number;
+    played_at: Date | string;
+    station_name: string;
+    station_slug: string;
+  };
+  const ghostResult = await db.execute<GhostRow>(sql`
+    SELECT
+      min(s2.id)      AS run_id,
+      s.played_at     AS played_at,
+      st.name         AS station_name,
+      st.slug         AS station_slug
+    FROM spins s
+    INNER JOIN stations st ON st.id = s.station_id
+    INNER JOIN spins s2 ON
+      s2.station_id = s.station_id AND
+      (s2.show_id IS NOT DISTINCT FROM s.show_id) AND
+      to_char(s2.played_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') =
+        to_char(s.played_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')
+    WHERE s.mbid = ${mbid}
+    GROUP BY s.id, s.played_at, s.station_id, st.name, st.slug
+    ORDER BY s.played_at DESC
+    LIMIT 1
+  `);
+  const top: GhostRow | undefined = ghostResult.rows[0];
 
-  // 2. Find the most recent archived run containing this song (always — shown
-  //    alongside live when both are present, alone otherwise).
-  //    Direct SQL: self-join spins to compute the run anchor (MIN spin id in
-  //    the same station+show+UTC-day group) without a heuristic scan limit.
-  let ghostRun: SongShareExtras["ghostRun"] = null;
-  {
-    type GhostRow = {
-      run_id: number;
-      played_at: Date | string;
-      station_name: string;
-      station_slug: string;
-    };
-    const ghostResult = await db.execute<GhostRow>(sql`
-      SELECT
-        min(s2.id)      AS run_id,
-        s.played_at     AS played_at,
-        st.name         AS station_name,
-        st.slug         AS station_slug
-      FROM spins s
-      INNER JOIN stations st ON st.id = s.station_id
-      INNER JOIN spins s2 ON
-        s2.station_id = s.station_id AND
-        (s2.show_id IS NOT DISTINCT FROM s.show_id) AND
-        to_char(s2.played_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') =
-          to_char(s.played_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')
-      WHERE s.mbid = ${mbid}
-      GROUP BY s.id, s.played_at, s.station_id, st.name, st.slug
-      ORDER BY s.played_at DESC
-      LIMIT 1
-    `);
-    const top: GhostRow | undefined = ghostResult.rows[0];
-    if (top) {
-      const playedAt =
-        top.played_at instanceof Date
-          ? top.played_at.toISOString()
-          : String(top.played_at);
-      ghostRun = {
-        stationName: top.station_name,
-        runId: Number(top.run_id),
-        playedAt,
-      };
-    }
-  }
+  return {
+    liveStation: liveRow ?? null,
+    ghostRun: top
+      ? {
+          stationName: top.station_name,
+          runId: Number(top.run_id),
+          playedAt:
+            top.played_at instanceof Date
+              ? top.played_at.toISOString()
+              : String(top.played_at),
+        }
+      : null,
+  };
+}
+
+export async function getSongShare(mbid: string): Promise<SongSharePayload | null> {
+  const [rec] = await db
+    .select()
+    .from(recordingsTable)
+    .where(eq(recordingsTable.mbid, mbid))
+    .limit(1);
+  if (!rec) return null;
+
+  const { liveStation, ghostRun } = await getMbidStationHistory(mbid);
 
   // Lazily enrich links via Odesli if the DB only has search-kind links (or
   // none). The result is written back to the DB so subsequent hits are free.
@@ -662,6 +672,31 @@ export async function resolveSongShareOrLinks(params: {
     //    node that the id-based lookup missed) → return its Lore card.
     const existing = await getSongShare(mbid);
     if (existing) return { kind: "lore", mbid, ...existing };
+
+    // 3b. Defensive integrity check: no recordings row, but does this MBID
+    //     have station history in spins? The FK (spins.mbid → recordings.mbid)
+    //     should make this impossible, but guard against ingest-pipeline gaps.
+    //     If history exists, upsert the recording from our resolved metadata
+    //     and return the full Lore card.
+    const history = await getMbidStationHistory(mbid);
+    if (history.liveStation || history.ghostRun) {
+      console.warn("[share] integrity gap: spin exists without recordings row, upserting", mbid);
+      await db
+        .insert(recordingsTable)
+        .values({
+          mbid,
+          title: title || "Unknown title",
+          artist: artist || "Unknown artist",
+          ...(params.isrc ? { isrc: params.isrc } : {}),
+          ...(params.thumbnailUrl ? { artworkUrl: params.thumbnailUrl } : {}),
+        })
+        .onConflictDoUpdate({
+          target: recordingsTable.mbid,
+          set: { updatedAt: new Date() },
+        });
+      const recovered = await getSongShare(mbid);
+      if (recovered) return { kind: "lore", mbid, ...recovered };
+    }
 
     // 4. Not in the library and never aired → links-only, no write.
     return buildLinksOnly({ ...params, mbid });
