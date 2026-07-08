@@ -77,9 +77,10 @@ describe("probeStream", () => {
     expect(result.codec).toBe("AAC");
   });
 
-  it("returns alive=false on non-ok response", async () => {
+  it("returns alive=false on non-ok response (not 405)", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: false,
+      status: 404,
       headers: new Headers(),
     } as unknown as Response);
 
@@ -90,6 +91,7 @@ describe("probeStream", () => {
   });
 
   it("returns alive=false on network error (never throws)", async () => {
+    // HEAD throws → GET also throws → dead
     const mockFetch = vi.fn().mockRejectedValue(new Error("ECONNREFUSED"));
     const result = await probeStream("https://dead.example.com/live", {
       fetchFn: mockFetch as typeof fetch,
@@ -97,6 +99,67 @@ describe("probeStream", () => {
     expect(result.alive).toBe(false);
     expect(result.bitrateKbps).toBeNull();
     expect(result.codec).toBeNull();
+  });
+
+  it("falls back to GET when HEAD returns 405 (Method Not Allowed)", async () => {
+    const mockFetch = vi.fn()
+      // First call: HEAD → 405
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 405,
+        headers: new Headers(),
+      } as unknown as Response)
+      // Second call: GET → 200 with headers
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ "content-type": "audio/mpeg" }),
+      } as unknown as Response);
+
+    const result = await probeStream("https://shoutcast.example.com/live", {
+      fetchFn: mockFetch as typeof fetch,
+    });
+    expect(result.alive).toBe(true);
+    expect(result.codec).toBe("MP3");
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("falls back to GET when HEAD throws a network error", async () => {
+    const mockFetch = vi.fn()
+      // First call: HEAD → network error
+      .mockRejectedValueOnce(new Error("connection refused"))
+      // Second call: GET → 200
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ "icy-br": "128" }),
+      } as unknown as Response);
+
+    const result = await probeStream("https://icecast.example.com/stream", {
+      fetchFn: mockFetch as typeof fetch,
+    });
+    expect(result.alive).toBe(true);
+    expect(result.bitrateKbps).toBe(128);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("treats our own GET abort (AbortError) as alive", async () => {
+    const abortErr = new Error("aborted");
+    abortErr.name = "AbortError";
+    const mockFetch = vi.fn()
+      // HEAD → 405
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 405,
+        headers: new Headers(),
+      } as unknown as Response)
+      // GET → throws AbortError (simulating our own abort)
+      .mockRejectedValueOnce(abortErr);
+
+    const result = await probeStream("https://stream.example.com/live", {
+      fetchFn: mockFetch as typeof fetch,
+    });
+    expect(result.alive).toBe(true);
   });
 });
 

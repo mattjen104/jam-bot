@@ -36,8 +36,16 @@ function intervalMs(): number {
 }
 
 /**
- * Probe a single stream URL. Returns an object describing the outcome.
- * Never throws.
+ * Probe a single stream URL using HEAD with a GET fallback.
+ *
+ * Strategy:
+ *  1. Try HEAD — cheap, no body download.
+ *  2. If HEAD returns 405 (Method Not Allowed) OR throws a network/timeout
+ *     error, fall through to a GET probe with an immediate abort after headers
+ *     arrive — this handles shoutcast/icecast servers that reject HEAD.
+ *  3. Any other non-ok HEAD response (4xx/5xx) is treated as dead immediately.
+ *
+ * Never throws — all paths return the result object.
  */
 export async function probeStream(
   url: string,
@@ -49,19 +57,61 @@ export async function probeStream(
 }> {
   const fetchFn = opts.fetchFn ?? fetch;
   const timeoutMs = opts.timeoutMs ?? HEAD_TIMEOUT_MS;
+
+  // ---- Step 1: HEAD -------------------------------------------------------
+  let headFailed = false; // true when HEAD should be followed up with GET
   try {
     const res = await fetchFn(url, {
       method: "HEAD",
       signal: AbortSignal.timeout(timeoutMs),
       headers: { "Icy-MetaData": "0" },
     });
-    if (!res.ok) {
+    if (res.ok) {
+      return {
+        alive: true,
+        bitrateKbps: extractBitrate(res.headers),
+        codec: extractCodec(res.headers),
+      };
+    }
+    // 405 = server doesn't support HEAD → try GET fallback
+    if (res.status === 405) {
+      headFailed = true;
+    } else {
+      // Any other error (404, 503…) → stream is genuinely down
       return { alive: false, bitrateKbps: null, codec: null };
     }
-    const bitrateKbps = extractBitrate(res.headers);
-    const codec = extractCodec(res.headers);
-    return { alive: true, bitrateKbps, codec };
   } catch {
+    // Network or timeout error on HEAD → try GET fallback
+    headFailed = true;
+  }
+
+  if (!headFailed) return { alive: false, bitrateKbps: null, codec: null };
+
+  // ---- Step 2: GET fallback -----------------------------------------------
+  // We abort immediately after receiving the response headers to avoid
+  // pulling the full audio stream. The AbortError we trigger is expected.
+  const controller = new AbortController();
+  try {
+    const res = await fetchFn(url, {
+      method: "GET",
+      signal: controller.signal,
+      headers: { "Icy-MetaData": "0", Range: "bytes=0-4095" },
+    });
+    // Abort body download — we only need the headers.
+    controller.abort();
+    if (!res.ok && res.status !== 206) {
+      return { alive: false, bitrateKbps: null, codec: null };
+    }
+    return {
+      alive: true,
+      bitrateKbps: extractBitrate(res.headers),
+      codec: extractCodec(res.headers),
+    };
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === "AbortError") {
+      // Our own abort after getting headers — stream is alive.
+      return { alive: true, bitrateKbps: null, codec: null };
+    }
     return { alive: false, bitrateKbps: null, codec: null };
   }
 }

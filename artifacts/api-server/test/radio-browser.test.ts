@@ -182,3 +182,88 @@ describe("MIN_BITRATE_KBPS", () => {
     expect(Number.isInteger(MIN_BITRATE_KBPS)).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// upsertRadioBrowserStations — DB interaction tests (mocked DB)
+// ---------------------------------------------------------------------------
+
+vi.mock("@workspace/db", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@workspace/db")>();
+  const onConflictDoUpdate = vi.fn().mockResolvedValue(undefined);
+  const valuesMock = vi.fn().mockReturnValue({ onConflictDoUpdate });
+  const insertMock = vi.fn().mockReturnValue({ values: valuesMock });
+  return {
+    ...actual,
+    db: { insert: insertMock },
+    stationsTable: actual.stationsTable,
+  };
+});
+
+describe("upsertRadioBrowserStations", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("inserts one row per valid station", async () => {
+    const { db } = await import("@workspace/db");
+    const station = makeStation();
+    const count = await upsertRadioBrowserStations([station], "jazz");
+    expect(count).toBe(1);
+    expect((db.insert as ReturnType<typeof vi.fn>)).toHaveBeenCalledOnce();
+  });
+
+  it("inserts new longtail rows as active=false", async () => {
+    const { db } = await import("@workspace/db");
+    const station = makeStation();
+    await upsertRadioBrowserStations([station], "jazz");
+
+    // Reach into the mock chain: insert(table) → .values(payload) → ...
+    // The return value of insert() has a `values` mock; inspect its first call.
+    const insertReturnValue = (db.insert as ReturnType<typeof vi.fn>).mock.results[0]?.value as {
+      values: ReturnType<typeof vi.fn>;
+    };
+    const valuesPayload = insertReturnValue?.values.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(valuesPayload).toBeDefined();
+    expect(valuesPayload.active).toBe(false);
+    expect(valuesPayload.source).toBe("radio_browser");
+    expect(valuesPayload.tier).toBe("longtail");
+  });
+
+  it("skips stations with empty name or URL", async () => {
+    const { db } = await import("@workspace/db");
+    const bad = [
+      makeStation({ name: "" }),
+      makeStation({ url_resolved: "", url: "" }),
+    ];
+    const count = await upsertRadioBrowserStations(bad, "jazz");
+    expect(count).toBe(0);
+    expect((db.insert as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
+  });
+
+  it("skips stations whose name produces an empty slug", async () => {
+    const { db } = await import("@workspace/db");
+    const station = makeStation({ name: "---" }); // slugify → ""
+    const count = await upsertRadioBrowserStations([station], "jazz");
+    expect(count).toBe(0);
+    expect((db.insert as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
+  });
+
+  it("merges tag into the tags array on upsert", async () => {
+    const { db } = await import("@workspace/db");
+    const station = makeStation({ tags: "blues,rock" });
+    await upsertRadioBrowserStations([station], "jazz");
+    // The insert was called once — the tags list includes both the query tag and station tags
+    expect((db.insert as ReturnType<typeof vi.fn>)).toHaveBeenCalledOnce();
+  });
+
+  it("returns 0 on DB error and does not throw", async () => {
+    const { db } = await import("@workspace/db");
+    (db.insert as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+      values: vi.fn().mockReturnValue({
+        onConflictDoUpdate: vi.fn().mockRejectedValue(new Error("unique violation")),
+      }),
+    });
+    const count = await upsertRadioBrowserStations([makeStation()], "jazz");
+    expect(count).toBe(0);
+  });
+});

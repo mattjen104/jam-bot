@@ -24,6 +24,7 @@ import { ensurePicksUnifiedView } from "./lore/view.js";
 import { startKexpShowsHarvester } from "./lore/kexp-shows.js";
 import { startRadioBrowserWorker } from "./lore/radio-browser.js";
 import { startStreamHealthWorker } from "./lore/stream-health.js";
+import { applyStationDiscoveryMigration } from "./lore/station-migration.js";
 
 const rawPort = process.env["PORT"];
 
@@ -51,6 +52,7 @@ app.listen(port, () => {
 async function bootLore(): Promise<void> {
   try {
     wireSongEnrichment();
+    await applyStationDiscoveryMigration();
     await ensurePicksUnifiedView();
     await seedStations();
     await seedPickers();
