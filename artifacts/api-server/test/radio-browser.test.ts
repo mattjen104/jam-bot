@@ -6,6 +6,9 @@ import {
   fetchStationsByTag,
   upsertRadioBrowserStations,
   MIN_BITRATE_KBPS,
+  MIN_VOTES,
+  RADIO_BROWSER_GENRE_WHITELIST,
+  SEED_GENRE_TAGS,
   type RadioBrowserStation,
 } from "../src/lore/radio-browser.js";
 
@@ -69,13 +72,13 @@ function makeStation(overrides: Partial<RadioBrowserStation> = {}): RadioBrowser
     name: "Test Station",
     url_resolved: "https://stream.example.com/live",
     url: "https://stream.example.com/live",
-    tags: "jazz",
+    tags: "ambient",
     country: "US",
     homepage: "https://example.com",
     favicon: "",
     codec: "MP3",
     bitrate: 128,
-    votes: 10,
+    votes: 200,      // ≥ MIN_VOTES (100) by default
     clickcount: 100,
     lastcheckok: 1,
     ...overrides,
@@ -112,6 +115,40 @@ describe("filterStations", () => {
     const result = filterStations([s]);
     expect(result).toHaveLength(1);
     expect(result[0]!.url_resolved).toBe("https://fallback.example.com/live");
+  });
+
+  // --- New quality gates (128 kbps floor, 100 votes minimum) ---
+
+  it(`rejects stations with known bitrate below ${MIN_BITRATE_KBPS}kbps`, () => {
+    expect(filterStations([makeStation({ bitrate: MIN_BITRATE_KBPS - 1 })])).toHaveLength(0);
+    expect(filterStations([makeStation({ bitrate: 64 })])).toHaveLength(0);
+  });
+
+  it(`passes stations with bitrate exactly ${MIN_BITRATE_KBPS}kbps`, () => {
+    expect(filterStations([makeStation({ bitrate: MIN_BITRATE_KBPS })])).toHaveLength(1);
+  });
+
+  it("allows stations with bitrate=0 (unknown bitrate — deferred to health worker)", () => {
+    expect(filterStations([makeStation({ bitrate: 0 })])).toHaveLength(1);
+  });
+
+  it(`rejects stations with votes below ${MIN_VOTES}`, () => {
+    expect(filterStations([makeStation({ votes: MIN_VOTES - 1 })])).toHaveLength(0);
+    expect(filterStations([makeStation({ votes: 0 })])).toHaveLength(0);
+  });
+
+  it(`passes stations with exactly ${MIN_VOTES} votes`, () => {
+    expect(filterStations([makeStation({ votes: MIN_VOTES })])).toHaveLength(1);
+  });
+
+  it("respects custom minBitrateKbps override", () => {
+    expect(filterStations([makeStation({ bitrate: 190 })], { minBitrateKbps: 192 })).toHaveLength(0);
+    expect(filterStations([makeStation({ bitrate: 64 })], { minBitrateKbps: 64, minVotes: 0 })).toHaveLength(1);
+  });
+
+  it("respects custom minVotes override", () => {
+    expect(filterStations([makeStation({ votes: 50 })], { minVotes: 200 })).toHaveLength(0);
+    expect(filterStations([makeStation({ votes: 50 })], { minVotes: 10 })).toHaveLength(1);
   });
 });
 
@@ -296,5 +333,99 @@ describe("upsertRadioBrowserStations", () => {
     });
     const count = await upsertRadioBrowserStations([makeStation()], "jazz");
     expect(count).toBe(0);
+  });
+
+  it("skips stations with votes below MIN_VOTES (belt-and-suspenders guard)", async () => {
+    const { db } = await import("@workspace/db");
+    const count = await upsertRadioBrowserStations(
+      [makeStation({ votes: MIN_VOTES - 1 })],
+      "ambient",
+    );
+    expect(count).toBe(0);
+    expect((db.insert as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
+  });
+
+  it("skips stations with known bitrate below MIN_BITRATE_KBPS (belt-and-suspenders guard)", async () => {
+    const { db } = await import("@workspace/db");
+    const count = await upsertRadioBrowserStations(
+      [makeStation({ bitrate: MIN_BITRATE_KBPS - 1 })],
+      "ambient",
+    );
+    expect(count).toBe(0);
+    expect((db.insert as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
+  });
+
+  it("allows stations with bitrate=0 (unknown) through the belt-and-suspenders guard", async () => {
+    const { db } = await import("@workspace/db");
+    const count = await upsertRadioBrowserStations(
+      [makeStation({ bitrate: 0 })],
+      "ambient",
+    );
+    expect(count).toBe(1);
+    expect((db.insert as ReturnType<typeof vi.fn>)).toHaveBeenCalledOnce();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// RADIO_BROWSER_GENRE_WHITELIST
+// ---------------------------------------------------------------------------
+
+describe("RADIO_BROWSER_GENRE_WHITELIST", () => {
+  it("is a non-empty frozen array", () => {
+    expect(RADIO_BROWSER_GENRE_WHITELIST.length).toBeGreaterThan(0);
+    expect(Object.isFrozen(RADIO_BROWSER_GENRE_WHITELIST)).toBe(true);
+  });
+
+  it("contains the expected niche genres", () => {
+    const list = RADIO_BROWSER_GENRE_WHITELIST as readonly string[];
+    expect(list).toContain("experimental");
+    expect(list).toContain("ambient");
+    expect(list).toContain("drone");
+    expect(list).toContain("idm");
+    expect(list).toContain("shoegaze");
+    expect(list).toContain("post-rock");
+    expect(list).toContain("folk");
+  });
+
+  it("does not contain mainstream genres", () => {
+    const list = RADIO_BROWSER_GENRE_WHITELIST as readonly string[];
+    for (const mainstream of ["jazz", "pop", "rock", "electronic", "blues", "soul", "indie", "classical"]) {
+      expect(list).not.toContain(mainstream);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SEED_GENRE_TAGS
+// ---------------------------------------------------------------------------
+
+describe("SEED_GENRE_TAGS", () => {
+  it("all seed tags exist in RADIO_BROWSER_GENRE_WHITELIST", () => {
+    const whitelist = new Set<string>(RADIO_BROWSER_GENRE_WHITELIST);
+    for (const tag of SEED_GENRE_TAGS) {
+      expect(whitelist.has(tag), `seed tag "${tag}" must be in the whitelist`).toBe(true);
+    }
+  });
+
+  it("is a non-empty array", () => {
+    expect(SEED_GENRE_TAGS.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// MIN_VOTES export sanity
+// ---------------------------------------------------------------------------
+
+describe("MIN_VOTES", () => {
+  it("is at least 100", () => {
+    expect(MIN_VOTES).toBeGreaterThanOrEqual(100);
+    expect(Number.isInteger(MIN_VOTES)).toBe(true);
+  });
+});
+
+describe("MIN_BITRATE_KBPS", () => {
+  it("is at least 128", () => {
+    expect(MIN_BITRATE_KBPS).toBeGreaterThanOrEqual(128);
+    expect(Number.isInteger(MIN_BITRATE_KBPS)).toBe(true);
   });
 });

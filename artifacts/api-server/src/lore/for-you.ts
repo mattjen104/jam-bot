@@ -32,6 +32,7 @@ import {
   fetchStationsByTag,
   filterStations,
   upsertRadioBrowserStations,
+  RADIO_BROWSER_GENRE_WHITELIST,
 } from "./radio-browser.js";
 import { queueCrossRefDiscovery } from "./blog-crossref.js";
 
@@ -430,10 +431,14 @@ export async function getForYouStations(
 
   // --- Thin-genre detection: run on FULL sorted set before limit-slice ---
   // Detects under-covered genre poles across all candidates, not just top-N.
+  // Only whitelisted niche genres trigger RadioBrowser discovery — mainstream
+  // genres are excluded to avoid ingesting low-quality generic stations.
   const thin = detectThinGenres(items, "station");
-  if (thin.length > 0) {
+  const whitelistSet = new Set<string>(RADIO_BROWSER_GENRE_WHITELIST);
+  const thinWhitelisted = thin.filter((tg) => whitelistSet.has(tg.genre));
+  if (thinWhitelisted.length > 0) {
     void (async () => {
-      for (const tg of thin) {
+      for (const tg of thinWhitelisted) {
         try {
           const raw = await fetchStationsByTag(tg.genre);
           const filtered = filterStations(raw);
@@ -631,10 +636,13 @@ export async function getForYouBlogs(
   );
 
   // --- Thin-genre detection: run on FULL sorted set before limit-slice ---
+  // Only whitelisted niche genres trigger cross-ref discovery.
   const thin = detectThinGenres(items, "picker");
-  if (thin.length > 0) {
+  const whitelistSetB = new Set<string>(RADIO_BROWSER_GENRE_WHITELIST);
+  const thinWhitelistedB = thin.filter((tg) => whitelistSetB.has(tg.genre));
+  if (thinWhitelistedB.length > 0) {
     void (async () => {
-      for (const tg of thin) {
+      for (const tg of thinWhitelistedB) {
         try {
           const blogUrls = await db
             .select({ homeUrl: pickersTable.homeUrl })

@@ -17,30 +17,65 @@ const FETCH_TIMEOUT_MS = 15_000;
 const RESULTS_PER_TAG = 200;
 
 /**
- * Seeded genre tags — these drive cold-start discovery before user-library
- * genre expansion is available. Kept intentionally narrow and high-quality;
- * the set can be expanded later without a migration.
+ * Niche/underground genres aligned with the Lore taste profile (KEXP /
+ * Radio Paradise / SomaFM audience). Only these tags trigger RadioBrowser
+ * discovery — mainstream genres (pop, jazz, rock, edm, etc.) are excluded
+ * because curated sources already cover them and RadioBrowser adds low-quality
+ * duplicates there.
  */
-export const SEED_GENRE_TAGS = [
-  "jazz",
-  "ambient",
-  "electronic",
-  "blues",
-  "folk",
-  "post-rock",
+export const RADIO_BROWSER_GENRE_WHITELIST = Object.freeze([
   "experimental",
-  "krautrock",
-  "doom-metal",
-  "stoner-rock",
-  "spiritual-jazz",
+  "avant-garde",
+  "ambient",
+  "drone",
+  "noise",
+  "idm",
+  "shoegaze",
+  "post-rock",
+  "post-punk",
+  "new wave",
+  "minimal wave",
   "psychedelic",
-  "soul",
-  "indie",
-  "classical",
+  "modular synthesis",
+  "electroacoustic",
+  "free jazz",
+  "nu-jazz",
+  "alt-country",
+  "americana",
+  "folk",
+  "world",
+] as const);
+
+export type RadioBrowserGenre = (typeof RADIO_BROWSER_GENRE_WHITELIST)[number];
+
+/**
+ * Seeded genre tags — these drive cold-start discovery before user-library
+ * genre expansion is available. All entries must be in RADIO_BROWSER_GENRE_WHITELIST.
+ */
+export const SEED_GENRE_TAGS: string[] = [
+  "experimental",
+  "ambient",
+  "drone",
+  "noise",
+  "idm",
+  "shoegaze",
+  "post-rock",
+  "post-punk",
+  "new wave",
+  "psychedelic",
+  "avant-garde",
+  "folk",
+  "world",
+  "nu-jazz",
+  "alt-country",
+  "americana",
 ];
 
-/** Minimum bitrate (kbps) required to promote a longtail station. */
-export const MIN_BITRATE_KBPS = 64;
+/** Minimum bitrate (kbps) required to accept or promote a longtail station. */
+export const MIN_BITRATE_KBPS = 128;
+
+/** Minimum community vote count required to accept a longtail station. */
+export const MIN_VOTES = 100;
 
 /** Maximum field length for text columns. */
 const MAX_TEXT = 1000;
@@ -130,17 +165,27 @@ export async function fetchStationsByTag(
  * Filter and deduplicate a list of radio-browser stations:
  * - lastcheckok=1 only
  * - Must have a name and a resolved/fallback stream URL
- * - Prefer HTTPS stream URLs
+ * - Known bitrate must be >= minBitrateKbps (default MIN_BITRATE_KBPS=128)
+ *   — stations reporting bitrate=0 (unknown) are allowed through and
+ *   re-evaluated by the stream-health worker before promotion.
+ * - Community votes must be >= minVotes (default MIN_VOTES=100)
  * - Deduplicate by resolved URL (keep highest-clickcount copy)
  */
 export function filterStations(
   stations: RadioBrowserStation[],
+  opts: { minBitrateKbps?: number; minVotes?: number } = {},
 ): RadioBrowserStation[] {
+  const minBitrate = opts.minBitrateKbps ?? MIN_BITRATE_KBPS;
+  const minVotes = opts.minVotes ?? MIN_VOTES;
   const seen = new Map<string, RadioBrowserStation>();
   for (const s of stations) {
     if (!s.lastcheckok) continue;
     const streamUrl = (s.url_resolved || s.url || "").trim();
     if (!streamUrl || !s.name?.trim()) continue;
+    // Reject if known bitrate is below threshold; bitrate=0 means unknown → allow.
+    if (s.bitrate > 0 && s.bitrate < minBitrate) continue;
+    // Reject if below community vote threshold.
+    if (num(s.votes) < minVotes) continue;
     const existing = seen.get(streamUrl);
     if (!existing || s.clickcount > existing.clickcount) {
       seen.set(streamUrl, { ...s, url_resolved: streamUrl });
@@ -155,7 +200,8 @@ export function filterStations(
  * (curated or previously discovered), only the radio-browser metadata fields
  * are updated; source/tier/active are NOT clobbered on an existing curated row.
  *
- * New longtail rows start as active=false; the health worker promotes them.
+ * New longtail rows start as active=false; the health worker promotes them
+ * once the stream passes a live check and meets the bitrate threshold.
  */
 export async function upsertRadioBrowserStations(
   stations: RadioBrowserStation[],
@@ -165,6 +211,10 @@ export async function upsertRadioBrowserStations(
   for (const s of stations) {
     const streamUrl = (s.url_resolved || s.url || "").trim();
     if (!streamUrl || !s.name?.trim()) continue;
+    // Belt-and-suspenders: filterStations should have caught these, but guard
+    // at the DB boundary so direct callers also stay clean.
+    if (num(s.votes) < MIN_VOTES) continue;
+    if (s.bitrate > 0 && s.bitrate < MIN_BITRATE_KBPS) continue;
 
     const baseName = clamp(s.name) ?? "Unknown";
     const slug = slugify(baseName);
@@ -219,6 +269,39 @@ export async function upsertRadioBrowserStations(
   return upserted;
 }
 
+/**
+ * Delete RadioBrowser stations that no longer meet quality or genre criteria.
+ * Safe to run on startup — curated stations are never touched.
+ *
+ * A station is removed if ANY of these are true:
+ *   - It has no tag matching the RADIO_BROWSER_GENRE_WHITELIST
+ *   - Its known bitrate is below MIN_BITRATE_KBPS (bitrate IS NOT NULL AND > 0)
+ *   - Its vote count is below MIN_VOTES
+ */
+export async function purgeNonQualifyingStations(): Promise<number> {
+  // Build JSONB containment check for any whitelisted tag.
+  const tagChecks = RADIO_BROWSER_GENRE_WHITELIST.map(
+    (g) => `tags @> '${JSON.stringify([g])}'::jsonb`,
+  ).join(" OR ");
+
+  const result = await db.execute(sql.raw(`
+    DELETE FROM stations
+    WHERE source = 'radio_browser'
+      AND (
+        NOT (${tagChecks})
+        OR (bitrate IS NOT NULL AND bitrate > 0 AND bitrate < ${MIN_BITRATE_KBPS})
+        OR votes < ${MIN_VOTES}
+      )
+  `));
+  const deleted = (result as { rowCount?: number }).rowCount ?? 0;
+  if (deleted > 0) {
+    console.info(
+      `[radio-browser] purged ${deleted} non-qualifying stations (whitelist + quality filter)`,
+    );
+  }
+  return deleted;
+}
+
 /** Map radio-browser codec string to a Lore streamFormat hint. */
 export function detectFormat(
   codec: string | null | undefined,
@@ -260,12 +343,20 @@ async function runDiscovery(): Promise<void> {
 }
 
 /**
- * Start the radio-browser discovery worker. Idempotent. Runs once after a
- * warmup delay, then on the configured interval. Errors never crash the server.
+ * Start the radio-browser discovery worker. Idempotent. On first start:
+ *   1. Immediately purges stations that no longer meet quality/genre criteria.
+ *   2. After a warmup delay, runs a full discovery pass for all seed tags.
+ *   3. Repeats discovery on the configured interval.
+ * Errors never crash the server.
  */
 export function startRadioBrowserWorker(): void {
   if (started) return;
   started = true;
+
+  // Purge non-qualifying stations synchronously on startup (best-effort).
+  void purgeNonQualifyingStations().catch((err) =>
+    console.error("[radio-browser] startup purge failed", err),
+  );
 
   warmup = setTimeout(() => {
     warmup = null;

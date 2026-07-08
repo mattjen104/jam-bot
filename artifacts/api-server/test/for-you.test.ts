@@ -516,8 +516,13 @@ describe("thin-genre enqueue (station discovery)", () => {
     );
     vi.mocked(fetchStationsByTag).mockClear();
 
-    // Unique genre tag unlikely to match any existing station
-    const rareGenre = `rare-genre-${run}`;
+    // Use a whitelisted genre so the new whitelist gate allows discovery.
+    // Since this user only has one specific recording in their library, only
+    // the single test station below (which played that recording) will have
+    // overlap_count > 0 — ambient stations in the DB that played OTHER tracks
+    // will have _tier1 = 0 and won't count toward coverage. Thus coveredCount
+    // for "ambient" = 1, which is below MIN_SOURCES_PER_GENRE (3) → thin.
+    const thinGenre = "ambient"; // must be in RADIO_BROWSER_GENRE_WHITELIST
     const recId = `test-fy-rec-thin-${run}`;
 
     const userId = await insertTestUser(`test-fy-${run}-thin-enq`);
@@ -535,7 +540,7 @@ describe("thin-genre enqueue (station discovery)", () => {
         streamUrl: "http://thin-enq.test",
         streamFormat: "mp3",
         active: true,
-        tags: [rareGenre],
+        tags: [thinGenre],
         clickcount: 1,
         votes: 0,
       })
@@ -567,9 +572,9 @@ describe("thin-genre enqueue (station discovery)", () => {
     // Allow the non-blocking enqueue promise to settle
     await new Promise<void>((r) => setTimeout(r, 150));
 
-    // The rare genre has only 1 source with overlap (<MIN_SOURCES_PER_GENRE=3)
+    // The whitelisted genre has only 1 source with overlap (<MIN_SOURCES_PER_GENRE=3)
     // → thin-genre detection should fire fetchStationsByTag for it
-    expect(vi.mocked(fetchStationsByTag)).toHaveBeenCalledWith(rareGenre);
+    expect(vi.mocked(fetchStationsByTag)).toHaveBeenCalledWith(thinGenre);
 
     // Cleanup
     await db
