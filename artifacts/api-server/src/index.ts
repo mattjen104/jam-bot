@@ -22,6 +22,8 @@ import { startSegueJob } from "./lore/segue-job.js";
 import { startWikipediaJob } from "./lore/wikipedia-job.js";
 import { ensurePicksUnifiedView } from "./lore/view.js";
 import { startKexpShowsHarvester } from "./lore/kexp-shows.js";
+import { startRadioBrowserWorker } from "./lore/radio-browser.js";
+import { startStreamHealthWorker } from "./lore/stream-health.js";
 
 const rawPort = process.env["PORT"];
 
@@ -78,6 +80,8 @@ async function bootLore(): Promise<void> {
     startSegueJob();
     startWikipediaJob();
     startKexpShowsHarvester();
+    startStreamHealthWorker();
+    startRadioBrowserWorker();
   } catch (err) {
     console.error("[lore] boot failed", err);
   }

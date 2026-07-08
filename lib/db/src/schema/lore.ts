@@ -4,6 +4,7 @@ import {
   serial,
   text,
   integer,
+  real,
   boolean,
   timestamp,
   jsonb,
@@ -118,6 +119,64 @@ export const stationsTable = pgTable("stations", {
   attribution: boolean("attribution").notNull().default(true),
   /** Display order in the directory (lower first). */
   sortOrder: integer("sort_order").notNull().default(0),
+  /**
+   * Whether this station is active (visible in the directory and polled).
+   * Curated flagship stations default to true; radio-browser longtail
+   * candidates start as false and are promoted by the health worker.
+   */
+  active: boolean("active").notNull().default(true),
+  /**
+   * How this station entered the directory: "curated" = hand-curated flagship
+   * seed, "radio_browser" = auto-discovered via radio-browser.info.
+   */
+  source: text("source").notNull().default("curated"),
+  /**
+   * Discovery tier. "flagship" = curated priority (never auto-demoted to
+   * inactive); "longtail" = radio-browser candidate (auto-demoted after 3
+   * consecutive health-check failures).
+   */
+  tier: text("tier").notNull().default("flagship"),
+  /**
+   * Genre/style tags sourced from radio-browser.info or set manually.
+   * Used to filter/rank stations in the for-you ranking API.
+   */
+  tags: jsonb("tags").$type<string[]>(),
+  /**
+   * Timestamp of the most recent successful stream health check (HEAD/GET
+   * the stream URL returned 2xx or non-empty audio bytes).
+   */
+  lastAliveAt: timestamp("last_alive_at"),
+  /**
+   * Fraction of spins (0–1) that resolved to a MusicBrainz recording over
+   * the last rolling window. Used for for-you ranking; null until enough
+   * data exists.
+   */
+  resolutionRate: real("resolution_rate"),
+  /**
+   * radio-browser.info click count at last upsert — a proxy for listener
+   * demand across the whole radio-browser network.
+   */
+  clickcount: integer("clickcount").notNull().default(0),
+  /**
+   * radio-browser.info vote count at last upsert.
+   */
+  votes: integer("votes").notNull().default(0),
+  /**
+   * Stream bitrate in kbps from radio-browser.info or detected by the health
+   * worker. Distinct from `streamQuality` (which is a human-readable badge).
+   */
+  bitrate: integer("bitrate"),
+  /**
+   * Audio codec identifier from radio-browser.info or detected by the health
+   * worker (e.g. "MP3", "AAC"). Distinct from `streamFormat` (the client
+   * playback hint).
+   */
+  codec: text("codec"),
+  /**
+   * Consecutive health-check failure count. Resets to 0 on success.
+   * When this reaches 3 for a longtail station, active is set false.
+   */
+  healthFailures: integer("health_failures").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
