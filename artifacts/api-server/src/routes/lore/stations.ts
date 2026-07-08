@@ -29,10 +29,13 @@ import { spinRunIdExpr } from "../../lore/runs.js";
 const router: IRouter = Router();
 
 // GET /api/stations
+// Only active=true stations are returned — longtail candidates (active=false)
+// are health-gated and must not appear in the public directory.
 router.get("/stations", h(async (_req, res) => {
   const rows = await db
     .select()
     .from(stationsTable)
+    .where(eq(stationsTable.active, true))
     .orderBy(asc(stationsTable.sortOrder), asc(stationsTable.name));
   return res.json(ListStationsResponse.parse({ stations: rows.map(toStation) }));
 }));
@@ -47,6 +50,7 @@ router.get("/stations/now-playing", h(async (req, res) => {
   const stations = await db
     .select({ id: stationsTable.id, slug: stationsTable.slug })
     .from(stationsTable)
+    .where(eq(stationsTable.active, true))
     .orderBy(asc(stationsTable.sortOrder), asc(stationsTable.name));
 
   const rows = await db

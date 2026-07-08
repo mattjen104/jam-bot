@@ -184,6 +184,37 @@ describe("MIN_BITRATE_KBPS", () => {
 });
 
 // ---------------------------------------------------------------------------
+// detectFormat — codec mapping correctness
+// ---------------------------------------------------------------------------
+
+describe("detectFormat", () => {
+  it("maps AAC codec to 'aac'", () => {
+    expect(detectFormat("AAC", "https://stream.example.com/live")).toBe("aac");
+  });
+
+  it("maps OGG codec to 'ogg' (not 'aac')", () => {
+    expect(detectFormat("OGG", "https://stream.example.com/live")).toBe("ogg");
+  });
+
+  it("maps VORBIS codec to 'ogg'", () => {
+    expect(detectFormat("VORBIS", "https://stream.example.com/live")).toBe("ogg");
+  });
+
+  it("maps FLAC codec to 'flac'", () => {
+    expect(detectFormat("FLAC", "https://stream.example.com/live")).toBe("flac");
+  });
+
+  it("maps .m3u8 URL to 'hls'", () => {
+    expect(detectFormat(null, "https://stream.example.com/live.m3u8")).toBe("hls");
+  });
+
+  it("defaults to 'mp3' for unknown codec", () => {
+    expect(detectFormat(null, "https://stream.example.com/live")).toBe("mp3");
+    expect(detectFormat("MP3", "https://stream.example.com/live")).toBe("mp3");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // upsertRadioBrowserStations — DB interaction tests (mocked DB)
 // ---------------------------------------------------------------------------
 

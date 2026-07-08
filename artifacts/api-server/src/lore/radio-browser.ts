@@ -226,7 +226,7 @@ export function detectFormat(
 ): string {
   const c = (codec ?? "").toUpperCase();
   if (c.includes("AAC")) return "aac";
-  if (c.includes("OGG") || c.includes("VORBIS")) return "aac"; // treat as audio
+  if (c.includes("OGG") || c.includes("VORBIS")) return "ogg";
   if (c.includes("FLAC")) return "flac";
   if (c.includes("HLS") || url.includes(".m3u8")) return "hls";
   return "mp3";

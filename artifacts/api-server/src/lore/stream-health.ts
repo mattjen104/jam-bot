@@ -92,14 +92,22 @@ export async function probeStream(
   // We abort immediately after receiving the response headers to avoid
   // pulling the full audio stream. A timeout signal is composed with our
   // own controller so the probe is always bounded even if headers never arrive.
+  //
+  // `gotResponse` tracks whether the fetch() promise resolved (headers received).
+  // If an AbortError is caught WITH gotResponse=true → it's our intentional
+  // controller.abort() → stream is alive.
+  // If AbortError is caught WITH gotResponse=false → it's the timeout firing
+  // before headers arrived → stream is dead (treat same as network error).
   const controller = new AbortController();
+  let gotResponse = false;
   try {
     const res = await fetchFn(url, {
       method: "GET",
       signal: AbortSignal.any([controller.signal, AbortSignal.timeout(timeoutMs)]),
       headers: { "Icy-MetaData": "0", Range: "bytes=0-4095" },
     });
-    // Abort body download — we only need the headers.
+    // Headers received — record this before aborting the body download.
+    gotResponse = true;
     controller.abort();
     if (!res.ok && res.status !== 206) {
       return { alive: false, bitrateKbps: null, codec: null };
@@ -110,10 +118,11 @@ export async function probeStream(
       codec: extractCodec(res.headers),
     };
   } catch (err: unknown) {
-    if (err instanceof Error && err.name === "AbortError") {
-      // Our own abort after getting headers — stream is alive.
+    if (err instanceof Error && err.name === "AbortError" && gotResponse) {
+      // Our own controller.abort() fired after headers were received — alive.
       return { alive: true, bitrateKbps: null, codec: null };
     }
+    // Timeout abort (gotResponse=false) or genuine network error — dead.
     return { alive: false, bitrateKbps: null, codec: null };
   }
 }

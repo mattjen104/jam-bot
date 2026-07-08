@@ -143,7 +143,10 @@ describe("probeStream", () => {
     expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 
-  it("treats our own GET abort (AbortError) as alive", async () => {
+  it("treats our own GET abort (AbortError after headers received) as alive", async () => {
+    // The real code: fetchFn resolves (gotResponse=true), then controller.abort()
+    // is called. The abort causes no exception in this mock since we return a
+    // full Response; the try block completes normally.
     const abortErr = new Error("aborted");
     abortErr.name = "AbortError";
     const mockFetch = vi.fn()
@@ -153,13 +156,34 @@ describe("probeStream", () => {
         status: 405,
         headers: new Headers(),
       } as unknown as Response)
-      // GET → throws AbortError (simulating our own abort)
-      .mockRejectedValueOnce(abortErr);
+      // GET → resolves (headers received), then our code calls controller.abort()
+      // which doesn't throw in the happy path — body abort happens silently.
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ "icy-br": "96" }),
+      } as unknown as Response);
 
     const result = await probeStream("https://stream.example.com/live", {
       fetchFn: mockFetch as typeof fetch,
     });
     expect(result.alive).toBe(true);
+    expect(result.bitrateKbps).toBe(96);
+  });
+
+  it("treats GET timeout (AbortError before headers, gotResponse=false) as dead", async () => {
+    const timeoutErr = new Error("TimeoutError");
+    timeoutErr.name = "AbortError"; // AbortSignal.timeout throws AbortError
+    const mockFetch = vi.fn()
+      // HEAD → network error (falls through to GET)
+      .mockRejectedValueOnce(new Error("connection refused"))
+      // GET → AbortError without gotResponse (timeout before headers)
+      .mockRejectedValueOnce(timeoutErr);
+
+    const result = await probeStream("https://slow.example.com/stream", {
+      fetchFn: mockFetch as typeof fetch,
+    });
+    expect(result.alive).toBe(false);
   });
 });
 
