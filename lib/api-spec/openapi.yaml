@@ -197,6 +197,52 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /stations/{slug}/report-now-playing:
+    post:
+      operationId: reportStationNowPlaying
+      tags: [stations]
+      summary: Client-reported now-playing for stations with no server poller
+      description: >
+        For longtail stations with no server-side now-playing source (e.g. a
+        RadioBrowser station), the browser can discover the current track from
+        the station's own Icecast status endpoint and report it here. The
+        track is resolved through the same MusicBrainz/Spotify pipeline as any
+        server-polled spin and then appears in now-playing, the journal, and
+        the archive like a normal spin. Deduped against the last logged spin
+        for the station, so it is safe to call repeatedly (e.g. every 30s)
+        while the same track is playing.
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IcecastReport"
+      responses:
+        "200":
+          description: Report processed (logged reflects whether a new spin was written)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IcecastReportResult"
+        "400":
+          description: Invalid report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Station not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /recordings/{mbid}:
     get:
       operationId: getRecording
@@ -2241,11 +2287,6 @@ components:
           type: string
         sourceUrl:
           type: string
-        sourceHandle:
-          type: string
-          description: >
-            Machine-readable source identifier, e.g. "genius" or
-            "classic-albums". Use this to filter claims by source in the UI.
         positionMs:
           anyOf:
             - type: integer
@@ -2923,6 +2964,36 @@ components:
       required:
         - mbid
         - next
+    IcecastReport:
+      type: object
+      description: >
+        Client-discovered now-playing text from a station's Icecast status
+        endpoint, awaiting MusicBrainz/Spotify resolution.
+      properties:
+        rawArtist:
+          type: string
+          description: May be empty when the Icecast source only provides a title.
+        rawTitle:
+          type: string
+          minLength: 1
+      required:
+        - rawTitle
+    IcecastReportResult:
+      type: object
+      properties:
+        logged:
+          type: boolean
+          description: >
+            True when this report resulted in a new spin being written (the
+            track differed from the last logged spin). False means the report
+            matched what's already logged — nothing changed.
+        mbid:
+          type: ["string", "null"]
+        confidence:
+          type: string
+          enum: [recording_id, isrc, text, unresolved]
+      required:
+        - logged
     ManualSpinRequest:
       type: object
       description: Admin manual/historical spin entry.

@@ -10,6 +10,9 @@ import {
   GetStationPickerOverlapsResponse,
   GetStationsRecentSpinsResponse,
   GetStationsScheduleResponse,
+  ReportStationNowPlayingParams,
+  IcecastReport,
+  IcecastReportResult,
 } from "@workspace/api-zod";
 import {
   db,
@@ -25,6 +28,7 @@ import { stationArchiveUrl } from "../../lore/adapters.js";
 import { h } from "../../middlewares/asyncHandler.js";
 import { toStation, toNowPlaying, toArchiveRecording, spinDayExpr } from "./shared.js";
 import { spinRunIdExpr } from "../../lore/runs.js";
+import { logSpinIfChanged } from "../../lore/resolve.js";
 
 const router: IRouter = Router();
 
@@ -132,6 +136,54 @@ router.get("/stations/:slug/now-playing", h(async (req, res) => {
     GetStationNowPlayingResponse.parse({
       station: toStation(station),
       nowPlaying: row ? toNowPlaying(row) : null,
+    }),
+  );
+}));
+
+// POST /api/stations/:slug/report-now-playing
+// Client-reported now-playing for stations with no server-side poller (e.g. a
+// RadioBrowser/Icecast station the browser polls directly). Resolved through
+// the same MusicBrainz/Spotify pipeline as any server-polled spin via
+// logSpinIfChanged, so the result is indistinguishable from a normal spin.
+router.post("/stations/:slug/report-now-playing", h(async (req, res) => {
+  const parsedParams = ReportStationNowPlayingParams.safeParse(req.params);
+  if (!parsedParams.success) {
+    return res.status(404).json({ error: "Station not found" });
+  }
+
+  const parsedBody = IcecastReport.safeParse(req.body);
+  if (!parsedBody.success) {
+    return res.status(400).json({ error: "Invalid report body", details: parsedBody.error.flatten() });
+  }
+
+  const [station] = await db
+    .select()
+    .from(stationsTable)
+    .where(eq(stationsTable.slug, parsedParams.data.slug))
+    .limit(1);
+  if (!station) {
+    return res.status(404).json({ error: "Station not found" });
+  }
+
+  const rawArtist = parsedBody.data.rawArtist?.trim() || "Unknown Artist";
+  const rawTitle = parsedBody.data.rawTitle.trim();
+
+  const logged = await logSpinIfChanged(station, { rawArtist, rawTitle });
+
+  const [latest] = await db
+    .select({ mbid: spinsTable.mbid, confidence: spinsTable.confidence })
+    .from(spinsTable)
+    .where(eq(spinsTable.stationId, station.id))
+    .orderBy(desc(spinsTable.playedAt))
+    .limit(1);
+
+  return res.json(
+    IcecastReportResult.parse({
+      logged,
+      mbid: latest?.mbid ?? null,
+      ...(latest?.confidence && latest.confidence !== "spotify"
+        ? { confidence: latest.confidence }
+        : {}),
     }),
   );
 }));

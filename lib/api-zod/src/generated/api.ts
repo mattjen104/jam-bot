@@ -318,6 +318,29 @@ export const GetStationNowPlayingParams = zod.object({
   slug: zod.coerce.string().min(1),
 });
 
+/**
+ * Client-reported now-playing for stations with no server-side poller (e.g. a
+ * RadioBrowser/Icecast station the browser polls directly). Resolved through
+ * the same MusicBrainz/Spotify pipeline as any server-polled spin.
+ *
+ * @summary Report a client-discovered now-playing track for resolution
+ */
+
+export const ReportStationNowPlayingParams = zod.object({
+  slug: zod.coerce.string().min(1),
+});
+
+export const IcecastReport = zod.object({
+  rawArtist: zod.string().optional(),
+  rawTitle: zod.string().min(1),
+});
+
+export const IcecastReportResult = zod.object({
+  logged: zod.boolean(),
+  mbid: zod.string().nullable(),
+  confidence: zod.enum(["recording_id", "isrc", "text", "unresolved"]).optional(),
+});
+
 export const GetStationNowPlayingResponse = zod.object({
   station: zod
     .object({

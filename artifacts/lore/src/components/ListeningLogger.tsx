@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   useGetStationNowPlaying,
   getGetStationNowPlayingQueryKey,
@@ -15,6 +16,7 @@ import { useIcecastFallback } from "../hooks/useIcecastFallback";
  */
 export function ListeningLogger() {
   const { radio, ride } = usePlayer();
+  const queryClient = useQueryClient();
 
   // --- Live radio: log the station's now-playing while the stream sounds ---
   const station = radio.station;
@@ -99,6 +101,42 @@ export function ListeningLogger() {
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [icecastKey, stationSlug, stationName]);
+
+  // Resolve the client-discovered raw track through the same
+  // MusicBrainz/Spotify pipeline as a server-polled spin. Fires once per
+  // distinct discovered track (icecastKey), then invalidates the
+  // now-playing query so the resolved recording replaces the raw text.
+  const reportIcecastNowPlaying = useMutation({
+    mutationFn: async (vars: { slug: string; rawArtist: string; rawTitle: string }) => {
+      const res = await fetch(`/api/stations/${vars.slug}/report-now-playing`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rawArtist: vars.rawArtist, rawTitle: vars.rawTitle }),
+      });
+      if (!res.ok) throw new Error(`report-now-playing failed: ${res.status}`);
+      return res.json() as Promise<{ logged: boolean; mbid: string | null }>;
+    },
+    onSuccess: (result, vars) => {
+      if (result.logged) {
+        queryClient.invalidateQueries({
+          queryKey: getGetStationNowPlayingQueryKey(vars.slug),
+        });
+      }
+    },
+  });
+  const { mutate: reportIcecast } = reportIcecastNowPlaying;
+
+  useEffect(() => {
+    if (!icecastKey || !stationSlug) return;
+    if (!icecastNp) return;
+    if (!icecastNp.rawTitle) return;
+    reportIcecast({
+      slug: stationSlug,
+      rawArtist: icecastNp.rawArtist,
+      rawTitle: icecastNp.rawTitle,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [icecastKey, stationSlug]);
 
   // --- Rides: log each track the moment it actually starts sounding --------
   const cur = ride.current;
