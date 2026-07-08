@@ -187,11 +187,25 @@ export function StationList({
                       : np.show.name}
                   </p>
                 ) : (
-                  <p className="mt-0.5 flex items-center gap-1.5 truncate font-mono text-xs text-muted-foreground">
-                    <Radio className="h-3 w-3" />
-                    {[station.org, station.country].filter(Boolean).join(" · ") ||
-                      "Independent"}
-                  </p>
+                  <>
+                    <p className="mt-0.5 flex items-center gap-1.5 truncate font-mono text-xs text-muted-foreground">
+                      <Radio className="h-3 w-3" />
+                      {[station.org, station.country].filter(Boolean).join(" · ") ||
+                        "Independent"}
+                    </p>
+                    {station.tags && station.tags.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {station.tags.slice(0, 3).map((tag) => (
+                          <span
+                            key={tag}
+                            className="inline-flex items-center rounded-full border border-border bg-background/40 px-2 py-0.5 font-mono text-[10px] text-muted-foreground/70 whitespace-nowrap"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
                 {/* Show attribution below track line only when both are present */}
                 {np?.show && trackLine && (

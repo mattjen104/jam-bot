@@ -29,4 +29,6 @@ export interface Station {
   /** @nullable */
   logoUrl?: string | null;
   attribution: boolean;
+  /** @nullable */
+  tags?: string[] | null;
 }

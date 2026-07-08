@@ -17,6 +17,7 @@ export function toStation(s: Station) {
     donateUrl: s.donateUrl,
     logoUrl: s.logoUrl,
     attribution: s.attribution,
+    tags: Array.isArray(s.tags) ? (s.tags as string[]) : null,
   };
 }
 
