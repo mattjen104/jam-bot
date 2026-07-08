@@ -912,8 +912,16 @@ export const userSourceAffinityTable = pgTable(
     sourceType: text("source_type").notNull(),
     /** Total distinct MBIDs in user's library that appear in this source's spins/picks. */
     overlapCount: integer("overlap_count").notNull().default(0),
-    /** Overlap restricted to library items with provenance.kind="keep". */
+    /** Overlap restricted to library items with provenance.kind IN ('keep','ride'). */
     keepOverlapCount: integer("keep_overlap_count").notNull().default(0),
+    /**
+     * For stations: distinct pickers whose picks share MBIDs with both the
+     * user's library and this station's spin history.
+     * For blog pickers: distinct other pickers whose picks share MBIDs with
+     * the user's library AND this picker's picks (co-taste proxy until a
+     * follow graph is available).
+     */
+    coPickerCount: integer("co_picker_count").notNull().default(0),
     /**
      * Up to 10 artist display names from the overlapping recordings — for the
      * overlap-proof tooltip. Null until the first compute run.

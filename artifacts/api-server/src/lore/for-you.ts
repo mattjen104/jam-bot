@@ -129,24 +129,25 @@ export async function computeUserSourceAffinity(
     .from(libraryItemsTable)
     .where(eq(libraryItemsTable.userId, userId));
 
-  const userKeepMbids = db
+  // Tier-2: in-Lore behavioral items (kept or ridden tracks).
+  const userBehaviorMbids = db
     .select({ mbid: libraryItemsTable.mbid })
     .from(libraryItemsTable)
     .where(
       and(
         eq(libraryItemsTable.userId, userId),
-        sql`${libraryItemsTable.provenance}->>'kind' = 'keep'`,
+        sql`${libraryItemsTable.provenance}->>'kind' IN ('keep', 'ride')`,
       ),
     );
 
   if (sourceType === "station") {
-    // --- stations ---
+    // --- stations: overlap + behavior overlap ---
     const rows = await db
       .select({
         stationId: stationsTable.id,
         overlapCount: sql<number>`count(distinct ${spinsTable.mbid})::int`,
         keepOverlapCount:
-          sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${spinsTable.mbid} in (${userKeepMbids}))::int`,
+          sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${spinsTable.mbid} in (${userBehaviorMbids}))::int`,
         overlappingArtists:
           sql<string[]>`(array_agg(distinct ${recordingsTable.artist} order by ${recordingsTable.artist}))[1:${ARTIST_SAMPLE_SIZE}]`,
       })
@@ -161,6 +162,26 @@ export async function computeUserSourceAffinity(
         ),
       )
       .groupBy(stationsTable.id);
+
+    // --- Tier-3 precompute: co-picker count per station ---
+    // For each station: count distinct pickers whose picks share MBIDs with
+    // both the user's library AND this station's spin history.
+    const tier3Rows = await db.execute<{
+      station_id: number;
+      co_picker_count: number;
+    }>(sql`
+      SELECT sp.station_id,
+             count(distinct p.picker_id)::int AS co_picker_count
+      FROM   library_items li
+      JOIN   picks p   ON p.mbid  = li.mbid
+      JOIN   spins  sp ON sp.mbid = li.mbid
+      WHERE  li.user_id = ${userId}
+        AND  sp.station_id IS NOT NULL
+      GROUP  BY sp.station_id
+    `);
+    const tier3Map = new Map<number, number>(
+      tier3Rows.rows.map((r) => [r.station_id, r.co_picker_count]),
+    );
 
     await db.transaction(async (tx) => {
       await tx
@@ -179,19 +200,20 @@ export async function computeUserSourceAffinity(
           sourceType: "station" as const,
           overlapCount: r.overlapCount,
           keepOverlapCount: r.keepOverlapCount,
+          coPickerCount: tier3Map.get(r.stationId) ?? 0,
           overlappingArtists: r.overlappingArtists ?? [],
           updatedAt: new Date(),
         })),
       );
     });
   } else {
-    // --- blog pickers ---
+    // --- blog pickers: overlap + behavior overlap ---
     const rows = await db
       .select({
         pickerId: pickersTable.id,
         overlapCount: sql<number>`count(distinct ${picksTable.mbid})::int`,
         keepOverlapCount:
-          sql<number>`count(distinct ${picksTable.mbid}) filter (where ${picksTable.mbid} in (${userKeepMbids}))::int`,
+          sql<number>`count(distinct ${picksTable.mbid}) filter (where ${picksTable.mbid} in (${userBehaviorMbids}))::int`,
         overlappingArtists:
           sql<string[]>`(array_agg(distinct ${recordingsTable.artist} order by ${recordingsTable.artist}))[1:${ARTIST_SAMPLE_SIZE}]`,
       })
@@ -207,6 +229,27 @@ export async function computeUserSourceAffinity(
         ),
       )
       .groupBy(pickersTable.id);
+
+    // --- Tier-3 precompute: co-picker count per blog ---
+    // For each blog picker B: count distinct other pickers P whose picks share
+    // MBIDs with both the user's library and B's own picks. Co-taste proxy
+    // until a follow graph is available (follow-graph feature planned).
+    const tier3Rows = await db.execute<{
+      picker_id: number;
+      co_picker_count: number;
+    }>(sql`
+      SELECT pb.picker_id,
+             count(distinct p.picker_id)::int AS co_picker_count
+      FROM   library_items li
+      JOIN   picks p  ON p.mbid  = li.mbid
+      JOIN   picks pb ON pb.mbid = li.mbid
+             AND pb.picker_id != p.picker_id
+      WHERE  li.user_id = ${userId}
+      GROUP  BY pb.picker_id
+    `);
+    const tier3Map = new Map<number, number>(
+      tier3Rows.rows.map((r) => [r.picker_id, r.co_picker_count]),
+    );
 
     await db.transaction(async (tx) => {
       await tx
@@ -225,6 +268,7 @@ export async function computeUserSourceAffinity(
           sourceType: "picker" as const,
           overlapCount: r.overlapCount,
           keepOverlapCount: r.keepOverlapCount,
+          coPickerCount: tier3Map.get(r.pickerId) ?? 0,
           overlappingArtists: r.overlappingArtists ?? [],
           updatedAt: new Date(),
         })),
@@ -288,7 +332,10 @@ export function detectThinGenres(
   }
   const thin: ThinGenre[] = [];
   for (const [genre, coveredCount] of genreMap) {
-    if (coveredCount < MIN_SOURCES_PER_GENRE) {
+    // Only enqueue discovery for genres where the user has SOME overlap but
+    // not enough sources. Genres with zero overlap are irrelevant for
+    // personalized discovery and must not trigger background jobs.
+    if (coveredCount > 0 && coveredCount < MIN_SOURCES_PER_GENRE) {
       thin.push({ genre, sourceType, coveredCount });
     }
   }
@@ -324,6 +371,7 @@ export async function getForYouStations(
       sourceId: userSourceAffinityTable.sourceId,
       overlapCount: userSourceAffinityTable.overlapCount,
       keepOverlapCount: userSourceAffinityTable.keepOverlapCount,
+      coPickerCount: userSourceAffinityTable.coPickerCount,
       overlappingArtists: userSourceAffinityTable.overlappingArtists,
     })
     .from(userSourceAffinityTable)
@@ -340,29 +388,10 @@ export async function getForYouStations(
       {
         overlapCount: r.overlapCount,
         keepOverlapCount: r.keepOverlapCount,
+        coPickerCount: r.coPickerCount,
         overlappingArtists: r.overlappingArtists ?? [],
       },
     ]),
-  );
-
-  // --- Tier-3: co-picker affinity ---
-  // Count distinct pickers whose picks overlap with the user's library AND
-  // the station's spin history. Proxy for "how many of the user's implicit
-  // taste-aligned pickers also champion this station's catalog".
-  const tier3StationRows = await db.execute<{
-    station_id: number;
-    co_picker_count: number;
-  }>(sql`
-    SELECT sp.station_id, count(distinct p.picker_id)::int as co_picker_count
-    FROM library_items li
-    JOIN picks p   ON p.mbid  = li.mbid
-    JOIN spins  sp ON sp.mbid = li.mbid
-    WHERE li.user_id = ${user.id}
-      AND sp.station_id IS NOT NULL
-    GROUP BY sp.station_id
-  `);
-  const tier3StationMap = new Map<number, number>(
-    tier3StationRows.rows.map((r) => [r.station_id, r.co_picker_count]),
   );
 
   // --- Fetch all active stations (or filtered by genre) ---
@@ -396,7 +425,7 @@ export async function getForYouStations(
       const aff = affinityMap.get(s.id);
       const tier1 = aff?.overlapCount ?? 0;
       const tier2 = aff?.keepOverlapCount ?? 0;
-      const tier3 = tier3StationMap.get(s.id) ?? 0;
+      const tier3 = aff?.coPickerCount ?? 0;
       const tier4 = s.clickcount + s.votes;
       return {
         id: s.id,
@@ -546,6 +575,7 @@ export async function getForYouBlogs(
       sourceId: userSourceAffinityTable.sourceId,
       overlapCount: userSourceAffinityTable.overlapCount,
       keepOverlapCount: userSourceAffinityTable.keepOverlapCount,
+      coPickerCount: userSourceAffinityTable.coPickerCount,
       overlappingArtists: userSourceAffinityTable.overlappingArtists,
     })
     .from(userSourceAffinityTable)
@@ -562,28 +592,10 @@ export async function getForYouBlogs(
       {
         overlapCount: r.overlapCount,
         keepOverlapCount: r.keepOverlapCount,
+        coPickerCount: r.coPickerCount,
         overlappingArtists: r.overlappingArtists ?? [],
       },
     ]),
-  );
-
-  // --- Tier-3: co-picker affinity for blogs ---
-  // For each blog picker B, count distinct other pickers whose picks share
-  // MBIDs with the user's library AND with B's own picks. Proxy for
-  // "how many taste-aligned curators also champion this blog's catalog".
-  const tier3BlogRows = await db.execute<{
-    picker_id: number;
-    co_picker_count: number;
-  }>(sql`
-    SELECT pb.picker_id, count(distinct p.picker_id)::int as co_picker_count
-    FROM library_items li
-    JOIN picks p  ON p.mbid  = li.mbid
-    JOIN picks pb ON pb.mbid = li.mbid AND pb.picker_id != p.picker_id
-    WHERE li.user_id = ${user.id}
-    GROUP BY pb.picker_id
-  `);
-  const tier3BlogMap = new Map<number, number>(
-    tier3BlogRows.rows.map((r) => [r.picker_id, r.co_picker_count]),
   );
 
   // --- Blog pickers + their pick counts for tier 4 ---
@@ -620,7 +632,7 @@ export async function getForYouBlogs(
       const aff = affinityMap.get(p.id);
       const tier1 = aff?.overlapCount ?? 0;
       const tier2 = aff?.keepOverlapCount ?? 0;
-      const tier3 = tier3BlogMap.get(p.id) ?? 0;
+      const tier3 = aff?.coPickerCount ?? 0;
       const tier4 = p.pickCount;
       return {
         id: p.id,
