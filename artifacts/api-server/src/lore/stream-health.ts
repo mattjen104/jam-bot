@@ -28,6 +28,7 @@ const WARMUP_MS = 15 * 60 * 1000; // 15min after boot
 
 let started = false;
 let timer: NodeJS.Timeout | null = null;
+let warmup: NodeJS.Timeout | null = null;
 
 function intervalMs(): number {
   const raw = process.env["STREAM_HEALTH_INTERVAL_MS"];
@@ -89,12 +90,13 @@ export async function probeStream(
 
   // ---- Step 2: GET fallback -----------------------------------------------
   // We abort immediately after receiving the response headers to avoid
-  // pulling the full audio stream. The AbortError we trigger is expected.
+  // pulling the full audio stream. A timeout signal is composed with our
+  // own controller so the probe is always bounded even if headers never arrive.
   const controller = new AbortController();
   try {
     const res = await fetchFn(url, {
       method: "GET",
-      signal: controller.signal,
+      signal: AbortSignal.any([controller.signal, AbortSignal.timeout(timeoutMs)]),
       headers: { "Icy-MetaData": "0", Range: "bytes=0-4095" },
     });
     // Abort body download — we only need the headers.
@@ -153,8 +155,10 @@ export async function applyHealthResult(
   if (result.alive) {
     const newBitrate = result.bitrateKbps ?? station.bitrate;
     const newCodec = result.codec ?? station.codec;
+    // Only promote when bitrate is known AND meets the threshold.
+    // Unknown bitrate (null) → keep inactive until a future probe can confirm quality.
     const meetsQuality =
-      !newBitrate || newBitrate >= MIN_BITRATE_KBPS;
+      newBitrate !== null && newBitrate >= MIN_BITRATE_KBPS;
 
     const shouldPromote =
       !station.active &&
@@ -258,7 +262,8 @@ export function startStreamHealthWorker(): void {
   if (started) return;
   started = true;
 
-  setTimeout(() => {
+  warmup = setTimeout(() => {
+    warmup = null;
     void runHealthSweep().catch((err) =>
       console.error("[stream-health] sweep failed", err),
     );
@@ -272,6 +277,10 @@ export function startStreamHealthWorker(): void {
 
 /** Stop the worker (for tests / graceful shutdown). */
 export function stopStreamHealthWorker(): void {
+  if (warmup) {
+    clearTimeout(warmup);
+    warmup = null;
+  }
   if (timer) {
     clearInterval(timer);
     timer = null;

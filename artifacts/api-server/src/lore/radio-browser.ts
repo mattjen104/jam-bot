@@ -234,6 +234,7 @@ export function detectFormat(
 
 let started = false;
 let timer: NodeJS.Timeout | null = null;
+let warmup: NodeJS.Timeout | null = null;
 
 const DEFAULT_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12h
 const WARMUP_MS = 10 * 60 * 1000; // 10min after boot
@@ -266,7 +267,8 @@ export function startRadioBrowserWorker(): void {
   if (started) return;
   started = true;
 
-  const delay = setTimeout(() => {
+  warmup = setTimeout(() => {
+    warmup = null;
     void runDiscovery().catch((err) =>
       console.error("[radio-browser] discovery failed", err),
     );
@@ -276,14 +278,14 @@ export function startRadioBrowserWorker(): void {
       );
     }, intervalMs());
   }, WARMUP_MS);
-
-  if (timer === null) {
-    void delay;
-  }
 }
 
 /** Stop the worker (for tests / graceful shutdown). */
 export function stopRadioBrowserWorker(): void {
+  if (warmup) {
+    clearTimeout(warmup);
+    warmup = null;
+  }
   if (timer) {
     clearInterval(timer);
     timer = null;
