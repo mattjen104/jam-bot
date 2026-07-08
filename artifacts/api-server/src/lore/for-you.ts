@@ -163,26 +163,9 @@ export async function computeUserSourceAffinity(
       )
       .groupBy(stationsTable.id);
 
-    // --- Tier-3 precompute: co-picker count per station ---
-    // For each station: count distinct pickers whose picks share MBIDs with
-    // both the user's library AND this station's spin history.
-    const tier3Rows = await db.execute<{
-      station_id: number;
-      co_picker_count: number;
-    }>(sql`
-      SELECT sp.station_id,
-             count(distinct p.picker_id)::int AS co_picker_count
-      FROM   library_items li
-      JOIN   picks p   ON p.mbid  = li.mbid
-      JOIN   spins  sp ON sp.mbid = li.mbid
-      WHERE  li.user_id = ${userId}
-        AND  sp.station_id IS NOT NULL
-      GROUP  BY sp.station_id
-    `);
-    const tier3Map = new Map<number, number>(
-      tier3Rows.rows.map((r) => [r.station_id, r.co_picker_count]),
-    );
-
+    // Tier-3 (followed-picker affinity) requires a follow graph that does not
+    // exist yet (planned in a follow-up task). Per spec, coPickerCount is 0
+    // until the follow graph is available; the column is reserved for that use.
     await db.transaction(async (tx) => {
       await tx
         .delete(userSourceAffinityTable)
@@ -200,7 +183,7 @@ export async function computeUserSourceAffinity(
           sourceType: "station" as const,
           overlapCount: r.overlapCount,
           keepOverlapCount: r.keepOverlapCount,
-          coPickerCount: tier3Map.get(r.stationId) ?? 0,
+          coPickerCount: 0, // follow graph not yet available
           overlappingArtists: r.overlappingArtists ?? [],
           updatedAt: new Date(),
         })),
@@ -230,27 +213,9 @@ export async function computeUserSourceAffinity(
       )
       .groupBy(pickersTable.id);
 
-    // --- Tier-3 precompute: co-picker count per blog ---
-    // For each blog picker B: count distinct other pickers P whose picks share
-    // MBIDs with both the user's library and B's own picks. Co-taste proxy
-    // until a follow graph is available (follow-graph feature planned).
-    const tier3Rows = await db.execute<{
-      picker_id: number;
-      co_picker_count: number;
-    }>(sql`
-      SELECT pb.picker_id,
-             count(distinct p.picker_id)::int AS co_picker_count
-      FROM   library_items li
-      JOIN   picks p  ON p.mbid  = li.mbid
-      JOIN   picks pb ON pb.mbid = li.mbid
-             AND pb.picker_id != p.picker_id
-      WHERE  li.user_id = ${userId}
-      GROUP  BY pb.picker_id
-    `);
-    const tier3Map = new Map<number, number>(
-      tier3Rows.rows.map((r) => [r.picker_id, r.co_picker_count]),
-    );
-
+    // Tier-3 (followed-picker affinity) requires a follow graph that does not
+    // exist yet (planned in a follow-up task). Per spec, coPickerCount is 0
+    // until the follow graph is available; the column is reserved for that use.
     await db.transaction(async (tx) => {
       await tx
         .delete(userSourceAffinityTable)
@@ -268,7 +233,7 @@ export async function computeUserSourceAffinity(
           sourceType: "picker" as const,
           overlapCount: r.overlapCount,
           keepOverlapCount: r.keepOverlapCount,
-          coPickerCount: tier3Map.get(r.pickerId) ?? 0,
+          coPickerCount: 0, // follow graph not yet available
           overlappingArtists: r.overlappingArtists ?? [],
           updatedAt: new Date(),
         })),

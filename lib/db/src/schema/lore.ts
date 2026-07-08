@@ -915,11 +915,9 @@ export const userSourceAffinityTable = pgTable(
     /** Overlap restricted to library items with provenance.kind IN ('keep','ride'). */
     keepOverlapCount: integer("keep_overlap_count").notNull().default(0),
     /**
-     * For stations: distinct pickers whose picks share MBIDs with both the
-     * user's library and this station's spin history.
-     * For blog pickers: distinct other pickers whose picks share MBIDs with
-     * the user's library AND this picker's picks (co-taste proxy until a
-     * follow graph is available).
+     * Tier-3 signal: followed-picker affinity — distinct pickers that the user
+     * follows AND whose picks share MBIDs with this source. Reserved for when
+     * the follow graph is available (follow-up task); stored as 0 until then.
      */
     coPickerCount: integer("co_picker_count").notNull().default(0),
     /**

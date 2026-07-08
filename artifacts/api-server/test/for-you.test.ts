@@ -316,6 +316,19 @@ describe("computeUserSourceAffinity + getForYouStations", () => {
     };
     await computeUserSourceAffinity(userId, "station");
 
+    // Tier-3 (followed-picker affinity) must be 0 until a follow graph lands.
+    // Verify the precomputed column is always 0 at this stage.
+    const affinityCheck = await db.execute<{
+      co_picker_count: number;
+    }>(sql`
+      SELECT co_picker_count
+      FROM user_source_affinity
+      WHERE user_id = ${userId} AND source_type = 'station'
+    `);
+    for (const row of affinityCheck.rows) {
+      expect(row.co_picker_count).toBe(0);
+    }
+
     const result = await getForYouStations(loreUser);
     expect(result.cold_start).toBe(false);
 
