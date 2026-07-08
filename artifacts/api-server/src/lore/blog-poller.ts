@@ -1,7 +1,7 @@
 import { db, pickersTable, type PickerHealth } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 import { ingestBlogFeed } from "./blog.js";
-import { extractOutboundLinks, queueCrossRefDiscovery } from "./blog-crossref.js";
+import { queueCrossRefDiscovery } from "./blog-crossref.js";
 
 /**
  * Blog-feed poller — the blog analogue of the station poller. Blogs publish a
@@ -15,10 +15,13 @@ import { extractOutboundLinks, queueCrossRefDiscovery } from "./blog-crossref.js
  * never stored), so re-polling only ever fills gaps.
  *
  * Health tracking:
- *   - On success: writes health.last_ok_at and resets consecutive_failures to 0.
- *   - On failure: increments health.consecutive_failures; after MAX_FAILURES
- *     sets active=false and logs the demotion. Recoveries (success after prior
- *     failures) are explicitly logged.
+ *   - `ingestBlogFeed` returns `success: false` when the feed fetch/HTTP fails
+ *     (the error is swallowed internally). The poller treats that as a failure.
+ *   - On failure: reads the CURRENT health from DB (atomic read-before-write),
+ *     increments consecutive_failures; after MAX_FAILURES sets active=false and
+ *     logs the demotion.
+ *   - On success: reads current health from DB, resets consecutive_failures to
+ *     0. Logs recoveries (first success after prior failures).
  */
 
 // Blogs move at human pace; poll each feed every 30 minutes.
@@ -28,7 +31,7 @@ const STAGGER_MS = 15_000;
 // Let boot (seed + station backfill) settle before the first blog fetch.
 const WARMUP_MS = 60_000;
 // Max consecutive failures before a picker is auto-demoted to active=false.
-const MAX_FAILURES = 5;
+export const MAX_FAILURES = 5;
 
 let started = false;
 const timers: NodeJS.Timeout[] = [];
@@ -39,7 +42,6 @@ interface BlogFeed {
   name: string;
   homeUrl: string | null;
   feedUrl: string;
-  health: PickerHealth | null;
 }
 
 /** Active blog pickers that carry a feed URL in their sourceRef. */
@@ -50,7 +52,6 @@ async function loadBlogFeeds(): Promise<BlogFeed[]> {
       name: pickersTable.name,
       homeUrl: pickersTable.homeUrl,
       sourceRef: pickersTable.sourceRef,
-      health: pickersTable.health,
     })
     .from(pickersTable)
     .where(
@@ -66,19 +67,35 @@ async function loadBlogFeeds(): Promise<BlogFeed[]> {
         name: r.name,
         homeUrl: r.homeUrl,
         feedUrl: feedUrl.trim(),
-        health: r.health ?? null,
       });
     }
   }
   return feeds;
 }
 
-/** Write a success health snapshot to the picker row. */
-async function writeHealthOk(pickerId: number, prevHealth: PickerHealth | null): Promise<void> {
-  const wasFailingBefore = (prevHealth?.consecutive_failures ?? 0) > 0;
-  const now = new Date().toISOString();
+/**
+ * Read the current health snapshot for a picker from the DB. Returned value is
+ * the single source of truth — never use a boot-time snapshot to accumulate
+ * consecutive_failures, or counts will reset to 0 on every restart.
+ */
+async function readCurrentHealth(pickerId: number): Promise<PickerHealth | null> {
+  const rows = await db
+    .select({ health: pickersTable.health })
+    .from(pickersTable)
+    .where(eq(pickersTable.id, pickerId))
+    .limit(1);
+  return rows[0]?.health ?? null;
+}
+
+/**
+ * Write a success health snapshot to the picker row.
+ * Reads current health from DB first to detect recovery from prior failures.
+ */
+export async function writeHealthOk(pickerId: number): Promise<void> {
+  const current = await readCurrentHealth(pickerId);
+  const wasFailingBefore = (current?.consecutive_failures ?? 0) > 0;
   const health: PickerHealth = {
-    last_ok_at: now,
+    last_ok_at: new Date().toISOString(),
     last_error: null,
     consecutive_failures: 0,
   };
@@ -87,23 +104,23 @@ async function writeHealthOk(pickerId: number, prevHealth: PickerHealth | null):
     .set({ health, updatedAt: new Date() })
     .where(eq(pickersTable.id, pickerId));
   if (wasFailingBefore) {
-    console.info(`[blog-poller] picker ${pickerId} recovered after prior failures`);
+    console.info(`[blog-poller] picker ${pickerId} recovered after ${current?.consecutive_failures} consecutive failures`);
   }
 }
 
 /**
- * Write a failure health snapshot. Returns true if the picker was demoted to
- * active=false (reached MAX_FAILURES).
+ * Write a failure health snapshot. Reads current health from DB first so that
+ * consecutive_failures accumulates correctly across restarts (not reset to 0
+ * every time the server boots).
+ *
+ * Returns true if the picker was demoted to active=false (reached MAX_FAILURES).
  */
-async function writeHealthFail(
-  pickerId: number,
-  errMsg: string,
-  prevHealth: PickerHealth | null,
-): Promise<boolean> {
-  const prev = prevHealth?.consecutive_failures ?? 0;
+export async function writeHealthFail(pickerId: number, errMsg: string): Promise<boolean> {
+  const current = await readCurrentHealth(pickerId);
+  const prev = current?.consecutive_failures ?? 0;
   const newFailures = prev + 1;
   const health: PickerHealth = {
-    last_ok_at: prevHealth?.last_ok_at ?? null,
+    last_ok_at: current?.last_ok_at ?? null,
     last_error: errMsg,
     consecutive_failures: newFailures,
   };
@@ -132,26 +149,32 @@ async function pollFeed(feed: BlogFeed): Promise<void> {
       name: feed.name,
       homeUrl: feed.homeUrl ?? undefined,
     });
+
+    if (!result.success) {
+      // ingestBlogFeed swallows the HTTP/network error and returns success:false.
+      // Treat this as a failure so health tracking demotes the picker correctly.
+      await writeHealthFail(feed.id, "feed fetch failed (no HTTP response)").catch((e) =>
+        console.error("[blog-poller] health write failed", feed.id, e),
+      );
+      return;
+    }
+
     if (result.logged > 0) {
       console.info(`[lore] blog ${feed.name} ingested ${result.logged} pick(s)`);
     }
-    await writeHealthOk(feed.id, feed.health).catch((err) =>
+    await writeHealthOk(feed.id).catch((err) =>
       console.error("[blog-poller] health write failed", feed.id, err),
     );
 
-    // Queue any new outbound domains from ingested posts for cross-ref discovery.
-    // We re-fetch the feed text here via result; since ingestBlogFeed doesn't
-    // return the raw HTML of posts, we queue the feed URL's domain's outbound
-    // links from the feed XML itself (links in items are outbound too).
+    // Queue any blog post page links for cross-ref discovery. The cross-ref
+    // module will fetch each post page, extract outbound links, and auto-discover
+    // new blog candidates from those links' domains.
     const sourceDomain = new URL(feed.feedUrl).hostname;
-    queueCrossRefDiscovery(
-      result.feedLinks ?? [],
-      sourceDomain,
-    );
+    queueCrossRefDiscovery(result.feedLinks ?? [], sourceDomain);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[lore] blog poll failed", feed.feedUrl, err);
-    await writeHealthFail(feed.id, msg, feed.health).catch((e) =>
+    await writeHealthFail(feed.id, msg).catch((e) =>
       console.error("[blog-poller] health write failed", feed.id, e),
     );
   }

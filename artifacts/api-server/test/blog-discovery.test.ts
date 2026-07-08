@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   discoverFeedUrl,
   extractFeedLinksFromHtml,
+  extractChannelTags,
 } from "../src/lore/blog.js";
 
 import {
@@ -13,6 +14,12 @@ import {
   extractDomain,
   resetCrossRefQueue,
 } from "../src/lore/blog-crossref.js";
+
+import {
+  writeHealthOk,
+  writeHealthFail,
+  MAX_FAILURES,
+} from "../src/lore/blog-poller.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -332,6 +339,51 @@ describe("extractOutboundLinks", () => {
 
   it("returns empty array for empty HTML", () => {
     expect(extractOutboundLinks("", BASE, "aquariumdrunkard.com")).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractChannelTags — pure: channel-level category extraction
+// ---------------------------------------------------------------------------
+
+describe("extractChannelTags", () => {
+  it("extracts channel-level <category> elements (RSS)", () => {
+    const xml = `<rss><channel>
+      <category>Metal</category>
+      <category>Heavy Rock</category>
+      <item><title>Post</title><link>http://x.com/p</link><category>Item-only</category></item>
+    </channel></rss>`;
+    const tags = extractChannelTags(xml);
+    expect(tags).toContain("metal");
+    expect(tags).toContain("heavy rock");
+    // item-level categories should be stripped before extraction
+    expect(tags).not.toContain("item-only");
+  });
+
+  it("lowercases all tag values", () => {
+    const xml = `<rss><channel><category>Post-Rock</category></channel></rss>`;
+    const tags = extractChannelTags(xml);
+    expect(tags).toEqual(["post-rock"]);
+  });
+
+  it("de-duplicates tags", () => {
+    const xml = `<rss><channel>
+      <category>Jazz</category>
+      <category>jazz</category>
+    </channel></rss>`;
+    const tags = extractChannelTags(xml);
+    expect(tags.filter((t) => t === "jazz")).toHaveLength(1);
+  });
+
+  it("returns empty array for feeds with no channel categories", () => {
+    const xml = `<rss><channel><title>No cats</title></channel></rss>`;
+    expect(extractChannelTags(xml)).toHaveLength(0);
+  });
+
+  it("caps results at 30 tags", () => {
+    const cats = Array.from({ length: 40 }, (_, i) => `<category>tag-${i}</category>`).join("");
+    const xml = `<rss><channel>${cats}</channel></rss>`;
+    expect(extractChannelTags(xml).length).toBeLessThanOrEqual(30);
   });
 });
 

@@ -1,3 +1,5 @@
+import { db, pickersTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import { upsertPicker, persistPick } from "./picks.js";
 
 /**
@@ -62,6 +64,27 @@ function toDate(v: string | undefined): Date | undefined {
   if (!v) return undefined;
   const d = new Date(v);
   return Number.isNaN(d.getTime()) ? undefined : d;
+}
+
+/**
+ * Pure: extract channel-level genre/category tags from an RSS or Atom feed.
+ * These appear as `<category>` children of `<channel>` or `<feed>`, distinct
+ * from the per-item categories. Values are lowercased and de-duped. Returns an
+ * empty array for feeds with no channel categories.
+ */
+export function extractChannelTags(xml: string): string[] {
+  // Strip item/entry blocks first so we don't pick up per-item categories.
+  const channelXml = xml
+    .replace(/<(item|entry)[\s>][\s\S]*?<\/\1>/gi, "")
+    .replace(/<(item|entry)\s*\/>/gi, "");
+  const tags: string[] = [];
+  const re = /<category[^>]*>([^<]+)<\/category>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(channelXml))) {
+    const v = decodeEntities(m[1]!).toLowerCase().trim();
+    if (v && !tags.includes(v)) tags.push(v);
+  }
+  return tags.slice(0, 30); // cap at 30 to keep tags column manageable
 }
 
 /**
@@ -297,6 +320,11 @@ export interface BlogIngestResult {
   items: number;
   matched: number;
   logged: number;
+  /**
+   * Whether the feed fetch succeeded. False means the network/HTTP request
+   * itself failed; the poller must treat this as a health failure.
+   */
+  success: boolean;
   /** Absolute URLs of every item link in the feed — used for cross-ref queueing. */
   feedLinks: string[];
 }
@@ -323,13 +351,15 @@ export async function ingestBlogFeed(args: {
   });
 
   let items: BlogItem[] = [];
+  let feedText = "";
   try {
     const res = await fetch(feedUrl, {
       headers: { Accept: "application/rss+xml, application/atom+xml, text/xml" },
       signal: AbortSignal.timeout(FEED_TIMEOUT_MS),
     });
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-    items = parseFeedItems(await res.text());
+    feedText = await res.text();
+    items = parseFeedItems(feedText);
   } catch (err) {
     console.error("[lore] blog feed fetch failed", feedUrl, err);
     return {
@@ -339,8 +369,22 @@ export async function ingestBlogFeed(args: {
       items: 0,
       matched: 0,
       logged: 0,
+      success: false,
       feedLinks: [],
     };
+  }
+
+  // Derive channel-level genre tags from the feed and persist them to the picker.
+  // This is best-effort: an empty tag list means the feed has no channel categories.
+  const channelTags = extractChannelTags(feedText);
+  if (channelTags.length > 0) {
+    await db
+      .update(pickersTable)
+      .set({ tags: channelTags, updatedAt: new Date() })
+      .where(eq(pickersTable.id, picker.id))
+      .catch((e) =>
+        console.error("[lore] blog: failed to write channel tags", feedUrl, e),
+      );
   }
 
   let matched = 0;
@@ -375,6 +419,7 @@ export async function ingestBlogFeed(args: {
     items: items.length,
     matched,
     logged,
+    success: true,
     // All item links from the feed — the poller queues these for cross-ref
     // discovery so outbound links from post pages can surface new blog candidates.
     feedLinks: items.map((i) => i.link).filter(Boolean),
