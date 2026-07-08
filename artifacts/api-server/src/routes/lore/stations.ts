@@ -30,6 +30,7 @@ import { h } from "../../middlewares/asyncHandler.js";
 import { toStation, toNowPlaying, toArchiveRecording, spinDayExpr } from "./shared.js";
 import { spinRunIdExpr } from "../../lore/runs.js";
 import { logSpinIfChanged } from "../../lore/resolve.js";
+import { fingerprintStream, fingerprintAvailable } from "../../lore/stream-fingerprint.js";
 
 const router: IRouter = Router();
 
@@ -41,6 +42,16 @@ const router: IRouter = Router();
 const reportNowPlayingLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 20,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+});
+
+// Tighter limit for ACR fingerprint: each call runs ffmpeg (~8s) + an
+// ACRCloud API call. 4 req/min per IP is plenty for a single listener and
+// prevents runaway cost from repeated/scripted calls.
+const fingerprintLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 4,
   standardHeaders: "draft-8",
   legacyHeaders: false,
 });
@@ -197,6 +208,71 @@ router.post("/stations/:slug/report-now-playing", reportNowPlayingLimiter, h(asy
       ...(latest?.confidence && latest.confidence !== "spotify"
         ? { confidence: latest.confidence }
         : {}),
+    }),
+  );
+}));
+
+// POST /api/stations/:slug/fingerprint
+// ACR absolute fallback: when neither a server poller nor Icecast metadata
+// can identify the playing track, the client asks the server to grab a short
+// clip from the station's own stream URL and fingerprint it via ACRCloud.
+//
+// The stream URL comes from the DB (not the client) — no SSRF risk. The clip
+// is captured by ffmpeg, sent as bytes to ACRCloud, and the match is fed into
+// logSpinIfChanged exactly like any other spin. Returns 503 when ACRCloud is
+// not configured, 404 when the station doesn't exist.
+router.post("/stations/:slug/fingerprint", fingerprintLimiter, h(async (req, res) => {
+  if (!fingerprintAvailable()) {
+    return res.status(503).json({ error: "ACR fingerprint is not configured" });
+  }
+
+  const parsedParams = ReportStationNowPlayingParams.safeParse(req.params);
+  if (!parsedParams.success) {
+    return res.status(404).json({ error: "Station not found" });
+  }
+
+  const [station] = await db
+    .select()
+    .from(stationsTable)
+    .where(eq(stationsTable.slug, parsedParams.data.slug))
+    .limit(1);
+  if (!station) {
+    return res.status(404).json({ error: "Station not found" });
+  }
+  if (!station.streamUrl) {
+    return res.status(422).json({ error: "Station has no stream URL" });
+  }
+
+  let match: Awaited<ReturnType<typeof fingerprintStream>>;
+  try {
+    match = await fingerprintStream(station.streamUrl);
+  } catch (err) {
+    console.error("[lore] fingerprint failed", station.slug, err);
+    return res.status(502).json({ error: "Fingerprint failed", detail: String(err) });
+  }
+
+  if (!match) {
+    return res.json(IcecastReportResult.parse({ logged: false, mbid: null }));
+  }
+
+  const logged = await logSpinIfChanged(station, {
+    rawArtist: match.artist,
+    rawTitle: match.title,
+    ...(match.isrc ? { isrc: match.isrc } : {}),
+  });
+
+  const [latest] = await db
+    .select({ mbid: spinsTable.mbid, confidence: spinsTable.confidence })
+    .from(spinsTable)
+    .where(eq(spinsTable.stationId, station.id))
+    .orderBy(desc(spinsTable.playedAt))
+    .limit(1);
+
+  return res.json(
+    IcecastReportResult.parse({
+      logged,
+      mbid: latest?.mbid ?? null,
+      ...(latest?.confidence ? { confidence: latest.confidence } : {}),
     }),
   );
 }));

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   useGetStationNowPlaying,
@@ -7,6 +7,13 @@ import {
 import { usePlayer } from "../player/PlayerProvider";
 import { appendJournal } from "../lib/local";
 import { useIcecastFallback } from "../hooks/useIcecastFallback";
+
+// How long to wait before attempting an ACR fingerprint when neither the
+// server poller nor Icecast metadata have identified the playing track.
+const ACR_INITIAL_DELAY_MS = 45_000;
+// How often to re-fingerprint (tracks are typically 3-5 min; 2 min catches
+// a new song without hammering ACRCloud or the rate limiter).
+const ACR_POLL_INTERVAL_MS = 2 * 60_000;
 
 /**
  * Invisible global recorder: while the listener is actually hearing something
@@ -137,6 +144,81 @@ export function ListeningLogger() {
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [icecastKey, stationSlug]);
+
+  // --- ACR absolute fallback: fingerprint via ACRCloud when Icecast silent ---
+  // When neither the server poller nor Icecast metadata have found a track
+  // after ACR_INITIAL_DELAY_MS, ask the server to grab a short audio clip
+  // from the station's stream URL and fingerprint it via ACRCloud. The server
+  // uses the DB stream URL (not client-supplied), so there's no SSRF risk.
+  // Re-polls every ACR_POLL_INTERVAL_MS while the station remains unidentified.
+  const needsAcr = listening && !np && !icecastNp;
+  const acrSlugRef = useRef<string | null>(null);
+  const acrTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const requestFingerprint = useMutation({
+    mutationFn: async (vars: { slug: string }) => {
+      const res = await fetch(`/api/stations/${vars.slug}/fingerprint`, {
+        method: "POST",
+      });
+      // 503 = ACR not configured; 429 = rate limited — swallow silently.
+      if (res.status === 503 || res.status === 429) return null;
+      if (!res.ok) throw new Error(`fingerprint failed: ${res.status}`);
+      return res.json() as Promise<{ logged: boolean; mbid: string | null }>;
+    },
+    onSuccess: (result, vars) => {
+      if (result?.logged) {
+        queryClient.invalidateQueries({
+          queryKey: getGetStationNowPlayingQueryKey(vars.slug),
+        });
+      }
+    },
+  });
+  const { mutate: fingerprint } = requestFingerprint;
+
+  useEffect(() => {
+    if (!needsAcr || !stationSlug) {
+      // Station changed, resolved, or stopped — cancel any pending ACR timer.
+      if (acrTimerRef.current) {
+        clearTimeout(acrTimerRef.current);
+        acrTimerRef.current = null;
+      }
+      acrSlugRef.current = null;
+      return;
+    }
+
+    // Station slug changed while still needing ACR — reset the timer so we
+    // don't fire the previous station's fingerprint for the new one.
+    if (acrSlugRef.current !== stationSlug) {
+      if (acrTimerRef.current) {
+        clearTimeout(acrTimerRef.current);
+        acrTimerRef.current = null;
+      }
+      acrSlugRef.current = stationSlug;
+    }
+
+    // Already have a timer running for this station — don't double-schedule.
+    if (acrTimerRef.current) return;
+
+    function scheduleNext(delayMs: number) {
+      acrTimerRef.current = setTimeout(() => {
+        acrTimerRef.current = null;
+        if (acrSlugRef.current !== stationSlug) return;
+        fingerprint({ slug: stationSlug! });
+        // Re-arm for the poll interval; the effect cleans up when no longer needed.
+        scheduleNext(ACR_POLL_INTERVAL_MS);
+      }, delayMs);
+    }
+
+    scheduleNext(ACR_INITIAL_DELAY_MS);
+
+    return () => {
+      if (acrTimerRef.current) {
+        clearTimeout(acrTimerRef.current);
+        acrTimerRef.current = null;
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needsAcr, stationSlug]);
 
   // --- Rides: log each track the moment it actually starts sounding --------
   const cur = ride.current;
