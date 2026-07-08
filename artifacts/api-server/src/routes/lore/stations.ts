@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { rateLimit } from "express-rate-limit";
 import {
   ListStationsResponse,
   ListStationsNowPlayingResponse,
@@ -31,6 +32,18 @@ import { spinRunIdExpr } from "../../lore/runs.js";
 import { logSpinIfChanged } from "../../lore/resolve.js";
 
 const router: IRouter = Router();
+
+// Rate limit for client-reported now-playing: this is the only write path on
+// an otherwise read-only public router, so it needs its own abuse guard.
+// 20 req/min per IP comfortably covers one browser polling several Icecast
+// fallback stations, while capping how much MusicBrainz/Spotify resolution
+// work — and spins-table writes — a single caller can force.
+const reportNowPlayingLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 20,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+});
 
 // GET /api/stations
 // Only active=true stations are returned — longtail candidates (active=false)
@@ -145,7 +158,7 @@ router.get("/stations/:slug/now-playing", h(async (req, res) => {
 // RadioBrowser/Icecast station the browser polls directly). Resolved through
 // the same MusicBrainz/Spotify pipeline as any server-polled spin via
 // logSpinIfChanged, so the result is indistinguishable from a normal spin.
-router.post("/stations/:slug/report-now-playing", h(async (req, res) => {
+router.post("/stations/:slug/report-now-playing", reportNowPlayingLimiter, h(async (req, res) => {
   const parsedParams = ReportStationNowPlayingParams.safeParse(req.params);
   if (!parsedParams.success) {
     return res.status(404).json({ error: "Station not found" });
@@ -165,7 +178,7 @@ router.post("/stations/:slug/report-now-playing", h(async (req, res) => {
     return res.status(404).json({ error: "Station not found" });
   }
 
-  const rawArtist = parsedBody.data.rawArtist?.trim() || "Unknown Artist";
+  const rawArtist = parsedBody.data.rawArtist?.trim() ?? "";
   const rawTitle = parsedBody.data.rawTitle.trim();
 
   const logged = await logSpinIfChanged(station, { rawArtist, rawTitle });
