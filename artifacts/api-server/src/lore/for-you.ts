@@ -70,7 +70,8 @@ export interface ForYouStationItem {
   tags: string[];
   clickcount: number;
   votes: number;
-  overlap: OverlapProof | null;
+  /** Present only when overlap was computed (non-cold-start, source has affinity). */
+  overlap?: OverlapProof;
   /** Ranking score for debug / transparency. */
   _tier1: number;
   _tier2: number;
@@ -85,7 +86,8 @@ export interface ForYouBlogItem {
   homeUrl: string | null;
   tags: string[];
   pickCount: number;
-  overlap: OverlapProof | null;
+  /** Present only when overlap was computed (non-cold-start, source has affinity). */
+  overlap?: OverlapProof;
   _tier1: number;
   _tier2: number;
   _tier3: number;
@@ -408,12 +410,14 @@ export async function getForYouStations(
         tags: s.tags ?? [],
         clickcount: s.clickcount,
         votes: s.votes,
-        overlap: aff
+        ...(aff
           ? {
-              overlapping_artists: aff.overlappingArtists,
-              overlap_count: aff.overlapCount,
+              overlap: {
+                overlapping_artists: aff.overlappingArtists,
+                overlap_count: aff.overlapCount,
+              },
             }
-          : null,
+          : {}),
         _tier1: tier1,
         _tier2: tier2,
         _tier3: tier3,
@@ -430,9 +434,8 @@ export async function getForYouStations(
       b._tier4 - a._tier4,
   );
 
-  items = items.slice(0, limit);
-
-  // --- Thin-genre detection: fire discovery jobs for underserved genres ---
+  // --- Thin-genre detection: run on FULL sorted set before limit-slice ---
+  // Detects under-covered genre poles across all candidates, not just top-N.
   const thin = detectThinGenres(items, "station");
   if (thin.length > 0) {
     void (async () => {
@@ -449,6 +452,8 @@ export async function getForYouStations(
       }
     })();
   }
+
+  items = items.slice(0, limit);
 
   // --- Group by genre pole, ordered by user's overlap signal ---
   const genre_poles = groupByGenre(items);
@@ -499,7 +504,6 @@ async function buildColdStartStations(
     tags: s.tags ?? [],
     clickcount: s.clickcount,
     votes: s.votes,
-    overlap: null,
     _tier1: 0,
     _tier2: 0,
     _tier3: 0,
@@ -625,12 +629,14 @@ export async function getForYouBlogs(
         homeUrl: p.homeUrl ?? null,
         tags: p.tags ?? [],
         pickCount: p.pickCount,
-        overlap: aff
+        ...(aff
           ? {
-              overlapping_artists: aff.overlappingArtists,
-              overlap_count: aff.overlapCount,
+              overlap: {
+                overlapping_artists: aff.overlappingArtists,
+                overlap_count: aff.overlapCount,
+              },
             }
-          : null,
+          : {}),
         _tier1: tier1,
         _tier2: tier2,
         _tier3: tier3,
@@ -647,9 +653,7 @@ export async function getForYouBlogs(
       b._tier4 - a._tier4,
   );
 
-  items = items.slice(0, limit);
-
-  // --- Thin-genre detection: fire cross-ref discovery for underserved genres ---
+  // --- Thin-genre detection: run on FULL sorted set before limit-slice ---
   const thin = detectThinGenres(items, "picker");
   if (thin.length > 0) {
     void (async () => {
@@ -677,6 +681,8 @@ export async function getForYouBlogs(
       }
     })();
   }
+
+  items = items.slice(0, limit);
 
   return { genre_poles: groupByGenre(items), cold_start: false };
 }
@@ -721,7 +727,6 @@ async function buildColdStartBlogs(
     homeUrl: p.homeUrl ?? null,
     tags: p.tags ?? [],
     pickCount: p.pickCount,
-    overlap: null,
     _tier1: 0,
     _tier2: 0,
     _tier3: 0,

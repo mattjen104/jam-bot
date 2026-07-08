@@ -5,7 +5,7 @@
  * when the DB is unavailable (same pattern as entry-db.test.ts).
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { sql, eq } from "drizzle-orm";
 import {
@@ -25,6 +25,24 @@ import {
   getForYouBlogs,
   MIN_SOURCES_PER_GENRE,
 } from "../src/lore/for-you.js";
+
+// Mock external HTTP/side-effect modules so tests are hermetic.
+vi.mock("../src/lore/radio-browser.js", async (importOriginal) => {
+  const orig =
+    await importOriginal<typeof import("../src/lore/radio-browser.js")>();
+  return {
+    ...orig,
+    fetchStationsByTag: vi.fn().mockResolvedValue([]),
+    filterStations: vi.fn().mockReturnValue([]),
+    upsertRadioBrowserStations: vi.fn().mockResolvedValue(0),
+  };
+});
+
+vi.mock("../src/lore/blog-crossref.js", async (importOriginal) => {
+  const orig =
+    await importOriginal<typeof import("../src/lore/blog-crossref.js")>();
+  return { ...orig, queueCrossRefDiscovery: vi.fn() };
+});
 
 // ---------------------------------------------------------------------------
 // Pure-logic unit tests (no DB)
@@ -194,9 +212,10 @@ describe("getForYouStations — cold start (no library)", () => {
 
     expect(result.cold_start).toBe(true);
     expect(result.prompt).toBeTruthy();
+    // Cold-start items must omit the overlap proof entirely (not null).
     for (const pole of result.genre_poles) {
       for (const item of pole.items) {
-        expect(item.overlap).toBeNull();
+        expect(item.overlap).toBeUndefined();
       }
     }
   });
@@ -217,9 +236,10 @@ describe("getForYouBlogs — cold start (no library)", () => {
 
     expect(result.cold_start).toBe(true);
     expect(result.prompt).toBeTruthy();
+    // Cold-start items must omit the overlap proof entirely (not null).
     for (const pole of result.genre_poles) {
       for (const item of pole.items) {
-        expect(item.overlap).toBeNull();
+        expect(item.overlap).toBeUndefined();
       }
     }
   });
@@ -471,5 +491,82 @@ describe("genre filter", () => {
         ).toBe(true);
       }
     }
+  });
+});
+
+describe("thin-genre enqueue (station discovery)", () => {
+  it("calls fetchStationsByTag for each genre pole below MIN_SOURCES_PER_GENRE coverage", async () => {
+    if (!dbAvailable) return;
+
+    const { fetchStationsByTag } = await import(
+      "../src/lore/radio-browser.js"
+    );
+    vi.mocked(fetchStationsByTag).mockClear();
+
+    // Unique genre tag unlikely to match any existing station
+    const rareGenre = `rare-genre-${run}`;
+    const recId = `test-fy-rec-thin-${run}`;
+
+    const userId = await insertTestUser(`test-fy-${run}-thin-enq`);
+
+    await db
+      .insert(recordingsTable)
+      .values({ mbid: recId, title: "Thin Track", artist: "Thin Artist" })
+      .onConflictDoNothing();
+
+    const [stRow] = await db
+      .insert(stationsTable)
+      .values({
+        slug: `thin-enq-st-${run}`,
+        name: "Thin Enqueue Station",
+        streamUrl: "http://thin-enq.test",
+        streamFormat: "mp3",
+        active: true,
+        tags: [rareGenre],
+        clickcount: 1,
+        votes: 0,
+      })
+      .returning({ id: stationsTable.id });
+    const stId = stRow!.id;
+
+    await db.execute(
+      sql`insert into spins (station_id, mbid, played_at) values (${stId}, ${recId}, now()) on conflict do nothing`,
+    );
+    await db
+      .insert(libraryItemsTable)
+      .values({
+        userId,
+        mbid: recId,
+        provenance: { kind: "import" },
+        addedAt: new Date(),
+      })
+      .onConflictDoNothing();
+
+    const loreUser = {
+      id: userId,
+      spotifyUserId: `test-fy-${run}-thin-enq`,
+      spotifyConnectionId: null,
+      createdAt: new Date(),
+    };
+
+    await getForYouStations(loreUser);
+
+    // Allow the non-blocking enqueue promise to settle
+    await new Promise<void>((r) => setTimeout(r, 150));
+
+    // The rare genre has only 1 source with overlap (<MIN_SOURCES_PER_GENRE=3)
+    // → thin-genre detection should fire fetchStationsByTag for it
+    expect(vi.mocked(fetchStationsByTag)).toHaveBeenCalledWith(rareGenre);
+
+    // Cleanup
+    await db
+      .delete(libraryItemsTable)
+      .where(eq(libraryItemsTable.userId, userId));
+    await db.execute(sql`delete from user_source_affinity where user_id = ${userId}`);
+    await db.execute(sql`delete from spins where station_id = ${stId}`);
+    await db.delete(stationsTable).where(eq(stationsTable.id, stId));
+    await db
+      .delete(recordingsTable)
+      .where(eq(recordingsTable.mbid, recId));
   });
 });

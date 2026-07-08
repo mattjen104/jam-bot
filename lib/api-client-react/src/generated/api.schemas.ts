@@ -1315,7 +1315,8 @@ export interface ForYouStationItem {
   logoUrl?: string | null;
   tags: string[];
   popularity: number;
-  overlap: ForYouOverlapProof | null;
+  /** Present only when overlap was computed (non-cold-start, source has affinity). */
+  overlap?: ForYouOverlapProof;
 }
 
 export interface ForYouBlogItem {
@@ -1324,7 +1325,8 @@ export interface ForYouBlogItem {
   homeUrl?: string | null;
   tags: string[];
   pick_count: number;
-  overlap: ForYouOverlapProof | null;
+  /** Present only when overlap was computed (non-cold-start, source has affinity). */
+  overlap?: ForYouOverlapProof;
 }
 
 export interface ForYouStationGenrePole {

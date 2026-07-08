@@ -2091,7 +2091,7 @@ const ForYouStationItem = zod.object({
   logoUrl: zod.string().nullish(),
   tags: zod.array(zod.string()),
   popularity: zod.number().int().nonnegative(),
-  overlap: ForYouOverlapProof.nullable(),
+  overlap: ForYouOverlapProof.optional(),
 });
 
 const ForYouBlogItem = zod.object({
@@ -2100,7 +2100,7 @@ const ForYouBlogItem = zod.object({
   homeUrl: zod.string().nullish(),
   tags: zod.array(zod.string()),
   pick_count: zod.number().int().nonnegative(),
-  overlap: ForYouOverlapProof.nullable(),
+  overlap: ForYouOverlapProof.optional(),
 });
 
 export const GetForYouStationsResponse = zod.object({
