@@ -20,6 +20,7 @@ import TasteMap from "@/pages/TasteMap";
 import AdminClaims from "@/pages/AdminClaims";
 import AdminSongExploder from "@/pages/AdminSongExploder";
 import AdminSelectors from "@/pages/AdminSelectors";
+import AdminRadioBrowser from "@/pages/AdminRadioBrowser";
 import { PlayerProvider } from "./player/PlayerProvider";
 import { PlayerDock } from "./components/PlayerDock";
 import { ListeningLogger } from "./components/ListeningLogger";
@@ -76,6 +77,7 @@ function Router() {
         <Route path="/admin" component={AdminClaims} />
         <Route path="/admin/song-exploder" component={AdminSongExploder} />
         <Route path="/admin/selectors" component={AdminSelectors} />
+        <Route path="/admin/radio-browser" component={AdminRadioBrowser} />
         {/* Legacy admin route */}
         <Route path="/admin/pickers">
           {() => <Redirect to="/admin/selectors" />}

@@ -123,6 +123,33 @@ export interface RadioBrowserStation {
 }
 
 /**
+ * Resolve a single Radio Browser station by UUID to its metadata.
+ * Returns null when the UUID isn't found or the API is unreachable. Never throws.
+ */
+export async function fetchRadioBrowserStation(
+  uuid: string,
+): Promise<RadioBrowserStation | null> {
+  try {
+    const res = await fetch(
+      `https://${RADIO_BROWSER_HOST}/json/stations/byuuid/${encodeURIComponent(uuid.trim())}`,
+      {
+        headers: {
+          Accept: "application/json",
+          "User-Agent": `Lore-Radio/1.0 (${process.env["MUSICBRAINZ_CONTACT"] ?? "contact@example.com"})`,
+        },
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      },
+    );
+    if (!res.ok) return null;
+    const body = await res.json();
+    if (!Array.isArray(body) || body.length === 0) return null;
+    return body[0] as RadioBrowserStation;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Fetch stations from radio-browser.info for a single tag.
  * Returns an empty array on any error (network, timeout, unexpected shape).
  */

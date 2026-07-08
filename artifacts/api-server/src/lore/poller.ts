@@ -39,6 +39,7 @@ const POLL_INTERVALS_MS: Record<string, number> = {
   radio_paradise: 60_000, // 1 min
   nts_live: 120_000, // 2 min — show-level, changes infrequently
   fip: 60_000, // 1 min — per-track metadata, songs ~3-5 min
+  radio_browser_icy: 30_000, // 30 s — ICY metadata is cheap to fetch
 };
 const DEFAULT_POLL_MS = 90_000;
 const STAGGER_MS = 4_000;
@@ -52,6 +53,19 @@ const MAX_CATCHUP = 200;
 
 let started = false;
 const timers: NodeJS.Timeout[] = [];
+
+/**
+ * Per-station interval/kickoff handles, keyed by station id.
+ * Populated by enrollStationPoller; cleared by unenrollStationPoller.
+ * Allows DELETE to immediately stop polling without waiting for a restart.
+ */
+const stationTimers = new Map<number, NodeJS.Timeout[]>();
+
+function trackStationTimer(stationId: number, handle: NodeJS.Timeout): void {
+  const list = stationTimers.get(stationId) ?? [];
+  list.push(handle);
+  stationTimers.set(stationId, list);
+}
 
 function intervalFor(source: string | null | undefined): number {
   return (source && POLL_INTERVALS_MS[source]) || DEFAULT_POLL_MS;
@@ -171,8 +185,12 @@ export async function startLorePoller(): Promise<void> {
       void pollStation(station);
       const interval = setInterval(() => void pollStation(station), period);
       timers.push(interval);
+      // Register in stationTimers so unenrollStationPoller can cancel
+      // boot-time loops, not just runtime-enrolled ones.
+      trackStationTimer(station.id, interval);
     }, i * STAGGER_MS);
     timers.push(kickoff);
+    trackStationTimer(station.id, kickoff);
   });
 }
 
@@ -181,4 +199,44 @@ export function stopLorePoller(): void {
   for (const t of timers) clearTimeout(t);
   timers.length = 0;
   started = false;
+}
+
+/**
+ * Register a newly enrolled station for live polling without restarting the
+ * whole poller. Fires an immediate first poll and then schedules the recurring
+ * interval at the source-appropriate cadence. Per-station timers are tracked
+ * so that unenrollStationPoller can cancel them immediately.
+ *
+ * Calling this twice for the same station adds a second interval — callers
+ * must ensure they call this once per enrollment (admin enroll endpoint does).
+ *
+ * Called by the admin enrollment endpoint immediately after inserting a new
+ * radio_browser_icy station row so it starts appearing in timelines right away.
+ */
+export function enrollStationPoller(station: Station): void {
+  if (!isPollable(station.nowPlayingSource)) return;
+  // Clear any existing timers for this station so re-enrollment (e.g. admin
+  // calling enroll twice for the same UUID) doesn't create duplicate loops.
+  unenrollStationPoller(station.id);
+  const period = intervalFor(station.nowPlayingSource);
+  const kickoff = setTimeout(() => {
+    void pollStation(station);
+    const interval = setInterval(() => void pollStation(station), period);
+    timers.push(interval);
+    trackStationTimer(station.id, interval);
+  }, 0);
+  timers.push(kickoff);
+  trackStationTimer(station.id, kickoff);
+}
+
+/**
+ * Cancel all active poll timers for a station, taking effect immediately.
+ * Called by the admin DELETE endpoint so removed stations stop being polled
+ * without waiting for a process restart.
+ */
+export function unenrollStationPoller(stationId: number): void {
+  const handles = stationTimers.get(stationId);
+  if (!handles) return;
+  for (const h of handles) clearTimeout(h);
+  stationTimers.delete(stationId);
 }

@@ -563,6 +563,160 @@ const fip: NowPlayingAdapter = async (config) => {
   return parseFipSteps(steps, nowSec);
 };
 
+// ---- Radio Browser ICY (now-playing, change-detection) ------------------
+
+import { fetchIcyMetadata, parseStreamTitle } from "./icy.js";
+import {
+  db as _icyDb,
+  stationsTable as _icyStationsTable,
+  radioBrowserStationsTable,
+} from "@workspace/db";
+import { eq as _icyEq } from "drizzle-orm";
+
+/**
+ * Pure: given a raw StreamTitle string, produce a NowPlayingRaw.
+ * Splits on ` - ` (artist left, title right). Title-only entries return
+ * rawArtist as the title so resolution degrades gracefully to text search.
+ */
+export function parseIcyNowPlaying(streamTitle: string): NowPlayingRaw | null {
+  const parsed = parseStreamTitle(streamTitle);
+  if (!parsed) return null;
+  const rawTitle = parsed.rawTitle;
+  const rawArtist = parsed.rawArtist ?? rawTitle;
+  return { rawArtist, rawTitle };
+}
+
+/**
+ * Deactivate a station in the canonical stations table when ICY polling
+ * cannot succeed (either icy_unsupported or error). This stops the main
+ * poller from counting it as a pollable station after a restart.
+ */
+async function deactivateIcyStation(stationId: number | null) {
+  if (stationId === null) return;
+  try {
+    await _icyDb
+      .update(_icyStationsTable)
+      .set({ active: false, nowPlayingSource: null, nowPlayingConfig: null, updatedAt: new Date() })
+      .where(_icyEq(_icyStationsTable.id, stationId));
+  } catch {
+    // Non-fatal — poller will retry on next tick and DB will converge.
+  }
+}
+
+/**
+ * RadioBrowserAdapter — now-playing adapter for ICY/Shoutcast streams.
+ *
+ * Config: `{ streamUrl, radioBrowserId: <radio_browser_stations.id> }`.
+ *
+ * Lifecycle:
+ *  - On every tick, reload the radio_browser_stations row so status changes
+ *    (e.g. by another admin action) take effect immediately.
+ *  - If `icyStatus` is "icy_unsupported" or "error", skip the fetch and
+ *    return null (polling is suspended until the station is re-enrolled).
+ *  - On transient network error, increment consecutiveErrors. After 3
+ *    failures, set icyStatus → "error" and deactivate the station.
+ *  - On icy_unsupported response, set icyStatus → "icy_unsupported" and
+ *    deactivate immediately.
+ *  - On success, reset consecutiveErrors and record lastStreamTitle.
+ */
+const radioBrowserIcy: NowPlayingAdapter = async (config) => {
+  const streamUrl = str(config.streamUrl);
+  const rbId =
+    typeof config.radioBrowserId === "number" ? config.radioBrowserId : null;
+
+  if (!streamUrl) return null;
+
+  // --- Reload DB row so suspension decisions are always fresh ---------------
+  let currentRow: { icyStatus: string; consecutiveErrors: number; stationId: number | null } | null = null;
+  if (rbId !== null) {
+    const [row] = await _icyDb
+      .select({
+        icyStatus: radioBrowserStationsTable.icyStatus,
+        consecutiveErrors: radioBrowserStationsTable.consecutiveErrors,
+        stationId: radioBrowserStationsTable.stationId,
+      })
+      .from(radioBrowserStationsTable)
+      .where(_icyEq(radioBrowserStationsTable.id, rbId))
+      .limit(1);
+    currentRow = row ?? null;
+  }
+
+  // --- Guard: row deleted (station removed while tick was in-flight) ---------
+  if (rbId !== null && currentRow === null) {
+    // The radio_browser_stations row was deleted (admin DELETE); abort quietly.
+    return null;
+  }
+
+  // --- Suspension gate (icy_unsupported only) --------------------------------
+  // Streams that do not honour Icy-MetaData are permanently unsupported; skip
+  // the fetch until re-enrolled. "error" (transient failures) stays pollable
+  // so the station auto-recovers once the stream becomes reachable again.
+  if (currentRow?.icyStatus === "icy_unsupported") {
+    return null;
+  }
+
+  // --- Fetch ----------------------------------------------------------------
+  const result = await fetchIcyMetadata(streamUrl);
+
+  if (!result.ok) {
+    if (result.kind === "icy_unsupported") {
+      // Permanent: the stream does not support ICY metadata at all.
+      if (rbId !== null) {
+        await _icyDb
+          .update(radioBrowserStationsTable)
+          .set({ icyStatus: "icy_unsupported", updatedAt: new Date() })
+          .where(_icyEq(radioBrowserStationsTable.id, rbId))
+          .catch(() => {});
+        // Deactivate the canonical station so it won't be re-polled after restart.
+        await deactivateIcyStation(currentRow?.stationId ?? null);
+      }
+    } else {
+      // Transient: network/timeout failure — increment error counter.
+      if (rbId !== null) {
+        const prevErrors = currentRow?.consecutiveErrors ?? 0;
+        const newErrors = prevErrors + 1;
+        const hitLimit = newErrors >= 3;
+        await _icyDb
+          .update(radioBrowserStationsTable)
+          .set({
+            consecutiveErrors: newErrors,
+            ...(hitLimit ? { icyStatus: "error" } : {}),
+            updatedAt: new Date(),
+          })
+          .where(_icyEq(radioBrowserStationsTable.id, rbId))
+          .catch(() => {});
+        if (hitLimit) {
+          console.warn(`[lore] icy error threshold reached (${newErrors}): ${streamUrl}`);
+          // Note: we do NOT deactivate the canonical station on transient errors —
+          // the station will keep being polled each tick and will auto-recover on
+          // the next successful fetch.
+        } else {
+          console.warn(`[lore] icy transient error (${newErrors}/3): ${streamUrl}${result.message ? " — " + result.message : ""}`);
+        }
+      }
+    }
+    return null;
+  }
+
+  // --- Success — reset error state ------------------------------------------
+  if (rbId !== null) {
+    await _icyDb
+      .update(radioBrowserStationsTable)
+      .set({
+        icyStatus: "active",
+        consecutiveErrors: 0,
+        lastStreamTitle: result.streamTitle,
+        lastSuccessAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(_icyEq(radioBrowserStationsTable.id, rbId))
+      .catch(() => {});
+  }
+
+  if (!result.streamTitle) return null; // between tracks — no change to log
+  return parseIcyNowPlaying(result.streamTitle);
+};
+
 // ---- Registry -----------------------------------------------------------
 
 const NOW_PLAYING_ADAPTERS: Record<string, NowPlayingAdapter> = {
@@ -570,6 +724,7 @@ const NOW_PLAYING_ADAPTERS: Record<string, NowPlayingAdapter> = {
   station_page: stationPage,
   nts_live: ntsLive,
   fip,
+  radio_browser_icy: radioBrowserIcy,
 };
 
 const HISTORY_ADAPTERS: Record<string, HistoryAdapter> = {

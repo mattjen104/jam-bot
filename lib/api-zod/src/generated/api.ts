@@ -2124,3 +2124,41 @@ export const GetForYouBlogsResponse = zod.object({
   cold_start: zod.boolean(),
   prompt: zod.string().optional(),
 });
+
+export const EnrollRadioBrowserBody = zod.object({
+  uuid: zod
+    .string()
+    .min(1)
+    .describe("Radio Browser station UUID from radio-browser.info."),
+});
+
+export const EnrollRadioBrowserResponse = zod.object({
+  id: zod.number(),
+  radioBrowserUuid: zod.string(),
+  name: zod.string(),
+  streamUrl: zod.string(),
+  faviconUrl: zod.string().nullable(),
+  icyStatus: zod.string(),
+  enrolledAt: zod.string(),
+});
+
+export const ListRadioBrowserStationsResponse = zod.object({
+  stations: zod.array(
+    zod.object({
+      id: zod.number(),
+      radioBrowserUuid: zod.string(),
+      name: zod.string(),
+      streamUrl: zod.string(),
+      faviconUrl: zod.string().nullable(),
+      icyStatus: zod.string(),
+      lastStreamTitle: zod.string().nullable(),
+      lastSuccessAt: zod.string().nullable(),
+      consecutiveErrors: zod.number(),
+      enrolledAt: zod.string(),
+    }),
+  ),
+});
+
+export const DeleteRadioBrowserParams = zod.object({
+  id: zod.coerce.number(),
+});

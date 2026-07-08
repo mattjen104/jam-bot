@@ -34,6 +34,10 @@ import {
   PatchSongExploderEpisodeResponse,
   GetSongExploderChaptersParams,
   GetSongExploderChaptersResponse,
+  EnrollRadioBrowserBody,
+  EnrollRadioBrowserResponse,
+  ListRadioBrowserStationsResponse,
+  DeleteRadioBrowserParams,
 } from "@workspace/api-zod";
 import {
   db,
@@ -44,9 +48,12 @@ import {
   trackClaimsTable,
   geniusAnnotationDraftsTable,
   songExploderEpisodesTable,
+  radioBrowserStationsTable,
 } from "@workspace/db";
 import { eq, and, asc, desc, sql, count } from "drizzle-orm";
 import { ingestManualSpin } from "../../lore/resolve.js";
+import { fetchRadioBrowserStation, slugify as rbSlugify } from "../../lore/radio-browser.js";
+import { enrollStationPoller, unenrollStationPoller } from "../../lore/poller.js";
 import {
   upsertPicker,
   getPickerByHandle,
@@ -814,6 +821,198 @@ router.post("/admin/pickers/nts", h(async (req, res) => {
       homeUrl,
     }),
   );
+}));
+
+// ---- Radio Browser ICY enrollment --------------------------------------
+
+// POST /api/admin/radio-browser/enroll — enroll a Radio Browser station for
+// ICY metadata polling. Accepts a station UUID, fetches metadata from the
+// Radio Browser API, upserts a stations row and a radio_browser_stations row,
+// and immediately starts polling. Idempotent by UUID.
+router.post("/admin/radio-browser/enroll", h(async (req, res) => {
+  const parsed = EnrollRadioBrowserBody.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "uuid is required" });
+  }
+  const { uuid } = parsed.data;
+  const trimmedUuid = uuid.trim();
+
+  // Resolve UUID → station metadata via the Radio Browser API.
+  const rbStation = await fetchRadioBrowserStation(trimmedUuid);
+  if (!rbStation) {
+    return res.status(404).json({
+      error: `Station UUID "${trimmedUuid}" not found in Radio Browser directory`,
+    });
+  }
+
+  const streamUrl = (rbStation.url_resolved || rbStation.url || "").trim();
+  if (!streamUrl) {
+    return res.status(422).json({ error: "Station has no usable stream URL" });
+  }
+
+  const stationName = rbStation.name?.trim() || "Unknown Station";
+  // Use the full UUID as the slug (stable across name changes, collision-free).
+  // Format: rb-{uuid} e.g. rb-960a8447-6600-11e8-ae2d-52543be04c81
+  const slug = `rb-${trimmedUuid}`;
+  void rbSlugify; // imported for potential future use; slug is UUID-based
+
+  // Upsert the canonical stations row (change-detection now-playing source).
+  const [stationRow] = await db
+    .insert(stationsTable)
+    .values({
+      slug,
+      name: stationName,
+      streamUrl,
+      streamFormat: "mp3",
+      source: "radio_browser",
+      tier: "longtail",
+      active: true,
+      nowPlayingSource: "radio_browser_icy",
+      ...(rbStation.favicon?.trim() ? { logoUrl: rbStation.favicon.trim() } : {}),
+      ...(rbStation.country?.trim() ? { country: rbStation.country.trim() } : {}),
+      nowPlayingConfig: {},
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: stationsTable.slug,
+      set: {
+        nowPlayingSource: "radio_browser_icy",
+        active: true,
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
+
+  if (!stationRow) {
+    return res.status(500).json({ error: "Failed to upsert station row" });
+  }
+
+  // Upsert the radio_browser_stations enrollment row.
+  const [rbRow] = await db
+    .insert(radioBrowserStationsTable)
+    .values({
+      radioBrowserUuid: trimmedUuid,
+      streamUrl,
+      name: stationName,
+      faviconUrl: rbStation.favicon?.trim() || null,
+      stationId: stationRow.id,
+      icyStatus: "active",
+      consecutiveErrors: 0,
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: radioBrowserStationsTable.radioBrowserUuid,
+      set: {
+        streamUrl,
+        name: stationName,
+        faviconUrl: rbStation.favicon?.trim() || null,
+        stationId: stationRow.id,
+        icyStatus: "active",
+        consecutiveErrors: 0,
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
+
+  if (!rbRow) {
+    return res.status(500).json({ error: "Failed to upsert radio_browser_stations row" });
+  }
+
+  // Wire the station's nowPlayingConfig with the rbRow id so the adapter can
+  // update ICY status on every tick.
+  await db
+    .update(stationsTable)
+    .set({
+      nowPlayingConfig: { streamUrl, radioBrowserId: rbRow.id },
+    })
+    .where(eq(stationsTable.id, stationRow.id));
+
+  // Reload the fully-configured station row and kick off immediate polling.
+  const [freshStation] = await db
+    .select()
+    .from(stationsTable)
+    .where(eq(stationsTable.id, stationRow.id))
+    .limit(1);
+
+  if (freshStation) {
+    enrollStationPoller(freshStation);
+  }
+
+  console.info(
+    `[lore] radio-browser enrolled: uuid=${trimmedUuid} name="${stationName}" slug=${slug}`,
+  );
+
+  return res.status(201).json(
+    EnrollRadioBrowserResponse.parse({
+      id: rbRow.id,
+      radioBrowserUuid: rbRow.radioBrowserUuid,
+      name: rbRow.name,
+      streamUrl: rbRow.streamUrl,
+      faviconUrl: rbRow.faviconUrl ?? null,
+      icyStatus: rbRow.icyStatus,
+      enrolledAt: rbRow.enrolledAt.toISOString(),
+    }),
+  );
+}));
+
+// GET /api/admin/radio-browser/stations — list enrolled Radio Browser stations.
+router.get("/admin/radio-browser/stations", h(async (_req, res) => {
+  const rows = await db
+    .select()
+    .from(radioBrowserStationsTable)
+    .orderBy(asc(radioBrowserStationsTable.enrolledAt));
+
+  return res.json(
+    ListRadioBrowserStationsResponse.parse({
+      stations: rows.map((r) => ({
+        id: r.id,
+        radioBrowserUuid: r.radioBrowserUuid,
+        name: r.name,
+        streamUrl: r.streamUrl,
+        faviconUrl: r.faviconUrl ?? null,
+        icyStatus: r.icyStatus,
+        lastStreamTitle: r.lastStreamTitle ?? null,
+        lastSuccessAt: r.lastSuccessAt?.toISOString() ?? null,
+        consecutiveErrors: r.consecutiveErrors,
+        enrolledAt: r.enrolledAt.toISOString(),
+      })),
+    }),
+  );
+}));
+
+// DELETE /api/admin/radio-browser/stations/:id — remove an enrolled station.
+// Marks the linked station inactive and removes the enrollment row.
+router.delete("/admin/radio-browser/stations/:id", h(async (req, res) => {
+  const params = DeleteRadioBrowserParams.safeParse(req.params);
+  if (!params.success) {
+    return res.status(400).json({ error: "Invalid station id" });
+  }
+
+  const [rbRow] = await db
+    .select()
+    .from(radioBrowserStationsTable)
+    .where(eq(radioBrowserStationsTable.id, params.data.id))
+    .limit(1);
+
+  if (!rbRow) {
+    return res.status(404).json({ error: "Station not found" });
+  }
+
+  // Cancel the live poll interval immediately so the station stops being polled
+  // without waiting for a process restart.
+  if (rbRow.stationId !== null) {
+    unenrollStationPoller(rbRow.stationId);
+    await db
+      .update(stationsTable)
+      .set({ active: false, nowPlayingSource: null, nowPlayingConfig: null, updatedAt: new Date() })
+      .where(eq(stationsTable.id, rbRow.stationId));
+  }
+
+  await db
+    .delete(radioBrowserStationsTable)
+    .where(eq(radioBrowserStationsTable.id, params.data.id));
+
+  return res.status(204).send();
 }));
 
 // POST /api/admin/rym-lists — admin-only RateYourMusic link-out picker.

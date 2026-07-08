@@ -941,3 +941,55 @@ export const userSourceAffinityTable = pgTable(
 export type UserSourceAffinity = typeof userSourceAffinityTable.$inferSelect;
 export type InsertUserSourceAffinity =
   typeof userSourceAffinityTable.$inferInsert;
+
+/**
+ * ICY metadata enrollment for Radio Browser stations.
+ *
+ * An admin enrolls a Radio Browser UUID; the poller fetches the station's
+ * metadata from radio-browser.info, stores it here, and then polls the stream
+ * for `StreamTitle` changes on a configurable interval.
+ *
+ * `icyStatus` values:
+ *   "active"          — ICY metadata confirmed working; polling continues.
+ *   "icy_unsupported" — The server responded without `icy-metaint`; polling
+ *                       is suspended with a visible admin warning.
+ *   "error"           — Three consecutive network errors; polling suspended.
+ *                       Resets to "active" on the next successful fetch.
+ *
+ * `consecutiveErrors` counts failures since the last success and is reset to 0
+ * on any successful ICY fetch, regardless of whether StreamTitle changed.
+ */
+export const radioBrowserStationsTable = pgTable("radio_browser_stations", {
+  id: serial("id").primaryKey(),
+  /** Radio Browser UUID (from radio-browser.info). */
+  radioBrowserUuid: text("radio_browser_uuid").notNull().unique(),
+  /** CDN-proxied stream URL fetched from Radio Browser API. */
+  streamUrl: text("stream_url").notNull(),
+  /** Station display name from Radio Browser. */
+  name: text("name").notNull(),
+  /** Favicon URL from Radio Browser, when available. */
+  faviconUrl: text("favicon_url"),
+  /**
+   * FK to the stations table — the canonical station row for this station.
+   * Null until a curated station row is linked (enrollment may create one).
+   */
+  stationId: integer("station_id").references(() => stationsTable.id),
+  /** ICY metadata support status: "active" | "icy_unsupported" | "error". */
+  icyStatus: text("icy_status").notNull().default("active"),
+  /** The most recent raw StreamTitle value, for admin display. */
+  lastStreamTitle: text("last_stream_title"),
+  /** ISO timestamp of the most recent successful ICY fetch. */
+  lastSuccessAt: timestamp("last_success_at"),
+  /**
+   * Consecutive ICY network error count since the last success.
+   * When this reaches 3 the station is marked "error".
+   */
+  consecutiveErrors: integer("consecutive_errors").notNull().default(0),
+  enrolledAt: timestamp("enrolled_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type RadioBrowserStationRow =
+  typeof radioBrowserStationsTable.$inferSelect;
+export type InsertRadioBrowserStationRow =
+  typeof radioBrowserStationsTable.$inferInsert;
