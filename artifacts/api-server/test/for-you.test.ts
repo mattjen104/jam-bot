@@ -86,6 +86,7 @@ describe("four-tier sort order (pure)", () => {
     name: string;
     _tier1: number;
     _tier2: number;
+    _tier3: number;
     _tier4: number;
   };
 
@@ -94,39 +95,48 @@ describe("four-tier sort order (pure)", () => {
       (a, b) =>
         b._tier1 - a._tier1 ||
         b._tier2 - a._tier2 ||
+        b._tier3 - a._tier3 ||
         b._tier4 - a._tier4,
     );
   }
 
   it("tier 1 (overlap) is primary sort", () => {
     const items: SortableItem[] = [
-      { name: "B", _tier1: 5, _tier2: 0, _tier4: 9999 },
-      { name: "A", _tier1: 10, _tier2: 0, _tier4: 0 },
+      { name: "B", _tier1: 5, _tier2: 0, _tier3: 0, _tier4: 9999 },
+      { name: "A", _tier1: 10, _tier2: 0, _tier3: 0, _tier4: 0 },
     ];
     expect(applySort(items)[0]!.name).toBe("A");
   });
 
   it("tier 2 (keep overlap) breaks ties on tier 1", () => {
     const items: SortableItem[] = [
-      { name: "B", _tier1: 5, _tier2: 1, _tier4: 999 },
-      { name: "A", _tier1: 5, _tier2: 3, _tier4: 0 },
+      { name: "B", _tier1: 5, _tier2: 1, _tier3: 0, _tier4: 999 },
+      { name: "A", _tier1: 5, _tier2: 3, _tier3: 0, _tier4: 0 },
+    ];
+    expect(applySort(items)[0]!.name).toBe("A");
+  });
+
+  it("tier 3 (co-picker affinity) breaks ties on tier 2", () => {
+    const items: SortableItem[] = [
+      { name: "B", _tier1: 5, _tier2: 3, _tier3: 1, _tier4: 999 },
+      { name: "A", _tier1: 5, _tier2: 3, _tier3: 4, _tier4: 0 },
     ];
     expect(applySort(items)[0]!.name).toBe("A");
   });
 
   it("tier 4 (popularity) breaks further ties", () => {
     const items: SortableItem[] = [
-      { name: "B", _tier1: 5, _tier2: 3, _tier4: 10 },
-      { name: "A", _tier1: 5, _tier2: 3, _tier4: 100 },
+      { name: "B", _tier1: 5, _tier2: 3, _tier3: 2, _tier4: 10 },
+      { name: "A", _tier1: 5, _tier2: 3, _tier3: 2, _tier4: 100 },
     ];
     expect(applySort(items)[0]!.name).toBe("A");
   });
 
   it("all-zero tier1 items are ranked purely by popularity (cold-start analog)", () => {
     const items: SortableItem[] = [
-      { name: "C", _tier1: 0, _tier2: 0, _tier4: 50 },
-      { name: "A", _tier1: 0, _tier2: 0, _tier4: 200 },
-      { name: "B", _tier1: 0, _tier2: 0, _tier4: 100 },
+      { name: "C", _tier1: 0, _tier2: 0, _tier3: 0, _tier4: 50 },
+      { name: "A", _tier1: 0, _tier2: 0, _tier3: 0, _tier4: 200 },
+      { name: "B", _tier1: 0, _tier2: 0, _tier3: 0, _tier4: 100 },
     ];
     const sorted = applySort(items);
     expect(sorted.map((i) => i.name)).toEqual(["A", "B", "C"]);

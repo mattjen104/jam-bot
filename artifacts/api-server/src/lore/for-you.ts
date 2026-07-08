@@ -28,6 +28,12 @@ import {
   type LoreUser,
 } from "@workspace/db";
 import { eq, and, isNotNull, inArray, sql, gt } from "drizzle-orm";
+import {
+  fetchStationsByTag,
+  filterStations,
+  upsertRadioBrowserStations,
+} from "./radio-browser.js";
+import { queueCrossRefDiscovery } from "./blog-crossref.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -68,6 +74,7 @@ export interface ForYouStationItem {
   /** Ranking score for debug / transparency. */
   _tier1: number;
   _tier2: number;
+  _tier3: number;
   _tier4: number;
 }
 
@@ -81,6 +88,7 @@ export interface ForYouBlogItem {
   overlap: OverlapProof | null;
   _tier1: number;
   _tier2: number;
+  _tier3: number;
   _tier4: number;
 }
 
@@ -152,11 +160,17 @@ export async function computeUserSourceAffinity(
       )
       .groupBy(stationsTable.id);
 
-    if (rows.length === 0) return;
-
-    await db
-      .insert(userSourceAffinityTable)
-      .values(
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(userSourceAffinityTable)
+        .where(
+          and(
+            eq(userSourceAffinityTable.userId, userId),
+            eq(userSourceAffinityTable.sourceType, "station"),
+          ),
+        );
+      if (rows.length === 0) return;
+      await tx.insert(userSourceAffinityTable).values(
         rows.map((r) => ({
           userId,
           sourceId: r.stationId,
@@ -166,20 +180,8 @@ export async function computeUserSourceAffinity(
           overlappingArtists: r.overlappingArtists ?? [],
           updatedAt: new Date(),
         })),
-      )
-      .onConflictDoUpdate({
-        target: [
-          userSourceAffinityTable.userId,
-          userSourceAffinityTable.sourceId,
-          userSourceAffinityTable.sourceType,
-        ],
-        set: {
-          overlapCount: sql`excluded.overlap_count`,
-          keepOverlapCount: sql`excluded.keep_overlap_count`,
-          overlappingArtists: sql`excluded.overlapping_artists`,
-          updatedAt: sql`now()`,
-        },
-      });
+      );
+    });
   } else {
     // --- blog pickers ---
     const rows = await db
@@ -204,11 +206,17 @@ export async function computeUserSourceAffinity(
       )
       .groupBy(pickersTable.id);
 
-    if (rows.length === 0) return;
-
-    await db
-      .insert(userSourceAffinityTable)
-      .values(
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(userSourceAffinityTable)
+        .where(
+          and(
+            eq(userSourceAffinityTable.userId, userId),
+            eq(userSourceAffinityTable.sourceType, "picker"),
+          ),
+        );
+      if (rows.length === 0) return;
+      await tx.insert(userSourceAffinityTable).values(
         rows.map((r) => ({
           userId,
           sourceId: r.pickerId,
@@ -218,20 +226,8 @@ export async function computeUserSourceAffinity(
           overlappingArtists: r.overlappingArtists ?? [],
           updatedAt: new Date(),
         })),
-      )
-      .onConflictDoUpdate({
-        target: [
-          userSourceAffinityTable.userId,
-          userSourceAffinityTable.sourceId,
-          userSourceAffinityTable.sourceType,
-        ],
-        set: {
-          overlapCount: sql`excluded.overlap_count`,
-          keepOverlapCount: sql`excluded.keep_overlap_count`,
-          overlappingArtists: sql`excluded.overlapping_artists`,
-          updatedAt: sql`now()`,
-        },
-      });
+      );
+    });
   }
 }
 
@@ -347,6 +343,26 @@ export async function getForYouStations(
     ]),
   );
 
+  // --- Tier-3: co-picker affinity ---
+  // Count distinct pickers whose picks overlap with the user's library AND
+  // the station's spin history. Proxy for "how many of the user's implicit
+  // taste-aligned pickers also champion this station's catalog".
+  const tier3StationRows = await db.execute<{
+    station_id: number;
+    co_picker_count: number;
+  }>(sql`
+    SELECT sp.station_id, count(distinct p.picker_id)::int as co_picker_count
+    FROM library_items li
+    JOIN picks p   ON p.mbid  = li.mbid
+    JOIN spins  sp ON sp.mbid = li.mbid
+    WHERE li.user_id = ${user.id}
+      AND sp.station_id IS NOT NULL
+    GROUP BY sp.station_id
+  `);
+  const tier3StationMap = new Map<number, number>(
+    tier3StationRows.rows.map((r) => [r.station_id, r.co_picker_count]),
+  );
+
   // --- Fetch all active stations (or filtered by genre) ---
   let stationQuery = db
     .select({
@@ -378,6 +394,7 @@ export async function getForYouStations(
       const aff = affinityMap.get(s.id);
       const tier1 = aff?.overlapCount ?? 0;
       const tier2 = aff?.keepOverlapCount ?? 0;
+      const tier3 = tier3StationMap.get(s.id) ?? 0;
       const tier4 = s.clickcount + s.votes;
       return {
         id: s.id,
@@ -399,6 +416,7 @@ export async function getForYouStations(
           : null,
         _tier1: tier1,
         _tier2: tier2,
+        _tier3: tier3,
         _tier4: tier4,
       };
     });
@@ -408,22 +426,31 @@ export async function getForYouStations(
     (a, b) =>
       b._tier1 - a._tier1 ||
       b._tier2 - a._tier2 ||
-      // tier 3: followed-picker affinity (0 until follows table exists)
+      b._tier3 - a._tier3 ||
       b._tier4 - a._tier4,
   );
 
   items = items.slice(0, limit);
 
-  // --- Thin-genre detection (side-effect; non-blocking) ---
+  // --- Thin-genre detection: fire discovery jobs for underserved genres ---
   const thin = detectThinGenres(items, "station");
   if (thin.length > 0) {
-    console.info(
-      "[for-you] thin genre poles detected (station):",
-      thin.map((t) => `${t.genre}(${t.coveredCount})`).join(", "),
-    );
+    void (async () => {
+      for (const tg of thin) {
+        try {
+          const raw = await fetchStationsByTag(tg.genre);
+          const filtered = filterStations(raw);
+          if (filtered.length > 0) {
+            await upsertRadioBrowserStations(filtered, tg.genre);
+          }
+        } catch (err) {
+          console.warn(`[for-you] station discovery failed genre="${tg.genre}"`, err);
+        }
+      }
+    })();
   }
 
-  // --- Group by genre pole ---
+  // --- Group by genre pole, ordered by user's overlap signal ---
   const genre_poles = groupByGenre(items);
 
   return { genre_poles, cold_start: false };
@@ -475,6 +502,7 @@ async function buildColdStartStations(
     overlap: null,
     _tier1: 0,
     _tier2: 0,
+    _tier3: 0,
     _tier4: s.clickcount + s.votes,
   }));
 
@@ -535,6 +563,25 @@ export async function getForYouBlogs(
     ]),
   );
 
+  // --- Tier-3: co-picker affinity for blogs ---
+  // For each blog picker B, count distinct other pickers whose picks share
+  // MBIDs with the user's library AND with B's own picks. Proxy for
+  // "how many taste-aligned curators also champion this blog's catalog".
+  const tier3BlogRows = await db.execute<{
+    picker_id: number;
+    co_picker_count: number;
+  }>(sql`
+    SELECT pb.picker_id, count(distinct p.picker_id)::int as co_picker_count
+    FROM library_items li
+    JOIN picks p  ON p.mbid  = li.mbid
+    JOIN picks pb ON pb.mbid = li.mbid AND pb.picker_id != p.picker_id
+    WHERE li.user_id = ${user.id}
+    GROUP BY pb.picker_id
+  `);
+  const tier3BlogMap = new Map<number, number>(
+    tier3BlogRows.rows.map((r) => [r.picker_id, r.co_picker_count]),
+  );
+
   // --- Blog pickers + their pick counts for tier 4 ---
   const blogRows = await db
     .select({
@@ -569,6 +616,7 @@ export async function getForYouBlogs(
       const aff = affinityMap.get(p.id);
       const tier1 = aff?.overlapCount ?? 0;
       const tier2 = aff?.keepOverlapCount ?? 0;
+      const tier3 = tier3BlogMap.get(p.id) ?? 0;
       const tier4 = p.pickCount;
       return {
         id: p.id,
@@ -585,6 +633,7 @@ export async function getForYouBlogs(
           : null,
         _tier1: tier1,
         _tier2: tier2,
+        _tier3: tier3,
         _tier4: tier4,
       };
     });
@@ -594,18 +643,39 @@ export async function getForYouBlogs(
     (a, b) =>
       b._tier1 - a._tier1 ||
       b._tier2 - a._tier2 ||
+      b._tier3 - a._tier3 ||
       b._tier4 - a._tier4,
   );
 
   items = items.slice(0, limit);
 
-  // --- Thin-genre detection ---
+  // --- Thin-genre detection: fire cross-ref discovery for underserved genres ---
   const thin = detectThinGenres(items, "picker");
   if (thin.length > 0) {
-    console.info(
-      "[for-you] thin genre poles detected (blog):",
-      thin.map((t) => `${t.genre}(${t.coveredCount})`).join(", "),
-    );
+    void (async () => {
+      for (const tg of thin) {
+        try {
+          const blogUrls = await db
+            .select({ homeUrl: pickersTable.homeUrl })
+            .from(pickersTable)
+            .where(
+              and(
+                eq(pickersTable.active, true),
+                eq(pickersTable.pickerType, "blog"),
+                sql`${tg.genre} = ANY(${pickersTable.tags})`,
+              ),
+            );
+          const urls = blogUrls
+            .map((b) => b.homeUrl)
+            .filter((u): u is string => u != null && u.length > 0);
+          if (urls.length > 0) {
+            queueCrossRefDiscovery(urls, "");
+          }
+        } catch (err) {
+          console.warn(`[for-you] blog discovery failed genre="${tg.genre}"`, err);
+        }
+      }
+    })();
   }
 
   return { genre_poles: groupByGenre(items), cold_start: false };
@@ -654,6 +724,7 @@ async function buildColdStartBlogs(
     overlap: null,
     _tier1: 0,
     _tier2: 0,
+    _tier3: 0,
     _tier4: p.pickCount,
   }));
 
@@ -670,11 +741,13 @@ async function buildColdStartBlogs(
 
 /**
  * Group items by their first genre tag (or "all" if untagged).
- * Items appear in all poles whose tags they carry, but the ranked order within
- * each pole is preserved from the four-tier sort. Each item appears in at most
- * one pole (its first tag) to keep the response compact.
+ * Poles are ordered by the user's overlap signal (sum of _tier1 per pole),
+ * so genres most represented in the user's library appear first. The "all"
+ * summary pole is always appended last when multiple genre poles exist.
+ * Each item appears in exactly one pole (its first tag) to keep the response
+ * compact.
  */
-function groupByGenre<T extends { tags: string[] }>(
+function groupByGenre<T extends { tags: string[]; _tier1: number }>(
   items: T[],
 ): ForYouGenrePole<T>[] {
   const poleMap = new Map<string, T[]>();
@@ -683,17 +756,24 @@ function groupByGenre<T extends { tags: string[] }>(
     if (!poleMap.has(genre)) poleMap.set(genre, []);
     poleMap.get(genre)!.push(item);
   }
-  // Always include an "all" pole that surfaces everything
-  const allItems = [...items];
-  const poles: ForYouGenrePole<T>[] = [];
-  for (const [genre, genreItems] of poleMap) {
-    poles.push({ genre, items: genreItems });
+
+  if (poleMap.size === 0) {
+    return [{ genre: "all", items: [] }];
   }
-  // Ensure "all" is last (summary pole)
+
+  // Order poles by total overlap signal (user's library relevance) descending.
+  const poles: ForYouGenrePole<T>[] = [...poleMap.entries()]
+    .map(([genre, genreItems]) => ({
+      genre,
+      items: genreItems,
+      _signal: genreItems.reduce((acc, it) => acc + it._tier1, 0),
+    }))
+    .sort((a, b) => b._signal - a._signal)
+    .map(({ genre, items: genreItems }) => ({ genre, items: genreItems }));
+
+  // Append "all" summary pole when there are multiple genre poles.
   if (poleMap.size > 1) {
-    poles.push({ genre: "all", items: allItems });
-  } else if (poleMap.size === 0) {
-    poles.push({ genre: "all", items: [] });
+    poles.push({ genre: "all", items: [...items] });
   }
   return poles;
 }
