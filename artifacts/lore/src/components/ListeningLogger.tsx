@@ -5,6 +5,7 @@ import {
 } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { appendJournal } from "../lib/local";
+import { useIcecastFallback } from "../hooks/useIcecastFallback";
 
 /**
  * Invisible global recorder: while the listener is actually hearing something
@@ -68,6 +69,36 @@ export function ListeningLogger() {
     npPlayedAt,
     npArtwork,
   ]);
+
+  // --- Icecast fallback: client-side stream metadata for unpolled stations ---
+  // When the server has no now-playing data (no poller configured), try the
+  // Icecast status JSON endpoint on the stream domain as a zero-bandwidth
+  // fallback. Polls every 30 s; fires immediately when a track is found.
+  const icecastNp = useIcecastFallback(
+    station?.streamUrl,
+    listening && !np,
+  );
+  const icecastKey = icecastNp
+    ? `icecast|${stationSlug}|${icecastNp.rawArtist}|${icecastNp.rawTitle}`
+    : "";
+
+  useEffect(() => {
+    if (!icecastKey || !stationSlug || !stationName) return;
+    if (!icecastNp) return;
+    if (!icecastNp.rawTitle && !icecastNp.rawArtist) return;
+    appendJournal({
+      at: new Date().toISOString(),
+      kind: "radio",
+      mbid: null,
+      artistMbid: null,
+      title: icecastNp.rawTitle,
+      artist: icecastNp.rawArtist,
+      artworkUrl: null,
+      stationSlug,
+      stationName,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [icecastKey, stationSlug, stationName]);
 
   // --- Rides: log each track the moment it actually starts sounding --------
   const cur = ride.current;

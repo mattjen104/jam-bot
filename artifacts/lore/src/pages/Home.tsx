@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
+import { useIcecastFallback } from "../hooks/useIcecastFallback";
 import {
   useListStations,
   useGetStationNowPlaying,
@@ -446,6 +447,14 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
     },
   );
 
+  // Browser-side fallback for stations with no server-side poller.
+  // Polls {streamDomain}/status-json.xsl; activates only when the server
+  // returns no now-playing data so there is never a double-call.
+  const icecastFallback = useIcecastFallback(
+    focusedStation?.streamUrl,
+    !!focusedStation && !nowPlaying?.nowPlaying && !selectedDate,
+  );
+
   const handleSelect = (station: Station) => setSelectedSlug(station.slug);
   const handleToggle = (station: Station) => {
     setSelectedSlug(station.slug);
@@ -526,6 +535,7 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
             data={nowPlaying}
             isLoading={npLoading}
             fallbackStation={focusedStation}
+            clientNowPlaying={icecastFallback}
           />
         </aside>
       )}

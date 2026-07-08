@@ -37,9 +37,11 @@ interface NowPlayingProps {
   data: StationNowPlaying | undefined;
   isLoading: boolean;
   fallbackStation: Station | null;
+  /** Client-discovered now-playing from Icecast status JSON, used when the server has no polled data. */
+  clientNowPlaying?: { rawArtist: string; rawTitle: string } | null;
 }
 
-export function NowPlaying({ data, isLoading, fallbackStation }: NowPlayingProps) {
+export function NowPlaying({ data, isLoading, fallbackStation, clientNowPlaying }: NowPlayingProps) {
   const station = data?.station ?? fallbackStation;
   const np = data?.nowPlaying ?? null;
   const rec = np?.recording ?? null;
@@ -92,7 +94,7 @@ export function NowPlaying({ data, isLoading, fallbackStation }: NowPlayingProps
         ) : (
           <div className="flex h-full w-full items-center justify-center">
             <Disc3
-              className={`h-20 w-20 text-muted-foreground/40 ${np ? "lore-spin" : ""}`}
+              className={`h-20 w-20 text-muted-foreground/40 ${np || clientNowPlaying ? "lore-spin" : ""}`}
             />
           </div>
         )}
@@ -259,6 +261,26 @@ export function NowPlaying({ data, isLoading, fallbackStation }: NowPlayingProps
 
             {rec && rec.links.length > 0 && <DeepLinks links={rec.links} />}
           </>
+        ) : clientNowPlaying ? (
+          <div className="py-2">
+            <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+              Now playing · stream
+            </p>
+            <h2
+              className="mt-1.5 font-serif text-2xl font-semibold leading-tight text-foreground"
+              data-testid="now-playing-title"
+            >
+              {clientNowPlaying.rawTitle || station.name}
+            </h2>
+            {clientNowPlaying.rawArtist && (
+              <p
+                className="mt-1 text-base text-muted-foreground"
+                data-testid="now-playing-artist"
+              >
+                {clientNowPlaying.rawArtist}
+              </p>
+            )}
+          </div>
         ) : (
           <div className="py-2">
             <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
