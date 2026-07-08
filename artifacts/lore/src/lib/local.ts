@@ -114,6 +114,12 @@ function sameIdentity(a: JournalEntry, b: JournalEntry): boolean {
  * Append a heard track (newest first). Polling and status flaps re-report the
  * same track, so an entry matching the newest one within the dedup window is
  * the same listen and gets skipped. Hearing the song again later logs again.
+ *
+ * Icecast fallback tracks are first logged as raw text (mbid: null) before
+ * the async MusicBrainz resolution completes. When a resolved report for the
+ * same identity arrives within the dedup window, upgrade the existing entry
+ * in place (fill in mbid/artistMbid/artworkUrl) rather than skipping it,
+ * otherwise the journal would keep the unresolved entry forever.
  */
 export function appendJournal(entry: JournalEntry): void {
   const entries = journalStore.read();
@@ -122,7 +128,22 @@ export function appendJournal(entry: JournalEntry): void {
     const gap = Math.abs(
       new Date(entry.at).getTime() - new Date(newest.at).getTime(),
     );
-    if (Number.isNaN(gap) || gap < DEDUP_WINDOW_MS) return;
+    if (Number.isNaN(gap) || gap < DEDUP_WINDOW_MS) {
+      if (!newest.mbid && entry.mbid) {
+        journalStore.write([
+          {
+            ...newest,
+            mbid: entry.mbid,
+            artistMbid: entry.artistMbid ?? newest.artistMbid,
+            artworkUrl: entry.artworkUrl ?? newest.artworkUrl,
+            title: entry.title,
+            artist: entry.artist,
+          },
+          ...entries.slice(1),
+        ]);
+      }
+      return;
+    }
   }
   journalStore.write([entry, ...entries].slice(0, JOURNAL_CAP));
 }
