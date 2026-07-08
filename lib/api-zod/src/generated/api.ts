@@ -1584,6 +1584,34 @@ export const IngestBlogBody = zod
   .describe("Ingest a blog\/critic RSS feed as a picker.");
 
 /**
+ * Seed a list of blog home URLs: auto-discover each feed, upsert inactive
+ * longtail picker rows, and return a per-URL summary. Token-guarded.
+ *
+ * @summary Bulk-seed blog pickers from home URLs (admin)
+ */
+export const SeedBlogPickersHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const SeedBlogPickersBody = zod
+  .object({
+    urls: zod.array(zod.string().url()).min(1),
+  })
+  .describe("Seed blog pickers from home page URLs via feed auto-discovery.");
+
+export const SeedBlogPickersResponse = zod.object({
+  results: zod.array(
+    zod.object({
+      url: zod.string(),
+      feedUrl: zod.string().nullable(),
+      handle: zod.string().nullable(),
+      status: zod.enum(["discovered", "already_exists", "no_feed", "error"]),
+      error: zod.string().optional(),
+    }),
+  ),
+});
+
+/**
  * Ingest a public Discogs list via the Discogs API and log a pick per catalogued item, resolving "Artist - Title" where possible and logging unresolved otherwise. Token-guarded.
 
  * @summary Admin-only Discogs list ingest (collector)

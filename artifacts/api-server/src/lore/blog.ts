@@ -169,6 +169,126 @@ export function extractArtistTrack(
 }
 
 const FEED_TIMEOUT_MS = 10_000;
+const DISCOVERY_TIMEOUT_MS = 10_000;
+
+/**
+ * Candidate probe paths tried in order when `<link rel="alternate">` is absent.
+ * Most blog platforms publish feeds at one of these conventional paths.
+ */
+const FEED_PROBE_PATHS = [
+  "/feed",
+  "/feed/",
+  "/rss",
+  "/rss.xml",
+  "/atom.xml",
+  "/index.xml",
+  "/feed.xml",
+];
+
+/**
+ * Auto-discover the RSS/Atom feed URL for a blog's home page.
+ *
+ * Strategy:
+ *  1. Fetch the home page and parse `<link rel="alternate" type="application/rss+xml">`.
+ *  2. If none found, probe the conventional paths above in order.
+ *  3. Validate the first candidate by fetching it and confirming it contains at
+ *     least one `<item>` or `<entry>` element.
+ *
+ * Returns the feed URL string, or `null` if no valid feed is found.
+ * Never throws — errors are returned as null.
+ */
+export async function discoverFeedUrl(
+  homeUrl: string,
+  opts: { fetchFn?: typeof fetch; timeoutMs?: number } = {},
+): Promise<string | null> {
+  const fetchFn = opts.fetchFn ?? fetch;
+  const timeoutMs = opts.timeoutMs ?? DISCOVERY_TIMEOUT_MS;
+
+  // ---- Step 1: fetch homepage and look for <link rel="alternate"> -----------
+  let candidates: string[] = [];
+  try {
+    const res = await fetchFn(homeUrl, {
+      signal: AbortSignal.timeout(timeoutMs),
+      headers: { Accept: "text/html" },
+    });
+    if (res.ok) {
+      const html = await res.text();
+      candidates = extractFeedLinksFromHtml(html, homeUrl);
+    }
+  } catch {
+    /* unreachable homepage — will fall through to probe paths */
+  }
+
+  // ---- Step 2: conventional probe paths (if no <link> found) ----------------
+  if (candidates.length === 0) {
+    let base: URL;
+    try {
+      base = new URL(homeUrl);
+    } catch {
+      return null;
+    }
+    for (const path of FEED_PROBE_PATHS) {
+      candidates.push(`${base.protocol}//${base.hostname}${path}`);
+    }
+  }
+
+  // ---- Step 3: validate each candidate ----------------------------------------
+  for (const url of candidates) {
+    const valid = await isFeedUrl(url, { fetchFn, timeoutMs });
+    if (valid) return url;
+  }
+  return null;
+}
+
+/**
+ * Pure: extract all RSS/Atom alternate link URLs from an HTML string.
+ * Resolves relative hrefs against the supplied base URL.
+ */
+export function extractFeedLinksFromHtml(html: string, baseUrl: string): string[] {
+  const out: string[] = [];
+  // Match <link ... rel="alternate" ... type="application/rss+xml" ...> (any attr order)
+  const linkRe = /<link([^>]+)>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = linkRe.exec(html))) {
+    const attrs = m[1]!;
+    const isAlt = /rel=["']alternate["']/i.test(attrs);
+    const isRss =
+      /type=["']application\/(rss|atom)\+xml["']/i.test(attrs) ||
+      /type=["']text\/xml["']/i.test(attrs);
+    if (!isAlt || !isRss) continue;
+    const hrefM = attrs.match(/href=["']([^"']+)["']/i);
+    if (!hrefM) continue;
+    try {
+      out.push(new URL(hrefM[1]!, baseUrl).href);
+    } catch {
+      /* skip malformed href */
+    }
+  }
+  return out;
+}
+
+/**
+ * Fetch a URL and return true if it looks like an RSS/Atom feed with at least
+ * one item. Returns false on any error or if the body has no items.
+ */
+async function isFeedUrl(
+  url: string,
+  opts: { fetchFn?: typeof fetch; timeoutMs?: number } = {},
+): Promise<boolean> {
+  const fetchFn = opts.fetchFn ?? fetch;
+  const timeoutMs = opts.timeoutMs ?? DISCOVERY_TIMEOUT_MS;
+  try {
+    const res = await fetchFn(url, {
+      signal: AbortSignal.timeout(timeoutMs),
+      headers: { Accept: "application/rss+xml, application/atom+xml, text/xml, */*" },
+    });
+    if (!res.ok) return false;
+    const text = await res.text();
+    return /<(item|entry)[\s>]/i.test(text);
+  } catch {
+    return false;
+  }
+}
 
 export interface BlogIngestResult {
   pickerId: number;
@@ -177,6 +297,8 @@ export interface BlogIngestResult {
   items: number;
   matched: number;
   logged: number;
+  /** Absolute URLs of every item link in the feed — used for cross-ref queueing. */
+  feedLinks: string[];
 }
 
 /**
@@ -217,6 +339,7 @@ export async function ingestBlogFeed(args: {
       items: 0,
       matched: 0,
       logged: 0,
+      feedLinks: [],
     };
   }
 
@@ -252,5 +375,8 @@ export async function ingestBlogFeed(args: {
     items: items.length,
     matched,
     logged,
+    // All item links from the feed — the poller queues these for cross-ref
+    // discovery so outbound links from post pages can surface new blog candidates.
+    feedLinks: items.map((i) => i.link).filter(Boolean),
   };
 }

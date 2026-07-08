@@ -352,6 +352,19 @@ export type InsertSegueEdge = typeof segueEdgesTable.$inferInsert;
  * (e.g. a MusicBrainz label MBID, an RSS feed URL, a Discogs list id). No
  * secrets belong here — it's public attribution metadata.
  */
+/**
+ * Health snapshot written by the blog poller on each poll cycle.
+ * All fields optional — null/absent means "never polled yet".
+ */
+export interface PickerHealth {
+  /** ISO timestamp of the last successful poll. */
+  last_ok_at?: string | null;
+  /** Error message from the most recent failure (absent on success). */
+  last_error?: string | null;
+  /** Number of consecutive failures since last success. Resets on success. */
+  consecutive_failures: number;
+}
+
 export const pickersTable = pgTable(
   "pickers",
   {
@@ -373,6 +386,17 @@ export const pickersTable = pgTable(
     trustTier: integer("trust_tier").notNull().default(2),
     description: text("description"),
     active: boolean("active").notNull().default(true),
+    /**
+     * Health snapshot for feed-backed pickers. Written by blog-poller on each
+     * cycle. Null for pickers that are never polled (label, dj, curator, etc.).
+     * Shape: { last_ok_at?, last_error?, consecutive_failures }.
+     */
+    health: jsonb("health").$type<PickerHealth>(),
+    /**
+     * Genre/style tags: self-declared by the blog or derived from the genres of
+     * its resolved picks. Null for pickers where tags are not applicable.
+     */
+    tags: text("tags").array(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

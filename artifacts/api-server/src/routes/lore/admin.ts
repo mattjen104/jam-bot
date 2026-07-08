@@ -9,6 +9,8 @@ import {
   LogTracklistBody,
   SeedLabelBody,
   IngestBlogBody,
+  SeedBlogPickersBody,
+  SeedBlogPickersResponse,
   IngestDiscogsListBody,
   AddSongExploderClaimParams,
   AddSongExploderClaimBody,
@@ -55,7 +57,7 @@ import {
 } from "../../lore/picks.js";
 import { validateNtsShowAlias } from "../../lore/nts.js";
 import { seedLabelPicker } from "../../lore/label.js";
-import { ingestBlogFeed } from "../../lore/blog.js";
+import { ingestBlogFeed, discoverFeedUrl } from "../../lore/blog.js";
 import { ingestDiscogsList, addRymPicker } from "../../lore/collector.js";
 import { addSongExploderClaim } from "../../lore/song-exploder.js";
 import { publishGeniusDraft, rejectGeniusDraft } from "../../lore/genius-annotations.js";
@@ -235,6 +237,102 @@ router.post("/admin/blogs", h(async (req, res) => {
     matched: r.matched,
     logged: r.logged,
   });
+}));
+
+/**
+ * Curated list of well-known music blogs for bulk seeding.
+ * These are inserted as inactive (active=false) longtail pickers awaiting
+ * human review — feed discovery confirms the feed URL before upsert.
+ */
+const CURATED_BLOG_URLS = [
+  "https://theobelisk.net",
+  "https://www.invisibleoranges.com",
+  "https://thequietus.com",
+  "https://daily.bandcamp.com",
+  "https://aquariumdrunkard.com",
+  "https://pitchfork.com",
+  "https://www.stereogum.com",
+  "https://exclaim.ca",
+  "https://www.tinymixtapes.com",
+  "https://www.clashmusic.com",
+  "https://www.sputnikmusic.com",
+  "https://www.allmusic.com",
+  "https://treblezine.com",
+  "https://www.thefader.com",
+  "https://www.residentadvisor.net",
+] as const;
+
+// POST /api/admin/lore/pickers/seed-blog — bulk-seed blog pickers via auto-discovery.
+router.post("/admin/lore/pickers/seed-blog", h(async (req, res) => {
+  const parsed = SeedBlogPickersBody.safeParse(req.body);
+  const urls = parsed.success ? parsed.data.urls : [...CURATED_BLOG_URLS];
+
+  type SeedResult = {
+    url: string;
+    feedUrl: string | null;
+    handle: string | null;
+    status: "discovered" | "already_exists" | "no_feed" | "error";
+    error?: string;
+  };
+  const results: SeedResult[] = [];
+
+  for (const url of urls) {
+    let feedUrl: string | null = null;
+    try {
+      feedUrl = await discoverFeedUrl(url);
+
+      if (!feedUrl) {
+        results.push({ url, feedUrl: null, handle: null, status: "no_feed" });
+        continue;
+      }
+
+      let domain: string;
+      try {
+        domain = new URL(url).hostname;
+      } catch {
+        results.push({ url, feedUrl: null, handle: null, status: "error", error: "Invalid URL" });
+        continue;
+      }
+
+      const handle = slugify(domain);
+      if (!handle) {
+        results.push({ url, feedUrl, handle: null, status: "error", error: "Could not slugify domain" });
+        continue;
+      }
+
+      const existing = await db
+        .select({ id: pickersTable.id })
+        .from(pickersTable)
+        .where(eq(pickersTable.handle, handle))
+        .limit(1);
+
+      if (existing.length > 0) {
+        results.push({ url, feedUrl, handle, status: "already_exists" });
+        continue;
+      }
+
+      await db.insert(pickersTable).values({
+        pickerType: "blog",
+        name: domain,
+        handle,
+        homeUrl: url,
+        sourceRef: { feedUrl },
+        trustTier: 2,
+        active: false,
+        description: `Seeded longtail blog candidate — feed discovered via auto-discovery.`,
+      }).onConflictDoNothing({ target: pickersTable.handle });
+
+      results.push({ url, feedUrl, handle, status: "discovered" });
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      results.push({ url, feedUrl, handle: null, status: "error", error: errMsg });
+    }
+  }
+
+  const discovered = results.filter((r) => r.status === "discovered").length;
+  console.info(`[lore] seed-blog: ${discovered}/${urls.length} new pickers inserted`);
+
+  return res.status(200).json({ results });
 }));
 
 // POST /api/admin/discogs-lists — admin-only Discogs list ingest.
