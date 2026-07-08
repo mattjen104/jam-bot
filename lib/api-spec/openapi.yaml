@@ -647,6 +647,52 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /selectors:
+    get:
+      operationId: listSelectors
+      tags: [pickers]
+      summary: Active KEXP DJ selectors with 30-day spin counts
+      description: >
+        Lists all active DJ-type pickers scoped to KEXP (source_ref.stationSlug='kexp'),
+        ordered alphabetically. Each entry includes a 30-day spin count and
+        last-played timestamp so the UI can surface the most active DJs.
+      responses:
+        "200":
+          description: Active KEXP DJ selectors
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SelectorList"
+  /selectors/{handle}/runs:
+    get:
+      operationId: getSelectorRuns
+      tags: [pickers]
+      summary: Station-style runs for a KEXP DJ selector
+      description: >
+        Returns the selector's spin history grouped into runs — one run per
+        show × UTC broadcast day — newest first (limit 100). Only resolves
+        for KEXP DJ selectors (source_ref.stationSlug='kexp'); non-KEXP or
+        non-DJ handles return 404.
+      parameters:
+        - name: handle
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: The selector's archived runs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SelectorRunsResponse"
+        "404":
+          description: Selector not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /picks/contains:
     get:
       operationId: lookupPickedMbids
@@ -3294,3 +3340,100 @@ components:
         - claimId
         - mbid
         - episodeTitle
+    SelectorSummary:
+      type: object
+      description: >
+        One KEXP DJ selector with 30-day spin statistics. Only pickers with
+        source_ref.stationSlug='kexp' and pickerType='dj' appear here.
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        handle:
+          type: string
+        homeUrl:
+          type: ["string", "null"]
+        recentSpinCount:
+          type: integer
+          description: Number of spins in the past 30 days across all of this DJ's shows.
+        lastPlayedAt:
+          type: ["string", "null"]
+          description: ISO-8601 timestamp of the most recent spin, or null if none in window.
+      required:
+        - id
+        - name
+        - handle
+        - homeUrl
+        - recentSpinCount
+        - lastPlayedAt
+    SelectorList:
+      type: object
+      description: The full list of active KEXP DJ selectors.
+      properties:
+        selectors:
+          type: array
+          items:
+            $ref: "#/components/schemas/SelectorSummary"
+      required:
+        - selectors
+    SelectorRunSummary:
+      type: object
+      description: >
+        One run of a KEXP DJ selector — a single show × UTC broadcast day.
+        Analogous to a station run but scoped to a named DJ.
+      properties:
+        runId:
+          type: integer
+          description: Opaque run identifier (min spin id for the group).
+        date:
+          type: ["string", "null"]
+          description: UTC date of the broadcast (YYYY-MM-DD), null if unknown.
+        show:
+          type: ["object", "null"]
+          description: The KEXP show metadata, null when show is unlinked.
+          properties:
+            name:
+              type: ["string", "null"]
+            djName:
+              type: ["string", "null"]
+        spinCount:
+          type: integer
+          description: Number of spins in this run.
+        startedAt:
+          type: ["string", "null"]
+          description: ISO-8601 timestamp of the first spin in the run.
+      required:
+        - runId
+        - date
+        - show
+        - spinCount
+        - startedAt
+    SelectorRunsResponse:
+      type: object
+      description: A KEXP DJ selector's full run history.
+      properties:
+        selector:
+          type: object
+          description: The selector this run history belongs to.
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+            handle:
+              type: string
+            homeUrl:
+              type: ["string", "null"]
+          required:
+            - id
+            - name
+            - handle
+            - homeUrl
+        runs:
+          type: array
+          items:
+            $ref: "#/components/schemas/SelectorRunSummary"
+      required:
+        - selector
+        - runs

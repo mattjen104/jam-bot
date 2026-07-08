@@ -30,6 +30,7 @@ router.get("/selectors", h(async (_req, res) => {
       and(
         eq(pickersTable.active, true),
         eq(pickersTable.pickerType, "dj"),
+        sql`${pickersTable.sourceRef}->>'stationSlug' = 'kexp'`,
       ),
     )
     .orderBy(asc(pickersTable.name));
@@ -121,7 +122,12 @@ router.get("/selectors/:handle/runs", h(async (req, res) => {
   }
 
   const picker = await getPickerByHandle(parsed.data.handle);
-  if (!picker || picker.pickerType !== "dj") {
+  const isKexpDj =
+    picker?.pickerType === "dj" &&
+    (picker.sourceRef as Record<string, unknown> | null | undefined)?.[
+      "stationSlug"
+    ] === "kexp";
+  if (!picker || !isKexpDj) {
     return res.status(404).json({ error: "Selector not found" });
   }
 

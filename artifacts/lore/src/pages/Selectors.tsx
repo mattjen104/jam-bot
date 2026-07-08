@@ -272,7 +272,8 @@ export default function Selectors() {
   // Full selector list: all active pickers, sorted by most recently active first
   // (using dial pickedAt for those that have runs), then alphabetically.
   const { recent, others } = useMemo(() => {
-    const all = (listData?.pickers ?? []).filter((p) => p.active);
+    // Exclude DJ-type pickers — they appear in the dedicated KEXP "Radio selectors" section below.
+    const all = (listData?.pickers ?? []).filter((p) => p.active && p.pickerType !== "dj");
     const toMs = (handle: string) => {
       const dialItem = dialByHandle.get(handle);
       if (!dialItem?.run.pickedAt) return 0;
