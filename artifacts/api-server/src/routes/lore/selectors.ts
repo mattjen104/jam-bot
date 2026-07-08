@@ -70,7 +70,7 @@ router.get("/selectors", h(async (_req, res) => {
         COUNT(*)::int AS "recentSpinCount",
         MAX(played_at) AS "lastPlayedAt"
       FROM spins
-      WHERE show_id = ANY(${showIds})
+      WHERE show_id = ANY(ARRAY[${sql.join(showIds, sql`, `)}]::integer[])
         AND played_at >= NOW() - INTERVAL '30 days'
       GROUP BY show_id
     `);
@@ -167,7 +167,7 @@ router.get("/selectors/:handle/runs", h(async (req, res) => {
       COUNT(*)::int                             AS "spinCount",
       MIN(played_at)                            AS "startedAt"
     FROM spins
-    WHERE show_id = ANY(${showIds})
+    WHERE show_id = ANY(ARRAY[${sql.join(showIds, sql`, `)}]::integer[])
     GROUP BY show_id, DATE(played_at AT TIME ZONE 'UTC')
     ORDER BY MIN(played_at) DESC
     LIMIT 100

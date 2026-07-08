@@ -409,7 +409,7 @@ export default function Selectors() {
               </div>
             ) : (
               <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {(kexpData?.selectors ?? []).map((s) => (
+                {(kexpData?.selectors ?? []).map((s: SelectorSummary) => (
                   <KexpSelectorCard key={s.handle} selector={s} />
                 ))}
               </ul>

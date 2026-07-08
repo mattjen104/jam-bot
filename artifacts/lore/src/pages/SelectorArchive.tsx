@@ -3,6 +3,7 @@ import {
   useGetPickerArchive,
   useGetPickerStationOverlaps,
   useGetSelectorRuns,
+  type SelectorRunSummary,
 } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { FollowButton } from "../components/FollowButton";
@@ -24,8 +25,9 @@ export default function SelectorArchive() {
   const { data, isLoading, isError } = useGetPickerArchive(handle);
   const { data: overlaps } = useGetPickerStationOverlaps(handle);
   const isDj = data?.picker.pickerType === "dj";
+  // Pass "" when not a DJ — the generated options have `enabled: !!handle` built in
   const { data: selectorRuns, isLoading: selectorRunsLoading } =
-    useGetSelectorRuns(handle, { query: { enabled: isDj } });
+    useGetSelectorRuns(isDj ? handle : "");
 
   const dockPadding = ride.active || radio.station ? "pb-32" : "pb-16";
 
@@ -99,7 +101,7 @@ export default function SelectorArchive() {
                 </p>
               ) : (
                 <ul className="flex flex-col gap-2" data-testid="selector-runs">
-                  {selectorRuns.runs.map((r) => (
+                  {selectorRuns.runs.map((r: SelectorRunSummary) => (
                     <li key={r.runId}>
                       <Link
                         href={`/archive/station-runs/${r.runId}`}
