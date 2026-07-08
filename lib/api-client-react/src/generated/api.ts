@@ -25,6 +25,9 @@ import type {
   BlogIngestRequest,
   DiscogsListRequest,
   EntryResult,
+  ForYouBlogsResponse,
+  ForYouQueryParams,
+  ForYouStationsResponse,
   GeniusDraftList,
   GeniusDraftReviewRequest,
   GeniusDraftReviewResponse,
@@ -4570,6 +4573,169 @@ export function useGetSelectorRuns<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetSelectorRunsQueryOptions(handle, options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+// ---- For-You personalized ranking -------------------------------------------
+
+/**
+ * GET /api/me/stations/for-you — stations ranked by artist overlap + behavior.
+ */
+export const getForYouStationsUrl = (params?: ForYouQueryParams) => {
+  const p = new URLSearchParams();
+  if (params?.genre) p.append("genre", params.genre);
+  if (params?.limit != null) p.append("limit", String(params.limit));
+  const qs = p.toString();
+  return qs ? `/api/me/stations/for-you?${qs}` : `/api/me/stations/for-you`;
+};
+
+export const getForYouStations = async (
+  params?: ForYouQueryParams,
+  options?: RequestInit,
+): Promise<ForYouStationsResponse> => {
+  return customFetch<ForYouStationsResponse>(getForYouStationsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getForYouStationsQueryKey = (params?: ForYouQueryParams) => {
+  return [`/api/me/stations/for-you`, ...(params ? [params] : [])] as const;
+};
+
+export const getForYouStationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getForYouStations>>,
+  TError = ErrorType<ApiError>,
+>(
+  params?: ForYouQueryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getForYouStations>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey =
+    queryOptions?.queryKey ?? getForYouStationsQueryKey(params);
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getForYouStations>>
+  > = ({ signal }) => getForYouStations(params, { signal, ...requestOptions });
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getForYouStations>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetForYouStationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getForYouStations>>
+>;
+export type GetForYouStationsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Stations ranked by artist overlap + in-Lore behavior
+ */
+export function useGetForYouStations<
+  TData = Awaited<ReturnType<typeof getForYouStations>>,
+  TError = ErrorType<ApiError>,
+>(
+  params?: ForYouQueryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getForYouStations>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getForYouStationsQueryOptions(params, options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * GET /api/me/blogs/for-you — blog pickers ranked by artist overlap + behavior.
+ */
+export const getForYouBlogsUrl = (params?: ForYouQueryParams) => {
+  const p = new URLSearchParams();
+  if (params?.genre) p.append("genre", params.genre);
+  if (params?.limit != null) p.append("limit", String(params.limit));
+  const qs = p.toString();
+  return qs ? `/api/me/blogs/for-you?${qs}` : `/api/me/blogs/for-you`;
+};
+
+export const getForYouBlogs = async (
+  params?: ForYouQueryParams,
+  options?: RequestInit,
+): Promise<ForYouBlogsResponse> => {
+  return customFetch<ForYouBlogsResponse>(getForYouBlogsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getForYouBlogsQueryKey = (params?: ForYouQueryParams) => {
+  return [`/api/me/blogs/for-you`, ...(params ? [params] : [])] as const;
+};
+
+export const getForYouBlogsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getForYouBlogs>>,
+  TError = ErrorType<ApiError>,
+>(
+  params?: ForYouQueryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getForYouBlogs>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getForYouBlogsQueryKey(params);
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getForYouBlogs>>
+  > = ({ signal }) => getForYouBlogs(params, { signal, ...requestOptions });
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getForYouBlogs>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetForYouBlogsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getForYouBlogs>>
+>;
+export type GetForYouBlogsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Blog pickers ranked by artist overlap + in-Lore behavior
+ */
+export function useGetForYouBlogs<
+  TData = Awaited<ReturnType<typeof getForYouBlogs>>,
+  TError = ErrorType<ApiError>,
+>(
+  params?: ForYouQueryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getForYouBlogs>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getForYouBlogsQueryOptions(params, options);
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
   };

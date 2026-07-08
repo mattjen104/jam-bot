@@ -1297,3 +1297,59 @@ export interface SelectorRuns {
 export interface SelectorList {
   selectors: SelectorSummary[];
 }
+
+// ---- For-You personalized ranking -------------------------------------------
+
+export interface ForYouOverlapProof {
+  overlapping_artists: string[];
+  overlap_count: number;
+}
+
+export interface ForYouStationItem {
+  slug: string;
+  name: string;
+  org?: string | null;
+  streamUrl: string;
+  streamFormat: string;
+  homepageUrl?: string | null;
+  logoUrl?: string | null;
+  tags: string[];
+  popularity: number;
+  overlap: ForYouOverlapProof | null;
+}
+
+export interface ForYouBlogItem {
+  handle: string;
+  name: string;
+  homeUrl?: string | null;
+  tags: string[];
+  pick_count: number;
+  overlap: ForYouOverlapProof | null;
+}
+
+export interface ForYouStationGenrePole {
+  genre: string;
+  items: ForYouStationItem[];
+}
+
+export interface ForYouBlogGenrePole {
+  genre: string;
+  items: ForYouBlogItem[];
+}
+
+export interface ForYouStationsResponse {
+  genre_poles: ForYouStationGenrePole[];
+  cold_start: boolean;
+  prompt?: string;
+}
+
+export interface ForYouBlogsResponse {
+  genre_poles: ForYouBlogGenrePole[];
+  cold_start: boolean;
+  prompt?: string;
+}
+
+export interface ForYouQueryParams {
+  genre?: string;
+  limit?: number;
+}

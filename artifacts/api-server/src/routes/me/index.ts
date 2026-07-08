@@ -34,6 +34,7 @@ import { encryptToken, decryptToken } from "../../lore/tokenCrypto.js";
 import { resolveToMbid } from "../../lore/resolve.js";
 import { h } from "../../middlewares/asyncHandler.js";
 import { spinDayExpr } from "../../lore/runs.js";
+import { getForYouStations, getForYouBlogs } from "../../lore/for-you.js";
 
 const router: IRouter = Router();
 
@@ -697,6 +698,80 @@ router.get("/me/keep/status", h(async (req, res) => {
 // ---------------------------------------------------------------------------
 // Taste overlap endpoints
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// For-You endpoints
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /api/me/stations/for-you — stations ranked by four-tier personalization:
+ * (1) artist overlap with user's library, (2) in-Lore keeps, (3) followed-picker
+ * affinity (future), (4) popularity cold-start. Grouped by genre pole.
+ * Optional: ?genre=jazz  ?limit=20
+ */
+router.get("/me/stations/for-you", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+  const genre =
+    typeof req.query["genre"] === "string" && req.query["genre"].trim()
+      ? req.query["genre"].trim().toLowerCase()
+      : undefined;
+  const limitRaw = parseInt(String(req.query["limit"] ?? ""), 10);
+  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 20;
+
+  const result = await getForYouStations(user, { genre, limit });
+
+  return res.json({
+    genre_poles: result.genre_poles.map((pole) => ({
+      genre: pole.genre,
+      items: pole.items.map((s) => ({
+        slug: s.slug,
+        name: s.name,
+        org: s.org,
+        streamUrl: s.streamUrl,
+        streamFormat: s.streamFormat,
+        homepageUrl: s.homepageUrl,
+        logoUrl: s.logoUrl,
+        tags: s.tags,
+        popularity: s.clickcount + s.votes,
+        overlap: s.overlap,
+      })),
+    })),
+    cold_start: result.cold_start,
+    ...(result.prompt ? { prompt: result.prompt } : {}),
+  });
+}));
+
+/**
+ * GET /api/me/blogs/for-you — blog pickers ranked by four-tier personalization.
+ * Optional: ?genre=jazz  ?limit=20
+ */
+router.get("/me/blogs/for-you", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+  const genre =
+    typeof req.query["genre"] === "string" && req.query["genre"].trim()
+      ? req.query["genre"].trim().toLowerCase()
+      : undefined;
+  const limitRaw = parseInt(String(req.query["limit"] ?? ""), 10);
+  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 20;
+
+  const result = await getForYouBlogs(user, { genre, limit });
+
+  return res.json({
+    genre_poles: result.genre_poles.map((pole) => ({
+      genre: pole.genre,
+      items: pole.items.map((b) => ({
+        handle: b.handle,
+        name: b.name,
+        homeUrl: b.homeUrl,
+        tags: b.tags,
+        pick_count: b.pickCount,
+        overlap: b.overlap,
+      })),
+    })),
+    cold_start: result.cold_start,
+    ...(result.prompt ? { prompt: result.prompt } : {}),
+  });
+}));
 
 /**
  * GET /api/me/overlaps/pickers — pickers ranked by exact-MBID intersection

@@ -881,3 +881,57 @@ export const keepTargetsTable = pgTable(
 
 export type KeepTarget = typeof keepTargetsTable.$inferSelect;
 export type InsertKeepTarget = typeof keepTargetsTable.$inferInsert;
+
+/**
+ * Pre-computed artist-overlap between a user's library and a radio station or
+ * blog picker. Keyed by `(user_id, source_id, source_type)`.
+ *
+ * The hot path for `GET /api/me/stations/for-you` and `GET /api/me/blogs/for-you`
+ * reads this table (a simple sort) instead of running a full cross-join every
+ * request. The compute job upserts here after every library import and on a
+ * daily refresh.
+ *
+ * `overlapping_artists` carries a sample of artist names (up to 10) for the
+ * overlap-proof tooltip; the full count is in `overlap_count`.
+ * `keep_overlap_count` counts only library items with provenance.kind="keep"
+ * (explicit Lore keeps vs. bulk imports) — used for tier-2 ranking.
+ */
+export const userSourceAffinityTable = pgTable(
+  "user_source_affinity",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => loreUsersTable.id, { onDelete: "cascade" }),
+    /**
+     * The station.id or picker.id this row describes.
+     * Not a FK because it references two different tables depending on sourceType.
+     */
+    sourceId: integer("source_id").notNull(),
+    /** "station" | "picker" */
+    sourceType: text("source_type").notNull(),
+    /** Total distinct MBIDs in user's library that appear in this source's spins/picks. */
+    overlapCount: integer("overlap_count").notNull().default(0),
+    /** Overlap restricted to library items with provenance.kind="keep". */
+    keepOverlapCount: integer("keep_overlap_count").notNull().default(0),
+    /**
+     * Up to 10 artist display names from the overlapping recordings — for the
+     * overlap-proof tooltip. Null until the first compute run.
+     */
+    overlappingArtists: jsonb("overlapping_artists").$type<string[]>(),
+    /** When this row was last recomputed. */
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("user_source_affinity_unique_idx").on(
+      t.userId,
+      t.sourceId,
+      t.sourceType,
+    ),
+    index("user_source_affinity_user_type_idx").on(t.userId, t.sourceType),
+  ],
+);
+
+export type UserSourceAffinity = typeof userSourceAffinityTable.$inferSelect;
+export type InsertUserSourceAffinity =
+  typeof userSourceAffinityTable.$inferInsert;

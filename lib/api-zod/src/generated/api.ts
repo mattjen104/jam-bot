@@ -2065,3 +2065,62 @@ export const GetSelectorRunsResponse = zod.object({
     }),
   ),
 });
+
+// ---- For-You personalized ranking -------------------------------------------
+
+/**
+ * Query params for GET /api/me/stations/for-you and /api/me/blogs/for-you.
+ */
+export const ForYouQueryParams = zod.object({
+  genre: zod.string().optional(),
+  limit: zod.coerce.number().int().positive().max(100).optional(),
+});
+
+const ForYouOverlapProof = zod.object({
+  overlapping_artists: zod.array(zod.string()),
+  overlap_count: zod.number().int().nonnegative(),
+});
+
+const ForYouStationItem = zod.object({
+  slug: zod.string(),
+  name: zod.string(),
+  org: zod.string().nullish(),
+  streamUrl: zod.string(),
+  streamFormat: zod.string(),
+  homepageUrl: zod.string().nullish(),
+  logoUrl: zod.string().nullish(),
+  tags: zod.array(zod.string()),
+  popularity: zod.number().int().nonnegative(),
+  overlap: ForYouOverlapProof.nullable(),
+});
+
+const ForYouBlogItem = zod.object({
+  handle: zod.string(),
+  name: zod.string(),
+  homeUrl: zod.string().nullish(),
+  tags: zod.array(zod.string()),
+  pick_count: zod.number().int().nonnegative(),
+  overlap: ForYouOverlapProof.nullable(),
+});
+
+export const GetForYouStationsResponse = zod.object({
+  genre_poles: zod.array(
+    zod.object({
+      genre: zod.string(),
+      items: zod.array(ForYouStationItem),
+    }),
+  ),
+  cold_start: zod.boolean(),
+  prompt: zod.string().optional(),
+});
+
+export const GetForYouBlogsResponse = zod.object({
+  genre_poles: zod.array(
+    zod.object({
+      genre: zod.string(),
+      items: zod.array(ForYouBlogItem),
+    }),
+  ),
+  cold_start: zod.boolean(),
+  prompt: zod.string().optional(),
+});
