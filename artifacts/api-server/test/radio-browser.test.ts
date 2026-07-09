@@ -257,13 +257,18 @@ describe("detectFormat", () => {
 
 vi.mock("@workspace/db", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@workspace/db")>();
-  const onConflictDoUpdate = vi.fn().mockResolvedValue(undefined);
+  const returning = vi.fn().mockResolvedValue([{ id: 1, source: "radio_browser" }]);
+  const onConflictDoUpdate = vi.fn().mockReturnValue({ returning });
   const valuesMock = vi.fn().mockReturnValue({ onConflictDoUpdate });
   const insertMock = vi.fn().mockReturnValue({ values: valuesMock });
+  const whereMock = vi.fn().mockResolvedValue(undefined);
+  const setMock = vi.fn().mockReturnValue({ where: whereMock });
+  const updateMock = vi.fn().mockReturnValue({ set: setMock });
   return {
     ...actual,
-    db: { insert: insertMock },
+    db: { insert: insertMock, update: updateMock },
     stationsTable: actual.stationsTable,
+    radioBrowserStationsTable: actual.radioBrowserStationsTable,
   };
 });
 
@@ -277,7 +282,9 @@ describe("upsertRadioBrowserStations", () => {
     const station = makeStation();
     const count = await upsertRadioBrowserStations([station], "jazz");
     expect(count).toBe(1);
-    expect((db.insert as ReturnType<typeof vi.fn>)).toHaveBeenCalledOnce();
+    // One insert for the stations row, one for the radio_browser_stations
+    // ICY-enrollment row.
+    expect((db.insert as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(2);
   });
 
   it("inserts new longtail rows as active=false", async () => {
@@ -320,8 +327,9 @@ describe("upsertRadioBrowserStations", () => {
     const { db } = await import("@workspace/db");
     const station = makeStation({ tags: "blues,rock" });
     await upsertRadioBrowserStations([station], "jazz");
-    // The insert was called once — the tags list includes both the query tag and station tags
-    expect((db.insert as ReturnType<typeof vi.fn>)).toHaveBeenCalledOnce();
+    // The tags list includes both the query tag and station tags. Two inserts:
+    // the stations row and the radio_browser_stations ICY-enrollment row.
+    expect((db.insert as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(2);
   });
 
   it("returns 0 on DB error and does not throw", async () => {
@@ -362,7 +370,7 @@ describe("upsertRadioBrowserStations", () => {
       "ambient",
     );
     expect(count).toBe(1);
-    expect((db.insert as ReturnType<typeof vi.fn>)).toHaveBeenCalledOnce();
+    expect((db.insert as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(2);
   });
 });
 

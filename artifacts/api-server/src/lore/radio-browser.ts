@@ -1,5 +1,5 @@
-import { db, stationsTable } from "@workspace/db";
-import { sql } from "drizzle-orm";
+import { db, stationsTable, radioBrowserStationsTable } from "@workspace/db";
+import { sql, eq, and, isNull } from "drizzle-orm";
 
 /**
  * radio-browser.info discovery worker.
@@ -256,7 +256,7 @@ export async function upsertRadioBrowserStations(
     }
 
     try {
-      await db
+      const [stationRow] = await db
         .insert(stationsTable)
         .values({
           slug,
@@ -275,6 +275,7 @@ export async function upsertRadioBrowserStations(
           codec: clamp(s.codec) ?? null,
           active: false,
           stationClass: "curated",
+          nowPlayingSource: "radio_browser_icy",
           updatedAt: new Date(),
         })
         .onConflictDoUpdate({
@@ -285,15 +286,130 @@ export async function upsertRadioBrowserStations(
             votes: sql`CASE WHEN ${stationsTable.source} = 'radio_browser' THEN ${sql.raw("EXCLUDED.votes")} ELSE ${stationsTable.votes} END`,
             bitrate: sql`CASE WHEN ${stationsTable.source} = 'radio_browser' THEN ${sql.raw("EXCLUDED.bitrate")} ELSE ${stationsTable.bitrate} END`,
             codec: sql`CASE WHEN ${stationsTable.source} = 'radio_browser' THEN ${sql.raw("EXCLUDED.codec")} ELSE ${stationsTable.codec} END`,
+            // Only (re)activate ICY polling for genuine radio-browser rows —
+            // never clobber a curated station that happens to share a slug.
+            nowPlayingSource: sql`CASE WHEN ${stationsTable.source} = 'radio_browser' THEN 'radio_browser_icy' ELSE ${stationsTable.nowPlayingSource} END`,
             updatedAt: new Date(),
           },
-        });
+        })
+        .returning();
       upserted++;
+
+      // Enroll for server-side ICY metadata polling — mirrors what the manual
+      // admin enroll endpoint does (radio_browser_stations row + nowPlayingConfig
+      // pointer). Skipped when the slug collided with a non-radio_browser row.
+      if (stationRow && stationRow.source === "radio_browser") {
+        await enrollIcyPolling(stationRow.id, {
+          radioBrowserUuid: s.stationuuid,
+          streamUrl,
+          name: baseName,
+          faviconUrl: clamp(s.favicon),
+        });
+      }
     } catch (err) {
       console.warn(`[radio-browser] upsert failed for slug="${slug}"`, err);
     }
   }
   return upserted;
+}
+
+/**
+ * Upsert the radio_browser_stations ICY-tracking row for a station and point
+ * the station's nowPlayingConfig at it. Idempotent on radioBrowserUuid.
+ */
+async function enrollIcyPolling(
+  stationId: number,
+  info: {
+    radioBrowserUuid: string;
+    streamUrl: string;
+    name: string;
+    faviconUrl: string | null;
+  },
+): Promise<void> {
+  const [rbRow] = await db
+    .insert(radioBrowserStationsTable)
+    .values({
+      radioBrowserUuid: info.radioBrowserUuid,
+      streamUrl: info.streamUrl,
+      name: info.name,
+      faviconUrl: info.faviconUrl,
+      stationId,
+      icyStatus: "active",
+      consecutiveErrors: 0,
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: radioBrowserStationsTable.radioBrowserUuid,
+      set: {
+        streamUrl: info.streamUrl,
+        name: info.name,
+        faviconUrl: info.faviconUrl,
+        stationId,
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
+
+  if (!rbRow) return;
+
+  await db
+    .update(stationsTable)
+    .set({
+      nowPlayingConfig: { streamUrl: info.streamUrl, radioBrowserId: rbRow.id },
+      updatedAt: new Date(),
+    })
+    .where(eq(stationsTable.id, stationId));
+}
+
+/**
+ * One-time backfill: activate server-side ICY polling for radio-browser
+ * stations discovered before auto-enrollment existed (nowPlayingSource is
+ * still null). Purely DB-driven — reuses the streamUrl/name already stored on
+ * the stations row, so no RadioBrowser API calls are needed. Idempotent: once
+ * every row has nowPlayingSource set, subsequent calls are a no-op. Safe to
+ * call on every boot.
+ */
+export async function backfillRadioBrowserIcyEnrollment(): Promise<number> {
+  const rows = await db
+    .select()
+    .from(stationsTable)
+    .where(
+      and(
+        eq(stationsTable.source, "radio_browser"),
+        isNull(stationsTable.nowPlayingSource),
+      ),
+    );
+
+  let enrolled = 0;
+  for (const station of rows) {
+    try {
+      await enrollIcyPolling(station.id, {
+        // No real RadioBrowser UUID was stored for these legacy rows; a
+        // slug-derived placeholder satisfies the unique constraint without
+        // colliding with genuinely-enrolled UUIDs.
+        radioBrowserUuid: `legacy-${station.slug}`,
+        streamUrl: station.streamUrl,
+        name: station.name,
+        faviconUrl: station.logoUrl ?? null,
+      });
+      await db
+        .update(stationsTable)
+        .set({ nowPlayingSource: "radio_browser_icy", updatedAt: new Date() })
+        .where(eq(stationsTable.id, station.id));
+      enrolled++;
+    } catch (err) {
+      console.warn(
+        `[radio-browser] backfill enroll failed for slug="${station.slug}"`,
+        err,
+      );
+    }
+  }
+  if (enrolled > 0) {
+    console.info(
+      `[lore] radio-browser ICY backfill: enrolled ${enrolled} station(s)`,
+    );
+  }
+  return enrolled;
 }
 
 /**

@@ -22,7 +22,10 @@ import { startSegueJob } from "./lore/segue-job.js";
 import { startWikipediaJob } from "./lore/wikipedia-job.js";
 import { ensurePicksUnifiedView } from "./lore/view.js";
 import { startKexpShowsHarvester } from "./lore/kexp-shows.js";
-import { startRadioBrowserWorker } from "./lore/radio-browser.js";
+import {
+  startRadioBrowserWorker,
+  backfillRadioBrowserIcyEnrollment,
+} from "./lore/radio-browser.js";
 import { startStreamHealthWorker } from "./lore/stream-health.js";
 import { applyStationDiscoveryMigration } from "./lore/station-migration.js";
 import { applyPickerDiscoveryMigration } from "./lore/picker-migration.js";
@@ -58,6 +61,11 @@ async function bootLore(): Promise<void> {
     await ensurePicksUnifiedView();
     await seedStations();
     await seedPickers();
+    try {
+      await backfillRadioBrowserIcyEnrollment();
+    } catch (err) {
+      console.error("[lore] radio-browser ICY backfill failed", err);
+    }
     await startLorePoller();
     await startBlogPoller();
     await startNtsPoller();
