@@ -528,20 +528,42 @@ router.get("/stations/recent-spins", h(async (req, res) => {
     )
     SELECT station_slug, mbid, title, artist, raw_title, raw_artist, played_at
     FROM ranked
-    WHERE rn <= 8
+    -- Over-fetch beyond the 8 we actually want to render: some stations log
+    -- the same track more than once in a row (metadata re-announces, ad-break
+    -- interruptions that resume the same song, etc), so we need extra rows
+    -- to still land on 8 *distinct* tracks after de-duping below.
+    WHERE rn <= 30
     ORDER BY station_slug, played_at DESC
   `);
 
+  const CHIPS_PER_STATION = 8;
   const bySlug = new Map<string, { mbid: string | null; title: string; artist: string; playedAt: string }[]>();
+  const seenBySlug = new Map<string, Set<string>>();
   for (const row of rows.rows) {
+    const title = row.title ?? row.raw_title ?? "";
+    const artist = row.artist ?? row.raw_artist ?? "";
+    // Identify a "track" by MBID when resolved, otherwise by title+artist —
+    // either way, the same song shouldn't show up twice in the chip strip.
+    const dedupeKey = row.mbid ? `mbid:${row.mbid}` : `text:${title.toLowerCase()}|${artist.toLowerCase()}`;
+
+    let seen = seenBySlug.get(row.station_slug);
+    if (!seen) {
+      seen = new Set();
+      seenBySlug.set(row.station_slug, seen);
+    }
+    if (seen.has(dedupeKey)) continue;
+
+    const arr = bySlug.get(row.station_slug) ?? [];
+    if (arr.length >= CHIPS_PER_STATION) continue;
+    seen.add(dedupeKey);
+
     const spin = {
       mbid: row.mbid ?? null,
-      title: row.title ?? row.raw_title ?? "",
-      artist: row.artist ?? row.raw_artist ?? "",
+      title,
+      artist,
       playedAt: new Date(row.played_at).toISOString(),
     };
-    const arr = bySlug.get(row.station_slug);
-    if (arr) arr.push(spin);
+    if (bySlug.has(row.station_slug)) arr.push(spin);
     else bySlug.set(row.station_slug, [spin]);
   }
 

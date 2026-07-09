@@ -55,6 +55,16 @@ let started = false;
 const timers: NodeJS.Timeout[] = [];
 
 /**
+ * Station ids with a poll currently in flight. Prevents overlapping ticks
+ * for the same station — e.g. a slow fetch on a tight interval (radio_browser_icy
+ * is 30s) can otherwise let two ticks race: both read the same "last spin" before
+ * either write commits, both pass the dedup check, and both insert an identical
+ * spin. Skipping a tick that's still running is always safe (the next tick
+ * picks up the current now-playing state anyway).
+ */
+const inFlight = new Set<number>();
+
+/**
  * Per-station interval/kickoff handles, keyed by station id.
  * Populated by enrollStationPoller; cleared by unenrollStationPoller.
  * Allows DELETE to immediately stop polling without waiting for a restart.
@@ -113,6 +123,8 @@ export async function fetchPlaysUntilCursor(
  * backfill). Never throws.
  */
 async function pollStation(station: Station): Promise<void> {
+  if (inFlight.has(station.id)) return;
+  inFlight.add(station.id);
   const source = station.nowPlayingSource;
   try {
     const history = getHistoryAdapter(source);
@@ -154,6 +166,8 @@ async function pollStation(station: Station): Promise<void> {
     }
   } catch (err) {
     console.error("[lore] poll failed", station.slug, err);
+  } finally {
+    inFlight.delete(station.id);
   }
 }
 
