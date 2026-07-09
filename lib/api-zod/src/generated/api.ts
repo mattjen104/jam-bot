@@ -225,6 +225,7 @@ export const ListStationsResponse = zod.object({
         logoUrl: zod.string().nullish(),
         attribution: zod.boolean(),
         tags: zod.array(zod.string()).nullish(),
+        mayHaveAds: zod.boolean(),
       })
       .describe("A curated radio station in the public directory."),
   ),
@@ -359,6 +360,7 @@ export const GetStationNowPlayingResponse = zod.object({
       logoUrl: zod.string().nullish(),
       attribution: zod.boolean(),
       tags: zod.array(zod.string()).nullish(),
+      mayHaveAds: zod.boolean(),
     })
     .describe("A curated radio station in the public directory."),
   nowPlaying: zod
@@ -1038,6 +1040,7 @@ export const GetStationArchiveResponse = zod.object({
       logoUrl: zod.string().nullish(),
       attribution: zod.boolean(),
       tags: zod.array(zod.string()).nullish(),
+      mayHaveAds: zod.boolean(),
     })
     .describe("A curated radio station in the public directory."),
   runs: zod.array(

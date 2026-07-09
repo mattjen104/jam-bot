@@ -15,6 +15,7 @@ import {
   type RecordingLink,
 } from "@workspace/song-enrichment";
 import { searchTrack } from "../spotify/appClient.js";
+import { recordAdSignal } from "./ads.js";
 import type { NowPlayingRaw, RawSpin, ShowAttribution } from "./types.js";
 
 /** Outcome of trying to place a now-playing track on the MusicBrainz spine. */
@@ -500,6 +501,11 @@ export async function logSpinIfChanged(
   np: NowPlayingRaw,
 ): Promise<boolean> {
   try {
+    // Ad detection runs unconditionally (before dedup) so a repeated ad slug
+    // still advances the streak instead of being suppressed as "unchanged".
+    const isAd = await recordAdSignal(station, np.rawArtist, np.rawTitle);
+    if (isAd) return false; // never pollute the spin log with ad breaks
+
     const candidateSig = sig(np.rawArtist, np.rawTitle);
 
     const [last] = await db

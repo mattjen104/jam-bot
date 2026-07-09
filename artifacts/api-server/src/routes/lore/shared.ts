@@ -18,6 +18,7 @@ export function toStation(s: Station) {
     logoUrl: s.logoUrl,
     attribution: s.attribution,
     tags: Array.isArray(s.tags) ? (s.tags as string[]) : null,
+    mayHaveAds: s.mayHaveAds,
   };
 }
 

@@ -177,6 +177,22 @@ export const stationsTable = pgTable("stations", {
    * When this reaches 3 for a longtail station, active is set false.
    */
   healthFailures: integer("health_failures").notNull().default(0),
+  /**
+   * Consecutive ad-like now-playing signals seen while polling (e.g. ICY
+   * metadata reading "Advertisement", "This station will continue after
+   * this break", etc — see lore/ads.ts). Resets to 0 on any normal-looking
+   * spin. Cheap byproduct of metadata we're already fetching every tick;
+   * no extra audio analysis required.
+   */
+  adSignalStreak: integer("ad_signal_streak").notNull().default(0),
+  /**
+   * True once `adSignalStreak` has crossed AD_SIGNAL_THRESHOLD at least
+   * once. Sticky (never auto-clears) — a station that runs ads sometimes
+   * should stay flagged rather than flicker on/off with listener state.
+   */
+  mayHaveAds: boolean("may_have_ads").notNull().default(false),
+  /** When `mayHaveAds` was first set true. Null until then. */
+  adDetectedAt: timestamp("ad_detected_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

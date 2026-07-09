@@ -9,7 +9,7 @@ import type {
 } from "@workspace/api-client-react";
 import { QualityBadge } from "./QualityBadge";
 import { FollowButton } from "./FollowButton";
-import { BadgeCheck, BookOpen, Mic, Mic2, Music2, Pause, Play, Radio } from "lucide-react";
+import { BadgeCheck, BookOpen, Mic, Mic2, Music2, Pause, Play, Radio, Volume2 } from "lucide-react";
 import type { PlayerStatus } from "../hooks/useRadioPlayer";
 
 interface StationListProps {
@@ -316,6 +316,16 @@ export function StationList({
               >
                 <FollowButton kind="station" id={station.slug} name={station.name} />
                 <QualityBadge quality={station.streamQuality} format={station.streamFormat} />
+                {station.mayHaveAds && (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wide text-amber-600 dark:text-amber-400"
+                    title="This station has been observed airing ad breaks"
+                    data-testid={`ads-badge-${station.slug}`}
+                  >
+                    <Volume2 className="h-2.5 w-2.5 shrink-0" />
+                    May have ads
+                  </span>
+                )}
               </div>
             </div>
           </li>

@@ -49,6 +49,21 @@ export const RADIO_BROWSER_GENRE_WHITELIST = Object.freeze([
 export type RadioBrowserGenre = (typeof RADIO_BROWSER_GENRE_WHITELIST)[number];
 
 /**
+ * Name substrings (case-insensitive) that permanently disqualify a station
+ * from RadioBrowser discovery, regardless of tags/bitrate/votes. Add brand
+ * names here that slip in under a whitelisted genre tag despite being
+ * low-quality/ad-heavy "lounge aggregator" style stations.
+ */
+export const RADIO_BROWSER_NAME_BLOCKLIST = Object.freeze([
+  "epic lounge",
+] as const);
+
+function isNameBlocked(name: string | null | undefined): boolean {
+  const lower = (name ?? "").toLowerCase();
+  return RADIO_BROWSER_NAME_BLOCKLIST.some((b) => lower.includes(b));
+}
+
+/**
  * Seeded genre tags — these drive cold-start discovery before user-library
  * genre expansion is available. All entries must be in RADIO_BROWSER_GENRE_WHITELIST.
  */
@@ -209,6 +224,7 @@ export function filterStations(
     if (!s.lastcheckok) continue;
     const streamUrl = (s.url_resolved || s.url || "").trim();
     if (!streamUrl || !s.name?.trim()) continue;
+    if (isNameBlocked(s.name)) continue;
     // Reject if known bitrate is below threshold; bitrate=0 means unknown → allow.
     if (s.bitrate > 0 && s.bitrate < minBitrate) continue;
     // Reject if below community vote threshold.

@@ -214,6 +214,7 @@ export interface Station {
   attribution: boolean;
   /** @nullable */
   tags?: string[] | null;
+  mayHaveAds: boolean;
 }
 
 export interface StationList {

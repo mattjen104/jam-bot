@@ -2024,6 +2024,13 @@ components:
           type: ["string", "null"]
         attribution:
           type: boolean
+        mayHaveAds:
+          type: boolean
+          description: >-
+            Cheap metadata-only signal ("this station will continue after
+            this break", sponsor reads, etc) suggests this station airs ad
+            breaks. Not a certainty — surfaces as a "may contain ads" hint,
+            not a guarantee either way.
       required:
         - slug
         - name
@@ -2031,6 +2038,7 @@ components:
         - streamFormat
         - mode
         - attribution
+        - mayHaveAds
     StationList:
       type: object
       properties:
