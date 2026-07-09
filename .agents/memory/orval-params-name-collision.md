@@ -26,3 +26,9 @@ has path params. Prefer resolving the value server-side (e.g. the entry ladder
 looks up the recording's `artistMbid` from the DB instead of taking it as a
 query param). If a query param is truly required, rename via a distinct
 operationId or post-process the codegen.
+
+A clean escape hatch: make the identifying param query-only instead of a path
+param (e.g. `GET /stations/spins?slug=...` instead of `GET
+/stations/:slug/spins`). No path param means orval only emits one `<Op>Params`
+symbol (the query-params type), so there's no collision at all — at the cost
+of a slightly less RESTful URL.

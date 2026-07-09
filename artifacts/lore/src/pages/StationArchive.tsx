@@ -6,6 +6,7 @@ import {
 import { usePlayer } from "../player/PlayerProvider";
 import { FollowButton } from "../components/FollowButton";
 import { ShareButton } from "../components/ShareButton";
+import { StationScrubTimeline } from "../components/StationScrubTimeline";
 import { runDate } from "../lib/format";
 import { ArrowLeft, ArrowUpRight, Ghost, Radio, Users } from "lucide-react";
 
@@ -62,6 +63,10 @@ export default function StationArchive() {
                 grouped by show and broadcast day (UTC)
               </p>
             </header>
+
+            <div className="mb-8">
+              <StationScrubTimeline slug={data.station.slug} stationName={data.station.name} />
+            </div>
 
             {data.runs.length === 0 ? (
               <p className="rounded-xl border border-card-border bg-card p-4 font-mono text-xs text-muted-foreground">

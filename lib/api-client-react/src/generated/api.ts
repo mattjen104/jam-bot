@@ -55,6 +55,8 @@ import type {
   RecordingPreview,
   RecordingSpins,
   StationPickerOverlaps,
+  StationSpinsPage,
+  GetStationSpinsParams,
   ResolveSongParams,
   ResolvedSong,
   RymListRequest,
@@ -1734,6 +1736,107 @@ export function useGetStationRun<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetStationRunQueryOptions(runId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Paginated, time-ordered (newest first) spin history for a station — every logged play, independent of show/run grouping. Powers the universal scrub timeline so listeners can browse a longtail station's history even when it has no documented "runs". Pass `before` (an ISO timestamp) to page further into the past; omit it for the most recent page. `bounds` reports the full time range covered so a client can render a continuous scrub control.
+
+ * @summary A station's full logged spin history, scrubbed by time
+ */
+export const getGetStationSpinsUrl = (params: GetStationSpinsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/stations/spins?${stringifiedParams}`
+    : `/api/stations/spins`;
+};
+
+export const getStationSpins = async (
+  params: GetStationSpinsParams,
+  options?: RequestInit,
+): Promise<StationSpinsPage> => {
+  return customFetch<StationSpinsPage>(getGetStationSpinsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetStationSpinsQueryKey = (params?: GetStationSpinsParams) => {
+  return [`/api/stations/spins`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetStationSpinsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStationSpins>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: GetStationSpinsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationSpins>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetStationSpinsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getStationSpins>>> = ({
+    signal,
+  }) => getStationSpins(params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!params.slug,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStationSpins>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStationSpinsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStationSpins>>
+>;
+export type GetStationSpinsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary A station's full logged spin history, scrubbed by time
+ */
+
+export function useGetStationSpins<
+  TData = Awaited<ReturnType<typeof getStationSpins>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: GetStationSpinsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationSpins>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStationSpinsQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

@@ -512,6 +512,51 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /stations/spins:
+    get:
+      operationId: getStationSpins
+      tags: [archive]
+      summary: A station's full logged spin history, scrubbed by time
+      description: >
+        Paginated, time-ordered (newest first) spin history for a station —
+        every logged play, independent of show/run grouping. Powers the
+        universal scrub timeline so listeners can browse a longtail station's
+        history even when it has no documented "runs". Pass `before` (an ISO
+        timestamp) to page further into the past; omit it for the most recent
+        page. `bounds` reports the full time range covered so a client can
+        render a continuous scrub control.
+      parameters:
+        - name: slug
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - name: before
+          in: query
+          required: false
+          description: Only return spins played strictly before this ISO timestamp.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          description: Max spins to return (default 50, max 200).
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: A page of the station's spin history, newest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationSpinsPage"
+        "404":
+          description: Station not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /archive/station-runs/{runId}:
     get:
       operationId: getStationRun
@@ -2704,6 +2749,46 @@ components:
       required:
         - station
         - runs
+    StationSpinsBounds:
+      type: object
+      description: >-
+        The full time range this station's spin history covers, so a client
+        can render a continuous scrub control without loading every page.
+      properties:
+        oldestSpinAt:
+          type: ["string", "null"]
+        newestSpinAt:
+          type: ["string", "null"]
+        spinCount:
+          type: integer
+      required:
+        - oldestSpinAt
+        - newestSpinAt
+        - spinCount
+    StationSpinsPage:
+      type: object
+      description: >-
+        One page of a station's spin history, newest first, independent of
+        show/run grouping.
+      properties:
+        station:
+          $ref: "#/components/schemas/StationRef"
+        tracks:
+          type: array
+          items:
+            $ref: "#/components/schemas/ArchiveTrack"
+        nextBefore:
+          type: ["string", "null"]
+          description: >-
+            Pass as `before` to fetch the next (older) page. Null when this
+            page reached the oldest logged spin.
+        bounds:
+          $ref: "#/components/schemas/StationSpinsBounds"
+      required:
+        - station
+        - tracks
+        - nextBefore
+        - bounds
     ArchiveTrack:
       type: object
       description: >-

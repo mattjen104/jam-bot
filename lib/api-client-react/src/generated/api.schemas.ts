@@ -1161,6 +1161,42 @@ export interface SongExploderClaimResponse {
   episodeTitle: string;
 }
 
+/**
+ * The full time range this station's spin history covers, so a client can render a continuous scrub control without loading every page.
+ */
+export interface StationSpinsBounds {
+  /** @nullable */
+  oldestSpinAt: string | null;
+  /** @nullable */
+  newestSpinAt: string | null;
+  spinCount: number;
+}
+
+/**
+ * One page of a station's spin history, newest first, independent of show/run grouping.
+ */
+export interface StationSpinsPage {
+  station: StationRef;
+  tracks: ArchiveTrack[];
+  /**
+   * Pass as `before` to fetch the next (older) page. Null when this page reached the oldest logged spin.
+   * @nullable
+   */
+  nextBefore: string | null;
+  bounds: StationSpinsBounds;
+}
+
+export type GetStationSpinsParams = {
+  /**
+   * @minLength 1
+   */
+  slug: string;
+  /** Only return spins played strictly before this ISO timestamp. */
+  before?: string;
+  /** Max spins to return (default 50, max 200). */
+  limit?: number;
+};
+
 export type ResolveSongParams = {
   /**
    * @minLength 1

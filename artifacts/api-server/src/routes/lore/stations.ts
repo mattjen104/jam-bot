@@ -7,6 +7,8 @@ import {
   GetStationNowPlayingResponse,
   GetStationArchiveParams,
   GetStationArchiveResponse,
+  GetStationSpinsQueryParams,
+  GetStationSpinsResponse,
   GetStationPickerOverlapsParams,
   GetStationPickerOverlapsResponse,
   GetStationsRecentSpinsResponse,
@@ -329,6 +331,85 @@ router.get("/stations/:slug/archive", h(async (req, res) => {
         startedAt: new Date(r.startedAt).toISOString(),
         endedAt: new Date(r.endedAt).toISOString(),
       })),
+    }),
+  );
+}));
+
+// GET /api/stations/:slug/spins — full logged spin history, paginated by
+// time, newest first. Independent of show/run grouping — this is what powers
+// the universal scrub timeline (curated stations AND longtail radio-browser
+// stations alike, since it needs no documented "run").
+router.get("/stations/spins", h(async (req, res) => {
+  const parsedQuery = GetStationSpinsQueryParams.safeParse(req.query);
+  if (!parsedQuery.success) {
+    return res.status(400).json({ error: "Invalid request" });
+  }
+
+  const [station] = await db
+    .select()
+    .from(stationsTable)
+    .where(eq(stationsTable.slug, parsedQuery.data.slug))
+    .limit(1);
+  if (!station) {
+    return res.status(404).json({ error: "Station not found" });
+  }
+
+  const before = parsedQuery.data.before ? new Date(parsedQuery.data.before) : null;
+  const limit = Math.min(Math.max(parsedQuery.data.limit ?? 50, 1), 200);
+
+  const [bounds] = await db
+    .select({
+      oldestSpinAt: sql<string | null>`min(${spinsTable.playedAt})`,
+      newestSpinAt: sql<string | null>`max(${spinsTable.playedAt})`,
+      spinCount: sql<number>`count(*)::int`,
+    })
+    .from(spinsTable)
+    .where(eq(spinsTable.stationId, station.id));
+
+  const rows = await db
+    .select({
+      playedAt: spinsTable.playedAt,
+      rawArtist: spinsTable.rawArtist,
+      rawTitle: spinsTable.rawTitle,
+      confidence: spinsTable.confidence,
+      mbid: recordingsTable.mbid,
+      recTitle: recordingsTable.title,
+      recArtist: recordingsTable.artist,
+      artworkUrl: recordingsTable.artworkUrl,
+      links: recordingsTable.links,
+    })
+    .from(spinsTable)
+    .leftJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
+    .where(
+      before && !Number.isNaN(before.getTime())
+        ? and(eq(spinsTable.stationId, station.id), sql`${spinsTable.playedAt} < ${before}`)
+        : eq(spinsTable.stationId, station.id),
+    )
+    .orderBy(desc(spinsTable.playedAt))
+    .limit(limit);
+
+  return res.json(
+    GetStationSpinsResponse.parse({
+      station: {
+        slug: station.slug,
+        name: station.name,
+        stationClass: station.stationClass,
+      },
+      tracks: rows.map((r, i) => ({
+        position: i,
+        playedAt: r.playedAt.toISOString(),
+        rawArtist: r.rawArtist ?? "",
+        rawTitle: r.rawTitle ?? "",
+        confidence: r.confidence,
+        recording: toArchiveRecording(r),
+      })),
+      nextBefore:
+        rows.length === limit ? rows[rows.length - 1]!.playedAt.toISOString() : null,
+      bounds: {
+        oldestSpinAt: bounds?.oldestSpinAt ? new Date(bounds.oldestSpinAt).toISOString() : null,
+        newestSpinAt: bounds?.newestSpinAt ? new Date(bounds.newestSpinAt).toISOString() : null,
+        spinCount: bounds?.spinCount ?? 0,
+      },
     }),
   );
 }));

@@ -1167,6 +1167,79 @@ export const GetStationRunResponse = zod.object({
 });
 
 /**
+ * Paginated, time-ordered (newest first) spin history for a station — every logged play, independent of show/run grouping. Powers the universal scrub timeline so listeners can browse a longtail station's history even when it has no documented "runs". Pass `before` (an ISO timestamp) to page further into the past; omit it for the most recent page. `bounds` reports the full time range covered so a client can render a continuous scrub control.
+
+ * @summary A station's full logged spin history, scrubbed by time
+ */
+
+export const GetStationSpinsQueryParams = zod.object({
+  slug: zod.coerce.string().min(1),
+  before: zod.coerce.string().optional(),
+  limit: zod.coerce.number().optional(),
+});
+
+export const GetStationSpinsResponse = zod.object({
+  station: zod
+    .object({
+      slug: zod.string(),
+      name: zod.string(),
+      stationClass: zod.string(),
+    })
+    .describe("A station reference used in spin\/segue attribution."),
+  tracks: zod.array(
+    zod
+      .object({
+        position: zod.number(),
+        playedAt: zod.string(),
+        rawArtist: zod.string(),
+        rawTitle: zod.string(),
+        confidence: zod.enum(["recording_id", "isrc", "text", "unresolved"]),
+        recording: zod
+          .union([
+            zod
+              .object({
+                mbid: zod.string(),
+                title: zod.string(),
+                artist: zod.string(),
+                artworkUrl: zod.string().nullish(),
+                links: zod.array(
+                  zod
+                    .object({
+                      name: zod.string(),
+                      url: zod.string(),
+                      kind: zod.enum(["exact", "search"]),
+                    })
+                    .describe(
+                      'A cross-service deep link. kind=\"exact\" points at the precise recording (resolved via Odesli); kind=\"search\" is a best-effort artist+title search on that service.',
+                    ),
+                ),
+              })
+              .describe("The MBID-keyed recording a spin resolved to."),
+            zod.null(),
+          ])
+          .optional(),
+      })
+      .describe(
+        "One logged spin, newest-first. `recording` is null when the track never resolved to the spine (raw metadata preserved — the honesty gradient stays visible even in scrub).",
+      ),
+  ),
+  nextBefore: zod
+    .union([zod.string(), zod.null()])
+    .describe(
+      "Pass as `before` to fetch the next (older) page. Null when this page reached the oldest logged spin.",
+    ),
+  bounds: zod
+    .object({
+      oldestSpinAt: zod.string().nullable(),
+      newestSpinAt: zod.string().nullable(),
+      spinCount: zod.number(),
+    })
+    .describe(
+      "The full time range and count of the station's logged spin history, independent of the current page — used to render a continuous scrub control.",
+    ),
+});
+
+/**
  * The picker's picks grouped into runs — one run per source URL (an NTS episode page, a list, a post) — newest first by pick date. The `runId` is an opaque id for fetching the ordered tracklist via /archive/picker-runs/{runId}.
 
  * @summary A picker's documented runs (archived episodes / lists)
