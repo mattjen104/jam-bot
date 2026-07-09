@@ -29,6 +29,10 @@ export const loreErrorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   const status = err instanceof HttpError ? err.status : 503;
   const message =
     err instanceof HttpError ? err.message : "Internal error";
-  console.error(`[lore] ${req.method} ${req.path} failed`, err);
+  const errInfo =
+    err instanceof Error
+      ? { name: err.name, message: err.message, stack: err.stack }
+      : err;
+  console.error(`[lore] ${req.method} ${req.path} failed`, errInfo);
   res.status(status).json({ error: message });
 };
