@@ -10,6 +10,7 @@ import {
   parseFipSteps,
   stationArchiveUrl,
   supportsBackfill,
+  parseRadiojarNowPlaying,
 } from "../src/lore/adapters.js";
 
 describe("pickPath", () => {
@@ -387,6 +388,7 @@ describe("parseNtsLive", () => {
     expect(parseNtsLive(body)).toEqual({
       rawArtist: "Ben UFO",
       rawTitle: "Hessle Audio",
+      show: { name: "Hessle Audio", djName: "Ben UFO" },
     });
   });
 
@@ -455,5 +457,56 @@ describe("supportsBackfill", () => {
     expect(supportsBackfill("kexp_api")).toBe(true);
     expect(supportsBackfill("radio_paradise")).toBe(false);
     expect(supportsBackfill(null)).toBe(false);
+  });
+});
+
+describe("parseRadiojarNowPlaying", () => {
+  it("parses a normal track payload with album and thumb", () => {
+    expect(
+      parseRadiojarNowPlaying({
+        artist: "Fleetwood Mac",
+        title: "Go Your Own Way",
+        album: "Rumours",
+        thumb: "https://cdn.example.com/art.jpg",
+      }),
+    ).toEqual({
+      rawArtist: "Fleetwood Mac",
+      rawTitle: "Go Your Own Way",
+      album: "Rumours",
+      artworkUrl: "https://cdn.example.com/art.jpg",
+    });
+  });
+
+  it("passes through show-level metadata (AlHara style)", () => {
+    expect(parseRadiojarNowPlaying({ artist: "Saria", title: "w/ Saria" })).toEqual({
+      rawArtist: "Saria",
+      rawTitle: "w/ Saria",
+    });
+  });
+
+  it("degrades to title-only and artist-only payloads", () => {
+    expect(parseRadiojarNowPlaying({ title: "Some Show" })).toEqual({
+      rawArtist: "Some Show",
+      rawTitle: "Some Show",
+    });
+    expect(parseRadiojarNowPlaying({ artist: "Some DJ" })).toEqual({
+      rawArtist: "Some DJ",
+      rawTitle: "Some DJ",
+    });
+  });
+
+  it("ignores empty/whitespace strings and null album/thumb", () => {
+    expect(parseRadiojarNowPlaying({ artist: "  ", title: "" })).toBeNull();
+    expect(
+      parseRadiojarNowPlaying({ artist: "A", title: "B", album: null, thumb: "" }),
+    ).toEqual({ rawArtist: "A", rawTitle: "B" });
+  });
+
+  it("returns null for non-object bodies", () => {
+    expect(parseRadiojarNowPlaying(null)).toBeNull();
+    expect(parseRadiojarNowPlaying(undefined)).toBeNull();
+    expect(parseRadiojarNowPlaying("nope")).toBeNull();
+    expect(parseRadiojarNowPlaying([1, 2])).toBeNull();
+    expect(parseRadiojarNowPlaying({})).toBeNull();
   });
 });

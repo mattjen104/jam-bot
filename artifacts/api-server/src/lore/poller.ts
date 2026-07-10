@@ -40,6 +40,7 @@ const POLL_INTERVALS_MS: Record<string, number> = {
   nts_live: 120_000, // 2 min — show-level, changes infrequently
   fip: 60_000, // 1 min — per-track metadata, songs ~3-5 min
   radio_browser_icy: 30_000, // 30 s — ICY metadata is cheap to fetch
+  radiojar: 60_000, // 1 min — unauthenticated JSON now-playing endpoint
 };
 const DEFAULT_POLL_MS = 90_000;
 const STAGGER_MS = 4_000;

@@ -717,6 +717,60 @@ const radioBrowserIcy: NowPlayingAdapter = async (config) => {
   return parseIcyNowPlaying(result.streamTitle);
 };
 
+// ---- Radiojar (now-playing, change-detection) ---------------------------
+
+/**
+ * Radiojar — hosted streaming platform (Radio AlHara, Lookout.FM, ...).
+ * The audio stream itself hides behind per-request tokenized 302 redirects
+ * that the raw-TCP ICY fetcher can't follow, but Radiojar publishes an
+ * unauthenticated now-playing JSON API per stream id:
+ *
+ *   https://www.radiojar.com/api/stations/<streamId>/now_playing/
+ *   → { artist, title, album, thumb, ... }
+ *
+ * Config: `{ streamId: "78cxy6wkxtzuv" }`.
+ *
+ * Freeform-station caveat: many Radiojar stations broadcast show-level
+ * metadata (artist "Saria" / title "w/ Saria") rather than track info. That
+ * flows through the normal text-resolution pipeline and may land unresolved,
+ * which is expected — when real track metadata is broadcast it resolves like
+ * any other station.
+ *
+ * Pure: shape a Radiojar now-playing JSON body into a NowPlayingRaw. Returns
+ * null when the body is not an object or both artist and title are missing.
+ * When only one of artist/title is present it stands in for both (same
+ * degradation pattern as ICY title-only entries).
+ */
+export function parseRadiojarNowPlaying(body: unknown): NowPlayingRaw | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+  const obj = body as Record<string, unknown>;
+  const artist = str(obj.artist);
+  const title = str(obj.title);
+  if (!artist && !title) return null;
+  const rawTitle = title ?? artist!;
+  const rawArtist = artist ?? rawTitle;
+  const out: NowPlayingRaw = { rawArtist, rawTitle };
+  const album = str(obj.album);
+  if (album) out.album = album;
+  const thumb = str(obj.thumb);
+  if (thumb) out.artworkUrl = thumb;
+  return out;
+}
+
+const radiojar: NowPlayingAdapter = async (config) => {
+  const streamId = str(config.streamId);
+  if (!streamId) return null;
+  let body: unknown;
+  try {
+    body = await getJson(
+      `https://www.radiojar.com/api/stations/${encodeURIComponent(streamId)}/now_playing/`,
+    );
+  } catch {
+    return null;
+  }
+  return parseRadiojarNowPlaying(body);
+};
+
 // ---- Registry -----------------------------------------------------------
 
 const NOW_PLAYING_ADAPTERS: Record<string, NowPlayingAdapter> = {
@@ -725,6 +779,7 @@ const NOW_PLAYING_ADAPTERS: Record<string, NowPlayingAdapter> = {
   nts_live: ntsLive,
   fip,
   radio_browser_icy: radioBrowserIcy,
+  radiojar,
 };
 
 const HISTORY_ADAPTERS: Record<string, HistoryAdapter> = {

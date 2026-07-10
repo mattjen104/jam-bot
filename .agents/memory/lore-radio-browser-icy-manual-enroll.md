@@ -34,3 +34,13 @@ behind a 302 (Live365, Radiojar, some CDN mirrors) reports `icy_unsupported` eve
 though the resolved URL works fine. Resolve the redirect once (e.g. `fetch(url,
 {redirect:"follow"})`) and store the final URL instead, but note some redirectors
 (Radiojar) mint a new token per request, so resolving once may still go stale.
+
+**Radiojar stations: skip ICY entirely.** Radiojar publishes an unauthenticated
+now-playing JSON API per stream id — `https://www.radiojar.com/api/stations/<id>/now_playing/`
+(returns `{artist, title, album, thumb}`) — so a dedicated `radiojar` now-playing
+adapter (config `{streamId}`) is the right path; never store the tokenized stream
+URL for polling. For browser playback, `https://stream.radiojar.com/<id>` works:
+it 302s to a tokenized `http://nNN.radiojar.com/...` URL, but the node hosts also
+serve HTTPS, so browsers that auto-upgrade mixed media play fine. Many Radiojar
+stations broadcast show-level metadata ("Saria" / "w/ Saria") — that flows through
+text resolution and lands unresolved by design.
