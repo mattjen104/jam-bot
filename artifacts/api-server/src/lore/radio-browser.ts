@@ -443,14 +443,35 @@ export async function purgeNonQualifyingStations(): Promise<number> {
     (g) => `tags @> '${JSON.stringify([g])}'::jsonb`,
   ).join(" OR ");
 
+  const whereClause = `
+    source = 'radio_browser'
+    AND (
+      NOT (${tagChecks})
+      OR (bitrate IS NOT NULL AND bitrate > 0 AND bitrate < ${MIN_BITRATE_KBPS})
+      OR votes < ${MIN_VOTES}
+    )
+  `;
+
+  // No ON DELETE CASCADE on these references — dependents must be cleared
+  // first (spins, shows, then the discovery-bookkeeping row in
+  // radio_browser_stations, which is easy to miss since it isn't part of
+  // the play-history spine) or the final DELETE hits a FK violation and
+  // silently no-ops every startup. See lore-station-deletion-fk-order memory.
+  await db.execute(sql.raw(`
+    DELETE FROM spins
+    WHERE station_id IN (SELECT id FROM stations WHERE ${whereClause})
+  `));
+  await db.execute(sql.raw(`
+    DELETE FROM shows
+    WHERE station_id IN (SELECT id FROM stations WHERE ${whereClause})
+  `));
+  await db.execute(sql.raw(`
+    DELETE FROM radio_browser_stations
+    WHERE station_id IN (SELECT id FROM stations WHERE ${whereClause})
+  `));
   const result = await db.execute(sql.raw(`
     DELETE FROM stations
-    WHERE source = 'radio_browser'
-      AND (
-        NOT (${tagChecks})
-        OR (bitrate IS NOT NULL AND bitrate > 0 AND bitrate < ${MIN_BITRATE_KBPS})
-        OR votes < ${MIN_VOTES}
-      )
+    WHERE ${whereClause}
   `));
   const deleted = (result as { rowCount?: number }).rowCount ?? 0;
   if (deleted > 0) {
