@@ -19,6 +19,10 @@ export function toStation(s: Station) {
     attribution: s.attribution,
     tags: Array.isArray(s.tags) ? (s.tags as string[]) : null,
     mayHaveAds: s.mayHaveAds,
+    votes: s.votes,
+    clickcount: s.clickcount,
+    discoveryScore: s.discoveryScore ?? null,
+    homepageBlurb: s.homepageBlurb ?? null,
   };
 }
 

@@ -213,6 +213,22 @@ export const stationsTable = pgTable("stations", {
   mayHaveAds: boolean("may_have_ads").notNull().default(false),
   /** When `mayHaveAds` was first set true. Null until then. */
   adDetectedAt: timestamp("ad_detected_at"),
+  /**
+   * Cached discovery score (0-100, higher = newer-leaning rotation), recomputed
+   * periodically by the discovery-score job from logged spins via
+   * computeDiscoveryScore. Null until enough resolved spin history exists.
+   * Cached rather than computed live because the dial sorts across every
+   * active station on every request.
+   */
+  discoveryScore: real("discovery_score"),
+  /**
+   * Best-effort excerpt (title/meta description) scraped from the station's
+   * own homepage. Null when never scraped, blocked by robots.txt, or the page
+   * had no usable text — never fabricated.
+   */
+  homepageBlurb: text("homepage_blurb"),
+  /** When the homepage was last (attempted to be) scraped. Null = never. */
+  homepageScrapedAt: timestamp("homepage_scraped_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

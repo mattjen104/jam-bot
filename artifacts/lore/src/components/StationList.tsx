@@ -9,7 +9,7 @@ import type {
 } from "@workspace/api-client-react";
 import { QualityBadge } from "./QualityBadge";
 import { FollowButton } from "./FollowButton";
-import { BadgeCheck, BookOpen, Mic, Mic2, Music2, Pause, Play, Radio, Volume2 } from "lucide-react";
+import { BadgeCheck, BookOpen, ExternalLink, Mic, Mic2, Music2, Pause, Play, Radio, Volume2 } from "lucide-react";
 import type { PlayerStatus } from "../hooks/useRadioPlayer";
 
 interface StationListProps {
@@ -155,6 +155,20 @@ export function StationList({
                   <h3 className="truncate font-serif text-lg font-semibold leading-tight text-foreground">
                     {station.name}
                   </h3>
+                  {station.homepageUrl && (
+                    <a
+                      href={station.homepageUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`Visit ${station.name}'s homepage`}
+                      title={station.homepageUrl}
+                      data-testid={`homepage-link-${station.slug}`}
+                      className="shrink-0 text-muted-foreground/60 transition-colors hover:text-primary"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  )}
                   {isPlaying && (
                     <span className="flex h-3 items-end gap-[2px]" aria-hidden>
                       {[0, 1, 2].map((i) => (
@@ -193,6 +207,11 @@ export function StationList({
                       {[station.org, station.country].filter(Boolean).join(" · ") ||
                         "Independent"}
                     </p>
+                    {station.homepageBlurb && (
+                      <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground/70">
+                        {station.homepageBlurb}
+                      </p>
+                    )}
                     {station.tags && station.tags.length > 0 && (
                       <div className="mt-1 flex flex-wrap gap-1">
                         {station.tags.slice(0, 3).map((tag) => (

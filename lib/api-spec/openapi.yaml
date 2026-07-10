@@ -2187,6 +2187,24 @@ components:
             this break", sponsor reads, etc) suggests this station airs ad
             breaks. Not a certainty — surfaces as a "may contain ads" hint,
             not a guarantee either way.
+        votes:
+          type: integer
+          description: radio-browser.info community vote count (0 for curated stations never seen there).
+        clickcount:
+          type: integer
+          description: radio-browser.info click count, a proxy for cross-network listener demand.
+        discoveryScore:
+          type: ["number", "null"]
+          description: >-
+            0-100 cached discovery score (higher = newer/more "discovery"-leaning
+            rotation), recomputed periodically from logged spins. Null until enough
+            resolved spin history exists to compute one.
+        homepageBlurb:
+          type: ["string", "null"]
+          description: >-
+            Best-effort excerpt (title/meta description) scraped from the station's
+            own homepage. Null when never scraped, blocked by robots.txt, or the
+            page had no usable text — never fabricated.
       required:
         - slug
         - name
@@ -2195,6 +2213,8 @@ components:
         - mode
         - attribution
         - mayHaveAds
+        - votes
+        - clickcount
     StationList:
       type: object
       properties:

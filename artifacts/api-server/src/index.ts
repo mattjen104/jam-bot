@@ -30,6 +30,8 @@ import { startStreamHealthWorker } from "./lore/stream-health.js";
 import { applyStationDiscoveryMigration } from "./lore/station-migration.js";
 import { applyPickerDiscoveryMigration } from "./lore/picker-migration.js";
 import { startGenreBackfillJob } from "./lore/genre-backfill.js";
+import { startHomepageScraper } from "./lore/homepage-scraper.js";
+import { startDiscoveryScoreJob } from "./lore/discovery-score-job.js";
 
 const rawPort = process.env["PORT"];
 
@@ -96,6 +98,8 @@ async function bootLore(): Promise<void> {
     startStreamHealthWorker();
     startRadioBrowserWorker();
     startGenreBackfillJob();
+    startHomepageScraper();
+    startDiscoveryScoreJob();
   } catch (err) {
     console.error("[lore] boot failed", err);
   }

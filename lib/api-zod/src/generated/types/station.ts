@@ -33,4 +33,18 @@ export interface Station {
   tags?: string[] | null;
   /** Cheap metadata-only signal ("this station will continue after this break", sponsor reads, etc) suggests this station airs ad breaks. Not a certainty — surfaces as a "may contain ads" hint, not a guarantee either way. */
   mayHaveAds: boolean;
+  /** radio-browser.info community vote count (0 for curated stations never seen there). */
+  votes: number;
+  /** radio-browser.info click count, a proxy for cross-network listener demand. */
+  clickcount: number;
+  /**
+   * 0-100 cached discovery score (higher = newer/more "discovery"-leaning rotation), recomputed periodically from logged spins. Null until enough resolved spin history exists to compute one.
+   * @nullable
+   */
+  discoveryScore?: number | null;
+  /**
+   * Best-effort excerpt (title/meta description) scraped from the station's own homepage. Null when never scraped, blocked by robots.txt, or the page had no usable text — never fabricated.
+   * @nullable
+   */
+  homepageBlurb?: string | null;
 }

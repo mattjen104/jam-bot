@@ -192,6 +192,60 @@ function DateSweep({
 }
 
 type DialFilterTab = "all" | "live" | "lists" | "following";
+type DialSort = "default" | "popularity" | "discovery";
+
+/** Sort/genre controls for the station dial. Purely client-side — the full
+ * station list is already loaded, so no extra network round-trip is needed. */
+function DialSortAndGenre({
+  sort,
+  onSortChange,
+  genre,
+  onGenreChange,
+  genreOptions,
+}: {
+  sort: DialSort;
+  onSortChange: (sort: DialSort) => void;
+  genre: string | null;
+  onGenreChange: (genre: string | null) => void;
+  genreOptions: string[];
+}) {
+  const sorts: { id: DialSort; label: string }[] = [
+    { id: "default", label: "Curated order" },
+    { id: "popularity", label: "Most popular" },
+    { id: "discovery", label: "Discovery" },
+  ];
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-2">
+      <select
+        value={sort}
+        onChange={(e) => onSortChange(e.target.value as DialSort)}
+        data-testid="dial-sort-select"
+        className="rounded-full border border-border bg-card px-3 py-1 font-mono text-[11px] uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+      >
+        {sorts.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.label}
+          </option>
+        ))}
+      </select>
+      {genreOptions.length > 0 && (
+        <select
+          value={genre ?? ""}
+          onChange={(e) => onGenreChange(e.target.value || null)}
+          data-testid="dial-genre-select"
+          className="rounded-full border border-border bg-card px-3 py-1 font-mono text-[11px] uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+        >
+          <option value="">All genres</option>
+          {genreOptions.map((g) => (
+            <option key={g} value={g}>
+              {g}
+            </option>
+          ))}
+        </select>
+      )}
+    </div>
+  );
+}
 
 /** Four-tab filter that narrows the dial to stations, lists, or followed items. */
 function DialFilter({
@@ -240,6 +294,8 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
   const { radio: player } = usePlayer();
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [dialFilter, setDialFilter] = useState<DialFilterTab>("all");
+  const [dialSort, setDialSort] = useState<DialSort>("default");
+  const [dialGenre, setDialGenre] = useState<string | null>(null);
   const follows = useFollows();
 
   // Client-side NTS show data — NTS blocks datacenter IPs but browser requests
@@ -333,14 +389,38 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
     [follows],
   );
 
+  // Genre options derived from whatever tags are actually present on the
+  // loaded stations — avoids a separate endpoint or a hardcoded taxonomy.
+  const genreOptions = useMemo((): string[] => {
+    const set = new Set<string>();
+    for (const s of stations) {
+      for (const tag of s.tags ?? []) set.add(tag);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [stations]);
+
   // Client-side filter — no network traffic.
   const filteredStations = useMemo((): Station[] => {
-    if (dialFilter === "live") return stations;
+    let result = stations;
     if (dialFilter === "lists") return [];
     if (dialFilter === "following")
-      return stations.filter((s) => isFollowed(follows, "station", s.slug));
-    return stations;
-  }, [dialFilter, stations, follows]);
+      result = result.filter((s) => isFollowed(follows, "station", s.slug));
+
+    if (dialGenre)
+      result = result.filter((s) => (s.tags ?? []).includes(dialGenre));
+
+    if (dialSort === "popularity") {
+      result = [...result].sort(
+        (a, b) => (b.votes ?? 0) + (b.clickcount ?? 0) - ((a.votes ?? 0) + (a.clickcount ?? 0)),
+      );
+    } else if (dialSort === "discovery") {
+      result = [...result].sort(
+        (a, b) => (b.discoveryScore ?? -1) - (a.discoveryScore ?? -1),
+      );
+    }
+
+    return result;
+  }, [dialFilter, dialSort, dialGenre, stations, follows]);
 
   const filteredPickerItems = useMemo((): PickerDialItem[] => {
     if (dialFilter === "live") return [];
@@ -491,6 +571,16 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
         onChange={setDialFilter}
         followCount={dialFollowCount}
       />
+
+      {dialFilter !== "lists" && (
+        <DialSortAndGenre
+          sort={dialSort}
+          onSortChange={setDialSort}
+          genre={dialGenre}
+          onGenreChange={setDialGenre}
+          genreOptions={genreOptions}
+        />
+      )}
 
       {isLoading && <StationListSkeleton />}
       {isError && (

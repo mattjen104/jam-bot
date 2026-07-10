@@ -25,7 +25,10 @@ export async function applyStationDiscoveryMigration(): Promise<void> {
       ADD COLUMN IF NOT EXISTS votes           integer  NOT NULL DEFAULT 0,
       ADD COLUMN IF NOT EXISTS bitrate         integer,
       ADD COLUMN IF NOT EXISTS codec           text,
-      ADD COLUMN IF NOT EXISTS health_failures integer  NOT NULL DEFAULT 0
+      ADD COLUMN IF NOT EXISTS health_failures integer  NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS discovery_score      real,
+      ADD COLUMN IF NOT EXISTS homepage_blurb       text,
+      ADD COLUMN IF NOT EXISTS homepage_scraped_at  timestamptz
   `);
   console.info("[migration] station discovery fields: OK");
 }

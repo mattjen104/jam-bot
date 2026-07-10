@@ -230,6 +230,28 @@ export const ListStationsResponse = zod.object({
           .describe(
             'Cheap metadata-only signal (\"this station will continue after this break\", sponsor reads, etc) suggests this station airs ad breaks. Not a certainty — surfaces as a \"may contain ads\" hint, not a guarantee either way.',
           ),
+        votes: zod
+          .number()
+          .describe(
+            "radio-browser.info community vote count (0 for curated stations never seen there).",
+          ),
+        clickcount: zod
+          .number()
+          .describe(
+            "radio-browser.info click count, a proxy for cross-network listener demand.",
+          ),
+        discoveryScore: zod
+          .number()
+          .nullish()
+          .describe(
+            '0-100 cached discovery score (higher = newer/more \"discovery\"-leaning rotation), recomputed periodically from logged spins. Null until enough resolved spin history exists to compute one.',
+          ),
+        homepageBlurb: zod
+          .string()
+          .nullish()
+          .describe(
+            "Best-effort excerpt (title/meta description) scraped from the station's own homepage. Null when never scraped, blocked by robots.txt, or the page had no usable text — never fabricated.",
+          ),
       })
       .describe("A curated radio station in the public directory."),
   ),
@@ -345,6 +367,28 @@ export const GetStationNowPlayingResponse = zod.object({
         .boolean()
         .describe(
           'Cheap metadata-only signal (\"this station will continue after this break\", sponsor reads, etc) suggests this station airs ad breaks. Not a certainty — surfaces as a \"may contain ads\" hint, not a guarantee either way.',
+        ),
+      votes: zod
+        .number()
+        .describe(
+          "radio-browser.info community vote count (0 for curated stations never seen there).",
+        ),
+      clickcount: zod
+        .number()
+        .describe(
+          "radio-browser.info click count, a proxy for cross-network listener demand.",
+        ),
+      discoveryScore: zod
+        .number()
+        .nullish()
+        .describe(
+          '0-100 cached discovery score (higher = newer/more \"discovery\"-leaning rotation), recomputed periodically from logged spins. Null until enough resolved spin history exists to compute one.',
+        ),
+      homepageBlurb: zod
+        .string()
+        .nullish()
+        .describe(
+          "Best-effort excerpt (title/meta description) scraped from the station's own homepage. Null when never scraped, blocked by robots.txt, or the page had no usable text — never fabricated.",
         ),
     })
     .describe("A curated radio station in the public directory."),
@@ -876,6 +920,28 @@ export const GetStationArchiveResponse = zod.object({
         .boolean()
         .describe(
           'Cheap metadata-only signal (\"this station will continue after this break\", sponsor reads, etc) suggests this station airs ad breaks. Not a certainty — surfaces as a \"may contain ads\" hint, not a guarantee either way.',
+        ),
+      votes: zod
+        .number()
+        .describe(
+          "radio-browser.info community vote count (0 for curated stations never seen there).",
+        ),
+      clickcount: zod
+        .number()
+        .describe(
+          "radio-browser.info click count, a proxy for cross-network listener demand.",
+        ),
+      discoveryScore: zod
+        .number()
+        .nullish()
+        .describe(
+          '0-100 cached discovery score (higher = newer/more \"discovery\"-leaning rotation), recomputed periodically from logged spins. Null until enough resolved spin history exists to compute one.',
+        ),
+      homepageBlurb: zod
+        .string()
+        .nullish()
+        .describe(
+          "Best-effort excerpt (title/meta description) scraped from the station's own homepage. Null when never scraped, blocked by robots.txt, or the page had no usable text — never fabricated.",
         ),
     })
     .describe("A curated radio station in the public directory."),
