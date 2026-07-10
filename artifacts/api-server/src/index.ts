@@ -32,6 +32,9 @@ import { applyPickerDiscoveryMigration } from "./lore/picker-migration.js";
 import { startGenreBackfillJob } from "./lore/genre-backfill.js";
 import { startHomepageScraper } from "./lore/homepage-scraper.js";
 import { startDiscoveryScoreJob } from "./lore/discovery-score-job.js";
+import { applyStationScheduleMigration } from "./lore/station-schedule-migration.js";
+import { wireScheduleExtractor } from "./lore/schedule-wire.js";
+import { startScheduleScraper } from "./lore/schedule-scraper.js";
 
 const rawPort = process.env["PORT"];
 
@@ -61,6 +64,7 @@ async function bootLore(): Promise<void> {
     wireSongEnrichment();
     await applyStationDiscoveryMigration();
     await applyPickerDiscoveryMigration();
+    await applyStationScheduleMigration();
     await ensurePicksUnifiedView();
     await seedStations();
     await seedPickers();
@@ -99,6 +103,9 @@ async function bootLore(): Promise<void> {
     startRadioBrowserWorker();
     startGenreBackfillJob();
     startHomepageScraper();
+    if (await wireScheduleExtractor()) {
+      startScheduleScraper();
+    }
     startDiscoveryScoreJob();
   } catch (err) {
     console.error("[lore] boot failed", err);

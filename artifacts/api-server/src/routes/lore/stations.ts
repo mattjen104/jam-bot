@@ -13,6 +13,8 @@ import {
   GetStationPickerOverlapsResponse,
   GetStationsRecentSpinsResponse,
   GetStationsScheduleResponse,
+  GetStationUpcomingScheduleParams,
+  GetStationUpcomingScheduleResponse,
   ReportStationNowPlayingParams,
   IcecastReportBody,
   IcecastReportResultBody,
@@ -27,6 +29,7 @@ import {
   recordingsTable,
   pickersTable,
   picksTable,
+  scrapedShowsTable,
 } from "@workspace/db";
 import { eq, ne, and, asc, desc, isNotNull, inArray, sql } from "drizzle-orm";
 import { stationArchiveUrl } from "../../lore/adapters.js";
@@ -679,6 +682,65 @@ router.get("/stations/schedule", h(async (req, res) => {
   }));
 
   return res.json(GetStationsScheduleResponse.parse({ items }));
+}));
+
+// GET /api/stations/:slug/upcoming-schedule
+// Returns the station's own scraped weekly programming grid (name/day/time),
+// distinct from /stations/schedule which is derived from logged spins.
+router.get("/stations/:slug/upcoming-schedule", h(async (req, res) => {
+  const { slug } = GetStationUpcomingScheduleParams.parse(req.params);
+
+  const station = await db
+    .select({
+      id: stationsTable.id,
+      slug: stationsTable.slug,
+      scheduleScrapedAt: stationsTable.scheduleScrapedAt,
+    })
+    .from(stationsTable)
+    .where(eq(stationsTable.slug, slug))
+    .limit(1);
+
+  if (station.length === 0) {
+    return res.status(404).json({ error: "Station not found" });
+  }
+
+  const dayRank = sql<number>`array_position(
+    array['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+    ${scrapedShowsTable.dayOfWeek}
+  )`;
+  const rows = await db
+    .select({
+      showName: scrapedShowsTable.showName,
+      dayOfWeek: scrapedShowsTable.dayOfWeek,
+      startTime: scrapedShowsTable.startTime,
+      endTime: scrapedShowsTable.endTime,
+      djName: scrapedShowsTable.djName,
+    })
+    .from(scrapedShowsTable)
+    .where(eq(scrapedShowsTable.stationId, station[0]!.id))
+    .orderBy(asc(dayRank), asc(scrapedShowsTable.startTime));
+
+  // Freshness comes from stationsTable.scheduleScrapedAt (set on every
+  // successful scrape, including a legitimate empty result) rather than from
+  // row data — otherwise a station with a real, successfully-confirmed empty
+  // schedule would be indistinguishable from one that's never been scraped.
+  const lastScrapedAt = station[0]!.scheduleScrapedAt
+    ? station[0]!.scheduleScrapedAt.toISOString()
+    : null;
+
+  return res.json(
+    GetStationUpcomingScheduleResponse.parse({
+      stationSlug: station[0]!.slug,
+      shows: rows.map((r) => ({
+        showName: r.showName,
+        dayOfWeek: r.dayOfWeek,
+        startTime: r.startTime,
+        endTime: r.endTime,
+        djName: r.djName ?? null,
+      })),
+      lastScrapedAt,
+    }),
+  );
 }));
 
 export default router;

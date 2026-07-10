@@ -799,6 +799,40 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ArchiveRecentRuns"
+  /stations/{slug}/upcoming-schedule:
+    get:
+      operationId: getStationUpcomingSchedule
+      tags: [stations]
+      summary: A station's scraped weekly programming grid
+      description: >
+        The station's own published upcoming-show schedule — show name, day of
+        week, start/end time, and DJ when stated — scraped from its homepage
+        or a linked schedule page and extracted via LLM. Distinct from
+        `/stations/schedule`, which derives a timeline from already-logged
+        spins; this reflects what the station itself publishes about shows to
+        come. Returns an empty `shows` array (never fabricated entries) when
+        the station has no parseable schedule, along with `lastScrapedAt` so
+        clients can show "no schedule available" honestly.
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: The station's scraped upcoming schedule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationUpcomingSchedule"
+        "404":
+          description: Station not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /stations/{slug}/overlaps/pickers:
     get:
       operationId: getStationPickerOverlaps
@@ -2990,6 +3024,54 @@ components:
         - oldestSpinAt
         - newestSpinAt
         - spinCount
+    ScrapedShow:
+      type: object
+      description: >-
+        One entry in a station's own published weekly programming grid.
+        Times are the station's own local wall-clock times as published
+        (timezone not modeled), describing a recurring weekly slot rather
+        than a specific calendar date.
+      properties:
+        showName:
+          type: string
+        dayOfWeek:
+          type: string
+          enum: [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
+        startTime:
+          type: string
+          description: 24h "HH:MM"
+        endTime:
+          type: string
+          description: 24h "HH:MM"
+        djName:
+          type: ["string", "null"]
+      required:
+        - showName
+        - dayOfWeek
+        - startTime
+        - endTime
+        - djName
+    StationUpcomingSchedule:
+      type: object
+      description: >-
+        A station's scraped upcoming schedule. `shows` is empty (never
+        fabricated) when the station's page had no parseable schedule.
+      properties:
+        stationSlug:
+          type: string
+        shows:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScrapedShow"
+        lastScrapedAt:
+          type: ["string", "null"]
+          description: >-
+            ISO timestamp of the last successful schedule scrape. Null when
+            never successfully scraped.
+      required:
+        - stationSlug
+        - shows
+        - lastScrapedAt
     StationSpinsPage:
       type: object
       description: >-

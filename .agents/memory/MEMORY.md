@@ -42,3 +42,4 @@
 - [Cheap ad detection via metadata](lore-ad-detection-metadata.md) — detect ad breaks from already-polled ICY/now-playing text (regex + same-field-filler heuristic) instead of audio analysis; run before dedup so repeats still count.
 - [Lore picker/selector page consolidation](lore-picker-page-routing.md) — SelectorArchive.tsx is the ONLY live route for both DJ + curated pickers; a standalone sibling page can typecheck fine yet be unroutable dead code.
 - [Stale tsx dev server after new routes](api-server-stale-dev-server.md) — a long-running api-server workflow can serve pre-fix routes as 503 "Admin entry not configured" (falls through to admin catch-all); restart workflow before trusting a new-route 503 as a real bug.
+- [Structured LLM extraction from scraped pages](schedule-scraper-llm-pattern.md) — injectable extractor seam (like askLLM), strip fences + field-validate every entry, distinguish null (failed) from [] (no data).

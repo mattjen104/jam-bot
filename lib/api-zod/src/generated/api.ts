@@ -2732,6 +2732,30 @@ export const GetStationsScheduleResponse = zod.object({
   ),
 });
 
+/**
+ * One entry in a station's own published weekly programming grid, scraped
+ * from its homepage/schedule page and LLM-extracted. Never fabricated.
+ * (Hand-added alongside GetStationsScheduleResponse above — see that
+ * comment for why this file has hand-patched exports outside orval.)
+ */
+export const ScrapedShow = zod.object({
+  showName: zod.string(),
+  dayOfWeek: zod.enum(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]),
+  startTime: zod.string().describe('24h "HH:MM"'),
+  endTime: zod.string().describe('24h "HH:MM"'),
+  djName: zod.string().nullable(),
+});
+
+export const GetStationUpcomingScheduleParams = zod.object({
+  slug: zod.string().min(1),
+});
+
+export const GetStationUpcomingScheduleResponse = zod.object({
+  stationSlug: zod.string(),
+  shows: zod.array(ScrapedShow),
+  lastScrapedAt: zod.string().nullable(),
+});
+
 export const IcecastReportBody = zod.object({
   rawArtist: zod.string().optional(),
   rawTitle: zod.string().min(1),

@@ -1,0 +1,373 @@
+import { db, stationsTable, scrapedShowsTable } from "@workspace/db";
+import { and, eq, isNotNull, lt, or, isNull, sql } from "drizzle-orm";
+import { isCrawlBlocked } from "./blog-crossref.js";
+import { extractScheduleRaw } from "./schedule-llm.js";
+
+/**
+ * Weekly-schedule scraper — a second, slower-paced sibling to
+ * homepage-scraper.ts. Stations format their programming grid wildly
+ * differently (HTML tables, prose lists, embedded JSON), so extraction is
+ * delegated to an LLM call (see schedule-llm.ts) instead of a bespoke parser
+ * per station. Deliberately conservative: only stores an entry when the
+ * extractor returns well-formed, unambiguous JSON, and a full re-scrape
+ * atomically replaces a station's prior schedule rather than merging with
+ * stale rows. Never blocks the dial, never fabricates a show.
+ */
+
+const FETCH_TIMEOUT_MS = 10_000;
+const MAX_PAGE_CHARS = 20_000; // keep the LLM prompt bounded
+// Schedules change week to week — refresh far less often than every tick,
+// but more often than the monthly blurb cadence.
+const RESCRAPE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+// Separate, much shorter backoff for stations whose scrape *attempt* failed
+// (dead homepage, robots-blocked, LLM error). Without this, a persistently
+// failing station would be selected again on every single tick forever
+// (scheduleScrapedAt would stay null), starving the small per-tick batch
+// and preventing the scraper from ever reaching the rest of the directory.
+const ATTEMPT_RETRY_AFTER_MS = 6 * 60 * 60 * 1000;
+const BATCH_SIZE = 3;
+const TICK_MS = 45_000;
+const WARMUP_MS = 150_000; // start after the homepage scraper's own warmup
+const MAX_SHOWS_PER_STATION = 40;
+
+const DAY_TOKENS = new Set([
+  "Mon",
+  "Tue",
+  "Wed",
+  "Thu",
+  "Fri",
+  "Sat",
+  "Sun",
+]);
+
+const HHMM_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+interface ScrapeTarget {
+  id: number;
+  slug: string;
+  homepageUrl: string;
+}
+
+export interface ExtractedShow {
+  showName: string;
+  dayOfWeek: string;
+  startTime: string;
+  endTime: string;
+  djName: string | null;
+}
+
+async function loadStaleTargets(limit: number): Promise<ScrapeTarget[]> {
+  const successCutoff = new Date(Date.now() - RESCRAPE_AFTER_MS);
+  const attemptCutoff = new Date(Date.now() - ATTEMPT_RETRY_AFTER_MS);
+
+  // Eligible when the last *successful* scrape (if any) is older than the
+  // weekly cadence AND the last *attempt* (if any — success or failure) is
+  // older than the shorter failure-retry backoff. The attempt clause is what
+  // stops a persistently-failing station from being reselected every tick.
+  // Selection + limit both happen in SQL (ordered oldest-attempt-first, nulls
+  // first) so it's deterministic and fair across the whole directory rather
+  // than an in-memory filter/slice over an unordered result set.
+  const rows = await db
+    .select({
+      id: stationsTable.id,
+      slug: stationsTable.slug,
+      homepageUrl: stationsTable.homepageUrl,
+    })
+    .from(stationsTable)
+    .where(
+      and(
+        eq(stationsTable.active, true),
+        isNotNull(stationsTable.homepageUrl),
+        or(
+          isNull(stationsTable.scheduleScrapedAt),
+          lt(stationsTable.scheduleScrapedAt, successCutoff),
+        ),
+        or(
+          isNull(stationsTable.scheduleAttemptedAt),
+          lt(stationsTable.scheduleAttemptedAt, attemptCutoff),
+        ),
+      ),
+    )
+    .orderBy(sql`${stationsTable.scheduleAttemptedAt} asc nulls first`)
+    .limit(limit);
+
+  return rows
+    .filter((r): r is typeof r & { homepageUrl: string } => Boolean(r.homepageUrl))
+    .map((r) => ({ id: r.id, slug: r.slug, homepageUrl: r.homepageUrl }));
+}
+
+/** Strip tags/scripts down to visible-ish text, pure/no I/O. */
+export function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Find an on-page link that plausibly leads to a dedicated schedule page,
+ * e.g. `<a href="/schedule">Programming</a>`. Pure, no I/O.
+ */
+export function findScheduleLink(html: string, baseUrl: string): string | null {
+  const re = /<a\s+[^>]*href=["']([^"'#]+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  const keywords = /schedule|programming|program\s?guide|shows|line-?up/i;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html))) {
+    const href = m[1]!;
+    const label = htmlToPlainText(m[2] ?? "");
+    if (keywords.test(href) || keywords.test(label)) {
+      try {
+        return new URL(href, baseUrl).toString();
+      } catch {
+        continue;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Validate + normalize the LLM's raw JSON response into extracted shows.
+ * Rejects (returns null) anything malformed or ambiguous rather than
+ * guessing — the caller stores nothing for that station on a null result.
+ * Pure, no I/O.
+ */
+export function parseExtractedSchedule(raw: string): ExtractedShow[] | null {
+  let jsonText = raw.trim();
+  // Tolerate a fenced code block, but nothing fancier — anything else is
+  // treated as low-confidence.
+  const fenced = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced) jsonText = fenced[1]!.trim();
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(parsed)) return null;
+
+  const out: ExtractedShow[] = [];
+  // The DB's unique key is (stationId, dayOfWeek, startTime, showName); an
+  // LLM can plausibly emit the same slot twice even with prompt
+  // instructions not to, which would otherwise throw on insert. Dedupe on
+  // that same key here so validation is the single source of truth for
+  // "well-formed", rather than relying on the DB constraint to catch it.
+  const seenSlots = new Set<string>();
+  for (const entry of parsed) {
+    if (!entry || typeof entry !== "object") continue;
+    const e = entry as Record<string, unknown>;
+    const showName = typeof e["showName"] === "string" ? e["showName"].trim() : "";
+    const dayOfWeek = typeof e["dayOfWeek"] === "string" ? e["dayOfWeek"].trim() : "";
+    const startTime = typeof e["startTime"] === "string" ? e["startTime"].trim() : "";
+    const endTime = typeof e["endTime"] === "string" ? e["endTime"].trim() : "";
+    const djName =
+      typeof e["djName"] === "string" && e["djName"].trim() ? e["djName"].trim() : null;
+
+    if (!showName || showName.length > 200) continue;
+    if (!DAY_TOKENS.has(dayOfWeek)) continue;
+    if (!HHMM_RE.test(startTime) || !HHMM_RE.test(endTime)) continue;
+
+    const slotKey = `${dayOfWeek}|${startTime}|${showName.toLowerCase()}`;
+    if (seenSlots.has(slotKey)) continue;
+    seenSlots.add(slotKey);
+
+    out.push({ showName, dayOfWeek, startTime, endTime, djName });
+  }
+
+  // An empty-but-valid extraction (page had no schedule) is a legitimate
+  // "nothing to store" result, not a parse failure — return it as-is so the
+  // caller can distinguish "no schedule" from "extraction failed".
+  return out.slice(0, MAX_SHOWS_PER_STATION);
+}
+
+const EXTRACTION_PROMPT = `You are extracting a radio station's upcoming weekly show schedule from
+the raw text of its website below. Return ONLY a JSON array (no prose, no
+markdown fences) of objects shaped exactly like:
+{"showName": string, "dayOfWeek": "Mon"|"Tue"|"Wed"|"Thu"|"Fri"|"Sat"|"Sun", "startTime": "HH:MM" (24h), "endTime": "HH:MM" (24h), "djName": string|null}
+
+Rules:
+- Only include a show if the page states its day AND a start and end time.
+- Never invent, guess, or infer a time or day that is not explicitly stated.
+- If the page does not contain a real schedule (e.g. it's just a homepage
+  with no programming grid), return an empty JSON array: []
+- Do not include duplicate entries for the same show/day/time.
+
+Page text:
+`;
+
+/**
+ * Scrape one station's schedule. Never throws. Only replaces the station's
+ * stored schedule when extraction produced a well-formed result (including
+ * a legitimate empty array); a fetch/robots/LLM failure leaves any
+ * previously-scraped schedule in place.
+ */
+export async function scrapeStationSchedule(
+  target: ScrapeTarget,
+  opts: { fetchFn?: typeof fetch } = {},
+): Promise<{ scraped: boolean; showCount: number }> {
+  const fetchFn = opts.fetchFn ?? fetch;
+
+  // Every return path below goes through this so scheduleAttemptedAt always
+  // reflects the most recent attempt, success or failure — that's what lets
+  // loadStaleTargets back off a persistently-failing station instead of
+  // reselecting it on every single tick.
+  const markAttempted = () =>
+    db
+      .update(stationsTable)
+      .set({ scheduleAttemptedAt: new Date() })
+      .where(eq(stationsTable.id, target.id));
+  const fail = async (): Promise<{ scraped: false; showCount: 0 }> => {
+    await markAttempted();
+    return { scraped: false, showCount: 0 };
+  };
+
+  let origin: string;
+  try {
+    origin = new URL(target.homepageUrl).origin;
+  } catch {
+    return fail();
+  }
+
+  if (await isCrawlBlocked(origin, { fetchFn })) {
+    console.info(`[schedule-scraper] robots.txt blocks ${target.slug} (${origin})`);
+    return fail();
+  }
+
+  const fetchPage = async (url: string): Promise<string | null> => {
+    try {
+      const res = await fetchFn(url, {
+        headers: { Accept: "text/html", "User-Agent": "Lore-Discovery-Bot/1.0" },
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      if (!res.ok) return null;
+      return await res.text();
+    } catch {
+      return null;
+    }
+  };
+
+  const homeHtml = await fetchPage(target.homepageUrl);
+  if (!homeHtml) return fail();
+
+  let pageHtml = homeHtml;
+  const scheduleLink = findScheduleLink(homeHtml, target.homepageUrl);
+  // Only follow the discovered link when it's first-party (same origin as
+  // the station's own homepage). A schedule/programming-looking link
+  // pointing off-site (ad network, unrelated aggregator, etc) is not this
+  // station's own published schedule and must not be fetched/trusted.
+  if (scheduleLink) {
+    let scheduleOrigin: string | null = null;
+    try {
+      scheduleOrigin = new URL(scheduleLink).origin;
+    } catch {
+      scheduleOrigin = null;
+    }
+    if (scheduleOrigin === origin) {
+      const linkedHtml = await fetchPage(scheduleLink);
+      if (linkedHtml) pageHtml = linkedHtml;
+    } else {
+      console.info(
+        `[schedule-scraper] ignoring off-site schedule link for ${target.slug}: ${scheduleLink}`,
+      );
+    }
+  }
+
+  const pageText = htmlToPlainText(pageHtml).slice(0, MAX_PAGE_CHARS);
+  if (!pageText) return fail();
+
+  let shows: ExtractedShow[] | null;
+  try {
+    const raw = await extractScheduleRaw(`${EXTRACTION_PROMPT}${pageText}`);
+    shows = parseExtractedSchedule(raw);
+  } catch (err) {
+    console.warn(`[schedule-scraper] extraction failed for ${target.slug}`, err);
+    return fail();
+  }
+
+  if (shows === null) {
+    console.info(`[schedule-scraper] low-confidence/unparseable result for ${target.slug}`);
+    return fail();
+  }
+
+  const now = new Date();
+  try {
+    await db.transaction(async (tx) => {
+      await tx.delete(scrapedShowsTable).where(eq(scrapedShowsTable.stationId, target.id));
+      if (shows!.length > 0) {
+        await tx
+          .insert(scrapedShowsTable)
+          .values(
+            shows!.map((s) => ({
+              stationId: target.id,
+              showName: s.showName,
+              dayOfWeek: s.dayOfWeek,
+              startTime: s.startTime,
+              endTime: s.endTime,
+              djName: s.djName,
+            })),
+          )
+          // Validation already dedupes on the same key as the unique index,
+          // but insert must not throw even if that ever drifts (e.g. index
+          // changes, validation bug) — a write failure here must never
+          // starve the batch by leaving scheduleAttemptedAt unset.
+          .onConflictDoNothing();
+      }
+      // Stamp both freshness markers in the same transaction as the row swap
+      // so a legitimate empty result (page has no schedule) is recorded as
+      // "successfully scraped" — see stationsTable.scheduleScrapedAt /
+      // scheduleAttemptedAt.
+      await tx
+        .update(stationsTable)
+        .set({ scheduleScrapedAt: now, scheduleAttemptedAt: now })
+        .where(eq(stationsTable.id, target.id));
+    });
+  } catch (err) {
+    console.warn(`[schedule-scraper] write failed for ${target.slug}`, err);
+    return fail();
+  }
+
+  return { scraped: true, showCount: shows.length };
+}
+
+let started = false;
+let timer: NodeJS.Timeout | null = null;
+
+/** Start the schedule-scraper loop. Idempotent — safe to call once at boot. */
+export function startScheduleScraper(): void {
+  if (started) return;
+  started = true;
+
+  const tick = async () => {
+    try {
+      const targets = await loadStaleTargets(BATCH_SIZE);
+      for (const target of targets) {
+        // Isolate each station: an unexpected throw from one station (e.g.
+        // a bug outside scrapeStationSchedule's own try/catch coverage)
+        // must not abort the rest of the batch.
+        try {
+          await scrapeStationSchedule(target);
+        } catch (err) {
+          console.error(`[schedule-scraper] unexpected error for ${target.slug}`, err);
+        }
+      }
+    } catch (err) {
+      console.error("[lore] schedule scraper tick failed", err);
+    }
+    timer = setTimeout(tick, TICK_MS);
+  };
+  timer = setTimeout(tick, WARMUP_MS);
+}
+
+/** Stop the schedule scraper (tests / graceful shutdown). */
+export function stopScheduleScraper(): void {
+  if (timer) clearTimeout(timer);
+  timer = null;
+  started = false;
+}

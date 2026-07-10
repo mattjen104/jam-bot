@@ -229,6 +229,26 @@ export const stationsTable = pgTable("stations", {
   homepageBlurb: text("homepage_blurb"),
   /** When the homepage was last (attempted to be) scraped. Null = never. */
   homepageScrapedAt: timestamp("homepage_scraped_at"),
+  /**
+   * When the weekly-schedule scraper last *successfully* produced a result
+   * for this station (including a legitimate "page has no schedule" empty
+   * result) — the freshness marker that drives both the 7-day re-scrape
+   * cadence and the public `lastScrapedAt` field. Deliberately NOT derived
+   * from `scraped_shows` row presence: a station whose real schedule is
+   * empty would otherwise look "never scraped" and get re-scraped every
+   * tick forever. Null = never successfully scraped. Fetch/robots/LLM
+   * failures leave this column untouched — see `scheduleAttemptedAt` below
+   * for the failure-retry backoff.
+   */
+  scheduleScrapedAt: timestamp("schedule_scraped_at"),
+  /**
+   * When the weekly-schedule scraper last *attempted* this station,
+   * regardless of outcome. Distinct from `scheduleScrapedAt` (success-only)
+   * so a station that persistently fails (dead homepage, robots-blocked,
+   * LLM error) still gets a short backoff instead of being re-tried on
+   * every 45s tick forever and starving other stations' turn in the batch.
+   */
+  scheduleAttemptedAt: timestamp("schedule_attempted_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -257,6 +277,48 @@ export const showsTable = pgTable("shows", {
 
 export type Show = typeof showsTable.$inferSelect;
 export type InsertShow = typeof showsTable.$inferInsert;
+
+/**
+ * A scraped upcoming-schedule entry for a station's own weekly programming
+ * grid (distinct from `shows`, which is derived from actually-logged spins).
+ * Sourced from the station's homepage or a linked schedule page via LLM
+ * extraction — never fabricated. `dayOfWeek` + `startTime`/`endTime` describe
+ * a recurring weekly slot ("Mon", "09:00", "11:00"), not a specific date,
+ * since that's the granularity stations themselves publish. A full re-scrape
+ * replaces a station's entire schedule set (see `station-schedule.ts`) so the
+ * unique key spans every field that identifies a distinct slot.
+ */
+export const scrapedShowsTable = pgTable(
+  "scraped_shows",
+  {
+    id: serial("id").primaryKey(),
+    stationId: integer("station_id")
+      .notNull()
+      .references(() => stationsTable.id),
+    showName: text("show_name").notNull(),
+    /** "Mon" | "Tue" | ... | "Sun" — the station's own weekly grid slot. */
+    dayOfWeek: text("day_of_week").notNull(),
+    /** 24h "HH:MM", station-local time as published (timezone not modeled). */
+    startTime: text("start_time").notNull(),
+    endTime: text("end_time").notNull(),
+    djName: text("dj_name"),
+    /** When this row was (re)written by the schedule scraper. */
+    scrapedAt: timestamp("scraped_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("scraped_shows_slot_uq").on(
+      t.stationId,
+      t.dayOfWeek,
+      t.startTime,
+      t.showName,
+    ),
+    index("scraped_shows_station_idx").on(t.stationId),
+  ],
+);
+
+export type ScrapedShow = typeof scrapedShowsTable.$inferSelect;
+export type InsertScrapedShow = typeof scrapedShowsTable.$inferInsert;
 
 /**
  * One play (spin) of a track on a station. This is the play-history spine's edge

@@ -10,6 +10,9 @@
       "path": "./lib/song-enrichment"
     },
     {
+      "path": "./lib/integrations-anthropic-ai"
+    },
+    {
       "path": "./lib/api-client-react"
     },
     {
