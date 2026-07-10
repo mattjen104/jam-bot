@@ -1,5 +1,10 @@
-import { db, stationsTable, type InsertStation } from "@workspace/db";
-import { sql } from "drizzle-orm";
+import {
+  db,
+  stationsTable,
+  radioBrowserStationsTable,
+  type InsertStation,
+} from "@workspace/db";
+import { eq, sql } from "drizzle-orm";
 import { upsertPicker } from "./picks.js";
 
 /**
@@ -130,7 +135,183 @@ const SEED_STATIONS: InsertStation[] = [
   ...fipStations(),
   ...somaFmStations(),
   ...spinitronCollegeStations(),
+  ...nprListStations(),
 ];
+
+/**
+ * The final four stations from NPR's "streaming alternatives" list.
+ *
+ * KCHUNG and Radio AlHara keep the `rb-<radio-browser-uuid>` slugs from their
+ * original radio-browser auto-enrollment (the UUID is radio-browser's global
+ * stationuuid, so the slug is deterministic across environments) — existing
+ * spins stay attached while the seed pins the verified stream + now-playing
+ * config over whatever stale data auto-enrollment left behind:
+ *
+ *  - KCHUNG moved hosting to Radiocult; the old kchungradio.org:8000 stream is
+ *    dead, the Radiocult stream carries ICY track metadata (confirmed live).
+ *  - Radio AlHara and Lookout.FM are Radiojar stations: the audio stream hides
+ *    behind per-request tokenized 302 redirects the raw-TCP ICY fetcher can't
+ *    follow, so they poll Radiojar's public now-playing JSON API instead
+ *    (`radiojar` adapter, config `{streamId}`). The stored stream URL
+ *    `https://stream.radiojar.com/<id>` is for browser playback only.
+ *  - Radio Nopal is a plain Icecast/ICY stream (channel A of two; the
+ *    Ventana channel is intentionally not enrolled).
+ *
+ * All four are `source: "curated"` (exempt from the radio-browser whitelist
+ * purge) and `tier: "longtail"`. The ICY-polled pair also get a
+ * radio_browser_stations health row via `ensureIcyHealthRows()` after upsert.
+ */
+function nprListStations(): InsertStation[] {
+  return [
+    {
+      slug: "rb-b58a4aaa-d5be-4925-be71-f69d1cccc13f",
+      name: "KCHUNG Radio",
+      org: "KCHUNG",
+      country: "US",
+      streamUrl: "https://kchung-radio-01e54a81.radiocult.fm/stream",
+      streamFormat: "mp3",
+      homepageUrl: "https://kchungradio.org",
+      donateUrl: null,
+      nowPlayingSource: "radio_browser_icy",
+      // radioBrowserId is environment-specific; ensureIcyHealthRows() patches
+      // it in after upserting the health row.
+      nowPlayingConfig: {
+        streamUrl: "https://kchung-radio-01e54a81.radiocult.fm/stream",
+      },
+      source: "curated",
+      tier: "longtail",
+      stationClass: "curated",
+    },
+    {
+      slug: "rb-308a9f58-fb54-44dc-b95d-bb40fe4f3631",
+      name: "Radio AlHara",
+      org: "Radio AlHara",
+      country: "PS",
+      streamUrl: "https://stream.radiojar.com/78cxy6wkxtzuv",
+      streamFormat: "mp3",
+      homepageUrl: "https://www.radioalhara.net",
+      donateUrl: null,
+      nowPlayingSource: "radiojar",
+      nowPlayingConfig: { streamId: "78cxy6wkxtzuv" },
+      source: "curated",
+      tier: "longtail",
+      stationClass: "curated",
+    },
+    {
+      slug: "radio-nopal",
+      name: "Radio Nopal",
+      org: "Radio Nopal",
+      country: "MX",
+      streamUrl: "https://radio.mensajito.mx/nopalA",
+      streamFormat: "mp3",
+      homepageUrl: "https://radionopal.com",
+      donateUrl: null,
+      nowPlayingSource: "radio_browser_icy",
+      nowPlayingConfig: { streamUrl: "https://radio.mensajito.mx/nopalA" },
+      source: "curated",
+      tier: "longtail",
+      stationClass: "curated",
+    },
+    {
+      slug: "lookout-fm",
+      name: "Lookout.FM",
+      org: "Lookout.FM",
+      country: "US",
+      streamUrl: "https://stream.radiojar.com/5f3y7sbg342vv",
+      streamFormat: "mp3",
+      homepageUrl: "https://www.lookout.fm",
+      donateUrl: null,
+      nowPlayingSource: "radiojar",
+      nowPlayingConfig: { streamId: "5f3y7sbg342vv" },
+      source: "curated",
+      tier: "longtail",
+      stationClass: "curated",
+    },
+  ];
+}
+
+/**
+ * Curated ICY-polled seed stations that need a radio_browser_stations health
+ * row (icy status / consecutive-error tracking). The row id is
+ * environment-specific, so the seed upserts the row by radio-browser UUID and
+ * patches the station's nowPlayingConfig.radioBrowserId with the real id.
+ * KCHUNG's UUID is its genuine radio-browser stationuuid; Radio Nopal is not
+ * listed on radio-browser with a working stream, so it carries a synthetic
+ * `manual-` UUID.
+ */
+const ICY_HEALTH_SEEDS: Array<{
+  stationSlug: string;
+  radioBrowserUuid: string;
+}> = [
+  {
+    stationSlug: "rb-b58a4aaa-d5be-4925-be71-f69d1cccc13f",
+    radioBrowserUuid: "b58a4aaa-d5be-4925-be71-f69d1cccc13f",
+  },
+  { stationSlug: "radio-nopal", radioBrowserUuid: "manual-radio-nopal" },
+];
+
+/**
+ * Ensure each ICY-polled curated seed station has a radio_browser_stations
+ * health row linked to it, and that its nowPlayingConfig carries the row's id.
+ * Resets icyStatus to "active" on every boot — these streams are hand-verified,
+ * so a restart doubles as re-enrollment after a transient suspension (the
+ * poller will re-suspend within a few ticks if the stream is genuinely dead).
+ * Idempotent — safe on every boot.
+ */
+export async function ensureIcyHealthRows(): Promise<void> {
+  for (const ref of ICY_HEALTH_SEEDS) {
+    const seed = SEED_STATIONS.find((s) => s.slug === ref.stationSlug);
+    if (!seed?.streamUrl) continue;
+
+    const [station] = await db
+      .select({
+        id: stationsTable.id,
+        nowPlayingConfig: stationsTable.nowPlayingConfig,
+      })
+      .from(stationsTable)
+      .where(eq(stationsTable.slug, ref.stationSlug))
+      .limit(1);
+    if (!station) continue;
+
+    const [rbRow] = await db
+      .insert(radioBrowserStationsTable)
+      .values({
+        radioBrowserUuid: ref.radioBrowserUuid,
+        streamUrl: seed.streamUrl,
+        name: seed.name,
+        stationId: station.id,
+      })
+      .onConflictDoUpdate({
+        target: radioBrowserStationsTable.radioBrowserUuid,
+        set: {
+          streamUrl: seed.streamUrl,
+          name: seed.name,
+          stationId: station.id,
+          icyStatus: "active",
+          consecutiveErrors: 0,
+          updatedAt: new Date(),
+        },
+      })
+      .returning({ id: radioBrowserStationsTable.id });
+    if (!rbRow) continue;
+
+    const baseConfig =
+      station.nowPlayingConfig && typeof station.nowPlayingConfig === "object"
+        ? (station.nowPlayingConfig as Record<string, unknown>)
+        : {};
+    await db
+      .update(stationsTable)
+      .set({
+        nowPlayingConfig: {
+          ...baseConfig,
+          streamUrl: seed.streamUrl,
+          radioBrowserId: rbRow.id,
+        },
+        updatedAt: sql`now()`,
+      })
+      .where(eq(stationsTable.id, station.id));
+  }
+}
 
 /**
  * NTS Radio (London) — two channels, each a continuous 24/7 stream of
@@ -604,11 +785,19 @@ export async function seedStations(): Promise<void> {
           nowPlayingSource: s.nowPlayingSource ?? null,
           nowPlayingConfig: s.nowPlayingConfig ?? null,
           stationClass: s.stationClass ?? "curated",
+          // Seeded stations are hand-picked by definition; forcing
+          // source="curated" exempts a previously auto-enrolled row (e.g.
+          // KCHUNG's radio-browser enrollment) from the whitelist purge.
+          source: s.source ?? "curated",
           sortOrder: s.sortOrder ?? 0,
           updatedAt: sql`now()`,
         },
       });
   }
+
+  // ICY-polled curated stations additionally need a health row whose id is
+  // environment-specific — upsert it and patch nowPlayingConfig.radioBrowserId.
+  await ensureIcyHealthRows();
 
   // Diagnostic: report Spinitron key coverage so adding a key + restarting
   // immediately shows up in logs without any further investigation.
