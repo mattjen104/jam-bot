@@ -17,36 +17,47 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
-  AllDraftClaim,
   AllDraftClaimsList,
   ApiError,
   ArchiveCoverage,
   ArchiveRecentRuns,
+  ArtistTopTrack,
   BlogIngestRequest,
-  DiscogsListRequest,
-  EntryResult,
   ForYouBlogsResponse,
   ForYouQueryParams,
   ForYouStationsResponse,
+  GetArtistResponse,
+  RecordingSongExploder,
+  SongExploderEpisodeList,
+  DiscogsListRequest,
+  EntryResult,
   GeniusDraftList,
   GeniusDraftReviewRequest,
   GeniusDraftReviewResponse,
-  GetArtistResponse,
   GetOembedParams,
   GetSpotifySavedParams,
+  GetStationSpinsParams,
+  GetWikipediaDraftsParams,
   HealthStatus,
+  IcecastReport,
+  IcecastReportResult,
   IngestResult,
   LabelSeedRequest,
   ListAllDraftClaimsParams,
   ListGeniusDraftsParams,
+  ListPickersParams,
+  LookupPickedMbidsParams,
   ManualSpinRequest,
   ManualSpinResponse,
   OEmbed,
+  PatchClaimRequest,
   PickedLookup,
   Picker,
   PickerArchive,
   PickerList,
   PickerRunDetail,
+  PickerRunInsights,
+  PickerInsights,
   PickerStationOverlaps,
   RecordingKnowledge,
   RecordingLyrics,
@@ -54,33 +65,35 @@ import type {
   RecordingPicks,
   RecordingPreview,
   RecordingSpins,
-  StationPickerOverlaps,
-  StationSpinsPage,
-  GetStationSpinsParams,
   ResolveSongParams,
   ResolvedSong,
   RymListRequest,
-  SelectorList,
-  SelectorRuns,
   SegueNextList,
+  SelectorInsights,
+  SelectorList,
+  SelectorRunsResponse,
   SongContext,
   SongExploderClaimRequest,
   SongExploderClaimResponse,
-  RecordingSongExploder,
-  SongExploderEpisodeList,
   SpotifyPlayRequest,
   SpotifyPlayResult,
   SpotifyPlayerState,
   SpotifySaveResult,
   SpotifyStatus,
   StationArchive,
+  StationInsights,
   StationList,
   StationNowPlaying,
+  StationPickerOverlaps,
   StationPulseList,
   StationRunDetail,
+  StationRunInsights,
+  StationSpinsPage,
   TracklistRequest,
   TracklistResult,
   UpsertPickerRequest,
+  WikipediaDraftClaim,
+  WikipediaDraftList,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -604,254 +617,6 @@ export function useListStationsNowPlaying<
   return { ...query, queryKey: queryOptions.queryKey };
 }
 
-// ---------------------------------------------------------------------------
-// Batch metadata availability — lyrics + SE episode, per MBID.
-// Powers the metadata chips on station dial cards.
-// ---------------------------------------------------------------------------
-
-export interface RecordingAvailabilityItem {
-  mbid: string;
-  hasLyrics: boolean;
-  hasSe: boolean;
-}
-
-export interface RecordingsAvailabilityList {
-  items: RecordingAvailabilityItem[];
-}
-
-export const getGetRecordingsAvailabilityUrl = (mbids: string) =>
-  `/api/recordings/availability?mbids=${encodeURIComponent(mbids)}`;
-
-export const getRecordingsAvailability = async (
-  mbids: string,
-  options?: RequestInit,
-): Promise<RecordingsAvailabilityList> => {
-  return customFetch<RecordingsAvailabilityList>(
-    getGetRecordingsAvailabilityUrl(mbids),
-    { ...options, method: "GET" },
-  );
-};
-
-export const getGetRecordingsAvailabilityQueryKey = (mbids: string) =>
-  [`/api/recordings/availability`, mbids] as const;
-
-export function useGetRecordingsAvailability<
-  TData = Awaited<ReturnType<typeof getRecordingsAvailability>>,
-  TError = ErrorType<unknown>,
->(
-  mbids: string,
-  options?: {
-    query?: UseQueryOptions<
-      Awaited<ReturnType<typeof getRecordingsAvailability>>,
-      TError,
-      TData
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-  const queryKey =
-    queryOptions?.queryKey ?? getGetRecordingsAvailabilityQueryKey(mbids);
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof getRecordingsAvailability>>
-  > = ({ signal }) =>
-    getRecordingsAvailability(mbids, { signal, ...requestOptions });
-  const query = useQuery({
-    queryKey,
-    queryFn,
-    enabled: !!mbids,
-    ...queryOptions,
-  }) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
-  return { ...query, queryKey };
-}
-
-// ---------------------------------------------------------------------------
-// Recent individual spins per station — last 8 per station for a given date.
-// Powers the track-chip timeline on showless station cards (e.g. Radio Paradise).
-// ---------------------------------------------------------------------------
-
-export interface StationRecentSpin {
-  mbid: string | null;
-  title: string;
-  artist: string;
-  playedAt: string;
-}
-
-export interface StationRecentSpinsItem {
-  stationSlug: string;
-  spins: StationRecentSpin[];
-}
-
-export interface StationRecentSpinsList {
-  items: StationRecentSpinsItem[];
-}
-
-export const getGetStationsRecentSpinsUrl = (date: string) =>
-  `/api/stations/recent-spins?date=${encodeURIComponent(date)}`;
-
-export const getStationsRecentSpins = async (
-  date: string,
-  options?: RequestInit,
-): Promise<StationRecentSpinsList> => {
-  return customFetch<StationRecentSpinsList>(
-    getGetStationsRecentSpinsUrl(date),
-    { ...options, method: "GET" },
-  );
-};
-
-export const getGetStationsRecentSpinsQueryKey = (date: string) =>
-  [`/api/stations/recent-spins`, date] as const;
-
-export function useGetStationsRecentSpins<
-  TData = Awaited<ReturnType<typeof getStationsRecentSpins>>,
-  TError = ErrorType<unknown>,
->(
-  date: string,
-  options?: {
-    query?: UseQueryOptions<
-      Awaited<ReturnType<typeof getStationsRecentSpins>>,
-      TError,
-      TData
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-  const queryKey =
-    queryOptions?.queryKey ?? getGetStationsRecentSpinsQueryKey(date);
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof getStationsRecentSpins>>
-  > = ({ signal }) =>
-    getStationsRecentSpins(date, { signal, ...requestOptions });
-  const query = useQuery({
-    queryKey,
-    queryFn,
-    enabled: !!date,
-    ...queryOptions,
-  }) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
-  return { ...query, queryKey };
-}
-
-// ---------------------------------------------------------------------------
-// Station show schedule — all show blocks for every station on a given date.
-// Powers the timeline strip on each station card.
-// ---------------------------------------------------------------------------
-
-export interface StationScheduleRun {
-  runId: number;
-  show: { name: string; djName?: string | null } | null;
-  spinCount: number;
-  resolvedCount: number;
-  /** ISO timestamp of first spin in this block. */
-  startedAt: string;
-  /** ISO timestamp of last spin in this block. */
-  endedAt: string;
-}
-
-export interface StationScheduleItem {
-  stationSlug: string;
-  runs: StationScheduleRun[];
-}
-
-export interface StationScheduleList {
-  items: StationScheduleItem[];
-}
-
-export const getGetStationsScheduleUrl = (date: string) =>
-  `/api/stations/schedule?date=${encodeURIComponent(date)}`;
-
-export const getStationsSchedule = async (
-  date: string,
-  options?: RequestInit,
-): Promise<StationScheduleList> => {
-  return customFetch<StationScheduleList>(getGetStationsScheduleUrl(date), {
-    ...options,
-    method: "GET",
-  });
-};
-
-export const getGetStationsScheduleQueryKey = (date: string) =>
-  [`/api/stations/schedule`, date] as const;
-
-export function useGetStationsSchedule<
-  TData = Awaited<ReturnType<typeof getStationsSchedule>>,
-  TError = ErrorType<unknown>,
->(
-  date: string,
-  options?: {
-    query?: UseQueryOptions<
-      Awaited<ReturnType<typeof getStationsSchedule>>,
-      TError,
-      TData
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-  const queryKey =
-    queryOptions?.queryKey ?? getGetStationsScheduleQueryKey(date);
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof getStationsSchedule>>
-  > = ({ signal }) => getStationsSchedule(date, { signal, ...requestOptions });
-  const query = useQuery({
-    queryKey,
-    queryFn,
-    enabled: !!date,
-    ...queryOptions,
-  }) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
-  return { ...query, queryKey };
-}
-
-// ---------------------------------------------------------------------------
-// Date-filtered dial pulse — same shape as the live now-playing but scoped to
-// a single calendar day.  Powers the ghost-dial date sweep on the home page.
-// ---------------------------------------------------------------------------
-
-export const getListStationsAtDateUrl = (date: string) =>
-  `/api/stations/now-playing?date=${encodeURIComponent(date)}`;
-
-export const listStationsAtDate = async (
-  date: string,
-  options?: RequestInit,
-): Promise<StationPulseList> => {
-  return customFetch<StationPulseList>(getListStationsAtDateUrl(date), {
-    ...options,
-    method: "GET",
-  });
-};
-
-export const getListStationsAtDateQueryKey = (date: string) =>
-  [`/api/stations/now-playing`, date] as const;
-
-export function useListStationsAtDate<
-  TData = Awaited<ReturnType<typeof listStationsAtDate>>,
-  TError = ErrorType<unknown>,
->(
-  date: string,
-  options?: {
-    query?: UseQueryOptions<
-      Awaited<ReturnType<typeof listStationsAtDate>>,
-      TError,
-      TData
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-  const queryKey =
-    queryOptions?.queryKey ?? getListStationsAtDateQueryKey(date);
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof listStationsAtDate>>
-  > = ({ signal }) => listStationsAtDate(date, { signal, ...requestOptions });
-  const query = useQuery({
-    queryKey,
-    queryFn,
-    enabled: !!date,
-    ...queryOptions,
-  }) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
-  return { ...query, queryKey };
-}
-
 /**
  * The most recent spin logged for a station, resolved (best-effort) to a MusicBrainz Recording ID with cross-service deep links and artwork. The `nowPlaying` field is null when nothing has been logged yet.
 
@@ -941,6 +706,95 @@ export function useGetStationNowPlaying<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * For longtail stations with no server-side now-playing source (e.g. a RadioBrowser station), the browser can discover the current track from the station's own Icecast status endpoint and report it here. The track is resolved through the same MusicBrainz/Spotify pipeline as any server-polled spin and then appears in now-playing, the journal, and the archive like a normal spin. Deduped against the last logged spin for the station, so it is safe to call repeatedly (e.g. every 30s) while the same track is playing.
+
+ * @summary Client-reported now-playing for stations with no server poller
+ */
+export const getReportStationNowPlayingUrl = (slug: string) => {
+  return `/api/stations/${slug}/report-now-playing`;
+};
+
+export const reportStationNowPlaying = async (
+  slug: string,
+  icecastReport: IcecastReport,
+  options?: RequestInit,
+): Promise<IcecastReportResult> => {
+  return customFetch<IcecastReportResult>(getReportStationNowPlayingUrl(slug), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(icecastReport),
+  });
+};
+
+export const getReportStationNowPlayingMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reportStationNowPlaying>>,
+    TError,
+    { slug: string; data: BodyType<IcecastReport> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reportStationNowPlaying>>,
+  TError,
+  { slug: string; data: BodyType<IcecastReport> },
+  TContext
+> => {
+  const mutationKey = ["reportStationNowPlaying"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reportStationNowPlaying>>,
+    { slug: string; data: BodyType<IcecastReport> }
+  > = (props) => {
+    const { slug, data } = props ?? {};
+
+    return reportStationNowPlaying(slug, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReportStationNowPlayingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reportStationNowPlaying>>
+>;
+export type ReportStationNowPlayingMutationBody = BodyType<IcecastReport>;
+export type ReportStationNowPlayingMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Client-reported now-playing for stations with no server poller
+ */
+export const useReportStationNowPlaying = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reportStationNowPlaying>>,
+    TError,
+    { slug: string; data: BodyType<IcecastReport> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reportStationNowPlaying>>,
+  TError,
+  { slug: string; data: BodyType<IcecastReport> },
+  TContext
+> => {
+  return useMutation(getReportStationNowPlayingMutationOptions(options));
+};
 
 /**
  * The MBID-keyed recording node — title, artist, artwork and cross-service deep links — for rendering a shareable song page. 404 when the MBID is not (yet) on the spine.
@@ -1203,6 +1057,95 @@ export function useGetRecordingSpins<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetRecordingSpinsQueryOptions(mbid, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Every curated pick of this recording — the reverse edge of the song–source graph. Each pick carries its picker, the specific list/run it belongs to (runId, when the pick has a source URL), its ordinal within that list, and the run's size, so a song page can link both to the picker and to the exact list, and offer "hear it in context" playback. Only real human selection edges — never inferred.
+
+ * @summary Curated lists that contain a recording ("Picked by")
+ */
+export const getGetRecordingPicksUrl = (mbid: string) => {
+  return `/api/recordings/${mbid}/picks`;
+};
+
+export const getRecordingPicks = async (
+  mbid: string,
+  options?: RequestInit,
+): Promise<RecordingPicks> => {
+  return customFetch<RecordingPicks>(getGetRecordingPicksUrl(mbid), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetRecordingPicksQueryKey = (mbid: string) => {
+  return [`/api/recordings/${mbid}/picks`] as const;
+};
+
+export const getGetRecordingPicksQueryOptions = <
+  TData = Awaited<ReturnType<typeof getRecordingPicks>>,
+  TError = ErrorType<unknown>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecordingPicks>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetRecordingPicksQueryKey(mbid);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getRecordingPicks>>
+  > = ({ signal }) => getRecordingPicks(mbid, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!mbid,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getRecordingPicks>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetRecordingPicksQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getRecordingPicks>>
+>;
+export type GetRecordingPicksQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Curated lists that contain a recording ("Picked by")
+ */
+
+export function useGetRecordingPicks<
+  TData = Awaited<ReturnType<typeof getRecordingPicks>>,
+  TError = ErrorType<unknown>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecordingPicks>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetRecordingPicksQueryOptions(mbid, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -1480,19 +1423,28 @@ export const useCreateManualSpin = <
 };
 
 /**
- * The trusted taste sources Lore rides beyond radio DJs. A DJ is one picker type; this lists the rest (and any DJ-typed pickers), so a client can browse who is doing the picking.
+ * The trusted taste sources Lore rides beyond radio DJs. A DJ is one picker type; this lists the rest (and any DJ-typed pickers), so a client can browse who is doing the picking. Filter by pickerType with the optional `type` query parameter.
 
  * @summary All active pickers (labels, blogs, curators, collectors, events)
  */
-export const getListPickersUrl = (params?: { type?: string }) => {
-  const searchParams = new URLSearchParams();
-  if (params?.type != null) searchParams.set("type", params.type);
-  const qs = searchParams.toString();
-  return qs ? `/api/pickers?${qs}` : `/api/pickers`;
+export const getListPickersUrl = (params?: ListPickersParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/pickers?${stringifiedParams}`
+    : `/api/pickers`;
 };
 
 export const listPickers = async (
-  params?: { type?: string },
+  params?: ListPickersParams,
   options?: RequestInit,
 ): Promise<PickerList> => {
   return customFetch<PickerList>(getListPickersUrl(params), {
@@ -1501,7 +1453,7 @@ export const listPickers = async (
   });
 };
 
-export const getListPickersQueryKey = (params?: { type?: string }) => {
+export const getListPickersQueryKey = (params?: ListPickersParams) => {
   return [`/api/pickers`, ...(params ? [params] : [])] as const;
 };
 
@@ -1509,7 +1461,7 @@ export const getListPickersQueryOptions = <
   TData = Awaited<ReturnType<typeof listPickers>>,
   TError = ErrorType<unknown>,
 >(
-  params?: { type?: string },
+  params?: ListPickersParams,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof listPickers>>,
@@ -1547,7 +1499,7 @@ export function useListPickers<
   TData = Awaited<ReturnType<typeof listPickers>>,
   TError = ErrorType<unknown>,
 >(
-  params?: { type?: string },
+  params?: ListPickersParams,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof listPickers>>,
@@ -1656,6 +1608,192 @@ export function useGetStationArchive<
 }
 
 /**
+ * Aggregated genre tags and a discovery score (recent-release-leaning vs. catalog-leaning) across the station's logged spin history. Computed on read from already-enriched recording data — never a per-spin recompute. Degrades to unknown/null fields when there isn't enough enriched data yet.
+
+ * @summary Genre breakdown + discovery score for a station
+ */
+export const getGetStationInsightsUrl = (slug: string) => {
+  return `/api/stations/${slug}/insights`;
+};
+
+export const getStationInsights = async (
+  slug: string,
+  options?: RequestInit,
+): Promise<StationInsights> => {
+  return customFetch<StationInsights>(getGetStationInsightsUrl(slug), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetStationInsightsQueryKey = (slug: string) => {
+  return [`/api/stations/${slug}/insights`] as const;
+};
+
+export const getGetStationInsightsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStationInsights>>,
+  TError = ErrorType<ApiError>,
+>(
+  slug: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationInsights>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStationInsightsQueryKey(slug);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStationInsights>>
+  > = ({ signal }) => getStationInsights(slug, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!slug,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStationInsights>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStationInsightsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStationInsights>>
+>;
+export type GetStationInsightsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Genre breakdown + discovery score for a station
+ */
+
+export function useGetStationInsights<
+  TData = Awaited<ReturnType<typeof getStationInsights>>,
+  TError = ErrorType<ApiError>,
+>(
+  slug: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationInsights>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStationInsightsQueryOptions(slug, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Paginated, time-ordered (newest first) spin history for a station — every logged play, independent of show/run grouping. Powers the universal scrub timeline so listeners can browse a longtail station's history even when it has no documented "runs". Pass `before` (an ISO timestamp) to page further into the past; omit it for the most recent page. `bounds` reports the full time range covered so a client can render a continuous scrub control.
+
+ * @summary A station's full logged spin history, scrubbed by time
+ */
+export const getGetStationSpinsUrl = (params: GetStationSpinsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/stations/spins?${stringifiedParams}`
+    : `/api/stations/spins`;
+};
+
+export const getStationSpins = async (
+  params: GetStationSpinsParams,
+  options?: RequestInit,
+): Promise<StationSpinsPage> => {
+  return customFetch<StationSpinsPage>(getGetStationSpinsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetStationSpinsQueryKey = (params?: GetStationSpinsParams) => {
+  return [`/api/stations/spins`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetStationSpinsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStationSpins>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: GetStationSpinsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationSpins>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetStationSpinsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getStationSpins>>> = ({
+    signal,
+  }) => getStationSpins(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStationSpins>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStationSpinsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStationSpins>>
+>;
+export type GetStationSpinsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary A station's full logged spin history, scrubbed by time
+ */
+
+export function useGetStationSpins<
+  TData = Awaited<ReturnType<typeof getStationSpins>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: GetStationSpinsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationSpins>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStationSpinsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * The full tracklist of one documented station run (a show's UTC broadcast day), oldest first — exactly as it aired. Tracks resolved to the spine carry their recording node; unresolved tracks keep raw metadata so the honesty gradient stays visible.
 
  * @summary One archived station run, in airing order
@@ -1745,48 +1883,36 @@ export function useGetStationRun<
 }
 
 /**
- * Paginated, time-ordered (newest first) spin history for a station — every logged play, independent of show/run grouping. Powers the universal scrub timeline so listeners can browse a longtail station's history even when it has no documented "runs". Pass `before` (an ISO timestamp) to page further into the past; omit it for the most recent page. `bounds` reports the full time range covered so a client can render a continuous scrub control.
+ * Aggregated genre tags and a discovery score across a single archived station run's tracklist. Computed on read from already-enriched recording data. Degrades to unknown/null fields when there isn't enough enriched data yet.
 
- * @summary A station's full logged spin history, scrubbed by time
+ * @summary Genre breakdown + discovery score for one station run (show)
  */
-export const getGetStationSpinsUrl = (params: GetStationSpinsParams) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? "null" : value.toString());
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0
-    ? `/api/stations/spins?${stringifiedParams}`
-    : `/api/stations/spins`;
+export const getGetStationRunInsightsUrl = (runId: number) => {
+  return `/api/archive/station-runs/${runId}/insights`;
 };
 
-export const getStationSpins = async (
-  params: GetStationSpinsParams,
+export const getStationRunInsights = async (
+  runId: number,
   options?: RequestInit,
-): Promise<StationSpinsPage> => {
-  return customFetch<StationSpinsPage>(getGetStationSpinsUrl(params), {
+): Promise<StationRunInsights> => {
+  return customFetch<StationRunInsights>(getGetStationRunInsightsUrl(runId), {
     ...options,
     method: "GET",
   });
 };
 
-export const getGetStationSpinsQueryKey = (params?: GetStationSpinsParams) => {
-  return [`/api/stations/spins`, ...(params ? [params] : [])] as const;
+export const getGetStationRunInsightsQueryKey = (runId: number) => {
+  return [`/api/archive/station-runs/${runId}/insights`] as const;
 };
 
-export const getGetStationSpinsQueryOptions = <
-  TData = Awaited<ReturnType<typeof getStationSpins>>,
+export const getGetStationRunInsightsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStationRunInsights>>,
   TError = ErrorType<ApiError>,
 >(
-  params: GetStationSpinsParams,
+  runId: number,
   options?: {
     query?: UseQueryOptions<
-      Awaited<ReturnType<typeof getStationSpins>>,
+      Awaited<ReturnType<typeof getStationRunInsights>>,
       TError,
       TData
     >;
@@ -1795,48 +1921,141 @@ export const getGetStationSpinsQueryOptions = <
 ) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
-  const queryKey = queryOptions?.queryKey ?? getGetStationSpinsQueryKey(params);
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStationRunInsightsQueryKey(runId);
 
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof getStationSpins>>> = ({
-    signal,
-  }) => getStationSpins(params, { signal, ...requestOptions });
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStationRunInsights>>
+  > = ({ signal }) =>
+    getStationRunInsights(runId, { signal, ...requestOptions });
 
   return {
     queryKey,
     queryFn,
-    enabled: !!params.slug,
+    enabled: !!runId,
     ...queryOptions,
   } as UseQueryOptions<
-    Awaited<ReturnType<typeof getStationSpins>>,
+    Awaited<ReturnType<typeof getStationRunInsights>>,
     TError,
     TData
   > & { queryKey: QueryKey };
 };
 
-export type GetStationSpinsQueryResult = NonNullable<
-  Awaited<ReturnType<typeof getStationSpins>>
+export type GetStationRunInsightsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStationRunInsights>>
 >;
-export type GetStationSpinsQueryError = ErrorType<ApiError>;
+export type GetStationRunInsightsQueryError = ErrorType<ApiError>;
 
 /**
- * @summary A station's full logged spin history, scrubbed by time
+ * @summary Genre breakdown + discovery score for one station run (show)
  */
 
-export function useGetStationSpins<
-  TData = Awaited<ReturnType<typeof getStationSpins>>,
+export function useGetStationRunInsights<
+  TData = Awaited<ReturnType<typeof getStationRunInsights>>,
   TError = ErrorType<ApiError>,
 >(
-  params: GetStationSpinsParams,
+  runId: number,
   options?: {
     query?: UseQueryOptions<
-      Awaited<ReturnType<typeof getStationSpins>>,
+      Awaited<ReturnType<typeof getStationRunInsights>>,
       TError,
       TData
     >;
     request?: SecondParameter<typeof customFetch>;
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetStationSpinsQueryOptions(params, options);
+  const queryOptions = getGetStationRunInsightsQueryOptions(runId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Aggregated genre tags and a discovery score across a single archived picker run's tracklist (a curated list or episode). Computed on read from already-enriched recording data. Degrades to unknown/null fields when there isn't enough enriched data yet.
+
+ * @summary Genre breakdown + discovery score for one picker run (list)
+ */
+export const getGetPickerRunInsightsUrl = (runId: number) => {
+  return `/api/archive/picker-runs/${runId}/insights`;
+};
+
+export const getPickerRunInsights = async (
+  runId: number,
+  options?: RequestInit,
+): Promise<PickerRunInsights> => {
+  return customFetch<PickerRunInsights>(getGetPickerRunInsightsUrl(runId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPickerRunInsightsQueryKey = (runId: number) => {
+  return [`/api/archive/picker-runs/${runId}/insights`] as const;
+};
+
+export const getGetPickerRunInsightsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPickerRunInsights>>,
+  TError = ErrorType<ApiError>,
+>(
+  runId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPickerRunInsights>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPickerRunInsightsQueryKey(runId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPickerRunInsights>>
+  > = ({ signal }) =>
+    getPickerRunInsights(runId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!runId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPickerRunInsights>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPickerRunInsightsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPickerRunInsights>>
+>;
+export type GetPickerRunInsightsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Genre breakdown + discovery score for one picker run (list)
+ */
+
+export function useGetPickerRunInsights<
+  TData = Awaited<ReturnType<typeof getPickerRunInsights>>,
+  TError = ErrorType<ApiError>,
+>(
+  runId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPickerRunInsights>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPickerRunInsightsQueryOptions(runId, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -2102,7 +2321,7 @@ export function useGetArchiveCoverage<
 }
 
 /**
- * The newest documented runs from all stations in one list — each a real show's plays on one UTC broadcast day, newest first, with resolution counts so the client can favor well-resolved, replayable runs. Powers the home screen's Ghost Radio mode.
+ * The newest documented runs from all stations in one list — each a real show's plays on one UTC broadcast day. Ranked by recency and quality: newest broadcast day first, best-resolved runs first within a day, so replayable runs lead. Powers the home screen's Ghost Radio mode.
 
  * @summary Recent documented runs across every station (ghost radio browse)
  */
@@ -2170,6 +2389,641 @@ export function useGetArchiveRecentRuns<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetArchiveRecentRunsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Pickers whose curated lists contain recordings this station has actually spun — exact MBID overlap only, never similarity. Ranked by the number of distinct shared recordings. Empty when no picker shares a track with the station's spin history.
+
+ * @summary Curated pickers sharing tracks with a station ("Critics agree")
+ */
+export const getGetStationPickerOverlapsUrl = (slug: string) => {
+  return `/api/stations/${slug}/overlaps/pickers`;
+};
+
+export const getStationPickerOverlaps = async (
+  slug: string,
+  options?: RequestInit,
+): Promise<StationPickerOverlaps> => {
+  return customFetch<StationPickerOverlaps>(
+    getGetStationPickerOverlapsUrl(slug),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetStationPickerOverlapsQueryKey = (slug: string) => {
+  return [`/api/stations/${slug}/overlaps/pickers`] as const;
+};
+
+export const getGetStationPickerOverlapsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStationPickerOverlaps>>,
+  TError = ErrorType<ApiError>,
+>(
+  slug: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationPickerOverlaps>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStationPickerOverlapsQueryKey(slug);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStationPickerOverlaps>>
+  > = ({ signal }) =>
+    getStationPickerOverlaps(slug, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!slug,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStationPickerOverlaps>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStationPickerOverlapsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStationPickerOverlaps>>
+>;
+export type GetStationPickerOverlapsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Curated pickers sharing tracks with a station ("Critics agree")
+ */
+
+export function useGetStationPickerOverlaps<
+  TData = Awaited<ReturnType<typeof getStationPickerOverlaps>>,
+  TError = ErrorType<ApiError>,
+>(
+  slug: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationPickerOverlaps>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStationPickerOverlapsQueryOptions(slug, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Stations whose logged spin history contains recordings this picker has picked — exact MBID overlap only, never similarity. Ranked by the number of distinct shared recordings. Empty when radio hasn't touched any of the picker's tracks.
+
+ * @summary Stations that have spun a picker's tracks ("On the radio too")
+ */
+export const getGetPickerStationOverlapsUrl = (handle: string) => {
+  return `/api/pickers/${handle}/overlaps/stations`;
+};
+
+export const getPickerStationOverlaps = async (
+  handle: string,
+  options?: RequestInit,
+): Promise<PickerStationOverlaps> => {
+  return customFetch<PickerStationOverlaps>(
+    getGetPickerStationOverlapsUrl(handle),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetPickerStationOverlapsQueryKey = (handle: string) => {
+  return [`/api/pickers/${handle}/overlaps/stations`] as const;
+};
+
+export const getGetPickerStationOverlapsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPickerStationOverlaps>>,
+  TError = ErrorType<ApiError>,
+>(
+  handle: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPickerStationOverlaps>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPickerStationOverlapsQueryKey(handle);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPickerStationOverlaps>>
+  > = ({ signal }) =>
+    getPickerStationOverlaps(handle, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!handle,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPickerStationOverlaps>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPickerStationOverlapsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPickerStationOverlaps>>
+>;
+export type GetPickerStationOverlapsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Stations that have spun a picker's tracks ("On the radio too")
+ */
+
+export function useGetPickerStationOverlaps<
+  TData = Awaited<ReturnType<typeof getPickerStationOverlaps>>,
+  TError = ErrorType<ApiError>,
+>(
+  handle: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPickerStationOverlaps>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPickerStationOverlapsQueryOptions(handle, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Lists all active DJ-type pickers scoped to KEXP (source_ref.stationSlug='kexp'), ordered alphabetically. Each entry includes a 30-day spin count and last-played timestamp so the UI can surface the most active DJs.
+
+ * @summary Active KEXP DJ selectors with 30-day spin counts
+ */
+export const getListSelectorsUrl = () => {
+  return `/api/selectors`;
+};
+
+export const listSelectors = async (
+  options?: RequestInit,
+): Promise<SelectorList> => {
+  return customFetch<SelectorList>(getListSelectorsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListSelectorsQueryKey = () => {
+  return [`/api/selectors`] as const;
+};
+
+export const getListSelectorsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listSelectors>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listSelectors>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListSelectorsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listSelectors>>> = ({
+    signal,
+  }) => listSelectors({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listSelectors>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListSelectorsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listSelectors>>
+>;
+export type ListSelectorsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Active KEXP DJ selectors with 30-day spin counts
+ */
+
+export function useListSelectors<
+  TData = Awaited<ReturnType<typeof listSelectors>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listSelectors>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListSelectorsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns the selector's spin history grouped into runs — one run per show × UTC broadcast day — newest first (limit 100). Only resolves for KEXP DJ selectors (source_ref.stationSlug='kexp'); non-KEXP or non-DJ handles return 404.
+
+ * @summary Station-style runs for a KEXP DJ selector
+ */
+export const getGetSelectorRunsUrl = (handle: string) => {
+  return `/api/selectors/${handle}/runs`;
+};
+
+export const getSelectorRuns = async (
+  handle: string,
+  options?: RequestInit,
+): Promise<SelectorRunsResponse> => {
+  return customFetch<SelectorRunsResponse>(getGetSelectorRunsUrl(handle), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetSelectorRunsQueryKey = (handle: string) => {
+  return [`/api/selectors/${handle}/runs`] as const;
+};
+
+export const getGetSelectorRunsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSelectorRuns>>,
+  TError = ErrorType<ApiError>,
+>(
+  handle: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSelectorRuns>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetSelectorRunsQueryKey(handle);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getSelectorRuns>>> = ({
+    signal,
+  }) => getSelectorRuns(handle, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!handle,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSelectorRuns>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSelectorRunsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSelectorRuns>>
+>;
+export type GetSelectorRunsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Station-style runs for a KEXP DJ selector
+ */
+
+export function useGetSelectorRuns<
+  TData = Awaited<ReturnType<typeof getSelectorRuns>>,
+  TError = ErrorType<ApiError>,
+>(
+  handle: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSelectorRuns>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSelectorRunsQueryOptions(handle, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Aggregated genre tags and a discovery score (recent-release-leaning vs. catalog-leaning) across every pick this picker has logged, for curated-list pickers (labels, blogs, curators, etc.) that have no per-run aggregate elsewhere. Computed on read from already-enriched recording data — never a per-pick recompute. Degrades to unknown/null fields when there isn't enough enriched data yet.
+
+ * @summary Genre breakdown + discovery score across a picker's full pick history
+ */
+export const getGetPickerInsightsUrl = (handle: string) => {
+  return `/api/pickers/${handle}/insights`;
+};
+
+export const getPickerInsights = async (
+  handle: string,
+  options?: RequestInit,
+): Promise<PickerInsights> => {
+  return customFetch<PickerInsights>(getGetPickerInsightsUrl(handle), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPickerInsightsQueryKey = (handle: string) => {
+  return [`/api/pickers/${handle}/insights`] as const;
+};
+
+export const getGetPickerInsightsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPickerInsights>>,
+  TError = ErrorType<ApiError>,
+>(
+  handle: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPickerInsights>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPickerInsightsQueryKey(handle);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPickerInsights>>
+  > = ({ signal }) =>
+    getPickerInsights(handle, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!handle,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPickerInsights>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPickerInsightsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPickerInsights>>
+>;
+export type GetPickerInsightsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Genre breakdown + discovery score across a picker's full pick history
+ */
+
+export function useGetPickerInsights<
+  TData = Awaited<ReturnType<typeof getPickerInsights>>,
+  TError = ErrorType<ApiError>,
+>(
+  handle: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPickerInsights>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPickerInsightsQueryOptions(handle, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Aggregated genre tags and a discovery score (recent-release-leaning vs. catalog-leaning) across the selector's logged spin history. Computed on read from already-enriched recording data — never a per-spin recompute. Degrades to unknown/null fields when there isn't enough enriched data yet.
+
+ * @summary Genre breakdown + discovery score for a KEXP DJ selector
+ */
+export const getGetSelectorInsightsUrl = (handle: string) => {
+  return `/api/selectors/${handle}/insights`;
+};
+
+export const getSelectorInsights = async (
+  handle: string,
+  options?: RequestInit,
+): Promise<SelectorInsights> => {
+  return customFetch<SelectorInsights>(getGetSelectorInsightsUrl(handle), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetSelectorInsightsQueryKey = (handle: string) => {
+  return [`/api/selectors/${handle}/insights`] as const;
+};
+
+export const getGetSelectorInsightsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSelectorInsights>>,
+  TError = ErrorType<ApiError>,
+>(
+  handle: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSelectorInsights>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetSelectorInsightsQueryKey(handle);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getSelectorInsights>>
+  > = ({ signal }) =>
+    getSelectorInsights(handle, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!handle,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSelectorInsights>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSelectorInsightsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSelectorInsights>>
+>;
+export type GetSelectorInsightsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Genre breakdown + discovery score for a KEXP DJ selector
+ */
+
+export function useGetSelectorInsights<
+  TData = Awaited<ReturnType<typeof getSelectorInsights>>,
+  TError = ErrorType<ApiError>,
+>(
+  handle: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSelectorInsights>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSelectorInsightsQueryOptions(handle, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Batched, cached lookup for the live dial: given a comma-separated list of recording MBIDs, returns — for each MBID that appears in at least one curated (non-DJ) picker's list — the strongest such pick with its picker and list runId. MBIDs with no editorial pick are simply absent. Served from an in-memory cache so it never slows the dial poll.
+
+ * @summary Which of these MBIDs appear in an editorial list (dial badges)
+ */
+export const getLookupPickedMbidsUrl = (params: LookupPickedMbidsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/picks/contains?${stringifiedParams}`
+    : `/api/picks/contains`;
+};
+
+export const lookupPickedMbids = async (
+  params: LookupPickedMbidsParams,
+  options?: RequestInit,
+): Promise<PickedLookup> => {
+  return customFetch<PickedLookup>(getLookupPickedMbidsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getLookupPickedMbidsQueryKey = (
+  params?: LookupPickedMbidsParams,
+) => {
+  return [`/api/picks/contains`, ...(params ? [params] : [])] as const;
+};
+
+export const getLookupPickedMbidsQueryOptions = <
+  TData = Awaited<ReturnType<typeof lookupPickedMbids>>,
+  TError = ErrorType<unknown>,
+>(
+  params: LookupPickedMbidsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof lookupPickedMbids>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getLookupPickedMbidsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof lookupPickedMbids>>
+  > = ({ signal }) => lookupPickedMbids(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof lookupPickedMbids>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type LookupPickedMbidsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof lookupPickedMbids>>
+>;
+export type LookupPickedMbidsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Which of these MBIDs appear in an editorial list (dial badges)
+ */
+
+export function useLookupPickedMbids<
+  TData = Awaited<ReturnType<typeof lookupPickedMbids>>,
+  TError = ErrorType<unknown>,
+>(
+  params: LookupPickedMbidsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof lookupPickedMbids>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getLookupPickedMbidsQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -2987,13 +3841,11 @@ export const useAddSongExploderClaim = <
 export const getListAllDraftClaimsUrl = (params?: ListAllDraftClaimsParams) => {
   const normalizedParams = new URLSearchParams();
 
-  if (params) {
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined) {
-        normalizedParams.append(key, value === null ? "null" : value.toString());
-      }
-    });
-  }
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
 
   const stringifiedParams = normalizedParams.toString();
 
@@ -3072,6 +3924,105 @@ export function useListAllDraftClaims<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getListAllDraftClaimsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns all draft track claims with source_handle='wikipedia' for the given recording MBID. The admin reads the linked Wikipedia section, then uses PATCH /admin/claims/:id to paraphrase and publish or reject each draft. Token-guarded.
+
+ * @summary Pending Wikipedia section draft claims for a recording
+ */
+export const getGetWikipediaDraftsUrl = (params: GetWikipediaDraftsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/admin/wikipedia-drafts?${stringifiedParams}`
+    : `/api/admin/wikipedia-drafts`;
+};
+
+export const getWikipediaDrafts = async (
+  params: GetWikipediaDraftsParams,
+  options?: RequestInit,
+): Promise<WikipediaDraftList> => {
+  return customFetch<WikipediaDraftList>(getGetWikipediaDraftsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetWikipediaDraftsQueryKey = (
+  params?: GetWikipediaDraftsParams,
+) => {
+  return [`/api/admin/wikipedia-drafts`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetWikipediaDraftsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getWikipediaDrafts>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: GetWikipediaDraftsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getWikipediaDrafts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetWikipediaDraftsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getWikipediaDrafts>>
+  > = ({ signal }) => getWikipediaDrafts(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getWikipediaDrafts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetWikipediaDraftsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getWikipediaDrafts>>
+>;
+export type GetWikipediaDraftsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Pending Wikipedia section draft claims for a recording
+ */
+
+export function useGetWikipediaDrafts<
+  TData = Awaited<ReturnType<typeof getWikipediaDrafts>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: GetWikipediaDraftsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getWikipediaDrafts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetWikipediaDraftsQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -3178,6 +4129,95 @@ export function useListGeniusDrafts<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Set the status of a draft track claim to 'published' or 'rejected'. When publishing, `text` is required and must be the admin-written paraphrase of the Wikipedia section's key fact — never verbatim Wikipedia prose. Token-guarded.
+
+ * @summary Admin review — paraphrase and publish or reject a draft claim
+ */
+export const getPatchClaimUrl = (id: number) => {
+  return `/api/admin/claims/${id}`;
+};
+
+export const patchClaim = async (
+  id: number,
+  patchClaimRequest: PatchClaimRequest,
+  options?: RequestInit,
+): Promise<WikipediaDraftClaim> => {
+  return customFetch<WikipediaDraftClaim>(getPatchClaimUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(patchClaimRequest),
+  });
+};
+
+export const getPatchClaimMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof patchClaim>>,
+    TError,
+    { id: number; data: BodyType<PatchClaimRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof patchClaim>>,
+  TError,
+  { id: number; data: BodyType<PatchClaimRequest> },
+  TContext
+> => {
+  const mutationKey = ["patchClaim"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof patchClaim>>,
+    { id: number; data: BodyType<PatchClaimRequest> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return patchClaim(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PatchClaimMutationResult = NonNullable<
+  Awaited<ReturnType<typeof patchClaim>>
+>;
+export type PatchClaimMutationBody = BodyType<PatchClaimRequest>;
+export type PatchClaimMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Admin review — paraphrase and publish or reject a draft claim
+ */
+export const usePatchClaim = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof patchClaim>>,
+    TError,
+    { id: number; data: BodyType<PatchClaimRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof patchClaim>>,
+  TError,
+  { id: number; data: BodyType<PatchClaimRequest> },
+  TContext
+> => {
+  return useMutation(getPatchClaimMutationOptions(options));
+};
 
 /**
  * Publish or reject a pending Genius annotation draft. On publish, the admin supplies a paraphrase (`text` field) — never the verbatim Genius annotation — which is stored as a `track_claim` with `source_label = "Genius"` (or `"Genius · Verified"` for artist-verified annotations). The claim inherits the draft's `offset_ms` as `position_ms` when `anchor_type = 'timestamp'`. Token-guarded.
@@ -3929,374 +4969,253 @@ export function useGetSpotifyPlayer<
   return { ...query, queryKey: queryOptions.queryKey };
 }
 
-/**
- * Every curated pick of this recording — the reverse edge of the song–source graph. Each pick carries its picker, the specific list/run it belongs to, its ordinal within that list, and the run's size. Only real human selection edges — never inferred.
+// ---- Restored hand-patched endpoints (not modeled in openapi.yaml) ----
+// ---------------------------------------------------------------------------
+// Batch metadata availability — lyrics + SE episode, per MBID.
+// Powers the metadata chips on station dial cards.
+// ---------------------------------------------------------------------------
 
- * @summary Curated lists that contain a recording ("Picked by")
- */
-export const getGetRecordingPicksUrl = (mbid: string) => {
-  return `/api/recordings/${mbid}/picks`;
+export interface RecordingAvailabilityItem {
+  mbid: string;
+  hasLyrics: boolean;
+  hasSe: boolean;
+}
+
+export interface RecordingsAvailabilityList {
+  items: RecordingAvailabilityItem[];
+}
+
+export const getGetRecordingsAvailabilityUrl = (mbids: string) =>
+  `/api/recordings/availability?mbids=${encodeURIComponent(mbids)}`;
+
+export const getRecordingsAvailability = async (
+  mbids: string,
+  options?: RequestInit,
+): Promise<RecordingsAvailabilityList> => {
+  return customFetch<RecordingsAvailabilityList>(
+    getGetRecordingsAvailabilityUrl(mbids),
+    { ...options, method: "GET" },
+  );
 };
 
-export const getRecordingPicks = async (
-  mbid: string,
+export const getGetRecordingsAvailabilityQueryKey = (mbids: string) =>
+  [`/api/recordings/availability`, mbids] as const;
+
+export function useGetRecordingsAvailability<
+  TData = Awaited<ReturnType<typeof getRecordingsAvailability>>,
+  TError = ErrorType<unknown>,
+>(
+  mbids: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecordingsAvailability>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey =
+    queryOptions?.queryKey ?? getGetRecordingsAvailabilityQueryKey(mbids);
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getRecordingsAvailability>>
+  > = ({ signal }) =>
+    getRecordingsAvailability(mbids, { signal, ...requestOptions });
+  const query = useQuery({
+    queryKey,
+    queryFn,
+    enabled: !!mbids,
+    ...queryOptions,
+  }) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey };
+}
+
+// ---------------------------------------------------------------------------
+// Recent individual spins per station — last 8 per station for a given date.
+// Powers the track-chip timeline on showless station cards (e.g. Radio Paradise).
+// ---------------------------------------------------------------------------
+
+export interface StationRecentSpin {
+  mbid: string | null;
+  title: string;
+  artist: string;
+  playedAt: string;
+}
+
+export interface StationRecentSpinsItem {
+  stationSlug: string;
+  spins: StationRecentSpin[];
+}
+
+export interface StationRecentSpinsList {
+  items: StationRecentSpinsItem[];
+}
+
+export const getGetStationsRecentSpinsUrl = (date: string) =>
+  `/api/stations/recent-spins?date=${encodeURIComponent(date)}`;
+
+export const getStationsRecentSpins = async (
+  date: string,
   options?: RequestInit,
-): Promise<RecordingPicks> => {
-  return customFetch<RecordingPicks>(getGetRecordingPicksUrl(mbid), {
+): Promise<StationRecentSpinsList> => {
+  return customFetch<StationRecentSpinsList>(
+    getGetStationsRecentSpinsUrl(date),
+    { ...options, method: "GET" },
+  );
+};
+
+export const getGetStationsRecentSpinsQueryKey = (date: string) =>
+  [`/api/stations/recent-spins`, date] as const;
+
+export function useGetStationsRecentSpins<
+  TData = Awaited<ReturnType<typeof getStationsRecentSpins>>,
+  TError = ErrorType<unknown>,
+>(
+  date: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationsRecentSpins>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStationsRecentSpinsQueryKey(date);
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStationsRecentSpins>>
+  > = ({ signal }) =>
+    getStationsRecentSpins(date, { signal, ...requestOptions });
+  const query = useQuery({
+    queryKey,
+    queryFn,
+    enabled: !!date,
+    ...queryOptions,
+  }) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey };
+}
+
+// ---------------------------------------------------------------------------
+// Station show schedule — all show blocks for every station on a given date.
+// Powers the timeline strip on each station card.
+// ---------------------------------------------------------------------------
+
+export interface StationScheduleRun {
+  runId: number;
+  show: { name: string; djName?: string | null } | null;
+  spinCount: number;
+  resolvedCount: number;
+  /** ISO timestamp of first spin in this block. */
+  startedAt: string;
+  /** ISO timestamp of last spin in this block. */
+  endedAt: string;
+}
+
+export interface StationScheduleItem {
+  stationSlug: string;
+  runs: StationScheduleRun[];
+}
+
+export interface StationScheduleList {
+  items: StationScheduleItem[];
+}
+
+export const getGetStationsScheduleUrl = (date: string) =>
+  `/api/stations/schedule?date=${encodeURIComponent(date)}`;
+
+export const getStationsSchedule = async (
+  date: string,
+  options?: RequestInit,
+): Promise<StationScheduleList> => {
+  return customFetch<StationScheduleList>(getGetStationsScheduleUrl(date), {
     ...options,
     method: "GET",
   });
 };
 
-export const getGetRecordingPicksQueryKey = (mbid: string) => {
-  return [`/api/recordings/${mbid}/picks`] as const;
-};
+export const getGetStationsScheduleQueryKey = (date: string) =>
+  [`/api/stations/schedule`, date] as const;
 
-export const getGetRecordingPicksQueryOptions = <
-  TData = Awaited<ReturnType<typeof getRecordingPicks>>,
+export function useGetStationsSchedule<
+  TData = Awaited<ReturnType<typeof getStationsSchedule>>,
   TError = ErrorType<unknown>,
 >(
-  mbid: string,
+  date: string,
   options?: {
     query?: UseQueryOptions<
-      Awaited<ReturnType<typeof getRecordingPicks>>,
-      TError,
-      TData
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-) => {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-
-  const queryKey = queryOptions?.queryKey ?? getGetRecordingPicksQueryKey(mbid);
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof getRecordingPicks>>
-  > = ({ signal }) => getRecordingPicks(mbid, { signal, ...requestOptions });
-
-  return {
-    queryKey,
-    queryFn,
-    enabled: !!mbid,
-    ...queryOptions,
-  } as UseQueryOptions<
-    Awaited<ReturnType<typeof getRecordingPicks>>,
-    TError,
-    TData
-  > & { queryKey: QueryKey };
-};
-
-export type GetRecordingPicksQueryResult = NonNullable<
-  Awaited<ReturnType<typeof getRecordingPicks>>
->;
-export type GetRecordingPicksQueryError = ErrorType<unknown>;
-
-/**
- * @summary Curated lists that contain a recording ("Picked by")
- */
-
-export function useGetRecordingPicks<
-  TData = Awaited<ReturnType<typeof getRecordingPicks>>,
-  TError = ErrorType<unknown>,
->(
-  mbid: string,
-  options?: {
-    query?: UseQueryOptions<
-      Awaited<ReturnType<typeof getRecordingPicks>>,
+      Awaited<ReturnType<typeof getStationsSchedule>>,
       TError,
       TData
     >;
     request?: SecondParameter<typeof customFetch>;
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetRecordingPicksQueryOptions(mbid, options);
-
-  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
-    queryKey: QueryKey;
-  };
-
-  return { ...query, queryKey: queryOptions.queryKey };
-}
-
-/**
- * Pickers whose curated lists contain recordings this station has actually spun — exact MBID overlap only, never similarity.
-
- * @summary Curated pickers sharing tracks with a station ("Critics agree")
- */
-export const getGetStationPickerOverlapsUrl = (slug: string) => {
-  return `/api/stations/${slug}/overlaps/pickers`;
-};
-
-export const getStationPickerOverlaps = async (
-  slug: string,
-  options?: RequestInit,
-): Promise<StationPickerOverlaps> => {
-  return customFetch<StationPickerOverlaps>(
-    getGetStationPickerOverlapsUrl(slug),
-    {
-      ...options,
-      method: "GET",
-    },
-  );
-};
-
-export const getGetStationPickerOverlapsQueryKey = (slug: string) => {
-  return [`/api/stations/${slug}/overlaps/pickers`] as const;
-};
-
-export const getGetStationPickerOverlapsQueryOptions = <
-  TData = Awaited<ReturnType<typeof getStationPickerOverlaps>>,
-  TError = ErrorType<ApiError>,
->(
-  slug: string,
-  options?: {
-    query?: UseQueryOptions<
-      Awaited<ReturnType<typeof getStationPickerOverlaps>>,
-      TError,
-      TData
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
-
   const queryKey =
-    queryOptions?.queryKey ?? getGetStationPickerOverlapsQueryKey(slug);
-
+    queryOptions?.queryKey ?? getGetStationsScheduleQueryKey(date);
   const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof getStationPickerOverlaps>>
-  > = ({ signal }) =>
-    getStationPickerOverlaps(slug, { signal, ...requestOptions });
-
-  return {
+    Awaited<ReturnType<typeof getStationsSchedule>>
+  > = ({ signal }) => getStationsSchedule(date, { signal, ...requestOptions });
+  const query = useQuery({
     queryKey,
     queryFn,
-    enabled: !!slug,
+    enabled: !!date,
     ...queryOptions,
-  } as UseQueryOptions<
-    Awaited<ReturnType<typeof getStationPickerOverlaps>>,
-    TError,
-    TData
-  > & { queryKey: QueryKey };
-};
-
-export type GetStationPickerOverlapsQueryResult = NonNullable<
-  Awaited<ReturnType<typeof getStationPickerOverlaps>>
->;
-export type GetStationPickerOverlapsQueryError = ErrorType<ApiError>;
-
-/**
- * @summary Curated pickers sharing tracks with a station ("Critics agree")
- */
-
-export function useGetStationPickerOverlaps<
-  TData = Awaited<ReturnType<typeof getStationPickerOverlaps>>,
-  TError = ErrorType<ApiError>,
->(
-  slug: string,
-  options?: {
-    query?: UseQueryOptions<
-      Awaited<ReturnType<typeof getStationPickerOverlaps>>,
-      TError,
-      TData
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetStationPickerOverlapsQueryOptions(slug, options);
-
-  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
-    queryKey: QueryKey;
-  };
-
-  return { ...query, queryKey: queryOptions.queryKey };
+  }) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey };
 }
 
-/**
- * Stations whose logged spin history contains recordings this picker has picked — exact MBID overlap only, never similarity.
+// ---------------------------------------------------------------------------
+// Date-filtered dial pulse — same shape as the live now-playing but scoped to
+// a single calendar day.  Powers the ghost-dial date sweep on the home page.
+// ---------------------------------------------------------------------------
 
- * @summary Stations that have spun a picker's tracks ("On the radio too")
- */
-export const getGetPickerStationOverlapsUrl = (handle: string) => {
-  return `/api/pickers/${handle}/overlaps/stations`;
-};
+export const getListStationsAtDateUrl = (date: string) =>
+  `/api/stations/now-playing?date=${encodeURIComponent(date)}`;
 
-export const getPickerStationOverlaps = async (
-  handle: string,
+export const listStationsAtDate = async (
+  date: string,
   options?: RequestInit,
-): Promise<PickerStationOverlaps> => {
-  return customFetch<PickerStationOverlaps>(
-    getGetPickerStationOverlapsUrl(handle),
-    {
-      ...options,
-      method: "GET",
-    },
-  );
-};
-
-export const getGetPickerStationOverlapsQueryKey = (handle: string) => {
-  return [`/api/pickers/${handle}/overlaps/stations`] as const;
-};
-
-export const getGetPickerStationOverlapsQueryOptions = <
-  TData = Awaited<ReturnType<typeof getPickerStationOverlaps>>,
-  TError = ErrorType<ApiError>,
->(
-  handle: string,
-  options?: {
-    query?: UseQueryOptions<
-      Awaited<ReturnType<typeof getPickerStationOverlaps>>,
-      TError,
-      TData
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-) => {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ?? getGetPickerStationOverlapsQueryKey(handle);
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof getPickerStationOverlaps>>
-  > = ({ signal }) =>
-    getPickerStationOverlaps(handle, { signal, ...requestOptions });
-
-  return {
-    queryKey,
-    queryFn,
-    enabled: !!handle,
-    ...queryOptions,
-  } as UseQueryOptions<
-    Awaited<ReturnType<typeof getPickerStationOverlaps>>,
-    TError,
-    TData
-  > & { queryKey: QueryKey };
-};
-
-export type GetPickerStationOverlapsQueryResult = NonNullable<
-  Awaited<ReturnType<typeof getPickerStationOverlaps>>
->;
-export type GetPickerStationOverlapsQueryError = ErrorType<ApiError>;
-
-/**
- * @summary Stations that have spun a picker's tracks ("On the radio too")
- */
-
-export function useGetPickerStationOverlaps<
-  TData = Awaited<ReturnType<typeof getPickerStationOverlaps>>,
-  TError = ErrorType<ApiError>,
->(
-  handle: string,
-  options?: {
-    query?: UseQueryOptions<
-      Awaited<ReturnType<typeof getPickerStationOverlaps>>,
-      TError,
-      TData
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetPickerStationOverlapsQueryOptions(handle, options);
-
-  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
-    queryKey: QueryKey;
-  };
-
-  return { ...query, queryKey: queryOptions.queryKey };
-}
-
-/**
- * Batched, cached lookup for the live dial: for each requested MBID that appears in at least one curated (non-DJ) picker's list, returns the strongest such pick. MBIDs with no editorial pick are simply absent.
-
- * @summary Which of these MBIDs appear in an editorial list (dial badges)
- */
-export const getLookupPickedMbidsUrl = (params: { mbids: string }) => {
-  const searchParams = new URLSearchParams();
-  searchParams.set("mbids", params.mbids);
-  const qs = searchParams.toString();
-  return `/api/picks/contains?${qs}`;
-};
-
-export const lookupPickedMbids = async (
-  params: { mbids: string },
-  options?: RequestInit,
-): Promise<PickedLookup> => {
-  return customFetch<PickedLookup>(getLookupPickedMbidsUrl(params), {
+): Promise<StationPulseList> => {
+  return customFetch<StationPulseList>(getListStationsAtDateUrl(date), {
     ...options,
     method: "GET",
   });
 };
 
-export const getLookupPickedMbidsQueryKey = (params: { mbids: string }) => {
-  return [`/api/picks/contains`, params] as const;
-};
+export const getListStationsAtDateQueryKey = (date: string) =>
+  [`/api/stations/now-playing`, date] as const;
 
-export const getLookupPickedMbidsQueryOptions = <
-  TData = Awaited<ReturnType<typeof lookupPickedMbids>>,
+export function useListStationsAtDate<
+  TData = Awaited<ReturnType<typeof listStationsAtDate>>,
   TError = ErrorType<unknown>,
 >(
-  params: { mbids: string },
+  date: string,
   options?: {
     query?: UseQueryOptions<
-      Awaited<ReturnType<typeof lookupPickedMbids>>,
-      TError,
-      TData
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-) => {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ?? getLookupPickedMbidsQueryKey(params);
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof lookupPickedMbids>>
-  > = ({ signal }) => lookupPickedMbids(params, { signal, ...requestOptions });
-
-  return {
-    queryKey,
-    queryFn,
-    enabled: !!params.mbids,
-    ...queryOptions,
-  } as UseQueryOptions<
-    Awaited<ReturnType<typeof lookupPickedMbids>>,
-    TError,
-    TData
-  > & { queryKey: QueryKey };
-};
-
-export type LookupPickedMbidsQueryResult = NonNullable<
-  Awaited<ReturnType<typeof lookupPickedMbids>>
->;
-export type LookupPickedMbidsQueryError = ErrorType<unknown>;
-
-/**
- * @summary Which of these MBIDs appear in an editorial list (dial badges)
- */
-
-export function useLookupPickedMbids<
-  TData = Awaited<ReturnType<typeof lookupPickedMbids>>,
-  TError = ErrorType<unknown>,
->(
-  params: { mbids: string },
-  options?: {
-    query?: UseQueryOptions<
-      Awaited<ReturnType<typeof lookupPickedMbids>>,
+      Awaited<ReturnType<typeof listStationsAtDate>>,
       TError,
       TData
     >;
     request?: SecondParameter<typeof customFetch>;
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getLookupPickedMbidsQueryOptions(params, options);
-
-  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
-    queryKey: QueryKey;
-  };
-
-  return { ...query, queryKey: queryOptions.queryKey };
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey =
+    queryOptions?.queryKey ?? getListStationsAtDateQueryKey(date);
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listStationsAtDate>>
+  > = ({ signal }) => listStationsAtDate(date, { signal, ...requestOptions });
+  const query = useQuery({
+    queryKey,
+    queryFn,
+    enabled: !!date,
+    ...queryOptions,
+  }) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey };
 }
 
 // ---- Song Exploder — public recording hook --------------------------------
@@ -4540,147 +5459,6 @@ export function useGetArtist<
   return { ...query, queryKey: queryOptions.queryKey };
 }
 
-// ── Selectors (KEXP DJ pickers) ───────────────────────────────────────────────
-
-export const getListSelectorsUrl = () => `/api/selectors`;
-
-export const listSelectors = async (
-  options?: RequestInit,
-): Promise<SelectorList> => {
-  return customFetch<SelectorList>(getListSelectorsUrl(), {
-    ...options,
-    method: "GET",
-  });
-};
-
-export const getListSelectorsQueryKey = () =>
-  [`/api/selectors`] as const;
-
-export const getListSelectorsQueryOptions = <
-  TData = Awaited<ReturnType<typeof listSelectors>>,
-  TError = ErrorType<ApiError>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof listSelectors>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-  const queryKey = queryOptions?.queryKey ?? getListSelectorsQueryKey();
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof listSelectors>>
-  > = ({ signal }) => listSelectors({ signal, ...requestOptions });
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
-    Awaited<ReturnType<typeof listSelectors>>,
-    TError,
-    TData
-  > & { queryKey: QueryKey };
-};
-
-export type ListSelectorsQueryResult = NonNullable<
-  Awaited<ReturnType<typeof listSelectors>>
->;
-export type ListSelectorsQueryError = ErrorType<ApiError>;
-
-/**
- * @summary List KEXP selectors (DJ pickers)
- */
-export function useListSelectors<
-  TData = Awaited<ReturnType<typeof listSelectors>>,
-  TError = ErrorType<ApiError>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof listSelectors>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getListSelectorsQueryOptions(options);
-  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
-    queryKey: QueryKey;
-  };
-  return { ...query, queryKey: queryOptions.queryKey };
-}
-
-export const getGetSelectorRunsUrl = (handle: string) =>
-  `/api/selectors/${handle}/runs`;
-
-export const getSelectorRuns = async (
-  handle: string,
-  options?: RequestInit,
-): Promise<SelectorRuns> => {
-  return customFetch<SelectorRuns>(getGetSelectorRunsUrl(handle), {
-    ...options,
-    method: "GET",
-  });
-};
-
-export const getGetSelectorRunsQueryKey = (handle: string) =>
-  [`/api/selectors/${handle}/runs`] as const;
-
-export const getGetSelectorRunsQueryOptions = <
-  TData = Awaited<ReturnType<typeof getSelectorRuns>>,
-  TError = ErrorType<ApiError>,
->(
-  handle: string,
-  options?: {
-    query?: UseQueryOptions<
-      Awaited<ReturnType<typeof getSelectorRuns>>,
-      TError,
-      TData
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-) => {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-  const queryKey =
-    queryOptions?.queryKey ?? getGetSelectorRunsQueryKey(handle);
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof getSelectorRuns>>
-  > = ({ signal }) => getSelectorRuns(handle, { signal, ...requestOptions });
-  return {
-    queryKey,
-    queryFn,
-    enabled: !!handle,
-    ...queryOptions,
-  } as UseQueryOptions<
-    Awaited<ReturnType<typeof getSelectorRuns>>,
-    TError,
-    TData
-  > & { queryKey: QueryKey };
-};
-
-export type GetSelectorRunsQueryResult = NonNullable<
-  Awaited<ReturnType<typeof getSelectorRuns>>
->;
-export type GetSelectorRunsQueryError = ErrorType<ApiError>;
-
-/**
- * @summary Station runs for a KEXP DJ selector
- */
-export function useGetSelectorRuns<
-  TData = Awaited<ReturnType<typeof getSelectorRuns>>,
-  TError = ErrorType<ApiError>,
->(
-  handle: string,
-  options?: {
-    query?: UseQueryOptions<
-      Awaited<ReturnType<typeof getSelectorRuns>>,
-      TError,
-      TData
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetSelectorRunsQueryOptions(handle, options);
-  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
-    queryKey: QueryKey;
-  };
-  return { ...query, queryKey: queryOptions.queryKey };
-}
 
 // ---- For-You personalized ranking -------------------------------------------
 

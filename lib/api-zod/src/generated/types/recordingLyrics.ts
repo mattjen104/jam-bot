@@ -8,9 +8,10 @@
 import type { LyricLine } from "./lyricLine";
 
 /**
- * Synced lyric lines for a recording. lines is empty when LRCLIB has no synced version for this track.
+ * Lyric lines for a recording. synced=true means time-coded (LRC); synced=false means static plain lyrics. lines is empty when LRCLIB has no lyrics at all.
 
  */
 export interface RecordingLyrics {
+  synced: boolean;
   lines: LyricLine[];
 }

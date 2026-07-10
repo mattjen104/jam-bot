@@ -14,8 +14,10 @@ import {
   GetStationsRecentSpinsResponse,
   GetStationsScheduleResponse,
   ReportStationNowPlayingParams,
-  IcecastReport,
-  IcecastReportResult,
+  IcecastReportBody,
+  IcecastReportResultBody,
+  GetStationInsightsParams,
+  GetStationInsightsResponse,
 } from "@workspace/api-zod";
 import {
   db,
@@ -33,6 +35,7 @@ import { toStation, toNowPlaying, toArchiveRecording, spinDayExpr } from "./shar
 import { spinRunIdExpr } from "../../lore/runs.js";
 import { logSpinIfChanged } from "../../lore/resolve.js";
 import { fingerprintStream, fingerprintAvailable } from "../../lore/stream-fingerprint.js";
+import { computeGenreBreakdown, computeDiscoveryScore } from "../../lore/genre-insights.js";
 
 const router: IRouter = Router();
 
@@ -177,7 +180,7 @@ router.post("/stations/:slug/report-now-playing", reportNowPlayingLimiter, h(asy
     return res.status(404).json({ error: "Station not found" });
   }
 
-  const parsedBody = IcecastReport.safeParse(req.body);
+  const parsedBody = IcecastReportBody.safeParse(req.body);
   if (!parsedBody.success) {
     return res.status(400).json({ error: "Invalid report body", details: parsedBody.error.flatten() });
   }
@@ -204,7 +207,7 @@ router.post("/stations/:slug/report-now-playing", reportNowPlayingLimiter, h(asy
     .limit(1);
 
   return res.json(
-    IcecastReportResult.parse({
+    IcecastReportResultBody.parse({
       logged,
       mbid: latest?.mbid ?? null,
       ...(latest?.confidence && latest.confidence !== "spotify"
@@ -254,7 +257,7 @@ router.post("/stations/:slug/fingerprint", fingerprintLimiter, h(async (req, res
   }
 
   if (!match) {
-    return res.json(IcecastReportResult.parse({ logged: false, mbid: null }));
+    return res.json(IcecastReportResultBody.parse({ logged: false, mbid: null }));
   }
 
   const logged = await logSpinIfChanged(station, {
@@ -271,7 +274,7 @@ router.post("/stations/:slug/fingerprint", fingerprintLimiter, h(async (req, res
     .limit(1);
 
   return res.json(
-    IcecastReportResult.parse({
+    IcecastReportResultBody.parse({
       logged,
       mbid: latest?.mbid ?? null,
       ...(latest?.confidence ? { confidence: latest.confidence } : {}),
@@ -331,6 +334,47 @@ router.get("/stations/:slug/archive", h(async (req, res) => {
         startedAt: new Date(r.startedAt).toISOString(),
         endedAt: new Date(r.endedAt).toISOString(),
       })),
+    }),
+  );
+}));
+
+// GET /api/stations/:slug/insights — genre breakdown + discovery score across
+// the station's full logged spin history. Read-time aggregation over
+// already-enriched recording data; never a per-spin recompute.
+router.get("/stations/:slug/insights", h(async (req, res) => {
+  const parsed = GetStationInsightsParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(404).json({ error: "Station not found" });
+  }
+
+  const [station] = await db
+    .select()
+    .from(stationsTable)
+    .where(eq(stationsTable.slug, parsed.data.slug))
+    .limit(1);
+  if (!station) {
+    return res.status(404).json({ error: "Station not found" });
+  }
+
+  const rows = await db
+    .select({
+      genres: recordingsTable.genres,
+      releaseYear: recordingsTable.releaseYear,
+      playedAt: spinsTable.playedAt,
+    })
+    .from(spinsTable)
+    .innerJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
+    .where(eq(spinsTable.stationId, station.id));
+
+  return res.json(
+    GetStationInsightsResponse.parse({
+      station: { slug: station.slug, name: station.name, stationClass: station.stationClass },
+      insights: {
+        genreBreakdown: computeGenreBreakdown(rows),
+        discoveryScore: computeDiscoveryScore(
+          rows.map((r) => ({ releaseYear: r.releaseYear, airedAt: r.playedAt })),
+        ),
+      },
     }),
   );
 }));

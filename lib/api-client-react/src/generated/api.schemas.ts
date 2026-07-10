@@ -214,6 +214,7 @@ export interface Station {
   attribution: boolean;
   /** @nullable */
   tags?: string[] | null;
+  /** Cheap metadata-only signal ("this station will continue after this break", sponsor reads, etc) suggests this station airs ad breaks. Not a certainty — surfaces as a "may contain ads" hint, not a guarantee either way. */
   mayHaveAds: boolean;
 }
 
@@ -350,8 +351,8 @@ export interface LyricLine {
 
  */
 export interface RecordingLyrics {
-  lines: LyricLine[];
   synced: boolean;
+  lines: LyricLine[];
 }
 
 export type GeniusDraftAnchorType =
@@ -433,25 +434,131 @@ export interface GeniusDraftReviewResponse {
 }
 
 /**
- * One grounded fact about a recording, extracted systematically from an official documentary source (e.g. a Classic Albums making-of clip or a Genius annotation). `sourceUrl` deep-links to the exact moment in the official source that supports the claim, so every fact is one tap from its evidence. `verified` is true for artist-verified Genius annotations. `sourceHandle` identifies the picker that produced this claim (e.g. "genius", "classic-albums") so UIs can apply source-specific treatment.
+ * Review status. Only 'published' claims are surfaced to end users on the song page. 'draft' = awaiting admin review (Wikipedia candidates). 'rejected' = discarded by admin.
+
+ */
+export type TrackClaimStatus =
+  (typeof TrackClaimStatus)[keyof typeof TrackClaimStatus];
+
+export const TrackClaimStatus = {
+  draft: "draft",
+  published: "published",
+  rejected: "rejected",
+} as const;
+
+/**
+ * One grounded fact about a recording, extracted systematically from an official documentary source (e.g. a Classic Albums making-of clip, a Wikipedia article section, or a Genius annotation). `sourceUrl` deep-links to the supporting moment or section in the original source, so every claim is one tap from its evidence. `anchorType` distinguishes timestamp-anchored (null) from section-anchored ('section') claims. Section claims carry `anchorValue` (the Wikipedia section label, e.g. "Recording") and a `sourceUrl` that is a Wikipedia deep link to that section. `verified` is true for artist-verified Genius annotations. `sourceHandle` identifies the picker that produced this claim (e.g. "genius", "classic-albums") so UIs can apply source-specific treatment.
 
  */
 export interface TrackClaim {
+  /** Database row id (needed for admin PATCH). */
   id?: number;
   text: string;
   sourceLabel: string;
   sourceUrl: string;
-  /** Machine-readable source identifier, e.g. "genius" or "classic-albums". Use this to filter claims by source in the UI.
+  positionMs?: number | null;
+  /** 'section' for Wikipedia section claims; null for timestamp-anchored claims (positionMs carries the offset).
+   */
+  anchorType?: "section" | null;
+  /** Section label when anchorType='section' (e.g. "Recording", "Production", "Composition", "Background", "Critical reception"). Null for timestamp-anchored claims.
+   */
+  anchorValue?: string | null;
+  /** Review status. Only 'published' claims are surfaced to end users on the song page. 'draft' = awaiting admin review (Wikipedia candidates). 'rejected' = discarded by admin.
+   */
+  status?: TrackClaimStatus;
+  /** Origin handle for the claim. 'classic-albums' for Classic Albums documentary clips. 'wikipedia' for track-level Wikipedia section claims. 'wikipedia-album' for album-level Wikipedia section claims (sourced from the recording's canonical album article). 'genius' for Genius annotation-derived claims.
    */
   sourceHandle: string;
-  positionMs?: number | null;
-  /** 'section' for Wikipedia section claims; null for timestamp-anchored claims. */
-  anchorType?: "section" | null;
-  /** Section label when anchorType='section'. Null for timestamp-anchored claims. */
-  anchorValue?: string | null;
   /** True for artist-verified Genius annotations. */
   verified?: boolean;
-  status?: "draft" | "published" | "rejected";
+}
+
+export type AllDraftClaimStatus =
+  (typeof AllDraftClaimStatus)[keyof typeof AllDraftClaimStatus];
+
+export const AllDraftClaimStatus = {
+  draft: "draft",
+  published: "published",
+  rejected: "rejected",
+} as const;
+
+/**
+ * A Wikipedia draft claim awaiting admin review, enriched with a joined track title when the recording is known.
+
+ */
+export interface AllDraftClaim {
+  id: number;
+  mbid: string;
+  /**
+   * Recording title from the recordings table, if available.
+   * @nullable
+   */
+  trackTitle?: string | null;
+  /**
+   * Recording artist from the recordings table, if available.
+   * @nullable
+   */
+  trackArtist?: string | null;
+  /** Section label (e.g. "Recording", "Production"). */
+  anchorValue: string;
+  /** Wikipedia article title. */
+  sourceLabel: string;
+  /** Deep link to the Wikipedia section. */
+  sourceUrl: string;
+  status: AllDraftClaimStatus;
+  createdAt: string;
+}
+
+export interface AllDraftClaimsList {
+  claims: AllDraftClaim[];
+}
+
+export type WikipediaDraftClaimStatus =
+  (typeof WikipediaDraftClaimStatus)[keyof typeof WikipediaDraftClaimStatus];
+
+export const WikipediaDraftClaimStatus = {
+  draft: "draft",
+  published: "published",
+  rejected: "rejected",
+} as const;
+
+/**
+ * A Wikipedia draft track claim awaiting admin review. The admin fills in `text` (a paraphrase of the section's key fact) before publishing. No Wikipedia prose is stored — only the section URL pointer and the admin-written paraphrase.
+
+ */
+export interface WikipediaDraftClaim {
+  id: number;
+  mbid: string;
+  /** Section label (e.g. "Recording", "Production"). */
+  anchorValue: string;
+  /** Wikipedia article title, e.g. 'Wikipedia — Go Your Own Way'. */
+  sourceLabel: string;
+  /** Deep link to the Wikipedia section. */
+  sourceUrl: string;
+  status: WikipediaDraftClaimStatus;
+  createdAt: string;
+}
+
+export interface WikipediaDraftList {
+  claims: WikipediaDraftClaim[];
+}
+
+export type PatchClaimRequestStatus =
+  (typeof PatchClaimRequestStatus)[keyof typeof PatchClaimRequestStatus];
+
+export const PatchClaimRequestStatus = {
+  published: "published",
+  rejected: "rejected",
+} as const;
+
+/**
+ * Admin claim review: provide the paraphrased claim text and set status to 'published' (to publish) or 'rejected' (to discard). Text is required when publishing — it must be the admin-written paraphrase of the Wikipedia section's key fact, never verbatim Wikipedia prose.
+
+ */
+export interface PatchClaimRequest {
+  /** @minLength 1 */
+  text?: string;
+  status: PatchClaimRequestStatus;
 }
 
 export interface AlbumTrack {
@@ -476,25 +583,6 @@ export interface RecordingKnowledge {
   album?: AlbumContext | null;
   /** Grounded documentary-sourced facts (may be empty). */
   claims?: TrackClaim[];
-}
-
-export interface ArtistTopTrack {
-  mbid: string;
-  title: string;
-  artist: string;
-  /** @nullable */
-  artworkUrl?: string | null;
-  spinCount: number;
-  /** @nullable */
-  lastSpunAt?: string | null;
-}
-
-export interface GetArtistResponse {
-  mbid: string;
-  name: string;
-  topTracks: ArtistTopTrack[];
-  /** @nullable */
-  catalogue?: ArtistCatalogue | null;
 }
 
 /**
@@ -551,7 +639,6 @@ export interface PickerRef {
 export type RecordingPickConfidence =
   (typeof RecordingPickConfidence)[keyof typeof RecordingPickConfidence];
 
-// eslint-disable-next-line @typescript-eslint/no-redeclare
 export const RecordingPickConfidence = {
   recording_id: "recording_id",
   isrc: "isrc",
@@ -656,6 +743,17 @@ export interface StationArchive {
   runs: StationRunSummary[];
 }
 
+/**
+ * The full time range this station's spin history covers, so a client can render a continuous scrub control without loading every page.
+ */
+export interface StationSpinsBounds {
+  /** @nullable */
+  oldestSpinAt: string | null;
+  /** @nullable */
+  newestSpinAt: string | null;
+  spinCount: number;
+}
+
 export type ArchiveTrackConfidence =
   (typeof ArchiveTrackConfidence)[keyof typeof ArchiveTrackConfidence];
 
@@ -679,22 +777,24 @@ export interface ArchiveTrack {
   recording?: NowPlayingRecording | null;
 }
 
+/**
+ * One page of a station's spin history, newest first, independent of show/run grouping.
+ */
+export interface StationSpinsPage {
+  station: StationRef;
+  tracks: ArchiveTrack[];
+  /**
+   * Pass as `before` to fetch the next (older) page. Null when this page reached the oldest logged spin.
+   * @nullable
+   */
+  nextBefore: string | null;
+  bounds: StationSpinsBounds;
+}
+
 export interface StationRunDetail {
   station: StationRef;
   run: StationRunSummary;
   tracks: ArchiveTrack[];
-}
-
-/**
- * One recent documented run with its station attribution, for the cross-station ghost radio browse surface.
- */
-export interface RecentStationRun {
-  station: StationRef;
-  run: StationRunSummary;
-}
-
-export interface ArchiveRecentRuns {
-  items: RecentStationRun[];
 }
 
 /**
@@ -729,6 +829,7 @@ export const PickerPickerType = {
   collector: "collector",
   event: "event",
   series: "series",
+  editorial: "editorial",
 } as const;
 
 /**
@@ -745,7 +846,10 @@ export interface Picker {
   /** @nullable */
   description?: string | null;
   active: boolean;
-  /** @nullable */
+  /**
+   * ID of the most recent run from this picker; present when at least one pick has been ingested.
+   * @nullable
+   */
   latestRunId?: number | null;
 }
 
@@ -758,6 +862,101 @@ export interface PickerRunDetail {
   picker: Picker;
   run: PickerRunSummary;
   tracks: ArchiveTrack[];
+}
+
+export interface GenreCount {
+  genre: string;
+  count: number;
+}
+
+/**
+ * Ranked genre tags across a set of tracks. Genre data comes from MusicBrainz (primary) or Last.fm artist tags (fallback); tracks that were never enriched, or truly carry no tags, count toward `unknownCount` rather than being guessed at.
+ */
+export interface GenreBreakdown {
+  top: GenreCount[];
+  unknownCount: number;
+  totalCount: number;
+}
+
+export type DiscoveryScoreLabel =
+  (typeof DiscoveryScoreLabel)[keyof typeof DiscoveryScoreLabel];
+
+export const DiscoveryScoreLabel = {
+  "new-music": "new-music",
+  recent: "recent",
+  catalog: "catalog",
+  unknown: "unknown",
+} as const;
+
+/**
+ * How "new music"-leaning a set of tracks is, based on each track's release year vs. the date it aired/was picked. Null fields mean there wasn't enough dated data to compute a score — never a fabricated guess.
+ */
+export interface DiscoveryScore {
+  /** @nullable */
+  medianAgeYears: number | null;
+  /**
+   * 0-100, higher = newer / more discovery-leaning.
+   * @nullable
+   */
+  score: number | null;
+  label: DiscoveryScoreLabel;
+  /** Tracks with both a release year and an air/pick date. */
+  sampleSize: number;
+  /** Tracks considered but missing a release year. */
+  unknownCount: number;
+}
+
+/**
+ * Combined genre breakdown + discovery score for a scope (station, run, DJ, or list).
+ */
+export interface GenreInsights {
+  genreBreakdown: GenreBreakdown;
+  discoveryScore: DiscoveryScore;
+}
+
+export interface StationInsights {
+  station: StationRef;
+  insights: GenreInsights;
+}
+
+export interface StationRunInsights {
+  runId: number;
+  insights: GenreInsights;
+}
+
+export interface SelectorRef {
+  id: number;
+  name: string;
+  handle: string;
+  /** @nullable */
+  homeUrl?: string | null;
+}
+
+export interface SelectorInsights {
+  selector: SelectorRef;
+  insights: GenreInsights;
+}
+
+export interface PickerRunInsights {
+  runId: number;
+  insights: GenreInsights;
+}
+
+export interface PickerInsights {
+  picker: Picker;
+  insights: GenreInsights;
+}
+
+/**
+ * One recent documented run with its station attribution, for the cross-station ghost radio browse surface.
+ */
+export interface RecentStationRun {
+  station: StationRef;
+  run: StationRunSummary;
+}
+
+export interface ArchiveRecentRuns {
+  items: RecentStationRun[];
 }
 
 /**
@@ -830,6 +1029,36 @@ export interface SegueNext {
 export interface SegueNextList {
   mbid: string;
   next: SegueNext[];
+}
+
+/**
+ * Client-discovered now-playing text from a station's Icecast status endpoint, awaiting MusicBrainz/Spotify resolution.
+
+ */
+export interface IcecastReport {
+  /** May be empty when the Icecast source only provides a title. */
+  rawArtist?: string;
+  /** @minLength 1 */
+  rawTitle: string;
+}
+
+export type IcecastReportResultConfidence =
+  (typeof IcecastReportResultConfidence)[keyof typeof IcecastReportResultConfidence];
+
+export const IcecastReportResultConfidence = {
+  recording_id: "recording_id",
+  isrc: "isrc",
+  text: "text",
+  unresolved: "unresolved",
+} as const;
+
+export interface IcecastReportResult {
+  /** True when this report resulted in a new spin being written (the track differed from the last logged spin). False means the report matched what's already logged — nothing changed.
+   */
+  logged: boolean;
+  /** @nullable */
+  mbid?: string | null;
+  confidence?: IcecastReportResultConfidence;
 }
 
 /**
@@ -946,6 +1175,7 @@ export const UpsertPickerRequestPickerType = {
   collector: "collector",
   event: "event",
   series: "series",
+  editorial: "editorial",
 } as const;
 
 /**
@@ -1163,40 +1393,87 @@ export interface SongExploderClaimResponse {
 }
 
 /**
- * The full time range this station's spin history covers, so a client can render a continuous scrub control without loading every page.
+ * One KEXP DJ selector with 30-day spin statistics. Only pickers with source_ref.stationSlug='kexp' and pickerType='dj' appear here.
+
  */
-export interface StationSpinsBounds {
+export interface SelectorSummary {
+  id: number;
+  name: string;
+  handle: string;
   /** @nullable */
-  oldestSpinAt: string | null;
-  /** @nullable */
-  newestSpinAt: string | null;
-  spinCount: number;
+  homeUrl: string | null;
+  /** Number of spins in the past 30 days across all of this DJ's shows. */
+  recentSpinCount: number;
+  /**
+   * ISO-8601 timestamp of the most recent spin, or null if none in window.
+   * @nullable
+   */
+  lastPlayedAt: string | null;
 }
 
 /**
- * One page of a station's spin history, newest first, independent of show/run grouping.
+ * The full list of active KEXP DJ selectors.
  */
-export interface StationSpinsPage {
-  station: StationRef;
-  tracks: ArchiveTrack[];
-  /**
-   * Pass as `before` to fetch the next (older) page. Null when this page reached the oldest logged spin.
-   * @nullable
-   */
-  nextBefore: string | null;
-  bounds: StationSpinsBounds;
+export interface SelectorList {
+  selectors: SelectorSummary[];
 }
 
-export type GetStationSpinsParams = {
+/**
+ * The KEXP show metadata, null when show is unlinked.
+ * @nullable
+ */
+export type SelectorRunSummaryShow = {
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  djName?: string | null;
+} | null;
+
+/**
+ * One run of a KEXP DJ selector — a single show × UTC broadcast day. Analogous to a station run but scoped to a named DJ.
+
+ */
+export interface SelectorRunSummary {
+  /** Opaque run identifier (min spin id for the group). */
+  runId: number;
   /**
-   * @minLength 1
+   * UTC date of the broadcast (YYYY-MM-DD), null if unknown.
+   * @nullable
    */
-  slug: string;
-  /** Only return spins played strictly before this ISO timestamp. */
-  before?: string;
-  /** Max spins to return (default 50, max 200). */
-  limit?: number;
+  date: string | null;
+  /**
+   * The KEXP show metadata, null when show is unlinked.
+   * @nullable
+   */
+  show: SelectorRunSummaryShow;
+  /** Number of spins in this run. */
+  spinCount: number;
+  /**
+   * ISO-8601 timestamp of the first spin in the run.
+   * @nullable
+   */
+  startedAt: string | null;
+}
+
+/**
+ * The selector this run history belongs to.
+ */
+export type SelectorRunsResponseSelector = {
+  id: number;
+  name: string;
+  handle: string;
+  /** @nullable */
+  homeUrl: string | null;
 };
+
+/**
+ * A KEXP DJ selector's full run history.
+ */
+export interface SelectorRunsResponse {
+  /** The selector this run history belongs to. */
+  selector: SelectorRunsResponseSelector;
+  runs: SelectorRunSummary[];
+}
 
 export type ResolveSongParams = {
   /**
@@ -1212,29 +1489,52 @@ export type GetOembedParams = {
   url: string;
 };
 
-export type AllDraftClaim = {
-  id: number;
-  mbid: string;
-  /** Recording title from the recordings table, if available. */
-  trackTitle?: string | null;
-  /** Recording artist from the recordings table, if available. */
-  trackArtist?: string | null;
-  /** Section label (e.g. "Recording", "Production"). */
-  anchorValue: string;
-  /** Wikipedia article title. */
-  sourceLabel: string;
-  /** Deep link to the Wikipedia section. */
-  sourceUrl: string;
-  status: "draft" | "published" | "rejected";
-  createdAt: string;
+export type ListPickersParams = {
+  /**
+   * Filter to a specific pickerType (e.g. "editorial").
+   */
+  type?: string;
 };
 
-export type AllDraftClaimsList = {
-  claims: AllDraftClaim[];
+export type GetStationSpinsParams = {
+  /**
+   * @minLength 1
+   */
+  slug: string;
+  /**
+   * Only return spins played strictly before this ISO timestamp.
+   */
+  before?: string;
+  /**
+   * Max spins to return (default 50, max 200).
+   */
+  limit?: number;
+};
+
+export type LookupPickedMbidsParams = {
+  /**
+   * Comma-separated recording MBIDs (max 30 per call).
+   * @minLength 1
+   */
+  mbids: string;
 };
 
 export type ListAllDraftClaimsParams = {
-  status?: "draft";
+  status?: ListAllDraftClaimsStatus;
+};
+
+export type ListAllDraftClaimsStatus =
+  (typeof ListAllDraftClaimsStatus)[keyof typeof ListAllDraftClaimsStatus];
+
+export const ListAllDraftClaimsStatus = {
+  draft: "draft",
+} as const;
+
+export type GetWikipediaDraftsParams = {
+  /**
+   * @minLength 1
+   */
+  mbid: string;
 };
 
 export type ListGeniusDraftsParams = {
@@ -1251,8 +1551,25 @@ export type GetSpotifySavedParams = {
   mbid: string;
 };
 
-// ---- Song Exploder types --------------------------------------------------
+// ---- Restored hand-patched schemas (not modeled in openapi.yaml) ----
+export interface ArtistTopTrack {
+  mbid: string;
+  title: string;
+  artist: string;
+  /** @nullable */
+  artworkUrl?: string | null;
+  spinCount: number;
+  /** @nullable */
+  lastSpunAt?: string | null;
+}
 
+export interface GetArtistResponse {
+  mbid: string;
+  name: string;
+  topTracks: ArtistTopTrack[];
+  /** @nullable */
+  catalogue?: ArtistCatalogue | null;
+}
 export type SongExploderAnchor = {
   id: number;
   /** Song offset in ms — when to surface this anchor during playback. */
@@ -1298,47 +1615,11 @@ export type SongExploderEpisodePatch = {
   youtubeUrl: string | null;
 };
 
+
 export type SongExploderEpisodePatchResult = {
   id: number;
   youtubeUrl: string | null;
 };
-
-export interface SelectorSummary {
-  id: number;
-  name: string;
-  handle: string;
-  homeUrl?: string | null;
-  recentSpinCount: number;
-  lastPlayedAt?: string | null;
-}
-
-export interface SelectorRunSummary {
-  runId: number;
-  date?: string | null;
-  show?: {
-    name: string;
-    djName?: string | null;
-  } | null;
-  spinCount: number;
-  startedAt?: string | null;
-}
-
-export interface SelectorRuns {
-  selector: {
-    id: number;
-    name: string;
-    handle: string;
-    homeUrl?: string | null;
-  };
-  runs: SelectorRunSummary[];
-}
-
-export interface SelectorList {
-  selectors: SelectorSummary[];
-}
-
-// ---- For-You personalized ranking -------------------------------------------
-
 export interface ForYouOverlapProof {
   overlapping_artists: string[];
   overlap_count: number;

@@ -52,6 +52,26 @@ export const recordingsTable = pgTable("recordings", {
   links: jsonb("links").$type<RecordingLink[]>(),
   /** Album cover / artwork URL from the now-playing source, when available. */
   artworkUrl: text("artwork_url"),
+  /**
+   * Ranked genre tags (MusicBrainz `inc=genres` primary, Last.fm artist tags
+   * fallback), most-relevant first. Null means never enriched — degrade to
+   * "unknown" in the UI, never fabricate a genre.
+   */
+  genres: text("genres").array(),
+  /**
+   * First-release year (MusicBrainz `first-release-date`), used for the
+   * discovery-score age comparison against a spin/pick's air date. Null
+   * means never enriched or MusicBrainz had no dated release.
+   */
+  releaseYear: integer("release_year"),
+  /**
+   * When genre/year enrichment was last attempted for this recording (set
+   * regardless of whether MusicBrainz/Last.fm actually returned data). Null
+   * means never attempted — the backfill target set. This is distinct from
+   * `genres`/`releaseYear` being null, which can be a legitimate "looked it
+   * up, nothing there" result and must not be retried forever.
+   */
+  genreEnrichedAt: timestamp("genre_enriched_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

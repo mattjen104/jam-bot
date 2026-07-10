@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearch } from "wouter";
-import { useGetStationRun } from "@workspace/api-client-react";
+import { useGetStationRun, useGetStationRunInsights } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { ArchiveTracklist } from "../components/ArchiveTracklist";
 import { ShareButton } from "../components/ShareButton";
+import { GenreDiscoveryPanel } from "../components/GenreDiscoveryPanel";
 import { runDate } from "../lib/format";
 import { ArrowLeft, ExternalLink, Ghost, X } from "lucide-react";
 
@@ -17,6 +18,7 @@ export default function StationRun() {
   const fromMbid = searchParams.get("from");
   const { ride, radio } = usePlayer();
   const { data, isLoading, isError } = useGetStationRun(runId);
+  const { data: insights, isLoading: insightsLoading } = useGetStationRunInsights(runId);
   const didAutoPlay = useRef(false);
   const [showFallbackNotice, setShowFallbackNotice] = useState(false);
 
@@ -100,6 +102,14 @@ export default function StationRun() {
                 </a>
               ) : null}
             </header>
+
+            <div className="mb-6">
+              <GenreDiscoveryPanel
+                genreBreakdown={insights?.insights.genreBreakdown}
+                discoveryScore={insights?.insights.discoveryScore}
+                isLoading={insightsLoading}
+              />
+            </div>
 
             {showFallbackNotice && (
               <div

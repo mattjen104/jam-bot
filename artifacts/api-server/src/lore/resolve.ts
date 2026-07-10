@@ -12,6 +12,7 @@ import {
   resolveRecordingId,
   resolveRecordingByText,
   fetchRecordingLinks,
+  fetchGenreAndYear,
   type RecordingLink,
 } from "@workspace/song-enrichment";
 import { searchTrack } from "../spotify/appClient.js";
@@ -344,10 +345,35 @@ async function upsertRecording(
       mbid: recordingsTable.mbid,
       links: recordingsTable.links,
       artworkUrl: recordingsTable.artworkUrl,
+      genres: recordingsTable.genres,
+      releaseYear: recordingsTable.releaseYear,
+      genreEnrichedAt: recordingsTable.genreEnrichedAt,
     })
     .from(recordingsTable)
     .where(eq(recordingsTable.mbid, r.mbid as string))
     .limit(1);
+
+  // Genre/year enrichment — best-effort, only when never *attempted* before.
+  // Gated on `genreEnrichedAt` (not on `genres`/`releaseYear` being null) so a
+  // legitimate "looked it up, MusicBrainz/Last.fm had nothing" result doesn't
+  // get retried forever — that distinction matters for the backfill job's
+  // convergence too (see genre-backfill.ts). Deliberately also gated on
+  // `enrichLinks` (never runs during a deep backfill slice): a dedicated
+  // backfill job converges historical rows separately so a large historical
+  // import never fans out into hundreds of MB/Last.fm hits.
+  let genres = existing?.genres ?? null;
+  let releaseYear = existing?.releaseYear ?? null;
+  let genreEnrichedAt = existing?.genreEnrichedAt ?? null;
+  if (enrichLinks && genreEnrichedAt == null) {
+    try {
+      const g = await fetchGenreAndYear(r.mbid as string, r.artist, r.artistMbid);
+      if (genres == null && g.genres.length) genres = g.genres;
+      if (releaseYear == null && g.year != null) releaseYear = g.year;
+      genreEnrichedAt = new Date();
+    } catch (err) {
+      console.error("[lore] genre/year enrichment failed", r.mbid, err);
+    }
+  }
 
   let links = existing?.links ?? null;
   // Feed-provided art always wins; Spotify's album cover is the fallback for
@@ -379,6 +405,9 @@ async function upsertRecording(
       durationMs: r.durationMs ?? null,
       artworkUrl: newArtwork,
       links,
+      genres,
+      releaseYear,
+      genreEnrichedAt,
     })
     .onConflictDoUpdate({
       target: recordingsTable.mbid,
@@ -386,6 +415,9 @@ async function upsertRecording(
         title: r.title,
         artist: r.artist,
         artistMbid: r.artistMbid ?? null,
+        ...(genres ? { genres } : {}),
+        ...(releaseYear != null ? { releaseYear } : {}),
+        ...(genreEnrichedAt ? { genreEnrichedAt } : {}),
         ...(r.isrc ? { isrc: r.isrc } : {}),
         ...(newArtwork ? { artworkUrl: newArtwork } : {}),
         ...(links ? { links } : {}),

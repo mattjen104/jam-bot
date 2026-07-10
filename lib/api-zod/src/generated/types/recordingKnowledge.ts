@@ -5,11 +5,14 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AlbumContext } from "./albumContext";
 import type { TrackClaim } from "./trackClaim";
 import type { TrackKnowledge } from "./trackKnowledge";
 
 export interface RecordingKnowledge {
   knowledge: TrackKnowledge | null;
+  /** Album context resolved from Spotify, with cross-referenced Lore MBIDs per track. */
+  album?: AlbumContext | null;
   /** Grounded documentary-sourced facts (may be empty). */
   claims?: TrackClaim[];
 }

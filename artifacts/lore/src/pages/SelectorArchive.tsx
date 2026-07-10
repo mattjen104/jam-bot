@@ -3,11 +3,14 @@ import {
   useGetPickerArchive,
   useGetPickerStationOverlaps,
   useGetSelectorRuns,
+  useGetSelectorInsights,
+  useGetPickerInsights,
   type SelectorRunSummary,
 } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { FollowButton } from "../components/FollowButton";
 import { ShareButton } from "../components/ShareButton";
+import { GenreDiscoveryPanel } from "../components/GenreDiscoveryPanel";
 import { runDate } from "../lib/format";
 import {
   ArrowLeft,
@@ -28,6 +31,12 @@ export default function SelectorArchive() {
   // Pass "" when not a DJ — the generated options have `enabled: !!handle` built in
   const { data: selectorRuns, isLoading: selectorRunsLoading } =
     useGetSelectorRuns(isDj ? handle : "");
+  const { data: selectorInsights, isLoading: selectorInsightsLoading } =
+    useGetSelectorInsights(isDj ? handle : "");
+  const { data: pickerInsights, isLoading: pickerInsightsLoading } =
+    useGetPickerInsights(isDj ? "" : handle);
+  const insights = isDj ? selectorInsights : pickerInsights;
+  const insightsLoading = isDj ? selectorInsightsLoading : pickerInsightsLoading;
 
   const dockPadding = ride.active || radio.station ? "pb-32" : "pb-16";
 
@@ -90,6 +99,14 @@ export default function SelectorArchive() {
                 </a>
               ) : null}
             </header>
+
+            <div className="mb-6">
+              <GenreDiscoveryPanel
+                genreBreakdown={insights?.insights.genreBreakdown}
+                discoveryScore={insights?.insights.discoveryScore}
+                isLoading={insightsLoading}
+              />
+            </div>
 
             {isDj ? (
               /* Station-run-backed archive for KEXP DJ selectors */

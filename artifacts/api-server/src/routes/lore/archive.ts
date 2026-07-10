@@ -6,6 +6,10 @@ import {
   GetPickerRunResponse,
   GetArchiveRecentRunsResponse,
   GetArchiveCoverageResponse,
+  GetStationRunInsightsParams,
+  GetStationRunInsightsResponse,
+  GetPickerRunInsightsParams,
+  GetPickerRunInsightsResponse,
 } from "@workspace/api-zod";
 import {
   db,
@@ -21,6 +25,7 @@ import { stationArchiveUrl, supportsBackfill } from "../../lore/adapters.js";
 import { getPickerByHandle } from "../../lore/picks.js";
 import { h } from "../../middlewares/asyncHandler.js";
 import { toArchiveRecording, toPicker, spinDayExpr } from "./shared.js";
+import { computeGenreBreakdown, computeDiscoveryScore } from "../../lore/genre-insights.js";
 
 const router: IRouter = Router();
 
@@ -123,6 +128,58 @@ router.get("/archive/station-runs/:runId", h(async (req, res) => {
   );
 }));
 
+// GET /api/archive/station-runs/:runId/insights — genre breakdown + discovery
+// score for one run's tracklist.
+router.get("/archive/station-runs/:runId/insights", h(async (req, res) => {
+  const parsed = GetStationRunInsightsParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(404).json({ error: "Run not found" });
+  }
+
+  const [anchor] = await db
+    .select({
+      stationId: spinsTable.stationId,
+      showId: spinsTable.showId,
+      day: spinDayExpr,
+    })
+    .from(spinsTable)
+    .where(eq(spinsTable.id, parsed.data.runId))
+    .limit(1);
+  if (!anchor) {
+    return res.status(404).json({ error: "Run not found" });
+  }
+
+  const rows = await db
+    .select({
+      genres: recordingsTable.genres,
+      releaseYear: recordingsTable.releaseYear,
+      playedAt: spinsTable.playedAt,
+    })
+    .from(spinsTable)
+    .innerJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
+    .where(
+      and(
+        eq(spinsTable.stationId, anchor.stationId),
+        anchor.showId == null
+          ? isNull(spinsTable.showId)
+          : eq(spinsTable.showId, anchor.showId),
+        sql`${spinDayExpr} = ${anchor.day}`,
+      ),
+    );
+
+  return res.json(
+    GetStationRunInsightsResponse.parse({
+      runId: parsed.data.runId,
+      insights: {
+        genreBreakdown: computeGenreBreakdown(rows),
+        discoveryScore: computeDiscoveryScore(
+          rows.map((r) => ({ releaseYear: r.releaseYear, airedAt: r.playedAt })),
+        ),
+      },
+    }),
+  );
+}));
+
 // GET /api/archive/picker-runs/:runId — one run's picks, in documented order.
 router.get("/archive/picker-runs/:runId", h(async (req, res) => {
   const parsed = GetPickerRunParams.safeParse(req.params);
@@ -200,6 +257,55 @@ router.get("/archive/picker-runs/:runId", h(async (req, res) => {
         confidence: r.confidence,
         recording: toArchiveRecording(r),
       })),
+    }),
+  );
+}));
+
+// GET /api/archive/picker-runs/:runId/insights — genre breakdown + discovery
+// score for one picker run's tracklist.
+router.get("/archive/picker-runs/:runId/insights", h(async (req, res) => {
+  const parsed = GetPickerRunInsightsParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(404).json({ error: "Run not found" });
+  }
+
+  const [anchor] = await db
+    .select({
+      pickerId: picksTable.pickerId,
+      sourceUrl: picksTable.sourceUrl,
+    })
+    .from(picksTable)
+    .where(eq(picksTable.id, parsed.data.runId))
+    .limit(1);
+  if (!anchor || !anchor.sourceUrl) {
+    return res.status(404).json({ error: "Run not found" });
+  }
+
+  const rows = await db
+    .select({
+      genres: recordingsTable.genres,
+      releaseYear: recordingsTable.releaseYear,
+      pickedAt: picksTable.pickedAt,
+    })
+    .from(picksTable)
+    .innerJoin(recordingsTable, eq(picksTable.mbid, recordingsTable.mbid))
+    .where(
+      and(
+        eq(picksTable.pickerId, anchor.pickerId),
+        eq(picksTable.sourceUrl, anchor.sourceUrl),
+      ),
+    );
+
+  const dated = rows.filter((r): r is typeof r & { pickedAt: Date } => r.pickedAt != null);
+  return res.json(
+    GetPickerRunInsightsResponse.parse({
+      runId: parsed.data.runId,
+      insights: {
+        genreBreakdown: computeGenreBreakdown(rows),
+        discoveryScore: computeDiscoveryScore(
+          dated.map((r) => ({ releaseYear: r.releaseYear, airedAt: r.pickedAt })),
+        ),
+      },
     }),
   );
 }));

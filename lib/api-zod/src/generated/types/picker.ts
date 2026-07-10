@@ -21,4 +21,9 @@ export interface Picker {
   /** @nullable */
   description?: string | null;
   active: boolean;
+  /**
+   * ID of the most recent run from this picker; present when at least one pick has been ingested.
+   * @nullable
+   */
+  latestRunId?: number | null;
 }

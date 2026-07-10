@@ -29,6 +29,7 @@ import {
 import { startStreamHealthWorker } from "./lore/stream-health.js";
 import { applyStationDiscoveryMigration } from "./lore/station-migration.js";
 import { applyPickerDiscoveryMigration } from "./lore/picker-migration.js";
+import { startGenreBackfillJob } from "./lore/genre-backfill.js";
 
 const rawPort = process.env["PORT"];
 
@@ -94,6 +95,7 @@ async function bootLore(): Promise<void> {
     startKexpShowsHarvester();
     startStreamHealthWorker();
     startRadioBrowserWorker();
+    startGenreBackfillJob();
   } catch (err) {
     console.error("[lore] boot failed", err);
   }

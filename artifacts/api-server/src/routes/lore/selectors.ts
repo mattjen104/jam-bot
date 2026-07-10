@@ -3,16 +3,20 @@ import {
   ListSelectorsResponse,
   GetSelectorRunsParams,
   GetSelectorRunsResponse,
+  GetSelectorInsightsParams,
+  GetSelectorInsightsResponse,
 } from "@workspace/api-zod";
 import {
   db,
   pickersTable,
   showsTable,
   spinsTable,
+  recordingsTable,
 } from "@workspace/db";
 import { eq, and, asc, isNotNull, inArray, sql } from "drizzle-orm";
 import { getPickerByHandle } from "../../lore/picks.js";
 import { h } from "../../middlewares/asyncHandler.js";
+import { computeGenreBreakdown, computeDiscoveryScore } from "../../lore/genre-insights.js";
 
 const router: IRouter = Router();
 
@@ -197,6 +201,72 @@ router.get("/selectors/:handle/runs", h(async (req, res) => {
           startedAt: r.startedAt ? new Date(r.startedAt).toISOString() : null,
         };
       }),
+    }),
+  );
+}));
+
+// GET /api/selectors/:handle/insights — genre breakdown + discovery score
+// across a KEXP DJ selector's logged spin history.
+router.get("/selectors/:handle/insights", h(async (req, res) => {
+  const parsed = GetSelectorInsightsParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(404).json({ error: "Selector not found" });
+  }
+
+  const picker = await getPickerByHandle(parsed.data.handle);
+  const isKexpDj =
+    picker?.pickerType === "dj" &&
+    (picker.sourceRef as Record<string, unknown> | null | undefined)?.[
+      "stationSlug"
+    ] === "kexp";
+  if (!picker || !isKexpDj) {
+    return res.status(404).json({ error: "Selector not found" });
+  }
+
+  const selector = {
+    id: picker.id,
+    name: picker.name,
+    handle: picker.handle,
+    homeUrl: picker.homeUrl ?? null,
+  };
+
+  const shows = await db
+    .select({ id: showsTable.id })
+    .from(showsTable)
+    .where(eq(showsTable.pickerId, picker.id));
+
+  if (shows.length === 0) {
+    return res.json(
+      GetSelectorInsightsResponse.parse({
+        selector,
+        insights: {
+          genreBreakdown: computeGenreBreakdown([]),
+          discoveryScore: computeDiscoveryScore([]),
+        },
+      }),
+    );
+  }
+
+  const showIds = shows.map((s) => s.id);
+  const rows = await db
+    .select({
+      genres: recordingsTable.genres,
+      releaseYear: recordingsTable.releaseYear,
+      playedAt: spinsTable.playedAt,
+    })
+    .from(spinsTable)
+    .innerJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
+    .where(inArray(spinsTable.showId, showIds));
+
+  return res.json(
+    GetSelectorInsightsResponse.parse({
+      selector,
+      insights: {
+        genreBreakdown: computeGenreBreakdown(rows),
+        discoveryScore: computeDiscoveryScore(
+          rows.map((r) => ({ releaseYear: r.releaseYear, airedAt: r.playedAt })),
+        ),
+      },
     }),
   );
 }));

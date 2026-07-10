@@ -5,19 +5,31 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { TrackClaimStatus } from "./trackClaimStatus";
 
 /**
- * One grounded fact about a recording, extracted systematically from an official documentary source (e.g. a Classic Albums making-of clip or a Genius annotation). `sourceUrl` deep-links to the exact moment in the official source that supports the claim, so every fact is one tap from its evidence. `verified` is true for artist-verified Genius annotations. `sourceHandle` identifies the picker that produced this claim (e.g. "genius", "classic-albums") so UIs can apply source-specific treatment.
+ * One grounded fact about a recording, extracted systematically from an official documentary source (e.g. a Classic Albums making-of clip, a Wikipedia article section, or a Genius annotation). `sourceUrl` deep-links to the supporting moment or section in the original source, so every claim is one tap from its evidence. `anchorType` distinguishes timestamp-anchored (null) from section-anchored ('section') claims. Section claims carry `anchorValue` (the Wikipedia section label, e.g. "Recording") and a `sourceUrl` that is a Wikipedia deep link to that section. `verified` is true for artist-verified Genius annotations. `sourceHandle` identifies the picker that produced this claim (e.g. "genius", "classic-albums") so UIs can apply source-specific treatment.
 
  */
 export interface TrackClaim {
+  /** Database row id (needed for admin PATCH). */
+  id?: number;
   text: string;
   sourceLabel: string;
   sourceUrl: string;
-  /** Machine-readable source identifier, e.g. "genius" or "classic-albums". Use this to filter claims by source in the UI.
+  positionMs?: number | null;
+  /** 'section' for Wikipedia section claims; null for timestamp-anchored claims (positionMs carries the offset).
+   */
+  anchorType?: "section" | null;
+  /** Section label when anchorType='section' (e.g. "Recording", "Production", "Composition", "Background", "Critical reception"). Null for timestamp-anchored claims.
+   */
+  anchorValue?: string | null;
+  /** Review status. Only 'published' claims are surfaced to end users on the song page. 'draft' = awaiting admin review (Wikipedia candidates). 'rejected' = discarded by admin.
+   */
+  status?: TrackClaimStatus;
+  /** Origin handle for the claim. 'classic-albums' for Classic Albums documentary clips. 'wikipedia' for track-level Wikipedia section claims. 'wikipedia-album' for album-level Wikipedia section claims (sourced from the recording's canonical album article). 'genius' for Genius annotation-derived claims.
    */
   sourceHandle: string;
-  positionMs?: number | null;
   /** True for artist-verified Genius annotations. */
   verified?: boolean;
 }

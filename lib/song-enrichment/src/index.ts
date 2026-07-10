@@ -14,6 +14,7 @@ export * from "./wikipedia.js";
 export * from "./genius.js";
 export * from "./person.js";
 export * from "./knowledge.js";
+export * from "./genre.js";
 export * from "./context.js";
 export * from "./catalogue.js";
 export * from "./odesli.js";

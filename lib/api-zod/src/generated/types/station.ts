@@ -31,4 +31,6 @@ export interface Station {
   attribution: boolean;
   /** @nullable */
   tags?: string[] | null;
+  /** Cheap metadata-only signal ("this station will continue after this break", sponsor reads, etc) suggests this station airs ad breaks. Not a certainty — surfaces as a "may contain ads" hint, not a guarantee either way. */
+  mayHaveAds: boolean;
 }

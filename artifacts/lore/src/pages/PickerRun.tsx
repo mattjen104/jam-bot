@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearch } from "wouter";
-import { useGetPickerRun } from "@workspace/api-client-react";
+import { useGetPickerRun, useGetPickerRunInsights } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { ArchiveTracklist } from "../components/ArchiveTracklist";
 import { ShareButton } from "../components/ShareButton";
+import { GenreDiscoveryPanel } from "../components/GenreDiscoveryPanel";
 import { runDate } from "../lib/format";
 import { ArrowLeft, ExternalLink, Ghost, X } from "lucide-react";
 
@@ -17,6 +18,7 @@ export default function PickerRun() {
   const fromMbid = searchParams.get("from");
   const { ride, radio } = usePlayer();
   const { data, isLoading, isError } = useGetPickerRun(runId);
+  const { data: insights, isLoading: insightsLoading } = useGetPickerRunInsights(runId);
   const didAutoPlay = useRef(false);
   const [showFallbackNotice, setShowFallbackNotice] = useState(false);
 
@@ -95,6 +97,14 @@ export default function PickerRun() {
                 Original source
               </a>
             </header>
+
+            <div className="mb-6">
+              <GenreDiscoveryPanel
+                genreBreakdown={insights?.insights.genreBreakdown}
+                discoveryScore={insights?.insights.discoveryScore}
+                isLoading={insightsLoading}
+              />
+            </div>
 
             {showFallbackNotice && (
               <div

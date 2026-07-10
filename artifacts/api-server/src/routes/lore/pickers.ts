@@ -6,6 +6,8 @@ import {
   GetPickerArchiveResponse,
   GetPickerStationOverlapsParams,
   GetPickerStationOverlapsResponse,
+  GetPickerInsightsParams,
+  GetPickerInsightsResponse,
   LookupPickedMbidsQueryParams,
   LookupPickedMbidsResponse,
 } from "@workspace/api-zod";
@@ -13,6 +15,7 @@ import {
   db,
   pickersTable,
   picksTable,
+  recordingsTable,
   spinsTable,
   stationsTable,
 } from "@workspace/db";
@@ -21,6 +24,7 @@ import { getPickerByHandle } from "../../lore/picks.js";
 import { resolvePickRunIds } from "../../lore/runs.js";
 import { h } from "../../middlewares/asyncHandler.js";
 import { toPicker } from "./shared.js";
+import { computeGenreBreakdown, computeDiscoveryScore } from "../../lore/genre-insights.js";
 
 const router: IRouter = Router();
 
@@ -248,6 +252,47 @@ router.get("/pickers/:handle/archive", h(async (req, res) => {
         trackCount: r.trackCount,
         resolvedCount: r.resolvedCount,
       })),
+    }),
+  );
+}));
+
+// GET /api/pickers/:handle/insights — genre breakdown + discovery score
+// across a curated-list picker's full pick history (labels, blogs, curators,
+// etc.). DJ selectors have their own richer per-show endpoint at
+// /selectors/:handle/insights; this covers every other picker type since
+// they have no shows to group by.
+router.get("/pickers/:handle/insights", h(async (req, res) => {
+  const parsed = GetPickerInsightsParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(404).json({ error: "Picker not found" });
+  }
+
+  const picker = await getPickerByHandle(parsed.data.handle);
+  if (!picker) {
+    return res.status(404).json({ error: "Picker not found" });
+  }
+
+  const rows = await db
+    .select({
+      genres: recordingsTable.genres,
+      releaseYear: recordingsTable.releaseYear,
+      pickedAt: picksTable.pickedAt,
+    })
+    .from(picksTable)
+    .innerJoin(recordingsTable, eq(picksTable.mbid, recordingsTable.mbid))
+    .where(eq(picksTable.pickerId, picker.id));
+
+  return res.json(
+    GetPickerInsightsResponse.parse({
+      picker: toPicker(picker),
+      insights: {
+        genreBreakdown: computeGenreBreakdown(rows),
+        discoveryScore: computeDiscoveryScore(
+          rows
+            .filter((r): r is typeof r & { pickedAt: Date } => r.pickedAt != null)
+            .map((r) => ({ releaseYear: r.releaseYear, airedAt: r.pickedAt })),
+        ),
+      },
     }),
   );
 }));

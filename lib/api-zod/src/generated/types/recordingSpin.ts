@@ -19,4 +19,9 @@ export interface RecordingSpin {
   confidence: RecordingSpinConfidence;
   station: StationRef;
   show?: ShowRef | null;
+  /**
+   * The archived station run (show + UTC broadcast day) this spin belongs to — an opaque id for /archive/station-runs/{runId}, so a song page can jump into the ghost run containing this play. Optional for older cached payloads.
+   * @nullable
+   */
+  runId?: number | null;
 }

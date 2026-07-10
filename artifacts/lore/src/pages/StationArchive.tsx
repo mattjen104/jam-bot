@@ -2,11 +2,13 @@ import { Link, useParams } from "wouter";
 import {
   useGetStationArchive,
   useGetStationPickerOverlaps,
+  useGetStationInsights,
 } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { FollowButton } from "../components/FollowButton";
 import { ShareButton } from "../components/ShareButton";
 import { StationScrubTimeline } from "../components/StationScrubTimeline";
+import { GenreDiscoveryPanel } from "../components/GenreDiscoveryPanel";
 import { runDate } from "../lib/format";
 import { ArrowLeft, ArrowUpRight, Ghost, Radio, Users } from "lucide-react";
 
@@ -17,6 +19,7 @@ export default function StationArchive() {
   const { ride, radio } = usePlayer();
   const { data, isLoading, isError } = useGetStationArchive(slug);
   const { data: overlaps } = useGetStationPickerOverlaps(slug);
+  const { data: insights, isLoading: insightsLoading } = useGetStationInsights(slug);
 
   const dockPadding = ride.active || radio.station ? "pb-32" : "pb-16";
 
@@ -63,6 +66,14 @@ export default function StationArchive() {
                 grouped by show and broadcast day (UTC)
               </p>
             </header>
+
+            <div className="mb-6">
+              <GenreDiscoveryPanel
+                genreBreakdown={insights?.insights.genreBreakdown}
+                discoveryScore={insights?.insights.discoveryScore}
+                isLoading={insightsLoading}
+              />
+            </div>
 
             <div className="mb-8">
               <StationScrubTimeline slug={data.station.slug} stationName={data.station.name} />

@@ -479,6 +479,50 @@ export function parseArtistReleaseGroups(
   return out.slice(0, cap);
 }
 
+/** Pure: ranked genre names + first-release year from a recording body. */
+export function parseRecordingGenreYear(body: unknown): {
+  genres: string[];
+  year: number | null;
+} {
+  const b = body as {
+    genres?: Array<{ name?: string; count?: number }>;
+    "first-release-date"?: string;
+  };
+  const genres = [...(b?.genres ?? [])]
+    .filter((g) => !!g?.name?.trim())
+    .sort((a, c) => (c.count ?? 0) - (a.count ?? 0))
+    .map((g) => g.name!.trim().toLowerCase())
+    .slice(0, 5);
+  const yearStr = b?.["first-release-date"]?.slice(0, 4);
+  const year = yearStr && /^\d{4}$/.test(yearStr) ? Number(yearStr) : null;
+  return { genres, year };
+}
+
+/**
+ * Fetch a recording's aggregated genre tags + first-release year. Best-effort
+ * — returns `{ genres: [], year: null }` on any failure or when MusicBrainz
+ * is unconfigured; never throws. This is the MB-primary half of the
+ * genre/discovery enrichment pipeline (see `genre.ts` for the Last.fm
+ * fallback composition).
+ */
+export async function fetchRecordingGenreYear(
+  recordingId: string,
+): Promise<{ genres: string[]; year: number | null }> {
+  if (!musicbrainzEnabled() || !recordingId.trim()) {
+    return { genres: [], year: null };
+  }
+  try {
+    const body = await mbFetch(`/recording/${recordingId}?inc=genres&fmt=json`);
+    return parseRecordingGenreYear(body);
+  } catch (err) {
+    logger.warn("MusicBrainz genre lookup failed", {
+      recordingId,
+      error: String(err),
+    });
+    return { genres: [], year: null };
+  }
+}
+
 /**
  * Fetch an artist's release groups (albums/EPs/singles). Best-effort — returns
  * [] on any failure or when MusicBrainz is unconfigured; never throws.

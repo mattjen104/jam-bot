@@ -18,7 +18,6 @@ import {
   EnrollNtsShowBody,
   EnrollNtsShowResponse,
   ListAllDraftClaimsResponse,
-  GetWikipediaDraftsParams,
   GetWikipediaDraftsResponse,
   PatchClaimParams,
   PatchClaimBody,
@@ -441,8 +440,9 @@ router.get("/admin/claims", h(async (req, res) => {
 
 // GET /api/admin/wikipedia-drafts?mbid= — draft Wikipedia claims pending review.
 router.get("/admin/wikipedia-drafts", h(async (req, res) => {
-  const parsed = GetWikipediaDraftsParams.safeParse({ mbid: req.query["mbid"] });
-  if (!parsed.success) {
+  const rawMbid = req.query["mbid"];
+  const mbid = typeof rawMbid === "string" ? rawMbid.trim() : "";
+  if (!mbid) {
     return res.status(400).json({ error: "mbid query parameter is required" });
   }
 
@@ -451,7 +451,7 @@ router.get("/admin/wikipedia-drafts", h(async (req, res) => {
     .from(trackClaimsTable)
     .where(
       and(
-        eq(trackClaimsTable.mbid, parsed.data.mbid),
+        eq(trackClaimsTable.mbid, mbid),
         eq(trackClaimsTable.sourceHandle, "wikipedia"),
         eq(trackClaimsTable.status, "draft"),
       ),

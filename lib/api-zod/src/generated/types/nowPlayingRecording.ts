@@ -15,6 +15,8 @@ export interface NowPlayingRecording {
   title: string;
   artist: string;
   /** @nullable */
+  artistMbid?: string | null;
+  /** @nullable */
   artworkUrl?: string | null;
   links: RecordingLink[];
 }

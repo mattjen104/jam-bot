@@ -512,6 +512,37 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /stations/{slug}/insights:
+    get:
+      operationId: getStationInsights
+      tags: [archive]
+      summary: Genre breakdown + discovery score for a station
+      description: >
+        Aggregated genre tags and a discovery score (recent-release-leaning
+        vs. catalog-leaning) across the station's logged spin history.
+        Computed on read from already-enriched recording data — never a
+        per-spin recompute. Degrades to unknown/null fields when there isn't
+        enough enriched data yet.
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: The station's genre + discovery insights
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationInsights"
+        "404":
+          description: Station not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /stations/spins:
     get:
       operationId: getStationSpins
@@ -586,6 +617,64 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /archive/station-runs/{runId}/insights:
+    get:
+      operationId: getStationRunInsights
+      tags: [archive]
+      summary: Genre breakdown + discovery score for one station run (show)
+      description: >
+        Aggregated genre tags and a discovery score across a single archived
+        station run's tracklist. Computed on read from already-enriched
+        recording data. Degrades to unknown/null fields when there isn't
+        enough enriched data yet.
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: The run's genre + discovery insights
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationRunInsights"
+        "404":
+          description: Run not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /archive/picker-runs/{runId}/insights:
+    get:
+      operationId: getPickerRunInsights
+      tags: [archive]
+      summary: Genre breakdown + discovery score for one picker run (list)
+      description: >
+        Aggregated genre tags and a discovery score across a single archived
+        picker run's tracklist (a curated list or episode). Computed on read
+        from already-enriched recording data. Degrades to unknown/null fields
+        when there isn't enough enriched data yet.
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: The run's genre + discovery insights
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PickerRunInsights"
+        "404":
+          description: Run not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /pickers/{handle}/archive:
     get:
       operationId: getPickerArchive
@@ -610,6 +699,38 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PickerArchive"
+        "404":
+          description: Picker not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /pickers/{handle}/insights:
+    get:
+      operationId: getPickerInsights
+      tags: [archive]
+      summary: Genre breakdown + discovery score across a picker's full pick history
+      description: >
+        Aggregated genre tags and a discovery score (recent-release-leaning
+        vs. catalog-leaning) across every pick this picker has logged, for
+        curated-list pickers (labels, blogs, curators, etc.) that have no
+        per-run aggregate elsewhere. Computed on read from already-enriched
+        recording data — never a per-pick recompute. Degrades to
+        unknown/null fields when there isn't enough enriched data yet.
+      parameters:
+        - name: handle
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: The picker's genre + discovery insights
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PickerInsights"
         "404":
           description: Picker not found
           content:
@@ -778,6 +899,37 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SelectorRunsResponse"
+        "404":
+          description: Selector not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /selectors/{handle}/insights:
+    get:
+      operationId: getSelectorInsights
+      tags: [pickers]
+      summary: Genre breakdown + discovery score for a KEXP DJ selector
+      description: >
+        Aggregated genre tags and a discovery score (recent-release-leaning
+        vs. catalog-leaning) across the selector's logged spin history.
+        Computed on read from already-enriched recording data — never a
+        per-spin recompute. Degrades to unknown/null fields when there isn't
+        enough enriched data yet.
+      parameters:
+        - name: handle
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: The selector's genre + discovery insights
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SelectorInsights"
         "404":
           description: Selector not found
           content:
@@ -2024,6 +2176,10 @@ components:
           type: ["string", "null"]
         attribution:
           type: boolean
+        tags:
+          type: ["array", "null"]
+          items:
+            type: string
         mayHaveAds:
           type: boolean
           description: >-
@@ -2121,6 +2277,8 @@ components:
           type: string
         artist:
           type: string
+        artistMbid:
+          type: ["string", "null"]
         artworkUrl:
           type: ["string", "null"]
         links:
@@ -2215,14 +2373,18 @@ components:
     RecordingLyrics:
       type: object
       description: >
-        Synced lyric lines for a recording. lines is empty when LRCLIB has no
-        synced version for this track.
+        Lyric lines for a recording. synced=true means time-coded (LRC);
+        synced=false means static plain lyrics. lines is empty when LRCLIB
+        has no lyrics at all.
       properties:
+        synced:
+          type: boolean
         lines:
           type: array
           items:
             $ref: "#/components/schemas/LyricLine"
       required:
+        - synced
         - lines
     GeniusDraft:
       type: object
@@ -2489,12 +2651,47 @@ components:
           enum: ["published", "rejected"]
       required:
         - status
+    AlbumTrack:
+      type: object
+      properties:
+        title:
+          type: string
+        trackNumber:
+          type: integer
+        mbid:
+          type: ["string", "null"]
+      required:
+        - title
+        - trackNumber
+    AlbumContext:
+      type: object
+      properties:
+        name:
+          type: string
+        year:
+          type: ["integer", "null"]
+        spotifyAlbumId:
+          type: ["string", "null"]
+        tracks:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlbumTrack"
+      required:
+        - name
+        - tracks
     RecordingKnowledge:
       type: object
       properties:
         knowledge:
           anyOf:
             - $ref: "#/components/schemas/TrackKnowledge"
+            - type: "null"
+        album:
+          description: >-
+            Album context resolved from Spotify, with cross-referenced Lore
+            MBIDs per track.
+          anyOf:
+            - $ref: "#/components/schemas/AlbumContext"
             - type: "null"
         claims:
           type: array
@@ -2892,6 +3089,140 @@ components:
         - picker
         - run
         - tracks
+    GenreCount:
+      type: object
+      properties:
+        genre:
+          type: string
+        count:
+          type: integer
+      required:
+        - genre
+        - count
+    GenreBreakdown:
+      type: object
+      description: >-
+        Ranked genre tags across a set of tracks. Genre data comes from
+        MusicBrainz (primary) or Last.fm artist tags (fallback); tracks that
+        were never enriched, or truly carry no tags, count toward
+        `unknownCount` rather than being guessed at.
+      properties:
+        top:
+          type: array
+          items:
+            $ref: "#/components/schemas/GenreCount"
+        unknownCount:
+          type: integer
+        totalCount:
+          type: integer
+      required:
+        - top
+        - unknownCount
+        - totalCount
+    DiscoveryScore:
+      type: object
+      description: >-
+        How "new music"-leaning a set of tracks is, based on each track's
+        release year vs. the date it aired/was picked. Null fields mean there
+        wasn't enough dated data to compute a score — never a fabricated
+        guess.
+      properties:
+        medianAgeYears:
+          type: ["number", "null"]
+        score:
+          type: ["number", "null"]
+          description: 0-100, higher = newer / more discovery-leaning.
+        label:
+          type: string
+          enum: [new-music, recent, catalog, unknown]
+        sampleSize:
+          type: integer
+          description: Tracks with both a release year and an air/pick date.
+        unknownCount:
+          type: integer
+          description: Tracks considered but missing a release year.
+      required:
+        - medianAgeYears
+        - score
+        - label
+        - sampleSize
+        - unknownCount
+    GenreInsights:
+      type: object
+      description: Combined genre breakdown + discovery score for a scope (station, run, DJ, or list).
+      properties:
+        genreBreakdown:
+          $ref: "#/components/schemas/GenreBreakdown"
+        discoveryScore:
+          $ref: "#/components/schemas/DiscoveryScore"
+      required:
+        - genreBreakdown
+        - discoveryScore
+    StationInsights:
+      type: object
+      properties:
+        station:
+          $ref: "#/components/schemas/StationRef"
+        insights:
+          $ref: "#/components/schemas/GenreInsights"
+      required:
+        - station
+        - insights
+    StationRunInsights:
+      type: object
+      properties:
+        runId:
+          type: integer
+        insights:
+          $ref: "#/components/schemas/GenreInsights"
+      required:
+        - runId
+        - insights
+    SelectorRef:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        handle:
+          type: string
+        homeUrl:
+          type: ["string", "null"]
+      required:
+        - id
+        - name
+        - handle
+    SelectorInsights:
+      type: object
+      properties:
+        selector:
+          $ref: "#/components/schemas/SelectorRef"
+        insights:
+          $ref: "#/components/schemas/GenreInsights"
+      required:
+        - selector
+        - insights
+    PickerRunInsights:
+      type: object
+      properties:
+        runId:
+          type: integer
+        insights:
+          $ref: "#/components/schemas/GenreInsights"
+      required:
+        - runId
+        - insights
+    PickerInsights:
+      type: object
+      properties:
+        picker:
+          $ref: "#/components/schemas/Picker"
+        insights:
+          $ref: "#/components/schemas/GenreInsights"
+      required:
+        - picker
+        - insights
     RecentStationRun:
       type: object
       description: >-
