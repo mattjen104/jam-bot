@@ -518,9 +518,33 @@ function ShowTimeline({
   );
 }
 
+/** UTC day-of-week index (Sun=0 … Sat=6) for scraped day abbreviations. */
+const DAY_INDEX: Record<string, number> = {
+  Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+};
+
+/**
+ * Minutes from now (UTC) until the next occurrence of a weekly slot.
+ * Always returns a positive number 0 < result ≤ 10080 (one week).
+ */
+function minutesUntilSlot(dayOfWeek: string, startTime: string): number {
+  const now = new Date();
+  const nowDayIdx = now.getUTCDay();
+  const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+  const slotDayIdx = DAY_INDEX[dayOfWeek] ?? 0;
+  const [h, m] = startTime.split(":").map(Number);
+  const slotMinutes = h * 60 + (m || 0);
+  let daysDiff = slotDayIdx - nowDayIdx;
+  if (daysDiff < 0 || (daysDiff === 0 && slotMinutes <= nowMinutes)) {
+    daysDiff += 7;
+  }
+  return daysDiff * 24 * 60 + (slotMinutes - nowMinutes);
+}
+
 /**
  * Lazy-loaded upcoming show strip for Featured mode. Fetches the station's
- * weekly scraped schedule and renders clickable chips:
+ * weekly scraped schedule, sorts slots by time-until-next-occurrence (UTC),
+ * and renders the soonest unique slots as clickable chips:
  *   - Show name chip → station archive (filtered by show)
  *   - DJ name chip → /dj/:name
  */
@@ -535,15 +559,14 @@ function UpcomingShowStrip({ slug }: { slug: string }) {
   const shows = data?.shows ?? [];
   if (shows.length === 0) return null;
 
-  // Deduplicate: one chip per unique show name (different days are collapsed).
-  const seen = new Set<string>();
-  const unique: ScrapedShowItem[] = [];
-  for (const s of shows) {
-    if (!seen.has(s.showName)) {
-      seen.add(s.showName);
-      unique.push(s);
-    }
-  }
+  // Sort every slot by proximity to now, then pick the 5 soonest.
+  // A show that runs Mon + Thu will appear as two chips (both occurrences).
+  const sorted = [...shows].sort(
+    (a, b) =>
+      minutesUntilSlot(a.dayOfWeek, a.startTime) -
+      minutesUntilSlot(b.dayOfWeek, b.startTime),
+  );
+  const upcoming = sorted.slice(0, 5);
 
   return (
     <div
@@ -551,16 +574,17 @@ function UpcomingShowStrip({ slug }: { slug: string }) {
       onClick={(e) => e.stopPropagation()}
       data-testid={`upcoming-shows-${slug}`}
     >
-      {unique.slice(0, 6).map((show) => (
-        <span key={show.showName} className="flex items-center gap-1">
+      {upcoming.map((show, i) => (
+        <span key={`${show.showName}-${show.dayOfWeek}-${i}`} className="flex items-center gap-1">
           <Link
             href={`/archive/stations/${slug}?show=${encodeURIComponent(show.showName)}`}
             className="inline-flex items-center gap-1 rounded-full border border-border bg-background/60 px-2 py-0.5 font-mono text-[10px] text-foreground/80 hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-colors whitespace-nowrap"
-            title={`Browse ${show.showName} archive`}
+            title={`${show.dayOfWeek} ${show.startTime} — browse archive`}
             data-testid={`show-chip-featured-${slug}-${show.showName}`}
           >
             <BookOpen className="h-2.5 w-2.5 shrink-0" />
             <span className="max-w-[14ch] truncate">{show.showName}</span>
+            <span className="text-muted-foreground/50">{show.dayOfWeek}</span>
           </Link>
           {show.djName && (
             <Link
