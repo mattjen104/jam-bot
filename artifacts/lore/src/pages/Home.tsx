@@ -406,7 +406,7 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
     if (dialFilter === "lists") return [];
     if (dialFilter === "featured")
       result = result.filter(
-        (s) => !!s.homepageBlurb || (s.upcomingShowCount ?? 0) > 0,
+        (s) => !!s.homepageBlurb && (s.upcomingShowCount ?? 0) > 0,
       );
     if (dialFilter === "following")
       result = result.filter((s) => isFollowed(follows, "station", s.slug));
@@ -438,7 +438,6 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
   }, [dialFilter, pickerItems, follows]);
 
   const handleGenreClick = (tag: string) => {
-    setDialFilter("all");
     setDialGenre(tag);
   };
 
@@ -582,7 +581,7 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
         followCount={dialFollowCount}
       />
 
-      {dialFilter !== "lists" && dialFilter !== "featured" && (
+      {dialFilter !== "lists" && (
         <DialSortAndGenre
           sort={dialSort}
           onSortChange={setDialSort}

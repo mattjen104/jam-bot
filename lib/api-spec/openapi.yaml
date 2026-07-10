@@ -833,6 +833,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /djs/{name}:
+    get:
+      operationId: getDjShows
+      tags: [stations]
+      summary: All scraped upcoming shows for a DJ across stations
+      description: >
+        Returns every scraped weekly show slot attributed to the given DJ name
+        across all stations. DJ names come from the schedule scraper's
+        structured extraction; matching is exact (case-sensitive). Returns 404
+        when the name has no scraped shows.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: DJ's scraped show schedule across stations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DjShows"
+        "404":
+          description: DJ not found or no scraped shows for this name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /stations/{slug}/overlaps/pickers:
     get:
       operationId: getStationPickerOverlaps
@@ -3078,6 +3108,45 @@ components:
         - stationSlug
         - shows
         - lastScrapedAt
+    DjShowEntry:
+      type: object
+      description: One scraped weekly show slot for a DJ at a specific station.
+      properties:
+        stationSlug:
+          type: string
+        stationName:
+          type: string
+        showName:
+          type: string
+        dayOfWeek:
+          type: string
+          enum: [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
+        startTime:
+          type: string
+          description: 24h "HH:MM"
+        endTime:
+          type: string
+          description: 24h "HH:MM"
+      required:
+        - stationSlug
+        - stationName
+        - showName
+        - dayOfWeek
+        - startTime
+        - endTime
+    DjShows:
+      type: object
+      description: All scraped upcoming shows for a DJ across all stations.
+      properties:
+        djName:
+          type: string
+        shows:
+          type: array
+          items:
+            $ref: "#/components/schemas/DjShowEntry"
+      required:
+        - djName
+        - shows
     StationSpinsPage:
       type: object
       description: >-

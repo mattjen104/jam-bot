@@ -165,9 +165,20 @@ export function StationList({
 
               <div className="min-w-0 flex-1 overflow-hidden">
                 <div className="flex items-center gap-2">
-                  <h3 className="truncate font-serif text-lg font-semibold leading-tight text-foreground">
-                    {station.name}
-                  </h3>
+                  {featured ? (
+                    <Link
+                      href={`/archive/stations/${station.slug}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="truncate font-serif text-lg font-semibold leading-tight text-foreground hover:text-primary transition-colors"
+                      data-testid={`featured-station-link-${station.slug}`}
+                    >
+                      {station.name}
+                    </Link>
+                  ) : (
+                    <h3 className="truncate font-serif text-lg font-semibold leading-tight text-foreground">
+                      {station.name}
+                    </h3>
+                  )}
                   {safeHttpUrl(station.homepageUrl) && (
                     <a
                       href={safeHttpUrl(station.homepageUrl)!}
