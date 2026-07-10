@@ -225,22 +225,24 @@ export function StationList({
                       : np.show.name}
                   </p>
                 ) : (
+                  <p className="mt-0.5 flex items-center gap-1.5 truncate font-mono text-xs text-muted-foreground">
+                    <Radio className="h-3 w-3" />
+                    {[station.org, station.country].filter(Boolean).join(" · ") ||
+                      "Independent"}
+                  </p>
+                )}
+                {/* Featured metadata — always shown in featured mode regardless of now-playing state */}
+                {featured && (
                   <>
-                    <p className="mt-0.5 flex items-center gap-1.5 truncate font-mono text-xs text-muted-foreground">
-                      <Radio className="h-3 w-3" />
-                      {[station.org, station.country].filter(Boolean).join(" · ") ||
-                        "Independent"}
-                    </p>
-                    {/* In featured mode always show blurb; otherwise show when no track */}
                     {station.homepageBlurb && (
-                      <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground/70">
+                      <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground/70">
                         {station.homepageBlurb}
                       </p>
                     )}
                     {station.tags && station.tags.length > 0 && (
                       <div className="mt-1 flex flex-wrap gap-1">
-                        {station.tags.slice(0, 3).map((tag) => (
-                          featured && onGenreClick ? (
+                        {station.tags.slice(0, 5).map((tag) =>
+                          onGenreClick ? (
                             <button
                               key={tag}
                               type="button"
@@ -261,7 +263,7 @@ export function StationList({
                               {tag}
                             </span>
                           )
-                        ))}
+                        )}
                       </div>
                     )}
                   </>
