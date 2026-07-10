@@ -230,6 +230,8 @@ export interface Station {
    * @nullable
    */
   homepageBlurb?: string | null;
+  /** Count of scraped upcoming shows in this station's weekly programming grid. 0 when the schedule scraper has not found shows yet. */
+  upcomingShowCount: number;
 }
 
 export interface StationList {
@@ -1688,4 +1690,51 @@ export interface ForYouBlogsResponse {
 export interface ForYouQueryParams {
   genre?: string;
   limit?: number;
+}
+
+// ---------------------------------------------------------------------------
+// Upcoming schedule — scraped weekly shows per station.
+// ---------------------------------------------------------------------------
+
+export type ScrapedShowDayOfWeek =
+  | "Mon"
+  | "Tue"
+  | "Wed"
+  | "Thu"
+  | "Fri"
+  | "Sat"
+  | "Sun";
+
+export interface ScrapedShowItem {
+  showName: string;
+  dayOfWeek: ScrapedShowDayOfWeek;
+  /** 24h "HH:MM" */
+  startTime: string;
+  /** 24h "HH:MM" */
+  endTime: string;
+  djName: string | null;
+}
+
+export interface StationUpcomingScheduleResult {
+  stationSlug: string;
+  shows: ScrapedShowItem[];
+  lastScrapedAt: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// DJ page — all scraped shows for a given DJ name across stations.
+// ---------------------------------------------------------------------------
+
+export interface DjShowItem {
+  stationSlug: string;
+  stationName: string;
+  showName: string;
+  dayOfWeek: ScrapedShowDayOfWeek;
+  startTime: string;
+  endTime: string;
+}
+
+export interface DjShowsResult {
+  djName: string;
+  shows: DjShowItem[];
 }

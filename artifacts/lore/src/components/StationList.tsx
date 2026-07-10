@@ -3,9 +3,14 @@ import type {
   NowPlaying,
   PickedLookupItem,
   RecordingAvailabilityItem,
+  ScrapedShowItem,
   Station,
   StationRecentSpin,
   StationScheduleRun,
+} from "@workspace/api-client-react";
+import {
+  useGetStationUpcomingSchedule,
+  getGetStationUpcomingScheduleQueryKey,
 } from "@workspace/api-client-react";
 import { QualityBadge } from "./QualityBadge";
 import { FollowButton } from "./FollowButton";
@@ -40,8 +45,13 @@ interface StationListProps {
    * When present, shows lyrics / SE episode chips on each card.
    */
   availability?: Map<string, RecordingAvailabilityItem>;
+  /** When true, renders each card with the full featured layout (blurb +
+   * scraped upcoming shows + clickable genre tags). */
+  featured?: boolean;
   onToggle: (station: Station) => void;
   onSelect: (station: Station) => void;
+  /** Called when the user clicks a genre tag chip (featured mode). */
+  onGenreClick?: (tag: string) => void;
 }
 
 export function StationList({
@@ -53,8 +63,10 @@ export function StationList({
   schedule,
   recentSpins,
   availability,
+  featured = false,
   onToggle,
   onSelect,
+  onGenreClick,
 }: StationListProps) {
   return (
     <ul className="flex flex-col gap-2" data-testid="station-list">
@@ -208,6 +220,7 @@ export function StationList({
                       {[station.org, station.country].filter(Boolean).join(" · ") ||
                         "Independent"}
                     </p>
+                    {/* In featured mode always show blurb; otherwise show when no track */}
                     {station.homepageBlurb && (
                       <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground/70">
                         {station.homepageBlurb}
@@ -216,12 +229,27 @@ export function StationList({
                     {station.tags && station.tags.length > 0 && (
                       <div className="mt-1 flex flex-wrap gap-1">
                         {station.tags.slice(0, 3).map((tag) => (
-                          <span
-                            key={tag}
-                            className="inline-flex items-center rounded-full border border-border bg-background/40 px-2 py-0.5 font-mono text-[10px] text-muted-foreground/70 whitespace-nowrap"
-                          >
-                            {tag}
-                          </span>
+                          featured && onGenreClick ? (
+                            <button
+                              key={tag}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onGenreClick(tag);
+                              }}
+                              data-testid={`genre-tag-${station.slug}-${tag}`}
+                              className="inline-flex items-center rounded-full border border-border bg-background/40 px-2 py-0.5 font-mono text-[10px] text-muted-foreground/70 whitespace-nowrap hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer"
+                            >
+                              {tag}
+                            </button>
+                          ) : (
+                            <span
+                              key={tag}
+                              className="inline-flex items-center rounded-full border border-border bg-background/40 px-2 py-0.5 font-mono text-[10px] text-muted-foreground/70 whitespace-nowrap"
+                            >
+                              {tag}
+                            </span>
+                          )
                         ))}
                       </div>
                     )}
@@ -326,6 +354,11 @@ export function StationList({
                     stationSlug={station.slug}
                   />
                 ) : null}
+
+                {/* Featured-mode upcoming shows strip */}
+                {featured && (
+                  <UpcomingShowStrip slug={station.slug} />
+                )}
               </div>
 
               {/* Right rail: follow station, quality badge */}
@@ -468,6 +501,67 @@ function ShowTimeline({
           </Link>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * Lazy-loaded upcoming show strip for Featured mode. Fetches the station's
+ * weekly scraped schedule and renders clickable chips:
+ *   - Show name chip → station archive (filtered by show)
+ *   - DJ name chip → /dj/:name
+ */
+function UpcomingShowStrip({ slug }: { slug: string }) {
+  const { data } = useGetStationUpcomingSchedule(slug, {
+    query: {
+      queryKey: getGetStationUpcomingScheduleQueryKey(slug),
+      staleTime: 10 * 60 * 1000,
+    },
+  });
+
+  const shows = data?.shows ?? [];
+  if (shows.length === 0) return null;
+
+  // Deduplicate: one chip per unique show name (different days are collapsed).
+  const seen = new Set<string>();
+  const unique: ScrapedShowItem[] = [];
+  for (const s of shows) {
+    if (!seen.has(s.showName)) {
+      seen.add(s.showName);
+      unique.push(s);
+    }
+  }
+
+  return (
+    <div
+      className="mt-2 flex flex-wrap gap-1.5"
+      onClick={(e) => e.stopPropagation()}
+      data-testid={`upcoming-shows-${slug}`}
+    >
+      {unique.slice(0, 6).map((show) => (
+        <span key={show.showName} className="flex items-center gap-1">
+          <Link
+            href={`/archive/stations/${slug}?show=${encodeURIComponent(show.showName)}`}
+            className="inline-flex items-center gap-1 rounded-full border border-border bg-background/60 px-2 py-0.5 font-mono text-[10px] text-foreground/80 hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-colors whitespace-nowrap"
+            title={`Browse ${show.showName} archive`}
+            data-testid={`show-chip-featured-${slug}-${show.showName}`}
+          >
+            <BookOpen className="h-2.5 w-2.5 shrink-0" />
+            <span className="max-w-[14ch] truncate">{show.showName}</span>
+          </Link>
+          {show.djName && (
+            <Link
+              href={`/dj/${encodeURIComponent(show.djName)}`}
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-background/40 px-2 py-0.5 font-mono text-[10px] text-muted-foreground/70 hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-colors whitespace-nowrap"
+              title={`${show.djName}'s schedule`}
+              data-testid={`dj-chip-featured-${slug}-${show.djName}`}
+            >
+              <Mic className="h-2.5 w-2.5 shrink-0" />
+              <span className="max-w-[10ch] truncate">{show.djName}</span>
+            </Link>
+          )}
+        </span>
+      ))}
     </div>
   );
 }

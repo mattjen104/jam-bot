@@ -191,7 +191,7 @@ function DateSweep({
   );
 }
 
-type DialFilterTab = "all" | "live" | "lists" | "following";
+type DialFilterTab = "all" | "live" | "featured" | "lists" | "following";
 type DialSort = "default" | "popularity" | "discovery";
 
 /** Sort/genre controls for the station dial. Purely client-side — the full
@@ -260,6 +260,7 @@ function DialFilter({
   const tabs: { id: DialFilterTab; label: string }[] = [
     { id: "all", label: "All" },
     { id: "live", label: "Live" },
+    { id: "featured", label: "Featured" },
     { id: "lists", label: "Lists" },
     { id: "following", label: "Following" },
   ];
@@ -403,6 +404,10 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
   const filteredStations = useMemo((): Station[] => {
     let result = stations;
     if (dialFilter === "lists") return [];
+    if (dialFilter === "featured")
+      result = result.filter(
+        (s) => !!s.homepageBlurb || (s.upcomingShowCount ?? 0) > 0,
+      );
     if (dialFilter === "following")
       result = result.filter((s) => isFollowed(follows, "station", s.slug));
 
@@ -423,7 +428,7 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
   }, [dialFilter, dialSort, dialGenre, stations, follows]);
 
   const filteredPickerItems = useMemo((): PickerDialItem[] => {
-    if (dialFilter === "live") return [];
+    if (dialFilter === "live" || dialFilter === "featured") return [];
     if (dialFilter === "lists") return pickerItems;
     if (dialFilter === "following")
       return pickerItems.filter((it) =>
@@ -431,6 +436,11 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
       );
     return pickerItems;
   }, [dialFilter, pickerItems, follows]);
+
+  const handleGenreClick = (tag: string) => {
+    setDialFilter("all");
+    setDialGenre(tag);
+  };
 
   const pulseBySlug = useMemo(() => {
     const map = new Map(
@@ -572,7 +582,7 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
         followCount={dialFollowCount}
       />
 
-      {dialFilter !== "lists" && (
+      {dialFilter !== "lists" && dialFilter !== "featured" && (
         <DialSortAndGenre
           sort={dialSort}
           onSortChange={setDialSort}
@@ -613,8 +623,10 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
           schedule={scheduleBySlug}
           recentSpins={recentSpinsBySlug}
           availability={availabilityBySlug}
+          featured={dialFilter === "featured"}
           onToggle={handleToggle}
           onSelect={handleSelect}
+          onGenreClick={handleGenreClick}
         />
       )}
 

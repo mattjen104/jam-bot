@@ -73,7 +73,17 @@ router.get("/stations", h(async (_req, res) => {
     .from(stationsTable)
     .where(eq(stationsTable.active, true))
     .orderBy(asc(stationsTable.sortOrder), asc(stationsTable.name));
-  return res.json(ListStationsResponse.parse({ stations: rows.map(toStation) }));
+
+  // Attach scraped-show counts in a single extra query (one round-trip, not N).
+  const showCounts = await db
+    .select({ stationId: scrapedShowsTable.stationId, count: sql<number>`count(*)::int` })
+    .from(scrapedShowsTable)
+    .groupBy(scrapedShowsTable.stationId);
+  const countById = new Map(showCounts.map((r) => [r.stationId, r.count]));
+
+  return res.json(ListStationsResponse.parse({
+    stations: rows.map((s) => toStation(s, countById.get(s.id) ?? 0)),
+  }));
 }));
 
 // GET /api/stations/now-playing — latest spin per station (the dial pulse).
@@ -682,6 +692,44 @@ router.get("/stations/schedule", h(async (req, res) => {
   }));
 
   return res.json(GetStationsScheduleResponse.parse({ items }));
+}));
+
+// GET /api/djs/:name
+// Returns all scraped upcoming shows for a given DJ name across stations.
+router.get("/djs/:name", h(async (req, res) => {
+  const djName = decodeURIComponent(String(req.params.name ?? ""));
+  if (!djName) return res.status(400).json({ error: "DJ name required" });
+
+  const rows = await db
+    .select({
+      stationId: scrapedShowsTable.stationId,
+      stationSlug: stationsTable.slug,
+      stationName: stationsTable.name,
+      showName: scrapedShowsTable.showName,
+      dayOfWeek: scrapedShowsTable.dayOfWeek,
+      startTime: scrapedShowsTable.startTime,
+      endTime: scrapedShowsTable.endTime,
+    })
+    .from(scrapedShowsTable)
+    .innerJoin(stationsTable, eq(scrapedShowsTable.stationId, stationsTable.id))
+    .where(eq(scrapedShowsTable.djName, djName))
+    .orderBy(asc(stationsTable.name), asc(scrapedShowsTable.dayOfWeek), asc(scrapedShowsTable.startTime));
+
+  if (rows.length === 0) {
+    return res.status(404).json({ error: "DJ not found" });
+  }
+
+  return res.json({
+    djName,
+    shows: rows.map((r) => ({
+      stationSlug: r.stationSlug,
+      stationName: r.stationName,
+      showName: r.showName,
+      dayOfWeek: r.dayOfWeek,
+      startTime: r.startTime,
+      endTime: r.endTime,
+    })),
+  });
 }));
 
 // GET /api/stations/:slug/upcoming-schedule

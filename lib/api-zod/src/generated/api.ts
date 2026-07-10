@@ -252,6 +252,11 @@ export const ListStationsResponse = zod.object({
           .describe(
             "Best-effort excerpt (title/meta description) scraped from the station's own homepage. Null when never scraped, blocked by robots.txt, or the page had no usable text — never fabricated.",
           ),
+        upcomingShowCount: zod
+          .number()
+          .describe(
+            "Count of scraped upcoming shows in this station's weekly programming grid. 0 when the schedule scraper has not found shows yet.",
+          ),
       })
       .describe("A curated radio station in the public directory."),
   ),
@@ -389,6 +394,11 @@ export const GetStationNowPlayingResponse = zod.object({
         .nullish()
         .describe(
           "Best-effort excerpt (title/meta description) scraped from the station's own homepage. Null when never scraped, blocked by robots.txt, or the page had no usable text — never fabricated.",
+        ),
+      upcomingShowCount: zod
+        .number()
+        .describe(
+          "Count of scraped upcoming shows in this station's weekly programming grid. 0 when the schedule scraper has not found shows yet.",
         ),
     })
     .describe("A curated radio station in the public directory."),
@@ -942,6 +952,11 @@ export const GetStationArchiveResponse = zod.object({
         .nullish()
         .describe(
           "Best-effort excerpt (title/meta description) scraped from the station's own homepage. Null when never scraped, blocked by robots.txt, or the page had no usable text — never fabricated.",
+        ),
+      upcomingShowCount: zod
+        .number()
+        .describe(
+          "Count of scraped upcoming shows in this station's weekly programming grid. 0 when the schedule scraper has not found shows yet.",
         ),
     })
     .describe("A curated radio station in the public directory."),
@@ -2754,6 +2769,24 @@ export const GetStationUpcomingScheduleResponse = zod.object({
   stationSlug: zod.string(),
   shows: zod.array(ScrapedShow),
   lastScrapedAt: zod.string().nullable(),
+});
+
+export const GetDjShowsParams = zod.object({
+  name: zod.string().min(1),
+});
+
+export const DjShowEntry = zod.object({
+  stationSlug: zod.string(),
+  stationName: zod.string(),
+  showName: zod.string(),
+  dayOfWeek: zod.enum(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]),
+  startTime: zod.string(),
+  endTime: zod.string(),
+});
+
+export const GetDjShowsResponse = zod.object({
+  djName: zod.string(),
+  shows: zod.array(DjShowEntry),
 });
 
 export const IcecastReportBody = zod.object({

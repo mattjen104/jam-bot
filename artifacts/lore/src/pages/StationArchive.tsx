@@ -1,4 +1,4 @@
-import { Link, useParams } from "wouter";
+import { Link, useParams, useSearch } from "wouter";
 import {
   useGetStationArchive,
   useGetStationPickerOverlaps,
@@ -16,6 +16,8 @@ import { ArrowLeft, ArrowUpRight, Ghost, Radio, Users } from "lucide-react";
 export default function StationArchive() {
   const params = useParams();
   const slug = params.slug ?? "";
+  const search = useSearch();
+  const showFilter = new URLSearchParams(search).get("show") ?? null;
   const { ride, radio } = usePlayer();
   const { data, isLoading, isError } = useGetStationArchive(slug);
   const { data: overlaps } = useGetStationPickerOverlaps(slug);
@@ -100,8 +102,27 @@ export default function StationArchive() {
                   </div>
                 )}
 
+                {showFilter && (
+                  <div className="mb-4 flex items-center gap-2 rounded-xl border border-primary-border bg-primary/10 px-4 py-2">
+                    <span className="font-mono text-xs text-primary">
+                      Showing runs for: <span className="font-semibold">{showFilter}</span>
+                    </span>
+                    <Link
+                      href={`/archive/stations/${slug}`}
+                      className="ml-auto font-mono text-[10px] uppercase tracking-wide text-muted-foreground hover:text-primary"
+                    >
+                      Clear filter
+                    </Link>
+                  </div>
+                )}
                 <ul className="flex flex-col gap-2" data-testid="station-runs">
-                  {data.runs.map((r) => (
+                  {data.runs
+                    .filter((r) =>
+                      showFilter
+                        ? (r.show?.name ?? "").toLowerCase() === showFilter.toLowerCase()
+                        : true,
+                    )
+                    .map((r) => (
                     <li key={r.runId}>
                       <div
                         className="flex items-center gap-3 rounded-xl border border-card-border bg-card p-4"

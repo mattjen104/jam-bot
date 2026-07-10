@@ -2239,6 +2239,11 @@ components:
             Best-effort excerpt (title/meta description) scraped from the station's
             own homepage. Null when never scraped, blocked by robots.txt, or the
             page had no usable text — never fabricated.
+        upcomingShowCount:
+          type: integer
+          description: >-
+            Count of scraped upcoming shows in this station's weekly programming
+            grid. 0 when the schedule scraper has not found shows yet.
       required:
         - slug
         - name
@@ -2249,6 +2254,7 @@ components:
         - mayHaveAds
         - votes
         - clickcount
+        - upcomingShowCount
     StationList:
       type: object
       properties:

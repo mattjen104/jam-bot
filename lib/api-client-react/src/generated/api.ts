@@ -89,6 +89,8 @@ import type {
   StationRunDetail,
   StationRunInsights,
   StationSpinsPage,
+  StationUpcomingScheduleResult,
+  DjShowsResult,
   TracklistRequest,
   TracklistResult,
   UpsertPickerRequest,
@@ -5621,4 +5623,103 @@ export function useGetForYouBlogs<
     queryKey: QueryKey;
   };
   return { ...query, queryKey: queryOptions.queryKey };
+}
+
+// ---------------------------------------------------------------------------
+// Station upcoming schedule — scraped weekly programming grid per station.
+// Powers the Featured dial tab's show strips.
+// ---------------------------------------------------------------------------
+
+export const getGetStationUpcomingScheduleUrl = (slug: string) =>
+  `/api/stations/${encodeURIComponent(slug)}/upcoming-schedule`;
+
+export const getStationUpcomingSchedule = async (
+  slug: string,
+  options?: RequestInit,
+): Promise<StationUpcomingScheduleResult> => {
+  return customFetch<StationUpcomingScheduleResult>(
+    getGetStationUpcomingScheduleUrl(slug),
+    { ...options, method: "GET" },
+  );
+};
+
+export const getGetStationUpcomingScheduleQueryKey = (slug: string) =>
+  [`/api/stations/upcoming-schedule`, slug] as const;
+
+export function useGetStationUpcomingSchedule<
+  TData = Awaited<ReturnType<typeof getStationUpcomingSchedule>>,
+  TError = ErrorType<unknown>,
+>(
+  slug: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationUpcomingSchedule>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStationUpcomingScheduleQueryKey(slug);
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStationUpcomingSchedule>>
+  > = ({ signal }) =>
+    getStationUpcomingSchedule(slug, { signal, ...requestOptions });
+  const query = useQuery({
+    queryKey,
+    queryFn,
+    enabled: !!slug,
+    ...queryOptions,
+  }) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey };
+}
+
+// ---------------------------------------------------------------------------
+// DJ page — all scraped shows for a given DJ name across stations.
+// ---------------------------------------------------------------------------
+
+export const getGetDjShowsUrl = (name: string) =>
+  `/api/djs/${encodeURIComponent(name)}`;
+
+export const getDjShows = async (
+  name: string,
+  options?: RequestInit,
+): Promise<DjShowsResult> => {
+  return customFetch<DjShowsResult>(getGetDjShowsUrl(name), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDjShowsQueryKey = (name: string) =>
+  [`/api/djs`, name] as const;
+
+export function useGetDjShows<
+  TData = Awaited<ReturnType<typeof getDjShows>>,
+  TError = ErrorType<unknown>,
+>(
+  name: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDjShows>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getGetDjShowsQueryKey(name);
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getDjShows>>> = ({
+    signal,
+  }) => getDjShows(name, { signal, ...requestOptions });
+  const query = useQuery({
+    queryKey,
+    queryFn,
+    enabled: !!name,
+    ...queryOptions,
+  }) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey };
 }
