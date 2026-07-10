@@ -11,7 +11,7 @@ import {
 } from "@workspace/api-client-react";
 import { CONFIDENCE_LABEL, clockTime, timeAgo } from "../lib/format";
 import { groupCredits, pressingLine } from "../lib/linerNotes";
-import { cn } from "../lib/utils";
+import { cn, safeHttpUrl } from "../lib/utils";
 import { LikeButton } from "./LikeButton";
 import { KeepButton } from "./KeepButton";
 import { ShareButton } from "./ShareButton";
@@ -599,9 +599,9 @@ function StationFooter({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {station.homepageUrl && (
+          {safeHttpUrl(station.homepageUrl) && (
             <a
-              href={station.homepageUrl}
+              href={safeHttpUrl(station.homepageUrl)!}
               target="_blank"
               rel="noreferrer"
               className="hover-elevate inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm"

@@ -11,6 +11,7 @@ import { QualityBadge } from "./QualityBadge";
 import { FollowButton } from "./FollowButton";
 import { BadgeCheck, BookOpen, ExternalLink, Mic, Mic2, Music2, Pause, Play, Radio, Volume2 } from "lucide-react";
 import type { PlayerStatus } from "../hooks/useRadioPlayer";
+import { safeHttpUrl } from "../lib/utils";
 
 interface StationListProps {
   stations: Station[];
@@ -155,14 +156,14 @@ export function StationList({
                   <h3 className="truncate font-serif text-lg font-semibold leading-tight text-foreground">
                     {station.name}
                   </h3>
-                  {station.homepageUrl && (
+                  {safeHttpUrl(station.homepageUrl) && (
                     <a
-                      href={station.homepageUrl}
+                      href={safeHttpUrl(station.homepageUrl)!}
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={(e) => e.stopPropagation()}
                       aria-label={`Visit ${station.name}'s homepage`}
-                      title={station.homepageUrl}
+                      title={station.homepageUrl ?? undefined}
                       data-testid={`homepage-link-${station.slug}`}
                       className="shrink-0 text-muted-foreground/60 transition-colors hover:text-primary"
                     >
