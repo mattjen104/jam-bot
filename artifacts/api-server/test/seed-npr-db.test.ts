@@ -57,7 +57,27 @@ describe("NPR-list station seed enrollment", () => {
       expect(row.stationClass).toBe("curated");
       expect(row.homepageUrl).toBeTruthy();
       expect(row.streamUrl).toBeTruthy();
+      // GET /api/stations filters active=true — an inactive row is invisible.
+      expect(row.active).toBe(true);
     }
+  });
+
+  it("reactivates a legacy row a previous ICY failure deactivated", async () => {
+    if (!dbAvailable) return;
+    // Simulate production: KCHUNG's old dead stream tripped the ICY error
+    // threshold and the row was deactivated — hidden from GET /api/stations.
+    const slug = "rb-b58a4aaa-d5be-4925-be71-f69d1cccc13f";
+    await db
+      .update(stationsTable)
+      .set({ active: false })
+      .where(eq(stationsTable.slug, slug));
+    await seedStations();
+    const [row] = await db
+      .select({ active: stationsTable.active })
+      .from(stationsTable)
+      .where(eq(stationsTable.slug, slug))
+      .limit(1);
+    expect(row?.active).toBe(true);
   });
 
   it("wires the Radiojar pair to the JSON API adapter, not ICY", async () => {

@@ -789,6 +789,12 @@ export async function seedStations(): Promise<void> {
           // source="curated" exempts a previously auto-enrolled row (e.g.
           // KCHUNG's radio-browser enrollment) from the whitelist purge.
           source: s.source ?? "curated",
+          // Reactivate rows a previous ICY failure deactivated (e.g. KCHUNG
+          // after its stream moved to Radiocult): every seeded stream is
+          // hand-verified, and the poller re-suspends within a few ticks if
+          // one is genuinely dead. Without this, a legacy inactive row stays
+          // hidden from GET /api/stations (active=true filter) forever.
+          active: true,
           sortOrder: s.sortOrder ?? 0,
           updatedAt: sql`now()`,
         },
