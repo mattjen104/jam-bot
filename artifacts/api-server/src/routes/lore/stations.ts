@@ -805,6 +805,7 @@ router.get("/scraped-shows", h(async (_req, res) => {
     .innerJoin(stationsTable, eq(scrapedShowsTable.stationId, stationsTable.id))
     .orderBy(stationsTable.name, scrapedShowsTable.dayOfWeek, scrapedShowsTable.startTime);
 
+  // Group rows by station slug
   const bySlug = new Map<string, { slug: string; name: string; shows: typeof rows }>();
   for (const row of rows) {
     if (!bySlug.has(row.stationSlug)) {
@@ -813,8 +814,24 @@ router.get("/scraped-shows", h(async (_req, res) => {
     bySlug.get(row.stationSlug)!.shows.push(row);
   }
 
+  // Deduplicate stations whose show sets are identical (e.g. two DB rows for
+  // the same station scraped under different slugs). Fingerprint = sorted join
+  // of "showName|dayOfWeek|startTime" tuples. For each group of duplicates,
+  // keep the entry with the shortest name (most canonical).
+  const byFingerprint = new Map<string, typeof bySlug extends Map<string, infer V> ? V : never>();
+  for (const station of bySlug.values()) {
+    const fp = station.shows
+      .map((s) => `${s.showName}|${s.dayOfWeek}|${s.startTime}`)
+      .sort()
+      .join(",");
+    const existing = byFingerprint.get(fp);
+    if (!existing || station.name.length < existing.name.length) {
+      byFingerprint.set(fp, station);
+    }
+  }
+
   return res.json({
-    stations: [...bySlug.values()].map((s) => ({
+    stations: [...byFingerprint.values()].sort((a, b) => a.name.localeCompare(b.name)).map((s) => ({
       slug: s.slug,
       name: s.name,
       shows: s.shows.map((r) => ({
