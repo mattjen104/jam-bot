@@ -68,7 +68,13 @@ export default function DjPage() {
           </div>
         )}
 
-        {data && (
+        {data && data.shows.length === 0 && (
+          <div className="rounded-xl border border-border bg-card p-6 text-center font-mono text-sm text-muted-foreground">
+            No schedule found for this DJ yet.
+          </div>
+        )}
+
+        {data && data.shows.length > 0 && (
           <div className="space-y-6">
             {groupByStation(data.shows).map(({ stationSlug, stationName, shows }) => {
               const byDay = groupByDay(shows);

@@ -220,9 +220,21 @@ export function StationList({
                     data-testid={`pulse-show-${station.slug}`}
                   >
                     <Mic className="h-3 w-3 text-primary/70" />
-                    {np.show.djName
-                      ? `${np.show.djName} · ${np.show.name}`
-                      : np.show.name}
+                    {np.show.djName ? (
+                      <>
+                        <Link
+                          href={`/dj/${encodeURIComponent(np.show.djName)}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="hover:text-primary hover:underline"
+                        >
+                          {np.show.djName}
+                        </Link>
+                        {" · "}
+                        {np.show.name}
+                      </>
+                    ) : (
+                      np.show.name
+                    )}
                   </p>
                 ) : (
                   <p className="mt-0.5 flex items-center gap-1.5 truncate font-mono text-xs text-muted-foreground">
@@ -275,9 +287,21 @@ export function StationList({
                     data-testid={`pulse-show-${station.slug}`}
                   >
                     <Mic className="h-3 w-3 text-primary/70" />
-                    {np.show.djName
-                      ? `${np.show.djName} · ${np.show.name}`
-                      : np.show.name}
+                    {np.show.djName ? (
+                      <>
+                        <Link
+                          href={`/dj/${encodeURIComponent(np.show.djName)}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="hover:text-primary hover:underline"
+                        >
+                          {np.show.djName}
+                        </Link>
+                        {" · "}
+                        {np.show.name}
+                      </>
+                    ) : (
+                      np.show.name
+                    )}
                   </p>
                 )}
                 {pick &&
