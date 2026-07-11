@@ -18,6 +18,7 @@ import type {
 
 import type {
   AllDraftClaimsList,
+  AllScrapedShowsResult,
   ApiError,
   ArchiveCoverage,
   ArchiveRecentRuns,
@@ -5695,6 +5696,49 @@ export const getDjShows = async (
 
 export const getGetDjShowsQueryKey = (name: string) =>
   [`/api/djs`, name] as const;
+
+// ---------------------------------------------------------------------------
+// All scraped shows — aggregated weekly schedule for the calendar page
+// ---------------------------------------------------------------------------
+
+export const getGetAllScrapedShowsUrl = () => `/api/scraped-shows`;
+
+export const getAllScrapedShows = async (
+  options?: RequestInit,
+): Promise<AllScrapedShowsResult> => {
+  return customFetch<AllScrapedShowsResult>(getGetAllScrapedShowsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAllScrapedShowsQueryKey = () =>
+  [`/api/scraped-shows`] as const;
+
+export function useGetAllScrapedShows<
+  TData = Awaited<ReturnType<typeof getAllScrapedShows>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAllScrapedShows>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAllScrapedShowsQueryKey();
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAllScrapedShows>>
+  > = ({ signal }) => getAllScrapedShows({ signal, ...requestOptions });
+  const query = useQuery({
+    queryKey,
+    queryFn,
+    ...queryOptions,
+  }) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey };
+}
 
 export function useGetDjShows<
   TData = Awaited<ReturnType<typeof getDjShows>>,

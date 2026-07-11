@@ -1,8 +1,9 @@
 import { Link, useLocation } from "wouter";
-import { BookOpen, Headphones, Users } from "lucide-react";
+import { BookOpen, CalendarDays, Headphones, Users } from "lucide-react";
 
 const NAV_TABS = [
   { href: "/", label: "LISTEN", Icon: Headphones, exact: true },
+  { href: "/schedule", label: "SCHEDULE", Icon: CalendarDays, exact: false },
   { href: "/journal", label: "LIBRARY", Icon: BookOpen, exact: false },
   { href: "/selectors", label: "SELECTORS", Icon: Users, exact: false },
 ];

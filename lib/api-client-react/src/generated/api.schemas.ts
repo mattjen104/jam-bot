@@ -1738,3 +1738,27 @@ export interface DjShowsResult {
   djName: string;
   shows: DjShowItem[];
 }
+
+// ---------------------------------------------------------------------------
+// All scraped shows — weekly schedule across all stations (for calendar page)
+// ---------------------------------------------------------------------------
+
+export interface AllScrapedShowSlot {
+  showName: string;
+  dayOfWeek: string;
+  startTime: string;
+  /** @nullable */
+  endTime: string | null;
+  /** @nullable */
+  djName: string | null;
+}
+
+export interface AllScrapedShowStation {
+  slug: string;
+  name: string;
+  shows: AllScrapedShowSlot[];
+}
+
+export interface AllScrapedShowsResult {
+  stations: AllScrapedShowStation[];
+}

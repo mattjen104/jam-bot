@@ -787,4 +787,45 @@ router.get("/stations/:slug/upcoming-schedule", h(async (req, res) => {
   );
 }));
 
+// ---------------------------------------------------------------------------
+// GET /api/scraped-shows — all stations' weekly scraped show slots (for calendar)
+// ---------------------------------------------------------------------------
+router.get("/scraped-shows", h(async (_req, res) => {
+  const rows = await db
+    .select({
+      stationSlug: stationsTable.slug,
+      stationName: stationsTable.name,
+      showName: scrapedShowsTable.showName,
+      dayOfWeek: scrapedShowsTable.dayOfWeek,
+      startTime: scrapedShowsTable.startTime,
+      endTime: scrapedShowsTable.endTime,
+      djName: scrapedShowsTable.djName,
+    })
+    .from(scrapedShowsTable)
+    .innerJoin(stationsTable, eq(scrapedShowsTable.stationId, stationsTable.id))
+    .orderBy(stationsTable.name, scrapedShowsTable.dayOfWeek, scrapedShowsTable.startTime);
+
+  const bySlug = new Map<string, { slug: string; name: string; shows: typeof rows }>();
+  for (const row of rows) {
+    if (!bySlug.has(row.stationSlug)) {
+      bySlug.set(row.stationSlug, { slug: row.stationSlug, name: row.stationName, shows: [] });
+    }
+    bySlug.get(row.stationSlug)!.shows.push(row);
+  }
+
+  return res.json({
+    stations: [...bySlug.values()].map((s) => ({
+      slug: s.slug,
+      name: s.name,
+      shows: s.shows.map((r) => ({
+        showName: r.showName,
+        dayOfWeek: r.dayOfWeek,
+        startTime: r.startTime,
+        endTime: r.endTime ?? null,
+        djName: r.djName ?? null,
+      })),
+    })),
+  });
+}));
+
 export default router;
