@@ -202,12 +202,16 @@ function DialSortAndGenre({
   genre,
   onGenreChange,
   genreOptions,
+  descriptionOnly,
+  onDescriptionOnlyChange,
 }: {
   sort: DialSort;
   onSortChange: (sort: DialSort) => void;
   genre: string | null;
   onGenreChange: (genre: string | null) => void;
   genreOptions: string[];
+  descriptionOnly: boolean;
+  onDescriptionOnlyChange: (value: boolean) => void;
 }) {
   const sorts: { id: DialSort; label: string }[] = [
     { id: "default", label: "Curated order" },
@@ -243,6 +247,19 @@ function DialSortAndGenre({
           ))}
         </select>
       )}
+      <button
+        type="button"
+        onClick={() => onDescriptionOnlyChange(!descriptionOnly)}
+        data-testid="dial-description-filter"
+        aria-pressed={descriptionOnly}
+        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-[11px] uppercase tracking-wide transition-colors ${
+          descriptionOnly
+            ? "border-primary/40 bg-primary/10 text-primary"
+            : "border-border bg-card text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        Has description
+      </button>
     </div>
   );
 }
@@ -297,6 +314,7 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
   const [dialFilter, setDialFilter] = useState<DialFilterTab>("all");
   const [dialSort, setDialSort] = useState<DialSort>("default");
   const [dialGenre, setDialGenre] = useState<string | null>(null);
+  const [descriptionOnly, setDescriptionOnly] = useState(false);
   const follows = useFollows();
 
   // Client-side NTS show data — NTS blocks datacenter IPs but browser requests
@@ -414,6 +432,11 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
     if (dialGenre)
       result = result.filter((s) => (s.tags ?? []).includes(dialGenre));
 
+    if (descriptionOnly)
+      result = result.filter(
+        (s) => !!s.homepageBlurb && s.homepageBlurb.trim().length > 0,
+      );
+
     if (dialSort === "popularity") {
       result = [...result].sort(
         (a, b) => (b.votes ?? 0) + (b.clickcount ?? 0) - ((a.votes ?? 0) + (a.clickcount ?? 0)),
@@ -425,7 +448,7 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
     }
 
     return result;
-  }, [dialFilter, dialSort, dialGenre, stations, follows]);
+  }, [dialFilter, dialSort, dialGenre, descriptionOnly, stations, follows]);
 
   const filteredPickerItems = useMemo((): PickerDialItem[] => {
     if (dialFilter === "live" || dialFilter === "featured") return [];
@@ -570,8 +593,8 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
             "The dial"
           )}
         </h2>
-        <span className="font-mono text-xs text-muted-foreground">
-          {stations.length} station{stations.length === 1 ? "" : "s"}
+        <span className="font-mono text-xs text-muted-foreground" data-testid="dial-station-count">
+          {filteredStations.length} station{filteredStations.length === 1 ? "" : "s"}
         </span>
       </div>
 
@@ -588,6 +611,8 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
           genre={dialGenre}
           onGenreChange={setDialGenre}
           genreOptions={genreOptions}
+          descriptionOnly={descriptionOnly}
+          onDescriptionOnlyChange={setDescriptionOnly}
         />
       )}
 

@@ -795,7 +795,6 @@ router.get("/scraped-shows", h(async (_req, res) => {
     .select({
       stationSlug: stationsTable.slug,
       stationName: stationsTable.name,
-      homepageBlurb: stationsTable.homepageBlurb,
       showName: scrapedShowsTable.showName,
       dayOfWeek: scrapedShowsTable.dayOfWeek,
       startTime: scrapedShowsTable.startTime,
@@ -807,15 +806,10 @@ router.get("/scraped-shows", h(async (_req, res) => {
     .orderBy(stationsTable.name, scrapedShowsTable.dayOfWeek, scrapedShowsTable.startTime);
 
   // Group rows by station slug
-  const bySlug = new Map<string, { slug: string; name: string; hasDescription: boolean; shows: typeof rows }>();
+  const bySlug = new Map<string, { slug: string; name: string; shows: typeof rows }>();
   for (const row of rows) {
     if (!bySlug.has(row.stationSlug)) {
-      bySlug.set(row.stationSlug, {
-        slug: row.stationSlug,
-        name: row.stationName,
-        hasDescription: !!(row.homepageBlurb && row.homepageBlurb.trim().length > 0),
-        shows: [],
-      });
+      bySlug.set(row.stationSlug, { slug: row.stationSlug, name: row.stationName, shows: [] });
     }
     bySlug.get(row.stationSlug)!.shows.push(row);
   }
