@@ -230,6 +230,13 @@ export const stationsTable = pgTable("stations", {
   /** When the homepage was last (attempted to be) scraped. Null = never. */
   homepageScrapedAt: timestamp("homepage_scraped_at"),
   /**
+   * Denormalized count of rows in `scraped_shows` for this station.
+   * Written in the same transaction as each schedule scrape (full replace),
+   * so it stays in sync without a secondary query. Starts at 0; backfilled
+   * from existing scraped_shows rows by the boot migration.
+   */
+  upcomingShowCount: integer("upcoming_show_count").notNull().default(0),
+  /**
    * When the weekly-schedule scraper last *successfully* produced a result
    * for this station (including a legitimate "page has no schedule" empty
    * result) — the freshness marker that drives both the 7-day re-scrape

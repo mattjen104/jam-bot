@@ -67,6 +67,9 @@ const fingerprintLimiter = rateLimit({
 // GET /api/stations
 // Only active=true stations are returned — longtail candidates (active=false)
 // are health-gated and must not appear in the public directory.
+// `upcomingShowCount` is a denormalized column written by the schedule scraper
+// in the same transaction as each scraped_shows replace, so no second query
+// is needed here.
 router.get("/stations", h(async (_req, res) => {
   const rows = await db
     .select()
@@ -74,15 +77,8 @@ router.get("/stations", h(async (_req, res) => {
     .where(eq(stationsTable.active, true))
     .orderBy(asc(stationsTable.sortOrder), asc(stationsTable.name));
 
-  // Attach scraped-show counts in a single extra query (one round-trip, not N).
-  const showCounts = await db
-    .select({ stationId: scrapedShowsTable.stationId, count: sql<number>`count(*)::int` })
-    .from(scrapedShowsTable)
-    .groupBy(scrapedShowsTable.stationId);
-  const countById = new Map(showCounts.map((r) => [r.stationId, r.count]));
-
   return res.json(ListStationsResponse.parse({
-    stations: rows.map((s) => toStation(s, countById.get(s.id) ?? 0)),
+    stations: rows.map((s) => toStation(s)),
   }));
 }));
 

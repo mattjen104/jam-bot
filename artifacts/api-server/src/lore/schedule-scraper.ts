@@ -319,13 +319,13 @@ export async function scrapeStationSchedule(
           // starve the batch by leaving scheduleAttemptedAt unset.
           .onConflictDoNothing();
       }
-      // Stamp both freshness markers in the same transaction as the row swap
-      // so a legitimate empty result (page has no schedule) is recorded as
-      // "successfully scraped" — see stationsTable.scheduleScrapedAt /
-      // scheduleAttemptedAt.
+      // Stamp both freshness markers AND the denormalized show count in the
+      // same transaction as the row swap so they are always consistent:
+      // - scheduleScrapedAt / scheduleAttemptedAt drive the re-scrape cadence
+      // - upcomingShowCount lets GET /api/stations avoid a second round-trip
       await tx
         .update(stationsTable)
-        .set({ scheduleScrapedAt: now, scheduleAttemptedAt: now })
+        .set({ scheduleScrapedAt: now, scheduleAttemptedAt: now, upcomingShowCount: shows!.length })
         .where(eq(stationsTable.id, target.id));
     });
   } catch (err) {

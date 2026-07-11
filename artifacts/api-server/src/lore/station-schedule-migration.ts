@@ -42,5 +42,23 @@ export async function applyStationScheduleMigration(): Promise<void> {
   await db.execute(sql`
     ALTER TABLE stations ADD COLUMN IF NOT EXISTS schedule_attempted_at timestamptz
   `);
+  // Denormalized show count — written in the same transaction as each full
+  // scraped_shows replace, so the Featured tab never needs a second join.
+  // NOT NULL DEFAULT 0: Postgres adds this as a catalog-only default (instant,
+  // no table rewrite on Postgres 11+), so all existing rows immediately read 0.
+  await db.execute(sql`
+    ALTER TABLE stations ADD COLUMN IF NOT EXISTS upcoming_show_count integer NOT NULL DEFAULT 0
+  `);
+  // Backfill: stations that already have scraped_shows rows would stay at 0
+  // until their next weekly re-scrape without this one-time fix. Running the
+  // UPDATE unconditionally is safe — it is idempotent, cheap (index scan on
+  // station_id), and stations that have never been scraped correctly stay 0.
+  await db.execute(sql`
+    UPDATE stations s
+    SET upcoming_show_count = (
+      SELECT count(*)::int FROM scraped_shows ss WHERE ss.station_id = s.id
+    )
+    WHERE upcoming_show_count = 0
+  `);
   console.info("[migration] scraped_shows table: OK");
 }

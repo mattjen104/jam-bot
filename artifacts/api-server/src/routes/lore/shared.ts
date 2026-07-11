@@ -3,7 +3,7 @@ import type { Station, Picker } from "@workspace/db";
 export { spinDayExpr } from "../../lore/runs.js";
 
 /** Shape a DB station row into the public Station payload. */
-export function toStation(s: Station, upcomingShowCount = 0) {
+export function toStation(s: Station) {
   return {
     slug: s.slug,
     name: s.name,
@@ -23,7 +23,7 @@ export function toStation(s: Station, upcomingShowCount = 0) {
     clickcount: s.clickcount,
     discoveryScore: s.discoveryScore ?? null,
     homepageBlurb: s.homepageBlurb ?? null,
-    upcomingShowCount,
+    upcomingShowCount: s.upcomingShowCount ?? 0,
   };
 }
 
