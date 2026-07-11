@@ -101,6 +101,15 @@ export const stationsTable = pgTable("stations", {
   /** Playback mode; "live" for continuous radio. */
   mode: text("mode").notNull().default("live"),
   homepageUrl: text("homepage_url"),
+  /**
+   * Optional direct URL to this station's weekly-schedule page (e.g.
+   * https://kexp.org/schedule/). When set, the schedule scraper fetches this
+   * URL directly and skips both the homepage fetch and the link-discovery
+   * step — significantly improving extraction success for stations whose
+   * schedule link doesn't appear as a plain anchor on the homepage (JS-rendered
+   * nav, embedded players, etc.). Null = fall back to homepage + link discovery.
+   */
+  scheduleUrl: text("schedule_url"),
   donateUrl: text("donate_url"),
   logoUrl: text("logo_url"),
   /** Now-playing adapter key, e.g. "radio_paradise" | "kexp" | "bbc". */

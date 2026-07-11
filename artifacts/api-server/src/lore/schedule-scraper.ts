@@ -46,6 +46,9 @@ interface ScrapeTarget {
   id: number;
   slug: string;
   homepageUrl: string;
+  /** Pre-known schedule page URL. When set, the scraper fetches this directly
+   *  and skips the homepage fetch + link-discovery step entirely. */
+  scheduleUrl: string | null;
 }
 
 export interface ExtractedShow {
@@ -72,6 +75,7 @@ async function loadStaleTargets(limit: number): Promise<ScrapeTarget[]> {
       id: stationsTable.id,
       slug: stationsTable.slug,
       homepageUrl: stationsTable.homepageUrl,
+      scheduleUrl: stationsTable.scheduleUrl,
     })
     .from(stationsTable)
     .where(
@@ -93,7 +97,12 @@ async function loadStaleTargets(limit: number): Promise<ScrapeTarget[]> {
 
   return rows
     .filter((r): r is typeof r & { homepageUrl: string } => Boolean(r.homepageUrl))
-    .map((r) => ({ id: r.id, slug: r.slug, homepageUrl: r.homepageUrl }));
+    .map((r) => ({
+      id: r.id,
+      slug: r.slug,
+      homepageUrl: r.homepageUrl,
+      scheduleUrl: r.scheduleUrl ?? null,
+    }));
 }
 
 /** Strip tags/scripts down to visible-ish text, pure/no I/O. */
@@ -253,29 +262,59 @@ export async function scrapeStationSchedule(
     }
   };
 
-  const homeHtml = await fetchPage(target.homepageUrl);
-  if (!homeHtml) return fail();
-
-  let pageHtml = homeHtml;
-  const scheduleLink = findScheduleLink(homeHtml, target.homepageUrl);
-  // Only follow the discovered link when it's first-party (same origin as
-  // the station's own homepage). A schedule/programming-looking link
-  // pointing off-site (ad network, unrelated aggregator, etc) is not this
-  // station's own published schedule and must not be fetched/trusted.
-  if (scheduleLink) {
+  // When a pre-known schedule URL is configured, fetch it directly and skip
+  // the homepage fetch + link-discovery step entirely. This bypasses JS-
+  // rendered nav menus and other homepage structures that hide the schedule
+  // link from a plain HTML anchor scan. Same origin-safety check applies.
+  let pageHtml: string | null = null;
+  if (target.scheduleUrl) {
     let scheduleOrigin: string | null = null;
     try {
-      scheduleOrigin = new URL(scheduleLink).origin;
+      scheduleOrigin = new URL(target.scheduleUrl).origin;
     } catch {
       scheduleOrigin = null;
     }
     if (scheduleOrigin === origin) {
-      const linkedHtml = await fetchPage(scheduleLink);
-      if (linkedHtml) pageHtml = linkedHtml;
+      pageHtml = await fetchPage(target.scheduleUrl);
+      if (pageHtml) {
+        console.info(
+          `[schedule-scraper] using pre-known schedule URL for ${target.slug}: ${target.scheduleUrl}`,
+        );
+      }
     } else {
-      console.info(
-        `[schedule-scraper] ignoring off-site schedule link for ${target.slug}: ${scheduleLink}`,
+      console.warn(
+        `[schedule-scraper] scheduleUrl is off-site for ${target.slug}, ignoring: ${target.scheduleUrl}`,
       );
+    }
+  }
+
+  // Fall back to homepage + link-discovery when no pre-known schedule URL
+  // was configured or the direct fetch failed.
+  if (!pageHtml) {
+    const homeHtml = await fetchPage(target.homepageUrl);
+    if (!homeHtml) return fail();
+
+    pageHtml = homeHtml;
+    const scheduleLink = findScheduleLink(homeHtml, target.homepageUrl);
+    // Only follow the discovered link when it's first-party (same origin as
+    // the station's own homepage). A schedule/programming-looking link
+    // pointing off-site (ad network, unrelated aggregator, etc) is not this
+    // station's own published schedule and must not be fetched/trusted.
+    if (scheduleLink) {
+      let scheduleOrigin: string | null = null;
+      try {
+        scheduleOrigin = new URL(scheduleLink).origin;
+      } catch {
+        scheduleOrigin = null;
+      }
+      if (scheduleOrigin === origin) {
+        const linkedHtml = await fetchPage(scheduleLink);
+        if (linkedHtml) pageHtml = linkedHtml;
+      } else {
+        console.info(
+          `[schedule-scraper] ignoring off-site schedule link for ${target.slug}: ${scheduleLink}`,
+        );
+      }
     }
   }
 

@@ -83,6 +83,7 @@ const SEED_STATIONS: InsertStation[] = [
     streamQuality: "160kbps AAC",
     streamFormat: "aac",
     homepageUrl: "https://kexp.org",
+    scheduleUrl: "https://kexp.org/schedule/",
     donateUrl: "https://www.kexp.org/donate/",
     nowPlayingSource: "kexp_api",
     nowPlayingConfig: {},
@@ -98,6 +99,7 @@ const SEED_STATIONS: InsertStation[] = [
     streamQuality: "128kbps MP3",
     streamFormat: "mp3",
     homepageUrl: "https://www.kcrw.com/music/shows/eclectic24",
+    scheduleUrl: "https://www.kcrw.com/schedule",
     donateUrl: "https://join.kcrw.com",
     nowPlayingSource: "kcrw",
     nowPlayingConfig: { feed: "Music" },
@@ -123,6 +125,7 @@ const SEED_STATIONS: InsertStation[] = [
     streamQuality: "128kbps AAC",
     streamFormat: "aac",
     homepageUrl: "https://www.bbc.co.uk/6music",
+    scheduleUrl: "https://www.bbc.co.uk/6music/schedule",
     donateUrl: null,
     nowPlayingSource: "bbc_api",
     nowPlayingConfig: { sid: "bbc_6music" },
@@ -136,6 +139,7 @@ const SEED_STATIONS: InsertStation[] = [
   ...somaFmStations(),
   ...spinitronCollegeStations(),
   ...nprListStations(),
+  ...indieInternetStations(),
 ];
 
 /**
@@ -161,6 +165,125 @@ const SEED_STATIONS: InsertStation[] = [
  * purge) and `tier: "longtail"`. The ICY-polled pair also get a
  * radio_browser_stations health row via `ensureIcyHealthRows()` after upsert.
  */
+/**
+ * Curated indie/experimental internet-first stations known for published DJ
+ * scheduling — added specifically to populate the Featured tab. Stream URLs
+ * are left empty where not yet verified from the Replit container (mixed-
+ * content / CDN token issues); the schedule scraper only needs `homepageUrl`.
+ *
+ * Spinitron is not available for these stations; nowPlayingSource is omitted
+ * (null) until a compatible adapter is confirmed. Stations still appear on the
+ * dial and in Featured once the homepage scraper sets `homepageBlurb` and the
+ * schedule scraper finds ≥1 show.
+ */
+function indieInternetStations(): InsertStation[] {
+  return [
+    // Dublab — LA-based non-profit internet radio, launched 1999. Weekly
+    // show schedule published at dublab.com/schedule. Stream through their
+    // own infrastructure; URL not yet confirmed from the Replit container.
+    {
+      slug: "dublab",
+      name: "Dublab",
+      org: "Dublab",
+      country: "US",
+      streamUrl: "",
+      streamFormat: "mp3",
+      homepageUrl: "https://dublab.com",
+      scheduleUrl: "https://dublab.com/schedule",
+      donateUrl: "https://dublab.com/membership/",
+      nowPlayingSource: null,
+      nowPlayingConfig: null,
+      stationClass: "community",
+      sortOrder: 560,
+    },
+    // Rinse FM — London-based station, seminal for grime, garage, UKB and
+    // forward club sounds. Weekly schedule at rinse.fm/schedule.
+    {
+      slug: "rinse-fm",
+      name: "Rinse FM",
+      org: "Rinse FM",
+      country: "GB",
+      streamUrl: "",
+      streamFormat: "mp3",
+      homepageUrl: "https://rinse.fm",
+      scheduleUrl: "https://rinse.fm/schedule",
+      donateUrl: null,
+      nowPlayingSource: null,
+      nowPlayingConfig: null,
+      stationClass: "community",
+      sortOrder: 565,
+    },
+    // Worldwide FM — London/global; Gilles Peterson's curation-led station.
+    // Detailed weekly schedule published at worldwidefm.net.
+    {
+      slug: "worldwide-fm",
+      name: "Worldwide FM",
+      org: "Worldwide FM",
+      country: "GB",
+      streamUrl: "",
+      streamFormat: "mp3",
+      homepageUrl: "https://worldwidefm.net",
+      scheduleUrl: "https://worldwidefm.net/schedule",
+      donateUrl: null,
+      nowPlayingSource: null,
+      nowPlayingConfig: null,
+      stationClass: "community",
+      sortOrder: 570,
+    },
+    // The Lot Radio — Red Hook, Brooklyn all-DJ station; publishes a full
+    // weekly lineup at thelotradio.com.
+    {
+      slug: "the-lot-radio",
+      name: "The Lot Radio",
+      org: "The Lot Radio",
+      country: "US",
+      streamUrl: "",
+      streamFormat: "mp3",
+      homepageUrl: "https://www.thelotradio.com",
+      scheduleUrl: "https://www.thelotradio.com/schedule",
+      donateUrl: null,
+      nowPlayingSource: null,
+      nowPlayingConfig: null,
+      stationClass: "community",
+      sortOrder: 575,
+    },
+    // Refuge Worldwide — Berlin non-profit community radio; full weekly
+    // schedule published at refugeworldwide.com.
+    {
+      slug: "refuge-worldwide",
+      name: "Refuge Worldwide",
+      org: "Refuge Worldwide",
+      country: "DE",
+      streamUrl: "",
+      streamFormat: "mp3",
+      homepageUrl: "https://refugeworldwide.com",
+      scheduleUrl: "https://refugeworldwide.com/schedule",
+      donateUrl: "https://refugeworldwide.com/support",
+      nowPlayingSource: null,
+      nowPlayingConfig: null,
+      stationClass: "community",
+      sortOrder: 580,
+    },
+    // Balamii — South London community station, detailed weekly schedule at
+    // balamii.com.
+    {
+      slug: "balamii",
+      name: "Balamii",
+      org: "Balamii",
+      country: "GB",
+      streamUrl: "",
+      streamFormat: "mp3",
+      homepageUrl: "https://balamii.com",
+      scheduleUrl: "https://balamii.com/schedule",
+      donateUrl: null,
+      nowPlayingSource: null,
+      nowPlayingConfig: null,
+      stationClass: "community",
+      sortOrder: 585,
+    },
+  ];
+}
+
 function nprListStations(): InsertStation[] {
   return [
     {
@@ -332,6 +455,7 @@ function ntsliveStations(): InsertStation[] {
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://www.nts.live",
+      scheduleUrl: "https://www.nts.live/schedule",
       donateUrl: "https://www.nts.live/membership",
       nowPlayingSource: "nts_live",
       nowPlayingConfig: { channel: "1" },
@@ -347,6 +471,7 @@ function ntsliveStations(): InsertStation[] {
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://www.nts.live",
+      scheduleUrl: "https://www.nts.live/schedule",
       donateUrl: "https://www.nts.live/membership",
       nowPlayingSource: "nts_live",
       nowPlayingConfig: { channel: "2" },
@@ -500,6 +625,7 @@ function spinitronCollegeStations(): InsertStation[] {
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://wprb.com",
+      scheduleUrl: "https://wprb.com/schedule/",
       donateUrl: null,
       nowPlayingSource: "spinitron",
       nowPlayingConfig: spinConfig("WPRB"),
@@ -517,6 +643,7 @@ function spinitronCollegeStations(): InsertStation[] {
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://wnur.northwestern.edu",
+      scheduleUrl: "https://wnur.northwestern.edu/schedule/",
       donateUrl: null,
       nowPlayingSource: "spinitron",
       nowPlayingConfig: spinConfig("WNUR"),
@@ -535,6 +662,7 @@ function spinitronCollegeStations(): InsertStation[] {
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://wrek.org",
+      scheduleUrl: "https://wrek.org/shows/",
       donateUrl: null,
       nowPlayingSource: "spinitron",
       nowPlayingConfig: spinConfig("WREK"),
@@ -552,6 +680,7 @@ function spinitronCollegeStations(): InsertStation[] {
       streamQuality: "128kbps AAC",
       streamFormat: "aac",
       homepageUrl: "https://kdvs.org",
+      scheduleUrl: "https://kdvs.org/schedule",
       donateUrl: null,
       nowPlayingSource: "spinitron",
       nowPlayingConfig: spinConfig("KDVS"),
@@ -569,6 +698,7 @@ function spinitronCollegeStations(): InsertStation[] {
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://whrb.org",
+      scheduleUrl: "https://whrb.org/schedule",
       donateUrl: null,
       nowPlayingSource: "spinitron",
       nowPlayingConfig: spinConfig("WHRB"),
@@ -585,6 +715,7 @@ function spinitronCollegeStations(): InsertStation[] {
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://wkcr.org",
+      scheduleUrl: "https://wkcr.org/programs/",
       donateUrl: null,
       nowPlayingSource: "spinitron",
       nowPlayingConfig: spinConfig("WKCR"),
@@ -605,6 +736,7 @@ function spinitronCollegeStations(): InsertStation[] {
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://wfmu.org",
+      scheduleUrl: "https://wfmu.org/schedule",
       donateUrl: "https://www.wfmu.org/donate.html",
       nowPlayingSource: "spinitron",
       nowPlayingConfig: spinConfig("WFMU"),
@@ -622,6 +754,7 @@ function spinitronCollegeStations(): InsertStation[] {
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://wxyc.org",
+      scheduleUrl: "https://wxyc.org/schedule",
       donateUrl: null,
       nowPlayingSource: "spinitron",
       nowPlayingConfig: spinConfig("WXYC"),
@@ -638,6 +771,7 @@ function spinitronCollegeStations(): InsertStation[] {
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://kalx.berkeley.edu",
+      scheduleUrl: "https://kalx.berkeley.edu/schedule",
       donateUrl: null,
       nowPlayingSource: "spinitron",
       nowPlayingConfig: spinConfig("KALX"),
@@ -656,6 +790,7 @@ function spinitronCollegeStations(): InsertStation[] {
       streamQuality: "192kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://kvrx.org",
+      scheduleUrl: "https://kvrx.org/schedule",
       donateUrl: null,
       nowPlayingSource: "spinitron",
       nowPlayingConfig: spinConfig("KVRX"),
@@ -678,6 +813,7 @@ function spinitronCollegeStations(): InsertStation[] {
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://wmbr.org",
+      scheduleUrl: "https://wmbr.org/schedule.php",
       donateUrl: null,
       nowPlayingSource: "spinitron",
       nowPlayingConfig: spinConfig("WMBR"),
@@ -695,6 +831,7 @@ function spinitronCollegeStations(): InsertStation[] {
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://wusb.fm",
+      scheduleUrl: "https://wusb.fm/schedule",
       donateUrl: null,
       nowPlayingSource: "spinitron",
       nowPlayingConfig: spinConfig("WUSB"),
@@ -713,6 +850,7 @@ function spinitronCollegeStations(): InsertStation[] {
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://wuog.org",
+      scheduleUrl: "https://wuog.org/schedule",
       donateUrl: null,
       nowPlayingSource: "spinitron",
       nowPlayingConfig: spinConfig("WUOG"),
@@ -730,6 +868,7 @@ function spinitronCollegeStations(): InsertStation[] {
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://wvum.org",
+      scheduleUrl: "https://wvum.org/schedule",
       donateUrl: null,
       nowPlayingSource: "spinitron",
       nowPlayingConfig: spinConfig("WVUM"),
@@ -747,6 +886,7 @@ function spinitronCollegeStations(): InsertStation[] {
       streamQuality: "192kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://www.kvsc.org",
+      scheduleUrl: "https://www.kvsc.org/programs/",
       donateUrl: null,
       nowPlayingSource: "spinitron",
       nowPlayingConfig: spinConfig("KVSC"),
@@ -781,6 +921,7 @@ export async function seedStations(): Promise<void> {
           streamQuality: s.streamQuality ?? null,
           streamFormat: s.streamFormat ?? "aac",
           homepageUrl: s.homepageUrl ?? null,
+          scheduleUrl: s.scheduleUrl ?? null,
           donateUrl: s.donateUrl ?? null,
           nowPlayingSource: s.nowPlayingSource ?? null,
           nowPlayingConfig: s.nowPlayingConfig ?? null,

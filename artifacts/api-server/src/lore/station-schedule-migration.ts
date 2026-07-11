@@ -60,5 +60,10 @@ export async function applyStationScheduleMigration(): Promise<void> {
     )
     WHERE upcoming_show_count = 0
   `);
+  // Pre-known schedule page URL — when set, the scraper fetches this directly
+  // and skips the homepage + link-discovery step. Null = fall back to discovery.
+  await db.execute(sql`
+    ALTER TABLE stations ADD COLUMN IF NOT EXISTS schedule_url text
+  `);
   console.info("[migration] scraped_shows table: OK");
 }
