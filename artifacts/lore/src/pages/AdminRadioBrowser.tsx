@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAdminToken } from "../hooks/useAdminToken";
-import { AlertTriangle, KeyRound, Loader2, Plus, Radio, Trash2, Wifi, WifiOff, AlertCircle } from "lucide-react";
+import { AlertTriangle, KeyRound, Loader2, Plus, Radio, RefreshCw, Trash2, Wifi, WifiOff, AlertCircle } from "lucide-react";
 
 export default function AdminRadioBrowser() {
   const { token, saveToken, clearToken } = useAdminToken();
@@ -90,6 +90,15 @@ function RadioBrowserPanel({
   const [stations, setStations] = useState<RbStation[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  const patchStation = useCallback(
+    (id: number, patch: Pick<RbStation, "icyStatus" | "consecutiveErrors">) => {
+      setStations((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+      );
+    },
+    [],
+  );
 
   const loadStations = useCallback(async () => {
     try {
@@ -185,6 +194,7 @@ function RadioBrowserPanel({
                     station={s}
                     token={token}
                     onRemoved={() => void loadStations()}
+                    onReenrolled={(patch) => patchStation(s.id, patch)}
                   />
                 ))}
               </div>
@@ -318,12 +328,19 @@ function StationRow({
   station,
   token,
   onRemoved,
+  onReenrolled,
 }: {
   station: RbStation;
   token: string;
   onRemoved: () => void;
+  onReenrolled: (patch: Pick<RbStation, "icyStatus" | "consecutiveErrors">) => void;
 }) {
   const [removing, setRemoving] = useState(false);
+  const [reenrolling, setReenrolling] = useState(false);
+  const [reenrollError, setReenrollError] = useState<string | null>(null);
+
+  const needsReenroll =
+    station.icyStatus === "error" || station.icyStatus === "icy_unsupported";
 
   async function handleRemove() {
     if (!confirm(`Remove "${station.name}" from ICY polling?`)) return;
@@ -336,6 +353,36 @@ function StationRow({
       onRemoved();
     } catch {
       setRemoving(false);
+    }
+  }
+
+  async function handleReenroll() {
+    setReenrolling(true);
+    setReenrollError(null);
+    try {
+      const res = await fetch(
+        `/api/admin/radio-browser/stations/${station.id}/reenroll`,
+        { method: "POST", headers: { "x-admin-token": token } },
+      );
+      if (!res.ok) {
+        const body = (await res.json()) as { error?: string };
+        setReenrollError(body.error ?? `HTTP ${res.status}`);
+        return;
+      }
+      const body = (await res.json()) as {
+        icyStatus: string;
+        consecutiveErrors: number;
+      };
+      onReenrolled({
+        icyStatus: body.icyStatus,
+        consecutiveErrors: body.consecutiveErrors,
+      });
+    } catch (err) {
+      setReenrollError(
+        err instanceof Error ? err.message : "Re-enroll failed — try again.",
+      );
+    } finally {
+      setReenrolling(false);
     }
   }
 
@@ -366,11 +413,32 @@ function StationRow({
             <span className="font-mono text-[11px] text-muted-foreground">
               {icyStatusLabel(station.icyStatus)}
             </span>
+            {station.consecutiveErrors > 0 && station.icyStatus !== "active" && (
+              <span className="font-mono text-[11px] text-muted-foreground/60">
+                ({station.consecutiveErrors})
+              </span>
+            )}
           </div>
+          {needsReenroll && (
+            <button
+              type="button"
+              onClick={() => void handleReenroll()}
+              disabled={reenrolling || removing}
+              className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/5 px-2.5 py-1 font-mono text-[11px] text-primary transition-colors hover:bg-primary/10 disabled:opacity-40"
+              title="Reset status and resume polling"
+            >
+              {reenrolling ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3 w-3" />
+              )}
+              {reenrolling ? "Retrying…" : "Re-enroll"}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => void handleRemove()}
-            disabled={removing}
+            disabled={removing || reenrolling}
             className="rounded-lg p-1 text-muted-foreground/60 transition-colors hover:text-destructive disabled:opacity-40"
             title="Remove station"
           >
@@ -392,20 +460,27 @@ function StationRow({
       )}
       {station.icyStatus === "icy_unsupported" && (
         <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-          This stream does not advertise ICY metadata. Polling is paused — try a
-          different stream URL or a station with Shoutcast/Icecast support.
+          This stream does not advertise ICY metadata. Polling is paused — try
+          re-enrolling first, or remove and re-add with a different stream URL.
         </p>
       )}
       {station.icyStatus === "error" && (
         <p className="mt-2 text-xs text-destructive-foreground">
-          Three consecutive network errors — polling suspended. It will resume
-          automatically when the stream becomes reachable again.
+          {station.consecutiveErrors > 0
+            ? `${station.consecutiveErrors} consecutive error${station.consecutiveErrors !== 1 ? "s" : ""} — `
+            : ""}
+          Polling suspended. Click Re-enroll to reset and resume immediately.
         </p>
       )}
       {station.consecutiveErrors > 0 && station.icyStatus === "active" && (
         <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
           {station.consecutiveErrors} consecutive error
           {station.consecutiveErrors !== 1 ? "s" : ""} — will be suspended after 3.
+        </p>
+      )}
+      {reenrollError && (
+        <p className="mt-2 text-xs text-destructive-foreground">
+          Re-enroll failed: {reenrollError}
         </p>
       )}
     </div>
