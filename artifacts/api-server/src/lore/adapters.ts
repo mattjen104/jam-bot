@@ -630,6 +630,23 @@ export function clearIcyErrorBackoff(rbId: number): void {
 }
 
 /**
+ * @internal Testing only — do not call in production code.
+ * Directly sets a backoff entry so tests can pre-populate the map without
+ * triggering a real ICY network probe.
+ */
+export function _testOnlySetIcyBackoff(rbId: number, timestamp = Date.now()): void {
+  icyErrorLastProbeAt.set(rbId, timestamp);
+}
+
+/**
+ * @internal Testing only — do not call in production code.
+ * Returns true when an in-memory backoff entry exists for the given id.
+ */
+export function _testOnlyIcyBackoffHas(rbId: number): boolean {
+  return icyErrorLastProbeAt.has(rbId);
+}
+
+/**
  * RadioBrowserAdapter — now-playing adapter for ICY/Shoutcast streams.
  *
  * Config: `{ streamUrl, radioBrowserId: <radio_browser_stations.id> }`.
