@@ -771,6 +771,80 @@ const radiojar: NowPlayingAdapter = async (config) => {
   return parseRadiojarNowPlaying(body);
 };
 
+// ---- The Lot Radio schedule (now-playing, change-detection) ------------
+
+/**
+ * The Lot Radio publishes no ICY/JSON now-playing endpoint — their
+ * infrastructure is HLS-only (livepeer). Their Next.js homepage embeds the
+ * full two-week Google Calendar schedule as JSON inside the RSC payload,
+ * so we fetch that and find the event whose window contains "now".
+ *
+ * Returns the current show summary as `rawArtist` (the DJ / show name) and
+ * "Live Session" as `rawTitle` when on-air, or null when off-air (nothing
+ * scheduled at this moment).
+ *
+ * No config keys are required.
+ */
+export function parseLotRadioSchedule(
+  rscText: string,
+  now: Date = new Date(),
+): NowPlayingRaw | null {
+  const marker = '"schedule":';
+  const markerIdx = rscText.indexOf(marker);
+  if (markerIdx < 0) return null;
+
+  const arrayStart = markerIdx + marker.length; // points at '['
+  if (rscText[arrayStart] !== "[") return null;
+  let depth = 0;
+  let arrayEnd = arrayStart;
+  for (let i = arrayStart; i < rscText.length; i++) {
+    const c = rscText[i];
+    if (c === "[") depth++;
+    else if (c === "]") {
+      depth--;
+      if (depth === 0) {
+        arrayEnd = i + 1;
+        break;
+      }
+    }
+  }
+  if (arrayEnd <= arrayStart) return null;
+
+  let events: Array<{ summary?: string; start?: string; end?: string }>;
+  try {
+    events = JSON.parse(rscText.slice(arrayStart, arrayEnd)) as typeof events;
+  } catch {
+    return null;
+  }
+
+  const nowMs = now.getTime();
+  for (const ev of events) {
+    if (!ev.summary || !ev.start || !ev.end) continue;
+    const startMs = Date.parse(ev.start);
+    const endMs = Date.parse(ev.end);
+    if (Number.isNaN(startMs) || Number.isNaN(endMs)) continue;
+    if (startMs <= nowMs && nowMs < endMs) {
+      return { rawArtist: ev.summary.trim(), rawTitle: "Live Session" };
+    }
+  }
+  return null;
+}
+
+const lotRadioSchedule: NowPlayingAdapter = async (_config) => {
+  let text: string;
+  try {
+    const res = await fetch("https://www.thelotradio.com", {
+      headers: { RSC: "1", Accept: "text/x-component, */*" },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+    text = await res.text();
+  } catch {
+    return null;
+  }
+  return parseLotRadioSchedule(text);
+};
+
 // ---- Registry -----------------------------------------------------------
 
 const NOW_PLAYING_ADAPTERS: Record<string, NowPlayingAdapter> = {
@@ -780,6 +854,7 @@ const NOW_PLAYING_ADAPTERS: Record<string, NowPlayingAdapter> = {
   fip,
   radio_browser_icy: radioBrowserIcy,
   radiojar,
+  lot_radio_schedule: lotRadioSchedule,
 };
 
 const HISTORY_ADAPTERS: Record<string, HistoryAdapter> = {

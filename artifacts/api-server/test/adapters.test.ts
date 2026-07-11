@@ -11,6 +11,7 @@ import {
   stationArchiveUrl,
   supportsBackfill,
   parseRadiojarNowPlaying,
+  parseLotRadioSchedule,
 } from "../src/lore/adapters.js";
 
 describe("pickPath", () => {
@@ -508,5 +509,88 @@ describe("parseRadiojarNowPlaying", () => {
     expect(parseRadiojarNowPlaying("nope")).toBeNull();
     expect(parseRadiojarNowPlaying([1, 2])).toBeNull();
     expect(parseRadiojarNowPlaying({})).toBeNull();
+  });
+});
+
+describe("parseLotRadioSchedule", () => {
+  function buildRsc(
+    events: Array<{ summary: string; start: string; end: string }>,
+  ): string {
+    const arr = JSON.stringify(events);
+    return `...some rsc payload..."schedule":${arr},"from":"2026-07-10T12:00:00.000-04:00"...`;
+  }
+
+  const ON_AIR = new Date("2026-07-10T17:30:00.000Z"); // 1:30 pm EDT
+
+  it("returns show name + 'Live Session' for the current on-air event", () => {
+    const rsc = buildRsc([
+      {
+        summary: "KELLEN303",
+        start: "2026-07-10T12:00:00-04:00", // noon–1pm EDT, ends before ON_AIR
+        end: "2026-07-10T13:00:00-04:00",
+      },
+      {
+        summary: "DJ OFFWRLD",
+        start: "2026-07-10T13:00:00-04:00", // 1pm–3pm EDT, covers ON_AIR (1:30pm)
+        end: "2026-07-10T15:00:00-04:00",
+      },
+    ]);
+    expect(parseLotRadioSchedule(rsc, ON_AIR)).toEqual({
+      rawArtist: "DJ OFFWRLD",
+      rawTitle: "Live Session",
+    });
+  });
+
+  it("returns null when no event covers the current time (off-air gap)", () => {
+    const rsc = buildRsc([
+      {
+        summary: "Morning Show",
+        start: "2026-07-10T10:00:00-04:00",
+        end: "2026-07-10T11:00:00-04:00",
+      },
+    ]);
+    expect(parseLotRadioSchedule(rsc, ON_AIR)).toBeNull();
+  });
+
+  it("trims leading/trailing whitespace from show summary", () => {
+    const rsc = buildRsc([
+      {
+        summary: "  GENE ON EARTH  ",
+        start: "2026-07-10T13:00:00-04:00",
+        end: "2026-07-10T15:00:00-04:00",
+      },
+    ]);
+    const result = parseLotRadioSchedule(rsc, ON_AIR);
+    expect(result?.rawArtist).toBe("GENE ON EARTH");
+  });
+
+  it("returns null when the RSC payload has no schedule marker", () => {
+    expect(parseLotRadioSchedule("some random html with no schedule", ON_AIR)).toBeNull();
+  });
+
+  it("returns null when the embedded JSON is malformed", () => {
+    const broken = `..."schedule":[{bad json}],"from":"..."`;
+    expect(parseLotRadioSchedule(broken, ON_AIR)).toBeNull();
+  });
+
+  it("matches the boundary exactly: start inclusive, end exclusive", () => {
+    const events = [
+      {
+        summary: "Early Show",
+        start: "2026-07-10T12:00:00-04:00",
+        end: "2026-07-10T13:00:00-04:00",
+      },
+      {
+        summary: "Late Show",
+        start: "2026-07-10T13:00:00-04:00",
+        end: "2026-07-10T14:00:00-04:00",
+      },
+    ];
+    const rsc = buildRsc(events);
+    const atStart = new Date("2026-07-10T17:00:00.000Z"); // 1:00 pm EDT = start of Late Show
+    expect(parseLotRadioSchedule(rsc, atStart)?.rawArtist).toBe("Late Show");
+
+    const atEnd = new Date("2026-07-10T18:00:00.000Z"); // 2:00 pm EDT = end of Late Show
+    expect(parseLotRadioSchedule(rsc, atEnd)).toBeNull();
   });
 });
