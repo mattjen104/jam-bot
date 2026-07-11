@@ -179,66 +179,86 @@ const SEED_STATIONS: InsertStation[] = [
 function indieInternetStations(): InsertStation[] {
   return [
     // Dublab — LA-based non-profit internet radio, launched 1999. Weekly
-    // show schedule published at dublab.com/schedule. Stream through their
-    // own infrastructure; URL not yet confirmed from the Replit container.
+    // show schedule published at dublab.com/schedule.
+    // Stream: Airtime Pro ICY confirmed 200/audio-mpeg from the Replit container.
+    // ICY health row: synthetic UUID "manual-dublab" (not in radio-browser).
     {
       slug: "dublab",
       name: "Dublab",
       org: "Dublab",
       country: "US",
-      streamUrl: "",
+      streamUrl: "https://dublab.out.airtime.pro/dublab_a",
+      streamQuality: "192kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://dublab.com",
       scheduleUrl: "https://dublab.com/schedule",
       donateUrl: "https://dublab.com/membership/",
-      nowPlayingSource: null,
-      nowPlayingConfig: null,
+      nowPlayingSource: "radio_browser_icy",
+      nowPlayingConfig: { streamUrl: "https://dublab.out.airtime.pro/dublab_a" },
       stationClass: "community",
       sortOrder: 560,
     },
     // Rinse FM — London-based station, seminal for grime, garage, UKB and
     // forward club sounds. Weekly schedule at rinse.fm/schedule.
+    // Stream: Centova Cast proxy confirmed by radio-browser (128kbps AAC+).
+    // ICY health row: synthetic UUID "manual-rinse-fm". The stream is AAC+
+    // via an HE-AAC container; if ICY is unsupported the adapter degrades
+    // to icy_unsupported gracefully and the stream still plays in-browser.
     {
       slug: "rinse-fm",
       name: "Rinse FM",
       org: "Rinse FM",
       country: "GB",
-      streamUrl: "",
-      streamFormat: "mp3",
+      streamUrl: "https://admin.stream.rinse.fm/proxy/rinse_uk/stream",
+      streamQuality: "128kbps AAC+",
+      streamFormat: "aac",
       homepageUrl: "https://rinse.fm",
       scheduleUrl: "https://rinse.fm/schedule",
       donateUrl: null,
-      nowPlayingSource: null,
-      nowPlayingConfig: null,
+      nowPlayingSource: "radio_browser_icy",
+      nowPlayingConfig: {
+        streamUrl: "https://admin.stream.rinse.fm/proxy/rinse_uk/stream",
+      },
       stationClass: "community",
       sortOrder: 565,
     },
     // Worldwide FM — London/global; Gilles Peterson's curation-led station.
     // Detailed weekly schedule published at worldwidefm.net.
+    // Stream: Radiocult Icecast confirmed 200 from the Replit container.
+    // ICY health row: synthetic UUID "manual-worldwide-fm".
     {
       slug: "worldwide-fm",
       name: "Worldwide FM",
       org: "Worldwide FM",
       country: "GB",
-      streamUrl: "",
+      streamUrl: "https://worldwide-fm.radiocult.fm/stream",
+      streamQuality: "192kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://worldwidefm.net",
       scheduleUrl: "https://worldwidefm.net/schedule",
       donateUrl: null,
-      nowPlayingSource: null,
-      nowPlayingConfig: null,
+      nowPlayingSource: "radio_browser_icy",
+      nowPlayingConfig: {
+        streamUrl: "https://worldwide-fm.radiocult.fm/stream",
+      },
       stationClass: "community",
       sortOrder: 570,
     },
     // The Lot Radio — Red Hook, Brooklyn all-DJ station; publishes a full
     // weekly lineup at thelotradio.com.
+    // Stream: Livepeer HLS confirmed by radio-browser (no ICY-capable MP3
+    // stream found — their infrastructure is HLS-only via livepeercdn.studio).
+    // nowPlayingSource is null; the HLS URL is browser-playable but carries
+    // no ICY metadata the server can poll.
     {
       slug: "the-lot-radio",
       name: "The Lot Radio",
       org: "The Lot Radio",
       country: "US",
-      streamUrl: "",
-      streamFormat: "mp3",
+      streamUrl:
+        "https://livepeercdn.studio/hls/85c28sa2o8wppm58/index.m3u8",
+      streamQuality: "AAC",
+      streamFormat: "hls",
       homepageUrl: "https://www.thelotradio.com",
       scheduleUrl: "https://www.thelotradio.com/schedule",
       donateUrl: null,
@@ -249,18 +269,25 @@ function indieInternetStations(): InsertStation[] {
     },
     // Refuge Worldwide — Berlin non-profit community radio; full weekly
     // schedule published at refugeworldwide.com.
+    // Stream: radio.co confirmed 200/audio-mpeg from the Replit container.
+    // ICY health row: synthetic UUID "manual-refuge-worldwide".
+    // radio.co ICY metadata carries show-level titles ("show (r) - host");
+    // the ICY adapter parses them on a best-effort basis.
     {
       slug: "refuge-worldwide",
       name: "Refuge Worldwide",
       org: "Refuge Worldwide",
       country: "DE",
-      streamUrl: "",
+      streamUrl: "https://streaming.radio.co/s3699c5e49/listen",
+      streamQuality: "192kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://refugeworldwide.com",
       scheduleUrl: "https://refugeworldwide.com/schedule",
       donateUrl: "https://refugeworldwide.com/support",
-      nowPlayingSource: null,
-      nowPlayingConfig: null,
+      nowPlayingSource: "radio_browser_icy",
+      nowPlayingConfig: {
+        streamUrl: "https://streaming.radio.co/s3699c5e49/listen",
+      },
       stationClass: "community",
       sortOrder: 580,
     },
@@ -371,6 +398,14 @@ const ICY_HEALTH_SEEDS: Array<{
     radioBrowserUuid: "b58a4aaa-d5be-4925-be71-f69d1cccc13f",
   },
   { stationSlug: "radio-nopal", radioBrowserUuid: "manual-radio-nopal" },
+  // Indie internet stations — not in radio-browser, so synthetic UUIDs.
+  { stationSlug: "dublab", radioBrowserUuid: "manual-dublab" },
+  { stationSlug: "rinse-fm", radioBrowserUuid: "manual-rinse-fm" },
+  { stationSlug: "worldwide-fm", radioBrowserUuid: "manual-worldwide-fm" },
+  {
+    stationSlug: "refuge-worldwide",
+    radioBrowserUuid: "manual-refuge-worldwide",
+  },
 ];
 
 /**
