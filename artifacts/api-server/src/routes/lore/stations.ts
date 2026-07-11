@@ -715,9 +715,19 @@ router.get("/djs/:name", h(async (req, res) => {
     return res.status(404).json({ error: "DJ not found" });
   }
 
+  // Deduplicate: two stations with identical schedules (e.g. KEXP + KEXP Seattle)
+  // yield the same show row. Keep only the first station encountered per fingerprint.
+  const seen = new Set<string>();
+  const deduped = rows.filter((r) => {
+    const fp = `${r.showName}|${r.dayOfWeek}|${r.startTime}`;
+    if (seen.has(fp)) return false;
+    seen.add(fp);
+    return true;
+  });
+
   return res.json({
     djName,
-    shows: rows.map((r) => ({
+    shows: deduped.map((r) => ({
       stationSlug: r.stationSlug,
       stationName: r.stationName,
       showName: r.showName,

@@ -19,6 +19,8 @@ import {
   getLookupPickedMbidsQueryKey,
   useGetPickersDial,
   getGetPickersDialQueryKey,
+  useGetAllScrapedShows,
+  getGetAllScrapedShowsQueryKey,
   type Station,
   type PickedLookupItem,
   type StationScheduleRun,
@@ -40,6 +42,7 @@ import {
   CalendarDays,
   Map as MapIcon,
   Radio,
+  Search,
   ShieldCheck,
   UserCheck,
   Waypoints,
@@ -204,6 +207,8 @@ function DialSortAndGenre({
   genreOptions,
   descriptionOnly,
   onDescriptionOnlyChange,
+  search,
+  onSearchChange,
 }: {
   sort: DialSort;
   onSortChange: (sort: DialSort) => void;
@@ -212,6 +217,8 @@ function DialSortAndGenre({
   genreOptions: string[];
   descriptionOnly: boolean;
   onDescriptionOnlyChange: (value: boolean) => void;
+  search: string;
+  onSearchChange: (s: string) => void;
 }) {
   const sorts: { id: DialSort; label: string }[] = [
     { id: "default", label: "Curated order" },
@@ -220,6 +227,18 @@ function DialSortAndGenre({
   ];
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2">
+      {/* Search input */}
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground/60" />
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => onSearchChange(e.target.value)}
+          placeholder="Search stations…"
+          data-testid="dial-search-input"
+          className="w-44 rounded-full border border-border bg-card py-1 pl-7 pr-3 font-mono text-[11px] text-foreground placeholder-muted-foreground/50 focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+      </div>
       <select
         value={sort}
         onChange={(e) => onSortChange(e.target.value as DialSort)}
@@ -315,6 +334,7 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
   const [dialSort, setDialSort] = useState<DialSort>("default");
   const [dialGenre, setDialGenre] = useState<string | null>(null);
   const [descriptionOnly, setDescriptionOnly] = useState(false);
+  const [dialSearch, setDialSearch] = useState("");
   const follows = useFollows();
 
   // Client-side NTS show data — NTS blocks datacenter IPs but browser requests
@@ -389,6 +409,14 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
     return map;
   }, [recentSpinsData]);
 
+  // Scraped weekly schedule — used to show what's currently on air per station.
+  const { data: scrapedData } = useGetAllScrapedShows({
+    query: {
+      queryKey: getGetAllScrapedShowsQueryKey(),
+      staleTime: 10 * 60 * 1000,
+    },
+  });
+
   // Curated picker dial — all active lists with mosaic artwork.
   // Fetched once; no polling (lists update infrequently).
   const { data: pickerDialData } = useGetPickersDial({
@@ -418,6 +446,38 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
     return [...set].sort((a, b) => a.localeCompare(b));
   }, [stations]);
 
+  // Map slug → the show currently airing based on the scraped weekly schedule.
+  // Only computed in live mode (selectedDate = null); falls back gracefully
+  // if scraped data hasn't loaded yet.
+  const currentShowBySlug = useMemo((): Map<string, { showName: string; djName: string | null }> => {
+    const map = new Map<string, { showName: string; djName: string | null }>();
+    if (!scrapedData?.stations || selectedDate) return map;
+    const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+    const now = new Date();
+    const currentDay = DOW[now.getDay()];
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    for (const station of scrapedData.stations) {
+      const todayShows = station.shows
+        .filter((s) => s.dayOfWeek === currentDay)
+        .sort((a, b) => a.startTime.localeCompare(b.startTime));
+      let current: { showName: string; djName: string | null } | null = null;
+      for (const show of todayShows) {
+        const [sh, sm] = show.startTime.split(":").map(Number);
+        const startMin = (sh ?? 0) * 60 + (sm ?? 0);
+        if (startMin > nowMin) break;
+        if (show.endTime) {
+          const [eh, em] = show.endTime.split(":").map(Number);
+          const endMin = (eh ?? 0) * 60 + (em ?? 0);
+          current = nowMin < endMin ? { showName: show.showName, djName: show.djName ?? null } : null;
+        } else {
+          current = { showName: show.showName, djName: show.djName ?? null };
+        }
+      }
+      if (current) map.set(station.slug, current);
+    }
+    return map;
+  }, [scrapedData, selectedDate]);
+
   // Client-side filter — no network traffic.
   const filteredStations = useMemo((): Station[] => {
     let result = stations;
@@ -437,6 +497,16 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
         (s) => !!s.homepageBlurb && s.homepageBlurb.trim().length > 0,
       );
 
+    if (dialSearch.trim()) {
+      const q = dialSearch.trim().toLowerCase();
+      result = result.filter(
+        (s) =>
+          s.name.toLowerCase().includes(q) ||
+          (s.org ?? "").toLowerCase().includes(q) ||
+          (s.tags ?? []).some((t) => t.toLowerCase().includes(q)),
+      );
+    }
+
     if (dialSort === "popularity") {
       result = [...result].sort(
         (a, b) => (b.votes ?? 0) + (b.clickcount ?? 0) - ((a.votes ?? 0) + (a.clickcount ?? 0)),
@@ -448,7 +518,7 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
     }
 
     return result;
-  }, [dialFilter, dialSort, dialGenre, descriptionOnly, stations, follows]);
+  }, [dialFilter, dialSort, dialGenre, descriptionOnly, dialSearch, stations, follows]);
 
   const filteredPickerItems = useMemo((): PickerDialItem[] => {
     if (dialFilter === "live" || dialFilter === "featured") return [];
@@ -613,6 +683,8 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
           genreOptions={genreOptions}
           descriptionOnly={descriptionOnly}
           onDescriptionOnlyChange={setDescriptionOnly}
+          search={dialSearch}
+          onSearchChange={setDialSearch}
         />
       )}
 
@@ -648,6 +720,7 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
           recentSpins={recentSpinsBySlug}
           availability={availabilityBySlug}
           featured={dialFilter === "featured"}
+          currentShow={selectedDate ? undefined : currentShowBySlug}
           onToggle={handleToggle}
           onSelect={handleSelect}
           onGenreClick={handleGenreClick}

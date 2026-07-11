@@ -48,6 +48,12 @@ interface StationListProps {
   /** When true, renders each card with the full featured layout (blurb +
    * scraped upcoming shows + clickable genre tags). */
   featured?: boolean;
+  /**
+   * Scraped schedule overlay: station slug → the show currently airing
+   * according to the weekly schedule. Used as a subtitle fallback when the
+   * server hasn't polled a live track for this station yet.
+   */
+  currentShow?: Map<string, { showName: string; djName: string | null }>;
   onToggle: (station: Station) => void;
   onSelect: (station: Station) => void;
   /** Called when the user clicks a genre tag chip (featured mode). */
@@ -64,6 +70,7 @@ export function StationList({
   recentSpins,
   availability,
   featured = false,
+  currentShow,
   onToggle,
   onSelect,
   onGenreClick,
@@ -78,6 +85,7 @@ export function StationList({
         const pick = picked?.get(station.slug) ?? null;
         const runs = schedule?.get(station.slug) ?? null;
         const spins = recentSpins?.get(station.slug) ?? null;
+        const scrapedNow = currentShow?.get(station.slug) ?? null;
         // Showless = every run has show: null (e.g. Radio Paradise). Use
         // per-track chips instead of show-block chips for these stations.
         const isShowless = runs
@@ -234,6 +242,28 @@ export function StationList({
                       </>
                     ) : (
                       np.show.name
+                    )}
+                  </p>
+                ) : scrapedNow ? (
+                  <p
+                    className="mt-0.5 flex items-center gap-1.5 truncate font-mono text-[11px] text-muted-foreground"
+                    data-testid={`scraped-now-${station.slug}`}
+                  >
+                    <Mic className="h-3 w-3 text-primary/70" />
+                    {scrapedNow.djName ? (
+                      <>
+                        <Link
+                          href={`/dj/${encodeURIComponent(scrapedNow.djName)}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="hover:text-primary hover:underline"
+                        >
+                          {scrapedNow.djName}
+                        </Link>
+                        {" · "}
+                        {scrapedNow.showName}
+                      </>
+                    ) : (
+                      scrapedNow.showName
                     )}
                   </p>
                 ) : (
