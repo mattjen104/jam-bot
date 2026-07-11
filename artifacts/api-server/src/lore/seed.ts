@@ -292,19 +292,25 @@ function indieInternetStations(): InsertStation[] {
       sortOrder: 580,
     },
     // Balamii — South London community station, detailed weekly schedule at
-    // balamii.com.
+    // balamii.com. Stream: Airtime Pro ICY confirmed via online-radio.eu PLS
+    // export (https://balamii.out.airtime.pro/balamii_a, 128kbps MP3). Same
+    // Airtime Pro platform as Dublab. ICY health row: synthetic UUID
+    // "manual-balamii" (not in radio-browser).
     {
       slug: "balamii",
       name: "Balamii",
       org: "Balamii",
       country: "GB",
-      streamUrl: "",
+      streamUrl: "https://balamii.out.airtime.pro/balamii_a",
+      streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://balamii.com",
       scheduleUrl: "https://balamii.com/schedule",
       donateUrl: null,
-      nowPlayingSource: null,
-      nowPlayingConfig: null,
+      nowPlayingSource: "radio_browser_icy",
+      nowPlayingConfig: {
+        streamUrl: "https://balamii.out.airtime.pro/balamii_a",
+      },
       stationClass: "community",
       sortOrder: 585,
     },
