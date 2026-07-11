@@ -604,6 +604,32 @@ async function deactivateIcyStation(stationId: number | null) {
 }
 
 /**
+ * How long to wait before re-probing a station whose icyStatus is "error".
+ * Error stations are not polled on every tick (to avoid hammering a struggling
+ * stream); instead, one probe attempt is allowed every ICY_ERROR_BACKOFF_MS.
+ * On success the station self-heals; on continued failure the backoff resets
+ * to give it another window at the next interval.
+ */
+const ICY_ERROR_BACKOFF_MS = 30 * 60 * 1000; // 30 minutes
+
+/**
+ * Tracks the wall-clock time of the most-recent re-probe attempt for each
+ * "error"-status station, keyed by radio_browser_stations.id. In-memory only
+ * — resets on restart (which is fine: ensureIcyHealthRows resets the status
+ * on every boot, so the station gets a fresh attempt immediately anyway).
+ */
+const icyErrorLastProbeAt = new Map<number, number>();
+
+/**
+ * Clear the error-backoff entry for a station. Called when an admin action
+ * (re-enroll endpoint) resets the station's ICY status to "active", so the
+ * very next poll tick makes a live attempt rather than waiting out the backoff.
+ */
+export function clearIcyErrorBackoff(rbId: number): void {
+  icyErrorLastProbeAt.delete(rbId);
+}
+
+/**
  * RadioBrowserAdapter — now-playing adapter for ICY/Shoutcast streams.
  *
  * Config: `{ streamUrl, radioBrowserId: <radio_browser_stations.id> }`.
@@ -611,13 +637,18 @@ async function deactivateIcyStation(stationId: number | null) {
  * Lifecycle:
  *  - On every tick, reload the radio_browser_stations row so status changes
  *    (e.g. by another admin action) take effect immediately.
- *  - If `icyStatus` is "icy_unsupported" or "error", skip the fetch and
- *    return null (polling is suspended until the station is re-enrolled).
+ *  - If `icyStatus` is "icy_unsupported", skip the fetch permanently (until
+ *    the station is manually re-enrolled).
+ *  - If `icyStatus` is "error", apply a 30-minute backoff: skip the fetch
+ *    unless ICY_ERROR_BACKOFF_MS has elapsed since the last probe attempt.
+ *    This lets the station self-heal once the stream recovers without hammering
+ *    a struggling or temporarily-dead stream on every 30-second tick.
  *  - On transient network error, increment consecutiveErrors. After 3
- *    failures, set icyStatus → "error" and deactivate the station.
+ *    failures, set icyStatus → "error".
  *  - On icy_unsupported response, set icyStatus → "icy_unsupported" and
- *    deactivate immediately.
- *  - On success, reset consecutiveErrors and record lastStreamTitle.
+ *    deactivate the canonical station immediately.
+ *  - On success, reset consecutiveErrors and icyStatus → "active", and
+ *    record lastStreamTitle.
  */
 const radioBrowserIcy: NowPlayingAdapter = async (config) => {
   const streamUrl = str(config.streamUrl);
@@ -647,12 +678,22 @@ const radioBrowserIcy: NowPlayingAdapter = async (config) => {
     return null;
   }
 
-  // --- Suspension gate (icy_unsupported only) --------------------------------
-  // Streams that do not honour Icy-MetaData are permanently unsupported; skip
-  // the fetch until re-enrolled. "error" (transient failures) stays pollable
-  // so the station auto-recovers once the stream becomes reachable again.
+  // --- Suspension gate -------------------------------------------------------
+  // "icy_unsupported": permanently skip until manual re-enroll.
   if (currentRow?.icyStatus === "icy_unsupported") {
     return null;
+  }
+  // "error": apply a time-based backoff — probe at most once every
+  // ICY_ERROR_BACKOFF_MS (30 min) so we don't hammer a struggling stream on
+  // every 30-second tick while still allowing self-healing mid-session.
+  if (currentRow?.icyStatus === "error" && rbId !== null) {
+    const lastProbe = icyErrorLastProbeAt.get(rbId) ?? 0;
+    const elapsed = Date.now() - lastProbe;
+    if (elapsed < ICY_ERROR_BACKOFF_MS) {
+      return null; // still within backoff window; skip this tick
+    }
+    // Record this attempt so subsequent ticks honour the backoff.
+    icyErrorLastProbeAt.set(rbId, Date.now());
   }
 
   // --- Fetch ----------------------------------------------------------------
@@ -686,10 +727,10 @@ const radioBrowserIcy: NowPlayingAdapter = async (config) => {
           .where(_icyEq(radioBrowserStationsTable.id, rbId))
           .catch(() => {});
         if (hitLimit) {
-          console.warn(`[lore] icy error threshold reached (${newErrors}): ${streamUrl}`);
-          // Note: we do NOT deactivate the canonical station on transient errors —
-          // the station will keep being polled each tick and will auto-recover on
-          // the next successful fetch.
+          console.warn(`[lore] icy error threshold reached (${newErrors}): ${streamUrl} — backing off ${ICY_ERROR_BACKOFF_MS / 60000} min before next probe`);
+          // Note: we do NOT deactivate the canonical station on transient errors.
+          // The 30-minute backoff (icyErrorLastProbeAt) throttles re-probes, and
+          // the station self-heals on the next successful attempt.
         } else {
           console.warn(`[lore] icy transient error (${newErrors}/3): ${streamUrl}${result.message ? " — " + result.message : ""}`);
         }
@@ -700,6 +741,8 @@ const radioBrowserIcy: NowPlayingAdapter = async (config) => {
 
   // --- Success — reset error state ------------------------------------------
   if (rbId !== null) {
+    // Clear the in-memory backoff entry so future ticks aren't throttled.
+    icyErrorLastProbeAt.delete(rbId);
     await _icyDb
       .update(radioBrowserStationsTable)
       .set({

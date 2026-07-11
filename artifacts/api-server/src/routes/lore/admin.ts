@@ -37,6 +37,8 @@ import {
   EnrollRadioBrowserResponse,
   ListRadioBrowserStationsResponse,
   DeleteRadioBrowserParams,
+  ReenrollRadioBrowserParams,
+  ReenrollRadioBrowserResponse,
 } from "@workspace/api-zod";
 import {
   db,
@@ -53,6 +55,7 @@ import { eq, and, asc, desc, sql, count } from "drizzle-orm";
 import { ingestManualSpin } from "../../lore/resolve.js";
 import { fetchRadioBrowserStation, slugify as rbSlugify } from "../../lore/radio-browser.js";
 import { enrollStationPoller, unenrollStationPoller } from "../../lore/poller.js";
+import { clearIcyErrorBackoff } from "../../lore/adapters.js";
 import {
   upsertPicker,
   getPickerByHandle,
@@ -976,6 +979,50 @@ router.get("/admin/radio-browser/stations", h(async (_req, res) => {
         consecutiveErrors: r.consecutiveErrors,
         enrolledAt: r.enrolledAt.toISOString(),
       })),
+    }),
+  );
+}));
+
+// POST /api/admin/radio-browser/stations/:id/reenroll — reset a suspended ICY
+// station back to active without restarting the server.  Clears icyStatus →
+// "active" and consecutiveErrors → 0 in the DB, and clears the in-memory
+// 30-minute backoff so the very next poll tick makes a live probe attempt.
+// Safe to call on a station that is already active (idempotent).
+router.post("/admin/radio-browser/stations/:id/reenroll", h(async (req, res) => {
+  const params = ReenrollRadioBrowserParams.safeParse(req.params);
+  if (!params.success) {
+    return res.status(400).json({ error: "Invalid station id" });
+  }
+
+  const [rbRow] = await db
+    .select()
+    .from(radioBrowserStationsTable)
+    .where(eq(radioBrowserStationsTable.id, params.data.id))
+    .limit(1);
+
+  if (!rbRow) {
+    return res.status(404).json({ error: "Station not found" });
+  }
+
+  const now = new Date();
+  await db
+    .update(radioBrowserStationsTable)
+    .set({ icyStatus: "active", consecutiveErrors: 0, updatedAt: now })
+    .where(eq(radioBrowserStationsTable.id, rbRow.id));
+
+  // Clear the in-memory backoff so the next poll tick probes immediately.
+  clearIcyErrorBackoff(rbRow.id);
+
+  console.info(
+    `[lore] radio-browser reenrolled: id=${rbRow.id} uuid=${rbRow.radioBrowserUuid} name="${rbRow.name}"`,
+  );
+
+  return res.status(200).json(
+    ReenrollRadioBrowserResponse.parse({
+      id: rbRow.id,
+      icyStatus: "active",
+      consecutiveErrors: 0,
+      updatedAt: now.toISOString(),
     }),
   );
 }));

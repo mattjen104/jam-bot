@@ -2493,6 +2493,17 @@ export const DeleteRadioBrowserParams = zod.object({
   id: zod.coerce.number(),
 });
 
+export const ReenrollRadioBrowserParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ReenrollRadioBrowserResponse = zod.object({
+  id: zod.number(),
+  icyStatus: zod.string(),
+  consecutiveErrors: zod.number(),
+  updatedAt: zod.string(),
+});
+
 export const EnrollNtsShowBody = zod
   .object({
     alias: zod.string().min(1).describe("The NTS show slug, e.g. 'floating-points'."),
