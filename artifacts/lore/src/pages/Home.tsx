@@ -406,7 +406,7 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
     if (dialFilter === "lists") return [];
     if (dialFilter === "featured")
       result = result.filter(
-        (s) => !!s.homepageBlurb && (s.upcomingShowCount ?? 0) > 0,
+        (s) => !!s.homepageBlurb || (s.upcomingShowCount ?? 0) > 0,
       );
     if (dialFilter === "following")
       result = result.filter((s) => isFollowed(follows, "station", s.slug));
