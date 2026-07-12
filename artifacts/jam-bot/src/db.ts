@@ -503,7 +503,7 @@ export function recommendFromTo(
   return recommendStmt.all(source, target, limit);
 }
 
-// ---- Wrapped opt-out ---------------------------------------------------
+// ---- Stats opt-out -----------------------------------------------------
 
 const setOptOutStmt = db.prepare(
   `INSERT OR IGNORE INTO user_optouts (slack_user) VALUES (?)`,

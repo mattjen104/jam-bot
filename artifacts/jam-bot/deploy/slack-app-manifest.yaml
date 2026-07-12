@@ -38,9 +38,6 @@ features:
     - command: /history
       description: Show recent Jam history
       should_escape: false
-    - command: /wrapped
-      description: Show this week's Jam Wrapped recap
-      should_escape: false
     - command: /dna
       description: Show a user's taste DNA card
       usage_hint: "[@user]"
@@ -57,7 +54,7 @@ features:
       description: Start a Spotify Jam (social listening) session
       should_escape: false
     - command: /jamoptout
-      description: Opt out of (or back into) personal Wrapped stats
+      description: Opt out of (or back into) personal DNA/Compat stats
       usage_hint: "[off]"
       should_escape: false
     - command: /turntable

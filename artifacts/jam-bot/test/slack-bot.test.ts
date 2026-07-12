@@ -46,6 +46,9 @@ vi.mock("@slack/bolt", () => {
     action(_id: string, _handler: unknown) {
       // no-op for tests
     }
+    use(_handler: unknown) {
+      // no-op for tests
+    }
     start = vi.fn().mockResolvedValue(undefined);
   }
   return { App: FakeApp, LogLevel: { WARN: "warn", DEBUG: "debug", INFO: "info", ERROR: "error" } };
