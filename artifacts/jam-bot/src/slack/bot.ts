@@ -118,12 +118,10 @@ import {
 import {
   historyBlocks,
   nowPlayingBlocks,
-  wrappedBlocks,
   dnaBlocks,
   compatBlocks,
   VOTE_SKIP_ACTION_ID,
 } from "./format.js";
-import { buildWrappedStats, WrappedScheduler, type WrappedStats } from "../wrapped.js";
 import { buildDnaStats, buildCompatStats } from "../dna.js";
 import { askLLMForSet, isMemoryPlaybackRequest } from "../memory.js";
 import {
@@ -158,8 +156,8 @@ slackApp.use(async ({ payload, next }) => {
 // the Jam channel (slash command, @mention, engaged-thread reply) is
 // answered in the channel; a DM from the host is answered in the DM. The
 // only proactive posts the bot makes on its own are the ambient now-playing
-// cards (gated on an active Jam — see the trackChange handler) and the
-// scheduled Wrapped (always to the channel). A guided tour follows its
+// cards (gated on an active Jam — see the trackChange handler). A guided
+// tour follows its
 // origin: a tour started in a DM stays entirely in that DM, a channel tour
 // stays in the channel.
 //
@@ -273,7 +271,7 @@ async function postDMToUser(
 
 /**
  * Background channel poster — used by automated events (device-gone,
- * Jam-back, scheduled Wrapped). Always posts to the channel. Callers that
+ * Jam-back). Always posts to the channel. Callers that
  * should only fire under specific conditions (e.g. ambient now-playing
  * cards, which require an active Jam) gate themselves before calling.
  */
@@ -627,90 +625,6 @@ slackApp.command(
 
 // ---- Jam Memory slash commands ------------------------------------------
 
-export function statsAsFacts(stats: WrappedStats): string {
-  const lines: string[] = [];
-  lines.push(`Window: ${stats.startStr} -> ${stats.endStr} UTC`);
-  lines.push(`Total plays: ${stats.totalPlays}`);
-  lines.push(
-    `Late-night (22-06 UTC) plays: ${stats.lateNightPlays}, daytime: ${stats.daytimePlays}`,
-  );
-  if (stats.topTracks.length) {
-    lines.push("Top tracks:");
-    stats.topTracks.forEach((t, i) =>
-      lines.push(`  ${i + 1}. "${t.title}" by ${t.artist} (${t.plays} plays)`),
-    );
-  }
-  if (stats.topArtists.length) {
-    lines.push(
-      `Top artists: ${stats.topArtists.map((a) => `${a.artist} (${a.plays})`).join(", ")}`,
-    );
-  }
-  // Strict opt-out: filter opted-out users out completely BEFORE we hand the
-  // facts block to the LLM. Anything we put here can end up in the public
-  // narration the bot posts to the channel, so we can't even include
-  // "opted out of stats" placeholders — that itself leaks identity.
-  const visiblePerUser = stats.perUser.filter((u) => !u.optedOut);
-  if (visiblePerUser.length) {
-    lines.push("Per person:");
-    visiblePerUser.forEach((u) => {
-      const bits = [
-        `${u.plays} plays`,
-        u.topArtist ? `top artist ${u.topArtist}` : null,
-        u.topTrack ? `top track "${u.topTrack}"` : null,
-        u.discoveries > 0 ? `${u.discoveries} discoveries` : null,
-      ].filter(Boolean);
-      lines.push(`  <@${u.slackUser}>: ${bits.join(", ")}`);
-    });
-  }
-  return lines.join("\n");
-}
-
-async function postWrappedToChannel() {
-  const stats = buildWrappedStats();
-  if (stats.totalPlays === 0) {
-    await postBackgroundToChannel(
-      undefined,
-      `:notes: Jam Wrapped: nothing played in the last ${config.JAM_WRAPPED_LOOKBACK_DAYS} days. Queue something up!`,
-      "wrapped-empty",
-    );
-    return;
-  }
-  let narration: string;
-  try {
-    narration = await narrate("wrapped", statsAsFacts(stats));
-  } catch (err) {
-    logger.warn("Wrapped narration failed; falling back to plain", {
-      error: String(err),
-    });
-    narration = "Here's how the Jam went this week.";
-  }
-  await postBackgroundToChannel(
-    wrappedBlocks(stats, narration),
-    "Jam Wrapped",
-    "wrapped",
-  );
-}
-
-slackApp.command(
-  "/wrapped",
-  slashHandler(async ({ say }) => {
-    const stats = buildWrappedStats();
-    if (stats.totalPlays === 0) {
-      await say(
-        `:notes: Nothing has played in the last ${config.JAM_WRAPPED_LOOKBACK_DAYS} days yet — queue something up!`,
-      );
-      return;
-    }
-    let narration: string;
-    try {
-      narration = await narrate("wrapped", statsAsFacts(stats));
-    } catch {
-      narration = "Here's how the Jam went this week.";
-    }
-    await say("Jam Wrapped", wrappedBlocks(stats, narration));
-  }),
-);
-
 // Slack passes user mentions as "<@U123|name>" in command.text.
 function parseUserMention(text: string): string | null {
   const m = text.trim().match(/^<@([A-Z0-9]+)(?:\|[^>]*)?>$/);
@@ -1037,36 +951,15 @@ slackApp.command(
     if (arg === "off" || arg === "false" || arg === "0") {
       setOptOut(userId, false);
       await sayEphemeral(
-        ":unlock: You're back in personal Wrapped/DNA/Compat stats.",
+        ":unlock: You're back in personal DNA/Compat stats.",
       );
       return;
     }
     setOptOut(userId, true);
     await sayEphemeral(
-      ":lock: You're now opted out of personal Wrapped/DNA/Compat stats. Run `/jamoptout off` to undo.",
+      ":lock: You're now opted out of personal DNA/Compat stats. Run `/jamoptout off` to undo.",
     );
   }),
-);
-
-// Scheduler — posts the auto Wrapped recap on the configured cadence.
-// The 2nd arg surfaces a short, rate-limited notice in-channel when the
-// scheduled fire fails, so a broken weekly post isn't silently invisible.
-const wrappedScheduler = new WrappedScheduler(
-  postWrappedToChannel,
-  async (err) => {
-    try {
-      await postBackgroundToChannel(
-        undefined,
-        ":warning: Couldn't post this week's Wrapped — check logs.",
-        "wrapped-error",
-      );
-    } catch (postErr) {
-      logger.error("Failed to post Wrapped failure notice", {
-        originalError: String(err),
-        error: String(postErr),
-      });
-    }
-  },
 );
 
 // ---- Channel message listener -------------------------------------------
@@ -3095,7 +2988,6 @@ export async function startSlackBot() {
       error: String(err),
     });
   }
-  wrappedScheduler.start();
   if (insightsEnabled()) insightScheduler.start();
   logger.info(`Slack bot connected (channel ${config.SLACK_CHANNEL_ID})`);
   const quietUser = quietDmTarget();
@@ -3111,7 +3003,6 @@ export async function startSlackBot() {
   );
 }
 
-export function stopWrappedScheduler() {
-  wrappedScheduler.stop();
+export function stopSchedulers() {
   insightScheduler.stop();
 }

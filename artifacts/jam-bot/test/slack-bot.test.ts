@@ -139,25 +139,6 @@ vi.mock("../src/llm/openrouter.js", async (importOriginal) => {
   };
 });
 
-vi.mock("../src/wrapped.js", () => ({
-  buildWrappedStats: vi.fn(() => ({
-    start: new Date(),
-    end: new Date(),
-    startStr: "",
-    endStr: "",
-    totalPlays: 0,
-    topTracks: [],
-    topArtists: [],
-    perUser: [],
-    lateNightPlays: 0,
-    daytimePlays: 0,
-  })),
-  WrappedScheduler: class {
-    start() {}
-    stop() {}
-  },
-}));
-
 vi.mock("../src/dna.js", () => ({
   buildDnaStats: vi.fn(() => ({
     slackUser: "U",
@@ -193,7 +174,6 @@ vi.mock("../src/slack/format.js", () => ({
   historyBlocks: () => [],
   noDeviceBlocks: () => [],
   nowPlayingBlocks: () => [],
-  wrappedBlocks: () => [],
   dnaBlocks: () => [],
   compatBlocks: () => [],
   VOTE_SKIP_ACTION_ID: "jam_vote_skip",

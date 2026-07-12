@@ -247,7 +247,7 @@ async function startJamViaRelay(): Promise<JamStartResult> {
   }
 
   // The driver returns the URL but no session_id — derive a stable
-  // identifier from the URL so /wrapped et al. can reference it.
+  // identifier from the URL so DNA/Compat et al. can reference it.
   const sessionId =
     data.joinUrl.split("/").filter(Boolean).pop() ?? data.joinUrl;
   return { ok: true, joinUrl: data.joinUrl, sessionId, existed: false };

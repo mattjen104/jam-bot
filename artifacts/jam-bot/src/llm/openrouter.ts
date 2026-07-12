@@ -363,12 +363,6 @@ async function callOpenRouter(
   return content;
 }
 
-const NARRATE_WRAPPED_SYSTEM = `You're the friendly DJ-host of a small private Spotify Jam.
-Write a Slack-friendly weekly recap as TWO short paragraphs (about 2-3 sentences each), warm and a little playful, separated by a blank line. No headings, no bullets, no emoji header.
-Paragraph 1: the headline narrative — pick the most interesting one or two threads (a clear top track, a late-night vs daytime split, the standout artist) and weave them into prose.
-Paragraph 2: a few personal shout-outs by Slack mention <@U...> for the most active members or a notable discoverer.
-Reference people only by the <@U...> mentions you're given. Don't claim to play, queue, or skip anything. Don't restate every number.`;
-
 const NARRATE_DNA_SYSTEM = `You're the friendly DJ-host of a small private Spotify Jam.
 Write 2 short Slack sentences describing this person's musical taste based on their request history.
 Be specific (name an artist or two if given), warm, no bullets, no headings, no superlatives like "absolute legend".`;
@@ -378,15 +372,10 @@ Write 2 short Slack sentences describing how compatible two friends' tastes are 
 Be specific (mention a shared artist or a recommendation if available), warm, conversational, no bullets, no headings.`;
 
 export async function narrate(
-  kind: "wrapped" | "dna" | "compat",
+  kind: "dna" | "compat",
   factsBlock: string,
 ): Promise<string> {
-  const sys =
-    kind === "wrapped"
-      ? NARRATE_WRAPPED_SYSTEM
-      : kind === "dna"
-        ? NARRATE_DNA_SYSTEM
-        : NARRATE_COMPAT_SYSTEM;
+  const sys = kind === "dna" ? NARRATE_DNA_SYSTEM : NARRATE_COMPAT_SYSTEM;
   return callOpenRouter(
     [
       { role: "system", content: sys },

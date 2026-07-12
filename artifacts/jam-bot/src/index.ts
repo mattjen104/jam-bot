@@ -1,6 +1,6 @@
 import { logger } from "./logger.js";
 import { findActiveDevice } from "./spotify/client.js";
-import { startSlackBot, stopWrappedScheduler } from "./slack/bot.js";
+import { startSlackBot, stopSchedulers } from "./slack/bot.js";
 import { nowPlayingWatcher } from "./now-playing.js";
 import {
   startTurntableIngestServer,
@@ -55,7 +55,7 @@ async function main() {
 function shutdown(signal: string) {
   logger.info(`Received ${signal}, shutting down`);
   nowPlayingWatcher.stop();
-  stopWrappedScheduler();
+  stopSchedulers();
   stopTurntableIngestServer();
   process.exit(0);
 }

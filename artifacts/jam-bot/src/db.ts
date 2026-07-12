@@ -50,14 +50,14 @@ db.exec(`
   );
 
   -- Speeds up the "first appearance of this track" subquery used by the
-  -- discovery / wrapped queries — a covering composite index on
+  -- discovery / DNA queries — a covering composite index on
   -- (track_id, played_at) lets SQLite resolve the NOT EXISTS check by
   -- index lookup alone.
   CREATE INDEX IF NOT EXISTS idx_played_tracks_track_played_at
     ON played_tracks (track_id, played_at);
 
   -- Tiny key/value bag for state that needs to survive process restarts but
-  -- doesn't deserve its own table (e.g. the WrappedScheduler's last-fire key).
+  -- doesn't deserve its own table (e.g. the InsightScheduler's last-fire key).
   CREATE TABLE IF NOT EXISTS kv (
     k TEXT PRIMARY KEY,
     v TEXT NOT NULL
@@ -377,10 +377,6 @@ export function expireOldUserRequests() {
 }
 
 // ---- Jam Memory aggregations -------------------------------------------
-//
-// All aggregations take SQLite-formatted UTC date strings ("YYYY-MM-DD HH:MM:SS")
-// to match how `played_at` is stored. Use `toSqliteUtc(date)` from `wrapped.ts`
-// to build them.
 
 export interface TopTrackRow {
   track_id: string;
@@ -392,177 +388,17 @@ export interface TopTrackRow {
   plays: number;
 }
 
-// All range queries use `played_at <= end` (inclusive). Wrapped/dna
-// callers pass `end = now` for "as of this moment" snapshots — with a
-// strict `<` they'd drop rows whose played_at equals the snapshot
-// instant (a real situation in tests and on busy channels). The
-// scheduler fires once per day/week, so the worst-case
-// boundary-double-count window is one second per period; we accept
-// that in exchange for "as of now" actually meaning "as of now".
-const topTracksStmt = db.prepare<[string, string, number], TopTrackRow>(`
-  SELECT track_id,
-         MAX(title) AS title,
-         MAX(artist) AS artist,
-         MAX(spotify_url) AS spotify_url,
-         MAX(album) AS album,
-         MAX(album_image_url) AS album_image_url,
-         COUNT(*) AS plays
-  FROM played_tracks
-  WHERE played_at >= ? AND played_at <= ?
-  GROUP BY track_id
-  ORDER BY plays DESC, MAX(played_at) DESC
-  LIMIT ?
-`);
-// Direct count of plays in a time window — used by /wrapped's headline
-// "totalPlays" so we don't have to derive it from a top-N approximation.
-const countPlaysInRangeStmt = db.prepare<[string, string], { c: number }>(`
-  SELECT COUNT(*) AS c FROM played_tracks
-  WHERE played_at >= ? AND played_at <= ?
-`);
-export function countPlaysInRange(startStr: string, endStr: string): number {
-  return countPlaysInRangeStmt.get(startStr, endStr)?.c ?? 0;
-}
-
-export function topTracksInRange(
-  startStr: string,
-  endStr: string,
-  limit = 5,
-): TopTrackRow[] {
-  return topTracksStmt.all(startStr, endStr, limit);
-}
-
 export interface TopArtistRow {
   artist: string;
   plays: number;
 }
 
-const topArtistsStmt = db.prepare<[string, string, number], TopArtistRow>(`
-  SELECT artist, COUNT(*) AS plays
-  FROM played_tracks
-  WHERE played_at >= ? AND played_at <= ?
-  GROUP BY artist
-  ORDER BY plays DESC
-  LIMIT ?
-`);
-export function topArtistsInRange(
-  startStr: string,
-  endStr: string,
-  limit = 5,
-): TopArtistRow[] {
-  return topArtistsStmt.all(startStr, endStr, limit);
-}
+// ---- Taste DNA / compat primitives -------------------------------------
 
-export interface UserPlaysRow {
-  slack_user: string;
-  plays: number;
-}
-
-const activeUsersStmt = db.prepare<[string, string], UserPlaysRow>(`
-  SELECT requested_by_slack_user AS slack_user, COUNT(*) AS plays
-  FROM played_tracks
-  WHERE played_at >= ? AND played_at <= ?
-    AND requested_by_slack_user IS NOT NULL
-  GROUP BY requested_by_slack_user
-  ORDER BY plays DESC
-`);
-export function activeUsersInRange(
-  startStr: string,
-  endStr: string,
-): UserPlaysRow[] {
-  return activeUsersStmt.all(startStr, endStr);
-}
-
-const userTopTracksStmt = db.prepare<
-  [string, string, string, number],
-  TopTrackRow
->(`
-  SELECT track_id,
-         MAX(title) AS title,
-         MAX(artist) AS artist,
-         MAX(spotify_url) AS spotify_url,
-         MAX(album) AS album,
-         MAX(album_image_url) AS album_image_url,
-         COUNT(*) AS plays
-  FROM played_tracks
-  WHERE requested_by_slack_user = ?
-    AND played_at >= ? AND played_at <= ?
-  GROUP BY track_id
-  ORDER BY plays DESC, MAX(played_at) DESC
-  LIMIT ?
-`);
-export function userTopTracksInRange(
-  slackUser: string,
-  startStr: string,
-  endStr: string,
-  limit = 5,
-): TopTrackRow[] {
-  return userTopTracksStmt.all(slackUser, startStr, endStr, limit);
-}
-
-const userTopArtistsStmt = db.prepare<
-  [string, string, string, number],
-  TopArtistRow
->(`
-  SELECT artist, COUNT(*) AS plays
-  FROM played_tracks
-  WHERE requested_by_slack_user = ?
-    AND played_at >= ? AND played_at <= ?
-  GROUP BY artist
-  ORDER BY plays DESC
-  LIMIT ?
-`);
-export function userTopArtistsInRange(
-  slackUser: string,
-  startStr: string,
-  endStr: string,
-  limit = 5,
-): TopArtistRow[] {
-  return userTopArtistsStmt.all(slackUser, startStr, endStr, limit);
-}
-
-// Tracks the user introduced to the channel (their request was the very first
-// time that track_id appeared in history) within the window.
-const userDiscoveriesStmt = db.prepare<[string, string, string], TopTrackRow>(`
-  SELECT p.track_id, p.title, p.artist, p.spotify_url, p.album, p.album_image_url, 1 AS plays
-  FROM played_tracks p
-  WHERE p.requested_by_slack_user = ?
-    AND p.played_at >= ? AND p.played_at <= ?
-    AND NOT EXISTS (
-      SELECT 1 FROM played_tracks p2
-      WHERE p2.track_id = p.track_id
-        AND p2.played_at < p.played_at
-    )
-  ORDER BY p.played_at ASC
-`);
-export function userDiscoveriesInRange(
-  slackUser: string,
-  startStr: string,
-  endStr: string,
-): TopTrackRow[] {
-  return userDiscoveriesStmt.all(slackUser, startStr, endStr);
-}
-
-// Distinct UTC hour-of-day histogram. Useful for "late-night vs daytime".
 export interface HourBucket {
   hour: number;
   plays: number;
 }
-const hourBucketsStmt = db.prepare<[string, string], HourBucket>(`
-  SELECT CAST(strftime('%H', played_at) AS INTEGER) AS hour,
-         COUNT(*) AS plays
-  FROM played_tracks
-  WHERE played_at >= ? AND played_at <= ?
-  GROUP BY hour
-  ORDER BY hour
-`);
-export function hourBucketsInRange(
-  startStr: string,
-  endStr: string,
-): HourBucket[] {
-  return hourBucketsStmt.all(startStr, endStr);
-}
-
-// ---- Taste DNA / compat primitives -------------------------------------
 
 const userArtistsAllStmt = db.prepare<[string], TopArtistRow>(`
   SELECT artist, COUNT(*) AS plays
@@ -693,7 +529,7 @@ export function listOptOuts(): string[] {
   return listOptOutsStmt.all().map((r) => r.slack_user);
 }
 
-// ---- Tiny key/value bag (used by the WrappedScheduler) ------------------
+// ---- Tiny key/value bag (used by the InsightScheduler) ------------------
 
 const kvGetStmt = db.prepare<[string], { v: string }>(
   `SELECT v FROM kv WHERE k = ?`,

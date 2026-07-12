@@ -1,7 +1,6 @@
 import type { KnownBlock } from "@slack/types";
 import type { CurrentlyPlaying } from "../spotify/client.js";
 import type { PlayedTrack } from "../db.js";
-import type { WrappedStats } from "../wrapped.js";
 import type { DnaStats, CompatStats } from "../dna.js";
 
 function fmtMs(ms: number): string {
@@ -98,110 +97,6 @@ export function historyBlocks(rows: PlayedTrack[]): KnownBlock[] {
 // ---- Jam Memory blocks --------------------------------------------------
 
 const PODIUM = [":first_place_medal:", ":second_place_medal:", ":third_place_medal:"];
-
-export function wrappedBlocks(
-  stats: WrappedStats,
-  narration: string,
-): KnownBlock[] {
-  const days = Math.round(
-    (stats.end.getTime() - stats.start.getTime()) / (24 * 3600 * 1000),
-  );
-  const header: KnownBlock = {
-    type: "header",
-    text: {
-      type: "plain_text",
-      text: `Jam Wrapped — last ${days} days`,
-      emoji: true,
-    },
-  };
-  const summary: KnownBlock = {
-    type: "section",
-    text: {
-      type: "mrkdwn",
-      text:
-        `*${stats.totalPlays}* plays  •  *${stats.topArtists.length}* artists in the top list  •  ` +
-        `*${stats.lateNightPlays}* late-night vs *${stats.daytimePlays}* daytime plays (UTC).`,
-    },
-  };
-  const blocks: KnownBlock[] = [header, summary];
-
-  if (stats.topTracks.length) {
-    blocks.push({ type: "divider" });
-    blocks.push({
-      type: "section",
-      text: { type: "mrkdwn", text: "*:trophy: Top tracks*" },
-    });
-    stats.topTracks.slice(0, 3).forEach((t, i) => {
-      const link = t.spotify_url ? `<${t.spotify_url}|${t.title}>` : t.title;
-      blocks.push({
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: `${PODIUM[i]} *${link}* — ${t.artist}  _(${t.plays} plays)_`,
-        },
-        // Album art on the podium so the recap reads like a real Wrapped card,
-        // not just a list of links. We fall back to a text-only block when the
-        // track row pre-dates the album_image_url column.
-        ...(t.album_image_url
-          ? {
-              accessory: {
-                type: "image",
-                image_url: t.album_image_url,
-                alt_text: t.album ?? t.title,
-              },
-            }
-          : {}),
-      });
-    });
-    const rest = stats.topTracks.slice(3);
-    if (rest.length) {
-      const lines = rest.map((t) => {
-        const link = t.spotify_url ? `<${t.spotify_url}|${t.title}>` : t.title;
-        return `• ${link} — ${t.artist} _(${t.plays})_`;
-      });
-      blocks.push({
-        type: "section",
-        text: { type: "mrkdwn", text: lines.join("\n") },
-      });
-    }
-  }
-
-  // Strict opt-out: hide opted-out users entirely from the per-person section
-  // (their plays still count toward channel-wide totalPlays / topTracks /
-  // topArtists, but no personal stats — including raw play counts — leak).
-  const visiblePerUser = stats.perUser.filter((u) => !u.optedOut);
-  if (visiblePerUser.length) {
-    blocks.push({ type: "divider" });
-    blocks.push({
-      type: "section",
-      text: { type: "mrkdwn", text: "*:bust_in_silhouette: Per person*" },
-    });
-    // Show every active member (no slice cap) — the requirement is
-    // "one stat per active member". Slack section blocks are capped at
-    // ~3000 chars; with ~50-char lines that's ~60 members worth of room
-    // before we'd need to split, which is fine for a music channel.
-    const lines = visiblePerUser.map((u) => {
-      const bits: string[] = [];
-      if (u.topTrack) bits.push(`top: _${u.topTrack}_`);
-      if (u.topArtist) bits.push(`fav artist: *${u.topArtist}*`);
-      if (u.discoveries > 0) {
-        bits.push(`introduced *${u.discoveries}* new ${u.discoveries === 1 ? "track" : "tracks"}`);
-      }
-      return `• <@${u.slackUser}> — ${u.plays} plays  ·  ${bits.join("  ·  ")}`;
-    });
-    blocks.push({
-      type: "section",
-      text: { type: "mrkdwn", text: lines.join("\n") },
-    });
-  }
-
-  blocks.push({ type: "divider" });
-  blocks.push({
-    type: "section",
-    text: { type: "mrkdwn", text: `:speech_balloon: ${narration}` },
-  });
-  return blocks;
-}
 
 export function dnaBlocks(stats: DnaStats, narration: string): KnownBlock[] {
   if (stats.totalPlays === 0) {
