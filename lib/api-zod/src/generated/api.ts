@@ -257,6 +257,12 @@ export const ListStationsResponse = zod.object({
           .describe(
             "Count of scraped upcoming shows in this station's weekly programming grid. 0 when the schedule scraper has not found shows yet.",
           ),
+        tier: zod
+          .string()
+          .nullish()
+          .describe(
+            'Station tier — "flagship" for editorially curated stations, "longtail" for auto-discovered ones.',
+          ),
       })
       .describe("A curated radio station in the public directory."),
   ),

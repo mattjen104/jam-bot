@@ -232,6 +232,11 @@ export interface Station {
   homepageBlurb?: string | null;
   /** Count of scraped upcoming shows in this station's weekly programming grid. 0 when the schedule scraper has not found shows yet. */
   upcomingShowCount: number;
+  /**
+   * Station tier — "flagship" for editorially curated stations, "longtail" for auto-discovered ones.
+   * @nullable
+   */
+  tier?: string | null;
 }
 
 export interface StationList {

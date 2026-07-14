@@ -47,4 +47,9 @@ export interface Station {
    * @nullable
    */
   homepageBlurb?: string | null;
+  /**
+   * Station tier — "flagship" for editorially curated stations, "longtail" for auto-discovered ones.
+   * @nullable
+   */
+  tier?: string | null;
 }

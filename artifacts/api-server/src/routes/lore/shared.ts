@@ -24,6 +24,7 @@ export function toStation(s: Station) {
     discoveryScore: s.discoveryScore ?? null,
     homepageBlurb: s.homepageBlurb ?? null,
     upcomingShowCount: s.upcomingShowCount ?? 0,
+    tier: s.tier ?? null,
   };
 }
 

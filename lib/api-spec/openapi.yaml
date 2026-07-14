@@ -2277,6 +2277,11 @@ components:
           description: >-
             Count of scraped upcoming shows in this station's weekly programming
             grid. 0 when the schedule scraper has not found shows yet.
+        tier:
+          type: ["string", "null"]
+          description: >-
+            Station tier — "flagship" for editorially curated stations,
+            "longtail" for auto-discovered ones.
       required:
         - slug
         - name

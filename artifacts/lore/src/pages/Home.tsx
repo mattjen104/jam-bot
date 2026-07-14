@@ -194,7 +194,7 @@ function DateSweep({
   );
 }
 
-type DialFilterTab = "all" | "live" | "featured" | "lists" | "following";
+type DialFilterTab = "all" | "live" | "flagship" | "featured" | "lists" | "following";
 type DialSort = "default" | "popularity" | "discovery";
 
 /** Sort/genre controls for the station dial. Purely client-side — the full
@@ -296,6 +296,7 @@ function DialFilter({
   const tabs: { id: DialFilterTab; label: string }[] = [
     { id: "all", label: "All" },
     { id: "live", label: "Live" },
+    { id: "flagship", label: "Flagship" },
     { id: "featured", label: "Featured" },
     { id: "lists", label: "Lists" },
     { id: "following", label: "Following" },
@@ -482,6 +483,8 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
   const filteredStations = useMemo((): Station[] => {
     let result = stations;
     if (dialFilter === "lists") return [];
+    if (dialFilter === "flagship")
+      result = result.filter((s) => s.tier === "flagship");
     if (dialFilter === "featured")
       result = result.filter(
         (s) => !!s.homepageBlurb || (s.upcomingShowCount ?? 0) > 0,
