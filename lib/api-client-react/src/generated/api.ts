@@ -19,6 +19,7 @@ import type {
 import type {
   AllDraftClaimsList,
   AllScrapedShowsResult,
+  StationsRollingGenresResult,
   ApiError,
   ArchiveCoverage,
   ArchiveRecentRuns,
@@ -5763,6 +5764,52 @@ export function useGetDjShows<
     queryKey,
     queryFn,
     enabled: !!name,
+    ...queryOptions,
+  }) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey };
+}
+
+// ---------------------------------------------------------------------------
+// Rolling per-song genre chips — schedule page live view
+// ---------------------------------------------------------------------------
+
+export const getGetStationsRollingGenresUrl = () =>
+  `/api/stations/rolling-genres`;
+
+export const getStationsRollingGenres = async (
+  options?: RequestInit,
+): Promise<StationsRollingGenresResult> => {
+  return customFetch<StationsRollingGenresResult>(
+    getGetStationsRollingGenresUrl(),
+    { ...options, method: "GET" },
+  );
+};
+
+export const getGetStationsRollingGenresQueryKey = () =>
+  [`/api/stations/rolling-genres`] as const;
+
+export function useGetStationsRollingGenres<
+  TData = Awaited<ReturnType<typeof getStationsRollingGenres>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getStationsRollingGenres>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStationsRollingGenresQueryKey();
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStationsRollingGenres>>
+  > = ({ signal }) =>
+    getStationsRollingGenres({ signal, ...requestOptions });
+  const query = useQuery({
+    queryKey,
+    queryFn,
+    staleTime: 2 * 60 * 1000,
     ...queryOptions,
   }) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
   return { ...query, queryKey };

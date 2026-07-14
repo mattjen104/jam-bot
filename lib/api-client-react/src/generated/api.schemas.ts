@@ -1778,3 +1778,20 @@ export interface AllScrapedShowStation {
 export interface AllScrapedShowsResult {
   stations: AllScrapedShowStation[];
 }
+
+// ---------------------------------------------------------------------------
+// Rolling per-song genre chips — schedule page live view
+// ---------------------------------------------------------------------------
+
+/** One recent spin's genre + discovery tier for the schedule rolling view. */
+export interface RollingGenreChip {
+  genre: string;
+  /** Inline tier derived from release_year: "new-music" | "recent" | "catalog". @nullable */
+  discoveryLabel: "new-music" | "recent" | "catalog" | null;
+  playedAt: string;
+}
+
+/** Map from station slug → up to 3 most-recent spins with genre data (newest first). */
+export interface StationsRollingGenresResult {
+  stations: Record<string, RollingGenreChip[]>;
+}

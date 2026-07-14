@@ -2885,3 +2885,20 @@ export const SeedBlogPickersResponse = zod.object({
   ),
 });
 
+// ---- rolling-genres (schedule page live chip view) ----
+// One entry per recent spin (up to 3, newest first) per station slug.
+// Discovery tier is derived inline from recordings.release_year.
+export const GetStationsRollingGenresResponse = zod.object({
+  stations: zod.record(
+    zod.array(
+      zod.object({
+        genre: zod.string(),
+        discoveryLabel: zod
+          .enum(["new-music", "recent", "catalog"])
+          .nullable(),
+        playedAt: zod.string(),
+      }),
+    ),
+  ),
+});
+

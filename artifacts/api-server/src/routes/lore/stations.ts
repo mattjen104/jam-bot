@@ -20,6 +20,7 @@ import {
   IcecastReportResultBody,
   GetStationInsightsParams,
   GetStationInsightsResponse,
+  GetStationsRollingGenresResponse,
 } from "@workspace/api-zod";
 import {
   db,
@@ -733,6 +734,80 @@ router.get("/stations/schedule", h(async (req, res) => {
   return res.json(GetStationsScheduleResponse.parse({ items }));
 }));
 
+// GET /api/stations/rolling-genres
+// Returns the last ≤3 distinct-MBID spins with genre data per station, newest
+// first. Discovery tier is derived inline from recordings.release_year:
+//   ≤3yr → "new-music" | ≤10yr → "recent" | older → "catalog" | null → null
+//
+// Cached in memory with a 2-minute TTL — stale data is harmless because the
+// genres and release years of recently-played tracks don't change.
+const ROLLING_GENRES_TTL_MS = 2 * 60 * 1000;
+type RollingChip = { genre: string; discoveryLabel: string | null; playedAt: string };
+let _rollingGenresCache: { builtAt: number; data: Record<string, RollingChip[]> } | null = null;
+
+function rollingDiscoveryLabel(releaseYear: number | null): string | null {
+  if (releaseYear == null) return null;
+  const age = new Date().getFullYear() - releaseYear;
+  if (age <= 3) return "new-music";
+  if (age <= 10) return "recent";
+  return "catalog";
+}
+
+router.get("/stations/rolling-genres", h(async (_req, res) => {
+  const now = Date.now();
+  if (_rollingGenresCache && now - _rollingGenresCache.builtAt < ROLLING_GENRES_TTL_MS) {
+    return res.json(
+      GetStationsRollingGenresResponse.parse({ stations: _rollingGenresCache.data }),
+    );
+  }
+
+  // DISTINCT ON (station_id, mbid) keeps only the most-recent play for each
+  // unique track per station. The outer ROW_NUMBER then picks the newest 3
+  // distinct tracks per station that actually have genre data.
+  const rows = await db.execute<{
+    station_slug: string;
+    genre: string;
+    release_year: number | null;
+    played_at: string;
+  }>(sql`
+    WITH deduped AS (
+      SELECT DISTINCT ON (sp.station_id, sp.mbid)
+        s.slug          AS station_slug,
+        r.genres[1]     AS genre,
+        r.release_year,
+        sp.played_at
+      FROM spins sp
+      JOIN stations s ON s.id = sp.station_id AND s.active = true
+      JOIN recordings r ON r.mbid = sp.mbid
+      WHERE r.genres IS NOT NULL
+        AND array_length(r.genres, 1) > 0
+      ORDER BY sp.station_id, sp.mbid, sp.played_at DESC
+    ),
+    ranked AS (
+      SELECT *,
+        ROW_NUMBER() OVER (PARTITION BY station_slug ORDER BY played_at DESC) AS rn
+      FROM deduped
+    )
+    SELECT station_slug, genre, release_year, played_at
+    FROM ranked
+    WHERE rn <= 3
+    ORDER BY station_slug, played_at DESC
+  `);
+
+  const stations: Record<string, RollingChip[]> = {};
+  for (const row of rows.rows) {
+    if (!stations[row.station_slug]) stations[row.station_slug] = [];
+    stations[row.station_slug]!.push({
+      genre: row.genre,
+      discoveryLabel: rollingDiscoveryLabel(row.release_year ?? null),
+      playedAt: new Date(row.played_at).toISOString(),
+    });
+  }
+
+  _rollingGenresCache = { builtAt: now, data: stations };
+  return res.json(GetStationsRollingGenresResponse.parse({ stations }));
+}));
+
 // GET /api/djs/:name
 // Returns all scraped upcoming shows for a given DJ name across stations.
 router.get("/djs/:name", h(async (req, res) => {
@@ -987,8 +1062,6 @@ router.get("/scraped-shows", h(async (_req, res) => {
       stationId: scrapedShowsTable.stationId,
       stationSlug: stationsTable.slug,
       stationName: stationsTable.name,
-      stationGenreProfile: stationsTable.genreProfile,
-      stationDiscoveryScore: stationsTable.discoveryScore,
       showName: scrapedShowsTable.showName,
       dayOfWeek: scrapedShowsTable.dayOfWeek,
       startTime: scrapedShowsTable.startTime,
@@ -1005,8 +1078,6 @@ router.get("/scraped-shows", h(async (_req, res) => {
     stationId: number;
     showName: string;
     djName: string | null;
-    stationGenreProfile: { top: Array<{ genre: string; count: number }> } | null;
-    stationDiscoveryScore: number | null;
   }): Insight | null => {
     const byName = showByName.get(`${slot.stationId}|${slot.showName.trim().toLowerCase()}`);
     if (byName) return byName;
@@ -1016,16 +1087,6 @@ router.get("/scraped-shows", h(async (_req, res) => {
       if (byDj) return byDj;
       const byPicker = pickerByDj.get(dj);
       if (byPicker) return byPicker;
-    }
-    // Fall back to the station-level genre profile so every slot at a
-    // scored station shows at least a station-wide profile rather than "—".
-    const stationGenres = slot.stationGenreProfile?.top.slice(0, 4).map((g) => g.genre) ?? [];
-    if (stationGenres.length > 0 || slot.stationDiscoveryScore != null) {
-      return {
-        genres: stationGenres,
-        discoveryScore: slot.stationDiscoveryScore,
-        discoveryLabel: slot.stationDiscoveryScore != null ? labelFromScore(slot.stationDiscoveryScore) : null,
-      };
     }
     return null;
   };

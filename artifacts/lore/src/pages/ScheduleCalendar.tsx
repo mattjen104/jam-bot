@@ -9,7 +9,11 @@ import {
   Radio,
   Sparkles,
 } from "lucide-react";
-import { useGetAllScrapedShows } from "@workspace/api-client-react";
+import {
+  useGetAllScrapedShows,
+  useGetStationsRollingGenres,
+} from "@workspace/api-client-react";
+import type { RollingGenreChip } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import {
   toMinutes,
@@ -46,9 +50,6 @@ type ShowEntry = {
   startTime: string;
   endTime: string | null;
   djName: string | null;
-  genres: string[];
-  discoveryScore: number | null;
-  discoveryLabel: string | null;
 };
 
 export default function ScheduleCalendar() {
@@ -56,10 +57,13 @@ export default function ScheduleCalendar() {
   // 0 = live-first view anchored on "now"; negative = days back in time.
   const [offsetDays, setOffsetDays] = useState(0);
   const { data, isLoading } = useGetAllScrapedShows();
+  const { data: rollingData } = useGetStationsRollingGenres();
   const { ride, radio } = usePlayer();
   const dockPadding = ride.active || radio.station ? "pb-32" : "pb-16";
 
   const stations = data?.stations ?? [];
+  const rollingByStation: Record<string, RollingGenreChip[]> =
+    rollingData?.stations ?? {};
 
   // "Now" is computed once per render pass; the page is navigational, not a
   // ticking clock, so no interval re-render is needed.
@@ -102,9 +106,6 @@ export default function ScheduleCalendar() {
               startTime: show.startTime,
               endTime: show.endTime ?? null,
               djName: show.djName ?? null,
-              genres: show.genres ?? [],
-              discoveryScore: show.discoveryScore ?? null,
-              discoveryLabel: show.discoveryLabel ?? null,
             });
           }
         }
@@ -158,9 +159,6 @@ export default function ScheduleCalendar() {
           startTime: show.startTime,
           endTime: show.endTime ?? null,
           djName: show.djName ?? null,
-          genres: show.genres ?? [],
-          discoveryScore: show.discoveryScore ?? null,
-          discoveryLabel: show.discoveryLabel ?? null,
         });
       }
     }
@@ -300,6 +298,7 @@ export default function ScheduleCalendar() {
                     <SlotRow
                       key={`${show.stationSlug}-${show.showName}-${show.startTime}-${i}`}
                       show={show}
+                      rollingChips={rollingByStation[show.stationSlug]}
                       isLast={i === liveNow.length - 1}
                       live
                     />
@@ -325,6 +324,7 @@ export default function ScheduleCalendar() {
                     <SlotRow
                       key={`${show.stationSlug}-${show.showName}-${show.startTime}-${i}`}
                       show={show}
+                      rollingChips={rollingByStation[show.stationSlug]}
                       isLast={i === upcomingToday.length - 1}
                     />
                   ))}
@@ -367,6 +367,7 @@ export default function ScheduleCalendar() {
                       <SlotRow
                         key={`${show.stationSlug}-${show.showName}-${show.startTime}-${i}`}
                         show={show}
+                        rollingChips={rollingByStation[show.stationSlug]}
                         isLast={i === shows.length - 1}
                         live={isToday && isSlotLive(show.startTime, show.endTime, nowMins)}
                       />
@@ -406,65 +407,73 @@ function ColumnHeader() {
       <span>Time</span>
       <span className="hidden sm:block">Station</span>
       <span>Show</span>
-      <span>Genre</span>
-      <span className="text-right" title="Discovery score (0–100): how much the block leans on brand-new music">
-        Disc.
+      <span>Recent plays</span>
+      <span className="text-right" title="Discovery tier derived from the most recently-played song's release year">
+        Era
       </span>
     </div>
   );
 }
 
-/** Discovery score cell: numeric score tinted by tier, "—" when unknown. */
-function DiscoveryCell({ show }: { show: ShowEntry }) {
-  if (show.discoveryScore == null) {
+/**
+ * Discovery era cell: label badge from the newest rolling chip that has a
+ * non-null discoveryLabel. "—" when no rolling data is available yet.
+ */
+function DiscoveryEraCell({ chips }: { chips: RollingGenreChip[] | undefined }) {
+  const label = chips?.find((c) => c.discoveryLabel != null)?.discoveryLabel ?? null;
+
+  if (!label) {
     return (
       <span className="text-right font-mono text-[10px] text-muted-foreground/40">
         —
       </span>
     );
   }
-  const score = Math.round(show.discoveryScore);
-  const isNewMusic = show.discoveryLabel === "new-music";
+
+  const isNew = label === "new-music";
   const tone =
-    show.discoveryLabel === "new-music"
+    label === "new-music"
       ? "text-primary"
-      : show.discoveryLabel === "recent"
+      : label === "recent"
         ? "text-foreground"
         : "text-muted-foreground/70";
-  const label =
-    show.discoveryLabel === "new-music"
-      ? "leans on brand-new music"
-      : show.discoveryLabel === "recent"
-        ? "mixes recent releases"
-        : "leans on catalog";
+  const shortLabel =
+    label === "new-music" ? "new" : label === "recent" ? "recent" : "catalog";
+  const title =
+    label === "new-music"
+      ? "Recent release — within the last 3 years"
+      : label === "recent"
+        ? "Modern — within the last 10 years"
+        : "Catalog — older than 10 years";
+
   return (
     <span
-      className={`inline-flex items-center justify-end gap-1 text-right font-mono text-[10px] tabular-nums ${tone}`}
-      title={`Discovery score ${score} — this block ${label}`}
-      data-testid={`discovery-${show.stationSlug}-${show.startTime}`}
+      className={`inline-flex items-center justify-end gap-1 text-right font-mono text-[10px] ${tone}`}
+      title={title}
+      data-testid={`discovery-era-label`}
     >
-      {isNewMusic && (
-        <Sparkles
-          className="h-2.5 w-2.5 shrink-0"
-          data-testid={`new-music-badge-${show.stationSlug}-${show.startTime}`}
-        />
-      )}
-      {score}
+      {isNew && <Sparkles className="h-2.5 w-2.5 shrink-0" />}
+      {shortLabel}
     </span>
   );
 }
 
-/** One schedule slot row: time, station, show, DJ, genre column, discovery. */
+/** One schedule slot row: time, station, show, DJ, rolling genre chips, era. */
 function SlotRow({
   show,
+  rollingChips,
   isLast,
   live = false,
 }: {
   show: ShowEntry;
+  rollingChips: RollingGenreChip[] | undefined;
   isLast: boolean;
   live?: boolean;
 }) {
-  const isNewMusic = show.discoveryLabel === "new-music";
+  // Newest chip determines row highlight — only if it's brand-new music.
+  const newestLabel = rollingChips?.[0]?.discoveryLabel ?? null;
+  const isNewMusic = newestLabel === "new-music";
+
   return (
     <div
       className={`${ROW_GRID} py-2.5${
@@ -523,27 +532,35 @@ function SlotRow({
         )}
       </span>
 
-      {/* Genre column */}
-      {show.genres.length > 0 ? (
+      {/* Rolling genre chips: oldest left, newest right (most prominent).
+          chips[0] = newest, so we reverse before rendering. */}
+      {rollingChips && rollingChips.length > 0 ? (
         <span
           className="flex min-w-0 gap-1 overflow-hidden"
-          title={show.genres.join(", ")}
+          title={[...rollingChips].reverse().map((c) => c.genre).join(" → ")}
         >
-          {show.genres.slice(0, 3).map((g, gi) => (
-            <span
-              key={g}
-              className={`inline-flex min-w-0 items-center rounded-full border border-border bg-background/40 px-2 py-0.5 font-mono text-[9px] text-muted-foreground/70 whitespace-nowrap ${gi > 0 ? "hidden md:inline-flex" : ""}`}
-            >
-              <span className="truncate">{g}</span>
-            </span>
-          ))}
+          {[...rollingChips].reverse().map((chip, gi, arr) => {
+            const isNewest = gi === arr.length - 1;
+            return (
+              <span
+                key={chip.playedAt}
+                className={`inline-flex min-w-0 items-center rounded-full border px-2 py-0.5 font-mono text-[9px] whitespace-nowrap ${
+                  isNewest
+                    ? "border-border bg-background/40 text-muted-foreground/70"
+                    : "border-border/40 bg-background/20 text-muted-foreground/35"
+                } ${gi === 0 ? "hidden md:inline-flex" : gi === 1 ? "hidden sm:inline-flex" : ""}`}
+              >
+                <span className="truncate">{chip.genre}</span>
+              </span>
+            );
+          })}
         </span>
       ) : (
         <span className="font-mono text-[10px] text-muted-foreground/40">—</span>
       )}
 
-      {/* Discovery score column */}
-      <DiscoveryCell show={show} />
+      {/* Era / discovery column */}
+      <DiscoveryEraCell chips={rollingChips} />
     </div>
   );
 }
