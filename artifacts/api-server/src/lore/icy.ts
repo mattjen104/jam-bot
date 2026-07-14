@@ -34,28 +34,111 @@ export type IcyFetchResult =
  * Parse `StreamTitle` from a raw ICY metadata block. The block is a NUL-padded
  * sequence of `Key='Value';` pairs. Returns the StreamTitle string, or null
  * when absent or empty.
+ *
+ * Encoding: ICY is nominally UTF-8 but many stations (especially European
+ * broadcasters) send Latin-1 / ISO 8859-1. We try UTF-8 first; if the result
+ * contains the Unicode replacement character (U+FFFD) we retry as Latin-1,
+ * which never produces replacements (every byte is a valid Latin-1 code point).
  */
 export function parseIcyStreamTitle(block: Buffer): string | null {
-  const text = block.toString("utf8");
-  const m = /StreamTitle='([^']*)'/i.exec(text);
-  if (!m) return null;
-  const title = m[1]?.trim();
-  return title || null;
+  const extractTitle = (text: string): string | null => {
+    const m = /StreamTitle='([^']*)'/i.exec(text);
+    if (!m) return null;
+    const title = m[1]?.trim();
+    return title || null;
+  };
+
+  const utf8 = block.toString("utf8");
+  const fromUtf8 = extractTitle(utf8);
+  if (fromUtf8 !== null && !fromUtf8.includes("\uFFFD")) return fromUtf8;
+
+  // Try Latin-1 fallback when UTF-8 produced replacement characters.
+  const latin1 = block.toString("latin1");
+  const fromLatin1 = extractTitle(latin1);
+  if (fromLatin1 !== null) return fromLatin1;
+
+  // Return the UTF-8 result even if it had replacement chars — better than null.
+  return fromUtf8;
+}
+
+/**
+ * Extended result from parseStreamTitle — adds optional fields that only
+ * the tilde-structured format can supply.
+ */
+export interface ParsedStreamTitle {
+  rawArtist?: string;
+  rawTitle: string;
+  /** MusicBrainz Recording UUID, present when the tilde format supplies one. */
+  sourceRecordingId?: string;
+  /** Track duration in ms, present when the tilde format supplies one. */
+  durationMs?: number;
+}
+
+/**
+ * Attempt to parse a tilde-delimited structured stream title used by a cluster
+ * of stations (Radio Monte Carlo Nights Story, United Music Pink Floyd, et al.).
+ *
+ * Format (11 `~`-separated fields, 0-indexed):
+ *   [0]  title
+ *   [1]  artist
+ *   [2]  empty
+ *   [3]  release year (e.g. "1986")
+ *   [4]  empty
+ *   [5]  duration in seconds (e.g. "333")
+ *   [6]  start datetime ISO
+ *   [7]  end datetime ISO
+ *   [8]  station name
+ *   [9]  elapsed seconds (e.g. "261.88")
+ *   [10] MusicBrainz recording UUID
+ *
+ * Returns null when the string does not match this format.
+ */
+export function parseTildeStreamTitle(s: string): ParsedStreamTitle | null {
+  if (!s.includes("~")) return null;
+  const parts = s.split("~");
+  if (parts.length < 11) return null;
+
+  const potentialUuid = parts[10]?.trim() ?? "";
+  const UUID_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!UUID_RE.test(potentialUuid)) return null;
+
+  const rawTitle = parts[0]?.trim();
+  const rawArtist = parts[1]?.trim();
+  if (!rawTitle || !rawArtist) return null;
+
+  const result: ParsedStreamTitle = {
+    rawTitle,
+    rawArtist,
+    sourceRecordingId: potentialUuid,
+  };
+
+  const durationStr = parts[5]?.trim();
+  if (durationStr) {
+    const secs = parseFloat(durationStr);
+    if (Number.isFinite(secs) && secs > 0) result.durationMs = Math.round(secs * 1000);
+  }
+
+  return result;
 }
 
 /**
  * Split an ICY `StreamTitle` value into artist and title.
  *
- * Heuristic: most stations use `Artist - Title`. We split on the first ` - `
- * (space-dash-space) and trim both sides. When the delimiter is absent the
- * whole string is treated as the title with rawArtist undefined (caller
- * decides how to handle title-only entries).
+ * Tries the tilde-structured format first (used by a cluster of stations that
+ * embed a MusicBrainz UUID). Falls back to the standard `Artist - Title`
+ * heuristic. When the delimiter is absent the whole string is treated as the
+ * title with rawArtist undefined.
  */
-export function parseStreamTitle(
-  streamTitle: string,
-): { rawArtist?: string; rawTitle: string } | null {
+export function parseStreamTitle(streamTitle: string): ParsedStreamTitle | null {
   const trimmed = streamTitle.trim();
   if (!trimmed) return null;
+
+  // Tilde-structured format takes priority — it supplies a direct MB UUID.
+  const tilde = parseTildeStreamTitle(trimmed);
+  if (tilde) return tilde;
+
+  // Standard "Artist - Title" split.
   const sep = trimmed.indexOf(" - ");
   if (sep > 0) {
     const rawArtist = trimmed.slice(0, sep).trim();
@@ -63,6 +146,37 @@ export function parseStreamTitle(
     if (rawTitle) return { rawArtist: rawArtist || undefined, rawTitle };
   }
   return { rawTitle: trimmed };
+}
+
+/**
+ * Return true when a raw artist/title pair is clearly not a song — an ad slot,
+ * break announcement, station ID loop, or other junk metadata that should be
+ * silently discarded before resolution is attempted.
+ *
+ * Kept intentionally conservative: only patterns with near-zero false-positive
+ * risk are listed. Unknown/unusual content is allowed through so real tracks
+ * are never dropped.
+ */
+export function isJunkMetadata(rawArtist: string, rawTitle: string): boolean {
+  // Identical artist and title — station loop, jingle ID, or ad filler.
+  if (rawArtist === rawTitle) return true;
+
+  // Ad-tag prefix used by several network broadcasters.
+  if (/^ADWTAG_/i.test(rawArtist) || /^ADWTAG_/i.test(rawTitle)) return true;
+
+  // Known break-announcement phrases (case-insensitive, apostrophe-tolerant).
+  const combined = `${rawArtist} ${rawTitle}`.toLowerCase().replace(/'/g, "");
+  const BREAK_PHRASES = [
+    "espacio publicitario",
+    "well be right back",    // matches "we'll be right back"
+    "well be back",
+    "continue after this break",
+    "after this message",
+    "station will continue",
+  ];
+  if (BREAK_PHRASES.some((p) => combined.includes(p))) return true;
+
+  return false;
 }
 
 function parseUrl(rawUrl: string): {

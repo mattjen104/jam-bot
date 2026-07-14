@@ -565,7 +565,7 @@ const fip: NowPlayingAdapter = async (config) => {
 
 // ---- Radio Browser ICY (now-playing, change-detection) ------------------
 
-import { fetchIcyMetadata, parseStreamTitle } from "./icy.js";
+import { fetchIcyMetadata, parseStreamTitle, isJunkMetadata } from "./icy.js";
 import {
   db as _icyDb,
   stationsTable as _icyStationsTable,
@@ -575,15 +575,26 @@ import { eq as _icyEq } from "drizzle-orm";
 
 /**
  * Pure: given a raw StreamTitle string, produce a NowPlayingRaw.
- * Splits on ` - ` (artist left, title right). Title-only entries return
- * rawArtist as the title so resolution degrades gracefully to text search.
+ *
+ * Handles three cases in priority order:
+ * 1. Tilde-structured format (some station networks) — supplies a direct MB
+ *    recording UUID + duration, which bypasses text search entirely.
+ * 2. Standard "Artist - Title" split.
+ * 3. Title-only — rawArtist falls back to rawTitle for text-search resolution.
+ *
+ * Returns null for junk metadata (ads, break announcements, station IDs) so
+ * those slots are never submitted to the resolver or logged as spins.
  */
 export function parseIcyNowPlaying(streamTitle: string): NowPlayingRaw | null {
   const parsed = parseStreamTitle(streamTitle);
   if (!parsed) return null;
   const rawTitle = parsed.rawTitle;
   const rawArtist = parsed.rawArtist ?? rawTitle;
-  return { rawArtist, rawTitle };
+  if (isJunkMetadata(rawArtist, rawTitle)) return null;
+  const out: NowPlayingRaw = { rawArtist, rawTitle };
+  if (parsed.sourceRecordingId) out.recordingId = parsed.sourceRecordingId;
+  if (parsed.durationMs != null) out.durationMs = parsed.durationMs;
+  return out;
 }
 
 /**
