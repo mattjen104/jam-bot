@@ -12,6 +12,7 @@ import {
   supportsBackfill,
   parseRadiojarNowPlaying,
   parseLotRadioSchedule,
+  parseIcyNowPlaying,
 } from "../src/lore/adapters.js";
 
 describe("pickPath", () => {
@@ -592,5 +593,47 @@ describe("parseLotRadioSchedule", () => {
 
     const atEnd = new Date("2026-07-10T18:00:00.000Z"); // 2:00 pm EDT = end of Late Show
     expect(parseLotRadioSchedule(rsc, atEnd)).toBeNull();
+  });
+});
+
+// ---- parseIcyNowPlaying --------------------------------------------------
+
+describe("parseIcyNowPlaying", () => {
+  it("parses a standard Artist - Title entry", () => {
+    const result = parseIcyNowPlaying("Beck - Heart Is A Drum");
+    expect(result?.rawArtist).toBe("Beck");
+    expect(result?.rawTitle).toBe("Heart Is A Drum");
+  });
+
+  it("retains a title-only entry — NOT flagged as junk even though rawArtist will equal rawTitle", () => {
+    // A station that emits only a title (no ` - ` separator) must not be
+    // discarded: the equality guard must not fire on the synthetic fallback.
+    const result = parseIcyNowPlaying("Landscape on Mars");
+    expect(result).not.toBeNull();
+    expect(result!.rawTitle).toBe("Landscape on Mars");
+    expect(result!.rawArtist).toBe("Landscape on Mars"); // fallback = title
+  });
+
+  it("drops entries where the source provides identical artist and title", () => {
+    // This is a genuine junk case: both fields are present and equal.
+    expect(parseIcyNowPlaying("LA GIGANTE DE LOS ANDES - LA GIGANTE DE LOS ANDES")).toBeNull();
+  });
+
+  it("drops ADWTAG_ junk", () => {
+    expect(parseIcyNowPlaying("ADWTAG_60000 - Big R Radio")).toBeNull();
+  });
+
+  it("passes tilde format through with recordingId and durationMs", () => {
+    const tilde =
+      "Diamonds On The Soles Of Her Shoes~Paul Simon~~1986~~333~2026-07-09T17:34:51~2026-07-09T17:39:12~Radio Monte Carlo Nights Story~261.88~7306359a-ae20-4755-99ca-8a0410618b6d";
+    const result = parseIcyNowPlaying(tilde);
+    expect(result?.rawTitle).toBe("Diamonds On The Soles Of Her Shoes");
+    expect(result?.rawArtist).toBe("Paul Simon");
+    expect(result?.recordingId).toBe("7306359a-ae20-4755-99ca-8a0410618b6d");
+    expect(result?.durationMs).toBe(333_000);
+  });
+
+  it("returns null for empty string", () => {
+    expect(parseIcyNowPlaying("")).toBeNull();
   });
 });
