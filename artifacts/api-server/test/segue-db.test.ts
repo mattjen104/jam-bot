@@ -69,8 +69,10 @@ beforeAll(async () => {
     { stationId, mbid: D, confidence: "text", playedAt: new Date(base + 23 * MIN) },
   ]);
 
-  await runSegueDerivation();
-});
+  // Scope derivation to this test's station — a full-table scan over a large
+  // dev spins history blows the default 10s beforeAll hook timeout.
+  await runSegueDerivation({ stationId });
+}, 60_000);
 
 afterAll(async () => {
   if (!dbAvailable || stationId === undefined) return;
@@ -117,7 +119,7 @@ describe("runSegueDerivation (DB row selection)", () => {
       .select({ id: segueEdgesTable.id })
       .from(segueEdgesTable)
       .where(eq(segueEdgesTable.stationId, stationId!));
-    await runSegueDerivation();
+    await runSegueDerivation({ stationId });
     const after = await db
       .select({ id: segueEdgesTable.id })
       .from(segueEdgesTable)

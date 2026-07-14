@@ -84,17 +84,27 @@ export function deriveEdges(
  * fills gaps, never duplicates. Returns the number of edges written. Never
  * throws.
  */
-export async function runSegueDerivation(): Promise<number> {
+export async function runSegueDerivation(opts?: {
+  /**
+   * Restrict derivation to a single station's spins. Segue chains never
+   * cross stations (deriveEdges groups by station), so scoping the row scan
+   * is safe — used by integration tests to avoid a full-table scan.
+   */
+  stationId?: number;
+}): Promise<number> {
   try {
-    const rows = await db
+    const base = db
       .select({
         mbid: spinsTable.mbid,
         playedAt: spinsTable.playedAt,
         stationId: spinsTable.stationId,
         showId: spinsTable.showId,
       })
-      .from(spinsTable)
-      .orderBy(asc(spinsTable.playedAt));
+      .from(spinsTable);
+    const rows = await (opts?.stationId !== undefined
+      ? base.where(eq(spinsTable.stationId, opts.stationId))
+      : base
+    ).orderBy(asc(spinsTable.playedAt));
 
     const edges = deriveEdges(
       rows.map((r) => ({

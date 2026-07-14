@@ -375,6 +375,11 @@ const PICKED_BATCH_MAX = 30;
 // editorial (non-DJ) picker's list. Batched + cached so it never slows the
 // live dial poll; MBIDs with no editorial pick are simply absent from items.
 router.get("/picks/contains", h(async (req, res) => {
+  // Explicit presence guard: the generated zod schema uses zod.coerce, which
+  // turns an ABSENT query param into the string "undefined" and passes .min(1).
+  if (typeof req.query.mbids !== "string" || req.query.mbids.trim() === "") {
+    return res.status(400).json({ error: "mbids is required" });
+  }
   const parsed = LookupPickedMbidsQueryParams.safeParse(req.query);
   if (!parsed.success) {
     return res.status(400).json({ error: "mbids is required" });

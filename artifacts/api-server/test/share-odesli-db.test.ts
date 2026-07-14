@@ -24,6 +24,16 @@ const MBID = `test-share-odesli-${run}`;
 let dbAvailable = false;
 
 const FAKE_ODESLI_RESPONSE = {
+  // Free-text (?q=) lookups run a confidence check against the returned
+  // entity's artist/title — the mock must include matching metadata or the
+  // guard fails closed ("no-metadata") and discards the links.
+  entityUniqueId: "SPOTIFY_SONG::TESTTRACK001",
+  entitiesByUniqueId: {
+    "SPOTIFY_SONG::TESTTRACK001": {
+      artistName: "Kendrick Lamar",
+      title: "Alright",
+    },
+  },
   linksByPlatform: {
     spotify: { url: "https://open.spotify.com/track/TESTTRACK001" },
     appleMusic: { url: "https://music.apple.com/us/album/alright/123456?i=789" },
