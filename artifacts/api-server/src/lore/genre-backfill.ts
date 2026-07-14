@@ -1,5 +1,5 @@
 import { db, recordingsTable } from "@workspace/db";
-import { and, isNull, sql } from "drizzle-orm";
+import { and, isNull, sql, desc } from "drizzle-orm";
 import { fetchGenreAndYear } from "@workspace/song-enrichment";
 
 /**
@@ -28,6 +28,9 @@ export async function backfillGenreBatch(batchSize = 25): Promise<{
   // converged (marked via `genreEnrichedAt`) and must not be re-selected
   // forever, or this job would never reach `remaining === 0` and would keep
   // hammering MusicBrainz/Last.fm for the same permanently-unknown rows.
+  // Order by most-recently-spun first so the tracks currently visible in the
+  // schedule get genres before the long tail of historical recordings. Recordings
+  // with no spins at all (picker-only entries) sink to the bottom via NULLS LAST.
   const rows = await db
     .select({
       mbid: recordingsTable.mbid,
@@ -36,6 +39,9 @@ export async function backfillGenreBatch(batchSize = 25): Promise<{
     })
     .from(recordingsTable)
     .where(isNull(recordingsTable.genreEnrichedAt))
+    .orderBy(
+      sql`(SELECT MAX(played_at) FROM spins WHERE spins.mbid = ${recordingsTable.mbid}) DESC NULLS LAST`,
+    )
     .limit(batchSize);
 
   let updated = 0;
