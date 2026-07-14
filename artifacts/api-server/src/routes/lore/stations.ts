@@ -38,7 +38,7 @@ import { toStation, toNowPlaying, toArchiveRecording, spinDayExpr } from "./shar
 import { spinRunIdExpr } from "../../lore/runs.js";
 import { logSpinIfChanged } from "../../lore/resolve.js";
 import { fingerprintStream, fingerprintAvailable } from "../../lore/stream-fingerprint.js";
-import { computeGenreBreakdown, computeDiscoveryScore } from "../../lore/genre-insights.js";
+import { computeGenreBreakdown, computeDiscoveryScore, labelFromScore } from "../../lore/genre-insights.js";
 
 const router: IRouter = Router();
 
@@ -803,6 +803,7 @@ router.get("/stations/:slug/upcoming-schedule", h(async (req, res) => {
 router.get("/scraped-shows", h(async (_req, res) => {
   const rows = await db
     .select({
+      stationId: scrapedShowsTable.stationId,
       stationSlug: stationsTable.slug,
       stationName: stationsTable.name,
       showName: scrapedShowsTable.showName,
@@ -814,6 +815,82 @@ router.get("/scraped-shows", h(async (_req, res) => {
     .from(scrapedShowsTable)
     .innerJoin(stationsTable, eq(scrapedShowsTable.stationId, stationsTable.id))
     .orderBy(stationsTable.name, scrapedShowsTable.dayOfWeek, scrapedShowsTable.startTime);
+
+  // Insight lookup: match each scraped slot to a logged show (by station +
+  // show name, falling back to station + DJ name) or a DJ picker (by DJ
+  // name), and attach that entity's cached genre profile + discovery score.
+  // Cached columns are written by the insights job — nothing is computed
+  // here, so an unmatched or not-yet-scored slot simply carries no insights.
+  const loggedShows = await db
+    .select({
+      stationId: showsTable.stationId,
+      name: showsTable.name,
+      djName: showsTable.djName,
+      genreProfile: showsTable.genreProfile,
+      discoveryScore: showsTable.discoveryScore,
+    })
+    .from(showsTable)
+    .where(isNotNull(showsTable.genreProfile));
+  const djPickers = await db
+    .select({
+      name: pickersTable.name,
+      genreProfile: pickersTable.genreProfile,
+      discoveryScore: pickersTable.discoveryScore,
+    })
+    .from(pickersTable)
+    .where(and(eq(pickersTable.pickerType, "dj"), isNotNull(pickersTable.genreProfile)));
+
+  type Insight = {
+    genres: string[];
+    discoveryScore: number | null;
+    discoveryLabel: string | null;
+  };
+  const toInsight = (row: {
+    genreProfile: { top: Array<{ genre: string; count: number }> } | null;
+    discoveryScore: number | null;
+  }): Insight | null => {
+    const genres = row.genreProfile?.top.slice(0, 4).map((g) => g.genre) ?? [];
+    if (genres.length === 0 && row.discoveryScore == null) return null;
+    return {
+      genres,
+      discoveryScore: row.discoveryScore,
+      discoveryLabel: row.discoveryScore != null ? labelFromScore(row.discoveryScore) : null,
+    };
+  };
+
+  const showByName = new Map<string, Insight | null>();
+  const showByDj = new Map<string, Insight | null>();
+  for (const s of loggedShows) {
+    const insight = toInsight(s);
+    showByName.set(`${s.stationId}|${s.name.trim().toLowerCase()}`, insight);
+    if (s.djName) {
+      const key = `${s.stationId}|${s.djName.trim().toLowerCase()}`;
+      // First match wins so a DJ with several shows keeps a stable profile.
+      if (!showByDj.has(key)) showByDj.set(key, insight);
+    }
+  }
+  const pickerByDj = new Map<string, Insight | null>();
+  for (const p of djPickers) {
+    const key = p.name.trim().toLowerCase();
+    if (!pickerByDj.has(key)) pickerByDj.set(key, toInsight(p));
+  }
+
+  const insightForSlot = (slot: {
+    stationId: number;
+    showName: string;
+    djName: string | null;
+  }): Insight | null => {
+    const byName = showByName.get(`${slot.stationId}|${slot.showName.trim().toLowerCase()}`);
+    if (byName) return byName;
+    if (slot.djName) {
+      const dj = slot.djName.trim().toLowerCase();
+      const byDj = showByDj.get(`${slot.stationId}|${dj}`);
+      if (byDj) return byDj;
+      const byPicker = pickerByDj.get(dj);
+      if (byPicker) return byPicker;
+    }
+    return null;
+  };
 
   // Group rows by station slug
   const bySlug = new Map<string, { slug: string; name: string; shows: typeof rows }>();
@@ -844,13 +921,19 @@ router.get("/scraped-shows", h(async (_req, res) => {
     stations: [...byFingerprint.values()].sort((a, b) => a.name.localeCompare(b.name)).map((s) => ({
       slug: s.slug,
       name: s.name,
-      shows: s.shows.map((r) => ({
-        showName: r.showName,
-        dayOfWeek: r.dayOfWeek,
-        startTime: r.startTime,
-        endTime: r.endTime ?? null,
-        djName: r.djName ?? null,
-      })),
+      shows: s.shows.map((r) => {
+        const insight = insightForSlot(r);
+        return {
+          showName: r.showName,
+          dayOfWeek: r.dayOfWeek,
+          startTime: r.startTime,
+          endTime: r.endTime ?? null,
+          djName: r.djName ?? null,
+          genres: insight?.genres ?? [],
+          discoveryScore: insight?.discoveryScore ?? null,
+          discoveryLabel: insight?.discoveryLabel ?? null,
+        };
+      }),
     })),
   });
 }));

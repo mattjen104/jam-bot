@@ -1,8 +1,21 @@
 import { useState, useMemo } from "react";
 import { Link } from "wouter";
-import { ArrowLeft, CalendarDays, Mic, Radio } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Mic,
+  Radio,
+  Sparkles,
+} from "lucide-react";
 import { useGetAllScrapedShows } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
+import {
+  toMinutes,
+  isSlotLive,
+  isOvernightCarryoverLive,
+} from "../lib/scheduleLive";
 
 const DOW_TO_IDX: Record<string, number> = {
   Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
@@ -15,21 +28,15 @@ const SHORT_MONTH = [
 const FULL_DAY = [
   "Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday",
 ];
-const SHORT_DAY = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
 function formatDateHeading(d: Date) {
   return `${FULL_DAY[d.getDay()]}, ${SHORT_MONTH[d.getMonth()]} ${d.getDate()}`;
 }
 
-function getDatesBetween(from: Date, to: Date): Date[] {
-  const dates: Date[] = [];
-  const d = new Date(from.getFullYear(), from.getMonth(), from.getDate());
-  const end = new Date(to.getFullYear(), to.getMonth(), to.getDate());
-  while (d <= end) {
-    dates.push(new Date(d));
-    d.setDate(d.getDate() + 1);
-  }
-  return dates;
+function localDateKey(d: Date) {
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
 }
 
 type ShowEntry = {
@@ -39,29 +46,37 @@ type ShowEntry = {
   startTime: string;
   endTime: string | null;
   djName: string | null;
+  genres: string[];
+  discoveryScore: number | null;
+  discoveryLabel: string | null;
 };
 
 export default function ScheduleCalendar() {
   const [stationFilter, setStationFilter] = useState("all");
+  // 0 = live-first view anchored on "now"; negative = days back in time.
+  const [offsetDays, setOffsetDays] = useState(0);
   const { data, isLoading } = useGetAllScrapedShows();
   const { ride, radio } = usePlayer();
   const dockPadding = ride.active || radio.station ? "pb-32" : "pb-16";
 
   const stations = data?.stations ?? [];
 
-  const { dates, toDate } = useMemo(() => {
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const july31 = new Date(2026, 6, 31);
-    const july11 = new Date(2026, 6, 11);
-    const from =
-      today.getFullYear() === 2026 &&
-      today.getMonth() === 6 &&
-      today.getDate() >= 11
-        ? today
-        : july11;
-    return { dates: getDatesBetween(from, july31), toDate: july31 };
-  }, []);
+  // "Now" is computed once per render pass; the page is navigational, not a
+  // ticking clock, so no interval re-render is needed.
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayMs = today.getTime();
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+
+  const dates = useMemo(() => {
+    const list: Date[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(todayMs);
+      d.setDate(d.getDate() + offsetDays + i);
+      list.push(d);
+    }
+    return list;
+  }, [offsetDays, todayMs]);
 
   const byDate = useMemo(() => {
     const filtered =
@@ -71,7 +86,7 @@ export default function ScheduleCalendar() {
 
     const map = new Map<string, ShowEntry[]>();
     for (const date of dates) {
-      map.set(date.toISOString().slice(0, 10), []);
+      map.set(localDateKey(date), []);
     }
 
     for (const station of filtered) {
@@ -80,14 +95,16 @@ export default function ScheduleCalendar() {
         if (dowIdx === undefined) continue;
         for (const date of dates) {
           if (date.getDay() === dowIdx) {
-            const key = date.toISOString().slice(0, 10);
-            map.get(key)!.push({
+            map.get(localDateKey(date))!.push({
               stationSlug: station.slug,
               stationName: station.name,
               showName: show.showName,
               startTime: show.startTime,
               endTime: show.endTime ?? null,
               djName: show.djName ?? null,
+              genres: show.genres ?? [],
+              discoveryScore: show.discoveryScore ?? null,
+              discoveryLabel: show.discoveryLabel ?? null,
             });
           }
         }
@@ -104,6 +121,58 @@ export default function ScheduleCalendar() {
 
     return map;
   }, [stations, stationFilter, dates]);
+
+  // Live-first split: only meaningful in the default (offset 0) view.
+  const todayKey = localDateKey(today);
+  const isLiveView = offsetDays === 0;
+  const { liveNow, upcomingToday } = useMemo(() => {
+    if (!isLiveView) return { liveNow: [], upcomingToday: [] };
+    const todaySlots = byDate.get(todayKey) ?? [];
+    const live: ShowEntry[] = [];
+    const upcoming: ShowEntry[] = [];
+    for (const s of todaySlots) {
+      if (isSlotLive(s.startTime, s.endTime, nowMins)) live.push(s);
+      else {
+        const start = toMinutes(s.startTime);
+        if (start != null && start > nowMins) upcoming.push(s);
+        // Earlier-today slots are reachable via the "Earlier" control.
+      }
+    }
+
+    // Overnight carryover: a slot from *yesterday's* grid that crosses
+    // midnight (e.g. Sat 23:00–02:00) is still on the air in today's early
+    // hours, but only appears under yesterday's dayOfWeek.
+    const yesterdayDow = (today.getDay() + 6) % 7;
+    const filtered =
+      stationFilter === "all"
+        ? stations
+        : stations.filter((st) => st.slug === stationFilter);
+    for (const station of filtered) {
+      for (const show of station.shows) {
+        if (DOW_TO_IDX[show.dayOfWeek] !== yesterdayDow) continue;
+        if (!isOvernightCarryoverLive(show.startTime, show.endTime ?? null, nowMins)) continue;
+        live.push({
+          stationSlug: station.slug,
+          stationName: station.name,
+          showName: show.showName,
+          startTime: show.startTime,
+          endTime: show.endTime ?? null,
+          djName: show.djName ?? null,
+          genres: show.genres ?? [],
+          discoveryScore: show.discoveryScore ?? null,
+          discoveryLabel: show.discoveryLabel ?? null,
+        });
+      }
+    }
+    live.sort(
+      (a, b) =>
+        a.startTime.localeCompare(b.startTime) ||
+        a.stationName.localeCompare(b.stationName),
+    );
+
+    return { liveNow: live, upcomingToday: upcoming };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [byDate, todayKey, nowMins, isLiveView, stations, stationFilter]);
 
   const totalSlots = useMemo(() => {
     let n = 0;
@@ -133,7 +202,7 @@ export default function ScheduleCalendar() {
             Schedule
           </div>
           <h1 className="mt-2 font-serif text-3xl font-semibold text-foreground">
-            Rest of July
+            {isLiveView ? "On the air" : formatDateHeading(dates[0]!)}
           </h1>
           {!isLoading && stations.length > 0 && (
             <p className="mt-1 font-mono text-[11px] text-muted-foreground">
@@ -146,9 +215,9 @@ export default function ScheduleCalendar() {
           )}
         </header>
 
-        {/* Station filter */}
-        {stations.length > 0 && (
-          <div className="mb-6">
+        {/* Controls: station filter + time navigation */}
+        <div className="mb-6 flex flex-wrap items-center gap-2">
+          {stations.length > 0 && (
             <select
               value={stationFilter}
               onChange={(e) => setStationFilter(e.target.value)}
@@ -161,8 +230,41 @@ export default function ScheduleCalendar() {
                 </option>
               ))}
             </select>
+          )}
+
+          <div className="ml-auto flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setOffsetDays((d) => d - 1)}
+              data-testid="schedule-earlier"
+              className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2.5 py-2 font-mono text-[11px] text-muted-foreground hover:border-primary/40 hover:text-primary transition-colors"
+              title="Step one day earlier"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              Earlier
+            </button>
+            {!isLiveView && (
+              <button
+                type="button"
+                onClick={() => setOffsetDays(0)}
+                data-testid="schedule-now"
+                className="inline-flex items-center gap-1 rounded-lg border border-primary-border bg-primary/10 px-2.5 py-2 font-mono text-[11px] uppercase tracking-wide text-primary hover:bg-primary/20 transition-colors"
+              >
+                Now
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setOffsetDays((d) => d + 1)}
+              data-testid="schedule-later"
+              className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2.5 py-2 font-mono text-[11px] text-muted-foreground hover:border-primary/40 hover:text-primary transition-colors"
+              title="Step one day later"
+            >
+              Later
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
           </div>
-        )}
+        </div>
 
         {isLoading && (
           <div className="space-y-4">
@@ -177,17 +279,69 @@ export default function ScheduleCalendar() {
 
         {!isLoading && (
           <div className="space-y-8">
+            {/* Live now — pinned at the top in the default view */}
+            {isLiveView && liveNow.length > 0 && (
+              <section data-testid="live-now-section">
+                <div className="mb-2 flex items-center gap-3">
+                  <h2 className="flex items-center gap-2 font-mono text-[11px] font-semibold uppercase tracking-wider text-foreground">
+                    <span className="relative flex h-2 w-2" aria-hidden>
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-60" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+                    </span>
+                    Live radio
+                  </h2>
+                  <span className="font-mono text-[10px] text-muted-foreground">
+                    {liveNow.length} on the air
+                  </span>
+                </div>
+                <div className="overflow-hidden rounded-xl border border-red-500/25 bg-card">
+                  {liveNow.map((show, i) => (
+                    <SlotRow
+                      key={`${show.stationSlug}-${show.showName}-${show.startTime}-${i}`}
+                      show={show}
+                      isLast={i === liveNow.length - 1}
+                      live
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Rest of today (upcoming) in live view */}
+            {isLiveView && upcomingToday.length > 0 && (
+              <section>
+                <div className="mb-2 flex items-center gap-3">
+                  <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wider text-foreground">
+                    Later today
+                  </h2>
+                  <span className="font-mono text-[10px] text-muted-foreground">
+                    {upcomingToday.length} shows
+                  </span>
+                </div>
+                <div className="overflow-hidden rounded-xl border border-card-border bg-card">
+                  {upcomingToday.map((show, i) => (
+                    <SlotRow
+                      key={`${show.stationSlug}-${show.showName}-${show.startTime}-${i}`}
+                      show={show}
+                      isLast={i === upcomingToday.length - 1}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Day-by-day grid: in live view, skip today (already split above) */}
             {dates.map((date) => {
-              const key = date.toISOString().slice(0, 10);
+              const key = localDateKey(date);
+              if (isLiveView && key === todayKey) return null;
               const shows = byDate.get(key) ?? [];
               if (shows.length === 0) return null;
-              const isToday =
-                date.toISOString().slice(0, 10) ===
-                new Date().toISOString().slice(0, 10);
+              const isToday = key === todayKey;
+              const isPast = date.getTime() < todayMs;
               return (
                 <section key={key} id={key}>
                   <div className="mb-2 flex items-center gap-3">
-                    <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wider text-foreground">
+                    <h2 className={`font-mono text-[11px] font-semibold uppercase tracking-wider ${isPast ? "text-muted-foreground" : "text-foreground"}`}>
                       {formatDateHeading(date)}
                     </h2>
                     {isToday && (
@@ -195,61 +349,24 @@ export default function ScheduleCalendar() {
                         today
                       </span>
                     )}
+                    {isPast && (
+                      <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide text-muted-foreground">
+                        past
+                      </span>
+                    )}
                     <span className="font-mono text-[10px] text-muted-foreground">
                       {shows.length} shows
                     </span>
                   </div>
 
-                  <div className="rounded-xl border border-card-border bg-card overflow-hidden">
+                  <div className={`overflow-hidden rounded-xl border border-card-border bg-card ${isPast ? "opacity-70" : ""}`}>
                     {shows.map((show, i) => (
-                      <div
+                      <SlotRow
                         key={`${show.stationSlug}-${show.showName}-${show.startTime}-${i}`}
-                        className={`flex items-center gap-3 px-4 py-2.5${
-                          i < shows.length - 1
-                            ? " border-b border-border/40"
-                            : ""
-                        }`}
-                      >
-                        {/* Time */}
-                        <span className="w-11 shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
-                          {show.startTime}
-                        </span>
-
-                        {/* Station badge — hidden on tiny screens */}
-                        <Link
-                          href={`/archive/stations/${show.stationSlug}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="hidden sm:inline-flex w-[11ch] shrink-0 items-center gap-1 rounded-full border border-border bg-background/40 px-2 py-0.5 font-mono text-[9px] text-muted-foreground/70 hover:border-primary/40 hover:text-primary transition-colors overflow-hidden"
-                          title={show.stationName}
-                        >
-                          <Radio className="h-2 w-2 shrink-0" />
-                          <span className="truncate">{show.stationName}</span>
-                        </Link>
-
-                        {/* Show name */}
-                        <Link
-                          href={`/archive/stations/${show.stationSlug}?show=${encodeURIComponent(show.showName)}`}
-                          className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground hover:text-primary transition-colors"
-                          title={show.showName}
-                        >
-                          {show.showName}
-                        </Link>
-
-                        {/* DJ link */}
-                        {show.djName && (
-                          <Link
-                            href={`/dj/${encodeURIComponent(show.djName)}`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="hidden md:inline-flex shrink-0 items-center gap-1 font-mono text-[10px] text-muted-foreground/70 hover:text-primary transition-colors"
-                            title={`${show.djName}'s schedule`}
-                          >
-                            <Mic className="h-2.5 w-2.5 shrink-0" />
-                            <span className="max-w-[12ch] truncate">
-                              {show.djName}
-                            </span>
-                          </Link>
-                        )}
-                      </div>
+                        show={show}
+                        isLast={i === shows.length - 1}
+                        live={isToday && isSlotLive(show.startTime, show.endTime, nowMins)}
+                      />
                     ))}
                   </div>
                 </section>
@@ -264,6 +381,108 @@ export default function ScheduleCalendar() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/** One schedule slot row: time, station, show, DJ, genre chips, discovery. */
+function SlotRow({
+  show,
+  isLast,
+  live = false,
+}: {
+  show: ShowEntry;
+  isLast: boolean;
+  live?: boolean;
+}) {
+  const isNewMusic = show.discoveryLabel === "new-music";
+  return (
+    <div
+      className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5${
+        isLast ? "" : " border-b border-border/40"
+      }${isNewMusic ? " bg-primary/[0.04]" : ""}`}
+      data-testid={`slot-${show.stationSlug}-${show.startTime}`}
+    >
+      {/* Time or LIVE badge */}
+      {live ? (
+        <span
+          className="inline-flex w-11 shrink-0 items-center gap-1 font-mono text-[9px] font-semibold uppercase tracking-wide text-red-500"
+          data-testid="live-badge"
+        >
+          <span className="relative flex h-1.5 w-1.5" aria-hidden>
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-60" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-red-500" />
+          </span>
+          Live
+        </span>
+      ) : (
+        <span className="w-11 shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
+          {show.startTime}
+        </span>
+      )}
+
+      {/* Station badge — hidden on tiny screens */}
+      <Link
+        href={`/archive/stations/${show.stationSlug}`}
+        onClick={(e) => e.stopPropagation()}
+        className="hidden sm:inline-flex w-[11ch] shrink-0 items-center gap-1 rounded-full border border-border bg-background/40 px-2 py-0.5 font-mono text-[9px] text-muted-foreground/70 hover:border-primary/40 hover:text-primary transition-colors overflow-hidden"
+        title={show.stationName}
+      >
+        <Radio className="h-2 w-2 shrink-0" />
+        <span className="truncate">{show.stationName}</span>
+      </Link>
+
+      {/* Show name */}
+      <Link
+        href={`/archive/stations/${show.stationSlug}?show=${encodeURIComponent(show.showName)}`}
+        className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground hover:text-primary transition-colors"
+        title={show.showName}
+      >
+        {show.showName}
+      </Link>
+
+      {/* Discovery highlight — blocks leaning heavily on new music */}
+      {isNewMusic && (
+        <span
+          className="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary-border bg-primary/10 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide text-primary"
+          title={
+            show.discoveryScore != null
+              ? `Discovery score ${Math.round(show.discoveryScore)} — this block leans on brand-new music`
+              : "This block leans on brand-new music"
+          }
+          data-testid={`new-music-badge-${show.stationSlug}-${show.startTime}`}
+        >
+          <Sparkles className="h-2.5 w-2.5 shrink-0" />
+          New music
+        </span>
+      )}
+
+      {/* Genre chips */}
+      {show.genres.length > 0 && (
+        <span className="hidden md:flex shrink-0 gap-1">
+          {show.genres.slice(0, 3).map((g) => (
+            <span
+              key={g}
+              className="inline-flex items-center rounded-full border border-border bg-background/40 px-2 py-0.5 font-mono text-[9px] text-muted-foreground/70 whitespace-nowrap"
+            >
+              {g}
+            </span>
+          ))}
+        </span>
+      )}
+
+      {/* DJ link */}
+      {show.djName && (
+        <Link
+          href={`/dj/${encodeURIComponent(show.djName)}`}
+          onClick={(e) => e.stopPropagation()}
+          className="hidden md:inline-flex shrink-0 items-center gap-1 font-mono text-[10px] text-muted-foreground/70 hover:text-primary transition-colors"
+          title={`${show.djName}'s schedule`}
+        >
+          <Mic className="h-2.5 w-2.5 shrink-0" />
+          <span className="max-w-[12ch] truncate">{show.djName}</span>
+        </Link>
+      )}
     </div>
   );
 }

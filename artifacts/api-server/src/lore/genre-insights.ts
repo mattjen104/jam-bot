@@ -77,7 +77,7 @@ function scoreFromAge(ageYears: number): number {
   return Math.max(0, Math.min(100, Math.round(100 - ageYears * 4)));
 }
 
-function labelFromScore(score: number): DiscoveryLabel {
+export function labelFromScore(score: number): DiscoveryLabel {
   if (score >= 70) return "new-music";
   if (score >= 35) return "recent";
   return "catalog";

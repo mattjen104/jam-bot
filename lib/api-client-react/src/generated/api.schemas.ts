@@ -1751,6 +1751,12 @@ export interface AllScrapedShowSlot {
   endTime: string | null;
   /** @nullable */
   djName: string | null;
+  /** Top genres of the matched logged show/DJ; empty when unmatched. */
+  genres: string[];
+  /** Cached discovery score (0-100) of the matched show/DJ. @nullable */
+  discoveryScore: number | null;
+  /** "new-music" | "recent" | "catalog"; null when no score. @nullable */
+  discoveryLabel: string | null;
 }
 
 export interface AllScrapedShowStation {

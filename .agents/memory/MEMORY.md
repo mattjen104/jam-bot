@@ -43,3 +43,4 @@
 - [Lore picker/selector page consolidation](lore-picker-page-routing.md) — SelectorArchive.tsx is the ONLY live route for both DJ + curated pickers; a standalone sibling page can typecheck fine yet be unroutable dead code.
 - [Stale tsx dev server after new routes](api-server-stale-dev-server.md) — a long-running api-server workflow can serve pre-fix routes as 503 "Admin entry not configured" (falls through to admin catch-all); restart workflow before trusting a new-route 503 as a real bug.
 - [Structured LLM extraction from scraped pages](schedule-scraper-llm-pattern.md) — injectable extractor seam (like askLLM), strip fences + field-validate every entry, distinguish null (failed) from [] (no data).
+- [Schedule live-first overnight carryover](schedule-overnight-carryover.md) — per-day schedule grids hide post-midnight tails: live detection needs a yesterday-slot carryover check, not just same-day isSlotLive.

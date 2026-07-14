@@ -231,6 +231,17 @@ export const stationsTable = pgTable("stations", {
    */
   discoveryScore: real("discovery_score"),
   /**
+   * Cumulative genre representation of everything this station has actually
+   * spun (top genres + counts), recomputed periodically by the insights job.
+   * Distinct from `tags` (radio-browser/manual labels): this is derived from
+   * resolved spin history, never hand-written. Null until enough data exists.
+   */
+  genreProfile: jsonb("genre_profile").$type<{
+    top: Array<{ genre: string; count: number }>;
+    unknownCount: number;
+    totalCount: number;
+  }>(),
+  /**
    * Best-effort excerpt (title/meta description) scraped from the station's
    * own homepage. Null when never scraped, blocked by robots.txt, or the page
    * had no usable text — never fabricated.
@@ -288,6 +299,25 @@ export const showsTable = pgTable("shows", {
    * Null for multi-host shows and non-KEXP stations (for now).
    */
   pickerId: integer("picker_id").references(() => pickersTable.id),
+  /**
+   * Cumulative genre representation of everything this show has actually
+   * spun, recomputed periodically by the insights job from resolved spins
+   * (top genres + counts). Null until enough resolved history exists.
+   * Shape mirrors GenreBreakdown from genre-insights.
+   */
+  genreProfile: jsonb("genre_profile").$type<{
+    top: Array<{ genre: string; count: number }>;
+    unknownCount: number;
+    totalCount: number;
+  }>(),
+  /**
+   * Cached discovery score (0-100, higher = newer-leaning rotation) for this
+   * show's logged spins, recomputed by the insights job alongside
+   * genreProfile. Null until enough dated spin history exists.
+   */
+  discoveryScore: real("discovery_score"),
+  /** When genreProfile/discoveryScore were last recomputed. Null = never. */
+  insightsUpdatedAt: timestamp("insights_updated_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -527,6 +557,25 @@ export const pickersTable = pgTable(
      * its resolved picks. Null for pickers where tags are not applicable.
      */
     tags: text("tags").array(),
+    /**
+     * Cumulative genre representation of this picker's resolved picks
+     * (top genres + counts), recomputed periodically by the insights job.
+     * Derived — distinct from the self-declared `tags`. Null until enough
+     * resolved picks exist.
+     */
+    genreProfile: jsonb("genre_profile").$type<{
+      top: Array<{ genre: string; count: number }>;
+      unknownCount: number;
+      totalCount: number;
+    }>(),
+    /**
+     * Cached discovery score (0-100, higher = newer-leaning picks) over this
+     * picker's dated picks, recomputed by the insights job. Null until
+     * enough dated history exists.
+     */
+    discoveryScore: real("discovery_score"),
+    /** When genreProfile/discoveryScore were last recomputed. Null = never. */
+    insightsUpdatedAt: timestamp("insights_updated_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
