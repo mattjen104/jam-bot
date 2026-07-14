@@ -841,27 +841,35 @@ router.get("/stations/:slug/upcoming-schedule", h(async (req, res) => {
 // ---------------------------------------------------------------------------
 // GET /api/scraped-shows — all stations' weekly scraped show slots (for calendar)
 // ---------------------------------------------------------------------------
-router.get("/scraped-shows", h(async (_req, res) => {
-  const rows = await db
-    .select({
-      stationId: scrapedShowsTable.stationId,
-      stationSlug: stationsTable.slug,
-      stationName: stationsTable.name,
-      showName: scrapedShowsTable.showName,
-      dayOfWeek: scrapedShowsTable.dayOfWeek,
-      startTime: scrapedShowsTable.startTime,
-      endTime: scrapedShowsTable.endTime,
-      djName: scrapedShowsTable.djName,
-    })
-    .from(scrapedShowsTable)
-    .innerJoin(stationsTable, eq(scrapedShowsTable.stationId, stationsTable.id))
-    .orderBy(stationsTable.name, scrapedShowsTable.dayOfWeek, scrapedShowsTable.startTime);
 
-  // Insight lookup: match each scraped slot to a logged show (by station +
-  // show name, falling back to station + DJ name) or a DJ picker (by DJ
-  // name), and attach that entity's cached genre profile + discovery score.
-  // Cached columns are written by the insights job — nothing is computed
-  // here, so an unmatched or not-yet-scored slot simply carries no insights.
+// Insight lookup maps for schedule enrichment: match each scraped slot to a
+// logged show (by station + show name, falling back to station + DJ name) or
+// a DJ picker (by DJ name), and attach that entity's cached genre profile +
+// discovery score. Cached columns are written by the insights job — nothing
+// is computed here, so an unmatched or not-yet-scored slot simply carries no
+// insights.
+//
+// Building these maps reads the full shows + pickers tables on every request,
+// which is the schedule page's main hotspot as stations grow — so the built
+// maps are cached in memory with a short TTL and refreshed naturally on
+// expiry. Staleness is bounded and harmless: the underlying genre profiles
+// are themselves only rewritten by a periodic insights job.
+type Insight = {
+  genres: string[];
+  discoveryScore: number | null;
+  discoveryLabel: string | null;
+};
+
+type InsightMaps = {
+  showByName: Map<string, Insight | null>;
+  showByDj: Map<string, Insight | null>;
+  pickerByDj: Map<string, Insight | null>;
+};
+
+const INSIGHT_MAPS_TTL_MS = 5 * 60 * 1000;
+let insightMapsCache: { builtAt: number; promise: Promise<InsightMaps> } | null = null;
+
+async function buildInsightMaps(): Promise<InsightMaps> {
   const loggedShows = await db
     .select({
       stationId: showsTable.stationId,
@@ -881,11 +889,6 @@ router.get("/scraped-shows", h(async (_req, res) => {
     .from(pickersTable)
     .where(and(eq(pickersTable.pickerType, "dj"), isNotNull(pickersTable.genreProfile)));
 
-  type Insight = {
-    genres: string[];
-    discoveryScore: number | null;
-    discoveryLabel: string | null;
-  };
   const toInsight = (row: {
     genreProfile: { top: Array<{ genre: string; count: number }> } | null;
     discoveryScore: number | null;
@@ -915,6 +918,46 @@ router.get("/scraped-shows", h(async (_req, res) => {
     const key = p.name.trim().toLowerCase();
     if (!pickerByDj.has(key)) pickerByDj.set(key, toInsight(p));
   }
+
+  return { showByName, showByDj, pickerByDj };
+}
+
+// Cache the in-flight promise (not just the resolved value) so concurrent
+// requests during a cold/expired window share one rebuild instead of each
+// firing their own full-table reads. A failed build is evicted immediately so
+// the next request retries rather than caching the error for the full TTL.
+function getInsightMaps(): Promise<InsightMaps> {
+  const now = Date.now();
+  if (!insightMapsCache || now - insightMapsCache.builtAt >= INSIGHT_MAPS_TTL_MS) {
+    const entry = {
+      builtAt: now,
+      promise: buildInsightMaps(),
+    };
+    entry.promise.catch(() => {
+      if (insightMapsCache === entry) insightMapsCache = null;
+    });
+    insightMapsCache = entry;
+  }
+  return insightMapsCache.promise;
+}
+
+router.get("/scraped-shows", h(async (_req, res) => {
+  const rows = await db
+    .select({
+      stationId: scrapedShowsTable.stationId,
+      stationSlug: stationsTable.slug,
+      stationName: stationsTable.name,
+      showName: scrapedShowsTable.showName,
+      dayOfWeek: scrapedShowsTable.dayOfWeek,
+      startTime: scrapedShowsTable.startTime,
+      endTime: scrapedShowsTable.endTime,
+      djName: scrapedShowsTable.djName,
+    })
+    .from(scrapedShowsTable)
+    .innerJoin(stationsTable, eq(scrapedShowsTable.stationId, stationsTable.id))
+    .orderBy(stationsTable.name, scrapedShowsTable.dayOfWeek, scrapedShowsTable.startTime);
+
+  const { showByName, showByDj, pickerByDj } = await getInsightMaps();
 
   const insightForSlot = (slot: {
     stationId: number;
