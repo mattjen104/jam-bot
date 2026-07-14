@@ -866,10 +866,35 @@ type InsightMaps = {
   pickerByDj: Map<string, Insight | null>;
 };
 
-const INSIGHT_MAPS_TTL_MS = 5 * 60 * 1000;
+export const INSIGHT_MAPS_TTL_MS = 5 * 60 * 1000;
 let insightMapsCache: { builtAt: number; promise: Promise<InsightMaps> } | null = null;
 
+// Injectable seam — replaced in tests so DB interactions can be controlled
+// without spying on drizzle internals.  In production this always points to
+// the real implementation below.
+let _insightMapsBuilder: () => Promise<InsightMaps> = buildInsightMapsImpl;
+
+/** Test-only: replace the builder (call resetInsightMapsBuilder in afterEach). */
+export function _configureInsightMapsBuilder(fn: () => Promise<InsightMaps>): void {
+  _insightMapsBuilder = fn;
+}
+
+/** Test-only: restore the real builder and clear the cache. */
+export function _resetInsightMapsBuilder(): void {
+  _insightMapsBuilder = buildInsightMapsImpl;
+  insightMapsCache = null;
+}
+
+/** Test-only: clear the cache without touching the builder. */
+export function _resetInsightMapsCache(): void {
+  insightMapsCache = null;
+}
+
 async function buildInsightMaps(): Promise<InsightMaps> {
+  return _insightMapsBuilder();
+}
+
+async function buildInsightMapsImpl(): Promise<InsightMaps> {
   const loggedShows = await db
     .select({
       stationId: showsTable.stationId,
@@ -926,7 +951,7 @@ async function buildInsightMaps(): Promise<InsightMaps> {
 // requests during a cold/expired window share one rebuild instead of each
 // firing their own full-table reads. A failed build is evicted immediately so
 // the next request retries rather than caching the error for the full TTL.
-function getInsightMaps(): Promise<InsightMaps> {
+export function getInsightMaps(): Promise<InsightMaps> {
   const now = Date.now();
   if (!insightMapsCache || now - insightMapsCache.builtAt >= INSIGHT_MAPS_TTL_MS) {
     const entry = {
