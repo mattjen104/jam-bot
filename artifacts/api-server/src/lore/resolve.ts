@@ -210,7 +210,13 @@ export async function resolveToMbid(
   }
 
   const match = await resolveRecordingByText(rawArtist, rawTitle);
-  if (match && !durationMismatch(durationMs, match.durationMs)) {
+
+  // Track whether the search returned a result that was rejected only for
+  // duration — that means we found the right song but the wrong pressing.
+  // Swapping artist/title would not help and risks pinning the wrong track.
+  const durationRejected = match !== null && durationMismatch(durationMs, match.durationMs);
+
+  if (match && !durationRejected) {
     const result: MbidResolution = {
       mbid: match.recordingId,
       confidence: "text",
@@ -222,6 +228,31 @@ export async function resolveToMbid(
     };
     await writeResolutionCacheSafe(key, result.mbid, "text");
     return result;
+  }
+
+  // 3b. Swap retry — fires only on a true text-search miss (not a
+  //     duration-only rejection). Some ICY stations emit "Title - Artist"
+  //     instead of "Artist - Title"; trying the fields in reverse order
+  //     recovers those spins before falling back to Spotify. The cache key
+  //     remains the raw (unswapped) artist+title so repeat polls of the same
+  //     station still de-duplicate correctly. The canonical artist/title from
+  //     the MusicBrainz response is what lands in the recordings row — the raw
+  //     ICY order is only ever stored in spins.raw_artist / raw_title.
+  if (!durationRejected) {
+    const swapped = await resolveRecordingByText(rawTitle, rawArtist);
+    if (swapped && !durationMismatch(durationMs, swapped.durationMs)) {
+      const result: MbidResolution = {
+        mbid: swapped.recordingId,
+        confidence: "text",
+        title: swapped.title || rawTitle,
+        artist: swapped.artist || rawArtist,
+        ...(swapped.artistMbid ? { artistMbid: swapped.artistMbid } : {}),
+        ...(swapped.isrc ? { isrc: swapped.isrc } : {}),
+        ...(swapped.durationMs != null ? { durationMs: swapped.durationMs } : {}),
+      };
+      await writeResolutionCacheSafe(key, result.mbid, "text");
+      return result;
+    }
   }
 
   // 4. Spotify fallback — MusicBrainz couldn't place it (new release, niche
