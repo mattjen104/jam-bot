@@ -83,24 +83,58 @@ describe("parseTildeStreamTitle", () => {
     expect(parseTildeStreamTitle("Beck - Heart Is A Drum")).toBeNull();
   });
 
-  it("returns null when the last field is not a UUID", () => {
+  it("parses successfully when the last field is not a UUID (omits sourceRecordingId)", () => {
     const s = "Title~Artist~~1990~~200~dt~dt~Station~10~not-a-uuid";
-    expect(parseTildeStreamTitle(s)).toBeNull();
+    const result = parseTildeStreamTitle(s);
+    expect(result).not.toBeNull();
+    expect(result!.rawTitle).toBe("Title");
+    expect(result!.rawArtist).toBe("Artist");
+    expect(result!.durationMs).toBe(200_000);
+    expect(result!.sourceRecordingId).toBeUndefined();
   });
 
-  it("returns null when there are fewer than 11 fields", () => {
+  it("parses successfully when fewer than 11 fields (no UUID slot)", () => {
     const s = "Title~Artist~~1990~~200~dt~dt~Station";
-    expect(parseTildeStreamTitle(s)).toBeNull();
+    const result = parseTildeStreamTitle(s);
+    expect(result).not.toBeNull();
+    expect(result!.rawTitle).toBe("Title");
+    expect(result!.rawArtist).toBe("Artist");
+    expect(result!.durationMs).toBe(200_000);
+    expect(result!.sourceRecordingId).toBeUndefined();
   });
 
   it("returns null for a string with no tilde", () => {
     expect(parseTildeStreamTitle("Beck - Morning Phase")).toBeNull();
   });
 
-  it("omits durationMs when duration field is missing or zero", () => {
+  it("omits sourceRecordingId but still parses when UUID is absent", () => {
+    const noUuid =
+      "Dream Come True~The Brand New Heavies~~1992~~268~2026-07-09T17:53:16~2026-07-09T17:53:41~Radio Monte Carlo Nights Story~25.68~not-a-uuid";
+    const result = parseTildeStreamTitle(noUuid);
+    expect(result).not.toBeNull();
+    expect(result!.rawTitle).toBe("Dream Come True");
+    expect(result!.rawArtist).toBe("The Brand New Heavies");
+    expect(result!.durationMs).toBe(268_000);
+    expect(result!.sourceRecordingId).toBeUndefined();
+  });
+
+  it("parses a short tilde format with exactly 6 fields (no UUID)", () => {
+    const short = "Some Song~Some Artist~~1999~~180";
+    const result = parseTildeStreamTitle(short);
+    expect(result?.rawTitle).toBe("Some Song");
+    expect(result?.rawArtist).toBe("Some Artist");
+    expect(result?.durationMs).toBe(180_000);
+    expect(result?.sourceRecordingId).toBeUndefined();
+  });
+
+  it("returns null when duration field is missing or zero", () => {
     const noTime = "Title~Artist~~1990~~~~dt~dt~Station~10~7306359a-ae20-4755-99ca-8a0410618b6d";
     const result = parseTildeStreamTitle(noTime);
-    expect(result?.durationMs).toBeUndefined();
+    expect(result).toBeNull();
+  });
+
+  it("returns null when fewer than 6 fields", () => {
+    expect(parseTildeStreamTitle("Title~Artist~~1990~~")).toBeNull();
   });
 });
 
@@ -165,6 +199,24 @@ describe("isJunkMetadata", () => {
     expect(isJunkMetadata("Paul Simon", "Diamonds On The Soles Of Her Shoes")).toBe(false);
     expect(isJunkMetadata("Cock Robin", "When Your Heart Is Weak")).toBe(false);
     expect(isJunkMetadata("Hisingens Spelmanslag", "Spel Kalles hambopolska")).toBe(false);
+  });
+
+  it("flags purely numeric artist or title (station ID codes)", () => {
+    expect(isJunkMetadata("12345", "Some Song")).toBe(true);
+    expect(isJunkMetadata("Some Artist", "60000")).toBe(true);
+    expect(isJunkMetadata("00001", "00001")).toBe(true);
+  });
+
+  it("flags ALL_CAPS underscore-slug identifiers", () => {
+    expect(isJunkMetadata("STATION_ID_123", "Rock Hits")).toBe(true);
+    expect(isJunkMetadata("Beck", "IDENT_LOOP_01")).toBe(true);
+    expect(isJunkMetadata("MUZICA_RADIO", "MUZICA_RADIO")).toBe(true);
+  });
+
+  it("does NOT flag legitimate ALL_CAPS names without underscores", () => {
+    // Real artists/titles in all caps are fine (ABBA, AC/DC, etc.)
+    expect(isJunkMetadata("ABBA", "Dancing Queen")).toBe(false);
+    expect(isJunkMetadata("ACDC", "Highway to Hell")).toBe(false);
   });
 
   it("does NOT flag tracks that merely contain a station name in one field", () => {

@@ -78,7 +78,7 @@ export interface ParsedStreamTitle {
  * Attempt to parse a tilde-delimited structured stream title used by a cluster
  * of stations (Radio Monte Carlo Nights Story, United Music Pink Floyd, et al.).
  *
- * Format (11 `~`-separated fields, 0-indexed):
+ * Format (≥6 `~`-separated fields, 0-indexed):
  *   [0]  title
  *   [1]  artist
  *   [2]  empty
@@ -89,34 +89,43 @@ export interface ParsedStreamTitle {
  *   [7]  end datetime ISO
  *   [8]  station name
  *   [9]  elapsed seconds (e.g. "261.88")
- *   [10] MusicBrainz recording UUID
+ *   [10] MusicBrainz recording UUID (optional — present on some networks)
  *
- * Returns null when the string does not match this format.
+ * Returns a result whenever title, artist, and a numeric duration can be
+ * extracted (minimum 6 fields). `sourceRecordingId` is set only when a
+ * valid UUID is present at field 10. Returns null when the string does not
+ * look like the tilde format (< 6 fields, or missing title/artist/duration).
  */
 export function parseTildeStreamTitle(s: string): ParsedStreamTitle | null {
   if (!s.includes("~")) return null;
   const parts = s.split("~");
-  if (parts.length < 11) return null;
-
-  const potentialUuid = parts[10]?.trim() ?? "";
-  const UUID_RE =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (!UUID_RE.test(potentialUuid)) return null;
+  if (parts.length < 6) return null;
 
   const rawTitle = parts[0]?.trim();
   const rawArtist = parts[1]?.trim();
   if (!rawTitle || !rawArtist) return null;
 
+  // Require a parseable duration in field[5] to distinguish this format from
+  // any random tilde-containing string.
+  const durationStr = parts[5]?.trim();
+  if (!durationStr) return null;
+  const secs = parseFloat(durationStr);
+  if (!Number.isFinite(secs) || secs <= 0) return null;
+
   const result: ParsedStreamTitle = {
     rawTitle,
     rawArtist,
-    sourceRecordingId: potentialUuid,
+    durationMs: Math.round(secs * 1000),
   };
 
-  const durationStr = parts[5]?.trim();
-  if (durationStr) {
-    const secs = parseFloat(durationStr);
-    if (Number.isFinite(secs) && secs > 0) result.durationMs = Math.round(secs * 1000);
+  // UUID at field[10] is optional — include it when present and valid.
+  if (parts.length >= 11) {
+    const potentialUuid = parts[10]?.trim() ?? "";
+    const UUID_RE =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (UUID_RE.test(potentialUuid)) {
+      result.sourceRecordingId = potentialUuid;
+    }
   }
 
   return result;
@@ -175,6 +184,18 @@ export function isJunkMetadata(rawArtist: string, rawTitle: string): boolean {
     "station will continue",
   ];
   if (BREAK_PHRASES.some((p) => combined.includes(p))) return true;
+
+  // Purely numeric entries — station ID counters, timestamp codes, etc.
+  // No real song title or artist name is just digits.
+  if (/^\d+$/.test(rawArtist) || /^\d+$/.test(rawTitle)) return true;
+
+  // Station-slug-shaped ALL_CAPS identifiers: uppercase letters, digits, and
+  // underscores only (no spaces, no lowercase), must contain an underscore to
+  // distinguish from legitimately all-caps artist names like "ABBA" or "AC/DC".
+  // Catches patterns like STATION_ID_123, IDENT_LOOP_01, etc.
+  const isSlug = (s: string): boolean =>
+    /^[A-Z][A-Z0-9_-]+$/.test(s) && s.includes("_");
+  if (isSlug(rawArtist) || isSlug(rawTitle)) return true;
 
   return false;
 }
