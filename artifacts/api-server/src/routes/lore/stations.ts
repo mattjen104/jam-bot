@@ -347,9 +347,12 @@ router.get("/stations/:slug/archive", h(async (req, res) => {
   );
 }));
 
-// GET /api/stations/:slug/insights — genre breakdown + discovery score across
-// the station's full logged spin history. Read-time aggregation over
-// already-enriched recording data; never a per-spin recompute.
+// GET /api/stations/:slug/insights — genre breakdown + discovery score for a
+// station. Persisted-first: the insights job periodically caches a cumulative
+// `genreProfile` and `discoveryScore` onto the stations row, so this endpoint
+// serves those columns directly when they exist. Only a station the job has
+// never scored (both columns null) falls back to a live aggregation over its
+// spin history — same math, just computed on read.
 router.get("/stations/:slug/insights", h(async (req, res) => {
   const parsed = GetStationInsightsParams.safeParse(req.params);
   if (!parsed.success) {
@@ -365,6 +368,44 @@ router.get("/stations/:slug/insights", h(async (req, res) => {
     return res.status(404).json({ error: "Station not found" });
   }
 
+  const stationRef = {
+    slug: station.slug,
+    name: station.name,
+    stationClass: station.stationClass,
+  };
+
+  if (station.genreProfile != null || station.discoveryScore != null) {
+    // Served from the persisted columns. The cached discovery score is just
+    // the 0-100 number — medianAgeYears/sampleSize/unknownCount aren't
+    // persisted, so they degrade to null/0 rather than being recomputed
+    // (the UI treats them as optional detail).
+    return res.json(
+      GetStationInsightsResponse.parse({
+        station: stationRef,
+        insights: {
+          genreBreakdown:
+            station.genreProfile ?? { top: [], unknownCount: 0, totalCount: 0 },
+          discoveryScore:
+            station.discoveryScore != null
+              ? {
+                  medianAgeYears: null,
+                  score: station.discoveryScore,
+                  label: labelFromScore(station.discoveryScore),
+                  sampleSize: 0,
+                  unknownCount: 0,
+                }
+              : {
+                  medianAgeYears: null,
+                  score: null,
+                  label: "unknown",
+                  sampleSize: 0,
+                  unknownCount: 0,
+                },
+        },
+      }),
+    );
+  }
+
   const rows = await db
     .select({
       genres: recordingsTable.genres,
@@ -377,7 +418,7 @@ router.get("/stations/:slug/insights", h(async (req, res) => {
 
   return res.json(
     GetStationInsightsResponse.parse({
-      station: { slug: station.slug, name: station.name, stationClass: station.stationClass },
+      station: stationRef,
       insights: {
         genreBreakdown: computeGenreBreakdown(rows),
         discoveryScore: computeDiscoveryScore(

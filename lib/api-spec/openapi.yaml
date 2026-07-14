@@ -520,9 +520,12 @@ paths:
       description: >
         Aggregated genre tags and a discovery score (recent-release-leaning
         vs. catalog-leaning) across the station's logged spin history.
-        Computed on read from already-enriched recording data — never a
-        per-spin recompute. Degrades to unknown/null fields when there isn't
-        enough enriched data yet.
+        Served from the station's persisted `genreProfile`/`discoveryScore`
+        columns (recomputed periodically by the insights job); when served
+        from the cache, `medianAgeYears` is null and `sampleSize`/
+        `unknownCount` are 0. A station the job has never scored falls back
+        to a live aggregation over already-enriched recording data. Degrades
+        to unknown/null fields when there isn't enough enriched data yet.
       parameters:
         - name: slug
           in: path
