@@ -295,6 +295,7 @@ export default function ScheduleCalendar() {
                   </span>
                 </div>
                 <div className="overflow-hidden rounded-xl border border-red-500/25 bg-card">
+                  <ColumnHeader />
                   {liveNow.map((show, i) => (
                     <SlotRow
                       key={`${show.stationSlug}-${show.showName}-${show.startTime}-${i}`}
@@ -319,6 +320,7 @@ export default function ScheduleCalendar() {
                   </span>
                 </div>
                 <div className="overflow-hidden rounded-xl border border-card-border bg-card">
+                  <ColumnHeader />
                   {upcomingToday.map((show, i) => (
                     <SlotRow
                       key={`${show.stationSlug}-${show.showName}-${show.startTime}-${i}`}
@@ -360,6 +362,7 @@ export default function ScheduleCalendar() {
                   </div>
 
                   <div className={`overflow-hidden rounded-xl border border-card-border bg-card ${isPast ? "opacity-70" : ""}`}>
+                    <ColumnHeader />
                     {shows.map((show, i) => (
                       <SlotRow
                         key={`${show.stationSlug}-${show.showName}-${show.startTime}-${i}`}
@@ -385,7 +388,73 @@ export default function ScheduleCalendar() {
   );
 }
 
-/** One schedule slot row: time, station, show, DJ, genre chips, discovery. */
+/**
+ * Shared column template so header + rows stay aligned.
+ * Mobile:  time | show | genre | discovery
+ * sm+:     time | station | show | genre | discovery
+ * md+:     time | station | show+DJ | wider genre | discovery
+ */
+const ROW_GRID =
+  "grid grid-cols-[3rem_minmax(0,1fr)_minmax(0,6.5rem)_3.25rem] sm:grid-cols-[3rem_7.5rem_minmax(0,1fr)_minmax(0,9rem)_3.5rem] md:grid-cols-[3rem_7.5rem_minmax(0,1fr)_minmax(0,13rem)_3.75rem] items-center gap-x-3 px-4";
+
+/** Column header row for a schedule section. */
+function ColumnHeader() {
+  return (
+    <div
+      className={`${ROW_GRID} border-b border-border/60 bg-background/40 py-1.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground/60`}
+    >
+      <span>Time</span>
+      <span className="hidden sm:block">Station</span>
+      <span>Show</span>
+      <span>Genre</span>
+      <span className="text-right" title="Discovery score (0–100): how much the block leans on brand-new music">
+        Disc.
+      </span>
+    </div>
+  );
+}
+
+/** Discovery score cell: numeric score tinted by tier, "—" when unknown. */
+function DiscoveryCell({ show }: { show: ShowEntry }) {
+  if (show.discoveryScore == null) {
+    return (
+      <span className="text-right font-mono text-[10px] text-muted-foreground/40">
+        —
+      </span>
+    );
+  }
+  const score = Math.round(show.discoveryScore);
+  const isNewMusic = show.discoveryLabel === "new-music";
+  const tone =
+    show.discoveryLabel === "new-music"
+      ? "text-primary"
+      : show.discoveryLabel === "recent"
+        ? "text-foreground"
+        : "text-muted-foreground/70";
+  const label =
+    show.discoveryLabel === "new-music"
+      ? "leans on brand-new music"
+      : show.discoveryLabel === "recent"
+        ? "mixes recent releases"
+        : "leans on catalog";
+  return (
+    <span
+      className={`inline-flex items-center justify-end gap-1 text-right font-mono text-[10px] tabular-nums ${tone}`}
+      title={`Discovery score ${score} — this block ${label}`}
+      data-testid={`discovery-${show.stationSlug}-${show.startTime}`}
+    >
+      {isNewMusic && (
+        <Sparkles
+          className="h-2.5 w-2.5 shrink-0"
+          data-testid={`new-music-badge-${show.stationSlug}-${show.startTime}`}
+        />
+      )}
+      {score}
+    </span>
+  );
+}
+
+/** One schedule slot row: time, station, show, DJ, genre column, discovery. */
 function SlotRow({
   show,
   isLast,
@@ -398,7 +467,7 @@ function SlotRow({
   const isNewMusic = show.discoveryLabel === "new-music";
   return (
     <div
-      className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5${
+      className={`${ROW_GRID} py-2.5${
         isLast ? "" : " border-b border-border/40"
       }${isNewMusic ? " bg-primary/[0.04]" : ""}`}
       data-testid={`slot-${show.stationSlug}-${show.startTime}`}
@@ -406,7 +475,7 @@ function SlotRow({
       {/* Time or LIVE badge */}
       {live ? (
         <span
-          className="inline-flex w-11 shrink-0 items-center gap-1 font-mono text-[9px] font-semibold uppercase tracking-wide text-red-500"
+          className="inline-flex items-center gap-1 font-mono text-[9px] font-semibold uppercase tracking-wide text-red-500"
           data-testid="live-badge"
         >
           <span className="relative flex h-1.5 w-1.5" aria-hidden>
@@ -416,7 +485,7 @@ function SlotRow({
           Live
         </span>
       ) : (
-        <span className="w-11 shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
+        <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
           {show.startTime}
         </span>
       )}
@@ -425,64 +494,56 @@ function SlotRow({
       <Link
         href={`/archive/stations/${show.stationSlug}`}
         onClick={(e) => e.stopPropagation()}
-        className="hidden sm:inline-flex w-[11ch] shrink-0 items-center gap-1 rounded-full border border-border bg-background/40 px-2 py-0.5 font-mono text-[9px] text-muted-foreground/70 hover:border-primary/40 hover:text-primary transition-colors overflow-hidden"
+        className="hidden sm:inline-flex min-w-0 items-center gap-1 rounded-full border border-border bg-background/40 px-2 py-0.5 font-mono text-[9px] text-muted-foreground/70 hover:border-primary/40 hover:text-primary transition-colors overflow-hidden"
         title={show.stationName}
       >
         <Radio className="h-2 w-2 shrink-0" />
         <span className="truncate">{show.stationName}</span>
       </Link>
 
-      {/* Show name */}
-      <Link
-        href={`/archive/stations/${show.stationSlug}?show=${encodeURIComponent(show.showName)}`}
-        className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground hover:text-primary transition-colors"
-        title={show.showName}
-      >
-        {show.showName}
-      </Link>
-
-      {/* Discovery highlight — blocks leaning heavily on new music */}
-      {isNewMusic && (
-        <span
-          className="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary-border bg-primary/10 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide text-primary"
-          title={
-            show.discoveryScore != null
-              ? `Discovery score ${Math.round(show.discoveryScore)} — this block leans on brand-new music`
-              : "This block leans on brand-new music"
-          }
-          data-testid={`new-music-badge-${show.stationSlug}-${show.startTime}`}
+      {/* Show name + DJ */}
+      <span className="flex min-w-0 items-center gap-2">
+        <Link
+          href={`/archive/stations/${show.stationSlug}?show=${encodeURIComponent(show.showName)}`}
+          className="min-w-0 truncate font-mono text-[11px] text-foreground hover:text-primary transition-colors"
+          title={show.showName}
         >
-          <Sparkles className="h-2.5 w-2.5 shrink-0" />
-          New music
-        </span>
-      )}
+          {show.showName}
+        </Link>
+        {show.djName && (
+          <Link
+            href={`/dj/${encodeURIComponent(show.djName)}`}
+            onClick={(e) => e.stopPropagation()}
+            className="hidden md:inline-flex shrink-0 items-center gap-1 font-mono text-[10px] text-muted-foreground/70 hover:text-primary transition-colors"
+            title={`${show.djName}'s schedule`}
+          >
+            <Mic className="h-2.5 w-2.5 shrink-0" />
+            <span className="max-w-[12ch] truncate">{show.djName}</span>
+          </Link>
+        )}
+      </span>
 
-      {/* Genre chips */}
-      {show.genres.length > 0 && (
-        <span className="hidden md:flex shrink-0 gap-1">
-          {show.genres.slice(0, 3).map((g) => (
+      {/* Genre column */}
+      {show.genres.length > 0 ? (
+        <span
+          className="flex min-w-0 gap-1 overflow-hidden"
+          title={show.genres.join(", ")}
+        >
+          {show.genres.slice(0, 3).map((g, gi) => (
             <span
               key={g}
-              className="inline-flex items-center rounded-full border border-border bg-background/40 px-2 py-0.5 font-mono text-[9px] text-muted-foreground/70 whitespace-nowrap"
+              className={`inline-flex min-w-0 items-center rounded-full border border-border bg-background/40 px-2 py-0.5 font-mono text-[9px] text-muted-foreground/70 whitespace-nowrap ${gi > 0 ? "hidden md:inline-flex" : ""}`}
             >
-              {g}
+              <span className="truncate">{g}</span>
             </span>
           ))}
         </span>
+      ) : (
+        <span className="font-mono text-[10px] text-muted-foreground/40">—</span>
       )}
 
-      {/* DJ link */}
-      {show.djName && (
-        <Link
-          href={`/dj/${encodeURIComponent(show.djName)}`}
-          onClick={(e) => e.stopPropagation()}
-          className="hidden md:inline-flex shrink-0 items-center gap-1 font-mono text-[10px] text-muted-foreground/70 hover:text-primary transition-colors"
-          title={`${show.djName}'s schedule`}
-        >
-          <Mic className="h-2.5 w-2.5 shrink-0" />
-          <span className="max-w-[12ch] truncate">{show.djName}</span>
-        </Link>
-      )}
+      {/* Discovery score column */}
+      <DiscoveryCell show={show} />
     </div>
   );
 }
