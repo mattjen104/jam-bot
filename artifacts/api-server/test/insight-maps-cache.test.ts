@@ -227,6 +227,60 @@ describe("getInsightMaps — concurrent cold-cache calls fire the builder only o
 });
 
 // ---------------------------------------------------------------------------
+// Test 5 — thundering-herd guard holds after TTL expires mid-flight
+//
+// Race: call 1 fires → slow builder runs → TTL advances past expiry →
+// call 2 fires before call 1 resolves.
+//
+// The guard works by gating the TTL eviction on `settled`: an in-flight
+// promise (settled=false) is never evicted regardless of builtAt age, so
+// call 2 receives the same in-flight promise and the builder fires only once.
+// ---------------------------------------------------------------------------
+
+describe("getInsightMaps — thundering-herd guard holds after TTL expires mid-flight", () => {
+  it("reuses the in-flight promise even when the TTL has expired before it resolves", async () => {
+    vi.useFakeTimers();
+
+    let buildCount = 0;
+    let resolveInFlight!: (maps: { showByName: Map<never, never>; showByDj: Map<never, never>; pickerByDj: Map<never, never> }) => void;
+
+    const fakeBuilder = vi.fn(
+      () =>
+        new Promise<{ showByName: Map<never, never>; showByDj: Map<never, never>; pickerByDj: Map<never, never> }>(
+          (resolve) => {
+            buildCount++;
+            resolveInFlight = resolve;
+          }
+        )
+    );
+
+    _configureInsightMapsBuilder(fakeBuilder as Parameters<typeof _configureInsightMapsBuilder>[0]);
+
+    // Call 1 — cold cache, builder starts but does not resolve yet.
+    const promise1 = getInsightMaps();
+    expect(buildCount).toBe(1);
+
+    // Advance fake time past the TTL.  The entry's `settled` flag is still
+    // false because the builder hasn't resolved.
+    vi.advanceTimersByTime(INSIGHT_MAPS_TTL_MS + 1);
+
+    // Call 2 — TTL looks expired, but the promise is still in-flight.
+    // The guard should reuse the existing in-flight entry, not start a new build.
+    const promise2 = getInsightMaps();
+    expect(buildCount).toBe(1);
+
+    // Resolve the in-flight builder.
+    const maps = { showByName: new Map(), showByDj: new Map(), pickerByDj: new Map() };
+    resolveInFlight(maps);
+
+    // Both calls must resolve to the same object.
+    const [result1, result2] = await Promise.all([promise1, promise2]);
+    expect(result1).toBe(result2);
+    expect(fakeBuilder).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Test 3 — error not cached: a failed build is evicted so the next call
 //           retries rather than replaying the cached rejection
 // ---------------------------------------------------------------------------

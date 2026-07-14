@@ -867,7 +867,7 @@ type InsightMaps = {
 };
 
 export const INSIGHT_MAPS_TTL_MS = 5 * 60 * 1000;
-let insightMapsCache: { builtAt: number; promise: Promise<InsightMaps> } | null = null;
+let insightMapsCache: { builtAt: number; promise: Promise<InsightMaps>; settled: boolean } | null = null;
 
 // Injectable seam — replaced in tests so DB interactions can be controlled
 // without spying on drizzle internals.  In production this always points to
@@ -949,18 +949,31 @@ async function buildInsightMapsImpl(): Promise<InsightMaps> {
 
 // Cache the in-flight promise (not just the resolved value) so concurrent
 // requests during a cold/expired window share one rebuild instead of each
-// firing their own full-table reads. A failed build is evicted immediately so
+// firing their own full-table reads.
+//
+// The TTL check is gated on `settled`: if the promise is still in-flight
+// when the TTL clock ticks past expiry, later callers reuse the same
+// in-flight promise rather than kicking off a second redundant build.
+// A failed build is evicted immediately (settled=true + cache cleared) so
 // the next request retries rather than caching the error for the full TTL.
 export function getInsightMaps(): Promise<InsightMaps> {
   const now = Date.now();
-  if (!insightMapsCache || now - insightMapsCache.builtAt >= INSIGHT_MAPS_TTL_MS) {
-    const entry = {
+  if (
+    !insightMapsCache ||
+    (insightMapsCache.settled && now - insightMapsCache.builtAt >= INSIGHT_MAPS_TTL_MS)
+  ) {
+    const entry: { builtAt: number; promise: Promise<InsightMaps>; settled: boolean } = {
       builtAt: now,
       promise: buildInsightMaps(),
+      settled: false,
     };
-    entry.promise.catch(() => {
-      if (insightMapsCache === entry) insightMapsCache = null;
-    });
+    entry.promise.then(
+      () => { entry.settled = true; },
+      () => {
+        entry.settled = true;
+        if (insightMapsCache === entry) insightMapsCache = null;
+      }
+    );
     insightMapsCache = entry;
   }
   return insightMapsCache.promise;
