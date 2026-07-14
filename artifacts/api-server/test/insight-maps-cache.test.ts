@@ -180,6 +180,53 @@ describe("getInsightMaps — TTL expiry triggers rebuild with fresh data", () =>
 });
 
 // ---------------------------------------------------------------------------
+// Test 4 — thundering herd: concurrent cold-cache callers share one build
+// ---------------------------------------------------------------------------
+
+describe("getInsightMaps — concurrent cold-cache calls fire the builder only once", () => {
+  it("resolves all callers from a single in-flight promise when the cache is empty", async () => {
+    let buildCount = 0;
+
+    // The builder takes a tick to resolve so that multiple synchronous callers
+    // can all observe an empty cache before the first one sets the entry.
+    const fakeBuilder = vi.fn(
+      () =>
+        new Promise<{ showByName: Map<never, never>; showByDj: Map<never, never>; pickerByDj: Map<never, never> }>(
+          (resolve) => {
+            buildCount++;
+            // Yield to the microtask queue so all callers below reach
+            // getInsightMaps() before the promise settles.
+            Promise.resolve().then(() =>
+              resolve({ showByName: new Map(), showByDj: new Map(), pickerByDj: new Map() })
+            );
+          }
+        )
+    );
+
+    _configureInsightMapsBuilder(fakeBuilder as Parameters<typeof _configureInsightMapsBuilder>[0]);
+
+    // Fire five concurrent requests against a cold cache.
+    const results = await Promise.all([
+      getInsightMaps(),
+      getInsightMaps(),
+      getInsightMaps(),
+      getInsightMaps(),
+      getInsightMaps(),
+    ]);
+
+    // The builder must have been invoked exactly once despite five concurrent callers.
+    expect(buildCount).toBe(1);
+    expect(fakeBuilder).toHaveBeenCalledTimes(1);
+
+    // Every caller receives the exact same resolved object (shared promise).
+    const first = results[0];
+    for (const r of results.slice(1)) {
+      expect(r).toBe(first);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Test 3 — error not cached: a failed build is evicted so the next call
 //           retries rather than replaying the cached rejection
 // ---------------------------------------------------------------------------
