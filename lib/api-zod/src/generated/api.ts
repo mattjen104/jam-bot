@@ -313,6 +313,7 @@ export const ListStationsNowPlayingResponse = zod.object({
                               'A cross-service deep link. kind=\"exact\" points at the precise recording (resolved via Odesli); kind=\"search\" is a best-effort artist+title search on that service.',
                             ),
                         ),
+                        genres: zod.array(zod.string()).nullish(),
                       })
                       .describe("The MBID-keyed recording a spin resolved to."),
                     zod.null(),

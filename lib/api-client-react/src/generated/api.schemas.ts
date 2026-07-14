@@ -301,6 +301,11 @@ export interface NowPlayingRecording {
   /** @nullable */
   artworkUrl?: string | null;
   links: RecordingLink[];
+  /**
+   * MusicBrainz-sourced genre tags for the recording, most-relevant first. Null when the recording has not been enriched yet.
+   * @nullable
+   */
+  genres?: string[] | null;
 }
 
 export type NowPlayingConfidence =

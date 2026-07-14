@@ -437,15 +437,19 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
     [follows],
   );
 
-  // Genre options derived from whatever tags are actually present on the
-  // loaded stations — avoids a separate endpoint or a hardcoded taxonomy.
+  // Genre options derived from what's actually playing right now — ranked by
+  // how many stations are currently broadcasting that genre.
   const genreOptions = useMemo((): string[] => {
-    const set = new Set<string>();
-    for (const s of stations) {
-      for (const tag of s.tags ?? []) set.add(tag);
+    const counts = new Map<string, number>();
+    for (const item of pulse?.items ?? []) {
+      for (const g of item.nowPlaying?.recording?.genres ?? []) {
+        counts.set(g, (counts.get(g) ?? 0) + 1);
+      }
     }
-    return [...set].sort((a, b) => a.localeCompare(b));
-  }, [stations]);
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([g]) => g);
+  }, [pulse]);
 
   // Map slug → the show currently airing based on the scraped weekly schedule.
   // Only computed in live mode (selectedDate = null); falls back gracefully
@@ -492,8 +496,16 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
     if (dialFilter === "following")
       result = result.filter((s) => isFollowed(follows, "station", s.slug));
 
-    if (dialGenre)
-      result = result.filter((s) => (s.tags ?? []).includes(dialGenre));
+    if (dialGenre) {
+      const genresBySlug = new Map(
+        (pulse?.items ?? [])
+          .filter((i) => i.nowPlaying?.recording?.genres?.length)
+          .map((i) => [i.slug, i.nowPlaying!.recording!.genres!] as const),
+      );
+      result = result.filter((s) =>
+        (genresBySlug.get(s.slug) ?? []).includes(dialGenre),
+      );
+    }
 
     if (descriptionOnly)
       result = result.filter(
@@ -521,7 +533,7 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
     }
 
     return result;
-  }, [dialFilter, dialSort, dialGenre, descriptionOnly, dialSearch, stations, follows]);
+  }, [dialFilter, dialSort, dialGenre, descriptionOnly, dialSearch, stations, follows, pulse]);
 
   const filteredPickerItems = useMemo((): PickerDialItem[] => {
     if (dialFilter === "live" || dialFilter === "featured") return [];

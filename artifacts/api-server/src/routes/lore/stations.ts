@@ -109,6 +109,7 @@ router.get("/stations/now-playing", h(async (req, res) => {
       artistMbid: recordingsTable.artistMbid,
       artworkUrl: recordingsTable.artworkUrl,
       links: recordingsTable.links,
+      genres: recordingsTable.genres,
       showName: showsTable.name,
       showDj: showsTable.djName,
     })
@@ -160,6 +161,7 @@ router.get("/stations/:slug/now-playing", h(async (req, res) => {
       artistMbid: recordingsTable.artistMbid,
       artworkUrl: recordingsTable.artworkUrl,
       links: recordingsTable.links,
+      genres: recordingsTable.genres,
       showName: showsTable.name,
       showDj: showsTable.djName,
     })
