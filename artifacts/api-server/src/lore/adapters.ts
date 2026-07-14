@@ -591,11 +591,11 @@ export function parseIcyNowPlaying(streamTitle: string): NowPlayingRaw | null {
   const rawTitle = parsed.rawTitle;
   const sourceArtist = parsed.rawArtist;
 
-  // Apply the junk guard on source-provided values only. When the source does
-  // not carry an artist field (title-only stream), skip the check entirely:
-  // the equality rule must not fire on the synthetic rawTitle fallback, and
-  // the other junk patterns are far rarer in title-only metadata.
-  if (sourceArtist !== undefined && isJunkMetadata(sourceArtist, rawTitle)) return null;
+  // Apply the junk guard. For title-only entries (no source artist) we pass an
+  // empty string so the equality rule cannot fire on the synthetic fallback,
+  // while all non-equality checks (ADWTAG, phrases, digits, slugs) still screen
+  // the title field. When the source provides an artist the full pair is checked.
+  if (isJunkMetadata(sourceArtist ?? "", rawTitle)) return null;
 
   const rawArtist = sourceArtist ?? rawTitle;
   const out: NowPlayingRaw = { rawArtist, rawTitle };

@@ -614,6 +614,14 @@ describe("parseIcyNowPlaying", () => {
     expect(result!.rawArtist).toBe("Landscape on Mars"); // fallback = title
   });
 
+  it("drops title-only ADWTAG_ junk even with no artist field", () => {
+    expect(parseIcyNowPlaying("ADWTAG_60000")).toBeNull();
+  });
+
+  it("drops title-only numeric code even with no artist field", () => {
+    expect(parseIcyNowPlaying("60000")).toBeNull();
+  });
+
   it("drops entries where the source provides identical artist and title", () => {
     // This is a genuine junk case: both fields are present and equal.
     expect(parseIcyNowPlaying("LA GIGANTE DE LOS ANDES - LA GIGANTE DE LOS ANDES")).toBeNull();

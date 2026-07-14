@@ -43,6 +43,7 @@ vi.mock("../src/lore/icy.js", () => ({
       ? { rawArtist: parts[0], rawTitle: parts[1] }
       : { rawArtist: parts[0], rawTitle: parts[0] };
   }),
+  isJunkMetadata: vi.fn(() => false),
 }));
 
 // ---------------------------------------------------------------------------
