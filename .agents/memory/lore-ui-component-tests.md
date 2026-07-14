@@ -12,6 +12,9 @@ The lore vitest suite defaults to `environment: "node"`; UI tests opt into jsdom
 - Stub `HTMLMediaElement.prototype.play/pause/load` (jsdom's are not implemented; `play()` returning non-Promise crashes `.play().catch(...)` call sites).
 - Route pages with `<Router hook={hook} searchHook={searchHook}>` from `memoryLocation(...)` (`wouter/memory-location`).
 
+- Wrap renders in a `QueryClientProvider` (fresh `new QueryClient({defaultOptions:{queries:{retry:false, enabled:false}}})`): some components (e.g. KeepButton via meHooks) call `useQuery` from @tanstack/react-query directly, bypassing the mocked barrel, and crash with "No QueryClient set".
+- Barrel-mock breakage is the usual failure mode when pages grow new hooks: any new `useGetX`/`getGetXQueryKey` used anywhere in the tree must be added to every test file's `vi.mock` factory or ~20 tests fail with "No export is defined on the mock".
+
 **Gotcha — memoryLocation searchPath must NOT start with `?`.**
 **Why:** wouter joins `path + "?" + searchPath`; a leading `?` yields `path??query`, and its `split("?")` destructuring then reads the search as empty — pages silently see no query params and tests fail mysteriously (renders fine, params absent).
 **How to apply:** pass `searchPath: "play=1&from=x"` (bare), and prefer `static: true` for read-only page tests.

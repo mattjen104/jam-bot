@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vite
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Route, Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 vi.mock("@workspace/api-client-react", () => ({
   useGetRecording: vi.fn(),
@@ -23,11 +24,14 @@ vi.mock("@workspace/api-client-react", () => ({
   useGetRecordingEntry: vi.fn(),
   useGetRecordingKnowledge: vi.fn(),
   useGetRecordingLyrics: vi.fn(),
+  useGetRecordingSongExploder: vi.fn(() => ({ data: null, isLoading: false })),
   useGetRecordingSpins: vi.fn(),
   useGetRecordingSegues: vi.fn(),
   useGetRecordingPicks: vi.fn(),
   useGetStationRun: vi.fn(),
   useGetPickerRun: vi.fn(),
+  useGetStationRunInsights: vi.fn(() => ({ data: null, isLoading: false })),
+  useGetPickerRunInsights: vi.fn(() => ({ data: null, isLoading: false })),
   getRecording: vi.fn(async () => ({ links: [] })),
   getRecordingSegues: vi.fn(async () => ({ next: [] })),
   getRecordingPreview: vi.fn(async (mbid: string) => ({
@@ -35,6 +39,11 @@ vi.mock("@workspace/api-client-react", () => ({
     artworkUrl: null,
   })),
   getStationNowPlaying: vi.fn(),
+  useGetStationNowPlaying: vi.fn(() => ({ data: null, isLoading: false })),
+  getGetStationNowPlayingQueryKey: vi.fn((slug: string) => [
+    "station-now-playing",
+    slug,
+  ]),
   spotifyPlay: vi.fn(),
   spotifyPause: vi.fn(async () => {}),
   spotifyResume: vi.fn(),
@@ -162,6 +171,12 @@ function makeRunData(kind: "station" | "picker") {
 // Helpers
 // --------------------------------------------------------------------------
 
+function makeQueryClient() {
+  return new QueryClient({
+    defaultOptions: { queries: { retry: false, enabled: false } },
+  });
+}
+
 function renderSongPage(mbid: string) {
   const { hook, searchHook } = memoryLocation({
     path: `/song/${mbid}`,
@@ -169,12 +184,14 @@ function renderSongPage(mbid: string) {
     static: true,
   });
   return render(
-    <Router hook={hook} searchHook={searchHook}>
-      <PlayerProvider>
-        <Route path="/song/:mbid" component={Song} />
-        <PlayerDock />
-      </PlayerProvider>
-    </Router>,
+    <QueryClientProvider client={makeQueryClient()}>
+      <Router hook={hook} searchHook={searchHook}>
+        <PlayerProvider>
+          <Route path="/song/:mbid" component={Song} />
+          <PlayerDock />
+        </PlayerProvider>
+      </Router>
+    </QueryClientProvider>,
   );
 }
 
@@ -192,12 +209,14 @@ function renderRunPage(
   });
   const PageComponent = kind === "station" ? StationRun : PickerRun;
   return render(
-    <Router hook={hook} searchHook={searchHook}>
-      <PlayerProvider>
-        <Route path={`${base}/:runId`} component={PageComponent} />
-        <PlayerDock />
-      </PlayerProvider>
-    </Router>,
+    <QueryClientProvider client={makeQueryClient()}>
+      <Router hook={hook} searchHook={searchHook}>
+        <PlayerProvider>
+          <Route path={`${base}/:runId`} component={PageComponent} />
+          <PlayerDock />
+        </PlayerProvider>
+      </Router>
+    </QueryClientProvider>,
   );
 }
 
@@ -287,7 +306,7 @@ describe("Song page — 'Hear it in context' link construction", () => {
     renderSongPage(SONG_MBID);
     const link = await screen.findByTestId("pick-replay-0");
     const href = link.getAttribute("href") ?? "";
-    expect(href).toContain(`/archive/picker-runs/${RUN_ID}`);
+    expect(href).toContain(`/archive/selector-runs/${RUN_ID}`);
     expect(href).toContain("play=1");
     expect(href).toContain(`from=${SONG_MBID}`);
   });

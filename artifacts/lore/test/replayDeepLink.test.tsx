@@ -14,10 +14,13 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vite
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Route, Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 vi.mock("@workspace/api-client-react", () => ({
   useGetStationRun: vi.fn(),
   useGetPickerRun: vi.fn(),
+  useGetStationRunInsights: vi.fn(() => ({ data: null, isLoading: false })),
+  useGetPickerRunInsights: vi.fn(() => ({ data: null, isLoading: false })),
   getRecording: vi.fn(async () => ({ links: [] })),
   getRecordingSegues: vi.fn(async () => ({ next: [] })),
   getRecordingPreview: vi.fn(async (mbid: string) => ({
@@ -25,6 +28,11 @@ vi.mock("@workspace/api-client-react", () => ({
     artworkUrl: null,
   })),
   getStationNowPlaying: vi.fn(),
+  useGetStationNowPlaying: vi.fn(() => ({ data: null, isLoading: false })),
+  getGetStationNowPlayingQueryKey: vi.fn((slug: string) => [
+    "station-now-playing",
+    slug,
+  ]),
   spotifyPlay: vi.fn(),
   spotifyPause: vi.fn(async () => {}),
   spotifyResume: vi.fn(),
@@ -118,13 +126,18 @@ function renderRunPage(
     static: true,
   });
   const PageComponent = page === "station" ? StationRun : PickerRun;
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, enabled: false } },
+  });
   return render(
-    <Router hook={hook} searchHook={searchHook}>
-      <PlayerProvider>
-        <Route path={`${base}/:runId`} component={PageComponent} />
-        <PlayerDock />
-      </PlayerProvider>
-    </Router>,
+    <QueryClientProvider client={queryClient}>
+      <Router hook={hook} searchHook={searchHook}>
+        <PlayerProvider>
+          <Route path={`${base}/:runId`} component={PageComponent} />
+          <PlayerDock />
+        </PlayerProvider>
+      </Router>
+    </QueryClientProvider>,
   );
 }
 
