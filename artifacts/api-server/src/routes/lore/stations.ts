@@ -947,6 +947,8 @@ router.get("/scraped-shows", h(async (_req, res) => {
       stationId: scrapedShowsTable.stationId,
       stationSlug: stationsTable.slug,
       stationName: stationsTable.name,
+      stationGenreProfile: stationsTable.genreProfile,
+      stationDiscoveryScore: stationsTable.discoveryScore,
       showName: scrapedShowsTable.showName,
       dayOfWeek: scrapedShowsTable.dayOfWeek,
       startTime: scrapedShowsTable.startTime,
@@ -963,6 +965,8 @@ router.get("/scraped-shows", h(async (_req, res) => {
     stationId: number;
     showName: string;
     djName: string | null;
+    stationGenreProfile: { top: Array<{ genre: string; count: number }> } | null;
+    stationDiscoveryScore: number | null;
   }): Insight | null => {
     const byName = showByName.get(`${slot.stationId}|${slot.showName.trim().toLowerCase()}`);
     if (byName) return byName;
@@ -972,6 +976,16 @@ router.get("/scraped-shows", h(async (_req, res) => {
       if (byDj) return byDj;
       const byPicker = pickerByDj.get(dj);
       if (byPicker) return byPicker;
+    }
+    // Fall back to the station-level genre profile so every slot at a
+    // scored station shows at least a station-wide profile rather than "—".
+    const stationGenres = slot.stationGenreProfile?.top.slice(0, 4).map((g) => g.genre) ?? [];
+    if (stationGenres.length > 0 || slot.stationDiscoveryScore != null) {
+      return {
+        genres: stationGenres,
+        discoveryScore: slot.stationDiscoveryScore,
+        discoveryLabel: slot.stationDiscoveryScore != null ? labelFromScore(slot.stationDiscoveryScore) : null,
+      };
     }
     return null;
   };
