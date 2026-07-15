@@ -10,10 +10,43 @@
  *  - "running" state with phase="spine" renders "Checking spine…" (not "Connecting to Spotify…")
  *  - "running" state with phase="cache" also renders "Checking spine…"
  *  - "pending" state with no phase shows "Connecting to Spotify…" (correct default)
+ *
+ * Timer tests (Library page):
+ *  - Banner is still visible when < 8 s have elapsed since "done"
+ *  - Banner auto-dismisses after the 8 s setTimeout fires
  */
-import { describe, expect, it, vi, afterEach } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi, afterEach, beforeEach } from "vitest";
+import { cleanup, render, screen, act } from "@testing-library/react";
 import { LibraryImportBanner } from "../src/pages/Library";
+import LibraryPage from "../src/pages/Library";
+
+// ---------------------------------------------------------------------------
+// Module-level mocks (hoisted) — only affect Library page render tests.
+// LibraryImportBanner is a pure prop-driven component and is unaffected.
+// ---------------------------------------------------------------------------
+
+vi.mock("wouter", () => ({
+  Link: ({ children, href }: { children: React.ReactNode; href: string }) => (
+    <a href={href}>{children}</a>
+  ),
+}));
+
+vi.mock("../src/player/PlayerProvider", () => ({
+  usePlayer: vi.fn(() => ({
+    ride: { active: false },
+    radio: { station: null },
+  })),
+}));
+
+vi.mock("../src/lib/meHooks", () => ({
+  useMyConnections: vi.fn(() => ({ data: null, isLoading: false })),
+  useMyLibrary: vi.fn(() => ({ data: { items: [] }, isLoading: false })),
+  useLatestImportJob: vi.fn(() => ({ data: null })),
+  startSpotifyLibraryConnect: vi.fn(),
+  postStartImport: vi.fn(),
+}));
+
+// ---------------------------------------------------------------------------
 
 afterEach(() => {
   cleanup();
@@ -151,5 +184,66 @@ describe("LibraryImportBanner — running phase labels", () => {
       />,
     );
     expect(screen.getByText(/connecting to spotify/i)).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Timer tests — Library page component
+//
+// These render the full Library page with mocked hooks so we can exercise the
+// two useEffect blocks that (a) clear bannerDismissed when a job starts and
+// (b) set a 8 000 ms auto-dismiss timer when status reaches "done".
+// ---------------------------------------------------------------------------
+
+describe("Library page — import banner auto-dismiss timer", () => {
+  // Fix the wall clock so isRecentlyFinished (< 10 min) stays true when we
+  // advance fake timers. We set finishedAt 30 s before this anchor.
+  const FIXED_NOW = new Date("2026-01-01T12:00:00.000Z");
+  const FINISHED_AT = new Date(FIXED_NOW.getTime() - 30_000).toISOString();
+
+  const doneJob = {
+    status: "done" as const,
+    phase: null,
+    total: 120,
+    resolved: 120,
+    error: null,
+    finishedAt: FINISHED_AT,
+  };
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(FIXED_NOW);
+
+    const { useLatestImportJob } = await import("../src/lib/meHooks");
+    vi.mocked(useLatestImportJob).mockReturnValue({ data: doneJob } as ReturnType<typeof useLatestImportJob>);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("shows the banner before 8 s have elapsed", async () => {
+    render(<LibraryPage />);
+
+    // Advance 7 999 ms — just under the threshold
+    await act(async () => {
+      vi.advanceTimersByTime(7_999);
+    });
+
+    expect(screen.getByTestId("library-import-banner")).toBeTruthy();
+  });
+
+  it("auto-dismisses the banner once 8 s have elapsed", async () => {
+    render(<LibraryPage />);
+
+    // Confirm it's visible to start with
+    expect(screen.getByTestId("library-import-banner")).toBeTruthy();
+
+    // Advance past the 8 000 ms threshold
+    await act(async () => {
+      vi.advanceTimersByTime(8_001);
+    });
+
+    expect(screen.queryByTestId("library-import-banner")).toBeNull();
   });
 });
