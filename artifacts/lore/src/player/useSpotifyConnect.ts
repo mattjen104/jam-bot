@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getSpotifyStatus, spotifyLogout } from "@workspace/api-client-react";
+import {
+  getSpotifyStatus,
+  spotifyLogout,
+  getSpotifyDevices,
+  type SpotifyDevice,
+} from "@workspace/api-client-react";
+
+export type { SpotifyDevice };
 
 /**
  * Spotify Connect state for this browser session. The server holds the OAuth
@@ -21,6 +28,15 @@ export interface SpotifyConnectApi {
   connect: () => void;
   disconnect: () => void;
   refresh: () => void;
+
+  /** The device the listener has pinned for one-at-a-time queuing. Session-only. */
+  pinnedDevice: SpotifyDevice | null;
+  /** Fetch available Spotify Connect devices (call on picker open). */
+  fetchDevices: () => Promise<SpotifyDevice[]>;
+  /** Pin a device — subsequent tracks will be sent to it automatically. */
+  pinDevice: (device: SpotifyDevice) => void;
+  /** Unpin the current device, returning to the active-device default. */
+  unpinDevice: () => void;
 }
 
 const NOTICES: Record<string, string> = {
@@ -35,6 +51,7 @@ export function useSpotifyConnect(): SpotifyConnectApi {
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [product, setProduct] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [pinnedDevice, setPinnedDevice] = useState<SpotifyDevice | null>(null);
   const aliveRef = useRef(true);
 
   const refresh = useCallback(() => {
@@ -45,6 +62,9 @@ export function useSpotifyConnect(): SpotifyConnectApi {
         setConnected(s.connected);
         setDisplayName(s.displayName ?? null);
         setProduct(s.product ?? null);
+        // If connection dropped, clear the pinned device so we don't silently
+        // keep sending commands to a device for a disconnected session.
+        if (!s.connected) setPinnedDevice(null);
       })
       .catch(() => {
         // Status is best-effort; failure just means "no Spotify layer".
@@ -95,10 +115,28 @@ export function useSpotifyConnect(): SpotifyConnectApi {
         setConnected(false);
         setDisplayName(null);
         setProduct(null);
+        setPinnedDevice(null);
       });
   }, []);
 
   const clearNotice = useCallback(() => setNotice(null), []);
+
+  const fetchDevices = useCallback(async (): Promise<SpotifyDevice[]> => {
+    try {
+      const result = await getSpotifyDevices();
+      return result.devices;
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const pinDevice = useCallback((device: SpotifyDevice) => {
+    setPinnedDevice(device);
+  }, []);
+
+  const unpinDevice = useCallback(() => {
+    setPinnedDevice(null);
+  }, []);
 
   return {
     configured,
@@ -111,5 +149,9 @@ export function useSpotifyConnect(): SpotifyConnectApi {
     connect,
     disconnect,
     refresh,
+    pinnedDevice,
+    fetchDevices,
+    pinDevice,
+    unpinDevice,
   };
 }

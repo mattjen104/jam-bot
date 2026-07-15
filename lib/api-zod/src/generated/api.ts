@@ -2444,7 +2444,21 @@ export const GetSpotifyStatusResponse = zod
 
 export const SpotifyPlayBody = zod.object({
   mbid: zod.string().min(1),
+  deviceId: zod.string().nullish(),
 });
+
+export const SpotifyDevicesResponse = zod
+  .object({
+    devices: zod.array(
+      zod.object({
+        id: zod.string(),
+        name: zod.string(),
+        type: zod.string(),
+        isActive: zod.boolean(),
+      }),
+    ),
+  })
+  .describe("Available Spotify Connect devices for this session.");
 
 export const SpotifyPlayResponse = zod
   .object({

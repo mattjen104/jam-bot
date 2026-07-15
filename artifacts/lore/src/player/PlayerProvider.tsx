@@ -277,6 +277,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   playbackModeRef.current = playbackMode;
   const timeOrientationRef = useRef<TimeOrientation>(timeOrientation);
   timeOrientationRef.current = timeOrientation;
+  // Pinned device id — kept in a ref so the spotifyPlay effect can read the
+  // latest value without being re-armed on every device change.
+  const pinnedDeviceIdRef = useRef<string | null>(null);
+  pinnedDeviceIdRef.current = spotify.pinnedDevice?.id ?? null;
+  // Stable ref so device-lost path can clear the pin without being in deps.
+  const unpinDeviceRef = useRef(spotify.unpinDevice);
+  unpinDeviceRef.current = spotify.unpinDevice;
 
   const spotifyEligible = spotify.connected && spotify.premium;
 
@@ -593,7 +600,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     // Also silence the broadcast if it was resumed as a fallback.
     pauseRadio?.();
 
-    void spotifyPlay({ mbid: targetMbid })
+    void spotifyPlay({
+      mbid: targetMbid,
+      deviceId: pinnedDeviceIdRef.current ?? undefined,
+    })
       .then((res) => {
         if (token !== rideRef.current) return;
         spotifyNowRef.current = {
@@ -669,6 +679,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
               sourceRef.current = null;
               setSource(null);
               setSpotifyFallbackTick((t) => t + 1);
+              // Clear the pinned device — it's gone offline.
+              unpinDeviceRef.current();
               return;
             }
             if (confirmation.type === "wait") {
@@ -680,11 +692,23 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           }
 
           if (!ours && st.active && st.isPlaying) {
-            // The listener started something else: they took the wheel — the
-            // ride yields immediately and never fights their device.
-            spotifyNowRef.current = null;
-            spotifyPausedRef.current = false;
-            setStatus("ended");
+            // If a device is pinned, the listener skipped in Spotify — advance
+            // Lore's queue and let the next command effect send the next track.
+            // Without a pinned device, the listener took the wheel manually and
+            // we yield immediately without fighting their device.
+            if (pinnedDeviceIdRef.current) {
+              spotifyNowRef.current = null;
+              spotifyPausedRef.current = false;
+              setIndex((i) => {
+                if (i + 1 < queueLenRef.current) return i + 1;
+                setStatus("ended");
+                return i;
+              });
+            } else {
+              spotifyNowRef.current = null;
+              spotifyPausedRef.current = false;
+              setStatus("ended");
+            }
             return;
           }
 
@@ -777,6 +801,53 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
     return () => clearInterval(id);
   }, [active, isLiveSvcRide]);
+
+  // Live radio → pinned device: when the listener is NOT in a ride but has a
+  // Spotify Connect device pinned, send each new now-playing track to that
+  // device automatically. This mirrors the ride command path but without a
+  // queue — the station drives what plays.
+  useEffect(() => {
+    if (active) return undefined; // ride is active — its own logic handles this
+    if (!spotifyEligible) return undefined;
+    if (!spotify.pinnedDevice) return undefined;
+    const slug = liveStationSlugRef.current;
+    if (!slug) return undefined;
+
+    let lastSeenMbid: string | null = null;
+    let initialized = false;
+
+    const id = setInterval(() => {
+      void getStationNowPlaying(slug)
+        .then((np) => {
+          const mbid = np.nowPlaying?.recording?.mbid ?? null;
+          if (!mbid) return;
+
+          if (!initialized) {
+            lastSeenMbid = mbid;
+            initialized = true;
+            return;
+          }
+
+          if (mbid === lastSeenMbid) return;
+          lastSeenMbid = mbid;
+
+          // Station moved to a new track — send it to the pinned device.
+          void spotifyPlay({
+            mbid,
+            deviceId: pinnedDeviceIdRef.current ?? undefined,
+          }).catch(() => {
+            // Best-effort: if it fails the listener still hears the broadcast.
+          });
+        })
+        .catch(() => {});
+    }, 5000);
+
+    return () => clearInterval(id);
+  // re-run when the pin changes, when eligibility changes, or when a ride
+  // starts/stops — slug is read from a ref so changes there don't need to
+  // re-trigger (the interval re-reads it each tick).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, spotifyEligible, spotify.pinnedDevice?.id]);
 
   // Live fallback: when in live+service-ride and Spotify fails for a track,
   // resume the broadcast so the listener always hears audio. The now-playing

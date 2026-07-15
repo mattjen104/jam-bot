@@ -5,6 +5,7 @@ import type { SpotifyConnectApi } from "../player/useSpotifyConnect";
 import { rideFallbackLabel } from "../player/playbackSession";
 import { KeepButton } from "./KeepButton";
 import { ShareButton } from "./ShareButton";
+import { DevicePicker } from "./DevicePicker";
 import {
   AlertTriangle,
   ExternalLink,
@@ -132,29 +133,36 @@ export function RideBar({
               )}
             </div>
 
-            <button
-              type="button"
-              onClick={handleModeToggle}
-              data-testid="ride-mode-toggle"
-              className="hover-elevate inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-1 font-mono text-[11px] text-foreground"
-              title={
-                inServiceRide
-                  ? "Switch to hearing the broadcast stream"
-                  : "Switch to riding full tracks on your Spotify"
-              }
-            >
+            <div className="flex items-center gap-2">
+              {/* Device picker — shown when riding in Spotify */}
               {inServiceRide ? (
-                <>
-                  <Radio className="h-3.5 w-3.5" />
-                  Hear the broadcast
-                </>
-              ) : (
-                <>
-                  <Music2 className="h-3.5 w-3.5" />
-                  Ride in Spotify
-                </>
-              )}
-            </button>
+                <DevicePicker spotify={spotify} />
+              ) : null}
+
+              <button
+                type="button"
+                onClick={handleModeToggle}
+                data-testid="ride-mode-toggle"
+                className="hover-elevate inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-1 font-mono text-[11px] text-foreground"
+                title={
+                  inServiceRide
+                    ? "Switch to hearing the broadcast stream"
+                    : "Switch to riding full tracks on your Spotify"
+                }
+              >
+                {inServiceRide ? (
+                  <>
+                    <Radio className="h-3.5 w-3.5" />
+                    Hear the broadcast
+                  </>
+                ) : (
+                  <>
+                    <Music2 className="h-3.5 w-3.5" />
+                    Ride in Spotify
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

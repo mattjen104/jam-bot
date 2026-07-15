@@ -1960,6 +1960,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /spotify/devices:
+    get:
+      operationId: getSpotifyDevices
+      tags: [spotify]
+      summary: List available Spotify Connect devices for this session
+      description: >
+        Returns all Spotify Connect devices currently visible to the listener's
+        account (`GET /v1/me/player/devices`). Used to populate the device
+        picker so the listener can pin a target for one-at-a-time queuing.
+        Restricted devices are excluded. Requires Premium and a connected
+        Spotify account.
+      responses:
+        "200":
+          description: List of available Spotify Connect devices
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpotifyDevicesResult"
+        "401":
+          description: No Spotify connection for this session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Spotify not configured on the server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 components:
   schemas:
     HealthStatus:
@@ -3978,8 +4008,44 @@ components:
         mbid:
           type: string
           minLength: 1
+        deviceId:
+          type: ["string", "null"]
+          description: >
+            Target Spotify Connect device id (from the device picker). When
+            provided, playback is directed to this device explicitly. When
+            omitted or null, the active device is used (existing behaviour).
       required:
         - mbid
+    SpotifyDevice:
+      type: object
+      description: >
+        A Spotify Connect device visible to the listener's account.
+        `type` follows Spotify's own taxonomy: Computer, Smartphone, Speaker,
+        TV, etc. Restricted devices are never included in the list.
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+        isActive:
+          type: boolean
+      required:
+        - id
+        - name
+        - type
+        - isActive
+    SpotifyDevicesResult:
+      type: object
+      description: Available Spotify Connect devices for this session.
+      properties:
+        devices:
+          type: array
+          items:
+            $ref: "#/components/schemas/SpotifyDevice"
+      required:
+        - devices
     SpotifyPlayResult:
       type: object
       description: Full-track playback started on the listener's own device.

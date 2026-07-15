@@ -1356,6 +1356,28 @@ export interface SpotifyStatus {
 export interface SpotifyPlayRequest {
   /** @minLength 1 */
   mbid: string;
+  /**
+   * Target Spotify Connect device id (from the device picker). When provided,
+   * playback is directed to this device explicitly. When omitted or null, the
+   * active device is used (existing behaviour).
+   * @nullable
+   */
+  deviceId?: string | null;
+}
+
+/**
+ * A Spotify Connect device visible to the listener's account.
+ * `type` follows Spotify's own taxonomy: Computer, Smartphone, Speaker, TV, etc.
+ */
+export interface SpotifyDevice {
+  id: string;
+  name: string;
+  type: string;
+  isActive: boolean;
+}
+
+export interface SpotifyDevicesResult {
+  devices: SpotifyDevice[];
 }
 
 /**

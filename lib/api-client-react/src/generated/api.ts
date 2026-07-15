@@ -77,6 +77,8 @@ import type {
   SongContext,
   SongExploderClaimRequest,
   SongExploderClaimResponse,
+  SpotifyDevice,
+  SpotifyDevicesResult,
   SpotifyPlayRequest,
   SpotifyPlayResult,
   SpotifyPlayerState,
@@ -4984,6 +4986,19 @@ export function useGetSpotifySaved<
  */
 export const getGetSpotifyPlayerUrl = () => {
   return `/api/spotify/player`;
+};
+
+export const getSpotifyDevicesUrl = () => {
+  return `/api/spotify/devices`;
+};
+
+export const getSpotifyDevices = async (
+  options?: RequestInit,
+): Promise<SpotifyDevicesResult> => {
+  return customFetch<SpotifyDevicesResult>(getSpotifyDevicesUrl(), {
+    method: "GET",
+    ...options,
+  });
 };
 
 export const getSpotifyPlayer = async (

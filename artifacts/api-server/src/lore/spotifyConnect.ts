@@ -358,19 +358,34 @@ function throwPlayError(result: PlayerRequestResult, context: string): never {
   );
 }
 
-interface SpotifyDevice {
+interface RawSpotifyDevice {
   id: string | null;
   name: string;
+  type?: string;
   is_active: boolean;
   is_restricted: boolean;
 }
 
-async function listDevices(accessToken: string): Promise<SpotifyDevice[]> {
+export interface SpotifyConnectDevice {
+  id: string;
+  name: string;
+  type: string;
+  isActive: boolean;
+}
+
+export async function listDevices(accessToken: string): Promise<SpotifyConnectDevice[]> {
   const result = await playerRequest(accessToken, "GET", "/me/player/devices");
   if (result.status !== 200) return [];
   try {
-    const parsed = JSON.parse(result.body) as { devices?: SpotifyDevice[] };
-    return parsed.devices ?? [];
+    const parsed = JSON.parse(result.body) as { devices?: RawSpotifyDevice[] };
+    return (parsed.devices ?? [])
+      .filter((d) => d.id && !d.is_restricted)
+      .map((d) => ({
+        id: d.id as string,
+        name: d.name,
+        type: d.type ?? "Unknown",
+        isActive: d.is_active,
+      }));
   } catch {
     return [];
   }
@@ -381,28 +396,38 @@ export interface PlayOutcome {
 }
 
 /**
- * Start full-track playback of `uri` on the listener's Spotify. If no device
- * is active but one is available (e.g. the app is open but paused-idle), we
- * target it explicitly rather than failing — the listener said "play".
+ * Start full-track playback of `uri` on the listener's Spotify. If `deviceId`
+ * is provided (from the device picker), the play command targets that device
+ * directly. If no device is active but one is available (e.g. the app is open
+ * but paused-idle), we target it explicitly rather than failing.
  */
 export async function playTrack(
   accessToken: string,
   uri: string,
+  deviceId?: string | null,
 ): Promise<PlayOutcome> {
-  const first = await playerRequest(accessToken, "PUT", "/me/player/play", {
+  const path = deviceId
+    ? `/me/player/play?device_id=${encodeURIComponent(deviceId)}`
+    : "/me/player/play";
+
+  const first = await playerRequest(accessToken, "PUT", path, {
     uris: [uri],
   });
   if (first.status === 202 || first.status === 204 || first.status === 200) {
     return { deviceName: null };
   }
 
+  // If a device was explicitly pinned, don't try to auto-pick — the specific
+  // device failed (offline, no longer visible), so surface that honestly.
+  if (deviceId) {
+    throwPlayError(first, "play");
+  }
+
   const isNoDevice =
     first.status === 404 && first.body.toLowerCase().includes("no_active_device");
   if (isNoDevice) {
-    const devices = (await listDevices(accessToken)).filter(
-      (d) => d.id && !d.is_restricted,
-    );
-    const target = devices.find((d) => d.is_active) ?? devices[0];
+    const devices = await listDevices(accessToken);
+    const target = devices.find((d) => d.isActive) ?? devices[0];
     if (target?.id) {
       const retry = await playerRequest(
         accessToken,

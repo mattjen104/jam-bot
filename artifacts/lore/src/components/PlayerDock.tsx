@@ -59,6 +59,7 @@ export function PlayerDock() {
         onToggle={radio.toggle}
         onStop={radio.stop}
         onVolume={radio.setVolume}
+        spotify={spotify}
       />
     );
   }

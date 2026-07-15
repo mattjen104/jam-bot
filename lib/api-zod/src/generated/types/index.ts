@@ -115,6 +115,7 @@ export * from "./songRelationship";
 export * from "./songRelationshipDirection";
 export * from "./songRelationshipKind";
 export * from "./songRelationshipTargetType";
+export * from "./spotifyDevice";
 export * from "./spotifyPlayerState";
 export * from "./spotifyPlayRequest";
 export * from "./spotifyPlayResult";

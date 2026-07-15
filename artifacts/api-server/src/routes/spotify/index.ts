@@ -16,6 +16,7 @@ import {
   pausePlayback,
   resumePlayback,
   getPlayerState,
+  listDevices,
   SpotifyPlayError,
   saveTrackToLibrary,
   isTrackSaved,
@@ -191,7 +192,11 @@ router.post("/spotify/play", async (req: Request, res: Response) => {
   }
 
   try {
-    const outcome = await playTrack(conn.accessToken, track.uri);
+    const outcome = await playTrack(
+      conn.accessToken,
+      track.uri,
+      parsed.data.deviceId ?? null,
+    );
     res.json({
       trackUri: track.uri,
       trackUrl: track.url,
@@ -338,6 +343,13 @@ router.get("/spotify/recently-played", async (req: Request, res: Response) => {
     return;
   }
   res.json({ tracks });
+});
+
+router.get("/spotify/devices", async (req: Request, res: Response) => {
+  const conn = await requireConnection(req, res);
+  if (!conn) return;
+  const devices = await listDevices(conn.accessToken);
+  res.json({ devices });
 });
 
 export default router;

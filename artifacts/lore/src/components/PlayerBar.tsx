@@ -1,5 +1,7 @@
 import type { Station } from "@workspace/api-client-react";
 import type { PlayerStatus } from "../hooks/useRadioPlayer";
+import type { SpotifyConnectApi } from "../player/useSpotifyConnect";
+import { DevicePicker } from "./DevicePicker";
 import { Loader2, Pause, Play, Radio, Volume2, VolumeX, X } from "lucide-react";
 import { KeepButton } from "./KeepButton";
 import { ShareButton } from "./ShareButton";
@@ -14,6 +16,8 @@ interface PlayerBarProps {
   onToggle: (station: Station) => void;
   onStop: () => void;
   onVolume: (v: number) => void;
+  /** Spotify Connect state — when provided and connected+premium, shows the device picker. */
+  spotify?: SpotifyConnectApi;
 }
 
 export function PlayerBar({
@@ -25,9 +29,11 @@ export function PlayerBar({
   onToggle,
   onStop,
   onVolume,
+  spotify,
 }: PlayerBarProps) {
   const isPlaying = status === "playing";
   const isLoading = status === "loading";
+  const showDevicePicker = !!(spotify?.connected && spotify.premium);
   return (
     <div
       className="fixed z-40 border border-border bg-secondary/95 backdrop-blur-md shadow-lg
@@ -123,6 +129,10 @@ export function PlayerBar({
               <ShareButton compact sharePath={`songs/${nowPlayingMbid}`} kind="song" />
             </>
           )}
+          {/* Device picker — shown when Spotify Premium is connected */}
+          {showDevicePicker && spotify ? (
+            <DevicePicker spotify={spotify} />
+          ) : null}
           <div className="hidden items-center gap-2 sm:flex">
             {volume === 0 ? (
               <VolumeX className="h-4 w-4 text-muted-foreground" />
