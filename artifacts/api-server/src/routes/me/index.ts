@@ -54,6 +54,8 @@ const KEEP_BATCH_MAX = 50;
 const LIBRARY_PAGE_SIZE = 50;
 /** Delay between resolveToMbid calls in the import worker (1.1 s ≥ MB 1 req/sec). */
 const IMPORT_RESOLVE_DELAY_MS = 1100;
+/** Stamp partial total to DB every N items during the buffer-drain (fetching) phase. */
+const FETCH_STAMP_INTERVAL = 100;
 
 // ---------------------------------------------------------------------------
 // Auth middleware
@@ -427,6 +429,7 @@ export async function runImportWorker(
       .where(eq(libraryImportJobsTable.id, jobId));
 
     const buffer: Array<{ artist: string; title: string; isrc?: string; durationMs?: number; externalId: string }> = [];
+    let lastFetchStamp = 0;
     for await (const raw of connector.importLibrary(accessToken)) {
       buffer.push({
         artist: raw.artist,
@@ -435,6 +438,13 @@ export async function runImportWorker(
         durationMs: raw.durationMs,
         externalId: raw.externalId ?? `${raw.artist}\u001f${raw.title}`,
       });
+      if (buffer.length - lastFetchStamp >= FETCH_STAMP_INTERVAL) {
+        lastFetchStamp = buffer.length;
+        await db
+          .update(libraryImportJobsTable)
+          .set({ total: buffer.length })
+          .where(eq(libraryImportJobsTable.id, jobId));
+      }
     }
     const total = buffer.length;
     let resolved = 0;

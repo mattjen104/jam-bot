@@ -322,6 +322,7 @@ function LibraryImportBanner({
 
   // pending / running — show phase label + progress bar
   const label = phaseLabel(job.phase);
+  const isFetchingPhase = job.phase === "fetching";
   const isResolvingPhase = job.phase === "resolve";
   const progressPct = job.total > 0 ? Math.min(100, (job.resolved / job.total) * 100) : 0;
 
@@ -335,7 +336,12 @@ function LibraryImportBanner({
           <p className="font-mono text-[11px] uppercase tracking-wide text-[#C6F53F]">
             {label}
           </p>
-          {job.total > 0 ? (
+          {isFetchingPhase && job.total > 0 ? (
+            <p className="mt-1 font-serif text-xl font-semibold text-foreground">
+              Found {job.total.toLocaleString()}{" "}
+              <span className="text-base font-normal text-muted-foreground">tracks…</span>
+            </p>
+          ) : !isFetchingPhase && job.total > 0 ? (
             <p className="mt-1 font-serif text-xl font-semibold text-foreground">
               {job.resolved.toLocaleString()}{" "}
               <span className="text-base font-normal text-muted-foreground">
@@ -344,7 +350,7 @@ function LibraryImportBanner({
             </p>
           ) : (
             <p className="mt-1 font-serif text-base text-muted-foreground">
-              {job.phase === "fetching" ? "Scanning your library…" : "Starting…"}
+              {isFetchingPhase ? "Scanning your library…" : "Starting…"}
             </p>
           )}
         </div>
