@@ -284,6 +284,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // Stable ref so device-lost path can clear the pin without being in deps.
   const unpinDeviceRef = useRef(spotify.unpinDevice);
   unpinDeviceRef.current = spotify.unpinDevice;
+  // Stable refs so the periodic device-check interval can call the latest
+  // versions without being re-armed when they are recreated.
+  const showNoticeRef = useRef(spotify.showNotice);
+  showNoticeRef.current = spotify.showNotice;
+  const fetchDevicesRef = useRef(spotify.fetchDevices);
+  fetchDevicesRef.current = spotify.fetchDevices;
 
   const spotifyEligible = spotify.connected && spotify.premium;
 
@@ -752,6 +758,48 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }, 3000);
     return () => clearInterval(id);
   }, [spotifyModeForCurrent, currentMbid]);
+
+  // Periodic device availability check: once per minute while riding in
+  // service-ride mode with a pinned device, confirm the device is still in the
+  // Spotify device list. If it's gone, clear the pin and surface a notice so
+  // the user isn't silently sending commands to a vanished device.
+  // Race guard: skip any check while a play command is in-flight.
+  // Gated on the mode + active state (not spotifyModeForCurrent) so the check
+  // keeps running even when the current track is in fallback.
+  const hasPinnedDevice = !!spotify.pinnedDevice;
+  useEffect(() => {
+    if (!active) return undefined;
+    if (playbackMode !== "resolve_to_service") return undefined;
+    if (!hasPinnedDevice) return undefined;
+
+    const id = setInterval(() => {
+      // Don't act while a command is in-flight — the device might reappear
+      // as soon as Spotify activates it.
+      if (spotifyCommandingRef.current !== null) return;
+
+      const pinnedId = pinnedDeviceIdRef.current;
+      if (!pinnedId) return; // pin already cleared between ticks
+
+      void fetchDevicesRef.current()
+        .then((devices) => {
+          // Re-check the race guard after the async fetch.
+          if (spotifyCommandingRef.current !== null) return;
+          // Also bail if the pin changed while we were fetching.
+          if (pinnedDeviceIdRef.current !== pinnedId) return;
+
+          const stillPresent = devices.some((d) => d.id === pinnedId);
+          if (!stillPresent) {
+            unpinDeviceRef.current();
+            showNoticeRef.current("Device no longer reachable");
+          }
+        })
+        .catch(() => {
+          // Best-effort — a poll failure just skips this tick.
+        });
+    }, 60_000);
+
+    return () => clearInterval(id);
+  }, [active, playbackMode, hasPinnedDevice]);
 
   // Now-playing subscription for live+service-ride: advance the queue when
   // the station moves to a new MBID, rather than polling Spotify for track-end.

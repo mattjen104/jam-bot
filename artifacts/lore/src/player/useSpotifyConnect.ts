@@ -28,9 +28,12 @@ export interface SpotifyConnectApi {
   premium: boolean;
   displayName: string | null;
   product: string | null;
-  /** One-shot message from the OAuth return redirect (?spotify=...). */
+  /** One-shot message from the OAuth return redirect (?spotify=...) or a
+   * programmatic notice (e.g. "Device no longer reachable"). */
   notice: string | null;
   clearNotice: () => void;
+  /** Surface a one-shot notice banner (reuses the same display as OAuth notices). */
+  showNotice: (msg: string) => void;
   connect: () => void;
   disconnect: () => void;
   refresh: () => void;
@@ -135,33 +138,33 @@ export function useSpotifyConnect(): SpotifyConnectApi {
   }, []);
 
   const clearNotice = useCallback(() => setNotice(null), []);
+  const showNotice = useCallback((msg: string) => setNotice(msg), []);
 
   const fetchDevices = useCallback(async (): Promise<SpotifyDevice[]> => {
-    try {
-      const result = await getSpotifyDevices();
-      const devices = result.devices;
+    // Let the error propagate so callers can distinguish "fetch failed" (network
+    // error) from "fetched but empty list". Swallowing it here would make []
+    // ambiguous: no devices vs. transient failure.
+    const result = await getSpotifyDevices();
+    const devices = result.devices;
 
-      // If a device is pinned from a previous session, verify it is still
-      // reachable. If not, clear the pin and surface a toast.
-      setPinnedDevice((current) => {
-        if (!current) return current;
-        const stillReachable = devices.some((d) => d.id === current.id);
-        if (!stillReachable) {
-          clearStoredPinnedDevice();
-          toast({
-            title: "Pinned device unreachable",
-            description: "Your pinned device is no longer reachable — pick one from the list to pin again.",
-            variant: "default",
-          });
-          return null;
-        }
-        return current;
-      });
+    // If a device is pinned from a previous session, verify it is still
+    // reachable. If not, clear the pin and surface a toast.
+    setPinnedDevice((current) => {
+      if (!current) return current;
+      const stillReachable = devices.some((d) => d.id === current.id);
+      if (!stillReachable) {
+        clearStoredPinnedDevice();
+        toast({
+          title: "Pinned device unreachable",
+          description: "Your pinned device is no longer reachable — pick one from the list to pin again.",
+          variant: "default",
+        });
+        return null;
+      }
+      return current;
+    });
 
-      return devices;
-    } catch {
-      return [];
-    }
+    return devices;
   }, []);
 
   const pinDevice = useCallback((device: SpotifyDevice) => {
@@ -182,6 +185,7 @@ export function useSpotifyConnect(): SpotifyConnectApi {
     product,
     notice,
     clearNotice,
+    showNotice,
     connect,
     disconnect,
     refresh,

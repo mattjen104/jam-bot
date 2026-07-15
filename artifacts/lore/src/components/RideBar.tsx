@@ -68,6 +68,29 @@ export function RideBar({
       className="fixed z-40 border border-border bg-secondary/95 backdrop-blur-md shadow-lg bottom-4 left-4 right-4 rounded-[18px] lg:bottom-0 lg:left-[220px] lg:right-0 lg:rounded-none lg:shadow-none lg:border-x-0 lg:border-b-0"
       data-testid="ride-bar"
     >
+      {/* One-shot notice (OAuth return or device availability). Reuses the same
+          banner style as PlayerDock so the pattern is consistent. */}
+      {spotify.notice ? (
+        <div className="border-b border-border/60 bg-background/40">
+          <div className="flex items-center justify-between gap-3 px-5 py-1.5">
+            <p
+              className="truncate font-mono text-[11px] text-muted-foreground"
+              data-testid="spotify-notice"
+            >
+              {spotify.notice}
+            </p>
+            <button
+              type="button"
+              onClick={spotify.clearNotice}
+              aria-label="Dismiss"
+              className="hover-elevate shrink-0 rounded-full border border-border px-2.5 py-0.5 font-mono text-[11px] text-muted-foreground"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {/* Connect Spotify prompt — shown when configured but not yet connected. */}
       {spotify.configured && !spotify.connected ? (
         <div className="border-b border-border/60 bg-background/40">
