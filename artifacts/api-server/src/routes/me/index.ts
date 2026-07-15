@@ -1136,7 +1136,7 @@ export async function markOrphanedImportJobsAsError(): Promise<void> {
         error: "Server restarted while job was running — please start a new import",
         finishedAt: new Date(),
       })
-      .where(eq(libraryImportJobsTable.status, "running"))
+      .where(inArray(libraryImportJobsTable.status, ["running", "pending"]))
       .returning({ id: libraryImportJobsTable.id });
 
     if (orphaned.length > 0) {
