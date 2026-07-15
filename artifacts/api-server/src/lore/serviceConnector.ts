@@ -146,6 +146,7 @@ interface SpotifyTracksPage {
     } | null;
   }>;
   next: string | null;
+  offset: number;
   total: number;
 }
 
@@ -188,26 +189,61 @@ export class SpotifyConnector implements ServiceConnector {
 
   async *importLibrary(accessToken: string): AsyncIterable<RawLibraryTrack> {
     let url: string | null = `${API_BASE}/me/tracks?limit=50`;
+    let pageNum = 0;
+    const FETCH_TIMEOUT_MS = 20_000;
+    const PAGE_GAP_MS = 300; // proactive throttle — stay well under Spotify's limit
+
     while (url) {
-      let res = await fetch(url, {
-        headers: { Authorization: `Bearer ${accessToken}` },
+      pageNum++;
+
+      // Helper: fetch with a hard timeout so a hanging TCP connection can't
+      // stall the import worker indefinitely.
+      const fetchWithTimeout = (u: string) => {
+        const ac = new AbortController();
+        const timer = setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS);
+        return fetch(u, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          signal: ac.signal,
+        }).finally(() => clearTimeout(timer));
+      };
+
+      let res = await fetchWithTimeout(url).catch((err: unknown) => {
+        const isAbort = err instanceof Error && err.name === "AbortError";
+        throw new Error(
+          isAbort
+            ? `Spotify saved-tracks fetch timed out (page ${pageNum})`
+            : `Spotify saved-tracks fetch failed: ${String(err)}`,
+        );
       });
+
       // Spotify rate-limit: honour Retry-After with exponential backoff, up to 4 attempts.
       let attempt = 0;
       while (res.status === 429 && attempt < 4) {
         attempt++;
         const raw = res.headers.get("Retry-After");
         const waitSec = raw !== null && isFinite(Number(raw)) ? Number(raw) : Math.min(5 * 2 ** attempt, 60);
+        console.log(`[me/import] 429 on page ${pageNum} — waiting ${waitSec}s (attempt ${attempt}/4)`);
         await new Promise((r) => setTimeout(r, waitSec * 1_000 + 200 * attempt));
-        res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+        res = await fetchWithTimeout(url).catch((err: unknown) => {
+          const isAbort = err instanceof Error && err.name === "AbortError";
+          throw new Error(
+            isAbort
+              ? `Spotify saved-tracks fetch timed out on retry (page ${pageNum})`
+              : `Spotify saved-tracks fetch failed on retry: ${String(err)}`,
+          );
+        });
       }
+
       if (!res.ok) {
         const body = await res.text().catch(() => "");
         throw new Error(
           `Spotify saved-tracks fetch failed (${res.status}): ${body.slice(0, 200)}`,
         );
       }
+
       const page = (await res.json()) as SpotifyTracksPage;
+      console.log(`[me/import] page ${pageNum}: ${page.items.length} tracks (total so far: ${page.offset + page.items.length}/${page.total})`);
+
       for (const item of page.items) {
         const track = item.track;
         if (!track) continue;
@@ -220,6 +256,9 @@ export class SpotifyConnector implements ServiceConnector {
         };
       }
       url = page.next;
+
+      // Small inter-page gap to stay well below Spotify's rate limit.
+      if (url) await new Promise((r) => setTimeout(r, PAGE_GAP_MS));
     }
   }
 
