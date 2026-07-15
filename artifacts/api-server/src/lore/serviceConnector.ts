@@ -223,11 +223,21 @@ export class SpotifyConnector implements ServiceConnector {
       });
 
       // Spotify rate-limit: honour Retry-After with exponential backoff, up to 4 attempts.
+      // Cap the wait at 30s — if Spotify asks for longer, fail immediately so the user
+      // gets a clear message rather than an invisible multi-hour sleep.
+      const MAX_RETRY_WAIT_SEC = 30;
       let attempt = 0;
       while (res.status === 429 && attempt < 4) {
         attempt++;
         const raw = res.headers.get("Retry-After");
-        const waitSec = raw !== null && isFinite(Number(raw)) ? Number(raw) : Math.min(5 * 2 ** attempt, 60);
+        const rawSec = raw !== null && isFinite(Number(raw)) ? Number(raw) : 5 * 2 ** attempt;
+        if (rawSec > MAX_RETRY_WAIT_SEC) {
+          throw new Error(
+            `Spotify is rate-limiting imports right now (Retry-After: ${rawSec}s). ` +
+            `Please wait a few hours before trying again.`,
+          );
+        }
+        const waitSec = Math.min(rawSec, MAX_RETRY_WAIT_SEC);
         console.log(`[me/import] 429 on page ${pageNum} — waiting ${waitSec}s (attempt ${attempt}/4)`);
         await new Promise((r) => setTimeout(r, waitSec * 1_000 + 200 * attempt));
         res = await fetchWithTimeout(url).catch((err: unknown) => {
