@@ -310,6 +310,29 @@ router.post("/me/library/import", h(async (req, res) => {
     return res.status(400).json({ error: `No ${service} connection found; connect first.` });
   }
 
+  // Reject if a job is already actively running or pending — triggering another
+  // would fire two concurrent Spotify API pagination loops, almost guaranteeing
+  // a 429 rate-limit error on both.
+  const [existingJob] = await db
+    .select({ id: libraryImportJobsTable.id, status: libraryImportJobsTable.status })
+    .from(libraryImportJobsTable)
+    .where(
+      and(
+        eq(libraryImportJobsTable.userId, user.id),
+        eq(libraryImportJobsTable.service, service),
+        inArray(libraryImportJobsTable.status, ["running", "pending"]),
+      ),
+    )
+    .limit(1);
+
+  if (existingJob) {
+    return res.status(409).json({
+      jobId: existingJob.id,
+      status: existingJob.status,
+      error: "An import is already in progress — check its status before starting another.",
+    });
+  }
+
   const [job] = await db
     .insert(libraryImportJobsTable)
     .values({

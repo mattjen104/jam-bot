@@ -189,9 +189,16 @@ export class SpotifyConnector implements ServiceConnector {
   async *importLibrary(accessToken: string): AsyncIterable<RawLibraryTrack> {
     let url: string | null = `${API_BASE}/me/tracks?limit=50`;
     while (url) {
-      const res = await fetch(url, {
+      let res = await fetch(url, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
+      // Spotify rate-limit: honour Retry-After and retry once before giving up.
+      if (res.status === 429) {
+        const raw = res.headers.get("Retry-After");
+        const waitSec = raw !== null && isFinite(Number(raw)) ? Number(raw) : 5;
+        await new Promise((r) => setTimeout(r, waitSec * 1_000 + 500));
+        res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+      }
       if (!res.ok) {
         const body = await res.text().catch(() => "");
         throw new Error(
