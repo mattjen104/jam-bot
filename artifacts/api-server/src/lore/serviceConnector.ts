@@ -112,6 +112,8 @@ interface SpotifyTokenResponse {
 async function spotifyTokenRequest(
   body: URLSearchParams,
 ): Promise<SpotifyTokenResponse> {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 15_000);
   const res = await fetch(`${ACCOUNTS_BASE}/api/token`, {
     method: "POST",
     headers: {
@@ -119,6 +121,10 @@ async function spotifyTokenRequest(
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body,
+    signal: ac.signal,
+  }).finally(() => clearTimeout(timer)).catch((err: unknown) => {
+    const isAbort = err instanceof Error && err.name === "AbortError";
+    throw new Error(isAbort ? "Spotify token request timed out (15s)" : `Spotify token request network error: ${String(err)}`);
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");

@@ -426,11 +426,13 @@ export async function runImportWorker(
   conn: typeof serviceConnectionsTable.$inferSelect,
 ): Promise<void> {
   try {
+    console.log(`[me/import] job=${jobId} starting (service=${service})`);
     await db
       .update(libraryImportJobsTable)
       .set({ status: "running" })
       .where(eq(libraryImportJobsTable.id, jobId));
 
+    console.log(`[me/import] job=${jobId} fetching token…`);
     const accessToken = await getFreshToken(conn);
     if (!accessToken) {
       await db
