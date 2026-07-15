@@ -240,3 +240,62 @@ export function writeStoredPlaybackMode(mode: PlaybackMode): void {
     // Ignore write failures
   }
 }
+
+// ---------------------------------------------------------------------------
+// Pinned device persistence
+// ---------------------------------------------------------------------------
+
+export const PINNED_DEVICE_STORAGE_KEY = "lore:pinned-device";
+
+export interface StoredPinnedDevice {
+  id: string;
+  name: string;
+  type: string;
+}
+
+/** Read the persisted pinned device. Returns null when absent or unreadable. */
+export function readStoredPinnedDevice(): StoredPinnedDevice | null {
+  try {
+    if (typeof localStorage === "undefined") return null;
+    const raw = localStorage.getItem(PINNED_DEVICE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as unknown;
+    if (
+      parsed !== null &&
+      typeof parsed === "object" &&
+      "id" in parsed &&
+      "name" in parsed &&
+      "type" in parsed &&
+      typeof (parsed as Record<string, unknown>).id === "string" &&
+      typeof (parsed as Record<string, unknown>).name === "string" &&
+      typeof (parsed as Record<string, unknown>).type === "string"
+    ) {
+      return parsed as StoredPinnedDevice;
+    }
+  } catch {
+    // Corrupt / SSR — ignore
+  }
+  return null;
+}
+
+/** Persist the pinned device. */
+export function writeStoredPinnedDevice(device: StoredPinnedDevice): void {
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(PINNED_DEVICE_STORAGE_KEY, JSON.stringify(device));
+    }
+  } catch {
+    // Ignore write failures
+  }
+}
+
+/** Remove the persisted pinned device. */
+export function clearStoredPinnedDevice(): void {
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem(PINNED_DEVICE_STORAGE_KEY);
+    }
+  } catch {
+    // Ignore
+  }
+}

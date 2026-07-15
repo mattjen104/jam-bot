@@ -5,6 +5,12 @@ import {
   getSpotifyDevices,
   type SpotifyDevice,
 } from "@workspace/api-client-react";
+import { toast } from "@/hooks/use-toast";
+import {
+  readStoredPinnedDevice,
+  writeStoredPinnedDevice,
+  clearStoredPinnedDevice,
+} from "./playbackSession";
 
 export type { SpotifyDevice };
 
@@ -29,7 +35,7 @@ export interface SpotifyConnectApi {
   disconnect: () => void;
   refresh: () => void;
 
-  /** The device the listener has pinned for one-at-a-time queuing. Session-only. */
+  /** The device the listener has pinned for one-at-a-time queuing. Persisted across reloads. */
   pinnedDevice: SpotifyDevice | null;
   /** Fetch available Spotify Connect devices (call on picker open). */
   fetchDevices: () => Promise<SpotifyDevice[]>;
@@ -51,7 +57,12 @@ export function useSpotifyConnect(): SpotifyConnectApi {
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [product, setProduct] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [pinnedDevice, setPinnedDevice] = useState<SpotifyDevice | null>(null);
+  const [pinnedDevice, setPinnedDevice] = useState<SpotifyDevice | null>(() => {
+    const stored = readStoredPinnedDevice();
+    if (!stored) return null;
+    // Restore as a minimal SpotifyDevice; stale-check happens on fetchDevices.
+    return { id: stored.id, name: stored.name, type: stored.type, isActive: false, volumePercent: null };
+  });
   const aliveRef = useRef(true);
 
   const refresh = useCallback(() => {
@@ -64,7 +75,10 @@ export function useSpotifyConnect(): SpotifyConnectApi {
         setProduct(s.product ?? null);
         // If connection dropped, clear the pinned device so we don't silently
         // keep sending commands to a device for a disconnected session.
-        if (!s.connected) setPinnedDevice(null);
+        if (!s.connected) {
+          setPinnedDevice(null);
+          clearStoredPinnedDevice();
+        }
       })
       .catch(() => {
         // Status is best-effort; failure just means "no Spotify layer".
@@ -116,6 +130,7 @@ export function useSpotifyConnect(): SpotifyConnectApi {
         setDisplayName(null);
         setProduct(null);
         setPinnedDevice(null);
+        clearStoredPinnedDevice();
       });
   }, []);
 
@@ -124,7 +139,26 @@ export function useSpotifyConnect(): SpotifyConnectApi {
   const fetchDevices = useCallback(async (): Promise<SpotifyDevice[]> => {
     try {
       const result = await getSpotifyDevices();
-      return result.devices;
+      const devices = result.devices;
+
+      // If a device is pinned from a previous session, verify it is still
+      // reachable. If not, clear the pin and surface a toast.
+      setPinnedDevice((current) => {
+        if (!current) return current;
+        const stillReachable = devices.some((d) => d.id === current.id);
+        if (!stillReachable) {
+          clearStoredPinnedDevice();
+          toast({
+            title: "Pinned device unreachable",
+            description: "Your pinned device is no longer reachable — pick one from the list to pin again.",
+            variant: "default",
+          });
+          return null;
+        }
+        return current;
+      });
+
+      return devices;
     } catch {
       return [];
     }
@@ -132,10 +166,12 @@ export function useSpotifyConnect(): SpotifyConnectApi {
 
   const pinDevice = useCallback((device: SpotifyDevice) => {
     setPinnedDevice(device);
+    writeStoredPinnedDevice({ id: device.id, name: device.name, type: device.type });
   }, []);
 
   const unpinDevice = useCallback(() => {
     setPinnedDevice(null);
+    clearStoredPinnedDevice();
   }, []);
 
   return {
