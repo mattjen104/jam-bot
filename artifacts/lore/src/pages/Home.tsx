@@ -327,6 +327,9 @@ function DialFilter({
 }
 
 /** Mode 1 — the live dial with the now-playing sidebar. */
+const QUALITY_TIERS_VISIBLE = new Set(["proven", "promising"]);
+const LS_SHOW_ALL = "lore:showAllStations";
+
 function LiveMode({ selectedDate }: { selectedDate: string | null }) {
   const { data, isLoading, isError } = useListStations();
   const { radio: player } = usePlayer();
@@ -336,7 +339,24 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
   const [dialGenre, setDialGenre] = useState<string | null>(null);
   const [descriptionOnly, setDescriptionOnly] = useState(false);
   const [dialSearch, setDialSearch] = useState("");
+  const [showAllStations, setShowAllStations] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(LS_SHOW_ALL) === "true";
+    } catch {
+      return false;
+    }
+  });
   const follows = useFollows();
+
+  const handleShowAllToggle = () => {
+    const next = !showAllStations;
+    setShowAllStations(next);
+    try {
+      localStorage.setItem(LS_SHOW_ALL, String(next));
+    } catch {
+      // ignore
+    }
+  };
 
   // Client-side NTS show data — NTS blocks datacenter IPs but browser requests
   // from residential IPs work fine. These queries run in the browser and refresh
@@ -535,6 +555,16 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
     return result;
   }, [dialFilter, dialSort, dialGenre, descriptionOnly, dialSearch, stations, follows, pulse]);
 
+  // Quality-gated view: when showAllStations is false, only show proven/promising.
+  const visibleStations = useMemo(() => {
+    if (showAllStations) return filteredStations;
+    return filteredStations.filter((s) =>
+      s.qualityTier != null && QUALITY_TIERS_VISIBLE.has(s.qualityTier),
+    );
+  }, [filteredStations, showAllStations]);
+
+  const hiddenStationCount = filteredStations.length - visibleStations.length;
+
   const filteredPickerItems = useMemo((): PickerDialItem[] => {
     if (dialFilter === "live" || dialFilter === "featured") return [];
     if (dialFilter === "lists") return pickerItems;
@@ -679,7 +709,7 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
           )}
         </h2>
         <span className="font-mono text-xs text-muted-foreground" data-testid="dial-station-count">
-          {filteredStations.length} station{filteredStations.length === 1 ? "" : "s"}
+          {visibleStations.length} station{visibleStations.length === 1 ? "" : "s"}
         </span>
       </div>
 
@@ -724,9 +754,9 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
       {/* Selectors — shown first to give human curation top billing */}
       <SelectorDial items={filteredPickerItems} />
 
-      {!isLoading && filteredStations.length > 0 && (
+      {!isLoading && visibleStations.length > 0 && (
         <StationList
-          stations={filteredStations}
+          stations={visibleStations}
           activeSlug={activeSlug}
           status={player.status}
           pulse={pulseBySlug}
@@ -740,6 +770,25 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
           onSelect={handleSelect}
           onGenreClick={handleGenreClick}
         />
+      )}
+
+      {/* Quality-tier toggle — hidden when no stations are being filtered out */}
+      {!isLoading && !isError && (hiddenStationCount > 0 || showAllStations) && (
+        <div className="mt-3 flex justify-center">
+          <button
+            type="button"
+            onClick={handleShowAllToggle}
+            data-testid="dial-show-all-toggle"
+            aria-pressed={showAllStations}
+            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-4 py-1.5 font-mono text-[11px] uppercase tracking-wide text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+          >
+            {showAllStations ? (
+              "Hide low-signal stations"
+            ) : (
+              <>+ {hiddenStationCount} more station{hiddenStationCount === 1 ? "" : "s"}</>
+            )}
+          </button>
+        </div>
       )}
 
       {/* Now-playing sidebar only shown in live mode — not meaningful for ghost snapshots */}

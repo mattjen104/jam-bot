@@ -14,7 +14,7 @@ import {
 } from "@workspace/api-client-react";
 import { QualityBadge } from "./QualityBadge";
 import { FollowButton } from "./FollowButton";
-import { BadgeCheck, BookOpen, ExternalLink, Mic, Mic2, Music2, Pause, Play, Radio, Volume2 } from "lucide-react";
+import { BadgeCheck, BookOpen, ExternalLink, Info, Mic, Mic2, Music2, Pause, Play, Radio, Volume2 } from "lucide-react";
 import type { PlayerStatus } from "../hooks/useRadioPlayer";
 import { safeHttpUrl } from "../lib/utils";
 
@@ -472,6 +472,20 @@ export function StationList({
                 >
                   <FollowButton kind="station" id={station.slug} name={station.name} />
                   <QualityBadge quality={station.streamQuality} format={station.streamFormat} />
+                  {(station.qualityTier === "silent" || station.qualityTier === "unscored") && (
+                    <span
+                      className="inline-flex items-center gap-1 rounded-full border border-border bg-background/40 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wide text-muted-foreground/50"
+                      title={
+                        station.qualityTier === "silent"
+                          ? "Active stream but near-zero usable track metadata in the last 7 days"
+                          : "Fewer than 20 logged spins in the last 7 days — not enough data to evaluate"
+                      }
+                      data-testid={`low-signal-badge-${station.slug}`}
+                    >
+                      <Info className="h-2.5 w-2.5 shrink-0" />
+                      Low signal
+                    </span>
+                  )}
                 </div>
               </div>
 
