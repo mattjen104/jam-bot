@@ -376,6 +376,51 @@ describe("Phase 3 — serial MB resolution, fromCache=false triggers sleep", () 
   );
 });
 
+// ── Fast-path: all tracks already in spine (Phases 1+2 exhaust the buffer) ──
+
+describe("Fast-path re-import — all tracks already resolved, Phase 3 skipped", () => {
+  it("reaches 'done' immediately with resolved === total, never calls resolveToMbid", async () => {
+    if (!dbAvailable) return;
+
+    const resolveToMbid = vi.mocked(resolveModule.resolveToMbid);
+    resolveToMbid.mockClear();
+
+    // Two tracks: one resolved by Phase 1 (ISRC match), one by Phase 2 (cache).
+    // Neither should fall through to Phase 3.
+    setupConnector([
+      { artist: ARTIST, title: "Phase1 Track", isrc: ISRC_P1, externalId: "sp-fast-p1" },
+      { artist: ARTIST, title: "Phase2 Track",                externalId: "sp-fast-p2" },
+    ]);
+
+    const jid = await createJob();
+    await runImportWorker(jid, userId, "spotify", connRow);
+
+    // Phase 3 must have been completely skipped.
+    expect(resolveToMbid).not.toHaveBeenCalled();
+
+    // Job must finish as "done" with total=2 and resolved=2.
+    const [job] = await db
+      .select({
+        status:   libraryImportJobsTable.status,
+        total:    libraryImportJobsTable.total,
+        resolved: libraryImportJobsTable.resolved,
+        phase:    libraryImportJobsTable.phase,
+      })
+      .from(libraryImportJobsTable)
+      .where(eq(libraryImportJobsTable.id, jid));
+
+    expect(job!.status).toBe("done");
+    expect(job!.total).toBe(2);
+    expect(job!.resolved).toBe(2);
+    // finishedAt must be set (not null) so the banner's isRecentlyFinished check passes.
+    const [jobFull] = await db
+      .select({ finishedAt: libraryImportJobsTable.finishedAt })
+      .from(libraryImportJobsTable)
+      .where(eq(libraryImportJobsTable.id, jid));
+    expect(jobFull!.finishedAt).not.toBeNull();
+  });
+});
+
 // ── Mixed-phase regression test ──────────────────────────────────────────────
 
 describe("Mixed all-3 phases — large re-import short-circuit", () => {

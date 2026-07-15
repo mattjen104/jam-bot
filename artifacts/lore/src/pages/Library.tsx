@@ -258,7 +258,7 @@ function phaseLabel(phase: string | null | undefined): string {
   }
 }
 
-function LibraryImportBanner({
+export function LibraryImportBanner({
   job,
   onDismiss,
 }: {
