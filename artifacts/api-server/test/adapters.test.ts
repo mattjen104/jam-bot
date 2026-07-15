@@ -701,10 +701,10 @@ describe("parseSpinitronWebPage", () => {
 // structure (class names, element nesting), parseSpinitronWebPage returns null
 // and the test fails loudly — catching the breakage before production goes dark.
 //
-// To update a fixture after a confirmed Spinitron HTML change:
-//   1. Re-fetch the live page:  curl -sL https://spinitron.com/WPRB/ > artifacts/api-server/test/fixtures/spinitron-wprb.html
-//   2. Verify parseSpinitronWebPage() still returns non-null artist + title.
-//   3. Update the inline snapshot below with `vitest --update-snapshots`.
+// To update fixtures after a confirmed Spinitron HTML change:
+//   1. Re-fetch both live pages:  ./scripts/refresh-spinitron-fixtures.sh
+//   2. Update the snapshots:      pnpm --filter api-server test -- --update-snapshots
+//   3. Verify parseSpinitronWebPage() still returns non-null artist + title.
 
 function loadFixture(name: string): string {
   return readFileSync(resolve(import.meta.dirname, "fixtures", name), "utf8");
