@@ -392,7 +392,7 @@ router.get("/me/library/import/:jobId", h(async (req, res) => {
 // Import worker (runs off the hot path via setImmediate)
 // ---------------------------------------------------------------------------
 
-async function runImportWorker(
+export async function runImportWorker(
   jobId: number,
   userId: number,
   service: string,
