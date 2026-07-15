@@ -700,6 +700,7 @@ export async function resolveSongShareOrLinks(params: {
     const timeoutResolution: MbidResolution = {
       mbid: null,
       confidence: "unresolved",
+      fromCache: false,
       title: artist,
       artist,
     };

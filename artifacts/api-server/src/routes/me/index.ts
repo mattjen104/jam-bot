@@ -8,6 +8,7 @@ import {
   libraryImportJobsTable,
   keepTargetsTable,
   recordingsTable,
+  resolutionCacheTable,
   picksTable,
   pickersTable,
   spinsTable,
@@ -31,7 +32,7 @@ import {
   refreshServiceToken,
 } from "../../lore/serviceConnector.js";
 import { encryptToken, decryptToken } from "../../lore/tokenCrypto.js";
-import { resolveToMbid } from "../../lore/resolve.js";
+import { resolveToMbid, normalizeKey, isrcKey } from "../../lore/resolve.js";
 import { h } from "../../middlewares/asyncHandler.js";
 import { spinDayExpr } from "../../lore/runs.js";
 import { getForYouStations, getForYouBlogs } from "../../lore/for-you.js";
@@ -415,23 +416,155 @@ async function runImportWorker(
     const connector = getConnector(service);
     if (!connector) throw new Error(`connector '${service}' not found`);
 
-    let total = 0;
+    // ── Buffer drain ───────────────────────────────────────────────────────────
+    // Page through the service API (fast, no rate-limit) and collect every
+    // track upfront so we know the total before any resolution work begins.
+    const buffer: Array<{ artist: string; title: string; isrc?: string; durationMs?: number; externalId: string }> = [];
+    for await (const raw of connector.importLibrary(accessToken)) {
+      buffer.push({
+        artist: raw.artist,
+        title: raw.title,
+        isrc: raw.isrc,
+        durationMs: raw.durationMs,
+        externalId: raw.externalId ?? `${raw.artist}\u001f${raw.title}`,
+      });
+    }
+    const total = buffer.length;
     let resolved = 0;
 
-    for await (const raw of connector.importLibrary(accessToken)) {
-      total++;
+    // Stamp total immediately so the progress bar is honest from the start.
+    await db
+      .update(libraryImportJobsTable)
+      .set({ total })
+      .where(eq(libraryImportJobsTable.id, jobId));
 
-      // Resolve raw artist+title to an MBID, honoring the MB 1 req/sec budget.
+    const provenance: LibraryItemProvenance = { kind: "import", service };
+
+    // Track which buffer entries have already been resolved (by position).
+    const matchedIdx = new Set<number>();
+
+    // ── Phase 1: ISRC bulk pre-match against recordings ───────────────────────
+    // Tracks whose ISRC is already on the spine need zero MB calls and no sleep.
+    const isrcEntries = buffer
+      .map((t, i) => ({ t, i }))
+      .filter(({ t }) => Boolean(t.isrc));
+
+    if (isrcEntries.length > 0) {
+      const uniqueIsrcs = [...new Set(isrcEntries.map(({ t }) => t.isrc!))];
+      const isrcMatches = await db
+        .select({ mbid: recordingsTable.mbid, isrc: recordingsTable.isrc })
+        .from(recordingsTable)
+        .where(inArray(recordingsTable.isrc, uniqueIsrcs));
+      const isrcToMbid = new Map(isrcMatches.map((r) => [r.isrc!, r.mbid]));
+
+      for (const { t, i } of isrcEntries) {
+        const mbid = isrcToMbid.get(t.isrc!);
+        if (mbid) {
+          await db
+            .insert(libraryItemsTable)
+            .values({ userId, mbid, provenance, addedAt: new Date() })
+            .onConflictDoNothing();
+          resolved++;
+          matchedIdx.add(i);
+        }
+      }
+
+      await db
+        .update(libraryImportJobsTable)
+        .set({ total, resolved })
+        .where(eq(libraryImportJobsTable.id, jobId));
+    }
+
+    // ── Phase 2: resolution-cache bulk pre-check ──────────────────────────────
+    // Tracks already resolved in a prior import/spin have a cache entry — look
+    // them all up in one query. Still no MB call, no sleep.
+    const phase2Entries = buffer
+      .map((t, i) => ({ t, i }))
+      .filter(({ i }) => !matchedIdx.has(i));
+
+    if (phase2Entries.length > 0) {
+      // Build one flat list of all cache keys (ISRC-namespaced + text), deduped.
+      const keySet = new Set<string>();
+      // Map each cache key back to the buffer indices it represents so we can
+      // resolve a hit back to the right track without re-scanning.
+      const keyToIndices = new Map<string, number[]>();
+      const addKey = (k: string, i: number) => {
+        keySet.add(k);
+        const arr = keyToIndices.get(k) ?? [];
+        arr.push(i);
+        keyToIndices.set(k, arr);
+      };
+
+      for (const { t, i } of phase2Entries) {
+        if (t.isrc) addKey(isrcKey(t.isrc), i);
+        addKey(normalizeKey(t.artist, t.title), i);
+      }
+
+      const allKeys = [...keySet];
+      const cacheRows = await db
+        .select({ key: resolutionCacheTable.key, mbid: resolutionCacheTable.mbid })
+        .from(resolutionCacheTable)
+        .where(inArray(resolutionCacheTable.key, allKeys));
+      const cacheMap = new Map(cacheRows.map((r) => [r.key, r.mbid]));
+
+      // Per-track: collect the best mbid (prefer ISRC key hit over text key).
+      // indexToMbid accumulates the first non-null hit per index.
+      const indexToMbid = new Map<number, string>();
+      for (const { t, i } of phase2Entries) {
+        if (indexToMbid.has(i)) continue;
+        // ISRC key first (stronger).
+        if (t.isrc) {
+          const mbid = cacheMap.get(isrcKey(t.isrc));
+          if (mbid) { indexToMbid.set(i, mbid); continue; }
+        }
+        const mbid = cacheMap.get(normalizeKey(t.artist, t.title));
+        if (mbid) indexToMbid.set(i, mbid);
+      }
+
+      if (indexToMbid.size > 0) {
+        // Batch-verify candidate MBIDs exist in recordings (FK guard).
+        const candidateMbids = [...new Set(indexToMbid.values())];
+        const existingRecs = await db
+          .select({ mbid: recordingsTable.mbid })
+          .from(recordingsTable)
+          .where(inArray(recordingsTable.mbid, candidateMbids));
+        const existingSet = new Set(existingRecs.map((r) => r.mbid));
+
+        for (const [idx, mbid] of indexToMbid) {
+          if (!existingSet.has(mbid)) continue;
+          await db
+            .insert(libraryItemsTable)
+            .values({ userId, mbid, provenance, addedAt: new Date() })
+            .onConflictDoNothing();
+          resolved++;
+          matchedIdx.add(idx);
+        }
+      }
+
+      await db
+        .update(libraryImportJobsTable)
+        .set({ total, resolved })
+        .where(eq(libraryImportJobsTable.id, jobId));
+    }
+
+    // ── Phase 3: serial MB resolution for true misses ─────────────────────────
+    // Only tracks with no cache/spine hit reach here. Sleep 1.1 s ONLY after a
+    // call where resolveToMbid made a real MusicBrainz network request.
+    const phase3Entries = buffer
+      .map((t, i) => ({ t, i }))
+      .filter(({ i }) => !matchedIdx.has(i));
+
+    let phase3Done = 0;
+    for (const { t } of phase3Entries) {
       const resolution = await resolveToMbid(
-        raw.artist,
-        raw.title,
-        raw.durationMs,
-        raw.isrc ? { isrc: raw.isrc } : undefined,
+        t.artist,
+        t.title,
+        t.durationMs,
+        t.isrc ? { isrc: t.isrc } : undefined,
       );
 
       if (resolution.mbid) {
-        // Only insert if the recording exists in our DB — the FK on
-        // library_items.mbid → recordings.mbid will reject unknown MBIDs.
+        // FK guard: only insert if recordings row exists.
         const [rec] = await db
           .select({ mbid: recordingsTable.mbid })
           .from(recordingsTable)
@@ -439,30 +572,26 @@ async function runImportWorker(
           .limit(1);
 
         if (rec) {
-          const provenance: LibraryItemProvenance = { kind: "import", service };
           await db
             .insert(libraryItemsTable)
-            .values({
-              userId,
-              mbid: resolution.mbid,
-              provenance,
-              addedAt: new Date(),
-            })
+            .values({ userId, mbid: resolution.mbid, provenance, addedAt: new Date() })
             .onConflictDoNothing();
           resolved++;
         }
       }
 
-      // Update progress every 10 items so polling shows progress.
-      if (total % 10 === 0) {
+      // Respect MusicBrainz 1 req/sec budget only when a real network call fired.
+      if (!resolution.fromCache) {
+        await sleep(IMPORT_RESOLVE_DELAY_MS);
+      }
+
+      phase3Done++;
+      if (phase3Done % 10 === 0) {
         await db
           .update(libraryImportJobsTable)
           .set({ total, resolved })
           .where(eq(libraryImportJobsTable.id, jobId));
       }
-
-      // Respect MusicBrainz 1 req/sec budget.
-      await sleep(IMPORT_RESOLVE_DELAY_MS);
     }
 
     // Update service_connections.lastImportAt.

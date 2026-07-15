@@ -37,6 +37,14 @@ export interface MbidResolution {
   artistMbid?: string;
   isrc?: string;
   durationMs?: number;
+  /**
+   * True when the result came entirely from the DB cache / a supplied recording
+   * id — no external MusicBrainz or Spotify API call was made. The import
+   * worker uses this to skip the 1.1 s MB rate-limit sleep for cache hits,
+   * dramatically speeding up re-imports and large libraries where most tracks
+   * are already on the spine.
+   */
+  fromCache: boolean;
 }
 
 // ---- Pure helpers (unit-tested; no DB / network) -----------------------
@@ -146,7 +154,7 @@ async function writeResolutionCacheSafe(
 }
 
 /** Cache key for an ISRC lookup — namespaced away from text keys on purpose. */
-function isrcKey(isrc: string): string {
+export function isrcKey(isrc: string): string {
   return `isrc\u001f${isrc.trim().toUpperCase()}`;
 }
 
@@ -171,9 +179,14 @@ export async function resolveToMbid(
 ): Promise<MbidResolution> {
   const base = { title: rawTitle, artist: rawArtist };
 
+  // Track whether any external network call (MB ISRC/text or Spotify) was
+  // made during this resolution. fromCache: true means pure DB/memory path —
+  // the import worker uses this to skip the 1.1 s rate-limit sleep.
+  let madeNetworkCall = false;
+
   // 1. Source handed us the canonical id — strongest, free, nothing to cache.
   if (opts?.recordingId) {
-    return { mbid: opts.recordingId, confidence: "recording_id", ...base };
+    return { mbid: opts.recordingId, confidence: "recording_id", fromCache: true, ...base };
   }
 
   // 2. ISRC — a strong identifier, tried BEFORE the text cache and under its
@@ -185,6 +198,7 @@ export async function resolveToMbid(
     const ik = isrcKey(opts.isrc);
     const cached = await readResolutionCacheSafe(ik);
     if (cached === undefined) {
+      madeNetworkCall = true;
       let mbid: string | null = null;
       try {
         mbid = await resolveRecordingId(opts.isrc);
@@ -192,9 +206,9 @@ export async function resolveToMbid(
         console.error("[lore] isrc resolution failed", opts.isrc, err);
       }
       await writeResolutionCacheSafe(ik, mbid, mbid ? "isrc" : "unresolved");
-      if (mbid) return { mbid, confidence: "isrc", isrc: opts.isrc, ...base };
+      if (mbid) return { mbid, confidence: "isrc", isrc: opts.isrc, fromCache: false, ...base };
     } else if (cached.mbid) {
-      return { mbid: cached.mbid, confidence: "isrc", isrc: opts.isrc, ...base };
+      return { mbid: cached.mbid, confidence: "isrc", isrc: opts.isrc, fromCache: true, ...base };
     }
     // Cached miss OR live miss — fall through to a text search.
   }
@@ -206,9 +220,12 @@ export async function resolveToMbid(
   if (cached) {
     const confidence =
       (cached.confidence as MbidResolution["confidence"]) || "unresolved";
-    return { mbid: cached.mbid, confidence, ...base };
+    // fromCache is false when a live ISRC call preceded this (madeNetworkCall=true)
+    // but we then hit the text cache — still counts as a network call overall.
+    return { mbid: cached.mbid, confidence, fromCache: !madeNetworkCall, ...base };
   }
 
+  madeNetworkCall = true;
   const match = await resolveRecordingByText(rawArtist, rawTitle);
 
   // Track whether the search returned a result that was rejected only for
@@ -220,6 +237,7 @@ export async function resolveToMbid(
     const result: MbidResolution = {
       mbid: match.recordingId,
       confidence: "text",
+      fromCache: false,
       title: match.title || rawTitle,
       artist: match.artist || rawArtist,
       ...(match.artistMbid ? { artistMbid: match.artistMbid } : {}),
@@ -244,6 +262,7 @@ export async function resolveToMbid(
       const result: MbidResolution = {
         mbid: swapped.recordingId,
         confidence: "text",
+        fromCache: false,
         title: swapped.title || rawTitle,
         artist: swapped.artist || rawArtist,
         ...(swapped.artistMbid ? { artistMbid: swapped.artistMbid } : {}),
@@ -269,6 +288,7 @@ export async function resolveToMbid(
       return {
         mbid: syntheticMbid,
         confidence: "spotify",
+        fromCache: false,
         title: hit.name ?? rawTitle,
         artist: rawArtist,
         ...(hit.durationMs != null ? { durationMs: hit.durationMs } : {}),
@@ -280,7 +300,7 @@ export async function resolveToMbid(
 
   // Cache the miss so an unresolvable pair isn't re-queried on every spin.
   await writeResolutionCacheSafe(key, null, "unresolved");
-  return { mbid: null, confidence: "unresolved", ...base };
+  return { mbid: null, confidence: "unresolved", fromCache: false, ...base };
 }
 
 /**
