@@ -1,6 +1,6 @@
 import app from "./app";
 import { wireSongEnrichment } from "./song/wire.js";
-import { seedStations, seedPickers } from "./lore/seed.js";
+import { seedStations, seedPickers, seedSpinitronRoster } from "./lore/seed.js";
 import { startLorePoller } from "./lore/poller.js";
 import { startBlogPoller } from "./lore/blog-poller.js";
 import { startBackfillJob } from "./lore/backfill.js";
@@ -69,6 +69,11 @@ async function bootLore(): Promise<void> {
     await applyStationScheduleMigration();
     await ensurePicksUnifiedView();
     await seedStations();
+    try {
+      await seedSpinitronRoster();
+    } catch (err) {
+      console.error("[lore] Spinitron roster seed failed", err);
+    }
     await seedPickers();
     try {
       await backfillRadioBrowserIcyEnrollment();

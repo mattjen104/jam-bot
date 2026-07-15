@@ -13,6 +13,7 @@ import {
   parseRadiojarNowPlaying,
   parseLotRadioSchedule,
   parseIcyNowPlaying,
+  parseSpinitronWebPage,
 } from "../src/lore/adapters.js";
 
 describe("pickPath", () => {
@@ -643,5 +644,50 @@ describe("parseIcyNowPlaying", () => {
 
   it("returns null for empty string", () => {
     expect(parseIcyNowPlaying("")).toBeNull();
+  });
+});
+
+describe("parseSpinitronWebPage", () => {
+  it("parses the live Spinitron HTML structure (class='artist' / class='song')", () => {
+    const html = `<td class="spin-text"><div class="spin"><span class="artist">Matt Borghi</span> <span class="song">Silence Beneath Memory</span></div></td>`;
+    const result = parseSpinitronWebPage(html);
+    expect(result).toEqual({ rawArtist: "Matt Borghi", rawTitle: "Silence Beneath Memory" });
+  });
+
+  it("returns the FIRST spin (current) when multiple are present", () => {
+    const html = `
+      <span class="artist">First Artist</span> <span class="song">First Song</span>
+      <span class="artist">Second Artist</span> <span class="song">Second Song</span>
+    `;
+    const result = parseSpinitronWebPage(html);
+    expect(result?.rawArtist).toBe("First Artist");
+    expect(result?.rawTitle).toBe("First Song");
+  });
+
+  it("parses data-artist / data-song attributes (Pattern A)", () => {
+    const html = `<div data-artist="Khruangbin" data-song="Maria También"></div>`;
+    const result = parseSpinitronWebPage(html);
+    expect(result).toEqual({ rawArtist: "Khruangbin", rawTitle: "Maria También" });
+  });
+
+  it("falls through to JSON island when class patterns are absent (Pattern C)", () => {
+    const html = `<script>{"artist":"Grouper","song":"Alien Observer"}</script>`;
+    const result = parseSpinitronWebPage(html);
+    expect(result).toEqual({ rawArtist: "Grouper", rawTitle: "Alien Observer" });
+  });
+
+  it("returns null when no recognizable pattern is present", () => {
+    expect(parseSpinitronWebPage("<html><body>Nothing here</body></html>")).toBeNull();
+  });
+
+  it("returns null for empty string", () => {
+    expect(parseSpinitronWebPage("")).toBeNull();
+  });
+
+  it("trims whitespace from extracted values", () => {
+    const html = `<span class="artist">  Low  </span> <span class="song">  Murderer  </span>`;
+    const result = parseSpinitronWebPage(html);
+    expect(result?.rawArtist).toBe("Low");
+    expect(result?.rawTitle).toBe("Murderer");
   });
 });

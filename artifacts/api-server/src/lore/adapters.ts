@@ -849,6 +849,129 @@ const radiojar: NowPlayingAdapter = async (config) => {
   return parseRadiojarNowPlaying(body);
 };
 
+// ---- Spinitron Web (now-playing, unauthenticated HTML scrape) ----------
+
+/**
+ * Pure: parse a Spinitron public station page HTML into a NowPlayingRaw.
+ *
+ * Spinitron's public station page (https://spinitron.com/{callsign}/) renders a
+ * now-playing widget for the current spin. We extract artist + song title via a
+ * sequence of regex patterns that cover their known HTML variants:
+ *
+ *  Pattern A — structured data block (`data-artist` / `data-song` attributes).
+ *  Pattern B — class-scoped spans (`.spin-artist`, `.spin-song`).
+ *  Pattern C — generic `.artist` / `.song` (older Spinitron page template).
+ *  Pattern D — `<meta property="music:musician">` + `<title>` combo.
+ *
+ * Returns null when none of the patterns fire or either field is blank.
+ * Never throws — any parse failure produces null.
+ */
+export function parseSpinitronWebPage(html: string): NowPlayingRaw | null {
+  // Pattern A — data attributes on the spin container (future-proofing)
+  const dataArtist = /data-artist="([^"]+)"/.exec(html)?.[1];
+  const dataSong = /data-song="([^"]+)"/.exec(html)?.[1];
+  if (dataArtist && dataSong) {
+    return { rawArtist: dataArtist.trim(), rawTitle: dataSong.trim() };
+  }
+
+  // Pattern B — Spinitron's actual HTML structure (confirmed live):
+  //   <span class="artist">Artist Name</span> <span class="song">Song Title</span>
+  // The first occurrence in the page is the current/most-recent spin.
+  const artistMatch = /class="artist">([^<]+)</.exec(html)?.[1];
+  const songMatch = /class="song">([^<]+)</.exec(html)?.[1];
+  if (artistMatch && songMatch) {
+    return { rawArtist: artistMatch.trim(), rawTitle: songMatch.trim() };
+  }
+
+  // Pattern C — JSON island with artist/song keys (may appear in embedded data)
+  const jsonIsland = /"artist"\s*:\s*"([^"]+)"[^}]*"song"\s*:\s*"([^"]+)"/.exec(html);
+  if (jsonIsland) {
+    const [, rawArtist, rawTitle] = jsonIsland;
+    if (rawArtist && rawTitle) {
+      return { rawArtist: rawArtist.trim(), rawTitle: rawTitle.trim() };
+    }
+  }
+
+  // Pattern D — OpenGraph / Twitter card meta tags as last resort
+  const ogTitle =
+    /property="og:title"\s+content="([^"]+)"/.exec(html)?.[1] ??
+    /name="twitter:title"\s+content="([^"]+)"/.exec(html)?.[1];
+  if (ogTitle) {
+    // Spinitron og:title format: "Artist – Song on CALLSIGN" or "Artist - Song"
+    const parts = ogTitle.split(/\s[–\-]\s/);
+    if (parts.length >= 2) {
+      const rawTitle = parts[1].replace(/\s+on\s+\w+\s*$/, "").trim();
+      const rawArtist = parts[0].trim();
+      if (rawArtist && rawTitle) {
+        return { rawArtist, rawTitle };
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Spinitron Web — unauthenticated now-playing adapter for any station on
+ * the Spinitron platform.
+ *
+ * Strategy (single HTTP request, Content-Type routing):
+ * 1. Fetch the station page with `Accept: application/json, text/html;q=0.9`.
+ *    If Spinitron ever exposes a public JSON endpoint this activates
+ *    automatically — the response Content-Type switches to `application/json`
+ *    and we parse `{ artist, song|title }` directly.
+ *    Note: as of 2026-07 `?format=json` still returns HTML; this attempt is
+ *    forward-compatible and adds no extra round-trip.
+ * 2. If the response is HTML (current behaviour), delegate to
+ *    `parseSpinitronWebPage()` which covers the live class-based widget and
+ *    three additional fallback patterns.
+ *
+ * Config: `{ callsign: "WPRB" }`.
+ * Best-effort: returns null on any error, parse failure, or when nothing plays.
+ */
+const spinitronWeb: NowPlayingAdapter = async (config) => {
+  const callsign = str(config.callsign);
+  if (!callsign) return null;
+  try {
+    const res = await fetch(
+      `https://spinitron.com/${encodeURIComponent(callsign)}/`,
+      {
+        headers: {
+          // Prefer JSON so a future public JSON endpoint is used automatically.
+          // Spinitron currently returns HTML regardless of Accept, so we fall
+          // through to HTML parsing below.
+          Accept: "application/json, text/html;q=0.9, application/xhtml+xml;q=0.8",
+          "User-Agent": "Lore Radio/1.0 (+https://spinitron.com)",
+        },
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      },
+    );
+    if (!res.ok) return null;
+
+    const contentType = res.headers.get("content-type") ?? "";
+    if (contentType.includes("json")) {
+      // Public JSON endpoint available — parse directly.
+      const body = (await res.json()) as Record<string, unknown>;
+      const rawArtist =
+        typeof body.artist === "string" ? body.artist.trim() : null;
+      const rawTitle =
+        typeof body.song === "string"
+          ? body.song.trim()
+          : typeof body.title === "string"
+            ? body.title.trim()
+            : null;
+      if (rawArtist && rawTitle) return { rawArtist, rawTitle };
+      return null;
+    }
+
+    // HTML response (current Spinitron behaviour) — parse the page widget.
+    const html = await res.text();
+    return parseSpinitronWebPage(html);
+  } catch {
+    return null;
+  }
+};
+
 // ---- The Lot Radio schedule (now-playing, change-detection) ------------
 
 /**
@@ -933,6 +1056,7 @@ const NOW_PLAYING_ADAPTERS: Record<string, NowPlayingAdapter> = {
   radio_browser_icy: radioBrowserIcy,
   radiojar,
   lot_radio_schedule: lotRadioSchedule,
+  spinitron_web: spinitronWeb,
 };
 
 const HISTORY_ADAPTERS: Record<string, HistoryAdapter> = {
@@ -1004,14 +1128,25 @@ export function stationArchiveUrl(
     // FIP (Radio France) publishes a dated programme grid.
     case "fip":
       return `https://www.radiofrance.fr/fip/grille-programmes?date=${year}-${month}-${dayOfMonth}`;
-    // Spinitron publishes a per-station calendar view. Requires the station's
-    // public handle (e.g. "WFMU") stored in nowPlayingConfig.stationHandle.
+    // Spinitron publishes a per-station calendar view.
+    // Authenticated adapter stores the handle in `stationHandle`; the
+    // web-scrape adapter stores it in `callsign`. Both produce the same URL.
     case "spinitron": {
       const handle =
         config &&
         typeof config.stationHandle === "string" &&
         config.stationHandle.trim()
           ? config.stationHandle.trim()
+          : null;
+      if (!handle) return null;
+      return `https://spinitron.com/${encodeURIComponent(handle)}/calendar/date/${year}-${month}-${dayOfMonth}`;
+    }
+    case "spinitron_web": {
+      const handle =
+        config &&
+        typeof config.callsign === "string" &&
+        config.callsign.trim()
+          ? config.callsign.trim()
           : null;
       if (!handle) return null;
       return `https://spinitron.com/${encodeURIComponent(handle)}/calendar/date/${year}-${month}-${dayOfMonth}`;

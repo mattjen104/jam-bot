@@ -31,6 +31,7 @@ import type { HistoryAdapter, RawSpin } from "./types.js";
 // playing sources are cheap so they can be a touch tighter.
 const POLL_INTERVALS_MS: Record<string, number> = {
   spinitron: 150_000, // 2.5 min
+  spinitron_web: 150_000, // 2.5 min — HTML scrape, same cadence as API adapter
   kexp_api: 120_000, // 2 min
   bbc_api: 120_000, // 2 min
   somafm: 120_000, // 2 min — feed holds ~20 songs, no risk of gaps

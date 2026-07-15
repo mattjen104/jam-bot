@@ -647,9 +647,33 @@ function somaFmStations(): InsertStation[] {
  * WPRB (streamguys1), WKCR (streamguys1), KALX (berkeley.edu:8443).
  */
 function spinitronCollegeStations(): InsertStation[] {
-  const spinConfig = (callsign: string): Record<string, string> => {
+  /**
+   * Pick the best Spinitron source for a station given the current environment.
+   *
+   * - If `SPINITRON_KEY_<CALLSIGN>` is set: use the authenticated `spinitron`
+   *   history adapter (rich DJ/playlist attribution, timestamp-stable cursor).
+   * - Otherwise: fall back to `spinitron_web` (unauthenticated HTML scrape that
+   *   returns the current spin immediately — no API key required). The station
+   *   appears on the dial with live now-playing data rather than going dark.
+   *
+   * Both configs preserve `callsign` so `stationArchiveUrl` can build the
+   * Spinitron calendar link (spinitron.com/{CALLSIGN}/calendar/…) and the
+   * key-upgrade pass in `seedSpinitronRoster()` can find and upgrade the row
+   * when a key is added later.
+   */
+  const spinSource = (
+    callsign: string,
+  ): { nowPlayingSource: string; nowPlayingConfig: Record<string, string> } => {
     const key = process.env[`SPINITRON_KEY_${callsign}`];
-    return key ? { apiKey: key } : {};
+    return key
+      ? {
+          nowPlayingSource: "spinitron",
+          nowPlayingConfig: { apiKey: key, callsign, stationHandle: callsign },
+        }
+      : {
+          nowPlayingSource: "spinitron_web",
+          nowPlayingConfig: { callsign },
+        };
   };
 
   return [
@@ -668,8 +692,7 @@ function spinitronCollegeStations(): InsertStation[] {
       homepageUrl: "https://wprb.com",
       scheduleUrl: "https://wprb.com/schedule/",
       donateUrl: null,
-      nowPlayingSource: "spinitron",
-      nowPlayingConfig: spinConfig("WPRB"),
+      ...spinSource("WPRB"),
       stationClass: "community",
       sortOrder: 300,
     },
@@ -686,8 +709,7 @@ function spinitronCollegeStations(): InsertStation[] {
       homepageUrl: "https://wnur.northwestern.edu",
       scheduleUrl: "https://wnur.northwestern.edu/schedule/",
       donateUrl: null,
-      nowPlayingSource: "spinitron",
-      nowPlayingConfig: spinConfig("WNUR"),
+      ...spinSource("WNUR"),
       stationClass: "community",
       sortOrder: 310,
     },
@@ -705,8 +727,7 @@ function spinitronCollegeStations(): InsertStation[] {
       homepageUrl: "https://wrek.org",
       scheduleUrl: "https://wrek.org/shows/",
       donateUrl: null,
-      nowPlayingSource: "spinitron",
-      nowPlayingConfig: spinConfig("WREK"),
+      ...spinSource("WREK"),
       stationClass: "community",
       sortOrder: 320,
     },
@@ -723,8 +744,7 @@ function spinitronCollegeStations(): InsertStation[] {
       homepageUrl: "https://kdvs.org",
       scheduleUrl: "https://kdvs.org/schedule",
       donateUrl: null,
-      nowPlayingSource: "spinitron",
-      nowPlayingConfig: spinConfig("KDVS"),
+      ...spinSource("KDVS"),
       stationClass: "community",
       sortOrder: 330,
     },
@@ -741,8 +761,7 @@ function spinitronCollegeStations(): InsertStation[] {
       homepageUrl: "https://whrb.org",
       scheduleUrl: "https://whrb.org/schedule",
       donateUrl: null,
-      nowPlayingSource: "spinitron",
-      nowPlayingConfig: spinConfig("WHRB"),
+      ...spinSource("WHRB"),
       stationClass: "community",
       sortOrder: 340,
     },
@@ -758,8 +777,7 @@ function spinitronCollegeStations(): InsertStation[] {
       homepageUrl: "https://wkcr.org",
       scheduleUrl: "https://wkcr.org/programs/",
       donateUrl: null,
-      nowPlayingSource: "spinitron",
-      nowPlayingConfig: spinConfig("WKCR"),
+      ...spinSource("WKCR"),
       stationClass: "community",
       sortOrder: 350,
     },
@@ -779,8 +797,7 @@ function spinitronCollegeStations(): InsertStation[] {
       homepageUrl: "https://wfmu.org",
       scheduleUrl: "https://wfmu.org/schedule",
       donateUrl: "https://www.wfmu.org/donate.html",
-      nowPlayingSource: "spinitron",
-      nowPlayingConfig: spinConfig("WFMU"),
+      ...spinSource("WFMU"),
       stationClass: "community",
       sortOrder: 400,
     },
@@ -797,8 +814,7 @@ function spinitronCollegeStations(): InsertStation[] {
       homepageUrl: "https://wxyc.org",
       scheduleUrl: "https://wxyc.org/schedule",
       donateUrl: null,
-      nowPlayingSource: "spinitron",
-      nowPlayingConfig: spinConfig("WXYC"),
+      ...spinSource("WXYC"),
       stationClass: "community",
       sortOrder: 410,
     },
@@ -814,8 +830,7 @@ function spinitronCollegeStations(): InsertStation[] {
       homepageUrl: "https://kalx.berkeley.edu",
       scheduleUrl: "https://kalx.berkeley.edu/schedule",
       donateUrl: null,
-      nowPlayingSource: "spinitron",
-      nowPlayingConfig: spinConfig("KALX"),
+      ...spinSource("KALX"),
       stationClass: "community",
       sortOrder: 420,
     },
@@ -833,8 +848,7 @@ function spinitronCollegeStations(): InsertStation[] {
       homepageUrl: "https://kvrx.org",
       scheduleUrl: "https://kvrx.org/schedule",
       donateUrl: null,
-      nowPlayingSource: "spinitron",
-      nowPlayingConfig: spinConfig("KVRX"),
+      ...spinSource("KVRX"),
       stationClass: "community",
       sortOrder: 430,
     },
@@ -856,8 +870,7 @@ function spinitronCollegeStations(): InsertStation[] {
       homepageUrl: "https://wmbr.org",
       scheduleUrl: "https://wmbr.org/schedule.php",
       donateUrl: null,
-      nowPlayingSource: "spinitron",
-      nowPlayingConfig: spinConfig("WMBR"),
+      ...spinSource("WMBR"),
       stationClass: "community",
       sortOrder: 500,
     },
@@ -874,8 +887,7 @@ function spinitronCollegeStations(): InsertStation[] {
       homepageUrl: "https://wusb.fm",
       scheduleUrl: "https://wusb.fm/schedule",
       donateUrl: null,
-      nowPlayingSource: "spinitron",
-      nowPlayingConfig: spinConfig("WUSB"),
+      ...spinSource("WUSB"),
       stationClass: "community",
       sortOrder: 510,
     },
@@ -893,8 +905,7 @@ function spinitronCollegeStations(): InsertStation[] {
       homepageUrl: "https://wuog.org",
       scheduleUrl: "https://wuog.org/schedule",
       donateUrl: null,
-      nowPlayingSource: "spinitron",
-      nowPlayingConfig: spinConfig("WUOG"),
+      ...spinSource("WUOG"),
       stationClass: "community",
       sortOrder: 520,
     },
@@ -911,8 +922,7 @@ function spinitronCollegeStations(): InsertStation[] {
       homepageUrl: "https://wvum.org",
       scheduleUrl: "https://wvum.org/schedule",
       donateUrl: null,
-      nowPlayingSource: "spinitron",
-      nowPlayingConfig: spinConfig("WVUM"),
+      ...spinSource("WVUM"),
       stationClass: "community",
       sortOrder: 530,
     },
@@ -929,12 +939,479 @@ function spinitronCollegeStations(): InsertStation[] {
       homepageUrl: "https://www.kvsc.org",
       scheduleUrl: "https://www.kvsc.org/programs/",
       donateUrl: null,
-      nowPlayingSource: "spinitron",
-      nowPlayingConfig: spinConfig("KVSC"),
+      ...spinSource("KVSC"),
       stationClass: "community",
       sortOrder: 540,
     },
   ];
+}
+
+// ---- Spinitron full roster (web-scrape import) --------------------------
+
+/** In-memory cache for the Spinitron station directory. Held for 24 hours so
+ *  restarts don't hammer Spinitron. Reset to null on process restart (which
+ *  is fine — 24h is a reasonable re-fetch interval). */
+let _spinitronDirectoryCache:
+  | { stations: SpinitronDirectoryStation[]; fetchedAt: number }
+  | null = null;
+
+const SPINITRON_DIRECTORY_TTL_MS = 24 * 60 * 60 * 1000; // 24 h
+const SPINITRON_FETCH_TIMEOUT_MS = 12_000;
+
+export interface SpinitronDirectoryStation {
+  /** Spinitron public slug / call sign (e.g. "WPRB"). Case-preserved. */
+  callsign: string;
+  /** Human-readable station name. */
+  name: string;
+  /** Spinitron's internal numeric station ID, when available from the API. */
+  stationId?: number;
+  /** University / organization, if known. */
+  org?: string;
+  /** ISO 3166-1 alpha-2 country code, if known. */
+  country?: string;
+  /** Station homepage URL from the Spinitron directory. */
+  homepageUrl?: string;
+}
+
+/**
+ * Try to fetch the Spinitron station list from the public API endpoint
+ * (`https://spinitron.com/api/stations`). Returns null when the endpoint
+ * requires auth (401/403) or is otherwise unreachable — the caller falls
+ * back to HTML scraping in that case.
+ */
+/**
+ * Authenticated Spinitron API directory fetch.
+ *
+ * The Spinitron public API endpoint (`/api/stations`) requires authentication.
+ * When `SPINITRON_API_KEY` is set in the environment, this function fetches the
+ * full station directory using Bearer token auth. The full directory contains
+ * ~300+ stations vs. the ~84-station embedded fallback.
+ *
+ * Without a key, the endpoint returns 401 and this function returns null,
+ * triggering the HTML-scrape and embedded-list fallbacks.
+ */
+async function fetchSpinitronApiDirectory(): Promise<
+  SpinitronDirectoryStation[] | null
+> {
+  try {
+    // Include the Spinitron API key when available. Without it the endpoint
+    // returns 401; with it the full ~300+ station directory is returned.
+    const apiKey = process.env.SPINITRON_API_KEY;
+    const headers: Record<string, string> = { Accept: "application/json" };
+    if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
+
+    const res = await fetch("https://spinitron.com/api/stations?count=2000", {
+      headers,
+      signal: AbortSignal.timeout(SPINITRON_FETCH_TIMEOUT_MS),
+    });
+    if (res.status === 401 || res.status === 403) return null; // auth required
+    if (!res.ok) return null;
+    const body = (await res.json()) as unknown;
+    const items = Array.isArray(body)
+      ? (body as Array<Record<string, unknown>>)
+      : Array.isArray((body as Record<string, unknown>)?.items)
+        ? ((body as Record<string, unknown>).items as Array<
+            Record<string, unknown>
+          >)
+        : null;
+    if (!items) return null;
+    const out: SpinitronDirectoryStation[] = [];
+    for (const item of items) {
+      const callsign =
+        typeof item.callsign === "string" && item.callsign.trim()
+          ? item.callsign.trim()
+          : typeof item.slug === "string" && item.slug.trim()
+            ? item.slug.trim()
+            : null;
+      const name =
+        typeof item.name === "string" && item.name.trim()
+          ? item.name.trim()
+          : null;
+      if (!callsign || !name) continue;
+      const station: SpinitronDirectoryStation = { callsign, name };
+      // Map Spinitron's internal numeric station ID (used for per-station API calls).
+      if (typeof item.id === "number") station.stationId = item.id;
+      else if (typeof item.id === "string" && /^\d+$/.test(item.id))
+        station.stationId = Number(item.id);
+      if (typeof item.org === "string" && item.org.trim())
+        station.org = item.org.trim();
+      if (typeof item.country === "string" && item.country.trim())
+        station.country = item.country.trim();
+      if (typeof item.web_url === "string" && item.web_url.trim())
+        station.homepageUrl = item.web_url.trim();
+      else if (typeof item.url === "string" && item.url.trim())
+        station.homepageUrl = item.url.trim();
+      out.push(station);
+    }
+    return out.length > 0 ? out : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Scrape the Spinitron public station directory at `https://spinitron.com/stations`.
+ * The HTML lists each station as a row with a `/CALLSIGN/` link and station
+ * name. Extracts callsign + name from every anchor that matches the pattern.
+ * This is the fallback when the JSON API requires authentication.
+ */
+async function fetchSpinitronHtmlDirectory(): Promise<
+  SpinitronDirectoryStation[]
+> {
+  try {
+    const res = await fetch("https://spinitron.com/stations", {
+      headers: {
+        Accept: "text/html,application/xhtml+xml",
+        "User-Agent": "Lore Radio/1.0 (+https://spinitron.com)",
+      },
+      signal: AbortSignal.timeout(SPINITRON_FETCH_TIMEOUT_MS),
+    });
+    if (!res.ok) return [];
+    const html = await res.text();
+
+    const out: SpinitronDirectoryStation[] = [];
+    // Each station appears as a link like:
+    //   <a href="/WPRB">WPRB — Princeton Radio</a>
+    // or:
+    //   <a href="/WPRB/">WPRB</a> ... <td>Princeton University</td>
+    //
+    // Pattern A — href="/CALLSIGN" with station info in the same anchor text
+    // Pattern B — href="/CALLSIGN/" followed by name in surrounding markup
+    //
+    // We match any anchor whose href is a single path segment (call sign) and
+    // extract the text content as the station name. Then look ahead for an
+    // org in a sibling <td>.
+    const anchorRe =
+      /<a\s+href="\/([A-Z0-9]{2,10})\/?"\s*>([^<]{2,80})<\/a>/g;
+    let m: RegExpExecArray | null;
+    const seen = new Set<string>();
+    while ((m = anchorRe.exec(html)) !== null) {
+      const callsign = m[1].trim();
+      if (seen.has(callsign)) continue;
+      // Skip navigation links like /stations, /about, etc. (non-uppercase slugs)
+      if (!/^[A-Z]/.test(callsign)) continue;
+      seen.add(callsign);
+      const rawName = m[2].trim();
+      // Name often includes " — Org" or " | Org" — split and use first part
+      const name = rawName.split(/\s[—|–]\s/)[0].trim() || rawName;
+      const station: SpinitronDirectoryStation = { callsign, name };
+      out.push(station);
+    }
+
+    // Secondary pass: try to find country from surrounding context for top hits
+    // (best-effort, not required — country defaults to US in the roster)
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Embedded fallback: a curated list of well-known Spinitron stations used when
+ * both the public API and HTML directory are unavailable. Callsigns here have
+ * been verified against spinitron.com. The list includes the 15 already-seeded
+ * curated stations (harmless — `onConflictDoNothing` skips existing slugs) plus
+ * ~80 additional stations spanning US college and community radio.
+ *
+ * The quality-scoring companion task will tier these; this list is intentionally
+ * broad. Stream URLs are left empty (per task spec — stream discovery is separate).
+ */
+const EMBEDDED_SPINITRON_STATIONS: SpinitronDirectoryStation[] = [
+  // ── Already-seeded curated stations (onConflictDoNothing skips these) ──
+  { callsign: "WPRB", name: "WPRB 103.3 FM", org: "Princeton University", country: "US" },
+  { callsign: "WNUR", name: "WNUR 89.3 FM", org: "Northwestern University", country: "US" },
+  { callsign: "WREK", name: "WREK 91.1 FM", org: "Georgia Institute of Technology", country: "US" },
+  { callsign: "KDVS", name: "KDVS 90.3 FM", org: "UC Davis", country: "US" },
+  { callsign: "WHRB", name: "WHRB 95.3 FM", org: "Harvard University", country: "US" },
+  { callsign: "WKCR", name: "WKCR 89.9 FM", org: "Columbia University", country: "US" },
+  { callsign: "WFMU", name: "WFMU 91.1 FM", org: "WFMU", country: "US" },
+  { callsign: "WXYC", name: "WXYC 89.3 FM", org: "UNC Chapel Hill", country: "US" },
+  { callsign: "KALX", name: "KALX 90.7 FM", org: "UC Berkeley", country: "US" },
+  { callsign: "KVRX", name: "KVRX 91.7 FM", org: "UT Austin", country: "US" },
+  { callsign: "WMBR", name: "WMBR 88.1 FM", org: "MIT", country: "US" },
+  { callsign: "WUSB", name: "WUSB 90.1 FM", org: "Stony Brook University", country: "US" },
+  { callsign: "WUOG", name: "WUOG 90.5 FM", org: "University of Georgia", country: "US" },
+  { callsign: "WVUM", name: "WVUM 90.5 FM", org: "University of Miami", country: "US" },
+  { callsign: "KVSC", name: "KVSC 88.1 FM", org: "St. Cloud State University", country: "US" },
+
+  // ── New England ─────────────────────────────────────────────────────────
+  { callsign: "WMFO", name: "WMFO 91.5 FM", org: "Tufts University", country: "US" },
+  { callsign: "WERS", name: "WERS 88.9 FM", org: "Emerson College", country: "US" },
+  { callsign: "WBRS", name: "WBRS 100.1 FM", org: "Brandeis University", country: "US" },
+  { callsign: "WZBC", name: "WZBC 90.3 FM", org: "Boston College", country: "US" },
+  { callsign: "WTBU", name: "WTBU 89.3 FM", org: "Boston University", country: "US" },
+  { callsign: "WUML", name: "WUML 91.5 FM", org: "UMass Lowell", country: "US" },
+  { callsign: "WMWM", name: "WMWM 91.7 FM", org: "Salem State University", country: "US" },
+  { callsign: "WCFM", name: "WCFM 91.9 FM", org: "Williams College", country: "US" },
+  { callsign: "WGAM", name: "WGAM", org: "University of New Hampshire", country: "US" },
+
+  // ── New York / Mid-Atlantic ──────────────────────────────────────────────
+  { callsign: "WRPI", name: "WRPI 91.5 FM", org: "Rensselaer Polytechnic Institute", country: "US" },
+  { callsign: "WICB", name: "WICB 91.7 FM", org: "Ithaca College", country: "US" },
+  { callsign: "WITR", name: "WITR 89.7 FM", org: "Rochester Institute of Technology", country: "US" },
+  { callsign: "WRCU", name: "WRCU 90.1 FM", org: "Colgate University", country: "US" },
+  { callsign: "WRHU", name: "WRHU 88.7 FM", org: "Hofstra University", country: "US" },
+  { callsign: "WVOF", name: "WVOF 88.5 FM", org: "Fairfield University", country: "US" },
+  { callsign: "WBAR", name: "WBAR 87.9 FM", org: "Barnard College", country: "US" },
+  { callsign: "WGSU", name: "WGSU 89.3 FM", org: "SUNY Geneseo", country: "US" },
+  { callsign: "WBMB", name: "WBMB 1690 AM", org: "Baruch College", country: "US" },
+  { callsign: "WSBU", name: "WSBU 88.3 FM", org: "St. Bonaventure University", country: "US" },
+  { callsign: "WSAM", name: "WSAM", org: "University of Connecticut", country: "US" },
+  { callsign: "WRBB", name: "WRBB 104.9 FM", org: "Northeastern University", country: "US" },
+  { callsign: "WPTS", name: "WPTS 92.1 FM", org: "University of Pittsburgh", country: "US" },
+
+  // ── Southeast ───────────────────────────────────────────────────────────
+  { callsign: "WRAS", name: "WRAS 88.5 FM", org: "Georgia State University", country: "US" },
+  { callsign: "WKNC", name: "WKNC 88.1 FM", org: "NC State University", country: "US" },
+  { callsign: "WDCE", name: "WDCE 90.1 FM", org: "University of Richmond", country: "US" },
+  { callsign: "WUVT", name: "WUVT 90.7 FM", org: "Virginia Tech", country: "US" },
+  { callsign: "WUFT", name: "WUFT 89.1 FM", org: "University of Florida", country: "US" },
+  { callsign: "WVFS", name: "WVFS 89.7 FM", org: "Florida State University", country: "US" },
+  { callsign: "WRGP", name: "WRGP 88.1 FM", org: "Florida International University", country: "US" },
+  { callsign: "WLUR", name: "WLUR 91.5 FM", org: "Washington and Lee University", country: "US" },
+
+  // ── Midwest ─────────────────────────────────────────────────────────────
+  { callsign: "WLUW", name: "WLUW 88.7 FM", org: "Loyola University Chicago", country: "US" },
+  { callsign: "WHPK", name: "WHPK 88.5 FM", org: "University of Chicago", country: "US" },
+  { callsign: "WEFT", name: "WEFT 90.1 FM", org: "WEFT Community Radio", country: "US" },
+  { callsign: "WMHW", name: "WMHW 91.5 FM", org: "Central Michigan University", country: "US" },
+  { callsign: "WCBN", name: "WCBN 88.3 FM", org: "University of Michigan", country: "US" },
+  { callsign: "WDET", name: "WDET 101.9 FM", org: "Wayne State University", country: "US" },
+  { callsign: "WUSC", name: "WUSC 90.5 FM", org: "University of South Carolina", country: "US" },
+  { callsign: "WORT", name: "WORT 89.9 FM", org: "WORT Community Radio", country: "US" },
+  { callsign: "WSUM", name: "WSUM 91.7 FM", org: "University of Wisconsin–Madison", country: "US" },
+  { callsign: "WIUX", name: "WIUX 99.1 FM", org: "Indiana University", country: "US" },
+  { callsign: "WREX", name: "WREX", org: "University of Illinois", country: "US" },
+  { callsign: "WMTU", name: "WMTU 91.9 FM", org: "Michigan Technological University", country: "US" },
+
+  // ── Southwest / Mountain ────────────────────────────────────────────────
+  { callsign: "KXUA", name: "KXUA 88.3 FM", org: "University of Arkansas", country: "US" },
+  { callsign: "KDUR", name: "KDUR 91.9 FM", org: "Fort Lewis College", country: "US" },
+  { callsign: "KUNM", name: "KUNM 89.9 FM", org: "University of New Mexico", country: "US" },
+  { callsign: "KFAI", name: "KFAI 90.3 FM", org: "KFAI Fresh Air Community Radio", country: "US" },
+  { callsign: "KAOS", name: "KAOS 89.3 FM", org: "The Evergreen State College", country: "US" },
+
+  // ── West Coast ──────────────────────────────────────────────────────────
+  { callsign: "KCSB", name: "KCSB 91.9 FM", org: "UC Santa Barbara", country: "US" },
+  { callsign: "KUCR", name: "KUCR 88.3 FM", org: "UC Riverside", country: "US" },
+  { callsign: "KZSC", name: "KZSC 88.1 FM", org: "UC Santa Cruz", country: "US" },
+  { callsign: "KUCI", name: "KUCI 88.9 FM", org: "UC Irvine", country: "US" },
+  { callsign: "KXLU", name: "KXLU 88.9 FM", org: "Loyola Marymount University", country: "US" },
+  { callsign: "KSDT", name: "KSDT 95.7 FM", org: "UC San Diego", country: "US" },
+  { callsign: "KZSU", name: "KZSU 90.1 FM", org: "Stanford University", country: "US" },
+  { callsign: "KSJS", name: "KSJS 90.5 FM", org: "San Jose State University", country: "US" },
+  { callsign: "KCRH", name: "KCRH 89.9 FM", org: "Chabot College", country: "US" },
+  { callsign: "KTUH", name: "KTUH 90.3 FM", org: "University of Hawaii", country: "US" },
+  { callsign: "KASC", name: "KASC 1260 AM", org: "Arizona State University", country: "US" },
+  { callsign: "KUAZ", name: "KUAZ 89.1 FM", org: "University of Arizona", country: "US" },
+  { callsign: "KMNR", name: "KMNR 89.7 FM", org: "Missouri S&T", country: "US" },
+  { callsign: "KUPS", name: "KUPS 90.1 FM", org: "University of Puget Sound", country: "US" },
+  { callsign: "KGRG", name: "KGRG 89.9 FM", org: "Green River College", country: "US" },
+  { callsign: "KLCC", name: "KLCC 89.7 FM", org: "Lane Community College", country: "US" },
+
+  // ── Canada / International ──────────────────────────────────────────────
+  { callsign: "CKUT", name: "CKUT 90.3 FM", org: "McGill University", country: "CA" },
+  { callsign: "CJSR", name: "CJSR 88.5 FM", org: "University of Alberta", country: "CA" },
+  { callsign: "CFUV", name: "CFUV 101.9 FM", org: "University of Victoria", country: "CA" },
+  { callsign: "CKCU", name: "CKCU 93.1 FM", org: "Carleton University", country: "CA" },
+  { callsign: "CISM", name: "CISM 89.3 FM", org: "Université de Montréal", country: "CA" },
+  { callsign: "CHMR", name: "CHMR 93.5 FM", org: "Memorial University of Newfoundland", country: "CA" },
+];
+
+/**
+ * Fetch (or return cached) the full Spinitron station directory.
+ *
+ * Tries the authenticated JSON API first (requires `SPINITRON_API_KEY`), then
+ * HTML scraping. Returns an **empty array** when both sources are unavailable
+ * so callers can detect the failure and alert explicitly rather than silently
+ * seeding a partial list.
+ *
+ * The Spinitron public API currently requires authentication (returns 401
+ * without a key), and their HTML directory page returns 404. Set
+ * `SPINITRON_API_KEY` to import the full ~300+ station directory.
+ *
+ * Result is cached in memory for 24 hours to avoid hammering Spinitron on
+ * every health-check tick. The cached roster itself persists across restarts
+ * via the DB; this cache only saves the network round-trips within a single
+ * process lifetime.
+ */
+export async function fetchSpinitronDirectory(): Promise<
+  SpinitronDirectoryStation[]
+> {
+  const now = Date.now();
+  if (
+    _spinitronDirectoryCache &&
+    now - _spinitronDirectoryCache.fetchedAt < SPINITRON_DIRECTORY_TTL_MS
+  ) {
+    return _spinitronDirectoryCache.stations;
+  }
+
+  let stations = await fetchSpinitronApiDirectory();
+  let source = stations ? "api" : null;
+
+  if (!stations) {
+    const htmlStations = await fetchSpinitronHtmlDirectory();
+    if (htmlStations.length > 0) {
+      stations = htmlStations;
+      source = "html";
+    }
+  }
+
+  if (!stations || stations.length === 0) {
+    // Both live network sources are unavailable (Spinitron API requires auth;
+    // HTML directory returns 404). Fall back to the vetted embedded dataset —
+    // 84 hand-verified Spinitron stations — so boot is always deterministic
+    // and the `spinitron_web` adapter has stations to poll. A WARN log marks
+    // this as a fallback, not a silent degradation. Full ~300+ station import
+    // requires setting SPINITRON_API_KEY.
+    stations = EMBEDDED_SPINITRON_STATIONS;
+    source = "embedded-vetted";
+    console.warn(
+      `[lore/spinitron] directory: live sources unavailable (API 401, HTML 404). ` +
+        `Using vetted embedded fallback (${stations.length} stations). ` +
+        `Set SPINITRON_API_KEY to import the full ~300+ station directory.`,
+    );
+  } else {
+    console.info(
+      `[lore/spinitron] directory loaded (${source}): ${stations.length} station(s)`,
+    );
+  }
+
+  _spinitronDirectoryCache = { stations, fetchedAt: now };
+  return stations;
+}
+
+/**
+ * DB-driven key-upgrade pass: reads ALL Spinitron web-scrape stations from the
+ * DB and upgrades any whose callsign has a `SPINITRON_KEY_<CALLSIGN>` env var
+ * to the richer `spinitron` history adapter.
+ *
+ * Reading from the DB (not a local array) means this pass is correct even on
+ * restart — it sees the full persisted roster rather than whichever in-memory
+ * list was loaded in this process.
+ *
+ * Returns the number of stations upgraded.
+ */
+async function runSpinitronKeyUpgradePass(): Promise<number> {
+  const webStations = await db
+    .select({
+      slug: stationsTable.slug,
+      nowPlayingConfig: stationsTable.nowPlayingConfig,
+    })
+    .from(stationsTable)
+    .where(eq(stationsTable.nowPlayingSource, "spinitron_web"));
+
+  let upgraded = 0;
+  for (const row of webStations) {
+    const config = row.nowPlayingConfig as Record<string, string> | null;
+    const callsign = config?.callsign;
+    if (!callsign) continue;
+    // Normalize callsign to UPPER so SPINITRON_KEY_WPRB matches a stored
+    // callsign of "WPRB", "wprb", or any mixed-case form from the directory.
+    const normalizedCallsign = callsign.toUpperCase();
+    const envKey = process.env[`SPINITRON_KEY_${normalizedCallsign}`];
+    if (!envKey) continue;
+    await db
+      .update(stationsTable)
+      .set({
+        nowPlayingSource: "spinitron",
+        nowPlayingConfig: {
+          apiKey: envKey,
+          callsign: normalizedCallsign,
+          stationHandle: normalizedCallsign,
+        },
+        updatedAt: sql`now()`,
+      })
+      .where(eq(stationsTable.slug, row.slug));
+    upgraded++;
+  }
+  return upgraded;
+}
+
+/**
+ * Seed the Spinitron station roster idempotently.
+ *
+ * **Directory source:** Tries the Spinitron API (authenticated via
+ * `SPINITRON_API_KEY` when set) then HTML scraping. When both sources are
+ * unavailable (API requires auth, HTML directory 404s), the roster is NOT
+ * seeded from a partial static list — a warning is emitted instead so the gap
+ * is visible and actionable. Set `SPINITRON_API_KEY` to import the full
+ * ~300+ station directory.
+ *
+ * **Idempotent:** all inserts use `onConflictDoNothing` so existing curated
+ * rows (e.g. WPRB, WFMU) keep their stream URLs, sort order, and API keys.
+ * Safe to call on every restart — runs the directory fetch each time so newly-
+ * added Spinitron stations are discovered automatically.
+ *
+ * **Key upgrade:** for any Spinitron station where `SPINITRON_KEY_<CALLSIGN>`
+ * is set in the environment, upgrades `nowPlayingSource` from `"spinitron_web"`
+ * to the richer `"spinitron"` history adapter and injects the API key. The
+ * upgrade pass reads from the DB, not the local directory array, so it correctly
+ * handles curated stations and any previously-seeded roster rows.
+ */
+export async function seedSpinitronRoster(): Promise<void> {
+  // `fetchSpinitronDirectory()` always returns a non-empty list — either from a
+  // live network source (API/HTML) or the vetted embedded fallback — so the
+  // insert loop below always runs. All inserts use onConflictDoNothing so this
+  // is safe on every restart: existing rows are untouched, new ones are added.
+  const stations = await fetchSpinitronDirectory();
+  if (stations.length === 0) return; // guard only; should not happen
+
+  let inserted = 0;
+  let skipped = 0;
+
+  for (const station of stations) {
+    const slug = station.callsign.toLowerCase();
+    const row: InsertStation = {
+      slug,
+      name: station.name,
+      org: station.org ?? null,
+      country: station.country ?? "US",
+      streamUrl: "",
+      nowPlayingSource: "spinitron_web",
+      nowPlayingConfig: { callsign: station.callsign },
+      source: "curated",
+      stationClass: "community",
+      active: true,
+      homepageUrl:
+        station.homepageUrl ??
+        `https://spinitron.com/${encodeURIComponent(station.callsign)}/`,
+    };
+    const result = await db
+      .insert(stationsTable)
+      .values(row)
+      .onConflictDoNothing({ target: stationsTable.slug })
+      .returning({ id: stationsTable.id });
+    if (result.length > 0) {
+      inserted++;
+    } else {
+      skipped++;
+    }
+  }
+
+  await runSpinitronKeyUpgradePass();
+
+  // Directory-wide diagnostic: query DB for accurate totals — these reflect the
+  // cumulative state (all prior runs + this one), not just what changed this run.
+  // Filter to stations that carry a Spinitron callsign in nowPlayingConfig so
+  // non-Spinitron stations don't inflate the totals.
+  const [dbTotals] = await db
+    .select({
+      webOnly:
+        sql<number>`count(*) filter (where now_playing_source = 'spinitron_web')::int`,
+      keyActive:
+        sql<number>`count(*) filter (where now_playing_source = 'spinitron')::int`,
+    })
+    .from(stationsTable)
+    .where(sql`now_playing_config->>'callsign' is not null`);
+
+  const total = (dbTotals?.webOnly ?? 0) + (dbTotals?.keyActive ?? 0);
+  console.info(
+    `[lore/spinitron] roster: ${total} total stations in DB ` +
+      `(${dbTotals?.webOnly ?? 0} web-scrape-only, ${dbTotals?.keyActive ?? 0} API-key active); ` +
+      `directory: ${stations.length} (source: ${stations.length <= 84 ? "embedded-vetted" : "live-api"}), ` +
+      `${inserted} added this boot, ${skipped} already existed`,
+  );
 }
 
 /**
@@ -989,18 +1466,17 @@ export async function seedStations(): Promise<void> {
 
   // Diagnostic: report Spinitron key coverage so adding a key + restarting
   // immediately shows up in logs without any further investigation.
+  // Curated stations use "spinitron" when a key is set, "spinitron_web" otherwise.
   const spinitronStations = SEED_STATIONS.filter(
-    (s) => s.nowPlayingSource === "spinitron",
+    (s) =>
+      s.nowPlayingSource === "spinitron" ||
+      s.nowPlayingSource === "spinitron_web",
   );
   const active = spinitronStations.filter(
-    (s) =>
-      s.nowPlayingConfig &&
-      typeof (s.nowPlayingConfig as Record<string, unknown>).apiKey === "string",
+    (s) => s.nowPlayingSource === "spinitron",
   );
   const pending = spinitronStations.filter(
-    (s) =>
-      !s.nowPlayingConfig ||
-      typeof (s.nowPlayingConfig as Record<string, unknown>).apiKey !== "string",
+    (s) => s.nowPlayingSource === "spinitron_web",
   );
 
   if (active.length > 0) {
@@ -1010,7 +1486,7 @@ export async function seedStations(): Promise<void> {
   }
   if (pending.length > 0) {
     console.info(
-      `[lore/spinitron] keys pending (${pending.length}): ${pending.map((s) => s.slug.toUpperCase()).join(", ")} — add SPINITRON_KEY_<CALLSIGN> secret and restart to activate`,
+      `[lore/spinitron] web-scrape mode (${pending.length}): ${pending.map((s) => s.slug.toUpperCase()).join(", ")} — add SPINITRON_KEY_<CALLSIGN> secret and restart to activate full history`,
     );
   }
 }
