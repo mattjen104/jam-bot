@@ -36,6 +36,8 @@ export interface ImportJobStatus {
   jobId: number;
   service: string;
   status: "pending" | "running" | "done" | "error";
+  /** Worker phase: "fetching" | "spine" | "cache" | "resolve" | null */
+  phase: "fetching" | "spine" | "cache" | "resolve" | null;
   total: number;
   resolved: number;
   startedAt: string;
@@ -260,7 +262,7 @@ export function useImportJobStatus(jobId: number | null) {
     refetchInterval: (query) => {
       const data = query.state.data as ImportJobStatus | undefined;
       if (data?.status === "done" || data?.status === "error") return false;
-      return 3_000;
+      return 2_000;
     },
     retry: false,
   });
@@ -281,7 +283,7 @@ export function useLatestImportJob() {
       const data = query.state.data as ImportJobStatus | null | undefined;
       if (!data) return false;
       if (data.status === "done" || data.status === "error") return false;
-      return 3_000;
+      return 2_000;
     },
     staleTime: 0,
     retry: false,

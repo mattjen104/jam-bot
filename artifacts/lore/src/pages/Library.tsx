@@ -247,11 +247,22 @@ export default function Library() {
   );
 }
 
+/** Human-readable label for each worker phase. */
+function phaseLabel(phase: string | null | undefined): string {
+  switch (phase) {
+    case "fetching": return "Reading your Spotify library…";
+    case "spine":    return "Checking spine…";
+    case "cache":    return "Checking spine…";
+    case "resolve":  return "Resolving new tracks…";
+    default:         return "Connecting to Spotify…";
+  }
+}
+
 function LibraryImportBanner({
   job,
   onDismiss,
 }: {
-  job: { status: string; total: number; resolved: number; error: string | null };
+  job: { status: string; phase?: string | null; total: number; resolved: number; error: string | null };
   onDismiss: () => void;
 }) {
   const isError = job.status === "error";
@@ -309,27 +320,31 @@ function LibraryImportBanner({
     );
   }
 
-  // pending / running
+  // pending / running — show phase label + progress bar
+  const label = phaseLabel(job.phase);
+  const isResolvingPhase = job.phase === "resolve";
+  const progressPct = job.total > 0 ? Math.min(100, (job.resolved / job.total) * 100) : 0;
+
   return (
     <div
       className="mb-8 overflow-hidden rounded-xl border border-[#C6F53F]/30 bg-[#C6F53F]/10"
       data-testid="library-import-banner"
     >
       <div className="flex items-center justify-between gap-4 px-5 py-4">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="font-mono text-[11px] uppercase tracking-wide text-[#C6F53F]">
-            Reading your Spotify library…
+            {label}
           </p>
           {job.total > 0 ? (
             <p className="mt-1 font-serif text-xl font-semibold text-foreground">
               {job.resolved.toLocaleString()}{" "}
               <span className="text-base font-normal text-muted-foreground">
-                / ~{job.total.toLocaleString()} tracks resolved
+                / ~{job.total.toLocaleString()} tracks{isResolvingPhase ? " resolved" : " found"}
               </span>
             </p>
           ) : (
             <p className="mt-1 font-serif text-base text-muted-foreground">
-              Connecting to Spotify…
+              {job.phase === "fetching" ? "Scanning your library…" : "Starting…"}
             </p>
           )}
         </div>
@@ -339,7 +354,7 @@ function LibraryImportBanner({
         <div className="h-1 w-full bg-[#C6F53F]/10">
           <div
             className="h-full bg-[#C6F53F]/60 transition-all duration-700"
-            style={{ width: `${Math.min(100, (job.resolved / job.total) * 100)}%` }}
+            style={{ width: `${progressPct}%` }}
           />
         </div>
       )}

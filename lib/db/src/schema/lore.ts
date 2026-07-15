@@ -1030,6 +1030,12 @@ export const libraryImportJobsTable = pgTable("library_import_jobs", {
   service: text("service").notNull(),
   /** "pending" | "running" | "done" | "error" */
   status: text("status").notNull().default("pending"),
+  /**
+   * Current worker phase — stamped as the job progresses so the frontend can
+   * show a meaningful label rather than a bare spinner.
+   * "fetching" | "spine" | "cache" | "resolve" | null
+   */
+  phase: text("phase"),
   total: integer("total").notNull().default(0),
   resolved: integer("resolved").notNull().default(0),
   startedAt: timestamp("started_at").defaultNow().notNull(),

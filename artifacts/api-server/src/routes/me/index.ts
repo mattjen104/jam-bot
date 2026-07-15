@@ -346,6 +346,7 @@ router.get("/me/library/import", h(async (req, res) => {
     jobId: job.id,
     service: job.service,
     status: job.status,
+    phase: job.phase ?? null,
     total: job.total,
     resolved: job.resolved,
     startedAt: job.startedAt.toISOString(),
@@ -380,6 +381,7 @@ router.get("/me/library/import/:jobId", h(async (req, res) => {
     jobId: job.id,
     service: job.service,
     status: job.status,
+    phase: job.phase ?? null,
     total: job.total,
     resolved: job.resolved,
     startedAt: job.startedAt.toISOString(),
@@ -419,6 +421,11 @@ export async function runImportWorker(
     // ── Buffer drain ───────────────────────────────────────────────────────────
     // Page through the service API (fast, no rate-limit) and collect every
     // track upfront so we know the total before any resolution work begins.
+    await db
+      .update(libraryImportJobsTable)
+      .set({ phase: "fetching" })
+      .where(eq(libraryImportJobsTable.id, jobId));
+
     const buffer: Array<{ artist: string; title: string; isrc?: string; durationMs?: number; externalId: string }> = [];
     for await (const raw of connector.importLibrary(accessToken)) {
       buffer.push({
@@ -435,7 +442,7 @@ export async function runImportWorker(
     // Stamp total immediately so the progress bar is honest from the start.
     await db
       .update(libraryImportJobsTable)
-      .set({ total })
+      .set({ total, phase: "spine" })
       .where(eq(libraryImportJobsTable.id, jobId));
 
     const provenance: LibraryItemProvenance = { kind: "import", service };
@@ -478,6 +485,11 @@ export async function runImportWorker(
     // ── Phase 2: resolution-cache bulk pre-check ──────────────────────────────
     // Tracks already resolved in a prior import/spin have a cache entry — look
     // them all up in one query. Still no MB call, no sleep.
+    await db
+      .update(libraryImportJobsTable)
+      .set({ phase: "cache" })
+      .where(eq(libraryImportJobsTable.id, jobId));
+
     const phase2Entries = buffer
       .map((t, i) => ({ t, i }))
       .filter(({ i }) => !matchedIdx.has(i));
@@ -554,7 +566,11 @@ export async function runImportWorker(
       .map((t, i) => ({ t, i }))
       .filter(({ i }) => !matchedIdx.has(i));
 
-    let phase3Done = 0;
+    await db
+      .update(libraryImportJobsTable)
+      .set({ phase: "resolve", total, resolved })
+      .where(eq(libraryImportJobsTable.id, jobId));
+
     for (const { t } of phase3Entries) {
       const resolution = await resolveToMbid(
         t.artist,
@@ -585,13 +601,12 @@ export async function runImportWorker(
         await sleep(IMPORT_RESOLVE_DELAY_MS);
       }
 
-      phase3Done++;
-      if (phase3Done % 10 === 0) {
-        await db
-          .update(libraryImportJobsTable)
-          .set({ total, resolved })
-          .where(eq(libraryImportJobsTable.id, jobId));
-      }
+      // Update after every resolved track — Phase 3 is slow (≥1.1 s/track) so
+      // every write is cheap relative to the sleep that follows.
+      await db
+        .update(libraryImportJobsTable)
+        .set({ total, resolved })
+        .where(eq(libraryImportJobsTable.id, jobId));
     }
 
     // Update service_connections.lastImportAt.
