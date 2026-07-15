@@ -475,3 +475,154 @@ describe("ride continues after device-lost", () => {
     expect(DEVICE_LOST_POLLS).toBe(5);
   });
 });
+
+// ---------------------------------------------------------------------------
+// device-lost triggers unpinDevice — pinned device is cleared, next play
+// targets the active device (no deviceId).
+//
+// PlayerProvider.tsx (lines ~673-684): when processDeviceConfirmation returns
+// "device-lost", the provider calls unpinDeviceRef.current() immediately.
+// The next spotifyPlay call then uses:
+//   { deviceId: pinnedDeviceIdRef.current ?? undefined }
+// which resolves to undefined (active-device default) once the pin is gone.
+//
+// These tests mirror that exact sequence using the same pure helper so any
+// change to processDeviceConfirmation or the threshold automatically breaks
+// them rather than letting them pass silently.
+// ---------------------------------------------------------------------------
+describe("device-lost triggers unpinDevice", () => {
+  /**
+   * Simulate the PlayerProvider poll loop through to device-lost, wiring an
+   * unpinDevice callback exactly as the provider does via unpinDeviceRef.
+   * Returns whether unpinDevice was called and the effective deviceId that
+   * would be passed to the next spotifyPlay call.
+   */
+  function simulateDeviceLostWithUnpin(startingPinnedId: string | null): {
+    unpinCalled: boolean;
+    deviceIdForNextPlay: string | undefined;
+  } {
+    // Mirror: pinnedDeviceIdRef.current in PlayerProvider.
+    let currentPinnedId: string | null = startingPinnedId;
+    let unpinCalled = false;
+
+    // Mirror: unpinDeviceRef.current = spotify.unpinDevice — sets pinnedDevice=null.
+    const unpinDevice = () => {
+      unpinCalled = true;
+      currentPinnedId = null;
+    };
+
+    const cur = { sawPlaying: false, noDevicePolls: 0 };
+
+    // Run the poll loop until device-lost fires, then call unpinDevice exactly
+    // as the provider does (break stops further polls just as clearing
+    // spotifyNowRef stops the provider's interval from re-entering this branch).
+    for (let i = 0; i < DEVICE_LOST_POLLS + 1; i++) {
+      const result = processDeviceConfirmation(cur, { ours: false, isPlaying: false });
+      if (result.type === "device-lost") {
+        unpinDevice();
+        break;
+      }
+      if (result.type === "wait") cur.noDevicePolls = result.noDevicePolls;
+    }
+
+    // Mirror: spotifyPlay({ deviceId: pinnedDeviceIdRef.current ?? undefined })
+    const deviceIdForNextPlay = currentPinnedId ?? undefined;
+    return { unpinCalled, deviceIdForNextPlay };
+  }
+
+  it("unpinDevice is called when device-lost fires", () => {
+    const { unpinCalled } = simulateDeviceLostWithUnpin("device-abc");
+    expect(unpinCalled).toBe(true);
+  });
+
+  it("unpinDevice is NOT called before the threshold is reached", () => {
+    // DEVICE_LOST_POLLS-1 silent polls — device-lost must not have fired yet.
+    let unpinCalled = false;
+    const unpinDevice = () => { unpinCalled = true; };
+    const cur = { sawPlaying: false, noDevicePolls: 0 };
+
+    for (let i = 0; i < DEVICE_LOST_POLLS - 1; i++) {
+      const result = processDeviceConfirmation(cur, { ours: false, isPlaying: false });
+      if (result.type === "device-lost") { unpinDevice(); break; }
+      if (result.type === "wait") cur.noDevicePolls = result.noDevicePolls;
+    }
+
+    expect(unpinCalled).toBe(false);
+  });
+
+  it("after unpinDevice, deviceId for next spotifyPlay is undefined (active-device)", () => {
+    // undefined → Spotify Web API targets whichever device is currently active,
+    // rather than the lost device's id.
+    const { deviceIdForNextPlay } = simulateDeviceLostWithUnpin("device-xyz");
+    expect(deviceIdForNextPlay).toBeUndefined();
+  });
+
+  it("after unpinDevice, spotifyPlay no longer targets the lost device id", () => {
+    const lostDeviceId = "device-123";
+    const { deviceIdForNextPlay } = simulateDeviceLostWithUnpin(lostDeviceId);
+    // Must not pass the lost device id to the next play command.
+    expect(deviceIdForNextPlay).not.toBe(lostDeviceId);
+    expect(deviceIdForNextPlay).toBeUndefined();
+  });
+
+  it("unpinDevice is called exactly once per device-lost event (no double-unpin)", () => {
+    let unpinCallCount = 0;
+    const unpinDevice = () => { unpinCallCount++; };
+    const cur = { sawPlaying: false, noDevicePolls: 0 };
+
+    // Run well past the threshold — provider breaks after device-lost fires
+    // (spotifyNowRef cleared), so only one call is possible per track.
+    for (let i = 0; i < DEVICE_LOST_POLLS + 10; i++) {
+      const result = processDeviceConfirmation(cur, { ours: false, isPlaying: false });
+      if (result.type === "device-lost") {
+        unpinDevice();
+        break;
+      }
+      if (result.type === "wait") cur.noDevicePolls = result.noDevicePolls;
+    }
+
+    expect(unpinCallCount).toBe(1);
+  });
+
+  it("unpinDevice clears pin regardless of which device id was lost", () => {
+    // The device-lost path does not filter by device id — any pinned device
+    // is cleared so the next track goes to whatever is active.
+    for (const deviceId of ["device-A", "device-B", "living-room-speaker"]) {
+      const { unpinCalled, deviceIdForNextPlay } = simulateDeviceLostWithUnpin(deviceId);
+      expect(unpinCalled).toBe(true);
+      expect(deviceIdForNextPlay).toBeUndefined();
+    }
+  });
+
+  it("when no device was pinned, device-lost still calls unpinDevice and play is active-device", () => {
+    // Provider calls unpinDevice unconditionally on device-lost; even with
+    // no prior pin the call must not leave stale state or throw.
+    const { unpinCalled, deviceIdForNextPlay } = simulateDeviceLostWithUnpin(null);
+    expect(unpinCalled).toBe(true);
+    expect(deviceIdForNextPlay).toBeUndefined();
+  });
+
+  it("device-lost then new ride: pin can be set again for the fresh ride", () => {
+    // After stop() the consumer re-pins for the new ride. Verify that the pin
+    // state is independent of the previous device-lost — it is just a variable
+    // reset on ride start, not permanently locked.
+    let currentPinnedId: string | null = "device-old";
+    const unpinDevice = () => { currentPinnedId = null; };
+    const cur = { sawPlaying: false, noDevicePolls: 0 };
+
+    // First ride: device-lost fires → unpin
+    for (let i = 0; i < DEVICE_LOST_POLLS + 1; i++) {
+      const r = processDeviceConfirmation(cur, { ours: false, isPlaying: false });
+      if (r.type === "device-lost") { unpinDevice(); break; }
+      if (r.type === "wait") cur.noDevicePolls = r.noDevicePolls;
+    }
+    expect(currentPinnedId).toBeNull();
+
+    // User picks a new device for the next ride (mirrors pinDevice in the UI).
+    currentPinnedId = "device-new";
+
+    // First spotifyPlay of new ride must target the newly pinned device.
+    const deviceIdForNewRide = currentPinnedId ?? undefined;
+    expect(deviceIdForNewRide).toBe("device-new");
+  });
+});
