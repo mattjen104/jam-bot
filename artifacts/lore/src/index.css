@@ -307,6 +307,17 @@
   animation: lore-eq 900ms ease-in-out infinite;
 }
 
+/* Sampler waveform — compact bars shown in schedule slot rows */
+@keyframes lore-sampler-bar {
+  0%, 100% { transform: scaleY(0.25); }
+  50% { transform: scaleY(1); }
+}
+
+.lore-sampler-bar {
+  transform-origin: bottom;
+  animation: lore-sampler-bar 700ms ease-in-out infinite;
+}
+
 @keyframes lore-spin {
   to { transform: rotate(360deg); }
 }

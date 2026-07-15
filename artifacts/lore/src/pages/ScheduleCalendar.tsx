@@ -20,10 +20,13 @@ import {
   isSlotLive,
   isOvernightCarryoverLive,
 } from "../lib/scheduleLive";
+import { useScheduleSampler } from "../hooks/useScheduleSampler";
 
 const DOW_TO_IDX: Record<string, number> = {
   Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
 };
+
+const DOW_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
 const SHORT_MONTH = [
   "Jan","Feb","Mar","Apr","May","Jun",
@@ -60,6 +63,7 @@ export default function ScheduleCalendar() {
   const { data: rollingData } = useGetStationsRollingGenres();
   const { ride, radio } = usePlayer();
   const dockPadding = ride.active || radio.station ? "pb-32" : "pb-16";
+  const { onSlotEnter, onSlotLeave, isSlotActive } = useScheduleSampler();
 
   const stations = data?.stations ?? [];
   const rollingByStation: Record<string, RollingGenreChip[]> =
@@ -301,6 +305,15 @@ export default function ScheduleCalendar() {
                       rollingChips={rollingByStation[show.stationSlug]}
                       isLast={i === liveNow.length - 1}
                       live
+                      isSampling={isSlotActive(show.stationSlug, todayKey, show.startTime)}
+                      onMouseEnter={() => onSlotEnter(
+                        show.stationSlug,
+                        todayKey,
+                        show.startTime,
+                        DOW_NAMES[today.getDay()] ?? "Mon",
+                        show.endTime,
+                      )}
+                      onMouseLeave={onSlotLeave}
                     />
                   ))}
                 </div>
@@ -326,6 +339,15 @@ export default function ScheduleCalendar() {
                       show={show}
                       rollingChips={rollingByStation[show.stationSlug]}
                       isLast={i === upcomingToday.length - 1}
+                      isSampling={isSlotActive(show.stationSlug, todayKey, show.startTime)}
+                      onMouseEnter={() => onSlotEnter(
+                        show.stationSlug,
+                        todayKey,
+                        show.startTime,
+                        DOW_NAMES[today.getDay()] ?? "Mon",
+                        show.endTime,
+                      )}
+                      onMouseLeave={onSlotLeave}
                     />
                   ))}
                 </div>
@@ -370,6 +392,15 @@ export default function ScheduleCalendar() {
                         rollingChips={rollingByStation[show.stationSlug]}
                         isLast={i === shows.length - 1}
                         live={isToday && isSlotLive(show.startTime, show.endTime, nowMins)}
+                        isSampling={isSlotActive(show.stationSlug, key, show.startTime)}
+                        onMouseEnter={() => onSlotEnter(
+                          show.stationSlug,
+                          key,
+                          show.startTime,
+                          DOW_NAMES[date.getDay()] ?? "Mon",
+                          show.endTime,
+                        )}
+                        onMouseLeave={onSlotLeave}
                       />
                     ))}
                   </div>
@@ -458,17 +489,43 @@ function DiscoveryEraCell({ chips }: { chips: RollingGenreChip[] | undefined }) 
   );
 }
 
+/** Tiny waveform bars shown next to the show name while the sampler is active. */
+function ScanningIndicator() {
+  return (
+    <span
+      className="inline-flex shrink-0 items-end gap-px"
+      style={{ height: "10px" }}
+      aria-label="Sampling audio"
+      role="img"
+    >
+      {[0, 150, 75, 225].map((delay) => (
+        <span
+          key={delay}
+          className="lore-sampler-bar inline-block w-[2px] rounded-sm bg-primary"
+          style={{ height: "10px", animationDelay: `${delay}ms` }}
+        />
+      ))}
+    </span>
+  );
+}
+
 /** One schedule slot row: time, station, show, DJ, rolling genre chips, era. */
 function SlotRow({
   show,
   rollingChips,
   isLast,
   live = false,
+  isSampling = false,
+  onMouseEnter,
+  onMouseLeave,
 }: {
   show: ShowEntry;
   rollingChips: RollingGenreChip[] | undefined;
   isLast: boolean;
   live?: boolean;
+  isSampling?: boolean;
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
 }) {
   // Newest chip determines row highlight — only if it's brand-new music.
   const newestLabel = rollingChips?.[0]?.discoveryLabel ?? null;
@@ -478,8 +535,10 @@ function SlotRow({
     <div
       className={`${ROW_GRID} py-2.5${
         isLast ? "" : " border-b border-border/40"
-      }${isNewMusic ? " bg-primary/[0.04]" : ""}`}
+      }${isNewMusic ? " bg-primary/[0.04]" : ""}${isSampling ? " bg-primary/[0.06]" : ""}`}
       data-testid={`slot-${show.stationSlug}-${show.startTime}`}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
     >
       {/* Time or LIVE badge */}
       {live ? (
@@ -510,7 +569,7 @@ function SlotRow({
         <span className="truncate">{show.stationName}</span>
       </Link>
 
-      {/* Show name + DJ */}
+      {/* Show name + DJ + scanning indicator */}
       <span className="flex min-w-0 items-center gap-2">
         <Link
           href={`/archive/stations/${show.stationSlug}?show=${encodeURIComponent(show.showName)}`}
@@ -519,6 +578,7 @@ function SlotRow({
         >
           {show.showName}
         </Link>
+        {isSampling && <ScanningIndicator />}
         {show.djName && (
           <Link
             href={`/dj/${encodeURIComponent(show.djName)}`}
