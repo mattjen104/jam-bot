@@ -1,12 +1,24 @@
+import { useState } from "react";
 import { Link } from "wouter";
 import {
   useListStations,
   useListPickers,
   useGetArchiveCoverage,
+  useSearchArtistRuns,
+  getSearchArtistRunsQueryKey,
 } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { runDate } from "../lib/format";
-import { ArrowLeft, ArrowUpRight, Gauge, Ghost, Radio, Users } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowUpRight,
+  Gauge,
+  Ghost,
+  Radio,
+  Search,
+  Users,
+} from "lucide-react";
+import { useDebouncedValue } from "../hooks/useDebouncedValue";
 
 /** The ghost radio hub: every archive you can replay, by picker. */
 export default function Archive() {
@@ -14,6 +26,18 @@ export default function Archive() {
   const { data: stationsData, isLoading: stationsLoading } = useListStations();
   const { data: pickersData, isLoading: pickersLoading } = useListPickers();
   const { data: coverage } = useGetArchiveCoverage();
+  const [artistQuery, setArtistQuery] = useState("");
+  const debouncedQuery = useDebouncedValue(artistQuery.trim(), 350);
+  const searchEnabled = debouncedQuery.length >= 2;
+  const { data: artistRuns, isFetching: searchFetching } = useSearchArtistRuns(
+    { q: debouncedQuery },
+    {
+      query: {
+        queryKey: getSearchArtistRunsQueryKey({ q: debouncedQuery }),
+        enabled: searchEnabled,
+      },
+    },
+  );
 
   const stations = stationsData?.stations ?? [];
   const pickers = (pickersData?.pickers ?? []).filter((p) => p.active);
@@ -44,6 +68,91 @@ export default function Archive() {
             order. Real sequences from real people, never an algorithm.
           </p>
         </header>
+
+        <section className="mb-10">
+          <label
+            htmlFor="artist-run-search"
+            className="mb-3 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] text-primary"
+          >
+            <Search className="h-4 w-4" />
+            Who played my artist?
+          </label>
+          <input
+            id="artist-run-search"
+            type="search"
+            value={artistQuery}
+            onChange={(e) => setArtistQuery(e.target.value)}
+            placeholder="Type an artist — e.g. Fleetwood Mac"
+            className="w-full rounded-xl border border-card-border bg-card px-4 py-3 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            data-testid="input-artist-run-search"
+          />
+          {searchEnabled ? (
+            <div className="mt-4" data-testid="artist-run-results">
+              {searchFetching && !artistRuns ? (
+                <p className="font-mono text-xs text-muted-foreground">
+                  Digging through the vault…
+                </p>
+              ) : artistRuns &&
+                artistRuns.stationRuns.length === 0 &&
+                artistRuns.pickerRuns.length === 0 ? (
+                <p
+                  className="rounded-xl border border-card-border bg-card p-4 font-mono text-xs text-muted-foreground"
+                  data-testid="artist-run-empty"
+                >
+                  No documented runs with “{debouncedQuery}” yet.
+                </p>
+              ) : artistRuns ? (
+                <ul className="flex flex-col gap-2">
+                  {artistRuns.stationRuns.map((m) => (
+                    <li key={`s-${m.run.runId}`}>
+                      <Link
+                        href={`/archive/station-runs/${m.run.runId}`}
+                        className="hover-elevate flex items-center justify-between gap-3 rounded-xl border border-card-border bg-card p-4"
+                        data-testid={`artist-run-station-${m.run.runId}`}
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-serif text-base font-semibold text-foreground">
+                            {m.station.name}
+                            {m.run.show ? ` · ${m.run.show.name}` : ""}
+                          </p>
+                          <p className="truncate font-mono text-[11px] text-muted-foreground">
+                            {runDate(m.run.startedAt)} · {m.matchCount} track
+                            {m.matchCount === 1 ? "" : "s"} matched ·{" "}
+                            {m.run.spinCount} spins in the run
+                          </p>
+                        </div>
+                        <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      </Link>
+                    </li>
+                  ))}
+                  {artistRuns.pickerRuns.map((m) => (
+                    <li key={`p-${m.runId}`}>
+                      <Link
+                        href={`/archive/selector-runs/${m.runId}`}
+                        className="hover-elevate flex items-center justify-between gap-3 rounded-xl border border-card-border bg-card p-4"
+                        data-testid={`artist-run-picker-${m.runId}`}
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-serif text-base font-semibold text-foreground">
+                            {m.picker.name}
+                            {m.title ? ` · ${m.title}` : ""}
+                          </p>
+                          <p className="truncate font-mono text-[11px] text-muted-foreground">
+                            {m.pickedAt ? `${runDate(m.pickedAt)} · ` : ""}
+                            {m.matchCount} track
+                            {m.matchCount === 1 ? "" : "s"} matched ·{" "}
+                            {m.trackCount} in the list
+                          </p>
+                        </div>
+                        <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
 
         {coverage ? (
           <section

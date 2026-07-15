@@ -874,6 +874,38 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ArchiveRecentRuns"
+  /archive/artist-runs:
+    get:
+      operationId: searchArtistRuns
+      tags: [archive]
+      summary: Find archived runs that include an artist
+      description: >
+        Case-insensitive artist-name search across the whole archive. Matches
+        both raw spin/pick metadata and resolved recording artists, then groups
+        the hits into their documented runs — station runs (show + UTC
+        broadcast day) and picker runs (source-cited lists) — each with a count
+        of matching tracks. Powers "which shows/lists played X?".
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+          description: Artist name (or fragment) to search for.
+      responses:
+        "200":
+          description: Runs that include the searched artist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtistRunSearch"
+        "400":
+          description: Missing or empty search query
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /scraped-shows:
     get:
       operationId: getAllScrapedShows
@@ -3780,6 +3812,68 @@ components:
             $ref: "#/components/schemas/RecentStationRun"
       required:
         - items
+    ArtistStationRunMatch:
+      type: object
+      description: >-
+        One station run containing the searched artist, with how many of its
+        spins matched.
+      properties:
+        station:
+          $ref: "#/components/schemas/StationRef"
+        run:
+          $ref: "#/components/schemas/StationRunSummary"
+        matchCount:
+          type: integer
+          description: Spins in this run by the searched artist.
+      required:
+        - station
+        - run
+        - matchCount
+    ArtistPickerRunMatch:
+      type: object
+      description: >-
+        One picker run (source-cited list) containing the searched artist.
+      properties:
+        picker:
+          $ref: "#/components/schemas/PickerRef"
+        runId:
+          type: integer
+        title:
+          type: ["string", "null"]
+        sourceUrl:
+          type: string
+        pickedAt:
+          type: ["string", "null"]
+        trackCount:
+          type: integer
+        matchCount:
+          type: integer
+          description: Picks in this run by the searched artist.
+      required:
+        - picker
+        - runId
+        - title
+        - sourceUrl
+        - pickedAt
+        - trackCount
+        - matchCount
+    ArtistRunSearch:
+      type: object
+      properties:
+        query:
+          type: string
+        stationRuns:
+          type: array
+          items:
+            $ref: "#/components/schemas/ArtistStationRunMatch"
+        pickerRuns:
+          type: array
+          items:
+            $ref: "#/components/schemas/ArtistPickerRunMatch"
+      required:
+        - query
+        - stationRuns
+        - pickerRuns
     StationCoverage:
       type: object
       description: >-

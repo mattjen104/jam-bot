@@ -10,6 +10,8 @@ import {
   GetStationRunInsightsResponse,
   GetPickerRunInsightsParams,
   GetPickerRunInsightsResponse,
+  SearchArtistRunsQueryParams,
+  SearchArtistRunsResponse,
 } from "@workspace/api-zod";
 import {
   db,
@@ -20,7 +22,7 @@ import {
   pickersTable,
   picksTable,
 } from "@workspace/db";
-import { eq, and, asc, isNull, isNotNull, inArray, sql } from "drizzle-orm";
+import { eq, and, or, asc, isNull, isNotNull, inArray, sql } from "drizzle-orm";
 import { stationArchiveUrl, supportsBackfill } from "../../lore/adapters.js";
 import { getPickerByHandle } from "../../lore/picks.js";
 import { h } from "../../middlewares/asyncHandler.js";
@@ -380,6 +382,234 @@ router.get("/archive/recent-runs", h(async (_req, res) => {
         ];
       }),
     }),
+  );
+}));
+
+// GET /api/archive/artist-runs?q=… — find runs that include an artist.
+// Matches raw spin/pick metadata AND resolved recording artists, then groups
+// hits into runs. Run anchors (min id) are computed over the FULL partition —
+// never just the matching rows — so runIds match the archive pages exactly.
+router.get("/archive/artist-runs", h(async (req, res) => {
+  // Explicit presence guard: zod.coerce would turn an absent param into the
+  // literal string "undefined".
+  if (typeof req.query.q !== "string" || req.query.q.trim().length === 0) {
+    return res.status(400).json({ error: "Missing search query" });
+  }
+  const parsed = SearchArtistRunsQueryParams.safeParse({ q: req.query.q });
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Missing search query" });
+  }
+  const q = parsed.data.q.trim();
+  const pattern = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+
+  const artistMatch = or(
+    sql`${spinsTable.rawArtist} ilike ${pattern}`,
+    sql`${recordingsTable.artist} ilike ${pattern}`,
+  )!;
+
+  // 1. Which station-run groups contain the artist, and how many hits each?
+  const spinGroups = await db
+    .select({
+      stationId: spinsTable.stationId,
+      showId: spinsTable.showId,
+      day: spinDayExpr,
+      matchCount: sql<number>`count(*)::int`,
+    })
+    .from(spinsTable)
+    .leftJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
+    .where(artistMatch)
+    .groupBy(spinsTable.stationId, spinsTable.showId, spinDayExpr)
+    .orderBy(sql`${spinDayExpr} desc`, sql`count(*) desc`)
+    .limit(25);
+
+  // 2. Full-partition summaries for those groups (anchor id, total counts).
+  let stationRuns: Array<{
+    station: { slug: string; name: string; stationClass: string };
+    run: {
+      runId: number;
+      date: string;
+      show: { name: string; djName: string | null } | null;
+      spinCount: number;
+      resolvedCount: number;
+      sourceUrl: string | null;
+      startedAt: string;
+      endedAt: string;
+    };
+    matchCount: number;
+  }> = [];
+  if (spinGroups.length > 0) {
+    const groupFilter = or(
+      ...spinGroups.map((g) =>
+        and(
+          eq(spinsTable.stationId, g.stationId),
+          g.showId == null
+            ? isNull(spinsTable.showId)
+            : eq(spinsTable.showId, g.showId),
+          sql`${spinDayExpr} = ${g.day}`,
+        ),
+      ),
+    )!;
+    const fullGroups = await db
+      .select({
+        stationId: spinsTable.stationId,
+        showId: spinsTable.showId,
+        day: spinDayExpr,
+        runId: sql<number>`min(${spinsTable.id})`,
+        spinCount: sql<number>`count(*)::int`,
+        resolvedCount: sql<number>`count(*) filter (where ${spinsTable.mbid} is not null)::int`,
+        citation: sql<string | null>`max(${spinsTable.citation})`,
+        startedAt: sql<string>`min(${spinsTable.playedAt})`,
+        endedAt: sql<string>`max(${spinsTable.playedAt})`,
+        showName: showsTable.name,
+        djName: showsTable.djName,
+      })
+      .from(spinsTable)
+      .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id))
+      .where(groupFilter)
+      .groupBy(
+        spinsTable.stationId,
+        spinsTable.showId,
+        spinDayExpr,
+        showsTable.name,
+        showsTable.djName,
+      );
+
+    const stationIds = [...new Set(fullGroups.map((g) => g.stationId))];
+    const stations = stationIds.length
+      ? await db.select().from(stationsTable).where(inArray(stationsTable.id, stationIds))
+      : [];
+    const stationById = new Map(stations.map((s) => [s.id, s]));
+    const matchByKey = new Map(
+      spinGroups.map((g) => [`${g.stationId}|${g.showId ?? "null"}|${g.day}`, g.matchCount]),
+    );
+
+    stationRuns = fullGroups
+      .flatMap((g) => {
+        const station = stationById.get(g.stationId);
+        if (!station) return [];
+        return [
+          {
+            station: {
+              slug: station.slug,
+              name: station.name,
+              stationClass: station.stationClass,
+            },
+            run: {
+              runId: g.runId,
+              date: g.day,
+              show: g.showName
+                ? { name: g.showName, djName: g.djName ?? null }
+                : null,
+              spinCount: g.spinCount,
+              resolvedCount: g.resolvedCount,
+              sourceUrl:
+                stationArchiveUrl(station.nowPlayingSource, g.day, station.nowPlayingConfig as Record<string, unknown> | null) ??
+                g.citation ??
+                null,
+              startedAt: new Date(g.startedAt).toISOString(),
+              endedAt: new Date(g.endedAt).toISOString(),
+            },
+            matchCount:
+              matchByKey.get(`${g.stationId}|${g.showId ?? "null"}|${g.day}`) ?? 0,
+          },
+        ];
+      })
+      .sort(
+        (a, b) =>
+          b.run.date.localeCompare(a.run.date) || b.matchCount - a.matchCount,
+      );
+  }
+
+  // 3. Same for picker runs: matching (picker, sourceUrl) groups…
+  const pickGroups = await db
+    .select({
+      pickerId: picksTable.pickerId,
+      sourceUrl: picksTable.sourceUrl,
+      matchCount: sql<number>`count(*)::int`,
+    })
+    .from(picksTable)
+    .leftJoin(recordingsTable, eq(picksTable.mbid, recordingsTable.mbid))
+    .where(
+      and(
+        isNotNull(picksTable.sourceUrl),
+        or(
+          sql`${picksTable.rawArtist} ilike ${pattern}`,
+          sql`${recordingsTable.artist} ilike ${pattern}`,
+        ),
+      ),
+    )
+    .groupBy(picksTable.pickerId, picksTable.sourceUrl)
+    .orderBy(sql`count(*) desc`)
+    .limit(25);
+
+  let pickerRuns: Array<{
+    picker: { name: string; handle: string; pickerType: string; trustTier: number };
+    runId: number;
+    title: string | null;
+    sourceUrl: string;
+    pickedAt: string | null;
+    trackCount: number;
+    matchCount: number;
+  }> = [];
+  if (pickGroups.length > 0) {
+    // …then full-group summaries (anchor id over the whole list).
+    const fullPickGroups = await db
+      .select({
+        pickerId: picksTable.pickerId,
+        sourceUrl: picksTable.sourceUrl,
+        runId: sql<number>`min(${picksTable.id})`,
+        trackCount: sql<number>`count(*)::int`,
+        title: sql<string | null>`max(${picksTable.context})`,
+        pickedAt: sql<string | null>`min(${picksTable.pickedAt})`,
+      })
+      .from(picksTable)
+      .where(
+        or(
+          ...pickGroups.map((g) =>
+            and(
+              eq(picksTable.pickerId, g.pickerId),
+              eq(picksTable.sourceUrl, g.sourceUrl!),
+            ),
+          ),
+        )!,
+      )
+      .groupBy(picksTable.pickerId, picksTable.sourceUrl);
+
+    const pickerIds = [...new Set(fullPickGroups.map((g) => g.pickerId))];
+    const pickers = pickerIds.length
+      ? await db.select().from(pickersTable).where(inArray(pickersTable.id, pickerIds))
+      : [];
+    const pickerById = new Map(pickers.map((p) => [p.id, p]));
+    const pickMatchByKey = new Map(
+      pickGroups.map((g) => [`${g.pickerId}|${g.sourceUrl}`, g.matchCount]),
+    );
+
+    pickerRuns = fullPickGroups
+      .flatMap((g) => {
+        const picker = pickerById.get(g.pickerId);
+        if (!picker || g.sourceUrl == null) return [];
+        return [
+          {
+            picker: {
+              name: picker.name,
+              handle: picker.handle,
+              pickerType: picker.pickerType,
+              trustTier: picker.trustTier,
+            },
+            runId: g.runId,
+            title: g.title,
+            sourceUrl: g.sourceUrl,
+            pickedAt: g.pickedAt ? new Date(g.pickedAt).toISOString() : null,
+            trackCount: g.trackCount,
+            matchCount: pickMatchByKey.get(`${g.pickerId}|${g.sourceUrl}`) ?? 0,
+          },
+        ];
+      })
+      .sort((a, b) => b.matchCount - a.matchCount || b.runId - a.runId);
+  }
+
+  return res.json(
+    SearchArtistRunsResponse.parse({ query: q, stationRuns, pickerRuns }),
   );
 }));
 

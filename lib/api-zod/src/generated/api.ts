@@ -1978,6 +1978,100 @@ export const GetArchiveRecentRunsResponse = zod.object({
 });
 
 /**
+ * Case-insensitive artist-name search across the whole archive. Matches both raw spin/pick metadata and resolved recording artists, then groups the hits into their documented runs — station runs (show + UTC broadcast day) and picker runs (source-cited lists) — each with a count of matching tracks. Powers "which shows/lists played X?".
+
+ * @summary Find archived runs that include an artist
+ */
+
+export const SearchArtistRunsQueryParams = zod.object({
+  q: zod.coerce
+    .string()
+    .min(1)
+    .describe("Artist name (or fragment) to search for."),
+});
+
+export const SearchArtistRunsResponse = zod.object({
+  query: zod.string(),
+  stationRuns: zod.array(
+    zod
+      .object({
+        station: zod
+          .object({
+            slug: zod.string(),
+            name: zod.string(),
+            stationClass: zod.string(),
+          })
+          .describe("A station reference used in spin\/segue attribution."),
+        run: zod
+          .object({
+            runId: zod.number(),
+            date: zod.string().describe("UTC broadcast day, YYYY-MM-DD."),
+            show: zod
+              .union([
+                zod
+                  .object({
+                    name: zod.string(),
+                    djName: zod.string().nullish(),
+                  })
+                  .describe(
+                    "Show + DJ attribution for a spin, when the source exposes it.",
+                  ),
+                zod.null(),
+              ])
+              .optional(),
+            spinCount: zod.number(),
+            resolvedCount: zod
+              .number()
+              .describe(
+                "Spins resolved to the MBID spine (replayable tracks).",
+              ),
+            sourceUrl: zod
+              .string()
+              .nullable()
+              .describe(
+                "Outbound link to the source's own archive for this run (e.g. the station's dated playlist page, or a manual spin's citation). Null when the source has no public per-day archive.",
+              ),
+            startedAt: zod.string(),
+            endedAt: zod.string(),
+          })
+          .describe(
+            "One documented station run — a show's plays on one UTC broadcast day. `runId` is opaque (fetch the tracklist via \/archive\/station-runs).",
+          ),
+        matchCount: zod
+          .number()
+          .describe("Spins in this run by the searched artist."),
+      })
+      .describe(
+        "One station run containing the searched artist, with how many of its spins matched.",
+      ),
+  ),
+  pickerRuns: zod.array(
+    zod
+      .object({
+        picker: zod
+          .object({
+            name: zod.string(),
+            handle: zod.string(),
+            pickerType: zod.string(),
+            trustTier: zod.number(),
+          })
+          .describe("A picker reference used in pick attribution."),
+        runId: zod.number(),
+        title: zod.string().nullable(),
+        sourceUrl: zod.string(),
+        pickedAt: zod.string().nullable(),
+        trackCount: zod.number(),
+        matchCount: zod
+          .number()
+          .describe("Picks in this run by the searched artist."),
+      })
+      .describe(
+        "One picker run (source-cited list) containing the searched artist.",
+      ),
+  ),
+});
+
+/**
  * Returns every station that has a scraped weekly schedule, deduplicated by fingerprint (same show set = same station), sorted by station name. Powers the schedule calendar and the in-progress show detection on station cards.
 
  * @summary All stations with their scraped weekly programming grids

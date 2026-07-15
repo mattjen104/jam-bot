@@ -23,6 +23,8 @@ import type {
   ArchiveCoverage,
   ArchiveRecentRuns,
   ArtistResult,
+  ArtistRunSearch,
+  SearchArtistRunsParams,
   BlogIngestRequest,
   DiscogsListRequest,
   DjShows,
@@ -2781,6 +2783,104 @@ export function useGetArchiveRecentRuns<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetArchiveRecentRunsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Case-insensitive artist-name search across the whole archive. Matches both raw spin/pick metadata and resolved recording artists, then groups the hits into their documented runs — station runs (show + UTC broadcast day) and picker runs (source-cited lists) — each with a count of matching tracks. Powers "which shows/lists played X?".
+
+ * @summary Find archived runs that include an artist
+ */
+export const getSearchArtistRunsUrl = (params: SearchArtistRunsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/archive/artist-runs?${stringifiedParams}`
+    : `/api/archive/artist-runs`;
+};
+
+export const searchArtistRuns = async (
+  params: SearchArtistRunsParams,
+  options?: RequestInit,
+): Promise<ArtistRunSearch> => {
+  return customFetch<ArtistRunSearch>(getSearchArtistRunsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getSearchArtistRunsQueryKey = (
+  params?: SearchArtistRunsParams,
+) => {
+  return [`/api/archive/artist-runs`, ...(params ? [params] : [])] as const;
+};
+
+export const getSearchArtistRunsQueryOptions = <
+  TData = Awaited<ReturnType<typeof searchArtistRuns>>,
+  TError = ErrorType<unknown>,
+>(
+  params: SearchArtistRunsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof searchArtistRuns>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getSearchArtistRunsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof searchArtistRuns>>
+  > = ({ signal }) => searchArtistRuns(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof searchArtistRuns>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type SearchArtistRunsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof searchArtistRuns>>
+>;
+export type SearchArtistRunsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Find archived runs that include an artist
+ */
+
+export function useSearchArtistRuns<
+  TData = Awaited<ReturnType<typeof searchArtistRuns>>,
+  TError = ErrorType<unknown>,
+>(
+  params: SearchArtistRunsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof searchArtistRuns>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getSearchArtistRunsQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

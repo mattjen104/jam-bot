@@ -1082,6 +1082,44 @@ export interface ArchiveRecentRuns {
   items: RecentStationRun[];
 }
 
+export type SearchArtistRunsParams = {
+  /**
+   * Artist name (or fragment) to search for.
+   * @minLength 1
+   */
+  q: string;
+};
+
+/**
+ * One station run containing the searched artist, with how many of its spins matched.
+ */
+export interface ArtistStationRunMatch {
+  station: StationRef;
+  run: StationRunSummary;
+  /** Spins in this run by the searched artist. */
+  matchCount: number;
+}
+
+/**
+ * One picker run (source-cited list) containing the searched artist.
+ */
+export interface ArtistPickerRunMatch {
+  picker: PickerRef;
+  runId: number;
+  title: string | null;
+  sourceUrl: string;
+  pickedAt: string | null;
+  trackCount: number;
+  /** Picks in this run by the searched artist. */
+  matchCount: number;
+}
+
+export interface ArtistRunSearch {
+  query: string;
+  stationRuns: ArtistStationRunMatch[];
+  pickerRuns: ArtistPickerRunMatch[];
+}
+
 /**
  * Archive depth for one station: how far back documented spins reach, how many resolved to the spine, and whether the deep backfill is still digging (`backfillDone=false` with a cursor means the walk is mid-way; no cursor means the source only supports live polling).
  */
