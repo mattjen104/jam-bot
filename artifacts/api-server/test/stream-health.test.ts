@@ -6,6 +6,12 @@ import {
   applyHealthResult,
   runHealthSweep,
 } from "../src/lore/stream-health.js";
+import {
+  recordSpinitronWebResult,
+  getSpinitronWebStaleStations,
+  clearSpinitronWebState,
+  DEFAULT_STALE_THRESHOLD_MS,
+} from "../src/lore/spinitron-web-health.js";
 import type { Station } from "@workspace/db";
 
 // ---------------------------------------------------------------------------
@@ -335,5 +341,133 @@ describe("applyHealthResult — 3-strike demotion", () => {
     const setArgs = setCall.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(setArgs.active).toBeUndefined();
     expect(setArgs.healthFailures).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// spinitron_web failure alert — recordSpinitronWebResult + getSpinitronWebStaleStations
+// ---------------------------------------------------------------------------
+
+describe("spinitron_web health tracker", () => {
+  beforeEach(() => {
+    clearSpinitronWebState();
+  });
+
+  it("does NOT warn on the first-ever null (no prior success)", () => {
+    const result = recordSpinitronWebResult(10, "wprb", "null");
+    expect(result.shouldWarn).toBe(false);
+  });
+
+  it("warns exactly once on the first null following a success", () => {
+    recordSpinitronWebResult(10, "wprb", "success");
+    const result = recordSpinitronWebResult(10, "wprb", "null");
+    expect(result.shouldWarn).toBe(true);
+    if (result.shouldWarn) {
+      expect(result.lastSuccessAt).toBeInstanceOf(Date);
+    }
+  });
+
+  it("does NOT warn again on subsequent consecutive nulls", () => {
+    recordSpinitronWebResult(10, "wprb", "success");
+    recordSpinitronWebResult(10, "wprb", "null");
+    const second = recordSpinitronWebResult(10, "wprb", "null");
+    expect(second.shouldWarn).toBe(false);
+  });
+
+  it("warns again after recovery then a new null run", () => {
+    recordSpinitronWebResult(10, "wprb", "success");
+    recordSpinitronWebResult(10, "wprb", "null");
+    recordSpinitronWebResult(10, "wprb", "success");
+    const result = recordSpinitronWebResult(10, "wprb", "null");
+    expect(result.shouldWarn).toBe(true);
+  });
+
+  it("does NOT warn on success", () => {
+    const result = recordSpinitronWebResult(10, "wprb", "success");
+    expect(result.shouldWarn).toBe(false);
+  });
+
+  it("handles multiple independent stations without cross-contamination", () => {
+    recordSpinitronWebResult(10, "wprb", "success");
+    recordSpinitronWebResult(20, "wfmu", "success");
+
+    const r10 = recordSpinitronWebResult(10, "wprb", "null");
+    const r20 = recordSpinitronWebResult(20, "wfmu", "null");
+
+    expect(r10.shouldWarn).toBe(true);
+    expect(r20.shouldWarn).toBe(true);
+  });
+});
+
+describe("getSpinitronWebStaleStations", () => {
+  beforeEach(() => {
+    clearSpinitronWebState();
+  });
+
+  it("returns empty when no stations tracked", () => {
+    expect(getSpinitronWebStaleStations()).toHaveLength(0);
+  });
+
+  it("returns empty when all stations are healthy (null within threshold)", () => {
+    const now = new Date();
+    const justNow = new Date(now.getTime() - 1_000);
+    recordSpinitronWebResult(10, "wprb", "success", new Date(now.getTime() - 60_000));
+    recordSpinitronWebResult(10, "wprb", "null", justNow);
+    expect(getSpinitronWebStaleStations(DEFAULT_STALE_THRESHOLD_MS, now)).toHaveLength(0);
+  });
+
+  it("returns a station whose last null is beyond the threshold", () => {
+    const now = new Date();
+    const successAt = new Date(now.getTime() - 20 * 60_000);
+    const nullAt = new Date(now.getTime() - 15 * 60_000);
+    recordSpinitronWebResult(10, "wprb", "success", successAt);
+    recordSpinitronWebResult(10, "wprb", "null", nullAt);
+
+    const stale = getSpinitronWebStaleStations(DEFAULT_STALE_THRESHOLD_MS, now);
+    expect(stale).toHaveLength(1);
+    expect(stale[0]!.slug).toBe("wprb");
+    expect(stale[0]!.stationId).toBe(10);
+    expect(stale[0]!.lastSuccessAt).toEqual(successAt);
+    expect(stale[0]!.consecutiveNulls).toBe(1);
+    expect(stale[0]!.staleSinceMs).toBeGreaterThanOrEqual(15 * 60_000);
+  });
+
+  it("excludes a station that recovered after being stale", () => {
+    const now = new Date();
+    const oldNull = new Date(now.getTime() - 20 * 60_000);
+    const recentSuccess = new Date(now.getTime() - 2 * 60_000);
+    recordSpinitronWebResult(10, "wprb", "null", oldNull);
+    recordSpinitronWebResult(10, "wprb", "success", recentSuccess);
+
+    expect(getSpinitronWebStaleStations(DEFAULT_STALE_THRESHOLD_MS, now)).toHaveLength(0);
+  });
+
+  it("returns stations sorted by staleSinceMs descending (stalest first)", () => {
+    const now = new Date();
+    recordSpinitronWebResult(10, "wprb", "success", new Date(now.getTime() - 60 * 60_000));
+    recordSpinitronWebResult(10, "wprb", "null", new Date(now.getTime() - 30 * 60_000));
+
+    recordSpinitronWebResult(20, "wfmu", "success", new Date(now.getTime() - 60 * 60_000));
+    recordSpinitronWebResult(20, "wfmu", "null", new Date(now.getTime() - 12 * 60_000));
+
+    const stale = getSpinitronWebStaleStations(DEFAULT_STALE_THRESHOLD_MS, now);
+    expect(stale).toHaveLength(2);
+    expect(stale[0]!.slug).toBe("wprb");
+    expect(stale[1]!.slug).toBe("wfmu");
+  });
+
+  it("clearSpinitronWebState with an id removes only that station", () => {
+    const now = new Date();
+    const nullAt = new Date(now.getTime() - 20 * 60_000);
+    recordSpinitronWebResult(10, "wprb", "success", new Date(now.getTime() - 60 * 60_000));
+    recordSpinitronWebResult(10, "wprb", "null", nullAt);
+    recordSpinitronWebResult(20, "wfmu", "success", new Date(now.getTime() - 60 * 60_000));
+    recordSpinitronWebResult(20, "wfmu", "null", nullAt);
+
+    clearSpinitronWebState(10);
+
+    const stale = getSpinitronWebStaleStations(DEFAULT_STALE_THRESHOLD_MS, now);
+    expect(stale).toHaveLength(1);
+    expect(stale[0]!.slug).toBe("wfmu");
   });
 });

@@ -7,6 +7,11 @@ import {
 } from "./adapters.js";
 import { logSpinIfChanged, ingestRawSpins } from "./resolve.js";
 import type { HistoryAdapter, RawSpin } from "./types.js";
+import {
+  recordSpinitronWebResult,
+  clearSpinitronWebState,
+} from "./spinitron-web-health.js";
+export { getSpinitronWebStaleStations } from "./spinitron-web-health.js";
 
 /**
  * Minimal, safe ingestion poller. No background-worker infra exists in the
@@ -159,6 +164,27 @@ async function pollStation(station: Station): Promise<void> {
     const nowPlaying = getNowPlayingAdapter(source);
     if (!nowPlaying) return;
     const np = await nowPlaying(station.nowPlayingConfig ?? {});
+
+    if (source === "spinitron_web") {
+      if (!np) {
+        const warning = recordSpinitronWebResult(
+          station.id,
+          station.slug,
+          "null",
+        );
+        if (warning.shouldWarn) {
+          console.warn("[lore] spinitron_web returned null for a previously-active station", {
+            source: "spinitron_web",
+            stationId: station.id,
+            slug: station.slug,
+            lastSuccessAt: warning.lastSuccessAt.toISOString(),
+          });
+        }
+        return;
+      }
+      recordSpinitronWebResult(station.id, station.slug, "success");
+    }
+
     if (!np) return;
     const wrote = await logSpinIfChanged(station, np);
     if (wrote) {
@@ -255,4 +281,5 @@ export function unenrollStationPoller(stationId: number): void {
   if (!handles) return;
   for (const h of handles) clearTimeout(h);
   stationTimers.delete(stationId);
+  clearSpinitronWebState(stationId);
 }

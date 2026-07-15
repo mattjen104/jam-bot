@@ -63,7 +63,7 @@ import { wireListExtractor } from "../../lore/list-wire.js";
 import { scrapeAndPopulateList, enrichRecordingReleaseGroups } from "../../lore/list-scraper.js";
 import { ingestManualSpin } from "../../lore/resolve.js";
 import { fetchRadioBrowserStation, slugify as rbSlugify } from "../../lore/radio-browser.js";
-import { enrollStationPoller, unenrollStationPoller } from "../../lore/poller.js";
+import { enrollStationPoller, unenrollStationPoller, getSpinitronWebStaleStations } from "../../lore/poller.js";
 import { clearIcyErrorBackoff } from "../../lore/adapters.js";
 import {
   upsertPicker,
@@ -1253,6 +1253,24 @@ router.get("/admin/recordings/:mbid/release-groups", h(async (req, res) => {
     .where(eq(recordingReleaseGroupsTable.recordingMbid, mbid));
 
   return res.json({ mbid, releaseGroups: rows });
+}));
+
+// GET /api/admin/spinitron-web-health — stations whose spinitron_web scraper
+// has been returning null for longer than the configurable threshold (default
+// 10 minutes). An empty array means all spinitron_web stations are healthy.
+router.get("/admin/spinitron-web-health", h(async (_req, res) => {
+  const stale = getSpinitronWebStaleStations();
+  return res.json({
+    staleCount: stale.length,
+    stations: stale.map((s) => ({
+      stationId: s.stationId,
+      slug: s.slug,
+      lastSuccessAt: s.lastSuccessAt?.toISOString() ?? null,
+      lastNullAt: s.lastNullAt.toISOString(),
+      consecutiveNulls: s.consecutiveNulls,
+      staleSinceMs: s.staleSinceMs,
+    })),
+  });
 }));
 
 // POST /api/admin/rym-lists — admin-only RateYourMusic link-out picker.
