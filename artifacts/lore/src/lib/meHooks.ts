@@ -128,6 +128,7 @@ export const ME_OVERLAP_PICKERS_KEY = ["me", "overlaps", "pickers"] as const;
 export const ME_OVERLAP_STATIONS_KEY = ["me", "overlaps", "stations"] as const;
 export const ME_OVERLAP_RUNS_KEY = ["me", "overlaps", "runs"] as const;
 export const ME_IMPORT_JOB_KEY = (jobId: number) => ["me", "import-job", jobId] as const;
+export const ME_LATEST_IMPORT_JOB_KEY = ["me", "import-job", "latest"] as const;
 
 // ---------------------------------------------------------------------------
 // Hooks
@@ -276,7 +277,7 @@ export function useImportJobStatus(jobId: number | null) {
  */
 export function useLatestImportJob() {
   return useQuery({
-    queryKey: ["me", "import-job", "latest"],
+    queryKey: ME_LATEST_IMPORT_JOB_KEY,
     queryFn: () =>
       fetchOrNull<ImportJobStatus>("/api/me/library/import"),
     refetchInterval: (query) => {

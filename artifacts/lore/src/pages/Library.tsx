@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import { usePlayer } from "../player/PlayerProvider";
 import {
   useMyLibrary,
@@ -7,6 +8,7 @@ import {
   useLatestImportJob,
   startSpotifyLibraryConnect,
   postStartImport,
+  ME_LATEST_IMPORT_JOB_KEY,
 } from "../lib/meHooks";
 import { InflowCard } from "../components/InflowCard";
 import { LibraryRow } from "../components/LibraryRow";
@@ -22,6 +24,7 @@ import {
 } from "lucide-react";
 
 export default function Library() {
+  const queryClient = useQueryClient();
   const { ride, radio } = usePlayer();
   const dockPadding = ride.active || radio.station ? "pb-32" : "pb-16";
 
@@ -75,6 +78,7 @@ export default function Library() {
     setImportBusy(true);
     try {
       await postStartImport("spotify");
+      void queryClient.invalidateQueries({ queryKey: ME_LATEST_IMPORT_JOB_KEY });
       window.location.href = window.location.origin + (import.meta.env.BASE_URL ?? "/lore/") + "taste-map";
     } finally {
       setImportBusy(false);

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import { usePlayer } from "../player/PlayerProvider";
 import {
   useMyOverlapPickers,
@@ -9,6 +10,7 @@ import {
   postStartImport,
   startSpotifyLibraryConnect,
   useMyConnections,
+  ME_LATEST_IMPORT_JOB_KEY,
   type OverlapPicker,
   type OverlapStation,
   type OverlapRun,
@@ -29,6 +31,7 @@ import {
 } from "lucide-react";
 
 export default function TasteMap() {
+  const queryClient = useQueryClient();
   const { ride, radio } = usePlayer();
   const dockPadding = ride.active || radio.station ? "pb-32" : "pb-16";
 
@@ -46,8 +49,10 @@ export default function TasteMap() {
     const params = new URLSearchParams(window.location.search);
     if (params.get("import") !== "1") return;
     setImportTriggered(true);
-    postStartImport("spotify").catch(() => {});
-  }, [hasSpotify, importTriggered]);
+    postStartImport("spotify")
+      .then(() => queryClient.invalidateQueries({ queryKey: ME_LATEST_IMPORT_JOB_KEY }))
+      .catch(() => {});
+  }, [hasSpotify, importTriggered, queryClient]);
 
   // Always poll the latest import job — works across tabs so the user sees
   // status even when OAuth completed in a different tab.

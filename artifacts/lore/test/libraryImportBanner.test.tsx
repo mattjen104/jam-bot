@@ -15,10 +15,24 @@
  *  - Banner is still visible when < 8 s have elapsed since "done"
  *  - Banner auto-dismisses after the 8 s setTimeout fires
  */
+import React from "react";
 import { describe, expect, it, vi, afterEach, beforeEach } from "vitest";
 import { cleanup, render, screen, act } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { LibraryImportBanner } from "../src/pages/Library";
 import LibraryPage from "../src/pages/Library";
+
+function makeQueryClient() {
+  return new QueryClient({ defaultOptions: { queries: { retry: false, enabled: false } } });
+}
+
+function renderLibraryPage() {
+  return render(
+    <QueryClientProvider client={makeQueryClient()}>
+      <LibraryPage />
+    </QueryClientProvider>,
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Module-level mocks (hoisted) — only affect Library page render tests.
@@ -44,6 +58,7 @@ vi.mock("../src/lib/meHooks", () => ({
   useLatestImportJob: vi.fn(() => ({ data: null })),
   startSpotifyLibraryConnect: vi.fn(),
   postStartImport: vi.fn(),
+  ME_LATEST_IMPORT_JOB_KEY: ["me", "import-job", "latest"],
 }));
 
 // ---------------------------------------------------------------------------
@@ -93,8 +108,6 @@ describe("LibraryImportBanner — done state (fast-path re-import)", () => {
         onDismiss={noop}
       />,
     );
-    // The spinner has role="img" implicitly via Lucide SVG; check that no
-    // animate-spin class is present in the rendered output.
     const el = screen.getByTestId("library-import-banner");
     expect(el.innerHTML).not.toContain("animate-spin");
   });
@@ -107,7 +120,6 @@ describe("LibraryImportBanner — done state (fast-path re-import)", () => {
       />,
     );
     const el = screen.getByTestId("library-import-banner");
-    // Progress bar wrapper has a fixed h-1 class only in the pending/running branch.
     expect(el.innerHTML).not.toMatch(/class="h-1 w-full/);
   });
 
@@ -196,8 +208,6 @@ describe("LibraryImportBanner — running phase labels", () => {
 // ---------------------------------------------------------------------------
 
 describe("Library page — import banner auto-dismiss timer", () => {
-  // Fix the wall clock so isRecentlyFinished (< 10 min) stays true when we
-  // advance fake timers. We set finishedAt 30 s before this anchor.
   const FIXED_NOW = new Date("2026-01-01T12:00:00.000Z");
   const FINISHED_AT = new Date(FIXED_NOW.getTime() - 30_000).toISOString();
 
@@ -223,9 +233,8 @@ describe("Library page — import banner auto-dismiss timer", () => {
   });
 
   it("shows the banner before 8 s have elapsed", async () => {
-    render(<LibraryPage />);
+    renderLibraryPage();
 
-    // Advance 7 999 ms — just under the threshold
     await act(async () => {
       vi.advanceTimersByTime(7_999);
     });
@@ -234,12 +243,10 @@ describe("Library page — import banner auto-dismiss timer", () => {
   });
 
   it("auto-dismisses the banner once 8 s have elapsed", async () => {
-    render(<LibraryPage />);
+    renderLibraryPage();
 
-    // Confirm it's visible to start with
     expect(screen.getByTestId("library-import-banner")).toBeTruthy();
 
-    // Advance past the 8 000 ms threshold
     await act(async () => {
       vi.advanceTimersByTime(8_001);
     });
