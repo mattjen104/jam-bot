@@ -129,12 +129,12 @@ async function syncHistory(signal: AbortSignal) {
   }
 }
 
-export function useSpotifyHistorySync(connected: boolean) {
+export function useSpotifyHistorySync(connected: boolean, paused = false) {
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    if (!connected) return;
+    if (!connected || paused) return;
 
     const controller = new AbortController();
     abortRef.current = controller;

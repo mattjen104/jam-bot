@@ -8,6 +8,7 @@ import { usePlayer } from "../player/PlayerProvider";
 import { appendJournal } from "../lib/local";
 import { useIcecastFallback } from "../hooks/useIcecastFallback";
 import { useSpotifyHistorySync } from "../hooks/useSpotifyHistorySync";
+import { useLatestImportJob } from "../lib/meHooks";
 
 // How long to wait before attempting an ACR fingerprint when neither the
 // server poller nor Icecast metadata have identified the playing track.
@@ -26,7 +27,11 @@ export function ListeningLogger() {
   const { radio, ride, spotify } = usePlayer();
   const queryClient = useQueryClient();
 
-  useSpotifyHistorySync(spotify.connected);
+  // Pause Spotify history polling while a library import is in progress —
+  // both use the same access token and competing requests trigger 429s.
+  const { data: importJob } = useLatestImportJob();
+  const importActive = importJob?.status === "pending" || importJob?.status === "running";
+  useSpotifyHistorySync(spotify.connected, importActive);
 
   // --- Live radio: log the station's now-playing while the stream sounds ---
   const station = radio.station;

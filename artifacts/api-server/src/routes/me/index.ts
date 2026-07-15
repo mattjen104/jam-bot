@@ -55,7 +55,7 @@ const LIBRARY_PAGE_SIZE = 50;
 /** Delay between resolveToMbid calls in the import worker (1.1 s ≥ MB 1 req/sec). */
 const IMPORT_RESOLVE_DELAY_MS = 1100;
 /** Stamp partial total to DB every N items during the buffer-drain (fetching) phase. */
-const FETCH_STAMP_INTERVAL = 100;
+const FETCH_STAMP_INTERVAL = 50;
 
 // ---------------------------------------------------------------------------
 // Auth middleware

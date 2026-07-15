@@ -192,11 +192,13 @@ export class SpotifyConnector implements ServiceConnector {
       let res = await fetch(url, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
-      // Spotify rate-limit: honour Retry-After and retry once before giving up.
-      if (res.status === 429) {
+      // Spotify rate-limit: honour Retry-After with exponential backoff, up to 4 attempts.
+      let attempt = 0;
+      while (res.status === 429 && attempt < 4) {
+        attempt++;
         const raw = res.headers.get("Retry-After");
-        const waitSec = raw !== null && isFinite(Number(raw)) ? Number(raw) : 5;
-        await new Promise((r) => setTimeout(r, waitSec * 1_000 + 500));
+        const waitSec = raw !== null && isFinite(Number(raw)) ? Number(raw) : Math.min(5 * 2 ** attempt, 60);
+        await new Promise((r) => setTimeout(r, waitSec * 1_000 + 200 * attempt));
         res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
       }
       if (!res.ok) {
