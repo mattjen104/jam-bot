@@ -5,30 +5,6 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-export interface ListProvenanceItem {
-  listId: number;
-  listTitle: string;
-  /** @nullable */
-  listYear: number | null;
-  listUrl: string;
-  listKind: string;
-  isRanked: boolean;
-  sourceName: string;
-  /** @nullable */
-  rank: number | null;
-  /** @nullable */
-  listLength: number | null;
-  releaseGroupMbid: string;
-  /** @nullable */
-  releaseGroupTitle: string | null;
-  /** @nullable */
-  releaseYear: number | null;
-}
-
-export interface RecordingListProvenanceResponse {
-  items: ListProvenanceItem[];
-}
-
 export interface HealthStatus {
   status: string;
 }
@@ -214,6 +190,22 @@ export interface OEmbed {
 }
 
 /**
+ * Ingest quality tier derived from the last 7 days of logged spins. "proven" = strong MBID resolution (≥40%); "promising" = mostly track-shaped spins (≥50%); "raw" = metadata present but low resolution (≥20% yield); "silent" = active but near-zero usable metadata; "unscored" = fewer than 20 spins in the window. Null until the nightly quality recompute job has run at least once.
+ * @nullable
+ */
+export type StationQualityTier =
+  | (typeof StationQualityTier)[keyof typeof StationQualityTier]
+  | null;
+
+export const StationQualityTier = {
+  proven: "proven",
+  promising: "promising",
+  raw: "raw",
+  silent: "silent",
+  unscored: "unscored",
+} as const;
+
+/**
  * A curated radio station in the public directory.
  */
 export interface Station {
@@ -261,6 +253,11 @@ export interface Station {
    * @nullable
    */
   tier?: string | null;
+  /**
+   * Ingest quality tier derived from the last 7 days of logged spins. "proven" = strong MBID resolution (≥40%); "promising" = mostly track-shaped spins (≥50%); "raw" = metadata present but low resolution (≥20% yield); "silent" = active but near-zero usable metadata; "unscored" = fewer than 20 spins in the window. Null until the nightly quality recompute job has run at least once.
+   * @nullable
+   */
+  qualityTier?: StationQualityTier;
 }
 
 export interface StationList {
@@ -325,10 +322,7 @@ export interface NowPlayingRecording {
   /** @nullable */
   artworkUrl?: string | null;
   links: RecordingLink[];
-  /**
-   * MusicBrainz-sourced genre tags for the recording, most-relevant first. Null when the recording has not been enriched yet.
-   * @nullable
-   */
+  /** MusicBrainz-sourced genre tags for the recording, most-relevant first. Null when the recording has not been enriched yet. */
   genres?: string[] | null;
 }
 
@@ -340,6 +334,7 @@ export const NowPlayingConfidence = {
   isrc: "isrc",
   text: "text",
   unresolved: "unresolved",
+  spotify: "spotify",
 } as const;
 
 /**
@@ -652,6 +647,7 @@ export const RecordingSpinConfidence = {
   isrc: "isrc",
   text: "text",
   unresolved: "unresolved",
+  spotify: "spotify",
 } as const;
 
 /**
@@ -694,6 +690,7 @@ export const RecordingPickConfidence = {
   isrc: "isrc",
   text: "text",
   unresolved: "unresolved",
+  spotify: "spotify",
 } as const;
 
 /**
@@ -804,6 +801,81 @@ export interface StationSpinsBounds {
   spinCount: number;
 }
 
+export type ScrapedShowDayOfWeek =
+  (typeof ScrapedShowDayOfWeek)[keyof typeof ScrapedShowDayOfWeek];
+
+export const ScrapedShowDayOfWeek = {
+  Mon: "Mon",
+  Tue: "Tue",
+  Wed: "Wed",
+  Thu: "Thu",
+  Fri: "Fri",
+  Sat: "Sat",
+  Sun: "Sun",
+} as const;
+
+/**
+ * One entry in a station's own published weekly programming grid. Times are the station's own local wall-clock times as published (timezone not modeled), describing a recurring weekly slot rather than a specific calendar date.
+ */
+export interface ScrapedShow {
+  showName: string;
+  dayOfWeek: ScrapedShowDayOfWeek;
+  /** 24h "HH:MM" */
+  startTime: string;
+  /** 24h "HH:MM" */
+  endTime: string;
+  /** @nullable */
+  djName: string | null;
+}
+
+/**
+ * A station's scraped upcoming schedule. `shows` is empty (never fabricated) when the station's page had no parseable schedule.
+ */
+export interface StationUpcomingSchedule {
+  stationSlug: string;
+  shows: ScrapedShow[];
+  /**
+   * ISO timestamp of the last successful schedule scrape. Null when never successfully scraped.
+   * @nullable
+   */
+  lastScrapedAt: string | null;
+}
+
+export type DjShowEntryDayOfWeek =
+  (typeof DjShowEntryDayOfWeek)[keyof typeof DjShowEntryDayOfWeek];
+
+export const DjShowEntryDayOfWeek = {
+  Mon: "Mon",
+  Tue: "Tue",
+  Wed: "Wed",
+  Thu: "Thu",
+  Fri: "Fri",
+  Sat: "Sat",
+  Sun: "Sun",
+} as const;
+
+/**
+ * One scraped weekly show slot for a DJ at a specific station.
+ */
+export interface DjShowEntry {
+  stationSlug: string;
+  stationName: string;
+  showName: string;
+  dayOfWeek: DjShowEntryDayOfWeek;
+  /** 24h "HH:MM" */
+  startTime: string;
+  /** 24h "HH:MM" */
+  endTime: string;
+}
+
+/**
+ * All scraped upcoming shows for a DJ across all stations.
+ */
+export interface DjShows {
+  djName: string;
+  shows: DjShowEntry[];
+}
+
 export type ArchiveTrackConfidence =
   (typeof ArchiveTrackConfidence)[keyof typeof ArchiveTrackConfidence];
 
@@ -812,6 +884,7 @@ export const ArchiveTrackConfidence = {
   isrc: "isrc",
   text: "text",
   unresolved: "unresolved",
+  spotify: "spotify",
 } as const;
 
 /**
@@ -1100,6 +1173,7 @@ export const IcecastReportResultConfidence = {
   isrc: "isrc",
   text: "text",
   unresolved: "unresolved",
+  spotify: "spotify",
 } as const;
 
 export interface IcecastReportResult {
@@ -1138,6 +1212,7 @@ export const ManualSpinResponseConfidence = {
   isrc: "isrc",
   text: "text",
   unresolved: "unresolved",
+  spotify: "spotify",
 } as const;
 
 export interface ManualSpinResponse {
@@ -1205,6 +1280,29 @@ export const EntryResultRung = {
 } as const;
 
 /**
+ * Linked Song Exploder episode for a recording.
+ */
+export interface SongExploderEpisode {
+  id: number;
+  title: string;
+  episodeUrl: string;
+  youtubeUrl: string | null;
+  publishedAt: string | null;
+  resolvedAt: string | null;
+}
+
+/**
+ * One timed annotation from a Song Exploder episode.
+ */
+export interface SongExploderAnchor {
+  id: number;
+  positionMs: number;
+  text: string;
+  sourceUrl: string | null;
+  sourceLabel: string | null;
+}
+
+/**
  * The strongest rung of human attribution found for a recording.
  */
 export interface EntryResult {
@@ -1212,6 +1310,8 @@ export interface EntryResult {
   framing: string;
   picks: EntryPick[];
   invitation?: EntryInvitation | null;
+  episode?: SongExploderEpisode | null;
+  anchors?: SongExploderAnchor[];
 }
 
 export type UpsertPickerRequestPickerType =
@@ -1357,17 +1457,16 @@ export interface SpotifyPlayRequest {
   /** @minLength 1 */
   mbid: string;
   /**
-   * Target Spotify Connect device id (from the device picker). When provided,
-   * playback is directed to this device explicitly. When omitted or null, the
-   * active device is used (existing behaviour).
+   * Target Spotify Connect device id (from the device picker). When provided, playback is directed to this device explicitly. When omitted or null, the active device is used (existing behaviour).
+
    * @nullable
    */
   deviceId?: string | null;
 }
 
 /**
- * A Spotify Connect device visible to the listener's account.
- * `type` follows Spotify's own taxonomy: Computer, Smartphone, Speaker, TV, etc.
+ * A Spotify Connect device visible to the listener's account. `type` follows Spotify's own taxonomy: Computer, Smartphone, Speaker, TV, etc. Restricted devices are never included in the list.
+
  */
 export interface SpotifyDevice {
   id: string;
@@ -1376,6 +1475,9 @@ export interface SpotifyDevice {
   isActive: boolean;
 }
 
+/**
+ * Available Spotify Connect devices for this session.
+ */
 export interface SpotifyDevicesResult {
   devices: SpotifyDevice[];
 }
@@ -1547,6 +1649,365 @@ export interface SelectorRunsResponse {
   runs: SelectorRunSummary[];
 }
 
+/**
+ * @nullable
+ */
+export type RollingGenreChipDiscoveryLabel =
+  | (typeof RollingGenreChipDiscoveryLabel)[keyof typeof RollingGenreChipDiscoveryLabel]
+  | null;
+
+export const RollingGenreChipDiscoveryLabel = {
+  "new-music": "new-music",
+  recent: "recent",
+  catalog: "catalog",
+} as const;
+
+/**
+ * One recent spin's primary genre tag and inline discovery tier for the schedule rolling view. `discoveryLabel` is null when the recording has no `release_year`.
+
+ */
+export interface RollingGenreChip {
+  genre: string;
+  /** @nullable */
+  discoveryLabel?: RollingGenreChipDiscoveryLabel;
+  /** ISO 8601 timestamp of the spin. */
+  playedAt: string;
+}
+
+/**
+ * A single publication list entry that features this recording's album.
+ */
+export interface ListProvenanceItem {
+  listId: number;
+  /** Name of the list (e.g. "50 Best Albums of 2025"). */
+  listTitle: string;
+  /**
+   * Calendar year of the list (null for all-time lists).
+   * @nullable
+   */
+  listYear: number | null;
+  /** URL to the list page. */
+  listUrl: string;
+  /** year_end | mid_year | decade | all_time | genre | custom */
+  listKind: string;
+  isRanked: boolean;
+  /** Publication / selector / station name (e.g. "The Quietus"). */
+  sourceName: string;
+  /**
+   * Position in the list, null for unranked appearances.
+   * @nullable
+   */
+  rank: number | null;
+  /**
+   * Total list length (e.g. 50), null when unknown.
+   * @nullable
+   */
+  listLength: number | null;
+  releaseGroupMbid: string;
+  /**
+   * Cached album title from the bridge table.
+   * @nullable
+   */
+  releaseGroupTitle: string | null;
+  /**
+   * Earliest release year for the album.
+   * @nullable
+   */
+  releaseYear: number | null;
+}
+
+export interface RecordingListProvenanceResponse {
+  items: ListProvenanceItem[];
+}
+
+export type StationsRollingGenresResultStations = {
+  [key: string]: RollingGenreChip[];
+};
+
+/**
+ * Map from station slug to an array of up to 3 recent genre chips, newest first. Stations with no resolved spins carrying genre data are omitted.
+
+ */
+export interface StationsRollingGenresResult {
+  stations: StationsRollingGenresResultStations;
+}
+
+/**
+ * One deduped spin chip for a station on a given day.
+ */
+export interface StationRecentSpin {
+  mbid: string | null;
+  title: string;
+  artist: string;
+  playedAt: string;
+}
+
+export interface StationScheduleRunShow {
+  name: string;
+  djName: string | null;
+}
+
+/**
+ * One spin-run block for a station on a given day.
+ */
+export interface StationScheduleRun {
+  runId: number | string | null;
+  show: StationScheduleRunShow | null;
+  spinCount: number;
+  resolvedCount: number;
+  startedAt: string;
+  endedAt: string;
+}
+
+export type StationsRecentSpinsResultItemsItem = {
+  stationSlug: string;
+  spins: StationRecentSpin[];
+};
+
+/**
+ * Per-station recent spins for a given calendar day.
+ */
+export interface StationsRecentSpinsResult {
+  items: StationsRecentSpinsResultItemsItem[];
+}
+
+export type StationsScheduleResultItemsItem = {
+  stationSlug: string;
+  runs: StationScheduleRun[];
+};
+
+/**
+ * Per-station show-run timeline for a given calendar day.
+ */
+export interface StationsScheduleResult {
+  items: StationsScheduleResultItemsItem[];
+}
+
+/**
+ * Availability of enrichment content for one recording.
+ */
+export interface RecordingAvailabilityItem {
+  mbid: string;
+  hasLyrics: boolean;
+  hasSe: boolean;
+}
+
+/**
+ * Availability results for a batch of recordings.
+ */
+export interface RecordingsAvailabilityResult {
+  items: RecordingAvailabilityItem[];
+}
+
+export interface PickerDialPreviewTrack {
+  mbid: string | null;
+  title: string;
+  artist: string;
+  artworkUrl: string | null;
+}
+
+export interface PickerDialItemPicker {
+  id: number;
+  pickerType: string;
+  name: string;
+  handle: string;
+  homeUrl: string | null;
+  trustTier: number;
+  description: string | null;
+}
+
+export interface PickerDialItemRun {
+  runId: number;
+  title: string | null;
+  sourceUrl: string;
+  trackCount: number;
+  resolvedCount: number;
+  pickedAt: string | null;
+}
+
+/**
+ * One picker entry on the curated dial, with its latest run and preview tracks.
+ */
+export interface PickerDialItem {
+  picker: PickerDialItemPicker;
+  run: PickerDialItemRun | null;
+  previewTracks: PickerDialPreviewTrack[];
+}
+
+/**
+ * Full curated picker dial.
+ */
+export interface PickersDialResult {
+  items: PickerDialItem[];
+}
+
+/**
+ * Summary row for an episode in the admin episode list.
+ */
+export interface SongExploderEpisodeListItem {
+  id: number;
+  title: string;
+  episodeUrl: string;
+  youtubeUrl: string | null;
+  mbid: string | null;
+  resolvedAt: string | null;
+  publishedAt: string | null;
+  anchorCount: number;
+}
+
+/**
+ * List of all Song Exploder episodes with resolution status.
+ */
+export interface SongExploderEpisodeListResult {
+  episodes: SongExploderEpisodeListItem[];
+}
+
+/**
+ * A recording by this artist, ranked by Lore spin count.
+ */
+export interface ArtistTopTrack {
+  mbid: string;
+  title: string;
+  artist: string;
+  artworkUrl: string | null;
+  spinCount: number;
+  lastSpunAt: string | null;
+}
+
+/**
+ * Artist page data — Lore top tracks plus optional Spotify catalogue.
+ */
+export interface ArtistResult {
+  mbid: string;
+  name: string;
+  topTracks: ArtistTopTrack[];
+  catalogue: ArtistCatalogue | null;
+}
+
+/**
+ * One station entry in the all-scraped-shows response.
+ */
+export interface ScrapedStation {
+  slug: string;
+  name: string;
+  shows: ScrapedShow[];
+}
+
+/**
+ * All stations with their scraped weekly programming grids.
+ */
+export interface ScrapedStationList {
+  stations: ScrapedStation[];
+}
+
+/**
+ * Station ingest quality tier derived from the last 7 days of logged spins. "proven" = MBID resolution ≥40%; "promising" = track-shaped ≥50%; "raw" = metadata yield ≥20%; "silent" = active but near-zero usable metadata; "unscored" = fewer than 20 spins in the window.
+ */
+export type QualityTier = (typeof QualityTier)[keyof typeof QualityTier];
+
+export const QualityTier = {
+  proven: "proven",
+  promising: "promising",
+  raw: "raw",
+  silent: "silent",
+  unscored: "unscored",
+} as const;
+
+/**
+ * Rolling quality metrics for a single station (last 7 days of spins).
+ */
+export interface StationQualityScores {
+  /**
+   * Fraction of spins with non-null artist+title.
+   * @nullable
+   */
+  metadataYield: number | null;
+  /**
+   * Fraction of metadata spins that look like real "Artist – Title" pairs.
+   * @nullable
+   */
+  trackShaped: number | null;
+  /**
+   * Fraction of track-shaped spins that resolved to a MusicBrainz ID.
+   * @nullable
+   */
+  mbidResolutionRate: number | null;
+  /**
+   * Fraction of spins NOT flagged by the ad-detection heuristic.
+   * @nullable
+   */
+  musicShare: number | null;
+  /** Number of spins analysed. */
+  sampleCount: number;
+  qualityTier: QualityTier;
+  /** @nullable */
+  computedAt: string | null;
+}
+
+/**
+ * @nullable
+ */
+export type AdminStationItemQualityTier =
+  | (typeof AdminStationItemQualityTier)[keyof typeof AdminStationItemQualityTier]
+  | null;
+
+export const AdminStationItemQualityTier = {
+  proven: "proven",
+  promising: "promising",
+  raw: "raw",
+  silent: "silent",
+  unscored: "unscored",
+} as const;
+
+/**
+ * A station row with quality scores for the admin station list.
+ */
+export interface AdminStationItem {
+  id: number;
+  slug: string;
+  name: string;
+  /** @nullable */
+  org: string | null;
+  /** @nullable */
+  country: string | null;
+  active: boolean;
+  /** @nullable */
+  nowPlayingSource: string | null;
+  /** @nullable */
+  tier: string | null;
+  /** @nullable */
+  source: string | null;
+  /** @nullable */
+  qualityTier: AdminStationItemQualityTier;
+  /** @nullable */
+  metadataYield: number | null;
+  /** @nullable */
+  trackShaped: number | null;
+  /** @nullable */
+  mbidResolutionRate: number | null;
+  /** @nullable */
+  musicShare: number | null;
+  /** @nullable */
+  sampleCount: number | null;
+  /** @nullable */
+  qualityComputedAt: string | null;
+}
+
+export interface AdminStationListResponse {
+  stations: AdminStationItem[];
+}
+
+/**
+ * Tier count summary returned after a quality recompute. Each property is the number of active stations assigned that quality tier.
+ */
+export interface RecomputeQualityResponse {
+  proven: number;
+  promising: number;
+  raw: number;
+  silent: number;
+  unscored: number;
+}
+
 export type ResolveSongParams = {
   /**
    * @minLength 1
@@ -1559,6 +2020,13 @@ export type GetOembedParams = {
    * @minLength 1
    */
   url: string;
+};
+
+export type GetRecordingsAvailabilityParams = {
+  /**
+   * Comma-separated recording MBIDs (max 100).
+   */
+  mbids: string;
 };
 
 export type ListPickersParams = {
@@ -1581,6 +2049,22 @@ export type GetStationSpinsParams = {
    * Max spins to return (default 50, max 200).
    */
   limit?: number;
+};
+
+export type GetStationsRecentSpinsParams = {
+  /**
+   * Calendar day in YYYY-MM-DD format (UTC).
+   * @pattern ^\d{4}-\d{2}-\d{2}$
+   */
+  date: string;
+};
+
+export type GetStationsScheduleParams = {
+  /**
+   * Calendar day in YYYY-MM-DD format (UTC).
+   * @pattern ^\d{4}-\d{2}-\d{2}$
+   */
+  date: string;
 };
 
 export type LookupPickedMbidsParams = {
@@ -1622,222 +2106,3 @@ export type GetSpotifySavedParams = {
    */
   mbid: string;
 };
-
-// ---- Restored hand-patched schemas (not modeled in openapi.yaml) ----
-export interface ArtistTopTrack {
-  mbid: string;
-  title: string;
-  artist: string;
-  /** @nullable */
-  artworkUrl?: string | null;
-  spinCount: number;
-  /** @nullable */
-  lastSpunAt?: string | null;
-}
-
-export interface GetArtistResponse {
-  mbid: string;
-  name: string;
-  topTracks: ArtistTopTrack[];
-  /** @nullable */
-  catalogue?: ArtistCatalogue | null;
-}
-export type SongExploderAnchor = {
-  id: number;
-  /** Song offset in ms — when to surface this anchor during playback. */
-  positionMs: number;
-  /** Paraphrased topic label (never verbatim transcript). */
-  text: string;
-  /** Timestamped deep-link into the episode (YouTube ?t= or episode page). */
-  sourceUrl: string;
-  /** Human-readable source credit, e.g. "Song Exploder — Episode Title". */
-  sourceLabel: string;
-};
-
-export type SongExploderEpisodeMeta = {
-  id: number;
-  title: string;
-  episodeUrl: string;
-  youtubeUrl: string | null;
-  publishedAt: string | null;
-  resolvedAt: string | null;
-};
-
-export type RecordingSongExploder = {
-  episode: SongExploderEpisodeMeta | null;
-  anchors: SongExploderAnchor[];
-};
-
-export type SongExploderEpisodeListItem = {
-  id: number;
-  title: string;
-  episodeUrl: string;
-  youtubeUrl: string | null;
-  mbid: string | null;
-  resolvedAt: string | null;
-  publishedAt: string | null;
-  anchorCount: number;
-};
-
-export type SongExploderEpisodeList = {
-  episodes: SongExploderEpisodeListItem[];
-};
-
-export type SongExploderEpisodePatch = {
-  youtubeUrl: string | null;
-};
-
-
-export type SongExploderEpisodePatchResult = {
-  id: number;
-  youtubeUrl: string | null;
-};
-export interface ForYouOverlapProof {
-  overlapping_artists: string[];
-  overlap_count: number;
-}
-
-export interface ForYouStationItem {
-  slug: string;
-  name: string;
-  org?: string | null;
-  streamUrl: string;
-  streamFormat: string;
-  homepageUrl?: string | null;
-  logoUrl?: string | null;
-  tags: string[];
-  popularity: number;
-  /** Present only when overlap was computed (non-cold-start, source has affinity). */
-  overlap?: ForYouOverlapProof;
-}
-
-export interface ForYouBlogItem {
-  handle: string;
-  name: string;
-  homeUrl?: string | null;
-  tags: string[];
-  pick_count: number;
-  /** Present only when overlap was computed (non-cold-start, source has affinity). */
-  overlap?: ForYouOverlapProof;
-}
-
-export interface ForYouStationGenrePole {
-  genre: string;
-  items: ForYouStationItem[];
-}
-
-export interface ForYouBlogGenrePole {
-  genre: string;
-  items: ForYouBlogItem[];
-}
-
-export interface ForYouStationsResponse {
-  genre_poles: ForYouStationGenrePole[];
-  cold_start: boolean;
-  prompt?: string;
-}
-
-export interface ForYouBlogsResponse {
-  genre_poles: ForYouBlogGenrePole[];
-  cold_start: boolean;
-  prompt?: string;
-}
-
-export interface ForYouQueryParams {
-  genre?: string;
-  limit?: number;
-}
-
-// ---------------------------------------------------------------------------
-// Upcoming schedule — scraped weekly shows per station.
-// ---------------------------------------------------------------------------
-
-export type ScrapedShowDayOfWeek =
-  | "Mon"
-  | "Tue"
-  | "Wed"
-  | "Thu"
-  | "Fri"
-  | "Sat"
-  | "Sun";
-
-export interface ScrapedShowItem {
-  showName: string;
-  dayOfWeek: ScrapedShowDayOfWeek;
-  /** 24h "HH:MM" */
-  startTime: string;
-  /** 24h "HH:MM" */
-  endTime: string;
-  djName: string | null;
-}
-
-export interface StationUpcomingScheduleResult {
-  stationSlug: string;
-  shows: ScrapedShowItem[];
-  lastScrapedAt: string | null;
-}
-
-// ---------------------------------------------------------------------------
-// DJ page — all scraped shows for a given DJ name across stations.
-// ---------------------------------------------------------------------------
-
-export interface DjShowItem {
-  stationSlug: string;
-  stationName: string;
-  showName: string;
-  dayOfWeek: ScrapedShowDayOfWeek;
-  startTime: string;
-  endTime: string;
-}
-
-export interface DjShowsResult {
-  djName: string;
-  shows: DjShowItem[];
-}
-
-// ---------------------------------------------------------------------------
-// All scraped shows — weekly schedule across all stations (for calendar page)
-// ---------------------------------------------------------------------------
-
-export interface AllScrapedShowSlot {
-  showName: string;
-  dayOfWeek: string;
-  startTime: string;
-  /** @nullable */
-  endTime: string | null;
-  /** @nullable */
-  djName: string | null;
-  /** Top genres of the matched logged show/DJ; empty when unmatched. */
-  genres: string[];
-  /** Cached discovery score (0-100) of the matched show/DJ. @nullable */
-  discoveryScore: number | null;
-  /** "new-music" | "recent" | "catalog"; null when no score. @nullable */
-  discoveryLabel: string | null;
-}
-
-export interface AllScrapedShowStation {
-  slug: string;
-  name: string;
-  shows: AllScrapedShowSlot[];
-}
-
-export interface AllScrapedShowsResult {
-  stations: AllScrapedShowStation[];
-}
-
-// ---------------------------------------------------------------------------
-// Rolling per-song genre chips — schedule page live view
-// ---------------------------------------------------------------------------
-
-/** One recent spin's genre + discovery tier for the schedule rolling view. */
-export interface RollingGenreChip {
-  genre: string;
-  /** Inline tier derived from release_year: "new-music" | "recent" | "catalog". @nullable */
-  discoveryLabel: "new-music" | "recent" | "catalog" | null;
-  playedAt: string;
-}
-
-/** Map from station slug → up to 3 most-recent spins with genre data (newest first). */
-export interface StationsRollingGenresResult {
-  stations: Record<string, RollingGenreChip[]>;
-}

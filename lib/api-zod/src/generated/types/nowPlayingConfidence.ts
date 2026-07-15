@@ -14,4 +14,5 @@ export const NowPlayingConfidence = {
   isrc: "isrc",
   text: "text",
   unresolved: "unresolved",
+  spotify: "spotify",
 } as const;

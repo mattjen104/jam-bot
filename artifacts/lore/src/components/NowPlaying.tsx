@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { Link } from "wouter";
 import {
   useGetRecordingKnowledge,
-  useGetRecordingSongExploder,
+  useGetRecordingEntry,
   useGetRecordingListProvenance,
   getGetRecordingKnowledgeQueryKey,
   getGetRecordingListProvenanceQueryKey,
@@ -318,7 +318,7 @@ function SEToggleBtn({
   active: boolean;
   onToggle: () => void;
 }) {
-  const { data } = useGetRecordingSongExploder(mbid);
+  const { data } = useGetRecordingEntry(mbid);
   if (!data?.episode) return null;
   return (
     <button
@@ -363,7 +363,7 @@ function SongExploderPanel({
   mbid: string;
   progressMs: number | null;
 }) {
-  const { data, isLoading } = useGetRecordingSongExploder(mbid);
+  const { data, isLoading } = useGetRecordingEntry(mbid);
   const episode = data?.episode ?? null;
   const anchors: SongExploderAnchor[] = data?.anchors ?? [];
 
@@ -452,7 +452,7 @@ function SongExploderPanel({
                   </span>
                   <span className="flex-1">{anchor.text}</span>
                   <a
-                    href={anchor.sourceUrl}
+                    href={anchor.sourceUrl ?? undefined}
                     target="_blank"
                     rel="noreferrer"
                     className={cn(

@@ -7,17 +7,12 @@
  */
 
 /**
- * A Spotify Connect device visible to the listener's account.
- * `type` follows Spotify's own taxonomy: Computer, Smartphone, Speaker, TV, etc.
- * Restricted devices are never included in the list.
+ * A Spotify Connect device visible to the listener's account. `type` follows Spotify's own taxonomy: Computer, Smartphone, Speaker, TV, etc. Restricted devices are never included in the list.
+
  */
 export interface SpotifyDevice {
   id: string;
   name: string;
   type: string;
   isActive: boolean;
-}
-
-export interface SpotifyDevicesResult {
-  devices: SpotifyDevice[];
 }

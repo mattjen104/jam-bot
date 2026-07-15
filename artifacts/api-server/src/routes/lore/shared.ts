@@ -2,8 +2,13 @@ import type { Station, Picker } from "@workspace/db";
 // Re-export from the lore layer so route files have one import site.
 export { spinDayExpr } from "../../lore/runs.js";
 
-/** Shape a DB station row into the public Station payload. */
-export function toStation(s: Station) {
+/** Shape a DB station row into the public Station payload.
+ *  `qualityTier` comes from a LEFT JOIN on station_quality and is null until
+ *  the first nightly recompute has run. */
+export function toStation(
+  s: Station,
+  qualityTier?: string | null,
+) {
   return {
     slug: s.slug,
     name: s.name,
@@ -25,6 +30,7 @@ export function toStation(s: Station) {
     homepageBlurb: s.homepageBlurb ?? null,
     upcomingShowCount: s.upcomingShowCount ?? 0,
     tier: s.tier ?? null,
+    qualityTier: qualityTier ?? null,
   };
 }
 

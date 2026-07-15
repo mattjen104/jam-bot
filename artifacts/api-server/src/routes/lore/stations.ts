@@ -31,6 +31,7 @@ import {
   pickersTable,
   picksTable,
   scrapedShowsTable,
+  stationQualityTable,
 } from "@workspace/db";
 import { eq, ne, and, asc, desc, isNotNull, inArray, sql } from "drizzle-orm";
 import { stationArchiveUrl } from "../../lore/adapters.js";
@@ -70,16 +71,24 @@ const fingerprintLimiter = rateLimit({
 // are health-gated and must not appear in the public directory.
 // `upcomingShowCount` is a denormalized column written by the schedule scraper
 // in the same transaction as each scraped_shows replace, so no second query
-// is needed here.
+// is needed here. LEFT JOINs station_quality to include qualityTier so the
+// dial UI can badge or deprioritize low-quality stations.
 router.get("/stations", h(async (_req, res) => {
   const rows = await db
-    .select()
+    .select({
+      station: stationsTable,
+      qualityTier: stationQualityTable.qualityTier,
+    })
     .from(stationsTable)
+    .leftJoin(
+      stationQualityTable,
+      eq(stationQualityTable.stationId, stationsTable.id),
+    )
     .where(eq(stationsTable.active, true))
     .orderBy(asc(stationsTable.sortOrder), asc(stationsTable.name));
 
   return res.json(ListStationsResponse.parse({
-    stations: rows.map((s) => toStation(s)),
+    stations: rows.map((r) => toStation(r.station, r.qualityTier)),
   }));
 }));
 
@@ -121,6 +130,58 @@ router.get("/stations/now-playing", h(async (req, res) => {
       dateFilter
         ? and(isNotNull(spinsTable.stationId), sql`${spinsTable.playedAt}::date = ${dateFilter}::date`)
         : isNotNull(spinsTable.stationId),
+    )
+    .orderBy(asc(spinsTable.stationId), desc(spinsTable.playedAt));
+
+  const byStation = new Map(rows.map((r) => [r.stationId, r]));
+  const items = stations.map((s) => {
+    const row = byStation.get(s.id);
+    return { slug: s.slug, nowPlaying: row ? toNowPlaying(row) : null };
+  });
+
+  return res.json(ListStationsNowPlayingResponse.parse({ items }));
+}));
+
+// GET /api/stations/at/:date/now-playing — path-param variant of the above.
+// The OpenAPI client generates path-param hooks for typed date routing; this
+// route simply proxies the date into the query-param handler's logic.
+router.get("/stations/at/:date/now-playing", h(async (req, res) => {
+  const dateFilter = typeof req.params.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.params.date)
+    ? req.params.date
+    : null;
+  if (!dateFilter) {
+    return res.status(400).json({ error: "date path param must be YYYY-MM-DD" });
+  }
+
+  const stations = await db
+    .select({ id: stationsTable.id, slug: stationsTable.slug })
+    .from(stationsTable)
+    .where(eq(stationsTable.active, true))
+    .orderBy(asc(stationsTable.sortOrder), asc(stationsTable.name));
+
+  const rows = await db
+    .selectDistinctOn([spinsTable.stationId], {
+      stationId: spinsTable.stationId,
+      rawArtist: spinsTable.rawArtist,
+      rawTitle: spinsTable.rawTitle,
+      source: spinsTable.source,
+      confidence: spinsTable.confidence,
+      playedAt: spinsTable.playedAt,
+      mbid: recordingsTable.mbid,
+      title: recordingsTable.title,
+      artist: recordingsTable.artist,
+      artistMbid: recordingsTable.artistMbid,
+      artworkUrl: recordingsTable.artworkUrl,
+      links: recordingsTable.links,
+      genres: recordingsTable.genres,
+      showName: showsTable.name,
+      showDj: showsTable.djName,
+    })
+    .from(spinsTable)
+    .leftJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
+    .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id))
+    .where(
+      and(isNotNull(spinsTable.stationId), sql`${spinsTable.playedAt}::date = ${dateFilter}::date`),
     )
     .orderBy(asc(spinsTable.stationId), desc(spinsTable.playedAt));
 

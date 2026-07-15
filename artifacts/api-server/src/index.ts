@@ -32,6 +32,7 @@ import { applyPickerDiscoveryMigration } from "./lore/picker-migration.js";
 import { startGenreBackfillJob } from "./lore/genre-backfill.js";
 import { startHomepageScraper } from "./lore/homepage-scraper.js";
 import { startDiscoveryScoreJob } from "./lore/discovery-score-job.js";
+import { startQualityRecomputeJob } from "./lore/quality.js";
 import { applyStationScheduleMigration } from "./lore/station-schedule-migration.js";
 import { wireScheduleExtractor } from "./lore/schedule-wire.js";
 import { startScheduleScraper } from "./lore/schedule-scraper.js";
@@ -114,6 +115,7 @@ async function bootLore(): Promise<void> {
       startScheduleScraper();
     }
     startDiscoveryScoreJob();
+    startQualityRecomputeJob();
   } catch (err) {
     console.error("[lore] boot failed", err);
   }

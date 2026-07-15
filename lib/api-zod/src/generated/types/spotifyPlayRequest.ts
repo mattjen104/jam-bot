@@ -10,9 +10,8 @@ export interface SpotifyPlayRequest {
   /** @minLength 1 */
   mbid: string;
   /**
-   * Target Spotify Connect device id (from the device picker). When provided,
-   * playback is directed to this device explicitly. When omitted or null, the
-   * active device is used (existing behaviour).
+   * Target Spotify Connect device id (from the device picker). When provided, playback is directed to this device explicitly. When omitted or null, the active device is used (existing behaviour).
+
    * @nullable
    */
   deviceId?: string | null;

@@ -19,9 +19,6 @@ export interface NowPlayingRecording {
   /** @nullable */
   artworkUrl?: string | null;
   links: RecordingLink[];
-  /**
-   * MusicBrainz-sourced genre tags for the recording, most-relevant first. Null when the recording has not been enriched yet.
-   * @nullable
-   */
+  /** MusicBrainz-sourced genre tags for the recording, most-relevant first. Null when the recording has not been enriched yet. */
   genres?: string[] | null;
 }

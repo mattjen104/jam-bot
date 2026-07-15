@@ -151,6 +151,30 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/StationList"
+  /stations/at/{date}/now-playing:
+    get:
+      operationId: listStationsAtDate
+      tags: [stations]
+      summary: Last spin per station for a specific calendar day (ghost dial)
+      description: >
+        Same as listStationsNowPlaying but for a historical calendar day.
+        Returns the last logged spin per station on that UTC date. Powers the
+        ghost-dial date sweep on the home page.
+      parameters:
+        - name: date
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: Calendar day in YYYY-MM-DD format (UTC).
+      responses:
+        "200":
+          description: Last spin per station on the given day
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationPulseList"
   /stations/now-playing:
     get:
       operationId: listStationsNowPlaying
@@ -272,6 +296,29 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /recordings/availability:
+    get:
+      operationId: getRecordingsAvailability
+      tags: [recordings]
+      summary: Batch check for lyrics and Song Exploder content
+      description: >
+        Given a comma-separated list of recording MBIDs, returns which ones have
+        synced lyrics and/or a linked Song Exploder episode. Used by the home
+        page to show content-indicator badges. Caps at 100 MBIDs per call.
+      parameters:
+        - name: mbids
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Comma-separated recording MBIDs (max 100).
+      responses:
+        "200":
+          description: Availability flags per MBID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecordingsAvailabilityResult"
   /recordings/{mbid}/knowledge:
     get:
       operationId: getRecordingKnowledge
@@ -827,6 +874,54 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ArchiveRecentRuns"
+  /scraped-shows:
+    get:
+      operationId: getAllScrapedShows
+      tags: [stations]
+      summary: All stations with their scraped weekly programming grids
+      description: >
+        Returns every station that has a scraped weekly schedule, deduplicated
+        by fingerprint (same show set = same station), sorted by station name.
+        Powers the schedule calendar and the in-progress show detection on
+        station cards.
+      responses:
+        "200":
+          description: All stations with their scraped weekly show grids
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScrapedStationList"
+  /artist/{mbid}:
+    get:
+      operationId: getArtist
+      tags: [recordings]
+      summary: Artist page — Lore top tracks and optional Spotify catalogue
+      description: >
+        Resolves the artist name from any recording carrying the given artist
+        MBID, returns their most-spun recordings on Lore (capped at 20), and
+        optionally fetches a Spotify catalogue (top tracks + albums) when
+        Spotify is configured.
+      parameters:
+        - name: mbid
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+          description: MusicBrainz artist MBID.
+      responses:
+        "200":
+          description: Artist page data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtistResult"
+        "404":
+          description: No recordings found for this artist MBID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /stations/{slug}/upcoming-schedule:
     get:
       operationId: getStationUpcomingSchedule
@@ -909,6 +1004,68 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/StationsRollingGenresResult"
+  /stations/recent-spins:
+    get:
+      operationId: getStationsRecentSpins
+      tags: [stations]
+      summary: Last 8 spins per station for a given calendar day
+      description: >
+        Returns the 8 most-recently-played distinct tracks per station for the
+        given UTC calendar day, ordered newest first. Deduplicated by MBID when
+        resolved, otherwise by title+artist. Powers track-chip timelines on
+        showless station cards.
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: Calendar day in YYYY-MM-DD format (UTC).
+      responses:
+        "200":
+          description: Per-station recent spins for the given day
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationsRecentSpinsResult"
+        "400":
+          description: Missing or invalid date parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /stations/schedule:
+    get:
+      operationId: getStationsSchedule
+      tags: [stations]
+      summary: Show-run timeline for all stations on a given calendar day
+      description: >
+        Returns all spin-runs (grouped by station, day, and show) for every
+        station on the given UTC calendar day, ordered chronologically within
+        each station. Powers the show timeline on station cards on the home
+        schedule page.
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: Calendar day in YYYY-MM-DD format (UTC).
+      responses:
+        "200":
+          description: Per-station schedule runs for the given day
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationsScheduleResult"
+        "400":
+          description: Missing or invalid date parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /stations/{slug}/overlaps/pickers:
     get:
       operationId: getStationPickerOverlaps
@@ -939,6 +1096,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /pickers/dial:
+    get:
+      operationId: getPickersDial
+      tags: [pickers]
+      summary: Curated picker dial with preview tracks
+      description: >
+        Returns all active pickers with their most-recently-added list run and
+        up to 5 preview tracks (artwork + mbid). Powers the curated dial on the
+        home page. Fetched once per session; no polling.
+      responses:
+        "200":
+          description: Full curated picker dial
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PickersDialResult"
   /pickers/{handle}/overlaps/stations:
     get:
       operationId: getPickerStationOverlaps
@@ -1419,6 +1592,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /admin/song-exploder/episodes:
+    get:
+      operationId: listSongExploderEpisodes
+      tags: [admin]
+      summary: List all Song Exploder episodes with resolution status
+      description: >
+        Returns the full list of scraped Song Exploder episodes, sorted newest
+        first, with their MBID resolution status and anchor count. Used by the
+        admin episode review page.
+      responses:
+        "200":
+          description: All episodes with resolution status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SongExploderEpisodeListResult"
   /admin/song-exploder/{episodeId}/claims:
     post:
       operationId: addSongExploderClaim
@@ -1723,6 +1912,76 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "404":
           description: Draft not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Admin entry not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /admin/stations:
+    get:
+      operationId: listAdminStations
+      tags: [admin]
+      summary: Admin-only station list with ingest quality scores
+      description: >
+        Full station directory joined with the latest quality scores from the
+        station_quality table. One row per station; quality fields are null for
+        stations that have not been scored yet. Guarded by the `x-admin-token`
+        header matching the LORE_ADMIN_TOKEN env var.
+      parameters:
+        - name: x-admin-token
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Station directory with quality scores
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStationListResponse"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Admin entry not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /admin/stations/recompute-quality:
+    post:
+      operationId: recomputeStationQuality
+      tags: [admin]
+      summary: Admin-only on-demand station quality recompute
+      description: >
+        Triggers an immediate full recompute of quality scores for all active
+        stations — the same job the nightly scheduler runs. Returns a flat
+        tier count summary (keys = tier names, values = station counts).
+        Token-guarded.
+      parameters:
+        - name: x-admin-token
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Recompute complete — tier count summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecomputeQualityResponse"
+        "401":
+          description: Missing or invalid admin token
           content:
             application/json:
               schema:
@@ -2355,6 +2614,16 @@ components:
           description: >-
             Station tier — "flagship" for editorially curated stations,
             "longtail" for auto-discovered ones.
+        qualityTier:
+          type: ["string", "null"]
+          enum: ["proven", "promising", "raw", "silent", "unscored", null]
+          description: >-
+            Ingest quality tier derived from the last 7 days of logged spins.
+            "proven" = strong MBID resolution (≥40%); "promising" = mostly
+            track-shaped spins (≥50%); "raw" = metadata present but low
+            resolution (≥20% yield); "silent" = active but near-zero usable
+            metadata; "unscored" = fewer than 20 spins in the window. Null
+            until the nightly quality recompute job has run at least once.
       required:
         - slug
         - name
@@ -2483,7 +2752,7 @@ components:
           type: ["string", "null"]
         confidence:
           type: string
-          enum: [recording_id, isrc, text, unresolved]
+          enum: [recording_id, isrc, text, unresolved, spotify]
         playedAt:
           type: string
         artworkUrl:
@@ -2913,7 +3182,7 @@ components:
           type: ["string", "null"]
         confidence:
           type: string
-          enum: [recording_id, isrc, text, unresolved]
+          enum: [recording_id, isrc, text, unresolved, spotify]
         station:
           $ref: "#/components/schemas/StationRef"
         show:
@@ -2985,7 +3254,7 @@ components:
           description: Total picks in the same run (0 when the pick has no run).
         confidence:
           type: string
-          enum: [recording_id, isrc, text, unresolved]
+          enum: [recording_id, isrc, text, unresolved, spotify]
       required:
         - picker
         - runId
@@ -3277,7 +3546,7 @@ components:
           type: string
         confidence:
           type: string
-          enum: [recording_id, isrc, text, unresolved]
+          enum: [recording_id, isrc, text, unresolved, spotify]
         recording:
           anyOf:
             - $ref: "#/components/schemas/NowPlayingRecording"
@@ -3681,7 +3950,7 @@ components:
           type: ["string", "null"]
         confidence:
           type: string
-          enum: [recording_id, isrc, text, unresolved]
+          enum: [recording_id, isrc, text, unresolved, spotify]
       required:
         - logged
     ManualSpinRequest:
@@ -3723,7 +3992,7 @@ components:
           type: ["string", "null"]
         confidence:
           type: string
-          enum: [recording_id, isrc, text, unresolved]
+          enum: [recording_id, isrc, text, unresolved, spotify]
       required:
         - logged
         - confidence
@@ -3829,6 +4098,14 @@ components:
           anyOf:
             - $ref: "#/components/schemas/EntryInvitation"
             - type: "null"
+        episode:
+          anyOf:
+            - $ref: "#/components/schemas/SongExploderEpisode"
+            - type: "null"
+        anchors:
+          type: array
+          items:
+            $ref: "#/components/schemas/SongExploderAnchor"
       required:
         - rung
         - framing
@@ -4325,3 +4602,433 @@ components:
               $ref: "#/components/schemas/RollingGenreChip"
       required:
         - stations
+    StationRecentSpin:
+      type: object
+      description: One deduped spin chip for a station on a given day.
+      properties:
+        mbid:
+          type: string
+          nullable: true
+        title:
+          type: string
+        artist:
+          type: string
+        playedAt:
+          type: string
+      required: [mbid, title, artist, playedAt]
+    StationScheduleRunShow:
+      type: object
+      properties:
+        name:
+          type: string
+        djName:
+          type: string
+          nullable: true
+      required: [name, djName]
+    StationScheduleRun:
+      type: object
+      description: One spin-run block for a station on a given day.
+      properties:
+        runId:
+          oneOf:
+            - type: number
+            - type: string
+          nullable: true
+        show:
+          anyOf:
+            - $ref: "#/components/schemas/StationScheduleRunShow"
+            - type: "null"
+        spinCount:
+          type: integer
+        resolvedCount:
+          type: integer
+        startedAt:
+          type: string
+        endedAt:
+          type: string
+      required: [runId, show, spinCount, resolvedCount, startedAt, endedAt]
+    StationsRecentSpinsResult:
+      type: object
+      description: Per-station recent spins for a given calendar day.
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              stationSlug:
+                type: string
+              spins:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StationRecentSpin"
+            required: [stationSlug, spins]
+      required: [items]
+    StationsScheduleResult:
+      type: object
+      description: Per-station show-run timeline for a given calendar day.
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              stationSlug:
+                type: string
+              runs:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StationScheduleRun"
+            required: [stationSlug, runs]
+      required: [items]
+    RecordingAvailabilityItem:
+      type: object
+      description: Availability of enrichment content for one recording.
+      properties:
+        mbid:
+          type: string
+        hasLyrics:
+          type: boolean
+        hasSe:
+          type: boolean
+      required: [mbid, hasLyrics, hasSe]
+    RecordingsAvailabilityResult:
+      type: object
+      description: Availability results for a batch of recordings.
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecordingAvailabilityItem"
+      required: [items]
+    PickerDialPreviewTrack:
+      type: object
+      properties:
+        mbid:
+          type: string
+          nullable: true
+        title:
+          type: string
+        artist:
+          type: string
+        artworkUrl:
+          type: string
+          nullable: true
+      required: [mbid, title, artist, artworkUrl]
+    PickerDialItemPicker:
+      type: object
+      properties:
+        id:
+          type: integer
+        pickerType:
+          type: string
+        name:
+          type: string
+        handle:
+          type: string
+        homeUrl:
+          type: string
+          nullable: true
+        trustTier:
+          type: integer
+        description:
+          type: string
+          nullable: true
+      required: [id, pickerType, name, handle, homeUrl, trustTier, description]
+    PickerDialItemRun:
+      type: object
+      properties:
+        runId:
+          type: integer
+        title:
+          type: string
+          nullable: true
+        sourceUrl:
+          type: string
+        trackCount:
+          type: integer
+        resolvedCount:
+          type: integer
+        pickedAt:
+          type: string
+          nullable: true
+      required: [runId, title, sourceUrl, trackCount, resolvedCount, pickedAt]
+    PickerDialItem:
+      type: object
+      description: One picker entry on the curated dial, with its latest run and preview tracks.
+      properties:
+        picker:
+          $ref: "#/components/schemas/PickerDialItemPicker"
+        run:
+          anyOf:
+            - $ref: "#/components/schemas/PickerDialItemRun"
+            - type: "null"
+        previewTracks:
+          type: array
+          items:
+            $ref: "#/components/schemas/PickerDialPreviewTrack"
+      required: [picker, run, previewTracks]
+    PickersDialResult:
+      type: object
+      description: Full curated picker dial.
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PickerDialItem"
+      required: [items]
+    SongExploderAnchor:
+      type: object
+      description: One timed annotation from a Song Exploder episode.
+      properties:
+        id:
+          type: integer
+        positionMs:
+          type: integer
+        text:
+          type: string
+        sourceUrl:
+          type: string
+          nullable: true
+        sourceLabel:
+          type: string
+          nullable: true
+      required: [id, positionMs, text, sourceUrl, sourceLabel]
+    SongExploderEpisode:
+      type: object
+      description: Linked Song Exploder episode for a recording.
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        episodeUrl:
+          type: string
+        youtubeUrl:
+          type: string
+          nullable: true
+        publishedAt:
+          type: string
+          nullable: true
+        resolvedAt:
+          type: string
+          nullable: true
+      required: [id, title, episodeUrl, youtubeUrl, publishedAt, resolvedAt]
+    SongExploderEpisodeListItem:
+      type: object
+      description: Summary row for an episode in the admin episode list.
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        episodeUrl:
+          type: string
+        youtubeUrl:
+          type: string
+          nullable: true
+        mbid:
+          type: string
+          nullable: true
+        resolvedAt:
+          type: string
+          nullable: true
+        publishedAt:
+          type: string
+          nullable: true
+        anchorCount:
+          type: integer
+      required: [id, title, episodeUrl, youtubeUrl, mbid, resolvedAt, publishedAt, anchorCount]
+    SongExploderEpisodeListResult:
+      type: object
+      description: List of all Song Exploder episodes with resolution status.
+      properties:
+        episodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/SongExploderEpisodeListItem"
+      required: [episodes]
+    ArtistTopTrack:
+      type: object
+      description: A recording by this artist, ranked by Lore spin count.
+      properties:
+        mbid:
+          type: string
+        title:
+          type: string
+        artist:
+          type: string
+        artworkUrl:
+          type: string
+          nullable: true
+        spinCount:
+          type: integer
+        lastSpunAt:
+          type: string
+          nullable: true
+      required: [mbid, title, artist, artworkUrl, spinCount, lastSpunAt]
+    ArtistResult:
+      type: object
+      description: Artist page data — Lore top tracks plus optional Spotify catalogue.
+      properties:
+        mbid:
+          type: string
+        name:
+          type: string
+        topTracks:
+          type: array
+          items:
+            $ref: "#/components/schemas/ArtistTopTrack"
+        catalogue:
+          anyOf:
+            - $ref: "#/components/schemas/ArtistCatalogue"
+            - type: "null"
+      required: [mbid, name, topTracks, catalogue]
+    ScrapedStation:
+      type: object
+      description: One station entry in the all-scraped-shows response.
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+        shows:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScrapedShow"
+      required: [slug, name, shows]
+    ScrapedStationList:
+      type: object
+      description: All stations with their scraped weekly programming grids.
+      properties:
+        stations:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScrapedStation"
+      required: [stations]
+    QualityTier:
+      type: string
+      enum: [proven, promising, raw, silent, unscored]
+      description: >-
+        Station ingest quality tier derived from the last 7 days of logged spins.
+        "proven" = MBID resolution ≥40%; "promising" = track-shaped ≥50%;
+        "raw" = metadata yield ≥20%; "silent" = active but near-zero usable
+        metadata; "unscored" = fewer than 20 spins in the window.
+    StationQualityScores:
+      type: object
+      description: Rolling quality metrics for a single station (last 7 days of spins).
+      properties:
+        metadataYield:
+          type: ["number", "null"]
+          description: Fraction of spins with non-null artist+title.
+        trackShaped:
+          type: ["number", "null"]
+          description: Fraction of metadata spins that look like real "Artist – Title" pairs.
+        mbidResolutionRate:
+          type: ["number", "null"]
+          description: Fraction of track-shaped spins that resolved to a MusicBrainz ID.
+        musicShare:
+          type: ["number", "null"]
+          description: Fraction of spins NOT flagged by the ad-detection heuristic.
+        sampleCount:
+          type: integer
+          description: Number of spins analysed.
+        qualityTier:
+          $ref: "#/components/schemas/QualityTier"
+        computedAt:
+          type: ["string", "null"]
+          format: date-time
+      required:
+        - metadataYield
+        - trackShaped
+        - mbidResolutionRate
+        - musicShare
+        - sampleCount
+        - qualityTier
+        - computedAt
+    AdminStationItem:
+      type: object
+      description: A station row with quality scores for the admin station list.
+      properties:
+        id:
+          type: integer
+        slug:
+          type: string
+        name:
+          type: string
+        org:
+          type: ["string", "null"]
+        country:
+          type: ["string", "null"]
+        active:
+          type: boolean
+        nowPlayingSource:
+          type: ["string", "null"]
+        tier:
+          type: ["string", "null"]
+        source:
+          type: ["string", "null"]
+        qualityTier:
+          type: ["string", "null"]
+          enum: ["proven", "promising", "raw", "silent", "unscored", null]
+        metadataYield:
+          type: ["number", "null"]
+        trackShaped:
+          type: ["number", "null"]
+        mbidResolutionRate:
+          type: ["number", "null"]
+        musicShare:
+          type: ["number", "null"]
+        sampleCount:
+          type: ["integer", "null"]
+        qualityComputedAt:
+          type: ["string", "null"]
+          format: date-time
+      required:
+        - id
+        - slug
+        - name
+        - org
+        - country
+        - active
+        - nowPlayingSource
+        - tier
+        - source
+        - qualityTier
+        - metadataYield
+        - trackShaped
+        - mbidResolutionRate
+        - musicShare
+        - sampleCount
+        - qualityComputedAt
+    AdminStationListResponse:
+      type: object
+      properties:
+        stations:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminStationItem"
+      required:
+        - stations
+    RecomputeQualityResponse:
+      type: object
+      description: >-
+        Tier count summary returned after a quality recompute. Each property is
+        the number of active stations assigned that quality tier.
+      properties:
+        proven:
+          type: integer
+        promising:
+          type: integer
+        raw:
+          type: integer
+        silent:
+          type: integer
+        unscored:
+          type: integer
+      required:
+        - proven
+        - promising
+        - raw
+        - silent
+        - unscored

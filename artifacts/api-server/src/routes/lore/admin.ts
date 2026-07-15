@@ -42,6 +42,8 @@ import {
   CreateListSourceBody,
   ScrapeListBody,
   ConfirmListEntryBody,
+  RecomputeStationQualityResponse,
+  ListAdminStationsResponse,
 } from "@workspace/api-zod";
 import {
   db,
@@ -57,10 +59,12 @@ import {
   listsTable,
   listEntriesTable,
   recordingReleaseGroupsTable,
+  stationQualityTable,
 } from "@workspace/db";
 import { eq, and, asc, desc, sql, count } from "drizzle-orm";
 import { wireListExtractor } from "../../lore/list-wire.js";
 import { scrapeAndPopulateList, enrichRecordingReleaseGroups } from "../../lore/list-scraper.js";
+import { recomputeAllQualityScores } from "../../lore/quality.js";
 import { ingestManualSpin } from "../../lore/resolve.js";
 import { fetchRadioBrowserStation, slugify as rbSlugify } from "../../lore/radio-browser.js";
 import { enrollStationPoller, unenrollStationPoller, getSpinitronWebStaleStations } from "../../lore/poller.js";
@@ -1271,6 +1275,76 @@ router.get("/admin/spinitron-web-health", h(async (_req, res) => {
       staleSinceMs: s.staleSinceMs,
     })),
   });
+}));
+
+// ---------------------------------------------------------------------------
+// Station quality scoring endpoints
+// ---------------------------------------------------------------------------
+
+// GET /api/admin/stations — list all stations with ingest-quality scores.
+// Joins station_quality (LEFT JOIN) so stations with no computed scores still
+// appear (qualityTier null). Includes inactive stations so the admin can see
+// the full picture, including longtail candidates.
+router.get("/admin/stations", h(async (_req, res) => {
+  const rows = await db
+    .select({
+      id: stationsTable.id,
+      slug: stationsTable.slug,
+      name: stationsTable.name,
+      org: stationsTable.org,
+      country: stationsTable.country,
+      active: stationsTable.active,
+      nowPlayingSource: stationsTable.nowPlayingSource,
+      tier: stationsTable.tier,
+      source: stationsTable.source,
+      qualityTier: stationQualityTable.qualityTier,
+      metadataYield: stationQualityTable.metadataYield,
+      trackShaped: stationQualityTable.trackShaped,
+      mbidResolutionRate: stationQualityTable.mbidResolutionRate,
+      musicShare: stationQualityTable.musicShare,
+      sampleCount: stationQualityTable.sampleCount,
+      qualityComputedAt: stationQualityTable.computedAt,
+    })
+    .from(stationsTable)
+    .leftJoin(
+      stationQualityTable,
+      eq(stationQualityTable.stationId, stationsTable.id),
+    )
+    .orderBy(asc(stationsTable.sortOrder), asc(stationsTable.name));
+
+  return res.json(
+    ListAdminStationsResponse.parse({
+      stations: rows.map((r) => ({
+        id: r.id,
+        slug: r.slug,
+        name: r.name,
+        org: r.org ?? null,
+        country: r.country ?? null,
+        active: r.active,
+        nowPlayingSource: r.nowPlayingSource ?? null,
+        tier: r.tier ?? null,
+        source: r.source ?? null,
+        qualityTier: r.qualityTier ?? null,
+        metadataYield: r.metadataYield ?? null,
+        trackShaped: r.trackShaped ?? null,
+        mbidResolutionRate: r.mbidResolutionRate ?? null,
+        musicShare: r.musicShare ?? null,
+        sampleCount: r.sampleCount ?? null,
+        qualityComputedAt: r.qualityComputedAt?.toISOString() ?? null,
+      })),
+    }),
+  );
+}));
+
+// POST /api/admin/stations/recompute-quality — trigger an immediate full
+// quality recompute across all active stations. Returns the tier count summary.
+// Long-running but safe to call while the server is live — each station is
+// processed atomically, so a failure on one station never aborts the batch.
+router.post("/admin/stations/recompute-quality", h(async (_req, res) => {
+  console.info("[lore:quality] admin triggered quality recompute");
+  const summary = await recomputeAllQualityScores();
+  console.info("[lore:quality] admin recompute complete", summary);
+  return res.json(RecomputeStationQualityResponse.parse(summary));
 }));
 
 // POST /api/admin/rym-lists — admin-only RateYourMusic link-out picker.

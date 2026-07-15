@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { StationQualityTier } from "./stationQualityTier";
 
 /**
  * A curated radio station in the public directory.
@@ -47,9 +48,16 @@ export interface Station {
    * @nullable
    */
   homepageBlurb?: string | null;
+  /** Count of scraped upcoming shows in this station's weekly programming grid. 0 when the schedule scraper has not found shows yet. */
+  upcomingShowCount: number;
   /**
    * Station tier — "flagship" for editorially curated stations, "longtail" for auto-discovered ones.
    * @nullable
    */
   tier?: string | null;
+  /**
+   * Ingest quality tier derived from the last 7 days of logged spins. "proven" = strong MBID resolution (≥40%); "promising" = mostly track-shaped spins (≥50%); "raw" = metadata present but low resolution (≥20% yield); "silent" = active but near-zero usable metadata; "unscored" = fewer than 20 spins in the window. Null until the nightly quality recompute job has run at least once.
+   * @nullable
+   */
+  qualityTier?: StationQualityTier;
 }

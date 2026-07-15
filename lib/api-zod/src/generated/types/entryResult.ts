@@ -8,6 +8,8 @@
 import type { EntryInvitation } from "./entryInvitation";
 import type { EntryPick } from "./entryPick";
 import type { EntryResultRung } from "./entryResultRung";
+import type { SongExploderAnchor } from "./songExploderAnchor";
+import type { SongExploderEpisode } from "./songExploderEpisode";
 
 /**
  * The strongest rung of human attribution found for a recording.
@@ -17,4 +19,6 @@ export interface EntryResult {
   framing: string;
   picks: EntryPick[];
   invitation?: EntryInvitation | null;
+  episode?: SongExploderEpisode | null;
+  anchors?: SongExploderAnchor[];
 }

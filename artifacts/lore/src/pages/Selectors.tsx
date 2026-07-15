@@ -54,6 +54,9 @@ function ArtworkMosaic({ tracks }: { tracks: { artworkUrl: string | null }[] }) 
 function SelectorDialCard({ item }: { item: PickerDialItem }) {
   const { ride } = usePlayer();
   const [loading, setLoading] = useState(false);
+
+  if (!item.run) return null;
+
   const recent = isRecentlyActive(item.run.pickedAt);
 
   const handlePlay = async (e: React.MouseEvent) => {
@@ -61,7 +64,7 @@ function SelectorDialCard({ item }: { item: PickerDialItem }) {
     e.stopPropagation();
     setLoading(true);
     try {
-      const data = await getPickerRun(item.run.runId);
+      const data = await getPickerRun(item.run!.runId);
       const seeds = data.tracks
         .filter((t) => t.recording != null)
         .map((t) => ({
@@ -74,7 +77,7 @@ function SelectorDialCard({ item }: { item: PickerDialItem }) {
       if (seeds.length > 0) {
         ride.startReplay(
           seeds,
-          `${item.picker.name}${item.run.title ? ` — ${item.run.title}` : ""}`,
+          `${item.picker.name}${item.run!.title ? ` — ${item.run!.title}` : ""}`,
           { timeOrientation: "curated" },
         );
       }
@@ -276,22 +279,22 @@ export default function Selectors() {
     const all = (listData?.pickers ?? []).filter((p) => p.active && p.pickerType !== "dj");
     const toMs = (handle: string) => {
       const dialItem = dialByHandle.get(handle);
-      if (!dialItem?.run.pickedAt) return 0;
+      if (!dialItem?.run?.pickedAt) return 0;
       return new Date(dialItem.run.pickedAt).getTime();
     };
     const sorted = [...all].sort((a, b) => {
-      const aRecent = isRecentlyActive(dialByHandle.get(a.handle)?.run.pickedAt) ? 1 : 0;
-      const bRecent = isRecentlyActive(dialByHandle.get(b.handle)?.run.pickedAt) ? 1 : 0;
+      const aRecent = isRecentlyActive(dialByHandle.get(a.handle)?.run?.pickedAt) ? 1 : 0;
+      const bRecent = isRecentlyActive(dialByHandle.get(b.handle)?.run?.pickedAt) ? 1 : 0;
       if (aRecent !== bRecent) return bRecent - aRecent;
       const timeDiff = toMs(b.handle) - toMs(a.handle);
       if (timeDiff !== 0) return timeDiff;
       return a.name.localeCompare(b.name);
     });
     const recentItems = sorted.filter((p) =>
-      isRecentlyActive(dialByHandle.get(p.handle)?.run.pickedAt),
+      isRecentlyActive(dialByHandle.get(p.handle)?.run?.pickedAt),
     );
     const otherItems = sorted.filter(
-      (p) => !isRecentlyActive(dialByHandle.get(p.handle)?.run.pickedAt),
+      (p) => !isRecentlyActive(dialByHandle.get(p.handle)?.run?.pickedAt),
     );
     return { recent: recentItems, others: otherItems };
   }, [listData, dialByHandle]);

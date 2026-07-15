@@ -1323,3 +1323,53 @@ export const listEntriesTable = pgTable(
 
 export type ListEntry = typeof listEntriesTable.$inferSelect;
 export type InsertListEntry = typeof listEntriesTable.$inferInsert;
+
+/**
+ * Per-station rolling ingest-quality snapshot, recomputed nightly from the
+ * last 7 days of `spins`. One row per station (upserted on each recompute run).
+ *
+ * Four metrics (all 0–1 floats, null until first scored):
+ *  - metadataYield       — fraction of spins with non-null artist+title
+ *  - trackShaped         — fraction of metadata spins that look like "Artist – Title"
+ *                          (not ALL-CAPS filler, not ad copy, minimum length)
+ *  - mbidResolutionRate  — fraction of track-shaped spins that resolved to an MBID
+ *  - musicShare          — fraction of spins that were NOT flagged as ad/promo copy
+ *
+ * qualityTier is derived from the thresholds in the spec:
+ *  "proven"   — mbidResolutionRate ≥ 0.4
+ *  "promising"— trackShaped ≥ 0.5
+ *  "raw"      — metadataYield ≥ 0.2
+ *  "silent"   — below all thresholds
+ *  "unscored" — sampleCount < 20 (not penalized early)
+ */
+export const stationQualityTable = pgTable(
+  "station_quality",
+  {
+    id: serial("id").primaryKey(),
+    stationId: integer("station_id")
+      .notNull()
+      .unique()
+      .references(() => stationsTable.id),
+    /** Fraction of logged spins (last 7 days) with non-null artist+title. */
+    metadataYield: real("metadata_yield"),
+    /** Fraction of non-null spins that look like a real "Artist – Title" track. */
+    trackShaped: real("track_shaped"),
+    /** Fraction of track-shaped spins that resolved to a MusicBrainz MBID. */
+    mbidResolutionRate: real("mbid_resolution_rate"),
+    /** Fraction of spins NOT flagged as ad/promo copy. */
+    musicShare: real("music_share"),
+    /** Number of spins in the scoring window. < 20 → "unscored". */
+    sampleCount: integer("sample_count").notNull().default(0),
+    /**
+     * proven | promising | raw | silent | unscored.
+     * Derived from the four metrics + sampleCount; stored for fast reads.
+     */
+    qualityTier: text("quality_tier").notNull().default("unscored"),
+    /** When these scores were last computed. */
+    computedAt: timestamp("computed_at").defaultNow().notNull(),
+  },
+  (t) => [index("station_quality_station_idx").on(t.stationId)],
+);
+
+export type StationQuality = typeof stationQualityTable.$inferSelect;
+export type InsertStationQuality = typeof stationQualityTable.$inferInsert;

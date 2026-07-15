@@ -7,7 +7,6 @@ import {
   useGetRecordingSpins,
   useGetRecordingSegues,
   useGetRecordingPicks,
-  useGetRecordingSongExploder,
   type AlbumContext,
   type EntryPick,
   type RecordingPick,
@@ -64,7 +63,7 @@ export default function Song() {
   const { data: spinsData } = useGetRecordingSpins(mbid);
   const { data: seguesData } = useGetRecordingSegues(mbid);
   const { data: picksData } = useGetRecordingPicks(mbid);
-  const { data: seData } = useGetRecordingSongExploder(mbid);
+  const { data: seData } = useGetRecordingEntry(mbid);
 
   const notFound =
     isError && (error as { status?: number } | undefined)?.status === 404;
@@ -678,7 +677,7 @@ function SongExploderSection({
                     {anchor.text}
                   </span>
                   <a
-                    href={anchor.sourceUrl}
+                    href={anchor.sourceUrl ?? undefined}
                     target="_blank"
                     rel="noreferrer"
                     title="Hear this in the episode"

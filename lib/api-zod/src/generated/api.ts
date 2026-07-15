@@ -244,13 +244,13 @@ export const ListStationsResponse = zod.object({
           .number()
           .nullish()
           .describe(
-            '0-100 cached discovery score (higher = newer/more \"discovery\"-leaning rotation), recomputed periodically from logged spins. Null until enough resolved spin history exists to compute one.',
+            '0-100 cached discovery score (higher = newer\/more \"discovery\"-leaning rotation), recomputed periodically from logged spins. Null until enough resolved spin history exists to compute one.',
           ),
         homepageBlurb: zod
           .string()
           .nullish()
           .describe(
-            "Best-effort excerpt (title/meta description) scraped from the station's own homepage. Null when never scraped, blocked by robots.txt, or the page had no usable text — never fabricated.",
+            "Best-effort excerpt (title\/meta description) scraped from the station's own homepage. Null when never scraped, blocked by robots.txt, or the page had no usable text — never fabricated.",
           ),
         upcomingShowCount: zod
           .number()
@@ -261,10 +261,119 @@ export const ListStationsResponse = zod.object({
           .string()
           .nullish()
           .describe(
-            'Station tier — "flagship" for editorially curated stations, "longtail" for auto-discovered ones.',
+            'Station tier — \"flagship\" for editorially curated stations, \"longtail\" for auto-discovered ones.',
+          ),
+        qualityTier: zod
+          .union([
+            zod.literal("proven"),
+            zod.literal("promising"),
+            zod.literal("raw"),
+            zod.literal("silent"),
+            zod.literal("unscored"),
+            zod.literal(null),
+          ])
+          .nullish()
+          .describe(
+            'Ingest quality tier derived from the last 7 days of logged spins. \"proven\" = strong MBID resolution (≥40%); \"promising\" = mostly track-shaped spins (≥50%); \"raw\" = metadata present but low resolution (≥20% yield); \"silent\" = active but near-zero usable metadata; \"unscored\" = fewer than 20 spins in the window. Null until the nightly quality recompute job has run at least once.',
           ),
       })
       .describe("A curated radio station in the public directory."),
+  ),
+});
+
+/**
+ * Same as listStationsNowPlaying but for a historical calendar day. Returns the last logged spin per station on that UTC date. Powers the ghost-dial date sweep on the home page.
+
+ * @summary Last spin per station for a specific calendar day (ghost dial)
+ */
+export const listStationsAtDatePathDateRegExp = new RegExp(
+  "^\\d{4}-\\d{2}-\\d{2}$",
+);
+
+export const ListStationsAtDateParams = zod.object({
+  date: zod.coerce
+    .string()
+    .regex(listStationsAtDatePathDateRegExp)
+    .describe("Calendar day in YYYY-MM-DD format (UTC)."),
+});
+
+export const ListStationsAtDateResponse = zod.object({
+  items: zod.array(
+    zod
+      .object({
+        slug: zod.string(),
+        nowPlaying: zod
+          .union([
+            zod
+              .object({
+                rawArtist: zod.string(),
+                rawTitle: zod.string(),
+                source: zod.string().nullish(),
+                confidence: zod.enum([
+                  "recording_id",
+                  "isrc",
+                  "text",
+                  "unresolved",
+                  "spotify",
+                ]),
+                playedAt: zod.string(),
+                artworkUrl: zod.string().nullish(),
+                recording: zod
+                  .union([
+                    zod
+                      .object({
+                        mbid: zod.string(),
+                        title: zod.string(),
+                        artist: zod.string(),
+                        artistMbid: zod.string().nullish(),
+                        artworkUrl: zod.string().nullish(),
+                        links: zod.array(
+                          zod
+                            .object({
+                              name: zod.string(),
+                              url: zod.string(),
+                              kind: zod.enum(["exact", "search"]),
+                            })
+                            .describe(
+                              'A cross-service deep link. kind=\"exact\" points at the precise recording (resolved via Odesli); kind=\"search\" is a best-effort artist+title search on that service.',
+                            ),
+                        ),
+                        genres: zod
+                          .array(zod.string())
+                          .nullish()
+                          .describe(
+                            "MusicBrainz-sourced genre tags for the recording, most-relevant first. Null when the recording has not been enriched yet.",
+                          ),
+                      })
+                      .describe("The MBID-keyed recording a spin resolved to."),
+                    zod.null(),
+                  ])
+                  .optional(),
+                show: zod
+                  .union([
+                    zod
+                      .object({
+                        name: zod.string(),
+                        djName: zod.string().nullish(),
+                      })
+                      .describe(
+                        "Show + DJ attribution for a spin, when the source exposes it.",
+                      ),
+                    zod.null(),
+                  ])
+                  .optional()
+                  .describe(
+                    "Show + DJ on air for this spin, when the source exposes it.",
+                  ),
+              })
+              .describe(
+                "The most recent spin on a station. `recording` is null when the track could not be resolved to the MusicBrainz spine (raw metadata preserved).",
+              ),
+            zod.null(),
+          ])
+          .optional(),
+      })
+      .describe("One station's latest spin, for the dial's live pulse."),
   ),
 });
 
@@ -289,8 +398,8 @@ export const ListStationsNowPlayingResponse = zod.object({
                   "recording_id",
                   "isrc",
                   "text",
-                  "spotify",
                   "unresolved",
+                  "spotify",
                 ]),
                 playedAt: zod.string(),
                 artworkUrl: zod.string().nullish(),
@@ -314,7 +423,12 @@ export const ListStationsNowPlayingResponse = zod.object({
                               'A cross-service deep link. kind=\"exact\" points at the precise recording (resolved via Odesli); kind=\"search\" is a best-effort artist+title search on that service.',
                             ),
                         ),
-                        genres: zod.array(zod.string()).nullish(),
+                        genres: zod
+                          .array(zod.string())
+                          .nullish()
+                          .describe(
+                            "MusicBrainz-sourced genre tags for the recording, most-relevant first. Null when the recording has not been enriched yet.",
+                          ),
                       })
                       .describe("The MBID-keyed recording a spin resolved to."),
                     zod.null(),
@@ -395,18 +509,37 @@ export const GetStationNowPlayingResponse = zod.object({
         .number()
         .nullish()
         .describe(
-          '0-100 cached discovery score (higher = newer/more \"discovery\"-leaning rotation), recomputed periodically from logged spins. Null until enough resolved spin history exists to compute one.',
+          '0-100 cached discovery score (higher = newer\/more \"discovery\"-leaning rotation), recomputed periodically from logged spins. Null until enough resolved spin history exists to compute one.',
         ),
       homepageBlurb: zod
         .string()
         .nullish()
         .describe(
-          "Best-effort excerpt (title/meta description) scraped from the station's own homepage. Null when never scraped, blocked by robots.txt, or the page had no usable text — never fabricated.",
+          "Best-effort excerpt (title\/meta description) scraped from the station's own homepage. Null when never scraped, blocked by robots.txt, or the page had no usable text — never fabricated.",
         ),
       upcomingShowCount: zod
         .number()
         .describe(
           "Count of scraped upcoming shows in this station's weekly programming grid. 0 when the schedule scraper has not found shows yet.",
+        ),
+      tier: zod
+        .string()
+        .nullish()
+        .describe(
+          'Station tier — \"flagship\" for editorially curated stations, \"longtail\" for auto-discovered ones.',
+        ),
+      qualityTier: zod
+        .union([
+          zod.literal("proven"),
+          zod.literal("promising"),
+          zod.literal("raw"),
+          zod.literal("silent"),
+          zod.literal("unscored"),
+          zod.literal(null),
+        ])
+        .nullish()
+        .describe(
+          'Ingest quality tier derived from the last 7 days of logged spins. \"proven\" = strong MBID resolution (≥40%); \"promising\" = mostly track-shaped spins (≥50%); \"raw\" = metadata present but low resolution (≥20% yield); \"silent\" = active but near-zero usable metadata; \"unscored\" = fewer than 20 spins in the window. Null until the nightly quality recompute job has run at least once.',
         ),
     })
     .describe("A curated radio station in the public directory."),
@@ -417,7 +550,13 @@ export const GetStationNowPlayingResponse = zod.object({
           rawArtist: zod.string(),
           rawTitle: zod.string(),
           source: zod.string().nullish(),
-          confidence: zod.enum(["recording_id", "isrc", "text", "spotify", "unresolved"]),
+          confidence: zod.enum([
+            "recording_id",
+            "isrc",
+            "text",
+            "unresolved",
+            "spotify",
+          ]),
           playedAt: zod.string(),
           artworkUrl: zod.string().nullish(),
           recording: zod
@@ -440,6 +579,12 @@ export const GetStationNowPlayingResponse = zod.object({
                         'A cross-service deep link. kind=\"exact\" points at the precise recording (resolved via Odesli); kind=\"search\" is a best-effort artist+title search on that service.',
                       ),
                   ),
+                  genres: zod
+                    .array(zod.string())
+                    .nullish()
+                    .describe(
+                      "MusicBrainz-sourced genre tags for the recording, most-relevant first. Null when the recording has not been enriched yet.",
+                    ),
                 })
                 .describe("The MBID-keyed recording a spin resolved to."),
               zod.null(),
@@ -500,7 +645,7 @@ export const ReportStationNowPlayingResponse = zod.object({
     ),
   mbid: zod.string().nullish(),
   confidence: zod
-    .enum(["recording_id", "isrc", "text", "spotify", "unresolved"])
+    .enum(["recording_id", "isrc", "text", "unresolved", "spotify"])
     .optional(),
 });
 
@@ -537,6 +682,31 @@ export const GetRecordingResponse = zod
   .describe(
     "A recording's own metadata, keyed by MusicBrainz Recording ID, for the song page. artistMbid powers artist-level attribution; artwork and links are best-effort and may be absent.",
   );
+
+/**
+ * Given a comma-separated list of recording MBIDs, returns which ones have synced lyrics and/or a linked Song Exploder episode. Used by the home page to show content-indicator badges. Caps at 100 MBIDs per call.
+
+ * @summary Batch check for lyrics and Song Exploder content
+ */
+export const GetRecordingsAvailabilityQueryParams = zod.object({
+  mbids: zod.coerce
+    .string()
+    .describe("Comma-separated recording MBIDs (max 100)."),
+});
+
+export const GetRecordingsAvailabilityResponse = zod
+  .object({
+    items: zod.array(
+      zod
+        .object({
+          mbid: zod.string(),
+          hasLyrics: zod.boolean(),
+          hasSe: zod.boolean(),
+        })
+        .describe("Availability of enrichment content for one recording."),
+    ),
+  })
+  .describe("Availability results for a batch of recordings.");
 
 /**
  * Real liner-notes enrichment for a recording on the spine — personnel credits, original pressing detail, and typed song relationships — resolved from MusicBrainz/Discogs and cached. `knowledge` is null when the sources are unconfigured or nothing verifiable was found; Lore never fabricates credits.
@@ -682,7 +852,13 @@ export const GetRecordingSpinsResponse = zod.object({
       .object({
         playedAt: zod.string(),
         source: zod.string().nullish(),
-        confidence: zod.enum(["recording_id", "isrc", "text", "spotify", "unresolved"]),
+        confidence: zod.enum([
+          "recording_id",
+          "isrc",
+          "text",
+          "unresolved",
+          "spotify",
+        ]),
         station: zod
           .object({
             slug: zod.string(),
@@ -754,7 +930,13 @@ export const GetRecordingPicksResponse = zod.object({
           .describe(
             "Total picks in the same run (0 when the pick has no run).",
           ),
-        confidence: zod.enum(["recording_id", "isrc", "text", "spotify", "unresolved"]),
+        confidence: zod.enum([
+          "recording_id",
+          "isrc",
+          "text",
+          "unresolved",
+          "spotify",
+        ]),
       })
       .describe(
         "One curated pick of a recording — the reverse edge of the song–source graph. `runId` locates the specific list (null when the pick has no source URL and therefore no archived run).",
@@ -782,6 +964,62 @@ export const GetRecordingPreviewResponse = zod
   .describe(
     "A best-effort 30s preview clip for a recording. All fields may be null when no preview was found; the audio streams directly from the source's CDN, never through Lore.",
   );
+
+/**
+ * Returns year-end / all-time list entries from music publications that feature the primary album this recording appears on. Ordered by rank (ascending), then by list year (descending). Only confirmed or exact-confidence entries are returned. Returns an empty array when no list provenance has been scraped yet.
+
+ * @summary Publication list appearances for a recording
+ */
+
+export const GetRecordingListProvenanceParams = zod.object({
+  mbid: zod.coerce.string().min(1),
+});
+
+export const GetRecordingListProvenanceResponse = zod.object({
+  items: zod.array(
+    zod
+      .object({
+        listId: zod.number(),
+        listTitle: zod
+          .string()
+          .describe('Name of the list (e.g. \"50 Best Albums of 2025\").'),
+        listYear: zod
+          .number()
+          .nullable()
+          .describe("Calendar year of the list (null for all-time lists)."),
+        listUrl: zod.string().describe("URL to the list page."),
+        listKind: zod
+          .string()
+          .describe("year_end | mid_year | decade | all_time | genre | custom"),
+        isRanked: zod.boolean(),
+        sourceName: zod
+          .string()
+          .describe(
+            'Publication \/ selector \/ station name (e.g. \"The Quietus\").',
+          ),
+        rank: zod
+          .number()
+          .nullable()
+          .describe("Position in the list, null for unranked appearances."),
+        listLength: zod
+          .number()
+          .nullable()
+          .describe("Total list length (e.g. 50), null when unknown."),
+        releaseGroupMbid: zod.string(),
+        releaseGroupTitle: zod
+          .string()
+          .nullable()
+          .describe("Cached album title from the bridge table."),
+        releaseYear: zod
+          .number()
+          .nullable()
+          .describe("Earliest release year for the album."),
+      })
+      .describe(
+        "A single publication list entry that features this recording's album.",
+      ),
+  ),
+});
 
 /**
  * Real DJ transitions observed after this recording, ranked by a station-class-weighted frequency so curated/community segues outrank commercial ones. Powers Segue mode.
@@ -832,29 +1070,6 @@ export const GetRecordingSeguesResponse = zod.object({
           ),
       })
       .describe("A song observed playing after the queried recording."),
-  ),
-});
-
-export const GetRecordingListProvenanceParams = zod.object({
-  mbid: zod.coerce.string().min(1),
-});
-
-export const GetRecordingListProvenanceResponse = zod.object({
-  items: zod.array(
-    zod.object({
-      listId: zod.number(),
-      listTitle: zod.string(),
-      listYear: zod.number().nullable(),
-      listUrl: zod.string(),
-      listKind: zod.string(),
-      isRanked: zod.boolean(),
-      sourceName: zod.string(),
-      rank: zod.number().nullable(),
-      listLength: zod.number().nullable(),
-      releaseGroupMbid: zod.string(),
-      releaseGroupTitle: zod.string().nullable(),
-      releaseYear: zod.number().nullable(),
-    }),
   ),
 });
 
@@ -976,18 +1191,37 @@ export const GetStationArchiveResponse = zod.object({
         .number()
         .nullish()
         .describe(
-          '0-100 cached discovery score (higher = newer/more \"discovery\"-leaning rotation), recomputed periodically from logged spins. Null until enough resolved spin history exists to compute one.',
+          '0-100 cached discovery score (higher = newer\/more \"discovery\"-leaning rotation), recomputed periodically from logged spins. Null until enough resolved spin history exists to compute one.',
         ),
       homepageBlurb: zod
         .string()
         .nullish()
         .describe(
-          "Best-effort excerpt (title/meta description) scraped from the station's own homepage. Null when never scraped, blocked by robots.txt, or the page had no usable text — never fabricated.",
+          "Best-effort excerpt (title\/meta description) scraped from the station's own homepage. Null when never scraped, blocked by robots.txt, or the page had no usable text — never fabricated.",
         ),
       upcomingShowCount: zod
         .number()
         .describe(
           "Count of scraped upcoming shows in this station's weekly programming grid. 0 when the schedule scraper has not found shows yet.",
+        ),
+      tier: zod
+        .string()
+        .nullish()
+        .describe(
+          'Station tier — \"flagship\" for editorially curated stations, \"longtail\" for auto-discovered ones.',
+        ),
+      qualityTier: zod
+        .union([
+          zod.literal("proven"),
+          zod.literal("promising"),
+          zod.literal("raw"),
+          zod.literal("silent"),
+          zod.literal("unscored"),
+          zod.literal(null),
+        ])
+        .nullish()
+        .describe(
+          'Ingest quality tier derived from the last 7 days of logged spins. \"proven\" = strong MBID resolution (≥40%); \"promising\" = mostly track-shaped spins (≥50%); \"raw\" = metadata present but low resolution (≥20% yield); \"silent\" = active but near-zero usable metadata; \"unscored\" = fewer than 20 spins in the window. Null until the nightly quality recompute job has run at least once.',
         ),
     })
     .describe("A curated radio station in the public directory."),
@@ -1029,7 +1263,7 @@ export const GetStationArchiveResponse = zod.object({
 });
 
 /**
- * Aggregated genre tags and a discovery score (recent-release-leaning vs. catalog-leaning) across the station's logged spin history. Computed on read from already-enriched recording data — never a per-spin recompute. Degrades to unknown/null fields when there isn't enough enriched data yet.
+ * Aggregated genre tags and a discovery score (recent-release-leaning vs. catalog-leaning) across the station's logged spin history. Served from the station's persisted `genreProfile`/`discoveryScore` columns (recomputed periodically by the insights job); when served from the cache, `medianAgeYears` is null and `sampleSize`/ `unknownCount` are 0. A station the job has never scored falls back to a live aggregation over already-enriched recording data. Degrades to unknown/null fields when there isn't enough enriched data yet.
 
  * @summary Genre breakdown + discovery score for a station
  */
@@ -1120,7 +1354,13 @@ export const GetStationSpinsResponse = zod
           playedAt: zod.string().nullish(),
           rawArtist: zod.string(),
           rawTitle: zod.string(),
-          confidence: zod.enum(["recording_id", "isrc", "text", "spotify", "unresolved"]),
+          confidence: zod.enum([
+            "recording_id",
+            "isrc",
+            "text",
+            "unresolved",
+            "spotify",
+          ]),
           recording: zod
             .union([
               zod
@@ -1141,6 +1381,12 @@ export const GetStationSpinsResponse = zod
                         'A cross-service deep link. kind=\"exact\" points at the precise recording (resolved via Odesli); kind=\"search\" is a best-effort artist+title search on that service.',
                       ),
                   ),
+                  genres: zod
+                    .array(zod.string())
+                    .nullish()
+                    .describe(
+                      "MusicBrainz-sourced genre tags for the recording, most-relevant first. Null when the recording has not been enriched yet.",
+                    ),
                 })
                 .describe("The MBID-keyed recording a spin resolved to."),
               zod.null(),
@@ -1228,7 +1474,13 @@ export const GetStationRunResponse = zod.object({
         playedAt: zod.string().nullish(),
         rawArtist: zod.string(),
         rawTitle: zod.string(),
-        confidence: zod.enum(["recording_id", "isrc", "text", "spotify", "unresolved"]),
+        confidence: zod.enum([
+          "recording_id",
+          "isrc",
+          "text",
+          "unresolved",
+          "spotify",
+        ]),
         recording: zod
           .union([
             zod
@@ -1249,6 +1501,12 @@ export const GetStationRunResponse = zod.object({
                       'A cross-service deep link. kind=\"exact\" points at the precise recording (resolved via Odesli); kind=\"search\" is a best-effort artist+title search on that service.',
                     ),
                 ),
+                genres: zod
+                  .array(zod.string())
+                  .nullish()
+                  .describe(
+                    "MusicBrainz-sourced genre tags for the recording, most-relevant first. Null when the recording has not been enriched yet.",
+                  ),
               })
               .describe("The MBID-keyed recording a spin resolved to."),
             zod.null(),
@@ -1428,6 +1686,86 @@ export const GetPickerArchiveResponse = zod.object({
 });
 
 /**
+ * Aggregated genre tags and a discovery score (recent-release-leaning vs. catalog-leaning) across every pick this picker has logged, for curated-list pickers (labels, blogs, curators, etc.) that have no per-run aggregate elsewhere. Computed on read from already-enriched recording data — never a per-pick recompute. Degrades to unknown/null fields when there isn't enough enriched data yet.
+
+ * @summary Genre breakdown + discovery score across a picker's full pick history
+ */
+
+export const GetPickerInsightsParams = zod.object({
+  handle: zod.coerce.string().min(1),
+});
+
+export const GetPickerInsightsResponse = zod.object({
+  picker: zod
+    .object({
+      id: zod.number(),
+      pickerType: zod.enum([
+        "dj",
+        "label",
+        "blog",
+        "curator",
+        "collector",
+        "event",
+        "series",
+        "editorial",
+      ]),
+      name: zod.string(),
+      handle: zod.string(),
+      homeUrl: zod.string().nullish(),
+      trustTier: zod.number(),
+      description: zod.string().nullish(),
+      active: zod.boolean(),
+      latestRunId: zod
+        .number()
+        .nullish()
+        .describe(
+          "ID of the most recent run from this picker; present when at least one pick has been ingested.",
+        ),
+    })
+    .describe(
+      "A trusted taste source (label, blog, curator, collector, event, DJ).",
+    ),
+  insights: zod
+    .object({
+      genreBreakdown: zod
+        .object({
+          top: zod.array(
+            zod.object({
+              genre: zod.string(),
+              count: zod.number(),
+            }),
+          ),
+          unknownCount: zod.number(),
+          totalCount: zod.number(),
+        })
+        .describe(
+          "Ranked genre tags across a set of tracks. Genre data comes from MusicBrainz (primary) or Last.fm artist tags (fallback); tracks that were never enriched, or truly carry no tags, count toward `unknownCount` rather than being guessed at.",
+        ),
+      discoveryScore: zod
+        .object({
+          medianAgeYears: zod.number().nullable(),
+          score: zod
+            .number()
+            .nullable()
+            .describe("0-100, higher = newer \/ more discovery-leaning."),
+          label: zod.enum(["new-music", "recent", "catalog", "unknown"]),
+          sampleSize: zod
+            .number()
+            .describe("Tracks with both a release year and an air\/pick date."),
+          unknownCount: zod
+            .number()
+            .describe("Tracks considered but missing a release year."),
+        })
+        .describe(
+          "How \"new music\"-leaning a set of tracks is, based on each track's release year vs. the date it aired\/was picked. Null fields mean there wasn't enough dated data to compute a score — never a fabricated guess.",
+        ),
+    })
+    .describe(
+      "Combined genre breakdown + discovery score for a scope (station, run, DJ, or list).",
+    ),
+});
+
+/**
  * The ordered tracklist of one picker run (an archived episode or list), in the order the picker documented it. Ordinals are preserved; tracks resolved to the spine carry their recording node.
 
  * @summary One archived picker run, in documented order
@@ -1493,7 +1831,13 @@ export const GetPickerRunResponse = zod.object({
         playedAt: zod.string().nullish(),
         rawArtist: zod.string(),
         rawTitle: zod.string(),
-        confidence: zod.enum(["recording_id", "isrc", "text", "spotify", "unresolved"]),
+        confidence: zod.enum([
+          "recording_id",
+          "isrc",
+          "text",
+          "unresolved",
+          "spotify",
+        ]),
         recording: zod
           .union([
             zod
@@ -1514,6 +1858,12 @@ export const GetPickerRunResponse = zod.object({
                       'A cross-service deep link. kind=\"exact\" points at the precise recording (resolved via Odesli); kind=\"search\" is a best-effort artist+title search on that service.',
                     ),
                 ),
+                genres: zod
+                  .array(zod.string())
+                  .nullish()
+                  .describe(
+                    "MusicBrainz-sourced genre tags for the recording, most-relevant first. Null when the recording has not been enriched yet.",
+                  ),
               })
               .describe("The MBID-keyed recording a spin resolved to."),
             zod.null(),
@@ -1628,6 +1978,295 @@ export const GetArchiveRecentRunsResponse = zod.object({
 });
 
 /**
+ * Returns every station that has a scraped weekly schedule, deduplicated by fingerprint (same show set = same station), sorted by station name. Powers the schedule calendar and the in-progress show detection on station cards.
+
+ * @summary All stations with their scraped weekly programming grids
+ */
+export const GetAllScrapedShowsResponse = zod
+  .object({
+    stations: zod.array(
+      zod
+        .object({
+          slug: zod.string(),
+          name: zod.string(),
+          shows: zod.array(
+            zod
+              .object({
+                showName: zod.string(),
+                dayOfWeek: zod.enum([
+                  "Mon",
+                  "Tue",
+                  "Wed",
+                  "Thu",
+                  "Fri",
+                  "Sat",
+                  "Sun",
+                ]),
+                startTime: zod.string().describe('24h \"HH:MM\"'),
+                endTime: zod.string().describe('24h \"HH:MM\"'),
+                djName: zod.string().nullable(),
+              })
+              .describe(
+                "One entry in a station's own published weekly programming grid. Times are the station's own local wall-clock times as published (timezone not modeled), describing a recurring weekly slot rather than a specific calendar date.",
+              ),
+          ),
+        })
+        .describe("One station entry in the all-scraped-shows response."),
+    ),
+  })
+  .describe("All stations with their scraped weekly programming grids.");
+
+/**
+ * Resolves the artist name from any recording carrying the given artist MBID, returns their most-spun recordings on Lore (capped at 20), and optionally fetches a Spotify catalogue (top tracks + albums) when Spotify is configured.
+
+ * @summary Artist page — Lore top tracks and optional Spotify catalogue
+ */
+
+export const GetArtistParams = zod.object({
+  mbid: zod.coerce.string().min(1).describe("MusicBrainz artist MBID."),
+});
+
+export const GetArtistResponse = zod
+  .object({
+    mbid: zod.string(),
+    name: zod.string(),
+    topTracks: zod.array(
+      zod
+        .object({
+          mbid: zod.string(),
+          title: zod.string(),
+          artist: zod.string(),
+          artworkUrl: zod.string().nullable(),
+          spinCount: zod.number(),
+          lastSpunAt: zod.string().nullable(),
+        })
+        .describe("A recording by this artist, ranked by Lore spin count."),
+    ),
+    catalogue: zod.union([
+      zod.object({
+        artistId: zod.string(),
+        artistName: zod.string(),
+        artistUrl: zod.string(),
+        topTracks: zod.array(
+          zod.object({
+            id: zod.string(),
+            uri: zod.string(),
+            title: zod.string(),
+          }),
+        ),
+        albums: zod.array(
+          zod.object({
+            id: zod.string(),
+            name: zod.string(),
+            year: zod.number().nullish(),
+            url: zod.string(),
+          }),
+        ),
+      }),
+      zod.null(),
+    ]),
+  })
+  .describe(
+    "Artist page data — Lore top tracks plus optional Spotify catalogue.",
+  );
+
+/**
+ * The station's own published upcoming-show schedule — show name, day of week, start/end time, and DJ when stated — scraped from its homepage or a linked schedule page and extracted via LLM. Distinct from `/stations/schedule`, which derives a timeline from already-logged spins; this reflects what the station itself publishes about shows to come. Returns an empty `shows` array (never fabricated entries) when the station has no parseable schedule, along with `lastScrapedAt` so clients can show "no schedule available" honestly.
+
+ * @summary A station's scraped weekly programming grid
+ */
+
+export const GetStationUpcomingScheduleParams = zod.object({
+  slug: zod.coerce.string().min(1),
+});
+
+export const GetStationUpcomingScheduleResponse = zod
+  .object({
+    stationSlug: zod.string(),
+    shows: zod.array(
+      zod
+        .object({
+          showName: zod.string(),
+          dayOfWeek: zod.enum([
+            "Mon",
+            "Tue",
+            "Wed",
+            "Thu",
+            "Fri",
+            "Sat",
+            "Sun",
+          ]),
+          startTime: zod.string().describe('24h \"HH:MM\"'),
+          endTime: zod.string().describe('24h \"HH:MM\"'),
+          djName: zod.string().nullable(),
+        })
+        .describe(
+          "One entry in a station's own published weekly programming grid. Times are the station's own local wall-clock times as published (timezone not modeled), describing a recurring weekly slot rather than a specific calendar date.",
+        ),
+    ),
+    lastScrapedAt: zod
+      .string()
+      .nullable()
+      .describe(
+        "ISO timestamp of the last successful schedule scrape. Null when never successfully scraped.",
+      ),
+  })
+  .describe(
+    "A station's scraped upcoming schedule. `shows` is empty (never fabricated) when the station's page had no parseable schedule.",
+  );
+
+/**
+ * Returns every scraped weekly show slot attributed to the given DJ name across all stations. DJ names come from the schedule scraper's structured extraction; matching is exact (case-sensitive). Returns 404 when the name has no scraped shows.
+
+ * @summary All scraped upcoming shows for a DJ across stations
+ */
+
+export const GetDjShowsParams = zod.object({
+  name: zod.coerce.string().min(1),
+});
+
+export const GetDjShowsResponse = zod
+  .object({
+    djName: zod.string(),
+    shows: zod.array(
+      zod
+        .object({
+          stationSlug: zod.string(),
+          stationName: zod.string(),
+          showName: zod.string(),
+          dayOfWeek: zod.enum([
+            "Mon",
+            "Tue",
+            "Wed",
+            "Thu",
+            "Fri",
+            "Sat",
+            "Sun",
+          ]),
+          startTime: zod.string().describe('24h \"HH:MM\"'),
+          endTime: zod.string().describe('24h \"HH:MM\"'),
+        })
+        .describe(
+          "One scraped weekly show slot for a DJ at a specific station.",
+        ),
+    ),
+  })
+  .describe("All scraped upcoming shows for a DJ across all stations.");
+
+/**
+ * Returns up to 3 most-recently-played distinct songs (by MBID) per station that have genre data, ordered newest first. Each chip carries the recording's primary genre tag and a discovery tier derived inline from `recordings.release_year` (≤3yr → "new-music", ≤10yr → "recent", older → "catalog", null year → null). Cached server-side for 2 minutes.
+
+ * @summary Rolling per-song genre chips for the schedule page
+ */
+export const GetStationsRollingGenresResponse = zod
+  .object({
+    stations: zod.record(
+      zod.string(),
+      zod.array(
+        zod
+          .object({
+            genre: zod.string(),
+            discoveryLabel: zod
+              .union([
+                zod.literal("new-music"),
+                zod.literal("recent"),
+                zod.literal("catalog"),
+                zod.literal(null),
+              ])
+              .nullish(),
+            playedAt: zod.string().describe("ISO 8601 timestamp of the spin."),
+          })
+          .describe(
+            "One recent spin's primary genre tag and inline discovery tier for the schedule rolling view. `discoveryLabel` is null when the recording has no `release_year`.\n",
+          ),
+      ),
+    ),
+  })
+  .describe(
+    "Map from station slug to an array of up to 3 recent genre chips, newest first. Stations with no resolved spins carrying genre data are omitted.\n",
+  );
+
+/**
+ * Returns the 8 most-recently-played distinct tracks per station for the given UTC calendar day, ordered newest first. Deduplicated by MBID when resolved, otherwise by title+artist. Powers track-chip timelines on showless station cards.
+
+ * @summary Last 8 spins per station for a given calendar day
+ */
+export const getStationsRecentSpinsQueryDateRegExp = new RegExp(
+  "^\\d{4}-\\d{2}-\\d{2}$",
+);
+
+export const GetStationsRecentSpinsQueryParams = zod.object({
+  date: zod.coerce
+    .string()
+    .regex(getStationsRecentSpinsQueryDateRegExp)
+    .describe("Calendar day in YYYY-MM-DD format (UTC)."),
+});
+
+export const GetStationsRecentSpinsResponse = zod
+  .object({
+    items: zod.array(
+      zod.object({
+        stationSlug: zod.string(),
+        spins: zod.array(
+          zod
+            .object({
+              mbid: zod.string().nullable(),
+              title: zod.string(),
+              artist: zod.string(),
+              playedAt: zod.string(),
+            })
+            .describe("One deduped spin chip for a station on a given day."),
+        ),
+      }),
+    ),
+  })
+  .describe("Per-station recent spins for a given calendar day.");
+
+/**
+ * Returns all spin-runs (grouped by station, day, and show) for every station on the given UTC calendar day, ordered chronologically within each station. Powers the show timeline on station cards on the home schedule page.
+
+ * @summary Show-run timeline for all stations on a given calendar day
+ */
+export const getStationsScheduleQueryDateRegExp = new RegExp(
+  "^\\d{4}-\\d{2}-\\d{2}$",
+);
+
+export const GetStationsScheduleQueryParams = zod.object({
+  date: zod.coerce
+    .string()
+    .regex(getStationsScheduleQueryDateRegExp)
+    .describe("Calendar day in YYYY-MM-DD format (UTC)."),
+});
+
+export const GetStationsScheduleResponse = zod
+  .object({
+    items: zod.array(
+      zod.object({
+        stationSlug: zod.string(),
+        runs: zod.array(
+          zod
+            .object({
+              runId: zod.union([zod.number(), zod.string()]).nullable(),
+              show: zod.union([
+                zod.object({
+                  name: zod.string(),
+                  djName: zod.string().nullable(),
+                }),
+                zod.null(),
+              ]),
+              spinCount: zod.number(),
+              resolvedCount: zod.number(),
+              startedAt: zod.string(),
+              endedAt: zod.string(),
+            })
+            .describe("One spin-run block for a station on a given day."),
+        ),
+      }),
+    ),
+  })
+  .describe("Per-station show-run timeline for a given calendar day.");
+
+/**
  * Pickers whose curated lists contain recordings this station has actually spun — exact MBID overlap only, never similarity. Ranked by the number of distinct shared recordings. Empty when no picker shares a track with the station's spin history.
 
  * @summary Curated pickers sharing tracks with a station ("Critics agree")
@@ -1667,6 +2306,52 @@ export const GetStationPickerOverlapsResponse = zod.object({
       ),
   ),
 });
+
+/**
+ * Returns all active pickers with their most-recently-added list run and up to 5 preview tracks (artwork + mbid). Powers the curated dial on the home page. Fetched once per session; no polling.
+
+ * @summary Curated picker dial with preview tracks
+ */
+export const GetPickersDialResponse = zod
+  .object({
+    items: zod.array(
+      zod
+        .object({
+          picker: zod.object({
+            id: zod.number(),
+            pickerType: zod.string(),
+            name: zod.string(),
+            handle: zod.string(),
+            homeUrl: zod.string().nullable(),
+            trustTier: zod.number(),
+            description: zod.string().nullable(),
+          }),
+          run: zod.union([
+            zod.object({
+              runId: zod.number(),
+              title: zod.string().nullable(),
+              sourceUrl: zod.string(),
+              trackCount: zod.number(),
+              resolvedCount: zod.number(),
+              pickedAt: zod.string().nullable(),
+            }),
+            zod.null(),
+          ]),
+          previewTracks: zod.array(
+            zod.object({
+              mbid: zod.string().nullable(),
+              title: zod.string(),
+              artist: zod.string(),
+              artworkUrl: zod.string().nullable(),
+            }),
+          ),
+        })
+        .describe(
+          "One picker entry on the curated dial, with its latest run and preview tracks.",
+        ),
+    ),
+  })
+  .describe("Full curated picker dial.");
 
 /**
  * Stations whose logged spin history contains recordings this picker has picked — exact MBID overlap only, never similarity. Ranked by the number of distinct shared recordings. Empty when radio hasn't touched any of the picker's tracks.
@@ -1793,82 +2478,6 @@ export const GetSelectorRunsResponse = zod
     ),
   })
   .describe("A KEXP DJ selector's full run history.");
-
-/**
- * Aggregated genre tags and a discovery score (recent-release-leaning vs. catalog-leaning) across every pick this picker has logged, for curated-list pickers (labels, blogs, curators, etc.) that have no per-run aggregate elsewhere. Computed on read from already-enriched recording data — never a per-pick recompute. Degrades to unknown/null fields when there isn't enough enriched data yet.
-
- * @summary Genre breakdown + discovery score across a picker's full pick history
- */
-
-export const GetPickerInsightsParams = zod.object({
-  handle: zod.coerce.string().min(1),
-});
-
-export const GetPickerInsightsResponse = zod.object({
-  picker: zod.object({
-    id: zod.number(),
-    pickerType: zod.enum([
-      "dj",
-      "label",
-      "blog",
-      "curator",
-      "collector",
-      "event",
-      "series",
-      "editorial",
-    ]),
-    name: zod.string(),
-    handle: zod.string(),
-    homeUrl: zod.string().nullish(),
-    trustTier: zod.number(),
-    description: zod.string().nullish(),
-    active: zod.boolean(),
-    latestRunId: zod
-      .number()
-      .nullish()
-      .describe(
-        "ID of the most recent run from this picker; present when at least one pick has been ingested.",
-      ),
-  }),
-  insights: zod
-    .object({
-      genreBreakdown: zod
-        .object({
-          top: zod.array(
-            zod.object({
-              genre: zod.string(),
-              count: zod.number(),
-            }),
-          ),
-          unknownCount: zod.number(),
-          totalCount: zod.number(),
-        })
-        .describe(
-          "Ranked genre tags across a set of tracks. Genre data comes from MusicBrainz (primary) or Last.fm artist tags (fallback); tracks that were never enriched, or truly carry no tags, count toward `unknownCount` rather than being guessed at.",
-        ),
-      discoveryScore: zod
-        .object({
-          medianAgeYears: zod.number().nullable(),
-          score: zod
-            .number()
-            .nullable()
-            .describe("0-100, higher = newer \/ more discovery-leaning."),
-          label: zod.enum(["new-music", "recent", "catalog", "unknown"]),
-          sampleSize: zod
-            .number()
-            .describe("Tracks with both a release year and an air\/pick date."),
-          unknownCount: zod
-            .number()
-            .describe("Tracks considered but missing a release year."),
-        })
-        .describe(
-          "How \"new music\"-leaning a set of tracks is, based on each track's release year vs. the date it aired\/was picked. Null fields mean there wasn't enough dated data to compute a score — never a fabricated guess.",
-        ),
-    })
-    .describe(
-      "Combined genre breakdown + discovery score for a scope (station, run, DJ, or list).",
-    ),
-});
 
 /**
  * Aggregated genre tags and a discovery score (recent-release-leaning vs. catalog-leaning) across the selector's logged spin history. Computed on read from already-enriched recording data — never a per-spin recompute. Degrades to unknown/null fields when there isn't enough enriched data yet.
@@ -2047,6 +2656,34 @@ export const GetRecordingEntryResponse = zod
         zod.null(),
       ])
       .optional(),
+    episode: zod
+      .union([
+        zod
+          .object({
+            id: zod.number(),
+            title: zod.string(),
+            episodeUrl: zod.string(),
+            youtubeUrl: zod.string().nullable(),
+            publishedAt: zod.string().nullable(),
+            resolvedAt: zod.string().nullable(),
+          })
+          .describe("Linked Song Exploder episode for a recording."),
+        zod.null(),
+      ])
+      .optional(),
+    anchors: zod
+      .array(
+        zod
+          .object({
+            id: zod.number(),
+            positionMs: zod.number(),
+            text: zod.string(),
+            sourceUrl: zod.string().nullable(),
+            sourceLabel: zod.string().nullable(),
+          })
+          .describe("One timed annotation from a Song Exploder episode."),
+      )
+      .optional(),
   })
   .describe("The strongest rung of human attribution found for a recording.");
 
@@ -2183,6 +2820,30 @@ export const AddRymListBody = zod
     url: zod.string().min(1),
   })
   .describe("Register a RateYourMusic list as a link-out-only picker.");
+
+/**
+ * Returns the full list of scraped Song Exploder episodes, sorted newest first, with their MBID resolution status and anchor count. Used by the admin episode review page.
+
+ * @summary List all Song Exploder episodes with resolution status
+ */
+export const ListSongExploderEpisodesResponse = zod
+  .object({
+    episodes: zod.array(
+      zod
+        .object({
+          id: zod.number(),
+          title: zod.string(),
+          episodeUrl: zod.string(),
+          youtubeUrl: zod.string().nullable(),
+          mbid: zod.string().nullable(),
+          resolvedAt: zod.string().nullable(),
+          publishedAt: zod.string().nullable(),
+          anchorCount: zod.number(),
+        })
+        .describe("Summary row for an episode in the admin episode list."),
+    ),
+  })
+  .describe("List of all Song Exploder episodes with resolution status.");
 
 /**
  * Attach a paraphrased, timestamp-anchored claim to the recording resolved from a Song Exploder episode. Claims are admin-entered (never automated) because Song Exploder episode timestamps live in the audio, not the RSS feed text. The claim is stored as a track_claim with source attribution deep-linking to the episode, so every fact is one tap from its evidence. Token-guarded.
@@ -2418,6 +3079,72 @@ export const ReviewGeniusDraftResponse = zod.object({
 });
 
 /**
+ * Full station directory joined with the latest quality scores from the station_quality table. One row per station; quality fields are null for stations that have not been scored yet. Guarded by the `x-admin-token` header matching the LORE_ADMIN_TOKEN env var.
+
+ * @summary Admin-only station list with ingest quality scores
+ */
+export const ListAdminStationsHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const ListAdminStationsResponse = zod.object({
+  stations: zod.array(
+    zod
+      .object({
+        id: zod.number(),
+        slug: zod.string(),
+        name: zod.string(),
+        org: zod.string().nullable(),
+        country: zod.string().nullable(),
+        active: zod.boolean(),
+        nowPlayingSource: zod.string().nullable(),
+        tier: zod.string().nullable(),
+        source: zod.string().nullable(),
+        qualityTier: zod
+          .union([
+            zod.literal("proven"),
+            zod.literal("promising"),
+            zod.literal("raw"),
+            zod.literal("silent"),
+            zod.literal("unscored"),
+            zod.literal(null),
+          ])
+          .nullable(),
+        metadataYield: zod.number().nullable(),
+        trackShaped: zod.number().nullable(),
+        mbidResolutionRate: zod.number().nullable(),
+        musicShare: zod.number().nullable(),
+        sampleCount: zod.number().nullable(),
+        qualityComputedAt: zod.date().nullable(),
+      })
+      .describe(
+        "A station row with quality scores for the admin station list.",
+      ),
+  ),
+});
+
+/**
+ * Triggers an immediate full recompute of quality scores for all active stations — the same job the nightly scheduler runs. Returns a flat tier count summary (keys = tier names, values = station counts). Token-guarded.
+
+ * @summary Admin-only on-demand station quality recompute
+ */
+export const RecomputeStationQualityHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const RecomputeStationQualityResponse = zod
+  .object({
+    proven: zod.number(),
+    promising: zod.number(),
+    raw: zod.number(),
+    silent: zod.number(),
+    unscored: zod.number(),
+  })
+  .describe(
+    "Tier count summary returned after a quality recompute. Each property is the number of active stations assigned that quality tier.",
+  );
+
+/**
  * `configured` is false when the server has no Spotify app credentials (feature honestly absent). `connected` is true when this session's cookie maps to stored OAuth tokens.
 
  * @summary Whether this browser session has Spotify connected
@@ -2444,21 +3171,13 @@ export const GetSpotifyStatusResponse = zod
 
 export const SpotifyPlayBody = zod.object({
   mbid: zod.string().min(1),
-  deviceId: zod.string().nullish(),
-});
-
-export const SpotifyDevicesResponse = zod
-  .object({
-    devices: zod.array(
-      zod.object({
-        id: zod.string(),
-        name: zod.string(),
-        type: zod.string(),
-        isActive: zod.boolean(),
-      }),
+  deviceId: zod
+    .string()
+    .nullish()
+    .describe(
+      "Target Spotify Connect device id (from the device picker). When provided, playback is directed to this device explicitly. When omitted or null, the active device is used (existing behaviour).\n",
     ),
-  })
-  .describe("Available Spotify Connect devices for this session.");
+});
 
 export const SpotifyPlayResponse = zod
   .object({
@@ -2482,6 +3201,12 @@ export const SpotifyPlayResponse = zod
 
 export const SpotifySaveBody = zod.object({
   mbid: zod.string().min(1),
+  deviceId: zod
+    .string()
+    .nullish()
+    .describe(
+      "Target Spotify Connect device id (from the device picker). When provided, playback is directed to this device explicitly. When omitted or null, the active device is used (existing behaviour).\n",
+    ),
 });
 
 export const SpotifySaveResponse = zod
@@ -2521,446 +3246,24 @@ export const GetSpotifyPlayerResponse = zod
     "Snapshot of the listener's Spotify player (Connect API). `active` is false when Spotify reports no playback session anywhere.\n",
   );
 
-// ---- Restored hand-patched schemas (not modeled in openapi.yaml) ----
-export const CreateManualSpinResponse = zod.object({
-  logged: zod.boolean(),
-  mbid: zod.string().nullable(),
-  confidence: zod.string(),
-});
-
 /**
- * The trusted taste sources Lore rides beyond radio DJs. A DJ is one picker type; this lists the rest (and any DJ-typed pickers), so a client can browse who is doing the picking.
+ * Returns all Spotify Connect devices currently visible to the listener's account (`GET /v1/me/player/devices`). Used to populate the device picker so the listener can pin a target for one-at-a-time queuing. Restricted devices are excluded. Requires Premium and a connected Spotify account.
 
- * @summary All active pickers (labels, blogs, curators, collectors, events)
+ * @summary List available Spotify Connect devices for this session
  */
-
-export const DeleteRadioBrowserParams = zod.object({
-  id: zod.coerce.number(),
-});
-
-export const ReenrollRadioBrowserParams = zod.object({
-  id: zod.coerce.number(),
-});
-
-export const ReenrollRadioBrowserResponse = zod.object({
-  id: zod.number(),
-  icyStatus: zod.string(),
-  consecutiveErrors: zod.number(),
-  updatedAt: zod.string(),
-});
-
-export const EnrollNtsShowBody = zod
+export const GetSpotifyDevicesResponse = zod
   .object({
-    alias: zod.string().min(1).describe("The NTS show slug, e.g. 'floating-points'."),
-    name: zod.string().optional().describe("Display name override; defaults to the show title from NTS."),
-  })
-  .describe("Enrol an NTS resident show as a curator picker.");
-
-export const EnrollNtsShowHeader = zod.object({
-  "x-admin-token": zod.string().optional(),
-});
-
-export const EnrollNtsShowResponse = zod.object({
-  pickerId: zod.number(),
-  handle: zod.string(),
-  name: zod.string(),
-  alias: zod.string(),
-  homeUrl: zod.string(),
-});
-
-/**
- * Attach a paraphrased, timestamp-anchored claim to the recording resolved from a Song Exploder episode. Claims are admin-entered (never automated) because Song Exploder episode timestamps live in the audio, not the RSS feed text. The claim is stored as a track_claim with source attribution deep-linking to the episode, so every fact is one tap from its evidence. Token-guarded.
-
- * @summary Admin-only timestamp-anchored claim entry for a Song Exploder episode
- */
-
-export const EnrollRadioBrowserBody = zod.object({
-  uuid: zod
-    .string()
-    .min(1)
-    .describe("Radio Browser station UUID from radio-browser.info."),
-});
-
-export const EnrollRadioBrowserResponse = zod.object({
-  id: zod.number(),
-  radioBrowserUuid: zod.string(),
-  name: zod.string(),
-  streamUrl: zod.string(),
-  faviconUrl: zod.string().nullable(),
-  icyStatus: zod.string(),
-  enrolledAt: zod.string(),
-});
-
-export const ForYouQueryParams = zod.object({
-  genre: zod.string().optional(),
-  limit: zod.coerce.number().int().positive().max(100).optional(),
-});
-
-const ForYouOverlapProof = zod.object({
-  overlapping_artists: zod.array(zod.string()),
-  overlap_count: zod.number().int().nonnegative(),
-});
-
-const ForYouStationItem = zod.object({
-  slug: zod.string(),
-  name: zod.string(),
-  org: zod.string().nullish(),
-  streamUrl: zod.string(),
-  streamFormat: zod.string(),
-  homepageUrl: zod.string().nullish(),
-  logoUrl: zod.string().nullish(),
-  tags: zod.array(zod.string()),
-  popularity: zod.number().int().nonnegative(),
-  overlap: ForYouOverlapProof.optional(),
-});
-
-const ForYouBlogItem = zod.object({
-  handle: zod.string(),
-  name: zod.string(),
-  homeUrl: zod.string().nullish(),
-  tags: zod.array(zod.string()),
-  pick_count: zod.number().int().nonnegative(),
-  overlap: ForYouOverlapProof.optional(),
-});
-
-export const GetForYouBlogsResponse = zod.object({
-  genre_poles: zod.array(
-    zod.object({
-      genre: zod.string(),
-      items: zod.array(ForYouBlogItem),
-    }),
-  ),
-  cold_start: zod.boolean(),
-  prompt: zod.string().optional(),
-});
-
-export const GetForYouStationsResponse = zod.object({
-  genre_poles: zod.array(
-    zod.object({
-      genre: zod.string(),
-      items: zod.array(ForYouStationItem),
-    }),
-  ),
-  cold_start: zod.boolean(),
-  prompt: zod.string().optional(),
-});
-
-export const GetPickersDialResponse = zod.object({
-  items: zod.array(
-    zod.object({
-      picker: zod.object({
-        id: zod.number(),
-        pickerType: zod.string(),
-        name: zod.string(),
-        handle: zod.string(),
-        homeUrl: zod.string().nullable(),
-        trustTier: zod.number(),
-        description: zod.string().nullable(),
-      }),
-      run: zod.object({
-        runId: zod.number(),
-        title: zod.string().nullable(),
-        sourceUrl: zod.string(),
-        trackCount: zod.number(),
-        resolvedCount: zod.number(),
-        pickedAt: zod.string().nullable(),
-      }),
-      previewTracks: zod.array(
-        zod.object({
-          mbid: zod.string().nullable(),
-          title: zod.string(),
-          artist: zod.string(),
-          artworkUrl: zod.string().nullable(),
-        }),
-      ),
-    }),
-  ),
-});
-
-/**
- * The station's play history grouped into runs — one run per show per UTC broadcast day — newest first. Each run is a real, documented sequence a DJ actually aired; the `runId` is an opaque id for fetching the full tracklist via /archive/station-runs/{runId}.
-
- * @summary A station's documented runs (ghost radio browse surface)
- */
-
-export const GetRecordingsAvailabilityResponse = zod.object({
-  items: zod.array(
-    zod.object({
-      mbid: zod.string(),
-      hasLyrics: zod.boolean(),
-      hasSe: zod.boolean(),
-    }),
-  ),
-});
-
-/**
- * All show blocks (runs) for every station on a given UTC calendar day.
- * One call powers the show timeline on every station card.
- */
-
-export const GetRecordingSongExploderParams = zod.object({
-  mbid: zod.coerce.string().min(1),
-});
-
-export const SongExploderAnchor = zod.object({
-  id: zod.number(),
-  positionMs: zod.number().describe("Song offset in ms — when to surface this anchor during playback."),
-  text: zod.string().describe("Paraphrased topic label (never verbatim transcript)."),
-  sourceUrl: zod.string().describe("Timestamped deep-link into the episode (YouTube ?t= or episode page)."),
-  sourceLabel: zod.string().describe("Human-readable source credit, e.g. 'Song Exploder — Episode Title'."),
-});
-
-export const GetRecordingSongExploderResponse = zod.object({
-  episode: zod
-    .object({
-      id: zod.number(),
-      title: zod.string(),
-      episodeUrl: zod.string(),
-      youtubeUrl: zod.string().nullable(),
-      publishedAt: zod.string().nullable(),
-      resolvedAt: zod.string().nullable(),
-    })
-    .nullable()
-    .describe("The resolved Song Exploder episode for this recording, or null if none."),
-  anchors: zod.array(SongExploderAnchor).describe("Timeline anchors ordered by positionMs."),
-});
-
-// ---- Song Exploder — admin endpoints -------------------------------------
-
-export const GetSongExploderChaptersParams = zod.object({
-  episodeId: zod.coerce.number().int().positive(),
-});
-
-export const GetSongExploderChaptersResponse = zod.object({
-  chapters: zod.array(
-    zod.object({
-      positionMs: zod.number().int().nonnegative(),
-      text: zod.string(),
-    }),
-  ),
-});
-
-/**
- * Recent individual spins for every station on a given date — last 8 per station.
- * Powers the track-chip timeline on showless station cards (e.g. Radio Paradise).
- */
-
-export const GetStationsRecentSpinsQueryParams = zod.object({
-  date: zod.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-});
-
-export const GetStationsRecentSpinsResponse = zod.object({
-  items: zod.array(
-    zod.object({
-      stationSlug: zod.string(),
-      spins: zod.array(
-        zod.object({
-          mbid: zod.string().nullable(),
-          title: zod.string(),
-          artist: zod.string(),
-          playedAt: zod.string(),
-        }),
-      ),
-    }),
-  ),
-});
-
-/**
- * Batch metadata availability for a set of MBIDs.
- * Tells the caller which recordings have synced lyrics and/or a Song Exploder episode.
- * Pure DB lookup — no external calls.
- */
-
-export const GetStationsScheduleQueryParams = zod.object({
-  date: zod.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-});
-
-export const GetStationsScheduleResponse = zod.object({
-  items: zod.array(
-    zod.object({
-      stationSlug: zod.string(),
-      runs: zod.array(
-        zod.object({
-          runId: zod.number(),
-          show: zod
-            .union([
-              zod
-                .object({
-                  name: zod.string(),
-                  djName: zod.string().nullish(),
-                })
-                .describe("Show + DJ attribution for this run block."),
-              zod.null(),
-            ])
-            .optional(),
-          spinCount: zod.number(),
-          resolvedCount: zod.number(),
-          startedAt: zod.string().describe("ISO timestamp of first spin in this block."),
-          endedAt: zod.string().describe("ISO timestamp of last spin in this block."),
-        }),
-      ),
-    }),
-  ),
-});
-
-/**
- * One entry in a station's own published weekly programming grid, scraped
- * from its homepage/schedule page and LLM-extracted. Never fabricated.
- * (Hand-added alongside GetStationsScheduleResponse above — see that
- * comment for why this file has hand-patched exports outside orval.)
- */
-export const ScrapedShow = zod.object({
-  showName: zod.string(),
-  dayOfWeek: zod.enum(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]),
-  startTime: zod.string().describe('24h "HH:MM"'),
-  endTime: zod.string().describe('24h "HH:MM"'),
-  djName: zod.string().nullable(),
-});
-
-export const GetStationUpcomingScheduleParams = zod.object({
-  slug: zod.string().min(1),
-});
-
-export const GetStationUpcomingScheduleResponse = zod.object({
-  stationSlug: zod.string(),
-  shows: zod.array(ScrapedShow),
-  lastScrapedAt: zod.string().nullable(),
-});
-
-export const GetDjShowsParams = zod.object({
-  name: zod.string().min(1),
-});
-
-export const DjShowEntry = zod.object({
-  stationSlug: zod.string(),
-  stationName: zod.string(),
-  showName: zod.string(),
-  dayOfWeek: zod.enum(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]),
-  startTime: zod.string(),
-  endTime: zod.string(),
-});
-
-export const GetDjShowsResponse = zod.object({
-  djName: zod.string(),
-  shows: zod.array(DjShowEntry),
-});
-
-export const IcecastReportBody = zod.object({
-  rawArtist: zod.string().optional(),
-  rawTitle: zod.string().min(1),
-});
-
-export const IcecastReportResultBody = zod.object({
-  logged: zod.boolean(),
-  mbid: zod.string().nullable(),
-  confidence: zod.enum(["recording_id", "isrc", "text", "spotify", "unresolved"]).optional(),
-});
-
-export const ListRadioBrowserStationsResponse = zod.object({
-  stations: zod.array(
-    zod.object({
-      id: zod.number(),
-      radioBrowserUuid: zod.string(),
-      name: zod.string(),
-      streamUrl: zod.string(),
-      faviconUrl: zod.string().nullable(),
-      icyStatus: zod.string(),
-      lastStreamTitle: zod.string().nullable(),
-      lastSuccessAt: zod.string().nullable(),
-      consecutiveErrors: zod.number(),
-      enrolledAt: zod.string(),
-    }),
-  ),
-});
-
-export const ListSongExploderEpisodesResponse = zod.object({
-  episodes: zod.array(
-    zod.object({
-      id: zod.number(),
-      title: zod.string(),
-      episodeUrl: zod.string(),
-      youtubeUrl: zod.string().nullable(),
-      mbid: zod.string().nullable(),
-      resolvedAt: zod.string().nullable(),
-      publishedAt: zod.string().nullable(),
-      anchorCount: zod.number(),
-    }),
-  ),
-});
-
-export const PatchSongExploderEpisodeBody = zod.object({
-  youtubeUrl: zod.string().url().nullable(),
-});
-
-export const PatchSongExploderEpisodeParams = zod.object({
-  episodeId: zod.coerce.number().int().positive(),
-});
-
-export const PatchSongExploderEpisodeResponse = zod.object({
-  id: zod.number(),
-  youtubeUrl: zod.string().nullable(),
-});
-
-export const SeedBlogPickersBody = zod
-  .object({
-    urls: zod.array(zod.string().url()).min(1),
-  })
-  .describe("Seed blog pickers from home page URLs via feed auto-discovery.");
-
-export const SeedBlogPickersHeader = zod.object({
-  "x-admin-token": zod.string().optional(),
-});
-
-export const SeedBlogPickersResponse = zod.object({
-  results: zod.array(
-    zod.object({
-      url: zod.string(),
-      feedUrl: zod.string().nullable(),
-      handle: zod.string().nullable(),
-      status: zod.enum(["discovered", "already_exists", "no_feed", "error"]),
-      error: zod.string().optional(),
-    }),
-  ),
-});
-
-// ---- rolling-genres (schedule page live chip view) ----
-// One entry per recent spin (up to 3, newest first) per station slug.
-// Discovery tier is derived inline from recordings.release_year.
-export const GetStationsRollingGenresResponse = zod.object({
-  stations: zod.record(
-    zod.array(
-      zod.object({
-        genre: zod.string(),
-        discoveryLabel: zod
-          .enum(["new-music", "recent", "catalog"])
-          .nullable(),
-        playedAt: zod.string(),
-      }),
+    devices: zod.array(
+      zod
+        .object({
+          id: zod.string(),
+          name: zod.string(),
+          type: zod.string(),
+          isActive: zod.boolean(),
+        })
+        .describe(
+          "A Spotify Connect device visible to the listener's account. `type` follows Spotify's own taxonomy: Computer, Smartphone, Speaker, TV, etc. Restricted devices are never included in the list.\n",
+        ),
     ),
-  ),
-});
-
-
-// List provenance admin schemas (hand-patched, not generated by orval).
-export const CreateListSourceBody = zod.object({
-  kind: zod.enum(["publication", "selector", "station"]),
-  name: zod.string().min(1).max(200),
-  homepageUrl: zod.string().url().optional(),
-  pickerId: zod.number().int().positive().optional(),
-  stationId: zod.number().int().positive().optional(),
-});
-
-export const ScrapeListBody = zod.object({
-  sourceId: zod.number().int().positive(),
-  title: zod.string().min(1).max(300),
-  year: zod.number().int().min(1900).max(2100).optional(),
-  kind: zod.enum(["year_end", "mid_year", "decade", "all_time", "genre", "custom"]),
-  isRanked: zod.boolean().default(true),
-  listLength: zod.number().int().positive().optional(),
-  url: zod.string().url(),
-});
-
-export const ConfirmListEntryBody = zod.object({
-  confirmed: zod.boolean(),
-  releaseGroupMbid: zod.string().optional(),
-});
+  })
+  .describe("Available Spotify Connect devices for this session.");

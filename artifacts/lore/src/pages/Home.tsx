@@ -370,7 +370,7 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
   // Historical pulse — fetched once for a specific date; no polling.
   const { data: datePulse } = useListStationsAtDate(selectedDate ?? "", {
     query: {
-      queryKey: getListStationsAtDateQueryKey(selectedDate ?? ""),
+      queryKey: getListStationsAtDateQueryKey(selectedDate ?? "") as readonly unknown[],
       enabled: !!selectedDate,
       staleTime: 5 * 60 * 1000,
     },
@@ -379,9 +379,9 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
   const pulse = selectedDate ? datePulse : livePulse;
 
   // Show timeline — all blocks for every station on the schedule date.
-  const { data: scheduleData } = useGetStationsSchedule(scheduleDate, {
+  const { data: scheduleData } = useGetStationsSchedule({ date: scheduleDate }, {
     query: {
-      queryKey: getGetStationsScheduleQueryKey(scheduleDate),
+      queryKey: getGetStationsScheduleQueryKey({ date: scheduleDate }),
       staleTime: selectedDate ? 5 * 60 * 1000 : 60_000,
       refetchInterval: selectedDate ? false : 2 * 60 * 1000,
     },
@@ -395,9 +395,9 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
   }, [scheduleData]);
 
   // Recent individual spins — powers the track-chip timeline on showless cards.
-  const { data: recentSpinsData } = useGetStationsRecentSpins(scheduleDate, {
+  const { data: recentSpinsData } = useGetStationsRecentSpins({ date: scheduleDate }, {
     query: {
-      queryKey: getGetStationsRecentSpinsQueryKey(scheduleDate),
+      queryKey: getGetStationsRecentSpinsQueryKey({ date: scheduleDate }),
       staleTime: selectedDate ? 5 * 60 * 1000 : 60_000,
       refetchInterval: selectedDate ? false : 2 * 60 * 1000,
     },
@@ -611,9 +611,9 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
   }, [pulse, pickedData]);
 
   // Metadata availability — which current tracks have lyrics / SE episodes.
-  const { data: availabilityData } = useGetRecordingsAvailability(pulseMbids, {
+  const { data: availabilityData } = useGetRecordingsAvailability({ mbids: pulseMbids }, {
     query: {
-      queryKey: getGetRecordingsAvailabilityQueryKey(pulseMbids),
+      queryKey: getGetRecordingsAvailabilityQueryKey({ mbids: pulseMbids }),
       enabled: pulseMbids.length > 0,
       staleTime: 60_000,
     },

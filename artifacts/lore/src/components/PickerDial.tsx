@@ -43,11 +43,13 @@ function PickerCard({ item }: { item: PickerDialItem }) {
   const { ride } = usePlayer();
   const [loading, setLoading] = useState(false);
 
+  if (!item.run) return null;
+
   const handlePlay = async (e: React.MouseEvent) => {
     e.stopPropagation();
     setLoading(true);
     try {
-      const data = await getPickerRun(item.run.runId);
+      const data = await getPickerRun(item.run!.runId);
       const seeds = data.tracks
         .filter((t) => t.recording != null)
         .map((t) => ({
@@ -60,7 +62,7 @@ function PickerCard({ item }: { item: PickerDialItem }) {
       if (seeds.length > 0) {
         ride.startReplay(
           seeds,
-          `${item.picker.name}${item.run.title ? ` — ${item.run.title}` : ""}`,
+          `${item.picker.name}${item.run!.title ? ` — ${item.run!.title}` : ""}`,
           { timeOrientation: "curated" },
         );
       }

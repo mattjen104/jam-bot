@@ -3,7 +3,7 @@ import type {
   NowPlaying,
   PickedLookupItem,
   RecordingAvailabilityItem,
-  ScrapedShowItem,
+  ScrapedShow,
   Station,
   StationRecentSpin,
   StationScheduleRun,
