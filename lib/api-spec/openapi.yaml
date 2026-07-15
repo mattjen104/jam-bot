@@ -382,6 +382,31 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /recordings/{mbid}/list-provenance:
+    get:
+      operationId: getRecordingListProvenance
+      tags: [recordings]
+      summary: Publication list appearances for a recording
+      description: >
+        Returns year-end / all-time list entries from music publications that
+        feature the primary album this recording appears on. Ordered by rank
+        (ascending), then by list year (descending). Only confirmed or
+        exact-confidence entries are returned. Returns an empty array when no
+        list provenance has been scraped yet.
+      parameters:
+        - name: mbid
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: List provenance items (may be empty)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecordingListProvenanceResponse"
   /recordings/{mbid}/segues:
     get:
       operationId: getRecordingSegues
@@ -4161,6 +4186,65 @@ components:
       required:
         - genre
         - playedAt
+    ListProvenanceItem:
+      type: object
+      description: A single publication list entry that features this recording's album.
+      properties:
+        listId:
+          type: integer
+        listTitle:
+          type: string
+          description: Name of the list (e.g. "50 Best Albums of 2025").
+        listYear:
+          type: ["integer", "null"]
+          description: Calendar year of the list (null for all-time lists).
+        listUrl:
+          type: string
+          description: URL to the list page.
+        listKind:
+          type: string
+          description: "year_end | mid_year | decade | all_time | genre | custom"
+        isRanked:
+          type: boolean
+        sourceName:
+          type: string
+          description: Publication / selector / station name (e.g. "The Quietus").
+        rank:
+          type: ["integer", "null"]
+          description: Position in the list, null for unranked appearances.
+        listLength:
+          type: ["integer", "null"]
+          description: Total list length (e.g. 50), null when unknown.
+        releaseGroupMbid:
+          type: string
+        releaseGroupTitle:
+          type: ["string", "null"]
+          description: Cached album title from the bridge table.
+        releaseYear:
+          type: ["integer", "null"]
+          description: Earliest release year for the album.
+      required:
+        - listId
+        - listTitle
+        - listYear
+        - listUrl
+        - listKind
+        - isRanked
+        - sourceName
+        - rank
+        - listLength
+        - releaseGroupMbid
+        - releaseGroupTitle
+        - releaseYear
+    RecordingListProvenanceResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ListProvenanceItem"
+      required:
+        - items
     StationsRollingGenresResult:
       description: >
         Map from station slug to an array of up to 3 recent genre chips, newest

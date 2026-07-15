@@ -5,6 +5,30 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface ListProvenanceItem {
+  listId: number;
+  listTitle: string;
+  /** @nullable */
+  listYear: number | null;
+  listUrl: string;
+  listKind: string;
+  isRanked: boolean;
+  sourceName: string;
+  /** @nullable */
+  rank: number | null;
+  /** @nullable */
+  listLength: number | null;
+  releaseGroupMbid: string;
+  /** @nullable */
+  releaseGroupTitle: string | null;
+  /** @nullable */
+  releaseYear: number | null;
+}
+
+export interface RecordingListProvenanceResponse {
+  items: ListProvenanceItem[];
+}
+
 export interface HealthStatus {
   status: string;
 }

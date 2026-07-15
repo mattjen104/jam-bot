@@ -39,6 +39,9 @@ import {
   DeleteRadioBrowserParams,
   ReenrollRadioBrowserParams,
   ReenrollRadioBrowserResponse,
+  CreateListSourceBody,
+  ScrapeListBody,
+  ConfirmListEntryBody,
 } from "@workspace/api-zod";
 import {
   db,
@@ -50,8 +53,14 @@ import {
   geniusAnnotationDraftsTable,
   songExploderEpisodesTable,
   radioBrowserStationsTable,
+  listSourcesTable,
+  listsTable,
+  listEntriesTable,
+  recordingReleaseGroupsTable,
 } from "@workspace/db";
 import { eq, and, asc, desc, sql, count } from "drizzle-orm";
+import { wireListExtractor } from "../../lore/list-wire.js";
+import { scrapeAndPopulateList, enrichRecordingReleaseGroups } from "../../lore/list-scraper.js";
 import { ingestManualSpin } from "../../lore/resolve.js";
 import { fetchRadioBrowserStation, slugify as rbSlugify } from "../../lore/radio-browser.js";
 import { enrollStationPoller, unenrollStationPoller } from "../../lore/poller.js";
@@ -1060,6 +1069,190 @@ router.delete("/admin/radio-browser/stations/:id", h(async (req, res) => {
     .where(eq(radioBrowserStationsTable.id, params.data.id));
 
   return res.status(204).send();
+}));
+
+// ---------------------------------------------------------------------------
+// List provenance admin endpoints
+// ---------------------------------------------------------------------------
+
+// POST /api/admin/list-sources — create a list source (publication, selector, station).
+router.post("/admin/list-sources", h(async (req, res) => {
+  const parsed = CreateListSourceBody.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid list source", details: parsed.error.flatten() });
+  }
+  const b = parsed.data;
+  const [row] = await db
+    .insert(listSourcesTable)
+    .values({
+      kind: b.kind,
+      name: b.name,
+      homepageUrl: b.homepageUrl ?? null,
+      pickerId: b.pickerId ?? null,
+      stationId: b.stationId ?? null,
+    })
+    .returning();
+  if (!row) return res.status(500).json({ error: "Insert failed" });
+  return res.status(201).json({ id: row.id, kind: row.kind, name: row.name });
+}));
+
+// GET /api/admin/list-sources — list all sources.
+router.get("/admin/list-sources", h(async (_req, res) => {
+  const rows = await db
+    .select()
+    .from(listSourcesTable)
+    .orderBy(asc(listSourcesTable.name));
+  return res.json({ sources: rows });
+}));
+
+// POST /api/admin/lists/scrape — scrape a URL and create list + entries.
+router.post("/admin/lists/scrape", h(async (req, res) => {
+  const parsed = ScrapeListBody.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid list body", details: parsed.error.flatten() });
+  }
+  const b = parsed.data;
+
+  const contact = process.env["MUSICBRAINZ_CONTACT"]?.trim();
+  if (!contact) {
+    return res.status(503).json({ error: "MUSICBRAINZ_CONTACT not configured" });
+  }
+
+  const ready = await wireListExtractor();
+  if (!ready) {
+    return res.status(503).json({ error: "Anthropic AI integration unavailable for list extraction" });
+  }
+
+  // Upsert list row (idempotent on re-scrape of same list).
+  const [listRow] = await db
+    .insert(listsTable)
+    .values({
+      sourceId: b.sourceId,
+      title: b.title,
+      year: b.year ?? null,
+      kind: b.kind,
+      isRanked: b.isRanked,
+      listLength: b.listLength ?? null,
+      url: b.url,
+      retrievedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: [listsTable.sourceId, listsTable.title, listsTable.year],
+      set: { url: b.url, retrievedAt: new Date() },
+    })
+    .returning();
+  if (!listRow) return res.status(500).json({ error: "Failed to upsert list" });
+
+  // Run async scrape — returns result summary, entries already inserted.
+  const result = await scrapeAndPopulateList(listRow.id, b.url, contact);
+
+  return res.status(200).json({
+    listId: listRow.id,
+    ...result,
+  });
+}));
+
+// GET /api/admin/lists/:listId/entries — list entries for a given list.
+// Optional query: ?filter=pending (only fuzzy/unresolved + unconfirmed)
+router.get("/admin/lists/:listId/entries", h(async (req, res) => {
+  const listId = parseInt(String(req.params["listId"] ?? ""), 10);
+  if (!listId) return res.status(400).json({ error: "Invalid listId" });
+  const filter = String(req.query["filter"] ?? "");
+
+  let query = db
+    .select()
+    .from(listEntriesTable)
+    .where(eq(listEntriesTable.listId, listId));
+
+  if (filter === "pending") {
+    const rows = await db
+      .select()
+      .from(listEntriesTable)
+      .where(
+        and(
+          eq(listEntriesTable.listId, listId),
+          sql`(${listEntriesTable.confidence} != 'exact' OR ${listEntriesTable.confirmed} = false)`,
+        ),
+      )
+      .orderBy(asc(listEntriesTable.rank));
+    return res.json({ entries: rows });
+  }
+
+  const rows = await (query as typeof query).orderBy(asc(listEntriesTable.rank));
+  return res.json({ entries: rows });
+}));
+
+// PATCH /api/admin/lists/:listId/entries/:entryId — confirm or correct an entry.
+router.patch("/admin/lists/:listId/entries/:entryId", h(async (req, res) => {
+  const listId = parseInt(String(req.params["listId"] ?? ""), 10);
+  const entryId = parseInt(String(req.params["entryId"] ?? ""), 10);
+  if (!listId || !entryId) return res.status(400).json({ error: "Invalid id" });
+
+  const parsed = ConfirmListEntryBody.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid body" });
+  }
+
+  const updates: Partial<typeof listEntriesTable.$inferInsert> = {
+    confirmed: parsed.data.confirmed,
+  };
+  if (parsed.data.releaseGroupMbid) {
+    updates.releaseGroupMbid = parsed.data.releaseGroupMbid;
+    updates.confidence = "exact";
+  }
+
+  const [updated] = await db
+    .update(listEntriesTable)
+    .set(updates)
+    .where(
+      and(eq(listEntriesTable.id, entryId), eq(listEntriesTable.listId, listId)),
+    )
+    .returning();
+
+  if (!updated) return res.status(404).json({ error: "Entry not found" });
+  return res.json(updated);
+}));
+
+// POST /api/admin/recordings/enrich-release-groups — fetch and cache release
+// groups for a batch of recording MBIDs. Populates the recording_release_groups
+// bridge table so the provenance endpoint can join through it.
+// Rate-limited: 1.1s MB sleep per recording. Not for large batches.
+router.post("/admin/recordings/enrich-release-groups", h(async (req, res) => {
+  const contact = process.env["MUSICBRAINZ_CONTACT"]?.trim();
+  if (!contact) {
+    return res.status(503).json({ error: "MUSICBRAINZ_CONTACT not configured" });
+  }
+
+  const body = req.body as { mbids?: unknown };
+  if (!Array.isArray(body.mbids) || body.mbids.length === 0) {
+    return res.status(400).json({ error: "mbids must be a non-empty array" });
+  }
+  const mbids: string[] = body.mbids
+    .map((m: unknown) => (typeof m === "string" ? m.trim() : ""))
+    .filter(Boolean)
+    .slice(0, 50);
+
+  const results: Array<{ mbid: string; inserted: number; primaryMbid: string | null }> = [];
+  for (const mbid of mbids) {
+    const r = await enrichRecordingReleaseGroups(mbid, contact);
+    results.push({ mbid: r.recordingMbid, inserted: r.inserted, primaryMbid: r.primaryMbid });
+  }
+
+  return res.json({ enriched: results.length, results });
+}));
+
+// GET /api/admin/recordings/:mbid/release-groups — list cached release groups
+// for a specific recording (diagnostic — not needed for UI).
+router.get("/admin/recordings/:mbid/release-groups", h(async (req, res) => {
+  const mbid = String(req.params["mbid"] ?? "");
+  if (!mbid) return res.status(400).json({ error: "Invalid MBID" });
+
+  const rows = await db
+    .select()
+    .from(recordingReleaseGroupsTable)
+    .where(eq(recordingReleaseGroupsTable.recordingMbid, mbid));
+
+  return res.json({ mbid, releaseGroups: rows });
 }));
 
 // POST /api/admin/rym-lists — admin-only RateYourMusic link-out picker.

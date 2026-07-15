@@ -1172,3 +1172,148 @@ export type RadioBrowserStationRow =
   typeof radioBrowserStationsTable.$inferSelect;
 export type InsertRadioBrowserStationRow =
   typeof radioBrowserStationsTable.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// List provenance layer
+// ---------------------------------------------------------------------------
+
+/**
+ * Bridge: recording MBID → release group MBID(s).
+ *
+ * A recording appears on many releases (album, reissue, compilation, live).
+ * `is_primary` flags the canonical studio album: primary-type = Album, no
+ * secondary types, earliest first-release-date wins ties. Fetched from MB on
+ * enrichment and cached forever (release group membership rarely changes).
+ *
+ * Carries the release group's title and year for display without an extra
+ * MB lookup at render time.
+ */
+export const recordingReleaseGroupsTable = pgTable(
+  "recording_release_groups",
+  {
+    id: serial("id").primaryKey(),
+    recordingMbid: text("recording_mbid")
+      .notNull()
+      .references(() => recordingsTable.mbid, { onDelete: "cascade" }),
+    releaseGroupMbid: text("release_group_mbid").notNull(),
+    isPrimary: boolean("is_primary").notNull().default(false),
+    /** Cached release group title for display (e.g. "OK Computer"). */
+    title: text("title"),
+    /** MB primary type (e.g. "Album", "EP", "Single"). */
+    primaryType: text("primary_type"),
+    /** Earliest first-release year for this release group. */
+    releaseYear: integer("release_year"),
+    fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("rrg_recording_rg_unique_idx").on(
+      t.recordingMbid,
+      t.releaseGroupMbid,
+    ),
+    index("rrg_recording_primary_idx").on(t.recordingMbid, t.isPrimary),
+  ],
+);
+
+export type RecordingReleaseGroup =
+  typeof recordingReleaseGroupsTable.$inferSelect;
+export type InsertRecordingReleaseGroup =
+  typeof recordingReleaseGroupsTable.$inferInsert;
+
+/**
+ * Who authors lists. Publications (The Wire, Pitchfork) AND selectors/stations
+ * (a picker's year-end run) share one table — a station's year-end list is a
+ * first-class source.
+ *
+ * `picker_id` and `station_id` are both nullable: publications set neither.
+ */
+export const listSourcesTable = pgTable("list_sources", {
+  id: serial("id").primaryKey(),
+  /** "publication" | "selector" | "station" */
+  kind: text("kind").notNull(),
+  name: text("name").notNull(),
+  pickerId: integer("picker_id").references(() => pickersTable.id),
+  stationId: integer("station_id").references(() => stationsTable.id),
+  homepageUrl: text("homepage_url"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type ListSource = typeof listSourcesTable.$inferSelect;
+export type InsertListSource = typeof listSourcesTable.$inferInsert;
+
+/**
+ * A specific published list (e.g. "The 50 Best Albums of 2025", The Wire).
+ *
+ * `is_ranked` + `list_length` are stored raw and normalized at render time —
+ * we never bake a combined score into the DB. Unranked list appearances render
+ * as "listed by" rather than "#—".
+ *
+ * `url` is a pointer; we never store editorial prose here.
+ */
+export const listsTable = pgTable(
+  "lists",
+  {
+    id: serial("id").primaryKey(),
+    sourceId: integer("source_id")
+      .notNull()
+      .references(() => listSourcesTable.id),
+    title: text("title").notNull(),
+    /** Null for all-time lists. */
+    year: integer("year"),
+    /** "year_end" | "mid_year" | "decade" | "all_time" | "genre" | "custom" */
+    kind: text("kind").notNull(),
+    isRanked: boolean("is_ranked").notNull().default(true),
+    listLength: integer("list_length"),
+    /** Pointer to the list page — we never cache the editorial text. */
+    url: text("url").notNull(),
+    retrievedAt: timestamp("retrieved_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("lists_source_title_year_idx").on(
+      t.sourceId,
+      t.title,
+      t.year,
+    ),
+  ],
+);
+
+export type List = typeof listsTable.$inferSelect;
+export type InsertList = typeof listsTable.$inferInsert;
+
+/**
+ * Album-level entries within a list.
+ *
+ * Keyed on `(list_id, release_group_mbid)`. `release_group_mbid` may be an
+ * empty string for `confidence = "unresolved"` entries awaiting human confirm
+ * — in practice these are stored with a generated placeholder prefix so the
+ * unique constraint still holds.
+ *
+ * `raw_artist` / `raw_album` preserve the scraped strings for the confirm UI.
+ * `confirmed` becomes true once an admin has reviewed a fuzzy/unresolved match.
+ * Only `confidence = "exact"` OR `confirmed = true` entries participate in
+ * provenance queries.
+ */
+export const listEntriesTable = pgTable(
+  "list_entries",
+  {
+    id: serial("id").primaryKey(),
+    listId: integer("list_id")
+      .notNull()
+      .references(() => listsTable.id, { onDelete: "cascade" }),
+    releaseGroupMbid: text("release_group_mbid").notNull(),
+    rank: integer("rank"),
+    blurbUrl: text("blurb_url"),
+    /** Raw strings from the scrape — for display in the confirm UI. */
+    rawArtist: text("raw_artist"),
+    rawAlbum: text("raw_album"),
+    /** "exact" | "fuzzy" | "unresolved" */
+    confidence: text("confidence").notNull().default("exact"),
+    confirmed: boolean("confirmed").notNull().default(false),
+  },
+  (t) => [
+    uniqueIndex("list_entries_list_rg_idx").on(t.listId, t.releaseGroupMbid),
+    index("list_entries_rg_idx").on(t.releaseGroupMbid),
+  ],
+);
+
+export type ListEntry = typeof listEntriesTable.$inferSelect;
+export type InsertListEntry = typeof listEntriesTable.$inferInsert;

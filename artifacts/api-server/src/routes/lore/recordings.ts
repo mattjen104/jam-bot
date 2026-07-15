@@ -19,6 +19,8 @@ import {
   GetRecordingSongExploderParams,
   GetRecordingSongExploderResponse,
   GetRecordingsAvailabilityResponse,
+  GetRecordingListProvenanceParams,
+  GetRecordingListProvenanceResponse,
 } from "@workspace/api-zod";
 import {
   db,
@@ -28,6 +30,10 @@ import {
   trackClaimsTable,
   songExploderEpisodesTable,
   lyricLinesTable,
+  recordingReleaseGroupsTable,
+  listEntriesTable,
+  listsTable,
+  listSourcesTable,
 } from "@workspace/db";
 import { eq, and, asc, sql, inArray, gte, isNotNull } from "drizzle-orm";
 import { nextRideable, spinsForRecording } from "../../lore/segue.js";
@@ -510,6 +516,74 @@ router.get("/recordings/:mbid/song-exploder", h(async (req, res) => {
         resolvedAt: episode.resolvedAt?.toISOString() ?? null,
       },
       anchors,
+    }),
+  );
+}));
+
+// GET /api/recordings/:mbid/list-provenance — publication list entries that
+// feature any release group this recording belongs to. Only exact-confidence
+// or admin-confirmed entries are surfaced.
+router.get("/recordings/:mbid/list-provenance", h(async (req, res) => {
+  const parsed = GetRecordingListProvenanceParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid recording MBID" });
+  }
+  const { mbid } = parsed.data;
+
+  // Join: recording_release_groups → list_entries → lists → list_sources
+  // Only exact or confirmed entries participate in provenance display.
+  const rows = await db
+    .select({
+      listId: listsTable.id,
+      listTitle: listsTable.title,
+      listYear: listsTable.year,
+      listUrl: listsTable.url,
+      listKind: listsTable.kind,
+      isRanked: listsTable.isRanked,
+      listLength: listsTable.listLength,
+      sourceName: listSourcesTable.name,
+      rank: listEntriesTable.rank,
+      releaseGroupMbid: listEntriesTable.releaseGroupMbid,
+      releaseGroupTitle: recordingReleaseGroupsTable.title,
+      releaseYear: recordingReleaseGroupsTable.releaseYear,
+    })
+    .from(listEntriesTable)
+    .innerJoin(listsTable, eq(listsTable.id, listEntriesTable.listId))
+    .innerJoin(listSourcesTable, eq(listSourcesTable.id, listsTable.sourceId))
+    .innerJoin(
+      recordingReleaseGroupsTable,
+      and(
+        eq(
+          recordingReleaseGroupsTable.releaseGroupMbid,
+          listEntriesTable.releaseGroupMbid,
+        ),
+        eq(recordingReleaseGroupsTable.recordingMbid, mbid),
+      ),
+    )
+    .where(
+      sql`(${listEntriesTable.confidence} = 'exact' OR ${listEntriesTable.confirmed} = true)`,
+    )
+    .orderBy(
+      sql`${listEntriesTable.rank} asc nulls last`,
+      sql`${listsTable.year} desc nulls last`,
+    );
+
+  return res.json(
+    GetRecordingListProvenanceResponse.parse({
+      items: rows.map((r) => ({
+        listId: r.listId,
+        listTitle: r.listTitle,
+        listYear: r.listYear ?? null,
+        listUrl: r.listUrl,
+        listKind: r.listKind,
+        isRanked: r.isRanked,
+        listLength: r.listLength ?? null,
+        sourceName: r.sourceName,
+        rank: r.rank ?? null,
+        releaseGroupMbid: r.releaseGroupMbid,
+        releaseGroupTitle: r.releaseGroupTitle ?? null,
+        releaseYear: r.releaseYear ?? null,
+      })),
     }),
   );
 }));

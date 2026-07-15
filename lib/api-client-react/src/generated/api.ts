@@ -98,6 +98,7 @@ import type {
   UpsertPickerRequest,
   WikipediaDraftClaim,
   WikipediaDraftList,
+  RecordingListProvenanceResponse,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -1335,6 +1336,86 @@ export function useGetRecordingSegues<
     queryKey: QueryKey;
   };
 
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getGetRecordingListProvenanceUrl = (mbid: string) => {
+  return `/api/recordings/${mbid}/list-provenance`;
+};
+
+export const getRecordingListProvenance = async (
+  mbid: string,
+  options?: RequestInit,
+): Promise<RecordingListProvenanceResponse> => {
+  return customFetch<RecordingListProvenanceResponse>(
+    getGetRecordingListProvenanceUrl(mbid),
+    { ...options, method: "GET" },
+  );
+};
+
+export const getGetRecordingListProvenanceQueryKey = (mbid: string) => {
+  return [`/api/recordings/${mbid}/list-provenance`] as const;
+};
+
+export const getGetRecordingListProvenanceQueryOptions = <
+  TData = Awaited<ReturnType<typeof getRecordingListProvenance>>,
+  TError = ErrorType<unknown>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecordingListProvenance>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey =
+    queryOptions?.queryKey ?? getGetRecordingListProvenanceQueryKey(mbid);
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getRecordingListProvenance>>
+  > = ({ signal }) =>
+    getRecordingListProvenance(mbid, { signal, ...requestOptions });
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!mbid,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getRecordingListProvenance>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetRecordingListProvenanceQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getRecordingListProvenance>>
+>;
+export type GetRecordingListProvenanceQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Publication list appearances for a recording
+ */
+export function useGetRecordingListProvenance<
+  TData = Awaited<ReturnType<typeof getRecordingListProvenance>>,
+  TError = ErrorType<unknown>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecordingListProvenance>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetRecordingListProvenanceQueryOptions(mbid, options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
   return { ...query, queryKey: queryOptions.queryKey };
 }
 
