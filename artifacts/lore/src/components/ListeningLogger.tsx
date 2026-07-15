@@ -7,6 +7,7 @@ import {
 import { usePlayer } from "../player/PlayerProvider";
 import { appendJournal } from "../lib/local";
 import { useIcecastFallback } from "../hooks/useIcecastFallback";
+import { useSpotifyHistorySync } from "../hooks/useSpotifyHistorySync";
 
 // How long to wait before attempting an ACR fingerprint when neither the
 // server poller nor Icecast metadata have identified the playing track.
@@ -22,8 +23,10 @@ const ACR_POLL_INTERVAL_MS = 2 * 60_000;
  * never doubles the traffic; it only keeps the poll alive off the dial page.
  */
 export function ListeningLogger() {
-  const { radio, ride } = usePlayer();
+  const { radio, ride, spotify } = usePlayer();
   const queryClient = useQueryClient();
+
+  useSpotifyHistorySync(spotify.connected);
 
   // --- Live radio: log the station's now-playing while the stream sounds ---
   const station = radio.station;

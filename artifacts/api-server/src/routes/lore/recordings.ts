@@ -104,6 +104,23 @@ router.get("/recordings/availability", h(async (req, res) => {
   return res.json(GetRecordingsAvailabilityResponse.parse({ items }));
 }));
 
+// GET /api/recordings/by-isrc/:isrc — lightweight ISRC → MBID lookup for
+// client-side journal sync. Returns {mbid, artistMbid} or 404.
+// NOTE: must appear before /recordings/:mbid so Express doesn't swallow it.
+router.get("/recordings/by-isrc/:isrc", h(async (req, res) => {
+  const isrc = typeof req.params.isrc === "string" ? req.params.isrc.trim() : "";
+  if (!isrc) return res.status(400).json({ error: "isrc is required" });
+
+  const [rec] = await db
+    .select({ mbid: recordingsTable.mbid, artistMbid: recordingsTable.artistMbid })
+    .from(recordingsTable)
+    .where(eq(recordingsTable.isrc, isrc))
+    .limit(1);
+
+  if (!rec) return res.status(404).json({ error: "Not found" });
+  return res.json({ mbid: rec.mbid, artistMbid: rec.artistMbid ?? null });
+}));
+
 // GET /api/recordings/:mbid — recording metadata (song-page header).
 router.get("/recordings/:mbid", h(async (req, res) => {
   const parsed = GetRecordingParams.safeParse(req.params);

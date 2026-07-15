@@ -21,6 +21,7 @@ import {
   isTrackSaved,
   trackIdFromUri,
   SpotifyLibraryError,
+  fetchRecentlyPlayed,
 } from "../../lore/spotifyConnect.js";
 import { upsertLoreUserForSid } from "../../lore/userSession.js";
 
@@ -309,6 +310,34 @@ router.get("/spotify/player", async (req: Request, res: Response) => {
   if (!conn) return;
   const state = await getPlayerState(conn.accessToken);
   res.json(state);
+});
+
+/**
+ * GET /spotify/recently-played
+ *
+ * Proxy for Spotify's /v1/me/player/recently-played. Returns up to 50 tracks,
+ * optionally filtered to tracks played after `after` (Unix ms timestamp).
+ *
+ * Responds 204 (empty body) when the token predates the
+ * `user-read-recently-played` scope so callers can silently no-op.
+ */
+router.get("/spotify/recently-played", async (req: Request, res: Response) => {
+  const conn = await requireConnection(req, res);
+  if (!conn) return;
+
+  const afterParam =
+    typeof req.query.after === "string" ? Number(req.query.after) : undefined;
+  const after =
+    afterParam !== undefined && Number.isFinite(afterParam)
+      ? afterParam
+      : undefined;
+
+  const tracks = await fetchRecentlyPlayed(conn.accessToken, after);
+  if (tracks === null) {
+    res.status(204).end();
+    return;
+  }
+  res.json({ tracks });
 });
 
 export default router;

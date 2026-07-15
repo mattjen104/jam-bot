@@ -16,6 +16,7 @@ import {
   BookOpen,
   Disc3,
   Ghost,
+  Music2,
   Radio,
   Trash2,
   UserCheck,
@@ -379,6 +380,7 @@ function InflowRow() {
 function SourceIcon({ kind }: { kind: JournalEntry["kind"] }) {
   if (kind === "radio") return <Radio className="h-3 w-3 shrink-0 text-primary" />;
   if (kind === "replay") return <Ghost className="h-3 w-3 shrink-0 text-primary" />;
+  if (kind === "spotify") return <Music2 className="h-3 w-3 shrink-0 text-primary" />;
   return <Waypoints className="h-3 w-3 shrink-0 text-primary" />;
 }
 
@@ -395,6 +397,9 @@ function SourceLabel({ entry }: { entry: JournalEntry }) {
   }
   if (entry.kind === "replay") {
     return <span className="truncate">{entry.context ?? "Replay"}</span>;
+  }
+  if (entry.kind === "spotify") {
+    return <span className="truncate">Played in Spotify</span>;
   }
   return <span className="truncate">Segue trail</span>;
 }

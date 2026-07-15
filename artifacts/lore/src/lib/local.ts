@@ -11,8 +11,9 @@ import { useSyncExternalStore } from "react";
 export interface JournalEntry {
   /** ISO timestamp of when it was heard (station's playedAt when known). */
   at: string;
-  /** How it was heard: live radio, a segue trail, or a ghost-radio replay. */
-  kind: "radio" | "trail" | "replay";
+  /** How it was heard: live radio, a segue trail, a ghost-radio replay, or
+   *  a track played directly in Spotify (synced from listening history). */
+  kind: "radio" | "trail" | "replay" | "spotify";
   mbid: string | null;
   /** MusicBrainz artist MBID, when resolved. Powers /artist/:mbid links. */
   artistMbid?: string | null;
@@ -146,6 +147,75 @@ export function appendJournal(entry: JournalEntry): void {
     }
   }
   journalStore.write([entry, ...entries].slice(0, JOURNAL_CAP));
+}
+
+/**
+ * Check whether any entry in the full journal matches the given track identity
+ * within the 30-minute dedup window centred on `at`.
+ *
+ * Unlike appendJournal's dedup (which only looks at entries[0]), this scans
+ * the entire journal. Used by bulk ingestion paths (e.g. Spotify history sync)
+ * where tracks are not necessarily written newest-first, so entries[0] may not
+ * be the right comparison target.
+ */
+export function journalHasRecentEntry(
+  title: string,
+  artist: string,
+  mbid: string | null,
+  at: string,
+): boolean {
+  const atMs = new Date(at).getTime();
+  if (Number.isNaN(atMs)) return false;
+  const titleLc = title.toLowerCase();
+  const artistLc = artist.toLowerCase();
+  return journalStore.read().some((e) => {
+    const gap = Math.abs(new Date(e.at).getTime() - atMs);
+    if (Number.isNaN(gap) || gap >= DEDUP_WINDOW_MS) return false;
+    if (mbid && e.mbid) return mbid === e.mbid;
+    return (
+      e.title.toLowerCase() === titleLc &&
+      e.artist.toLowerCase() === artistLc
+    );
+  });
+}
+
+/**
+ * Patch an existing journal entry by exact timestamp + text identity.
+ * Used by the Spotify history sync to fill in an MBID after async resolution
+ * without the risk of inserting a duplicate (which would happen if we called
+ * appendJournal, since that only deduplicates against the *newest* entry).
+ *
+ * Scans the full journal for an entry whose `at` matches exactly and whose
+ * title+artist match case-insensitively. The first match that still has
+ * mbid: null is upgraded in-place. No-ops if no such entry is found.
+ */
+export function patchJournalEntry(
+  at: string,
+  title: string,
+  artist: string,
+  mbid: string,
+  artistMbid: string | null,
+  artworkUrl?: string | null,
+): void {
+  const entries = journalStore.read();
+  const titleLc = title.toLowerCase();
+  const artistLc = artist.toLowerCase();
+  const idx = entries.findIndex(
+    (e) =>
+      e.at === at &&
+      !e.mbid &&
+      e.title.toLowerCase() === titleLc &&
+      e.artist.toLowerCase() === artistLc,
+  );
+  if (idx === -1) return;
+  const updated = [...entries];
+  updated[idx] = {
+    ...updated[idx],
+    mbid,
+    artistMbid: artistMbid ?? updated[idx].artistMbid ?? null,
+    artworkUrl: artworkUrl ?? updated[idx].artworkUrl ?? null,
+  };
+  journalStore.write(updated);
 }
 
 export function clearJournal(): void {

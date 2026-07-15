@@ -25,13 +25,15 @@ const ACCOUNTS_BASE = "https://accounts.spotify.com";
 const API_BASE = "https://api.spotify.com/v1";
 
 /** Scopes: read player state (auto-advance), control playback, read product
- * tier, and read/save Liked Songs (the heart button). */
+ * tier, read/save Liked Songs (the heart button), and read recent history for
+ * journal sync. */
 export const SPOTIFY_SCOPES = [
   "user-read-playback-state",
   "user-modify-playback-state",
   "user-read-private",
   "user-library-read",
   "user-library-modify",
+  "user-read-recently-played",
 ].join(" ");
 
 export function spotifyConnectConfigured(): boolean {
@@ -514,6 +516,91 @@ export async function isTrackSaved(
   }
   const parsed = (await res.json()) as unknown;
   return Array.isArray(parsed) && parsed[0] === true;
+}
+
+// ---------------------------------------------------------------------------
+// Recently-played history (journal sync)
+// ---------------------------------------------------------------------------
+
+export interface RecentTrack {
+  /** ISO-8601 timestamp of when the track finished playing. */
+  playedAt: string;
+  title: string;
+  artist: string;
+  /** ISRC when Spotify provides it; null otherwise. */
+  isrc: string | null;
+  artworkUrl: string | null;
+  /** Spotify track URI (e.g. `spotify:track:…`) */
+  uri: string;
+}
+
+/**
+ * Fetch up to 50 recently-played tracks from the listener's Spotify account.
+ *
+ * @param after  Optional Unix timestamp (ms). When supplied, only tracks played
+ *               after that instant are returned. Omit to get the latest 50.
+ *
+ * Returns null when the scope is absent (pre-reconnect tokens) so callers can
+ * silently no-op rather than throwing. Any other Spotify error is re-thrown.
+ */
+export async function fetchRecentlyPlayed(
+  accessToken: string,
+  after?: number,
+): Promise<RecentTrack[] | null> {
+  const params = new URLSearchParams({ limit: "50", type: "track" });
+  if (after !== undefined) params.set("after", String(after));
+
+  const res = await fetch(
+    `${API_BASE}/me/player/recently-played?${params.toString()}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+
+  if (res.status === 403) {
+    const body = await res.text().catch(() => "");
+    if (body.toLowerCase().includes("scope")) {
+      return null;
+    }
+    throw new Error(`Spotify recently-played 403: ${body.slice(0, 200)}`);
+  }
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(
+      `Spotify recently-played failed (${res.status}): ${body.slice(0, 200)}`,
+    );
+  }
+
+  const json = (await res.json()) as {
+    items?: Array<{
+      played_at?: string;
+      track?: {
+        name?: string;
+        uri?: string;
+        artists?: Array<{ name?: string }>;
+        album?: { images?: Array<{ url?: string }> };
+        external_ids?: { isrc?: string };
+      };
+    }>;
+  };
+
+  return (json.items ?? [])
+    .map((item) => {
+      const track = item.track;
+      if (!track?.uri || !item.played_at) return null;
+      const artworkUrl =
+        (track.album?.images ?? []).sort(
+          (a, b) => (b as { height?: number }).height! - (a as { height?: number }).height!,
+        )[0]?.url ?? null;
+      return {
+        playedAt: item.played_at,
+        title: track.name ?? "",
+        artist: (track.artists ?? []).map((a) => a.name ?? "").filter(Boolean).join(", "),
+        isrc: track.external_ids?.isrc ?? null,
+        artworkUrl: artworkUrl ?? null,
+        uri: track.uri,
+      } satisfies RecentTrack;
+    })
+    .filter((t): t is RecentTrack => t !== null);
 }
 
 /** `spotify:track:ID` -> `ID`; null when the URI is not a track URI. */
