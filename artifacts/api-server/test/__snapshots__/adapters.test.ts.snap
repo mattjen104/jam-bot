@@ -1,0 +1,15 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`parseSpinitronWebPage — real HTML fixtures > WMFO fixture: parsed result matches snapshot (detects HTML structure drift) 1`] = `
+{
+  "rawArtist": "Joe Louis Walker",
+  "rawTitle": "Blue Mirror",
+}
+`;
+
+exports[`parseSpinitronWebPage — real HTML fixtures > WPRB fixture: parsed result matches snapshot (detects HTML structure drift) 1`] = `
+{
+  "rawArtist": "Blason",
+  "rawTitle": "BOUNDARY MISSING A REACTOR",
+}
+`;

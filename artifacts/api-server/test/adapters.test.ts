@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import {
   pickPath,
   parseStationPage,
@@ -689,5 +691,69 @@ describe("parseSpinitronWebPage", () => {
     const result = parseSpinitronWebPage(html);
     expect(result?.rawArtist).toBe("Low");
     expect(result?.rawTitle).toBe("Murderer");
+  });
+});
+
+// ---- Spinitron HTML fixture snapshot tests -------------------------------
+//
+// These tests parse captured real-world Spinitron HTML snapshots.  Their
+// primary purpose is regression detection: if Spinitron changes their page
+// structure (class names, element nesting), parseSpinitronWebPage returns null
+// and the test fails loudly — catching the breakage before production goes dark.
+//
+// To update a fixture after a confirmed Spinitron HTML change:
+//   1. Re-fetch the live page:  curl -sL https://spinitron.com/WPRB/ > artifacts/api-server/test/fixtures/spinitron-wprb.html
+//   2. Verify parseSpinitronWebPage() still returns non-null artist + title.
+//   3. Update the inline snapshot below with `vitest --update-snapshots`.
+
+function loadFixture(name: string): string {
+  return readFileSync(resolve(import.meta.dirname, "fixtures", name), "utf8");
+}
+
+describe("parseSpinitronWebPage — real HTML fixtures", () => {
+  it("WPRB fixture: extracts non-null artist and title", () => {
+    const html = loadFixture("spinitron-wprb.html");
+    const result = parseSpinitronWebPage(html);
+    expect(result).not.toBeNull();
+    expect(typeof result?.rawArtist).toBe("string");
+    expect(result!.rawArtist.length).toBeGreaterThan(0);
+    expect(typeof result?.rawTitle).toBe("string");
+    expect(result!.rawTitle.length).toBeGreaterThan(0);
+  });
+
+  it("WPRB fixture: parsed result matches snapshot (detects HTML structure drift)", () => {
+    const html = loadFixture("spinitron-wprb.html");
+    const result = parseSpinitronWebPage(html);
+    expect(result).toMatchSnapshot();
+  });
+
+  it("WPRB fixture: picks the first (current) spin, not a later one", () => {
+    const html = loadFixture("spinitron-wprb.html");
+    const result = parseSpinitronWebPage(html);
+    expect(result?.rawArtist).toBe("Blason");
+    expect(result?.rawTitle).toBe("BOUNDARY MISSING A REACTOR");
+  });
+
+  it("WMFO fixture: extracts non-null artist and title", () => {
+    const html = loadFixture("spinitron-wmfo.html");
+    const result = parseSpinitronWebPage(html);
+    expect(result).not.toBeNull();
+    expect(typeof result?.rawArtist).toBe("string");
+    expect(result!.rawArtist.length).toBeGreaterThan(0);
+    expect(typeof result?.rawTitle).toBe("string");
+    expect(result!.rawTitle.length).toBeGreaterThan(0);
+  });
+
+  it("WMFO fixture: parsed result matches snapshot (detects HTML structure drift)", () => {
+    const html = loadFixture("spinitron-wmfo.html");
+    const result = parseSpinitronWebPage(html);
+    expect(result).toMatchSnapshot();
+  });
+
+  it("WMFO fixture: picks the first (current) spin, not a later one", () => {
+    const html = loadFixture("spinitron-wmfo.html");
+    const result = parseSpinitronWebPage(html);
+    expect(result?.rawArtist).toBe("Joe Louis Walker");
+    expect(result?.rawTitle).toBe("Blue Mirror");
   });
 });
