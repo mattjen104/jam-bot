@@ -180,7 +180,9 @@ export function DevicePicker({ spotify }: DevicePickerProps) {
                       type={device.type}
                       className={[
                         "h-4 w-4 shrink-0",
-                        isSelected ? "text-primary" : "text-muted-foreground",
+                        isSelected && device.isActive
+                          ? "text-primary"
+                          : "text-muted-foreground",
                       ].join(" ")}
                     />
                     <div className="min-w-0 flex-1">
@@ -189,14 +191,24 @@ export function DevicePicker({ spotify }: DevicePickerProps) {
                       </p>
                       <p className="font-mono text-[10px] text-muted-foreground">
                         {device.type}
-                        {device.isActive ? " · Active" : ""}
                       </p>
                     </div>
-                    {isSelected ? (
-                      <span className="shrink-0 rounded-full bg-primary/20 px-1.5 py-0.5 font-mono text-[10px] text-primary">
-                        Pinned
-                      </span>
-                    ) : null}
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      {device.isActive ? (
+                        <span
+                          data-testid={`device-playing-badge-${device.id}`}
+                          className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 font-mono text-[10px] text-emerald-500"
+                        >
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          Playing
+                        </span>
+                      ) : null}
+                      {isSelected ? (
+                        <span className="rounded-full bg-primary/20 px-1.5 py-0.5 font-mono text-[10px] text-primary">
+                          Pinned
+                        </span>
+                      ) : null}
+                    </div>
                   </button>
                 );
               })
