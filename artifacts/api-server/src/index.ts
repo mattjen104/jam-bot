@@ -35,6 +35,7 @@ import { startDiscoveryScoreJob } from "./lore/discovery-score-job.js";
 import { applyStationScheduleMigration } from "./lore/station-schedule-migration.js";
 import { wireScheduleExtractor } from "./lore/schedule-wire.js";
 import { startScheduleScraper } from "./lore/schedule-scraper.js";
+import { markOrphanedImportJobsAsError } from "./routes/me/index.js";
 
 const rawPort = process.env["PORT"];
 
@@ -61,6 +62,7 @@ app.listen(port, () => {
  */
 async function bootLore(): Promise<void> {
   try {
+    await markOrphanedImportJobsAsError();
     wireSongEnrichment();
     await applyStationDiscoveryMigration();
     await applyPickerDiscoveryMigration();

@@ -1096,4 +1096,30 @@ router.get("/me/overlaps/runs", h(async (req, res) => {
   });
 }));
 
+/**
+ * Mark any import jobs that are stuck in status="running" as failed.
+ * Called once at server startup — if the process was killed mid-import the DB
+ * row stays "running" forever with no worker driving it.  Resetting them to
+ * "error" lets users see a clear failure message and re-trigger the import.
+ */
+export async function markOrphanedImportJobsAsError(): Promise<void> {
+  try {
+    const orphaned = await db
+      .update(libraryImportJobsTable)
+      .set({
+        status: "error",
+        error: "Server restarted while job was running — please start a new import",
+        finishedAt: new Date(),
+      })
+      .where(eq(libraryImportJobsTable.status, "running"))
+      .returning({ id: libraryImportJobsTable.id });
+
+    if (orphaned.length > 0) {
+      console.log(`[me] marked ${orphaned.length} orphaned import job(s) as error:`, orphaned.map((j) => j.id));
+    }
+  } catch (err) {
+    console.error("[me] failed to clear orphaned import jobs", err);
+  }
+}
+
 export default router;
