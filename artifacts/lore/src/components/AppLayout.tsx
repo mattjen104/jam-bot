@@ -52,6 +52,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         <div className="mt-auto p-5">
+          <Link
+            href="/player"
+            className="mb-3 block font-mono text-[10px] uppercase tracking-widest transition-colors"
+            style={{ color: "hsl(var(--faint))" }}
+            data-testid="link-webplayer"
+          >
+            Webplayer →
+          </Link>
           <p
             className="font-mono text-[10px] uppercase tracking-widest"
             style={{ color: "hsl(var(--faint))" }}
@@ -83,6 +91,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
+          <Link
+            href="/player"
+            className="rounded-md px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-wider transition-colors"
+            style={{ color: "hsl(var(--faint))" }}
+            data-testid="link-webplayer-mobile"
+          >
+            Player
+          </Link>
         </nav>
       </header>
 

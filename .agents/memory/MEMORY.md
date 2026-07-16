@@ -50,5 +50,6 @@
 - [Import job polling invalidation](import-job-poll-invalidation.md) — latest-import-job query stops polling on terminal status; every postStartImport call site must invalidate it in finally (incl. 409).
 - [Lore consolidated mockup style](lore-consolidated-mockup-style.md) — approved warm-dark violet/green token design; scope tokens under group class, verbatim HTML via trusted-static innerHTML only.
 - [Schedule live-first overnight carryover](schedule-overnight-carryover.md) — per-day schedule grids hide post-midnight tails: live detection needs a yesterday-slot carryover check, not just same-day isSlotLive.
+- [Lore webplayer parallel surface](lore-webplayer-surface.md) — /player routes bare (no AppLayout/PlayerDock), plain-JSON /api/player/* read-models (no orval), .wp-scoped theme; new sub-routes must live under /player/.
 - [Spotify app-wide rate limit vs casting](spotify-app-rate-limit.md) — 429s are per client-id across ALL tokens; background search fallback can break casting, fixed by global cooldown in appClient.
 - [Blog picker identity = feedUrl](blog-picker-identity.md) — blog ingest must match pickers by sourceRef feedUrl, never slugified name, or seeded handles fork into duplicates every poll; tolerant flag lives in sourceRef.

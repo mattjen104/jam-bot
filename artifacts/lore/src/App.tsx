@@ -24,6 +24,7 @@ import AdminRadioBrowser from "@/pages/AdminRadioBrowser";
 import AdminListCandidates from "@/pages/AdminListCandidates";
 import DjPage from "@/pages/DjPage";
 import ScheduleCalendar from "@/pages/ScheduleCalendar";
+import WebPlayer from "./webplayer/WebPlayer";
 import { PlayerProvider } from "./player/PlayerProvider";
 import { PlayerDock } from "./components/PlayerDock";
 import { ListeningLogger } from "./components/ListeningLogger";
@@ -94,6 +95,35 @@ function Router() {
   );
 }
 
+/**
+ * The webplayer (/player) is a standalone parallel surface: no AppLayout
+ * chrome and no PlayerDock (it renders its own now-playing card). Everything
+ * else gets the classic shell.
+ */
+function Shell() {
+  const [location] = useLocation();
+  const path = location.split("?")[0] ?? location;
+  const isWebplayer = path === "/player" || path.startsWith("/player/");
+
+  if (isWebplayer) {
+    return (
+      <Switch>
+        <Route path="/player" component={WebPlayer} />
+        <Route component={WebPlayer} />
+      </Switch>
+    );
+  }
+
+  return (
+    <>
+      <AppLayout>
+        <Router />
+      </AppLayout>
+      <PlayerDock />
+    </>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -101,11 +131,8 @@ function App() {
         <PlayerProvider>
           <ListeningLogger />
           <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <AppLayout>
-              <Router />
-            </AppLayout>
+            <Shell />
           </WouterRouter>
-          <PlayerDock />
           <Toaster />
         </PlayerProvider>
       </TooltipProvider>

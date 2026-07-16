@@ -5,12 +5,14 @@ import loreRouter from "./lore";
 import spotifyRouter from "./spotify";
 import shareRouter from "./share";
 import meRouter from "./me/index.js";
+import playerRouter from "./player.js";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(songRouter);
 router.use(meRouter);
+router.use(playerRouter);
 router.use(shareRouter);
 router.use(spotifyRouter);
 router.use(loreRouter);

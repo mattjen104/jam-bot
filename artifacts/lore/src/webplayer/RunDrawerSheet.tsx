@@ -1,0 +1,289 @@
+import { Check, X } from "lucide-react";
+import { useWpRun, useWpLoreCounts, type WpRunSpin } from "./hooks";
+import { LoreChip } from "./LoreChip";
+import { WpKeep } from "./WpKeep";
+import { useFollows, isFollowed, toggleFollow, djFollowId } from "../lib/local";
+
+function fmtTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function SpinRow({
+  spin,
+  stationSlug,
+  loreCount,
+  onOpenLore,
+}: {
+  spin: WpRunSpin;
+  stationSlug: string;
+  loreCount: ReturnType<typeof useWpLoreCounts>["data"];
+  onOpenLore: (mbid: string) => void;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        padding: "8px 0",
+        borderBottom: "0.5px solid var(--wp-border)",
+      }}
+    >
+      {spin.inLibrary && (
+        <Check
+          size={15}
+          style={{ color: "var(--wp-text-success)", flexShrink: 0 }}
+          aria-label="In your library"
+        />
+      )}
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <p style={{ margin: 0, fontSize: 14 }}>
+          {spin.artist} — {spin.title}
+        </p>
+        <p style={{ margin: "1px 0 0", fontSize: 12, color: "var(--wp-text-muted)" }}>
+          spun {fmtTime(spin.playedAt)}
+          {!spin.resolved && " · unresolved"}
+        </p>
+      </div>
+      {spin.mbid && (
+        <LoreChip count={loreCount?.get(spin.mbid)} onOpen={() => onOpenLore(spin.mbid!)} />
+      )}
+      {spin.mbid && !spin.inLibrary && (
+        <WpKeep mbid={spin.mbid} provenance={{ kind: "station", stationSlug }} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Run drawer — tonight's run for a station, split into FROM YOUR LIBRARY and
+ * NEW TO YOU, with the selector trove (shared count + deep cuts) at the foot.
+ */
+export function RunDrawerSheet({
+  slug,
+  onClose,
+  onOpenLore,
+}: {
+  slug: string;
+  onClose: () => void;
+  onOpenLore: (mbid: string) => void;
+}) {
+  const { data: run, isLoading } = useWpRun(slug);
+  const follows = useFollows();
+
+  const allMbids = [
+    ...(run?.fromLibrary ?? []),
+    ...(run?.newToYou ?? []),
+  ]
+    .map((s) => s.mbid)
+    .filter((m): m is string => m != null);
+  const { data: loreCounts } = useWpLoreCounts(allMbids);
+
+  const selectorName = run?.show?.djName ?? run?.show?.name ?? null;
+  const followId = selectorName && run ? djFollowId(run.station.slug, selectorName) : null;
+  const following = followId != null && isFollowed(follows, "dj", followId);
+
+  return (
+    <>
+      <div className="wp-sheet-backdrop" onClick={onClose} aria-hidden="true" />
+      <div
+        className="wp wp-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Tonight's run"
+        style={{ padding: 0 }}
+        data-testid="run-drawer"
+      >
+        {/* Header */}
+        <div
+          style={{
+            padding: "16px 18px",
+            borderBottom: "0.5px solid var(--wp-border)",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <p style={{ margin: 0, fontSize: 16, fontWeight: 500 }}>
+              {run
+                ? `${run.show?.name ?? run.station.name} · tonight's run`
+                : "Loading run…"}
+            </p>
+            {run && (
+              <p style={{ margin: "3px 0 0", fontSize: 13, color: "var(--wp-text-secondary)" }}>
+                {run.show?.djName && (
+                  <>
+                    selector {run.show.djName} <span style={{ color: "var(--wp-text-muted)" }}>· </span>
+                  </>
+                )}
+                <span className="wp-mono" style={{ fontSize: 12 }}>
+                  {run.station.name}
+                </span>{" "}
+                <span style={{ color: "var(--wp-text-muted)" }}>
+                  · {run.spinCount} {run.spinCount === 1 ? "spin" : "spins"} so far
+                </span>
+              </p>
+            )}
+          </div>
+          {run?.overlapPct != null && (
+            <span
+              className="wp-pill"
+              style={{ background: "var(--wp-bg-success)", color: "var(--wp-text-success)" }}
+            >
+              {run.overlapPct}% taste overlap
+            </span>
+          )}
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={onClose}
+            style={{ padding: 6, borderRadius: "50%", display: "flex" }}
+          >
+            <X size={15} aria-hidden="true" />
+          </button>
+        </div>
+
+        {isLoading && (
+          <p style={{ padding: "16px 18px", color: "var(--wp-text-muted)", fontSize: 13 }}>
+            Loading tonight's spins…
+          </p>
+        )}
+
+        {/* From your library */}
+        {run && run.fromLibrary.length > 0 && (
+          <div style={{ padding: "14px 18px 6px" }}>
+            <p
+              className="wp-mono"
+              style={{ margin: "0 0 8px", fontSize: 12, color: "var(--wp-text-muted)" }}
+            >
+              FROM YOUR LIBRARY · {run.fromLibrary.length}
+            </p>
+            {run.fromLibrary.map((s, i) => (
+              <SpinRow
+                key={`${s.playedAt}-${i}`}
+                spin={s}
+                stationSlug={run.station.slug}
+                loreCount={loreCounts}
+                onOpenLore={onOpenLore}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* New to you */}
+        {run && run.newToYou.length > 0 && (
+          <div style={{ padding: "10px 18px 16px" }}>
+            <p
+              className="wp-mono"
+              style={{ margin: "0 0 8px", fontSize: 12, color: "var(--wp-text-muted)" }}
+            >
+              {run.authenticated ? "NEW TO YOU" : "TONIGHT"} · {run.newToYou.length}
+            </p>
+            {run.newToYou.map((s, i) => (
+              <SpinRow
+                key={`${s.playedAt}-${i}`}
+                spin={s}
+                stationSlug={run.station.slug}
+                loreCount={loreCounts}
+                onOpenLore={onOpenLore}
+              />
+            ))}
+          </div>
+        )}
+
+        {run && run.fromLibrary.length === 0 && run.newToYou.length === 0 && !isLoading && (
+          <p style={{ padding: "16px 18px", color: "var(--wp-text-muted)", fontSize: 13 }}>
+            No spins logged for tonight yet.
+          </p>
+        )}
+
+        {/* Selector trove */}
+        {run?.trove && (run.trove.sharedCount > 0 || run.trove.deepCuts.length > 0) && (
+          <div
+            style={{
+              background: "var(--wp-surface-1)",
+              borderTop: "0.5px solid var(--wp-border)",
+              padding: "14px 18px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                marginBottom: run.trove.deepCuts.length > 0 ? 10 : 0,
+                flexWrap: "wrap",
+              }}
+            >
+              <div
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: "50%",
+                  background: "var(--wp-bg-accent)",
+                  color: "var(--wp-text-accent)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 12,
+                  fontWeight: 500,
+                  flexShrink: 0,
+                }}
+                aria-hidden="true"
+              >
+                {run.trove.selectorName
+                  .split(/\s+/)
+                  .map((w) => w[0])
+                  .slice(0, 2)
+                  .join("")
+                  .toUpperCase()}
+              </div>
+              <p style={{ margin: 0, fontSize: 13, color: "var(--wp-text-secondary)", flex: 1 }}>
+                You and {run.trove.selectorName} share {run.trove.sharedCount} recordings.
+                {run.trove.deepCuts.length > 0 &&
+                  " Deeper in their stacks, past runs you haven't heard:"}
+              </p>
+              {selectorName && followId && (
+                <button
+                  type="button"
+                  style={{ fontSize: 13, whiteSpace: "nowrap" }}
+                  onClick={() => toggleFollow("dj", followId, selectorName)}
+                >
+                  {following ? "Following ✓" : "Follow selector"}
+                </button>
+              )}
+            </div>
+            {run.trove.deepCuts.length > 0 && (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+                  gap: 10,
+                }}
+              >
+                {run.trove.deepCuts.map((c) => (
+                  <div
+                    key={c.artist}
+                    style={{
+                      background: "var(--wp-surface-2)",
+                      border: "0.5px solid var(--wp-border)",
+                      borderRadius: "var(--wp-radius)",
+                      padding: "10px 12px",
+                    }}
+                  >
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 500 }}>{c.artist}</p>
+                    <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--wp-text-muted)" }}>
+                      spun {c.spinCount}x across {c.runCount} {c.runCount === 1 ? "run" : "runs"}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
