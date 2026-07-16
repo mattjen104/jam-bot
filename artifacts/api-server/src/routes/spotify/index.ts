@@ -191,12 +191,6 @@ router.post("/spotify/play", async (req: Request, res: Response) => {
     return;
   }
 
-  const track = await resolveSpotifyTrack(recording);
-  if (!track) {
-    res.status(404).json({ error: "This recording could not be found on Spotify" });
-    return;
-  }
-
   if (conn.product && conn.product !== "premium") {
     res.status(403).json({
       error: "Spotify Premium is required for remote playback",
@@ -205,6 +199,13 @@ router.post("/spotify/play", async (req: Request, res: Response) => {
   }
 
   try {
+    const track = await resolveSpotifyTrack(recording, conn.accessToken);
+    if (!track) {
+      res
+        .status(404)
+        .json({ error: "This recording could not be found on Spotify" });
+      return;
+    }
     const outcome = await playTrack(
       conn.accessToken,
       track.uri,
@@ -258,6 +259,7 @@ router.post("/spotify/resume", async (req: Request, res: Response) => {
 async function resolveTrackIdOr404(
   mbid: string,
   res: Response,
+  userAccessToken?: string,
 ): Promise<string | null> {
   const rows = await db
     .select()
@@ -269,7 +271,16 @@ async function resolveTrackIdOr404(
     res.status(404).json({ error: "Recording not on the spine" });
     return null;
   }
-  const track = await resolveSpotifyTrack(recording);
+  let track;
+  try {
+    track = await resolveSpotifyTrack(recording, userAccessToken);
+  } catch (err) {
+    if (err instanceof SpotifyPlayError) {
+      res.status(502).json({ error: err.message });
+      return null;
+    }
+    throw err;
+  }
   const trackId = track ? trackIdFromUri(track.uri) : null;
   if (!trackId) {
     res.status(404).json({ error: "This recording could not be found on Spotify" });
@@ -295,7 +306,7 @@ router.post("/spotify/save", async (req: Request, res: Response) => {
   }
   const conn = await requireConnection(req, res);
   if (!conn) return;
-  const trackId = await resolveTrackIdOr404(parsed.data.mbid, res);
+  const trackId = await resolveTrackIdOr404(parsed.data.mbid, res, conn.accessToken);
   if (!trackId) return;
   try {
     await saveTrackToLibrary(conn.accessToken, trackId);
@@ -313,7 +324,7 @@ router.get("/spotify/saved", async (req: Request, res: Response) => {
   }
   const conn = await requireConnection(req, res);
   if (!conn) return;
-  const trackId = await resolveTrackIdOr404(mbid, res);
+  const trackId = await resolveTrackIdOr404(mbid, res, conn.accessToken);
   if (!trackId) return;
   try {
     const saved = await isTrackSaved(conn.accessToken, trackId);

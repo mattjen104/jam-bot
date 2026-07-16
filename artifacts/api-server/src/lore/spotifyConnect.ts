@@ -282,8 +282,62 @@ export function extractSpotifyTrackId(
 /** Successful resolutions only; misses always retry the full ladder. */
 const resolveCache = new Map<string, ResolvedSpotifyTrack>();
 
+interface UserSearchHit {
+  uri: string;
+  spotifyUrl: string;
+  durationMs: number;
+}
+
+/**
+ * Search Spotify's catalogue with the LISTENER'S OWN token. The app-level
+ * client-credentials client shares one rate-limit bucket with every
+ * background enrichment job, so play-time resolution must not depend on it —
+ * a 429 there would break casting for reasons unrelated to the listener.
+ */
+async function searchTrackAsUser(
+  accessToken: string,
+  q: string,
+): Promise<UserSearchHit | null> {
+  const res = await fetch(
+    `${API_BASE}/search?type=track&limit=1&q=${encodeURIComponent(q)}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!res.ok) {
+    // Any upstream failure is an error, never a "track not found" — only a
+    // 200 with empty items means a true miss.
+    throw new SpotifyPlayError(
+      "spotify_error",
+      res.status === 429
+        ? "Spotify is rate-limiting search right now — try again in a minute"
+        : `Spotify search failed (${res.status})`,
+    );
+  }
+  const parsed = (await res.json().catch(() => null)) as {
+    tracks?: {
+      items?: {
+        uri?: string;
+        duration_ms?: number;
+        external_urls?: { spotify?: string };
+        id?: string;
+      }[];
+    };
+  } | null;
+  const item = parsed?.tracks?.items?.[0];
+  if (!item?.uri) return null;
+  return {
+    uri: item.uri,
+    spotifyUrl:
+      item.external_urls?.spotify ??
+      (item.id ? `https://open.spotify.com/track/${item.id}` : item.uri),
+    durationMs: item.duration_ms ?? 0,
+  };
+}
+
 export async function resolveSpotifyTrack(
   recording: Pick<Recording, "mbid" | "title" | "artist" | "isrc" | "links">,
+  /** When present, catalogue search uses the listener's token (separate
+   * rate-limit bucket from the shared app client). */
+  userAccessToken?: string | null,
 ): Promise<ResolvedSpotifyTrack | null> {
   const cached = resolveCache.get(recording.mbid);
   if (cached) return cached;
@@ -300,8 +354,24 @@ export async function resolveSpotifyTrack(
     };
   }
 
+  const doSearch = async (
+    q: string,
+  ): Promise<{ uri: string; spotifyUrl: string; durationMs: number } | null> => {
+    if (userAccessToken) return searchTrackAsUser(userAccessToken, q);
+    try {
+      return await searchTrack(q);
+    } catch (err) {
+      // The shared app client is rate-limited or down — honest, mappable error
+      // instead of an opaque 500.
+      throw new SpotifyPlayError(
+        "spotify_error",
+        `Spotify search failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  };
+
   if (!resolved && recording.isrc) {
-    const hit = await searchTrack(`isrc:${recording.isrc}`);
+    const hit = await doSearch(`isrc:${recording.isrc}`);
     if (hit) {
       resolved = {
         uri: hit.uri,
@@ -313,7 +383,7 @@ export async function resolveSpotifyTrack(
   }
 
   if (!resolved) {
-    const hit = await searchTrack(
+    const hit = await doSearch(
       `track:"${recording.title}" artist:"${recording.artist}"`,
     );
     if (hit) {
@@ -326,7 +396,12 @@ export async function resolveSpotifyTrack(
     }
   }
 
-  if (resolved) resolveCache.set(recording.mbid, resolved);
+  // Search results under a user token can be market-scoped; only cache
+  // token-independent resolutions (exact links, or shared app-client search)
+  // so one listener's market never contaminates another's.
+  if (resolved && (resolved.source === "link" || !userAccessToken)) {
+    resolveCache.set(recording.mbid, resolved);
+  }
   return resolved;
 }
 
