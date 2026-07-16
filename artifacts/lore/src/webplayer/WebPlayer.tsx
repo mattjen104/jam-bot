@@ -8,6 +8,7 @@ import { LoreChip } from "./LoreChip";
 import { WpKeep } from "./WpKeep";
 import { RunDrawerSheet } from "./RunDrawerSheet";
 import { AlbumLoreSheet } from "./AlbumLoreSheet";
+import { LibraryTab } from "./LibraryTab";
 import "./wp.css";
 
 /** Now-playing hero card: the station currently sounding via the radio player. */
@@ -274,7 +275,8 @@ function OnAirRow({
  */
 export default function WebPlayer() {
   const { data: onAir, isLoading } = useWpOnAir();
-  const [runSlug, setRunSlug] = useState<string | null>(null);
+  const [tab, setTab] = useState<"onair" | "library">("onair");
+  const [runRef, setRunRef] = useState<{ slug: string; runId: number | null } | null>(null);
   const [lore, setLore] = useState<{ mbid: string; spinningOn: string | null } | null>(null);
 
   const authenticated = onAir?.authenticated ?? false;
@@ -315,47 +317,92 @@ export default function WebPlayer() {
 
         <ImportStrip />
 
-        {/* On the air */}
+        {/* Tabs */}
         <div
-          style={{
-            display: "flex",
-            alignItems: "baseline",
-            justifyContent: "space-between",
-            margin: "20px 0 8px",
-          }}
+          role="tablist"
+          aria-label="Webplayer sections"
+          style={{ display: "flex", gap: 6, margin: "20px 0 10px" }}
         >
-          <h3 style={{ margin: 0, fontSize: 16 }}>On the air</h3>
-          <p className="wp-mono" style={{ margin: 0, fontSize: 12, color: "var(--wp-text-muted)" }}>
-            {authenticated ? "sorted by your overlap" : "connect Spotify to sort by your taste"}
-          </p>
+          {(
+            [
+              ["onair", "On the air"],
+              ["library", "Library"],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={tab === key}
+              onClick={() => setTab(key)}
+              className="wp-mono"
+              style={{
+                fontSize: 12,
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+                padding: "7px 14px",
+                ...(tab === key
+                  ? {
+                      background: "var(--wp-bg-accent)",
+                      color: "var(--wp-text-accent)",
+                      borderColor: "transparent",
+                    }
+                  : { color: "var(--wp-text-muted)" }),
+              }}
+              data-testid={`wp-tab-${key}`}
+            >
+              {label}
+            </button>
+          ))}
+          {tab === "onair" && (
+            <p
+              className="wp-mono"
+              style={{
+                margin: "0 0 0 auto",
+                alignSelf: "center",
+                fontSize: 11,
+                color: "var(--wp-text-muted)",
+              }}
+            >
+              {authenticated ? "sorted by your overlap" : "connect Spotify to sort by your taste"}
+            </p>
+          )}
         </div>
 
-        <div className="wp-card" style={{ overflow: "hidden" }}>
-          {isLoading && (
-            <p style={{ padding: "14px 16px", margin: 0, fontSize: 13, color: "var(--wp-text-muted)" }}>
-              Tuning across the dial…
-            </p>
-          )}
-          {!isLoading && items.length === 0 && (
-            <p style={{ padding: "14px 16px", margin: 0, fontSize: 13, color: "var(--wp-text-muted)" }}>
-              Nothing on the air right now — stations appear here as they log spins.
-            </p>
-          )}
-          {items.map((item) => (
-            <OnAirRow
-              key={item.station.slug}
-              item={item}
-              authenticated={authenticated}
-              onOpenRun={setRunSlug}
-            />
-          ))}
-        </div>
+        {tab === "onair" ? (
+          <div className="wp-card" style={{ overflow: "hidden" }}>
+            {isLoading && (
+              <p style={{ padding: "14px 16px", margin: 0, fontSize: 13, color: "var(--wp-text-muted)" }}>
+                Tuning across the dial…
+              </p>
+            )}
+            {!isLoading && items.length === 0 && (
+              <p style={{ padding: "14px 16px", margin: 0, fontSize: 13, color: "var(--wp-text-muted)" }}>
+                Nothing on the air right now — stations appear here as they log spins.
+              </p>
+            )}
+            {items.map((item) => (
+              <OnAirRow
+                key={item.station.slug}
+                item={item}
+                authenticated={authenticated}
+                onOpenRun={(slug) => setRunRef({ slug, runId: null })}
+              />
+            ))}
+          </div>
+        ) : (
+          <LibraryTab
+            onOpenLore={(mbid) => setLore({ mbid, spinningOn: null })}
+            onOpenRun={(slug, runId) => setRunRef({ slug, runId })}
+          />
+        )}
       </div>
 
-      {runSlug && (
+      {runRef && (
         <RunDrawerSheet
-          slug={runSlug}
-          onClose={() => setRunSlug(null)}
+          slug={runRef.slug}
+          runId={runRef.runId}
+          onClose={() => setRunRef(null)}
           onOpenLore={(mbid) => setLore({ mbid, spinningOn: null })}
         />
       )}

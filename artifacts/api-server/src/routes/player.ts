@@ -173,8 +173,14 @@ router.get("/player/run/:slug", h(async (req, res) => {
     .limit(1);
   if (!station) return res.status(404).json({ error: "Station not found" });
 
-  // Anchor: the station's latest spin defines tonight's (show, UTC day) run.
-  const [anchor] = await db
+  // Anchor: by default the station's latest spin defines tonight's
+  // (show, UTC day) run. With ?runId=<anchor spin id> (the min-spin-id run
+  // anchor used across the archive) a specific past run is requested instead
+  // — that spin's show + UTC day become the partition.
+  const runIdRaw = typeof req.query.runId === "string" ? req.query.runId : "";
+  const runId = /^\d+$/.test(runIdRaw) ? Number(runIdRaw) : null;
+
+  const anchorQuery = db
     .select({
       showId: spinsTable.showId,
       day: sql<string>`to_char(${spinsTable.playedAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
@@ -182,11 +188,21 @@ router.get("/player/run/:slug", h(async (req, res) => {
       showDj: showsTable.djName,
     })
     .from(spinsTable)
-    .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id))
-    .where(eq(spinsTable.stationId, station.id))
-    .orderBy(desc(spinsTable.playedAt))
-    .limit(1);
-  if (!anchor) return res.status(404).json({ error: "No spins for this station yet" });
+    .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id));
+
+  const [anchor] =
+    runId != null
+      ? await anchorQuery
+          .where(and(eq(spinsTable.id, runId), eq(spinsTable.stationId, station.id)))
+          .limit(1)
+      : await anchorQuery
+          .where(eq(spinsTable.stationId, station.id))
+          .orderBy(desc(spinsTable.playedAt))
+          .limit(1);
+  if (!anchor)
+    return res.status(404).json({
+      error: runId != null ? "Run not found for this station" : "No spins for this station yet",
+    });
 
   const partition = and(
     eq(spinsTable.stationId, station.id),

@@ -41,6 +41,7 @@ let stationIds: number[] = [];
 let showIds: number[] = [];
 let server: Server | undefined;
 let baseUrl = "";
+let spinIds: number[] = [];
 const slug = `test-wp-${run}`;
 
 beforeAll(async () => {
@@ -89,7 +90,7 @@ beforeAll(async () => {
     },
   ]);
 
-  await db.insert(spinsTable).values([
+  const inserted = await db.insert(spinsTable).values([
     // Earlier tonight, same show/day: resolved to B.
     {
       stationId,
@@ -119,7 +120,8 @@ beforeAll(async () => {
       rawTitle: "raw-a-t",
       playedAt: new Date(base + 2 * MIN),
     },
-  ]);
+  ]).returning({ id: spinsTable.id });
+  spinIds = inserted.map((r) => r.id);
 
   server = app.listen(0);
   await new Promise<void>((resolve) => server!.once("listening", resolve));
@@ -210,6 +212,22 @@ describe("GET /api/player/run/:slug", () => {
   it("404s for an unknown station", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
     const res = await fetch(`${baseUrl}/api/player/run/definitely-not-${run}`);
+    expect(res.status).toBe(404);
+  });
+
+  it("returns the same partition when anchored by ?runId (Hear in runs deep link)", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+    const anchorId = Math.min(...spinIds);
+    const res = await fetch(`${baseUrl}/api/player/run/${slug}?runId=${anchorId}`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { day: string; spinCount: number };
+    expect(body.day).toBe(DAY);
+    expect(body.spinCount).toBe(3);
+  });
+
+  it("404s for a runId that does not belong to the station", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+    const res = await fetch(`${baseUrl}/api/player/run/${slug}?runId=999999999`);
     expect(res.status).toBe(404);
   });
 });

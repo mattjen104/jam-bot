@@ -137,12 +137,16 @@ export function useWpOnAir() {
   });
 }
 
-export function useWpRun(slug: string | null) {
+export function useWpRun(slug: string | null, runId?: number | null) {
   return useQuery({
-    queryKey: ["wp", "run", slug],
-    queryFn: () => apiFetch<WpRunResponse>(`/api/player/run/${encodeURIComponent(slug!)}`),
+    queryKey: ["wp", "run", slug, runId ?? "latest"],
+    queryFn: () =>
+      apiFetch<WpRunResponse>(
+        `/api/player/run/${encodeURIComponent(slug!)}${runId != null ? `?runId=${runId}` : ""}`,
+      ),
     enabled: slug != null,
-    refetchInterval: 60_000,
+    // Past runs are immutable; only tonight's live run needs polling.
+    refetchInterval: runId == null ? 60_000 : false,
   });
 }
 

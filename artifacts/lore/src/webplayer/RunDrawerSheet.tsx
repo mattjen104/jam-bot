@@ -61,14 +61,17 @@ function SpinRow({
  */
 export function RunDrawerSheet({
   slug,
+  runId,
   onClose,
   onOpenLore,
 }: {
   slug: string;
+  /** Anchor spin id of a specific past run; omit for tonight's live run. */
+  runId?: number | null;
   onClose: () => void;
   onOpenLore: (mbid: string) => void;
 }) {
-  const { data: run, isLoading } = useWpRun(slug);
+  const { data: run, isLoading, isError, refetch } = useWpRun(slug, runId);
   const follows = useFollows();
 
   const allMbids = [
@@ -109,7 +112,9 @@ export function RunDrawerSheet({
             <p style={{ margin: 0, fontSize: 16, fontWeight: 500 }}>
               {run
                 ? `${run.show?.name ?? run.station.name} · tonight's run`
-                : "Loading run…"}
+                : isError
+                  ? "Run unavailable"
+                  : "Loading run…"}
             </p>
             {run && (
               <p style={{ margin: "3px 0 0", fontSize: 13, color: "var(--wp-text-secondary)" }}>
@@ -149,6 +154,18 @@ export function RunDrawerSheet({
           <p style={{ padding: "16px 18px", color: "var(--wp-text-muted)", fontSize: 13 }}>
             Loading tonight's spins…
           </p>
+        )}
+
+        {isError && !isLoading && (
+          <div style={{ padding: "16px 18px" }} data-testid="run-error">
+            <p style={{ margin: "0 0 10px", color: "var(--wp-text-muted)", fontSize: 13 }}>
+              Couldn't load this run — it may have been removed, or the
+              connection dropped.
+            </p>
+            <button type="button" onClick={() => void refetch()} style={{ fontSize: 12 }}>
+              Try again
+            </button>
+          </div>
         )}
 
         {/* From your library */}
