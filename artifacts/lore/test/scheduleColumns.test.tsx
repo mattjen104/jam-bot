@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 /**
- * Schedule page column layout: every slot row shows an aligned Genre column
- * and a Discovery score column, with "—" placeholders when insights are
- * missing, and the new-music tier keeps its sparkle highlight.
+ * Schedule page column layout: every slot row shows an aligned "Recent plays"
+ * rolling-genre column and an "Era" discovery column, with "—" placeholders
+ * when rolling data is missing, and the new-music tier keeps its sparkle
+ * highlight.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
@@ -11,6 +12,7 @@ import { memoryLocation } from "wouter/memory-location";
 
 vi.mock("@workspace/api-client-react", () => ({
   useGetAllScrapedShows: vi.fn(),
+  useGetStationsRollingGenres: vi.fn(() => ({ data: undefined })),
   getSpotifyStatus: vi.fn(async () => ({
     configured: false,
     connected: false,
@@ -27,7 +29,10 @@ vi.mock("@workspace/api-client-react", () => ({
   getRecordingPreview: vi.fn(async () => ({ previewUrl: null, artworkUrl: null })),
 }));
 
-import { useGetAllScrapedShows } from "@workspace/api-client-react";
+import {
+  useGetAllScrapedShows,
+  useGetStationsRollingGenres,
+} from "@workspace/api-client-react";
 import { PlayerProvider } from "../src/player/PlayerProvider";
 import ScheduleCalendar from "../src/pages/ScheduleCalendar";
 
@@ -45,99 +50,112 @@ function renderSchedule() {
   );
 }
 
+function mockShows(
+  slug: string,
+  name: string,
+  shows: Array<Record<string, unknown>>,
+) {
+  (useGetAllScrapedShows as ReturnType<typeof vi.fn>).mockReturnValue({
+    data: { stations: [{ slug, name, shows }] },
+    isLoading: false,
+  });
+}
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
 
-describe("ScheduleCalendar genre & discovery columns", () => {
-  it("renders genre chips and a tinted discovery score for enriched slots, and — placeholders otherwise", () => {
-    (useGetAllScrapedShows as ReturnType<typeof vi.fn>).mockReturnValue({
-      data: {
-        stations: [
-          {
-            slug: "kexp",
-            name: "KEXP",
-            shows: [
-              {
-                showName: "Seek & Destroy",
-                dayOfWeek: todayDow,
-                startTime: "00:00",
-                endTime: "23:59",
-                djName: "Tanner",
-                genres: ["rock", "heavy metal", "metal"],
-                discoveryScore: 78,
-                discoveryLabel: "new-music",
-              },
-              {
-                showName: "Mystery Hour",
-                dayOfWeek: todayDow,
-                startTime: "00:00",
-                endTime: "23:58",
-                djName: null,
-                genres: [],
-                discoveryScore: null,
-                discoveryLabel: null,
-              },
-            ],
-          },
-        ],
+describe("ScheduleCalendar rolling-genre & era columns", () => {
+  it("renders rolling genre chips and a sparkled 'new' era label for enriched stations, and — placeholders otherwise", () => {
+    mockShows("kexp", "KEXP", [
+      {
+        showName: "Seek & Destroy",
+        dayOfWeek: todayDow,
+        startTime: "00:00",
+        endTime: "23:59",
+        djName: "Tanner",
       },
-      isLoading: false,
+    ]);
+    (useGetStationsRollingGenres as ReturnType<typeof vi.fn>).mockReturnValue({
+      data: {
+        stations: {
+          kexp: [
+            // chips[0] = newest
+            { genre: "heavy metal", playedAt: "2026-07-16T10:00:00Z", discoveryLabel: "new-music" },
+            { genre: "rock", playedAt: "2026-07-16T09:55:00Z", discoveryLabel: null },
+          ],
+        },
+      },
     });
 
     renderSchedule();
 
     // Column headers are present (one per section container).
-    expect(screen.getAllByText("Genre").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Disc.").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Recent plays").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Era").length).toBeGreaterThan(0);
 
-    // Both slots are live all day → live section rows.
-    const rows = screen.getAllByTestId("slot-kexp-00:00");
-    expect(rows.length).toBe(2);
+    // The slot row renders.
+    expect(screen.getAllByTestId("slot-kexp-00:00").length).toBeGreaterThan(0);
 
-    // Genre chips rendered.
-    expect(screen.getByText("rock")).toBeTruthy();
-    expect(screen.getByText("heavy metal")).toBeTruthy();
+    // Rolling genre chips rendered.
+    expect(screen.getAllByText("rock").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("heavy metal").length).toBeGreaterThan(0);
 
-    // Discovery score cell shows the rounded number with the sparkle badge.
-    const score = screen.getByTestId("discovery-kexp-00:00");
-    expect(score.textContent).toContain("78");
-    expect(screen.getByTestId("new-music-badge-kexp-00:00")).toBeTruthy();
-
-    // The un-enriched slot shows placeholders (genre + discovery dashes).
-    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(2);
+    // Era label shows the new-music tier with its sparkle icon.
+    const eras = screen.getAllByTestId("discovery-era-label");
+    expect(eras.some((el) => el.textContent?.includes("new"))).toBe(true);
+    expect(eras.some((el) => el.querySelector("svg") !== null)).toBe(true);
   });
 
-  it("shows a 'recent' tier score without the sparkle badge", () => {
-    (useGetAllScrapedShows as ReturnType<typeof vi.fn>).mockReturnValue({
-      data: {
-        stations: [
-          {
-            slug: "fip",
-            name: "FIP",
-            shows: [
-              {
-                showName: "Club FIP",
-                dayOfWeek: todayDow,
-                startTime: "00:00",
-                endTime: "23:59",
-                djName: null,
-                genres: ["jazz"],
-                discoveryScore: 41.6,
-                discoveryLabel: "recent",
-              },
-            ],
-          },
-        ],
+  it("shows a 'recent' era label without the sparkle, and — when no rolling data exists", () => {
+    mockShows("fip", "FIP", [
+      {
+        showName: "Club FIP",
+        dayOfWeek: todayDow,
+        startTime: "00:00",
+        endTime: "23:59",
+        djName: null,
       },
-      isLoading: false,
+    ]);
+    (useGetStationsRollingGenres as ReturnType<typeof vi.fn>).mockReturnValue({
+      data: {
+        stations: {
+          fip: [
+            { genre: "jazz", playedAt: "2026-07-16T10:00:00Z", discoveryLabel: "recent" },
+          ],
+        },
+      },
     });
 
     renderSchedule();
 
-    const score = screen.getByTestId("discovery-fip-00:00");
-    expect(score.textContent).toContain("42"); // rounded
-    expect(screen.queryByTestId("new-music-badge-fip-00:00")).toBeNull();
+    const eras = screen.getAllByTestId("discovery-era-label");
+    expect(eras.some((el) => el.textContent?.includes("recent"))).toBe(true);
+    // 'recent' tier never gets the sparkle icon.
+    expect(eras.every((el) => el.querySelector("svg") === null)).toBe(true);
+  });
+
+  it("shows placeholders when a station has no rolling data", () => {
+    mockShows("kexp", "KEXP", [
+      {
+        showName: "Mystery Hour",
+        dayOfWeek: todayDow,
+        startTime: "00:00",
+        endTime: "23:59",
+        djName: null,
+      },
+    ]);
+    // Rolling genres endpoint has nothing yet.
+    (useGetStationsRollingGenres as ReturnType<typeof vi.fn>).mockReturnValue({
+      data: { stations: {} },
+    });
+
+    renderSchedule();
+
+    expect(screen.getAllByTestId("slot-kexp-00:00").length).toBeGreaterThan(0);
+    // Genre and era columns both degrade to dashes.
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByTestId("discovery-era-label")).toBeNull();
   });
 });

@@ -1,5 +1,6 @@
 import type { Station } from "@workspace/api-client-react";
 import type { PlayerStatus } from "../hooks/useRadioPlayer";
+import type { RadioCastStatus } from "../player/PlayerProvider";
 import type { SpotifyConnectApi } from "../player/useSpotifyConnect";
 import { DevicePicker } from "./DevicePicker";
 import { Loader2, Pause, Play, Radio, Volume2, VolumeX, X } from "lucide-react";
@@ -13,6 +14,10 @@ interface PlayerBarProps {
   error: string | null;
   /** MBID of the currently-identified track, if resolved. */
   nowPlayingMbid?: string | null;
+  /** Live-cast state — non-"off" when the station resolves to Spotify. */
+  casting?: RadioCastStatus;
+  /** True when the cast is paused on the listener's Spotify. */
+  castPaused?: boolean;
   onToggle: (station: Station) => void;
   onStop: () => void;
   onVolume: (v: number) => void;
@@ -26,14 +31,18 @@ export function PlayerBar({
   volume,
   error,
   nowPlayingMbid,
+  casting = "off",
+  castPaused = false,
   onToggle,
   onStop,
   onVolume,
   spotify,
 }: PlayerBarProps) {
-  const isPlaying = status === "playing";
-  const isLoading = status === "loading";
+  const isCasting = casting === "casting";
+  const isPlaying = isCasting ? !castPaused : status === "playing";
+  const isLoading = !isCasting && status === "loading";
   const showDevicePicker = !!(spotify?.connected && spotify.premium);
+  const castDeviceName = spotify?.pinnedDevice?.name ?? "your Spotify";
   return (
     <div
       className="fixed z-40 border border-border bg-secondary/95 backdrop-blur-md shadow-lg
@@ -100,6 +109,22 @@ export function PlayerBar({
           <p className="flex items-center gap-1.5 truncate font-mono text-[11px] text-muted-foreground">
             {error ? (
               error
+            ) : isCasting ? (
+              castPaused ? (
+                `Paused on ${castDeviceName}`
+              ) : (
+                <>
+                  <span
+                    className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent"
+                    aria-hidden
+                  />
+                  {`Live · casting to ${castDeviceName}`}
+                </>
+              )
+            ) : casting === "connecting" ? (
+              "Waiting for a track to resolve to Spotify…"
+            ) : casting === "fallback" ? (
+              "Not on Spotify · playing the broadcast"
             ) : isLoading ? (
               "Buffering the live stream…"
             ) : isPlaying ? (

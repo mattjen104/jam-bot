@@ -88,11 +88,24 @@ export interface StartRideOpts {
   stationSlug?: string;
 }
 
+/**
+ * Live-radio Spotify casting state (no ride involved).
+ * - off        : normal broadcast listening
+ * - connecting : device pinned, waiting for a resolvable track
+ * - casting    : the station's current track is playing on the listener's Spotify
+ * - fallback   : the current track couldn't play on Spotify — broadcast carries it
+ */
+export type RadioCastStatus = "off" | "connecting" | "casting" | "fallback";
+
 interface RadioApi {
   status: PlayerStatus;
   station: Station | null;
   volume: number;
   error: string | null;
+  /** Live casting state — non-"off" only when a Spotify device is pinned. */
+  casting: RadioCastStatus;
+  /** True when casting and the listener paused via the player bar. */
+  castPaused: boolean;
   toggle: (station: Station) => void;
   stop: () => void;
   setVolume: (v: number) => void;
@@ -851,52 +864,119 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(id);
   }, [active, isLiveSvcRide]);
 
-  // Live radio → pinned device: when the listener is NOT in a ride but has a
-  // Spotify Connect device pinned, send each new now-playing track to that
-  // device automatically. This mirrors the ride command path but without a
-  // queue — the station drives what plays.
+  // --- Live radio casting (no ride): resolve the broadcast to Spotify -----
+  // When the listener is NOT in a ride, is tuned to a live station, and has a
+  // Spotify Connect device pinned, the station's now-playing track plays on
+  // that device instead of the browser stream. The station drives what plays:
+  // the current resolved track is cast immediately, and each now-playing MBID
+  // change sends the next one. Unresolvable tracks fall back to the broadcast
+  // honestly — audio is exclusive, never doubled.
+  const [castStatus, setCastStatus] = useState<RadioCastStatus>("off");
+  const [castPaused, setCastPaused] = useState(false);
+  const castRef = useRef<{
+    lastMbid: string | null;
+    /** True once we've successfully commanded Spotify this cast session. */
+    commanded: boolean;
+    inFlight: boolean;
+  }>({ lastMbid: null, commanded: false, inFlight: false });
+  // Mirror of `active` readable inside the cast cleanup (refs assigned during
+  // render are current by the time cleanups run in the commit phase).
+  const rideActiveRef = useRef(active);
+  rideActiveRef.current = active;
+  // Mirror of castPaused readable inside the poll without re-arming it.
+  const castPausedRef = useRef(castPaused);
+  castPausedRef.current = castPaused;
+
+  const radioSlug = radio.station?.slug ?? null;
+  const radioIdle = radio.status === "idle" || radio.status === "error";
+  const castEligible =
+    !active && spotifyEligible && !!spotify.pinnedDevice && !!radioSlug && !radioIdle;
+
   useEffect(() => {
-    if (active) return undefined; // ride is active — its own logic handles this
-    if (!spotifyEligible) return undefined;
-    if (!spotify.pinnedDevice) return undefined;
-    const slug = liveStationSlugRef.current;
-    if (!slug) return undefined;
+    if (!castEligible || !radioSlug) return undefined;
 
-    let lastSeenMbid: string | null = null;
-    let initialized = false;
+    let cancelled = false;
+    castRef.current = { lastMbid: null, commanded: false, inFlight: false };
+    setCastStatus("connecting");
+    setCastPaused(false);
 
-    const id = setInterval(() => {
-      void getStationNowPlaying(slug)
-        .then((np) => {
-          const mbid = np.nowPlaying?.recording?.mbid ?? null;
-          if (!mbid) return;
-
-          if (!initialized) {
-            lastSeenMbid = mbid;
-            initialized = true;
-            return;
-          }
-
-          if (mbid === lastSeenMbid) return;
-          lastSeenMbid = mbid;
-
-          // Station moved to a new track — send it to the pinned device.
-          void spotifyPlay({
-            mbid,
-            deviceId: pinnedDeviceIdRef.current ?? undefined,
-          }).catch(() => {
-            // Best-effort: if it fails the listener still hears the broadcast.
-          });
+    const playMbid = (mbid: string) => {
+      if (castRef.current.inFlight) return;
+      castRef.current.inFlight = true;
+      void spotifyPlay({
+        mbid,
+        deviceId: pinnedDeviceIdRef.current ?? undefined,
+      })
+        .then(() => {
+          if (cancelled) return;
+          castRef.current.commanded = true;
+          setCastPaused(false);
+          setCastStatus("casting");
+          // Spotify carries the audio now — silence the browser stream.
+          pauseRadio?.();
         })
-        .catch(() => {});
-    }, 5000);
+        .catch((err: unknown) => {
+          if (cancelled) return;
+          // This track can't play on Spotify — the broadcast covers it.
+          setCastStatus("fallback");
+          resumeRadio?.();
+          const httpStatus = (err as { status?: number }).status;
+          if (httpStatus === 401 || httpStatus === 403) refreshSpotify();
+        })
+        .finally(() => {
+          castRef.current.inFlight = false;
+        });
+    };
 
-    return () => clearInterval(id);
-  // re-run when the pin changes, when eligibility changes, or when a ride
-  // starts/stops — slug is read from a ref so changes there don't need to
-  // re-trigger (the interval re-reads it each tick).
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, spotifyEligible, spotify.pinnedDevice?.id]);
+    const tick = () => {
+      void getStationNowPlaying(radioSlug)
+        .then((np) => {
+          if (cancelled) return;
+          const mbid = np.nowPlaying?.recording?.mbid ?? null;
+          if (!mbid) return; // unresolved — whatever is sounding keeps sounding
+          if (mbid === castRef.current.lastMbid) return;
+          castRef.current.lastMbid = mbid;
+          // Listener paused the cast: track the station's movement but don't
+          // interrupt their silence with a new play command.
+          if (castPausedRef.current) return;
+          playMbid(mbid);
+        })
+        .catch(() => {
+          // Best-effort — a poll failure just skips this tick.
+        });
+    };
+
+    tick(); // cast the currently-airing track right away
+    const id = setInterval(tick, 5000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+      setCastStatus("off");
+      setCastPaused(false);
+      if (castRef.current.commanded) {
+        // Leave the listener's Spotify quiet when the cast commanded it.
+        void spotifyPause().catch(() => {});
+        // Give audio back to the broadcast unless a ride took over or the
+        // station was stopped (resume is a no-op once the source is cleared).
+        if (!rideActiveRef.current) resumeRadio?.();
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [castEligible, radioSlug, spotify.pinnedDevice?.id]);
+
+  /** Pause/resume the cast on the listener's Spotify (player-bar toggle). */
+  const castTogglePause = useCallback(() => {
+    if (castPausedRef.current) {
+      void spotifyResume()
+        .then(() => setCastPaused(false))
+        .catch(() => {});
+    } else {
+      void spotifyPause()
+        .then(() => setCastPaused(true))
+        .catch(() => {});
+    }
+  }, []);
 
   // Live fallback: when in live+service-ride and Spotify fails for a track,
   // resume the broadcast so the listener always hears audio. The now-playing
@@ -1059,12 +1139,18 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => () => stop(), [stop]);
 
   // Starting the radio cancels any ride (audio is exclusive).
+  // While casting, the toggle controls the listener's Spotify — the browser
+  // stream is intentionally paused, so resuming it would double the audio.
   const toggleRadio = useCallback(
     (station: Station) => {
       if (active) stop();
+      if (castStatus === "casting" && radio.station?.slug === station.slug) {
+        castTogglePause();
+        return;
+      }
       radio.toggle(station);
     },
-    [active, radio, stop],
+    [active, radio, stop, castStatus, castTogglePause],
   );
 
   const value = useMemo<PlayerContextValue>(
@@ -1074,6 +1160,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         station: radio.station,
         volume: radio.volume,
         error: radio.error,
+        casting: castStatus,
+        castPaused,
         toggle: toggleRadio,
         stop: stopRadio,
         setVolume: radio.setVolume,
@@ -1114,6 +1202,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       radio.volume,
       radio.error,
       radio.setVolume,
+      castStatus,
+      castPaused,
       toggleRadio,
       stopRadio,
       active,

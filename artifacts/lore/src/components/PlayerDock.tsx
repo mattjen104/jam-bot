@@ -56,6 +56,8 @@ export function PlayerDock() {
         volume={radio.volume}
         error={radio.error}
         nowPlayingMbid={nowPlayingMbid}
+        casting={radio.casting}
+        castPaused={radio.castPaused}
         onToggle={radio.toggle}
         onStop={radio.stop}
         onVolume={radio.setVolume}
