@@ -47,6 +47,7 @@
 - [Lore picker/selector page consolidation](lore-picker-page-routing.md) — SelectorArchive.tsx is the ONLY live route for both DJ + curated pickers; a standalone sibling page can typecheck fine yet be unroutable dead code.
 - [Stale tsx dev server after new routes](api-server-stale-dev-server.md) — a long-running api-server workflow can serve pre-fix routes as 503 "Admin entry not configured" (falls through to admin catch-all); restart workflow before trusting a new-route 503 as a real bug.
 - [Structured LLM extraction from scraped pages](schedule-scraper-llm-pattern.md) — injectable extractor seam (like askLLM), strip fences + field-validate every entry, distinguish null (failed) from [] (no data).
+- [Import job polling invalidation](import-job-poll-invalidation.md) — latest-import-job query stops polling on terminal status; every postStartImport call site must invalidate it in finally (incl. 409).
 - [Lore consolidated mockup style](lore-consolidated-mockup-style.md) — approved warm-dark violet/green token design; scope tokens under group class, verbatim HTML via trusted-static innerHTML only.
 - [Schedule live-first overnight carryover](schedule-overnight-carryover.md) — per-day schedule grids hide post-midnight tails: live detection needs a yesterday-slot carryover check, not just same-day isSlotLive.
 - [Spotify app-wide rate limit vs casting](spotify-app-rate-limit.md) — 429s are per client-id across ALL tokens; background search fallback can break casting, fixed by global cooldown in appClient.

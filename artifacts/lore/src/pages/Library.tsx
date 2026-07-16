@@ -78,9 +78,13 @@ export default function Library() {
     setImportBusy(true);
     try {
       await postStartImport("spotify");
-      void queryClient.invalidateQueries({ queryKey: ME_LATEST_IMPORT_JOB_KEY });
       window.location.href = window.location.origin + (import.meta.env.BASE_URL ?? "/lore/") + "taste-map";
+    } catch {
+      // 409 (already running) or transient failure — refetch below re-syncs.
     } finally {
+      // Always refetch: the latest-job query stops polling on terminal states
+      // and must be invalidated to pick up a new (or already-running) job.
+      void queryClient.invalidateQueries({ queryKey: ME_LATEST_IMPORT_JOB_KEY });
       setImportBusy(false);
     }
   };

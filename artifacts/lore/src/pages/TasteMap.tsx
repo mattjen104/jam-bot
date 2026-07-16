@@ -50,8 +50,12 @@ export default function TasteMap() {
     if (params.get("import") !== "1") return;
     setImportTriggered(true);
     postStartImport("spotify")
-      .then(() => queryClient.invalidateQueries({ queryKey: ME_LATEST_IMPORT_JOB_KEY }))
-      .catch(() => {});
+      .catch(() => {
+        // 409 (already running) or transient failure — refetch below re-syncs.
+      })
+      .finally(() => {
+        void queryClient.invalidateQueries({ queryKey: ME_LATEST_IMPORT_JOB_KEY });
+      });
   }, [hasSpotify, importTriggered, queryClient]);
 
   // Always poll the latest import job — works across tabs so the user sees
@@ -106,11 +110,14 @@ export default function TasteMap() {
     setImportBusy(true);
     try {
       await postStartImport("spotify");
-      // The useLatestImportJob hook will start polling automatically once
-      // the new job appears (staleTime: 0).
     } catch {
-      // error will surface in the banner via the next poll
+      // Even on failure (e.g. 409 — a job is already running), refetching the
+      // latest job below re-syncs the UI with the real state.
     } finally {
+      // The latest-job query stops polling once it sees a terminal status
+      // (done/error), so it must be explicitly refetched to pick up the new
+      // pending job and resume its 2 s polling loop.
+      await queryClient.invalidateQueries({ queryKey: ME_LATEST_IMPORT_JOB_KEY });
       setImportBusy(false);
     }
   };
