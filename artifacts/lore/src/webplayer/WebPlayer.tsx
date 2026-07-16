@@ -9,6 +9,7 @@ import { WpKeep } from "./WpKeep";
 import { RunDrawerSheet } from "./RunDrawerSheet";
 import { AlbumLoreSheet } from "./AlbumLoreSheet";
 import { LibraryTab } from "./LibraryTab";
+import { ForYouTab } from "./ForYouTab";
 import "./wp.css";
 
 /** Now-playing hero card: the station currently sounding via the radio player. */
@@ -277,7 +278,7 @@ function OnAirRow({
  */
 export default function WebPlayer() {
   const { data: onAir, isLoading } = useWpOnAir();
-  const [tab, setTab] = useState<"onair" | "library">("onair");
+  const [tab, setTab] = useState<"onair" | "library" | "foryou">("onair");
   const [runRef, setRunRef] = useState<{ slug: string; runId: number | null } | null>(null);
   const [lore, setLore] = useState<{ mbid: string; spinningOn: string | null } | null>(null);
 
@@ -331,6 +332,7 @@ export default function WebPlayer() {
             [
               ["onair", "On the air"],
               ["library", "Library"],
+              ["foryou", "For You"],
             ] as const
           ).map(([key, label]) => (
             <button
@@ -358,7 +360,7 @@ export default function WebPlayer() {
               {label}
             </button>
           ))}
-          {tab === "onair" && (
+          {tab === "onair" && authenticated && (
             <p
               className="wp-mono"
               style={{
@@ -373,7 +375,7 @@ export default function WebPlayer() {
           )}
         </div>
 
-        {tab === "onair" ? (
+        {tab === "onair" && (
           <div className="wp-card" style={{ overflow: "hidden" }}>
             {isLoading && (
               <p style={{ padding: "14px 16px", margin: 0, fontSize: 13, color: "var(--wp-text-muted)" }}>
@@ -398,9 +400,15 @@ export default function WebPlayer() {
               />
             ))}
           </div>
-        ) : (
+        )}
+        {tab === "library" && (
           <LibraryTab
             onOpenLore={(mbid) => setLore({ mbid, spinningOn: null })}
+            onOpenRun={(slug, runId) => setRunRef({ slug, runId })}
+          />
+        )}
+        {tab === "foryou" && (
+          <ForYouTab
             onOpenRun={(slug, runId) => setRunRef({ slug, runId })}
           />
         )}

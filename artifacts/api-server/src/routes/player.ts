@@ -333,6 +333,89 @@ router.get("/player/run/:slug", h(async (req, res) => {
 }));
 
 // ---------------------------------------------------------------------------
+// GET /api/player/for-you — top 5 past runs ranked by library overlap
+// ---------------------------------------------------------------------------
+
+router.get("/player/for-you", h(async (req, res) => {
+  const user = await getUserFromSession(req).catch(() => null);
+  if (!user) return res.status(401).json({ error: "Login required" });
+
+  // CTE: user's library MBIDs
+  // Aggregate spins into (station, show, UTC-day) run partitions, counting
+  // how many resolved MBIDs overlap the user's library. Returns top 5 by
+  // overlap%, ties broken by recency (most recent run first).
+  const result = await db.execute(sql`
+    WITH user_lib AS (
+      SELECT mbid FROM library_items WHERE user_id = ${user.id}
+    )
+    SELECT
+      st.slug,
+      st.name                                               AS station_name,
+      sh.id                                                 AS show_id,
+      sh.name                                               AS show_name,
+      sh.dj_name,
+      to_char(s.played_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day,
+      MIN(s.id)::int                                        AS run_id,
+      COUNT(DISTINCT s.mbid) FILTER (WHERE s.mbid IS NOT NULL)::int
+                                                            AS total_resolved,
+      COUNT(DISTINCT s.mbid) FILTER (
+        WHERE s.mbid IN (SELECT mbid FROM user_lib)
+      )::int                                                AS match_count,
+      ROUND(
+        100.0
+        * COUNT(DISTINCT s.mbid) FILTER (
+            WHERE s.mbid IN (SELECT mbid FROM user_lib)
+          )
+        / NULLIF(
+            COUNT(DISTINCT s.mbid) FILTER (WHERE s.mbid IS NOT NULL),
+            0
+          )
+      )::int                                                AS overlap_pct
+    FROM   spins s
+    JOIN   stations st ON s.station_id = st.id
+    LEFT JOIN shows sh ON s.show_id    = sh.id
+    WHERE  s.station_id IS NOT NULL
+      AND  s.played_at  >= NOW() - INTERVAL '90 days'
+    GROUP BY
+      st.slug, st.name,
+      sh.id, sh.name, sh.dj_name,
+      to_char(s.played_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')
+    HAVING COUNT(DISTINCT s.mbid) FILTER (
+      WHERE s.mbid IN (SELECT mbid FROM user_lib)
+    ) > 0
+    ORDER BY overlap_pct DESC, day DESC
+    LIMIT 5
+  `);
+
+  const rows = result.rows as Array<{
+    slug: string;
+    station_name: string;
+    show_id: number | null;
+    show_name: string | null;
+    dj_name: string | null;
+    day: string;
+    run_id: number;
+    total_resolved: number;
+    match_count: number;
+    overlap_pct: number;
+  }>;
+
+  const runs = rows.map((r) => ({
+    slug: r.slug,
+    stationName: r.station_name,
+    showName: r.show_name ?? null,
+    djName: r.dj_name ?? null,
+    day: r.day,
+    runId: Number(r.run_id),
+    totalResolved: Number(r.total_resolved),
+    matchCount: Number(r.match_count),
+    overlapPct: Number(r.overlap_pct),
+  }));
+
+  return res.json({ runs });
+}));
+
+// ---------------------------------------------------------------------------
 // GET /api/player/lore-counts?mbids=a,b,c — chip counts per recording
 // ---------------------------------------------------------------------------
 

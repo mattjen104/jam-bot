@@ -150,6 +150,34 @@ export function useWpRun(slug: string | null, runId?: number | null) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// For You — top runs ranked by library overlap
+// ---------------------------------------------------------------------------
+
+export interface WpForYouRun {
+  slug: string;
+  stationName: string;
+  showName: string | null;
+  djName: string | null;
+  day: string;
+  runId: number;
+  totalResolved: number;
+  matchCount: number;
+  overlapPct: number;
+}
+
+export function useWpForYou() {
+  return useQuery({
+    queryKey: ["wp", "for-you"],
+    queryFn: () => apiFetch<{ runs: WpForYouRun[] }>("/api/player/for-you"),
+    // Runs are historical; a 5-minute window is plenty fresh.
+    staleTime: 5 * 60_000,
+    // Don't attempt if we can't tell whether the user is logged in yet;
+    // a 401 is fine and handled in the tab, but avoids noise.
+    retry: false,
+  });
+}
+
 export function useWpLoreCounts(mbids: string[]) {
   const key = [...mbids].sort().join(",");
   return useQuery({
