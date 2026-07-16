@@ -158,6 +158,75 @@ describe("writeHealthFail — consecutive_failures accumulates from DB state", (
 });
 
 // ---------------------------------------------------------------------------
+// Tolerant feeds — health recorded, never demoted
+// ---------------------------------------------------------------------------
+
+describe("writeHealthFail — tolerant feeds are never demoted", () => {
+  it("keeps a tolerant picker active past MAX_FAILURES while still tracking failures", async () => {
+    if (!dbAvailable) return;
+
+    let lastResult = true;
+    for (let i = 0; i < MAX_FAILURES + 2; i++) {
+      lastResult = await writeHealthFail(testPickerId, `flaky ${i + 1}`, {
+        tolerant: true,
+      });
+    }
+
+    // Never reports a demotion...
+    expect(lastResult).toBe(false);
+
+    const [row] = await db
+      .select({ active: pickersTable.active, health: pickersTable.health })
+      .from(pickersTable)
+      .where(eq(pickersTable.id, testPickerId))
+      .limit(1);
+
+    // ...stays active, but the failure streak is still visible for admins.
+    expect(row!.active).toBe(true);
+    expect((row!.health as PickerHealth).consecutive_failures).toBe(
+      MAX_FAILURES + 2,
+    );
+    expect((row!.health as PickerHealth).last_error).toBe(
+      `flaky ${MAX_FAILURES + 2}`,
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Seed-style reactivation — health reset makes reactivation durable
+// ---------------------------------------------------------------------------
+
+describe("reactivation with health reset survives the next single failure", () => {
+  it("does not instantly re-demote after active=true + health=null reset", async () => {
+    if (!dbAvailable) return;
+
+    // Demote the picker.
+    for (let i = 0; i < MAX_FAILURES; i++) {
+      await writeHealthFail(testPickerId, "old streak");
+    }
+
+    // What seedPickers() does for wanted seeded pickers: re-activate AND
+    // clear the health snapshot so the old streak cannot carry over.
+    await db
+      .update(pickersTable)
+      .set({ active: true, health: null, updatedAt: new Date() })
+      .where(eq(pickersTable.id, testPickerId));
+
+    // A single new failure must count as 1, not MAX_FAILURES + 1.
+    const demoted = await writeHealthFail(testPickerId, "fresh fail");
+    expect(demoted).toBe(false);
+
+    const [row] = await db
+      .select({ active: pickersTable.active, health: pickersTable.health })
+      .from(pickersTable)
+      .where(eq(pickersTable.id, testPickerId))
+      .limit(1);
+    expect(row!.active).toBe(true);
+    expect((row!.health as PickerHealth).consecutive_failures).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // writeHealthOk — resets consecutive_failures; does NOT re-activate
 // ---------------------------------------------------------------------------
 

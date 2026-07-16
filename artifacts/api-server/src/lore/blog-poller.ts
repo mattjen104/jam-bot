@@ -42,6 +42,11 @@ interface BlogFeed {
   name: string;
   homeUrl: string | null;
   feedUrl: string;
+  /**
+   * Known-flaky/thin feed (sourceRef.tolerant) — failures are logged and
+   * health is recorded, but the picker is never auto-demoted to inactive.
+   */
+  tolerant: boolean;
 }
 
 /** Active blog pickers that carry a feed URL in their sourceRef. */
@@ -60,13 +65,15 @@ async function loadBlogFeeds(): Promise<BlogFeed[]> {
 
   const feeds: BlogFeed[] = [];
   for (const r of rows) {
-    const feedUrl = (r.sourceRef as Record<string, unknown> | null)?.["feedUrl"];
+    const ref = r.sourceRef as Record<string, unknown> | null;
+    const feedUrl = ref?.["feedUrl"];
     if (typeof feedUrl === "string" && feedUrl.trim()) {
       feeds.push({
         id: r.id,
         name: r.name,
         homeUrl: r.homeUrl,
         feedUrl: feedUrl.trim(),
+        tolerant: ref?.["tolerant"] === true,
       });
     }
   }
@@ -115,7 +122,11 @@ export async function writeHealthOk(pickerId: number): Promise<void> {
  *
  * Returns true if the picker was demoted to active=false (reached MAX_FAILURES).
  */
-export async function writeHealthFail(pickerId: number, errMsg: string): Promise<boolean> {
+export async function writeHealthFail(
+  pickerId: number,
+  errMsg: string,
+  opts: { tolerant?: boolean } = {},
+): Promise<boolean> {
   const current = await readCurrentHealth(pickerId);
   const prev = current?.consecutive_failures ?? 0;
   const newFailures = prev + 1;
@@ -124,7 +135,16 @@ export async function writeHealthFail(pickerId: number, errMsg: string): Promise
     last_error: errMsg,
     consecutive_failures: newFailures,
   };
-  const shouldDemote = newFailures >= MAX_FAILURES;
+  // Tolerant (known-flaky/thin) feeds record health but are never auto-demoted
+  // — a Louder-style feed that 500s for a day should quietly recover, not
+  // vanish from the roster. Genuinely dead tolerant feeds still surface via
+  // the health snapshot (consecutive_failures keeps climbing).
+  const shouldDemote = !opts.tolerant && newFailures >= MAX_FAILURES;
+  if (opts.tolerant && newFailures >= MAX_FAILURES && newFailures % MAX_FAILURES === 0) {
+    console.warn(
+      `[blog-poller] tolerant picker ${pickerId} at ${newFailures} consecutive failures (not demoted): ${errMsg}`,
+    );
+  }
   await db
     .update(pickersTable)
     .set({
@@ -153,7 +173,9 @@ async function pollFeed(feed: BlogFeed): Promise<void> {
     if (!result.success) {
       // ingestBlogFeed swallows the HTTP/network error and returns success:false.
       // Treat this as a failure so health tracking demotes the picker correctly.
-      await writeHealthFail(feed.id, "feed fetch failed (no HTTP response)").catch((e) =>
+      await writeHealthFail(feed.id, "feed fetch failed (no HTTP response)", {
+        tolerant: feed.tolerant,
+      }).catch((e) =>
         console.error("[blog-poller] health write failed", feed.id, e),
       );
       return;
@@ -174,7 +196,7 @@ async function pollFeed(feed: BlogFeed): Promise<void> {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[lore] blog poll failed", feed.feedUrl, err);
-    await writeHealthFail(feed.id, msg).catch((e) =>
+    await writeHealthFail(feed.id, msg, { tolerant: feed.tolerant }).catch((e) =>
       console.error("[blog-poller] health write failed", feed.id, e),
     );
   }

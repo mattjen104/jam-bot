@@ -1325,6 +1325,49 @@ export type ListEntry = typeof listEntriesTable.$inferSelect;
 export type InsertListEntry = typeof listEntriesTable.$inferInsert;
 
 /**
+ * Feed posts flagged as **list candidates** — year-end / best-of / roundup
+ * posts detected by the blog poller. Detection and extraction are two separate
+ * stages by design: RSS answers "a list was published" (this table), while a
+ * separate extraction worker later fetches the post page and parses the
+ * individual entries into the lists/list_entries model. Rows are a durable
+ * queue: `status` moves pending → extracted | failed | skipped, and re-ingest
+ * is idempotent via the (picker_id, guid) unique key. Only the post title/link
+ * from the feed is stored — never body text.
+ */
+export const blogListCandidatesTable = pgTable(
+  "blog_list_candidates",
+  {
+    id: serial("id").primaryKey(),
+    pickerId: integer("picker_id")
+      .notNull()
+      .references(() => pickersTable.id),
+    /** The feed item's stable id (guid/id, else link) — dedup key per picker. */
+    guid: text("guid").notNull(),
+    /** The post page URL the extraction stage will fetch. */
+    url: text("url").notNull(),
+    /** The feed item title (e.g. "The 50 Best Albums of 2026 So Far"). */
+    title: text("title").notNull(),
+    /** Post publish date from the feed, when provided. */
+    publishedAt: timestamp("published_at"),
+    /** pending | extracted | failed | skipped — extraction-stage lifecycle. */
+    status: text("status").notNull().default("pending"),
+    /** When the extraction stage last processed this row. Null = never. */
+    processedAt: timestamp("processed_at"),
+    /** Extraction-stage error/skip note, for admin visibility. Null = none. */
+    note: text("note"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("blog_list_candidates_picker_guid_idx").on(t.pickerId, t.guid),
+    index("blog_list_candidates_status_idx").on(t.status),
+  ],
+);
+
+export type BlogListCandidate = typeof blogListCandidatesTable.$inferSelect;
+export type InsertBlogListCandidate =
+  typeof blogListCandidatesTable.$inferInsert;
+
+/**
  * Per-station rolling ingest-quality snapshot, recomputed nightly from the
  * last 7 days of `spins`. One row per station (upserted on each recompute run).
  *

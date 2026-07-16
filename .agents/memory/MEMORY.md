@@ -49,3 +49,4 @@
 - [Structured LLM extraction from scraped pages](schedule-scraper-llm-pattern.md) — injectable extractor seam (like askLLM), strip fences + field-validate every entry, distinguish null (failed) from [] (no data).
 - [Schedule live-first overnight carryover](schedule-overnight-carryover.md) — per-day schedule grids hide post-midnight tails: live detection needs a yesterday-slot carryover check, not just same-day isSlotLive.
 - [Spotify app-wide rate limit vs casting](spotify-app-rate-limit.md) — 429s are per client-id across ALL tokens; background search fallback can break casting, fixed by global cooldown in appClient.
+- [Blog picker identity = feedUrl](blog-picker-identity.md) — blog ingest must match pickers by sourceRef feedUrl, never slugified name, or seeded handles fork into duplicates every poll; tolerant flag lives in sourceRef.

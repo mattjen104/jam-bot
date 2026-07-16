@@ -1277,6 +1277,59 @@ router.get("/admin/spinitron-web-health", h(async (_req, res) => {
   });
 }));
 
+// GET /api/admin/lore/blog-health — per-picker feed health for all blog
+// pickers (active AND inactive, so demotions are visible), plus pending
+// list-candidate counts for stage-2 visibility.
+router.get("/admin/lore/blog-health", h(async (_req, res) => {
+  const rows = await db
+    .select({
+      id: pickersTable.id,
+      handle: pickersTable.handle,
+      name: pickersTable.name,
+      active: pickersTable.active,
+      sourceRef: pickersTable.sourceRef,
+      health: pickersTable.health,
+    })
+    .from(pickersTable)
+    .where(eq(pickersTable.pickerType, "blog"))
+    .orderBy(asc(pickersTable.handle));
+
+  const candidateCounts = await db.execute(sql`
+    SELECT picker_id, status, COUNT(*)::int AS n
+    FROM blog_list_candidates
+    GROUP BY picker_id, status
+  `);
+  const countsByPicker = new Map<number, Record<string, number>>();
+  for (const r of candidateCounts.rows as Array<{
+    picker_id: number;
+    status: string;
+    n: number;
+  }>) {
+    const entry = countsByPicker.get(r.picker_id) ?? {};
+    entry[r.status] = r.n;
+    countsByPicker.set(r.picker_id, entry);
+  }
+
+  return res.json({
+    pickers: rows.map((p) => {
+      const ref = (p.sourceRef ?? {}) as Record<string, unknown>;
+      const health = (p.health ?? {}) as Record<string, unknown>;
+      return {
+        id: p.id,
+        handle: p.handle,
+        name: p.name,
+        active: p.active,
+        feedUrl: typeof ref["feedUrl"] === "string" ? ref["feedUrl"] : null,
+        tolerant: ref["tolerant"] === true,
+        lastOkAt: health["last_ok_at"] ?? null,
+        lastError: health["last_error"] ?? null,
+        consecutiveFailures: health["consecutive_failures"] ?? 0,
+        listCandidates: countsByPicker.get(p.id) ?? {},
+      };
+    }),
+  });
+}));
+
 // ---------------------------------------------------------------------------
 // Station quality scoring endpoints
 // ---------------------------------------------------------------------------

@@ -2,9 +2,13 @@ import {
   db,
   stationsTable,
   radioBrowserStationsTable,
+  pickersTable,
+  picksTable,
+  showsTable,
+  listSourcesTable,
   type InsertStation,
 } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { upsertPicker } from "./picks.js";
 
 /**
@@ -1550,7 +1554,15 @@ const SEED_LABEL_PICKERS = [
  * become picks, feed body text is never stored). A feed that moves or 404s just
  * logs and is skipped, so a stale URL never harms boot or the spine.
  */
-const SEED_BLOG_PICKERS = [
+const SEED_BLOG_PICKERS: ReadonlyArray<{
+  handle: string;
+  name: string;
+  homeUrl: string;
+  feedUrl: string;
+  /** Known-flaky/thin feed: health is recorded but never auto-demoted. */
+  tolerant?: boolean;
+}> = [
+  // --- General canon -------------------------------------------------------
   {
     handle: "stereogum",
     name: "Stereogum",
@@ -1569,7 +1581,242 @@ const SEED_BLOG_PICKERS = [
     homeUrl: "https://www.brooklynvegan.com",
     feedUrl: "https://www.brooklynvegan.com/feed/",
   },
+  {
+    handle: "pitchfork",
+    name: "Pitchfork",
+    homeUrl: "https://pitchfork.com",
+    feedUrl: "https://pitchfork.com/feed/rss",
+  },
+  {
+    handle: "pitchfork-reviews",
+    name: "Pitchfork Album Reviews",
+    homeUrl: "https://pitchfork.com/reviews/albums/",
+    feedUrl: "https://pitchfork.com/feed/feed-album-reviews/rss",
+  },
+  {
+    handle: "bandcamp-daily",
+    name: "Bandcamp Daily",
+    homeUrl: "https://daily.bandcamp.com",
+    feedUrl: "https://daily.bandcamp.com/feed",
+  },
+  {
+    handle: "aquarium-drunkard",
+    name: "Aquarium Drunkard",
+    homeUrl: "https://aquariumdrunkard.com",
+    feedUrl: "https://aquariumdrunkard.com/feed/",
+  },
+  {
+    handle: "guardian-music",
+    name: "The Guardian — Music",
+    homeUrl: "https://www.theguardian.com/music",
+    feedUrl: "https://www.theguardian.com/music/rss",
+  },
+  // --- Metal ---------------------------------------------------------------
+  {
+    handle: "the-obelisk",
+    name: "The Obelisk",
+    homeUrl: "https://theobelisk.net",
+    feedUrl: "https://theobelisk.net/obelisk/feed/",
+  },
+  {
+    handle: "angry-metal-guy",
+    name: "Angry Metal Guy",
+    homeUrl: "https://angrymetalguy.com",
+    feedUrl: "https://angrymetalguy.com/feed/",
+  },
+  {
+    handle: "invisible-oranges",
+    name: "Invisible Oranges",
+    homeUrl: "https://www.invisibleoranges.com",
+    feedUrl: "https://www.invisibleoranges.com/feed/",
+  },
+  {
+    handle: "decibel-magazine",
+    name: "Decibel Magazine",
+    homeUrl: "https://www.decibelmagazine.com",
+    feedUrl: "https://www.decibelmagazine.com/feed/",
+  },
+  {
+    handle: "last-rites",
+    name: "Last Rites",
+    homeUrl: "https://yourlastrites.com",
+    feedUrl: "https://yourlastrites.com/feed/",
+  },
+  {
+    handle: "no-clean-singing",
+    name: "No Clean Singing",
+    homeUrl: "https://www.nocleansinging.com",
+    feedUrl: "https://www.nocleansinging.com/feed/",
+  },
+  {
+    handle: "heavy-blog-is-heavy",
+    name: "Heavy Blog Is Heavy",
+    homeUrl: "https://www.heavyblogisheavy.com",
+    feedUrl: "https://www.heavyblogisheavy.com/feed/",
+  },
+  {
+    handle: "metal-injection",
+    name: "Metal Injection",
+    homeUrl: "https://metalinjection.net",
+    feedUrl: "https://metalinjection.net/feed/",
+  },
+  {
+    handle: "metalsucks",
+    name: "MetalSucks",
+    homeUrl: "https://www.metalsucks.net",
+    feedUrl: "https://www.metalsucks.net/feed/",
+  },
+  {
+    handle: "loudersound",
+    name: "Louder (Metal Hammer / Prog / Classic Rock)",
+    homeUrl: "https://www.loudersound.com",
+    feedUrl: "https://www.loudersound.com/feeds/all",
+    // Louder's aggregate feed is known-flaky (intermittent 5xx / empty
+    // responses) — keep it enrolled, never auto-demote.
+    tolerant: true,
+  },
+  // --- Prog / experimental / drone ----------------------------------------
+  {
+    handle: "the-quietus",
+    name: "The Quietus",
+    homeUrl: "https://thequietus.com",
+    feedUrl: "https://thequietus.com/feed/",
+  },
+  {
+    handle: "the-wire",
+    name: "The Wire",
+    homeUrl: "https://www.thewire.co.uk",
+    // News-only feed — the magazine itself is print/paywalled. Thin by
+    // nature, so tolerant.
+    feedUrl: "https://www.thewire.co.uk/news/rss",
+    tolerant: true,
+  },
+  {
+    handle: "a-closer-listen",
+    name: "A Closer Listen",
+    homeUrl: "https://acloserlisten.com",
+    feedUrl: "https://acloserlisten.com/feed/",
+  },
+  {
+    handle: "tone-glow",
+    name: "Tone Glow",
+    homeUrl: "https://toneglow.substack.com",
+    feedUrl: "https://toneglow.substack.com/feed",
+  },
+  // --- Jazz ----------------------------------------------------------------
+  {
+    handle: "free-jazz-collective",
+    name: "The Free Jazz Collective",
+    homeUrl: "https://www.freejazzblog.org",
+    feedUrl: "https://www.freejazzblog.org/feeds/posts/default?alt=rss",
+  },
+  {
+    handle: "london-jazz-news",
+    name: "London Jazz News",
+    homeUrl: "https://londonjazznews.com",
+    // The site announced a move to ukjazznews.com; the old feed still
+    // publishes, so treat as flaky rather than dropping it.
+    feedUrl: "https://londonjazznews.com/feed/",
+    tolerant: true,
+  },
+  // --- Deliberately NOT enrolled (verified 2026-07-16) ----------------------
+  // Cvlt Nation      — Cloudflare 403s all non-browser/datacenter requests.
+  // NPR Music        — feeds.npr.org returns 403 from datacenter IPs.
+  // All About Jazz   — advertised feed endpoints return empty bodies or 403.
+  // DownBeat         — no working RSS feed found (404 on all known paths).
+  // Boomkat          — no RSS at all; scrape-only (out of scope).
+  // JazzTimes        — feed unstable/dead since the 2023 ownership collapse.
+  // Rolling Stone / Mojo / Uncut — no useful feeds; list content is one-off
+  //                    pages, not feed items.
 ] as const;
+
+/**
+ * Blog pickers that exist in the DB under auto-discovered handles duplicating
+ * a canonical seeded picker. Their picks are re-pointed at the canonical
+ * picker and the duplicate row is removed, so re-ingest stays idempotent and
+ * follow/feed surfaces show one picker per publication.
+ */
+const BLOG_PICKER_MERGES: Record<string, string[]> = {
+  "brooklyn-vegan": ["brooklynvegan"],
+  stereogum: ["lede-admin-stereogum-com", "www-stereogum-com"],
+  pitchfork: ["pitchfork-com"],
+  "tone-glow": ["toneglow-substack-com"],
+  "guardian-music": ["the-guardian-music"],
+};
+
+/**
+ * Fold auto-discovered duplicate blog pickers into their canonical seeded row.
+ * Picks colliding on the (picker_id, external_id) unique key are dropped from
+ * the alias (the canonical copy wins); everything else — picks, shows,
+ * list_sources, queued list candidates — is re-pointed, then the alias row is
+ * deleted. Idempotent: once an alias is gone, later runs are no-ops.
+ */
+async function mergeDuplicateBlogPickers(): Promise<void> {
+  for (const [canonicalHandle, aliasHandles] of Object.entries(
+    BLOG_PICKER_MERGES,
+  )) {
+    const [canonical] = await db
+      .select({ id: pickersTable.id })
+      .from(pickersTable)
+      .where(eq(pickersTable.handle, canonicalHandle))
+      .limit(1);
+    if (!canonical) continue;
+
+    for (const aliasHandle of aliasHandles) {
+      const [alias] = await db
+        .select({ id: pickersTable.id })
+        .from(pickersTable)
+        .where(eq(pickersTable.handle, aliasHandle))
+        .limit(1);
+      if (!alias || alias.id === canonical.id) continue;
+
+      await db.transaction(async (tx) => {
+        // Drop alias picks that would collide with a canonical pick on the
+        // (picker_id, external_id) unique key — same post, already tracked.
+        await tx.execute(sql`
+          DELETE FROM picks a
+          WHERE a.picker_id = ${alias.id}
+            AND a.external_id IS NOT NULL
+            AND EXISTS (
+              SELECT 1 FROM picks c
+              WHERE c.picker_id = ${canonical.id}
+                AND c.external_id = a.external_id
+            )
+        `);
+        await tx
+          .update(picksTable)
+          .set({ pickerId: canonical.id })
+          .where(eq(picksTable.pickerId, alias.id));
+        await tx
+          .update(showsTable)
+          .set({ pickerId: canonical.id })
+          .where(eq(showsTable.pickerId, alias.id));
+        await tx
+          .update(listSourcesTable)
+          .set({ pickerId: canonical.id })
+          .where(eq(listSourcesTable.pickerId, alias.id));
+        // Same-post list candidates: canonical copy wins on (picker_id, guid).
+        await tx.execute(sql`
+          DELETE FROM blog_list_candidates a
+          WHERE a.picker_id = ${alias.id}
+            AND EXISTS (
+              SELECT 1 FROM blog_list_candidates c
+              WHERE c.picker_id = ${canonical.id} AND c.guid = a.guid
+            )
+        `);
+        await tx.execute(sql`
+          UPDATE blog_list_candidates
+          SET picker_id = ${canonical.id}
+          WHERE picker_id = ${alias.id}
+        `);
+        await tx.delete(pickersTable).where(eq(pickersTable.id, alias.id));
+      });
+      console.info(
+        `[lore] merged duplicate blog picker ${aliasHandle} -> ${canonicalHandle}`,
+      );
+    }
+  }
+}
 
 /**
  * NTS archive curator pickers — long-running NTS resident shows whose full,
@@ -1624,13 +1871,30 @@ export async function seedPickers(): Promise<void> {
         handle: b.handle,
         homeUrl: b.homeUrl,
         trustTier: 2,
-        sourceRef: { feedUrl: b.feedUrl },
+        sourceRef: {
+          feedUrl: b.feedUrl,
+          ...(b.tolerant ? { tolerant: true } : {}),
+        },
         description: `Championed on ${b.name} — tracks it writes up become rideable picks.`,
       });
+      // Seeded pickers are wanted: re-activate any that a previous run of the
+      // health machinery demoted (e.g. before a feed URL was corrected). Reset
+      // the failure streak too — otherwise the very next single failure would
+      // hit MAX_FAILURES again and instantly re-demote the picker.
+      await db
+        .update(pickersTable)
+        .set({ active: true, health: null, updatedAt: new Date() })
+        .where(
+          and(eq(pickersTable.handle, b.handle), eq(pickersTable.active, false)),
+        );
     } catch (err) {
       console.error("[lore] seedPickers failed for", b.handle, err);
     }
   }
+  await mergeDuplicateBlogPickers().catch((err) =>
+    console.error("[lore] blog picker merge failed", err),
+  );
+
   for (const n of SEED_NTS_PICKERS) {
     try {
       await upsertPicker({

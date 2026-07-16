@@ -3,7 +3,11 @@ import {
   parseLabelReleaseRecordings,
   parseDiscogsList,
 } from "@workspace/song-enrichment";
-import { parseFeedItems, extractArtistTrack } from "../src/lore/blog.js";
+import {
+  parseFeedItems,
+  extractArtistTrack,
+  isListCandidate,
+} from "../src/lore/blog.js";
 import { slugify } from "../src/lore/picks.js";
 
 /**
@@ -233,5 +237,100 @@ describe("extractArtistTrack", () => {
     expect(extractArtistTrack("Our favorite albums of the year")).toBeNull();
     expect(extractArtistTrack("")).toBeNull();
     expect(extractArtistTrack("Premiere:")).toBeNull();
+  });
+
+  // Real headline shapes sampled from the seeded roster's live feeds.
+  it("strips the AMG/Last Rites 'Artist – Album Review' suffix", () => {
+    expect(extractArtistTrack("Protest the Hero – Within Review")).toEqual({
+      artist: "Protest the Hero",
+      title: "Within",
+    });
+    expect(extractArtistTrack("Kardashev – Alunea Album Review")).toEqual({
+      artist: "Kardashev",
+      title: "Alunea",
+    });
+  });
+
+  it("strips premiere-style prefixes from the metal blogs", () => {
+    expect(
+      extractArtistTrack(
+        'Track Premiere: Anatomy of a Habit – "Paired Sentinels"',
+      ),
+    ).toEqual({ artist: "Anatomy of a Habit", title: "Paired Sentinels" });
+    expect(
+      extractArtistTrack('AN NCS PREMIERE: VITRIOL – "WEAPONIZED LONELINESS"'),
+    ).toEqual({ artist: "VITRIOL", title: "WEAPONIZED LONELINESS" });
+    expect(
+      extractArtistTrack("Album Premiere: Bloodletter – Under the Banner"),
+    ).toEqual({ artist: "Bloodletter", title: "Under the Banner" });
+  });
+
+  it("splits The Obelisk's 'Review: Artist, Title' comma shape", () => {
+    expect(extractArtistTrack("Album Review: Sealess, Aura")).toEqual({
+      artist: "Sealess",
+      title: "Aura",
+    });
+    // Bare commas without an editorial prefix stay unparsed — too weak.
+    expect(extractArtistTrack("Big news today, more later")).toBeNull();
+  });
+
+  it("splits A Closer Listen's tilde and Aquarium Drunkard's double-colon", () => {
+    expect(extractArtistTrack("Sunmoonstar ~ Viera")).toEqual({
+      artist: "Sunmoonstar",
+      title: "Viera",
+    });
+    expect(extractArtistTrack("Videodrome :: The Fog")).toEqual({
+      artist: "Videodrome",
+      title: "The Fog",
+    });
+  });
+
+  it("skips review headlines where the dash separates headline from blurb", () => {
+    // Guardian house style: "Artist: Album review – blurb"
+    expect(
+      extractArtistTrack(
+        "Gracie Abrams: Daughter from Hell review – bloodless anthems hit like a faceful of icing sugar",
+      ),
+    ).toBeNull();
+    // MetalSucks column series: "… REVIEWS …: BAND – ALBUM"
+    expect(
+      extractArtistTrack(
+        "DISGRUNTLED DAD REVIEWS With DAVE MUSTCOMPLAIN: PHARMACIST – VERTEBRAE AFTER VERTEBRAE",
+      ),
+    ).toBeNull();
+  });
+
+  it("drops Free Jazz Collective rating tails and label annotations", () => {
+    expect(
+      extractArtistTrack("Susana Santos Silva – Laments (Clean Feed, 2026) ****½"),
+    ).toEqual({ artist: "Susana Santos Silva", title: "Laments" });
+  });
+});
+
+describe("isListCandidate", () => {
+  it("flags year-end / best-of / roundup titles", () => {
+    expect(isListCandidate("The 50 Best Albums of 2026 So Far")).toBe(true);
+    expect(isListCandidate("Top 10 doom records of the year")).toBe(true);
+    expect(isListCandidate("Year-End Extravaganza: Staff Picks")).toBe(true);
+    expect(isListCandidate("Angry Metal Guy's Record(s) o' the Month — June")).toBe(
+      true,
+    );
+    expect(isListCandidate("Upcoming Metal Releases: 7/13 – 7/19")).toBe(true);
+    expect(isListCandidate("Mid-Year AOTY check-in")).toBe(true);
+    expect(isListCandidate("New music roundup")).toBe(true);
+  });
+
+  it("flags list-y tags even when the title is plain", () => {
+    expect(isListCandidate("June in Review", ["Lists"])).toBe(true);
+    expect(isListCandidate("Staff picks", ["year-end"])).toBe(true);
+  });
+
+  it("does not flag ordinary single-track posts", () => {
+    expect(isListCandidate("Godspeed You! Black Emperor – Storm")).toBe(false);
+    expect(isListCandidate('Premiere: Slowdive – "Alison"')).toBe(false);
+    expect(isListCandidate("Kardashev – Alunea Review")).toBe(false);
+    expect(isListCandidate("The best thing about this record is the drums")).toBe(
+      false,
+    );
   });
 });

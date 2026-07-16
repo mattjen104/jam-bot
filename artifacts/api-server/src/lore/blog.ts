@@ -1,5 +1,5 @@
-import { db, pickersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, pickersTable, blogListCandidatesTable } from "@workspace/db";
+import { eq, sql } from "drizzle-orm";
 import { upsertPicker, persistPick } from "./picks.js";
 
 /**
@@ -131,11 +131,23 @@ export interface ArtistTrackGuess {
 }
 
 // Common editorial prefixes stripped before parsing "Artist – Track".
+// Covers the review/premiere conventions of the metal/jazz/experimental blogs
+// in the roster (Decibel "Album Premiere:", NCS "AN NCS VIDEO PREMIERE:",
+// The Obelisk "Album Review:", etc.).
 const PREFIX_RE =
-  /^\s*(premiere|exclusive|listen|watch|video|track premiere|song premiere|new (music|track|song|video)|stream)\s*[:\-–—]\s*/i;
+  /^\s*(an\s+ncs\s+(video\s+|audio\s+)?premiere|(track|song|album|video|ep|single|demo)\s+premiere|premiere|exclusive|listen|watch|video|new (music|track|song|video)|stream|full (album|ep) stream|(album|ep|demo|track|single)\s+review|review|song of the day|album of the week)\s*[:\-–—]\s*/i;
 
-// Dash-family separators used between artist and title.
-const DASH_RE = /\s+[\-–—]\s+/;
+// Dash-family separators used between artist and title. Includes the tilde
+// (A Closer Listen "Artist ~ Album") and double-colon (Aquarium Drunkard
+// "Artist :: Title") house styles.
+const DASH_RE = /\s+(?:[\-–—~]|::)\s+/;
+
+// Trailing review-suffix noise on the title side of a dash split — the house
+// style of Angry Metal Guy / Last Rites ("Artist – Album Review").
+const REVIEW_SUFFIX_RE = /\s+(album\s+|ep\s+|demo\s+)?review$/i;
+
+// Trailing rating stars / half-stars (Free Jazz Collective "Album (Label, 2026) ****½").
+const RATING_TAIL_RE = /[\s*½]+$/;
 
 /**
  * Pure: best-effort artist/track extraction from a post title, with tags as a
@@ -151,7 +163,9 @@ export function extractArtistTrack(
   rawTitle: string,
   tags: string[] = [],
 ): ArtistTrackGuess | null {
-  let title = rawTitle.trim().replace(PREFIX_RE, "").trim();
+  const trimmed = rawTitle.trim();
+  let title = trimmed.replace(PREFIX_RE, "").trim();
+  const prefixStripped = title !== trimmed;
   if (!title) return null;
 
   // Shape 1: Artist <dash> Track (optionally with the track quoted).
@@ -161,10 +175,43 @@ export function extractArtistTrack(
     let track = title.slice(dash.index + dash[0].length).trim();
     const quoted = track.match(/[""'"]([^""'"]+)[""'"]/);
     if (quoted) track = quoted[1]!.trim();
-    // A trailing " (…)" annotation ("(Official Video)") is noise, not a title.
+    // Trailing rating stars ("Album (Label, 2026) ****½") are noise.
+    track = track.replace(RATING_TAIL_RE, "").trim();
+    // A trailing " (…)" annotation ("(Official Video)", "(Label, 2026)") is
+    // noise, not a title.
     track = track.replace(/\s*[\(\[][^\)\]]*[\)\]]\s*$/g, "").trim();
-    if (artist && track && artist.length <= 120 && track.length <= 160) {
+    // "Artist – Album Review" (AMG/Last Rites house style) — the trailing
+    // "Review" is editorial, not part of the work's title.
+    track = track.replace(REVIEW_SUFFIX_RE, "").trim();
+    // If "review(s)" survives in the ARTIST side, this is a review headline
+    // whose dash separates headline from blurb ("Gracie Abrams: X review –
+    // bloodless anthems…", "DISGRUNTLED DAD REVIEWS…: BAND – ALBUM"), not
+    // artist from title. Skip — never guess.
+    const reviewishArtist = /\breviews?\b/i.test(artist);
+    if (
+      !reviewishArtist &&
+      artist &&
+      track &&
+      artist.length <= 120 &&
+      track.length <= 160
+    ) {
       return { artist, title: track };
+    }
+  }
+
+  // Shape 1b: "Album Review: Artist, Title" (The Obelisk house style). Only
+  // attempted when an editorial prefix was actually stripped — a bare comma in
+  // an arbitrary headline is far too weak a signal on its own.
+  if (prefixStripped && !dash) {
+    const comma = title.match(/^([^,]{1,120}),\s+(.{1,160})$/);
+    if (comma) {
+      const artist = comma[1]!.trim();
+      let work = comma[2]!.trim();
+      work = work.replace(/\s*[\(\[][^\)\]]*[\)\]]\s*$/g, "").trim();
+      // Multiple commas mean a sentence, not "Artist, Title" — skip.
+      if (artist && work && !work.includes(",")) {
+        return { artist, title: work };
+      }
     }
   }
 
@@ -189,6 +236,41 @@ export function extractArtistTrack(
   }
 
   return null;
+}
+
+// --- List-candidate detection (stage 1 of the two-stage list pipeline) -----
+//
+// RSS answers "a list was published", not "what's on it". Posts that look like
+// year-end / best-of / roundup features are flagged and queued for the
+// separate extraction stage instead of being mis-parsed as one artist–track.
+const LIST_TITLE_RES: RegExp[] = [
+  /\b(top|best)\s+\d+\b/i,
+  /\bbest\s+(albums|songs|tracks|records|releases|eps|reissues|metal|jazz)\b/i,
+  /\b(albums|songs|tracks|records|releases|eps)\s+of\s+(the\s+year|the\s+month|the\s+week|20\d\d)\b/i,
+  /\byear[- ]end\b/i,
+  /\bmid[- ]?year\b/i,
+  /\baoty\b/i,
+  /\bmost\s+anticipated\b/i,
+  /\brecord\(?s?\)?\s+o'?\s*the\s+month\b/i,
+  /\bupcoming\b.{0,40}\breleases\b/i,
+  /\broundup\b/i,
+];
+
+const LIST_TAG_RES: RegExp[] = [
+  /^lists?$/i,
+  /year[- ]end/i,
+  /best[- ]of/i,
+];
+
+/**
+ * Pure: does this feed item look like a multi-entry list/feature post
+ * (year-end list, best-of, weekly release roundup)? Such posts are queued for
+ * the extraction stage rather than parsed as a single artist–track.
+ */
+export function isListCandidate(title: string, tags: string[] = []): boolean {
+  const t = title.trim();
+  if (LIST_TITLE_RES.some((re) => re.test(t))) return true;
+  return tags.some((tag) => LIST_TAG_RES.some((re) => re.test(tag.trim())));
 }
 
 const FEED_TIMEOUT_MS = 10_000;
@@ -320,6 +402,8 @@ export interface BlogIngestResult {
   items: number;
   matched: number;
   logged: number;
+  /** Feed items flagged (and queued) as list/roundup candidates this pass. */
+  listCandidates: number;
   /**
    * Whether the feed fetch succeeded. False means the network/HTTP request
    * itself failed; the poller must treat this as a health failure.
@@ -341,14 +425,32 @@ export async function ingestBlogFeed(args: {
   const feedUrl = args.feedUrl.trim();
   if (!feedUrl) throw new Error("feedUrl is required");
 
-  const picker = await upsertPicker({
-    pickerType: "blog",
-    name: args.name,
-    homeUrl: args.homeUrl ?? feedUrl,
-    sourceRef: { feedUrl },
-    trustTier: 2,
-    description: `Championed tracks from ${args.name}.`,
-  });
+  // Reuse the existing picker for this feed if one exists. Matching on the
+  // feedUrl in sourceRef (not a slugified name) is what keeps a seeded picker
+  // ("guardian-music") from silently forking into a name-derived duplicate
+  // ("the-guardian-music") on every poll.
+  // Deterministic when duplicates still exist pre-merge: prefer the active
+  // row, then the oldest (canonical seeds have the lowest ids).
+  const [existing] = await db
+    .select()
+    .from(pickersTable)
+    .where(
+      sql`${pickersTable.pickerType} = 'blog' AND ${pickersTable.sourceRef}->>'feedUrl' = ${feedUrl}`,
+    )
+    .orderBy(
+      sql`${pickersTable.active} DESC, ${pickersTable.id} ASC`,
+    )
+    .limit(1);
+  const picker =
+    existing ??
+    (await upsertPicker({
+      pickerType: "blog",
+      name: args.name,
+      homeUrl: args.homeUrl ?? feedUrl,
+      sourceRef: { feedUrl },
+      trustTier: 2,
+      description: `Championed tracks from ${args.name}.`,
+    }));
 
   let items: BlogItem[] = [];
   let feedText = "";
@@ -369,6 +471,7 @@ export async function ingestBlogFeed(args: {
       items: 0,
       matched: 0,
       logged: 0,
+      listCandidates: 0,
       success: false,
       feedLinks: [],
     };
@@ -389,7 +492,40 @@ export async function ingestBlogFeed(args: {
 
   let matched = 0;
   let logged = 0;
+  let listCandidates = 0;
   for (const item of items) {
+    // Stage-1 list detection: a year-end/best-of/roundup post is a queue entry
+    // for the extraction stage, never a single artist–track guess.
+    if (isListCandidate(item.title, item.tags)) {
+      try {
+        const inserted = await db
+          .insert(blogListCandidatesTable)
+          .values({
+            pickerId: picker.id,
+            guid: item.guid,
+            url: item.link,
+            title: item.title,
+            publishedAt: item.publishedAt ?? null,
+          })
+          .onConflictDoNothing({
+            target: [
+              blogListCandidatesTable.pickerId,
+              blogListCandidatesTable.guid,
+            ],
+          })
+          .returning({ id: blogListCandidatesTable.id });
+        if (inserted.length > 0) {
+          listCandidates++;
+          console.info(
+            `[lore] blog ${args.name} queued list candidate: ${item.title}`,
+          );
+        }
+      } catch (e) {
+        console.error("[lore] blog: list-candidate insert failed", item.link, e);
+      }
+      continue;
+    }
+
     const guess = extractArtistTrack(item.title, item.tags);
     if (!guess) continue; // No confident match — skip, never guess.
     matched++;
@@ -419,6 +555,7 @@ export async function ingestBlogFeed(args: {
     items: items.length,
     matched,
     logged,
+    listCandidates,
     success: true,
     // All item links from the feed — the poller queues these for cross-ref
     // discovery so outbound links from post pages can surface new blog candidates.
