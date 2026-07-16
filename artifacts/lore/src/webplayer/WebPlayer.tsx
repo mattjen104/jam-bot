@@ -169,10 +169,12 @@ function ImportStrip() {
 function OnAirRow({
   item,
   authenticated,
+  nowInLibrary,
   onOpenRun,
 }: {
   item: WpOnAirItem;
   authenticated: boolean;
+  nowInLibrary: boolean;
   onOpenRun: (slug: string) => void;
 }) {
   const { radio } = usePlayer();
@@ -232,7 +234,7 @@ function OnAirRow({
           )}
         </p>
         {item.now.resolved ? (
-          <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--wp-text-secondary)" }}>
+          <p style={{ margin: "2px 0 0", fontSize: 12, color: nowInLibrary ? "var(--wp-text-success)" : "var(--wp-text-secondary)" }}>
             now: {item.now.artist}
             {item.earlier.length > 0 && <> · earlier: {item.earlier.join(", ")}</>}
           </p>
@@ -281,6 +283,8 @@ export default function WebPlayer() {
 
   const authenticated = onAir?.authenticated ?? false;
   const items = onAir?.items ?? [];
+  const onAirMbids = items.map((i) => i.now.mbid).filter((m): m is string => m != null);
+  const { data: onAirLore } = useWpLoreCounts(onAirMbids);
 
   return (
     <div className="wp" data-testid="webplayer">
@@ -386,6 +390,10 @@ export default function WebPlayer() {
                 key={item.station.slug}
                 item={item}
                 authenticated={authenticated}
+                nowInLibrary={
+                  item.now.mbid != null &&
+                  (onAirLore?.get(item.now.mbid)?.keptSince ?? null) != null
+                }
                 onOpenRun={(slug) => setRunRef({ slug, runId: null })}
               />
             ))}
