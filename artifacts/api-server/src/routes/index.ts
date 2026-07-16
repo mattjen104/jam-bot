@@ -12,7 +12,7 @@ router.use(healthRouter);
 router.use(songRouter);
 router.use(meRouter);
 router.use(shareRouter);
-router.use(loreRouter);
 router.use(spotifyRouter);
+router.use(loreRouter);
 
 export default router;
