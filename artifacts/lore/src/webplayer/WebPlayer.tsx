@@ -15,6 +15,7 @@ import { WpKeep } from "./WpKeep";
 import { RunDrawerSheet } from "./RunDrawerSheet";
 import { AlbumLoreSheet } from "./AlbumLoreSheet";
 import { LibraryTab } from "./LibraryTab";
+import { rememberPrefersClassic } from "../lib/uiPrefs";
 import { ForYouTab } from "./ForYouTab";
 import "./wp.css";
 
@@ -403,6 +404,7 @@ export default function WebPlayer() {
             className="wp-mono"
             style={{ fontSize: 11, color: "var(--wp-text-muted)", textDecoration: "none" }}
             data-testid="wp-back-to-classic"
+            onClick={() => rememberPrefersClassic()}
           >
             CLASSIC SITE →
           </Link>
