@@ -1,6 +1,9 @@
 import type { Station } from "@workspace/api-client-react";
 import type { PlayerStatus } from "../hooks/useRadioPlayer";
-import type { RadioCastStatus } from "../player/PlayerProvider";
+import type {
+  RadioCastStatus,
+  RadioCastFallbackReason,
+} from "../player/PlayerProvider";
 import type { SpotifyConnectApi } from "../player/useSpotifyConnect";
 import { DevicePicker } from "./DevicePicker";
 import { Cast, Loader2, Pause, Play, Radio, Volume2, VolumeX, X } from "lucide-react";
@@ -16,6 +19,8 @@ interface PlayerBarProps {
   nowPlayingMbid?: string | null;
   /** Live-cast state — non-"off" when the station resolves to Spotify. */
   casting?: RadioCastStatus;
+  /** Why the cast fell back — null unless casting === "fallback". */
+  castFallbackReason?: RadioCastFallbackReason | null;
   /** True when the cast is paused on the listener's Spotify. */
   castPaused?: boolean;
   onToggle: (station: Station) => void;
@@ -32,6 +37,7 @@ export function PlayerBar({
   error,
   nowPlayingMbid,
   casting = "off",
+  castFallbackReason = null,
   castPaused = false,
   onToggle,
   onStop,
@@ -126,7 +132,11 @@ export function PlayerBar({
             ) : casting === "connecting" ? (
               "Waiting for a track to resolve to Spotify…"
             ) : casting === "fallback" ? (
-              "Not on Spotify · playing the broadcast"
+              castFallbackReason === "rate_limited"
+                ? "Spotify is rate-limited right now · playing the broadcast"
+                : castFallbackReason === "spotify_error"
+                  ? "Spotify unavailable · playing the broadcast"
+                  : "Not on Spotify · playing the broadcast"
             ) : isLoading ? (
               "Buffering the live stream…"
             ) : isPlaying ? (

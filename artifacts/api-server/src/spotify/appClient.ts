@@ -34,6 +34,28 @@ let tokenExpiresAtMs = 0;
 let cooldownUntilMs = 0;
 const DEFAULT_COOLDOWN_MS = 60_000;
 
+/**
+ * Global pacing for app-level calls: Spotify's app-wide quota is a rolling
+ * ~30s window, and 700+ station pollers can trivially exceed it (we earned a
+ * 13-hour penalty once). Serialize all app-client calls with a minimum gap so
+ * background enrichment can never saturate the quota again.
+ */
+const MIN_CALL_GAP_MS = 400;
+let paceChain: Promise<void> = Promise.resolve();
+
+function paced<T>(fn: () => Promise<T>): Promise<T | null> {
+  const run = paceChain.then(async () => {
+    await new Promise((r) => setTimeout(r, MIN_CALL_GAP_MS));
+  });
+  paceChain = run.catch(() => {});
+  return run.then(() => {
+    // A 429 may have landed while this call sat in the queue — re-check so
+    // pre-queued requests also go quiet during an active cooldown.
+    if (spotifyAppInCooldown()) return null;
+    return fn();
+  });
+}
+
 export function spotifyAppInCooldown(): boolean {
   return Date.now() < cooldownUntilMs;
 }
@@ -101,7 +123,8 @@ export async function searchTrack(q: string): Promise<SpotifyTrackRaw | null> {
   const c = await getClient();
   if (!c) return null;
   try {
-    const res = await c.searchTracks(q, { limit: 1 });
+    const res = await paced(() => c.searchTracks(q, { limit: 1 }));
+    if (!res) return null;
     const item = res.body.tracks?.items?.[0];
     return item ? toRaw(item) : null;
   } catch (err) {
@@ -115,8 +138,8 @@ export async function getTrackById(trackId: string): Promise<SpotifyTrackRaw | n
   const c = await getClient();
   if (!c) return null;
   try {
-    const res = await c.getTrack(trackId);
-    return toRaw(res.body);
+    const res = await paced(() => c.getTrack(trackId));
+    return res ? toRaw(res.body) : null;
   } catch (err) {
     noteRateLimit(err);
     return null;
@@ -134,7 +157,8 @@ export async function getAlbumTracks(
   const c = await getClient();
   if (!c) return [];
   try {
-    const res = await c.getAlbumTracks(albumId, { limit: 50 });
+    const res = await paced(() => c.getAlbumTracks(albumId, { limit: 50 }));
+    if (!res) return [];
     return (res.body.items ?? []).map((t) => ({
       id: t.id,
       name: t.name,
@@ -153,7 +177,8 @@ export const cataloguePort: SpotifyCataloguePort = {
     const c = await getClient();
     if (!c) return null;
     try {
-      const res = await c.searchArtists(name, { limit: 1 });
+      const res = await paced(() => c.searchArtists(name, { limit: 1 }));
+      if (!res) return null;
       const a = res.body.artists?.items?.[0];
       if (!a) return null;
       return {
@@ -170,7 +195,8 @@ export const cataloguePort: SpotifyCataloguePort = {
     const c = await getClient();
     if (!c) return [];
     try {
-      const res = await c.getArtistTopTracks(artistId, "US");
+      const res = await paced(() => c.getArtistTopTracks(artistId, "US"));
+      if (!res) return [];
       return (res.body.tracks ?? []).map((t) => ({
         id: t.id,
         uri: t.uri,
@@ -185,10 +211,10 @@ export const cataloguePort: SpotifyCataloguePort = {
     const c = await getClient();
     if (!c) return [];
     try {
-      const res = await c.getArtistAlbums(artistId, {
-        include_groups: "album",
-        limit: 20,
-      });
+      const res = await paced(() =>
+        c.getArtistAlbums(artistId, { include_groups: "album", limit: 20 }),
+      );
+      if (!res) return [];
       return (res.body.items ?? []).map((al) => ({
         id: al.id,
         name: al.name,

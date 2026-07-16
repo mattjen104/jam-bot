@@ -97,6 +97,12 @@ export interface StartRideOpts {
  */
 export type RadioCastStatus = "off" | "connecting" | "casting" | "fallback";
 
+/** Why a live cast fell back to the broadcast — drives the honest status line. */
+export type RadioCastFallbackReason =
+  | "not_on_spotify"
+  | "rate_limited"
+  | "spotify_error";
+
 interface RadioApi {
   status: PlayerStatus;
   station: Station | null;
@@ -104,6 +110,8 @@ interface RadioApi {
   error: string | null;
   /** Live casting state — non-"off" only when a Spotify device is pinned. */
   casting: RadioCastStatus;
+  /** Why the cast fell back — null unless casting === "fallback". */
+  castFallbackReason: RadioCastFallbackReason | null;
   /** True when casting and the listener paused via the player bar. */
   castPaused: boolean;
   toggle: (station: Station) => void;
@@ -872,6 +880,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // change sends the next one. Unresolvable tracks fall back to the broadcast
   // honestly — audio is exclusive, never doubled.
   const [castStatus, setCastStatus] = useState<RadioCastStatus>("off");
+  const [castFallbackReason, setCastFallbackReason] =
+    useState<RadioCastFallbackReason | null>(null);
   const [castPaused, setCastPaused] = useState(false);
   const castRef = useRef<{
     lastMbid: string | null;
@@ -898,6 +908,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     castRef.current = { lastMbid: null, commanded: false, inFlight: false };
     setCastStatus("connecting");
+    setCastFallbackReason(null);
     setCastPaused(false);
 
     const playMbid = (mbid: string) => {
@@ -912,15 +923,27 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           castRef.current.commanded = true;
           setCastPaused(false);
           setCastStatus("casting");
+          setCastFallbackReason(null);
           // Spotify carries the audio now — silence the browser stream.
           pauseRadio?.();
         })
         .catch((err: unknown) => {
           if (cancelled) return;
-          // This track can't play on Spotify — the broadcast covers it.
-          setCastStatus("fallback");
-          resumeRadio?.();
+          // The broadcast covers this track — but be honest about WHY:
+          // a 404 means the track truly isn't on Spotify; anything else
+          // (rate limit, upstream failure) is Spotify being unavailable.
           const httpStatus = (err as { status?: number }).status;
+          const message =
+            err instanceof Error ? err.message.toLowerCase() : "";
+          setCastStatus("fallback");
+          setCastFallbackReason(
+            httpStatus === 404
+              ? "not_on_spotify"
+              : httpStatus === 429 || message.includes("rate-limit")
+                ? "rate_limited"
+                : "spotify_error",
+          );
+          resumeRadio?.();
           if (httpStatus === 401 || httpStatus === 403) refreshSpotify();
         })
         .finally(() => {
@@ -953,6 +976,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       clearInterval(id);
       setCastStatus("off");
+      setCastFallbackReason(null);
       setCastPaused(false);
       if (castRef.current.commanded) {
         // Leave the listener's Spotify quiet when the cast commanded it.
@@ -1161,6 +1185,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         volume: radio.volume,
         error: radio.error,
         casting: castStatus,
+        castFallbackReason,
         castPaused,
         toggle: toggleRadio,
         stop: stopRadio,
@@ -1203,6 +1228,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       radio.error,
       radio.setVolume,
       castStatus,
+      castFallbackReason,
       castPaused,
       toggleRadio,
       stopRadio,

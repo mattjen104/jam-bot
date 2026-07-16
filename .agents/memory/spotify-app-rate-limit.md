@@ -27,3 +27,10 @@ failure was quota exhaustion by unrelated jobs, not the play path.
 - Diagnose via server logs: `WebapiError [object Object]` = spotify-web-api-node
   429/4xx; check for concurrent `recently-played failed (429)` lines to spot
   app-wide throttling.
+- Penalties can be EXTENDED: we once got Retry-After 47599s (~13h). During a
+  penalty EVERYTHING 429s including user-token playback — nothing to do but
+  wait; the cooldown honors the full Retry-After.
+- Prevention: all app-client calls also go through a global pacing queue
+  (400ms min start gap, `paced()` in appClient) and re-check cooldown after
+  dequeuing; UI distinguishes rate_limited/spotify_error from a true 404 so
+  "Not on Spotify" is never shown for quota failures.

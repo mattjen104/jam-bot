@@ -457,6 +457,12 @@ function throwPlayError(result: PlayerRequestResult, context: string): never {
       "No active Spotify device — open Spotify on any device and try again",
     );
   }
+  if (result.status === 429) {
+    throw new SpotifyPlayError(
+      "spotify_error",
+      "Spotify is rate-limiting this app right now — try again later",
+    );
+  }
   throw new SpotifyPlayError(
     "spotify_error",
     `Spotify ${context} failed (${result.status}): ${result.body.slice(0, 200)}`,
