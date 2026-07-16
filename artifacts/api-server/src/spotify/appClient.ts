@@ -24,8 +24,39 @@ export function spotifyAppConfigured(): boolean {
 let client: SpotifyWebApi | null = null;
 let tokenExpiresAtMs = 0;
 
+/**
+ * Spotify rate-limits per APPLICATION (rolling 30s window), so the hundreds of
+ * background station-poller lookups share one quota with interactive listener
+ * features (casting, saves). When Spotify answers 429 we go quiet for a
+ * cooldown window instead of hammering — background enrichment is best-effort,
+ * and backing off is what lets interactive playback commands get through.
+ */
+let cooldownUntilMs = 0;
+const DEFAULT_COOLDOWN_MS = 60_000;
+
+export function spotifyAppInCooldown(): boolean {
+  return Date.now() < cooldownUntilMs;
+}
+
+function noteRateLimit(err: unknown): void {
+  const e = err as { statusCode?: number; headers?: Record<string, string> };
+  if (e?.statusCode !== 429) return;
+  const retryAfterSec = Number(e.headers?.["retry-after"] ?? NaN);
+  const waitMs = Number.isFinite(retryAfterSec)
+    ? Math.max(retryAfterSec * 1000, DEFAULT_COOLDOWN_MS)
+    : DEFAULT_COOLDOWN_MS;
+  const wasQuiet = !spotifyAppInCooldown();
+  cooldownUntilMs = Date.now() + waitMs;
+  if (wasQuiet) {
+    console.warn(
+      `[spotify/app] 429 rate limit — pausing app-level Spotify lookups for ${Math.round(waitMs / 1000)}s`,
+    );
+  }
+}
+
 async function getClient(): Promise<SpotifyWebApi | null> {
   if (!spotifyAppConfigured()) return null;
+  if (spotifyAppInCooldown()) return null;
   if (!client) client = createSpotifyClient();
   if (Date.now() >= tokenExpiresAtMs) {
     const grant = await client.clientCredentialsGrant();
@@ -69,9 +100,14 @@ function toRaw(t: SpotifyApi.TrackObjectFull): SpotifyTrackRaw {
 export async function searchTrack(q: string): Promise<SpotifyTrackRaw | null> {
   const c = await getClient();
   if (!c) return null;
-  const res = await c.searchTracks(q, { limit: 1 });
-  const item = res.body.tracks?.items?.[0];
-  return item ? toRaw(item) : null;
+  try {
+    const res = await c.searchTracks(q, { limit: 1 });
+    const item = res.body.tracks?.items?.[0];
+    return item ? toRaw(item) : null;
+  } catch (err) {
+    noteRateLimit(err);
+    throw err;
+  }
 }
 
 /** Look up a track by its Spotify id, or null when missing/unconfigured. */
@@ -81,7 +117,8 @@ export async function getTrackById(trackId: string): Promise<SpotifyTrackRaw | n
   try {
     const res = await c.getTrack(trackId);
     return toRaw(res.body);
-  } catch {
+  } catch (err) {
+    noteRateLimit(err);
     return null;
   }
 }
@@ -104,7 +141,8 @@ export async function getAlbumTracks(
       trackNumber: t.track_number ?? 0,
       isrc: (t as { external_ids?: { isrc?: string } }).external_ids?.isrc ?? null,
     }));
-  } catch {
+  } catch (err) {
+    noteRateLimit(err);
     return [];
   }
 }
@@ -114,38 +152,53 @@ export const cataloguePort: SpotifyCataloguePort = {
   async searchArtist(name: string): Promise<SpotifyArtistRef | null> {
     const c = await getClient();
     if (!c) return null;
-    const res = await c.searchArtists(name, { limit: 1 });
-    const a = res.body.artists?.items?.[0];
-    if (!a) return null;
-    return {
-      id: a.id,
-      name: a.name,
-      url: a.external_urls?.spotify ?? `https://open.spotify.com/artist/${a.id}`,
-    };
+    try {
+      const res = await c.searchArtists(name, { limit: 1 });
+      const a = res.body.artists?.items?.[0];
+      if (!a) return null;
+      return {
+        id: a.id,
+        name: a.name,
+        url: a.external_urls?.spotify ?? `https://open.spotify.com/artist/${a.id}`,
+      };
+    } catch (err) {
+      noteRateLimit(err);
+      throw err;
+    }
   },
   async getArtistTopTracksList(artistId: string): Promise<CatalogueTrack[]> {
     const c = await getClient();
     if (!c) return [];
-    const res = await c.getArtistTopTracks(artistId, "US");
-    return (res.body.tracks ?? []).map((t) => ({
-      id: t.id,
-      uri: t.uri,
-      title: t.name,
-    }));
+    try {
+      const res = await c.getArtistTopTracks(artistId, "US");
+      return (res.body.tracks ?? []).map((t) => ({
+        id: t.id,
+        uri: t.uri,
+        title: t.name,
+      }));
+    } catch (err) {
+      noteRateLimit(err);
+      throw err;
+    }
   },
   async getArtistAlbumsList(artistId: string): Promise<CatalogueAlbum[]> {
     const c = await getClient();
     if (!c) return [];
-    const res = await c.getArtistAlbums(artistId, {
-      include_groups: "album",
-      limit: 20,
-    });
-    return (res.body.items ?? []).map((al) => ({
-      id: al.id,
-      name: al.name,
-      year: al.release_date ? Number(al.release_date.slice(0, 4)) || undefined : undefined,
-      url: al.external_urls?.spotify ?? `https://open.spotify.com/album/${al.id}`,
-    }));
+    try {
+      const res = await c.getArtistAlbums(artistId, {
+        include_groups: "album",
+        limit: 20,
+      });
+      return (res.body.items ?? []).map((al) => ({
+        id: al.id,
+        name: al.name,
+        year: al.release_date ? Number(al.release_date.slice(0, 4)) || undefined : undefined,
+        url: al.external_urls?.spotify ?? `https://open.spotify.com/album/${al.id}`,
+      }));
+    } catch (err) {
+      noteRateLimit(err);
+      throw err;
+    }
   },
 };
 

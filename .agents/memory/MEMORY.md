@@ -48,3 +48,4 @@
 - [Stale tsx dev server after new routes](api-server-stale-dev-server.md) — a long-running api-server workflow can serve pre-fix routes as 503 "Admin entry not configured" (falls through to admin catch-all); restart workflow before trusting a new-route 503 as a real bug.
 - [Structured LLM extraction from scraped pages](schedule-scraper-llm-pattern.md) — injectable extractor seam (like askLLM), strip fences + field-validate every entry, distinguish null (failed) from [] (no data).
 - [Schedule live-first overnight carryover](schedule-overnight-carryover.md) — per-day schedule grids hide post-midnight tails: live detection needs a yesterday-slot carryover check, not just same-day isSlotLive.
+- [Spotify app-wide rate limit vs casting](spotify-app-rate-limit.md) — 429s are per client-id across ALL tokens; background search fallback can break casting, fixed by global cooldown in appClient.
