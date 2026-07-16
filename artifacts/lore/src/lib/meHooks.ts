@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "@workspace/api-client-react";
 
 // ---------------------------------------------------------------------------
@@ -185,6 +185,29 @@ export function useMyLibrary(cursor?: string, limit = 50) {
 }
 
 /**
+ * Infinite-scrolling variant of the library list. Pages via the API's
+ * addedAt cursor until nextCursor comes back null. Unauthenticated users
+ * get a single empty page.
+ */
+export function useMyLibraryInfinite(limit = 50) {
+  return useInfiniteQuery({
+    queryKey: ["me", "library", "infinite", limit] as const,
+    queryFn: ({ pageParam }) => {
+      const params = new URLSearchParams();
+      if (pageParam) params.set("cursor", pageParam);
+      params.set("limit", String(limit));
+      return fetchOrNull<{ items: LibraryItem[]; nextCursor: string | null }>(
+        `/api/me/library?${params}`,
+      ).then((d) => d ?? { items: [], nextCursor: null });
+    },
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
+/**
  * Batch kept-status check for a list of MBIDs.
  * Returns a Set of kept MBIDs; empty when unauthenticated or mbids is empty.
  */
@@ -228,7 +251,8 @@ export function useMutationKeep() {
           return new Set([...prev, mbid]);
         },
       );
-      void queryClient.invalidateQueries({ queryKey: ME_LIBRARY_KEY() });
+      // Prefix match: covers both the single-page and infinite library queries.
+      void queryClient.invalidateQueries({ queryKey: ["me", "library"] });
     },
   });
 }
@@ -251,7 +275,7 @@ export function useMutationUnkeep() {
           return next;
         },
       );
-      void queryClient.invalidateQueries({ queryKey: ME_LIBRARY_KEY() });
+      void queryClient.invalidateQueries({ queryKey: ["me", "library"] });
     },
   });
 }

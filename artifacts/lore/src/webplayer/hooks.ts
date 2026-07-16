@@ -132,8 +132,12 @@ export function useWpOnAir() {
   return useQuery({
     queryKey: ["wp", "onair"],
     queryFn: () => apiFetch<WpOnAirResponse>("/api/player/onair"),
-    refetchInterval: 30_000,
-    staleTime: 20_000,
+    // Quiet background refresh while the tab is visible. React Query's
+    // default refetchIntervalInBackground=false pauses polling when the
+    // window is hidden; the same query key means existing data stays on
+    // screen during a refetch (no blank/loading flash).
+    refetchInterval: 60_000,
+    staleTime: 45_000,
   });
 }
 

@@ -1,15 +1,13 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Disc3, Radio, Loader2, ExternalLink } from "lucide-react";
 import {
-  useMyLibrary,
+  useMyLibraryInfinite,
   useIsAuthenticated,
   startSpotifyLibraryConnect,
   type LibraryItem,
 } from "../lib/meHooks";
 import { useWpLoreCounts, useWpRecordingSpins, type WpSpinRow } from "./hooks";
 import { LoreChip } from "./LoreChip";
-
-const LORE_BATCH_MAX = 60;
 
 interface RunRef {
   runId: number | null;
@@ -194,9 +192,40 @@ function LibraryRow({
 }
 
 /**
+ * One page of library rows. Isolated as a component so each page batches its
+ * own lore-counts request (≤ page size MBIDs) instead of capping chips at the
+ * first N items overall.
+ */
+function LibraryPage({
+  items,
+  onOpenLore,
+  onOpenRun,
+}: {
+  items: LibraryItem[];
+  onOpenLore: (mbid: string) => void;
+  onOpenRun: (slug: string, runId: number | null) => void;
+}) {
+  const { data: loreCounts } = useWpLoreCounts(items.map((i) => i.mbid));
+  return (
+    <>
+      {items.map((item) => (
+        <LibraryRow
+          key={item.mbid}
+          item={item}
+          loreCounts={loreCounts}
+          onOpenLore={onOpenLore}
+          onOpenRun={onOpenRun}
+        />
+      ))}
+    </>
+  );
+}
+
+/**
  * Library tab — the user's kept/imported tracks with lore chips and a
  * "Hear in runs" expander that lists documented runs containing each
- * recording; tapping one opens that run's drawer.
+ * recording; tapping one opens that run's drawer. Pages load automatically
+ * as you scroll (with a manual Load more fallback).
  */
 export function LibraryTab({
   onOpenLore,
@@ -206,11 +235,32 @@ export function LibraryTab({
   onOpenRun: (slug: string, runId: number | null) => void;
 }) {
   const isAuthenticated = useIsAuthenticated();
-  const { data, isLoading } = useMyLibrary();
-  const items = data?.items ?? [];
-  const { data: loreCounts } = useWpLoreCounts(
-    items.slice(0, LORE_BATCH_MAX).map((i) => i.mbid),
-  );
+  const {
+    data,
+    isLoading,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = useMyLibraryInfinite();
+  const pages = data?.pages ?? [];
+  const totalLoaded = pages.reduce((n, p) => n + p.items.length, 0);
+
+  // Auto-load the next page when the sentinel scrolls into view.
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !hasNextPage) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting) && !isFetchingNextPage) {
+          void fetchNextPage();
+        }
+      },
+      { rootMargin: "300px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   if (isAuthenticated === false) {
     return (
@@ -244,21 +294,55 @@ export function LibraryTab({
           Loading your library…
         </p>
       )}
-      {!isLoading && items.length === 0 && (
+      {!isLoading && totalLoaded === 0 && (
         <p style={{ padding: "14px 16px", margin: 0, fontSize: 13, color: "var(--wp-text-muted)" }}>
           Nothing kept yet — keep a track from the on-air list or import your
           Spotify library.
         </p>
       )}
-      {items.map((item) => (
-        <LibraryRow
-          key={item.mbid}
-          item={item}
-          loreCounts={loreCounts}
+      {pages.map((page, i) => (
+        <LibraryPage
+          key={i}
+          items={page.items}
           onOpenLore={onOpenLore}
           onOpenRun={onOpenRun}
         />
       ))}
+      {hasNextPage && <div ref={sentinelRef} aria-hidden="true" />}
+      {totalLoaded > 0 && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 10,
+            padding: "12px 16px",
+          }}
+          data-testid="wp-library-footer"
+        >
+          {hasNextPage ? (
+            <button
+              type="button"
+              onClick={() => void fetchNextPage()}
+              disabled={isFetchingNextPage}
+              style={{ fontSize: 12, display: "inline-flex", alignItems: "center", gap: 6 }}
+              data-testid="wp-library-load-more"
+            >
+              {isFetchingNextPage && (
+                <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+              )}
+              {isFetchingNextPage ? "Loading…" : "Load more"}
+            </button>
+          ) : (
+            <p className="wp-mono" style={{ margin: 0, fontSize: 11, color: "var(--wp-text-muted)" }}>
+              that's everything
+            </p>
+          )}
+          <p className="wp-mono" style={{ margin: 0, fontSize: 11, color: "var(--wp-text-muted)" }}>
+            {totalLoaded} loaded
+          </p>
+        </div>
+      )}
     </div>
   );
 }

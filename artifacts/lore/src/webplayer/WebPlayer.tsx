@@ -1,8 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "wouter";
-import { Pause, Play, Check, RefreshCw, ChevronRight } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Pause, Play, Check, RefreshCw, ChevronRight, Bookmark, Loader2 } from "lucide-react";
 import { usePlayer } from "../player/PlayerProvider";
-import { useLatestImportJob, useMyKeepStatus, useIsAuthenticated } from "../lib/meHooks";
+import {
+  useLatestImportJob,
+  useMyKeepStatus,
+  useIsAuthenticated,
+  useMutationKeep,
+} from "../lib/meHooks";
 import { useWpOnAir, useWpLoreCounts, type WpOnAirItem } from "./hooks";
 import { LoreChip } from "./LoreChip";
 import { WpKeep } from "./WpKeep";
@@ -167,6 +173,83 @@ function ImportStrip() {
   );
 }
 
+/** Ticking "updated Xs ago" freshness label for the on-air list. */
+function OnAirFreshness({ updatedAt }: { updatedAt: number }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 10_000);
+    return () => clearInterval(id);
+  }, []);
+  if (!updatedAt) return null;
+  const secs = Math.max(0, Math.round((Date.now() - updatedAt) / 1000));
+  const label = secs < 15 ? "just now" : secs < 90 ? `${secs}s ago` : `${Math.round(secs / 60)}m ago`;
+  return (
+    <span className="wp-mono" style={{ fontSize: 11, color: "var(--wp-text-muted)" }} data-testid="wp-onair-freshness">
+      updated {label}
+    </span>
+  );
+}
+
+/**
+ * Compact keep control for on-air rows. Kept state comes from the batched
+ * lore-counts data (no per-row status query); an optimistic local flag flips
+ * the control immediately on success.
+ */
+function OnAirKeep({
+  mbid,
+  stationSlug,
+  inLibrary,
+}: {
+  mbid: string;
+  stationSlug: string;
+  inLibrary: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const keepMutation = useMutationKeep();
+  const [justKept, setJustKept] = useState(false);
+  const kept = inLibrary || justKept;
+
+  if (kept) {
+    return (
+      <span
+        title="In your library"
+        style={{ display: "inline-flex", alignItems: "center", color: "var(--wp-text-success)", flexShrink: 0 }}
+        data-testid={`wp-onair-kept-${mbid}`}
+      >
+        <Check size={14} aria-hidden="true" />
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        keepMutation.mutate(
+          { mbid, provenance: { kind: "station", stationSlug } },
+          {
+            onSuccess: () => {
+              setJustKept(true);
+              // Refresh keptSince so green in-library highlights pick up.
+              void queryClient.invalidateQueries({ queryKey: ["wp", "lore-counts"] });
+            },
+          },
+        )
+      }
+      disabled={keepMutation.isPending}
+      title="Keep this track in your library"
+      aria-label="Keep this track in your library"
+      style={{ display: "inline-flex", alignItems: "center", padding: "4px 7px", fontSize: 12, flexShrink: 0 }}
+      data-testid={`wp-onair-keep-${mbid}`}
+    >
+      {keepMutation.isPending ? (
+        <Loader2 size={13} className="animate-spin" aria-hidden="true" />
+      ) : (
+        <Bookmark size={13} aria-hidden="true" />
+      )}
+    </button>
+  );
+}
+
 function OnAirRow({
   item,
   authenticated,
@@ -251,6 +334,16 @@ function OnAirRow({
       >
         {item.station.name}
       </span>
+      {authenticated && item.now.resolved && item.now.mbid && (
+        <OnAirKeep
+          // Key by mbid: remounting on track change resets the optimistic
+          // justKept flag so a new track never inherits kept state.
+          key={item.now.mbid}
+          mbid={item.now.mbid}
+          stationSlug={item.station.slug}
+          inLibrary={nowInLibrary}
+        />
+      )}
       {authenticated ? (
         <span
           style={{
@@ -277,7 +370,7 @@ function OnAirRow({
  * panel open as bottom sheets.
  */
 export default function WebPlayer() {
-  const { data: onAir, isLoading } = useWpOnAir();
+  const { data: onAir, isLoading, dataUpdatedAt } = useWpOnAir();
   const [tab, setTab] = useState<"onair" | "library" | "foryou">("onair");
   const [runRef, setRunRef] = useState<{ slug: string; runId: number | null } | null>(null);
   const [lore, setLore] = useState<{ mbid: string; spinningOn: string | null } | null>(null);
@@ -360,7 +453,7 @@ export default function WebPlayer() {
               {label}
             </button>
           ))}
-          {tab === "onair" && authenticated && (
+          {tab === "onair" && (
             <p
               className="wp-mono"
               style={{
@@ -368,9 +461,12 @@ export default function WebPlayer() {
                 alignSelf: "center",
                 fontSize: 11,
                 color: "var(--wp-text-muted)",
+                display: "inline-flex",
+                gap: 10,
               }}
             >
-              {authenticated ? "sorted by your overlap" : "connect Spotify to sort by your taste"}
+              {authenticated && <span>sorted by your overlap</span>}
+              {!isLoading && <OnAirFreshness updatedAt={dataUpdatedAt} />}
             </p>
           )}
         </div>
