@@ -1719,11 +1719,45 @@ const SEED_BLOG_PICKERS: ReadonlyArray<{
     feedUrl: "https://londonjazznews.com/feed/",
     tolerant: true,
   },
-  // --- Deliberately NOT enrolled (verified 2026-07-16) ----------------------
-  // Cvlt Nation      — Cloudflare 403s all non-browser/datacenter requests.
-  // NPR Music        — feeds.npr.org returns 403 from datacenter IPs.
-  // All About Jazz   — advertised feed endpoints return empty bodies or 403.
-  // DownBeat         — no working RSS feed found (404 on all known paths).
+  // --- Enrolled but currently blocked from this network (2026-07-16) --------
+  // These four are required by the roster spec but their feeds are unreachable
+  // from this server today (Cloudflare/Akamai bot walls, empty XML, or
+  // HTML-not-RSS). They are seeded TOLERANT: the poller keeps trying, the
+  // health endpoint shows the failure streak, they are never auto-demoted,
+  // and ingestion starts automatically if the block ever lifts.
+  {
+    handle: "cvlt-nation",
+    name: "CVLT Nation",
+    homeUrl: "https://cvltnation.com",
+    // Cloudflare 403s non-browser/datacenter requests as of 2026-07-16.
+    feedUrl: "https://cvltnation.com/feed/",
+    tolerant: true,
+  },
+  {
+    handle: "npr-music",
+    name: "NPR Music",
+    homeUrl: "https://www.npr.org/music/",
+    // feeds.npr.org returns Akamai "Access Denied" from datacenter IPs.
+    feedUrl: "https://feeds.npr.org/1039/rss.xml",
+    tolerant: true,
+  },
+  {
+    handle: "all-about-jazz",
+    name: "All About Jazz",
+    homeUrl: "https://www.allaboutjazz.com",
+    // Advertised RSS endpoint returns HTTP 200 with an empty body from here.
+    feedUrl: "https://www.allaboutjazz.com/rss/news.xml",
+    tolerant: true,
+  },
+  {
+    handle: "downbeat",
+    name: "DownBeat",
+    homeUrl: "https://downbeat.com",
+    // Best-known feed path currently serves HTML, not RSS (thin feed — accept).
+    feedUrl: "https://downbeat.com/news/rss",
+    tolerant: true,
+  },
+  // --- Deliberately NOT enrolled (per task spec) -----------------------------
   // Boomkat          — no RSS at all; scrape-only (out of scope).
   // JazzTimes        — feed unstable/dead since the 2023 ownership collapse.
   // Rolling Stone / Mojo / Uncut — no useful feeds; list content is one-off
