@@ -1335,6 +1335,8 @@ router.get("/admin/lore/blog-health", h(async (_req, res) => {
 // GET /api/admin/lore/list-candidates — the stage-2 extraction queue.
 // Optional ?status=pending|extracted|failed|skipped filter. Shows per-post
 // outcome notes so extraction failures are loud and diagnosable.
+// Includes listId (left-joined from lists on URL match) so the admin UI can
+// link directly to the entry review flow for extracted candidates.
 router.get("/admin/lore/list-candidates", h(async (req, res) => {
   const status = String(req.query["status"] ?? "").trim();
   const where = status
@@ -1355,9 +1357,11 @@ router.get("/admin/lore/list-candidates", h(async (req, res) => {
       processedAt: blogListCandidatesTable.processedAt,
       note: blogListCandidatesTable.note,
       createdAt: blogListCandidatesTable.createdAt,
+      listId: listsTable.id,
     })
     .from(blogListCandidatesTable)
     .innerJoin(pickersTable, eq(pickersTable.id, blogListCandidatesTable.pickerId))
+    .leftJoin(listsTable, eq(listsTable.url, blogListCandidatesTable.url))
     .where(where)
     .orderBy(desc(blogListCandidatesTable.id))
     .limit(200);
