@@ -24,7 +24,9 @@ export interface SpotifyConnectApi {
   /** Server has app credentials; when false the feature is honestly absent. */
   configured: boolean;
   connected: boolean;
-  /** Full-track remote playback needs Premium. */
+  /** Full-track remote playback needs Premium. True unless the tier is
+   * explicitly known to be non-premium — an unknown tier is given the benefit
+   * of the doubt (the server enforces the same rule when playing). */
   premium: boolean;
   displayName: string | null;
   product: string | null;
@@ -180,7 +182,10 @@ export function useSpotifyConnect(): SpotifyConnectApi {
   return {
     configured,
     connected,
-    premium: product === "premium",
+    // Match the server's permissiveness: only an explicitly non-premium tier
+    // blocks remote playback. A null/blank tier (profile fetch failed at
+    // connect time) must not hide Premium features forever.
+    premium: product == null || product === "" || product === "premium",
     displayName,
     product,
     notice,

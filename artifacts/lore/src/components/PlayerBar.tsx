@@ -3,7 +3,7 @@ import type { PlayerStatus } from "../hooks/useRadioPlayer";
 import type { RadioCastStatus } from "../player/PlayerProvider";
 import type { SpotifyConnectApi } from "../player/useSpotifyConnect";
 import { DevicePicker } from "./DevicePicker";
-import { Loader2, Pause, Play, Radio, Volume2, VolumeX, X } from "lucide-react";
+import { Cast, Loader2, Pause, Play, Radio, Volume2, VolumeX, X } from "lucide-react";
 import { KeepButton } from "./KeepButton";
 import { ShareButton } from "./ShareButton";
 
@@ -42,6 +42,8 @@ export function PlayerBar({
   const isPlaying = isCasting ? !castPaused : status === "playing";
   const isLoading = !isCasting && status === "loading";
   const showDevicePicker = !!(spotify?.connected && spotify.premium);
+  // Not connected yet — show the cast icon as an entry point to connect.
+  const showConnectPrompt = !!(spotify?.configured && !spotify.connected);
   const castDeviceName = spotify?.pinnedDevice?.name ?? "your Spotify";
   return (
     <div
@@ -154,9 +156,21 @@ export function PlayerBar({
               <ShareButton compact sharePath={`songs/${nowPlayingMbid}`} kind="song" />
             </>
           )}
-          {/* Device picker — shown when Spotify Premium is connected */}
+          {/* Device picker — shown when Spotify is connected (unless the
+              account is explicitly non-premium) */}
           {showDevicePicker && spotify ? (
             <DevicePicker spotify={spotify} />
+          ) : showConnectPrompt && spotify ? (
+            <button
+              type="button"
+              onClick={spotify.connect}
+              aria-label="Connect Spotify to cast to your devices"
+              title="Connect Spotify to cast this station to your speakers"
+              data-testid="cast-connect-button"
+              className="hover-elevate flex h-9 items-center gap-1.5 rounded-full border border-border px-2.5 font-mono text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Cast className="h-3.5 w-3.5 shrink-0" />
+            </button>
           ) : null}
           <div className="hidden items-center gap-2 sm:flex">
             {volume === 0 ? (

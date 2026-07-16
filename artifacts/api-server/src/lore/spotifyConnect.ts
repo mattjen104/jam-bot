@@ -176,6 +176,36 @@ export async function createConnection(
   return sid;
 }
 
+/**
+ * Backfill a connection's profile fields (product tier, display name, user id)
+ * when they were never captured — e.g. the profile fetch failed at connect
+ * time. Best-effort: on failure the row is left unchanged and null is
+ * returned so callers keep serving the stored (blank) values honestly.
+ */
+export async function backfillConnectionProfile(
+  conn: SpotifyConnection,
+): Promise<SpotifyProfile | null> {
+  try {
+    const profile = await fetchProfile(conn.accessToken);
+    // A null product means the fetch failed or the token can't see the tier;
+    // don't write anything so a later attempt can still succeed.
+    if (!profile.product) return null;
+    await db
+      .update(spotifyConnectionsTable)
+      .set({
+        product: profile.product,
+        displayName: profile.displayName ?? conn.displayName,
+        spotifyUserId: profile.spotifyUserId ?? conn.spotifyUserId,
+        updatedAt: new Date(),
+      })
+      .where(eq(spotifyConnectionsTable.sid, conn.sid));
+    return profile;
+  } catch (err) {
+    console.error("[spotify] profile backfill failed", err);
+    return null;
+  }
+}
+
 export async function deleteConnection(sid: string): Promise<void> {
   await db
     .delete(spotifyConnectionsTable)

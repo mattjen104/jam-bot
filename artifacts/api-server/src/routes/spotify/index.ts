@@ -9,6 +9,7 @@ import {
   exchangeCode,
   fetchProfile,
   createConnection,
+  backfillConnectionProfile,
   deleteConnection,
   getFreshConnection,
   resolveSpotifyTrack,
@@ -128,11 +129,23 @@ router.get("/spotify/status", async (req: Request, res: Response) => {
   const configured = spotifyConnectConfigured();
   const sid = configured ? sidFrom(req) : null;
   const conn = sid ? await getFreshConnection(sid) : null;
+  // Self-heal: if the product tier was never captured at connect time (the
+  // profile fetch can fail silently), re-fetch and persist it so the client
+  // learns the real tier instead of hiding Premium features forever.
+  let displayName = conn?.displayName ?? null;
+  let product = conn?.product ?? null;
+  if (conn && !product) {
+    const profile = await backfillConnectionProfile(conn);
+    if (profile) {
+      displayName = profile.displayName ?? displayName;
+      product = profile.product;
+    }
+  }
   res.json({
     configured,
     connected: !!conn,
-    displayName: conn?.displayName ?? null,
-    product: conn?.product ?? null,
+    displayName,
+    product,
   });
 });
 
