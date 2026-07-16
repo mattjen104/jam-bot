@@ -691,6 +691,13 @@ router.get("/me/library", h(async (req, res) => {
       title: recordingsTable.title,
       artist: recordingsTable.artist,
       artworkUrl: recordingsTable.artworkUrl,
+      links: recordingsTable.links,
+      // Scalar subquery: primary release group title (at most one row).
+      albumTitle: sql<string | null>`(
+        SELECT title FROM recording_release_groups
+        WHERE recording_mbid = ${libraryItemsTable.mbid} AND is_primary = true
+        LIMIT 1
+      )`,
     })
     .from(libraryItemsTable)
     .leftJoin(recordingsTable, eq(libraryItemsTable.mbid, recordingsTable.mbid))
@@ -714,7 +721,16 @@ router.get("/me/library", h(async (req, res) => {
       provenance: r.provenance,
       addedAt: r.addedAt.toISOString(),
       recording: r.title
-        ? { title: r.title, artist: r.artist, artworkUrl: r.artworkUrl ?? null }
+        ? {
+            title: r.title,
+            artist: r.artist,
+            artworkUrl: r.artworkUrl ?? null,
+            albumTitle: r.albumTitle ?? null,
+            spotifyUrl:
+              (r.links as Array<{ url: string }> | null)?.find((l) =>
+                l.url.includes("open.spotify.com"),
+              )?.url ?? null,
+          }
         : null,
     })),
     nextCursor: hasMore ? items[items.length - 1]?.addedAt.toISOString() : null,

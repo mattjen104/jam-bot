@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Disc3, Radio, Loader2 } from "lucide-react";
+import { Disc3, Radio, Loader2, ExternalLink } from "lucide-react";
 import {
   useMyLibrary,
   useIsAuthenticated,
@@ -151,7 +151,24 @@ function LibraryRow({
           <p style={{ margin: 0, fontSize: 14 }}>
             {rec ? `${rec.artist} — ${rec.title}` : item.mbid}
           </p>
-          <p className="wp-mono" style={{ margin: "1px 0 0", fontSize: 11, color: "var(--wp-text-muted)" }}>
+          {rec?.albumTitle && (
+            <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--wp-text-secondary)", display: "flex", alignItems: "center", gap: 5 }}>
+              {rec.albumTitle}
+              {rec.spotifyUrl && (
+                <a
+                  href={`https://open.spotify.com/search/${encodeURIComponent(rec.artist + " " + rec.albumTitle)}/albums`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Find album on Spotify"
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ color: "var(--wp-text-muted)", display: "inline-flex", alignItems: "center" }}
+                >
+                  <ExternalLink size={11} aria-hidden="true" />
+                </a>
+              )}
+            </p>
+          )}
+          <p className="wp-mono" style={{ margin: "2px 0 0", fontSize: 11, color: "var(--wp-text-muted)" }}>
             kept {item.addedAt.slice(0, 10)}
             {item.provenance.kind === "station" && item.provenance.stationSlug
               ? ` · via ${item.provenance.stationSlug}`

@@ -16,6 +16,9 @@ export interface LibraryRecording {
   title: string;
   artist: string;
   artworkUrl: string | null;
+  albumTitle: string | null;
+  /** Spotify track URL from Odesli resolution, when available. */
+  spotifyUrl: string | null;
 }
 
 export interface LibraryProvenance {

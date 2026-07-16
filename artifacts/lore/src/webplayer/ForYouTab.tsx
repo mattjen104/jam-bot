@@ -1,5 +1,6 @@
-import { Radio, TrendingUp } from "lucide-react";
-import { useWpForYou, type WpForYouRun } from "./hooks";
+import { useState } from "react";
+import { Radio, TrendingUp, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { useWpForYou, useWpRun, type WpForYouRun, type WpRunSpin } from "./hooks";
 import { useIsAuthenticated, startSpotifyLibraryConnect } from "../lib/meHooks";
 
 function OverlapBadge({ pct }: { pct: number }) {
@@ -22,6 +23,109 @@ function OverlapBadge({ pct }: { pct: number }) {
   );
 }
 
+/** Inline tracklist for an expanded run card. */
+function RunTrackList({
+  slug,
+  runId,
+}: {
+  slug: string;
+  runId: number;
+}) {
+  const { data, isLoading, isError } = useWpRun(slug, runId);
+
+  if (isLoading) {
+    return (
+      <div
+        style={{
+          padding: "10px 14px",
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          color: "var(--wp-text-muted)",
+          fontSize: 12,
+        }}
+      >
+        <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+        Loading tracks…
+      </div>
+    );
+  }
+
+  if (isError || !data) {
+    return (
+      <p style={{ padding: "8px 14px", margin: 0, fontSize: 12, color: "var(--wp-text-muted)" }}>
+        Couldn't load tracks.
+      </p>
+    );
+  }
+
+  // Combine and sort chronologically so the list mirrors broadcast order.
+  const all: WpRunSpin[] = [...data.fromLibrary, ...data.newToYou].sort(
+    (a, b) => a.playedAt.localeCompare(b.playedAt),
+  );
+
+  if (all.length === 0) {
+    return (
+      <p style={{ padding: "8px 14px", margin: 0, fontSize: 12, color: "var(--wp-text-muted)" }}>
+        No resolved tracks in this run yet.
+      </p>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        background: "var(--wp-surface-2)",
+        borderTop: "0.5px solid var(--wp-border)",
+      }}
+    >
+      {all.map((spin, i) => (
+        <div
+          key={`${spin.mbid ?? spin.title}-${i}`}
+          style={{
+            padding: "6px 14px",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            borderBottom: i < all.length - 1 ? "0.5px solid var(--wp-border)" : "none",
+          }}
+        >
+          {spin.artworkUrl ? (
+            <img
+              src={spin.artworkUrl}
+              alt=""
+              style={{ width: 24, height: 24, borderRadius: 3, objectFit: "cover", flexShrink: 0 }}
+            />
+          ) : (
+            <div
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: 3,
+                background: "var(--wp-surface-3, var(--wp-border))",
+                flexShrink: 0,
+              }}
+            />
+          )}
+          <p
+            style={{
+              margin: 0,
+              fontSize: 12,
+              minWidth: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              color: spin.inLibrary ? "var(--wp-text-success)" : "var(--wp-text-primary)",
+            }}
+          >
+            {spin.artist} — {spin.title}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function RunCard({
   run,
   onOpen,
@@ -29,6 +133,7 @@ function RunCard({
   run: WpForYouRun;
   onOpen: () => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const label = run.showName ?? run.stationName;
   const sub = [
     run.djName,
@@ -39,71 +144,73 @@ function RunCard({
 
   return (
     <div
-      style={{
-        padding: "12px 14px",
-        borderBottom: "0.5px solid var(--wp-border)",
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-      }}
+      style={{ borderBottom: "0.5px solid var(--wp-border)" }}
       data-testid={`wp-foryou-run-${run.runId}`}
     >
-      {/* Overlap badge */}
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, flexShrink: 0 }}>
-        <OverlapBadge pct={run.overlapPct} />
-        <span style={{ fontSize: 10, color: "var(--wp-text-muted)" }}>overlap</span>
+      {/* Card header row */}
+      <div style={{ padding: "12px 14px", display: "flex", alignItems: "center", gap: 12 }}>
+        {/* Overlap badge */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, flexShrink: 0 }}>
+          <OverlapBadge pct={run.overlapPct} />
+          <span style={{ fontSize: 10, color: "var(--wp-text-muted)" }}>overlap</span>
+        </div>
+
+        {/* Run info — clicking opens the full run drawer */}
+        <button
+          type="button"
+          onClick={onOpen}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            background: "none",
+            border: "none",
+            padding: 0,
+            textAlign: "left",
+            cursor: "pointer",
+          }}
+          aria-label={`Open run: ${label}`}
+        >
+          <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>
+            {label}
+            {run.djName && run.showName && (
+              <span style={{ fontSize: 12, color: "var(--wp-text-muted)", fontWeight: 400 }}>
+                {" "}· {run.djName}
+              </span>
+            )}
+          </p>
+          {sub && (
+            <p style={{ margin: "1px 0 0", fontSize: 12, color: "var(--wp-text-muted)" }}>{sub}</p>
+          )}
+          <p className="wp-mono" style={{ margin: "4px 0 0", fontSize: 11, color: "var(--wp-text-secondary)" }}>
+            {run.day} · {run.matchCount} of {run.totalResolved} resolved tracks
+          </p>
+        </button>
+
+        {/* Expand tracklist toggle */}
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          aria-label={expanded ? "Hide tracks" : "Show tracks"}
+          style={{
+            flexShrink: 0,
+            background: "none",
+            border: "none",
+            padding: 4,
+            cursor: "pointer",
+            color: "var(--wp-text-muted)",
+            display: "flex",
+            alignItems: "center",
+            gap: 3,
+          }}
+        >
+          <Radio size={13} aria-hidden="true" />
+          {expanded ? <ChevronUp size={13} aria-hidden="true" /> : <ChevronDown size={13} aria-hidden="true" />}
+        </button>
       </div>
 
-      {/* Run info */}
-      <button
-        type="button"
-        onClick={onOpen}
-        style={{
-          flex: 1,
-          minWidth: 0,
-          background: "none",
-          border: "none",
-          padding: 0,
-          textAlign: "left",
-          cursor: "pointer",
-        }}
-        aria-label={`Open run: ${label}`}
-      >
-        <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>
-          {label}
-          {run.djName && run.showName && (
-            <span style={{ fontSize: 12, color: "var(--wp-text-muted)", fontWeight: 400 }}>
-              {" "}· {run.djName}
-            </span>
-          )}
-        </p>
-        {sub && (
-          <p style={{ margin: "1px 0 0", fontSize: 12, color: "var(--wp-text-muted)" }}>{sub}</p>
-        )}
-        <p className="wp-mono" style={{ margin: "4px 0 0", fontSize: 11, color: "var(--wp-text-secondary)" }}>
-          {run.day} · {run.matchCount} of {run.totalResolved} resolved tracks
-        </p>
-      </button>
-
-      {/* Station icon + arrow */}
-      <button
-        type="button"
-        onClick={onOpen}
-        aria-label={`Open run for ${label}`}
-        style={{
-          flexShrink: 0,
-          background: "none",
-          border: "none",
-          padding: 4,
-          cursor: "pointer",
-          color: "var(--wp-text-muted)",
-          display: "flex",
-          alignItems: "center",
-          gap: 4,
-        }}
-      >
-        <Radio size={14} aria-hidden="true" />
-      </button>
+      {/* Inline tracklist (lazy — only fetches on first expand) */}
+      {expanded && <RunTrackList slug={run.slug} runId={run.runId} />}
     </div>
   );
 }
