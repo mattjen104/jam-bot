@@ -1,0 +1,76 @@
+@import url("https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.31.0/dist/tabler-icons.min.css");
+
+.lore-v2 {
+  --surface-1: #262521;
+  --surface-2: #2e2d28;
+  --border: #413f37;
+  --border-strong: #585549;
+  --radius: 8px;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  --text-primary: #f0efe9;
+  --text-secondary: #b8b5ab;
+  --text-muted: #8a877c;
+  --bg-accent: rgba(139, 124, 246, 0.16);
+  --text-accent: #a99ff5;
+  --fill-accent: #8b7cf6;
+  --fill-primary: #f0efe9;
+  --on-primary: #21201c;
+  --bg-success: rgba(143, 219, 105, 0.14);
+  --text-success: #8fdb69;
+  --bg-pro: rgba(201, 158, 242, 0.14);
+  --text-pro: #c99ef2;
+
+  background: var(--surface-1);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  margin: 0;
+  padding: 20px 16px 60px;
+  box-sizing: border-box;
+}
+
+.lore-v2 *,
+.lore-v2 *::before,
+.lore-v2 *::after {
+  box-sizing: border-box;
+}
+
+.lore-v2 h3 {
+  font-weight: 600;
+}
+
+.lore-v2 p {
+  overflow-wrap: anywhere;
+}
+
+.lore-v2 button {
+  background: var(--surface-2);
+  color: var(--text-primary);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.lore-v2 button:hover {
+  border-color: var(--fill-accent);
+}
+
+.lore-v2 a {
+  cursor: pointer;
+}
+
+.lore-v2 :focus-visible {
+  outline: 2px solid var(--fill-accent);
+  outline-offset: 2px;
+}
+
+.lore-v2 .wrap {
+  max-width: 900px;
+  margin: 0 auto;
+}
