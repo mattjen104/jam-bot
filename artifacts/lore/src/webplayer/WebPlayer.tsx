@@ -410,6 +410,7 @@ export default function WebPlayer() {
         {tab === "foryou" && (
           <ForYouTab
             onOpenRun={(slug, runId) => setRunRef({ slug, runId })}
+            onOpenLore={(mbid) => setLore({ mbid, spinningOn: null })}
           />
         )}
       </div>

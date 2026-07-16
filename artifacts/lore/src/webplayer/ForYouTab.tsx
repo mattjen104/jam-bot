@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Radio, TrendingUp, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
-import { useWpForYou, useWpRun, type WpForYouRun, type WpRunSpin } from "./hooks";
+import { useWpForYou, useWpRun, useWpLoreCounts, type WpForYouRun, type WpRunSpin } from "./hooks";
 import { useIsAuthenticated, startSpotifyLibraryConnect } from "../lib/meHooks";
+import { LoreChip } from "./LoreChip";
 
 function OverlapBadge({ pct }: { pct: number }) {
   return (
@@ -27,9 +28,11 @@ function OverlapBadge({ pct }: { pct: number }) {
 function RunTrackList({
   slug,
   runId,
+  onOpenLore,
 }: {
   slug: string;
   runId: number;
+  onOpenLore: (mbid: string) => void;
 }) {
   const { data, isLoading, isError } = useWpRun(slug, runId);
 
@@ -63,6 +66,10 @@ function RunTrackList({
   const all: WpRunSpin[] = [...data.fromLibrary, ...data.newToYou].sort(
     (a, b) => a.playedAt.localeCompare(b.playedAt),
   );
+
+  // Batch lore counts for all resolved MBIDs in this run.
+  const resolvedMbids = all.map((s) => s.mbid).filter((m): m is string => m != null);
+  const { data: loreCounts } = useWpLoreCounts(resolvedMbids);
 
   if (all.length === 0) {
     return (
@@ -111,6 +118,7 @@ function RunTrackList({
             style={{
               margin: 0,
               fontSize: 12,
+              flex: 1,
               minWidth: 0,
               overflow: "hidden",
               textOverflow: "ellipsis",
@@ -120,6 +128,12 @@ function RunTrackList({
           >
             {spin.artist} — {spin.title}
           </p>
+          {spin.mbid && (
+            <LoreChip
+              count={loreCounts?.get(spin.mbid)}
+              onOpen={() => onOpenLore(spin.mbid!)}
+            />
+          )}
         </div>
       ))}
     </div>
@@ -129,9 +143,11 @@ function RunTrackList({
 function RunCard({
   run,
   onOpen,
+  onOpenLore,
 }: {
   run: WpForYouRun;
   onOpen: () => void;
+  onOpenLore: (mbid: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const label = run.showName ?? run.stationName;
@@ -210,7 +226,7 @@ function RunCard({
       </div>
 
       {/* Inline tracklist (lazy — only fetches on first expand) */}
-      {expanded && <RunTrackList slug={run.slug} runId={run.runId} />}
+      {expanded && <RunTrackList slug={run.slug} runId={run.runId} onOpenLore={onOpenLore} />}
     </div>
   );
 }
@@ -222,8 +238,10 @@ function RunCard({
  */
 export function ForYouTab({
   onOpenRun,
+  onOpenLore,
 }: {
   onOpenRun: (slug: string, runId: number) => void;
+  onOpenLore: (mbid: string) => void;
 }) {
   const isAuthenticated = useIsAuthenticated();
   const { data, isLoading, isError, refetch } = useWpForYou();
@@ -307,6 +325,7 @@ export function ForYouTab({
           key={`${run.slug}-${run.day}-${run.runId}`}
           run={run}
           onOpen={() => onOpenRun(run.slug, run.runId)}
+          onOpenLore={onOpenLore}
         />
       ))}
     </div>
