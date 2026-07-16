@@ -3,6 +3,7 @@ import { wireSongEnrichment } from "./song/wire.js";
 import { seedStations, seedPickers, seedSpinitronRoster } from "./lore/seed.js";
 import { startLorePoller } from "./lore/poller.js";
 import { startBlogPoller } from "./lore/blog-poller.js";
+import { startListCandidateWorker } from "./lore/list-candidates.js";
 import { startBackfillJob } from "./lore/backfill.js";
 import { startReconcileJob } from "./lore/reconcile.js";
 import { startNtsPoller } from "./lore/nts.js";
@@ -102,6 +103,7 @@ async function bootLore(): Promise<void> {
       console.error("[lore] bandcamp-daily picker seed failed", err);
     }
     startBandcampDailyPoller();
+    startListCandidateWorker();
     await startBackfillJob();
     await startReconcileJob();
     startSegueJob();

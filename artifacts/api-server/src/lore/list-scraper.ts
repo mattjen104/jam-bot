@@ -23,7 +23,9 @@ import { extractListRaw } from "./list-llm.js";
 const MB_BASE = "https://musicbrainz.org/ws/2";
 const MB_MIN_INTERVAL_MS = 1100;
 const FETCH_TIMEOUT_MS = 15_000;
-const MAX_PAGE_CHARS = 24_000;
+// Generous cap: a 50-album Pitchfork/Stereogum list with blurbs easily runs
+// past 24k chars of plain text; truncating mid-list silently drops entries.
+const MAX_PAGE_CHARS = 60_000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));

@@ -60,9 +60,11 @@ import {
   listEntriesTable,
   recordingReleaseGroupsTable,
   stationQualityTable,
+  blogListCandidatesTable,
 } from "@workspace/db";
 import { eq, and, asc, desc, sql, count } from "drizzle-orm";
 import { wireListExtractor } from "../../lore/list-wire.js";
+import { processListCandidate, writeCandidateOutcome } from "../../lore/list-candidates.js";
 import { scrapeAndPopulateList, enrichRecordingReleaseGroups } from "../../lore/list-scraper.js";
 import { recomputeAllQualityScores } from "../../lore/quality.js";
 import { ingestManualSpin } from "../../lore/resolve.js";
@@ -1328,6 +1330,66 @@ router.get("/admin/lore/blog-health", h(async (_req, res) => {
       };
     }),
   });
+}));
+
+// GET /api/admin/lore/list-candidates — the stage-2 extraction queue.
+// Optional ?status=pending|extracted|failed|skipped filter. Shows per-post
+// outcome notes so extraction failures are loud and diagnosable.
+router.get("/admin/lore/list-candidates", h(async (req, res) => {
+  const status = String(req.query["status"] ?? "").trim();
+  const where = status
+    ? and(
+        eq(blogListCandidatesTable.status, status),
+      )
+    : undefined;
+  const rows = await db
+    .select({
+      id: blogListCandidatesTable.id,
+      pickerId: blogListCandidatesTable.pickerId,
+      pickerHandle: pickersTable.handle,
+      pickerName: pickersTable.name,
+      title: blogListCandidatesTable.title,
+      url: blogListCandidatesTable.url,
+      publishedAt: blogListCandidatesTable.publishedAt,
+      status: blogListCandidatesTable.status,
+      processedAt: blogListCandidatesTable.processedAt,
+      note: blogListCandidatesTable.note,
+      createdAt: blogListCandidatesTable.createdAt,
+    })
+    .from(blogListCandidatesTable)
+    .innerJoin(pickersTable, eq(pickersTable.id, blogListCandidatesTable.pickerId))
+    .where(where)
+    .orderBy(desc(blogListCandidatesTable.id))
+    .limit(200);
+  return res.json({ candidates: rows });
+}));
+
+// POST /api/admin/lore/list-candidates/:id/retry — re-run extraction for one
+// candidate immediately (any status). Returns the outcome so the admin gets
+// direct feedback instead of waiting for the next worker cycle.
+router.post("/admin/lore/list-candidates/:id/retry", h(async (req, res) => {
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  if (!id) return res.status(400).json({ error: "Invalid candidate id" });
+
+  const [candidate] = await db
+    .select()
+    .from(blogListCandidatesTable)
+    .where(eq(blogListCandidatesTable.id, id))
+    .limit(1);
+  if (!candidate) return res.status(404).json({ error: "Candidate not found" });
+
+  const contact = process.env["MUSICBRAINZ_CONTACT"]?.trim();
+  if (!contact) {
+    return res.status(503).json({ error: "MUSICBRAINZ_CONTACT not configured" });
+  }
+  const ready = await wireListExtractor();
+  if (!ready) {
+    return res.status(503).json({ error: "Anthropic AI integration unavailable for list extraction" });
+  }
+
+  const outcome = await processListCandidate(candidate, contact);
+  await writeCandidateOutcome(candidate.id, outcome);
+  return res.json({ id: candidate.id, ...outcome });
 }));
 
 // ---------------------------------------------------------------------------
