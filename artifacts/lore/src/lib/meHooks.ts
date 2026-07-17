@@ -110,7 +110,9 @@ async function fetchOrNull<T>(url: string, options?: RequestInit): Promise<T | n
  *  mobile browsers (and most desktop ones) to block the popup silently. */
 export async function startSpotifyLibraryConnect(): Promise<void> {
   // Open a blank tab immediately (synchronous, still within the gesture).
-  const win = window.open("", "_blank", "noopener,noreferrer");
+  // NOTE: do NOT pass "noopener" — it causes window.open() to return null,
+  // which means we can never navigate the popup to the auth URL.
+  const win = window.open("", "_blank");
   try {
     const res = await apiFetch<{ url: string }>("/api/me/connect/spotify/start", {
       method: "POST",
