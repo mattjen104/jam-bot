@@ -450,11 +450,11 @@ export default function WebPlayer() {
                 textTransform: "uppercase",
                 letterSpacing: "0.06em",
                 padding: "7px 14px",
+                borderColor: "transparent",
                 ...(tab === key
                   ? {
                       background: "var(--wp-bg-accent)",
                       color: "var(--wp-text-accent)",
-                      borderColor: "transparent",
                     }
                   : { color: "var(--wp-text-muted)" }),
               }}
