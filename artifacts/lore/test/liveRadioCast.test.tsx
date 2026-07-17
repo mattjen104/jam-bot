@@ -46,14 +46,17 @@ vi.mock("@workspace/api-client-react", () => ({
 
 const radioPause = vi.fn();
 const radioResume = vi.fn();
+// Mutable so tests can switch the tuned station mid-cast; the hook reads it
+// on every render. Reset to KEXP in beforeEach.
+let mockStation: { slug: string; name: string; streamUrl: string } = {
+  slug: "kexp",
+  name: "KEXP",
+  streamUrl: "https://example.com/stream",
+};
 vi.mock("../src/hooks/useRadioPlayer", () => ({
   useRadioPlayer: vi.fn(() => ({
     status: "playing",
-    station: {
-      slug: "kexp",
-      name: "KEXP",
-      streamUrl: "https://example.com/stream",
-    },
+    station: mockStation,
     volume: 0.85,
     error: null,
     setVolume: vi.fn(),
@@ -65,6 +68,7 @@ vi.mock("../src/hooks/useRadioPlayer", () => ({
 }));
 
 import { PlayerProvider, usePlayer } from "../src/player/PlayerProvider";
+import { WpCast } from "../src/webplayer/WpCast";
 import type { SpotifyDevice, Station } from "@workspace/api-client-react";
 import {
   getStationNowPlaying,
@@ -120,10 +124,29 @@ async function pinDeviceAndSettleStatus() {
   await flush();
 }
 
+/** Render the real webplayer cast control against the real provider.
+ * `tree()` builds a fresh element each time — rerendering with an identical
+ * element reference makes React bail out without re-invoking the provider. */
+function renderWithWpCast() {
+  const tree = () => (
+    <PlayerProvider>
+      <Harness onReady={(p) => (latest = p)} />
+      <WpCast />
+    </PlayerProvider>
+  );
+  const view = render(tree());
+  return { view, tree };
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
   localStorage.clear();
   latest = null;
+  mockStation = {
+    slug: "kexp",
+    name: "KEXP",
+    streamUrl: "https://example.com/stream",
+  };
   // clearAllMocks does not reset implementations — restore defaults here.
   (spotifyPlay as Mock).mockResolvedValue({ trackUri: "spotify:track:cast-uri" });
   (getStationNowPlaying as Mock).mockResolvedValue({
@@ -283,5 +306,79 @@ describe("live radio Spotify casting", () => {
     });
     await flush();
     expect(spotifyPlay).not.toHaveBeenCalled();
+  });
+
+  it("switching stations mid-cast tears down and re-arms on the new station without double-playing", async () => {
+    // Now-playing is keyed by station so the switch drives a different track.
+    (getStationNowPlaying as Mock).mockImplementation(async (slug: string) =>
+      slug === "kexp"
+        ? { nowPlaying: { recording: { mbid: "mbid-kexp-1" } } }
+        : { nowPlaying: { recording: { mbid: "mbid-wfmu-1" } } },
+    );
+
+    const { view, tree } = renderWithWpCast();
+    await pinDeviceAndSettleStatus();
+
+    // Casting station A's current track.
+    expect(getStationNowPlaying).toHaveBeenCalledWith("kexp");
+    expect(spotifyPlay).toHaveBeenCalledTimes(1);
+    expect(spotifyPlay).toHaveBeenCalledWith({
+      mbid: "mbid-kexp-1",
+      deviceId: "device-1",
+    });
+    expect(screen.getByTestId("cast-status").textContent).toBe("casting");
+    expect(screen.getByTestId("wp-cast-status").textContent).toBe(
+      "Casting to Kitchen Speaker",
+    );
+    expect(spotifyPause).not.toHaveBeenCalled();
+    radioPause.mockClear();
+    radioResume.mockClear();
+
+    // Switch to station B while the cast is active.
+    mockStation = {
+      slug: "wfmu",
+      name: "WFMU",
+      streamUrl: "https://example.com/stream-b",
+    };
+    act(() => {
+      view.rerender(tree());
+    });
+
+    // Old cast tore down: Spotify paused, broadcast resumed to cover the gap,
+    // and the new cast session starts from "connecting".
+    expect(spotifyPause).toHaveBeenCalledTimes(1);
+    expect(radioResume).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("cast-status").textContent).toBe("connecting");
+    expect(screen.getByTestId("wp-cast-status").textContent).toBe(
+      "Waiting for a track to resolve to Spotify…",
+    );
+
+    await flush();
+
+    // Re-armed on station B: lastMbid was reset, so B's current track is
+    // commanded exactly once and Spotify carries the audio again.
+    expect(getStationNowPlaying).toHaveBeenLastCalledWith("wfmu");
+    expect(spotifyPlay).toHaveBeenCalledTimes(2);
+    expect(spotifyPlay).toHaveBeenLastCalledWith({
+      mbid: "mbid-wfmu-1",
+      deviceId: "device-1",
+    });
+    expect(radioPause).toHaveBeenCalled();
+    expect(screen.getByTestId("cast-status").textContent).toBe("casting");
+    expect(screen.getByTestId("wp-cast-status").textContent).toBe(
+      "Casting to Kitchen Speaker",
+    );
+
+    // Subsequent polls with the same MBID never re-issue the play command.
+    await act(async () => {
+      vi.advanceTimersByTime(5000);
+    });
+    await flush();
+    await act(async () => {
+      vi.advanceTimersByTime(5000);
+    });
+    await flush();
+    expect(spotifyPlay).toHaveBeenCalledTimes(2);
+    expect(spotifyPause).toHaveBeenCalledTimes(1);
   });
 });
