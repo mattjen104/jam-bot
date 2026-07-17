@@ -13,6 +13,7 @@ import { useWpOnAir, useWpLoreCounts, type WpOnAirItem } from "./hooks";
 import { LoreChip } from "./LoreChip";
 import { WpKeep } from "./WpKeep";
 import { RunDrawerSheet } from "./RunDrawerSheet";
+import { WpCast } from "./WpCast";
 import { AlbumLoreSheet } from "./AlbumLoreSheet";
 import { LibraryTab } from "./LibraryTab";
 import { rememberPrefersClassic } from "../lib/uiPrefs";
@@ -126,6 +127,9 @@ function NowPlayingCard({
       {nowMbid && !inLibrary && (
         <WpKeep mbid={nowMbid} provenance={{ kind: "station", stationSlug: radio.station.slug }} />
       )}
+      <div style={{ flexBasis: "100%", minWidth: 0 }}>
+        <WpCast />
+      </div>
     </div>
   );
 }
