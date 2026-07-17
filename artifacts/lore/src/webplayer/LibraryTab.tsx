@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { Disc3, Radio, Loader2, ExternalLink, Search, X } from "lucide-react";
+import { Disc3, Radio, Loader2, Search, X } from "lucide-react";
 import {
   useMyLibraryInfinite,
   useIsAuthenticated,
@@ -9,6 +9,32 @@ import {
 } from "../lib/meHooks";
 import { useWpLoreCounts, useWpRecordingSpins, type WpSpinRow } from "./hooks";
 import { LoreChip } from "./LoreChip";
+
+function VinylIcon({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="11" fill="#1a1a1a" />
+      <circle cx="12" cy="12" r="9" fill="none" stroke="#3a3a3a" strokeWidth="0.7" />
+      <circle cx="12" cy="12" r="7" fill="none" stroke="#2e2e2e" strokeWidth="0.7" />
+      <circle cx="12" cy="12" r="5" fill="none" stroke="#3a3a3a" strokeWidth="0.7" />
+      <circle cx="12" cy="12" r="3.2" fill="#c8a84b" />
+      <circle cx="12" cy="12" r="1.1" fill="#1a1a1a" />
+    </svg>
+  );
+}
+
+function GhostIcon({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 2C8.134 2 5 5.134 5 9v10.5l2-1.8 2 1.8 2-1.8 2 1.8 2-1.8 2 1.8V9c0-3.866-3.134-7-7-7z"
+        fill="currentColor"
+      />
+      <circle cx="9.5" cy="10" r="1.2" fill="#1a1a1a" />
+      <circle cx="14.5" cy="10" r="1.2" fill="#1a1a1a" />
+    </svg>
+  );
+}
 
 interface RunRef {
   runId: number | null;
@@ -151,20 +177,8 @@ function LibraryRow({
             {rec ? `${rec.artist} — ${rec.title}` : item.mbid}
           </p>
           {rec?.albumTitle && (
-            <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--wp-text-secondary)", display: "flex", alignItems: "center", gap: 5 }}>
+            <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--wp-text-secondary)" }}>
               {rec.albumTitle}
-              {rec.spotifyUrl && (
-                <a
-                  href={`https://open.spotify.com/search/${encodeURIComponent(rec.artist + " " + rec.albumTitle)}/albums`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title="Find album on Spotify"
-                  onClick={(e) => e.stopPropagation()}
-                  style={{ color: "var(--wp-text-muted)", display: "inline-flex", alignItems: "center" }}
-                >
-                  <ExternalLink size={11} aria-hidden="true" />
-                </a>
-              )}
             </p>
           )}
           <p className="wp-mono" style={{ margin: "2px 0 0", fontSize: 11, color: "var(--wp-text-muted)" }}>
@@ -177,15 +191,53 @@ function LibraryRow({
           </p>
         </div>
         <LoreChip count={loreCounts?.get(item.mbid)} onOpen={() => onOpenLore(item.mbid)} />
-        <button
-          type="button"
-          onClick={() => setShowRuns((v) => !v)}
-          style={{ fontSize: 12, whiteSpace: "nowrap" }}
-          aria-expanded={showRuns}
-          data-testid={`hear-in-runs-${item.mbid}`}
-        >
-          {showRuns ? "Hide runs" : "Hear in runs"}
-        </button>
+        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+          {rec?.spotifyUrl && rec?.albumTitle && (
+            <a
+              href={`https://open.spotify.com/search/${encodeURIComponent(rec.artist + " " + rec.albumTitle)}/albums`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`Play ${rec.albumTitle} on Spotify`}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: "50%",
+                background: "var(--wp-surface-2)",
+                border: "1px solid var(--wp-border)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "var(--wp-text-secondary)",
+                flexShrink: 0,
+              }}
+            >
+              <VinylIcon size={18} />
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={() => setShowRuns((v) => !v)}
+            title={showRuns ? "Hide ghost radio runs" : "Ghost radio — hear in runs"}
+            aria-expanded={showRuns}
+            data-testid={`hear-in-runs-${item.mbid}`}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: "50%",
+              background: showRuns ? "var(--wp-accent, #7c3aed)" : "var(--wp-surface-2)",
+              border: "1px solid var(--wp-border)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: showRuns ? "#fff" : "var(--wp-text-secondary)",
+              flexShrink: 0,
+              padding: 0,
+            }}
+          >
+            <GhostIcon size={17} />
+          </button>
+        </div>
       </div>
       {showRuns && <HearInRuns mbid={item.mbid} onOpenRun={onOpenRun} />}
     </div>
