@@ -225,8 +225,12 @@ router.post("/spotify/play", async (req: Request, res: Response) => {
           ? 403
           : err.code === "no_active_device"
             ? 409
-            : 502;
-      res.status(status).json({ error: err.message });
+            : err.code === "rate_limited"
+              ? 429
+              : 502;
+      const body: Record<string, unknown> = { error: err.message };
+      if (err.code === "rate_limited") body.retryAfter = err.retryAfterSecs ?? 30;
+      res.status(status).json(body);
       return;
     }
     throw err;

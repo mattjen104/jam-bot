@@ -895,7 +895,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     /** True once we've successfully commanded Spotify this cast session. */
     commanded: boolean;
     inFlight: boolean;
-  }>({ lastMbid: null, commanded: false, inFlight: false });
+    /** Timestamp (Date.now()) after which rate-limit back-off has expired. */
+    rateLimitedUntil: number;
+  }>({ lastMbid: null, commanded: false, inFlight: false, rateLimitedUntil: 0 });
   // Mirror of `active` readable inside the cast cleanup (refs assigned during
   // render are current by the time cleanups run in the commit phase).
   const rideActiveRef = useRef(active);
@@ -917,10 +919,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (!castEligible || !radioSlug) return undefined;
 
     let cancelled = false;
-    castRef.current = { lastMbid: null, commanded: false, inFlight: false };
+    castRef.current = { lastMbid: null, commanded: false, inFlight: false, rateLimitedUntil: 0 };
     setCastStatus("connecting");
     setCastFallbackReason(null);
     setCastPaused(false);
+
+    // Collect auto-retry timers so they can be cancelled on effect teardown.
+    const retryTimers: ReturnType<typeof setTimeout>[] = [];
 
     const playMbid = (mbid: string) => {
       if (castRef.current.inFlight) return;
@@ -932,6 +937,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         .then(() => {
           if (cancelled) return;
           castRef.current.commanded = true;
+          castRef.current.rateLimitedUntil = 0; // clear any stale back-off on success
           setCastPaused(false);
           setCastStatus("casting");
           setCastFallbackReason(null);
@@ -946,13 +952,31 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           const httpStatus = (err as { status?: number }).status;
           const message =
             err instanceof Error ? err.message.toLowerCase() : "";
+
+          if (httpStatus === 429 || message.includes("rate-limit")) {
+            // Read the Retry-After seconds from the response body if available.
+            const retryAfterSecs: number =
+              (err as { data?: { retryAfter?: number } }).data?.retryAfter ?? 30;
+            castRef.current.rateLimitedUntil = Date.now() + retryAfterSecs * 1000;
+            setCastStatus("fallback");
+            setCastFallbackReason("rate_limited");
+            resumeRadio?.();
+            // Auto-retry after the back-off — no manual Retry click needed.
+            const timer = setTimeout(() => {
+              if (cancelled) return;
+              castRef.current.rateLimitedUntil = 0;
+              const nextMbid = castRef.current.lastMbid;
+              if (nextMbid && !castPausedRef.current) playMbid(nextMbid);
+            }, retryAfterSecs * 1000);
+            retryTimers.push(timer);
+            return;
+          }
+
           setCastStatus("fallback");
           setCastFallbackReason(
             httpStatus === 404
               ? "not_on_spotify"
-              : httpStatus === 429 || message.includes("rate-limit")
-                ? "rate_limited"
-                : "spotify_error",
+              : "spotify_error",
           );
           resumeRadio?.();
           if (httpStatus === 401 || httpStatus === 403) refreshSpotify();
@@ -973,6 +997,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           // Listener paused the cast: track the station's movement but don't
           // interrupt their silence with a new play command.
           if (castPausedRef.current) return;
+          // Still within the Spotify rate-limit back-off window: track the
+          // new mbid (the auto-retry timer will pick it up) but skip play now.
+          if (Date.now() < castRef.current.rateLimitedUntil) return;
           playMbid(mbid);
         })
         .catch(() => {
@@ -984,17 +1011,19 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const id = setInterval(tick, 5000);
 
     // Expose a retry for the current track: re-issue the Spotify play after
-    // a retryable fallback. playMbid's own success/failure paths keep the
-    // status honest either way.
+    // a retryable fallback. Clears the rate-limit back-off so manual retries
+    // are always honoured immediately.
     castRetryRef.current = () => {
       const mbid = castRef.current.lastMbid;
       if (!mbid || castPausedRef.current) return;
+      castRef.current.rateLimitedUntil = 0;
       playMbid(mbid);
     };
 
     return () => {
       cancelled = true;
       clearInterval(id);
+      retryTimers.forEach(clearTimeout);
       castRetryRef.current = null;
       setCastStatus("off");
       setCastFallbackReason(null);

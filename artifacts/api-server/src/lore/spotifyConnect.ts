@@ -412,8 +412,10 @@ export async function resolveSpotifyTrack(
 /** Route-mappable playback failure with an honest machine-readable code. */
 export class SpotifyPlayError extends Error {
   constructor(
-    readonly code: "premium_required" | "no_active_device" | "spotify_error",
+    readonly code: "premium_required" | "no_active_device" | "rate_limited" | "spotify_error",
     message: string,
+    /** Present only when code === "rate_limited". */
+    readonly retryAfterSecs?: number,
   ) {
     super(message);
     this.name = "SpotifyPlayError";
@@ -423,6 +425,8 @@ export class SpotifyPlayError extends Error {
 interface PlayerRequestResult {
   status: number;
   body: string;
+  /** Seconds to wait before retrying, from Spotify's Retry-After header (absent for non-player requests). */
+  retryAfterSecs?: number | null;
 }
 
 async function playerRequest(
@@ -440,7 +444,12 @@ async function playerRequest(
     body: jsonBody !== undefined ? JSON.stringify(jsonBody) : undefined,
   });
   const body = await res.text().catch(() => "");
-  return { status: res.status, body };
+  const retryAfterRaw = res.headers.get("Retry-After");
+  const retryAfterSecs =
+    retryAfterRaw != null
+      ? Math.max(1, parseInt(retryAfterRaw, 10) || 30)
+      : null;
+  return { status: res.status, body, retryAfterSecs };
 }
 
 function throwPlayError(result: PlayerRequestResult, context: string): never {
@@ -459,8 +468,9 @@ function throwPlayError(result: PlayerRequestResult, context: string): never {
   }
   if (result.status === 429) {
     throw new SpotifyPlayError(
-      "spotify_error",
-      "Spotify is rate-limiting this app right now — try again later",
+      "rate_limited",
+      "Spotify is rate-limiting playback right now",
+      result.retryAfterSecs ?? 30,
     );
   }
   throw new SpotifyPlayError(
