@@ -32,7 +32,8 @@ import {
   refreshServiceToken,
 } from "../../lore/serviceConnector.js";
 import { encryptToken, decryptToken } from "../../lore/tokenCrypto.js";
-import { resolveToMbid, normalizeKey, isrcKey } from "../../lore/resolve.js";
+import { normalizeKey, isrcKey } from "../../lore/resolve.js";
+import { createMbResolver } from "@workspace/song-enrichment";
 import { h } from "../../middlewares/asyncHandler.js";
 import { spinDayExpr } from "../../lore/runs.js";
 import { getForYouStations, getForYouBlogs } from "../../lore/for-you.js";
@@ -628,44 +629,82 @@ export async function runImportWorker(
       .set({ phase: "resolve", total, resolved })
       .where(eq(libraryImportJobsTable.id, jobId));
 
-    for (const { t } of phase3Entries) {
-      // Race against a hard deadline so a single frozen MB call can't stall
-      // the entire import. fromCache:false on timeout keeps the 1.1s sleep,
-      // which is the right conservative choice (we did attempt a network call).
-      const resolution = await Promise.race([
-        resolveToMbid(t.artist, t.title, t.durationMs, t.isrc ? { isrc: t.isrc } : undefined),
-        new Promise<Awaited<ReturnType<typeof resolveToMbid>>>((resolve) =>
-          setTimeout(() => {
-            console.warn(`[me/import] resolve timeout for "${t.title}" by "${t.artist}" — skipping`);
-            resolve({ mbid: null, fromCache: false } as Awaited<ReturnType<typeof resolveToMbid>>);
-          }, IMPORT_RESOLVE_TIMEOUT_MS),
-        ),
-      ]);
+    // Phase 3 uses its own isolated MB chain so it doesn't compete with the
+    // process-wide enrichment pipeline chain (which is continuously fed by
+    // station pollers). Each call gets an AbortController: when the per-track
+    // timeout fires the controller aborts, and any ghost slot that's still
+    // queued in the isolated chain exits immediately on abort-check — no sleep,
+    // no network call — so the queue never backs up.
+    const mbResolver = createMbResolver();
+    const PHASE3_BUDGET_MS = 5 * 60_000; // 5 minutes wall-clock max for Phase 3
+    const phase3StartMs = Date.now();
 
-      if (resolution.mbid) {
+    for (const { t } of phase3Entries) {
+      // Hard wall-clock budget: stop gracefully rather than running forever.
+      if (Date.now() - phase3StartMs > PHASE3_BUDGET_MS) {
+        console.warn(
+          `[me/import] Phase 3 budget (${PHASE3_BUDGET_MS / 1000}s) exceeded — ` +
+            `marking import done with ${resolved}/${total} resolved`,
+        );
+        break;
+      }
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => {
+        console.warn(`[me/import] resolve timeout for "${t.title}" by "${t.artist}" — skipping`);
+        controller.abort();
+      }, IMPORT_RESOLVE_TIMEOUT_MS);
+
+      let mbid: string | null = null;
+      try {
+        // Try ISRC first (one MB lookup, high confidence); fall back to text.
+        if (t.isrc) {
+          mbid = await mbResolver.resolveByIsrc(t.isrc, controller.signal);
+        }
+        if (!mbid && !controller.signal.aborted) {
+          mbid = await mbResolver.resolveByText(t.artist, t.title, controller.signal);
+        }
+      } catch {
+        // resolveBy* are best-effort and never throw — defensive catch only.
+      } finally {
+        clearTimeout(timer);
+      }
+
+      if (mbid) {
         // FK guard: only insert if recordings row exists.
         const [rec] = await db
           .select({ mbid: recordingsTable.mbid })
           .from(recordingsTable)
-          .where(eq(recordingsTable.mbid, resolution.mbid))
+          .where(eq(recordingsTable.mbid, mbid))
           .limit(1);
 
         if (rec) {
           await db
             .insert(libraryItemsTable)
-            .values({ userId, mbid: resolution.mbid, provenance, addedAt: new Date() })
+            .values({ userId, mbid, provenance, addedAt: new Date() })
             .onConflictDoNothing();
+          // Cache the result so future imports resolve this track from Phase 2
+          // (DB-only, no MB network call).
+          await db
+            .insert(resolutionCacheTable)
+            .values([
+              ...(t.isrc ? [{ key: isrcKey(t.isrc), mbid }] : []),
+              { key: normalizeKey(t.artist, t.title), mbid },
+            ])
+            .onConflictDoNothing()
+            .catch(() => {});
           resolved++;
         }
       }
 
-      // Respect MusicBrainz 1 req/sec budget only when a real network call fired.
-      if (!resolution.fromCache) {
+      // Sleep only when we actually attempted a network call (signal not yet
+      // aborted at the point resolveBy* ran). Ghost-aborted slots are free.
+      if (!controller.signal.aborted) {
         await sleep(IMPORT_RESOLVE_DELAY_MS);
       }
 
-      // Update after every resolved track — Phase 3 is slow (≥1.1 s/track) so
-      // every write is cheap relative to the sleep that follows.
+      // Update after every track — Phase 3 is slow (≥1.1 s/track) so each
+      // write is cheap relative to the sleep that follows.
       await db
         .update(libraryImportJobsTable)
         .set({ total, resolved })

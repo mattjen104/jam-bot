@@ -125,24 +125,115 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-async function mbFetch(pathWithQuery: string): Promise<unknown> {
+/**
+ * Enqueue a MusicBrainz fetch on `chain`, honouring an optional AbortSignal.
+ * Returns [run, nextChain] so callers can keep their own chain variable.
+ *
+ * Ghost-call fast-exit: if `signal` is already aborted when the chain slot
+ * fires, we skip the sleep AND the network call and throw immediately — so
+ * abandoned slots are essentially free.
+ */
+function mbFetchOnChain(
+  chain: Promise<unknown>,
+  pathWithQuery: string,
+  signal?: AbortSignal,
+): [Promise<unknown>, Promise<unknown>] {
   const contact = config.MUSICBRAINZ_CONTACT?.trim();
-  if (!contact) throw new Error("MusicBrainz not configured");
-  const run = mbChain.then(async () => {
+  if (!contact) {
+    const err = Promise.reject(new Error("MusicBrainz not configured"));
+    return [err, err.catch(() => undefined)];
+  }
+  const run = chain.then(async () => {
+    if (signal?.aborted) throw signal.reason ?? new DOMException("Aborted", "AbortError");
     await sleep(MB_MIN_INTERVAL_MS);
+    if (signal?.aborted) throw signal.reason ?? new DOMException("Aborted", "AbortError");
+    const combinedSignal = signal
+      ? AbortSignal.any([AbortSignal.timeout(MB_TIMEOUT_MS), signal])
+      : AbortSignal.timeout(MB_TIMEOUT_MS);
     const res = await fetch(`${MB_BASE}${pathWithQuery}`, {
       headers: { "User-Agent": contact, Accept: "application/json" },
-      signal: AbortSignal.timeout(MB_TIMEOUT_MS),
+      signal: combinedSignal,
     });
     if (!res.ok) {
       throw new Error(`MusicBrainz ${res.status} for ${pathWithQuery}`);
     }
     return res.json();
   });
+  return [run, run.catch(() => undefined)];
+}
+
+async function mbFetch(pathWithQuery: string): Promise<unknown> {
+  const [run, next] = mbFetchOnChain(mbChain, pathWithQuery);
   // Keep the chain alive even when a call rejects, so one failure doesn't
   // wedge every later request.
-  mbChain = run.catch(() => undefined);
+  mbChain = next;
   return run;
+}
+
+/**
+ * Isolated MusicBrainz resolver — has its own serial chain independent of
+ * the process-wide enrichment pipeline chain. Use this when a call site
+ * (e.g. the library import worker) must not compete with background enrichment.
+ *
+ * Each method accepts an optional AbortSignal. When the signal fires, any
+ * queued-but-not-yet-started slot exits immediately without sleeping or making
+ * a network call, so timed-out "ghost" calls clean up in O(1).
+ */
+export interface IsolatedMbResolver {
+  resolveByIsrc(isrc: string, signal?: AbortSignal): Promise<string | null>;
+  resolveByText(
+    artist: string,
+    title: string,
+    signal?: AbortSignal,
+  ): Promise<string | null>;
+}
+
+export function createMbResolver(): IsolatedMbResolver {
+  let chain: Promise<unknown> = Promise.resolve();
+
+  function isolatedFetch(pathWithQuery: string, signal?: AbortSignal): Promise<unknown> {
+    const [run, next] = mbFetchOnChain(chain, pathWithQuery, signal);
+    chain = next;
+    return run;
+  }
+
+  return {
+    async resolveByIsrc(isrc: string, signal?: AbortSignal): Promise<string | null> {
+      if (!musicbrainzEnabled() || !isrc.trim()) return null;
+      try {
+        const body = await isolatedFetch(
+          `/isrc/${encodeURIComponent(isrc.trim())}?inc=recordings&fmt=json`,
+          signal,
+        );
+        return parseIsrcRecordingId(body);
+      } catch {
+        return null;
+      }
+    },
+
+    async resolveByText(
+      artist: string,
+      title: string,
+      signal?: AbortSignal,
+    ): Promise<string | null> {
+      if (!musicbrainzEnabled() || !artist.trim() || !title.trim()) return null;
+      const a = escapeQuery(artist);
+      const t = escapeQuery(title);
+      if (!a || !t) return null;
+      try {
+        const query = `recording:"${t}" AND artist:"${a}"`;
+        const body = await isolatedFetch(
+          `/recording?query=${encodeURIComponent(query)}&limit=5&fmt=json`,
+          signal,
+        );
+        const match = parseRecordingSearch(body);
+        if (!match || match.score < 90) return null;
+        return match.recordingId;
+      } catch {
+        return null;
+      }
+    },
+  };
 }
 
 /** Pure: first recording id from an ISRC lookup body, or null. */
