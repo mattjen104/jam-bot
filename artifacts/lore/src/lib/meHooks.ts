@@ -104,12 +104,23 @@ async function fetchOrNull<T>(url: string, options?: RequestInit): Promise<T | n
 }
 
 /** Start the Spotify Library OAuth flow. Opens in a new tab so it works
- *  both in iframe embeds (canvas preview, Replit) and direct browser visits. */
+ *  both in iframe embeds (canvas preview, Replit) and direct browser visits.
+ *  The window must be opened synchronously while the browser still has a
+ *  trusted user-gesture context — an async gap before window.open causes
+ *  mobile browsers (and most desktop ones) to block the popup silently. */
 export async function startSpotifyLibraryConnect(): Promise<void> {
-  const res = await apiFetch<{ url: string }>("/api/me/connect/spotify/start", {
-    method: "POST",
-  });
-  window.open(res.url, "_blank", "noopener");
+  // Open a blank tab immediately (synchronous, still within the gesture).
+  const win = window.open("", "_blank", "noopener,noreferrer");
+  try {
+    const res = await apiFetch<{ url: string }>("/api/me/connect/spotify/start", {
+      method: "POST",
+    });
+    if (win) win.location.href = res.url;
+  } catch (err) {
+    // If the fetch fails close the blank tab so the user isn't left with one.
+    if (win) win.close();
+    throw err;
+  }
 }
 
 /** Start a library import. Returns the job id on success. */

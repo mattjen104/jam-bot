@@ -69,9 +69,11 @@ function MobileDefaultRedirect() {
     didInitialMobileRoute = true;
     const path = location.split("?")[0] ?? location;
     if (path !== "/" && path !== "") return;
-    // The Spotify library-connect callback lands on /?library=connected and
-    // must be handled by LibraryConnectRedirect (→ /taste-map), not us.
-    if (new URLSearchParams(window.location.search).get("library") === "connected") return;
+    // OAuth callbacks land on / with a ?library= or ?spotify= param and must
+    // be handled by their own effects before we strip the URL via redirect.
+    const cbParams = new URLSearchParams(window.location.search);
+    if (cbParams.get("library") === "connected") return;
+    if (cbParams.has("spotify")) return;
     if (prefersClassic()) return;
     if (window.matchMedia("(max-width: 767px)").matches) {
       setLocation("/player", { replace: true });
