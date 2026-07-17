@@ -426,52 +426,53 @@ export default function WebPlayer() {
         <ImportStrip />
 
         {/* Tabs */}
-        <div
-          role="tablist"
-          aria-label="Webplayer sections"
-          style={{ display: "flex", gap: 6, margin: "20px 0 10px" }}
-        >
-          {(
-            [
-              ["onair", "On the air"],
-              ["library", "Library"],
-              ["foryou", "For You"],
-            ] as const
-          ).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              role="tab"
-              aria-selected={tab === key}
-              onClick={() => setTab(key)}
-              className="wp-mono"
-              style={{
-                fontSize: 12,
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                padding: "7px 14px",
-                borderColor: "transparent",
-                ...(tab === key
-                  ? {
-                      background: "var(--wp-bg-accent)",
-                      color: "var(--wp-text-accent)",
-                    }
-                  : { color: "var(--wp-text-muted)" }),
-              }}
-              data-testid={`wp-tab-${key}`}
-            >
-              {label}
-            </button>
-          ))}
+        <div style={{ margin: "20px 0 0" }}>
+          <div
+            role="tablist"
+            aria-label="Webplayer sections"
+            style={{ display: "flex", gap: 6 }}
+          >
+            {(
+              [
+                ["onair", "On the air"],
+                ["library", "Library"],
+                ["foryou", "For You"],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={tab === key}
+                onClick={() => setTab(key)}
+                className="wp-mono"
+                style={{
+                  fontSize: 12,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.06em",
+                  padding: "7px 14px",
+                  borderColor: "transparent",
+                  ...(tab === key
+                    ? {
+                        background: "var(--wp-bg-accent)",
+                        color: "var(--wp-text-accent)",
+                      }
+                    : { color: "var(--wp-text-muted)" }),
+                }}
+                data-testid={`wp-tab-${key}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           {tab === "onair" && (
             <p
               className="wp-mono"
               style={{
-                margin: "0 0 0 auto",
-                alignSelf: "center",
+                margin: "6px 0 0",
                 fontSize: 11,
                 color: "var(--wp-text-muted)",
-                display: "inline-flex",
+                display: "flex",
                 gap: 10,
               }}
             >
@@ -480,6 +481,7 @@ export default function WebPlayer() {
             </p>
           )}
         </div>
+        <div style={{ marginBottom: 10 }} />
 
         {tab === "onair" && (
           <div className="wp-card" style={{ overflow: "hidden" }}>
