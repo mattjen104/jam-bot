@@ -12,6 +12,7 @@ import {
   backfillConnectionProfile,
   deleteConnection,
   getFreshConnection,
+  getRawConnectionRow,
   resolveSpotifyTrack,
   playTrack,
   pausePlayback,
@@ -130,11 +131,20 @@ router.get("/spotify/status", async (req: Request, res: Response) => {
   const configured = spotifyConnectConfigured();
   const sid = configured ? sidFrom(req) : null;
   const conn = sid ? await getFreshConnection(sid) : null;
+
+  // If getFreshConnection returned null we need to distinguish:
+  //  (a) no row exists → user genuinely disconnected → connected: false
+  //  (b) row exists but token refresh failed transiently → keep connected: true
+  //      so the client doesn't clear the pinned device on a momentary Spotify blip.
+  const rawRow = !conn && sid ? await getRawConnectionRow(sid) : null;
+  const effectiveConn = conn ?? rawRow;
+
   // Self-heal: if the product tier was never captured at connect time (the
   // profile fetch can fail silently), re-fetch and persist it so the client
   // learns the real tier instead of hiding Premium features forever.
-  let displayName = conn?.displayName ?? null;
-  let product = conn?.product ?? null;
+  // Only attempt this when we have a freshly-refreshed token (not a stale row).
+  let displayName = effectiveConn?.displayName ?? null;
+  let product = effectiveConn?.product ?? null;
   if (conn && !product) {
     const profile = await backfillConnectionProfile(conn);
     if (profile) {
@@ -144,7 +154,7 @@ router.get("/spotify/status", async (req: Request, res: Response) => {
   }
   res.json({
     configured,
-    connected: !!conn,
+    connected: !!effectiveConn,
     displayName,
     product,
   });

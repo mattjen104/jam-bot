@@ -213,10 +213,21 @@ export async function deleteConnection(sid: string): Promise<void> {
 }
 
 /**
- * Load the connection for a sid, refreshing the access token when it is at or
- * past expiry. A failed refresh (revoked app access) deletes the row and
- * returns null so the UI honestly shows "not connected".
+ * Read the raw connection row without attempting a token refresh. Returns null
+ * only when no row exists for this sid. Used by the status endpoint so a
+ * transient Spotify refresh failure doesn't make the user look "disconnected".
  */
+export async function getRawConnectionRow(
+  sid: string,
+): Promise<SpotifyConnection | null> {
+  const rows = await db
+    .select()
+    .from(spotifyConnectionsTable)
+    .where(eq(spotifyConnectionsTable.sid, sid))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function getFreshConnection(
   sid: string,
 ): Promise<SpotifyConnection | null> {
@@ -440,27 +451,37 @@ interface PlayerRequestResult {
   retryAfterSecs?: number | null;
 }
 
+/** Spotify Player API calls must not hang the server — cap at 10 s. */
+const PLAYER_REQUEST_TIMEOUT_MS = 10_000;
+
 async function playerRequest(
   accessToken: string,
   method: "GET" | "PUT",
   path: string,
   jsonBody?: unknown,
 ): Promise<PlayerRequestResult> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      ...(jsonBody !== undefined ? { "Content-Type": "application/json" } : {}),
-    },
-    body: jsonBody !== undefined ? JSON.stringify(jsonBody) : undefined,
-  });
-  const body = await res.text().catch(() => "");
-  const retryAfterRaw = res.headers.get("Retry-After");
-  const retryAfterSecs =
-    retryAfterRaw != null
-      ? Math.max(1, parseInt(retryAfterRaw, 10) || 30)
-      : null;
-  return { status: res.status, body, retryAfterSecs };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PLAYER_REQUEST_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        ...(jsonBody !== undefined ? { "Content-Type": "application/json" } : {}),
+      },
+      body: jsonBody !== undefined ? JSON.stringify(jsonBody) : undefined,
+      signal: controller.signal,
+    });
+    const body = await res.text().catch(() => "");
+    const retryAfterRaw = res.headers.get("Retry-After");
+    const retryAfterSecs =
+      retryAfterRaw != null
+        ? Math.max(1, parseInt(retryAfterRaw, 10) || 30)
+        : null;
+    return { status: res.status, body, retryAfterSecs };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function throwPlayError(result: PlayerRequestResult, context: string): never {
