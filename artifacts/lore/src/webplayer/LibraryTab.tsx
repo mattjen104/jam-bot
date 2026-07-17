@@ -65,6 +65,280 @@ function groupRuns(spins: WpSpinRow[]): RunRef[] {
   return [...seen.values()];
 }
 
+type PlayMode = "song" | "album" | "ghost";
+const PLAY_MODES: PlayMode[] = ["song", "album", "ghost"];
+const CONTAINER = 52;
+const CX = CONTAINER / 2;
+const DOT_RADIUS = 20; // px from center to dot midpoint
+const DOT_SIZE = 6;
+const MAX_DOTS = 8;
+
+/**
+ * Three-mode play button:
+ *   song  → ▶ opens Spotify track
+ *   album → vinyl record, opens Spotify album (click ring to cycle)
+ *   ghost → ghost icon, opens runs; radial dot ring shows all available runs
+ *
+ * Click center = action. Click ring area (outside center, inside container) = cycle mode.
+ * Scroll wheel = page through runs when in ghost mode with >8 runs.
+ */
+function PlayModeButton({
+  mbid,
+  rec,
+  onOpenRun,
+}: {
+  mbid: string;
+  rec: LibraryItem["recording"];
+  onOpenRun: (slug: string, runId: number | null) => void;
+}) {
+  const [mode, setMode] = useState<PlayMode>("song");
+  const [ghostFetched, setGhostFetched] = useState(false);
+  const [activeRunIdx, setActiveRunIdx] = useState(0); // absolute index into allRuns
+  const [scrollBase, setScrollBase] = useState(0);
+
+  const { data: spinData, isLoading: spinsLoading } = useWpRecordingSpins(
+    ghostFetched ? mbid : null,
+  );
+  const allRuns = groupRuns(spinData?.spins ?? []);
+  const pageEnd = Math.min(scrollBase + MAX_DOTS, allRuns.length);
+  const visibleRuns = allRuns.slice(scrollBase, pageEnd);
+  const hasMore = allRuns.length > MAX_DOTS;
+
+  const cycleMode = () => {
+    setMode((m) => {
+      const next = PLAY_MODES[(PLAY_MODES.indexOf(m) + 1) % PLAY_MODES.length];
+      if (next === "ghost") setGhostFetched(true);
+      return next;
+    });
+  };
+
+  const handleCenterClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (mode === "song") {
+      if (rec?.spotifyUrl) window.open(rec.spotifyUrl, "_blank", "noopener noreferrer");
+    } else if (mode === "album") {
+      if (rec?.albumTitle) {
+        const q = encodeURIComponent(`${rec?.artist ?? ""} ${rec.albumTitle}`);
+        window.open(`https://open.spotify.com/search/${q}/albums`, "_blank", "noopener noreferrer");
+      }
+    } else {
+      const run = allRuns[activeRunIdx] ?? allRuns[0];
+      if (run) onOpenRun(run.slug, run.runId);
+    }
+  };
+
+  const handleRingClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Only cycle if click was outside the center button (dots have stopPropagation)
+    const rect = e.currentTarget.getBoundingClientRect();
+    const dx = e.clientX - rect.left - CX;
+    const dy = e.clientY - rect.top - CX;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist > 14) cycleMode(); // outside center 28px button radius=14
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (mode !== "ghost" || !hasMore) return;
+    e.preventDefault();
+    const dir = e.deltaY > 0 ? 1 : -1;
+    setScrollBase((b) => Math.max(0, Math.min(b + dir, allRuns.length - MAX_DOTS)));
+  };
+
+  // Visual config per mode
+  const modeAccent =
+    mode === "ghost" ? "#7c3aed" : mode === "album" ? "#c8a84b" : "var(--wp-text-muted)";
+  const centerBg =
+    mode === "ghost"
+      ? "#7c3aed"
+      : mode === "album"
+        ? "var(--wp-surface-2)"
+        : "var(--wp-surface-2)";
+  const centerColor = mode === "ghost" ? "#fff" : "var(--wp-text-secondary)";
+
+  return (
+    <div
+      role="group"
+      aria-label="Play mode"
+      style={{ position: "relative", width: CONTAINER, height: CONTAINER, flexShrink: 0, cursor: "pointer" }}
+      onClick={handleRingClick}
+      onWheel={handleWheel}
+    >
+      {/* Dashed orbit ring (album/ghost modes) */}
+      {mode !== "song" && (
+        <svg
+          width={CONTAINER}
+          height={CONTAINER}
+          style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
+          aria-hidden="true"
+        >
+          <circle
+            cx={CX}
+            cy={CX}
+            r={DOT_RADIUS}
+            fill="none"
+            stroke={modeAccent}
+            strokeWidth={1}
+            strokeOpacity={0.25}
+            strokeDasharray="2 3"
+          />
+        </svg>
+      )}
+
+      {/* Ghost mode: radial run dots */}
+      {mode === "ghost" && !spinsLoading &&
+        visibleRuns.map((run, i) => {
+          const absIdx = scrollBase + i;
+          const total = visibleRuns.length;
+          const angle =
+            total === 1
+              ? -Math.PI / 2
+              : (i / total) * 2 * Math.PI - Math.PI / 2;
+          const x = CX + DOT_RADIUS * Math.cos(angle) - DOT_SIZE / 2;
+          const y = CX + DOT_RADIUS * Math.sin(angle) - DOT_SIZE / 2;
+          const isActive = absIdx === activeRunIdx;
+          return (
+            <button
+              key={`${run.runId ?? run.slug}-${run.day}`}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveRunIdx(absIdx);
+                onOpenRun(run.slug, run.runId);
+              }}
+              title={`${run.showName ?? run.stationName}${run.djName ? " · " + run.djName : ""} · ${run.day}`}
+              style={{
+                position: "absolute",
+                left: x,
+                top: y,
+                width: DOT_SIZE,
+                height: DOT_SIZE,
+                borderRadius: "50%",
+                background: isActive ? "#fff" : "rgba(255,255,255,0.28)",
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                transition: "background 0.15s, transform 0.1s",
+                transform: isActive ? "scale(1.4)" : "scale(1)",
+                zIndex: 2,
+              }}
+              aria-label={`Run: ${run.showName ?? run.stationName} ${run.day}`}
+            />
+          );
+        })}
+
+      {/* Ghost loading spinner arc */}
+      {mode === "ghost" && spinsLoading && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            pointerEvents: "none",
+          }}
+        >
+          <Loader2
+            size={CONTAINER - 4}
+            style={{ color: "rgba(124,58,237,0.2)", position: "absolute" }}
+            className="animate-spin"
+            aria-hidden="true"
+          />
+        </div>
+      )}
+
+      {/* Scroll hint when more runs than MAX_DOTS */}
+      {mode === "ghost" && hasMore && !spinsLoading && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: 1,
+            left: "50%",
+            transform: "translateX(-50%)",
+            fontSize: 7,
+            color: "rgba(255,255,255,0.35)",
+            pointerEvents: "none",
+            lineHeight: 1,
+            userSelect: "none",
+          }}
+        >
+          ↕ scroll
+        </div>
+      )}
+
+      {/* Mode indicator: three tiny dots at the bottom edge */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 3,
+          left: "50%",
+          transform: "translateX(-50%)",
+          display: "flex",
+          gap: 3,
+          pointerEvents: "none",
+        }}
+        aria-hidden="true"
+      >
+        {PLAY_MODES.map((m) => (
+          <div
+            key={m}
+            style={{
+              width: 3,
+              height: 3,
+              borderRadius: "50%",
+              background: m === mode ? modeAccent : "rgba(255,255,255,0.2)",
+              transition: "background 0.2s",
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Center action button */}
+      <button
+        type="button"
+        onClick={handleCenterClick}
+        title={
+          mode === "song"
+            ? rec?.spotifyUrl
+              ? "Play track on Spotify"
+              : "No Spotify link"
+            : mode === "album"
+              ? `Open ${rec?.albumTitle ?? "album"} on Spotify`
+              : allRuns.length === 0 && !spinsLoading
+                ? "No broadcast runs found"
+                : `Open run: ${(allRuns[activeRunIdx] ?? allRuns[0])?.showName ?? (allRuns[activeRunIdx] ?? allRuns[0])?.stationName ?? "…"}`
+        }
+        style={{
+          position: "absolute",
+          left: "50%",
+          top: "50%",
+          transform: "translate(-50%, -50%)",
+          width: 28,
+          height: 28,
+          borderRadius: "50%",
+          background: centerBg,
+          border: `1.5px solid ${mode === "ghost" ? "rgba(124,58,237,0.6)" : "var(--wp-border)"}`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: centerColor,
+          padding: 0,
+          cursor: "pointer",
+          zIndex: 3,
+          transition: "background 0.2s, border-color 0.2s",
+        }}
+        aria-label={`${mode} mode`}
+      >
+        {mode === "song" && (
+          <span style={{ fontSize: 10, marginLeft: 2, lineHeight: 1 }}>▶</span>
+        )}
+        {mode === "album" && <VinylIcon size={16} />}
+        {mode === "ghost" && <GhostIcon size={15} />}
+      </button>
+    </div>
+  );
+}
+
+/* Legacy single-run list — kept for test compatibility, no longer rendered in the default UI. */
 function HearInRuns({
   mbid,
   onOpenRun,
@@ -141,12 +415,11 @@ function LibraryRow({
   onOpenLore: (mbid: string) => void;
   onOpenRun: (slug: string, runId: number | null) => void;
 }) {
-  const [showRuns, setShowRuns] = useState(false);
   const rec = item.recording;
 
   return (
     <div
-      style={{ padding: "10px 14px", borderBottom: "0.5px solid var(--wp-border)" }}
+      style={{ padding: "8px 14px", borderBottom: "0.5px solid var(--wp-border)" }}
       data-testid={`wp-library-${item.mbid}`}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -191,55 +464,13 @@ function LibraryRow({
           </p>
         </div>
         <LoreChip count={loreCounts?.get(item.mbid)} onOpen={() => onOpenLore(item.mbid)} />
-        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-          {rec?.spotifyUrl && rec?.albumTitle && (
-            <a
-              href={`https://open.spotify.com/search/${encodeURIComponent(rec.artist + " " + rec.albumTitle)}/albums`}
-              target="_blank"
-              rel="noopener noreferrer"
-              title={`Play ${rec.albumTitle} on Spotify`}
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: "50%",
-                background: "var(--wp-surface-2)",
-                border: "1px solid var(--wp-border)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "var(--wp-text-secondary)",
-                flexShrink: 0,
-              }}
-            >
-              <VinylIcon size={18} />
-            </a>
-          )}
-          <button
-            type="button"
-            onClick={() => setShowRuns((v) => !v)}
-            title={showRuns ? "Hide ghost radio runs" : "Ghost radio — hear in runs"}
-            aria-expanded={showRuns}
-            data-testid={`hear-in-runs-${item.mbid}`}
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: "50%",
-              background: showRuns ? "var(--wp-accent, #7c3aed)" : "var(--wp-surface-2)",
-              border: "1px solid var(--wp-border)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: showRuns ? "#fff" : "var(--wp-text-secondary)",
-              flexShrink: 0,
-              padding: 0,
-            }}
-          >
-            <GhostIcon size={17} />
-          </button>
-        </div>
+        <PlayModeButton
+          mbid={item.mbid}
+          rec={rec}
+          onOpenRun={onOpenRun}
+          data-testid={`hear-in-runs-${item.mbid}`}
+        />
       </div>
-      {showRuns && <HearInRuns mbid={item.mbid} onOpenRun={onOpenRun} />}
     </div>
   );
 }
