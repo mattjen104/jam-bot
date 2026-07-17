@@ -670,9 +670,24 @@ export async function runImportWorker(
 // Library endpoints
 // ---------------------------------------------------------------------------
 
+/** Cursor field separator for name-sorted library pages (see library GET). */
+const LIB_CURSOR_SEP = "\u001f";
+
+/** Escape LIKE wildcards so user search text is matched literally. */
+function escapeLike(s: string): string {
+  return s.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
 /**
  * GET /api/me/library — paginated list of kept + imported recordings.
- * Newest first.  Pass ?cursor=<addedAt ISO> to page.
+ *
+ * Query params:
+ * - `sort`  — "added" (default, newest first) | "artist" | "title" (A→Z).
+ * - `q`     — case-insensitive substring match on title or artist.
+ * - `source`— "keep" | "import" (provenance.kind filter).
+ * - `cursor`— keyset cursor. For sort=added it's the last row's addedAt ISO;
+ *   for name sorts it's `<sortKey>\u001f<mbid>` (tuple keyset, mbid tiebreak).
+ * - `limit` — page size (max 100).
  */
 router.get("/me/library", h(async (req, res) => {
   const user = (req as AuthedRequest).loreUser;
@@ -682,6 +697,55 @@ router.get("/me/library", h(async (req, res) => {
     parseInt(typeof req.query["limit"] === "string" ? req.query["limit"] : "", 10) || LIBRARY_PAGE_SIZE,
     100,
   );
+  const q =
+    typeof req.query["q"] === "string" ? req.query["q"].trim() : "";
+  const sortRaw =
+    typeof req.query["sort"] === "string" ? req.query["sort"] : "added";
+  const sort: "added" | "artist" | "title" =
+    sortRaw === "artist" || sortRaw === "title" ? sortRaw : "added";
+  const sourceRaw =
+    typeof req.query["source"] === "string" ? req.query["source"] : "";
+  const source: "keep" | "import" | null =
+    sourceRaw === "keep" || sourceRaw === "import" ? sourceRaw : null;
+
+  const conditions = [eq(libraryItemsTable.userId, user.id)];
+
+  if (q.length > 0) {
+    const pattern = `%${escapeLike(q)}%`;
+    conditions.push(
+      sql`(${recordingsTable.title} ILIKE ${pattern} OR ${recordingsTable.artist} ILIKE ${pattern})`,
+    );
+  }
+  if (source) {
+    conditions.push(
+      sql`${libraryItemsTable.provenance}->>'kind' = ${source}`,
+    );
+  }
+
+  // Sort key for name sorts: lower(primary field, then the other as tiebreak),
+  // coalesced so join-miss rows (no recordings match) sort deterministically.
+  const sortKeyExpr =
+    sort === "artist"
+      ? sql<string>`lower(coalesce(${recordingsTable.artist}, '') || ' ' || coalesce(${recordingsTable.title}, ''))`
+      : sql<string>`lower(coalesce(${recordingsTable.title}, '') || ' ' || coalesce(${recordingsTable.artist}, ''))`;
+
+  if (cursor) {
+    if (sort === "added") {
+      conditions.push(
+        sql`${libraryItemsTable.addedAt} < ${cursor}::timestamptz`,
+      );
+    } else {
+      const sep = cursor.lastIndexOf(LIB_CURSOR_SEP);
+      if (sep < 0) {
+        return res.status(400).json({ error: "Malformed cursor for this sort" });
+      }
+      const keyPart = cursor.slice(0, sep);
+      const mbidPart = cursor.slice(sep + 1);
+      conditions.push(
+        sql`(${sortKeyExpr}, ${libraryItemsTable.mbid}) > (${keyPart}, ${mbidPart})`,
+      );
+    }
+  }
 
   const rows = await db
     .select({
@@ -692,6 +756,7 @@ router.get("/me/library", h(async (req, res) => {
       artist: recordingsTable.artist,
       artworkUrl: recordingsTable.artworkUrl,
       links: recordingsTable.links,
+      sortKey: sortKeyExpr.as("sort_key"),
       // Scalar subquery: primary release group title (at most one row).
       albumTitle: sql<string | null>`(
         SELECT title FROM recording_release_groups
@@ -701,19 +766,17 @@ router.get("/me/library", h(async (req, res) => {
     })
     .from(libraryItemsTable)
     .leftJoin(recordingsTable, eq(libraryItemsTable.mbid, recordingsTable.mbid))
-    .where(
-      cursor
-        ? and(
-            eq(libraryItemsTable.userId, user.id),
-            sql`${libraryItemsTable.addedAt} < ${cursor}::timestamptz`,
-          )
-        : eq(libraryItemsTable.userId, user.id),
+    .where(and(...conditions))
+    .orderBy(
+      ...(sort === "added"
+        ? [desc(libraryItemsTable.addedAt)]
+        : [asc(sortKeyExpr), asc(libraryItemsTable.mbid)]),
     )
-    .orderBy(desc(libraryItemsTable.addedAt))
     .limit(limit + 1);
 
   const hasMore = rows.length > limit;
   const items = rows.slice(0, limit);
+  const last = items[items.length - 1];
 
   return res.json({
     items: items.map((r) => ({
@@ -733,7 +796,11 @@ router.get("/me/library", h(async (req, res) => {
           }
         : null,
     })),
-    nextCursor: hasMore ? items[items.length - 1]?.addedAt.toISOString() : null,
+    nextCursor: !hasMore || !last
+      ? null
+      : sort === "added"
+        ? last.addedAt.toISOString()
+        : `${last.sortKey}${LIB_CURSOR_SEP}${last.mbid}`,
   });
 }));
 

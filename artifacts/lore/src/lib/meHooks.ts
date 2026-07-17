@@ -189,13 +189,29 @@ export function useMyLibrary(cursor?: string, limit = 50) {
  * addedAt cursor until nextCursor comes back null. Unauthenticated users
  * get a single empty page.
  */
-export function useMyLibraryInfinite(limit = 50) {
+export interface LibraryQueryOptions {
+  /** Case-insensitive substring match on title or artist. */
+  q?: string;
+  /** "added" (default, newest first) | "artist" | "title" (A→Z). */
+  sort?: "added" | "artist" | "title";
+  /** Filter by provenance kind: "keep" | "import". */
+  source?: "keep" | "import" | "";
+}
+
+export function useMyLibraryInfinite(opts: LibraryQueryOptions = {}, limit = 50) {
+  const q = opts.q?.trim() ?? "";
+  const sort = opts.sort ?? "added";
+  const source = opts.source ?? "";
+
   return useInfiniteQuery({
-    queryKey: ["me", "library", "infinite", limit] as const,
+    queryKey: ["me", "library", "infinite", limit, q, sort, source] as const,
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams();
       if (pageParam) params.set("cursor", pageParam);
       params.set("limit", String(limit));
+      if (q) params.set("q", q);
+      if (sort !== "added") params.set("sort", sort);
+      if (source) params.set("source", source);
       return fetchOrNull<{ items: LibraryItem[]; nextCursor: string | null }>(
         `/api/me/library?${params}`,
       ).then((d) => d ?? { items: [], nextCursor: null });

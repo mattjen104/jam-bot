@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
-import { Disc3, Radio, Loader2, ExternalLink } from "lucide-react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { Disc3, Radio, Loader2, ExternalLink, Search, X } from "lucide-react";
 import {
   useMyLibraryInfinite,
   useIsAuthenticated,
   startSpotifyLibraryConnect,
   type LibraryItem,
+  type LibraryQueryOptions,
 } from "../lib/meHooks";
 import { useWpLoreCounts, useWpRecordingSpins, type WpSpinRow } from "./hooks";
 import { LoreChip } from "./LoreChip";
@@ -235,13 +236,26 @@ export function LibraryTab({
   onOpenRun: (slug: string, runId: number | null) => void;
 }) {
   const isAuthenticated = useIsAuthenticated();
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
+  const [sort, setSort] = useState<NonNullable<LibraryQueryOptions["sort"]>>("added");
+  const [source, setSource] = useState<NonNullable<LibraryQueryOptions["source"]>>("");
+
+  // Debounce search input so we don't refetch on every keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(searchInput.trim()), 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  const hasFilters = debouncedQ !== "" || sort !== "added" || source !== "";
   const {
     data,
     isLoading,
+    isFetching,
     hasNextPage,
     isFetchingNextPage,
     fetchNextPage,
-  } = useMyLibraryInfinite();
+  } = useMyLibraryInfinite({ q: debouncedQ, sort, source });
   const pages = data?.pages ?? [];
   const totalLoaded = pages.reduce((n, p) => n + p.items.length, 0);
 
@@ -287,17 +301,123 @@ export function LibraryTab({
     );
   }
 
+  const selectStyle: CSSProperties = {
+    fontSize: 12,
+    background: "var(--wp-surface-2)",
+    color: "var(--wp-text-secondary)",
+    border: "0.5px solid var(--wp-border)",
+    borderRadius: 6,
+    padding: "5px 6px",
+  };
+
   return (
     <div className="wp-card" style={{ overflow: "hidden" }} data-testid="wp-library-tab">
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: 8,
+          padding: "10px 14px",
+          borderBottom: "0.5px solid var(--wp-border)",
+        }}
+        data-testid="wp-library-controls"
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            flex: "1 1 160px",
+            minWidth: 140,
+            background: "var(--wp-surface-2)",
+            border: "0.5px solid var(--wp-border)",
+            borderRadius: 6,
+            padding: "5px 8px",
+          }}
+        >
+          <Search size={13} style={{ color: "var(--wp-text-muted)", flexShrink: 0 }} aria-hidden="true" />
+          <input
+            type="search"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search title or artist…"
+            aria-label="Search library"
+            style={{
+              flex: 1,
+              minWidth: 0,
+              fontSize: 13,
+              background: "transparent",
+              border: "none",
+              outline: "none",
+              color: "var(--wp-text)",
+            }}
+            data-testid="wp-library-search"
+          />
+          {searchInput !== "" && (
+            <button
+              type="button"
+              onClick={() => setSearchInput("")}
+              aria-label="Clear search"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                background: "transparent",
+                border: "none",
+                padding: 0,
+                color: "var(--wp-text-muted)",
+                cursor: "pointer",
+              }}
+              data-testid="wp-library-search-clear"
+            >
+              <X size={13} aria-hidden="true" />
+            </button>
+          )}
+        </div>
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value as typeof sort)}
+          aria-label="Sort library"
+          style={selectStyle}
+          data-testid="wp-library-sort"
+        >
+          <option value="added">Recently added</option>
+          <option value="artist">Artist A–Z</option>
+          <option value="title">Title A–Z</option>
+        </select>
+        <select
+          value={source}
+          onChange={(e) => setSource(e.target.value as typeof source)}
+          aria-label="Filter by source"
+          style={selectStyle}
+          data-testid="wp-library-source"
+        >
+          <option value="">All sources</option>
+          <option value="keep">Kept here</option>
+          <option value="import">Imported</option>
+        </select>
+        {isFetching && !isLoading && !isFetchingNextPage && (
+          <Loader2
+            size={13}
+            className="animate-spin"
+            style={{ color: "var(--wp-text-muted)", flexShrink: 0 }}
+            aria-label="Updating results"
+          />
+        )}
+      </div>
       {isLoading && (
         <p style={{ padding: "14px 16px", margin: 0, fontSize: 13, color: "var(--wp-text-muted)" }}>
           Loading your library…
         </p>
       )}
       {!isLoading && totalLoaded === 0 && (
-        <p style={{ padding: "14px 16px", margin: 0, fontSize: 13, color: "var(--wp-text-muted)" }}>
-          Nothing kept yet — keep a track from the on-air list or import your
-          Spotify library.
+        <p
+          style={{ padding: "14px 16px", margin: 0, fontSize: 13, color: "var(--wp-text-muted)" }}
+          data-testid="wp-library-empty"
+        >
+          {hasFilters
+            ? "No tracks match — try a different search or filter."
+            : "Nothing kept yet — keep a track from the on-air list or import your Spotify library."}
         </p>
       )}
       {pages.map((page, i) => (
