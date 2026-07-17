@@ -244,8 +244,19 @@ export async function getFreshConnection(
       .where(eq(spotifyConnectionsTable.sid, sid));
     return { ...conn, ...updated };
   } catch (err) {
-    console.error(`[spotify] token refresh failed; disconnecting sid`, err);
-    await deleteConnection(sid).catch(() => {});
+    // A 400 "invalid_grant" is permanent (token revoked by the user or
+    // expired beyond Spotify's rolling window) — nuke the row so the UI
+    // surfaces a proper "reconnect" prompt instead of silently failing.
+    // Any other error (network timeout, Spotify 5xx, DNS) is transient —
+    // keep the row so the user isn't logged out by a momentary blip.
+    const msg = err instanceof Error ? err.message : String(err);
+    const isPermanent = msg.includes("(400)") && msg.includes("invalid_grant");
+    if (isPermanent) {
+      console.error(`[spotify] refresh token permanently revoked — disconnecting sid`, err);
+      await deleteConnection(sid).catch(() => {});
+    } else {
+      console.warn(`[spotify] token refresh failed (transient) — keeping connection for next attempt`, err);
+    }
     return null;
   }
 }

@@ -54,6 +54,9 @@ const KEEP_BATCH_MAX = 50;
 const LIBRARY_PAGE_SIZE = 50;
 /** Delay between resolveToMbid calls in the import worker (1.1 s ≥ MB 1 req/sec). */
 const IMPORT_RESOLVE_DELAY_MS = 1100;
+/** Hard cap per MB resolve call — prevents a single hanging network call from
+ *  stalling the entire import indefinitely. Track is counted as unresolved. */
+const IMPORT_RESOLVE_TIMEOUT_MS = 12_000;
 /** Stamp partial total to DB every N items during the buffer-drain (fetching) phase. */
 const FETCH_STAMP_INTERVAL = 50;
 
@@ -313,8 +316,17 @@ router.post("/me/library/import", h(async (req, res) => {
   // Reject if a job is already actively running or pending — triggering another
   // would fire two concurrent Spotify API pagination loops, almost guaranteeing
   // a 429 rate-limit error on both.
+  //
+  // Exception: if the existing job is older than ZOMBIE_AGE_MS it was almost
+  // certainly orphaned by a server restart (the setImmediate worker died with
+  // the process). Mark it failed and let the user start fresh.
+  const ZOMBIE_AGE_MS = 30 * 60_000; // 30 minutes
   const [existingJob] = await db
-    .select({ id: libraryImportJobsTable.id, status: libraryImportJobsTable.status })
+    .select({
+      id: libraryImportJobsTable.id,
+      status: libraryImportJobsTable.status,
+      startedAt: libraryImportJobsTable.startedAt,
+    })
     .from(libraryImportJobsTable)
     .where(
       and(
@@ -326,11 +338,21 @@ router.post("/me/library/import", h(async (req, res) => {
     .limit(1);
 
   if (existingJob) {
-    return res.status(409).json({
-      jobId: existingJob.id,
-      status: existingJob.status,
-      error: "An import is already in progress — check its status before starting another.",
-    });
+    const ageMs = Date.now() - existingJob.startedAt.getTime();
+    if (ageMs > ZOMBIE_AGE_MS) {
+      // Orphaned job — clear it so the user gets a fresh import.
+      console.warn(`[me/import] job=${existingJob.id} orphaned (${Math.round(ageMs / 60_000)}m old) — resetting`);
+      await db
+        .update(libraryImportJobsTable)
+        .set({ status: "error", error: "Import interrupted (server restarted) — please try again", finishedAt: new Date() })
+        .where(eq(libraryImportJobsTable.id, existingJob.id));
+    } else {
+      return res.status(409).json({
+        jobId: existingJob.id,
+        status: existingJob.status,
+        error: "An import is already in progress — check its status before starting another.",
+      });
+    }
   }
 
   const [job] = await db
@@ -607,12 +629,18 @@ export async function runImportWorker(
       .where(eq(libraryImportJobsTable.id, jobId));
 
     for (const { t } of phase3Entries) {
-      const resolution = await resolveToMbid(
-        t.artist,
-        t.title,
-        t.durationMs,
-        t.isrc ? { isrc: t.isrc } : undefined,
-      );
+      // Race against a hard deadline so a single frozen MB call can't stall
+      // the entire import. fromCache:false on timeout keeps the 1.1s sleep,
+      // which is the right conservative choice (we did attempt a network call).
+      const resolution = await Promise.race([
+        resolveToMbid(t.artist, t.title, t.durationMs, t.isrc ? { isrc: t.isrc } : undefined),
+        new Promise<Awaited<ReturnType<typeof resolveToMbid>>>((resolve) =>
+          setTimeout(() => {
+            console.warn(`[me/import] resolve timeout for "${t.title}" by "${t.artist}" — skipping`);
+            resolve({ mbid: null, fromCache: false } as Awaited<ReturnType<typeof resolveToMbid>>);
+          }, IMPORT_RESOLVE_TIMEOUT_MS),
+        ),
+      ]);
 
       if (resolution.mbid) {
         // FK guard: only insert if recordings row exists.
