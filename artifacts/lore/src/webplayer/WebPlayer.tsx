@@ -265,21 +265,29 @@ function OnAirRow({
   const { radio } = usePlayer();
   const isPlaying = radio.station?.slug === item.station.slug && radio.status !== "idle";
   const title = item.show?.name ?? item.station.name;
+  // When a show name is the title, keep the station as context; otherwise the
+  // trailing station label would just repeat the title — hide it.
+  const stationContext = item.show?.name ? item.station.name : null;
+  const oneLine: React.CSSProperties = {
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  };
 
   return (
     <div
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 12,
-        padding: "12px 14px",
+        gap: 10,
+        padding: "7px 12px",
         borderBottom: "0.5px solid var(--wp-border)",
       }}
       data-testid={`wp-onair-${item.station.slug}`}
     >
       <button
         type="button"
-        className="wp-play"
+        className="wp-play wp-play-sm"
         aria-label={`${isPlaying ? "Stop" : "Play"} ${title}`}
         onClick={() => radio.toggle(item.station)}
         style={
@@ -292,7 +300,7 @@ function OnAirRow({
             : undefined
         }
       >
-        {isPlaying ? <Pause size={14} aria-hidden="true" /> : <Play size={14} aria-hidden="true" />}
+        {isPlaying ? <Pause size={12} aria-hidden="true" /> : <Play size={12} aria-hidden="true" />}
       </button>
       <button
         type="button"
@@ -309,32 +317,31 @@ function OnAirRow({
         }}
         aria-label={`Open tonight's run for ${title}`}
       >
-        <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>
+        <p style={{ margin: 0, fontSize: 13, fontWeight: 500, ...oneLine }}>
           {title}
           {item.show?.djName && (
-            <span style={{ fontSize: 12, color: "var(--wp-text-muted)", fontWeight: 400 }}>
+            <span style={{ fontSize: 11, color: "var(--wp-text-muted)", fontWeight: 400 }}>
               {" "}
               · {item.show.djName}
             </span>
           )}
+          {stationContext && (
+            <span className="wp-mono" style={{ fontSize: 10, color: "var(--wp-text-muted)", fontWeight: 400 }}>
+              {" "}
+              · {stationContext}
+            </span>
+          )}
         </p>
         {item.now.resolved ? (
-          <p style={{ margin: "2px 0 0", fontSize: 12, color: nowInLibrary ? "var(--wp-text-success)" : "var(--wp-text-secondary)" }}>
-            now: {item.now.artist}
-            {item.earlier.length > 0 && <> · earlier: {item.earlier.join(", ")}</>}
+          <p style={{ margin: "1px 0 0", fontSize: 12, color: nowInLibrary ? "var(--wp-text-success)" : "var(--wp-text-secondary)", ...oneLine }}>
+            {item.now.artist}
           </p>
         ) : (
-          <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--wp-text-muted)" }}>
-            {item.now.title ? `now: ${item.now.title}` : "resolving spins…"}
+          <p style={{ margin: "1px 0 0", fontSize: 12, color: "var(--wp-text-muted)", ...oneLine }}>
+            {item.now.title ?? "resolving spins…"}
           </p>
         )}
       </button>
-      <span
-        className="wp-mono"
-        style={{ fontSize: 11, color: "var(--wp-text-muted)", flexShrink: 0, maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-      >
-        {item.station.name}
-      </span>
       {authenticated && item.now.resolved && item.now.mbid && (
         <OnAirKeep
           // Key by mbid: remounting on track change resets the optimistic
@@ -346,18 +353,15 @@ function OnAirRow({
         />
       )}
       {authenticated ? (
-        <span
-          style={{
-            fontSize: 12,
-            fontWeight: 500,
-            color: item.matchCount ? "var(--wp-text-success)" : "var(--wp-text-muted)",
-            flexShrink: 0,
-            minWidth: 72,
-            textAlign: "right",
-          }}
-        >
-          {item.matchCount ? `${item.matchCount} matches` : "—"}
-        </span>
+        item.matchCount ? (
+          <span
+            className="wp-mono"
+            style={{ fontSize: 11, fontWeight: 500, color: "var(--wp-text-success)", flexShrink: 0 }}
+            title={`${item.matchCount} matches with your taste`}
+          >
+            {item.matchCount}✦
+          </span>
+        ) : null
       ) : (
         <ChevronRight size={14} style={{ color: "var(--wp-text-muted)", flexShrink: 0 }} aria-hidden="true" />
       )}

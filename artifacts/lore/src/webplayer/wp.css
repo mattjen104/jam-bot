@@ -111,6 +111,12 @@
   justify-content: center;
 }
 
+/* Compact variant for dense list rows — must come after .wp-play (same specificity). */
+.wp .wp-play-sm {
+  width: 26px;
+  height: 26px;
+}
+
 /* Bottom sheet overlays (run drawer, album lore panel) */
 .wp-sheet-backdrop {
   position: fixed;
