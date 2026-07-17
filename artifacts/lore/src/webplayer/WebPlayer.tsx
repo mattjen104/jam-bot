@@ -379,7 +379,7 @@ function OnAirRow({
  * panel open as bottom sheets.
  */
 export default function WebPlayer() {
-  const { data: onAir, isLoading, dataUpdatedAt } = useWpOnAir();
+  const { data: onAir, isLoading, dataUpdatedAt, refetch: refetchOnAir, isFetching: onAirFetching } = useWpOnAir();
   const [tab, setTab] = useState<"onair" | "library" | "foryou">("onair");
   const [runRef, setRunRef] = useState<{ slug: string; runId: number | null } | null>(null);
   const [lore, setLore] = useState<{ mbid: string; spinningOn: string | null } | null>(null);
@@ -478,6 +478,27 @@ export default function WebPlayer() {
             >
               {authenticated && <span>sorted by your overlap</span>}
               {!isLoading && <OnAirFreshness updatedAt={dataUpdatedAt} />}
+              <button
+                type="button"
+                onClick={() => void refetchOnAir()}
+                disabled={onAirFetching}
+                title="Refresh now"
+                aria-label="Refresh on-air list"
+                style={{
+                  display: "inline-flex",
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  color: "var(--wp-text-muted)",
+                  cursor: onAirFetching ? "default" : "pointer",
+                }}
+              >
+                <RefreshCw
+                  size={11}
+                  className={onAirFetching ? "animate-spin" : ""}
+                  aria-hidden="true"
+                />
+              </button>
             </p>
           )}
         </div>

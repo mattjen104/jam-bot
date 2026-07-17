@@ -26,6 +26,7 @@ import {
   fetchRecentlyPlayed,
 } from "../../lore/spotifyConnect.js";
 import { upsertLoreUserForSid } from "../../lore/userSession.js";
+import { getTrackById, getAlbumTracks } from "../../spotify/appClient.js";
 
 /**
  * Spotify Connect routes. The listener's identity is an opaque httpOnly
@@ -378,6 +379,26 @@ router.get("/spotify/devices", async (req: Request, res: Response) => {
   if (!conn) return;
   const devices = await listDevices(conn.accessToken);
   res.json({ devices });
+});
+
+/**
+ * Fetch the full ordered track list for the album a given track belongs to.
+ * Uses app-level client credentials — no user OAuth needed.
+ * GET /api/spotify/album-tracks?trackId=<spotify-track-id>
+ */
+router.get("/spotify/album-tracks", async (req: Request, res: Response) => {
+  const trackId = typeof req.query.trackId === "string" ? req.query.trackId.trim() : "";
+  if (!trackId) {
+    res.status(400).json({ error: "trackId query param is required" });
+    return;
+  }
+  const track = await getTrackById(trackId);
+  if (!track?.albumId) {
+    res.json({ tracks: [] });
+    return;
+  }
+  const tracks = await getAlbumTracks(track.albumId);
+  res.json({ tracks });
 });
 
 export default router;

@@ -7,7 +7,7 @@ import {
   type LibraryItem,
   type LibraryQueryOptions,
 } from "../lib/meHooks";
-import { useWpLoreCounts, useWpRecordingSpins, type WpSpinRow } from "./hooks";
+import { useWpLoreCounts, useWpRecordingSpins, useWpAlbumTracks, type WpSpinRow } from "./hooks";
 import { LoreChip } from "./LoreChip";
 
 function VinylIcon({ size = 20 }: { size?: number }) {
@@ -93,8 +93,11 @@ function PlayModeButton({
 }) {
   const [mode, setMode] = useState<PlayMode>("song");
   const [ghostFetched, setGhostFetched] = useState(false);
-  const [activeRunIdx, setActiveRunIdx] = useState(0); // absolute index into allRuns
+  const [albumFetched, setAlbumFetched] = useState(false);
+  const [activeRunIdx, setActiveRunIdx] = useState(0);
   const [scrollBase, setScrollBase] = useState(0);
+  const [activeTrackIdx, setActiveTrackIdx] = useState(0);
+  const [trackScrollBase, setTrackScrollBase] = useState(0);
 
   const { data: spinData, isLoading: spinsLoading } = useWpRecordingSpins(
     ghostFetched ? mbid : null,
@@ -104,10 +107,25 @@ function PlayModeButton({
   const visibleRuns = allRuns.slice(scrollBase, pageEnd);
   const hasMore = allRuns.length > MAX_DOTS;
 
+  // Extract the Spotify track ID from the track URL, e.g.
+  // "https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT" → "4cOdK2wGLETKBW3PvgPWqT"
+  const spotifyTrackId = rec?.spotifyUrl
+    ? (() => { try { return new URL(rec.spotifyUrl).pathname.split("/").pop() ?? null; } catch { return null; } })()
+    : null;
+
+  const { data: albumData, isLoading: albumLoading } = useWpAlbumTracks(
+    albumFetched ? spotifyTrackId : null,
+  );
+  const allTracks = albumData?.tracks ?? [];
+  const trackPageEnd = Math.min(trackScrollBase + MAX_DOTS, allTracks.length);
+  const visibleTracks = allTracks.slice(trackScrollBase, trackPageEnd);
+  const hasMoreTracks = allTracks.length > MAX_DOTS;
+
   const cycleMode = () => {
     setMode((m) => {
       const next = PLAY_MODES[(PLAY_MODES.indexOf(m) + 1) % PLAY_MODES.length];
       if (next === "ghost") setGhostFetched(true);
+      if (next === "album") setAlbumFetched(true);
       return next;
     });
   };
@@ -117,7 +135,10 @@ function PlayModeButton({
     if (mode === "song") {
       if (rec?.spotifyUrl) window.open(rec.spotifyUrl, "_blank", "noopener noreferrer");
     } else if (mode === "album") {
-      if (rec?.albumTitle) {
+      const track = allTracks[activeTrackIdx] ?? allTracks[0];
+      if (track) {
+        window.open(`https://open.spotify.com/track/${track.id}`, "_blank", "noopener noreferrer");
+      } else if (rec?.albumTitle) {
         const q = encodeURIComponent(`${rec?.artist ?? ""} ${rec.albumTitle}`);
         window.open(`https://open.spotify.com/search/${q}/albums`, "_blank", "noopener noreferrer");
       }
@@ -137,10 +158,15 @@ function PlayModeButton({
   };
 
   const handleWheel = (e: React.WheelEvent) => {
-    if (mode !== "ghost" || !hasMore) return;
-    e.preventDefault();
-    const dir = e.deltaY > 0 ? 1 : -1;
-    setScrollBase((b) => Math.max(0, Math.min(b + dir, allRuns.length - MAX_DOTS)));
+    if (mode === "ghost" && hasMore) {
+      e.preventDefault();
+      const dir = e.deltaY > 0 ? 1 : -1;
+      setScrollBase((b) => Math.max(0, Math.min(b + dir, allRuns.length - MAX_DOTS)));
+    } else if (mode === "album" && hasMoreTracks) {
+      e.preventDefault();
+      const dir = e.deltaY > 0 ? 1 : -1;
+      setTrackScrollBase((b) => Math.max(0, Math.min(b + dir, allTracks.length - MAX_DOTS)));
+    }
   };
 
   // Visual config per mode
@@ -265,6 +291,92 @@ function PlayModeButton({
         </div>
       )}
 
+      {/* Album mode: radial track dots — one dot per track, gold accent */}
+      {mode === "album" && !albumLoading &&
+        visibleTracks.map((track, i) => {
+          const absIdx = trackScrollBase + i;
+          const total = visibleTracks.length;
+          const angle =
+            total === 1
+              ? -Math.PI / 2
+              : (i / total) * 2 * Math.PI - Math.PI / 2;
+          const x = CX + DOT_RADIUS * Math.cos(angle) - DOT_SIZE / 2;
+          const y = CX + DOT_RADIUS * Math.sin(angle) - DOT_SIZE / 2;
+          const isActive = absIdx === activeTrackIdx;
+          return (
+            <button
+              key={track.id}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveTrackIdx(absIdx);
+                window.open(
+                  `https://open.spotify.com/track/${track.id}`,
+                  "_blank",
+                  "noopener noreferrer",
+                );
+              }}
+              title={`${track.trackNumber}. ${track.name}`}
+              style={{
+                position: "absolute",
+                left: x,
+                top: y,
+                width: DOT_SIZE,
+                height: DOT_SIZE,
+                borderRadius: "50%",
+                background: isActive ? "#c8a84b" : "rgba(200,168,75,0.35)",
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                transition: "background 0.15s, transform 0.1s",
+                transform: isActive ? "scale(1.4)" : "scale(1)",
+                zIndex: 2,
+              }}
+              aria-label={`Track ${track.trackNumber}: ${track.name}`}
+            />
+          );
+        })}
+
+      {/* Album loading spinner */}
+      {mode === "album" && albumLoading && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            pointerEvents: "none",
+          }}
+        >
+          <Loader2
+            size={CONTAINER - 4}
+            style={{ color: "rgba(200,168,75,0.2)", position: "absolute" }}
+            className="animate-spin"
+            aria-hidden="true"
+          />
+        </div>
+      )}
+
+      {/* Scroll hint when more tracks than MAX_DOTS */}
+      {mode === "album" && hasMoreTracks && !albumLoading && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: 1,
+            left: "50%",
+            transform: "translateX(-50%)",
+            fontSize: 7,
+            color: "rgba(200,168,75,0.45)",
+            pointerEvents: "none",
+            lineHeight: 1,
+            userSelect: "none",
+          }}
+        >
+          ↕ scroll
+        </div>
+      )}
+
       {/* Mode indicator: three tiny dots at the bottom edge */}
       <div
         style={{
@@ -302,7 +414,11 @@ function PlayModeButton({
               ? "Play track on Spotify"
               : "No Spotify link"
             : mode === "album"
-              ? `Open ${rec?.albumTitle ?? "album"} on Spotify`
+              ? allTracks.length > 0
+                ? `${(allTracks[activeTrackIdx] ?? allTracks[0])?.trackNumber}. ${(allTracks[activeTrackIdx] ?? allTracks[0])?.name ?? "…"}`
+                : albumLoading
+                  ? "Loading album tracks…"
+                  : `Open ${rec?.albumTitle ?? "album"} on Spotify`
               : allRuns.length === 0 && !spinsLoading
                 ? "No broadcast runs found"
                 : `Open run: ${(allRuns[activeRunIdx] ?? allRuns[0])?.showName ?? (allRuns[activeRunIdx] ?? allRuns[0])?.stationName ?? "…"}`
@@ -711,8 +827,29 @@ export function LibraryTab({
           onOpenRun={onOpenRun}
         />
       ))}
-      {hasNextPage && <div ref={sentinelRef} aria-hidden="true" />}
-      {totalLoaded > 0 && (
+      {hasNextPage && <div ref={sentinelRef} aria-hidden="true" style={{ height: 1 }} />}
+      {isFetchingNextPage && (
+        <div
+          style={{
+            padding: "10px 16px",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            borderTop: "0.5px solid var(--wp-border)",
+          }}
+          aria-live="polite"
+          aria-label="Loading more tracks"
+        >
+          <Loader2
+            size={13}
+            className="animate-spin"
+            style={{ color: "var(--wp-text-muted)", flexShrink: 0 }}
+            aria-hidden="true"
+          />
+          <span style={{ fontSize: 12, color: "var(--wp-text-muted)" }}>Loading more tracks…</span>
+        </div>
+      )}
+      {totalLoaded > 0 && !isFetchingNextPage && (
         <div
           style={{
             display: "flex",
@@ -731,19 +868,18 @@ export function LibraryTab({
               style={{ fontSize: 12, display: "inline-flex", alignItems: "center", gap: 6 }}
               data-testid="wp-library-load-more"
             >
-              {isFetchingNextPage && (
-                <Loader2 size={12} className="animate-spin" aria-hidden="true" />
-              )}
-              {isFetchingNextPage ? "Loading…" : "Load more"}
+              Load more
             </button>
           ) : (
             <p className="wp-mono" style={{ margin: 0, fontSize: 11, color: "var(--wp-text-muted)" }}>
-              that's everything
+              that's everything · {totalLoaded} tracks
             </p>
           )}
-          <p className="wp-mono" style={{ margin: 0, fontSize: 11, color: "var(--wp-text-muted)" }}>
-            {totalLoaded} loaded
-          </p>
+          {hasNextPage && (
+            <p className="wp-mono" style={{ margin: 0, fontSize: 11, color: "var(--wp-text-muted)" }}>
+              {totalLoaded} loaded
+            </p>
+          )}
         </div>
       )}
     </div>

@@ -132,12 +132,31 @@ export function useWpOnAir() {
   return useQuery({
     queryKey: ["wp", "onair"],
     queryFn: () => apiFetch<WpOnAirResponse>("/api/player/onair"),
-    // Quiet background refresh while the tab is visible. React Query's
-    // default refetchIntervalInBackground=false pauses polling when the
-    // window is hidden; the same query key means existing data stays on
-    // screen during a refetch (no blank/loading flash).
-    refetchInterval: 60_000,
-    staleTime: 45_000,
+    // Match station now-playing poller cadence: 30s keeps the dial fresh
+    // without hammering the server. React Query pauses background polling
+    // when the window is hidden; same query key avoids a loading flash.
+    refetchInterval: 30_000,
+    staleTime: 25_000,
+  });
+}
+
+export interface WpAlbumTrack {
+  id: string;
+  name: string;
+  trackNumber: number;
+  isrc: string | null;
+}
+
+export function useWpAlbumTracks(trackId: string | null) {
+  return useQuery({
+    queryKey: ["wp", "album-tracks", trackId],
+    queryFn: () =>
+      apiFetch<{ tracks: WpAlbumTrack[] }>(
+        `/api/spotify/album-tracks?trackId=${encodeURIComponent(trackId!)}`,
+      ),
+    enabled: trackId != null,
+    // Albums are immutable — cache for 30 minutes.
+    staleTime: 30 * 60_000,
   });
 }
 
