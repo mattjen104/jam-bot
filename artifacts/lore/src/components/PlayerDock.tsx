@@ -59,6 +59,7 @@ export function PlayerDock() {
         casting={radio.casting}
         castFallbackReason={radio.castFallbackReason}
         castPaused={radio.castPaused}
+        onCastRetry={radio.castRetry}
         onToggle={radio.toggle}
         onStop={radio.stop}
         onVolume={radio.setVolume}

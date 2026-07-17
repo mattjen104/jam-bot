@@ -114,6 +114,13 @@ interface RadioApi {
   castFallbackReason: RadioCastFallbackReason | null;
   /** True when casting and the listener paused via the player bar. */
   castPaused: boolean;
+  /**
+   * Retry the Spotify play for the current now-playing track after a
+   * retryable cast fallback (rate_limited / spotify_error). Success clears
+   * the fallback state; failure keeps the honest message. No-op unless a
+   * cast session is active with a known current track.
+   */
+  castRetry: () => void;
   toggle: (station: Station) => void;
   stop: () => void;
   setVolume: (v: number) => void;
@@ -896,6 +903,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // Mirror of castPaused readable inside the poll without re-arming it.
   const castPausedRef = useRef(castPaused);
   castPausedRef.current = castPaused;
+  // Retry hook set by the live-cast effect (null when no cast session is
+  // active) — lets UI re-issue the Spotify play for the current track after
+  // a retryable fallback without waiting for the station to change songs.
+  const castRetryRef = useRef<(() => void) | null>(null);
 
   const radioSlug = radio.station?.slug ?? null;
   const radioIdle = radio.status === "idle" || radio.status === "error";
@@ -972,9 +983,19 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     tick(); // cast the currently-airing track right away
     const id = setInterval(tick, 5000);
 
+    // Expose a retry for the current track: re-issue the Spotify play after
+    // a retryable fallback. playMbid's own success/failure paths keep the
+    // status honest either way.
+    castRetryRef.current = () => {
+      const mbid = castRef.current.lastMbid;
+      if (!mbid || castPausedRef.current) return;
+      playMbid(mbid);
+    };
+
     return () => {
       cancelled = true;
       clearInterval(id);
+      castRetryRef.current = null;
       setCastStatus("off");
       setCastFallbackReason(null);
       setCastPaused(false);
@@ -1000,6 +1021,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         .then(() => setCastPaused(true))
         .catch(() => {});
     }
+  }, []);
+
+  /** Retry the Spotify play for the current cast track (Retry button). */
+  const castRetry = useCallback(() => {
+    castRetryRef.current?.();
   }, []);
 
   // Live fallback: when in live+service-ride and Spotify fails for a track,
@@ -1187,6 +1213,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         casting: castStatus,
         castFallbackReason,
         castPaused,
+        castRetry,
         toggle: toggleRadio,
         stop: stopRadio,
         setVolume: radio.setVolume,
@@ -1230,6 +1257,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       castStatus,
       castFallbackReason,
       castPaused,
+      castRetry,
       toggleRadio,
       stopRadio,
       active,

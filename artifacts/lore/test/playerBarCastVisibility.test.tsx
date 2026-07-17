@@ -96,3 +96,46 @@ describe("PlayerBar cast button visibility", () => {
     expect(screen.queryByTestId("cast-connect-button")).toBeNull();
   });
 });
+
+describe("PlayerBar cast retry control", () => {
+  function renderFallbackBar(
+    reason: "not_on_spotify" | "rate_limited" | "spotify_error",
+    onCastRetry?: () => void,
+  ) {
+    return render(
+      <PlayerBar
+        station={STATION}
+        status="playing"
+        volume={0.8}
+        error={null}
+        casting="fallback"
+        castFallbackReason={reason}
+        onCastRetry={onCastRetry}
+        onToggle={vi.fn()}
+        onStop={vi.fn()}
+        onVolume={vi.fn()}
+        spotify={makeSpotify({ connected: true, product: "premium" })}
+      />,
+    );
+  }
+
+  it.each(["rate_limited", "spotify_error"] as const)(
+    "shows Retry for a retryable fallback (%s), wired to onCastRetry",
+    (reason) => {
+      const onCastRetry = vi.fn();
+      renderFallbackBar(reason, onCastRetry);
+      fireEvent.click(screen.getByTestId("cast-retry"));
+      expect(onCastRetry).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("hides Retry when the track is simply not on Spotify", () => {
+    renderFallbackBar("not_on_spotify", vi.fn());
+    expect(screen.queryByTestId("cast-retry")).toBeNull();
+  });
+
+  it("hides Retry when no retry handler is provided", () => {
+    renderFallbackBar("rate_limited");
+    expect(screen.queryByTestId("cast-retry")).toBeNull();
+  });
+});

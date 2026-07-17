@@ -6,7 +6,7 @@ import type {
 } from "../player/PlayerProvider";
 import type { SpotifyConnectApi } from "../player/useSpotifyConnect";
 import { DevicePicker } from "./DevicePicker";
-import { Cast, Loader2, Pause, Play, Radio, Volume2, VolumeX, X } from "lucide-react";
+import { Cast, Loader2, Pause, Play, Radio, RotateCw, Volume2, VolumeX, X } from "lucide-react";
 import { KeepButton } from "./KeepButton";
 import { ShareButton } from "./ShareButton";
 
@@ -23,6 +23,8 @@ interface PlayerBarProps {
   castFallbackReason?: RadioCastFallbackReason | null;
   /** True when the cast is paused on the listener's Spotify. */
   castPaused?: boolean;
+  /** Retry Spotify for the current track after a retryable cast fallback. */
+  onCastRetry?: () => void;
   onToggle: (station: Station) => void;
   onStop: () => void;
   onVolume: (v: number) => void;
@@ -39,6 +41,7 @@ export function PlayerBar({
   casting = "off",
   castFallbackReason = null,
   castPaused = false,
+  onCastRetry,
   onToggle,
   onStop,
   onVolume,
@@ -132,11 +135,25 @@ export function PlayerBar({
             ) : casting === "connecting" ? (
               "Waiting for a track to resolve to Spotify…"
             ) : casting === "fallback" ? (
-              castFallbackReason === "rate_limited"
-                ? "Spotify is rate-limited right now · playing the broadcast"
-                : castFallbackReason === "spotify_error"
-                  ? "Spotify unavailable · playing the broadcast"
-                  : "Not on Spotify · playing the broadcast"
+              <>
+                {castFallbackReason === "rate_limited"
+                  ? "Spotify is rate-limited right now · playing the broadcast"
+                  : castFallbackReason === "spotify_error"
+                    ? "Spotify unavailable · playing the broadcast"
+                    : "Not on Spotify · playing the broadcast"}
+                {castFallbackReason !== "not_on_spotify" && onCastRetry && (
+                  <button
+                    type="button"
+                    onClick={onCastRetry}
+                    className="inline-flex shrink-0 items-center gap-1 rounded border border-border px-1.5 py-0.5 font-mono text-[10px] text-foreground/80 transition-colors hover:bg-secondary"
+                    title="Try Spotify again for this track"
+                    data-testid="cast-retry"
+                  >
+                    <RotateCw className="h-2.5 w-2.5" aria-hidden />
+                    Retry
+                  </button>
+                )}
+              </>
             ) : isLoading ? (
               "Buffering the live stream…"
             ) : isPlaying ? (

@@ -227,4 +227,61 @@ describe("live radio Spotify casting", () => {
     expect(spotifyResume).toHaveBeenCalledTimes(1);
     expect(latest!.radio.castPaused).toBe(false);
   });
+
+  it("castRetry re-issues the play for the current track and clears the fallback on success", async () => {
+    (spotifyPlay as Mock).mockRejectedValue(
+      Object.assign(new Error("rate-limited"), { status: 429 }),
+    );
+    renderPlayer();
+    await pinDeviceAndSettleStatus();
+    expect(screen.getByTestId("cast-status").textContent).toBe("fallback");
+    expect(latest!.radio.castFallbackReason).toBe("rate_limited");
+    expect(spotifyPlay).toHaveBeenCalledTimes(1);
+
+    // Spotify recovers — retry succeeds and the cast resumes.
+    (spotifyPlay as Mock).mockResolvedValue({ trackUri: "spotify:track:cast-uri" });
+    radioPause.mockClear();
+    act(() => {
+      latest!.radio.castRetry();
+    });
+    await flush();
+
+    expect(spotifyPlay).toHaveBeenCalledTimes(2);
+    expect(spotifyPlay).toHaveBeenLastCalledWith({
+      mbid: "mbid-track-1",
+      deviceId: "device-1",
+    });
+    expect(screen.getByTestId("cast-status").textContent).toBe("casting");
+    expect(latest!.radio.castFallbackReason).toBeNull();
+    expect(radioPause).toHaveBeenCalled();
+  });
+
+  it("castRetry keeps the honest fallback message when Spotify fails again", async () => {
+    (spotifyPlay as Mock).mockRejectedValue(
+      Object.assign(new Error("boom"), { status: 502 }),
+    );
+    renderPlayer();
+    await pinDeviceAndSettleStatus();
+    expect(screen.getByTestId("cast-status").textContent).toBe("fallback");
+    expect(latest!.radio.castFallbackReason).toBe("spotify_error");
+
+    act(() => {
+      latest!.radio.castRetry();
+    });
+    await flush();
+
+    expect(spotifyPlay).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId("cast-status").textContent).toBe("fallback");
+    expect(latest!.radio.castFallbackReason).toBe("spotify_error");
+  });
+
+  it("castRetry is a no-op when no cast session is active", async () => {
+    renderPlayer();
+    await flush(); // status resolves, but no device is pinned
+    act(() => {
+      latest!.radio.castRetry();
+    });
+    await flush();
+    expect(spotifyPlay).not.toHaveBeenCalled();
+  });
 });

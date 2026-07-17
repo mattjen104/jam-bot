@@ -55,6 +55,7 @@ function mockPlayer(opts: MockOpts = {}) {
   const connect = vi.fn();
   const pinDevice = vi.fn();
   const unpinDevice = vi.fn();
+  const castRetry = vi.fn();
   const fetchDevices = opts.fetchDevices ?? vi.fn(async () => [DEVICE]);
   vi.mocked(usePlayer).mockReturnValue({
     radio: {
@@ -65,6 +66,7 @@ function mockPlayer(opts: MockOpts = {}) {
       casting: opts.casting ?? "off",
       castFallbackReason: opts.castFallbackReason ?? null,
       castPaused: opts.castPaused ?? false,
+      castRetry,
       toggle: vi.fn(),
       stop: vi.fn(),
       setVolume: vi.fn(),
@@ -88,7 +90,7 @@ function mockPlayer(opts: MockOpts = {}) {
     },
     ride: {} as never,
   } as unknown as ReturnType<typeof usePlayer>);
-  return { connect, pinDevice, unpinDevice, fetchDevices };
+  return { connect, pinDevice, unpinDevice, fetchDevices, castRetry };
 }
 
 describe("WpCast visibility states", () => {
@@ -221,5 +223,38 @@ describe("WpCast status line", () => {
     mockPlayer({ casting: "off" });
     render(<WpCast />);
     expect(screen.queryByTestId("wp-cast-status")).toBeNull();
+  });
+});
+
+describe("WpCast retry control", () => {
+  it.each(["rate_limited", "spotify_error"] as const)(
+    "shows Retry for a retryable fallback (%s), wired to castRetry",
+    (reason) => {
+      const { castRetry } = mockPlayer({
+        pinnedDevice: DEVICE,
+        casting: "fallback",
+        castFallbackReason: reason,
+      });
+      render(<WpCast />);
+      const btn = screen.getByTestId("wp-cast-retry");
+      fireEvent.click(btn);
+      expect(castRetry).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("hides Retry when the track is simply not on Spotify", () => {
+    mockPlayer({
+      pinnedDevice: DEVICE,
+      casting: "fallback",
+      castFallbackReason: "not_on_spotify",
+    });
+    render(<WpCast />);
+    expect(screen.queryByTestId("wp-cast-retry")).toBeNull();
+  });
+
+  it("hides Retry outside the fallback state", () => {
+    mockPlayer({ pinnedDevice: DEVICE, casting: "casting" });
+    render(<WpCast />);
+    expect(screen.queryByTestId("wp-cast-retry")).toBeNull();
   });
 });

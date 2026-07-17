@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Cast, Loader2, X } from "lucide-react";
+import { Cast, Loader2, RotateCw, X } from "lucide-react";
 import { usePlayer } from "../player/PlayerProvider";
 import type { SpotifyDevice } from "../player/useSpotifyConnect";
 import type {
@@ -192,6 +192,29 @@ export function WpCast() {
           {statusLine}
         </span>
       )}
+
+      {radio.casting === "fallback" &&
+        radio.castFallbackReason !== "not_on_spotify" && (
+          <button
+            type="button"
+            onClick={radio.castRetry}
+            className="wp-pill"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              border: "1px solid var(--wp-border)",
+              background: "transparent",
+              color: "var(--wp-text-secondary)",
+              cursor: "pointer",
+              fontSize: 11,
+            }}
+            title="Try Spotify again for this track"
+            data-testid="wp-cast-retry"
+          >
+            <RotateCw size={11} aria-hidden="true" /> Retry
+          </button>
+        )}
 
       {open && (
         <div
