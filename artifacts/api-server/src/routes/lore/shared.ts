@@ -14,6 +14,7 @@ export function toStation(
     name: s.name,
     org: s.org,
     country: s.country,
+    city: s.city ?? null,
     streamUrl: s.streamUrl,
     streamQuality: s.streamQuality,
     streamFormat: s.streamFormat,

@@ -92,6 +92,8 @@ export const stationsTable = pgTable("stations", {
   /** Operating org, e.g. "Radio Paradise", "KEXP", "BBC". */
   org: text("org"),
   country: text("country"),
+  /** City the station broadcasts from (e.g. "London", "Berlin"). Populated for CRI-sourced stations. */
+  city: text("city"),
   /** The station's own sanctioned live stream URL, played unmodified. */
   streamUrl: text("stream_url").notNull(),
   /** Human quality badge, e.g. "320kbps AAC", "FLAC", "160kbps AAC". */
@@ -1416,3 +1418,39 @@ export const stationQualityTable = pgTable(
 
 export type StationQuality = typeof stationQualityTable.$inferSelect;
 export type InsertStationQuality = typeof stationQualityTable.$inferInsert;
+
+/**
+ * Staging table for Community Radio Index discovery candidates.
+ * The CRI scraper writes one row per CRI station; rows with alreadyInLore=false
+ * and icyStatus="yes" are the strongest candidates for promotion to the stations table.
+ */
+export const criCandidatesTable = pgTable("cri_candidates", {
+  id: serial("id").primaryKey(),
+  /** Slug from the CRI URL, e.g. "refuge-worldwide". */
+  criSlug: text("cri_slug").notNull().unique(),
+  name: text("name").notNull(),
+  /** City the station broadcasts from, as listed on CRI. */
+  city: text("city"),
+  /** Country name as listed on CRI (e.g. "Germany", "UK"). */
+  country: text("country"),
+  /** Genre tags scraped from the CRI station page. */
+  genres: jsonb("genres").$type<string[]>(),
+  /** Station's own website URL scraped from CRI. */
+  websiteUrl: text("website_url"),
+  /** Best-guess stream URL sourced from Radio Browser; null if not found. */
+  streamUrl: text("stream_url"),
+  /**
+   * Whether the stream URL returned ICY now-playing headers.
+   * "yes" = station is Lore-compatible; "no" = stream exists but no metadata;
+   * "unknown" = stream URL untested or timed out.
+   */
+  icyStatus: text("icy_status").notNull().default("unknown"),
+  /** True when a station with a matching name already exists in the stations table. */
+  alreadyInLore: boolean("already_in_lore").notNull().default(false),
+  /** Free-form notes from the scraper (e.g. why a stream was skipped). */
+  notes: text("notes"),
+  checkedAt: timestamp("checked_at").defaultNow().notNull(),
+});
+
+export type CriCandidate = typeof criCandidatesTable.$inferSelect;
+export type InsertCriCandidate = typeof criCandidatesTable.$inferInsert;

@@ -214,6 +214,7 @@ export const ListStationsResponse = zod.object({
         name: zod.string(),
         org: zod.string().nullish(),
         country: zod.string().nullish(),
+        city: zod.string().nullish(),
         streamUrl: zod.string(),
         streamQuality: zod.string().nullish(),
         streamFormat: zod
@@ -479,6 +480,7 @@ export const GetStationNowPlayingResponse = zod.object({
       name: zod.string(),
       org: zod.string().nullish(),
       country: zod.string().nullish(),
+      city: zod.string().nullish(),
       streamUrl: zod.string(),
       streamQuality: zod.string().nullish(),
       streamFormat: zod
@@ -1161,6 +1163,7 @@ export const GetStationArchiveResponse = zod.object({
       name: zod.string(),
       org: zod.string().nullish(),
       country: zod.string().nullish(),
+      city: zod.string().nullish(),
       streamUrl: zod.string(),
       streamQuality: zod.string().nullish(),
       streamFormat: zod

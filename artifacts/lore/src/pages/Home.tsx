@@ -197,7 +197,27 @@ function DateSweep({
 type DialFilterTab = "all" | "live" | "flagship" | "featured" | "lists" | "following";
 type DialSort = "default" | "popularity" | "discovery";
 
-/** Sort/genre controls for the station dial. Purely client-side — the full
+/** Maps ISO-3166-1 alpha-2 codes to human-readable country names for the location filter. */
+const COUNTRY_NAMES: Record<string, string> = {
+  AR: "Argentina", AU: "Australia", AT: "Austria", BE: "Belgium", BR: "Brazil",
+  CA: "Canada", CN: "China", CO: "Colombia", CZ: "Czech Republic", DK: "Denmark",
+  EG: "Egypt", FI: "Finland", FR: "France", DE: "Germany", GH: "Ghana",
+  GR: "Greece", IN: "India", ID: "Indonesia", IE: "Ireland", IL: "Israel",
+  IT: "Italy", JP: "Japan", KE: "Kenya", LB: "Lebanon", MX: "Mexico",
+  MA: "Morocco", NL: "Netherlands", NZ: "New Zealand", NG: "Nigeria",
+  NO: "Norway", PK: "Pakistan", PS: "Palestine", PE: "Peru", PH: "Philippines",
+  PL: "Poland", PT: "Portugal", RO: "Romania", RU: "Russia", SG: "Singapore",
+  ZA: "South Africa", KR: "South Korea", ES: "Spain", SE: "Sweden",
+  CH: "Switzerland", TW: "Taiwan", TH: "Thailand", TR: "Turkey", UG: "Uganda",
+  UA: "Ukraine", AE: "United Arab Emirates", GB: "United Kingdom", US: "United States",
+  VN: "Vietnam",
+};
+
+function countryLabel(code: string): string {
+  return COUNTRY_NAMES[code.toUpperCase()] ?? code;
+}
+
+/** Sort/genre/location controls for the station dial. Purely client-side — the full
  * station list is already loaded, so no extra network round-trip is needed. */
 function DialSortAndGenre({
   sort,
@@ -205,6 +225,9 @@ function DialSortAndGenre({
   genre,
   onGenreChange,
   genreOptions,
+  country,
+  onCountryChange,
+  countryOptions,
   descriptionOnly,
   onDescriptionOnlyChange,
   search,
@@ -215,6 +238,9 @@ function DialSortAndGenre({
   genre: string | null;
   onGenreChange: (genre: string | null) => void;
   genreOptions: string[];
+  country: string | null;
+  onCountryChange: (country: string | null) => void;
+  countryOptions: string[];
   descriptionOnly: boolean;
   onDescriptionOnlyChange: (value: boolean) => void;
   search: string;
@@ -251,6 +277,25 @@ function DialSortAndGenre({
           </option>
         ))}
       </select>
+      {countryOptions.length > 0 && (
+        <select
+          value={country ?? ""}
+          onChange={(e) => onCountryChange(e.target.value || null)}
+          data-testid="dial-country-select"
+          className={`rounded-full border bg-card px-3 py-1 font-mono text-[11px] uppercase tracking-wide transition-colors focus:outline-none focus:ring-1 focus:ring-primary ${
+            country
+              ? "border-primary/40 text-primary"
+              : "border-border text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <option value="">All locations</option>
+          {countryOptions.map((c) => (
+            <option key={c} value={c}>
+              {countryLabel(c)}
+            </option>
+          ))}
+        </select>
+      )}
       {genreOptions.length > 0 && (
         <select
           value={genre ?? ""}
@@ -337,6 +382,7 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
   const [dialFilter, setDialFilter] = useState<DialFilterTab>("all");
   const [dialSort, setDialSort] = useState<DialSort>("default");
   const [dialGenre, setDialGenre] = useState<string | null>(null);
+  const [dialCountry, setDialCountry] = useState<string | null>(null);
   const [descriptionOnly, setDescriptionOnly] = useState(false);
   const [dialSearch, setDialSearch] = useState("");
   const [showAllStations, setShowAllStations] = useState<boolean>(() => {
@@ -471,6 +517,18 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
       .map(([g]) => g);
   }, [pulse]);
 
+  // Country options derived from the full station list — sorted by frequency
+  // so the most-represented countries appear first.
+  const countryOptions = useMemo((): string[] => {
+    const counts = new Map<string, number>();
+    for (const s of stations) {
+      if (s.country) counts.set(s.country, (counts.get(s.country) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([c]) => c);
+  }, [stations]);
+
   // Map slug → the show currently airing based on the scraped weekly schedule.
   // Only computed in live mode (selectedDate = null); falls back gracefully
   // if scraped data hasn't loaded yet.
@@ -516,6 +574,10 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
     if (dialFilter === "following")
       result = result.filter((s) => isFollowed(follows, "station", s.slug));
 
+    if (dialCountry) {
+      result = result.filter((s) => s.country === dialCountry);
+    }
+
     if (dialGenre) {
       const genresBySlug = new Map(
         (pulse?.items ?? [])
@@ -553,7 +615,7 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
     }
 
     return result;
-  }, [dialFilter, dialSort, dialGenre, descriptionOnly, dialSearch, stations, follows, pulse]);
+  }, [dialFilter, dialSort, dialGenre, dialCountry, descriptionOnly, dialSearch, stations, follows, pulse]);
 
   // Quality-gated view: when showAllStations is false, only show proven/promising.
   const visibleStations = useMemo(() => {
@@ -726,6 +788,9 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
           genre={dialGenre}
           onGenreChange={setDialGenre}
           genreOptions={genreOptions}
+          country={dialCountry}
+          onCountryChange={setDialCountry}
+          countryOptions={countryOptions}
           descriptionOnly={descriptionOnly}
           onDescriptionOnlyChange={setDescriptionOnly}
           search={dialSearch}

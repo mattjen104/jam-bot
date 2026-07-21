@@ -17,6 +17,8 @@ export interface Station {
   org?: string | null;
   /** @nullable */
   country?: string | null;
+  /** @nullable */
+  city?: string | null;
   streamUrl: string;
   /** @nullable */
   streamQuality?: string | null;
