@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePlayer } from "../player/PlayerProvider";
 import {
-  useMyLibrary,
+  useMyLibraryInfinite,
   useMyConnections,
   useLatestImportJob,
   startSpotifyLibraryConnect,
@@ -32,14 +32,39 @@ export default function Library() {
   const isAuthenticated = !connLoading && connections !== null;
   const hasSpotify = Array.isArray(connections) && connections.some((c) => c.service === "spotify");
 
-  const { data: libraryData, isLoading: libLoading } = useMyLibrary();
-  const items = libraryData?.items ?? [];
+  // Infinite kept list — scrolls as user reaches the bottom
+  const {
+    data: keptData,
+    isLoading: keptLoading,
+    isFetchingNextPage,
+    fetchNextPage,
+    hasNextPage,
+  } = useMyLibraryInfinite({ source: "keep" }, 50);
 
-  // Split: kept (provenance.kind === 'keep') vs imported
-  const kept = items.filter((i) => i.provenance.kind === "keep");
-  const inflow = items.filter((i) => i.provenance.kind !== "keep").slice(0, 20);
+  const keptItems = keptData?.pages.flatMap((p) => p.items) ?? [];
 
-  // Poll latest import job so Library shows progress without needing ?import=1
+  // Inflow row — first-page import items only (horizontal scroll, capped at 20)
+  const { data: inflowData } = useMyLibraryInfinite({ source: "import" }, 20);
+  const inflowItems = inflowData?.pages[0]?.items?.slice(0, 20) ?? [];
+
+  // Sentinel ref for IntersectionObserver — triggers next page when visible
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && hasNextPage && !isFetchingNextPage) {
+          void fetchNextPage();
+        }
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  // Import job banner
   const { data: jobData } = useLatestImportJob();
   const [bannerDismissed, setBannerDismissed] = useState(false);
 
@@ -82,12 +107,13 @@ export default function Library() {
     } catch {
       // 409 (already running) or transient failure — refetch below re-syncs.
     } finally {
-      // Always refetch: the latest-job query stops polling on terminal states
-      // and must be invalidated to pick up a new (or already-running) job.
       void queryClient.invalidateQueries({ queryKey: ME_LATEST_IMPORT_JOB_KEY });
       setImportBusy(false);
     }
   };
+
+  const libLoading = keptLoading;
+  const isEmpty = !libLoading && keptItems.length === 0;
 
   return (
     <div className="lore-grain relative min-h-screen">
@@ -153,7 +179,7 @@ export default function Library() {
             </div>
           )}
 
-          {isAuthenticated && hasSpotify && items.length === 0 && !libLoading && (
+          {isAuthenticated && hasSpotify && isEmpty && !libLoading && (
             <div className="mt-5 flex flex-wrap gap-2">
               <button
                 type="button"
@@ -182,18 +208,18 @@ export default function Library() {
         )}
 
         {/* New from your pickers — inflow scroll row */}
-        {inflow.length > 0 && (
+        {inflowItems.length > 0 && (
           <section className="mb-10" data-testid="library-inflow">
             <div className="mb-4 flex items-baseline justify-between">
               <h2 className="font-serif text-xl font-semibold text-foreground">
                 New from your pickers
               </h2>
               <span className="font-mono text-xs text-muted-foreground">
-                {inflow.length} track{inflow.length === 1 ? "" : "s"}
+                {inflowItems.length} track{inflowItems.length === 1 ? "" : "s"}
               </span>
             </div>
             <div className="flex gap-3 overflow-x-auto pb-2" data-testid="inflow-scroll">
-              {inflow.map((item) => (
+              {inflowItems.map((item) => (
                 <InflowCard
                   key={item.mbid}
                   item={item}
@@ -205,12 +231,13 @@ export default function Library() {
           </section>
         )}
 
-        {/* Kept list */}
+        {/* Kept list — infinite scroll */}
         <section>
           <div className="mb-4 flex items-baseline justify-between">
             <h2 className="font-serif text-xl font-semibold text-foreground">Kept</h2>
             <span className="font-mono text-xs text-muted-foreground">
-              {kept.length} track{kept.length === 1 ? "" : "s"}
+              {keptItems.length} track{keptItems.length === 1 ? "" : "s"}
+              {hasNextPage ? "+" : ""}
             </span>
           </div>
 
@@ -223,7 +250,7 @@ export default function Library() {
                 />
               ))}
             </ul>
-          ) : kept.length === 0 ? (
+          ) : keptItems.length === 0 ? (
             <div className="rounded-xl border border-card-border bg-card p-8 text-center">
               <Disc3 className="mx-auto h-10 w-10 text-muted-foreground/40" />
               <p className="mx-auto mt-4 max-w-[36ch] font-serif text-lg text-muted-foreground">
@@ -238,11 +265,33 @@ export default function Library() {
               </Link>
             </div>
           ) : (
-            <ul className="flex flex-col gap-2" data-testid="library-kept">
-              {kept.map((item) => (
-                <LibraryRow key={item.mbid} item={item} />
-              ))}
-            </ul>
+            <>
+              <ul className="flex flex-col gap-2" data-testid="library-kept">
+                {keptItems.map((item) => (
+                  <LibraryRow key={item.mbid} item={item} />
+                ))}
+              </ul>
+
+              {/* Sentinel — triggers next page fetch when scrolled into view */}
+              <div ref={sentinelRef} className="h-1" aria-hidden />
+
+              {/* Fetch-next-page spinner */}
+              {isFetchingNextPage && (
+                <div className="flex justify-center py-6" data-testid="library-loading-more">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              )}
+
+              {/* End-of-list message */}
+              {!hasNextPage && keptItems.length > 0 && (
+                <p
+                  className="py-6 text-center font-mono text-[11px] uppercase tracking-wide text-muted-foreground"
+                  data-testid="library-end"
+                >
+                  You've reached the end · {keptItems.length} track{keptItems.length === 1 ? "" : "s"}
+                </p>
+              )}
+            </>
           )}
         </section>
 
