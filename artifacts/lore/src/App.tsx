@@ -22,6 +22,7 @@ import AdminSongExploder from "@/pages/AdminSongExploder";
 import AdminSelectors from "@/pages/AdminSelectors";
 import AdminRadioBrowser from "@/pages/AdminRadioBrowser";
 import AdminListCandidates from "@/pages/AdminListCandidates";
+import AdminCriCandidates from "@/pages/AdminCriCandidates";
 import DjPage from "@/pages/DjPage";
 import ScheduleCalendar from "@/pages/ScheduleCalendar";
 import WebPlayer from "./webplayer/WebPlayer";
@@ -113,6 +114,7 @@ function Router() {
         <Route path="/admin/selectors" component={AdminSelectors} />
         <Route path="/admin/radio-browser" component={AdminRadioBrowser} />
         <Route path="/admin/list-candidates" component={AdminListCandidates} />
+        <Route path="/admin/cri" component={AdminCriCandidates} />
         <Route path="/dj/:name" component={DjPage} />
         <Route path="/schedule" component={ScheduleCalendar} />
         {/* Legacy admin route */}

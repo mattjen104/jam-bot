@@ -61,6 +61,7 @@ import {
   recordingReleaseGroupsTable,
   stationQualityTable,
   blogListCandidatesTable,
+  criCandidatesTable,
 } from "@workspace/db";
 import { eq, and, asc, desc, sql, count } from "drizzle-orm";
 import { wireListExtractor } from "../../lore/list-wire.js";
@@ -1464,6 +1465,202 @@ router.post("/admin/stations/recompute-quality", h(async (_req, res) => {
   const summary = await recomputeAllQualityScores();
   console.info("[lore:quality] admin recompute complete", summary);
   return res.json(RecomputeStationQualityResponse.parse(summary));
+}));
+
+// ---------------------------------------------------------------------------
+// CRI candidate promotion endpoints
+// ---------------------------------------------------------------------------
+
+/**
+ * Normalise a country name as scraped from CRI to an ISO 3166-1 alpha-2 code.
+ * Falls back to the original string when no mapping is found, so the UI can
+ * still display something sensible.
+ */
+const COUNTRY_ISO2: Record<string, string> = {
+  "uk": "GB",
+  "united kingdom": "GB",
+  "england": "GB",
+  "scotland": "GB",
+  "wales": "GB",
+  "northern ireland": "GB",
+  "germany": "DE",
+  "deutschland": "DE",
+  "france": "FR",
+  "usa": "US",
+  "united states": "US",
+  "united states of america": "US",
+  "australia": "AU",
+  "canada": "CA",
+  "netherlands": "NL",
+  "the netherlands": "NL",
+  "holland": "NL",
+  "belgium": "BE",
+  "japan": "JP",
+  "ireland": "IE",
+  "italy": "IT",
+  "spain": "ES",
+  "sweden": "SE",
+  "denmark": "DK",
+  "norway": "NO",
+  "finland": "FI",
+  "switzerland": "CH",
+  "austria": "AT",
+  "portugal": "PT",
+  "poland": "PL",
+  "czech republic": "CZ",
+  "czechia": "CZ",
+  "hungary": "HU",
+  "romania": "RO",
+  "greece": "GR",
+  "turkey": "TR",
+  "south korea": "KR",
+  "korea": "KR",
+  "china": "CN",
+  "brazil": "BR",
+  "argentina": "AR",
+  "mexico": "MX",
+  "colombia": "CO",
+  "chile": "CL",
+  "south africa": "ZA",
+  "new zealand": "NZ",
+  "israel": "IL",
+  "lebanon": "LB",
+  "india": "IN",
+  "russia": "RU",
+};
+
+function normalizeCountryToIso2(name: string | null | undefined): string | null {
+  if (!name) return null;
+  const lower = name.toLowerCase().trim();
+  return COUNTRY_ISO2[lower] ?? name;
+}
+
+// GET /api/admin/cri/candidates — list all CRI candidates, optionally filtered
+// by icy_status or alreadyInLore. Ordered newest-checked first.
+router.get("/admin/cri/candidates", h(async (req, res) => {
+  const icyFilter = typeof req.query["icyStatus"] === "string" ? req.query["icyStatus"] : null;
+  const onlyPromotable = req.query["promotable"] === "true";
+
+  const rows = await db
+    .select()
+    .from(criCandidatesTable)
+    .orderBy(desc(criCandidatesTable.checkedAt));
+
+  const filtered = rows.filter((r) => {
+    if (icyFilter && r.icyStatus !== icyFilter) return false;
+    if (onlyPromotable && (r.icyStatus !== "yes" || r.alreadyInLore)) return false;
+    return true;
+  });
+
+  return res.json({
+    candidates: filtered.map((r) => ({
+      id: r.id,
+      criSlug: r.criSlug,
+      name: r.name,
+      city: r.city ?? null,
+      country: r.country ?? null,
+      genres: r.genres ?? [],
+      websiteUrl: r.websiteUrl ?? null,
+      streamUrl: r.streamUrl ?? null,
+      icyStatus: r.icyStatus,
+      alreadyInLore: r.alreadyInLore,
+      notes: r.notes ?? null,
+      checkedAt: r.checkedAt.toISOString(),
+    })),
+  });
+}));
+
+// POST /api/admin/cri/candidates/:slug/promote — promote a CRI candidate into
+// the stations table and start polling. Only allowed when icyStatus === "yes".
+// Idempotent: re-promoting an already-promoted station re-enables it and
+// re-enrolls it in the poller.
+router.post("/admin/cri/candidates/:slug/promote", h(async (req, res) => {
+  const criSlug = String(req.params["slug"] ?? "");
+  if (!criSlug) return res.status(400).json({ error: "slug is required" });
+
+  const [candidate] = await db
+    .select()
+    .from(criCandidatesTable)
+    .where(eq(criCandidatesTable.criSlug, criSlug))
+    .limit(1);
+
+  if (!candidate) {
+    return res.status(404).json({ error: `CRI candidate "${criSlug}" not found` });
+  }
+  if (candidate.icyStatus !== "yes") {
+    return res.status(422).json({
+      error: `Cannot promote: icyStatus is "${candidate.icyStatus}" (must be "yes")`,
+    });
+  }
+  if (!candidate.streamUrl) {
+    return res.status(422).json({ error: "Candidate has no stream URL — cannot promote" });
+  }
+
+  const stationSlug = `cri-${criSlug}`;
+  const country = normalizeCountryToIso2(candidate.country);
+
+  const [stationRow] = await db
+    .insert(stationsTable)
+    .values({
+      slug: stationSlug,
+      name: candidate.name,
+      org: candidate.name,
+      country: country ?? undefined,
+      city: candidate.city ?? undefined,
+      streamUrl: candidate.streamUrl,
+      streamFormat: "mp3",
+      source: "cri",
+      tier: "longtail",
+      active: true,
+      nowPlayingSource: "radio_browser_icy",
+      nowPlayingConfig: { streamUrl: candidate.streamUrl },
+      tags: candidate.genres ?? undefined,
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: stationsTable.slug,
+      set: {
+        active: true,
+        nowPlayingSource: "radio_browser_icy",
+        nowPlayingConfig: { streamUrl: candidate.streamUrl },
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
+
+  if (!stationRow) {
+    return res.status(500).json({ error: "Failed to upsert station row" });
+  }
+
+  // Mark the candidate as already in Lore.
+  await db
+    .update(criCandidatesTable)
+    .set({ alreadyInLore: true })
+    .where(eq(criCandidatesTable.criSlug, criSlug));
+
+  // Reload the fully-configured station row and start polling immediately.
+  const [freshStation] = await db
+    .select()
+    .from(stationsTable)
+    .where(eq(stationsTable.id, stationRow.id))
+    .limit(1);
+
+  if (freshStation) {
+    enrollStationPoller(freshStation);
+  }
+
+  console.info(
+    `[lore] cri promoted: slug=${stationSlug} name="${candidate.name}" country=${country ?? "unknown"}`,
+  );
+
+  return res.status(201).json({
+    stationId: stationRow.id,
+    stationSlug,
+    name: stationRow.name,
+    streamUrl: stationRow.streamUrl,
+    country: stationRow.country ?? null,
+    city: stationRow.city ?? null,
+  });
 }));
 
 // POST /api/admin/rym-lists — admin-only RateYourMusic link-out picker.
