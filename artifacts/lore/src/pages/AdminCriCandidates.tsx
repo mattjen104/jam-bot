@@ -30,6 +30,7 @@ interface CriCandidate {
 }
 
 type IcyFilter = "" | "yes" | "no" | "unknown";
+type LoreFilter = "" | "true" | "false";
 
 const ICY_LABELS: Record<string, string> = {
   yes: "ICY ✓",
@@ -112,6 +113,7 @@ function CriPanel({
   onClearToken: () => void;
 }) {
   const [icyFilter, setIcyFilter] = useState<IcyFilter>("");
+  const [loreFilter, setLoreFilter] = useState<LoreFilter>("");
   const [onlyPromotable, setOnlyPromotable] = useState(false);
   const [candidates, setCandidates] = useState<CriCandidate[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -119,12 +121,13 @@ function CriPanel({
   const [didInit, setDidInit] = useState(false);
 
   const load = useCallback(
-    async (icy: IcyFilter, promotable: boolean) => {
+    async (icy: IcyFilter, lore: LoreFilter, promotable: boolean) => {
       setLoading(true);
       setFetchError(null);
       try {
         const params = new URLSearchParams();
         if (icy) params.set("icyStatus", icy);
+        if (lore) params.set("alreadyInLore", lore);
         if (promotable) params.set("promotable", "true");
         const qs = params.toString() ? `?${params.toString()}` : "";
         const res = await fetch(`/api/admin/cri/candidates${qs}`, {
@@ -148,20 +151,29 @@ function CriPanel({
 
   if (!didInit) {
     setDidInit(true);
-    void load(icyFilter, onlyPromotable);
+    void load(icyFilter, loreFilter, onlyPromotable);
   }
 
   function handleIcyFilter(f: IcyFilter) {
     setIcyFilter(f);
     setOnlyPromotable(false);
-    void load(f, false);
+    void load(f, loreFilter, false);
+  }
+
+  function handleLoreFilter(f: LoreFilter) {
+    setLoreFilter(f);
+    setOnlyPromotable(false);
+    void load(icyFilter, f, false);
   }
 
   function handlePromotable() {
     const next = !onlyPromotable;
     setOnlyPromotable(next);
-    setIcyFilter("");
-    void load("", next);
+    if (next) {
+      setIcyFilter("");
+      setLoreFilter("");
+    }
+    void load("", "", next);
   }
 
   function patchCandidate(updated: CriCandidate) {
@@ -171,10 +183,16 @@ function CriPanel({
   }
 
   const icyFilters: { label: string; value: IcyFilter }[] = [
-    { label: "All", value: "" },
+    { label: "All ICY", value: "" },
     { label: "ICY ✓", value: "yes" },
     { label: "No ICY", value: "no" },
     { label: "Untested", value: "unknown" },
+  ];
+
+  const loreFilters: { label: string; value: LoreFilter }[] = [
+    { label: "All", value: "" },
+    { label: "Not in Lore", value: "false" },
+    { label: "In Lore", value: "true" },
   ];
 
   const promotableCount =
@@ -195,7 +213,7 @@ function CriPanel({
           <div className="flex items-center gap-4">
             <button
               type="button"
-              onClick={() => void load(icyFilter, onlyPromotable)}
+              onClick={() => void load(icyFilter, loreFilter, onlyPromotable)}
               className="inline-flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground/70 hover:text-primary"
             >
               <RefreshCw className="h-3.5 w-3.5" />
@@ -226,7 +244,7 @@ function CriPanel({
           metadata and can be promoted to Lore.
         </p>
 
-        {/* Filter bar */}
+        {/* Filter bar — row 1: ICY status */}
         <div className="mt-6 flex flex-wrap items-center gap-2">
           {icyFilters.map((f) => (
             <button
@@ -242,6 +260,23 @@ function CriPanel({
               {f.label}
             </button>
           ))}
+          <span className="h-4 w-px bg-border" />
+          {/* Lore status filters */}
+          {loreFilters.map((f) => (
+            <button
+              key={f.value}
+              type="button"
+              onClick={() => handleLoreFilter(f.value)}
+              className={`rounded-full px-3 py-1 font-mono text-[11px] uppercase tracking-wide transition-colors ${
+                loreFilter === f.value && !onlyPromotable
+                  ? "bg-primary text-primary-foreground"
+                  : "border border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+          <span className="h-4 w-px bg-border" />
           <button
             type="button"
             onClick={handlePromotable}
@@ -272,7 +307,7 @@ function CriPanel({
             </div>
             <button
               type="button"
-              onClick={() => void load(icyFilter, onlyPromotable)}
+              onClick={() => void load(icyFilter, loreFilter, onlyPromotable)}
               className="mt-3 font-mono text-[11px] text-primary hover:underline"
             >
               Retry
@@ -386,6 +421,17 @@ function CandidateRow({
               </span>
             )}
           </div>
+          {candidate.streamUrl && (
+            <a
+              href={candidate.streamUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 block truncate font-mono text-[11px] text-muted-foreground/60 hover:text-primary"
+              title={candidate.streamUrl}
+            >
+              {candidate.streamUrl}
+            </a>
+          )}
           <p className="mt-0.5 font-mono text-[10px] text-muted-foreground/50">
             Checked {fmtDate(candidate.checkedAt)}
           </p>

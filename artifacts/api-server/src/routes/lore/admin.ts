@@ -1536,9 +1536,16 @@ function normalizeCountryToIso2(name: string | null | undefined): string | null 
 }
 
 // GET /api/admin/cri/candidates — list all CRI candidates, optionally filtered
-// by icy_status or alreadyInLore. Ordered newest-checked first.
+// by icyStatus and/or alreadyInLore. Ordered newest-checked first.
+// Query params:
+//   icyStatus=yes|no|unknown   — filter by ICY status
+//   alreadyInLore=true|false   — filter by whether already promoted
+//   promotable=true            — shorthand for icyStatus=yes + alreadyInLore=false
 router.get("/admin/cri/candidates", h(async (req, res) => {
   const icyFilter = typeof req.query["icyStatus"] === "string" ? req.query["icyStatus"] : null;
+  const alreadyInLoreFilter = typeof req.query["alreadyInLore"] === "string"
+    ? req.query["alreadyInLore"] === "true"
+    : null;
   const onlyPromotable = req.query["promotable"] === "true";
 
   const rows = await db
@@ -1548,6 +1555,7 @@ router.get("/admin/cri/candidates", h(async (req, res) => {
 
   const filtered = rows.filter((r) => {
     if (icyFilter && r.icyStatus !== icyFilter) return false;
+    if (alreadyInLoreFilter !== null && r.alreadyInLore !== alreadyInLoreFilter) return false;
     if (onlyPromotable && (r.icyStatus !== "yes" || r.alreadyInLore)) return false;
     return true;
   });
