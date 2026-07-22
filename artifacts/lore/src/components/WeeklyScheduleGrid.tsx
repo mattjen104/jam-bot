@@ -1,11 +1,21 @@
 import { Link } from "wouter";
 import type { ScrapedShow } from "@workspace/api-client-react";
-import { CalendarDays, Clock, Radio } from "lucide-react";
+import { Radio } from "lucide-react";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 type Day = (typeof DAYS)[number];
 
-const DAY_LABELS: Record<Day, string> = {
+const DAY_SHORT: Record<Day, string> = {
+  Mon: "Mon",
+  Tue: "Tue",
+  Wed: "Wed",
+  Thu: "Thu",
+  Fri: "Fri",
+  Sat: "Sat",
+  Sun: "Sun",
+};
+
+const DAY_LONG: Record<Day, string> = {
   Mon: "Monday",
   Tue: "Tuesday",
   Wed: "Wednesday",
@@ -33,7 +43,7 @@ function formatTime(hhmm: string): string {
 
 function getCurrentContext(): { day: Day; minutesNow: number; yesterday: Day } {
   const now = new Date();
-  const jsDay = now.getDay(); // 0=Sun, 1=Mon…6=Sat
+  const jsDay = now.getDay(); // 0=Sun…6=Sat
   const dayMap: Day[] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const day = dayMap[jsDay] ?? "Mon";
   const yesterday = dayMap[(jsDay + 6) % 7] ?? "Sun";
@@ -48,8 +58,10 @@ function isAiring(show: ScrapedShow, day: Day, minutesNow: number, yesterday: Da
     if (end > start) {
       return minutesNow >= start && minutesNow < end;
     }
+    // Overnight: started today, ends tomorrow (endTime < startTime)
     return minutesNow >= start;
   }
+  // Overnight carryover: started yesterday, still running today
   if (show.dayOfWeek === yesterday && end <= start) {
     return minutesNow < end;
   }
@@ -78,90 +90,119 @@ export function WeeklyScheduleGrid({ shows, lastScrapedAt }: WeeklyScheduleGridP
 
   const { day: currentDay, minutesNow, yesterday } = getCurrentContext();
 
-  const byDay = new Map<Day, ScrapedShow[]>();
-  for (const d of DAYS) byDay.set(d, []);
+  // Build lookup: day → startTime → show
+  const lookup = new Map<Day, Map<string, ScrapedShow>>();
+  for (const d of DAYS) lookup.set(d, new Map());
   for (const show of shows) {
-    const d = show.dayOfWeek as Day;
-    if (byDay.has(d)) byDay.get(d)!.push(show);
+    lookup.get(show.dayOfWeek as Day)?.set(show.startTime, show);
   }
 
-  const activeDays = DAYS.filter((d) => (byDay.get(d)?.length ?? 0) > 0);
+  // Collect all unique start times, sorted chronologically
+  const allTimes = [...new Set(shows.map((s) => s.startTime))].sort();
 
   return (
     <div className="flex flex-col gap-4">
-      {activeDays.map((day) => {
-        const dayShows = byDay.get(day) ?? [];
-        const isToday = day === currentDay;
-        return (
-          <section key={day}>
-            <div
-              className={`mb-2 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] ${
-                isToday ? "text-primary" : "text-muted-foreground"
-              }`}
-            >
-              <CalendarDays className="h-3.5 w-3.5" />
-              {DAY_LABELS[day]}
-              {isToday && (
-                <span className="ml-1 rounded-full border border-primary-border bg-primary/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-primary">
-                  Today
-                </span>
-              )}
-            </div>
-            <ul className="flex flex-col gap-1.5">
-              {dayShows.map((show, i) => {
-                const airing = isAiring(show, currentDay, minutesNow, yesterday);
-                return (
-                  <li key={`${day}-${i}`}>
-                    <div
-                      className={`flex items-center gap-3 rounded-lg border px-4 py-3 transition-colors ${
-                        airing
-                          ? "border-primary-border bg-primary/10"
-                          : "border-card-border bg-card"
-                      }`}
+      {/* Horizontal-scroll wrapper so the 7-column grid works on small screens */}
+      <div className="overflow-x-auto rounded-xl border border-card-border">
+        <table className="w-full min-w-[640px] border-collapse text-left">
+          <thead>
+            <tr className="border-b border-card-border bg-card">
+              {/* Empty time-label column header */}
+              <th className="w-16 px-3 py-2.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground/60">
+                Time
+              </th>
+              {DAYS.map((d) => (
+                <th
+                  key={d}
+                  title={DAY_LONG[d]}
+                  className={`px-3 py-2.5 font-mono text-[10px] uppercase tracking-wide ${
+                    d === currentDay ? "text-primary" : "text-muted-foreground"
+                  }`}
+                >
+                  {DAY_SHORT[d]}
+                  {d === currentDay && (
+                    <span className="ml-1.5 rounded-full border border-primary-border bg-primary/10 px-1 py-0.5 text-[8px] text-primary">
+                      today
+                    </span>
+                  )}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {allTimes.map((time, rowIdx) => (
+              <tr
+                key={time}
+                className={`border-b border-card-border/50 ${
+                  rowIdx % 2 === 0 ? "bg-card" : "bg-card/40"
+                }`}
+              >
+                {/* Time label */}
+                <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[11px] text-muted-foreground">
+                  {formatTime(time)}
+                </td>
+
+                {/* One cell per day */}
+                {DAYS.map((d) => {
+                  const show = lookup.get(d)?.get(time);
+                  if (!show) {
+                    return (
+                      <td key={d} className="px-2 py-2.5">
+                        <span className="text-muted-foreground/20">—</span>
+                      </td>
+                    );
+                  }
+                  const airing = isAiring(show, currentDay, minutesNow, yesterday);
+                  return (
+                    <td
+                      key={d}
+                      className={`px-2 py-2 ${airing ? "bg-primary/10" : ""}`}
                     >
-                      <div className="flex min-w-0 flex-1 flex-col">
-                        <p className="truncate text-sm font-medium text-foreground">
+                      <div className="flex flex-col gap-0.5">
+                        <span
+                          className={`text-[12px] font-medium leading-snug ${
+                            airing ? "text-primary" : "text-foreground"
+                          }`}
+                        >
                           {show.showName}
                           {airing && (
-                            <span className="ml-2 inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-wide text-primary">
-                              <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
-                              On air
+                            <span className="ml-1.5 inline-flex items-center gap-0.5 font-mono text-[9px] uppercase tracking-wide text-primary">
+                              <span className="inline-block h-1 w-1 animate-pulse rounded-full bg-primary" />
+                              live
                             </span>
                           )}
-                        </p>
+                        </span>
                         {show.djName && (
                           <Link
                             href={`/dj/${encodeURIComponent(show.djName)}`}
-                            className="mt-0.5 w-fit font-mono text-[11px] text-muted-foreground hover:text-primary"
+                            className="w-fit font-mono text-[10px] text-muted-foreground hover:text-primary"
                             onClick={(e) => e.stopPropagation()}
                           >
                             {show.djName}
                           </Link>
                         )}
+                        <span className="font-mono text-[10px] text-muted-foreground/60">
+                          {formatTime(show.startTime)}–{formatTime(show.endTime)}
+                        </span>
                       </div>
-                      <div className="flex shrink-0 items-center gap-1 font-mono text-[11px] text-muted-foreground">
-                        <Clock className="h-3 w-3" />
-                        {formatTime(show.startTime)}
-                        <span className="mx-0.5">–</span>
-                        {formatTime(show.endTime)}
-                      </div>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        );
-      })}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {lastScrapedAt && (
         <p className="font-mono text-[10px] text-muted-foreground/50">
-          Schedule last updated {new Date(lastScrapedAt).toLocaleDateString(undefined, {
+          Schedule last updated{" "}
+          {new Date(lastScrapedAt).toLocaleDateString(undefined, {
             month: "short",
             day: "numeric",
             year: "numeric",
-          })}
-          {" "}· Times shown in the station's own local time.
+          })}{" "}
+          · Times shown in the station's own local time.
         </p>
       )}
     </div>
