@@ -311,7 +311,7 @@ export function StationList({
                     <p className="flex items-center gap-1.5 truncate font-mono text-xs text-muted-foreground">
                       <Radio className="h-3 w-3 shrink-0" />
                       <span className="truncate">
-                        {[station.org, station.country].filter(Boolean).join(" · ") || "Independent"}
+                        {[station.org, station.city, station.country].filter(Boolean).join(" · ") || "Independent"}
                       </span>
                     </p>
                   )}
