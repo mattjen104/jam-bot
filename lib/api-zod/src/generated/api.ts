@@ -2207,6 +2207,12 @@ export const GetStationUpcomingScheduleResponse = zod
       .describe(
         "ISO timestamp of the last successful schedule scrape. Null when never successfully scraped.",
       ),
+    timezoneHint: zod
+      .string()
+      .nullable()
+      .describe(
+        "IANA timezone inferred from the station's city/country (e.g. \"America/Los_Angeles\"). Null when the timezone cannot be confidently determined.",
+      ),
   })
   .describe(
     "A station's scraped upcoming schedule. `shows` is empty (never fabricated) when the station's page had no parseable schedule.",

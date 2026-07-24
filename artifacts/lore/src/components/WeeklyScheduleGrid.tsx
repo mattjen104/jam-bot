@@ -68,12 +68,38 @@ function isAiring(show: ScrapedShow, day: Day, minutesNow: number, yesterday: Da
   return false;
 }
 
+/**
+ * Convert an IANA timezone identifier to a friendly display label using the
+ * browser's Intl API. Returns e.g. "Pacific Standard Time (PST)" or
+ * "Central European Time (CET)". Falls back to the raw identifier on error.
+ */
+function friendlyTimezone(ianaZone: string): string {
+  try {
+    const now = new Date();
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: ianaZone,
+      timeZoneName: "long",
+    }).formatToParts(now);
+    const shortParts = new Intl.DateTimeFormat("en-US", {
+      timeZone: ianaZone,
+      timeZoneName: "short",
+    }).formatToParts(now);
+    const long = parts.find((p) => p.type === "timeZoneName")?.value ?? null;
+    const abbr = shortParts.find((p) => p.type === "timeZoneName")?.value ?? null;
+    if (long && abbr && long !== abbr) return `${long} (${abbr})`;
+    return long ?? abbr ?? ianaZone;
+  } catch {
+    return ianaZone;
+  }
+}
+
 interface WeeklyScheduleGridProps {
   shows: ScrapedShow[];
   lastScrapedAt: string | null;
+  timezoneHint?: string | null;
 }
 
-export function WeeklyScheduleGrid({ shows, lastScrapedAt }: WeeklyScheduleGridProps) {
+export function WeeklyScheduleGrid({ shows, lastScrapedAt, timezoneHint }: WeeklyScheduleGridProps) {
   if (shows.length === 0) {
     return (
       <div className="rounded-xl border border-card-border bg-card p-8 text-center">
@@ -202,7 +228,10 @@ export function WeeklyScheduleGrid({ shows, lastScrapedAt }: WeeklyScheduleGridP
             day: "numeric",
             year: "numeric",
           })}{" "}
-          · Times shown in the station's own local time.
+          ·{" "}
+          {timezoneHint
+            ? `Times in ${friendlyTimezone(timezoneHint)}.`
+            : "Times shown in the station's own local time."}
         </p>
       )}
     </div>

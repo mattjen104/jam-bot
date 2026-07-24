@@ -276,6 +276,7 @@ export default function StationArchive() {
                 <WeeklyScheduleGrid
                   shows={scheduleData?.shows ?? []}
                   lastScrapedAt={scheduleData?.lastScrapedAt ?? null}
+                  timezoneHint={scheduleData?.timezoneHint ?? null}
                 />
               )
             )}

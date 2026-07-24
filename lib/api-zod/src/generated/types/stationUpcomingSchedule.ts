@@ -18,4 +18,9 @@ export interface StationUpcomingSchedule {
    * @nullable
    */
   lastScrapedAt: string | null;
+  /**
+   * IANA timezone inferred from the station's city/country (e.g. "America/Los_Angeles"). Null when the timezone cannot be confidently determined.
+   * @nullable
+   */
+  timezoneHint: string | null;
 }
