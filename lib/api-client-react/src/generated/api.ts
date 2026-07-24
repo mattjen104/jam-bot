@@ -24,7 +24,6 @@ import type {
   ArchiveRecentRuns,
   ArtistResult,
   ArtistRunSearch,
-  SearchArtistRunsParams,
   BlogIngestRequest,
   DiscogsListRequest,
   DjShows,
@@ -74,6 +73,7 @@ import type {
   ResolvedSong,
   RymListRequest,
   ScrapedStationList,
+  SearchArtistRunsParams,
   SegueNextList,
   SelectorInsights,
   SelectorList,
@@ -2830,7 +2830,7 @@ export const getSearchArtistRunsQueryKey = (
 
 export const getSearchArtistRunsQueryOptions = <
   TData = Awaited<ReturnType<typeof searchArtistRuns>>,
-  TError = ErrorType<unknown>,
+  TError = ErrorType<ApiError>,
 >(
   params: SearchArtistRunsParams,
   options?: {
@@ -2844,7 +2844,8 @@ export const getSearchArtistRunsQueryOptions = <
 ) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
-  const queryKey = queryOptions?.queryKey ?? getSearchArtistRunsQueryKey(params);
+  const queryKey =
+    queryOptions?.queryKey ?? getSearchArtistRunsQueryKey(params);
 
   const queryFn: QueryFunction<
     Awaited<ReturnType<typeof searchArtistRuns>>
@@ -2860,7 +2861,7 @@ export const getSearchArtistRunsQueryOptions = <
 export type SearchArtistRunsQueryResult = NonNullable<
   Awaited<ReturnType<typeof searchArtistRuns>>
 >;
-export type SearchArtistRunsQueryError = ErrorType<unknown>;
+export type SearchArtistRunsQueryError = ErrorType<ApiError>;
 
 /**
  * @summary Find archived runs that include an artist
@@ -2868,7 +2869,7 @@ export type SearchArtistRunsQueryError = ErrorType<unknown>;
 
 export function useSearchArtistRuns<
   TData = Awaited<ReturnType<typeof searchArtistRuns>>,
-  TError = ErrorType<unknown>,
+  TError = ErrorType<ApiError>,
 >(
   params: SearchArtistRunsParams,
   options?: {

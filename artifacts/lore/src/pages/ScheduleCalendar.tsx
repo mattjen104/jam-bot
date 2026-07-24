@@ -53,7 +53,21 @@ type ShowEntry = {
   startTime: string;
   endTime: string | null;
   djName: string | null;
+  timezoneHint: string | null;
 };
+
+/** Return the short timezone abbreviation (e.g. "PST", "CET") for an IANA zone, or null on failure. */
+function tzAbbr(ianaZone: string): string | null {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: ianaZone,
+      timeZoneName: "short",
+    }).formatToParts(new Date());
+    return parts.find((p) => p.type === "timeZoneName")?.value ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export default function ScheduleCalendar() {
   const [stationFilter, setStationFilter] = useState("all");
@@ -110,6 +124,7 @@ export default function ScheduleCalendar() {
               startTime: show.startTime,
               endTime: show.endTime ?? null,
               djName: show.djName ?? null,
+              timezoneHint: station.timezoneHint ?? null,
             });
           }
         }
@@ -163,6 +178,7 @@ export default function ScheduleCalendar() {
           startTime: show.startTime,
           endTime: show.endTime ?? null,
           djName: show.djName ?? null,
+          timezoneHint: station.timezoneHint ?? null,
         });
       }
     }
@@ -186,6 +202,29 @@ export default function ScheduleCalendar() {
     () => [...stations].sort((a, b) => a.name.localeCompare(b.name)),
     [stations],
   );
+
+  // Collect the distinct IANA zones among currently-visible stations so we
+  // can decide whether to show a multi-timezone legend.
+  const visibleTimezones = useMemo(() => {
+    const filtered =
+      stationFilter === "all"
+        ? stations
+        : stations.filter((s) => s.slug === stationFilter);
+    const zones = new Set<string>();
+    for (const s of filtered) {
+      if (s.timezoneHint) zones.add(s.timezoneHint);
+    }
+    return zones;
+  }, [stations, stationFilter]);
+
+  // True when stations span more than one timezone (or when some have a known
+  // zone and others don't — the footnote is worth showing either way).
+  const hasMultipleTimezones =
+    visibleTimezones.size > 1 ||
+    (visibleTimezones.size >= 1 &&
+      (stationFilter === "all"
+        ? stations.some((s) => !s.timezoneHint)
+        : sortedStations.find((s) => s.slug === stationFilter)?.timezoneHint == null));
 
   return (
     <div className="min-h-screen">
@@ -413,6 +452,15 @@ export default function ScheduleCalendar() {
                 No shows found for this selection.
               </div>
             )}
+
+            {/* Timezone footnote — only shown when stations span multiple zones */}
+            {!isLoading && totalSlots > 0 && hasMultipleTimezones && (
+              <p className="font-mono text-[10px] text-muted-foreground/50">
+                Times are shown in each station's own local time. The timezone
+                abbreviation next to each time indicates the station's zone when
+                known.
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -540,21 +588,38 @@ function SlotRow({
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
     >
-      {/* Time or LIVE badge */}
+      {/* Time or LIVE badge — both include a timezone abbreviation when known */}
       {live ? (
-        <span
-          className="inline-flex items-center gap-1 font-mono text-[9px] font-semibold uppercase tracking-wide text-red-500"
-          data-testid="live-badge"
-        >
-          <span className="relative flex h-1.5 w-1.5" aria-hidden>
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-60" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-red-500" />
+        <span className="flex flex-col leading-none gap-0.5" data-testid="live-badge">
+          <span className="inline-flex items-center gap-1 font-mono text-[9px] font-semibold uppercase tracking-wide text-red-500">
+            <span className="relative flex h-1.5 w-1.5 shrink-0" aria-hidden>
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-60" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-red-500" />
+            </span>
+            Live
           </span>
-          Live
+          {show.timezoneHint && (
+            <span
+              className="font-mono text-[8px] text-muted-foreground/40"
+              title={show.timezoneHint}
+            >
+              {tzAbbr(show.timezoneHint) ?? show.timezoneHint.split("/")[1] ?? "TZ"}
+            </span>
+          )}
         </span>
       ) : (
-        <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
-          {show.startTime}
+        <span className="flex flex-col leading-none">
+          <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+            {show.startTime}
+          </span>
+          {show.timezoneHint && (
+            <span
+              className="font-mono text-[8px] text-muted-foreground/40"
+              title={show.timezoneHint}
+            >
+              {tzAbbr(show.timezoneHint) ?? show.timezoneHint.split("/")[1] ?? "TZ"}
+            </span>
+          )}
         </span>
       )}
 

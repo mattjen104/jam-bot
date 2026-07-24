@@ -13,5 +13,10 @@ import type { ScrapedShow } from "./scrapedShow";
 export interface ScrapedStation {
   slug: string;
   name: string;
+  /**
+   * Best-effort IANA timezone identifier inferred from the station's city and country (e.g. "America/Los_Angeles"). Null when the timezone cannot be confidently determined.
+   * @nullable
+   */
+  timezoneHint: string | null;
   shows: ScrapedShow[];
 }

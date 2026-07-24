@@ -1196,6 +1196,8 @@ router.get("/scraped-shows", h(async (_req, res) => {
       stationId: scrapedShowsTable.stationId,
       stationSlug: stationsTable.slug,
       stationName: stationsTable.name,
+      stationCity: stationsTable.city,
+      stationCountry: stationsTable.country,
       showName: scrapedShowsTable.showName,
       dayOfWeek: scrapedShowsTable.dayOfWeek,
       startTime: scrapedShowsTable.startTime,
@@ -1226,10 +1228,10 @@ router.get("/scraped-shows", h(async (_req, res) => {
   };
 
   // Group rows by station slug
-  const bySlug = new Map<string, { slug: string; name: string; shows: typeof rows }>();
+  const bySlug = new Map<string, { slug: string; name: string; city: string | null; country: string | null; shows: typeof rows }>();
   for (const row of rows) {
     if (!bySlug.has(row.stationSlug)) {
-      bySlug.set(row.stationSlug, { slug: row.stationSlug, name: row.stationName, shows: [] });
+      bySlug.set(row.stationSlug, { slug: row.stationSlug, name: row.stationName, city: row.stationCity, country: row.stationCountry, shows: [] });
     }
     bySlug.get(row.stationSlug)!.shows.push(row);
   }
@@ -1254,6 +1256,7 @@ router.get("/scraped-shows", h(async (_req, res) => {
     stations: [...byFingerprint.values()].sort((a, b) => a.name.localeCompare(b.name)).map((s) => ({
       slug: s.slug,
       name: s.name,
+      timezoneHint: inferTimezone(s.city, s.country),
       shows: s.shows.map((r) => {
         const insight = insightForSlot(r);
         return {

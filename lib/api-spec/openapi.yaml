@@ -3494,10 +3494,17 @@ components:
           description: >-
             ISO timestamp of the last successful schedule scrape. Null when
             never successfully scraped.
+        timezoneHint:
+          type: ["string", "null"]
+          description: >-
+            Best-effort IANA timezone identifier inferred from the station's city
+            and country (e.g. "America/Los_Angeles"). Null when the timezone
+            cannot be confidently determined.
       required:
         - stationSlug
         - shows
         - lastScrapedAt
+        - timezoneHint
     DjShowEntry:
       type: object
       description: One scraped weekly show slot for a DJ at a specific station.
@@ -4986,11 +4993,17 @@ components:
           type: string
         name:
           type: string
+        timezoneHint:
+          type: ["string", "null"]
+          description: >-
+            Best-effort IANA timezone identifier inferred from the station's city
+            and country (e.g. "America/Los_Angeles"). Null when the timezone
+            cannot be confidently determined.
         shows:
           type: array
           items:
             $ref: "#/components/schemas/ScrapedShow"
-      required: [slug, name, shows]
+      required: [slug, name, timezoneHint, shows]
     ScrapedStationList:
       type: object
       description: All stations with their scraped weekly programming grids.

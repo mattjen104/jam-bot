@@ -214,7 +214,6 @@ export const ListStationsResponse = zod.object({
         name: zod.string(),
         org: zod.string().nullish(),
         country: zod.string().nullish(),
-        city: zod.string().nullish(),
         streamUrl: zod.string(),
         streamQuality: zod.string().nullish(),
         streamFormat: zod
@@ -480,7 +479,6 @@ export const GetStationNowPlayingResponse = zod.object({
       name: zod.string(),
       org: zod.string().nullish(),
       country: zod.string().nullish(),
-      city: zod.string().nullish(),
       streamUrl: zod.string(),
       streamQuality: zod.string().nullish(),
       streamFormat: zod
@@ -1163,7 +1161,6 @@ export const GetStationArchiveResponse = zod.object({
       name: zod.string(),
       org: zod.string().nullish(),
       country: zod.string().nullish(),
-      city: zod.string().nullish(),
       streamUrl: zod.string(),
       streamQuality: zod.string().nullish(),
       streamFormat: zod
@@ -2086,6 +2083,12 @@ export const GetAllScrapedShowsResponse = zod
         .object({
           slug: zod.string(),
           name: zod.string(),
+          timezoneHint: zod
+            .string()
+            .nullable()
+            .describe(
+              'Best-effort IANA timezone identifier inferred from the station\'s city and country (e.g. \"America\/Los_Angeles\"). Null when the timezone cannot be confidently determined.',
+            ),
           shows: zod.array(
             zod
               .object({
@@ -2211,7 +2214,7 @@ export const GetStationUpcomingScheduleResponse = zod
       .string()
       .nullable()
       .describe(
-        "IANA timezone inferred from the station's city/country (e.g. \"America/Los_Angeles\"). Null when the timezone cannot be confidently determined.",
+        'Best-effort IANA timezone identifier inferred from the station\'s city and country (e.g. \"America\/Los_Angeles\"). Null when the timezone cannot be confidently determined.',
       ),
   })
   .describe(

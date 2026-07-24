@@ -839,6 +839,11 @@ export interface StationUpcomingSchedule {
    * @nullable
    */
   lastScrapedAt: string | null;
+  /**
+   * Best-effort IANA timezone identifier inferred from the station's city and country (e.g. "America/Los_Angeles"). Null when the timezone cannot be confidently determined.
+   * @nullable
+   */
+  timezoneHint: string | null;
 }
 
 export type DjShowEntryDayOfWeek =
@@ -1082,14 +1087,6 @@ export interface ArchiveRecentRuns {
   items: RecentStationRun[];
 }
 
-export type SearchArtistRunsParams = {
-  /**
-   * Artist name (or fragment) to search for.
-   * @minLength 1
-   */
-  q: string;
-};
-
 /**
  * One station run containing the searched artist, with how many of its spins matched.
  */
@@ -1106,8 +1103,10 @@ export interface ArtistStationRunMatch {
 export interface ArtistPickerRunMatch {
   picker: PickerRef;
   runId: number;
+  /** @nullable */
   title: string | null;
   sourceUrl: string;
+  /** @nullable */
   pickedAt: string | null;
   trackCount: number;
   /** Picks in this run by the searched artist. */
@@ -1928,6 +1927,11 @@ export interface ArtistResult {
 export interface ScrapedStation {
   slug: string;
   name: string;
+  /**
+   * Best-effort IANA timezone identifier inferred from the station's city and country (e.g. "America/Los_Angeles"). Null when the timezone cannot be confidently determined.
+   * @nullable
+   */
+  timezoneHint: string | null;
   shows: ScrapedShow[];
 }
 
@@ -2087,6 +2091,14 @@ export type GetStationSpinsParams = {
    * Max spins to return (default 50, max 200).
    */
   limit?: number;
+};
+
+export type SearchArtistRunsParams = {
+  /**
+   * Artist name (or fragment) to search for.
+   * @minLength 1
+   */
+  q: string;
 };
 
 export type GetStationsRecentSpinsParams = {
