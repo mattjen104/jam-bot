@@ -10,6 +10,7 @@ import {
 } from "@workspace/db";
 import { and, eq, sql } from "drizzle-orm";
 import { upsertPicker } from "./picks.js";
+import { inferTimezone } from "./timezone.js";
 
 /**
  * Curated seed of high-quality, real radio stations. A smaller reliable set
@@ -1430,9 +1431,10 @@ export async function seedSpinitronRoster(): Promise<void> {
  */
 export async function seedStations(): Promise<void> {
   for (const s of SEED_STATIONS) {
+    const computedTimezone = inferTimezone(s.city ?? null, s.country ?? null);
     await db
       .insert(stationsTable)
-      .values(s)
+      .values({ ...s, ianaTimezone: computedTimezone })
       .onConflictDoUpdate({
         target: stationsTable.slug,
         set: {
@@ -1448,6 +1450,10 @@ export async function seedStations(): Promise<void> {
           nowPlayingSource: s.nowPlayingSource ?? null,
           nowPlayingConfig: s.nowPlayingConfig ?? null,
           stationClass: s.stationClass ?? "curated",
+          // COALESCE: update with the newly inferred value only when non-null,
+          // otherwise keep whatever is already stored (preserves manual corrections
+          // and avoids clobbering with null for US stations that lack a city).
+          ianaTimezone: sql`COALESCE(EXCLUDED.iana_timezone, ${stationsTable.ianaTimezone})`,
           // Seeded stations are hand-picked by definition; forcing
           // source="curated" exempts a previously auto-enrolled row (e.g.
           // KCHUNG's radio-browser enrollment) from the whitelist purge.
@@ -1492,6 +1498,47 @@ export async function seedStations(): Promise<void> {
     console.info(
       `[lore/spinitron] web-scrape mode (${pending.length}): ${pending.map((s) => s.slug.toUpperCase()).join(", ")} — add SPINITRON_KEY_<CALLSIGN> secret and restart to activate full history`,
     );
+  }
+}
+
+/**
+ * One-time (idempotent) backfill: compute and store `ianaTimezone` for any
+ * station row that has a city/country but no stored timezone yet.
+ *
+ * Safe to call on every boot — the WHERE clause targets only null rows, so
+ * it's a no-op once all rows are filled. Does NOT overwrite an existing value:
+ * a manually-corrected timezone set in the DB stays intact.
+ */
+export async function backfillStationTimezones(): Promise<void> {
+  const rows = await db
+    .select({
+      id: stationsTable.id,
+      city: stationsTable.city,
+      country: stationsTable.country,
+    })
+    .from(stationsTable)
+    .where(
+      and(
+        sql`${stationsTable.ianaTimezone} is null`,
+        sql`(${stationsTable.city} is not null or ${stationsTable.country} is not null)`,
+      ),
+    );
+
+  if (rows.length === 0) return;
+
+  let updated = 0;
+  for (const row of rows) {
+    const tz = inferTimezone(row.city ?? null, row.country ?? null);
+    if (!tz) continue;
+    await db
+      .update(stationsTable)
+      .set({ ianaTimezone: tz })
+      .where(eq(stationsTable.id, row.id));
+    updated++;
+  }
+
+  if (updated > 0) {
+    console.info(`[lore/timezone] backfilled ianaTimezone for ${updated} station(s)`);
   }
 }
 

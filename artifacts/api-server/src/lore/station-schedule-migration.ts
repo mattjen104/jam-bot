@@ -65,5 +65,13 @@ export async function applyStationScheduleMigration(): Promise<void> {
   await db.execute(sql`
     ALTER TABLE stations ADD COLUMN IF NOT EXISTS schedule_url text
   `);
+  // Stored IANA timezone — inferred from city + country by the seed and
+  // backfill, so the upcoming-schedule endpoint never re-computes it at
+  // query time. Null = inference was not confident enough (UI degrades to
+  // "station's local time"). ADD COLUMN IF NOT EXISTS ensures idempotency
+  // across all environments regardless of when drizzle-kit push was last run.
+  await db.execute(sql`
+    ALTER TABLE stations ADD COLUMN IF NOT EXISTS iana_timezone text
+  `);
   console.info("[migration] scraped_shows table: OK");
 }

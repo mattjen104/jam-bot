@@ -1,6 +1,6 @@
 import app from "./app";
 import { wireSongEnrichment } from "./song/wire.js";
-import { seedStations, seedPickers, seedSpinitronRoster } from "./lore/seed.js";
+import { seedStations, seedPickers, seedSpinitronRoster, backfillStationTimezones } from "./lore/seed.js";
 import { startLorePoller } from "./lore/poller.js";
 import { startBlogPoller } from "./lore/blog-poller.js";
 import { startListCandidateWorker } from "./lore/list-candidates.js";
@@ -71,6 +71,11 @@ async function bootLore(): Promise<void> {
     await applyStationScheduleMigration();
     await ensurePicksUnifiedView();
     await seedStations();
+    try {
+      await backfillStationTimezones();
+    } catch (err) {
+      console.error("[lore] timezone backfill failed", err);
+    }
     try {
       await seedSpinitronRoster();
     } catch (err) {

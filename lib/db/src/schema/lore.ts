@@ -94,6 +94,13 @@ export const stationsTable = pgTable("stations", {
   country: text("country"),
   /** City the station broadcasts from (e.g. "London", "Berlin"). Populated for CRI-sourced stations. */
   city: text("city"),
+  /**
+   * IANA timezone identifier inferred from city + country (e.g. "America/Los_Angeles").
+   * Stored so the schedule endpoint doesn't re-run the lookup on every request.
+   * Null when the inference is not confident enough — UI degrades to "station's local time".
+   * Written by the seed on create/update and backfilled for existing rows at startup.
+   */
+  ianaTimezone: text("iana_timezone"),
   /** The station's own sanctioned live stream URL, played unmodified. */
   streamUrl: text("stream_url").notNull(),
   /** Human quality badge, e.g. "320kbps AAC", "FLAC", "160kbps AAC". */
