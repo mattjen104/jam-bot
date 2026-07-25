@@ -208,16 +208,20 @@ export function PlayerBar({
 
         {/* Controls — mobile: rightmost; desktop: right column (flex justify-end) */}
         <div className="flex shrink-0 items-center gap-2 lg:order-3 lg:justify-end">
-          {/* Compact Keep + Share — hidden on small screens so the scan button always fits */}
+          {/* Compact Keep + Share — desktop only so scan always fits on mobile */}
           {nowPlayingMbid && !scanActive && (
-            <div className="hidden sm:contents">
-              <KeepButton
-                mbid={nowPlayingMbid}
-                compact
-                provenance={{ kind: "keep", stationSlug: station.slug }}
-              />
-              <ShareButton compact sharePath={`songs/${nowPlayingMbid}`} kind="song" />
-            </div>
+            <>
+              <div className="hidden lg:block">
+                <KeepButton
+                  mbid={nowPlayingMbid}
+                  compact
+                  provenance={{ kind: "keep", stationSlug: station.slug }}
+                />
+              </div>
+              <div className="hidden lg:block">
+                <ShareButton compact sharePath={`songs/${nowPlayingMbid}`} kind="song" />
+              </div>
+            </>
           )}
           {/* Skip to next station — visible during scan */}
           {scanActive && onScanNext && (
