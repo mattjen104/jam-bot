@@ -19,16 +19,12 @@ import {
   VolumeX,
   X,
 } from "lucide-react";
-import { KeepButton } from "./KeepButton";
-import { ShareButton } from "./ShareButton";
 
 interface PlayerBarProps {
   station: Station;
   status: PlayerStatus;
   volume: number;
   error: string | null;
-  /** MBID of the currently-identified track, if resolved. */
-  nowPlayingMbid?: string | null;
   /** Live-cast state — non-"off" when the station resolves to Spotify. */
   casting?: RadioCastStatus;
   /** Why the cast fell back — null unless casting === "fallback". */
@@ -59,7 +55,6 @@ export function PlayerBar({
   status,
   volume,
   error,
-  nowPlayingMbid,
   casting = "off",
   castFallbackReason = null,
   castPaused = false,
@@ -206,20 +201,10 @@ export function PlayerBar({
           </p>
         </div>
 
-        {/* Controls — mobile: [scan] [stop]; desktop: [keep] [share] [device] [volume] [scan] [stop] */}
+        {/* Controls — mobile: [scan] [stop]; desktop: [device] [volume] [scan] [stop] */}
         <div className="flex shrink-0 items-center gap-2 lg:order-3 lg:justify-end">
           {/* Extended controls — desktop only (hidden on mobile so scan+stop always fit) */}
           <div className="hidden lg:flex lg:items-center lg:gap-2">
-            {nowPlayingMbid && !scanActive && (
-              <>
-                <KeepButton
-                  mbid={nowPlayingMbid}
-                  compact
-                  provenance={{ kind: "keep", stationSlug: station.slug }}
-                />
-                <ShareButton compact sharePath={`songs/${nowPlayingMbid}`} kind="song" />
-              </>
-            )}
             {/* Device picker — shown when Spotify is connected */}
             {showDevicePicker && spotify ? (
               <DevicePicker spotify={spotify} />

@@ -136,7 +136,6 @@ export function PlayerDock() {
         status={radio.status}
         volume={radio.volume}
         error={radio.error}
-        nowPlayingMbid={nowPlayingMbid}
         casting={radio.casting}
         castFallbackReason={radio.castFallbackReason}
         castPaused={radio.castPaused}
