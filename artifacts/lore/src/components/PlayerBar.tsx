@@ -14,7 +14,6 @@ import {
   Radio,
   RotateCw,
   ScanLine,
-  SkipForward,
   Volume2,
   VolumeX,
   X,
@@ -46,8 +45,6 @@ interface PlayerBarProps {
   scanTotal?: number;
   /** Toggle scan on/off. */
   onScanToggle?: () => void;
-  /** Manually advance to the next station during scan. */
-  onScanNext?: () => void;
 }
 
 export function PlayerBar({
@@ -67,7 +64,6 @@ export function PlayerBar({
   scanCurrent = 1,
   scanTotal = 0,
   onScanToggle,
-  onScanNext,
 }: PlayerBarProps) {
   const isCasting = casting === "casting";
   const isPlaying = isCasting ? !castPaused : status === "playing";
@@ -240,17 +236,7 @@ export function PlayerBar({
             </div>
           </div>
 
-          {/* Core controls — always visible on mobile: skip (during scan) + scan toggle + stop */}
-          {scanActive && onScanNext && (
-            <button
-              type="button"
-              onClick={onScanNext}
-              aria-label="Next station"
-              className="hover-elevate flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <SkipForward className="h-4 w-4" />
-            </button>
-          )}
+          {/* Single scan toggle — on/off like a car radio */}
           {onScanToggle && (
             <button
               type="button"

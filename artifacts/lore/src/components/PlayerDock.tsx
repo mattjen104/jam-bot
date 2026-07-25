@@ -148,7 +148,6 @@ export function PlayerDock() {
         scanCurrent={scanIdx + 1}
         scanTotal={stations.length}
         onScanToggle={handleScanToggle}
-        onScanNext={handleScanNext}
       />
     );
   }
