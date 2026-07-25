@@ -6,7 +6,19 @@ import type {
 } from "../player/PlayerProvider";
 import type { SpotifyConnectApi } from "../player/useSpotifyConnect";
 import { DevicePicker } from "./DevicePicker";
-import { Cast, Loader2, Pause, Play, Radio, RotateCw, Volume2, VolumeX, X } from "lucide-react";
+import {
+  Cast,
+  Loader2,
+  Pause,
+  Play,
+  Radio,
+  RotateCw,
+  ScanLine,
+  SkipForward,
+  Volume2,
+  VolumeX,
+  X,
+} from "lucide-react";
 import { KeepButton } from "./KeepButton";
 import { ShareButton } from "./ShareButton";
 
@@ -30,6 +42,16 @@ interface PlayerBarProps {
   onVolume: (v: number) => void;
   /** Spotify Connect state — when provided and connected+premium, shows the device picker. */
   spotify?: SpotifyConnectApi;
+  /** Whether FM-style station scan is active. */
+  scanActive?: boolean;
+  /** 1-based index of the current scan position. */
+  scanCurrent?: number;
+  /** Total stations in the scan rotation. */
+  scanTotal?: number;
+  /** Toggle scan on/off. */
+  onScanToggle?: () => void;
+  /** Manually advance to the next station during scan. */
+  onScanNext?: () => void;
 }
 
 export function PlayerBar({
@@ -46,6 +68,11 @@ export function PlayerBar({
   onStop,
   onVolume,
   spotify,
+  scanActive = false,
+  scanCurrent = 1,
+  scanTotal = 0,
+  onScanToggle,
+  onScanNext,
 }: PlayerBarProps) {
   const isCasting = casting === "casting";
   const isPlaying = isCasting ? !castPaused : status === "playing";
@@ -54,6 +81,7 @@ export function PlayerBar({
   // Not connected yet — show the cast icon as an entry point to connect.
   const showConnectPrompt = !!(spotify?.configured && !spotify.connected);
   const castDeviceName = spotify?.pinnedDevice?.name ?? "your Spotify";
+
   return (
     <div
       className="fixed z-40 border border-border bg-secondary/95 backdrop-blur-md shadow-lg
@@ -62,7 +90,7 @@ export function PlayerBar({
       data-testid="player-bar"
     >
       {/*
-        Mobile: flex row — [play] [info flex-1] [volume+stop]
+        Mobile: flex row — [logo] [play] [info flex-1] [scan controls] [stop]
         Desktop (lg): 3-column grid — [info] [play centered] [volume+stop right-aligned]
       */}
       <div className="flex items-center gap-4 px-5 py-3 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:gap-6">
@@ -120,6 +148,14 @@ export function PlayerBar({
           <p className="flex items-center gap-1.5 truncate font-mono text-[11px] text-muted-foreground">
             {error ? (
               error
+            ) : scanActive ? (
+              <>
+                <span
+                  className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-primary"
+                  aria-hidden
+                />
+                {`Scanning · ${scanCurrent} of ${scanTotal}`}
+              </>
             ) : isCasting ? (
               castPaused ? (
                 `Paused on ${castDeviceName}`
@@ -173,7 +209,7 @@ export function PlayerBar({
         {/* Controls — mobile: rightmost; desktop: right column (flex justify-end) */}
         <div className="flex shrink-0 items-center gap-2 lg:order-3 lg:justify-end">
           {/* Compact Keep + Share — shown whenever a track is identified */}
-          {nowPlayingMbid && (
+          {nowPlayingMbid && !scanActive && (
             <>
               <KeepButton
                 mbid={nowPlayingMbid}
@@ -182,6 +218,34 @@ export function PlayerBar({
               />
               <ShareButton compact sharePath={`songs/${nowPlayingMbid}`} kind="song" />
             </>
+          )}
+          {/* Skip to next station — visible during scan */}
+          {scanActive && onScanNext && (
+            <button
+              type="button"
+              onClick={onScanNext}
+              aria-label="Next station"
+              className="hover-elevate flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <SkipForward className="h-4 w-4" />
+            </button>
+          )}
+          {/* Scan toggle — FM-style auto-cycle through stations */}
+          {onScanToggle && (
+            <button
+              type="button"
+              onClick={onScanToggle}
+              aria-label={scanActive ? "Stop scanning" : "Scan stations"}
+              title={scanActive ? "Stop scanning" : "Scan through all stations"}
+              data-testid="player-scan"
+              className={`hover-elevate flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition-colors ${
+                scanActive
+                  ? "border-primary bg-primary/15 text-primary"
+                  : "border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <ScanLine className="h-4 w-4" />
+            </button>
           )}
           {/* Device picker — shown when Spotify is connected (unless the
               account is explicitly non-premium) */}

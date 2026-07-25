@@ -78,7 +78,11 @@ export function useRadioPlayer() {
       if (isHls && !canNativeHls) {
         const Hls = (await import("hls.js")).default;
         if (Hls.isSupported()) {
-          const hls = new Hls({ enableWorker: true });
+          const hls = new Hls({
+            enableWorker: true,
+            maxBufferLength: 8,  // live edge reachable faster (default: 30s)
+            backBufferLength: 0, // no back-buffer needed for live radio
+          });
           hls.loadSource(station.streamUrl);
           hls.attachMedia(el);
           hlsRef.current = hls;
@@ -185,6 +189,7 @@ export function useRadioPlayer() {
     station: state.station,
     volume: state.volume,
     error: state.error,
+    play,
     toggle,
     stop,
     pause,
