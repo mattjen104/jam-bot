@@ -206,24 +206,56 @@ export function PlayerBar({
           </p>
         </div>
 
-        {/* Controls — mobile: rightmost; desktop: right column (flex justify-end) */}
+        {/* Controls — mobile: [scan] [stop]; desktop: [keep] [share] [device] [volume] [scan] [stop] */}
         <div className="flex shrink-0 items-center gap-2 lg:order-3 lg:justify-end">
-          {/* Compact Keep + Share — desktop only so scan always fits on mobile */}
-          {nowPlayingMbid && !scanActive && (
-            <>
-              <div className="hidden lg:block">
+          {/* Extended controls — desktop only (hidden on mobile so scan+stop always fit) */}
+          <div className="hidden lg:flex lg:items-center lg:gap-2">
+            {nowPlayingMbid && !scanActive && (
+              <>
                 <KeepButton
                   mbid={nowPlayingMbid}
                   compact
                   provenance={{ kind: "keep", stationSlug: station.slug }}
                 />
-              </div>
-              <div className="hidden lg:block">
                 <ShareButton compact sharePath={`songs/${nowPlayingMbid}`} kind="song" />
-              </div>
-            </>
-          )}
-          {/* Skip to next station — visible during scan */}
+              </>
+            )}
+            {/* Device picker — shown when Spotify is connected */}
+            {showDevicePicker && spotify ? (
+              <DevicePicker spotify={spotify} />
+            ) : showConnectPrompt && spotify ? (
+              <button
+                type="button"
+                onClick={spotify.connect}
+                aria-label="Connect Spotify to cast to your devices"
+                title="Connect Spotify to cast this station to your speakers"
+                data-testid="cast-connect-button"
+                className="hover-elevate flex h-9 items-center gap-1.5 rounded-full border border-border px-2.5 font-mono text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Cast className="h-3.5 w-3.5 shrink-0" />
+              </button>
+            ) : null}
+            <div className="flex items-center gap-2">
+              {volume === 0 ? (
+                <VolumeX className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <Volume2 className="h-4 w-4 text-muted-foreground" />
+              )}
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={volume}
+                onChange={(e) => onVolume(Number(e.target.value))}
+                aria-label="Volume"
+                data-testid="player-volume"
+                className="h-1 w-24 cursor-pointer appearance-none rounded-full bg-muted accent-primary"
+              />
+            </div>
+          </div>
+
+          {/* Core controls — always visible on mobile: skip (during scan) + scan toggle + stop */}
           {scanActive && onScanNext && (
             <button
               type="button"
@@ -234,7 +266,6 @@ export function PlayerBar({
               <SkipForward className="h-4 w-4" />
             </button>
           )}
-          {/* Scan toggle — FM-style auto-cycle through stations */}
           {onScanToggle && (
             <button
               type="button"
@@ -251,40 +282,6 @@ export function PlayerBar({
               <ScanLine className="h-4 w-4" />
             </button>
           )}
-          {/* Device picker — shown when Spotify is connected (unless the
-              account is explicitly non-premium) */}
-          {showDevicePicker && spotify ? (
-            <DevicePicker spotify={spotify} />
-          ) : showConnectPrompt && spotify ? (
-            <button
-              type="button"
-              onClick={spotify.connect}
-              aria-label="Connect Spotify to cast to your devices"
-              title="Connect Spotify to cast this station to your speakers"
-              data-testid="cast-connect-button"
-              className="hover-elevate flex h-9 items-center gap-1.5 rounded-full border border-border px-2.5 font-mono text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <Cast className="h-3.5 w-3.5 shrink-0" />
-            </button>
-          ) : null}
-          <div className="hidden items-center gap-2 sm:flex">
-            {volume === 0 ? (
-              <VolumeX className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <Volume2 className="h-4 w-4 text-muted-foreground" />
-            )}
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.01}
-              value={volume}
-              onChange={(e) => onVolume(Number(e.target.value))}
-              aria-label="Volume"
-              data-testid="player-volume"
-              className="h-1 w-24 cursor-pointer appearance-none rounded-full bg-muted accent-primary"
-            />
-          </div>
           <button
             type="button"
             onClick={onStop}
