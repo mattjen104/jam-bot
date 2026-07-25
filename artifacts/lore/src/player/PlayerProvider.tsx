@@ -18,6 +18,7 @@ import {
   spotifyPause,
   spotifyResume,
   getSpotifyPlayer,
+  useListStations,
   type RecordingLink,
   type SegueNext,
   type Station,
@@ -193,10 +194,16 @@ export interface RideApi {
   retrySpotify: () => void;
 }
 
+export interface ScanApi {
+  active: boolean;
+  toggle: () => void;
+}
+
 interface PlayerContextValue {
   radio: RadioApi;
   ride: RideApi;
   spotify: SpotifyConnectApi;
+  scan: ScanApi;
 }
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
@@ -216,9 +223,49 @@ function segueToItem(n: SegueNext): RideItem {
   };
 }
 
+const SCAN_INTERVAL_MS = 8_000;
+
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const radio = useRadioPlayer();
   const spotify = useSpotifyConnect();
+
+  // --- Scan state (shared so WebPlayer and PlayerDock both see it) ---
+  const { data: stationsData } = useListStations();
+  const stations: Station[] = stationsData?.stations ?? [];
+  const [scanActive, setScanActive] = useState(false);
+  const [scanIdx, setScanIdx] = useState(0);
+  const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const radioRef = useRef(radio);
+  radioRef.current = radio;
+
+  const clearScanTimer = useCallback(() => {
+    if (scanTimerRef.current != null) {
+      clearTimeout(scanTimerRef.current);
+      scanTimerRef.current = null;
+    }
+  }, []);
+
+  const toggleScan = useCallback(() => {
+    setScanActive((prev) => {
+      if (prev) { clearScanTimer(); return false; }
+      const currentSlug = radioRef.current.station?.slug;
+      const pos = currentSlug ? stations.findIndex((s) => s.slug === currentSlug) : -1;
+      setScanIdx(stations.length > 0 ? (pos + 1) % stations.length : 0);
+      return true;
+    });
+  }, [clearScanTimer, stations]);
+
+  useEffect(() => {
+    if (!scanActive || stations.length === 0) { clearScanTimer(); return; }
+    const station = stations[scanIdx];
+    if (!station) return;
+    const { station: current, toggle } = radioRef.current;
+    if (station.slug !== current?.slug) void toggle(station);
+    scanTimerRef.current = setTimeout(() => {
+      setScanIdx((i) => (i + 1) % stations.length);
+    }, SCAN_INTERVAL_MS);
+    return clearScanTimer;
+  }, [scanActive, scanIdx, stations, clearScanTimer]);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   if (audioRef.current === null && typeof Audio !== "undefined") {
@@ -1276,6 +1323,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         retrySpotify,
       },
       spotify,
+      scan: { active: scanActive, toggle: toggleScan },
     }),
     [
       radio.status,
@@ -1312,6 +1360,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setPlaybackMode,
       retrySpotify,
       spotify,
+      scanActive,
+      toggleScan,
     ],
   );
 

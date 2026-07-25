@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { Pause, Play, Check, RefreshCw, ChevronRight, Bookmark, Loader2 } from "lucide-react";
+import { Pause, Play, Check, RefreshCw, ChevronRight, Bookmark, Loader2, ScanLine } from "lucide-react";
 import { usePlayer } from "../player/PlayerProvider";
 import {
   useLatestImportJob,
@@ -28,7 +28,7 @@ function NowPlayingCard({
   onAir: WpOnAirItem[];
   onOpenLore: (mbid: string, spinningOn: string | null) => void;
 }) {
-  const { radio } = usePlayer();
+  const { radio, scan } = usePlayer();
   const playingSlug = radio.station?.slug ?? null;
   const item = playingSlug ? onAir.find((i) => i.station.slug === playingSlug) : null;
 
@@ -127,6 +127,29 @@ function NowPlayingCard({
       {nowMbid && !inLibrary && (
         <WpKeep mbid={nowMbid} provenance={{ kind: "station", stationSlug: radio.station.slug }} />
       )}
+      {/* Scan toggle — single on/off like a car radio */}
+      <button
+        type="button"
+        onClick={scan.toggle}
+        aria-label={scan.active ? "Stop scanning" : "Scan stations"}
+        title={scan.active ? "Stop scanning" : "Scan through all stations"}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 36,
+          height: 36,
+          borderRadius: "50%",
+          border: scan.active ? "1.5px solid var(--wp-text-accent)" : "1.5px solid var(--wp-border)",
+          background: scan.active ? "var(--wp-bg-accent)" : "none",
+          color: scan.active ? "var(--wp-text-accent)" : "var(--wp-text-muted)",
+          flexShrink: 0,
+          padding: 0,
+          cursor: "pointer",
+        }}
+      >
+        <ScanLine size={16} aria-hidden="true" />
+      </button>
       <div style={{ flexBasis: "100%", minWidth: 0 }}>
         <WpCast />
       </div>
