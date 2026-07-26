@@ -70,8 +70,8 @@ import { scrapeAndPopulateList, enrichRecordingReleaseGroups } from "../../lore/
 import { recomputeAllQualityScores } from "../../lore/quality.js";
 import { ingestManualSpin } from "../../lore/resolve.js";
 import { fetchRadioBrowserStation, slugify as rbSlugify } from "../../lore/radio-browser.js";
-import { enrollStationPoller, unenrollStationPoller, getSpinitronWebStaleStations } from "../../lore/poller.js";
-import { clearIcyErrorBackoff } from "../../lore/adapters.js";
+import { enrollStationPoller, unenrollStationPoller, getSpinitronWebStaleStations, coverageClassFor } from "../../lore/poller.js";
+import { clearIcyErrorBackoff, isPollable } from "../../lore/adapters.js";
 import { getLeaseAllocation } from "../../lore/socket-leases.js";
 import {
   upsertPicker,
@@ -998,6 +998,31 @@ router.get("/admin/radio-browser/stations", h(async (_req, res) => {
       })),
     }),
   );
+}));
+
+// GET /api/admin/stations/coverage — coverage class per pollable station
+// (plain JSON, admin-only). Blind spots = no history endpoint and no
+// persistent/multiplexed connection; the admin UI surfaces them so they can
+// be pinned as favorites or handled specially.
+router.get("/admin/stations/coverage", h(async (_req, res) => {
+  const rows = await db
+    .select()
+    .from(stationsTable)
+    .orderBy(asc(stationsTable.name));
+  const pollable = rows.filter(
+    (s) => isPollable(s.nowPlayingSource) && !s.hidden,
+  );
+  const stations = pollable.map((s) => ({
+    id: s.id,
+    slug: s.slug,
+    name: s.name,
+    source: s.nowPlayingSource,
+    favorite: s.favorite,
+    coverage: coverageClassFor(s),
+  }));
+  const counts: Record<string, number> = {};
+  for (const s of stations) counts[s.coverage] = (counts[s.coverage] ?? 0) + 1;
+  return res.json({ stations, counts });
 }));
 
 // POST /api/admin/radio-browser/stations/:id/reenroll — reset a suspended ICY

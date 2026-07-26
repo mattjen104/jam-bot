@@ -157,6 +157,7 @@ function RadioBrowserPanel({
         </p>
 
         <div className="mt-8 flex flex-col gap-6">
+          <CoverageSection token={token} />
           <EnrollForm token={token} onEnrolled={() => void loadStations()} />
 
           <div>
@@ -202,6 +203,131 @@ function RadioBrowserPanel({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+interface CoverageStation {
+  id: number;
+  slug: string;
+  name: string;
+  source: string | null;
+  favorite: boolean;
+  coverage: "instant" | "multiplexed" | "complete-history" | "blind-spot";
+}
+
+const COVERAGE_LABELS: Record<CoverageStation["coverage"], string> = {
+  instant: "Instant",
+  multiplexed: "Multiplexed",
+  "complete-history": "Complete history",
+  "blind-spot": "Blind spot",
+};
+
+function CoverageSection({ token }: { token: string }) {
+  const [data, setData] = useState<{
+    stations: CoverageStation[];
+    counts: Record<string, number>;
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/admin/stations/coverage", {
+          headers: { "x-admin-token": token },
+        });
+        if (!res.ok) {
+          const body = (await res.json()) as { error?: string };
+          if (!cancelled) setError(body.error ?? `HTTP ${res.status}`);
+          return;
+        }
+        const body = (await res.json()) as {
+          stations: CoverageStation[];
+          counts: Record<string, number>;
+        };
+        if (!cancelled) setData(body);
+      } catch (err) {
+        if (!cancelled)
+          setError(err instanceof Error ? err.message : "Failed to load coverage");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [token]);
+
+  if (error) {
+    return (
+      <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
+        Coverage: {error}
+      </div>
+    );
+  }
+  if (!data) return null;
+
+  const blindSpots = data.stations.filter((s) => s.coverage === "blind-spot");
+
+  return (
+    <div className="rounded-2xl border border-card-border bg-card p-6">
+      <div className="flex items-center gap-2">
+        <Wifi className="h-4 w-4 text-primary" />
+        <h2 className="font-serif text-lg font-semibold text-foreground">
+          Coverage
+        </h2>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {(Object.keys(COVERAGE_LABELS) as CoverageStation["coverage"][]).map(
+          (k) => (
+            <span
+              key={k}
+              className={`rounded-full border px-2.5 py-1 font-mono text-[11px] ${
+                k === "blind-spot"
+                  ? "border-amber-400/40 bg-amber-400/10 text-amber-700 dark:text-amber-300"
+                  : "border-border bg-secondary/40 text-muted-foreground"
+              }`}
+            >
+              {COVERAGE_LABELS[k]}: {data.counts[k] ?? 0}
+            </span>
+          ),
+        )}
+      </div>
+      {blindSpots.length > 0 && (
+        <div className="mt-4">
+          <div className="flex items-start gap-2 rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>
+              {blindSpots.length} station{blindSpots.length !== 1 ? "s" : ""}{" "}
+              have no history endpoint and no persistent connection — anything
+              played between polls is lost. Pin them as favorites to give them
+              an instant watcher.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="mt-2 font-mono text-[11px] text-primary hover:underline"
+          >
+            {expanded ? "Hide blind spots" : "Show blind spots"}
+          </button>
+          {expanded && (
+            <div className="mt-2 flex flex-col gap-1">
+              {blindSpots.map((s) => (
+                <div
+                  key={s.id}
+                  className="flex items-center justify-between rounded-lg border border-card-border bg-secondary/20 px-3 py-1.5"
+                >
+                  <span className="truncate text-sm text-foreground">
+                    {s.name}
+                  </span>
+                  <span className="ml-3 shrink-0 font-mono text-[11px] text-muted-foreground">
+                    {s.source ?? "?"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

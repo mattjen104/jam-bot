@@ -19,6 +19,7 @@ import {
   queueHostProbe,
   backfillHostProbes,
   stopHostMultiplex,
+  getStationMultiplexTier,
 } from "./host-multiplex.js";
 export { getSpinitronWebStaleStations } from "./spinitron-web-health.js";
 
@@ -41,15 +42,23 @@ export { getSpinitronWebStaleStations } from "./spinitron-web-health.js";
  *    track" and log on change.
  */
 
-// Per-source poll cadence. History sources move at roughly song length; now-
-// playing sources are cheap so they can be a touch tighter.
+// Per-source poll cadence.
+//
+// History-paging sources (Spinitron, KEXP, BBC, SomaFM) return a batch of
+// recent plays with stable ids and page back to a per-station cursor, so
+// NOTHING is lost by polling rarely — spins are learned late, never missed.
+// They run on a relaxed 10–15 minute cadence (plus a show-boundary bias poll,
+// see scheduleBoundaryPolls). Now-playing-only sources expose just "the
+// current track" with no history, so they must keep song-length cadence or
+// spins are genuinely dropped — kcrw is in the history family for idempotent
+// dedup but serves a single current track, so it stays tight too.
 const POLL_INTERVALS_MS: Record<string, number> = {
-  spinitron: 150_000, // 2.5 min
-  spinitron_web: 150_000, // 2.5 min — HTML scrape, same cadence as API adapter
-  kexp_api: 120_000, // 2 min
-  bbc_api: 120_000, // 2 min
-  somafm: 120_000, // 2 min — feed holds ~20 songs, no risk of gaps
-  kcrw: 90_000, // 1.5 min — single current track, cheap endpoint
+  spinitron: 900_000, // 15 min — pages back to cursor; nothing lost
+  spinitron_web: 150_000, // 2.5 min — HTML scrape of current playlist only
+  kexp_api: 900_000, // 15 min — pages back to cursor; nothing lost
+  bbc_api: 600_000, // 10 min — latest-segments feed holds well over 10 min
+  somafm: 900_000, // 15 min — feed holds ~20 songs (~1h of music)
+  kcrw: 90_000, // 1.5 min — single current track, no history depth
   station_page: 60_000, // 1 min
   radio_paradise: 60_000, // 1 min
   nts_live: 120_000, // 2 min — show-level, changes infrequently
@@ -58,6 +67,23 @@ const POLL_INTERVALS_MS: Record<string, number> = {
   radiojar: 60_000, // 1 min — unauthenticated JSON now-playing endpoint
 };
 const DEFAULT_POLL_MS = 90_000;
+
+/**
+ * Sources whose spin identity changes at show boundaries — they get one extra
+ * lightweight poll shortly after each :00/:30 so late-learning is minimized
+ * exactly when playlists roll over. History sources lose nothing either way;
+ * the boundary poll just tightens freshness where it matters.
+ */
+const BOUNDARY_POLL_SOURCES = new Set([
+  "spinitron",
+  "spinitron_web",
+  "kexp_api",
+  "bbc_api",
+  "somafm",
+  "nts_live",
+]);
+// Fire 2 minutes after the half-hour so the source has published the new show.
+const BOUNDARY_OFFSET_MS = 120_000;
 const STAGGER_MS = 4_000;
 
 // Paging: plays per page, and the max plays a single poll will walk back. A
@@ -212,6 +238,13 @@ function routePollingTier(station: Station, delayMs: number): void {
 /** Schedule the classic interval-poll loop for a station. */
 function scheduleIntervalPolling(station: Station, delayMs: number): void {
   const period = intervalFor(station.nowPlayingSource);
+  if (
+    station.nowPlayingSource &&
+    BOUNDARY_POLL_SOURCES.has(station.nowPlayingSource)
+  ) {
+    boundaryStations.set(station.id, station);
+    scheduleBoundaryPolls();
+  }
   const kickoff = setTimeout(() => {
     void pollStation(station);
     const interval = setInterval(() => void pollStation(station), period);
@@ -229,7 +262,77 @@ function trackStationTimer(stationId: number, handle: NodeJS.Timeout): void {
 }
 
 function intervalFor(source: string | null | undefined): number {
+  if (source) {
+    // Per-source override, e.g. LORE_POLL_MS_SPINITRON=300000.
+    const env = process.env[`LORE_POLL_MS_${source.toUpperCase()}`];
+    const ms = env ? Number(env) : NaN;
+    if (Number.isFinite(ms) && ms >= 10_000) return ms;
+  }
   return (source && POLL_INTERVALS_MS[source]) || DEFAULT_POLL_MS;
+}
+
+// ---- Show-boundary bias -------------------------------------------------
+
+/**
+ * Stations enrolled for the extra post-boundary poll, keyed by id. Registered
+ * when a boundary-source station starts interval polling; cleared on
+ * unenroll/hide so a removed station is never polled again.
+ */
+const boundaryStations = new Map<number, Station>();
+// Single-owner recurring handles — never pushed into `timers`/`stationTimers`
+// (those retain fired one-shots forever; a perpetual scheduler would leak).
+let boundaryTimer: NodeJS.Timeout | null = null;
+let boundaryFanoutTimers: NodeJS.Timeout[] = [];
+let boundaryActive = false;
+
+/**
+ * Pure: milliseconds until the next :00/:30 boundary plus `offsetMs`.
+ * Always returns a positive delay (if we're inside the offset window after a
+ * boundary, targets the NEXT one).
+ */
+export function msUntilNextBoundaryPoll(
+  nowMs: number,
+  offsetMs: number = BOUNDARY_OFFSET_MS,
+): number {
+  const HALF_HOUR = 30 * 60 * 1000;
+  const sinceBoundary = nowMs % HALF_HOUR;
+  const target = sinceBoundary < offsetMs ? offsetMs : HALF_HOUR + offsetMs;
+  return target - sinceBoundary;
+}
+
+/** Schedule the recurring post-half-hour boundary poll (self-rescheduling). */
+function scheduleBoundaryPolls(): void {
+  if (boundaryActive) return;
+  boundaryActive = true;
+  const arm = () => {
+    if (!boundaryActive) return; // stopped while a tick was mid-flight
+    boundaryTimer = setTimeout(() => {
+      boundaryTimer = null;
+      // Drop fan-out handles from the previous boundary (all fired by now).
+      boundaryFanoutTimers = [];
+      // Small stagger so a few dozen boundary polls don't fire in one tick.
+      // The stale-row risk is benign: pollStation reloads history stations'
+      // rows for the cursor, and a removed station is dropped from
+      // boundaryStations on unenroll before its next fire.
+      [...boundaryStations.values()].forEach((station, i) => {
+        boundaryFanoutTimers.push(
+          setTimeout(() => void pollStation(station), i * 500),
+        );
+      });
+      arm();
+    }, msUntilNextBoundaryPoll(Date.now()));
+  };
+  arm();
+}
+
+/** Tear down the boundary scheduler (stopLorePoller). */
+function stopBoundaryPolls(): void {
+  boundaryActive = false;
+  if (boundaryTimer) clearTimeout(boundaryTimer);
+  boundaryTimer = null;
+  for (const t of boundaryFanoutTimers) clearTimeout(t);
+  boundaryFanoutTimers = [];
+  boundaryStations.clear();
 }
 
 /**
@@ -419,6 +522,7 @@ export async function startLorePoller(): Promise<void> {
 export function stopLorePoller(): void {
   for (const t of timers) clearTimeout(t);
   timers.length = 0;
+  stopBoundaryPolls();
   for (const watcher of stationWatchers.values()) watcher.stop();
   stationWatchers.clear();
   stopHostMultiplex();
@@ -493,6 +597,45 @@ export function releaseStationLease(station: Station): void {
   if (!station.hidden) routePollingTier(station, 0);
 }
 
+// ---- Coverage classification --------------------------------------------
+
+export type CoverageClass =
+  | "instant"
+  | "multiplexed"
+  | "complete-history"
+  | "blind-spot";
+
+/**
+ * History sources with real paging depth — a complete recent spin log is
+ * recoverable no matter how rarely we poll. kcrw is deliberately excluded:
+ * its API serves a single current track, so it has no history safety net.
+ */
+const COMPLETE_HISTORY_SOURCES = new Set([
+  "spinitron",
+  "kexp_api",
+  "bbc_api",
+  "somafm",
+]);
+
+/**
+ * Classify one station's coverage from its source type and live connection
+ * state. Blind spots are the only true risk: no history endpoint AND no
+ * persistent connection — spins there are only as fresh as the poll cadence,
+ * and anything between polls is lost forever.
+ */
+export function coverageClassFor(station: Station): CoverageClass {
+  if (stationWatchers.has(station.id)) return "instant";
+  const mux = getStationMultiplexTier(station.id);
+  if (mux) return "multiplexed";
+  if (
+    station.nowPlayingSource &&
+    COMPLETE_HISTORY_SOURCES.has(station.nowPlayingSource)
+  ) {
+    return "complete-history";
+  }
+  return "blind-spot";
+}
+
 /**
  * Cancel all active poll timers for a station, taking effect immediately.
  * Called by the admin DELETE endpoint so removed stations stop being polled
@@ -502,6 +645,7 @@ export function unenrollStationPoller(stationId: number): void {
   stopStationWatcher(stationId);
   leasedIds.delete(stationId);
   leaveHostGroups(stationId);
+  boundaryStations.delete(stationId);
   const handles = stationTimers.get(stationId);
   if (handles) {
     for (const h of handles) clearTimeout(h);

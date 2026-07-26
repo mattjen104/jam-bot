@@ -735,6 +735,25 @@ export function getMultiplexStatus(): {
   };
 }
 
+/**
+ * Live multiplex membership for one station: "icecast" when it currently
+ * rides a host status poll, "azuracast" when covered by an SSE connection or
+ * the aggregate-poll degradation, null when it holds no multiplex coverage.
+ */
+export function getStationMultiplexTier(
+  stationId: number,
+): "icecast" | "azuracast" | null {
+  for (const conn of sseConns.values()) {
+    if (conn.stations.has(stationId)) return "azuracast";
+  }
+  for (const group of hostGroups.values()) {
+    if (group.stations.has(stationId)) {
+      return group.flavor === "icecast" ? "icecast" : "azuracast";
+    }
+  }
+  return null;
+}
+
 /** Expose the interval fallback for future use (SSE + poll both dead). */
 export function fallbackStationToInterval(station: Station): void {
   fallbackToInterval(station);
