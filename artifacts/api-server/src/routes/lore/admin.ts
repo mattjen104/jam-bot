@@ -71,6 +71,7 @@ import { recomputeAllQualityScores } from "../../lore/quality.js";
 import { ingestManualSpin } from "../../lore/resolve.js";
 import { fetchRadioBrowserStation, slugify as rbSlugify } from "../../lore/radio-browser.js";
 import { enrollStationPoller, unenrollStationPoller, getSpinitronWebStaleStations, getFeedFreshnessStaleStations, coverageClassFor } from "../../lore/poller.js";
+import { monitoringSince } from "../../lore/feed-freshness-health.js";
 import { clearIcyErrorBackoff, isPollable } from "../../lore/adapters.js";
 import { getLeaseAllocation } from "../../lore/socket-leases.js";
 import {
@@ -1309,9 +1310,12 @@ router.get("/admin/spinitron-web-health", h(async (_req, res) => {
 // GET /api/admin/feed-freshness-health — stations whose fixed-size feed
 // (bbc_api, somafm) has been silent for longer than 2× its poll interval.
 // An empty array means all tracked stations have ingested spins recently.
+// `monitoringSince` reflects when this server process started tracking state;
+// all counters were zero before that instant (state does not survive restarts).
 router.get("/admin/feed-freshness-health", h(async (_req, res) => {
   const stale = getFeedFreshnessStaleStations();
   return res.json({
+    monitoringSince: monitoringSince.toISOString(),
     staleCount: stale.length,
     stations: stale.map((s) => ({
       stationId: s.stationId,

@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
+  Info,
   KeyRound,
   Loader2,
   Radio,
@@ -28,6 +29,7 @@ interface FeedFreshnessStation {
 }
 
 interface FeedFreshnessResponse {
+  monitoringSince: string;
   staleCount: number;
   stations: FeedFreshnessStation[];
 }
@@ -226,6 +228,11 @@ function HealthPanel({
           </div>
         </div>
 
+        {/* Monitoring-since banner */}
+        {!loading && !loadError && feedFreshness && (
+          <MonitoringBanner monitoringSince={feedFreshness.monitoringSince} />
+        )}
+
         {/* Loading */}
         {loading && (
           <div className="mt-12 flex justify-center">
@@ -302,6 +309,47 @@ function HealthPanel({
 }
 
 // ─── Sub-components ────────────────────────────────────────────────────────
+
+/** Constant above which we consider the monitoring state "established". */
+const SETTLED_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
+
+function MonitoringBanner({ monitoringSince }: { monitoringSince: string }) {
+  const since = new Date(monitoringSince);
+  const uptimeMs = Date.now() - since.getTime();
+  const isNew = uptimeMs < SETTLED_THRESHOLD_MS;
+
+  return (
+    <div
+      className={`mt-6 flex items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
+        isNew
+          ? "border-blue-500/30 bg-blue-500/5 text-blue-700 dark:text-blue-300"
+          : "border-border bg-card/60 text-muted-foreground"
+      }`}
+    >
+      <Info className={`mt-0.5 h-4 w-4 shrink-0 ${isNew ? "text-blue-500" : "text-muted-foreground"}`} />
+      <div>
+        <span className="font-medium text-foreground">
+          Monitoring since {since.toLocaleString(undefined, {
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </span>
+        <span className="ml-1">({formatDuration(uptimeMs)} ago)</span>
+        {isNew && (
+          <p className="mt-0.5 text-xs">
+            Health state resets on every server restart — data may not yet reflect pre-restart
+            conditions. Results will stabilise after feeds have had time to report.
+          </p>
+        )}
+        {!isNew && (
+          <span className="ml-1 text-xs">· Health state resets on server restart.</span>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function SectionHeading({
   icon,

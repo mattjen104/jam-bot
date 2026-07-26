@@ -48,6 +48,14 @@ export interface FeedFreshnessStaleEntry {
 const state = new Map<number, FeedFreshnessState>();
 
 /**
+ * The moment this module was first loaded (i.e. when the server process
+ * started tracking feed-freshness). All in-memory counters were zero before
+ * this instant, so any "all feeds healthy" result before meaningful uptime
+ * should be treated with scepticism by operators.
+ */
+export const monitoringSince: Date = new Date();
+
+/**
  * Record one history-adapter poll result for a tracked station.
  *
  * Returns a warning payload when silence first crosses the 2 × pollIntervalMs
