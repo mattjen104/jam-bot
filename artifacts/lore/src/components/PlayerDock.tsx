@@ -67,6 +67,8 @@ export function PlayerDock() {
         spotify={spotify}
         scanActive={scan.active}
         onScanToggle={scan.toggle}
+        scanDir={scan.dir}
+        onScanDirToggle={scan.toggleDir}
       />
     );
   }

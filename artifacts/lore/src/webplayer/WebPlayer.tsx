@@ -156,29 +156,56 @@ function NowPlayingCard({
       {nowMbid && !inLibrary && !scanHop && radio.station && (
         <WpKeep mbid={nowMbid} provenance={{ kind: "station", stationSlug: radio.station.slug }} />
       )}
-      {/* Scan toggle — single on/off like a car radio */}
-      <button
-        type="button"
-        onClick={scan.toggle}
-        aria-label={scan.active ? "Stop scanning" : "Scan stations"}
-        title={scan.active ? "Stop scanning" : "Scan through all stations"}
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: 36,
-          height: 36,
-          borderRadius: "50%",
-          border: scan.active ? "1.5px solid var(--wp-text-accent)" : "1.5px solid var(--wp-border)",
-          background: scan.active ? "var(--wp-bg-accent)" : "none",
-          color: scan.active ? "var(--wp-text-accent)" : "var(--wp-text-muted)",
-          flexShrink: 0,
-          padding: 0,
-          cursor: "pointer",
-        }}
-      >
-        <ScanLine size={16} aria-hidden="true" />
-      </button>
+      {/* Scan controls — on/off toggle + direction flip */}
+      <div style={{ display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+        {scan.active && (
+          <button
+            type="button"
+            onClick={scan.toggleDir}
+            aria-label={scan.dir === 1 ? "Switch to backward scan" : "Switch to forward scan"}
+            title={scan.dir === 1 ? "Scanning forward — click to reverse" : "Scanning backward — click to go forward"}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 26,
+              height: 26,
+              borderRadius: "50%",
+              border: "1.5px solid var(--wp-text-accent)",
+              background: "var(--wp-bg-accent)",
+              color: "var(--wp-text-accent)",
+              fontFamily: "monospace",
+              fontSize: 14,
+              fontWeight: 600,
+              padding: 0,
+              cursor: "pointer",
+            }}
+          >
+            {scan.dir === 1 ? "›" : "‹"}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={scan.toggle}
+          aria-label={scan.active ? "Stop scanning" : "Scan stations"}
+          title={scan.active ? "Stop scanning" : "Scan through all stations"}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 36,
+            height: 36,
+            borderRadius: "50%",
+            border: scan.active ? "1.5px solid var(--wp-text-accent)" : "1.5px solid var(--wp-border)",
+            background: scan.active ? "var(--wp-bg-accent)" : "none",
+            color: scan.active ? "var(--wp-text-accent)" : "var(--wp-text-muted)",
+            padding: 0,
+            cursor: "pointer",
+          }}
+        >
+          <ScanLine size={16} aria-hidden="true" />
+        </button>
+      </div>
       <div style={{ flexBasis: "100%", minWidth: 0 }}>
         <WpCast />
       </div>

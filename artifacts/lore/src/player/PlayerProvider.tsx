@@ -209,6 +209,10 @@ export interface ScanApi {
   toggle: () => void;
   /** Non-null while scan is active and a preview hop is playing or loading. */
   current: ScanHop | null;
+  /** 1 = forward (→), -1 = backward (←). */
+  dir: 1 | -1;
+  /** Flip scan direction without stopping. */
+  toggleDir: () => void;
 }
 
 interface PlayerContextValue {
@@ -235,8 +239,8 @@ function segueToItem(n: SegueNext): RideItem {
   };
 }
 
-/** Preview-mode scan: 5 s per hop, no broadcast buffering. */
-const SCAN_INTERVAL_MS = 5_000;
+/** Preview-mode scan: 10 s per hop, no broadcast buffering. */
+const SCAN_INTERVAL_MS = 10_000;
 /** Quick-skip interval when a station has no preview URL. */
 const SCAN_SKIP_MS = 400;
 
@@ -267,6 +271,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [scanActive, setScanActive] = useState(false);
   const [scanIdx, setScanIdx] = useState(0);
   const [scanCurrent, setScanCurrent] = useState<ScanHop | null>(null);
+  const [scanDir, setScanDir] = useState<1 | -1>(1);
   const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Bumped on every toggle so stale async preview fetches are discarded.
   const scanTokenRef = useRef(0);
@@ -348,19 +353,25 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         }
         // Schedule next hop: quick-skip when no preview is available.
         scanTimerRef.current = setTimeout(() => {
-          setScanIdx((i) => (i + 1) % scannableStations.length);
+          setScanIdx((i) => {
+            const n = scannableStations.length;
+            return ((i + scanDir) % n + n) % n;
+          });
         }, p.previewUrl ? SCAN_INTERVAL_MS : SCAN_SKIP_MS);
       })
       .catch(() => {
         if (scanTokenRef.current !== token) return;
         // Error fetching preview — skip to next station quickly.
         scanTimerRef.current = setTimeout(() => {
-          setScanIdx((i) => (i + 1) % scannableStations.length);
+          setScanIdx((i) => {
+            const n = scannableStations.length;
+            return ((i + scanDir) % n + n) % n;
+          });
         }, SCAN_SKIP_MS);
       });
 
     return clearScanTimer;
-  }, [scanActive, scanIdx, scannableStations, clearScanTimer]);
+  }, [scanActive, scanIdx, scanDir, scannableStations, clearScanTimer]);
 
   const [active, setActive] = useState(false);
   const [status, setStatus] = useState<RideStatus>("idle");
@@ -1490,7 +1501,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         retrySpotify,
       },
       spotify,
-      scan: { active: scanActive, toggle: toggleScan, current: scanCurrent },
+      scan: {
+        active: scanActive,
+        toggle: toggleScan,
+        current: scanCurrent,
+        dir: scanDir,
+        toggleDir: () => setScanDir((d) => (d === 1 ? -1 : 1)),
+      },
     }),
     [
       radio.status,
@@ -1530,6 +1547,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       scanActive,
       toggleScan,
       scanCurrent,
+      scanDir,
     ],
   );
 

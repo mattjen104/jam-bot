@@ -45,6 +45,10 @@ interface PlayerBarProps {
   scanTotal?: number;
   /** Toggle scan on/off. */
   onScanToggle?: () => void;
+  /** 1 = forward, -1 = backward. */
+  scanDir?: 1 | -1;
+  /** Flip scan direction. */
+  onScanDirToggle?: () => void;
 }
 
 export function PlayerBar({
@@ -64,6 +68,8 @@ export function PlayerBar({
   scanCurrent = 1,
   scanTotal = 0,
   onScanToggle,
+  scanDir = 1,
+  onScanDirToggle,
 }: PlayerBarProps) {
   const isCasting = casting === "casting";
   const isPlaying = isCasting ? !castPaused : status === "playing";
@@ -236,22 +242,35 @@ export function PlayerBar({
             </div>
           </div>
 
-          {/* Single scan toggle — on/off like a car radio */}
+          {/* Scan controls — on/off toggle + direction flip */}
           {onScanToggle && (
-            <button
-              type="button"
-              onClick={onScanToggle}
-              aria-label={scanActive ? "Stop scanning" : "Scan stations"}
-              title={scanActive ? "Stop scanning" : "Scan through all stations"}
-              data-testid="player-scan"
-              className={`hover-elevate flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition-colors ${
-                scanActive
-                  ? "border-primary bg-primary/15 text-primary"
-                  : "border-border text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <ScanLine className="h-4 w-4" />
-            </button>
+            <div className="flex items-center gap-1">
+              {scanActive && onScanDirToggle && (
+                <button
+                  type="button"
+                  onClick={onScanDirToggle}
+                  aria-label={scanDir === 1 ? "Switch to backward scan" : "Switch to forward scan"}
+                  title={scanDir === 1 ? "Scanning forward — click to reverse" : "Scanning backward — click to go forward"}
+                  className="hover-elevate flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-primary/50 bg-primary/10 font-mono text-xs text-primary transition-colors hover:bg-primary/20"
+                >
+                  {scanDir === 1 ? "›" : "‹"}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onScanToggle}
+                aria-label={scanActive ? "Stop scanning" : "Scan stations"}
+                title={scanActive ? "Stop scanning" : "Scan through all stations"}
+                data-testid="player-scan"
+                className={`hover-elevate flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition-colors ${
+                  scanActive
+                    ? "border-primary bg-primary/15 text-primary"
+                    : "border-border text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <ScanLine className="h-4 w-4" />
+              </button>
+            </div>
           )}
           <button
             type="button"
