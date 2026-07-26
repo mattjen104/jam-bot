@@ -344,9 +344,15 @@ export function parseBbcSegments(body: unknown): RawSpin[] {
   return out;
 }
 
-const bbcApi: HistoryAdapter = async (config) => {
+const bbcApi: HistoryAdapter = async (config, opts) => {
   const sid = str(config.sid) ?? str(config.serviceId);
   if (!sid) return [];
+  // Single fixed-size feed — no pagination. Deeper pages are empty.
+  // The /segments/latest endpoint always returns the same ~25 newest segments
+  // regardless of an offset parameter; returning [] here lets fetchPlaysUntilCursor
+  // terminate cleanly on the short-page signal instead of re-fetching identical
+  // data in a loop until MAX_CATCHUP is exhausted.
+  if ((opts?.page ?? 0) > 0) return [];
   const body = await getJson(
     `https://rms.api.bbc.co.uk/v2/services/${encodeURIComponent(
       sid,
