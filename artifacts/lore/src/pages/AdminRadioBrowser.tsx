@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAdminToken } from "../hooks/useAdminToken";
+import { AdminNav } from "@/components/AdminNav";
 import { AlertTriangle, KeyRound, Loader2, Plus, Radio, RefreshCw, Trash2, Wifi, WifiOff, AlertCircle } from "lucide-react";
 
 export default function AdminRadioBrowser() {
@@ -141,6 +142,8 @@ function RadioBrowserPanel({
             Clear token
           </button>
         </div>
+
+        <AdminNav token={token} />
 
         <p className="mt-2 text-sm text-muted-foreground">
           Enrol internet radio stations from{" "}

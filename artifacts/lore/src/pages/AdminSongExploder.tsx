@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { AdminNav } from "@/components/AdminNav";
 import {
   useListSongExploderEpisodes,
   getListSongExploderEpisodesQueryKey,
@@ -110,6 +111,8 @@ function EpisodesPanel({
             Clear token
           </button>
         </div>
+
+        <AdminNav token={token} />
 
         <p className="mt-2 text-sm text-muted-foreground">
           For each resolved episode, set the YouTube URL (enables ?t= timestamped

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAdminToken } from "../hooks/useAdminToken";
+import { AdminNav } from "@/components/AdminNav";
 import { KeyRound, Loader2, Plus, Radio, Rss, Tag } from "lucide-react";
 
 export default function AdminSelectors() {
@@ -82,6 +83,8 @@ function SelectorsPanel({
             Clear token
           </button>
         </div>
+
+        <AdminNav token={token} />
 
         <p className="mt-2 text-sm text-muted-foreground">
           Enrol new taste sources. Each entry is picked up by the relevant

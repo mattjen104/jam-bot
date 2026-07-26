@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { useAdminToken } from "../hooks/useAdminToken";
+import { AdminNav } from "@/components/AdminNav";
 import {
   AlertCircle,
   ArrowUpRight,
@@ -241,6 +242,8 @@ function CandidatesPanel({
             </button>
           </div>
         </div>
+
+        <AdminNav token={token} />
 
         {/* Status filter tabs */}
         <div className="mt-6 flex flex-wrap gap-2">

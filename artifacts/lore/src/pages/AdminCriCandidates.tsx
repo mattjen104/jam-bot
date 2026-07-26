@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { useAdminToken } from "../hooks/useAdminToken";
+import { AdminNav } from "@/components/AdminNav";
 import {
   AlertCircle,
   ArrowUpRight,
@@ -228,6 +229,8 @@ function CriPanel({
             </button>
           </div>
         </div>
+
+        <AdminNav token={token} />
 
         <p className="mt-2 text-sm text-muted-foreground">
           Stations discovered via the{" "}

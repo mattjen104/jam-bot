@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { AdminNav } from "@/components/AdminNav";
 import {
   useListAllDraftClaims,
   getListAllDraftClaimsQueryKey,
@@ -192,6 +193,8 @@ function ClaimsReview({
             Clear token
           </button>
         </div>
+
+        <AdminNav token={token} />
 
         {isLoading && (
           <div className="mt-12 flex items-center justify-center gap-2 text-muted-foreground">

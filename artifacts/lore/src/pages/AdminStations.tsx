@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAdminToken } from "../hooks/useAdminToken";
+import { AdminNav } from "@/components/AdminNav";
 import {
   AlertTriangle,
   ChevronDown,
@@ -241,6 +242,8 @@ function StationsPanel({
             Clear token
           </button>
         </div>
+
+        <AdminNav token={token} />
 
         <p className="mt-2 text-sm text-muted-foreground">
           Favorites get a persistent connection for instant now-playing; other

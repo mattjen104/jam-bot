@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAdminToken } from "../hooks/useAdminToken";
+import { AdminNav } from "@/components/AdminNav";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -227,6 +228,8 @@ function HealthPanel({
             </button>
           </div>
         </div>
+
+        <AdminNav token={token} />
 
         {/* Monitoring-since banner */}
         {!loading && !loadError && feedFreshness && (
