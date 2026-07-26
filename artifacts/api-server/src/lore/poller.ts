@@ -389,8 +389,10 @@ export async function fetchPlaysUntilCursor(
  * Poll one station once. History sources reload the station row first so the
  * cursor advanced by a previous tick is honored (and to detect first-enroll
  * backfill). Never throws.
+ *
+ * @internal Exported for integration tests; treat as an implementation detail.
  */
-async function pollStation(station: Station): Promise<void> {
+export async function pollStation(station: Station): Promise<void> {
   if (inFlight.has(station.id)) return;
   inFlight.add(station.id);
   const source = station.nowPlayingSource;
