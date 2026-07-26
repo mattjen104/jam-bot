@@ -88,14 +88,57 @@ const stationTimers = new Map<number, NodeJS.Timeout[]>();
 const stationWatchers = new Map<number, IcyWatcher>();
 
 /**
+ * Station ids currently holding a leased persistent watcher (crossing-score
+ * leases, see socket-leases.ts). Distinct from favorites: favorites are pinned
+ * by the curator and never evicted; leases rotate on a ~20-minute cycle.
+ */
+const leasedIds = new Set<number>();
+
+/** True when the station currently holds a watcher lease. */
+export function isLeasedStation(stationId: number): boolean {
+  return leasedIds.has(stationId);
+}
+
+/**
+ * Pick the stream URL for a *persistent* connection. When the station's
+ * nowPlayingConfig advertises multiple mounts (`mounts: [{url, bitrate?}]`),
+ * prefer the lowest-bitrate mount — a held-open socket downloads audio bytes
+ * continuously, so the cheapest mount cuts bandwidth with identical metadata.
+ * Falls back to the plain `streamUrl` when no mounts are listed.
+ */
+export function pickWatcherStreamUrl(
+  config: Record<string, unknown>,
+): string | null {
+  const rawMounts = Array.isArray(config["mounts"]) ? config["mounts"] : [];
+  const mounts = rawMounts.filter(
+    (m): m is { url: string; bitrate?: number } =>
+      !!m &&
+      typeof m === "object" &&
+      typeof (m as { url?: unknown }).url === "string" &&
+      ((m as { url: string }).url.length > 0),
+  );
+  if (mounts.length > 0) {
+    const withBitrate = mounts.filter(
+      (m) => typeof m.bitrate === "number" && m.bitrate > 0,
+    );
+    if (withBitrate.length > 0) {
+      return withBitrate.reduce((a, b) => (b.bitrate! < a.bitrate! ? b : a))
+        .url;
+    }
+    return mounts[0]!.url;
+  }
+  const streamUrl = config["streamUrl"];
+  return typeof streamUrl === "string" && streamUrl ? streamUrl : null;
+}
+
+/**
  * Start a persistent ICY watcher for a station. Returns true when a watcher
  * was started (station has a usable streamUrl), false when the caller should
  * use interval polling instead.
  */
 function startStationWatcher(station: Station): boolean {
   const config = (station.nowPlayingConfig ?? {}) as Record<string, unknown>;
-  const streamUrl =
-    typeof config.streamUrl === "string" ? config.streamUrl : null;
+  const streamUrl = pickWatcherStreamUrl(config);
   if (!streamUrl) return false;
 
   const watcher = new IcyWatcher(station.slug, streamUrl);
@@ -121,6 +164,9 @@ function startStationWatcher(station: Station): boolean {
 
   watcher.on("persistent-failed", () => {
     stationWatchers.delete(station.id);
+    // A leased station whose socket keeps failing loses the lease — it keeps
+    // interval polling until the next lease cycle re-evaluates it.
+    leasedIds.delete(station.id);
     console.warn(
       `[lore] ${station.slug}: persistent ICY failed; falling back to interval polling`,
     );
@@ -311,7 +357,7 @@ export async function startLorePoller(): Promise<void> {
     // connection budget is curated via the favorite flag (~40 soft cap).
     if (station.nowPlayingSource === "radio_browser_icy" && station.favorite) {
       const config = (station.nowPlayingConfig ?? {}) as Record<string, unknown>;
-      if (typeof config.streamUrl === "string" && config.streamUrl) {
+      if (pickWatcherStreamUrl(config)) {
         const delay = watcherIndex++ * WATCHER_STAGGER_MS;
         const handle = setTimeout(() => {
           if (!startStationWatcher(station)) {
@@ -358,12 +404,50 @@ export function enrollStationPoller(station: Station): void {
   if (station.hidden) return;
   if (
     station.nowPlayingSource === "radio_browser_icy" &&
-    station.favorite &&
+    (station.favorite || leasedIds.has(station.id)) &&
     startStationWatcher(station)
   ) {
     return;
   }
   scheduleIntervalPolling(station, 0);
+}
+
+/**
+ * Grant a station a leased persistent watcher (crossing-score leasing).
+ * Tears down its interval poller first (unenroll), so promotion is live and
+ * never leaves a duplicate poll loop. Returns false — and restores interval
+ * polling — when a watcher can't start (no usable stream URL, hidden, or not
+ * an ICY station).
+ */
+export function leaseStationWatcher(station: Station): boolean {
+  if (
+    station.hidden ||
+    station.nowPlayingSource !== "radio_browser_icy" ||
+    !isPollable(station.nowPlayingSource)
+  ) {
+    return false;
+  }
+  // Favorites already hold a pinned watcher — leasing one is a no-op success.
+  if (station.favorite && stationWatchers.has(station.id)) return true;
+  unenrollStationPoller(station.id);
+  leasedIds.add(station.id);
+  if (!startStationWatcher(station)) {
+    leasedIds.delete(station.id);
+    scheduleIntervalPolling(station, 0);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Release a station's watcher lease and demote it back to interval polling
+ * immediately (delay 0 → first poll fires right away, so there is no gap in
+ * spin logging). No-op when the station holds no lease.
+ */
+export function releaseStationLease(station: Station): void {
+  if (!leasedIds.delete(station.id)) return;
+  unenrollStationPoller(station.id);
+  if (!station.hidden) scheduleIntervalPolling(station, 0);
 }
 
 /**
@@ -373,6 +457,7 @@ export function enrollStationPoller(station: Station): void {
  */
 export function unenrollStationPoller(stationId: number): void {
   stopStationWatcher(stationId);
+  leasedIds.delete(stationId);
   const handles = stationTimers.get(stationId);
   if (handles) {
     for (const h of handles) clearTimeout(h);

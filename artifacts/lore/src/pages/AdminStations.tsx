@@ -21,6 +21,26 @@ import {
 
 const FAVORITE_SOFT_CAP = 40;
 
+interface LeaseInfo {
+  stationId: number;
+  slug: string;
+  name: string;
+  score: number;
+  crossings: number;
+  leasedAt: string;
+  expiresAt: string;
+}
+
+interface Allocation {
+  budget: number;
+  pinnedCount: number;
+  leasedCount: number;
+  freeSlots: number;
+  pinned: { id: number; slug: string; name: string }[];
+  leases: LeaseInfo[];
+  nextEvaluationAt: string | null;
+}
+
 interface FlagStation {
   id: number;
   slug: string;
@@ -95,6 +115,24 @@ function StationsPanel({
   const [hiddenOpen, setHiddenOpen] = useState(false);
   const [busyIds, setBusyIds] = useState<Set<number>>(new Set());
   const [actionError, setActionError] = useState<string | null>(null);
+  const [allocation, setAllocation] = useState<Allocation | null>(null);
+  const [allocationOpen, setAllocationOpen] = useState(false);
+
+  const loadAllocation = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/stations/allocation", {
+        headers: { "x-admin-token": token },
+      });
+      if (!res.ok) return;
+      setAllocation((await res.json()) as Allocation);
+    } catch {
+      // best-effort panel; flags list is the primary surface
+    }
+  }, [token]);
+
+  useEffect(() => {
+    void loadAllocation();
+  }, [loadAllocation]);
 
   const load = useCallback(async () => {
     try {
@@ -231,6 +269,81 @@ function StationsPanel({
             </span>
           )}
         </div>
+
+        {/* Socket allocation (pinned + leased) */}
+        {allocation && (
+          <div
+            data-testid="socket-allocation"
+            className="mt-3 rounded-xl border border-card-border bg-card px-4 py-3 text-sm"
+          >
+            <button
+              type="button"
+              onClick={() => setAllocationOpen((v) => !v)}
+              className="flex w-full items-center gap-2 text-left"
+            >
+              {allocationOpen ? (
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+              ) : (
+                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+              )}
+              <span className="font-mono text-[11px] uppercase tracking-wide text-primary">
+                Socket allocation
+              </span>
+              <span className="ml-auto font-mono text-[11px] tabular-nums text-muted-foreground">
+                {allocation.pinnedCount} pinned · {allocation.leasedCount}{" "}
+                leased · {allocation.freeSlots} free / {allocation.budget}
+              </span>
+            </button>
+            {allocationOpen && (
+              <div className="mt-3 space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  Spare slots are leased to the non-favorite stations most
+                  likely to play music from the library (recent library
+                  crossings, recency-decayed). Leases rotate every ~20 minutes.
+                  {allocation.nextEvaluationAt && (
+                    <>
+                      {" "}
+                      Next re-evaluation:{" "}
+                      <span className="font-mono">
+                        {new Date(
+                          allocation.nextEvaluationAt,
+                        ).toLocaleTimeString()}
+                      </span>
+                      .
+                    </>
+                  )}
+                </p>
+                {allocation.leases.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    No active leases — either no spare slots or no station has
+                    crossed the library recently.
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    {allocation.leases.map((l) => (
+                      <div
+                        key={l.stationId}
+                        className="flex items-center justify-between gap-3 rounded-lg bg-secondary/30 px-3 py-1.5"
+                      >
+                        <span className="truncate text-xs text-foreground">
+                          {l.name}
+                        </span>
+                        <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
+                          score {l.score.toFixed(2)} · {l.crossings} crossings
+                          · until{" "}
+                          {new Date(l.expiresAt).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {actionError && (
           <p className="mt-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">

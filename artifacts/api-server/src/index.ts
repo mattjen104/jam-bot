@@ -2,6 +2,7 @@ import app from "./app";
 import { wireSongEnrichment } from "./song/wire.js";
 import { seedStations, seedPickers, seedSpinitronRoster, backfillStationTimezones } from "./lore/seed.js";
 import { startLorePoller } from "./lore/poller.js";
+import { startLeaseScheduler } from "./lore/socket-leases.js";
 import { startBlogPoller } from "./lore/blog-poller.js";
 import { startListCandidateWorker } from "./lore/list-candidates.js";
 import { startBackfillJob } from "./lore/backfill.js";
@@ -88,6 +89,7 @@ async function bootLore(): Promise<void> {
       console.error("[lore] radio-browser ICY backfill failed", err);
     }
     await startLorePoller();
+    startLeaseScheduler();
     await startBlogPoller();
     await startNtsPoller();
     try {

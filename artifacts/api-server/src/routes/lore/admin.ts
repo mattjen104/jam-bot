@@ -72,6 +72,7 @@ import { ingestManualSpin } from "../../lore/resolve.js";
 import { fetchRadioBrowserStation, slugify as rbSlugify } from "../../lore/radio-browser.js";
 import { enrollStationPoller, unenrollStationPoller, getSpinitronWebStaleStations } from "../../lore/poller.js";
 import { clearIcyErrorBackoff } from "../../lore/adapters.js";
+import { getLeaseAllocation } from "../../lore/socket-leases.js";
 import {
   upsertPicker,
   getPickerByHandle,
@@ -1477,6 +1478,38 @@ router.get("/admin/stations/flags", h(async (_req, res) => {
     .from(stationsTable)
     .orderBy(asc(stationsTable.sortOrder), asc(stationsTable.name));
   return res.json({ stations: rows });
+}));
+
+// GET /api/admin/stations/allocation — current persistent-connection
+// allocation: pinned favorites, active crossing-score leases (with scores and
+// expiry) and the next lease re-evaluation time. Plain JSON (outside the
+// OpenAPI surface — consumed only by the admin UI via plain fetch).
+router.get("/admin/stations/allocation", h(async (_req, res) => {
+  const { budget, leases, nextEvaluationAt } = getLeaseAllocation();
+  const pinned = await db
+    .select({
+      id: stationsTable.id,
+      slug: stationsTable.slug,
+      name: stationsTable.name,
+    })
+    .from(stationsTable)
+    .where(
+      and(
+        eq(stationsTable.favorite, true),
+        eq(stationsTable.hidden, false),
+        eq(stationsTable.nowPlayingSource, "radio_browser_icy"),
+      ),
+    )
+    .orderBy(asc(stationsTable.name));
+  return res.json({
+    budget,
+    pinnedCount: pinned.length,
+    leasedCount: leases.length,
+    freeSlots: Math.max(0, budget - pinned.length - leases.length),
+    pinned,
+    leases,
+    nextEvaluationAt,
+  });
 }));
 
 // PATCH /api/admin/stations/:id/flags — toggle favorite/hidden and apply the
