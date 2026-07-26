@@ -21,22 +21,46 @@ interface HealthSummary {
   staleCount: number;
 }
 
+const HEALTH_CACHE_TTL_MS = 60_000;
+
+/** Module-level cache so navigating between admin pages doesn't re-fetch. */
+const healthCache: { value: number; expiresAt: number } = {
+  value: 0,
+  expiresAt: 0,
+};
+/** In-flight promise to coalesce concurrent callers onto a single fetch. */
+let healthInFlight: Promise<number> | null = null;
+
 async function fetchHealthStaleCount(token: string): Promise<number> {
-  try {
-    const headers = { "x-admin-token": token };
-    const [ffRes, swRes] = await Promise.all([
-      fetch("/api/admin/feed-freshness-health", { headers }),
-      fetch("/api/admin/spinitron-web-health", { headers }),
-    ]);
-    if (!ffRes.ok || !swRes.ok) return 0;
-    const [ff, sw] = await Promise.all([
-      ffRes.json() as Promise<HealthSummary>,
-      swRes.json() as Promise<HealthSummary>,
-    ]);
-    return (ff.staleCount ?? 0) + (sw.staleCount ?? 0);
-  } catch {
-    return 0;
+  if (Date.now() < healthCache.expiresAt) {
+    return healthCache.value;
   }
+  if (healthInFlight) {
+    return healthInFlight;
+  }
+  healthInFlight = (async () => {
+    try {
+      const headers = { "x-admin-token": token };
+      const [ffRes, swRes] = await Promise.all([
+        fetch("/api/admin/feed-freshness-health", { headers }),
+        fetch("/api/admin/spinitron-web-health", { headers }),
+      ]);
+      if (!ffRes.ok || !swRes.ok) return healthCache.value;
+      const [ff, sw] = await Promise.all([
+        ffRes.json() as Promise<HealthSummary>,
+        swRes.json() as Promise<HealthSummary>,
+      ]);
+      const count = (ff.staleCount ?? 0) + (sw.staleCount ?? 0);
+      healthCache.value = count;
+      healthCache.expiresAt = Date.now() + HEALTH_CACHE_TTL_MS;
+      return count;
+    } catch {
+      return healthCache.value;
+    } finally {
+      healthInFlight = null;
+    }
+  })();
+  return healthInFlight;
 }
 
 // ─── Component ─────────────────────────────────────────────────────────────
