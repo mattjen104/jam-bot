@@ -32,7 +32,12 @@ function NowPlayingCard({
   const playingSlug = radio.station?.slug ?? null;
   const item = playingSlug ? onAir.find((i) => i.station.slug === playingSlug) : null;
 
-  const nowMbid = item?.now.mbid ?? null;
+  // During a preview-mode scan, display the scan hop's track instead of the
+  // broadcast station. The scan exposes its current track in `scan.current`.
+  const scanHop = scan.active ? scan.current : null;
+
+  // nowMbid: prefer scan hop MBID when scanning, else the on-air MBID.
+  const nowMbid = scanHop?.mbid ?? item?.now.mbid ?? null;
   const isAuthenticated = useIsAuthenticated();
   const { data: keptSet } = useMyKeepStatus(
     isAuthenticated && nowMbid ? [nowMbid] : [],
@@ -40,10 +45,23 @@ function NowPlayingCard({
   const inLibrary = nowMbid != null && keptSet?.has(nowMbid) === true;
   const { data: counts } = useWpLoreCounts(nowMbid ? [nowMbid] : []);
 
-  if (!radio.station) return null;
+  // Render when a station is playing OR when a preview scan is active.
+  if (!radio.station && !scan.active) return null;
 
   const showLabel = item?.show?.name ?? null;
   const dj = item?.show?.djName ?? null;
+
+  // Build the track line: scan hop overrides station now-playing during scan.
+  const trackLine = scanHop
+    ? `${scanHop.title} · ${scanHop.artist}`
+    : item
+      ? `${item.now.title} · ${item.now.artist}`
+      : radio.station?.name ?? "";
+
+  // Station context line: during scan show the station being previewed.
+  const stationLine = scanHop
+    ? scanHop.stationName
+    : showLabel ?? radio.station?.name ?? "";
 
   return (
     <div
@@ -59,8 +77,14 @@ function NowPlayingCard({
     >
       <button
         type="button"
-        aria-label={radio.status === "playing" ? "Stop" : "Play"}
-        onClick={() => radio.toggle(radio.station!)}
+        aria-label={radio.status === "playing" ? "Stop" : scan.active ? "Stop scan" : "Play"}
+        onClick={() => {
+          if (scan.active) {
+            scan.toggle(); // stop scan — returns to idle
+          } else {
+            radio.toggle(radio.station!);
+          }
+        }}
         style={{
           width: 44,
           height: 44,
@@ -75,7 +99,7 @@ function NowPlayingCard({
           padding: 0,
         }}
       >
-        {radio.status === "playing" ? (
+        {radio.status === "playing" || scan.active ? (
           <Pause size={20} aria-hidden="true" />
         ) : (
           <Play size={20} aria-hidden="true" />
@@ -83,24 +107,29 @@ function NowPlayingCard({
       </button>
       <div style={{ minWidth: 0, flex: 1 }}>
         <p style={{ margin: 0, fontSize: 15, fontWeight: 500 }}>
-          {item ? `${item.now.title} · ${item.now.artist}` : radio.station.name}
+          {trackLine}
         </p>
         <p style={{ margin: "2px 0 0", fontSize: 13, color: "var(--wp-text-secondary)" }}>
-          {showLabel ?? radio.station.name}
-          {showLabel && (
+          {stationLine}
+          {!scanHop && showLabel && (
             <>
               {" "}
               <span style={{ color: "var(--wp-text-muted)" }}>· via</span>{" "}
               <span className="wp-mono" style={{ fontSize: 12 }}>
-                {radio.station.name}
+                {radio.station?.name}
               </span>
             </>
           )}
-          {dj && (
+          {!scanHop && dj && (
             <>
               {" "}
               <span style={{ color: "var(--wp-text-muted)" }}>· selector</span> {dj}
             </>
+          )}
+          {scanHop && (
+            <span className="wp-mono" style={{ fontSize: 11, color: "var(--wp-text-muted)", marginLeft: 6 }}>
+              · preview
+            </span>
           )}
         </p>
       </div>
@@ -121,10 +150,10 @@ function NowPlayingCard({
       {nowMbid && (
         <LoreChip
           count={counts?.get(nowMbid)}
-          onOpen={() => onOpenLore(nowMbid, showLabel ?? radio.station!.name)}
+          onOpen={() => onOpenLore(nowMbid, scanHop?.stationName ?? showLabel ?? radio.station!.name)}
         />
       )}
-      {nowMbid && !inLibrary && (
+      {nowMbid && !inLibrary && !scanHop && radio.station && (
         <WpKeep mbid={nowMbid} provenance={{ kind: "station", stationSlug: radio.station.slug }} />
       )}
       {/* Scan toggle — single on/off like a car radio */}
@@ -289,7 +318,7 @@ function OnAirRow({
   nowInLibrary: boolean;
   onOpenRun: (slug: string) => void;
 }) {
-  const { radio } = usePlayer();
+  const { radio, scan } = usePlayer();
   const isPlaying = radio.station?.slug === item.station.slug && radio.status !== "idle";
   const title = item.show?.name ?? item.station.name;
   // When a show name is the title, keep the station as context; otherwise the
@@ -316,7 +345,11 @@ function OnAirRow({
         type="button"
         className="wp-play wp-play-sm"
         aria-label={`${isPlaying ? "Stop" : "Play"} ${title}`}
-        onClick={() => radio.toggle(item.station)}
+        onClick={() => {
+          // Stop preview-mode scan before switching to a broadcast station.
+          if (scan.active) scan.toggle();
+          radio.toggle(item.station);
+        }}
         style={
           isPlaying
             ? {

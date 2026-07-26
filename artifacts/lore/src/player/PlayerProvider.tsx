@@ -23,6 +23,7 @@ import {
   type SegueNext,
   type Station,
 } from "@workspace/api-client-react";
+import { useWpOnAir } from "../webplayer/hooks";
 import { useRadioPlayer, type PlayerStatus } from "../hooks/useRadioPlayer";
 import {
   useSpotifyConnect,
@@ -194,9 +195,20 @@ export interface RideApi {
   retrySpotify: () => void;
 }
 
+/** One scan hop — the preview currently sounding during a preview-mode scan. */
+export interface ScanHop {
+  title: string;
+  artist: string;
+  mbid: string;
+  stationName: string;
+  stationSlug: string;
+}
+
 export interface ScanApi {
   active: boolean;
   toggle: () => void;
+  /** Non-null while scan is active and a preview hop is playing or loading. */
+  current: ScanHop | null;
 }
 
 interface PlayerContextValue {
@@ -223,7 +235,10 @@ function segueToItem(n: SegueNext): RideItem {
   };
 }
 
-const SCAN_INTERVAL_MS = 8_000;
+/** Preview-mode scan: 5 s per hop, no broadcast buffering. */
+const SCAN_INTERVAL_MS = 5_000;
+/** Quick-skip interval when a station has no preview URL. */
+const SCAN_SKIP_MS = 400;
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const radio = useRadioPlayer();
@@ -232,9 +247,29 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // --- Scan state (shared so WebPlayer and PlayerDock both see it) ---
   const { data: stationsData } = useListStations();
   const stations: Station[] = stationsData?.stations ?? [];
+  // On-air data supplies the resolved MBID + track info per station.
+  const { data: onAirData } = useWpOnAir();
+
+  // Stations that currently have a resolved now-playing MBID — the only ones
+  // scannable via iTunes preview. Re-derived whenever on-air data refreshes.
+  const scannableStations = useMemo(() => {
+    if (!onAirData) return [];
+    return onAirData.items
+      .filter((item) => item.now.resolved && item.now.mbid != null)
+      .map((item) => ({
+        station: item.station,
+        mbid: item.now.mbid!,
+        title: item.now.title,
+        artist: item.now.artist,
+      }));
+  }, [onAirData]);
+
   const [scanActive, setScanActive] = useState(false);
   const [scanIdx, setScanIdx] = useState(0);
+  const [scanCurrent, setScanCurrent] = useState<ScanHop | null>(null);
   const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Bumped on every toggle so stale async preview fetches are discarded.
+  const scanTokenRef = useRef(0);
   const radioRef = useRef(radio);
   radioRef.current = radio;
 
@@ -245,34 +280,87 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const toggleScan = useCallback(() => {
-    setScanActive((prev) => {
-      if (prev) { clearScanTimer(); return false; }
-      const currentSlug = radioRef.current.station?.slug;
-      const pos = currentSlug ? stations.findIndex((s) => s.slug === currentSlug) : -1;
-      setScanIdx(stations.length > 0 ? (pos + 1) % stations.length : 0);
-      return true;
-    });
-  }, [clearScanTimer, stations]);
+  const stopScanAudio = useCallback((el: HTMLAudioElement | null) => {
+    if (!el) return;
+    el.pause();
+    el.removeAttribute("src");
+    el.load();
+  }, []);
 
-  useEffect(() => {
-    if (!scanActive || stations.length === 0) { clearScanTimer(); return; }
-    const station = stations[scanIdx];
-    if (!station) return;
-    const { station: current, toggle } = radioRef.current;
-    if (station.slug !== current?.slug) void toggle(station);
-    scanTimerRef.current = setTimeout(() => {
-      setScanIdx((i) => (i + 1) % stations.length);
-    }, SCAN_INTERVAL_MS);
-    return clearScanTimer;
-  }, [scanActive, scanIdx, stations, clearScanTimer]);
-
+  // Audio element — singleton created during render, shared by rides and preview scan.
   const audioRef = useRef<HTMLAudioElement | null>(null);
   if (audioRef.current === null && typeof Audio !== "undefined") {
     const el = new Audio();
     el.preload = "none";
     audioRef.current = el;
   }
+
+  const toggleScan = useCallback(() => {
+    setScanActive((prev) => {
+      if (prev) {
+        clearScanTimer();
+        scanTokenRef.current += 1;
+        setScanCurrent(null);
+        // Silence the preview audio element used by the scan.
+        stopScanAudio(audioRef.current);
+        return false;
+      }
+      // Don't start a preview scan while a ride is active — they share the
+      // same audio element and would fight each other.
+      if (rideActiveRef.current) return false;
+      scanTokenRef.current += 1;
+      setScanIdx(0);
+      return true;
+    });
+  }, [clearScanTimer, stopScanAudio]);
+
+  useEffect(() => {
+    if (!scanActive || scannableStations.length === 0) {
+      clearScanTimer();
+      return;
+    }
+    const entry = scannableStations[scanIdx % scannableStations.length];
+    if (!entry) return;
+
+    const el = audioRef.current;
+    const token = scanTokenRef.current;
+
+    // Stop any live broadcast — scan uses the preview audio element exclusively.
+    radioRef.current.stop();
+
+    // Expose display info immediately so the UI doesn't flicker blank.
+    setScanCurrent({
+      title: entry.title,
+      artist: entry.artist,
+      mbid: entry.mbid,
+      stationName: entry.station.name,
+      stationSlug: entry.station.slug,
+    });
+
+    // Fetch the 30 s iTunes preview and play it.
+    void getRecordingPreview(entry.mbid)
+      .then((p) => {
+        if (scanTokenRef.current !== token) return;
+        if (p.previewUrl && el) {
+          el.src = p.previewUrl;
+          el.load();
+          void el.play().catch(() => {/* autoplay blocked — advance anyway */});
+        }
+        // Schedule next hop: quick-skip when no preview is available.
+        scanTimerRef.current = setTimeout(() => {
+          setScanIdx((i) => (i + 1) % scannableStations.length);
+        }, p.previewUrl ? SCAN_INTERVAL_MS : SCAN_SKIP_MS);
+      })
+      .catch(() => {
+        if (scanTokenRef.current !== token) return;
+        // Error fetching preview — skip to next station quickly.
+        scanTimerRef.current = setTimeout(() => {
+          setScanIdx((i) => (i + 1) % scannableStations.length);
+        }, SCAN_SKIP_MS);
+      });
+
+    return clearScanTimer;
+  }, [scanActive, scanIdx, scannableStations, clearScanTimer]);
 
   const [active, setActive] = useState(false);
   const [status, setStatus] = useState<RideStatus>("idle");
@@ -407,6 +495,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const start = useCallback(
     (seed: RideSeed, opts?: StartRideOpts) => {
+      // Stop any active preview scan — it shares the ride's audio element.
+      clearScanTimer();
+      scanTokenRef.current += 1;
+      setScanActive(false);
+      setScanCurrent(null);
+      stopScanAudio(audioRef.current);
       // The ride takes over audio: pause the live stream (resumable) so two
       // sources never play at once — enqueue-never-cut, but audio is exclusive.
       pauseRadio?.();
@@ -438,7 +532,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       ]);
       setIndex(0);
     },
-    [pauseRadio],
+    [pauseRadio, clearScanTimer, stopScanAudio],
   );
 
   // Ghost radio / curated picker replay: play a documented run exactly as it
@@ -451,6 +545,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       opts?: { timeOrientation?: TimeOrientation; startIndex?: number },
     ) => {
       if (!seeds.length) return;
+      // Stop any active preview scan — it shares the ride's audio element.
+      clearScanTimer();
+      scanTokenRef.current += 1;
+      setScanActive(false);
+      setScanCurrent(null);
+      stopScanAudio(audioRef.current);
       pauseRadio?.();
       rideRef.current += 1;
       previewFetchingRef.current.clear();
@@ -490,8 +590,20 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           : 0,
       );
     },
-    [pauseRadio],
+    [pauseRadio, clearScanTimer, stopScanAudio],
   );
+
+  // Safety net: if a ride becomes active while a preview scan is running
+  // (e.g. via an external start call), stop the scan immediately so the two
+  // modes never fight over the shared audio element.
+  useEffect(() => {
+    if (!active) return;
+    clearScanTimer();
+    scanTokenRef.current += 1;
+    setScanActive(false);
+    setScanCurrent(null);
+    stopScanAudio(audioRef.current);
+  }, [active, clearScanTimer, stopScanAudio]);
 
   const next = useCallback(() => {
     setIndex((i) => {
@@ -1378,7 +1490,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         retrySpotify,
       },
       spotify,
-      scan: { active: scanActive, toggle: toggleScan },
+      scan: { active: scanActive, toggle: toggleScan, current: scanCurrent },
     }),
     [
       radio.status,
@@ -1417,6 +1529,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       spotify,
       scanActive,
       toggleScan,
+      scanCurrent,
     ],
   );
 
