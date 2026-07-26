@@ -51,7 +51,7 @@ export async function ensurePicksUnifiedView(): Promise<void> {
           COALESCE(pk.handle, st.slug)        AS picker_handle,
           COALESCE(pk.trust_tier, 3)          AS trust_tier
         FROM spins s
-        JOIN stations st ON st.id = s.station_id
+        JOIN stations st ON st.id = s.station_id AND st.hidden = false
         LEFT JOIN shows sh ON sh.id = s.show_id
         LEFT JOIN pickers pk ON pk.id = sh.picker_id
         LEFT JOIN recordings r ON r.mbid = s.mbid

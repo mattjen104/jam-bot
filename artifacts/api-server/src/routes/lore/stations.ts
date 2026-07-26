@@ -35,6 +35,7 @@ import {
 } from "@workspace/db";
 import { eq, ne, and, asc, desc, isNotNull, inArray, sql } from "drizzle-orm";
 import { stationArchiveUrl } from "../../lore/adapters.js";
+import { inferTimezone } from "../../lore/timezone.js";
 import { h } from "../../middlewares/asyncHandler.js";
 import { toStation, toNowPlaying, toArchiveRecording, spinDayExpr } from "./shared.js";
 import { spinRunIdExpr } from "../../lore/runs.js";
@@ -84,7 +85,7 @@ router.get("/stations", h(async (_req, res) => {
       stationQualityTable,
       eq(stationQualityTable.stationId, stationsTable.id),
     )
-    .where(eq(stationsTable.active, true))
+    .where(and(eq(stationsTable.active, true), eq(stationsTable.hidden, false)))
     .orderBy(asc(stationsTable.sortOrder), asc(stationsTable.name));
 
   return res.json(ListStationsResponse.parse({
@@ -102,7 +103,7 @@ router.get("/stations/now-playing", h(async (req, res) => {
   const stations = await db
     .select({ id: stationsTable.id, slug: stationsTable.slug })
     .from(stationsTable)
-    .where(eq(stationsTable.active, true))
+    .where(and(eq(stationsTable.active, true), eq(stationsTable.hidden, false)))
     .orderBy(asc(stationsTable.sortOrder), asc(stationsTable.name));
 
   const rows = await db
@@ -189,7 +190,7 @@ router.get("/stations/at/:date/now-playing", h(async (req, res) => {
   const stations = await db
     .select({ id: stationsTable.id, slug: stationsTable.slug })
     .from(stationsTable)
-    .where(eq(stationsTable.active, true))
+    .where(and(eq(stationsTable.active, true), eq(stationsTable.hidden, false)))
     .orderBy(asc(stationsTable.sortOrder), asc(stationsTable.name));
 
   const rows = await db
@@ -237,7 +238,7 @@ router.get("/stations/:slug/now-playing", h(async (req, res) => {
   const [station] = await db
     .select()
     .from(stationsTable)
-    .where(eq(stationsTable.slug, parsed.data.slug))
+    .where(and(eq(stationsTable.slug, parsed.data.slug), eq(stationsTable.hidden, false)))
     .limit(1);
   if (!station) {
     return res.status(404).json({ error: "Station not found" });
@@ -294,7 +295,7 @@ router.post("/stations/:slug/report-now-playing", reportNowPlayingLimiter, h(asy
   const [station] = await db
     .select()
     .from(stationsTable)
-    .where(eq(stationsTable.slug, parsedParams.data.slug))
+    .where(and(eq(stationsTable.slug, parsedParams.data.slug), eq(stationsTable.hidden, false)))
     .limit(1);
   if (!station) {
     return res.status(404).json({ error: "Station not found" });
@@ -345,7 +346,7 @@ router.post("/stations/:slug/fingerprint", fingerprintLimiter, h(async (req, res
   const [station] = await db
     .select()
     .from(stationsTable)
-    .where(eq(stationsTable.slug, parsedParams.data.slug))
+    .where(and(eq(stationsTable.slug, parsedParams.data.slug), eq(stationsTable.hidden, false)))
     .limit(1);
   if (!station) {
     return res.status(404).json({ error: "Station not found" });
@@ -398,7 +399,7 @@ router.get("/stations/:slug/archive", h(async (req, res) => {
   const [station] = await db
     .select()
     .from(stationsTable)
-    .where(eq(stationsTable.slug, parsed.data.slug))
+    .where(and(eq(stationsTable.slug, parsed.data.slug), eq(stationsTable.hidden, false)))
     .limit(1);
   if (!station) {
     return res.status(404).json({ error: "Station not found" });
@@ -459,7 +460,7 @@ router.get("/stations/:slug/insights", h(async (req, res) => {
   const [station] = await db
     .select()
     .from(stationsTable)
-    .where(eq(stationsTable.slug, parsed.data.slug))
+    .where(and(eq(stationsTable.slug, parsed.data.slug), eq(stationsTable.hidden, false)))
     .limit(1);
   if (!station) {
     return res.status(404).json({ error: "Station not found" });
@@ -539,7 +540,7 @@ router.get("/stations/spins", h(async (req, res) => {
   const [station] = await db
     .select()
     .from(stationsTable)
-    .where(eq(stationsTable.slug, parsedQuery.data.slug))
+    .where(and(eq(stationsTable.slug, parsedQuery.data.slug), eq(stationsTable.hidden, false)))
     .limit(1);
   if (!station) {
     return res.status(404).json({ error: "Station not found" });
@@ -617,7 +618,7 @@ router.get("/stations/:slug/overlaps/pickers", h(async (req, res) => {
   const [station] = await db
     .select()
     .from(stationsTable)
-    .where(eq(stationsTable.slug, parsed.data.slug))
+    .where(and(eq(stationsTable.slug, parsed.data.slug), eq(stationsTable.hidden, false)))
     .limit(1);
   if (!station) {
     return res.status(404).json({ error: "Station not found" });
@@ -712,7 +713,7 @@ router.get("/stations/recent-spins", h(async (req, res) => {
         sp.played_at,
         ROW_NUMBER() OVER (PARTITION BY sp.station_id ORDER BY sp.played_at DESC) AS rn
       FROM spins sp
-      JOIN stations s ON s.id = sp.station_id
+      JOIN stations s ON s.id = sp.station_id AND s.hidden = false
       LEFT JOIN recordings r ON r.mbid = sp.mbid
       WHERE sp.played_at::date = ${dateFilter}::date
         AND sp.station_id IS NOT NULL
@@ -793,6 +794,7 @@ router.get("/stations/schedule", h(async (req, res) => {
     .where(
       and(
         isNotNull(spinsTable.stationId),
+        eq(stationsTable.hidden, false),
         sql`${spinsTable.playedAt}::date = ${dateFilter}::date`,
       ),
     )
@@ -871,7 +873,7 @@ router.get("/stations/rolling-genres", h(async (_req, res) => {
         r.release_year,
         sp.played_at
       FROM spins sp
-      JOIN stations s ON s.id = sp.station_id AND s.active = true
+      JOIN stations s ON s.id = sp.station_id AND s.active = true AND s.hidden = false
       JOIN recordings r ON r.mbid = sp.mbid
       WHERE r.genres IS NOT NULL
         AND array_length(r.genres, 1) > 0
@@ -920,7 +922,9 @@ router.get("/djs/:name", h(async (req, res) => {
     })
     .from(scrapedShowsTable)
     .innerJoin(stationsTable, eq(scrapedShowsTable.stationId, stationsTable.id))
-    .where(eq(scrapedShowsTable.djName, djName))
+    .where(
+      and(eq(scrapedShowsTable.djName, djName), eq(stationsTable.hidden, false)),
+    )
     .orderBy(asc(stationsTable.name), asc(scrapedShowsTable.dayOfWeek), asc(scrapedShowsTable.startTime));
 
   if (rows.length === 0) {
@@ -964,7 +968,7 @@ router.get("/stations/:slug/upcoming-schedule", h(async (req, res) => {
       ianaTimezone: stationsTable.ianaTimezone,
     })
     .from(stationsTable)
-    .where(eq(stationsTable.slug, slug))
+    .where(and(eq(stationsTable.slug, slug), eq(stationsTable.hidden, false)))
     .limit(1);
 
   if (station.length === 0) {
@@ -1172,6 +1176,7 @@ router.get("/scraped-shows", h(async (_req, res) => {
     })
     .from(scrapedShowsTable)
     .innerJoin(stationsTable, eq(scrapedShowsTable.stationId, stationsTable.id))
+    .where(eq(stationsTable.hidden, false))
     .orderBy(stationsTable.name, scrapedShowsTable.dayOfWeek, scrapedShowsTable.startTime);
 
   const { showByName, showByDj, pickerByDj } = await getInsightMaps();
@@ -1222,7 +1227,7 @@ router.get("/scraped-shows", h(async (_req, res) => {
     stations: [...byFingerprint.values()].sort((a, b) => a.name.localeCompare(b.name)).map((s) => ({
       slug: s.slug,
       name: s.name,
-      timezoneHint: inferTimezone(s.city, s.country),
+      timezoneHint: inferTimezone(s.city ?? null, s.country ?? null),
       shows: s.shows.map((r) => {
         const insight = insightForSlot(r);
         return {

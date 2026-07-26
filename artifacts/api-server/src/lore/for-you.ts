@@ -158,6 +158,7 @@ export async function computeUserSourceAffinity(
       .where(
         and(
           eq(stationsTable.active, true),
+          eq(stationsTable.hidden, false),
           isNotNull(spinsTable.mbid),
           inArray(spinsTable.mbid, userLibMbids),
         ),
@@ -376,7 +377,7 @@ export async function getForYouStations(
       votes: stationsTable.votes,
     })
     .from(stationsTable)
-    .where(eq(stationsTable.active, true));
+    .where(and(eq(stationsTable.active, true), eq(stationsTable.hidden, false)));
 
   const stationRows = await stationQuery;
 
@@ -479,7 +480,7 @@ async function buildColdStartStations(
       votes: stationsTable.votes,
     })
     .from(stationsTable)
-    .where(eq(stationsTable.active, true))
+    .where(and(eq(stationsTable.active, true), eq(stationsTable.hidden, false)))
     .orderBy(
       sql`${stationsTable.clickcount} + ${stationsTable.votes} desc`,
       stationsTable.name,

@@ -81,6 +81,7 @@ async function loadStaleTargets(limit: number): Promise<ScrapeTarget[]> {
     .where(
       and(
         eq(stationsTable.active, true),
+        eq(stationsTable.hidden, false),
         isNotNull(stationsTable.homepageUrl),
         or(
           isNull(stationsTable.scheduleScrapedAt),

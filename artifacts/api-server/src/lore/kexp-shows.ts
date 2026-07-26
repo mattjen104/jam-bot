@@ -177,7 +177,9 @@ export async function syncKexpShows(): Promise<void> {
   const [station] = await db
     .select({ id: stationsTable.id })
     .from(stationsTable)
-    .where(eq(stationsTable.slug, KEXP_STATION_SLUG))
+    .where(
+      and(eq(stationsTable.slug, KEXP_STATION_SLUG), eq(stationsTable.hidden, false)),
+    )
     .limit(1);
 
   if (!station) {

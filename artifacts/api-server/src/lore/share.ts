@@ -489,6 +489,7 @@ async function getMbidStationHistory(mbid: string): Promise<{
     .where(
       and(
         eq(spinsTable.mbid, mbid),
+        eq(stationsTable.hidden, false),
         gt(spinsTable.playedAt, new Date(Date.now() - LIVE_WINDOW_MS)),
       ),
     )
@@ -511,7 +512,7 @@ async function getMbidStationHistory(mbid: string): Promise<{
       st.name         AS station_name,
       st.slug         AS station_slug
     FROM spins s
-    INNER JOIN stations st ON st.id = s.station_id
+    INNER JOIN stations st ON st.id = s.station_id AND st.hidden = false
     INNER JOIN spins s2 ON
       s2.station_id = s.station_id AND
       (s2.show_id IS NOT DISTINCT FROM s.show_id) AND
@@ -883,7 +884,7 @@ export async function getStationShare(
   const [station] = await db
     .select()
     .from(stationsTable)
-    .where(eq(stationsTable.slug, slug))
+    .where(and(eq(stationsTable.slug, slug), eq(stationsTable.hidden, false)))
     .limit(1);
   if (!station) return null;
   const quality = station.streamQuality ? ` · ${station.streamQuality}` : "";
@@ -918,7 +919,7 @@ export async function getStationRunShare(
   const [station] = await db
     .select()
     .from(stationsTable)
-    .where(eq(stationsTable.id, anchor.stationId))
+    .where(and(eq(stationsTable.id, anchor.stationId), eq(stationsTable.hidden, false)))
     .limit(1);
   if (!station) return null;
 

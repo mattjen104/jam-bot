@@ -164,6 +164,22 @@ export const stationsTable = pgTable("stations", {
    */
   active: boolean("active").notNull().default(true),
   /**
+   * Curator-level favorite. Favorites are the only stations that get a
+   * persistent ICY connection (instant now-playing); non-favorite ICY stations
+   * fall back to interval polling. Soft budget ~40 (connection/bandwidth
+   * guidance, enforced as a UI warning, never a hard block). Distinct from
+   * `active` (health-driven) and from per-listener follows (localStorage-only).
+   */
+  favorite: boolean("favorite").notNull().default(false),
+  /**
+   * Soft-hide: removed from the public dial and all listener-facing lists, and
+   * polling/watching stops entirely — but the row, spin history, and
+   * radio-browser link are kept intact so the station can be reintroduced with
+   * one click. Never overload `active` for this (its auto-demotion semantics
+   * belong to the health worker).
+   */
+  hidden: boolean("hidden").notNull().default(false),
+  /**
    * How this station entered the directory: "curated" = hand-curated flagship
    * seed, "radio_browser" = auto-discovered via radio-browser.info.
    */

@@ -21,6 +21,7 @@ import AdminClaims from "@/pages/AdminClaims";
 import AdminSongExploder from "@/pages/AdminSongExploder";
 import AdminSelectors from "@/pages/AdminSelectors";
 import AdminRadioBrowser from "@/pages/AdminRadioBrowser";
+import AdminStations from "@/pages/AdminStations";
 import AdminListCandidates from "@/pages/AdminListCandidates";
 import AdminCriCandidates from "@/pages/AdminCriCandidates";
 import DjPage from "@/pages/DjPage";
@@ -113,6 +114,7 @@ function Router() {
         <Route path="/admin/song-exploder" component={AdminSongExploder} />
         <Route path="/admin/selectors" component={AdminSelectors} />
         <Route path="/admin/radio-browser" component={AdminRadioBrowser} />
+        <Route path="/admin/stations" component={AdminStations} />
         <Route path="/admin/list-candidates" component={AdminListCandidates} />
         <Route path="/admin/cri" component={AdminCriCandidates} />
         <Route path="/dj/:name" component={DjPage} />

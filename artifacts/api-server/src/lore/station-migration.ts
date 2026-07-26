@@ -28,7 +28,9 @@ export async function applyStationDiscoveryMigration(): Promise<void> {
       ADD COLUMN IF NOT EXISTS health_failures integer  NOT NULL DEFAULT 0,
       ADD COLUMN IF NOT EXISTS discovery_score      real,
       ADD COLUMN IF NOT EXISTS homepage_blurb       text,
-      ADD COLUMN IF NOT EXISTS homepage_scraped_at  timestamptz
+      ADD COLUMN IF NOT EXISTS homepage_scraped_at  timestamptz,
+      ADD COLUMN IF NOT EXISTS favorite        boolean  NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS hidden          boolean  NOT NULL DEFAULT false
   `);
   console.info("[migration] station discovery fields: OK");
 }

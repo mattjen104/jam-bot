@@ -236,11 +236,14 @@ export async function runHealthSweep(
       .select()
       .from(stationsTable)
       .where(
-        or(
-          eq(stationsTable.active, true),
-          and(
-            eq(stationsTable.active, false),
-            eq(stationsTable.tier, "longtail"),
+        and(
+          eq(stationsTable.hidden, false),
+          or(
+            eq(stationsTable.active, true),
+            and(
+              eq(stationsTable.active, false),
+              eq(stationsTable.tier, "longtail"),
+            ),
           ),
         ),
       );

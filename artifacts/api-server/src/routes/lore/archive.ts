@@ -55,7 +55,7 @@ router.get("/archive/station-runs/:runId", h(async (req, res) => {
   const [station] = await db
     .select()
     .from(stationsTable)
-    .where(eq(stationsTable.id, anchor.stationId))
+    .where(and(eq(stationsTable.id, anchor.stationId), eq(stationsTable.hidden, false)))
     .limit(1);
   if (!station) {
     return res.status(404).json({ error: "Run not found" });
@@ -347,7 +347,10 @@ router.get("/archive/recent-runs", h(async (_req, res) => {
 
   const stationIds = [...new Set(runs.map((r) => r.stationId))];
   const stations = stationIds.length
-    ? await db.select().from(stationsTable).where(inArray(stationsTable.id, stationIds))
+    ? await db
+        .select()
+        .from(stationsTable)
+        .where(and(inArray(stationsTable.id, stationIds), eq(stationsTable.hidden, false)))
     : [];
   const stationById = new Map(stations.map((s) => [s.id, s]));
 
@@ -476,7 +479,10 @@ router.get("/archive/artist-runs", h(async (req, res) => {
 
     const stationIds = [...new Set(fullGroups.map((g) => g.stationId))];
     const stations = stationIds.length
-      ? await db.select().from(stationsTable).where(inArray(stationsTable.id, stationIds))
+      ? await db
+          .select()
+          .from(stationsTable)
+          .where(and(inArray(stationsTable.id, stationIds), eq(stationsTable.hidden, false)))
       : [];
     const stationById = new Map(stations.map((s) => [s.id, s]));
     const matchByKey = new Map(
@@ -629,6 +635,7 @@ router.get("/archive/coverage", h(async (_req, res) => {
     })
     .from(stationsTable)
     .leftJoin(spinsTable, eq(spinsTable.stationId, stationsTable.id))
+    .where(eq(stationsTable.hidden, false))
     .groupBy(
       stationsTable.id,
       stationsTable.slug,

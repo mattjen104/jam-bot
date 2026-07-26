@@ -34,8 +34,6 @@ channel = "stable-25_05"
 MUSICBRAINZ_CONTACT = "Lore Radio Library (https://replit.com; +radio now-playing resolver)"
 LORE_BACKFILL_FLOOR = "2012-01-01T00:00:00Z"
 
-[userenv.development]
-
 [[ports]]
 localPort = 8080
 externalPort = 8080

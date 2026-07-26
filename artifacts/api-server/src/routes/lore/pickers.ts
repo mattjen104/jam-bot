@@ -326,7 +326,13 @@ router.get("/pickers/:handle/overlaps/stations", h(async (req, res) => {
     })
     .from(spinsTable)
     .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
-    .where(and(isNotNull(spinsTable.mbid), inArray(spinsTable.mbid, pickerMbids)))
+    .where(
+      and(
+        isNotNull(spinsTable.mbid),
+        inArray(spinsTable.mbid, pickerMbids),
+        eq(stationsTable.hidden, false),
+      ),
+    )
     .groupBy(stationsTable.id, stationsTable.slug, stationsTable.name, stationsTable.stationClass)
     .orderBy(
       sql`count(distinct ${spinsTable.mbid}) desc`,

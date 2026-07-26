@@ -1456,6 +1456,74 @@ router.get("/admin/stations", h(async (_req, res) => {
   );
 }));
 
+// GET /api/admin/stations/flags — every station (incl. inactive/hidden) with
+// the curation flags. Plain JSON (deliberately outside the OpenAPI surface —
+// consumed only by the admin UI via plain fetch).
+router.get("/admin/stations/flags", h(async (_req, res) => {
+  const rows = await db
+    .select({
+      id: stationsTable.id,
+      slug: stationsTable.slug,
+      name: stationsTable.name,
+      org: stationsTable.org,
+      country: stationsTable.country,
+      active: stationsTable.active,
+      source: stationsTable.source,
+      nowPlayingSource: stationsTable.nowPlayingSource,
+      logoUrl: stationsTable.logoUrl,
+      favorite: stationsTable.favorite,
+      hidden: stationsTable.hidden,
+    })
+    .from(stationsTable)
+    .orderBy(asc(stationsTable.sortOrder), asc(stationsTable.name));
+  return res.json({ stations: rows });
+}));
+
+// PATCH /api/admin/stations/:id/flags — toggle favorite/hidden and apply the
+// change to the live poller immediately (no restart):
+//   hidden=true  → all polling/watching stops (soft-hide; row + history kept)
+//   hidden=false → re-enrolled (watcher iff favorite ICY, else interval poll)
+//   favorite toggles re-enroll so the watcher/interval choice is re-evaluated.
+router.patch("/admin/stations/:id/flags", h(async (req, res) => {
+  const id = Number(req.params["id"]);
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ error: "Invalid station id" });
+  }
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const patch: Partial<{ favorite: boolean; hidden: boolean }> = {};
+  if (typeof body["favorite"] === "boolean") patch.favorite = body["favorite"];
+  if (typeof body["hidden"] === "boolean") patch.hidden = body["hidden"];
+  if (Object.keys(patch).length === 0) {
+    return res
+      .status(400)
+      .json({ error: "Body must set favorite and/or hidden (booleans)" });
+  }
+
+  const [updated] = await db
+    .update(stationsTable)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(eq(stationsTable.id, id))
+    .returning();
+  if (!updated) {
+    return res.status(404).json({ error: "Station not found" });
+  }
+
+  // Live-apply: enrollStationPoller unenrolls first, then no-ops when hidden,
+  // starts a watcher for favorite ICY stations, or falls back to interval.
+  if (updated.hidden) {
+    unenrollStationPoller(updated.id);
+  } else {
+    enrollStationPoller(updated);
+  }
+
+  return res.json({
+    id: updated.id,
+    slug: updated.slug,
+    favorite: updated.favorite,
+    hidden: updated.hidden,
+  });
+}));
+
 // POST /api/admin/stations/recompute-quality — trigger an immediate full
 // quality recompute across all active stations. Returns the tier count summary.
 // Long-running but safe to call while the server is live — each station is

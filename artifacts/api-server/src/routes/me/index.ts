@@ -1188,6 +1188,7 @@ router.get("/me/overlaps/stations", h(async (req, res) => {
       and(
         isNotNull(spinsTable.mbid),
         inArray(spinsTable.mbid, userLib),
+        eq(stationsTable.hidden, false),
       ),
     )
     .groupBy(stationsTable.id, stationsTable.slug, stationsTable.name, stationsTable.stationClass)
@@ -1237,7 +1238,7 @@ router.get("/me/overlaps/runs", h(async (req, res) => {
     .from(spinsTable)
     .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
     .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id))
-    .where(isNotNull(spinsTable.mbid))
+    .where(and(isNotNull(spinsTable.mbid), eq(stationsTable.hidden, false)))
     .groupBy(
       spinDayExpr,
       spinsTable.stationId,

@@ -292,7 +292,10 @@ export async function startLorePoller(): Promise<void> {
     return;
   }
 
-  const pollable = stations.filter((s) => isPollable(s.nowPlayingSource));
+  // Hidden stations are soft-removed: no watcher, no interval poll.
+  const pollable = stations.filter(
+    (s) => isPollable(s.nowPlayingSource) && !s.hidden,
+  );
   console.info(`[lore] starting pollers for ${pollable.length} station(s)`);
 
   // Stagger watcher socket dials — opening hundreds of TCP/TLS connections in
@@ -302,9 +305,11 @@ export async function startLorePoller(): Promise<void> {
   const WATCHER_STAGGER_MS = 250;
   let watcherIndex = 0;
   pollable.forEach((station, i) => {
-    // radio_browser_icy stations get a persistent watcher (instant metadata)
-    // when a streamUrl is available; everything else keeps interval polling.
-    if (station.nowPlayingSource === "radio_browser_icy") {
+    // Favorite radio_browser_icy stations get a persistent watcher (instant
+    // metadata) when a streamUrl is available; everything else — including
+    // non-favorite ICY stations — keeps interval polling. The persistent
+    // connection budget is curated via the favorite flag (~40 soft cap).
+    if (station.nowPlayingSource === "radio_browser_icy" && station.favorite) {
       const config = (station.nowPlayingConfig ?? {}) as Record<string, unknown>;
       if (typeof config.streamUrl === "string" && config.streamUrl) {
         const delay = watcherIndex++ * WATCHER_STAGGER_MS;
@@ -348,8 +353,12 @@ export function enrollStationPoller(station: Station): void {
   // Clear any existing timers for this station so re-enrollment (e.g. admin
   // calling enroll twice for the same UUID) doesn't create duplicate loops.
   unenrollStationPoller(station.id);
+  // Hidden stations are soft-removed: enrollment is a no-op (the unenroll
+  // above already stopped anything running, so this doubles as "apply hide").
+  if (station.hidden) return;
   if (
     station.nowPlayingSource === "radio_browser_icy" &&
+    station.favorite &&
     startStationWatcher(station)
   ) {
     return;

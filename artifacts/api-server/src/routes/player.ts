@@ -49,7 +49,7 @@ router.get("/player/onair", h(async (req, res) => {
   const stations = await db
     .select()
     .from(stationsTable)
-    .where(eq(stationsTable.active, true));
+    .where(and(eq(stationsTable.active, true), eq(stationsTable.hidden, false)));
 
   // Latest spin per station, with resolved recording + show.
   const latest = await db
@@ -169,7 +169,7 @@ router.get("/player/run/:slug", h(async (req, res) => {
   const [station] = await db
     .select()
     .from(stationsTable)
-    .where(eq(stationsTable.slug, slug))
+    .where(and(eq(stationsTable.slug, slug), eq(stationsTable.hidden, false)))
     .limit(1);
   if (!station) return res.status(404).json({ error: "Station not found" });
 
@@ -372,7 +372,7 @@ router.get("/player/for-you", h(async (req, res) => {
           )
       )::int                                                AS overlap_pct
     FROM   spins s
-    JOIN   stations st ON s.station_id = st.id
+    JOIN   stations st ON s.station_id = st.id AND st.hidden = false
     LEFT JOIN shows sh ON s.show_id    = sh.id
     WHERE  s.station_id IS NOT NULL
       AND  s.played_at  >= NOW() - INTERVAL '90 days'

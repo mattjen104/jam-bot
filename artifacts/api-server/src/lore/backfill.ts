@@ -87,7 +87,7 @@ async function backfillSlice(stationId: number): Promise<number> {
     .from(stationsTable)
     .where(eq(stationsTable.id, stationId))
     .limit(1);
-  if (!station || station.backfillDone) return 0;
+  if (!station || station.backfillDone || station.hidden) return 0;
 
   const history = getHistoryAdapter(station.nowPlayingSource);
   if (!history || !supportsBackfill(station.nowPlayingSource)) return 0;
