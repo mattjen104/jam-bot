@@ -13,6 +13,11 @@ import {
   clearSpinitronWebState,
 } from "./spinitron-web-health.js";
 import {
+  recordFeedFreshnessResult,
+  clearFeedFreshnessState,
+  getFeedFreshnessStaleStations,
+} from "./feed-freshness-health.js";
+import {
   initHostMultiplex,
   tryJoinHostGroup,
   leaveHostGroups,
@@ -22,6 +27,15 @@ import {
   getStationMultiplexTier,
 } from "./host-multiplex.js";
 export { getSpinitronWebStaleStations } from "./spinitron-web-health.js";
+export { getFeedFreshnessStaleStations } from "./feed-freshness-health.js";
+
+/**
+ * History sources with fixed-size feeds (no deep pagination). A poll that
+ * returns zero new spins may mean the source went silent — tracked by the
+ * feed-freshness health module so operators are alerted before listeners
+ * notice an empty timeline.
+ */
+const FEED_FRESHNESS_SOURCES = new Set(["bbc_api", "somafm"]);
 
 /**
  * Minimal, safe ingestion poller. No background-worker infra exists in the
@@ -405,6 +419,35 @@ async function pollStation(station: Station): Promise<void> {
             (firstEnroll ? " (backfill)" : ""),
         );
       }
+
+      // Feed-freshness health tracking for fixed-size, non-paginating sources
+      // (bbc_api, somafm). A poll that returns no new spins after a successful
+      // run is normal during low-traffic periods, but sustained silence beyond
+      // 2 × the poll interval likely means the feed went dark.
+      if (source && FEED_FRESHNESS_SOURCES.has(source)) {
+        const pollIntervalMs = intervalFor(source);
+        const warning = recordFeedFreshnessResult(
+          current.id,
+          current.slug,
+          source,
+          logged > 0 ? "success" : "empty",
+          pollIntervalMs,
+        );
+        if (warning.shouldWarn) {
+          console.warn(
+            "[lore] feed has been silent beyond 2× poll interval — possible outage or API change",
+            {
+              source,
+              stationId: current.id,
+              slug: current.slug,
+              lastSpinAt: warning.lastSpinAt.toISOString(),
+              staleSinceMs: warning.staleSinceMs,
+              thresholdMs: 2 * pollIntervalMs,
+            },
+          );
+        }
+      }
+
       return;
     }
 
@@ -652,4 +695,5 @@ export function unenrollStationPoller(stationId: number): void {
     stationTimers.delete(stationId);
   }
   clearSpinitronWebState(stationId);
+  clearFeedFreshnessState(stationId);
 }

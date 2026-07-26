@@ -70,7 +70,7 @@ import { scrapeAndPopulateList, enrichRecordingReleaseGroups } from "../../lore/
 import { recomputeAllQualityScores } from "../../lore/quality.js";
 import { ingestManualSpin } from "../../lore/resolve.js";
 import { fetchRadioBrowserStation, slugify as rbSlugify } from "../../lore/radio-browser.js";
-import { enrollStationPoller, unenrollStationPoller, getSpinitronWebStaleStations, coverageClassFor } from "../../lore/poller.js";
+import { enrollStationPoller, unenrollStationPoller, getSpinitronWebStaleStations, getFeedFreshnessStaleStations, coverageClassFor } from "../../lore/poller.js";
 import { clearIcyErrorBackoff, isPollable } from "../../lore/adapters.js";
 import { getLeaseAllocation } from "../../lore/socket-leases.js";
 import {
@@ -1302,6 +1302,27 @@ router.get("/admin/spinitron-web-health", h(async (_req, res) => {
       lastNullAt: s.lastNullAt.toISOString(),
       consecutiveNulls: s.consecutiveNulls,
       staleSinceMs: s.staleSinceMs,
+    })),
+  });
+}));
+
+// GET /api/admin/feed-freshness-health — stations whose fixed-size feed
+// (bbc_api, somafm) has been silent for longer than 2× its poll interval.
+// An empty array means all tracked stations have ingested spins recently.
+router.get("/admin/feed-freshness-health", h(async (_req, res) => {
+  const stale = getFeedFreshnessStaleStations();
+  return res.json({
+    staleCount: stale.length,
+    stations: stale.map((s) => ({
+      stationId: s.stationId,
+      slug: s.slug,
+      source: s.source,
+      pollIntervalMs: s.pollIntervalMs,
+      lastSpinAt: s.lastSpinAt?.toISOString() ?? null,
+      lastEmptyAt: s.lastEmptyAt.toISOString(),
+      consecutiveEmpties: s.consecutiveEmpties,
+      staleSinceMs: s.staleSinceMs,
+      thresholdMs: s.thresholdMs,
     })),
   });
 }));
