@@ -200,7 +200,7 @@ export function isJunkMetadata(rawArtist: string, rawTitle: string): boolean {
   return false;
 }
 
-function parseUrl(rawUrl: string): {
+export function parseUrl(rawUrl: string): {
   protocol: "http:" | "https:";
   host: string;
   port: number;
@@ -217,6 +217,141 @@ function parseUrl(rawUrl: string): {
   const port = parsed.port ? Number(parsed.port) : defaultPort;
   const path = (parsed.pathname || "/") + (parsed.search || "");
   return { protocol: parsed.protocol as "http:" | "https:", host: parsed.hostname, port, path };
+}
+
+// ---- Streaming parser (persistent-connection mode) -----------------------
+
+/** Events produced by IcyStreamParser.feed(). */
+export type IcyParserEvent =
+  | { type: "headers"; icyMetaint: number }
+  | { type: "metadata"; streamTitle: string | null }
+  | { type: "error"; kind: "icy_unsupported"; message: string };
+
+/** Cap on accumulated HTTP header bytes before we give up on the response. */
+const MAX_HEADER_BYTES = 64 * 1024;
+
+/**
+ * Incremental ICY stream parser for persistent connections.
+ *
+ * Unlike the one-shot path in fetchIcyMetadata (which Buffer.concats the whole
+ * stream — fine for a single metadata block, fatal on a socket held open for
+ * hours), this parser counts audio bytes with an integer and only ever
+ * allocates metadata blocks (max 255*16 = 4080 bytes) and the HTTP headers
+ * (capped). Feed it raw socket chunks; it returns zero or more events per
+ * chunk. After an `error` event the parser is dead — reconnect with a fresh
+ * instance.
+ */
+export class IcyStreamParser {
+  private state: "headers" | "audio" | "meta-len" | "meta" | "failed" =
+    "headers";
+  private headerChunks: Buffer[] = [];
+  private headerBytes = 0;
+  private icyMetaint = 0;
+  private audioRemaining = 0;
+  private metaRemaining = 0;
+  private metaChunks: Buffer[] = [];
+
+  feed(chunk: Buffer): IcyParserEvent[] {
+    const events: IcyParserEvent[] = [];
+    if (this.state === "failed") return events;
+
+    let offset = 0;
+
+    if (this.state === "headers") {
+      this.headerChunks.push(chunk);
+      this.headerBytes += chunk.length;
+      const full = Buffer.concat(this.headerChunks, this.headerBytes);
+      const sep = full.indexOf("\r\n\r\n");
+      if (sep === -1) {
+        if (this.headerBytes > MAX_HEADER_BYTES) {
+          this.state = "failed";
+          events.push({
+            type: "error",
+            kind: "icy_unsupported",
+            message: "response headers too large",
+          });
+        }
+        return events;
+      }
+
+      const headerStr = full.slice(0, sep).toString("utf8");
+      const statusLine = headerStr.split("\r\n")[0] ?? "";
+      const statusCode = parseInt(statusLine.split(" ")[1] ?? "0", 10);
+      if (statusCode < 200 || statusCode >= 300) {
+        this.state = "failed";
+        events.push({
+          type: "error",
+          kind: "icy_unsupported",
+          message: `HTTP ${statusCode}`,
+        });
+        return events;
+      }
+      const metaintMatch = /icy-metaint:\s*(\d+)/i.exec(headerStr);
+      const metaint = metaintMatch ? parseInt(metaintMatch[1]!, 10) : 0;
+      if (!metaint || metaint <= 0) {
+        this.state = "failed";
+        events.push({
+          type: "error",
+          kind: "icy_unsupported",
+          message: "no icy-metaint header",
+        });
+        return events;
+      }
+
+      this.icyMetaint = metaint;
+      events.push({ type: "headers", icyMetaint: metaint });
+
+      // Continue with the body bytes that arrived alongside the headers,
+      // then release the header accumulation buffers.
+      this.headerChunks = [];
+      this.headerBytes = 0;
+      this.state = "audio";
+      this.audioRemaining = metaint;
+      chunk = full;
+      offset = sep + 4;
+    }
+
+    while (offset < chunk.length) {
+      if (this.state === "audio") {
+        // Count-and-skip: never buffer audio bytes.
+        const skip = Math.min(this.audioRemaining, chunk.length - offset);
+        this.audioRemaining -= skip;
+        offset += skip;
+        if (this.audioRemaining === 0) this.state = "meta-len";
+      } else if (this.state === "meta-len") {
+        const lenByte = chunk[offset]!;
+        offset += 1;
+        this.metaRemaining = lenByte * 16;
+        if (this.metaRemaining === 0) {
+          // Zero-length metadata block — no update; next audio segment.
+          this.audioRemaining = this.icyMetaint;
+          this.state = "audio";
+        } else {
+          this.metaChunks = [];
+          this.state = "meta";
+        }
+      } else if (this.state === "meta") {
+        const take = Math.min(this.metaRemaining, chunk.length - offset);
+        this.metaChunks.push(chunk.slice(offset, offset + take));
+        this.metaRemaining -= take;
+        offset += take;
+        if (this.metaRemaining === 0) {
+          const block = Buffer.concat(this.metaChunks);
+          this.metaChunks = [];
+          events.push({
+            type: "metadata",
+            streamTitle: parseIcyStreamTitle(block),
+          });
+          this.audioRemaining = this.icyMetaint;
+          this.state = "audio";
+        }
+      } else {
+        break;
+      }
+    }
+
+    return events;
+  }
 }
 
 /**

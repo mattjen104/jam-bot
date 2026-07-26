@@ -38,7 +38,7 @@ import { stationArchiveUrl } from "../../lore/adapters.js";
 import { h } from "../../middlewares/asyncHandler.js";
 import { toStation, toNowPlaying, toArchiveRecording, spinDayExpr } from "./shared.js";
 import { spinRunIdExpr } from "../../lore/runs.js";
-import { logSpinIfChanged } from "../../lore/resolve.js";
+import { logSpinIfChanged, spinEvents, type SpinChangedEvent } from "../../lore/resolve.js";
 import { fingerprintStream, fingerprintAvailable } from "../../lore/stream-fingerprint.js";
 import { computeGenreBreakdown, computeDiscoveryScore, labelFromScore } from "../../lore/genre-insights.js";
 
@@ -141,6 +141,39 @@ router.get("/stations/now-playing", h(async (req, res) => {
 
   return res.json(ListStationsNowPlayingResponse.parse({ items }));
 }));
+
+// GET /api/stations/now-playing/stream — Server-Sent Events push of spin
+// changes. One event per persisted spin, fired the moment the resolver writes
+// it (persistent ICY watchers make this near-instant for favorite stations).
+// Payload carries the resolved MBID so clients need no follow-up request.
+// Plain SSE, deliberately outside the OpenAPI/orval surface (EventSource, not
+// fetch). Must be registered before any /stations/:slug route.
+router.get("/stations/now-playing/stream", (req, res) => {
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    // Disable proxy buffering so events flush immediately through nginx-style
+    // proxies (the Replit preview proxy included).
+    "X-Accel-Buffering": "no",
+  });
+  // Initial comment establishes the stream in the browser right away.
+  res.write(":connected\n\n");
+
+  const onSpin = (ev: SpinChangedEvent) => {
+    if (res.writableEnded) return;
+    res.write(`data: ${JSON.stringify(ev)}\n\n`);
+  };
+  spinEvents.on("spin-changed", onSpin);
+
+  // Keep-alive comment every 30s so idle proxies don't kill the connection.
+  const ping = setInterval(() => res.write(":ping\n\n"), 30_000);
+
+  req.on("close", () => {
+    clearInterval(ping);
+    spinEvents.off("spin-changed", onSpin);
+  });
+});
 
 // GET /api/stations/at/:date/now-playing — path-param variant of the above.
 // The OpenAPI client generates path-param hooks for typed date routing; this

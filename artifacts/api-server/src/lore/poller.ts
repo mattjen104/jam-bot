@@ -6,7 +6,8 @@ import {
   isPollable,
 } from "./adapters.js";
 import { logSpinIfChanged, ingestRawSpins } from "./resolve.js";
-import type { HistoryAdapter, RawSpin } from "./types.js";
+import { IcyWatcher } from "./icy-watcher.js";
+import type { HistoryAdapter, RawSpin, NowPlayingRaw } from "./types.js";
 import {
   recordSpinitronWebResult,
   clearSpinitronWebState,
@@ -77,6 +78,79 @@ const inFlight = new Set<number>();
  * Allows DELETE to immediately stop polling without waiting for a restart.
  */
 const stationTimers = new Map<number, NodeJS.Timeout[]>();
+
+/**
+ * Persistent ICY watchers, keyed by station id. radio_browser_icy stations
+ * get one of these instead of a poll interval — a held-open socket that emits
+ * the moment StreamTitle changes (instant now-playing, no 30s worst case).
+ * On `persistent-failed` the station falls back to the ordinary interval poll.
+ */
+const stationWatchers = new Map<number, IcyWatcher>();
+
+/**
+ * Start a persistent ICY watcher for a station. Returns true when a watcher
+ * was started (station has a usable streamUrl), false when the caller should
+ * use interval polling instead.
+ */
+function startStationWatcher(station: Station): boolean {
+  const config = (station.nowPlayingConfig ?? {}) as Record<string, unknown>;
+  const streamUrl =
+    typeof config.streamUrl === "string" ? config.streamUrl : null;
+  if (!streamUrl) return false;
+
+  const watcher = new IcyWatcher(station.slug, streamUrl);
+  stationWatchers.set(station.id, watcher);
+
+  watcher.on("metadata-changed", (parsed: { rawArtist?: string; rawTitle: string; durationMs?: number; sourceRecordingId?: string }) => {
+    const np: NowPlayingRaw = {
+      rawArtist: parsed.rawArtist ?? "",
+      rawTitle: parsed.rawTitle,
+      ...(parsed.durationMs ? { durationMs: parsed.durationMs } : {}),
+      ...(parsed.sourceRecordingId
+        ? { recordingId: parsed.sourceRecordingId }
+        : {}),
+    };
+    void logSpinIfChanged(station, np).then((wrote) => {
+      if (wrote) {
+        console.info(
+          `[lore] ${station.slug} now playing (live): ${np.rawArtist} — ${np.rawTitle}`,
+        );
+      }
+    });
+  });
+
+  watcher.on("persistent-failed", () => {
+    stationWatchers.delete(station.id);
+    console.warn(
+      `[lore] ${station.slug}: persistent ICY failed; falling back to interval polling`,
+    );
+    scheduleIntervalPolling(station, 0);
+  });
+
+  watcher.start();
+  return true;
+}
+
+/** Stop and remove a station's persistent watcher, when one exists. */
+function stopStationWatcher(stationId: number): void {
+  const watcher = stationWatchers.get(stationId);
+  if (!watcher) return;
+  watcher.stop();
+  stationWatchers.delete(stationId);
+}
+
+/** Schedule the classic interval-poll loop for a station. */
+function scheduleIntervalPolling(station: Station, delayMs: number): void {
+  const period = intervalFor(station.nowPlayingSource);
+  const kickoff = setTimeout(() => {
+    void pollStation(station);
+    const interval = setInterval(() => void pollStation(station), period);
+    timers.push(interval);
+    trackStationTimer(station.id, interval);
+  }, delayMs);
+  timers.push(kickoff);
+  trackStationTimer(station.id, kickoff);
+}
 
 function trackStationTimer(stationId: number, handle: NodeJS.Timeout): void {
   const list = stationTimers.get(stationId) ?? [];
@@ -221,18 +295,30 @@ export async function startLorePoller(): Promise<void> {
   const pollable = stations.filter((s) => isPollable(s.nowPlayingSource));
   console.info(`[lore] starting pollers for ${pollable.length} station(s)`);
 
+  // Stagger watcher socket dials — opening hundreds of TCP/TLS connections in
+  // the same tick saturates the dialer and produces a boot-time storm of
+  // connect timeouts. 250ms apart spreads a few hundred dials over ~1 min
+  // while interval pollers keep their own (coarser) stagger.
+  const WATCHER_STAGGER_MS = 250;
+  let watcherIndex = 0;
   pollable.forEach((station, i) => {
-    const period = intervalFor(station.nowPlayingSource);
-    const kickoff = setTimeout(() => {
-      void pollStation(station);
-      const interval = setInterval(() => void pollStation(station), period);
-      timers.push(interval);
-      // Register in stationTimers so unenrollStationPoller can cancel
-      // boot-time loops, not just runtime-enrolled ones.
-      trackStationTimer(station.id, interval);
-    }, i * STAGGER_MS);
-    timers.push(kickoff);
-    trackStationTimer(station.id, kickoff);
+    // radio_browser_icy stations get a persistent watcher (instant metadata)
+    // when a streamUrl is available; everything else keeps interval polling.
+    if (station.nowPlayingSource === "radio_browser_icy") {
+      const config = (station.nowPlayingConfig ?? {}) as Record<string, unknown>;
+      if (typeof config.streamUrl === "string" && config.streamUrl) {
+        const delay = watcherIndex++ * WATCHER_STAGGER_MS;
+        const handle = setTimeout(() => {
+          if (!startStationWatcher(station)) {
+            scheduleIntervalPolling(station, 0);
+          }
+        }, delay);
+        timers.push(handle);
+        trackStationTimer(station.id, handle);
+        return;
+      }
+    }
+    scheduleIntervalPolling(station, i * STAGGER_MS);
   });
 }
 
@@ -240,6 +326,8 @@ export async function startLorePoller(): Promise<void> {
 export function stopLorePoller(): void {
   for (const t of timers) clearTimeout(t);
   timers.length = 0;
+  for (const watcher of stationWatchers.values()) watcher.stop();
+  stationWatchers.clear();
   started = false;
 }
 
@@ -260,15 +348,13 @@ export function enrollStationPoller(station: Station): void {
   // Clear any existing timers for this station so re-enrollment (e.g. admin
   // calling enroll twice for the same UUID) doesn't create duplicate loops.
   unenrollStationPoller(station.id);
-  const period = intervalFor(station.nowPlayingSource);
-  const kickoff = setTimeout(() => {
-    void pollStation(station);
-    const interval = setInterval(() => void pollStation(station), period);
-    timers.push(interval);
-    trackStationTimer(station.id, interval);
-  }, 0);
-  timers.push(kickoff);
-  trackStationTimer(station.id, kickoff);
+  if (
+    station.nowPlayingSource === "radio_browser_icy" &&
+    startStationWatcher(station)
+  ) {
+    return;
+  }
+  scheduleIntervalPolling(station, 0);
 }
 
 /**
@@ -277,9 +363,11 @@ export function enrollStationPoller(station: Station): void {
  * without waiting for a process restart.
  */
 export function unenrollStationPoller(stationId: number): void {
+  stopStationWatcher(stationId);
   const handles = stationTimers.get(stationId);
-  if (!handles) return;
-  for (const h of handles) clearTimeout(h);
-  stationTimers.delete(stationId);
+  if (handles) {
+    for (const h of handles) clearTimeout(h);
+    stationTimers.delete(stationId);
+  }
   clearSpinitronWebState(stationId);
 }

@@ -8,6 +8,7 @@ import {
   type Station,
 } from "@workspace/db";
 import { eq, and, desc, inArray, sql, gte } from "drizzle-orm";
+import { EventEmitter } from "node:events";
 import {
   resolveRecordingId,
   resolveRecordingByText,
@@ -557,6 +558,26 @@ async function persistSpin(args: {
   return inserted.length > 0;
 }
 
+// ---- Spin change pub-sub --------------------------------------------------
+
+/** Payload emitted on `spin-changed` when a new spin is persisted. */
+export interface SpinChangedEvent {
+  stationId: number;
+  stationSlug: string;
+  rawArtist: string;
+  rawTitle: string;
+  /** Resolved MBID (or synthetic sp: id), null when unresolved. */
+  mbid: string | null;
+}
+
+/**
+ * Emits `spin-changed` (SpinChangedEvent) whenever logSpinIfChanged persists a
+ * genuinely-new spin. Powers the SSE now-playing stream — subscribers are one
+ * per connected browser, so the listener cap is raised well above the default.
+ */
+export const spinEvents = new EventEmitter();
+spinEvents.setMaxListeners(1000);
+
 // ---- Ingestion paths ----------------------------------------------------
 
 /**
@@ -638,13 +659,25 @@ export async function logSpinIfChanged(
 
     const showId = np.show ? await upsertShow(station.id, np.show) : null;
 
-    return await persistSpin({
+    const wrote = await persistSpin({
       station,
       resolution: r,
       raw: np,
       showId,
       source: station.nowPlayingSource ?? "unknown",
     });
+    if (wrote) {
+      // MBID is fully resolved before persist, so subscribers (SSE clients)
+      // get everything they need without a follow-up round-trip.
+      spinEvents.emit("spin-changed", {
+        stationId: station.id,
+        stationSlug: station.slug,
+        rawArtist: np.rawArtist,
+        rawTitle: np.rawTitle,
+        mbid: r.mbid,
+      } satisfies SpinChangedEvent);
+    }
+    return wrote;
   } catch (err) {
     console.error("[lore] logSpinIfChanged failed", station.slug, err);
     return false;

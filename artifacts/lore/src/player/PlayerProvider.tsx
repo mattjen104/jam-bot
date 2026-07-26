@@ -877,6 +877,18 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(id);
   }, [active, playbackMode, hasPinnedDevice]);
 
+  // Push-channel trigger hooks: the SSE effect below calls these to fire an
+  // immediate now-playing re-check when the server pushes a spin change for
+  // the matching station. Each polling effect installs its own tick closure
+  // (capturing its local state) and clears it on teardown; the 5s intervals
+  // stay as fallback when SSE is unavailable.
+  const ridePollTriggerRef = useRef<{ slug: string; tick: () => void } | null>(
+    null,
+  );
+  const castPollTriggerRef = useRef<{ slug: string; tick: () => void } | null>(
+    null,
+  );
+
   // Now-playing subscription for live+service-ride: advance the queue when
   // the station moves to a new MBID, rather than polling Spotify for track-end.
   // This keeps the ride in sync with the actual broadcast clock without needing
@@ -891,7 +903,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     let lastSeenMbid: string | null = null;
     let initialized = false;
 
-    const id = setInterval(() => {
+    const tick = () => {
       void getStationNowPlaying(slug)
         .then((np) => {
           if (token !== rideRef.current) return;
@@ -921,9 +933,17 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         .catch(() => {
           // Best-effort — a poll failure just skips this tick.
         });
-    }, 5000);
+    };
 
-    return () => clearInterval(id);
+    const id = setInterval(tick, 5000);
+    // Expose the tick to the SSE push channel so a spin-changed event
+    // triggers an immediate re-check instead of waiting up to 5s.
+    ridePollTriggerRef.current = { slug, tick };
+
+    return () => {
+      clearInterval(id);
+      ridePollTriggerRef.current = null;
+    };
   }, [active, isLiveSvcRide]);
 
   // --- Live radio casting (no ride): resolve the broadcast to Spotify -----
@@ -1056,6 +1076,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
     tick(); // cast the currently-airing track right away
     const id = setInterval(tick, 5000);
+    // Expose the tick to the SSE push channel for instant track changes.
+    castPollTriggerRef.current = { slug: radioSlug, tick };
 
     // Expose a retry for the current track: re-issue the Spotify play after
     // a retryable fallback. Clears the rate-limit back-off so manual retries
@@ -1072,6 +1094,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       clearInterval(id);
       retryTimers.forEach(clearTimeout);
       castRetryRef.current = null;
+      castPollTriggerRef.current = null;
       setCastStatus("off");
       setCastFallbackReason(null);
       setCastPaused(false);
@@ -1085,6 +1108,38 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [castEligible, radioSlug, spotify.pinnedDevice?.id]);
+
+  // --- SSE push channel: instant now-playing updates ---------------------
+  // One EventSource against the server's spin-changed stream, open only while
+  // something is actually consuming now-playing data (a live-service ride or
+  // an active cast). Each event names the station whose spin changed; when it
+  // matches a subscribed effect's station we fire that effect's tick
+  // immediately instead of waiting for its 5s fallback interval.
+  const wantsSse = (active && isLiveSvcRide) || castEligible;
+  useEffect(() => {
+    if (!wantsSse) return undefined;
+    if (typeof EventSource === "undefined") return undefined;
+
+    const es = new EventSource("/api/stations/now-playing/stream");
+    es.onmessage = (msg) => {
+      let slug: string | null = null;
+      try {
+        const data = JSON.parse(msg.data) as { stationSlug?: string };
+        slug = data.stationSlug ?? null;
+      } catch {
+        return;
+      }
+      if (!slug) return;
+      const ride = ridePollTriggerRef.current;
+      if (ride && ride.slug === slug) ride.tick();
+      const cast = castPollTriggerRef.current;
+      if (cast && cast.slug === slug) cast.tick();
+    };
+    // No onerror handling needed: EventSource auto-reconnects, and the 5s
+    // polling intervals remain the correctness backstop throughout.
+
+    return () => es.close();
+  }, [wantsSse]);
 
   /** Pause/resume the cast on the listener's Spotify (player-bar toggle). */
   const castTogglePause = useCallback(() => {
