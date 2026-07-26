@@ -54,6 +54,7 @@
 - [Lore webplayer parallel surface](lore-webplayer-surface.md) — /player routes bare (no AppLayout/PlayerDock), plain-JSON /api/player/* read-models (no orval), .wp-scoped theme; new sub-routes must live under /player/.
 - [Spotify app-wide rate limit vs casting](spotify-app-rate-limit.md) — 429s are per client-id across ALL tokens; background search fallback can break casting, fixed by global cooldown in appClient.
 - [Instant now-playing (ICY watchers + SSE)](lore-instant-nowplaying-sse.md) — persistent sockets need the incremental parser + staggered dials; SSE route stays outside orval; 5s polls remain the backstop.
+- [Multiplexed now-playing tier](lore-host-multiplex.md) — probe-once host classification (atomic jsonb merge), route via the poller's single tier function, hooks before routing, reenroll must be watcher-aware, filter "Unknown" placeholders.
 - [Crossing-score socket leasing](lore-socket-leases.md) — poller lease set is the ONLY truth; scheduler map is display-only and must prune via isLeasedStation; all watcher starts must use the mount-preference helper.
 - [Lore station curation flags](lore-station-curation-flags.md) — favorite gates ICY watchers (soft cap 40), hidden = soft-hide + poll stop; every new listener-facing query must add hidden=false (no central predicate).
 - [Blog picker identity = feedUrl](blog-picker-identity.md) — blog ingest must match pickers by sourceRef feedUrl, never slugified name, or seeded handles fork into duplicates every poll; tolerant flag lives in sourceRef.

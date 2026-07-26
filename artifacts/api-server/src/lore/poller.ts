@@ -12,6 +12,14 @@ import {
   recordSpinitronWebResult,
   clearSpinitronWebState,
 } from "./spinitron-web-health.js";
+import {
+  initHostMultiplex,
+  tryJoinHostGroup,
+  leaveHostGroups,
+  queueHostProbe,
+  backfillHostProbes,
+  stopHostMultiplex,
+} from "./host-multiplex.js";
 export { getSpinitronWebStaleStations } from "./spinitron-web-health.js";
 
 /**
@@ -170,7 +178,7 @@ function startStationWatcher(station: Station): boolean {
     console.warn(
       `[lore] ${station.slug}: persistent ICY failed; falling back to interval polling`,
     );
-    scheduleIntervalPolling(station, 0);
+    routePollingTier(station, 0);
   });
 
   watcher.start();
@@ -183,6 +191,22 @@ function stopStationWatcher(stationId: number): void {
   if (!watcher) return;
   watcher.stop();
   stationWatchers.delete(stationId);
+}
+
+/**
+ * Route a station into the cheapest non-socket tier. Multiplexed host
+ * coverage (one Icecast status poll or AzuraCast SSE connection per host)
+ * wins when the station's host is classified for it; otherwise classic
+ * per-station interval polling. Unclassified ICY stations get a one-time
+ * background host probe (persisted; re-routes live on success) while
+ * interval polling covers them in the meantime.
+ */
+function routePollingTier(station: Station, delayMs: number): void {
+  if (station.nowPlayingSource === "radio_browser_icy") {
+    if (tryJoinHostGroup(station)) return;
+    queueHostProbe(station); // no-op when already classified as "none"
+  }
+  scheduleIntervalPolling(station, delayMs);
 }
 
 /** Schedule the classic interval-poll loop for a station. */
@@ -344,6 +368,20 @@ export async function startLorePoller(): Promise<void> {
   );
   console.info(`[lore] starting pollers for ${pollable.length} station(s)`);
 
+  // Install multiplex hooks BEFORE any routing/probing so a fast probe can
+  // never complete against the default no-op hooks (which would leave a
+  // classified station stuck on interval polling until the next restart).
+  // The reenroll hook is watcher-aware: a station that acquired a pinned or
+  // leased persistent watcher while its probe was in flight keeps it — the
+  // persisted classification simply applies at the next demotion/boot.
+  initHostMultiplex({
+    fallback: (station) => scheduleIntervalPolling(station, 0),
+    reenroll: (station) => {
+      if (stationWatchers.has(station.id)) return;
+      enrollStationPoller(station);
+    },
+  });
+
   // Stagger watcher socket dials — opening hundreds of TCP/TLS connections in
   // the same tick saturates the dialer and produces a boot-time storm of
   // connect timeouts. 250ms apart spreads a few hundred dials over ~1 min
@@ -361,7 +399,7 @@ export async function startLorePoller(): Promise<void> {
         const delay = watcherIndex++ * WATCHER_STAGGER_MS;
         const handle = setTimeout(() => {
           if (!startStationWatcher(station)) {
-            scheduleIntervalPolling(station, 0);
+            routePollingTier(station, 0);
           }
         }, delay);
         timers.push(handle);
@@ -369,8 +407,12 @@ export async function startLorePoller(): Promise<void> {
         return;
       }
     }
-    scheduleIntervalPolling(station, i * STAGGER_MS);
+    routePollingTier(station, i * STAGGER_MS);
   });
+
+  // One-off backfill for stations enrolled before host classification existed;
+  // no-ops for already-classified rows, so steady-state boots cost nothing.
+  backfillHostProbes(pollable);
 }
 
 /** Stop all pollers (used in tests / graceful shutdown). */
@@ -379,6 +421,7 @@ export function stopLorePoller(): void {
   timers.length = 0;
   for (const watcher of stationWatchers.values()) watcher.stop();
   stationWatchers.clear();
+  stopHostMultiplex();
   started = false;
 }
 
@@ -409,7 +452,7 @@ export function enrollStationPoller(station: Station): void {
   ) {
     return;
   }
-  scheduleIntervalPolling(station, 0);
+  routePollingTier(station, 0);
 }
 
 /**
@@ -433,7 +476,7 @@ export function leaseStationWatcher(station: Station): boolean {
   leasedIds.add(station.id);
   if (!startStationWatcher(station)) {
     leasedIds.delete(station.id);
-    scheduleIntervalPolling(station, 0);
+    routePollingTier(station, 0);
     return false;
   }
   return true;
@@ -447,7 +490,7 @@ export function leaseStationWatcher(station: Station): boolean {
 export function releaseStationLease(station: Station): void {
   if (!leasedIds.delete(station.id)) return;
   unenrollStationPoller(station.id);
-  if (!station.hidden) scheduleIntervalPolling(station, 0);
+  if (!station.hidden) routePollingTier(station, 0);
 }
 
 /**
@@ -458,6 +501,7 @@ export function releaseStationLease(station: Station): void {
 export function unenrollStationPoller(stationId: number): void {
   stopStationWatcher(stationId);
   leasedIds.delete(stationId);
+  leaveHostGroups(stationId);
   const handles = stationTimers.get(stationId);
   if (handles) {
     for (const h of handles) clearTimeout(h);

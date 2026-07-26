@@ -185,6 +185,11 @@ export function isJunkMetadata(rawArtist: string, rawTitle: string): boolean {
   ];
   if (BREAK_PHRASES.some((p) => combined.includes(p))) return true;
 
+  // Icecast placeholder when a mount carries no metadata: bare "Unknown"
+  // (often with an empty artist). No real track is titled just "Unknown"
+  // with no artist attached.
+  if (!rawArtist.trim() && /^unknown$/i.test(rawTitle.trim())) return true;
+
   // Purely numeric entries — station ID counters, timestamp codes, etc.
   // No real song title or artist name is just digits.
   if (/^\d+$/.test(rawArtist) || /^\d+$/.test(rawTitle)) return true;
