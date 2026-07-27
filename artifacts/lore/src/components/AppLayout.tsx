@@ -63,10 +63,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <Link
             href="/admin"
             className="mb-3 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-widest transition-colors"
-            style={{ color: "hsl(var(--faint))" }}
+            style={{ color: isActive("/admin", false, location) ? "hsl(var(--dim))" : "hsl(var(--faint))" }}
             data-testid="link-admin"
           >
-            <Lock className="h-2.5 w-2.5 shrink-0" />
+            <Lock
+              className="h-2.5 w-2.5 shrink-0"
+              style={{ color: isActive("/admin", false, location) ? "hsl(var(--primary))" : "hsl(var(--faint))" }}
+            />
             Admin
           </Link>
           <p
@@ -111,10 +114,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <Link
             href="/admin"
             className="flex items-center gap-1 rounded-md px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-wider transition-colors"
-            style={{ color: "hsl(var(--faint))" }}
+            style={{ color: isActive("/admin", false, location) ? "hsl(var(--dim))" : "hsl(var(--faint))" }}
             data-testid="link-admin-mobile"
           >
-            <Lock className="h-2.5 w-2.5 shrink-0" />
+            <Lock
+              className="h-2.5 w-2.5 shrink-0"
+              style={{ color: isActive("/admin", false, location) ? "hsl(var(--primary))" : "hsl(var(--faint))" }}
+            />
             Admin
           </Link>
         </nav>
