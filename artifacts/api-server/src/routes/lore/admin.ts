@@ -63,7 +63,7 @@ import {
   blogListCandidatesTable,
   criCandidatesTable,
 } from "@workspace/db";
-import { eq, and, asc, desc, sql, count } from "drizzle-orm";
+import { eq, and, asc, desc, sql, count, isNull, gt } from "drizzle-orm";
 import { wireListExtractor } from "../../lore/list-wire.js";
 import { processListCandidate, writeCandidateOutcome } from "../../lore/list-candidates.js";
 import { scrapeAndPopulateList, enrichRecordingReleaseGroups } from "../../lore/list-scraper.js";
@@ -1534,23 +1534,54 @@ router.get("/admin/stations/flags", h(async (_req, res) => {
 // allocation: pinned favorites, active crossing-score leases (with scores and
 // expiry) and the next lease re-evaluation time. Plain JSON (outside the
 // OpenAPI surface — consumed only by the admin UI via plain fetch).
+//
+// Also includes `timezoneGaps`: stations that have scraped schedule data but
+// no iana_timezone — these silently fall back to the station-wide crossing
+// score in scoreCrossingCandidates() and never benefit from per-show affinity
+// scoring.  Surfacing them here lets an admin spot and fix the gap (e.g. by
+// adding city/country) without having to query the DB directly.
 router.get("/admin/stations/allocation", h(async (_req, res) => {
   const { budget, leases, nextEvaluationAt } = getLeaseAllocation();
-  const pinned = await db
-    .select({
-      id: stationsTable.id,
-      slug: stationsTable.slug,
-      name: stationsTable.name,
-    })
-    .from(stationsTable)
-    .where(
-      and(
-        eq(stationsTable.favorite, true),
-        eq(stationsTable.hidden, false),
-        eq(stationsTable.nowPlayingSource, "radio_browser_icy"),
-      ),
-    )
-    .orderBy(asc(stationsTable.name));
+  const [pinned, timezoneGaps] = await Promise.all([
+    db
+      .select({
+        id: stationsTable.id,
+        slug: stationsTable.slug,
+        name: stationsTable.name,
+      })
+      .from(stationsTable)
+      .where(
+        and(
+          eq(stationsTable.favorite, true),
+          eq(stationsTable.hidden, false),
+          eq(stationsTable.nowPlayingSource, "radio_browser_icy"),
+        ),
+      )
+      .orderBy(asc(stationsTable.name)),
+    // Stations with at least one scraped show but no stored IANA timezone.
+    // These are the "silent fallback" bucket: scoreCrossingCandidates() skips
+    // the show-scoped path for them because the currently_airing CTE requires
+    // iana_timezone IS NOT NULL to convert wall-clock time to local station time.
+    db
+      .select({
+        id: stationsTable.id,
+        slug: stationsTable.slug,
+        name: stationsTable.name,
+        city: stationsTable.city,
+        country: stationsTable.country,
+        upcomingShowCount: stationsTable.upcomingShowCount,
+      })
+      .from(stationsTable)
+      .where(
+        and(
+          isNull(stationsTable.ianaTimezone),
+          gt(stationsTable.upcomingShowCount, 0),
+          eq(stationsTable.active, true),
+          eq(stationsTable.hidden, false),
+        ),
+      )
+      .orderBy(asc(stationsTable.name)),
+  ]);
   return res.json({
     budget,
     pinnedCount: pinned.length,
@@ -1559,6 +1590,17 @@ router.get("/admin/stations/allocation", h(async (_req, res) => {
     pinned,
     leases,
     nextEvaluationAt,
+    /** Stations with scraped schedule data but no iana_timezone — they cannot
+     *  enter the show-scoped scoring path and silently fall back to the
+     *  station-wide crossing average. */
+    timezoneGaps: timezoneGaps.map((r) => ({
+      id: r.id,
+      slug: r.slug,
+      name: r.name,
+      city: r.city ?? null,
+      country: r.country ?? null,
+      upcomingShowCount: r.upcomingShowCount,
+    })),
   });
 }));
 

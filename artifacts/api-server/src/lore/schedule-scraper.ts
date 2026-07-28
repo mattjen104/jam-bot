@@ -2,6 +2,7 @@ import { db, stationsTable, scrapedShowsTable } from "@workspace/db";
 import { and, eq, isNotNull, lt, or, isNull, sql } from "drizzle-orm";
 import { isCrawlBlocked } from "./blog-crossref.js";
 import { extractScheduleRaw } from "./schedule-llm.js";
+import { inferTimezone } from "./timezone.js";
 
 /**
  * Weekly-schedule scraper — a second, slower-paced sibling to
@@ -49,6 +50,11 @@ interface ScrapeTarget {
   /** Pre-known schedule page URL. When set, the scraper fetches this directly
    *  and skips the homepage fetch + link-discovery step entirely. */
   scheduleUrl: string | null;
+  /** City and country, used to backfill iana_timezone after a successful scrape. */
+  city: string | null;
+  country: string | null;
+  /** Already-stored timezone, when non-null the backfill is skipped. */
+  ianaTimezone: string | null;
 }
 
 export interface ExtractedShow {
@@ -76,6 +82,9 @@ async function loadStaleTargets(limit: number): Promise<ScrapeTarget[]> {
       slug: stationsTable.slug,
       homepageUrl: stationsTable.homepageUrl,
       scheduleUrl: stationsTable.scheduleUrl,
+      city: stationsTable.city,
+      country: stationsTable.country,
+      ianaTimezone: stationsTable.ianaTimezone,
     })
     .from(stationsTable)
     .where(
@@ -103,6 +112,9 @@ async function loadStaleTargets(limit: number): Promise<ScrapeTarget[]> {
       slug: r.slug,
       homepageUrl: r.homepageUrl,
       scheduleUrl: r.scheduleUrl ?? null,
+      city: r.city ?? null,
+      country: r.country ?? null,
+      ianaTimezone: r.ianaTimezone ?? null,
     }));
 }
 
@@ -371,6 +383,32 @@ export async function scrapeStationSchedule(
   } catch (err) {
     console.warn(`[schedule-scraper] write failed for ${target.slug}`, err);
     return fail();
+  }
+
+  // Backfill iana_timezone for stations that gained scraped_shows but have no
+  // timezone yet.  Without a timezone, scoreCrossingCandidates() cannot enter
+  // the show-scoped scoring path and silently falls back to the station-wide
+  // average — so any station that has schedule data should also have a
+  // timezone.  This runs outside the schedule transaction (best-effort: a
+  // failure here must not roll back the freshly-written shows) and is a
+  // no-op when the timezone was already set.
+  if (shows.length > 0 && !target.ianaTimezone) {
+    const tz = inferTimezone(target.city, target.country);
+    if (tz) {
+      try {
+        await db
+          .update(stationsTable)
+          .set({ ianaTimezone: tz })
+          .where(eq(stationsTable.id, target.id));
+        console.info(
+          `[schedule-scraper] backfilled ianaTimezone="${tz}" for ${target.slug} after schedule scrape`,
+        );
+      } catch (err) {
+        // Non-fatal — the timezone is a best-effort optimisation; the show
+        // data was already committed successfully.
+        console.warn(`[schedule-scraper] timezone backfill failed for ${target.slug}`, err);
+      }
+    }
   }
 
   return { scraped: true, showCount: shows.length };
