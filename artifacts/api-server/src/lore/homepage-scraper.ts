@@ -59,6 +59,73 @@ async function loadStaleTargets(limit: number): Promise<ScrapeTarget[]> {
     .map((r) => ({ id: r.id, slug: r.slug, homepageUrl: r.homepageUrl! }));
 }
 
+/**
+ * Scan the homepage HTML for a donate / support / membership link.
+ * Pure, no I/O. Resolves relative hrefs against `baseUrl`.
+ *
+ * Strategy (prefer specificity over recall to reduce false positives):
+ *   1. Exact-path keyword in href (`/donate`, `/support`, `/membership`,
+ *      `/pledge`, `/give`, `/contribute`, `/sustain`, `/fund`).
+ *   2. Link-text keyword match when the href at least starts with http/https
+ *      and is not an anchor-only `#…` href.
+ * Anchor-only hrefs (`#…`) are always skipped.
+ */
+export function extractDonateLink(
+  html: string,
+  baseUrl: string,
+): string | null {
+  // Keywords for href path matching (exact path segment match, lowercase).
+  const hrefPathKeywords =
+    /\/(donate|support|membership|pledge|give|contribute|sustain|fund)(\/|$|\?|#)/i;
+  // Keywords for link-text matching (looser — only used as a fallback).
+  const textKeywords =
+    /\b(donate|support|membership|pledge|contribute|sustain|give|fund)\b/i;
+
+  // Extract all <a href="...">...</a> pairs from the HTML.
+  // We only need href and the text content between the tags.
+  const anchorRe = /<a[^>]+href=["']([^"'#][^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi;
+
+  let hrefFallback: string | null = null;
+
+  let match: RegExpExecArray | null;
+  while ((match = anchorRe.exec(html)) !== null) {
+    const rawHref = match[1].trim();
+    // Skip anchor-only hrefs.
+    if (rawHref.startsWith("#")) continue;
+
+    // Resolve to an absolute URL (relative paths are common on homepages).
+    let resolved: string;
+    try {
+      resolved = new URL(rawHref, baseUrl).href;
+    } catch {
+      continue;
+    }
+    // Only accept http(s) links.
+    if (!/^https?:\/\//i.test(resolved)) continue;
+
+    // Tier 1: path-based match — strongest signal, return immediately.
+    const parsedPath = (() => {
+      try {
+        return new URL(resolved).pathname;
+      } catch {
+        return "";
+      }
+    })();
+    if (hrefPathKeywords.test(parsedPath)) return resolved;
+
+    // Tier 2: link-text match — store the first candidate and keep scanning
+    // in case a tier-1 hit appears later.
+    if (hrefFallback === null) {
+      const linkText = match[2].replace(/<[^>]*>/g, " ").trim();
+      if (textKeywords.test(linkText)) {
+        hrefFallback = resolved;
+      }
+    }
+  }
+
+  return hrefFallback;
+}
+
 /** Pull a title/meta-description-sized excerpt out of raw HTML. Pure, no I/O. */
 export function extractBlurb(html: string): string | null {
   // Prefer an explicit meta description — it's the site's own summary.
@@ -145,6 +212,11 @@ export async function scrapeStationHomepage(
     }
     const html = await res.text();
     const blurb = extractBlurb(html);
+    const donateLink = extractDonateLink(html, target.homepageUrl);
+
+    // Write blurb unconditionally (overwriting stale text is fine).
+    // Write donate_url only when the DB value is currently null — manual
+    // entries must never be clobbered.
     await db
       .update(stationsTable)
       .set({
@@ -152,6 +224,22 @@ export async function scrapeStationHomepage(
         homepageScrapedAt: new Date(),
       })
       .where(eq(stationsTable.id, target.id));
+
+    if (donateLink) {
+      const updated = await db
+        .update(stationsTable)
+        .set({ donateUrl: donateLink })
+        .where(
+          and(eq(stationsTable.id, target.id), isNull(stationsTable.donateUrl)),
+        )
+        .returning({ id: stationsTable.id });
+      if (updated.length > 0) {
+        console.info(
+          `[homepage-scraper] donate link found for ${target.slug}: ${donateLink}`,
+        );
+      }
+    }
+
     return { scraped: Boolean(blurb), blocked: false };
   } catch (err) {
     console.warn(`[homepage-scraper] fetch failed for ${target.slug}`, err);
@@ -165,6 +253,26 @@ export async function scrapeStationHomepage(
 
 let started = false;
 let timer: NodeJS.Timeout | null = null;
+
+/**
+ * OPERATOR NOTE — force an immediate donate-link back-fill pass:
+ *
+ * The scraper only visits stations whose `homepage_scraped_at` is null or
+ * older than 30 days. To force every station that currently lacks a
+ * `donate_url` to be re-scraped right away (without waiting for the normal
+ * 30-day cadence), run:
+ *
+ *   UPDATE stations
+ *   SET    homepage_scraped_at = NULL
+ *   WHERE  donate_url IS NULL
+ *     AND  active = true
+ *     AND  hidden = false
+ *     AND  homepage_url IS NOT NULL;
+ *
+ * The scraper loop will pick them up in batches of 5 every 20 s.
+ * No other changes are needed — `donate_url` writes are conditional on the
+ * column being NULL, so manually-curated entries are safe.
+ */
 
 /** Start the homepage-scraper loop. Idempotent — safe to call once at boot. */
 export function startHomepageScraper(): void {
