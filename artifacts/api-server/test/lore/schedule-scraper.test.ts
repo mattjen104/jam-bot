@@ -13,8 +13,39 @@ import { describe, it, expect, vi } from "vitest";
 import {
   probeScheduleUrl,
   homepageLooksLikeSchedule,
+  isScheduleUrlPermanentlyGone,
   SCHEDULE_PATH_PROBES,
 } from "../../src/lore/schedule-scraper.js";
+
+// ---------------------------------------------------------------------------
+// isScheduleUrlPermanentlyGone
+// ---------------------------------------------------------------------------
+
+describe("isScheduleUrlPermanentlyGone", () => {
+  it("returns true for HTTP 404 (page definitively gone)", () => {
+    expect(isScheduleUrlPermanentlyGone(404)).toBe(true);
+  });
+
+  it("returns true for HTTP 410 (page permanently removed)", () => {
+    expect(isScheduleUrlPermanentlyGone(410)).toBe(true);
+  });
+
+  it("returns false for HTTP 500 (transient server error)", () => {
+    expect(isScheduleUrlPermanentlyGone(500)).toBe(false);
+  });
+
+  it("returns false for HTTP 503 (transient unavailability)", () => {
+    expect(isScheduleUrlPermanentlyGone(503)).toBe(false);
+  });
+
+  it("returns false for null (timeout or network error — transient)", () => {
+    expect(isScheduleUrlPermanentlyGone(null)).toBe(false);
+  });
+
+  it("returns false for HTTP 401 (auth-gated page, not gone)", () => {
+    expect(isScheduleUrlPermanentlyGone(401)).toBe(false);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // probeScheduleUrl
@@ -207,5 +238,34 @@ describe("homepageLooksLikeSchedule", () => {
 
   it("returns false for an empty string", () => {
     expect(homepageLooksLikeSchedule("")).toBe(false);
+  });
+
+  // Full day names
+  it("returns true when 3+ distinct full day names and 2+ HH:MM times appear", () => {
+    const html = `<html><body>
+      <p>Monday 09:00 – 11:00 Morning Mix</p>
+      <p>Wednesday 14:00 – 16:00 Afternoon Drive</p>
+      <p>Friday 20:00 – 22:00 Night Vibes</p>
+    </body></html>`;
+    expect(homepageLooksLikeSchedule(html)).toBe(true);
+  });
+
+  it("counts 'Monday' and 'Mon' as the same day toward the threshold", () => {
+    // Only two distinct days (Monday≡Mon, Tuesday≡Tue) → should still be false.
+    const html = `<html><body>
+      <p>Monday 09:00 Morning show</p>
+      <p>Mon 11:00 Late Morning show</p>
+      <p>Tuesday 14:00 Afternoon show</p>
+    </body></html>`;
+    expect(homepageLooksLikeSchedule(html)).toBe(false);
+  });
+
+  it("returns true mixing abbreviated and full day names across the threshold", () => {
+    const html = `<html><body>
+      <p>Monday 08:00 – 10:00 Breakfast</p>
+      <p>Wed 12:00 – 14:00 Midday</p>
+      <p>Saturday 18:00 – 20:00 Weekend Drive</p>
+    </body></html>`;
+    expect(homepageLooksLikeSchedule(html)).toBe(true);
   });
 });

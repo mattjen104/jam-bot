@@ -209,19 +209,33 @@ export async function probeScheduleUrl(
 }
 
 /**
+ * Returns true when an HTTP status code indicates the schedule URL is
+ * permanently gone (404 Not Found, 410 Gone). Transient failures (5xx,
+ * timeout — represented as null) return false so a momentary outage never
+ * discards a pre-known URL. Pure, no I/O.
+ */
+export function isScheduleUrlPermanentlyGone(status: number | null): boolean {
+  return status === 404 || status === 410;
+}
+
+/**
  * Heuristic: does this HTML body already contain an inline schedule?
  * Looks for the presence of at least 3 day-of-week abbreviations AND at least
  * 2 HH:MM time patterns in the visible text. Pure, no I/O.
  */
 export function homepageLooksLikeSchedule(html: string): boolean {
   const text = htmlToPlainText(html);
-  const dayRe = /\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/g;
+  // Accept both three-letter abbreviations (Mon) and full names (Monday).
+  const dayRe =
+    /\b(Mon(?:day)?|Tue(?:sday)?|Wed(?:nesday)?|Thu(?:rsday)?|Fri(?:day)?|Sat(?:urday)?|Sun(?:day)?)\b/gi;
   const timeRe = /\b([01]\d|2[0-3]):[0-5]\d\b/g;
   const days = text.match(dayRe) ?? [];
   const times = text.match(timeRe) ?? [];
   // Require at least 3 distinct day tokens and at least 2 time tokens so a
   // passing mention of "Monday" + "10am" in normal prose doesn't trigger it.
-  const uniqueDays = new Set(days);
+  // Normalise to lowercase 3-letter key so "Mon" and "Monday" don't inflate
+  // the distinct-day count (both collapse to "mon").
+  const uniqueDays = new Set(days.map((d) => d.slice(0, 3).toLowerCase()));
   return uniqueDays.size >= 3 && times.length >= 2;
 }
 
@@ -361,17 +375,34 @@ export async function scrapeStationSchedule(
       scheduleOrigin = null;
     }
     if (scheduleOrigin === origin) {
-      pageHtml = await fetchPage(target.scheduleUrl);
+      // Fetch with explicit status capture so we can distinguish permanent
+      // failures (404/410 — the page is definitively gone) from transient ones
+      // (5xx, timeout, network error) where the pre-known URL may still be valid.
+      let scheduleStatus: number | null = null;
+      try {
+        const res = await fetchFn(target.scheduleUrl, {
+          headers: { Accept: "text/html", "User-Agent": "Lore-Discovery-Bot/1.0" },
+          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        });
+        scheduleStatus = res.status;
+        if (res.ok) {
+          pageHtml = await res.text();
+        }
+      } catch {
+        // Timeout or network error — scheduleStatus stays null (transient).
+      }
+
       if (pageHtml) {
         console.info(
           `[schedule-scraper] using pre-known schedule URL for ${target.slug}: ${target.scheduleUrl}`,
         );
-      } else {
-        // The pre-known URL returned a non-2xx response (or timed out) — the
-        // station may have moved its schedule page. Clear the stale URL so the
-        // full discovery flow runs this attempt and future ones.
+      } else if (isScheduleUrlPermanentlyGone(scheduleStatus)) {
+        // Permanent failure: the schedule page is definitively gone. Clear the
+        // stored URL so the full discovery flow runs on future attempts.
+        // Transient failures (5xx, timeout, network error) leave the URL intact
+        // so a working pre-known URL isn't discarded because of a momentary outage.
         console.info(
-          `[schedule-scraper] stale scheduleUrl cleared for ${target.slug} (fetch failed): ${target.scheduleUrl} — falling through to discovery`,
+          `[schedule-scraper] stale scheduleUrl cleared for ${target.slug} (HTTP ${scheduleStatus}): ${target.scheduleUrl} — falling through to discovery`,
         );
         try {
           await db
@@ -383,6 +414,18 @@ export async function scrapeStationSchedule(
           console.warn(
             `[schedule-scraper] failed to clear stale scheduleUrl for ${target.slug}`,
             err,
+          );
+        }
+      } else {
+        // Transient failure (5xx, timeout, network error) — fall through to
+        // discovery without clearing the pre-known URL.
+        if (scheduleStatus !== null) {
+          console.info(
+            `[schedule-scraper] pre-known scheduleUrl returned HTTP ${scheduleStatus} for ${target.slug} — treating as transient, keeping URL`,
+          );
+        } else {
+          console.info(
+            `[schedule-scraper] pre-known scheduleUrl fetch timed out for ${target.slug} — treating as transient, keeping URL`,
           );
         }
       }
