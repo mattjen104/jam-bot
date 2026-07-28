@@ -345,6 +345,12 @@ the raw text of its website below. Return ONLY a JSON array (no prose, no
 markdown fences) of objects shaped exactly like:
 {"showName": string, "dayOfWeek": "Mon"|"Tue"|"Wed"|"Thu"|"Fri"|"Sat"|"Sun", "startTime": "HH:MM" (24h), "endTime": "HH:MM" (24h), "djName": string|null}
 
+Times MUST be in 24-hour HH:MM format (two-digit hour, colon, two-digit
+minute). Rejected formats — do NOT use these:
+  - AM/PM: "9:00 AM", "2:00pm", "11:30 PM"  → WRONG
+  - Single-digit hour: "9:00", "8:30"         → WRONG (must be "09:00", "08:30")
+  - Correct examples: "09:00", "14:00", "23:30"
+
 Rules:
 - Only include a show if the page states its day AND a start and end time.
 - Never invent, guess, or infer a time or day that is not explicitly stated.
