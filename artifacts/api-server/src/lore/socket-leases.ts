@@ -25,6 +25,13 @@ import {
  * lease functions, which reuse the enroll/unenroll paths — so a demoted
  * station is back on interval polling in the same tick (no logging gap) and
  * a promoted one upgrades live without a restart.
+ *
+ * Show-scoped scoring: when a station has a currently-airing scraped_show
+ * (determined via stations.iana_timezone), crossings are restricted to spins
+ * that played during that show's recurring weekly time window. This means the
+ * lease scorer ranks on the active show's catalogue affinity, not a 30-DJ
+ * station average. Stations without schedule data or no currently-airing show
+ * fall back to the station-wide score.
  */
 
 /** Total persistent-connection budget (favorites + leases). */
@@ -53,6 +60,14 @@ export interface ScoredStation {
   score: number;
   /** Raw crossing count inside the window, for admin display. */
   crossings: number;
+  /**
+   * DJ name of the currently-airing scraped_show, when the score was
+   * narrowed to that show's recurring time window. Undefined for
+   * station-wide fallback scores.
+   */
+  activeDj?: string;
+  /** Whether this score was narrowed to the active show's time window. */
+  scopedToShow?: boolean;
 }
 
 export interface LeaseInfo {
@@ -63,6 +78,10 @@ export interface LeaseInfo {
   crossings: number;
   leasedAt: string;
   expiresAt: string;
+  /** DJ name of the show that was airing when this lease was evaluated. */
+  activeDj?: string;
+  /** True when the crossing score was narrowed to the active show's window. */
+  scopedToShow?: boolean;
 }
 
 /**
@@ -92,46 +111,150 @@ let evaluating = false;
 /**
  * Score every non-favorite, non-hidden, active radio_browser_icy station by
  * recency-decayed library crossings over the last CROSSING_WINDOW_DAYS.
+ *
+ * When a station has a currently-airing scraped_show (resolved via
+ * stations.iana_timezone), the crossing score is narrowed to spins that
+ * played during that show's recurring weekly time window — so we rank on the
+ * active DJ's catalogue affinity, not a station-wide average across all
+ * hosts. Stations without timezone data or no matching show at the current
+ * wall-clock time fall back to the unscoped station-wide score.
+ *
  * Stations with no usable stream URL are filtered afterwards (the mounts
  * shape lives in jsonb; cheaper to filter in JS on this small result set).
  */
 export async function scoreCrossingCandidates(): Promise<ScoredStation[]> {
-  const rows = await db.execute(sql`
-    SELECT
-      st.id                                   AS station_id,
-      st.slug                                 AS slug,
-      st.name                                 AS name,
-      st.now_playing_config                   AS config,
-      count(*)::int                           AS crossings,
-      sum(
-        exp(
-          -ln(2)
-          * extract(epoch FROM (now() - s.played_at))
-          / (86400.0 * ${DECAY_HALF_LIFE_DAYS})
-        )
-      )::float8                               AS score
-    FROM spins s
-    JOIN stations st ON st.id = s.station_id
-    WHERE st.now_playing_source = 'radio_browser_icy'
-      AND st.active = true
-      AND st.hidden = false
-      AND st.favorite = false
-      AND s.mbid IS NOT NULL
-      AND s.played_at > now() - make_interval(days => ${CROSSING_WINDOW_DAYS})
-      AND s.mbid IN (SELECT DISTINCT mbid FROM library_items)
-    GROUP BY st.id, st.slug, st.name, st.now_playing_config
-    ORDER BY score DESC
-  `);
+  // Run both queries in parallel: station-wide (always) + show-scoped
+  // (only for stations with a currently-airing scraped_show).
+  const [stationRows, showRows] = await Promise.all([
+    // ── Station-wide fallback ──────────────────────────────────────────────
+    db.execute(sql`
+      SELECT
+        st.id                                   AS station_id,
+        st.slug                                 AS slug,
+        st.name                                 AS name,
+        st.now_playing_config                   AS config,
+        count(*)::int                           AS crossings,
+        sum(
+          exp(
+            -ln(2)
+            * extract(epoch FROM (now() - s.played_at))
+            / (86400.0 * ${DECAY_HALF_LIFE_DAYS})
+          )
+        )::float8                               AS score
+      FROM spins s
+      JOIN stations st ON st.id = s.station_id
+      WHERE st.now_playing_source = 'radio_browser_icy'
+        AND st.active = true
+        AND st.hidden = false
+        AND st.favorite = false
+        AND s.mbid IS NOT NULL
+        AND s.played_at > now() - make_interval(days => ${CROSSING_WINDOW_DAYS})
+        AND s.mbid IN (SELECT DISTINCT mbid FROM library_items)
+      GROUP BY st.id, st.slug, st.name, st.now_playing_config
+      ORDER BY score DESC
+    `),
+
+    // ── Show-scoped score ──────────────────────────────────────────────────
+    // Find each station's currently-airing scraped_show, then restrict
+    // historical spins to the recurring weekly time window for that show.
+    // Uses DISTINCT ON to pick exactly one show per station (in case two
+    // rows overlap at the boundary minute).
+    db.execute(sql`
+      WITH currently_airing AS (
+        SELECT DISTINCT ON (ss.station_id)
+          ss.station_id,
+          ss.dj_name,
+          ss.day_of_week,
+          ss.start_time,
+          ss.end_time
+        FROM scraped_shows ss
+        JOIN stations st ON st.id = ss.station_id
+        WHERE st.iana_timezone IS NOT NULL
+          AND to_char(now() AT TIME ZONE st.iana_timezone, 'Dy')
+                = ss.day_of_week
+          AND to_char(now() AT TIME ZONE st.iana_timezone, 'HH24:MI')
+                >= ss.start_time
+          AND to_char(now() AT TIME ZONE st.iana_timezone, 'HH24:MI')
+                < ss.end_time
+        ORDER BY ss.station_id, ss.start_time
+      )
+      SELECT
+        st.id                                   AS station_id,
+        st.slug                                 AS slug,
+        st.name                                 AS name,
+        st.now_playing_config                   AS config,
+        ca.dj_name                              AS active_dj,
+        count(*)::int                           AS crossings,
+        sum(
+          exp(
+            -ln(2)
+            * extract(epoch FROM (now() - s.played_at))
+            / (86400.0 * ${DECAY_HALF_LIFE_DAYS})
+          )
+        )::float8                               AS score
+      FROM spins s
+      JOIN stations st ON st.id = s.station_id
+      JOIN currently_airing ca ON ca.station_id = st.id
+      WHERE st.now_playing_source = 'radio_browser_icy'
+        AND st.active = true
+        AND st.hidden = false
+        AND st.favorite = false
+        AND s.mbid IS NOT NULL
+        AND s.played_at > now() - make_interval(days => ${CROSSING_WINDOW_DAYS})
+        AND s.mbid IN (SELECT DISTINCT mbid FROM library_items)
+        AND to_char(
+              s.played_at AT TIME ZONE st.iana_timezone,
+              'Dy'
+            ) = ca.day_of_week
+        AND to_char(
+              s.played_at AT TIME ZONE st.iana_timezone,
+              'HH24:MI'
+            ) >= ca.start_time
+        AND to_char(
+              s.played_at AT TIME ZONE st.iana_timezone,
+              'HH24:MI'
+            ) < ca.end_time
+      GROUP BY st.id, st.slug, st.name, st.now_playing_config, ca.dj_name
+      ORDER BY score DESC
+    `),
+  ]);
+
+  // Index show-scoped results by stationId for O(1) merge.
+  const showScoped = new Map<number, { score: number; crossings: number; activeDj: string | null }>();
+  for (const r of showRows.rows as Array<Record<string, unknown>>) {
+    const id = Number(r["station_id"]);
+    const crossings = Number(r["crossings"]);
+    // Only prefer show-scoped when it actually has crossings — a show with
+    // zero historical library hits should let the station-wide score stand.
+    if (crossings > 0) {
+      showScoped.set(id, {
+        score: Number(r["score"]),
+        crossings,
+        activeDj: r["active_dj"] != null ? String(r["active_dj"]) : null,
+      });
+    }
+  }
+
   const out: ScoredStation[] = [];
-  for (const r of rows.rows as Array<Record<string, unknown>>) {
+  for (const r of stationRows.rows as Array<Record<string, unknown>>) {
     const config = (r["config"] ?? {}) as Record<string, unknown>;
     if (!pickWatcherStreamUrl(config)) continue; // no persistent-capable mount
+
+    const stationId = Number(r["station_id"]);
+    const scoped = showScoped.get(stationId);
+
     out.push({
-      stationId: Number(r["station_id"]),
+      stationId,
       slug: String(r["slug"]),
       name: String(r["name"]),
-      score: Number(r["score"]),
-      crossings: Number(r["crossings"]),
+      score: scoped ? scoped.score : Number(r["score"]),
+      crossings: scoped ? scoped.crossings : Number(r["crossings"]),
+      ...(scoped
+        ? {
+            scopedToShow: true,
+            activeDj: scoped.activeDj ?? undefined,
+          }
+        : {}),
     });
   }
   return out;
@@ -208,12 +331,14 @@ export async function evaluateLeases(): Promise<void> {
     for (const t of targets) {
       const existing = activeLeases.get(t.stationId);
       if (existing && isLeasedStation(t.stationId)) {
-        // Renewal — keep leasedAt, refresh score + expiry.
+        // Renewal — keep leasedAt, refresh score + expiry + show scope.
         activeLeases.set(t.stationId, {
           ...existing,
           score: t.score,
           crossings: t.crossings,
           expiresAt,
+          activeDj: t.activeDj,
+          scopedToShow: t.scopedToShow,
         });
         continue;
       }
@@ -234,12 +359,16 @@ export async function evaluateLeases(): Promise<void> {
         crossings: t.crossings,
         leasedAt: now.toISOString(),
         expiresAt,
+        activeDj: t.activeDj,
+        scopedToShow: t.scopedToShow,
       });
     }
 
+    const showScopedCount = targets.filter((t) => t.scopedToShow).length;
     console.info(
       `[lore:leases] cycle: ${pinned} pinned, ${activeLeases.size}/${slots} leased ` +
-        `(budget ${CONNECTION_BUDGET}, ${scored.length} scored candidates)`,
+        `(budget ${CONNECTION_BUDGET}, ${scored.length} scored candidates, ` +
+        `${showScopedCount} show-scoped)`,
     );
   } catch (err) {
     console.error("[lore:leases] lease evaluation failed", err);

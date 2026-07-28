@@ -30,6 +30,10 @@ interface LeaseInfo {
   crossings: number;
   leasedAt: string;
   expiresAt: string;
+  /** DJ name of the airing show when the score was evaluated, if any. */
+  activeDj?: string;
+  /** True when the crossing score was narrowed to the active show's window. */
+  scopedToShow?: boolean;
 }
 
 interface Allocation {
@@ -328,8 +332,22 @@ function StationsPanel({
                         key={l.stationId}
                         className="flex items-center justify-between gap-3 rounded-lg bg-secondary/30 px-3 py-1.5"
                       >
-                        <span className="truncate text-xs text-foreground">
-                          {l.name}
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <span className="truncate text-xs text-foreground">
+                            {l.name}
+                          </span>
+                          {l.scopedToShow && (
+                            <span
+                              className="shrink-0 rounded bg-primary/15 px-1 py-0.5 font-mono text-[9px] text-primary"
+                              title={
+                                l.activeDj
+                                  ? `Score narrowed to ${l.activeDj}'s show window`
+                                  : "Score narrowed to active show window"
+                              }
+                            >
+                              {l.activeDj ? l.activeDj : "show"}
+                            </span>
+                          )}
                         </span>
                         <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
                           score {l.score.toFixed(2)} · {l.crossings} crossings
