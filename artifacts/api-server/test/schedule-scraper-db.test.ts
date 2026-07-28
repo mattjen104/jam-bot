@@ -386,11 +386,14 @@ describe("scrapeStationSchedule — homepage + link-discovery path", () => {
     );
 
     const fetchFn = makeFetch([
-      { pattern: "robots.txt", body: "User-agent: *\nDisallow: /private\n" },
-      // Homepage with no schedule link
+      { pattern: /robots\.txt/, body: "User-agent: *\nDisallow: /private\n" },
+      // Homepage with no schedule link — anchored so probe paths like /schedule
+      // don't accidentally match and exercise strategy 2 instead of strategy 3.
+      // Body includes ≥3 day abbreviations and ≥2 HH:MM tokens so
+      // homepageLooksLikeSchedule() returns true (strategy 3 fires).
       {
-        pattern: HOMEPAGE,
-        body: "<html><body><p>Late Night Session every Friday 10pm DJ Night Owl</p></body></html>",
+        pattern: /^http:\/\/radio\.example\.test$/,
+        body: "<html><body><p>Mon 20:00-22:00 Wed 21:00-23:00 Fri 22:00-23:59 Late Night Session DJ Night Owl</p></body></html>",
       },
     ]);
 
@@ -408,6 +411,14 @@ describe("scrapeStationSchedule — homepage + link-discovery path", () => {
     const shows = await fetchScrapedShows();
     expect(shows).toHaveLength(1);
     expect(shows[0]!.showName).toBe("Late Night Session");
+
+    // scheduleUrl must remain null — confirms strategy 3 (inline homepage) was
+    // taken, not strategy 2 (probe path that would persist the discovered URL).
+    const [row] = await db
+      .select({ scheduleUrl: stationsTable.scheduleUrl })
+      .from(stationsTable)
+      .where(eq(stationsTable.id, stationId!));
+    expect(row?.scheduleUrl).toBeNull();
   });
 });
 
