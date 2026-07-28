@@ -581,6 +581,74 @@ describe("parseExtractedSchedule", () => {
     expect(result).toEqual([]);
   });
 
+  // -------------------------------------------------------------------------
+  // AM/PM time formats — 12-hour clock variants the LLM might emit
+  // -------------------------------------------------------------------------
+
+  it("drops a row whose startTime is a 12-hour AM string ('9:00 AM')", () => {
+    const raw = JSON.stringify([
+      { showName: "Good Show", dayOfWeek: "Mon", startTime: "09:00", endTime: "11:00", djName: null },
+      { showName: "AM Start",  dayOfWeek: "Tue", startTime: "9:00 AM", endTime: "11:00", djName: null },
+    ]);
+    const result = parseExtractedSchedule(raw);
+    expect(result).toHaveLength(1);
+    expect(result![0]!.showName).toBe("Good Show");
+  });
+
+  it("drops a row whose endTime is a 12-hour PM string ('09:00pm')", () => {
+    const raw = JSON.stringify([
+      { showName: "Good Show", dayOfWeek: "Mon", startTime: "09:00", endTime: "11:00", djName: null },
+      { showName: "PM End",    dayOfWeek: "Tue", startTime: "09:00", endTime: "09:00pm", djName: null },
+    ]);
+    const result = parseExtractedSchedule(raw);
+    expect(result).toHaveLength(1);
+    expect(result![0]!.showName).toBe("Good Show");
+  });
+
+  it("drops a row with startTime '12:00 PM' (noon in 12-hour format)", () => {
+    // '12:00 PM' looks like it could be valid 24-hour noon but the trailing
+    // ' PM' suffix means HHMM_RE rejects it cleanly.
+    const raw = JSON.stringify([
+      { showName: "Good Show",   dayOfWeek: "Mon", startTime: "12:00",    endTime: "14:00",    djName: null },
+      { showName: "Noon AM/PM",  dayOfWeek: "Tue", startTime: "12:00 PM", endTime: "14:00",    djName: null },
+    ]);
+    const result = parseExtractedSchedule(raw);
+    expect(result).toHaveLength(1);
+    expect(result![0]!.showName).toBe("Good Show");
+  });
+
+  it("drops a row with startTime '09:00 am' (lowercase am)", () => {
+    const raw = JSON.stringify([
+      { showName: "Good Show",   dayOfWeek: "Mon", startTime: "09:00",    endTime: "11:00", djName: null },
+      { showName: "Lowercase AM", dayOfWeek: "Wed", startTime: "09:00 am", endTime: "11:00", djName: null },
+    ]);
+    const result = parseExtractedSchedule(raw);
+    expect(result).toHaveLength(1);
+    expect(result![0]!.showName).toBe("Good Show");
+  });
+
+  it("drops all rows when the entire payload uses AM/PM time formats", () => {
+    const raw = JSON.stringify([
+      { showName: "Morning Show",  dayOfWeek: "Mon", startTime: "9:00 AM",  endTime: "11:00 AM", djName: null },
+      { showName: "Afternoon Mix", dayOfWeek: "Tue", startTime: "12:00 PM", endTime: "2:00 PM",  djName: null },
+      { showName: "Evening Drive", dayOfWeek: "Wed", startTime: "5:00pm",   endTime: "7:00pm",   djName: null },
+    ]);
+    const result = parseExtractedSchedule(raw);
+    expect(result).toEqual([]);
+  });
+
+  it("keeps valid 24-hour rows and drops AM/PM rows from a mixed payload", () => {
+    const raw = JSON.stringify([
+      { showName: "Valid Show",  dayOfWeek: "Mon", startTime: "09:00",    endTime: "11:00",    djName: null },
+      { showName: "AM/PM Show",  dayOfWeek: "Tue", startTime: "9:00 AM",  endTime: "11:00 AM", djName: null },
+      { showName: "Another Good",dayOfWeek: "Wed", startTime: "14:00",    endTime: "16:00",    djName: null },
+      { showName: "PM Show",     dayOfWeek: "Thu", startTime: "02:00 PM", endTime: "04:00 PM", djName: null },
+    ]);
+    const result = parseExtractedSchedule(raw);
+    expect(result).toHaveLength(2);
+    expect(result!.map((s) => s.showName)).toEqual(["Valid Show", "Another Good"]);
+  });
+
   it("handles a realistic prose-fenced LLM blob with mixed-case day names end-to-end", () => {
     // Simulates a real LLM response: markdown fence, prose intro line stripped
     // by the fence-unwrap logic, and a mix of title-case, SCREAMING, and
