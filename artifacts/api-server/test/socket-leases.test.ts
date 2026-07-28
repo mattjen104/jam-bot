@@ -314,6 +314,7 @@ let testUserId: number | null = null;
 let stAId: number | null = null;
 let stBId: number | null = null;
 let stCId: number | null = null;
+let stDId: number | null = null; // midnight-wrap show test station
 const MBID_SHARED = `test-sl-mbid-${run}`;
 
 beforeAll(async () => {
@@ -476,12 +477,79 @@ beforeAll(async () => {
       ON CONFLICT DO NOTHING
     `);
   }
+
+  // ── Station D: midnight-wrapping show ────────────────────────────────────
+  // The show's start_time and end_time are computed so that:
+  //   • start_time = now − 30 min (as HH24:MI in UTC)
+  //   • end_time   = now − 60 min (as HH24:MI in UTC)
+  // Since start_time is always 30 min closer to "now" than end_time, we have
+  // start_time > end_time in string order (a midnight-wrap), AND the current
+  // time satisfies the fixed predicate (now >= start_time OR now < end_time).
+  // day_of_week is the calendar weekday at (now − 30 min) — the moment when
+  // the show is considered to have started.
+  const wrappingTimes = await db.execute<{
+    start_time: string;
+    end_time: string;
+    day_of_week: string;
+  }>(sql`
+    SELECT
+      to_char(now() AT TIME ZONE 'UTC' - interval '30 minutes', 'HH24:MI') AS start_time,
+      to_char(now() AT TIME ZONE 'UTC' - interval '60 minutes', 'HH24:MI') AS end_time,
+      to_char(now() AT TIME ZONE 'UTC' - interval '30 minutes', 'Dy')      AS day_of_week
+  `);
+  const wt = wrappingTimes.rows[0]!;
+
+  const [rowD] = await db
+    .insert(stationsTable)
+    .values({
+      slug: `test-sl-std-${run}`,
+      name: `SL Station D ${run}`,
+      streamUrl: `http://test-sl-d-${run}.stream`,
+      streamFormat: "mp3",
+      nowPlayingSource: "radio_browser_icy",
+      nowPlayingConfig: { streamUrl: `http://test-sl-d-${run}.stream` },
+      ianaTimezone: "UTC",
+      active: true,
+      hidden: false,
+      favorite: false,
+    })
+    .returning({ id: stationsTable.id });
+  stDId = rowD!.id;
+
+  // The show wraps midnight: start_time > end_time in string order.
+  await db
+    .insert(scrapedShowsTable)
+    .values({
+      stationId: stDId!,
+      showName: "Midnight Wrap Show",
+      dayOfWeek: wt.day_of_week,
+      startTime: wt.start_time,
+      endTime: wt.end_time,
+      djName: "DJ Midnight",
+    })
+    .onConflictDoNothing();
+
+  // Seed 2 spins at 10 and 20 min ago (both inside the wrapping window).
+  for (const minsAgo of [10, 20]) {
+    await db.execute(sql`
+      INSERT INTO spins (station_id, mbid, raw_title, raw_artist, confidence, played_at)
+      VALUES (
+        ${stDId},
+        ${MBID_SHARED},
+        'Test Track SL',
+        'Test Artist SL',
+        'text',
+        now() - make_interval(mins => ${minsAgo})
+      )
+      ON CONFLICT DO NOTHING
+    `);
+  }
 });
 
 afterAll(async () => {
   if (!dbAvailable) return;
   try {
-    const stationIds = [stAId, stBId, stCId].filter((id): id is number => id !== null);
+    const stationIds = [stAId, stBId, stCId, stDId].filter((id): id is number => id !== null);
     if (stationIds.length) {
       await db.execute(
         sql`DELETE FROM scraped_shows WHERE station_id = ANY(ARRAY[${sql.join(stationIds.map((id) => sql`${id}`), sql`, `)}]::int[])`,
@@ -564,5 +632,27 @@ describe("scoreCrossingCandidates — DB integration", () => {
     // Station-wide score is positive (real crossings within 60-day window).
     expect(c!.score).toBeGreaterThan(0);
     expect(c!.crossings).toBeGreaterThanOrEqual(2);
+  });
+
+  it("midnight-wrapping show (start_time > end_time) is correctly detected as currently-airing", async () => {
+    if (!dbAvailable) return;
+
+    // Station D has a show whose start_time and end_time were seeded so that
+    // start_time > end_time (midnight-wrap) and the current clock time falls
+    // inside that window. Before the fix, the plain HH24:MI range predicate
+    // would never match and the station would score station-wide only.
+    const candidates = await scoreCrossingCandidates();
+
+    const d = candidates.find((s) => s.stationId === stDId);
+
+    // Station D must appear — it has 2 library crossings within 60 days.
+    expect(d).toBeTruthy();
+
+    // The midnight-wrap show should have been recognised as currently-airing,
+    // and the 2 spins within the window counted as show-scoped crossings.
+    expect(d!.scopedToShow).toBe(true);
+    expect(d!.activeDj).toBe("DJ Midnight");
+    expect(d!.crossings).toBe(2);
+    expect(d!.score).toBeGreaterThan(0);
   });
 });

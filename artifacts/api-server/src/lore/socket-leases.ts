@@ -182,12 +182,32 @@ export async function scoreCrossingCandidates(): Promise<ScoredStation[]> {
         FROM scraped_shows ss
         JOIN stations st ON st.id = ss.station_id
         WHERE st.iana_timezone IS NOT NULL
-          AND to_char(now() AT TIME ZONE st.iana_timezone, 'Dy')
-                = ss.day_of_week
-          AND to_char(now() AT TIME ZONE st.iana_timezone, 'HH24:MI')
-                >= ss.start_time
-          AND to_char(now() AT TIME ZONE st.iana_timezone, 'HH24:MI')
-                < ss.end_time
+          AND (
+            -- ── Normal or same-day case ──────────────────────────────────
+            -- Today's day matches AND the current local time is inside the
+            -- show's window.  Two sub-cases:
+            --   a) Non-wrapping: start_time <= end_time  →  [start, end)
+            --   b) Midnight-wrapping (start > end) and we're past start:
+            --      the show started today and hasn't crossed midnight yet.
+            (to_char(now() AT TIME ZONE st.iana_timezone, 'Dy') = ss.day_of_week
+              AND (
+                (ss.start_time <= ss.end_time
+                  AND to_char(now() AT TIME ZONE st.iana_timezone, 'HH24:MI') >= ss.start_time
+                  AND to_char(now() AT TIME ZONE st.iana_timezone, 'HH24:MI') <  ss.end_time)
+                OR
+                (ss.start_time > ss.end_time
+                  AND to_char(now() AT TIME ZONE st.iana_timezone, 'HH24:MI') >= ss.start_time)
+              ))
+            OR
+            -- ── Post-midnight tail of a wrapping show ────────────────────
+            -- The show started yesterday (day_of_week = yesterday's Dy) and
+            -- the current local time is still before the show's end_time.
+            -- e.g. Monday 23:00–01:00: on Tuesday at 00:30, yesterday = Mon.
+            (ss.start_time > ss.end_time
+              AND to_char((now() - interval '1 day') AT TIME ZONE st.iana_timezone, 'Dy')
+                    = ss.day_of_week
+              AND to_char(now() AT TIME ZONE st.iana_timezone, 'HH24:MI') < ss.end_time)
+          )
         ORDER BY ss.station_id, ss.start_time
       ),
       show_utc_ranges AS (
@@ -208,6 +228,13 @@ export async function scoreCrossingCandidates(): Promise<ScoredStation[]> {
           (
             date_trunc('day', gs AT TIME ZONE st.iana_timezone)
             + ca.end_time::interval
+            -- Midnight-wrapping show: end_time < start_time, so the end falls
+            -- on the following calendar day.  Add 1 day to produce a valid
+            -- [range_start, range_end) interval that spans the midnight boundary.
+            + CASE WHEN ca.end_time < ca.start_time
+                   THEN interval '1 day'
+                   ELSE interval '0'
+              END
           ) AT TIME ZONE st.iana_timezone  AS range_end
         FROM currently_airing ca
         JOIN stations st ON st.id = ca.station_id
