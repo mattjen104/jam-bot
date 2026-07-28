@@ -15,6 +15,8 @@ import {
   homepageLooksLikeSchedule,
   isScheduleUrlPermanentlyGone,
   SCHEDULE_PATH_PROBES,
+  parseExtractedSchedule,
+  normalizeDayOfWeek,
 } from "../../src/lore/schedule-scraper.js";
 
 // ---------------------------------------------------------------------------
@@ -341,5 +343,143 @@ describe("homepageLooksLikeSchedule", () => {
       <p>Saturday 18:00 – 20:00 Weekend Drive</p>
     </body></html>`;
     expect(homepageLooksLikeSchedule(html)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// normalizeDayOfWeek
+// ---------------------------------------------------------------------------
+
+describe("normalizeDayOfWeek", () => {
+  it("leaves 3-letter abbreviations unchanged", () => {
+    expect(normalizeDayOfWeek("Mon")).toBe("Mon");
+    expect(normalizeDayOfWeek("Fri")).toBe("Fri");
+    expect(normalizeDayOfWeek("Sun")).toBe("Sun");
+  });
+
+  it("normalises full day names to their 3-letter abbreviations", () => {
+    expect(normalizeDayOfWeek("Monday")).toBe("Mon");
+    expect(normalizeDayOfWeek("Tuesday")).toBe("Tue");
+    expect(normalizeDayOfWeek("Wednesday")).toBe("Wed");
+    expect(normalizeDayOfWeek("Thursday")).toBe("Thu");
+    expect(normalizeDayOfWeek("Friday")).toBe("Fri");
+    expect(normalizeDayOfWeek("Saturday")).toBe("Sat");
+    expect(normalizeDayOfWeek("Sunday")).toBe("Sun");
+  });
+
+  it("is case-insensitive for full names", () => {
+    expect(normalizeDayOfWeek("monday")).toBe("Mon");
+    expect(normalizeDayOfWeek("FRIDAY")).toBe("Fri");
+    expect(normalizeDayOfWeek("Saturday")).toBe("Sat");
+  });
+
+  it("returns unrecognised values as-is (so DAY_TOKENS can reject them)", () => {
+    expect(normalizeDayOfWeek("Lundi")).toBe("Lundi");
+    expect(normalizeDayOfWeek("")).toBe("");
+    expect(normalizeDayOfWeek("Weekday")).toBe("Weekday");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseExtractedSchedule
+// ---------------------------------------------------------------------------
+
+describe("parseExtractedSchedule", () => {
+  it("accepts abbreviated day names and returns well-formed shows", () => {
+    const raw = JSON.stringify([
+      { showName: "Morning Mix", dayOfWeek: "Mon", startTime: "09:00", endTime: "11:00", djName: "DJ A" },
+      { showName: "Drive Time", dayOfWeek: "Fri", startTime: "17:00", endTime: "19:00", djName: null },
+    ]);
+    const result = parseExtractedSchedule(raw);
+    expect(result).toHaveLength(2);
+    expect(result![0]).toMatchObject({ dayOfWeek: "Mon", showName: "Morning Mix" });
+    expect(result![1]).toMatchObject({ dayOfWeek: "Fri", showName: "Drive Time" });
+  });
+
+  it("normalises full day names to 3-letter abbreviations", () => {
+    const raw = JSON.stringify([
+      { showName: "Morning Mix", dayOfWeek: "Monday", startTime: "09:00", endTime: "11:00", djName: null },
+      { showName: "Afternoon Drive", dayOfWeek: "Wednesday", startTime: "14:00", endTime: "16:00", djName: "DJ B" },
+      { showName: "Night Vibes", dayOfWeek: "Friday", startTime: "22:00", endTime: "00:00", djName: null },
+    ]);
+    const result = parseExtractedSchedule(raw);
+    expect(result).toHaveLength(3);
+    expect(result![0]).toMatchObject({ dayOfWeek: "Mon", showName: "Morning Mix" });
+    expect(result![1]).toMatchObject({ dayOfWeek: "Wed", showName: "Afternoon Drive" });
+    expect(result![2]).toMatchObject({ dayOfWeek: "Fri", showName: "Night Vibes" });
+  });
+
+  it("normalises a full week of full day names", () => {
+    const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    const abbrevs = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const raw = JSON.stringify(
+      days.map((d, i) => ({
+        showName: `Show ${i}`,
+        dayOfWeek: d,
+        startTime: "10:00",
+        endTime: "11:00",
+        djName: null,
+      })),
+    );
+    const result = parseExtractedSchedule(raw);
+    expect(result).toHaveLength(7);
+    result!.forEach((show, i) => {
+      expect(show.dayOfWeek).toBe(abbrevs[i]);
+    });
+  });
+
+  it("drops rows whose dayOfWeek is unrecognised even after normalisation", () => {
+    const raw = JSON.stringify([
+      { showName: "Good Show", dayOfWeek: "Monday", startTime: "09:00", endTime: "11:00", djName: null },
+      { showName: "Bad Show", dayOfWeek: "Lundi", startTime: "10:00", endTime: "12:00", djName: null },
+    ]);
+    const result = parseExtractedSchedule(raw);
+    expect(result).toHaveLength(1);
+    expect(result![0]!.showName).toBe("Good Show");
+  });
+
+  it("returns an empty array for a valid JSON array with no passable rows", () => {
+    const raw = "[]";
+    const result = parseExtractedSchedule(raw);
+    expect(result).toEqual([]);
+  });
+
+  it("returns null for non-JSON input", () => {
+    expect(parseExtractedSchedule("not json at all")).toBeNull();
+  });
+
+  it("returns null when the top-level value is not an array", () => {
+    expect(parseExtractedSchedule('{"showName": "x"}')).toBeNull();
+  });
+
+  it("deduplicates rows with the same day/startTime/showName (case-insensitive name)", () => {
+    const raw = JSON.stringify([
+      { showName: "Morning Mix", dayOfWeek: "Monday", startTime: "09:00", endTime: "11:00", djName: null },
+      { showName: "Morning Mix", dayOfWeek: "Monday", startTime: "09:00", endTime: "11:00", djName: null },
+    ]);
+    const result = parseExtractedSchedule(raw);
+    expect(result).toHaveLength(1);
+  });
+
+  it("strips fenced code block wrappers before parsing", () => {
+    const raw = "```json\n" + JSON.stringify([
+      { showName: "Fenced Show", dayOfWeek: "Tuesday", startTime: "08:00", endTime: "09:00", djName: null },
+    ]) + "\n```";
+    const result = parseExtractedSchedule(raw);
+    expect(result).toHaveLength(1);
+    expect(result![0]).toMatchObject({ dayOfWeek: "Tue", showName: "Fenced Show" });
+  });
+
+  it("handles mixed abbreviated and full day names in the same response", () => {
+    const raw = JSON.stringify([
+      { showName: "Show A", dayOfWeek: "Monday", startTime: "09:00", endTime: "11:00", djName: null },
+      { showName: "Show B", dayOfWeek: "Wed", startTime: "14:00", endTime: "16:00", djName: null },
+      { showName: "Show C", dayOfWeek: "Saturday", startTime: "20:00", endTime: "22:00", djName: null },
+    ]);
+    const result = parseExtractedSchedule(raw);
+    expect(result).toHaveLength(3);
+    expect(result![0]!.dayOfWeek).toBe("Mon");
+    expect(result![1]!.dayOfWeek).toBe("Wed");
+    expect(result![2]!.dayOfWeek).toBe("Sat");
   });
 });

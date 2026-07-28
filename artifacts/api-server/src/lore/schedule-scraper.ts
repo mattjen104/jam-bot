@@ -41,6 +41,28 @@ const DAY_TOKENS = new Set([
   "Sun",
 ]);
 
+/** Map lowercase full day names to their 3-letter abbreviations. */
+const FULL_DAY_TO_ABBREV: Record<string, string> = {
+  monday: "Mon",
+  tuesday: "Tue",
+  wednesday: "Wed",
+  thursday: "Thu",
+  friday: "Fri",
+  saturday: "Sat",
+  sunday: "Sun",
+};
+
+/**
+ * Normalise a dayOfWeek string from LLM output. Accepts both abbreviated
+ * ("Mon") and full ("Monday") forms and returns the canonical 3-letter form.
+ * Unrecognised values are returned as-is so the DAY_TOKENS check can reject
+ * them cleanly. Pure, no I/O.
+ */
+export function normalizeDayOfWeek(day: string): string {
+  const lower = day.toLowerCase();
+  return FULL_DAY_TO_ABBREV[lower] ?? day;
+}
+
 const HHMM_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 interface ScrapeTarget {
@@ -293,7 +315,9 @@ export function parseExtractedSchedule(raw: string): ExtractedShow[] | null {
     if (!entry || typeof entry !== "object") continue;
     const e = entry as Record<string, unknown>;
     const showName = typeof e["showName"] === "string" ? e["showName"].trim() : "";
-    const dayOfWeek = typeof e["dayOfWeek"] === "string" ? e["dayOfWeek"].trim() : "";
+    const dayOfWeek = normalizeDayOfWeek(
+      typeof e["dayOfWeek"] === "string" ? e["dayOfWeek"].trim() : "",
+    );
     const startTime = typeof e["startTime"] === "string" ? e["startTime"].trim() : "";
     const endTime = typeof e["endTime"] === "string" ? e["endTime"].trim() : "";
     const djName =
