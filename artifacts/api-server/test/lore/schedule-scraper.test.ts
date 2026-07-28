@@ -521,6 +521,66 @@ describe("parseExtractedSchedule", () => {
     });
   });
 
+  // -------------------------------------------------------------------------
+  // Time-format edge cases — single-digit hours and seconds-appended strings
+  // -------------------------------------------------------------------------
+
+  it("drops a row whose startTime has a single-digit hour ('9:00')", () => {
+    // HHMM_RE requires exactly two digits for the hour (e.g. "09:00"), so a
+    // bare single-digit hour like "9:00" must be silently dropped, not stored
+    // as a corrupted time value.
+    const raw = JSON.stringify([
+      { showName: "Good Show", dayOfWeek: "Mon", startTime: "09:00", endTime: "11:00", djName: null },
+      { showName: "Bad Start", dayOfWeek: "Tue", startTime: "9:00",  endTime: "11:00", djName: null },
+    ]);
+    const result = parseExtractedSchedule(raw);
+    expect(result).toHaveLength(1);
+    expect(result![0]!.showName).toBe("Good Show");
+  });
+
+  it("drops a row whose endTime has a single-digit hour ('9:00')", () => {
+    const raw = JSON.stringify([
+      { showName: "Good Show",  dayOfWeek: "Mon", startTime: "08:00", endTime: "10:00", djName: null },
+      { showName: "Bad End",    dayOfWeek: "Tue", startTime: "08:00", endTime: "9:00",  djName: null },
+    ]);
+    const result = parseExtractedSchedule(raw);
+    expect(result).toHaveLength(1);
+    expect(result![0]!.showName).toBe("Good Show");
+  });
+
+  it("drops a row whose startTime has seconds appended ('09:00:00')", () => {
+    // HHMM_RE is anchored (^…$) and only allows HH:MM, so "09:00:00" must be
+    // rejected cleanly, not truncated or stored as "09:00".
+    const raw = JSON.stringify([
+      { showName: "Good Show",   dayOfWeek: "Mon", startTime: "09:00",    endTime: "11:00",    djName: null },
+      { showName: "Bad Seconds", dayOfWeek: "Tue", startTime: "09:00:00", endTime: "11:00",    djName: null },
+    ]);
+    const result = parseExtractedSchedule(raw);
+    expect(result).toHaveLength(1);
+    expect(result![0]!.showName).toBe("Good Show");
+  });
+
+  it("drops a row whose endTime has seconds appended ('11:00:00')", () => {
+    const raw = JSON.stringify([
+      { showName: "Good Show",      dayOfWeek: "Mon", startTime: "09:00", endTime: "11:00",    djName: null },
+      { showName: "Bad End Secs",   dayOfWeek: "Tue", startTime: "09:00", endTime: "11:00:00", djName: null },
+    ]);
+    const result = parseExtractedSchedule(raw);
+    expect(result).toHaveLength(1);
+    expect(result![0]!.showName).toBe("Good Show");
+  });
+
+  it("drops all rows when every time field is a non-conforming variant", () => {
+    // Ensures no rows slip through when the entire payload uses LLM time quirks.
+    const raw = JSON.stringify([
+      { showName: "Single Digit",  dayOfWeek: "Mon", startTime: "9:00",    endTime: "11:00",    djName: null },
+      { showName: "With Seconds",  dayOfWeek: "Tue", startTime: "09:00:00", endTime: "11:00:00", djName: null },
+      { showName: "Both Bad",      dayOfWeek: "Wed", startTime: "8:30",    endTime: "9:30",     djName: null },
+    ]);
+    const result = parseExtractedSchedule(raw);
+    expect(result).toEqual([]);
+  });
+
   it("handles a realistic prose-fenced LLM blob with mixed-case day names end-to-end", () => {
     // Simulates a real LLM response: markdown fence, prose intro line stripped
     // by the fence-unwrap logic, and a mix of title-case, SCREAMING, and
