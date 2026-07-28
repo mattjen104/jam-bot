@@ -200,6 +200,28 @@ export async function probeScheduleUrl(
           continue;
         }
         if (finalOrigin === origin) return res.url || url;
+      } else if (res.status === 405) {
+        // Server rejected HEAD — retry with a lightweight GET to confirm the
+        // page actually exists (read only enough bytes to verify a response).
+        try {
+          const getRes = await fetchFn(url, {
+            method: "GET",
+            headers: { "User-Agent": "Lore-Discovery-Bot/1.0", Range: "bytes=0-511" },
+            signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+            redirect: "follow",
+          });
+          if (getRes.ok || getRes.status === 206) {
+            let finalOrigin: string;
+            try {
+              finalOrigin = new URL(getRes.url || url).origin;
+            } catch {
+              continue;
+            }
+            if (finalOrigin === origin) return getRes.url || url;
+          }
+        } catch {
+          // GET also failed — try the next probe path.
+        }
       }
     } catch {
       // Timeout / network error for this probe — try the next one.
@@ -349,13 +371,15 @@ export async function scrapeStationSchedule(
     return fail();
   }
 
-  const fetchPage = async (url: string): Promise<string | null> => {
+  // Returns the page text on success, null on transient error, or the HTTP
+  // status code (as a number) when the server responded definitively (non-2xx).
+  const fetchPage = async (url: string): Promise<string | null | number> => {
     try {
       const res = await fetchFn(url, {
         headers: { Accept: "text/html", "User-Agent": "Lore-Discovery-Bot/1.0" },
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
-      if (!res.ok) return null;
+      if (!res.ok) return res.status;
       return await res.text();
     } catch {
       return null;
@@ -429,6 +453,8 @@ export async function scrapeStationSchedule(
           );
         }
       }
+      // Transient failure (null) or non-definitive error (5xx etc.): fall
+      // through to discovery without clearing the stored URL.
     } else {
       console.warn(
         `[schedule-scraper] scheduleUrl is off-site for ${target.slug}, ignoring: ${target.scheduleUrl}`,
@@ -449,7 +475,8 @@ export async function scrapeStationSchedule(
   let discoveredScheduleUrl: string | null = null;
 
   if (!pageHtml) {
-    const homeHtml = await fetchPage(target.homepageUrl);
+    const homeResult = await fetchPage(target.homepageUrl);
+    const homeHtml = typeof homeResult === "string" ? homeResult : null;
     if (!homeHtml) {
       console.info(
         `[schedule-scraper] give-up station=${target.id} slug=${target.slug} reason=no_link_found (homepage fetch failed)`,
@@ -467,9 +494,9 @@ export async function scrapeStationSchedule(
         scheduleOrigin = null;
       }
       if (scheduleOrigin === origin) {
-        const linkedHtml = await fetchPage(scheduleLink);
-        if (linkedHtml) {
-          pageHtml = linkedHtml;
+        const linkedResult = await fetchPage(scheduleLink);
+        if (typeof linkedResult === "string") {
+          pageHtml = linkedResult;
           discoveredScheduleUrl = scheduleLink;
         }
       } else {
@@ -483,9 +510,9 @@ export async function scrapeStationSchedule(
     if (!pageHtml) {
       const probedUrl = await probeScheduleUrl(origin, { fetchFn });
       if (probedUrl) {
-        const probedHtml = await fetchPage(probedUrl);
-        if (probedHtml) {
-          pageHtml = probedHtml;
+        const probedResult = await fetchPage(probedUrl);
+        if (typeof probedResult === "string") {
+          pageHtml = probedResult;
           discoveredScheduleUrl = probedUrl;
           console.info(
             `[schedule-scraper] probed schedule URL for ${target.slug}: ${probedUrl}`,

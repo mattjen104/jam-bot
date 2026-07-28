@@ -141,6 +141,80 @@ describe("probeScheduleUrl", () => {
     expect(result).toBeNull();
   });
 
+  it("falls back to GET when HEAD returns 405 and returns the URL if GET succeeds", async () => {
+    // HEAD → 405 for /schedule; subsequent GET → 200 for the same path.
+    const fetchFn = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = (init?.method ?? "GET").toUpperCase();
+      if (url === `${ORIGIN}/schedule`) {
+        if (method === "HEAD") {
+          return {
+            ok: false,
+            status: 405,
+            statusText: "Method Not Allowed",
+            url,
+            text: async () => "",
+            json: async () => ({}),
+            headers: new Headers(),
+          } as Response;
+        }
+        // GET succeeds
+        return {
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          url,
+          text: async () => "<html><body>schedule</body></html>",
+          json: async () => ({}),
+          headers: new Headers(),
+        } as Response;
+      }
+      return {
+        ok: false,
+        status: 404,
+        statusText: "Not Found",
+        url,
+        text: async () => "",
+        json: async () => ({}),
+        headers: new Headers(),
+      } as Response;
+    }) as unknown as typeof fetch;
+
+    const result = await probeScheduleUrl(ORIGIN, { fetchFn });
+    expect(result).toBe(`${ORIGIN}/schedule`);
+    // Verify both HEAD and GET were called for /schedule
+    const calls = (fetchFn as ReturnType<typeof vi.fn>).mock.calls;
+    const headCall = calls.find(
+      (c) => String(c[0]) === `${ORIGIN}/schedule` && (c[1]?.method ?? "GET").toUpperCase() === "HEAD",
+    );
+    const getCall = calls.find(
+      (c) => String(c[0]) === `${ORIGIN}/schedule` && (c[1]?.method ?? "GET").toUpperCase() === "GET",
+    );
+    expect(headCall).toBeDefined();
+    expect(getCall).toBeDefined();
+  });
+
+  it("skips a probe when HEAD returns 405 and the GET fallback also fails", async () => {
+    // /schedule HEAD → 405, GET → 500; /programming HEAD → 200.
+    const fetchFn = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = (init?.method ?? "GET").toUpperCase();
+      if (url === `${ORIGIN}/schedule`) {
+        if (method === "HEAD") {
+          return { ok: false, status: 405, url, text: async () => "", json: async () => ({}), headers: new Headers() } as Response;
+        }
+        return { ok: false, status: 500, url, text: async () => "", json: async () => ({}), headers: new Headers() } as Response;
+      }
+      if (url === `${ORIGIN}/programming` && method === "HEAD") {
+        return { ok: true, status: 200, url, text: async () => "", json: async () => ({}), headers: new Headers() } as Response;
+      }
+      return { ok: false, status: 404, url, text: async () => "", json: async () => ({}), headers: new Headers() } as Response;
+    }) as unknown as typeof fetch;
+
+    const result = await probeScheduleUrl(ORIGIN, { fetchFn });
+    expect(result).toBe(`${ORIGIN}/programming`);
+  });
+
   it("skips a probe when fetchFn throws and tries the next one", async () => {
     let callCount = 0;
     const fetchFn = vi.fn(async (input: RequestInfo | URL) => {
