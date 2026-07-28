@@ -482,4 +482,67 @@ describe("parseExtractedSchedule", () => {
     expect(result![1]!.dayOfWeek).toBe("Wed");
     expect(result![2]!.dayOfWeek).toBe("Sat");
   });
+
+  it("normalises SCREAMING_CASE full day names and keeps them in the output", () => {
+    // LLMs sometimes respond with all-caps day names.  Every row must survive
+    // and map to the correct 3-letter abbreviation.
+    const raw = JSON.stringify([
+      { showName: "Dawn Patrol", dayOfWeek: "MONDAY", startTime: "06:00", endTime: "08:00", djName: "DJ Alpha" },
+      { showName: "Midday Drift", dayOfWeek: "WEDNESDAY", startTime: "12:00", endTime: "14:00", djName: null },
+      { showName: "Twilight Zone", dayOfWeek: "FRIDAY", startTime: "20:00", endTime: "22:00", djName: "DJ Beta" },
+      { showName: "Sunday Session", dayOfWeek: "SUNDAY", startTime: "11:00", endTime: "13:00", djName: null },
+    ]);
+    const result = parseExtractedSchedule(raw);
+    expect(result).not.toBeNull();
+    expect(result).toHaveLength(4);
+    expect(result![0]).toMatchObject({ dayOfWeek: "Mon", showName: "Dawn Patrol" });
+    expect(result![1]).toMatchObject({ dayOfWeek: "Wed", showName: "Midday Drift" });
+    expect(result![2]).toMatchObject({ dayOfWeek: "Fri", showName: "Twilight Zone" });
+    expect(result![3]).toMatchObject({ dayOfWeek: "Sun", showName: "Sunday Session" });
+  });
+
+  it("normalises a complete week of SCREAMING_CASE day names without dropping any row", () => {
+    const screamingDays = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"];
+    const expectedAbbrevs = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const raw = JSON.stringify(
+      screamingDays.map((d, i) => ({
+        showName: `Show ${i}`,
+        dayOfWeek: d,
+        startTime: "10:00",
+        endTime: "11:00",
+        djName: null,
+      })),
+    );
+    const result = parseExtractedSchedule(raw);
+    expect(result).not.toBeNull();
+    expect(result).toHaveLength(7);
+    result!.forEach((show, i) => {
+      expect(show.dayOfWeek).toBe(expectedAbbrevs[i]);
+    });
+  });
+
+  it("handles a realistic prose-fenced LLM blob with mixed-case day names end-to-end", () => {
+    // Simulates a real LLM response: markdown fence, prose intro line stripped
+    // by the fence-unwrap logic, and a mix of title-case, SCREAMING, and
+    // already-correct 3-letter abbreviations all in the same payload.
+    const raw =
+      "```json\n" +
+      JSON.stringify([
+        { showName: "Breakfast Club", dayOfWeek: "monday", startTime: "07:00", endTime: "09:00", djName: "DJ Rosa" },
+        { showName: "Lunch Hour Hits", dayOfWeek: "TUESDAY", startTime: "12:00", endTime: "13:00", djName: null },
+        { showName: "Afternoon Express", dayOfWeek: "Wednesday", startTime: "15:00", endTime: "17:00", djName: "DJ Sam" },
+        { showName: "Drive Time", dayOfWeek: "Thu", startTime: "17:00", endTime: "19:00", djName: null },
+        { showName: "Friday Night Fever", dayOfWeek: "FRIDAY", startTime: "21:00", endTime: "23:00", djName: "DJ Noel" },
+        { showName: "Weekend Kickoff", dayOfWeek: "Saturday", startTime: "10:00", endTime: "12:00", djName: null },
+        { showName: "Sunday Brunch", dayOfWeek: "SUNDAY", startTime: "11:00", endTime: "13:00", djName: "DJ Jules" },
+      ]) +
+      "\n```";
+
+    const result = parseExtractedSchedule(raw);
+    expect(result).not.toBeNull();
+    // All 7 rows must survive — none silently dropped due to casing.
+    expect(result).toHaveLength(7);
+    const days = result!.map((s) => s.dayOfWeek);
+    expect(days).toEqual(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
+  });
 });
