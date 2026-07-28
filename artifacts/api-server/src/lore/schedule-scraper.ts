@@ -366,6 +366,25 @@ export async function scrapeStationSchedule(
         console.info(
           `[schedule-scraper] using pre-known schedule URL for ${target.slug}: ${target.scheduleUrl}`,
         );
+      } else {
+        // The pre-known URL returned a non-2xx response (or timed out) — the
+        // station may have moved its schedule page. Clear the stale URL so the
+        // full discovery flow runs this attempt and future ones.
+        console.info(
+          `[schedule-scraper] stale scheduleUrl cleared for ${target.slug} (fetch failed): ${target.scheduleUrl} — falling through to discovery`,
+        );
+        try {
+          await db
+            .update(stationsTable)
+            .set({ scheduleUrl: null })
+            .where(eq(stationsTable.id, target.id));
+        } catch (err) {
+          // Non-fatal — worst case the next scrape tries the stale URL again.
+          console.warn(
+            `[schedule-scraper] failed to clear stale scheduleUrl for ${target.slug}`,
+            err,
+          );
+        }
       }
     } else {
       console.warn(
