@@ -157,8 +157,20 @@ export async function scoreCrossingCandidates(): Promise<ScoredStation[]> {
     // ── Show-scoped score ──────────────────────────────────────────────────
     // Find each station's currently-airing scraped_show, then restrict
     // historical spins to the recurring weekly time window for that show.
-    // Uses DISTINCT ON to pick exactly one show per station (in case two
-    // rows overlap at the boundary minute).
+    //
+    // The original query filtered spins with to_char(played_at AT TIME ZONE
+    // tz, 'Dy'/'HH24:MI') comparisons, which are not index-sargable —
+    // Postgres cannot use spins_station_played_at_idx for those expressions.
+    //
+    // Rewrite strategy: a show_utc_ranges CTE uses generate_series to expand
+    // the recurring weekly slot into concrete UTC timestamptz pairs (one per
+    // matching weekday in the 60-day window, ~8–9 rows per station).  Spins
+    // are then filtered with played_at >= range_start AND played_at <
+    // range_end — plain range predicates that allow index scans.
+    //
+    // The currently_airing CTE still uses to_char(now() ...) to identify
+    // the current wall-clock slot; that executes once against scraped_shows,
+    // not against the large spins table, so it is fine.
     db.execute(sql`
       WITH currently_airing AS (
         SELECT DISTINCT ON (ss.station_id)
@@ -177,6 +189,34 @@ export async function scoreCrossingCandidates(): Promise<ScoredStation[]> {
           AND to_char(now() AT TIME ZONE st.iana_timezone, 'HH24:MI')
                 < ss.end_time
         ORDER BY ss.station_id, ss.start_time
+      ),
+      show_utc_ranges AS (
+        -- Expand each recurring weekly slot into concrete UTC timestamp ranges
+        -- covering the full crossing window (~8-9 occurrences per station).
+        -- date_trunc('day', gs AT TIME ZONE tz) yields the local midnight as a
+        -- timestamp-without-tz; adding start_time/end_time intervals then
+        -- applying AT TIME ZONE tz converts back to timestamptz (UTC), giving
+        -- Postgres plain range values it can match against the B-tree index on
+        -- (station_id, played_at).
+        SELECT
+          ca.station_id,
+          ca.dj_name,
+          (
+            date_trunc('day', gs AT TIME ZONE st.iana_timezone)
+            + ca.start_time::interval
+          ) AT TIME ZONE st.iana_timezone  AS range_start,
+          (
+            date_trunc('day', gs AT TIME ZONE st.iana_timezone)
+            + ca.end_time::interval
+          ) AT TIME ZONE st.iana_timezone  AS range_end
+        FROM currently_airing ca
+        JOIN stations st ON st.id = ca.station_id
+        CROSS JOIN generate_series(
+          now() - make_interval(days => ${CROSSING_WINDOW_DAYS}),
+          now(),
+          interval '1 day'
+        ) AS gs
+        WHERE to_char(gs AT TIME ZONE st.iana_timezone, 'Dy') = ca.day_of_week
       )
       SELECT
         st.id                                   AS station_id,
@@ -195,6 +235,9 @@ export async function scoreCrossingCandidates(): Promise<ScoredStation[]> {
       FROM spins s
       JOIN stations st ON st.id = s.station_id
       JOIN currently_airing ca ON ca.station_id = st.id
+      JOIN show_utc_ranges r ON r.station_id = st.id
+        AND s.played_at >= r.range_start
+        AND s.played_at <  r.range_end
       WHERE st.now_playing_source = 'radio_browser_icy'
         AND st.active = true
         AND st.hidden = false
@@ -202,18 +245,6 @@ export async function scoreCrossingCandidates(): Promise<ScoredStation[]> {
         AND s.mbid IS NOT NULL
         AND s.played_at > now() - make_interval(days => ${CROSSING_WINDOW_DAYS})
         AND s.mbid IN (SELECT DISTINCT mbid FROM library_items)
-        AND to_char(
-              s.played_at AT TIME ZONE st.iana_timezone,
-              'Dy'
-            ) = ca.day_of_week
-        AND to_char(
-              s.played_at AT TIME ZONE st.iana_timezone,
-              'HH24:MI'
-            ) >= ca.start_time
-        AND to_char(
-              s.played_at AT TIME ZONE st.iana_timezone,
-              'HH24:MI'
-            ) < ca.end_time
       GROUP BY st.id, st.slug, st.name, st.now_playing_config, ca.dj_name
       ORDER BY score DESC
     `),
