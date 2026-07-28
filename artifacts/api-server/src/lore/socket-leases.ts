@@ -219,15 +219,17 @@ export async function scoreCrossingCandidates(): Promise<ScoredStation[]> {
     `),
   ]);
 
-  // Index show-scoped results by stationId for O(1) merge.
-  const showScoped = new Map<number, { score: number; crossings: number; activeDj: string | null }>();
+  // Build a map of show-scoped results; skip zero-crossing entries so a show
+  // with no library history doesn't wipe out a useful station-wide score.
+  const showScopedMap = new Map<
+    number,
+    { score: number; crossings: number; activeDj: string | null }
+  >();
   for (const r of showRows.rows as Array<Record<string, unknown>>) {
     const id = Number(r["station_id"]);
     const crossings = Number(r["crossings"]);
-    // Only prefer show-scoped when it actually has crossings — a show with
-    // zero historical library hits should let the station-wide score stand.
     if (crossings > 0) {
-      showScoped.set(id, {
+      showScopedMap.set(id, {
         score: Number(r["score"]),
         crossings,
         activeDj: r["active_dj"] != null ? String(r["active_dj"]) : null,
@@ -235,29 +237,104 @@ export async function scoreCrossingCandidates(): Promise<ScoredStation[]> {
     }
   }
 
-  const out: ScoredStation[] = [];
+  const stationBase: ScoredStation[] = [];
   for (const r of stationRows.rows as Array<Record<string, unknown>>) {
     const config = (r["config"] ?? {}) as Record<string, unknown>;
     if (!pickWatcherStreamUrl(config)) continue; // no persistent-capable mount
-
-    const stationId = Number(r["station_id"]);
-    const scoped = showScoped.get(stationId);
-
-    out.push({
-      stationId,
+    stationBase.push({
+      stationId: Number(r["station_id"]),
       slug: String(r["slug"]),
       name: String(r["name"]),
-      score: scoped ? scoped.score : Number(r["score"]),
-      crossings: scoped ? scoped.crossings : Number(r["crossings"]),
-      ...(scoped
-        ? {
-            scopedToShow: true,
-            activeDj: scoped.activeDj ?? undefined,
-          }
-        : {}),
+      score: Number(r["score"]),
+      crossings: Number(r["crossings"]),
     });
   }
-  return out;
+
+  return mergeShowScoped(stationBase, showScopedMap);
+}
+
+/**
+ * Merge show-scoped override scores onto station-wide base scores.
+ *
+ * When a station has a show-scoped entry with crossings > 0, its score and
+ * crossing count are replaced by the show-scoped values and `scopedToShow` is
+ * set. Stations absent from `showScopedMap` (or present with zero crossings)
+ * keep their station-wide values unchanged.
+ *
+ * Exported for unit testing without a DB.
+ */
+export function mergeShowScoped(
+  base: ScoredStation[],
+  showScopedMap: ReadonlyMap<
+    number,
+    { score: number; crossings: number; activeDj: string | null }
+  >,
+): ScoredStation[] {
+  return base.map((s) => {
+    const scoped = showScopedMap.get(s.stationId);
+    if (!scoped || scoped.crossings === 0) return s;
+    return {
+      ...s,
+      score: scoped.score,
+      crossings: scoped.crossings,
+      scopedToShow: true,
+      activeDj: scoped.activeDj ?? undefined,
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Follow-bonus multiplier
+// ---------------------------------------------------------------------------
+
+/**
+ * Score multiplier applied when the currently-airing show's DJ name matches
+ * a handle the user follows. The goal is to make a followed person's time
+ * slot consistently win a lease during their broadcast.
+ *
+ * Value chosen empirically: 3× is large enough to beat a strong unfollowed
+ * station (crossing score ~1–5) while not being so extreme that a brand-new
+ * followed DJ with a single crossing dominates indefinitely.
+ *
+ * Set to 1 to disable without code changes (env-override not needed — this
+ * path is currently dormant until the follow-graph DB table ships).
+ */
+export const FOLLOW_BONUS = 3;
+
+/**
+ * Apply a `FOLLOW_BONUS` multiplier to stations whose active show's DJ name
+ * fuzzy-matches any handle in `followedDjNames`.
+ *
+ * Matching is case-insensitive and normalises runs of non-alphanumeric
+ * characters to a single space so "DJ Snake", "dj-snake", and "djsnake" all
+ * match each other. Only stations with `score > 0` receive the bonus — a
+ * station with zero library crossings must earn a real crossing first.
+ *
+ * `followedDjNames` should contain lowercased normalised handles. Pass an
+ * empty Set when the follow graph is unavailable (current default until the
+ * `picker_follows` table ships).
+ *
+ * Exported for unit testing without a DB.
+ */
+export function applyFollowBonus(
+  stations: ScoredStation[],
+  followedDjNames: ReadonlySet<string>,
+): ScoredStation[] {
+  if (followedDjNames.size === 0) return stations;
+  return stations.map((s) => {
+    if (s.score <= 0 || !s.activeDj) return s;
+    const normalised = normaliseDjName(s.activeDj);
+    if (!followedDjNames.has(normalised)) return s;
+    return { ...s, score: s.score * FOLLOW_BONUS };
+  });
+}
+
+/** Lowercased, punctuation-collapsed name for fuzzy DJ handle matching. */
+export function normaliseDjName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 /** Count pinned favorites (ICY favorites that hold persistent sockets). */
@@ -290,7 +367,12 @@ export async function evaluateLeases(): Promise<void> {
       scoreCrossingCandidates(),
     ]);
     const slots = Math.max(0, CONNECTION_BUDGET - pinned);
-    const targets = pickLeaseTargets(scored, slots);
+    // Apply follow-bonus before selecting lease targets so followed DJs win
+    // slots during their broadcast. The follow graph doesn't exist in DB yet
+    // (picker_follows table is a follow-up task), so we pass an empty set —
+    // this is a no-op today but the wiring is in place for when follows land.
+    const boosted = applyFollowBonus(scored, new Set());
+    const targets = pickLeaseTargets(boosted, slots);
     const targetIds = new Set(targets.map((t) => t.stationId));
 
     // Demotions first — free the sockets before dialing new ones.
