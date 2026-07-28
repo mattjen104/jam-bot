@@ -1,4 +1,4 @@
-import { db, stationsTable, type Station } from "@workspace/db";
+import { db, stationsTable, pickerFollowsTable, type Station } from "@workspace/db";
 import { and, eq, sql, inArray } from "drizzle-orm";
 import {
   leaseStationWatcher,
@@ -368,6 +368,23 @@ export function normaliseDjName(name: string): string {
     .trim();
 }
 
+/**
+ * Load the union of all followed picker handles from the DB and return them
+ * as a normalised Set (lowercased, punctuation-collapsed) ready for
+ * `applyFollowBonus`. An empty set is returned if the table has no rows or
+ * the query fails — the scorer degrades gracefully to zero bonus.
+ */
+async function loadFollowedDjHandles(): Promise<ReadonlySet<string>> {
+  const rows = await db
+    .selectDistinct({ handle: pickerFollowsTable.pickerHandle })
+    .from(pickerFollowsTable);
+  const set = new Set<string>();
+  for (const r of rows) {
+    set.add(normaliseDjName(r.handle));
+  }
+  return set;
+}
+
 /** Count pinned favorites (ICY favorites that hold persistent sockets). */
 async function countPinnedFavorites(): Promise<number> {
   const [row] = await db
@@ -393,16 +410,16 @@ export async function evaluateLeases(): Promise<void> {
   if (evaluating) return; // guard against overlapping cycles
   evaluating = true;
   try {
-    const [pinned, scored] = await Promise.all([
+    const [pinned, scored, followedHandles] = await Promise.all([
       countPinnedFavorites(),
       scoreCrossingCandidates(),
+      loadFollowedDjHandles(),
     ]);
     const slots = Math.max(0, CONNECTION_BUDGET - pinned);
-    // Apply follow-bonus before selecting lease targets so followed DJs win
-    // slots during their broadcast. The follow graph doesn't exist in DB yet
-    // (picker_follows table is a follow-up task), so we pass an empty set —
-    // this is a no-op today but the wiring is in place for when follows land.
-    const boosted = applyFollowBonus(scored, new Set());
+    // Apply follow-bonus: stations whose active show's DJ name fuzzy-matches
+    // a followed handle get a FOLLOW_BONUS (3×) multiplier so they reliably
+    // win lease slots during their broadcast window.
+    const boosted = applyFollowBonus(scored, followedHandles);
     const targets = pickLeaseTargets(boosted, slots);
     const targetIds = new Set(targets.map((t) => t.stationId));
 

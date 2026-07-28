@@ -1506,3 +1506,39 @@ export const criCandidatesTable = pgTable("cri_candidates", {
 
 export type CriCandidate = typeof criCandidatesTable.$inferSelect;
 export type InsertCriCandidate = typeof criCandidatesTable.$inferInsert;
+
+/**
+ * Follow graph: a listener's explicit "follow" of a picker (DJ, blog,
+ * curator, etc.) by the picker's canonical handle.
+ *
+ * This table is the source of truth for the lease-scorer's follow-bonus:
+ * during `evaluateLeases`, all followed handles are loaded and passed to
+ * `applyFollowBonus`, which gives a 3× multiplier to any station whose
+ * currently-airing show's DJ name fuzzy-matches a followed handle — so a
+ * followed DJ's time slot reliably wins a lease during their broadcast.
+ *
+ * `pickerHandle` matches `pickers.handle`; it is stored as text (not a FK)
+ * so that a listener can follow a DJ handle even before a corresponding
+ * picker row exists in the DB (e.g. followed via the dial before their
+ * picker page is seeded).
+ */
+export const pickerFollowsTable = pgTable(
+  "picker_follows",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => loreUsersTable.id, { onDelete: "cascade" }),
+    /** Canonical picker handle (matches pickers.handle when the row exists). */
+    pickerHandle: text("picker_handle").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("picker_follows_user_handle_uq").on(t.userId, t.pickerHandle),
+    index("picker_follows_user_idx").on(t.userId),
+    index("picker_follows_handle_idx").on(t.pickerHandle),
+  ],
+);
+
+export type PickerFollow = typeof pickerFollowsTable.$inferSelect;
+export type InsertPickerFollow = typeof pickerFollowsTable.$inferInsert;
