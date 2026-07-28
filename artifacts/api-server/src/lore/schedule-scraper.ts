@@ -134,11 +134,15 @@ export function htmlToPlainText(html: string): string {
 
 /**
  * Find an on-page link that plausibly leads to a dedicated schedule page,
- * e.g. `<a href="/schedule">Programming</a>`. Pure, no I/O.
+ * e.g. `<a href="/schedule">Programming</a>`. Inspects all anchors in the
+ * document (including those inside nav/header/footer). Pure, no I/O.
  */
 export function findScheduleLink(html: string, baseUrl: string): string | null {
   const re = /<a\s+[^>]*href=["']([^"'#]+)["'][^>]*>([\s\S]*?)<\/a>/gi;
-  const keywords = /schedule|programming|program\s?guide|shows|line-?up/i;
+  // Expanded keyword set: original terms plus common alternatives used by
+  // station sites whose schedule link doesn't say "schedule" or "shows".
+  const keywords =
+    /schedule|programming|program\s?guide|shows|line-?up|on[\s-]?air|timetable|calendar|broadcast|playlist|listen\s?live|grid/i;
   let m: RegExpExecArray | null;
   while ((m = re.exec(html))) {
     const href = m[1]!;
@@ -152,6 +156,73 @@ export function findScheduleLink(html: string, baseUrl: string): string | null {
     }
   }
   return null;
+}
+
+/**
+ * Well-known URL path suffixes that radio stations commonly use for their
+ * schedule pages. Probed in order; the first live (200/3xx-same-domain) URL
+ * wins. Pure list — no I/O here.
+ */
+export const SCHEDULE_PATH_PROBES = [
+  "/schedule",
+  "/programming",
+  "/shows",
+  "/on-air",
+  "/timetable",
+  "/programme",
+];
+
+/**
+ * Probe common schedule URL suffixes with HEAD requests. Returns the first
+ * URL that responds with 200 or a redirect that stays on the same origin.
+ * Returns null when all probes fail or robots.txt disallows.
+ */
+export async function probeScheduleUrl(
+  origin: string,
+  opts: { fetchFn?: typeof fetch } = {},
+): Promise<string | null> {
+  const fetchFn = opts.fetchFn ?? fetch;
+  for (const path of SCHEDULE_PATH_PROBES) {
+    const url = `${origin}${path}`;
+    try {
+      const res = await fetchFn(url, {
+        method: "HEAD",
+        headers: { "User-Agent": "Lore-Discovery-Bot/1.0" },
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        redirect: "follow",
+      });
+      if (res.ok) {
+        // Ensure the final URL (after any redirect) is still on the same origin.
+        let finalOrigin: string;
+        try {
+          finalOrigin = new URL(res.url || url).origin;
+        } catch {
+          continue;
+        }
+        if (finalOrigin === origin) return res.url || url;
+      }
+    } catch {
+      // Timeout / network error for this probe — try the next one.
+    }
+  }
+  return null;
+}
+
+/**
+ * Heuristic: does this HTML body already contain an inline schedule?
+ * Looks for the presence of at least 3 day-of-week abbreviations AND at least
+ * 2 HH:MM time patterns in the visible text. Pure, no I/O.
+ */
+export function homepageLooksLikeSchedule(html: string): boolean {
+  const text = htmlToPlainText(html);
+  const dayRe = /\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/g;
+  const timeRe = /\b([01]\d|2[0-3]):[0-5]\d\b/g;
+  const days = text.match(dayRe) ?? [];
+  const times = text.match(timeRe) ?? [];
+  // Require at least 3 distinct day tokens and at least 2 time tokens so a
+  // passing mention of "Monday" + "10am" in normal prose doesn't trigger it.
+  const uniqueDays = new Set(days);
+  return uniqueDays.size >= 3 && times.length >= 2;
 }
 
 /**
@@ -258,7 +329,9 @@ export async function scrapeStationSchedule(
   }
 
   if (await isCrawlBlocked(origin, { fetchFn })) {
-    console.info(`[schedule-scraper] robots.txt blocks ${target.slug} (${origin})`);
+    console.info(
+      `[schedule-scraper] give-up station=${target.id} slug=${target.slug} reason=robots_blocked origin=${origin}`,
+    );
     return fail();
   }
 
@@ -303,16 +376,27 @@ export async function scrapeStationSchedule(
 
   // Fall back to homepage + link-discovery when no pre-known schedule URL
   // was configured or the direct fetch failed.
+  //
+  // Discovery strategy (in order, short-circuit on first win):
+  //   1. Anchor scan: findScheduleLink on the homepage HTML.
+  //   2. Common-path probing: HEAD-check well-known suffixes (/schedule, etc).
+  //   3. Inline schedule: homepage itself looks like a schedule (day + time tokens).
+  //
+  // The URL found by probing or inline detection is written back to
+  // stations.scheduleUrl so future re-scrapes skip discovery entirely.
+  let discoveredScheduleUrl: string | null = null;
+
   if (!pageHtml) {
     const homeHtml = await fetchPage(target.homepageUrl);
-    if (!homeHtml) return fail();
+    if (!homeHtml) {
+      console.info(
+        `[schedule-scraper] give-up station=${target.id} slug=${target.slug} reason=no_link_found (homepage fetch failed)`,
+      );
+      return fail();
+    }
 
-    pageHtml = homeHtml;
+    // --- Strategy 1: anchor scan ---
     const scheduleLink = findScheduleLink(homeHtml, target.homepageUrl);
-    // Only follow the discovered link when it's first-party (same origin as
-    // the station's own homepage). A schedule/programming-looking link
-    // pointing off-site (ad network, unrelated aggregator, etc) is not this
-    // station's own published schedule and must not be fetched/trusted.
     if (scheduleLink) {
       let scheduleOrigin: string | null = null;
       try {
@@ -322,10 +406,63 @@ export async function scrapeStationSchedule(
       }
       if (scheduleOrigin === origin) {
         const linkedHtml = await fetchPage(scheduleLink);
-        if (linkedHtml) pageHtml = linkedHtml;
+        if (linkedHtml) {
+          pageHtml = linkedHtml;
+          discoveredScheduleUrl = scheduleLink;
+        }
       } else {
         console.info(
           `[schedule-scraper] ignoring off-site schedule link for ${target.slug}: ${scheduleLink}`,
+        );
+      }
+    }
+
+    // --- Strategy 2: common-path URL probing ---
+    if (!pageHtml) {
+      const probedUrl = await probeScheduleUrl(origin, { fetchFn });
+      if (probedUrl) {
+        const probedHtml = await fetchPage(probedUrl);
+        if (probedHtml) {
+          pageHtml = probedHtml;
+          discoveredScheduleUrl = probedUrl;
+          console.info(
+            `[schedule-scraper] probed schedule URL for ${target.slug}: ${probedUrl}`,
+          );
+        }
+      }
+    }
+
+    // --- Strategy 3: homepage already contains an inline schedule ---
+    if (!pageHtml) {
+      if (homepageLooksLikeSchedule(homeHtml)) {
+        pageHtml = homeHtml;
+        // No external URL to persist — the homepage itself is the schedule source.
+        console.info(
+          `[schedule-scraper] using homepage as inline schedule for ${target.slug}`,
+        );
+      }
+    }
+
+    if (!pageHtml) {
+      console.info(
+        `[schedule-scraper] give-up station=${target.id} slug=${target.slug} reason=probe_exhausted`,
+      );
+      return fail();
+    }
+
+    // Persist the newly-discovered schedule URL so future re-scrapes skip
+    // discovery and go straight to the known page.
+    if (discoveredScheduleUrl) {
+      try {
+        await db
+          .update(stationsTable)
+          .set({ scheduleUrl: discoveredScheduleUrl })
+          .where(eq(stationsTable.id, target.id));
+      } catch (err) {
+        // Non-fatal — worst case the next scrape rediscovers the URL.
+        console.warn(
+          `[schedule-scraper] failed to persist scheduleUrl for ${target.slug}`,
+          err,
         );
       }
     }
@@ -344,7 +481,9 @@ export async function scrapeStationSchedule(
   }
 
   if (shows === null) {
-    console.info(`[schedule-scraper] low-confidence/unparseable result for ${target.slug}`);
+    console.info(
+      `[schedule-scraper] give-up station=${target.id} slug=${target.slug} reason=llm_empty (unparseable result)`,
+    );
     return fail();
   }
 
