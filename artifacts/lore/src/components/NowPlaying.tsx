@@ -231,17 +231,18 @@ export function NowPlaying({ data, isLoading, fallbackStation, clientNowPlaying 
               </div>
             )}
 
-            {rec && (
+            {(rec || np?.spinId) && (
               <div className="mt-4 flex flex-wrap gap-2">
                 <KeepButton
-                  mbid={rec.mbid}
+                  mbid={rec?.mbid ?? null}
+                  spinId={!rec?.mbid && np?.spinId ? np.spinId : null}
                   provenance={{
                     kind: "keep",
                     stationSlug: station?.slug,
                   }}
                 />
-                <LikeButton mbid={rec.mbid} />
-                <ShareButton sharePath={`songs/${rec.mbid}`} kind="song" />
+                {rec && <LikeButton mbid={rec.mbid} />}
+                {rec && <ShareButton sharePath={`songs/${rec.mbid}`} kind="song" />}
               </div>
             )}
 

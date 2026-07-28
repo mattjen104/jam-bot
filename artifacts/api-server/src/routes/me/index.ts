@@ -7,6 +7,7 @@ import {
   libraryItemsTable,
   libraryImportJobsTable,
   keepTargetsTable,
+  pendingKeepsTable,
   recordingsTable,
   resolutionCacheTable,
   picksTable,
@@ -879,16 +880,54 @@ router.get("/me/library", h(async (req, res) => {
  * POST /api/me/keep — upsert a recording into library_items and optionally
  * mirror to enabled streaming services.
  * Body: { mbid: string, provenance?: object }
+ *    OR { spinId: number, provenance?: object }  ← unresolved-track path
  */
 router.post("/me/keep", h(async (req, res) => {
   const user = (req as AuthedRequest).loreUser;
-  const { mbid, provenance: provenanceOverride } = req.body as {
+  const { mbid, spinId, provenance: provenanceOverride } = req.body as {
     mbid?: string;
+    spinId?: number;
     provenance?: Partial<LibraryItemProvenance>;
   };
 
+  // ── Spin-based save (unresolved or not-yet-resolved track) ────────────────
+  if (!mbid && spinId != null) {
+    const [spin] = await db
+      .select({ id: spinsTable.id, mbid: spinsTable.mbid })
+      .from(spinsTable)
+      .where(eq(spinsTable.id, spinId))
+      .limit(1);
+
+    if (!spin) return res.status(404).json({ error: "Spin not found" });
+
+    // If the spin already resolved, also write to library_items.
+    let promotedAt: Date | null = null;
+    if (spin.mbid) {
+      const provenance: LibraryItemProvenance = { kind: "keep", ...provenanceOverride };
+      await db
+        .insert(libraryItemsTable)
+        .values({ userId: user.id, mbid: spin.mbid, provenance, addedAt: new Date() })
+        .onConflictDoUpdate({
+          target: [libraryItemsTable.userId, libraryItemsTable.mbid],
+          set: { provenance, addedAt: new Date() },
+        });
+      promotedAt = new Date();
+    }
+
+    await db
+      .insert(pendingKeepsTable)
+      .values({ userId: user.id, spinId: spin.id, promotedAt })
+      .onConflictDoUpdate({
+        target: [pendingKeepsTable.userId, pendingKeepsTable.spinId],
+        set: { promotedAt },
+      });
+
+    return res.json({ keptToLore: promotedAt != null, pendingKept: true, mirrors: [] });
+  }
+
+  // ── MBID-based (resolved) keep ────────────────────────────────────────────
   if (!mbid || typeof mbid !== "string") {
-    return res.status(400).json({ error: "mbid is required" });
+    return res.status(400).json({ error: "mbid or spinId is required" });
   }
 
   // The recording must already be on the spine.
@@ -967,6 +1006,69 @@ router.post("/me/keep", h(async (req, res) => {
   }
 
   return res.json({ keptToLore: true, mirrors });
+}));
+
+/**
+ * DELETE /api/me/keep/spin/:spinId — remove a spin-based save.
+ * Deletes from pending_keeps; if the spin resolved, also removes library_items.
+ * Must be registered before DELETE /me/keep/:mbid or "spin" matches :mbid.
+ */
+router.delete("/me/keep/spin/:spinId", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+  const spinId = parseInt(typeof req.params.spinId === "string" ? req.params.spinId : "", 10);
+  if (isNaN(spinId)) return res.status(400).json({ error: "invalid spinId" });
+
+  await db
+    .delete(pendingKeepsTable)
+    .where(and(eq(pendingKeepsTable.userId, user.id), eq(pendingKeepsTable.spinId, spinId)));
+
+  // If the spin has an MBID, clean up library_items too.
+  const [spin] = await db
+    .select({ mbid: spinsTable.mbid })
+    .from(spinsTable)
+    .where(eq(spinsTable.id, spinId))
+    .limit(1);
+
+  if (spin?.mbid) {
+    await db
+      .delete(libraryItemsTable)
+      .where(and(eq(libraryItemsTable.userId, user.id), eq(libraryItemsTable.mbid, spin.mbid)));
+  }
+
+  return res.status(204).end();
+}));
+
+/**
+ * GET /api/me/keep/pending-status?spinIds=1,2,3 — batch spin save-state check.
+ * Returns two sets:
+ *   savedSpinIds  — spin was saved AND promoted to library_items (resolved)
+ *   pendingSpinIds — spin was saved but not yet resolved to an MBID
+ */
+router.get("/me/keep/pending-status", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+  const rawIds = typeof req.query.spinIds === "string" ? req.query.spinIds : "";
+  const spinIds = rawIds
+    .split(",")
+    .map((s) => parseInt(s.trim(), 10))
+    .filter((n) => !isNaN(n) && n > 0)
+    .slice(0, 50);
+
+  if (spinIds.length === 0) return res.json({ savedSpinIds: [], pendingSpinIds: [] });
+
+  const rows = await db
+    .select({ spinId: pendingKeepsTable.spinId, promotedAt: pendingKeepsTable.promotedAt })
+    .from(pendingKeepsTable)
+    .where(
+      and(
+        eq(pendingKeepsTable.userId, user.id),
+        inArray(pendingKeepsTable.spinId, spinIds),
+      ),
+    );
+
+  const savedSpinIds = rows.filter((r) => r.promotedAt != null).map((r) => r.spinId);
+  const pendingSpinIds = rows.filter((r) => r.promotedAt == null).map((r) => r.spinId);
+
+  return res.json({ savedSpinIds, pendingSpinIds });
 }));
 
 /**

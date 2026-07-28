@@ -3,33 +3,67 @@ import { Bookmark, Check, Loader2 } from "lucide-react";
 import {
   useMyConnections,
   useMyKeepStatus,
+  useMySpinKeepStatus,
   useMutationKeep,
+  useMutationKeepSpin,
   useMutationUnkeep,
+  useMutationUnkeepSpin,
   startSpotifyLibraryConnect,
   type LibraryProvenance,
 } from "../lib/meHooks";
 
 /**
- * Keep button styled for the webplayer theme. Same behavior as the classic
- * KeepButton: unauthenticated click starts the Spotify connect flow.
+ * Keep button styled for the webplayer theme. Same behavior as KeepButton:
+ * unauthenticated click starts the Spotify connect flow.
+ *
+ * Accepts either `mbid` (resolved track) or `spinId` (unresolved spin).
  */
 export function WpKeep({
   mbid,
+  spinId,
   provenance,
 }: {
-  mbid: string;
+  mbid?: string | null;
+  spinId?: number | null;
   provenance?: Partial<LibraryProvenance>;
 }) {
   const { data: connections, isLoading: connLoading } = useMyConnections();
   const isAuthenticated = !connLoading && connections !== null;
 
-  const { data: keptSet } = useMyKeepStatus(isAuthenticated ? [mbid] : []);
-  const kept = keptSet?.has(mbid) === true;
+  // MBID path
+  const { data: keptSet } = useMyKeepStatus(
+    isAuthenticated && mbid ? [mbid] : [],
+  );
+  const keptByMbid = mbid ? keptSet?.has(mbid) === true : false;
+
+  // Spin path
+  const spinIdArr: number[] = isAuthenticated && spinId != null && !mbid ? [spinId] : [];
+  const { data: spinStatus } = useMySpinKeepStatus(spinIdArr);
+  const keptBySpin =
+    spinId != null && !mbid
+      ? spinStatus?.saved.has(spinId) === true || spinStatus?.pending.has(spinId) === true
+      : false;
+  const pendingOnly =
+    spinId != null && !mbid
+      ? spinStatus?.pending.has(spinId) === true && spinStatus?.saved.has(spinId) !== true
+      : false;
+
+  const kept = keptByMbid || keptBySpin;
 
   const keepMutation = useMutationKeep();
+  const keepSpinMutation = useMutationKeepSpin();
   const unkeepMutation = useMutationUnkeep();
+  const unkeepSpinMutation = useMutationUnkeepSpin();
   const [connectPending, setConnectPending] = useState(false);
-  const isPending = keepMutation.isPending || unkeepMutation.isPending || connectPending;
+
+  const isPending =
+    keepMutation.isPending ||
+    keepSpinMutation.isPending ||
+    unkeepMutation.isPending ||
+    unkeepSpinMutation.isPending ||
+    connectPending;
+
+  if (!mbid && spinId == null) return null;
 
   const handleClick = async () => {
     if (isPending) return;
@@ -42,8 +76,13 @@ export function WpKeep({
       }
       return;
     }
-    if (kept) unkeepMutation.mutate(mbid);
-    else keepMutation.mutate({ mbid, provenance });
+    if (kept) {
+      if (mbid) unkeepMutation.mutate(mbid);
+      else if (spinId != null) unkeepSpinMutation.mutate(spinId);
+    } else {
+      if (mbid) keepMutation.mutate({ mbid, provenance });
+      else if (spinId != null) keepSpinMutation.mutate({ spinId, provenance });
+    }
   };
 
   if (connLoading) return null;
@@ -52,7 +91,9 @@ export function WpKeep({
   const title = !isAuthenticated
     ? "Connect Spotify to keep this track"
     : isKept
-      ? "In your library — click to remove"
+      ? pendingOnly
+        ? "Saved — resolving; click to remove"
+        : "In your library — click to remove"
       : "Keep this track in your library";
 
   return (
@@ -71,7 +112,12 @@ export function WpKeep({
         alignItems: "center",
         gap: 5,
         ...(isKept
-          ? { color: "var(--wp-text-success)", borderColor: "var(--wp-border)" }
+          ? {
+              color: pendingOnly
+                ? "var(--wp-text-amber, #f59e0b)"
+                : "var(--wp-text-success)",
+              borderColor: "var(--wp-border)",
+            }
           : {}),
       }}
     >
@@ -82,7 +128,7 @@ export function WpKeep({
       ) : (
         <Bookmark size={14} aria-hidden="true" />
       )}
-      {isKept ? "Kept" : "Keep"}
+      {isKept ? (pendingOnly ? "Saved" : "Kept") : "Keep"}
     </button>
   );
 }

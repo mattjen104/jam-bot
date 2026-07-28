@@ -286,6 +286,84 @@ export function useMutationKeep() {
   });
 }
 
+/**
+ * Save an unresolved (or just-resolved) spin by its DB id.
+ * Writes to pending_keeps; also to library_items if the spin has an MBID.
+ */
+export function useMutationKeepSpin() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      spinId,
+      provenance,
+    }: {
+      spinId: number;
+      provenance?: Partial<LibraryProvenance>;
+    }) =>
+      apiFetch<{ keptToLore: boolean; pendingKept: boolean; mirrors: unknown[] }>(
+        "/api/me/keep",
+        { method: "POST", body: JSON.stringify({ spinId, provenance }) },
+      ),
+    onSuccess: (data, { spinId }) => {
+      queryClient.setQueriesData<{ saved: Set<number>; pending: Set<number> }>(
+        { queryKey: ["me", "pending-keep-status"] },
+        (prev) => {
+          const saved = new Set(prev?.saved ?? []);
+          const pending = new Set(prev?.pending ?? []);
+          if (data.keptToLore) saved.add(spinId);
+          else pending.add(spinId);
+          return { saved, pending };
+        },
+      );
+    },
+  });
+}
+
+/** Remove a spin-based save (pending or promoted). */
+export function useMutationUnkeepSpin() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (spinId: number) =>
+      apiFetch<null>(`/api/me/keep/spin/${spinId}`, { method: "DELETE" }),
+    onSuccess: (_data, spinId) => {
+      queryClient.setQueriesData<{ saved: Set<number>; pending: Set<number> }>(
+        { queryKey: ["me", "pending-keep-status"] },
+        (prev) => {
+          const saved = new Set(prev?.saved ?? []);
+          const pending = new Set(prev?.pending ?? []);
+          saved.delete(spinId);
+          pending.delete(spinId);
+          return { saved, pending };
+        },
+      );
+    },
+  });
+}
+
+/**
+ * Batch spin save-state check.
+ * Returns two Sets: `saved` (promoted to library) and `pending` (unresolved saves).
+ */
+export function useMySpinKeepStatus(spinIds: number[]) {
+  const { data: connections, isLoading: connLoading } = useMyConnections();
+  const isAuthenticated = !connLoading && connections !== null;
+  const joined = [...spinIds].sort((a, b) => a - b).join(",");
+
+  return useQuery({
+    queryKey: ["me", "pending-keep-status", joined],
+    queryFn: () =>
+      fetchOrNull<{ savedSpinIds: number[]; pendingSpinIds: number[] }>(
+        `/api/me/keep/pending-status?spinIds=${encodeURIComponent(joined)}`,
+      ).then((d) => ({
+        saved: new Set(d?.savedSpinIds ?? []),
+        pending: new Set(d?.pendingSpinIds ?? []),
+      })),
+    enabled: isAuthenticated && spinIds.length > 0,
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
 /** Remove a recording from the library. */
 export function useMutationUnkeep() {
   const queryClient = useQueryClient();

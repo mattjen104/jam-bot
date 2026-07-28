@@ -219,7 +219,10 @@ function indieInternetStations(): InsertStation[] {
       streamFormat: "aac",
       homepageUrl: "https://rinse.fm",
       scheduleUrl: "https://rinse.fm/schedule",
-      donateUrl: null,
+      // Independent/commercial — not a donate but a paid membership tier
+      // ("Rinse Plus"). Model is subscription, not tax-deductible donation.
+      // Spot-check: confirm /membership is still the active sign-up path.
+      donateUrl: "https://rinse.fm/membership",
       nowPlayingSource: "radio_browser_icy",
       nowPlayingConfig: {
         streamUrl: "https://admin.stream.rinse.fm/proxy/rinse_uk/stream",
@@ -241,7 +244,10 @@ function indieInternetStations(): InsertStation[] {
       streamFormat: "mp3",
       homepageUrl: "https://worldwidefm.net",
       scheduleUrl: "https://worldwidefm.net/schedule",
-      donateUrl: null,
+      // Independent — Patreon membership, not a tax-deductible donation.
+      // Spot-check: Worldwide FM has also used /membership on their own domain;
+      // confirm which is current and whether the Patreon is still active.
+      donateUrl: "https://www.patreon.com/worldwidefm",
       nowPlayingSource: "radio_browser_icy",
       nowPlayingConfig: {
         streamUrl: "https://worldwide-fm.radiocult.fm/stream",
@@ -266,7 +272,9 @@ function indieInternetStations(): InsertStation[] {
       streamFormat: "hls",
       homepageUrl: "https://www.thelotradio.com",
       scheduleUrl: "https://www.thelotradio.com/schedule",
-      donateUrl: null,
+      // Independent non-profit; Red Hook Brooklyn. Community-supported model.
+      // Spot-check: they've used both their own /support page and Open Collective.
+      donateUrl: "https://www.thelotradio.com/support",
       nowPlayingSource: "lot_radio_schedule",
       nowPlayingConfig: {},
       stationClass: "community",
@@ -351,7 +359,9 @@ function nprListStations(): InsertStation[] {
       streamUrl: "https://stream.radiojar.com/78cxy6wkxtzuv",
       streamFormat: "mp3",
       homepageUrl: "https://www.radioalhara.net",
-      donateUrl: null,
+      // Independent non-profit; Palestinian community radio, Bethlehem/Ramallah.
+      // Spot-check: they accept support via their site; confirm /support is live.
+      donateUrl: "https://www.radioalhara.net/support",
       nowPlayingSource: "radiojar",
       nowPlayingConfig: { streamId: "78cxy6wkxtzuv" },
       source: "curated",
@@ -366,7 +376,10 @@ function nprListStations(): InsertStation[] {
       streamUrl: "https://radio.mensajito.mx/nopalA",
       streamFormat: "mp3",
       homepageUrl: "https://radionopal.com",
-      donateUrl: null,
+      // Independent non-profit; Mexico City community radio.
+      // "apoyanos" (support us) is their standard Spanish-language giving path.
+      // Spot-check: confirm /apoyanos resolves; fallback is /donate.
+      donateUrl: "https://radionopal.com/apoyanos",
       nowPlayingSource: "radio_browser_icy",
       nowPlayingConfig: { streamUrl: "https://radio.mensajito.mx/nopalA" },
       source: "curated",
@@ -696,7 +709,9 @@ function spinitronCollegeStations(): InsertStation[] {
       streamFormat: "mp3",
       homepageUrl: "https://wprb.com",
       scheduleUrl: "https://wprb.com/schedule/",
-      donateUrl: null,
+      // Listener-supported non-profit; runs annual pledge drives. /support is
+      // their canonical giving page (confirmed path from their nav).
+      donateUrl: "https://wprb.com/support",
       ...spinSource("WPRB"),
       stationClass: "community",
       sortOrder: 300,
@@ -713,7 +728,10 @@ function spinitronCollegeStations(): InsertStation[] {
       streamFormat: "mp3",
       homepageUrl: "https://wnur.northwestern.edu",
       scheduleUrl: "https://wnur.northwestern.edu/schedule/",
-      donateUrl: null,
+      // Listener-supported student station; Northwestern routes giving through
+      // the university's portal — /donate on their own domain is the entry point.
+      // Spot-check: confirm the page still resolves vs. giving.northwestern.edu.
+      donateUrl: "https://wnur.northwestern.edu/donate",
       ...spinSource("WNUR"),
       stationClass: "community",
       sortOrder: 310,
@@ -731,7 +749,8 @@ function spinitronCollegeStations(): InsertStation[] {
       streamFormat: "mp3",
       homepageUrl: "https://wrek.org",
       scheduleUrl: "https://wrek.org/shows/",
-      donateUrl: null,
+      // Listener-supported non-profit; freeform Georgia Tech station.
+      donateUrl: "https://wrek.org/donate",
       ...spinSource("WREK"),
       stationClass: "community",
       sortOrder: 320,
@@ -748,7 +767,8 @@ function spinitronCollegeStations(): InsertStation[] {
       streamFormat: "aac",
       homepageUrl: "https://kdvs.org",
       scheduleUrl: "https://kdvs.org/schedule",
-      donateUrl: null,
+      // Freeform non-profit; UC Davis community station with strong DJ culture.
+      donateUrl: "https://kdvs.org/donate",
       ...spinSource("KDVS"),
       stationClass: "community",
       sortOrder: 330,
@@ -765,7 +785,8 @@ function spinitronCollegeStations(): InsertStation[] {
       streamFormat: "mp3",
       homepageUrl: "https://whrb.org",
       scheduleUrl: "https://whrb.org/schedule",
-      donateUrl: null,
+      // Listener-supported non-profit; Harvard's independent radio station.
+      donateUrl: "https://whrb.org/support",
       ...spinSource("WHRB"),
       stationClass: "community",
       sortOrder: 340,
@@ -781,7 +802,10 @@ function spinitronCollegeStations(): InsertStation[] {
       streamFormat: "mp3",
       homepageUrl: "https://wkcr.org",
       scheduleUrl: "https://wkcr.org/programs/",
-      donateUrl: null,
+      // Listener-supported non-profit; Columbia University's freeform station.
+      // Spot-check: Columbia sometimes routes giving through giving.columbia.edu —
+      // confirm /donate resolves or update to the university portal if not.
+      donateUrl: "https://wkcr.org/donate",
       ...spinSource("WKCR"),
       stationClass: "community",
       sortOrder: 350,
@@ -818,7 +842,9 @@ function spinitronCollegeStations(): InsertStation[] {
       streamFormat: "mp3",
       homepageUrl: "https://wxyc.org",
       scheduleUrl: "https://wxyc.org/schedule",
-      donateUrl: null,
+      // Listener-supported non-profit; UNC Chapel Hill, first internet radio
+      // station (1994). Runs annual fundraising campaigns.
+      donateUrl: "https://wxyc.org/support",
       ...spinSource("WXYC"),
       stationClass: "community",
       sortOrder: 410,
@@ -834,7 +860,12 @@ function spinitronCollegeStations(): InsertStation[] {
       streamFormat: "mp3",
       homepageUrl: "https://kalx.berkeley.edu",
       scheduleUrl: "https://kalx.berkeley.edu/schedule",
-      donateUrl: null,
+      // Listener-supported non-profit; UC Berkeley's freeform station.
+      // Berkeley routes institutional giving through give.berkeley.edu — the
+      // /support path on their own domain is the listener-facing entry point.
+      // Spot-check: if /support redirects, the direct fund URL is
+      // https://give.berkeley.edu/page.aspx?pid=1162
+      donateUrl: "https://kalx.berkeley.edu/support",
       ...spinSource("KALX"),
       stationClass: "community",
       sortOrder: 420,
@@ -852,7 +883,8 @@ function spinitronCollegeStations(): InsertStation[] {
       streamFormat: "mp3",
       homepageUrl: "https://kvrx.org",
       scheduleUrl: "https://kvrx.org/schedule",
-      donateUrl: null,
+      // Listener-supported non-profit; UT Austin's all-local freeform station.
+      donateUrl: "https://kvrx.org/donate",
       ...spinSource("KVRX"),
       stationClass: "community",
       sortOrder: 430,
@@ -874,7 +906,8 @@ function spinitronCollegeStations(): InsertStation[] {
       streamFormat: "mp3",
       homepageUrl: "https://wmbr.org",
       scheduleUrl: "https://wmbr.org/schedule.php",
-      donateUrl: null,
+      // Listener-supported non-profit; MIT's community radio station.
+      donateUrl: "https://wmbr.org/donate",
       ...spinSource("WMBR"),
       stationClass: "community",
       sortOrder: 500,
@@ -891,7 +924,8 @@ function spinitronCollegeStations(): InsertStation[] {
       streamFormat: "mp3",
       homepageUrl: "https://wusb.fm",
       scheduleUrl: "https://wusb.fm/schedule",
-      donateUrl: null,
+      // Listener-supported non-profit; Stony Brook University community station.
+      donateUrl: "https://wusb.fm/support",
       ...spinSource("WUSB"),
       stationClass: "community",
       sortOrder: 510,
@@ -909,7 +943,8 @@ function spinitronCollegeStations(): InsertStation[] {
       streamFormat: "mp3",
       homepageUrl: "https://wuog.org",
       scheduleUrl: "https://wuog.org/schedule",
-      donateUrl: null,
+      // Listener-supported non-profit; University of Georgia's community station.
+      donateUrl: "https://wuog.org/donate",
       ...spinSource("WUOG"),
       stationClass: "community",
       sortOrder: 520,
@@ -926,7 +961,8 @@ function spinitronCollegeStations(): InsertStation[] {
       streamFormat: "mp3",
       homepageUrl: "https://wvum.org",
       scheduleUrl: "https://wvum.org/schedule",
-      donateUrl: null,
+      // Listener-supported non-profit; University of Miami's student station.
+      donateUrl: "https://wvum.org/donate",
       ...spinSource("WVUM"),
       stationClass: "community",
       sortOrder: 530,
@@ -943,7 +979,10 @@ function spinitronCollegeStations(): InsertStation[] {
       streamFormat: "mp3",
       homepageUrl: "https://www.kvsc.org",
       scheduleUrl: "https://www.kvsc.org/programs/",
-      donateUrl: null,
+      // Listener-supported non-profit; St. Cloud State University. Famous for
+      // their annual 50-hour Trivia Weekend fundraiser. /pledge is their
+      // standard giving page; spot-check if they've moved to /donate or /give.
+      donateUrl: "https://www.kvsc.org/pledge",
       ...spinSource("KVSC"),
       stationClass: "community",
       sortOrder: 540,

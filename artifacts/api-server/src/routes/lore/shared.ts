@@ -52,6 +52,7 @@ export function toPicker(p: Picker, latestRunId: number | null = null) {
 
 /** Shape a joined now-playing spin row into the public NowPlaying payload. */
 export function toNowPlaying(row: {
+  spinId?: number | null;
   rawArtist: string | null;
   rawTitle: string | null;
   source: string | null;
@@ -68,6 +69,7 @@ export function toNowPlaying(row: {
   showDj: string | null;
 }) {
   return {
+    spinId: row.spinId ?? null,
     rawArtist: row.rawArtist ?? "",
     rawTitle: row.rawTitle ?? "",
     source: row.source,

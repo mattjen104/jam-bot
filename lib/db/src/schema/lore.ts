@@ -1093,6 +1093,35 @@ export type KeepTarget = typeof keepTargetsTable.$inferSelect;
 export type InsertKeepTarget = typeof keepTargetsTable.$inferInsert;
 
 /**
+ * Spin-based save: the listener clicked Save on a track that may not yet be
+ * resolved to a MusicBrainz MBID. Serves as the intent record.
+ * `promotedAt` is set (and a `library_items` row written) immediately if the
+ * spin already carries an MBID at save time, or remains null while pending.
+ */
+export const pendingKeepsTable = pgTable(
+  "pending_keeps",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => loreUsersTable.id, { onDelete: "cascade" }),
+    spinId: integer("spin_id")
+      .notNull()
+      .references(() => spinsTable.id, { onDelete: "cascade" }),
+    savedAt: timestamp("saved_at").defaultNow().notNull(),
+    /** Set when promoted to library_items (spin was or became resolved). */
+    promotedAt: timestamp("promoted_at"),
+  },
+  (t) => [
+    uniqueIndex("pending_keeps_user_spin_idx").on(t.userId, t.spinId),
+    index("pending_keeps_spin_idx").on(t.spinId),
+  ],
+);
+
+export type PendingKeep = typeof pendingKeepsTable.$inferSelect;
+export type InsertPendingKeep = typeof pendingKeepsTable.$inferInsert;
+
+/**
  * Pre-computed artist-overlap between a user's library and a radio station or
  * blog picker. Keyed by `(user_id, source_id, source_type)`.
  *

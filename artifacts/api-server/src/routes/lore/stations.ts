@@ -108,6 +108,7 @@ router.get("/stations/now-playing", h(async (req, res) => {
 
   const rows = await db
     .selectDistinctOn([spinsTable.stationId], {
+      spinId: spinsTable.id,
       stationId: spinsTable.stationId,
       rawArtist: spinsTable.rawArtist,
       rawTitle: spinsTable.rawTitle,
@@ -195,6 +196,7 @@ router.get("/stations/at/:date/now-playing", h(async (req, res) => {
 
   const rows = await db
     .selectDistinctOn([spinsTable.stationId], {
+      spinId: spinsTable.id,
       stationId: spinsTable.stationId,
       rawArtist: spinsTable.rawArtist,
       rawTitle: spinsTable.rawTitle,
@@ -246,6 +248,7 @@ router.get("/stations/:slug/now-playing", h(async (req, res) => {
 
   const [row] = await db
     .select({
+      spinId: spinsTable.id,
       rawArtist: spinsTable.rawArtist,
       rawTitle: spinsTable.rawTitle,
       source: spinsTable.source,

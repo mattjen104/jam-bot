@@ -36,6 +36,7 @@ import { startHomepageScraper } from "./lore/homepage-scraper.js";
 import { startDiscoveryScoreJob } from "./lore/discovery-score-job.js";
 import { startQualityRecomputeJob } from "./lore/quality.js";
 import { applyStationScheduleMigration } from "./lore/station-schedule-migration.js";
+import { applyPendingKeepsMigration } from "./lore/pending-keeps-migration.js";
 import { wireScheduleExtractor } from "./lore/schedule-wire.js";
 import { startScheduleScraper } from "./lore/schedule-scraper.js";
 import { markOrphanedImportJobsAsError } from "./routes/me/index.js";
@@ -70,6 +71,7 @@ async function bootLore(): Promise<void> {
     await applyStationDiscoveryMigration();
     await applyPickerDiscoveryMigration();
     await applyStationScheduleMigration();
+    await applyPendingKeepsMigration();
     await ensurePicksUnifiedView();
     await seedStations();
     try {
