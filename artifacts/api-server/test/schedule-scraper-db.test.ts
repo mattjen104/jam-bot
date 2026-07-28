@@ -145,6 +145,9 @@ afterEach(async () => {
         scheduleScrapedAt: null,
         scheduleAttemptedAt: null,
         upcomingShowCount: 0,
+        // Reset any scheduleUrl written by probe-path tests so subsequent
+        // tests start with a clean slate and don't skip discovery.
+        scheduleUrl: null,
       })
       .where(eq(stationsTable.id, stationId!));
   }
@@ -405,5 +408,195 @@ describe("scrapeStationSchedule — homepage + link-discovery path", () => {
     const shows = await fetchScrapedShows();
     expect(shows).toHaveLength(1);
     expect(shows[0]!.showName).toBe("Late Night Session");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Path 4 — no homepage anchor, but a well-known path responds (strategy 2)
+// ---------------------------------------------------------------------------
+
+describe("scrapeStationSchedule — common-path probing (strategy 2)", () => {
+  it("persists scheduleUrl and stores shows when /schedule responds but homepage has no anchor", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    configureScheduleExtractor(async () => VALID_SHOWS_JSON);
+
+    // Use precise RegExp patterns so /schedule matches the probe path but
+    // not the bare homepage, avoiding substring-match false-positives.
+    const PROBE_URL = `${HOMEPAGE}/schedule`;
+    const fetchFn = makeFetch([
+      { pattern: /robots\.txt/, body: "User-agent: *\nDisallow:\n" },
+      // Matches HEAD probe and subsequent GET fetch for /schedule.
+      {
+        pattern: /\/schedule/,
+        body: "<html><body><p>Morning Jazz Mon 08:00-10:00</p></body></html>",
+      },
+      // Bare homepage — no schedule link, no inline schedule tokens.
+      {
+        pattern: /^http:\/\/radio\.example\.test$/,
+        body: "<html><body><p>Welcome to the station. Stream 24/7.</p></body></html>",
+      },
+    ]);
+
+    const target = {
+      id: stationId!,
+      slug: `test-sched-${run}`,
+      homepageUrl: HOMEPAGE,
+      scheduleUrl: null,
+      city: null,
+      country: null,
+      ianaTimezone: null,
+    };
+
+    const result = await scrapeStationSchedule(target, { fetchFn });
+
+    expect(result).toEqual({ scraped: true, showCount: 2 });
+
+    const shows = await fetchScrapedShows();
+    expect(shows).toHaveLength(2);
+
+    // scheduleUrl must be written back to the DB so future re-scrapes skip
+    // discovery and go straight to the known path.
+    const [row] = await db
+      .select({ scheduleUrl: stationsTable.scheduleUrl })
+      .from(stationsTable)
+      .where(eq(stationsTable.id, stationId!));
+    expect(row?.scheduleUrl).toBe(PROBE_URL);
+
+    const station = await fetchStationRow();
+    expect(station?.scheduleScrapedAt).toBeInstanceOf(Date);
+    expect(station?.upcomingShowCount).toBe(2);
+  });
+
+  it("stamps scheduleAttemptedAt and leaves scheduleUrl null when all probes fail", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    const fetchFn = makeFetch([
+      { pattern: /robots\.txt/, body: "User-agent: *\nDisallow:\n" },
+      // Homepage with no anchor link and no inline day/time tokens.
+      {
+        pattern: /^http:\/\/radio\.example\.test$/,
+        body: "<html><body><p>Stream us live at stream.example.test/listen</p></body></html>",
+      },
+      // All probes get 404 (no pattern matches their paths).
+    ]);
+
+    const target = {
+      id: stationId!,
+      slug: `test-sched-${run}`,
+      homepageUrl: HOMEPAGE,
+      scheduleUrl: null,
+      city: null,
+      country: null,
+      ianaTimezone: null,
+    };
+
+    const result = await scrapeStationSchedule(target, { fetchFn });
+
+    expect(result).toEqual({ scraped: false, showCount: 0 });
+
+    const station = await fetchStationRow();
+    expect(station?.scheduleAttemptedAt).toBeInstanceOf(Date);
+    expect(station?.scheduleScrapedAt).toBeNull();
+
+    const [row] = await db
+      .select({ scheduleUrl: stationsTable.scheduleUrl })
+      .from(stationsTable)
+      .where(eq(stationsTable.id, stationId!));
+    expect(row?.scheduleUrl).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Path 5 — homepage already contains an inline schedule (strategy 3)
+// ---------------------------------------------------------------------------
+
+describe("scrapeStationSchedule — inline homepage schedule (strategy 3)", () => {
+  it("extracts shows from the homepage when it contains 3+ day tokens and 2+ times", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    configureScheduleExtractor(async () => VALID_SHOWS_JSON);
+
+    // Homepage has enough day abbreviations + HH:MM times to trigger strategy 3.
+    // No schedule link present, and all probe paths return 404.
+    const INLINE_HOMEPAGE = `<html><body>
+      <h1>Weekly Schedule</h1>
+      <p>Mon 09:00 – 11:00 Morning Mix</p>
+      <p>Tue 14:00 – 16:00 Afternoon Drive</p>
+      <p>Wed 20:00 – 22:00 Night Vibes</p>
+    </body></html>`;
+
+    const fetchFn = makeFetch([
+      { pattern: /robots\.txt/, body: "User-agent: *\nDisallow:\n" },
+      // Bare homepage only — probe paths get 404 (no matching pattern).
+      {
+        pattern: /^http:\/\/radio\.example\.test$/,
+        body: INLINE_HOMEPAGE,
+      },
+    ]);
+
+    const target = {
+      id: stationId!,
+      slug: `test-sched-${run}`,
+      homepageUrl: HOMEPAGE,
+      scheduleUrl: null,
+      city: null,
+      country: null,
+      ianaTimezone: null,
+    };
+
+    const result = await scrapeStationSchedule(target, { fetchFn });
+
+    expect(result).toEqual({ scraped: true, showCount: 2 });
+
+    const shows = await fetchScrapedShows();
+    expect(shows).toHaveLength(2);
+    expect(shows.map((s) => s.showName).sort()).toEqual([
+      "Afternoon Blues",
+      "Morning Jazz",
+    ]);
+
+    // No external schedule URL was discovered, so scheduleUrl must remain null.
+    const [row] = await db
+      .select({ scheduleUrl: stationsTable.scheduleUrl })
+      .from(stationsTable)
+      .where(eq(stationsTable.id, stationId!));
+    expect(row?.scheduleUrl).toBeNull();
+
+    const station = await fetchStationRow();
+    expect(station?.scheduleScrapedAt).toBeInstanceOf(Date);
+    expect(station?.upcomingShowCount).toBe(2);
+  });
+
+  it("does not treat a homepage as an inline schedule when it lacks day+time tokens", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // No extractor installed — should never be reached since all strategies fail.
+    const fetchFn = makeFetch([
+      { pattern: /robots\.txt/, body: "User-agent: *\nDisallow:\n" },
+      {
+        pattern: /^http:\/\/radio\.example\.test$/,
+        body: "<html><body><p>Great music every Monday. Listen live at 9am!</p></body></html>",
+      },
+    ]);
+
+    const target = {
+      id: stationId!,
+      slug: `test-sched-${run}`,
+      homepageUrl: HOMEPAGE,
+      scheduleUrl: null,
+      city: null,
+      country: null,
+      ianaTimezone: null,
+    };
+
+    const result = await scrapeStationSchedule(target, { fetchFn });
+
+    // Not enough day/time tokens — strategy 3 must not trigger.
+    expect(result).toEqual({ scraped: false, showCount: 0 });
+
+    const station = await fetchStationRow();
+    expect(station?.scheduleAttemptedAt).toBeInstanceOf(Date);
+    expect(station?.scheduleScrapedAt).toBeNull();
   });
 });
