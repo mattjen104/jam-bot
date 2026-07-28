@@ -275,6 +275,13 @@ export const stationsTable = pgTable("stations", {
   /** When the homepage was last (attempted to be) scraped. Null = never. */
   homepageScrapedAt: timestamp("homepage_scraped_at"),
   /**
+   * When the donate_url last received a health-check HEAD request, regardless
+   * of outcome. Null = never checked. Re-checked on the same 30-day cadence
+   * as homepage scraping. Setting this to null forces an immediate re-check
+   * on the next checker tick.
+   */
+  donateCheckedAt: timestamp("donate_checked_at"),
+  /**
    * Denormalized count of rows in `scraped_shows` for this station.
    * Written in the same transaction as each schedule scrape (full replace),
    * so it stays in sync without a secondary query. Starts at 0; backfilled

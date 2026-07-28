@@ -33,6 +33,8 @@ import { applyStationDiscoveryMigration } from "./lore/station-migration.js";
 import { applyPickerDiscoveryMigration } from "./lore/picker-migration.js";
 import { startGenreBackfillJob } from "./lore/genre-backfill.js";
 import { startHomepageScraper } from "./lore/homepage-scraper.js";
+import { startDonateChecker } from "./lore/donate-checker.js";
+import { applyDonateCheckerMigration } from "./lore/donate-checker-migration.js";
 import { startDiscoveryScoreJob } from "./lore/discovery-score-job.js";
 import { startQualityRecomputeJob } from "./lore/quality.js";
 import { applyStationScheduleMigration } from "./lore/station-schedule-migration.js";
@@ -122,6 +124,8 @@ async function bootLore(): Promise<void> {
     startRadioBrowserWorker();
     startGenreBackfillJob();
     startHomepageScraper();
+    await applyDonateCheckerMigration();
+    startDonateChecker();
     if (await wireScheduleExtractor()) {
       startScheduleScraper();
     }
