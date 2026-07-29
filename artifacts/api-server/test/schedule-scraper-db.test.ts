@@ -993,6 +993,117 @@ describe("scrapeStationSchedule — missing required fields never reach the DB",
     expect(station?.upcomingShowCount).toBe(0);
   });
 
+  it("stores zero rows when the LLM returns null or missing startTime", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // LLM returns entries where startTime is null, undefined (key absent), or
+    // an explicit null JSON value. All must be rejected by the HHMM_RE check
+    // (non-string values become "" which fails the regex).
+    const NULL_START_JSON = JSON.stringify([
+      {
+        showName: "Null Start Show",
+        dayOfWeek: "Mon",
+        startTime: null,
+        endTime: "11:00",
+        djName: "DJ Alice",
+      },
+      {
+        showName: "Missing Start Show",
+        dayOfWeek: "Tue",
+        // startTime key intentionally omitted
+        endTime: "16:00",
+        djName: null,
+      },
+    ]);
+
+    configureScheduleExtractor(async () => NULL_START_JSON);
+
+    const fetchFn = makeFetch([
+      { pattern: /robots\.txt/, body: "User-agent: *\nDisallow:\n" },
+      {
+        pattern: "/schedule",
+        body: "<html><body><p>Schedule page content</p></body></html>",
+      },
+    ]);
+
+    const target = {
+      id: stationId!,
+      slug: `test-sched-${run}`,
+      homepageUrl: HOMEPAGE,
+      scheduleUrl: SCHEDULE_URL,
+      city: null,
+      country: null,
+      ianaTimezone: null,
+    };
+
+    const result = await scrapeStationSchedule(target, { fetchFn });
+
+    // All entries lack a valid startTime — parser must reject them all.
+    expect(result).toEqual({ scraped: true, showCount: 0 });
+
+    const shows = await fetchScrapedShows();
+    expect(shows).toHaveLength(0);
+
+    const station = await fetchStationRow();
+    expect(station?.scheduleScrapedAt).toBeInstanceOf(Date);
+    expect(station?.upcomingShowCount).toBe(0);
+  });
+
+  it("stores zero rows when the LLM returns null or missing endTime", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // LLM returns entries where endTime is null or the key is absent entirely.
+    // Both must be rejected by the HHMM_RE check in parseExtractedSchedule.
+    const NULL_END_JSON = JSON.stringify([
+      {
+        showName: "Null End Show",
+        dayOfWeek: "Wed",
+        startTime: "14:00",
+        endTime: null,
+        djName: null,
+      },
+      {
+        showName: "Missing End Show",
+        dayOfWeek: "Fri",
+        startTime: "20:00",
+        // endTime key intentionally omitted
+        djName: "DJ Night",
+      },
+    ]);
+
+    configureScheduleExtractor(async () => NULL_END_JSON);
+
+    const fetchFn = makeFetch([
+      { pattern: /robots\.txt/, body: "User-agent: *\nDisallow:\n" },
+      {
+        pattern: "/schedule",
+        body: "<html><body><p>Schedule page content</p></body></html>",
+      },
+    ]);
+
+    const target = {
+      id: stationId!,
+      slug: `test-sched-${run}`,
+      homepageUrl: HOMEPAGE,
+      scheduleUrl: SCHEDULE_URL,
+      city: null,
+      country: null,
+      ianaTimezone: null,
+    };
+
+    const result = await scrapeStationSchedule(target, { fetchFn });
+
+    // All entries lack a valid endTime — parser must reject them all.
+    expect(result).toEqual({ scraped: true, showCount: 0 });
+
+    const shows = await fetchScrapedShows();
+    expect(shows).toHaveLength(0);
+
+    const station = await fetchStationRow();
+    expect(station?.scheduleScrapedAt).toBeInstanceOf(Date);
+    expect(station?.upcomingShowCount).toBe(0);
+  });
+
   it("stores only valid entries when bad fields are mixed with well-formed ones", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
 
