@@ -10,6 +10,8 @@ export const modules: ModuleMap = {
   "./components/mockups/lore-slack/AmbientCard.tsx": () => import("../components/mockups/lore-slack/AmbientCard.tsx"),
   "./components/mockups/lore-slack/CommandCard.tsx": () => import("../components/mockups/lore-slack/CommandCard.tsx"),
   "./components/mockups/lore-slack/UnfurlCard.tsx": () => import("../components/mockups/lore-slack/UnfurlCard.tsx"),
+  "./components/mockups/lore-timeline-queue/TimelineQueueDesktop.tsx": () => import("../components/mockups/lore-timeline-queue/TimelineQueueDesktop.tsx"),
+  "./components/mockups/lore-timeline-queue/TimelineQueueMobile.tsx": () => import("../components/mockups/lore-timeline-queue/TimelineQueueMobile.tsx"),
   "./components/mockups/lore-shared-room/SharedRoomDesktop.tsx": () => import("../components/mockups/lore-shared-room/SharedRoomDesktop.tsx"),
   "./components/mockups/lore-shared-room/SharedRoomMobile.tsx": () => import("../components/mockups/lore-shared-room/SharedRoomMobile.tsx"),
   "./components/mockups/music-explore/TheCaseFile.tsx": () => import("../components/mockups/music-explore/TheCaseFile.tsx"),
@@ -17,8 +19,6 @@ export const modules: ModuleMap = {
   "./components/mockups/music-explore/TheThread.tsx": () => import("../components/mockups/music-explore/TheThread.tsx"),
   "./components/mockups/playhead/PlayheadDesktop.tsx": () => import("../components/mockups/playhead/PlayheadDesktop.tsx"),
   "./components/mockups/playhead/PlayheadMobile.tsx": () => import("../components/mockups/playhead/PlayheadMobile.tsx"),
-  "./components/mockups/lore-timeline-queue/TimelineQueueDesktop.tsx": () => import("../components/mockups/lore-timeline-queue/TimelineQueueDesktop.tsx"),
-  "./components/mockups/lore-timeline-queue/TimelineQueueMobile.tsx": () => import("../components/mockups/lore-timeline-queue/TimelineQueueMobile.tsx"),
   "./components/mockups/playhead-unified/OneSpineDesktop.tsx": () => import("../components/mockups/playhead-unified/OneSpineDesktop.tsx"),
   "./components/mockups/playhead-unified/OneSpineMobile.tsx": () => import("../components/mockups/playhead-unified/OneSpineMobile.tsx")
 };
