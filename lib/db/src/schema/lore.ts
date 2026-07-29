@@ -248,6 +248,22 @@ export const stationsTable = pgTable("stations", {
   /** When `mayHaveAds` was first set true. Null until then. */
   adDetectedAt: timestamp("ad_detected_at"),
   /**
+   * Whether this station's programming is human-curated, automated/algorithmic,
+   * or a mix (human during show hours, automated between them).
+   *
+   *   'human'    — DJ-logged (Spinitron), or a known human-programmed feed
+   *                (KEXP, KCRW, BBC, FIP, The Lot Radio). Crossings from these
+   *                stations carry full attributed provenance.
+   *   'automated' — Known algorithmic playlist (SomaFM, Radio Paradise).
+   *                Crossings should not surface in Ether/Stacks.
+   *   'mixed'    — Has a scraped DJ schedule but runs an automated rotation
+   *                between shows (most community stations overnight). Crossings
+   *                are only attributed during (station, hour-of-week) slots that
+   *                fall within a scraped show window.
+   *   null       — Unknown. Longtail stations with no behavioral data yet.
+   */
+  automationClass: text("automation_class"),
+  /**
    * Cached discovery score (0-100, higher = newer-leaning rotation), recomputed
    * periodically by the discovery-score job from logged spins via
    * computeDiscoveryScore. Null until enough resolved spin history exists.
