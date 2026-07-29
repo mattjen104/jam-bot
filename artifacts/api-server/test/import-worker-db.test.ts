@@ -28,8 +28,10 @@ import {
 
 // ── Hoisted mock fns (created before vi.mock factories are evaluated) ────────
 
-const { mockImportLibrary } = vi.hoisted(() => ({
+const { mockImportLibrary, mockResolveByText, mockResolveByIsrc } = vi.hoisted(() => ({
   mockImportLibrary: vi.fn(),
+  mockResolveByText: vi.fn<[string, string, (AbortSignal | undefined)?], Promise<string | null>>(),
+  mockResolveByIsrc: vi.fn<[string, (AbortSignal | undefined)?], Promise<string | null>>(),
 }));
 
 // ── Module mocks (vi.mock is hoisted before any import) ─────────────────────
@@ -49,12 +51,26 @@ vi.mock("../src/lore/serviceConnector.js", () => ({
 }));
 
 // Keep real pure helpers (normalizeKey, isrcKey, …) but replace the network-
-// bound resolveToMbid with a spy so we can control what it returns and count
-// how many times it was called.
+// bound resolveToMbid with a spy so Phase 1/2 tests can confirm it's never
+// reached (it is no longer called in Phase 3 — that now uses createMbResolver).
 vi.mock("../src/lore/resolve.js", async (importOriginal) => {
   const orig =
     await importOriginal<typeof import("../src/lore/resolve.js")>();
   return { ...orig, resolveToMbid: vi.fn() };
+});
+
+// Phase 3 of the import worker now calls createMbResolver() to get an
+// isolated resolver.  Mock the factory to return controlled spies so tests
+// can set return values and verify call counts without real MusicBrainz I/O.
+vi.mock("@workspace/song-enrichment", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("@workspace/song-enrichment")>();
+  return {
+    ...orig,
+    createMbResolver: vi.fn().mockReturnValue({
+      resolveByIsrc: mockResolveByIsrc,
+      resolveByText: mockResolveByText,
+    }),
+  };
 });
 
 // Stub transitive imports that have nothing to do with the import worker but
@@ -204,6 +220,8 @@ describe("Phase 1 — ISRC bulk pre-match", () => {
 
     const resolveToMbid = vi.mocked(resolveModule.resolveToMbid);
     resolveToMbid.mockClear();
+    mockResolveByText.mockClear();
+    mockResolveByIsrc.mockClear();
 
     setupConnector([
       { artist: ARTIST, title: "Phase1 Track", isrc: ISRC_P1, externalId: "sp-p1" },
@@ -212,8 +230,9 @@ describe("Phase 1 — ISRC bulk pre-match", () => {
     const jid = await createJob();
     await runImportWorker(jid, userId, "spotify", connRow);
 
-    // resolveToMbid must never have been called.
+    // Neither old nor new resolver must have been called — Phase 3 was skipped.
     expect(resolveToMbid).not.toHaveBeenCalled();
+    expect(mockResolveByText).not.toHaveBeenCalled();
 
     // The track should appear in library_items.
     const items = await db
@@ -242,6 +261,8 @@ describe("Phase 2 — resolution-cache bulk pre-check", () => {
 
     const resolveToMbid = vi.mocked(resolveModule.resolveToMbid);
     resolveToMbid.mockClear();
+    mockResolveByText.mockClear();
+    mockResolveByIsrc.mockClear();
 
     // Track has NO isrc, so Phase 1 won't pick it up.
     // Its artist+title normalises to the key we seeded in resolution_cache.
@@ -253,6 +274,7 @@ describe("Phase 2 — resolution-cache bulk pre-check", () => {
     await runImportWorker(jid, userId, "spotify", connRow);
 
     expect(resolveToMbid).not.toHaveBeenCalled();
+    expect(mockResolveByText).not.toHaveBeenCalled();
 
     const items = await db
       .select({ mbid: libraryItemsTable.mbid })
@@ -270,27 +292,25 @@ describe("Phase 2 — resolution-cache bulk pre-check", () => {
   });
 });
 
-// ── Phase 3 test — fromCache=true (no sleep) ─────────────────────────────────
+// ── Phase 3 test — resolveByText called, sleep fires ─────────────────────────
+// Phase 3 now uses createMbResolver().resolveByText (not the old resolveToMbid).
+// The 1.1 s rate-limit sleep fires after every Phase 3 attempt whose
+// AbortController was not triggered (i.e. always for fast-resolving mocks).
 
-describe("Phase 3 — serial MB resolution, fromCache=true skips sleep", () => {
-  it("calls resolveToMbid but does NOT schedule a 1100 ms sleep", async () => {
+describe("Phase 3 — MB resolution via createMbResolver", () => {
+  it("calls resolveByText and schedules the 1100 ms rate-limit sleep", async () => {
     if (!dbAvailable) return;
 
-    const resolveToMbid = vi.mocked(resolveModule.resolveToMbid);
-    resolveToMbid.mockClear();
+    mockResolveByText.mockClear();
+    mockResolveByIsrc.mockClear();
 
-    // This track has neither an ISRC in recordings nor a cache entry, so it
-    // falls through to Phase 3.
-    resolveToMbid.mockResolvedValue({
-      mbid: MBID_P3A,
-      confidence: "text",
-      title: "Phase3A Track",
-      artist: ARTIST,
-      fromCache: true,  // <── cache hit: no MB network call, no sleep
-    });
+    // "Phase3X Track" is a unique title not used elsewhere — the cache stays
+    // clean so subsequent tests (especially the Mixed test) aren't affected.
+    // resolveByText returns MBID_P3A which exists in the recordings spine.
+    mockResolveByText.mockResolvedValue(MBID_P3A);
 
     setupConnector([
-      { artist: ARTIST, title: "Phase3A Track", externalId: "sp-p3a" },
+      { artist: ARTIST, title: "Phase3X Track", externalId: "sp-p3x" },
     ]);
 
     const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
@@ -298,14 +318,15 @@ describe("Phase 3 — serial MB resolution, fromCache=true skips sleep", () => {
     const jid = await createJob();
     await runImportWorker(jid, userId, "spotify", connRow);
 
-    // resolveToMbid must have been called for this track.
-    expect(resolveToMbid).toHaveBeenCalledTimes(1);
+    // resolveByText must have been called for this track (no ISRC → no ISRC path).
+    expect(mockResolveByText).toHaveBeenCalledTimes(1);
+    expect(mockResolveByIsrc).not.toHaveBeenCalled();
 
-    // The 1.1 s rate-limit sleep must NOT have been scheduled.
+    // The 1.1 s rate-limit sleep must have been scheduled.
     const sleepCalls = setTimeoutSpy.mock.calls.filter(
       ([, delay]) => delay === 1100,
     );
-    expect(sleepCalls).toHaveLength(0);
+    expect(sleepCalls.length).toBeGreaterThanOrEqual(1);
 
     setTimeoutSpy.mockRestore();
 
@@ -317,39 +338,35 @@ describe("Phase 3 — serial MB resolution, fromCache=true skips sleep", () => {
   });
 });
 
-// ── Phase 3 test — fromCache=false (sleep fires once) ───────────────────────
+// ── Phase 3 test — resolveByText returns null (track stays unresolved) ───────
 
-describe("Phase 3 — serial MB resolution, fromCache=false triggers sleep", () => {
+describe("Phase 3 — unresolved track when resolveByText returns null", () => {
   it(
-    "calls resolveToMbid AND schedules the 1100 ms MB rate-limit sleep",
+    "worker reaches done status even when resolveByText finds no match",
     async () => {
       if (!dbAvailable) return;
 
-      const resolveToMbid = vi.mocked(resolveModule.resolveToMbid);
-      resolveToMbid.mockClear();
+      mockResolveByText.mockClear();
+      mockResolveByIsrc.mockClear();
 
-      // fromCache=false signals a real MusicBrainz network call was made.
-      resolveToMbid.mockResolvedValue({
-        mbid: MBID_P3B,
-        confidence: "text",
-        title: "Phase3B Track",
-        artist: ARTIST,
-        fromCache: false, // <── real MB call: sleep must fire
-      });
+      // "Phase3Y Track" — unique title so no cache pollution for the Mixed test.
+      // resolveByText returns null — track is not found on MusicBrainz.
+      mockResolveByText.mockResolvedValue(null);
 
       setupConnector([
-        { artist: ARTIST, title: "Phase3B Track", externalId: "sp-p3b" },
+        { artist: ARTIST, title: "Phase3Y Track", externalId: "sp-p3y" },
       ]);
 
-      // Spy on setTimeout WITHOUT faking it — the real 1.1 s sleep will still
-      // run, but we can inspect what delay values were requested.
       const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
 
       const jid = await createJob();
-      // The worker sleeps 1100 ms for a fromCache=false track; let it complete.
+      // The worker sleeps 1100 ms after each Phase 3 attempt; let it complete.
       await runImportWorker(jid, userId, "spotify", connRow);
 
-      // At least one setTimeout must have been called with 1100 ms.
+      // resolveByText was called (Phase 3 was reached).
+      expect(mockResolveByText).toHaveBeenCalledTimes(1);
+
+      // Sleep must still fire — the rate-limit gap applies regardless of result.
       const sleepCalls = setTimeoutSpy.mock.calls.filter(
         ([, delay]) => delay === 1100,
       );
@@ -357,19 +374,19 @@ describe("Phase 3 — serial MB resolution, fromCache=false triggers sleep", () 
 
       setTimeoutSpy.mockRestore();
 
-      expect(resolveToMbid).toHaveBeenCalledTimes(1);
-
+      // Unresolved track is NOT in library_items.
       const items = await db
         .select({ mbid: libraryItemsTable.mbid })
         .from(libraryItemsTable)
         .where(eq(libraryItemsTable.userId, userId));
-      expect(items.map((r) => r.mbid)).toContain(MBID_P3B);
+      expect(items.map((r) => r.mbid)).not.toContain(MBID_P3B);
 
       const [job] = await db
-        .select({ status: libraryImportJobsTable.status })
+        .select({ status: libraryImportJobsTable.status, resolved: libraryImportJobsTable.resolved })
         .from(libraryImportJobsTable)
         .where(eq(libraryImportJobsTable.id, jid));
       expect(job!.status).toBe("done");
+      expect(job!.resolved).toBe(0); // nothing resolved in this run
     },
     // Allow up to 8 s: 1.1 s real sleep + DB round-trips.
     8_000,
@@ -424,20 +441,14 @@ describe("Fast-path re-import — all tracks already resolved, Phase 3 skipped",
 // ── Mixed-phase regression test ──────────────────────────────────────────────
 
 describe("Mixed all-3 phases — large re-import short-circuit", () => {
-  it("resolves Phase1+Phase2 without resolveToMbid; calls it only for Phase3", async () => {
+  it("resolves Phase1+Phase2 without resolveByText; calls it only for the Phase3 track", async () => {
     if (!dbAvailable) return;
 
-    const resolveToMbid = vi.mocked(resolveModule.resolveToMbid);
-    resolveToMbid.mockClear();
+    mockResolveByText.mockClear();
+    mockResolveByIsrc.mockClear();
 
-    // Phase 3 track only — fromCache=true so no sleep needed.
-    resolveToMbid.mockResolvedValue({
-      mbid: MBID_P3A,
-      confidence: "text",
-      title: "Phase3A Track",
-      artist: ARTIST,
-      fromCache: true,
-    });
+    // Phase 3 track: resolveByText returns the MBID.
+    mockResolveByText.mockResolvedValue(MBID_P3A);
 
     // Buffer: one track from each phase.
     setupConnector([
@@ -451,14 +462,14 @@ describe("Mixed all-3 phases — large re-import short-circuit", () => {
     const jid = await createJob();
     await runImportWorker(jid, userId, "spotify", connRow);
 
-    // Only the Phase 3 track reached resolveToMbid.
-    expect(resolveToMbid).toHaveBeenCalledTimes(1);
+    // Only the Phase 3 track reached resolveByText.
+    expect(mockResolveByText).toHaveBeenCalledTimes(1);
 
-    // No 1.1 s sleep — the one Phase 3 call returned fromCache=true.
+    // The 1.1 s sleep fires once for the Phase 3 track.
     const sleepCalls = setTimeoutSpy.mock.calls.filter(
       ([, delay]) => delay === 1100,
     );
-    expect(sleepCalls).toHaveLength(0);
+    expect(sleepCalls.length).toBeGreaterThanOrEqual(1);
 
     setTimeoutSpy.mockRestore();
 
