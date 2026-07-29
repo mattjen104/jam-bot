@@ -1,6 +1,44 @@
 import type { Station, Picker } from "@workspace/db";
+import { db, selectorClaimsTable } from "@workspace/db";
+import { eq, and, sql } from "drizzle-orm";
 // Re-export from the lore layer so route files have one import site.
 export { spinDayExpr } from "../../lore/runs.js";
+
+/**
+ * Drizzle `notExists` condition: true when the picker has NOT opted out.
+ * Attach to any query that joins or filters on `pickersTable.id`.
+ *
+ * Usage:
+ *   .where(and(eq(pickersTable.active, true), pickerNotOptedOut(pickersTable.id)))
+ *
+ * For raw SQL (CTE) queries use the inline fragment:
+ *   `AND NOT EXISTS (SELECT 1 FROM selector_claims sc WHERE sc.picker_id = pk.id AND sc.opted_out = true)`
+ */
+export function pickerNotOptedOut(pickerIdCol: Parameters<typeof eq>[0]) {
+  return sql`NOT EXISTS (
+    SELECT 1 FROM selector_claims sc
+    WHERE sc.picker_id = ${pickerIdCol}
+      AND sc.opted_out = true
+  )`;
+}
+
+/**
+ * Check whether a single picker is opted out.  Used by handle-based routes
+ * that already fetched the picker row and just need a fast yes/no.
+ */
+export async function isPickerOptedOut(pickerId: number): Promise<boolean> {
+  const [row] = await db
+    .select({ optedOut: selectorClaimsTable.optedOut })
+    .from(selectorClaimsTable)
+    .where(
+      and(
+        eq(selectorClaimsTable.pickerId, pickerId),
+        eq(selectorClaimsTable.optedOut, true),
+      ),
+    )
+    .limit(1);
+  return !!row;
+}
 
 /** Shape a DB station row into the public Station payload.
  *  `qualityTier` comes from a LEFT JOIN on station_quality and is null until

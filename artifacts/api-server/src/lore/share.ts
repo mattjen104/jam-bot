@@ -13,6 +13,7 @@ import {
   showsTable,
   pickersTable,
   picksTable,
+  selectorClaimsTable,
 } from "@workspace/db";
 import { eq, and, isNull, sql, gt, desc } from "drizzle-orm";
 import type { RecordingLink } from "@workspace/db";
@@ -976,6 +977,13 @@ export async function getPickerShare(
     .where(eq(pickersTable.handle, handle))
     .limit(1);
   if (!picker) return null;
+
+  const [claim] = await db
+    .select({ optedOut: selectorClaimsTable.optedOut })
+    .from(selectorClaimsTable)
+    .where(eq(selectorClaimsTable.pickerId, picker.id))
+    .limit(1);
+  if (claim?.optedOut) return null;
   const [counts] = await db
     .select({
       total: sql<number>`count(*)::int`,
@@ -1019,6 +1027,13 @@ export async function getPickerRunShare(
     .where(eq(pickersTable.id, anchor.pickerId))
     .limit(1);
   if (!picker) return null;
+
+  const [claim] = await db
+    .select({ optedOut: selectorClaimsTable.optedOut })
+    .from(selectorClaimsTable)
+    .where(eq(selectorClaimsTable.pickerId, picker.id))
+    .limit(1);
+  if (claim?.optedOut) return null;
 
   const [counts] = await db
     .select({

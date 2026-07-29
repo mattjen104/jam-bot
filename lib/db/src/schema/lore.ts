@@ -642,6 +642,67 @@ export type Picker = typeof pickersTable.$inferSelect;
 export type InsertPicker = typeof pickersTable.$inferInsert;
 
 /**
+ * Consent / claim record for a named human selector (DJ picker).
+ *
+ * One row per picker (unique index on `pickerId`). `optedOut = true` removes
+ * the selector from all public surfaces immediately — profile pages, picker
+ * rankings, overlap views, forecast rows, the Following strip — with no cache
+ * lag. The selector's `spins` rows are untouched (spins are factual public
+ * record; the *profile* is what's being consented to).
+ *
+ * `userId` is nullable — opting out does not require a connected Spotify
+ * account. The claim / pending / verified lifecycle exists in the schema for
+ * future verification flows (station-email proof, show-page-link proof, manual
+ * admin review); no verification UI is built yet.
+ */
+export const selectorClaimsTable = pgTable(
+  "selector_claims",
+  {
+    id: serial("id").primaryKey(),
+    pickerId: integer("picker_id")
+      .notNull()
+      .references(() => pickersTable.id),
+    /**
+     * FK to lore_users; nullable — opt-out is possible without a Spotify
+     * account.  Set when the opt-out request arrives with a live lore_sid
+     * session; null for anonymous opt-outs.
+     */
+    userId: integer("user_id").references(() => loreUsersTable.id),
+    /**
+     * Claim lifecycle:
+     *   unclaimed — no action taken by the selector.
+     *   pending   — selector submitted a claim, awaiting verification.
+     *   verified  — identity confirmed.
+     *   declined  — claim rejected by admin review.
+     * The verify flow is future work; the schema supports it now.
+     */
+    status: text("status").notNull().default("unclaimed"),
+    /**
+     * How the claim was verified (future work).
+     * Values: station_email | show_page_link | manual
+     */
+    verifiedVia: text("verified_via"),
+    verifiedAt: timestamp("verified_at"),
+    /**
+     * Selector's own words — never written by Lore. Null until the selector
+     * fills it in (future UI work).
+     */
+    bio: text("bio"),
+    /**
+     * When true the selector is suppressed from all public surfaces immediately
+     * (no cache lag). Spins rows are untouched — they are factual public
+     * record; only the taste profile is being consented to.
+     * Opting out does not require a verified claim or a connected account.
+     */
+    optedOut: boolean("opted_out").notNull().default(false),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("selector_claims_picker_uq").on(t.pickerId),
+    index("selector_claims_user_idx").on(t.userId),
+  ],
+);
+/**
  * A **pick** — one selection by a picker, resolved (best-effort) to the MBID
  * spine with a link back to the picker's own source. This is the generalized
  * edge table: a DJ's spin, a label's release, a blog's featured track, a
@@ -1653,3 +1714,7 @@ export const librarySyncJobsTable = pgTable("library_sync_jobs", {
 
 export type LibrarySyncJob = typeof librarySyncJobsTable.$inferSelect;
 export type InsertLibrarySyncJob = typeof librarySyncJobsTable.$inferInsert;
+
+export type InsertSelectorClaim = typeof selectorClaimsTable.$inferInsert;
+
+export type SelectorClaim = typeof selectorClaimsTable.$inferSelect;

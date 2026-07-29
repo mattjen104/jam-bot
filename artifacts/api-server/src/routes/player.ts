@@ -17,7 +17,7 @@ import {
 } from "@workspace/db";
 import { eq, and, desc, asc, sql, inArray, isNotNull, gte } from "drizzle-orm";
 import { getUserFromSession } from "../lore/userSession.js";
-import { toStation } from "./lore/shared.js";
+import { toStation, isPickerOptedOut } from "./lore/shared.js";
 import { h } from "../middlewares/asyncHandler.js";
 
 /**
@@ -548,6 +548,7 @@ router.get("/player/selectors", h(async (_req, res) => {
     LEFT JOIN spins sp ON sp.show_id = sh.id
     WHERE p.active = true
       AND p.picker_type = 'dj'
+      AND NOT EXISTS (SELECT 1 FROM selector_claims sc WHERE sc.picker_id = p.id AND sc.opted_out = true)
     GROUP BY p.id, p.name, p.handle, p.picker_type
     HAVING MAX(sp.played_at) IS NOT NULL
     ORDER BY MAX(sp.played_at) DESC
@@ -578,6 +579,10 @@ router.get("/player/selectors/:handle/runs", h(async (req, res) => {
     .where(and(eq(pickersTable.handle, handle), eq(pickersTable.active, true)))
     .limit(1);
   if (!picker) return res.status(404).json({ error: "Selector not found" });
+
+  if (await isPickerOptedOut(picker.id)) {
+    return res.status(404).json({ error: "Selector not found" });
+  }
 
   type RunRow = {
     runId: number;

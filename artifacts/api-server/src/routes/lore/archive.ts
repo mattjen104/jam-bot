@@ -26,7 +26,7 @@ import { eq, and, or, asc, isNull, isNotNull, inArray, sql } from "drizzle-orm";
 import { stationArchiveUrl, supportsBackfill } from "../../lore/adapters.js";
 import { getPickerByHandle } from "../../lore/picks.js";
 import { h } from "../../middlewares/asyncHandler.js";
-import { toArchiveRecording, toPicker, spinDayExpr } from "./shared.js";
+import { toArchiveRecording, toPicker, spinDayExpr, isPickerOptedOut, pickerNotOptedOut } from "./shared.js";
 import { computeGenreBreakdown, computeDiscoveryScore } from "../../lore/genre-insights.js";
 
 const router: IRouter = Router();
@@ -211,6 +211,10 @@ router.get("/archive/picker-runs/:runId", h(async (req, res) => {
     return res.status(404).json({ error: "Run not found" });
   }
 
+  if (await isPickerOptedOut(picker.id)) {
+    return res.status(404).json({ error: "Run not found" });
+  }
+
   const rows = await db
     .select({
       id: picksTable.id,
@@ -280,6 +284,10 @@ router.get("/archive/picker-runs/:runId/insights", h(async (req, res) => {
     .where(eq(picksTable.id, parsed.data.runId))
     .limit(1);
   if (!anchor || !anchor.sourceUrl) {
+    return res.status(404).json({ error: "Run not found" });
+  }
+
+  if (await isPickerOptedOut(anchor.pickerId)) {
     return res.status(404).json({ error: "Run not found" });
   }
 
@@ -583,7 +591,9 @@ router.get("/archive/artist-runs", h(async (req, res) => {
 
     const pickerIds = [...new Set(fullPickGroups.map((g) => g.pickerId))];
     const pickers = pickerIds.length
-      ? await db.select().from(pickersTable).where(inArray(pickersTable.id, pickerIds))
+      ? await db.select().from(pickersTable).where(
+          and(inArray(pickersTable.id, pickerIds), pickerNotOptedOut(pickersTable.id)),
+        )
       : [];
     const pickerById = new Map(pickers.map((p) => [p.id, p]));
     const pickMatchByKey = new Map(
@@ -658,6 +668,7 @@ router.get("/archive/coverage", h(async (_req, res) => {
     })
     .from(pickersTable)
     .innerJoin(picksTable, eq(picksTable.pickerId, pickersTable.id))
+    .where(pickerNotOptedOut(pickersTable.id))
     .groupBy(pickersTable.id, pickersTable.handle, pickersTable.name)
     .orderBy(sql`count(${picksTable.id}) desc`);
 

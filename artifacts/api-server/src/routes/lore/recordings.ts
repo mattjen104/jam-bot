@@ -44,6 +44,7 @@ import { enrichRecording, peekEnrichedKnowledge } from "@workspace/song-enrichme
 import { wireSongEnrichment } from "../../song/wire.js";
 import { fetchWikipediaClaims } from "../../lore/wikipedia.js";
 import { resolvePickRunAnchors } from "../../lore/runs.js";
+import { pickerNotOptedOut } from "./shared.js";
 import { h } from "../../middlewares/asyncHandler.js";
 import { getTrackById, getAlbumTracks, spotifyAppConfigured } from "../../spotify/appClient.js";
 
@@ -374,7 +375,11 @@ router.get("/recordings/:mbid/picks", h(async (req, res) => {
     .from(picksTable)
     .innerJoin(pickersTable, eq(picksTable.pickerId, pickersTable.id))
     .where(
-      and(eq(picksTable.mbid, parsed.data.mbid), eq(pickersTable.active, true)),
+      and(
+        eq(picksTable.mbid, parsed.data.mbid),
+        eq(pickersTable.active, true),
+        pickerNotOptedOut(pickersTable.id),
+      ),
     )
     .orderBy(
       asc(pickersTable.trustTier),

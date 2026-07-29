@@ -38,6 +38,7 @@ import { normalizeKey, isrcKey } from "../../lore/resolve.js";
 import { createMbResolver } from "@workspace/song-enrichment";
 import { h } from "../../middlewares/asyncHandler.js";
 import { spinDayExpr } from "../../lore/runs.js";
+import { pickerNotOptedOut } from "../lore/shared.js";
 import { getForYouStations, getForYouBlogs } from "../../lore/for-you.js";
 import {
   buildExport,
@@ -1453,6 +1454,7 @@ router.get("/me/overlaps/pickers", h(async (req, res) => {
         ne(pickersTable.pickerType, "dj"),
         isNotNull(picksTable.mbid),
         inArray(picksTable.mbid, userLib),
+        pickerNotOptedOut(pickersTable.id),
       ),
     )
     .groupBy(
@@ -1698,8 +1700,7 @@ router.get("/me/library/sync", h(async (req, res) => {
  */
 router.get("/me/library/sync/:jobId", h(async (req, res) => {
   const user = (req as AuthedRequest).loreUser;
-  const rawJobId = req.params.jobId;
-  const jobId = parseInt(typeof rawJobId === "string" ? rawJobId : "", 10);
+  const jobId = parseInt(typeof req.params.jobId === "string" ? req.params.jobId : "", 10);
   if (isNaN(jobId)) return res.status(400).json({ error: "Invalid jobId" });
   const [job] = await db
     .select()

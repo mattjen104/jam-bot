@@ -23,7 +23,7 @@ import { eq, ne, and, asc, isNotNull, inArray, sql } from "drizzle-orm";
 import { getPickerByHandle } from "../../lore/picks.js";
 import { resolvePickRunIds } from "../../lore/runs.js";
 import { h } from "../../middlewares/asyncHandler.js";
-import { toPicker } from "./shared.js";
+import { toPicker, pickerNotOptedOut, isPickerOptedOut } from "./shared.js";
 import { computeGenreBreakdown, computeDiscoveryScore } from "../../lore/genre-insights.js";
 
 const router: IRouter = Router();
@@ -110,6 +110,10 @@ router.get("/pickers/dial", h(async (_req, res) => {
     LEFT JOIN latest  lr ON lr.picker_id = pk.id
     LEFT JOIN preview pr ON pr.picker_id = pk.id AND pr.rn <= 4
     WHERE pk.active = true
+      AND NOT EXISTS (
+        SELECT 1 FROM selector_claims sc
+        WHERE sc.picker_id = pk.id AND sc.opted_out = true
+      )
     ORDER BY pk.trust_tier, pk.name, pr.rn ASC NULLS LAST
   `);
 
@@ -172,8 +176,12 @@ router.get("/pickers", h(async (req, res) => {
     .from(pickersTable)
     .where(
       typeFilter
-        ? and(eq(pickersTable.active, true), eq(pickersTable.pickerType, typeFilter))
-        : eq(pickersTable.active, true),
+        ? and(
+            eq(pickersTable.active, true),
+            eq(pickersTable.pickerType, typeFilter),
+            pickerNotOptedOut(pickersTable.id),
+          )
+        : and(eq(pickersTable.active, true), pickerNotOptedOut(pickersTable.id)),
     )
     .orderBy(asc(pickersTable.trustTier), asc(pickersTable.name));
 
@@ -218,6 +226,10 @@ router.get("/pickers/:handle/archive", h(async (req, res) => {
 
   const picker = await getPickerByHandle(parsed.data.handle);
   if (!picker) {
+    return res.status(404).json({ error: "Picker not found" });
+  }
+
+  if (await isPickerOptedOut(picker.id)) {
     return res.status(404).json({ error: "Picker not found" });
   }
 
@@ -272,6 +284,10 @@ router.get("/pickers/:handle/insights", h(async (req, res) => {
     return res.status(404).json({ error: "Picker not found" });
   }
 
+  if (await isPickerOptedOut(picker.id)) {
+    return res.status(404).json({ error: "Picker not found" });
+  }
+
   const rows = await db
     .select({
       genres: recordingsTable.genres,
@@ -308,6 +324,10 @@ router.get("/pickers/:handle/overlaps/stations", h(async (req, res) => {
 
   const picker = await getPickerByHandle(parsed.data.handle);
   if (!picker) {
+    return res.status(404).json({ error: "Picker not found" });
+  }
+
+  if (await isPickerOptedOut(picker.id)) {
     return res.status(404).json({ error: "Picker not found" });
   }
 
@@ -430,6 +450,7 @@ router.get("/picks/contains", h(async (req, res) => {
           inArray(picksTable.mbid, misses),
           eq(pickersTable.active, true),
           ne(pickersTable.pickerType, "dj"),
+          pickerNotOptedOut(pickersTable.id),
         ),
       )
       .orderBy(

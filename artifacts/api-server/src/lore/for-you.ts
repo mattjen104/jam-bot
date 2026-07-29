@@ -27,7 +27,8 @@ import {
   userSourceAffinityTable,
   type LoreUser,
 } from "@workspace/db";
-import { eq, and, isNotNull, inArray, sql, gt } from "drizzle-orm";
+import { eq, and, isNotNull, inArray, sql, gt, notExists } from "drizzle-orm";
+import { selectorClaimsTable } from "@workspace/db";
 import {
   fetchStationsByTag,
   filterStations,
@@ -211,6 +212,14 @@ export async function computeUserSourceAffinity(
           eq(pickersTable.pickerType, "blog"),
           isNotNull(picksTable.mbid),
           inArray(picksTable.mbid, userLibMbids),
+          notExists(
+            db.select({ _: sql`1` })
+              .from(selectorClaimsTable)
+              .where(and(
+                eq(selectorClaimsTable.pickerId, pickersTable.id),
+                eq(selectorClaimsTable.optedOut, true),
+              )),
+          ),
         ),
       )
       .groupBy(pickersTable.id);
@@ -582,7 +591,18 @@ export async function getForYouBlogs(
     .from(pickersTable)
     .leftJoin(picksTable, eq(picksTable.pickerId, pickersTable.id))
     .where(
-      and(eq(pickersTable.active, true), eq(pickersTable.pickerType, "blog")),
+      and(
+        eq(pickersTable.active, true),
+        eq(pickersTable.pickerType, "blog"),
+        notExists(
+          db.select({ _: sql`1` })
+            .from(selectorClaimsTable)
+            .where(and(
+              eq(selectorClaimsTable.pickerId, pickersTable.id),
+              eq(selectorClaimsTable.optedOut, true),
+            )),
+        ),
+      ),
     )
     .groupBy(
       pickersTable.id,
@@ -689,7 +709,18 @@ async function buildColdStartBlogs(
     .from(pickersTable)
     .leftJoin(picksTable, eq(picksTable.pickerId, pickersTable.id))
     .where(
-      and(eq(pickersTable.active, true), eq(pickersTable.pickerType, "blog")),
+      and(
+        eq(pickersTable.active, true),
+        eq(pickersTable.pickerType, "blog"),
+        notExists(
+          db.select({ _: sql`1` })
+            .from(selectorClaimsTable)
+            .where(and(
+              eq(selectorClaimsTable.pickerId, pickersTable.id),
+              eq(selectorClaimsTable.optedOut, true),
+            )),
+        ),
+      ),
     )
     .groupBy(
       pickersTable.id,

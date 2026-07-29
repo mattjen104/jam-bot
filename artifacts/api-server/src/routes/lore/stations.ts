@@ -37,7 +37,7 @@ import { eq, ne, and, asc, desc, isNotNull, inArray, sql } from "drizzle-orm";
 import { stationArchiveUrl } from "../../lore/adapters.js";
 import { inferTimezone } from "../../lore/timezone.js";
 import { h } from "../../middlewares/asyncHandler.js";
-import { toStation, toNowPlaying, toArchiveRecording, spinDayExpr } from "./shared.js";
+import { toStation, toNowPlaying, toArchiveRecording, spinDayExpr, pickerNotOptedOut } from "./shared.js";
 import { spinRunIdExpr } from "../../lore/runs.js";
 import { logSpinIfChanged, spinEvents, type SpinChangedEvent } from "../../lore/resolve.js";
 import { fingerprintStream, fingerprintAvailable } from "../../lore/stream-fingerprint.js";
@@ -649,6 +649,7 @@ router.get("/stations/:slug/overlaps/pickers", h(async (req, res) => {
         ne(pickersTable.pickerType, "dj"),
         isNotNull(picksTable.mbid),
         inArray(picksTable.mbid, stationMbids),
+        pickerNotOptedOut(pickersTable.id),
       ),
     )
     .groupBy(
