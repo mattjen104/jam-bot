@@ -74,4 +74,82 @@ export async function applyStationScheduleMigration(): Promise<void> {
     ALTER TABLE stations ADD COLUMN IF NOT EXISTS iana_timezone text
   `);
   console.info("[migration] scraped_shows table: OK");
+
+  await cleanupInvisibleCharactersInShowNames();
+}
+
+/**
+ * One-time (but idempotent) data cleanup: rows written before the parse-time
+ * sanitizer landed can still hold zero-width characters in show_name/dj_name
+ * (e.g. "Morning\u200BJazz"), which render without a space and break text
+ * matching until the station happens to be re-scraped.
+ *
+ * Applies the same normalization as `sanitizeName` in schedule-scraper.ts:
+ * zero-width chars (U+200B..U+200D, U+FEFF) → space, whitespace collapsed,
+ * trimmed. Because (station_id, day_of_week, start_time, show_name) is a
+ * unique key, a dirty row whose cleaned name collides with an existing row
+ * (or with another dirty row normalizing to the same name) is deleted
+ * instead of updated.
+ *
+ * Postgres AREs support \uXXXX escapes, so the pattern mirrors the JS regex
+ * /[\u200B-\u200D\uFEFF]/g exactly.
+ */
+async function cleanupInvisibleCharactersInShowNames(): Promise<void> {
+  // 1) Delete dirty show_name rows whose cleaned name would collide with an
+  //    already-clean row, or with a lower-id dirty sibling normalizing to the
+  //    same slot key (keep the lowest id among those siblings).
+  const deleted = await db.execute(sql`
+    WITH cleaned AS (
+      SELECT id, station_id, day_of_week, start_time, show_name,
+             btrim(regexp_replace(regexp_replace(show_name,
+               '[\\u200B-\\u200D\\uFEFF]', ' ', 'g'), '\\s+', ' ', 'g')) AS clean_name
+      FROM scraped_shows
+      WHERE show_name ~ '[\\u200B-\\u200D\\uFEFF]'
+    )
+    DELETE FROM scraped_shows s
+    USING cleaned c
+    WHERE s.id = c.id
+      AND (
+        EXISTS (
+          SELECT 1 FROM scraped_shows o
+          WHERE o.station_id = c.station_id
+            AND o.day_of_week = c.day_of_week
+            AND o.start_time = c.start_time
+            AND o.show_name = c.clean_name
+        )
+        OR EXISTS (
+          SELECT 1 FROM cleaned o
+          WHERE o.station_id = c.station_id
+            AND o.day_of_week = c.day_of_week
+            AND o.start_time = c.start_time
+            AND o.clean_name = c.clean_name
+            AND o.id < c.id
+        )
+      )
+  `);
+  // 2) Rewrite the surviving dirty show_name rows in place.
+  const updatedShows = await db.execute(sql`
+    UPDATE scraped_shows
+    SET show_name = btrim(regexp_replace(regexp_replace(show_name,
+      '[\\u200B-\\u200D\\uFEFF]', ' ', 'g'), '\\s+', ' ', 'g'))
+    WHERE show_name ~ '[\\u200B-\\u200D\\uFEFF]'
+  `);
+  // 3) dj_name is not part of the unique key, so a plain rewrite suffices;
+  //    a name that cleans down to nothing becomes NULL (matching the parser,
+  //    which stores null for empty DJ names).
+  const updatedDjs = await db.execute(sql`
+    UPDATE scraped_shows
+    SET dj_name = nullif(btrim(regexp_replace(regexp_replace(dj_name,
+      '[\\u200B-\\u200D\\uFEFF]', ' ', 'g'), '\\s+', ' ', 'g')), '')
+    WHERE dj_name IS NOT NULL AND dj_name ~ '[\\u200B-\\u200D\\uFEFF]'
+  `);
+  const total =
+    (deleted.rowCount ?? 0) +
+    (updatedShows.rowCount ?? 0) +
+    (updatedDjs.rowCount ?? 0);
+  if (total > 0) {
+    console.info(
+      `[migration] scraped_shows zero-width cleanup: ${deleted.rowCount ?? 0} duplicate(s) deleted, ${updatedShows.rowCount ?? 0} show name(s) rewritten, ${updatedDjs.rowCount ?? 0} DJ name(s) rewritten`,
+    );
+  }
 }
