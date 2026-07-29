@@ -1104,6 +1104,73 @@ describe("scrapeStationSchedule — missing required fields never reach the DB",
     expect(station?.upcomingShowCount).toBe(0);
   });
 
+  it("stores only the valid entry when null and absent endTime are mixed with a good entry", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // One entry whose endTime is explicit null, one whose endTime key is absent
+    // entirely, and one well-formed entry. The parser must drop both bad rows
+    // without short-circuiting, so the valid entry still reaches the DB.
+    const MIXED_END_JSON = JSON.stringify([
+      {
+        showName: "Valid Show",
+        dayOfWeek: "Mon",
+        startTime: "09:00",
+        endTime: "11:00",
+        djName: "DJ Good",
+      },
+      {
+        showName: "Null End Show",
+        dayOfWeek: "Wed",
+        startTime: "14:00",
+        endTime: null,
+        djName: null,
+      },
+      {
+        showName: "Missing End Show",
+        dayOfWeek: "Fri",
+        startTime: "20:00",
+        // endTime key intentionally omitted
+        djName: "DJ Night",
+      },
+    ]);
+
+    configureScheduleExtractor(async () => MIXED_END_JSON);
+
+    const fetchFn = makeFetch([
+      { pattern: /robots\.txt/, body: "User-agent: *\nDisallow:\n" },
+      {
+        pattern: "/schedule",
+        body: "<html><body><p>Schedule page content</p></body></html>",
+      },
+    ]);
+
+    const target = {
+      id: stationId!,
+      slug: `test-sched-${run}`,
+      homepageUrl: HOMEPAGE,
+      scheduleUrl: SCHEDULE_URL,
+      city: null,
+      country: null,
+      ianaTimezone: null,
+    };
+
+    const result = await scrapeStationSchedule(target, { fetchFn });
+
+    // Only the one valid entry must be stored; the two bad endTime entries
+    // are dropped by the parser without short-circuiting the loop.
+    expect(result).toEqual({ scraped: true, showCount: 1 });
+
+    const shows = await fetchScrapedShows();
+    expect(shows).toHaveLength(1);
+    expect(shows[0]!.showName).toBe("Valid Show");
+    expect(shows[0]!.startTime).toBe("09:00");
+    expect(shows[0]!.endTime).toBe("11:00");
+
+    const station = await fetchStationRow();
+    expect(station?.scheduleScrapedAt).toBeInstanceOf(Date);
+    expect(station?.upcomingShowCount).toBe(1);
+  });
+
   it("stores only valid entries when bad fields are mixed with well-formed ones", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
 
