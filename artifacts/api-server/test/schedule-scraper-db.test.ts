@@ -1241,4 +1241,68 @@ describe("scrapeStationSchedule — missing required fields never reach the DB",
     expect(station?.scheduleScrapedAt).toBeInstanceOf(Date);
     expect(station?.upcomingShowCount).toBe(1);
   });
+
+  it("stores exactly one row when the LLM returns the same show/day/time twice", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // LLM returns the same slot (showName + dayOfWeek + startTime) twice — a
+    // realistic hallucination where the model echoes a repeated HTML block.
+    // parseExtractedSchedule deduplicates on (dayOfWeek, startTime, showName)
+    // via seenSlots before any DB write, so only one row must reach scraped_shows.
+    // The second occurrence has a different endTime and djName to confirm that
+    // the dedup key is the identity triple, not full-object equality.
+    const DUPLICATE_SLOT_JSON = JSON.stringify([
+      {
+        showName: "Morning Jazz",
+        dayOfWeek: "Mon",
+        startTime: "08:00",
+        endTime: "10:00",
+        djName: "DJ Alice",
+      },
+      {
+        showName: "Morning Jazz",
+        dayOfWeek: "Mon",
+        startTime: "08:00",
+        endTime: "10:30", // different endTime — still a duplicate slot
+        djName: "DJ Bob",  // different djName — still a duplicate slot
+      },
+    ]);
+
+    configureScheduleExtractor(async () => DUPLICATE_SLOT_JSON);
+
+    const fetchFn = makeFetch([
+      { pattern: /robots\.txt/, body: "User-agent: *\nDisallow:\n" },
+      {
+        pattern: "/schedule",
+        body: "<html><body><p>Schedule page content</p></body></html>",
+      },
+    ]);
+
+    const target = {
+      id: stationId!,
+      slug: `test-sched-${run}`,
+      homepageUrl: HOMEPAGE,
+      scheduleUrl: SCHEDULE_URL,
+      city: null,
+      country: null,
+      ianaTimezone: null,
+    };
+
+    const result = await scrapeStationSchedule(target, { fetchFn });
+
+    // Dedup collapses two identical slots to one — showCount must be 1.
+    expect(result).toEqual({ scraped: true, showCount: 1 });
+
+    // Exactly one row must be in scraped_shows — no DB unique-constraint error
+    // and no silent duplicate row.
+    const shows = await fetchScrapedShows();
+    expect(shows).toHaveLength(1);
+    expect(shows[0]!.showName).toBe("Morning Jazz");
+    expect(shows[0]!.dayOfWeek).toBe("Mon");
+    expect(shows[0]!.startTime).toBe("08:00");
+
+    const station = await fetchStationRow();
+    expect(station?.scheduleScrapedAt).toBeInstanceOf(Date);
+    expect(station?.upcomingShowCount).toBe(1);
+  });
 });
