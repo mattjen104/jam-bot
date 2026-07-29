@@ -192,6 +192,39 @@ body{font-family:var(--ui);background:#0a0908;color:var(--ink);
 
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 
+/* ── context rail ── */
+/* Sticky strip at the bottom of the scroll area on deep views.
+   Always visible — tap chips to jump sideways across entity types. */
+.ctx-rail{position:sticky;bottom:0;left:0;right:0;z-index:10;
+  background:linear-gradient(to bottom,transparent 0%,var(--bg) 28%);
+  padding:18px 0 10px}
+.ctx-rail-inner{display:flex;gap:6px;overflow-x:auto;padding:0 15px;
+  padding-right:24px;scrollbar-width:none}
+.ctx-rail-inner::-webkit-scrollbar{display:none}
+/* group = one entity type */
+.ctx-grp{display:flex;align-items:center;gap:5px;flex-shrink:0}
+.ctx-grp-lbl{font-family:var(--label);font-size:7.5px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.1em;color:var(--absent);
+  white-space:nowrap}
+/* separator dot between groups */
+.ctx-sep{width:3px;height:3px;border-radius:50%;background:var(--rule-strong);flex-shrink:0}
+/* individual chip */
+.ctx-chip{font-family:var(--label);font-size:10px;font-weight:600;
+  text-transform:none;letter-spacing:.01em;padding:6px 11px;
+  border-radius:20px;border:1px solid var(--rule-strong);
+  background:var(--surface);color:var(--ink-2);
+  cursor:pointer;transition:.11s;white-space:nowrap;flex-shrink:0}
+.ctx-chip:hover{background:var(--raised);color:var(--ink)}
+.ctx-chip:active{background:var(--raised)}
+/* chip variants by entity type */
+.ctx-chip.lib{border-color:rgba(232,106,78,.35);color:var(--library);background:var(--library-bg)}
+.ctx-chip.lib:hover{background:rgba(232,106,78,.18)}
+.ctx-chip.sel{border-color:rgba(200,169,107,.35);color:var(--picker);background:var(--picker-bg)}
+.ctx-chip.sel:hover{background:rgba(200,169,107,.18)}
+.ctx-chip.live-chip{border-color:rgba(127,168,201,.35);color:var(--live);background:var(--live-bg)}
+.ctx-chip.live-chip:hover{background:rgba(127,168,201,.18)}
+.ctx-chip.new-chip{border-color:var(--rule-strong);color:var(--muted);font-style:italic}
+
 /* ── nav bubbles ── */
 .nav-bar{display:flex;align-items:center;justify-content:center;gap:8px;
   padding:9px 15px 10px;background:var(--bg);border-top:1px solid var(--rule);
@@ -555,10 +588,135 @@ function renderAll(){
   return html;
 }
 
+// ── context rail ──
+// Sticky strip at the bottom of deep views. Every chip is a lateral exit —
+// jump to an adjacent entity type without going back first.
+function chip(label,cls,action){
+  return`<button class="ctx-chip ${cls||''}" data-action="${encodeURIComponent(JSON.stringify(action))}">${label}</button>`;
+}
+function sep(){return`<span class="ctx-sep"></span>`;}
+function grp(label,...chips){
+  return`<div class="ctx-grp"><span class="ctx-grp-lbl">${label}</span>${chips.join('')}</div>`;
+}
+
+function railForShow(){
+  const spins=sh[5], st=sh[7];
+  // unique artists (yours first)
+  const yours=[...new Set(spins.filter(s=>s.hit).map(s=>s.ar))].slice(0,4);
+  const newArs=[...new Set(spins.filter(s=>!s.hit).map(s=>s.ar))]
+    .filter(a=>!yours.includes(a)).slice(0,2);
+  // unique albums
+  const albums=[...new Set(spins.map(s=>s.rl))].slice(0,3);
+  const isPicker=PICKERS.has(sh[1]);
+
+  const parts=[];
+  if(yours.length||newArs.length){
+    parts.push(grp('Artists',
+      ...yours.map(a=>chip(a,'lib',{type:'artist',name:a})),
+      ...newArs.map(a=>chip(a,'new-chip',{type:'artist',name:a}))
+    ));
+  }
+  if(albums.length){
+    parts.push(sep());
+    parts.push(grp('Albums',...albums.map(al=>chip(al,'',{type:'album',name:al}))));
+  }
+  parts.push(sep());
+  parts.push(grp('Selector',chip(sh[1],isPicker?'sel':'',{type:'dj',name:sh[1]})));
+  parts.push(sep());
+  parts.push(grp('Station',chip(st.n,'live-chip',{type:'station',idx:STATIONS.indexOf(st)})));
+  if(sh[6]>0){
+    parts.push(sep());
+    parts.push(grp('Library',chip(`◆ ${sh[6]} yours`,'lib',{type:'library'})));
+  }
+  return`<div class="ctx-rail"><div class="ctx-rail-inner">${parts.join('')}</div></div>`;
+}
+
+function railForDJ(){
+  const sets=ALLSHOWS.filter(x=>x[1]===djName&&x[3]<=0);
+  const stNames=[...new Set(sets.map(x=>x[7].n))];
+  const allSpins=sets.flatMap(s=>s[5]);
+  const yourArs=[...new Set(allSpins.filter(s=>s.hit).map(s=>s.ar))].slice(0,4);
+  const newArs=[...new Set(allSpins.filter(s=>!s.hit).map(s=>s.ar))]
+    .filter(a=>!yourArs.includes(a)).slice(0,2);
+  const totalCross=sets.reduce((m,s)=>m+s[6],0);
+
+  const parts=[];
+  parts.push(grp('Stations',...stNames.map((n,i)=>
+    chip(n,'live-chip',{type:'station',idx:STATIONS.findIndex(s=>s.n===n)}))));
+  if(yourArs.length){
+    parts.push(sep());
+    parts.push(grp('Your artists',...yourArs.map(a=>chip(a,'lib',{type:'artist',name:a}))));
+  }
+  if(newArs.length){
+    parts.push(sep());
+    parts.push(grp('New to you',...newArs.map(a=>chip(a,'new-chip',{type:'artist',name:a}))));
+  }
+  if(totalCross>0){
+    parts.push(sep());
+    parts.push(grp('Library',chip(`◆ ${totalCross} crossings`,'lib',{type:'library'})));
+  }
+  return`<div class="ctx-rail"><div class="ctx-rail-inner">${parts.join('')}</div></div>`;
+}
+
+function railForStation(){
+  const st=STATIONS[si];
+  const pastShows=st.shows.filter(s=>s[3]<=0);
+  const djs=[...new Set(pastShows.map(s=>s[1]))];
+  const allSpins=pastShows.flatMap(s=>s[5]);
+  const yourArs=[...new Set(allSpins.filter(s=>s.hit).map(s=>s.ar))].slice(0,4);
+  const totalCross=pastShows.reduce((m,s)=>m+s[6],0);
+  const selectors=djs.filter(d=>PICKERS.has(d));
+
+  const parts=[];
+  if(selectors.length){
+    parts.push(grp('Selectors',...selectors.map(d=>chip(d,'sel',{type:'dj',name:d}))));
+    const others=djs.filter(d=>!PICKERS.has(d)).slice(0,2);
+    if(others.length) parts.push(grp('DJs',...others.map(d=>chip(d,'',{type:'dj',name:d}))));
+  } else {
+    parts.push(grp('DJs',...djs.slice(0,3).map(d=>chip(d,'',{type:'dj',name:d}))));
+  }
+  if(yourArs.length){
+    parts.push(sep());
+    parts.push(grp('Your artists',...yourArs.map(a=>chip(a,'lib',{type:'artist',name:a}))));
+  }
+  if(totalCross>0){
+    parts.push(sep());
+    parts.push(grp('Library',chip(`◆ ${totalCross} heard here`,'lib',{type:'library'})));
+  }
+  return`<div class="ctx-rail"><div class="ctx-rail-inner">${parts.join('')}</div></div>`;
+}
+
+function wireRail(){
+  document.querySelectorAll('.ctx-chip[data-action]').forEach(btn=>{
+    btn.onclick=e=>{
+      e.stopPropagation();
+      const a=JSON.parse(decodeURIComponent(btn.dataset.action));
+      if(a.type==='dj'){djName=a.name;level='dj';render();}
+      else if(a.type==='station'){si=a.idx;level='station';render();}
+      else if(a.type==='library'){tab='library';
+        document.getElementById('navLibrary').classList.add('active');
+        document.getElementById('navRadio').classList.remove('active');
+        render();}
+      // artist / album: show toast for now (these are future entity pages)
+      else if(a.type==='artist'||a.type==='album'){
+        const toast=document.createElement('div');
+        toast.style.cssText=`position:fixed;bottom:200px;left:50%;transform:translateX(-50%);
+          background:var(--raised);border:1px solid var(--rule-strong);border-radius:3px;
+          font-family:var(--label);font-size:10px;text-transform:uppercase;letter-spacing:.07em;
+          color:var(--ink-2);padding:9px 16px;white-space:nowrap;z-index:200;
+          animation:pulse .3s ease-out`;
+        toast.textContent=`${a.type==='artist'?'Artist':'Album'} pages coming — #558 / next steps`;
+        document.getElementById('p').appendChild(toast);
+        setTimeout(()=>toast.remove(),2200);
+      }
+    };
+  });
+}
+
 // ── station level ──
 function renderStation(){
   const st=STATIONS[si];
-  return`<div class="fat-list">`+st.shows.map(s=>{
+  const list=st.shows.map(s=>{
     const isLive=s[3]===0,isFuture=s[3]>0;
     const warm=s[6]>0,isPicker=PICKERS.has(s[1]);
     const bars=s[5].slice(0,28).map(sp=>`<i class="${sp.hit?'h':''}"></i>`).join('');
@@ -572,7 +730,8 @@ function renderStation(){
       ${first?`<div class="fpeek">opened with <em>${first.ar} — ${first.tr}</em></div>`:''}`:
       `<div class="fcross zero" style="margin-top:8px">scheduled · no data yet</div>`}
     </div>`;
-  }).join('')+`</div>`;
+  }).join('');
+  return`<div class="fat-list">${list}</div>${railForStation()}`;
 }
 
 // ── show / track level ──
@@ -598,7 +757,8 @@ function renderShow(){
     <div class="tc"><div class="tr">${sp.tr}</div><div class="ar">${sp.ar}</div>
       <div class="meta">${sp.rl} · ${sp.lb} · ${sp.yr}</div></div>
     <div class="st ${sp.hit?'own':'new'}">${sp.hit?'◆ library':'new'}</div>
-  </div>`).join('')}`;
+  </div>`).join('')}
+  ${railForShow()}`;
 }
 
 // ── DJ level ──
@@ -628,7 +788,8 @@ function renderDJ(){
       <div class="fbar">${bars}</div>
       <div class="fcross ${s[6]===0?'zero':''}">${s[6]} of ${s[5].length} were yours</div>
     </div>`;
-  }).join('')}</div>`;
+  }).join('')}</div>
+  ${railForDJ()}`;
 }
 
 // ── library view ──
@@ -714,6 +875,7 @@ function render(){
   if(level==='show')    b.innerHTML=renderShow();
   if(level==='dj')      b.innerHTML=renderDJ();
   wire();
+  wireRail();
   updateScanBar();
 
   if(level==='all'){
