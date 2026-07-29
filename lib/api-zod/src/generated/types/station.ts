@@ -15,6 +15,11 @@ export interface Station {
   name: string;
   /** @nullable */
   org?: string | null;
+  /**
+   * City the station broadcasts from, when known. Used alongside org and country for the station's location byline.
+   * @nullable
+   */
+  city?: string | null;
   /** @nullable */
   country?: string | null;
   streamUrl: string;

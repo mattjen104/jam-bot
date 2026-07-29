@@ -89,20 +89,36 @@ import { ingestDiscogsList, addRymPicker } from "../../lore/collector.js";
 import { addSongExploderClaim } from "../../lore/song-exploder.js";
 import { publishGeniusDraft, rejectGeniusDraft } from "../../lore/genius-annotations.js";
 import { h, HttpError } from "../../middlewares/asyncHandler.js";
+import { stampSpinShowIds } from "../../lore/scraped-shows-sync.js";
 import { toPicker } from "./shared.js";
 
 const router: IRouter = Router();
 
 // Rate limit: 10 requests per 15 minutes per IP — brute-force protection.
 // Applied before auth so lockout happens before any token comparison.
-router.use(
-  rateLimit({
-    windowMs: 15 * 60 * 1000,
-    limit: 10,
-    standardHeaders: "draft-8",
-    legacyHeaders: false,
-  }),
-);
+//
+// Scoped to STATE-MUTATING methods only (POST/PATCH/PUT/DELETE). Read-only
+// GET endpoints are deliberately exempt: the admin dashboard polls several of
+// them (e.g. /admin/feed-freshness-health, /admin/spinitron-web-health,
+// /admin/radio-browser/stations) every 30s, which would otherwise trip the
+// 10-per-15-minutes budget within a couple of minutes and lock a legitimate
+// admin out of their own monitoring UI. GETs cannot mutate admin state, remain
+// behind the auth gate below, and carry no brute-force risk (a valid token is
+// required to learn anything), so exempting them closes the false-positive
+// throttling without weakening security. The mutating routes — where a
+// brute-force / abuse concern actually exists — keep the strict limit.
+const adminMutationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+});
+router.use((req, res, next) => {
+  if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") {
+    return next();
+  }
+  return adminMutationLimiter(req, res, next);
+});
 
 // Structural auth gate — all routes on this router are automatically protected.
 // Absent env var → 503 (not silently open); token mismatch → 401.
@@ -1602,6 +1618,55 @@ router.get("/admin/stations/allocation", h(async (_req, res) => {
       upcomingShowCount: r.upcomingShowCount,
     })),
   });
+}));
+
+// PATCH /api/admin/stations/:id/timezone — manually assign an IANA timezone
+// when city/country inference can't resolve one (e.g. US stations with no
+// city). Validates against the runtime tz database via Intl. On success,
+// kicks the spin show-stamper so historical spins gain show attribution
+// immediately instead of waiting for the next boot.
+router.patch("/admin/stations/:id/timezone", h(async (req, res) => {
+  const id = Number(req.params["id"]);
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ error: "Invalid station id" });
+  }
+  const tzRaw = (req.body ?? {})["ianaTimezone"];
+  if (tzRaw !== null && typeof tzRaw !== "string") {
+    return res
+      .status(400)
+      .json({ error: "Body must set ianaTimezone (IANA string, or null to clear)" });
+  }
+  const tz = typeof tzRaw === "string" ? tzRaw.trim() : null;
+  if (tz !== null) {
+    try {
+      // Throws RangeError for unknown zone names.
+      new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    } catch {
+      return res.status(400).json({ error: `Unknown IANA timezone: ${tz}` });
+    }
+  }
+
+  const [updated] = await db
+    .update(stationsTable)
+    .set({ ianaTimezone: tz, updatedAt: new Date() })
+    .where(eq(stationsTable.id, id))
+    .returning({
+      id: stationsTable.id,
+      slug: stationsTable.slug,
+      ianaTimezone: stationsTable.ianaTimezone,
+    });
+  if (!updated) {
+    return res.status(404).json({ error: "Station not found" });
+  }
+
+  // Fire-and-forget: idempotent, scoped to show_id-null spins.
+  if (tz) {
+    void stampSpinShowIds().then((n) => {
+      if (n > 0) console.info(`[admin] timezone set for ${updated.slug} — stamped ${n} spin(s)`);
+    });
+  }
+
+  return res.json(updated);
 }));
 
 // PATCH /api/admin/stations/:id/flags — toggle favorite/hidden and apply the

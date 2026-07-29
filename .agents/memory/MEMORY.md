@@ -59,4 +59,5 @@
 - [Crossing-score socket leasing](lore-socket-leases.md) — poller lease set is the ONLY truth; scheduler map is display-only and must prune via isLeasedStation; all watcher starts must use the mount-preference helper.
 - [Lore station curation flags](lore-station-curation-flags.md) — favorite gates ICY watchers (soft cap 40), hidden = soft-hide + poll stop; every new listener-facing query must add hidden=false (no central predicate).
 - [Blog picker identity = feedUrl](blog-picker-identity.md) — blog ingest must match pickers by sourceRef feedUrl, never slugified name, or seeded handles fork into duplicates every poll; tolerant flag lives in sourceRef.
+- [Scraped-show tz & slot matching](scraped-shows-timezone-matching.md) — RB countries are full names not ISO codes; overnight-wrap SQL pattern lives in 3 places; slot matches need explicit ORDER BY tie-breaks.
 - [Pending keeps — spin-based saves](pending-keeps-pattern.md) — pending_keeps table for pre-resolution saves; spinId on NowPlaying; hand-patch BOTH api-client-react AND api-zod types and rebuild dist.

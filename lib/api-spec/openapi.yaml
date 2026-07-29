@@ -2588,6 +2588,11 @@ components:
           type: string
         org:
           type: ["string", "null"]
+        city:
+          type: ["string", "null"]
+          description: >-
+            City the station broadcasts from, when known. Used alongside org and
+            country for the station's location byline.
         country:
           type: ["string", "null"]
         streamUrl:
@@ -2776,6 +2781,12 @@ components:
         The most recent spin on a station. `recording` is null when the track
         could not be resolved to the MusicBrainz spine (raw metadata preserved).
       properties:
+        spinId:
+          type: ["integer", "null"]
+          description: >-
+            DB primary key of the underlying spin row. Present on every
+            now-playing response so listeners can save unresolved tracks before
+            MB resolution completes.
         rawArtist:
           type: string
         rawTitle:

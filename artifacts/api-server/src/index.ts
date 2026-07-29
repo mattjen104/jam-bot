@@ -77,7 +77,6 @@ async function bootLore(): Promise<void> {
     await applyStationScheduleMigration();
     await applyPendingKeepsMigration();
     await applyAutomationClassMigration();
-    await syncScrapedShows();
     await ensurePicksUnifiedView();
     await seedStations();
     try {
@@ -85,6 +84,8 @@ async function bootLore(): Promise<void> {
     } catch (err) {
       console.error("[lore] timezone backfill failed", err);
     }
+    // After timezone backfill so the spin stamper sees freshly-inferred zones.
+    await syncScrapedShows();
     try {
       await seedSpinitronRoster();
     } catch (err) {

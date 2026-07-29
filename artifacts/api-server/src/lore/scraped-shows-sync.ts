@@ -185,7 +185,7 @@ async function syncDjPickers(): Promise<number> {
  * Only runs for stations with a known timezone — without one we can't safely
  * convert UTC to local time. Returns the number of spins updated.
  */
-async function stampSpinShowIds(): Promise<number> {
+export async function stampSpinShowIds(): Promise<number> {
   const result = await db.execute<{ count: string }>(sql`
     WITH matches AS (
       SELECT DISTINCT ON (sp.id)
@@ -199,12 +199,34 @@ async function stampSpinShowIds(): Promise<number> {
         AND sh.name       = ss.show_name
       WHERE sp.show_id      IS NULL
         AND st.iana_timezone IS NOT NULL
-        AND ss.day_of_week = TO_CHAR(
+        -- Overnight-aware slot matching (mirrors the crossing scorer's
+        -- currently_airing CTE): a wrap slot (end <= start, e.g. 22:00-02:00)
+        -- matches on its start day from start_time onward, and on the NEXT
+        -- day before end_time (checked via yesterday's DOW carryover).
+        AND (
+          (
+            ss.day_of_week = TO_CHAR(
               sp.played_at AT TIME ZONE st.iana_timezone, 'Dy')
-        AND ss.start_time  <= TO_CHAR(
-              sp.played_at AT TIME ZONE st.iana_timezone, 'HH24:MI')
-        AND ss.end_time    >  TO_CHAR(
-              sp.played_at AT TIME ZONE st.iana_timezone, 'HH24:MI')
+            AND (
+              (ss.end_time > ss.start_time
+                AND TO_CHAR(sp.played_at AT TIME ZONE st.iana_timezone, 'HH24:MI') >= ss.start_time
+                AND TO_CHAR(sp.played_at AT TIME ZONE st.iana_timezone, 'HH24:MI') <  ss.end_time)
+              OR
+              (ss.end_time <= ss.start_time
+                AND TO_CHAR(sp.played_at AT TIME ZONE st.iana_timezone, 'HH24:MI') >= ss.start_time)
+            )
+          )
+          OR
+          (
+            ss.end_time <= ss.start_time
+            AND ss.day_of_week = TO_CHAR(
+              (sp.played_at - interval '1 day') AT TIME ZONE st.iana_timezone, 'Dy')
+            AND TO_CHAR(sp.played_at AT TIME ZONE st.iana_timezone, 'HH24:MI') < ss.end_time
+          )
+        )
+      -- Deterministic tie-break when overlapping slots match one spin:
+      -- prefer the latest-starting (most specific) slot, then stable ids.
+      ORDER BY sp.id, ss.start_time DESC, ss.id
     ),
     updated AS (
       UPDATE spins sp
@@ -268,15 +290,28 @@ export async function lookupScrapedShowId(
         ON  ss.station_id = sh.station_id
         AND ss.show_name  = sh.name
       WHERE sh.station_id = ${stationId}
-        AND ss.day_of_week = TO_CHAR(
-              ${playedAt.toISOString()}::timestamptz AT TIME ZONE ${ianaTimezone},
-              'Dy')
-        AND ss.start_time  <= TO_CHAR(
-              ${playedAt.toISOString()}::timestamptz AT TIME ZONE ${ianaTimezone},
-              'HH24:MI')
-        AND ss.end_time    >  TO_CHAR(
-              ${playedAt.toISOString()}::timestamptz AT TIME ZONE ${ianaTimezone},
-              'HH24:MI')
+        AND (
+          (
+            ss.day_of_week = TO_CHAR(
+              ${playedAt.toISOString()}::timestamptz AT TIME ZONE ${ianaTimezone}, 'Dy')
+            AND (
+              (ss.end_time > ss.start_time
+                AND TO_CHAR(${playedAt.toISOString()}::timestamptz AT TIME ZONE ${ianaTimezone}, 'HH24:MI') >= ss.start_time
+                AND TO_CHAR(${playedAt.toISOString()}::timestamptz AT TIME ZONE ${ianaTimezone}, 'HH24:MI') <  ss.end_time)
+              OR
+              (ss.end_time <= ss.start_time
+                AND TO_CHAR(${playedAt.toISOString()}::timestamptz AT TIME ZONE ${ianaTimezone}, 'HH24:MI') >= ss.start_time)
+            )
+          )
+          OR
+          (
+            ss.end_time <= ss.start_time
+            AND ss.day_of_week = TO_CHAR(
+              (${playedAt.toISOString()}::timestamptz - interval '1 day') AT TIME ZONE ${ianaTimezone}, 'Dy')
+            AND TO_CHAR(${playedAt.toISOString()}::timestamptz AT TIME ZONE ${ianaTimezone}, 'HH24:MI') < ss.end_time
+          )
+        )
+      ORDER BY ss.start_time DESC, ss.id
       LIMIT 1
     `);
     return (result.rows[0]?.id as number) ?? null;

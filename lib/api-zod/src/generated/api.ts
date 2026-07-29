@@ -213,6 +213,12 @@ export const ListStationsResponse = zod.object({
         slug: zod.string(),
         name: zod.string(),
         org: zod.string().nullish(),
+        city: zod
+          .string()
+          .nullish()
+          .describe(
+            "City the station broadcasts from, when known. Used alongside org and country for the station's location byline.",
+          ),
         country: zod.string().nullish(),
         streamUrl: zod.string(),
         streamQuality: zod.string().nullish(),
@@ -306,6 +312,12 @@ export const ListStationsAtDateResponse = zod.object({
           .union([
             zod
               .object({
+                spinId: zod
+                  .number()
+                  .nullish()
+                  .describe(
+                    "DB primary key of the underlying spin row. Present on every now-playing response so listeners can save unresolved tracks before MB resolution completes.",
+                  ),
                 rawArtist: zod.string(),
                 rawTitle: zod.string(),
                 source: zod.string().nullish(),
@@ -391,6 +403,12 @@ export const ListStationsNowPlayingResponse = zod.object({
           .union([
             zod
               .object({
+                spinId: zod
+                  .number()
+                  .nullish()
+                  .describe(
+                    "DB primary key of the underlying spin row. Present on every now-playing response so listeners can save unresolved tracks before MB resolution completes.",
+                  ),
                 rawArtist: zod.string(),
                 rawTitle: zod.string(),
                 source: zod.string().nullish(),
@@ -478,6 +496,12 @@ export const GetStationNowPlayingResponse = zod.object({
       slug: zod.string(),
       name: zod.string(),
       org: zod.string().nullish(),
+      city: zod
+        .string()
+        .nullish()
+        .describe(
+          "City the station broadcasts from, when known. Used alongside org and country for the station's location byline.",
+        ),
       country: zod.string().nullish(),
       streamUrl: zod.string(),
       streamQuality: zod.string().nullish(),
@@ -547,6 +571,12 @@ export const GetStationNowPlayingResponse = zod.object({
     .union([
       zod
         .object({
+          spinId: zod
+            .number()
+            .nullish()
+            .describe(
+              "DB primary key of the underlying spin row. Present on every now-playing response so listeners can save unresolved tracks before MB resolution completes.",
+            ),
           rawArtist: zod.string(),
           rawTitle: zod.string(),
           source: zod.string().nullish(),
@@ -1160,6 +1190,12 @@ export const GetStationArchiveResponse = zod.object({
       slug: zod.string(),
       name: zod.string(),
       org: zod.string().nullish(),
+      city: zod
+        .string()
+        .nullish()
+        .describe(
+          "City the station broadcasts from, when known. Used alongside org and country for the station's location byline.",
+        ),
       country: zod.string().nullish(),
       streamUrl: zod.string(),
       streamQuality: zod.string().nullish(),

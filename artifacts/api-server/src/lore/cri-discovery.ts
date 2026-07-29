@@ -124,7 +124,7 @@ async function findStreamUrl(name: string): Promise<string | null> {
       },
     });
     if (!res.ok) return null;
-    const stations: RbStation[] = await res.json();
+    const stations = (await res.json()) as RbStation[];
     if (!Array.isArray(stations) || stations.length === 0) return null;
     // Prefer stations with a good bitrate and lastcheckok
     const best = stations.find((s) => s.lastcheckok === 1 && (s.bitrate ?? 0) >= 128)

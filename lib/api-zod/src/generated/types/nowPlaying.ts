@@ -13,6 +13,11 @@ import type { ShowRef } from "./showRef";
  * The most recent spin on a station. `recording` is null when the track could not be resolved to the MusicBrainz spine (raw metadata preserved).
  */
 export interface NowPlaying {
+  /**
+   * DB primary key of the underlying spin row. Present on every now-playing response so listeners can save unresolved tracks before MB resolution completes.
+   * @nullable
+   */
+  spinId?: number | null;
   rawArtist: string;
   rawTitle: string;
   /** @nullable */
@@ -24,11 +29,4 @@ export interface NowPlaying {
   recording?: NowPlayingRecording | null;
   /** Show + DJ on air for this spin, when the source exposes it. */
   show?: ShowRef | null;
-  /**
-   * DB primary key of the underlying spin row. Present on every now-playing
-   * response so listeners can save unresolved tracks before MB resolution
-   * completes. Hand-added; intentionally outside the orval surface.
-   * @nullable
-   */
-  spinId?: number | null;
 }
