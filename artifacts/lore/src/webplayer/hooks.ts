@@ -264,6 +264,78 @@ export function useWpRecordingSpins(mbid: string | null) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Selectors tab
+// ---------------------------------------------------------------------------
+
+export interface WpSelector {
+  id: number;
+  name: string;
+  handle: string;
+  pickerType: string;
+  stationName: string | null;
+  stationSlug: string | null;
+  recentSpinCount: number;
+  lastPlayedAt: string | null;
+}
+
+export function useWpSelectors() {
+  return useQuery({
+    queryKey: ["wp", "selectors"],
+    queryFn: () => apiFetch<{ selectors: WpSelector[] }>("/api/player/selectors"),
+    staleTime: 5 * 60_000,
+  });
+}
+
+export interface WpSelectorRun {
+  runId: number;
+  day: string;
+  spinCount: number;
+  startedAt: string;
+  show: { name: string; djName: string | null } | null;
+  station: { slug: string; name: string };
+}
+
+export function useWpSelectorRuns(handle: string | null) {
+  return useQuery({
+    queryKey: ["wp", "selector-runs", handle],
+    queryFn: () =>
+      apiFetch<{ selector: { name: string; handle: string }; runs: WpSelectorRun[] }>(
+        `/api/player/selectors/${encodeURIComponent(handle!)}/runs`,
+      ),
+    enabled: handle != null,
+    staleTime: 5 * 60_000,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Schedule tab
+// ---------------------------------------------------------------------------
+
+export interface WpScheduleSlot {
+  stationSlug: string;
+  stationName: string;
+  showName: string;
+  djName: string | null;
+  dayOfWeek: string;
+  startTime: string;
+  endTime: string;
+  ianaTimezone: string;
+  isLive: boolean;
+}
+
+export function useWpSchedule() {
+  return useQuery({
+    queryKey: ["wp", "schedule"],
+    queryFn: () =>
+      apiFetch<{ liveNow: WpScheduleSlot[]; upcomingToday: WpScheduleSlot[] }>(
+        "/api/player/schedule",
+      ),
+    refetchInterval: 60_000,
+    staleTime: 55_000,
+  });
+}
+
 export function useWpSongExploder(mbid: string | null) {
   return useQuery({
     queryKey: ["wp", "song-exploder", mbid],

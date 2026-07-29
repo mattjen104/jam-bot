@@ -461,6 +461,8 @@ export const spinsTable = pgTable(
   (t) => [
     index("spins_mbid_played_at_idx").on(t.mbid, t.playedAt),
     index("spins_station_played_at_idx").on(t.stationId, t.playedAt),
+    // Selector/run read-models group spins by show + time.
+    index("spins_show_played_at_idx").on(t.showId, t.playedAt),
     // Idempotent ingest: a given source play id is logged once per station.
     // Null externalIds are distinct in Postgres, so change-detection sources are
     // unaffected.

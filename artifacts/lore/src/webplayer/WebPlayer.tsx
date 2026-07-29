@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation, useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { Pause, Play, Check, RefreshCw, ChevronRight, Bookmark, Loader2, ScanLine } from "lucide-react";
+import { Pause, Play, Check, RefreshCw, ChevronRight, Bookmark, Loader2, ScanLine, AudioLines, LibraryBig, Users, CalendarDays } from "lucide-react";
 import { usePlayer } from "../player/PlayerProvider";
 import {
   useLatestImportJob,
@@ -18,7 +18,47 @@ import { AlbumLoreSheet } from "./AlbumLoreSheet";
 import { LibraryTab } from "./LibraryTab";
 import { rememberPrefersClassic } from "../lib/uiPrefs";
 import { ForYouTab } from "./ForYouTab";
+import { SelectorsTab } from "./SelectorsTab";
+import { ScheduleTab } from "./ScheduleTab";
 import "./wp.css";
+
+// ---------------------------------------------------------------------------
+// Bottom navigation — the app's four main sections (per approved mockup):
+// ON AIR · LIBRARY · SELECTORS · SCHEDULE
+// ---------------------------------------------------------------------------
+
+type WpSection = "onair" | "library" | "selectors" | "schedule";
+
+const NAV_ITEMS: Array<{ key: WpSection; label: string; icon: typeof AudioLines; path: string }> = [
+  { key: "onair", label: "ON AIR", icon: AudioLines, path: "/player" },
+  { key: "library", label: "LIBRARY", icon: LibraryBig, path: "/player/library" },
+  { key: "selectors", label: "SELECTORS", icon: Users, path: "/player/selectors" },
+  { key: "schedule", label: "SCHEDULE", icon: CalendarDays, path: "/player/schedule" },
+];
+
+function WpBottomNav({ section }: { section: WpSection }) {
+  const [, navigate] = useLocation();
+  return (
+    <nav className="wp-bottomnav" aria-label="Main sections">
+      {NAV_ITEMS.map(({ key, label, icon: Icon, path }) => {
+        const active = section === key;
+        return (
+          <button
+            key={key}
+            type="button"
+            className={`wp-bottomnav-item${active ? " is-active" : ""}`}
+            aria-current={active ? "page" : undefined}
+            onClick={() => navigate(path)}
+            data-testid={`wp-nav-${key}`}
+          >
+            <Icon size={20} strokeWidth={1.75} aria-hidden="true" />
+            <span className="wp-mono">{label}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
 
 /** Now-playing hero card: the station currently sounding via the radio player. */
 function NowPlayingCard({
@@ -463,7 +503,18 @@ function OnAirRow({
  */
 export default function WebPlayer() {
   const { data: onAir, isLoading, dataUpdatedAt, refetch: refetchOnAir, isFetching: onAirFetching } = useWpOnAir();
-  const [tab, setTab] = useState<"onair" | "library" | "foryou">("onair");
+  // Section is route-driven (/player, /player/library, /player/selectors,
+  // /player/schedule) so each main section is deep-linkable.
+  const [, navParams] = useRoute("/player/:tab");
+  const rawTab = navParams?.tab ?? null;
+  const section: WpSection =
+    rawTab === "library" || rawTab === "selectors" || rawTab === "schedule"
+      ? rawTab
+      : "onair";
+  // Within ON AIR, a secondary pill toggles the taste-ranked "For You" view.
+  const [onAirView, setOnAirView] = useState<"onair" | "foryou">("onair");
+  const tab = section === "onair" ? onAirView : section;
+  const setTab = setOnAirView as (t: "onair" | "library" | "foryou") => void;
   const [runRef, setRunRef] = useState<{ slug: string; runId: number | null } | null>(null);
   const [lore, setLore] = useState<{ mbid: string; spinningOn: string | null } | null>(null);
 
@@ -508,17 +559,17 @@ export default function WebPlayer() {
 
         <ImportStrip />
 
-        {/* Tabs */}
+        {/* ON AIR sub-tabs (For You lives inside the ON AIR section) */}
         <div style={{ margin: "20px 0 0" }}>
+          {section === "onair" && (
           <div
             role="tablist"
-            aria-label="Webplayer sections"
+            aria-label="On air views"
             style={{ display: "flex", gap: 6 }}
           >
             {(
               [
                 ["onair", "On the air"],
-                ["library", "Library"],
                 ["foryou", "For You"],
               ] as const
             ).map(([key, label]) => (
@@ -548,6 +599,7 @@ export default function WebPlayer() {
               </button>
             ))}
           </div>
+          )}
           {tab === "onair" && (
             <p
               className="wp-mono"
@@ -625,7 +677,15 @@ export default function WebPlayer() {
             onOpenLore={(mbid) => setLore({ mbid, spinningOn: null })}
           />
         )}
+        {section === "selectors" && (
+          <SelectorsTab onOpenRun={(slug, runId) => setRunRef({ slug, runId })} />
+        )}
+        {section === "schedule" && (
+          <ScheduleTab onOpenRun={(slug) => setRunRef({ slug, runId: null })} />
+        )}
       </div>
+
+      <WpBottomNav section={section} />
 
       {runRef && (
         <RunDrawerSheet

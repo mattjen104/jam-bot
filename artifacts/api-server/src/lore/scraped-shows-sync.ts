@@ -212,13 +212,13 @@ export async function stampSpinShowIds(): Promise<number> {
                 AND TO_CHAR(sp.played_at AT TIME ZONE st.iana_timezone, 'HH24:MI') >= ss.start_time
                 AND TO_CHAR(sp.played_at AT TIME ZONE st.iana_timezone, 'HH24:MI') <  ss.end_time)
               OR
-              (ss.end_time <= ss.start_time
+              (ss.end_time < ss.start_time
                 AND TO_CHAR(sp.played_at AT TIME ZONE st.iana_timezone, 'HH24:MI') >= ss.start_time)
             )
           )
           OR
           (
-            ss.end_time <= ss.start_time
+            ss.end_time < ss.start_time
             AND ss.day_of_week = TO_CHAR(
               (sp.played_at - interval '1 day') AT TIME ZONE st.iana_timezone, 'Dy')
             AND TO_CHAR(sp.played_at AT TIME ZONE st.iana_timezone, 'HH24:MI') < ss.end_time
@@ -299,13 +299,13 @@ export async function lookupScrapedShowId(
                 AND TO_CHAR(${playedAt.toISOString()}::timestamptz AT TIME ZONE ${ianaTimezone}, 'HH24:MI') >= ss.start_time
                 AND TO_CHAR(${playedAt.toISOString()}::timestamptz AT TIME ZONE ${ianaTimezone}, 'HH24:MI') <  ss.end_time)
               OR
-              (ss.end_time <= ss.start_time
+              (ss.end_time < ss.start_time
                 AND TO_CHAR(${playedAt.toISOString()}::timestamptz AT TIME ZONE ${ianaTimezone}, 'HH24:MI') >= ss.start_time)
             )
           )
           OR
           (
-            ss.end_time <= ss.start_time
+            ss.end_time < ss.start_time
             AND ss.day_of_week = TO_CHAR(
               (${playedAt.toISOString()}::timestamptz - interval '1 day') AT TIME ZONE ${ianaTimezone}, 'Dy')
             AND TO_CHAR(${playedAt.toISOString()}::timestamptz AT TIME ZONE ${ianaTimezone}, 'HH24:MI') < ss.end_time

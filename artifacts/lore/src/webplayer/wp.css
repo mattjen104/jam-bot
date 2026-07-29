@@ -29,7 +29,8 @@
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
   margin: 0;
-  padding: 20px 16px 80px;
+  /* Extra bottom padding clears the fixed bottom nav. */
+  padding: 20px 16px 120px;
   box-sizing: border-box;
 }
 
@@ -115,6 +116,52 @@
 .wp .wp-play-sm {
   width: 26px;
   height: 26px;
+}
+
+/* Bottom navigation — the four main sections (ON AIR / LIBRARY / SELECTORS /
+   SCHEDULE), fixed to the viewport bottom per the approved mockup. */
+.wp-bottomnav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  display: flex;
+  background: #21201c;
+  border-top: 1px solid #413f37;
+  padding: 10px 8px calc(10px + env(safe-area-inset-bottom, 0px));
+}
+
+.wp-bottomnav .wp-bottomnav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  padding: 4px 0;
+  color: #8a877c;
+  cursor: pointer;
+}
+
+.wp-bottomnav .wp-bottomnav-item span {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+}
+
+.wp-bottomnav .wp-bottomnav-item.is-active {
+  color: #a99ff5;
+}
+
+.wp-bottomnav .wp-bottomnav-item:hover {
+  border: none;
+  color: #b8b5ab;
+}
+
+.wp-bottomnav .wp-bottomnav-item.is-active:hover {
+  color: #a99ff5;
 }
 
 /* Bottom sheet overlays (run drawer, album lore panel) */

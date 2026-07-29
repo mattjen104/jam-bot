@@ -145,6 +145,7 @@ function Shell() {
     return (
       <Switch>
         <Route path="/player" component={WebPlayer} />
+        <Route path="/player/:tab" component={WebPlayer} />
         <Route component={WebPlayer} />
       </Switch>
     );

@@ -12,6 +12,8 @@ import {
   listEntriesTable,
   listsTable,
   picksTable,
+  pickersTable,
+  scrapedShowsTable,
 } from "@workspace/db";
 import { eq, and, desc, asc, sql, inArray, isNotNull, gte } from "drizzle-orm";
 import { getUserFromSession } from "../lore/userSession.js";
@@ -502,6 +504,205 @@ router.get("/player/lore-counts", h(async (req, res) => {
       keptSince: libMap.get(mbid)?.toISOString() ?? null,
     })),
   });
+}));
+
+// ---------------------------------------------------------------------------
+// GET /api/player/selectors — selector discovery for the SELECTORS tab.
+// All active DJ/curated pickers with at least one logged spin, most recently
+// heard first. Station context comes from the picker's linked shows.
+// ---------------------------------------------------------------------------
+/** 60s in-memory cache — both endpoints below aggregate over spins and are
+ *  public/unauthenticated, so identical responses are reused briefly. */
+const PLAYER_AGG_TTL_MS = 60_000;
+let _selectorsCache: { builtAt: number; body: unknown } | null = null;
+let _scheduleCache: { builtAt: number; body: unknown } | null = null;
+
+router.get("/player/selectors", h(async (_req, res) => {
+  if (_selectorsCache && Date.now() - _selectorsCache.builtAt < PLAYER_AGG_TTL_MS) {
+    return res.json(_selectorsCache.body);
+  }
+  type Row = {
+    id: number;
+    name: string;
+    handle: string;
+    pickerType: string;
+    stationName: string | null;
+    stationSlug: string | null;
+    recentSpinCount: number;
+    lastPlayedAt: string | null;
+  };
+  const rows = await db.execute<Row>(sql`
+    SELECT
+      p.id,
+      p.name,
+      p.handle,
+      p.picker_type                          AS "pickerType",
+      MAX(st.name)                           AS "stationName",
+      MAX(st.slug)                           AS "stationSlug",
+      COUNT(sp.id) FILTER (WHERE sp.played_at >= NOW() - INTERVAL '30 days')::int
+                                             AS "recentSpinCount",
+      MAX(sp.played_at)                      AS "lastPlayedAt"
+    FROM pickers p
+    JOIN shows sh   ON sh.picker_id = p.id
+    JOIN stations st ON st.id = sh.station_id AND st.hidden = false
+    LEFT JOIN spins sp ON sp.show_id = sh.id
+    WHERE p.active = true
+      AND p.picker_type = 'dj'
+    GROUP BY p.id, p.name, p.handle, p.picker_type
+    HAVING MAX(sp.played_at) IS NOT NULL
+    ORDER BY MAX(sp.played_at) DESC
+    LIMIT 120
+  `);
+  const body = {
+    selectors: rows.rows.map((r) => ({
+      ...r,
+      lastPlayedAt: r.lastPlayedAt ? new Date(r.lastPlayedAt).toISOString() : null,
+    })),
+  };
+  _selectorsCache = { builtAt: Date.now(), body };
+  return res.json(body);
+}));
+
+// ---------------------------------------------------------------------------
+// GET /api/player/selectors/:handle/runs — a selector's recent runs (any DJ
+// picker, not just KEXP). Includes the station slug so the run drawer can
+// open directly.
+// ---------------------------------------------------------------------------
+router.get("/player/selectors/:handle/runs", h(async (req, res) => {
+  const handle = String(req.params["handle"] ?? "").trim();
+  if (!handle) return res.status(404).json({ error: "Selector not found" });
+
+  const [picker] = await db
+    .select({ id: pickersTable.id, name: pickersTable.name, handle: pickersTable.handle })
+    .from(pickersTable)
+    .where(and(eq(pickersTable.handle, handle), eq(pickersTable.active, true)))
+    .limit(1);
+  if (!picker) return res.status(404).json({ error: "Selector not found" });
+
+  type RunRow = {
+    runId: number;
+    day: string;
+    spinCount: number;
+    startedAt: string;
+    showName: string | null;
+    djName: string | null;
+    stationSlug: string;
+    stationName: string;
+  };
+  const runRows = await db.execute<RunRow>(sql`
+    SELECT
+      MIN(sp.id)::int                                AS "runId",
+      (DATE(sp.played_at AT TIME ZONE 'UTC'))::text  AS day,
+      COUNT(*)::int                                  AS "spinCount",
+      MIN(sp.played_at)                              AS "startedAt",
+      sh.name                                        AS "showName",
+      sh.dj_name                                     AS "djName",
+      st.slug                                        AS "stationSlug",
+      st.name                                        AS "stationName"
+    FROM spins sp
+    JOIN shows sh    ON sh.id = sp.show_id
+    JOIN stations st ON st.id = sh.station_id
+    WHERE sh.picker_id = ${picker.id}
+    GROUP BY sh.id, sh.name, sh.dj_name, st.slug, st.name,
+             DATE(sp.played_at AT TIME ZONE 'UTC')
+    ORDER BY MIN(sp.played_at) DESC
+    LIMIT 30
+  `);
+  return res.json({
+    selector: { name: picker.name, handle: picker.handle },
+    runs: runRows.rows.map((r) => ({
+      runId: r.runId,
+      day: r.day,
+      spinCount: r.spinCount,
+      startedAt: new Date(r.startedAt).toISOString(),
+      show: r.showName ? { name: r.showName, djName: r.djName ?? null } : null,
+      station: { slug: r.stationSlug, name: r.stationName },
+    })),
+  });
+}));
+
+// ---------------------------------------------------------------------------
+// GET /api/player/schedule — SCHEDULE tab read-model: shows live right now
+// plus the rest of today's slate, across stations with a known timezone.
+// Overnight slots (end <= start) match on their start day from start_time
+// onward and on the next day before end_time (yesterday-DOW carryover) —
+// the same canonical pattern as the crossing scorer and the spin stamper.
+// ---------------------------------------------------------------------------
+router.get("/player/schedule", h(async (_req, res) => {
+  if (_scheduleCache && Date.now() - _scheduleCache.builtAt < PLAYER_AGG_TTL_MS) {
+    return res.json(_scheduleCache.body);
+  }
+  type SlotRow = {
+    stationSlug: string;
+    stationName: string;
+    showName: string;
+    djName: string | null;
+    dayOfWeek: string;
+    startTime: string;
+    endTime: string;
+    ianaTimezone: string;
+    isLive: boolean;
+  };
+  const rows = await db.execute<SlotRow>(sql`
+    SELECT
+      st.slug          AS "stationSlug",
+      st.name          AS "stationName",
+      ss.show_name     AS "showName",
+      ss.dj_name       AS "djName",
+      ss.day_of_week   AS "dayOfWeek",
+      ss.start_time    AS "startTime",
+      ss.end_time      AS "endTime",
+      st.iana_timezone AS "ianaTimezone",
+      (
+        (ss.day_of_week = TO_CHAR(NOW() AT TIME ZONE st.iana_timezone, 'Dy')
+          AND (
+            (ss.end_time > ss.start_time
+              AND TO_CHAR(NOW() AT TIME ZONE st.iana_timezone, 'HH24:MI') >= ss.start_time
+              AND TO_CHAR(NOW() AT TIME ZONE st.iana_timezone, 'HH24:MI') <  ss.end_time)
+            OR
+            (ss.end_time < ss.start_time
+              AND TO_CHAR(NOW() AT TIME ZONE st.iana_timezone, 'HH24:MI') >= ss.start_time)
+          ))
+        OR
+        (ss.end_time < ss.start_time
+          AND ss.day_of_week = TO_CHAR((NOW() - interval '1 day') AT TIME ZONE st.iana_timezone, 'Dy')
+          AND TO_CHAR(NOW() AT TIME ZONE st.iana_timezone, 'HH24:MI') < ss.end_time)
+      ) AS "isLive"
+    FROM scraped_shows ss
+    JOIN stations st ON st.id = ss.station_id
+    WHERE st.hidden = false
+      AND st.active = true
+      AND st.iana_timezone IS NOT NULL
+      AND (
+        -- live now (any DOW form above) …
+        (ss.day_of_week = TO_CHAR(NOW() AT TIME ZONE st.iana_timezone, 'Dy')
+          AND (
+            (ss.end_time > ss.start_time
+              AND TO_CHAR(NOW() AT TIME ZONE st.iana_timezone, 'HH24:MI') >= ss.start_time
+              AND TO_CHAR(NOW() AT TIME ZONE st.iana_timezone, 'HH24:MI') <  ss.end_time)
+            OR
+            (ss.end_time < ss.start_time
+              AND TO_CHAR(NOW() AT TIME ZONE st.iana_timezone, 'HH24:MI') >= ss.start_time)
+          ))
+        OR
+        (ss.end_time < ss.start_time
+          AND ss.day_of_week = TO_CHAR((NOW() - interval '1 day') AT TIME ZONE st.iana_timezone, 'Dy')
+          AND TO_CHAR(NOW() AT TIME ZONE st.iana_timezone, 'HH24:MI') < ss.end_time)
+        -- … or later today, station-local (zero-length slots excluded here too)
+        OR
+        (ss.day_of_week = TO_CHAR(NOW() AT TIME ZONE st.iana_timezone, 'Dy')
+          AND ss.start_time > TO_CHAR(NOW() AT TIME ZONE st.iana_timezone, 'HH24:MI')
+          AND ss.end_time <> ss.start_time)
+      )
+    ORDER BY "isLive" DESC, ss.start_time ASC, st.name ASC
+    LIMIT 200
+  `);
+  const body = {
+    liveNow: rows.rows.filter((r) => r.isLive),
+    upcomingToday: rows.rows.filter((r) => !r.isLive),
+  };
+  _scheduleCache = { builtAt: Date.now(), body };
+  return res.json(body);
 }));
 
 export default router;
