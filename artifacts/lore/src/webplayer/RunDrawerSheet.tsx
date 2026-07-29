@@ -1,8 +1,9 @@
-import { Check, X } from "lucide-react";
+import { Check, Ghost, X } from "lucide-react";
 import { useWpRun, useWpLoreCounts, type WpRunSpin } from "./hooks";
 import { LoreChip } from "./LoreChip";
 import { WpKeep } from "./WpKeep";
 import { useFollows, isFollowed, toggleFollow, djFollowId } from "../lib/local";
+import { usePlayer } from "../player/PlayerProvider";
 
 function fmtTime(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -64,15 +65,19 @@ export function RunDrawerSheet({
   runId,
   onClose,
   onOpenLore,
+  context,
 }: {
   slug: string;
   /** Anchor spin id of a specific past run; omit for tonight's live run. */
   runId?: number | null;
   onClose: () => void;
   onOpenLore: (mbid: string) => void;
+  /** Ledger context tag forwarded to startReplay (e.g. 'library'). */
+  context?: string;
 }) {
   const { data: run, isLoading, isError, refetch } = useWpRun(slug, runId);
   const follows = useFollows();
+  const { ride } = usePlayer();
 
   const allMbids = [
     ...(run?.fromLibrary ?? []),
@@ -85,6 +90,26 @@ export function RunDrawerSheet({
   const selectorName = run?.show?.djName ?? run?.show?.name ?? null;
   const followId = selectorName && run ? djFollowId(run.station.slug, selectorName) : null;
   const following = followId != null && isFollowed(follows, "dj", followId);
+
+  // Build replay seeds from all resolved spins (fromLibrary first, then newToYou).
+  const replaySeeds = run
+    ? [...run.fromLibrary, ...run.newToYou]
+        .filter((s) => s.mbid != null && s.resolved)
+        .map((s) => ({
+          mbid: s.mbid!,
+          title: s.title,
+          artist: s.artist,
+          artworkUrl: s.artworkUrl ?? null,
+          links: [],
+        }))
+    : [];
+
+  const handleGhostPlay = () => {
+    if (!run || replaySeeds.length === 0) return;
+    const label = `${run.station.name} · ${run.show?.name ?? "stream"} · ${run.day}`;
+    ride.startReplay(replaySeeds, label, { timeOrientation: "past", context });
+    onClose();
+  };
 
   return (
     <>
@@ -139,6 +164,30 @@ export function RunDrawerSheet({
             >
               {run.overlapPct}% taste overlap
             </span>
+          )}
+          {replaySeeds.length > 0 && (
+            <button
+              type="button"
+              onClick={handleGhostPlay}
+              title="Ghost radio — replay this run"
+              aria-label="Ghost radio: replay this run"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                padding: "5px 10px",
+                borderRadius: 20,
+                background: "var(--wp-bg-accent)",
+                color: "var(--wp-text-accent)",
+                fontSize: 12,
+                border: "none",
+                cursor: "pointer",
+                flexShrink: 0,
+              }}
+            >
+              <Ghost size={13} aria-hidden="true" />
+              Ghost radio
+            </button>
           )}
           <button
             type="button"

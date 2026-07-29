@@ -308,7 +308,10 @@ export function ListeningLogger() {
   // Progress is read from the ref (kept sync'd above) so the interval never
   // needs to be re-armed when progressMs updates.
   const rideOutputService = ride.source === "spotify" ? "spotify" : "preview";
-  const rideListenContext = ride.mode === "replay" ? "replay" : "ride";
+  // Use the context tag supplied to startReplay (e.g. 'library' for ghost-radio
+  // plays launched from the library tab); fall back to the mode-derived default.
+  const rideListenContext =
+    ride.listenContext ?? (ride.mode === "replay" ? "replay" : "ride");
 
   useEffect(() => {
     if (!ledgerEnabled) return;

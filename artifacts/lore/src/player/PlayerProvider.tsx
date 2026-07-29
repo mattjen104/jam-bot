@@ -179,8 +179,14 @@ export interface RideApi {
   startReplay: (
     seeds: RideSeed[],
     label: string,
-    opts?: { timeOrientation?: TimeOrientation; startIndex?: number },
+    opts?: { timeOrientation?: TimeOrientation; startIndex?: number; context?: string },
   ) => void;
+  /**
+   * The ledger context tag supplied to the most-recent `startReplay` call
+   * (e.g. `'library'` for a ghost-radio play opened from the library tab).
+   * Null for trail rides and when no context was supplied.
+   */
+  listenContext: string | null;
   stop: () => void;
   next: () => void;
   prev: () => void;
@@ -382,6 +388,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [source, setSource] = useState<"spotify" | "preview" | null>(null);
   const [mode, setMode] = useState<"trail" | "replay">("trail");
   const [replayLabel, setReplayLabel] = useState<string | null>(null);
+  const [rideListenContext, setRideListenContext] = useState<string | null>(null);
   const [progressMs, setProgressMs] = useState<number | null>(null);
   const [timeOrientation, setTimeOrientation] =
     useState<TimeOrientation>("curated");
@@ -501,6 +508,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setAtTrailEnd(false);
     setMode("trail");
     setReplayLabel(null);
+    setRideListenContext(null);
     setTimeOrientation("curated");
   }, []);
 
@@ -530,6 +538,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setSeeking(false);
       setMode("trail");
       setReplayLabel(null);
+      setRideListenContext(null);
       setTimeOrientation(opts?.timeOrientation ?? "curated");
       setQueue([
         {
@@ -553,7 +562,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     (
       seeds: RideSeed[],
       label: string,
-      opts?: { timeOrientation?: TimeOrientation; startIndex?: number },
+      opts?: { timeOrientation?: TimeOrientation; startIndex?: number; context?: string },
     ) => {
       if (!seeds.length) return;
       // Stop any active preview scan — it shares the ride's audio element.
@@ -580,6 +589,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setSeeking(false);
       setMode("replay");
       setReplayLabel(label);
+      setRideListenContext(opts?.context ?? null);
       // Ghost-radio station runs are 'past'; curated picker runs are 'curated'.
       setTimeOrientation(opts?.timeOrientation ?? "past");
       setQueue(
@@ -1487,6 +1497,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         source,
         mode,
         replayLabel,
+        listenContext: rideListenContext,
         timeOrientation,
         playbackMode,
         fallbackUsed,
@@ -1531,6 +1542,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       source,
       mode,
       replayLabel,
+      rideListenContext,
       timeOrientation,
       playbackMode,
       fallbackUsed,

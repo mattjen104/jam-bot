@@ -515,7 +515,7 @@ export default function WebPlayer() {
   const [onAirView, setOnAirView] = useState<"onair" | "foryou">("onair");
   const tab = section === "onair" ? onAirView : section;
   const setTab = setOnAirView as (t: "onair" | "library" | "foryou") => void;
-  const [runRef, setRunRef] = useState<{ slug: string; runId: number | null } | null>(null);
+  const [runRef, setRunRef] = useState<{ slug: string; runId: number | null; context?: string } | null>(null);
   const [lore, setLore] = useState<{ mbid: string; spinningOn: string | null } | null>(null);
 
   const authenticated = onAir?.authenticated ?? false;
@@ -668,7 +668,7 @@ export default function WebPlayer() {
         {tab === "library" && (
           <LibraryTab
             onOpenLore={(mbid) => setLore({ mbid, spinningOn: null })}
-            onOpenRun={(slug, runId) => setRunRef({ slug, runId })}
+            onOpenRun={(slug, runId) => setRunRef({ slug, runId, context: "library" })}
           />
         )}
         {tab === "foryou" && (
@@ -693,6 +693,7 @@ export default function WebPlayer() {
           runId={runRef.runId}
           onClose={() => setRunRef(null)}
           onOpenLore={(mbid) => setLore({ mbid, spinningOn: null })}
+          context={runRef.context}
         />
       )}
       {lore && (
