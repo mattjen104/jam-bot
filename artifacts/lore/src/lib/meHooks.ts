@@ -125,6 +125,24 @@ export async function startSpotifyLibraryConnect(): Promise<void> {
   }
 }
 
+/**
+ * Reconnect Spotify with write scope — forces Spotify's consent screen so the
+ * user can grant user-library-modify when they connected before it was added.
+ * Same popup pattern as startSpotifyLibraryConnect.
+ */
+export async function startSpotifyLibraryReconnect(): Promise<void> {
+  const win = window.open("", "_blank");
+  try {
+    const res = await apiFetch<{ url: string }>("/api/me/connect/spotify/start?scopes=write", {
+      method: "POST",
+    });
+    if (win) win.location.href = res.url;
+  } catch (err) {
+    if (win) win.close();
+    throw err;
+  }
+}
+
 /** Start a library import. Returns the job id on success. */
 export async function postStartImport(service: string): Promise<{ jobId: number; status: string }> {
   return apiFetch<{ jobId: number; status: string }>(

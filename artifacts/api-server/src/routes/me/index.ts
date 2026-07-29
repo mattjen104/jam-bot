@@ -120,7 +120,10 @@ router.post("/me/connect/spotify/start", h(async (req, res) => {
   const state = randomBytes(16).toString("hex");
   res.cookie(STATE_COOKIE, state, cookieOpts(STATE_MAX_AGE_MS));
 
-  const url = connector.authStart(state, meCallbackUri());
+  // ?scopes=write forces Spotify's consent screen so the user can grant
+  // user-library-modify when they're reconnecting to add write access.
+  const showDialog = req.query["scopes"] === "write";
+  const url = connector.authStart(state, meCallbackUri(), { showDialog });
   return res.json({ url });
 }));
 

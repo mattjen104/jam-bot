@@ -7,6 +7,7 @@ import {
   useIsAuthenticated,
   useLatestSyncJob,
   startSpotifyLibraryConnect,
+  startSpotifyLibraryReconnect,
   postImportLibraryFile,
   postStartSync,
   type FileImportSummary,
@@ -648,25 +649,46 @@ export function LibraryTab({
   const { data: syncJobData } = useLatestSyncJob();
   const [syncBusy, setSyncBusy] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncNeedsReconnect, setSyncNeedsReconnect] = useState(false);
+  const [reconnectBusy, setReconnectBusy] = useState(false);
   const [syncReceiptOpen, setSyncReceiptOpen] = useState(false);
   const isSyncActive = syncJobData?.status === "pending" || syncJobData?.status === "running";
 
   const handleSync = async () => {
     setSyncBusy(true);
     setSyncError(null);
+    setSyncNeedsReconnect(false);
     try {
       await postStartSync("spotify");
       void queryClient.invalidateQueries({ queryKey: ME_LATEST_SYNC_JOB_KEY });
     } catch (err) {
-      const msg =
-        err instanceof ApiError && err.data && typeof err.data === "object" && "error" in err.data
-          ? ((err.data as { error: string }).error === "canWrite:false"
-              ? "Reconnect Spotify to grant write access."
-              : String((err.data as { error: unknown }).error))
-          : "Sync failed. Try again.";
-      setSyncError(msg);
+      const isCanWriteError =
+        err instanceof ApiError &&
+        err.data &&
+        typeof err.data === "object" &&
+        "error" in err.data &&
+        (err.data as { error: string }).error === "canWrite:false";
+      if (isCanWriteError) {
+        setSyncNeedsReconnect(true);
+        setSyncError("Your Spotify connection doesn't have write access.");
+      } else {
+        const msg =
+          err instanceof ApiError && err.data && typeof err.data === "object" && "error" in err.data
+            ? String((err.data as { error: unknown }).error)
+            : "Sync failed. Try again.";
+        setSyncError(msg);
+      }
     } finally {
       setSyncBusy(false);
+    }
+  };
+
+  const handleReconnect = async () => {
+    setReconnectBusy(true);
+    try {
+      await startSpotifyLibraryReconnect();
+    } finally {
+      setReconnectBusy(false);
     }
   };
 
@@ -1059,9 +1081,35 @@ export function LibraryTab({
             </div>
 
             {syncError && (
-              <p className="wp-mono" style={{ margin: "8px 0 0", fontSize: 11, color: "var(--wp-danger, #c0605f)" }} data-testid="wp-library-sync-error">
-                {syncError}
-              </p>
+              <div style={{ margin: "8px 0 0" }} data-testid="wp-library-sync-error">
+                <p className="wp-mono" style={{ margin: 0, fontSize: 11, color: "var(--wp-danger, #c0605f)" }}>
+                  {syncError}
+                </p>
+                {syncNeedsReconnect && (
+                  <button
+                    type="button"
+                    onClick={() => void handleReconnect()}
+                    disabled={reconnectBusy}
+                    className="wp-mono"
+                    style={{
+                      marginTop: 6,
+                      fontSize: 11,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                      color: "var(--wp-text-secondary)",
+                      background: "none",
+                      border: "0.5px solid var(--wp-border)",
+                      borderRadius: 999,
+                      padding: "5px 12px",
+                      cursor: reconnectBusy ? "default" : "pointer",
+                      opacity: reconnectBusy ? 0.5 : 1,
+                    }}
+                    data-testid="wp-library-reconnect-spotify"
+                  >
+                    {reconnectBusy ? "opening…" : "reconnect spotify"}
+                  </button>
+                )}
+              </div>
             )}
 
             {/* Active progress */}

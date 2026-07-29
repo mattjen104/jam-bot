@@ -48,8 +48,10 @@ export interface MirrorResult {
 }
 
 export interface ServiceConnector {
-  /** Builds the OAuth authorization URL (browser redirect). */
-  authStart(state: string, redirectUri: string): string;
+  /** Builds the OAuth authorization URL (browser redirect).
+   *  Pass `options.showDialog = true` to force Spotify's consent screen
+   *  (use when reconnecting to add new scopes). */
+  authStart(state: string, redirectUri: string, options?: { showDialog?: boolean }): string;
 
   /**
    * Exchanges an authorization code for tokens.  Returns token bundle
@@ -157,7 +159,7 @@ interface SpotifyTracksPage {
 }
 
 export class SpotifyConnector implements ServiceConnector {
-  authStart(state: string, redirectUri: string): string {
+  authStart(state: string, redirectUri: string, options?: { showDialog?: boolean }): string {
     const params = new URLSearchParams({
       client_id: process.env.SPOTIFY_CLIENT_ID ?? "",
       response_type: "code",
@@ -165,6 +167,7 @@ export class SpotifyConnector implements ServiceConnector {
       scope: LIBRARY_SCOPES,
       state,
     });
+    if (options?.showDialog) params.set("show_dialog", "true");
     return `${ACCOUNTS_BASE}/authorize?${params.toString()}`;
   }
 
