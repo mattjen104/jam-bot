@@ -191,6 +191,83 @@ body{font-family:var(--ui);background:#0a0908;color:var(--ink);
 .dock .dsrc{font-family:var(--label);font-size:8.5px;font-weight:600;text-transform:uppercase;letter-spacing:var(--track);padding:6px 9px;border:1px solid var(--rule-strong);border-radius:var(--r);color:var(--muted);background:var(--surface);white-space:nowrap;flex-shrink:0}
 
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* ── nav bubbles ── */
+.nav-bar{display:flex;align-items:center;justify-content:center;gap:8px;
+  padding:9px 15px 10px;background:var(--bg);border-top:1px solid var(--rule);
+  flex-shrink:0}
+.nav-pill{font-family:var(--label);font-size:11px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.07em;padding:8px 26px;
+  border-radius:30px;border:1px solid var(--rule-strong);
+  background:var(--surface);color:var(--muted);cursor:pointer;transition:.12s}
+.nav-pill.active{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.nav-pill:not(.active):hover{color:var(--ink-2);background:var(--raised)}
+.nav-gear{font-size:15px;color:var(--absent);background:none;border:none;
+  cursor:pointer;padding:8px 4px;margin-left:auto;line-height:1;transition:.1s}
+.nav-gear:hover{color:var(--ink-2)}
+
+/* ── library view ── */
+.lib-hero{padding:16px 15px 14px;border-bottom:1px solid var(--rule)}
+.lib-hero .lh-num{font-family:'Fraunces',Georgia,serif;font-size:36px;
+  font-weight:600;color:var(--ink);line-height:1}
+.lib-hero .lh-sub{font-family:var(--name);font-style:italic;font-size:13px;
+  color:var(--muted);margin-top:3px}
+.lib-hero .lh-sub b{font-style:normal;font-weight:600;color:var(--library)}
+.lib-hero .lh-stats{display:flex;gap:18px;margin-top:12px;flex-wrap:wrap}
+.lib-hero .lhstat{font-family:var(--mono);font-size:9px;color:var(--absent);
+  text-transform:uppercase;letter-spacing:.06em}
+.lib-hero .lhstat b{display:block;font-family:var(--name);font-size:17px;
+  font-weight:600;color:var(--ink);text-transform:none;letter-spacing:0;margin-bottom:1px}
+.lib-hero .lhstat.warm b{color:var(--library)}
+
+.sync-bar{display:flex;align-items:center;gap:9px;padding:11px 15px;
+  border-bottom:1px solid var(--rule);background:var(--surface)}
+.sync-btn{font-family:var(--label);font-size:10px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.06em;padding:8px 14px;
+  border-radius:var(--r);border:0;background:var(--library);color:var(--bg);
+  cursor:pointer;flex-shrink:0;white-space:nowrap}
+.sync-btn.syncing{background:var(--raised);color:var(--muted);
+  border:1px solid var(--rule-strong)}
+.sync-meta{flex:1;min-width:0}
+.sync-meta .sm-line{font-family:var(--mono);font-size:9px;color:var(--muted);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sync-meta .sm-line b{color:var(--ink)}
+.sync-meta .sm-sub{font-family:var(--label);font-size:8.5px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.06em;color:var(--absent);margin-top:2px}
+
+.lib-section{padding:12px 15px 5px;display:flex;align-items:center;gap:9px}
+.lib-section .ls-lbl{font-family:var(--label);font-size:9px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}
+.lib-section .ls-rule{flex:1;height:1px;background:var(--rule)}
+.lib-section .ls-count{font-family:var(--mono);font-size:9px;color:var(--absent)}
+
+.lrow{display:flex;gap:12px;padding:10px 15px;align-items:flex-start;
+  border-bottom:1px solid var(--rule);cursor:pointer;transition:.1s}
+.lrow:hover{background:var(--surface)}
+.lrow .lnum{font-family:var(--mono);font-size:9px;color:var(--absent);
+  width:18px;flex-shrink:0;padding-top:4px;text-align:right}
+.lrow .lc{flex:1;min-width:0}
+.lrow .ltr{font-family:var(--name);font-size:15px;font-weight:500;line-height:1.2}
+.lrow .lar{font-size:12px;color:var(--ink-2);margin-top:2px}
+.lrow .lheard{font-family:var(--mono);font-size:8.5px;color:var(--library);
+  margin-top:4px;line-height:1.4}
+.lrow .lheard.none{color:var(--absent)}
+.lrow .ltag{font-family:var(--label);font-size:8.5px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.05em;flex-shrink:0;padding-top:4px}
+.ltag.saved{color:var(--library)}.ltag.unav{color:var(--absent)}
+.ltag.match{color:var(--live)}
+
+.bc-row{display:flex;gap:10px;padding:11px 15px;align-items:center;
+  border-bottom:1px solid var(--rule)}
+.bc-row .bc-info{flex:1;min-width:0}
+.bc-row .bc-tr{font-family:var(--name);font-size:14px;font-weight:500;line-height:1.2}
+.bc-row .bc-ar{font-size:12px;color:var(--ink-2);margin-top:2px}
+.bc-row .bc-link{font-family:var(--label);font-size:9px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.06em;color:var(--muted);
+  border:1px solid var(--rule-strong);border-radius:var(--r);
+  padding:5px 9px;background:var(--surface);cursor:pointer;
+  white-space:nowrap;flex-shrink:0;text-decoration:none}
+.bc-row .bc-link:hover{color:var(--ink),border-color:var(--ink-2)}
 </style>
 </head>
 <body>
@@ -204,6 +281,11 @@ body{font-family:var(--ui);background:#0a0908;color:var(--ink);
     <button class="landbtn" id="landBtn">Land</button>
   </div>
   <div class="sc" id="body"></div>
+  <div class="nav-bar">
+    <button class="nav-pill active" id="navRadio">Radio</button>
+    <button class="nav-pill" id="navLibrary">Library</button>
+    <button class="nav-gear" title="Settings">⚙</button>
+  </div>
   <div class="dock">
     <div class="art" id="dart"></div>
     <div class="dc">
@@ -331,6 +413,27 @@ function topArtists(sh,max=3){
   return out;
 }
 
+// ── library data ──
+// Build a personal library of ~14 tracks + some unavailable ones
+const MY_TRACKS=POOL.filter(r=>LIB.has(r[0])).map(r=>({
+  ar:r[0],tr:r[1],rl:r[2],lb:r[3],yr:r[4],
+  // How often heard on radio (from generated spins)
+  get heardon(){
+    return[...new Set(ALLSHOWS.filter(s=>s[3]<=0&&s[5].some(sp=>sp.ar===r[0]))
+      .map(s=>s[7].n))];
+  },
+  saved:true
+}));
+// A handful of tracks the DJ played that aren't on Spotify — Bandcamp candidates
+const UNAVAIL=[
+  {ar:'Worm',tr:'Foreverglade',rl:'Foreverglade','lb':'20 Buck Spin',yr:2021},
+  {ar:'Spectral Voice',tr:'Lurking Lethargic',rl:'Eroded Corridors of Unbeing',lb:'Dark Descent',yr:2017},
+  {ar:'Imperial Triumphant',tr:'Atomization of Silenus',rl:'Alphaville',lb:'Century Media',yr:2020},
+];
+const SYNC_STATE={status:'idle',lastAt:'2026-07-28 11:40',
+  synced:8,matched:2,alreadySaved:6,unavailable:3};
+
+let tab='radio'; // 'radio' | 'library'
 let level='all',si=0,sh=null,djName=null;
 let scanning=false,scanIx=0,scanTimer=null,sampling=null;
 const sortedStations=()=>[...STATIONS].sort((a,b)=>(b.pinned-a.pinned)||b.cross-a.cross);
@@ -528,10 +631,84 @@ function renderDJ(){
   }).join('')}</div>`;
 }
 
+// ── library view ──
+function renderLibrary(){
+  const totalHeard=ALLSHOWS.filter(s=>s[3]<=0&&s[6]>0).length;
+  const stations=[...new Set(ALLSHOWS.filter(s=>s[3]<=0&&s[6]>0).map(s=>s[7].n))];
+  const ss=SYNC_STATE;
+
+  const trackRows=MY_TRACKS.map((t,i)=>{
+    const heard=t.heardon;
+    return`<div class="lrow">
+      <div class="lnum">${i+1}</div>
+      <div class="lc">
+        <div class="ltr">${t.tr}</div>
+        <div class="lar">${t.ar} · <span style="color:var(--absent)">${t.lb} ${t.yr}</span></div>
+        ${heard.length?`<div class="lheard">heard on ${heard.join(' · ')}</div>`:
+          `<div class="lheard none">not heard on radio yet</div>`}
+      </div>
+      <div class="ltag ${heard.length?'saved':'unav'}">${heard.length?'◆':'-'}</div>
+    </div>`;
+  }).join('');
+
+  const bcRows=UNAVAIL.map(t=>`<div class="bc-row">
+    <div class="bc-info">
+      <div class="bc-tr">${t.tr}</div>
+      <div class="bc-ar">${t.ar} · <span style="color:var(--absent)">${t.lb} ${t.yr}</span></div>
+    </div>
+    <a class="bc-link" href="https://bandcamp.com/search?q=${encodeURIComponent(t.ar+' '+t.tr)}" target="_blank">Bandcamp ↗</a>
+  </div>`).join('');
+
+  const syncBusy=ss.status==='syncing';
+  return`<div class="lib-hero">
+    <div class="lh-num">${MY_TRACKS.length}</div>
+    <div class="lh-sub">tracks in your library · heard <b>${totalHeard} times</b> on radio</div>
+    <div class="lh-stats">
+      <div class="lhstat warm"><b>${MY_TRACKS.filter(t=>t.heardon.length).length}</b>heard on air</div>
+      <div class="lhstat"><b>${stations.length}</b>stations</div>
+      <div class="lhstat"><b>${UNAVAIL.length}</b>not on Spotify</div>
+    </div>
+  </div>
+  <div class="sync-bar">
+    <button class="sync-btn ${syncBusy?'syncing':''}" id="syncBtn">${syncBusy?'Syncing…':'Sync to Spotify'}</button>
+    <div class="sync-meta">
+      <div class="sm-line">Last synced <b>${ss.lastAt}</b></div>
+      <div class="sm-sub">${ss.synced} saved · ${ss.matched} matched · ${ss.alreadySaved} already there</div>
+    </div>
+  </div>
+  <div class="lib-section">
+    <span class="ls-lbl">Your tracks</span>
+    <span class="ls-rule"></span>
+    <span class="ls-count">${MY_TRACKS.length}</span>
+  </div>
+  ${trackRows}
+  <div class="lib-section" style="margin-top:6px">
+    <span class="ls-lbl">Not on Spotify</span>
+    <span class="ls-rule"></span>
+    <span class="ls-count">${UNAVAIL.length} · find on Bandcamp</span>
+  </div>
+  ${bcRows}
+  <div style="height:20px"></div>`;
+}
+
 // ── render ──
 function render(){
   renderTopbar();
   const b=document.getElementById('body');
+  // show/hide scan bar based on tab
+  document.querySelector('.scanbar').style.display=tab==='radio'?'':'none';
+
+  if(tab==='library'){
+    b.innerHTML=renderLibrary();
+    document.getElementById('syncBtn').onclick=()=>{
+      SYNC_STATE.status='syncing';
+      document.getElementById('syncBtn').textContent='Syncing…';
+      document.getElementById('syncBtn').classList.add('syncing');
+      setTimeout(()=>{SYNC_STATE.status='idle';SYNC_STATE.lastAt='2026-07-29 14:12';
+        SYNC_STATE.synced=10;render();},2200);
+    };
+    return;
+  }
   if(level==='all')     b.innerHTML=renderAll();
   if(level==='station') b.innerHTML=renderStation();
   if(level==='show')    b.innerHTML=renderShow();
@@ -639,6 +816,20 @@ function stopScan(){
 }
 document.getElementById('scanBtn').onclick=()=>scanning?(stopScan(),updateScanBar()):startScan();
 document.getElementById('landBtn').onclick=()=>{if(sampling)land(sampling)};
+
+// nav pills
+document.getElementById('navRadio').onclick=()=>{
+  tab='radio';
+  document.getElementById('navRadio').classList.add('active');
+  document.getElementById('navLibrary').classList.remove('active');
+  render();
+};
+document.getElementById('navLibrary').onclick=()=>{
+  tab='library';
+  document.getElementById('navLibrary').classList.add('active');
+  document.getElementById('navRadio').classList.remove('active');
+  stopScan();render();
+};
 
 render();
 </script>
