@@ -1797,6 +1797,104 @@ router.get("/me/library/sync/:jobId/unavailable", h(async (req, res) => {
 }));
 
 /**
+ * GET /api/me/library/sync/:jobId/search-matched — full paginated list of tracks
+ * that were matched by artist+title search (lower confidence) for a completed sync job.
+ *
+ * Query params:
+ * - `format` — "json" (default) | "csv" — set Content-Disposition when csv.
+ * - `page`   — 1-based page number (default 1). Ignored for csv (returns all).
+ * - `limit`  — page size 1–1000 (default 200).
+ *
+ * Response body (json): { items: [{mbid,artist,title,spotifyUrl}], total, page, limit, pages }
+ *
+ * The list is sourced by joining the stored searchMatchedMbids from the receipt
+ * against the recordings table — artist/title are never fabricated, they come
+ * from the spine. Jobs from before this feature shipped have no searchMatchedMbids
+ * and fall back to the capped searchMatchedItems preview list.
+ */
+router.get("/me/library/sync/:jobId/search-matched", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+  const rawJobId = req.params.jobId;
+  const jobId = parseInt(typeof rawJobId === "string" ? rawJobId : "", 10);
+  if (isNaN(jobId)) return res.status(400).json({ error: "Invalid jobId" });
+
+  const [job] = await db
+    .select()
+    .from(librarySyncJobsTable)
+    .where(and(eq(librarySyncJobsTable.id, jobId), eq(librarySyncJobsTable.userId, user.id)))
+    .limit(1);
+  if (!job) return res.status(404).json({ error: "Job not found" });
+  if (job.status !== "done" || !job.results) {
+    return res.status(400).json({ error: "Job is not complete" });
+  }
+
+  const receipt = job.results;
+  const total = receipt.searchMatched;
+
+  const formatRaw = req.query["format"];
+  const format = formatRaw === "csv" ? "csv" : "json";
+  const limitRaw = parseInt(typeof req.query["limit"] === "string" ? req.query["limit"] : "", 10);
+  const limit = isNaN(limitRaw) ? 200 : Math.max(1, Math.min(limitRaw, 1000));
+  const pageRaw = parseInt(typeof req.query["page"] === "string" ? req.query["page"] : "", 10);
+  const page = isNaN(pageRaw) ? 1 : Math.max(1, pageRaw);
+
+  interface SearchMatchedRow { mbid: string; artist: string; title: string; spotifyUrl: string }
+
+  let allItems: SearchMatchedRow[];
+
+  if (receipt.searchMatchedMbids && receipt.searchMatchedMbids.length > 0) {
+    // New-style receipt: full MBID list stored, join recordings for details.
+    const mbids = receipt.searchMatchedMbids;
+    const recs = await db
+      .select({ mbid: recordingsTable.mbid, artist: recordingsTable.artist, title: recordingsTable.title })
+      .from(recordingsTable)
+      .where(inArray(recordingsTable.mbid, mbids));
+    const recMap = new Map(recs.map((r) => [r.mbid, r]));
+
+    // Pair each MBID back with its spotifyUrl from the preview list (if present).
+    const spotifyUrlMap = new Map(receipt.searchMatchedItems.map((i) => [i.mbid, i.spotifyUrl]));
+
+    allItems = mbids.map((mbid) => {
+      const rec = recMap.get(mbid);
+      const artist = rec?.artist ?? "";
+      const title = rec?.title ?? "";
+      const spotifyUrl = spotifyUrlMap.get(mbid) ?? `https://open.spotify.com/search/${encodeURIComponent(`${artist} ${title}`)}`;
+      return { mbid, artist, title, spotifyUrl };
+    });
+  } else {
+    // Legacy receipt (no searchMatchedMbids): fall back to the capped preview list.
+    allItems = receipt.searchMatchedItems.map((item) => ({
+      mbid: item.mbid,
+      artist: item.artist,
+      title: item.title,
+      spotifyUrl: item.spotifyUrl,
+    }));
+  }
+
+  if (format === "csv") {
+    const lines = [
+      "mbid,artist,title,spotify_url",
+      ...allItems.map((r) => [r.mbid, r.artist, r.title, r.spotifyUrl]
+        .map((v) => `"${v.replace(/"/g, '""')}"`)
+        .join(",")),
+    ];
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="sync-${jobId}-search-matched.csv"`,
+    );
+    return res.send(lines.join("\n"));
+  }
+
+  // JSON: paginate.
+  const offset = (page - 1) * limit;
+  const pageItems = allItems.slice(offset, offset + limit);
+  const pages = Math.ceil(allItems.length / limit) || 1;
+
+  return res.json({ items: pageItems, total, page, limit, pages });
+}));
+
+/**
  * GET /api/me/library/sync/:jobId — poll sync job progress.
  */
 router.get("/me/library/sync/:jobId", h(async (req, res) => {

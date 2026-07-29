@@ -350,6 +350,9 @@ export async function runSyncWorker(
         spotifyUrl: `https://open.spotify.com/track/${m.spotifyId}`,
       }));
 
+    // Full MBID list (no cap) — used by the /search-matched download endpoint.
+    const searchMatchedMbids = searchSynced.map((m) => m.mbid);
+
     const receipt: SyncReceipt = {
       synced: exactSynced.length,
       searchMatched: searchSynced.length,
@@ -358,6 +361,7 @@ export async function runSyncWorker(
       unavailableItems,
       unavailableMbids,
       searchMatchedItems,
+      searchMatchedMbids,
     };
 
     await stamp({

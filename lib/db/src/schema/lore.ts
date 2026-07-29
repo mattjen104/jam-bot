@@ -1679,8 +1679,11 @@ export interface SyncReceipt {
   /** Full list of all unavailable MBIDs (no cap). Used by the
    *  /unavailable endpoint to serve the complete download. */
   unavailableMbids?: string[];
-  /** Capped list of search-matched items (max 200). */
+  /** Capped list of search-matched items (max 200) — preview only. */
   searchMatchedItems: SyncReceiptSearchItem[];
+  /** Full list of all search-matched MBIDs (no cap). Used by the
+   *  /search-matched endpoint to serve the complete download. */
+  searchMatchedMbids?: string[];
 }
 
 /**

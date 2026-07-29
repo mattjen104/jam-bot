@@ -521,9 +521,21 @@ export default function Library() {
                     )}
                     {syncJobData.results.searchMatchedItems.length > 0 && (
                       <div>
-                        <p className="mb-2 font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
-                          Matched by search (lower confidence)
-                        </p>
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <p className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+                            Matched by search (lower confidence)
+                          </p>
+                          {syncJobData.results.searchMatched > 200 && (
+                            <a
+                              href={`/api/me/library/sync/${syncJobData.jobId}/search-matched?format=csv`}
+                              download
+                              className="shrink-0 font-mono text-[10px] uppercase tracking-wide text-primary hover:underline"
+                              data-testid="library-sync-search-matched-download"
+                            >
+                              Download full list ({syncJobData.results.searchMatched}) ↓
+                            </a>
+                          )}
+                        </div>
                         <ul className="space-y-1">
                           {syncJobData.results.searchMatchedItems.map((item) => (
                             <li key={item.mbid} className="flex items-center justify-between gap-2 text-sm">

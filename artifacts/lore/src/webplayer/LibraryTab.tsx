@@ -1185,6 +1185,26 @@ export function LibraryTab({
                     )}
                   </>
                 )}
+                {syncJobData.results.searchMatchedItems.length > 0 && (
+                  <div style={{ marginTop: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                      <p className="wp-mono" style={{ margin: 0, fontSize: 11, color: "var(--wp-text-muted)" }}>
+                        matched by search
+                      </p>
+                      {syncJobData.results.searchMatched > 200 && (
+                        <a
+                          href={`/api/me/library/sync/${syncJobData.jobId}/search-matched?format=csv`}
+                          download
+                          className="wp-mono"
+                          style={{ fontSize: 11, color: "var(--wp-text-muted)", flexShrink: 0, textDecoration: "none" }}
+                          data-testid="wp-library-sync-search-matched-download"
+                        >
+                          download full list ↓
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
