@@ -611,3 +611,200 @@ describe("scrapeStationSchedule — inline homepage schedule (strategy 3)", () =
     expect(station?.scheduleScrapedAt).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Path 6 — malformed times from LLM are rejected before the DB write
+// ---------------------------------------------------------------------------
+
+/**
+ * These tests exercise the full scrapeStationSchedule write path with a mocked
+ * LLM that deliberately returns bad time strings (AM/PM notation, single-digit
+ * hours). The parser guard (parseExtractedSchedule / HHMM_RE) must reject every
+ * entry so that zero rows reach scraped_shows — even though the page fetch and
+ * LLM call both "succeed". This confirms the guard is not bypassed by the
+ * surrounding orchestration code.
+ */
+describe("scrapeStationSchedule — malformed LLM times never reach the DB", () => {
+  it("stores zero rows when the LLM returns AM/PM times", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // LLM returns shows with AM/PM notation — all must be rejected by
+    // parseExtractedSchedule before any DB insert is attempted.
+    const AM_PM_JSON = JSON.stringify([
+      {
+        showName: "Morning Drive",
+        dayOfWeek: "Mon",
+        startTime: "9:00 AM",
+        endTime: "11:00 AM",
+        djName: "DJ Sunrise",
+      },
+      {
+        showName: "Afternoon Chill",
+        dayOfWeek: "Wed",
+        startTime: "2:00 PM",
+        endTime: "4:00 PM",
+        djName: null,
+      },
+      {
+        showName: "Late Night",
+        dayOfWeek: "Fri",
+        startTime: "11:30 PM",
+        endTime: "1:00 AM",
+        djName: "DJ Owl",
+      },
+    ]);
+
+    configureScheduleExtractor(async () => AM_PM_JSON);
+
+    const fetchFn = makeFetch([
+      { pattern: /robots\.txt/, body: "User-agent: *\nDisallow:\n" },
+      {
+        pattern: "/schedule",
+        body: "<html><body><p>Schedule page content</p></body></html>",
+      },
+    ]);
+
+    const target = {
+      id: stationId!,
+      slug: `test-sched-${run}`,
+      homepageUrl: HOMEPAGE,
+      scheduleUrl: SCHEDULE_URL,
+      city: null,
+      country: null,
+      ianaTimezone: null,
+    };
+
+    const result = await scrapeStationSchedule(target, { fetchFn });
+
+    // All entries are malformed — parser returns an empty array, which is a
+    // legitimate "nothing to store" result (not a parse failure), so scraped=true
+    // with showCount=0.
+    expect(result).toEqual({ scraped: true, showCount: 0 });
+
+    // The DB must contain zero scraped rows for this station.
+    const shows = await fetchScrapedShows();
+    expect(shows).toHaveLength(0);
+
+    // scheduleScrapedAt is stamped (extraction succeeded, just no valid rows).
+    const station = await fetchStationRow();
+    expect(station?.scheduleScrapedAt).toBeInstanceOf(Date);
+    expect(station?.upcomingShowCount).toBe(0);
+  });
+
+  it("stores zero rows when the LLM returns single-digit-hour times", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // LLM returns shows with single-digit hours — rejected by HHMM_RE.
+    const SINGLE_DIGIT_JSON = JSON.stringify([
+      {
+        showName: "Morning Show",
+        dayOfWeek: "Tue",
+        startTime: "9:00",
+        endTime: "11:00",
+        djName: null,
+      },
+      {
+        showName: "Drive Time",
+        dayOfWeek: "Thu",
+        startTime: "8:30",
+        endTime: "10:00",
+        djName: "DJ Drive",
+      },
+    ]);
+
+    configureScheduleExtractor(async () => SINGLE_DIGIT_JSON);
+
+    const fetchFn = makeFetch([
+      { pattern: /robots\.txt/, body: "User-agent: *\nDisallow:\n" },
+      {
+        pattern: "/schedule",
+        body: "<html><body><p>Schedule page content</p></body></html>",
+      },
+    ]);
+
+    const target = {
+      id: stationId!,
+      slug: `test-sched-${run}`,
+      homepageUrl: HOMEPAGE,
+      scheduleUrl: SCHEDULE_URL,
+      city: null,
+      country: null,
+      ianaTimezone: null,
+    };
+
+    const result = await scrapeStationSchedule(target, { fetchFn });
+
+    expect(result).toEqual({ scraped: true, showCount: 0 });
+
+    const shows = await fetchScrapedShows();
+    expect(shows).toHaveLength(0);
+
+    const station = await fetchStationRow();
+    expect(station?.scheduleScrapedAt).toBeInstanceOf(Date);
+    expect(station?.upcomingShowCount).toBe(0);
+  });
+
+  it("stores only the well-formed entries when bad and good times are mixed", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // Mix of one valid 24h entry and two malformed (AM/PM + single-digit).
+    // Only the valid entry must reach the DB.
+    const MIXED_JSON = JSON.stringify([
+      {
+        showName: "Valid Show",
+        dayOfWeek: "Mon",
+        startTime: "14:00",
+        endTime: "16:00",
+        djName: "DJ Valid",
+      },
+      {
+        showName: "AM/PM Show",
+        dayOfWeek: "Wed",
+        startTime: "2:00 PM",
+        endTime: "4:00 PM",
+        djName: null,
+      },
+      {
+        showName: "Single Digit Show",
+        dayOfWeek: "Fri",
+        startTime: "9:00",
+        endTime: "11:00",
+        djName: null,
+      },
+    ]);
+
+    configureScheduleExtractor(async () => MIXED_JSON);
+
+    const fetchFn = makeFetch([
+      { pattern: /robots\.txt/, body: "User-agent: *\nDisallow:\n" },
+      {
+        pattern: "/schedule",
+        body: "<html><body><p>Schedule page content</p></body></html>",
+      },
+    ]);
+
+    const target = {
+      id: stationId!,
+      slug: `test-sched-${run}`,
+      homepageUrl: HOMEPAGE,
+      scheduleUrl: SCHEDULE_URL,
+      city: null,
+      country: null,
+      ianaTimezone: null,
+    };
+
+    const result = await scrapeStationSchedule(target, { fetchFn });
+
+    // Only the one valid entry is stored.
+    expect(result).toEqual({ scraped: true, showCount: 1 });
+
+    const shows = await fetchScrapedShows();
+    expect(shows).toHaveLength(1);
+    expect(shows[0]!.showName).toBe("Valid Show");
+    expect(shows[0]!.startTime).toBe("14:00");
+
+    const station = await fetchStationRow();
+    expect(station?.scheduleScrapedAt).toBeInstanceOf(Date);
+    expect(station?.upcomingShowCount).toBe(1);
+  });
+});
