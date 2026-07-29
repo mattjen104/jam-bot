@@ -209,6 +209,8 @@ export const StationQualityTier = {
  * A curated radio station in the public directory.
  */
 export interface Station {
+  /** Numeric primary key — stable across renames, used to link listen records to their station. */
+  id: number;
   slug: string;
   name: string;
   /** @nullable */

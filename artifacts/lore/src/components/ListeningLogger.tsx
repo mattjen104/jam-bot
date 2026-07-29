@@ -123,6 +123,7 @@ export function ListeningLogger() {
     void postListen({
       ...(npMbid ? { mbid: npMbid } : {}),
       ...(npSpinId != null ? { spinId: npSpinId } : {}),
+      ...(station?.id != null ? { stationId: station.id } : {}),
       context: "broadcast",
       outputService: broadcastOutputService,
       startedAt: npPlayedAt ?? new Date().toISOString(),

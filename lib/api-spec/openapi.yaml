@@ -2582,6 +2582,9 @@ components:
       type: object
       description: A curated radio station in the public directory.
       properties:
+        id:
+          type: integer
+          description: Numeric primary key — stable across renames, used to link listen records to their station.
         slug:
           type: string
         name:
@@ -2662,6 +2665,7 @@ components:
             metadata; "unscored" = fewer than 20 spins in the window. Null
             until the nightly quality recompute job has run at least once.
       required:
+        - id
         - slug
         - name
         - streamUrl

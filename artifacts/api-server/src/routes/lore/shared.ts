@@ -48,6 +48,7 @@ export function toStation(
   qualityTier?: string | null,
 ) {
   return {
+    id: s.id,
     slug: s.slug,
     name: s.name,
     org: s.org,

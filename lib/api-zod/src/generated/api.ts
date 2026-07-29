@@ -210,6 +210,11 @@ export const ListStationsResponse = zod.object({
   stations: zod.array(
     zod
       .object({
+        id: zod
+          .number()
+          .describe(
+            "Numeric primary key — stable across renames, used to link listen records to their station.",
+          ),
         slug: zod.string(),
         name: zod.string(),
         org: zod.string().nullish(),
@@ -493,6 +498,11 @@ export const GetStationNowPlayingParams = zod.object({
 export const GetStationNowPlayingResponse = zod.object({
   station: zod
     .object({
+      id: zod
+        .number()
+        .describe(
+          "Numeric primary key — stable across renames, used to link listen records to their station.",
+        ),
       slug: zod.string(),
       name: zod.string(),
       org: zod.string().nullish(),
@@ -1187,6 +1197,11 @@ export const GetStationArchiveParams = zod.object({
 export const GetStationArchiveResponse = zod.object({
   station: zod
     .object({
+      id: zod
+        .number()
+        .describe(
+          "Numeric primary key — stable across renames, used to link listen records to their station.",
+        ),
       slug: zod.string(),
       name: zod.string(),
       org: zod.string().nullish(),
