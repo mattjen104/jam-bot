@@ -1579,3 +1579,77 @@ export const pickerFollowsTable = pgTable(
 
 export type PickerFollow = typeof pickerFollowsTable.$inferSelect;
 export type InsertPickerFollow = typeof pickerFollowsTable.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Library sync jobs — push Lore library → Spotify saved tracks
+// ---------------------------------------------------------------------------
+
+/**
+ * One item in the sync receipt — a library track that could not be found on
+ * Spotify. Carries a Bandcamp search link so the user can buy it properly.
+ */
+export interface SyncReceiptUnavailableItem {
+  mbid: string;
+  title: string;
+  artist: string;
+  bandcampUrl: string;
+}
+
+/** A search-matched item (lower confidence than ISRC). Surfaced in the UI. */
+export interface SyncReceiptSearchItem {
+  mbid: string;
+  title: string;
+  artist: string;
+  spotifyUrl: string;
+}
+
+/** Completion receipt stored on the job row. */
+export interface SyncReceipt {
+  /** Exact ISRC or Odesli-link matches saved to Spotify. */
+  synced: number;
+  /** Artist+title search matches saved (lower confidence). */
+  searchMatched: number;
+  /** Already saved in Spotify before this sync ran (idempotent skip). */
+  alreadySaved: number;
+  /** Could not find on Spotify — listed with Bandcamp links. */
+  unavailable: number;
+  /** Capped list of unavailable items (max 200). */
+  unavailableItems: SyncReceiptUnavailableItem[];
+  /** Capped list of search-matched items (max 200). */
+  searchMatchedItems: SyncReceiptSearchItem[];
+}
+
+/**
+ * Background sync job: push the user's Lore library to a streaming service.
+ * Currently only Spotify is supported. `results` is set on completion.
+ *
+ * Phase progression: "matching" → "checking" → "saving" → done/error.
+ */
+export const librarySyncJobsTable = pgTable("library_sync_jobs", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => loreUsersTable.id),
+  service: text("service").notNull(),
+  /** "pending" | "running" | "done" | "error" */
+  status: text("status").notNull().default("pending"),
+  /**
+   * Current worker phase.
+   * "matching" = resolving Lore mbids → Spotify track IDs.
+   * "checking" = contains-check (idempotency pre-filter).
+   * "saving" = PUT /me/tracks batches.
+   */
+  phase: text("phase"),
+  /** Total library items to process. */
+  total: integer("total").notNull().default(0),
+  /** Items processed so far (not necessarily saved — includes all outcomes). */
+  processed: integer("processed").notNull().default(0),
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  finishedAt: timestamp("finished_at"),
+  error: text("error"),
+  /** Completion receipt: counts + unavailable/search-matched item lists. */
+  results: jsonb("results").$type<SyncReceipt>(),
+});
+
+export type LibrarySyncJob = typeof librarySyncJobsTable.$inferSelect;
+export type InsertLibrarySyncJob = typeof librarySyncJobsTable.$inferInsert;

@@ -5,11 +5,14 @@ import { ApiError } from "@workspace/api-client-react";
 import {
   useMyLibraryInfinite,
   useIsAuthenticated,
+  useLatestSyncJob,
   startSpotifyLibraryConnect,
   postImportLibraryFile,
+  postStartSync,
   type FileImportSummary,
   type LibraryItem,
   type LibraryQueryOptions,
+  ME_LATEST_SYNC_JOB_KEY,
 } from "../lib/meHooks";
 import { useWpLoreCounts, useWpRecordingSpins, useWpAlbumTracks, type WpSpinRow } from "./hooks";
 import { LoreChip } from "./LoreChip";
@@ -640,6 +643,33 @@ export function LibraryTab({
 }) {
   const isAuthenticated = useIsAuthenticated();
   const queryClient = useQueryClient();
+
+  // Sync state
+  const { data: syncJobData } = useLatestSyncJob();
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncReceiptOpen, setSyncReceiptOpen] = useState(false);
+  const isSyncActive = syncJobData?.status === "pending" || syncJobData?.status === "running";
+
+  const handleSync = async () => {
+    setSyncBusy(true);
+    setSyncError(null);
+    try {
+      await postStartSync("spotify");
+      void queryClient.invalidateQueries({ queryKey: ME_LATEST_SYNC_JOB_KEY });
+    } catch (err) {
+      const msg =
+        err instanceof ApiError && err.data && typeof err.data === "object" && "error" in err.data
+          ? ((err.data as { error: string }).error === "canWrite:false"
+              ? "Reconnect Spotify to grant write access."
+              : String((err.data as { error: unknown }).error))
+          : "Sync failed. Try again.";
+      setSyncError(msg);
+    } finally {
+      setSyncBusy(false);
+    }
+  };
+
   const importFileRef = useRef<HTMLInputElement | null>(null);
   const [importingFile, setImportingFile] = useState(false);
   const [fileImportSummary, setFileImportSummary] = useState<FileImportSummary | null>(null);
@@ -995,6 +1025,115 @@ export function LibraryTab({
               </p>
             )}
           </div>
+          {/* Sync to Spotify */}
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: "0.5px solid var(--wp-border)" }} data-testid="wp-library-sync">
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <div style={{ minWidth: 0 }}>
+                <p className="wp-mono" style={{ margin: 0, fontSize: 11, color: "var(--wp-text-secondary)", fontWeight: 500 }}>sync to spotify</p>
+                <p className="wp-mono" style={{ margin: "2px 0 0", fontSize: 11, color: "var(--wp-text-muted)" }}>
+                  push kept tracks · unavailable ones get a Bandcamp link
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={syncBusy || isSyncActive}
+                onClick={() => void handleSync()}
+                className="wp-mono"
+                style={{
+                  fontSize: 11,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.04em",
+                  color: "var(--wp-text-secondary)",
+                  background: "none",
+                  border: "0.5px solid var(--wp-border)",
+                  borderRadius: 999,
+                  padding: "5px 12px",
+                  cursor: syncBusy || isSyncActive ? "default" : "pointer",
+                  opacity: syncBusy || isSyncActive ? 0.5 : 1,
+                  flexShrink: 0,
+                }}
+                data-testid="wp-library-sync-button"
+              >
+                {isSyncActive ? "syncing…" : "sync now"}
+              </button>
+            </div>
+
+            {syncError && (
+              <p className="wp-mono" style={{ margin: "8px 0 0", fontSize: 11, color: "var(--wp-danger, #c0605f)" }} data-testid="wp-library-sync-error">
+                {syncError}
+              </p>
+            )}
+
+            {/* Active progress */}
+            {isSyncActive && syncJobData && (
+              <div style={{ marginTop: 8 }} data-testid="wp-library-sync-progress">
+                <p className="wp-mono" style={{ margin: 0, fontSize: 11, color: "var(--wp-text-muted)" }}>
+                  {syncJobData.phase === "matching" && "matching tracks…"}
+                  {syncJobData.phase === "checking" && "checking already saved…"}
+                  {syncJobData.phase === "saving" && "saving to spotify…"}
+                  {!syncJobData.phase && "preparing…"}
+                  {syncJobData.total > 0 && ` ${syncJobData.processed}/${syncJobData.total}`}
+                </p>
+                {syncJobData.total > 0 && (
+                  <div style={{ marginTop: 4, height: 2, background: "var(--wp-border)", borderRadius: 1, overflow: "hidden" }}>
+                    <div style={{ height: "100%", background: "var(--wp-green, #C6F53F)", borderRadius: 1, width: `${Math.min(100, (syncJobData.processed / syncJobData.total) * 100)}%`, transition: "width 0.4s" }} />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Receipt */}
+            {syncJobData?.status === "done" && syncJobData.results && (
+              <div style={{ marginTop: 8 }} data-testid="wp-library-sync-receipt">
+                <p className="wp-mono" style={{ margin: 0, fontSize: 11, color: "var(--wp-text-muted)" }}>
+                  {syncJobData.results.synced} synced
+                  {syncJobData.results.searchMatched > 0 && ` · ${syncJobData.results.searchMatched} by search`}
+                  {syncJobData.results.alreadySaved > 0 && ` · ${syncJobData.results.alreadySaved} already saved`}
+                  {syncJobData.results.unavailable > 0 && ` · ${syncJobData.results.unavailable} not on spotify`}
+                </p>
+                {syncJobData.results.unavailableItems.length > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setSyncReceiptOpen((v) => !v)}
+                      className="wp-mono"
+                      style={{ margin: "6px 0 0", fontSize: 11, color: "var(--wp-text-muted)", background: "none", border: "none", padding: 0, cursor: "pointer" }}
+                      data-testid="wp-library-sync-receipt-toggle"
+                    >
+                      {syncReceiptOpen ? "▲ hide" : "▼ not on spotify"}
+                    </button>
+                    {syncReceiptOpen && (
+                      <ul style={{ margin: "6px 0 0", padding: 0, listStyle: "none" }}>
+                        {syncJobData.results.unavailableItems.slice(0, 20).map((item) => (
+                          <li key={item.mbid} style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
+                            <span className="wp-mono" style={{ fontSize: 11, color: "var(--wp-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {item.artist} — {item.title}
+                            </span>
+                            <a
+                              href={item.bandcampUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="wp-mono"
+                              style={{ fontSize: 11, color: "var(--wp-text-muted)", flexShrink: 0, textDecoration: "none" }}
+                            >
+                              bandcamp ↗
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {syncJobData?.status === "error" && (
+              <p className="wp-mono" style={{ margin: "8px 0 0", fontSize: 11, color: "var(--wp-danger, #c0605f)" }} data-testid="wp-library-sync-job-error">
+                {syncJobData.error ?? "sync failed — please try again"}
+              </p>
+            )}
+          </div>
+
           <p className="wp-mono" style={{ margin: "8px 0 0", fontSize: 11, color: "var(--wp-text-muted)" }}>
             move to another service via{" "}
             <a href="https://soundiiz.com" target="_blank" rel="noreferrer" style={{ color: "inherit" }}>

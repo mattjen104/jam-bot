@@ -133,6 +133,87 @@ export async function postStartImport(service: string): Promise<{ jobId: number;
   );
 }
 
+// ---------------------------------------------------------------------------
+// Sync (push Lore library → Spotify)
+// ---------------------------------------------------------------------------
+
+export interface SyncReceiptItem {
+  mbid: string;
+  title: string;
+  artist: string;
+}
+
+export interface SyncReceiptUnavailableItem extends SyncReceiptItem {
+  bandcampUrl: string;
+}
+
+export interface SyncReceiptSearchItem extends SyncReceiptItem {
+  spotifyUrl: string;
+}
+
+export interface SyncReceipt {
+  synced: number;
+  searchMatched: number;
+  alreadySaved: number;
+  unavailable: number;
+  unavailableItems: SyncReceiptUnavailableItem[];
+  searchMatchedItems: SyncReceiptSearchItem[];
+}
+
+export interface SyncJobStatus {
+  jobId: number;
+  service: string;
+  status: string;
+  phase: string | null;
+  total: number;
+  processed: number;
+  startedAt: string;
+  finishedAt: string | null;
+  error: string | null;
+  results: SyncReceipt | null;
+}
+
+export const ME_LATEST_SYNC_JOB_KEY = ["me", "sync-job", "latest"] as const;
+export const ME_SYNC_JOB_KEY = (jobId: number) => ["me", "sync-job", jobId] as const;
+
+export async function postStartSync(service = "spotify"): Promise<{ jobId: number; status: string }> {
+  return apiFetch<{ jobId: number; status: string }>(
+    `/api/me/library/sync?service=${encodeURIComponent(service)}`,
+    { method: "POST" },
+  );
+}
+
+export function useLatestSyncJob() {
+  return useQuery({
+    queryKey: ME_LATEST_SYNC_JOB_KEY,
+    queryFn: () => fetchOrNull<SyncJobStatus>("/api/me/library/sync"),
+    refetchInterval: (query) => {
+      const data = query.state.data as SyncJobStatus | null | undefined;
+      if (!data) return false;
+      if (data.status === "done" || data.status === "error") return false;
+      return 2_000;
+    },
+    staleTime: 0,
+    retry: false,
+  });
+}
+
+export function useSyncJob(jobId: number | null) {
+  return useQuery({
+    queryKey: ME_SYNC_JOB_KEY(jobId ?? 0),
+    queryFn: () => apiFetch<SyncJobStatus>(`/api/me/library/sync/${jobId}`),
+    enabled: jobId != null,
+    refetchInterval: (query) => {
+      const data = query.state.data as SyncJobStatus | null | undefined;
+      if (!data) return false;
+      if (data.status === "done" || data.status === "error") return false;
+      return 2_000;
+    },
+    staleTime: 0,
+    retry: false,
+  });
+}
+
 export interface FileImportSummary {
   imported: number;
   skipped: number;

@@ -6,11 +6,15 @@ import {
   useMyLibraryInfinite,
   useMyConnections,
   useLatestImportJob,
+  useLatestSyncJob,
   startSpotifyLibraryConnect,
   postStartImport,
+  postStartSync,
   postImportLibraryFile,
   type FileImportSummary,
+  type SyncJobStatus,
   ME_LATEST_IMPORT_JOB_KEY,
+  ME_LATEST_SYNC_JOB_KEY,
 } from "../lib/meHooks";
 import { ApiError } from "@workspace/api-client-react";
 import { InflowCard } from "../components/InflowCard";
@@ -19,10 +23,13 @@ import {
   ArrowLeft,
   BookMarked,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Disc3,
   Radio,
   Loader2,
   Music2,
+  Upload,
   XCircle,
 } from "lucide-react";
 
@@ -99,6 +106,33 @@ export default function Library() {
       await startSpotifyLibraryConnect();
     } finally {
       setConnectBusy(false);
+    }
+  };
+
+  // Sync job state
+  const { data: syncJobData } = useLatestSyncJob();
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncReceiptOpen, setSyncReceiptOpen] = useState(false);
+
+  const isSyncActive = syncJobData?.status === "pending" || syncJobData?.status === "running";
+
+  const handleSync = async () => {
+    setSyncBusy(true);
+    setSyncError(null);
+    try {
+      await postStartSync("spotify");
+      void queryClient.invalidateQueries({ queryKey: ME_LATEST_SYNC_JOB_KEY });
+    } catch (err) {
+      const msg =
+        err instanceof ApiError && err.data && typeof err.data === "object" && "error" in err.data
+          ? ((err.data as { error: string }).error === "canWrite:false"
+            ? "Reconnect Spotify to grant write access, then try again."
+            : String((err.data as { error: unknown }).error))
+          : "Sync failed. Try again.";
+      setSyncError(msg);
+    } finally {
+      setSyncBusy(false);
     }
   };
 
@@ -328,6 +362,147 @@ export default function Library() {
             </>
           )}
         </section>
+
+        {/* Sync to Spotify */}
+        {isAuthenticated && hasSpotify && (
+          <section className="mt-8 rounded-xl border border-card-border bg-card p-5" data-testid="library-sync">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 className="font-serif text-lg font-semibold text-foreground">Sync to Spotify</h2>
+                <p className="mt-1 font-mono text-[11px] text-muted-foreground">
+                  Push your kept tracks to Spotify's saved songs. Already-saved tracks are skipped.
+                  Anything not on Spotify gets a Bandcamp link.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={syncBusy || isSyncActive}
+                onClick={() => void handleSync()}
+                className="hover-elevate inline-flex shrink-0 items-center gap-2 rounded-full border border-[#C6F53F]/50 bg-[#C6F53F]/15 px-4 py-2 font-mono text-[11px] uppercase tracking-wide text-[#C6F53F] disabled:opacity-50"
+                data-testid="library-sync-button"
+              >
+                {isSyncActive ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Upload className="h-3.5 w-3.5" />
+                )}
+                {isSyncActive ? "Syncing…" : "Sync now"}
+              </button>
+            </div>
+
+            {syncError && (
+              <p className="mt-2 font-mono text-[11px] text-destructive" data-testid="library-sync-error">
+                {syncError}
+              </p>
+            )}
+
+            {/* Active job progress */}
+            {isSyncActive && syncJobData && (
+              <div className="mt-4" data-testid="library-sync-progress">
+                <p className="font-mono text-[11px] text-muted-foreground">
+                  {syncJobData.phase === "matching" && "Matching your tracks on Spotify…"}
+                  {syncJobData.phase === "checking" && "Checking which tracks are already saved…"}
+                  {syncJobData.phase === "saving" && "Saving to your Spotify library…"}
+                  {!syncJobData.phase && "Preparing…"}
+                  {syncJobData.total > 0 && ` (${syncJobData.processed} / ${syncJobData.total})`}
+                </p>
+                {syncJobData.total > 0 && (
+                  <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-[#C6F53F] transition-all"
+                      style={{ width: `${Math.min(100, (syncJobData.processed / syncJobData.total) * 100)}%` }}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Completed receipt */}
+            {syncJobData?.status === "done" && syncJobData.results && (
+              <div className="mt-4" data-testid="library-sync-receipt">
+                <div className="flex flex-wrap gap-4 font-mono text-[11px] text-muted-foreground">
+                  <span><span className="text-foreground">{syncJobData.results.synced}</span> synced</span>
+                  {syncJobData.results.searchMatched > 0 && (
+                    <span><span className="text-foreground">{syncJobData.results.searchMatched}</span> matched by search</span>
+                  )}
+                  {syncJobData.results.alreadySaved > 0 && (
+                    <span><span className="text-muted-foreground">{syncJobData.results.alreadySaved}</span> already saved</span>
+                  )}
+                  {syncJobData.results.unavailable > 0 && (
+                    <span><span className="text-foreground">{syncJobData.results.unavailable}</span> not on Spotify</span>
+                  )}
+                </div>
+
+                {(syncJobData.results.unavailableItems.length > 0 || syncJobData.results.searchMatchedItems.length > 0) && (
+                  <button
+                    type="button"
+                    onClick={() => setSyncReceiptOpen((v) => !v)}
+                    className="mt-3 inline-flex items-center gap-1 font-mono text-[11px] text-muted-foreground hover:text-foreground"
+                    data-testid="library-sync-receipt-toggle"
+                  >
+                    {syncReceiptOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                    {syncReceiptOpen ? "Hide details" : "Show details"}
+                  </button>
+                )}
+
+                {syncReceiptOpen && (
+                  <div className="mt-3 space-y-4">
+                    {syncJobData.results.unavailableItems.length > 0 && (
+                      <div>
+                        <p className="mb-2 font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+                          Not on Spotify — buy them properly
+                        </p>
+                        <ul className="space-y-1">
+                          {syncJobData.results.unavailableItems.map((item) => (
+                            <li key={item.mbid} className="flex items-center justify-between gap-2 text-sm">
+                              <span className="truncate text-foreground">{item.artist} — {item.title}</span>
+                              <a
+                                href={item.bandcampUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="shrink-0 font-mono text-[10px] uppercase tracking-wide text-primary hover:underline"
+                              >
+                                Bandcamp ↗
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {syncJobData.results.searchMatchedItems.length > 0 && (
+                      <div>
+                        <p className="mb-2 font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+                          Matched by search (lower confidence)
+                        </p>
+                        <ul className="space-y-1">
+                          {syncJobData.results.searchMatchedItems.map((item) => (
+                            <li key={item.mbid} className="flex items-center justify-between gap-2 text-sm">
+                              <span className="truncate text-foreground">{item.artist} — {item.title}</span>
+                              <a
+                                href={item.spotifyUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="shrink-0 font-mono text-[10px] uppercase tracking-wide text-primary hover:underline"
+                              >
+                                Spotify ↗
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {syncJobData?.status === "error" && (
+              <p className="mt-3 font-mono text-[11px] text-destructive" data-testid="library-sync-job-error">
+                {syncJobData.error ?? "Sync failed — please try again."}
+              </p>
+            )}
+          </section>
+        )}
 
         {/* Export — take your library with you */}
         <section className="mt-12 rounded-xl border border-card-border bg-card p-5" data-testid="library-export">

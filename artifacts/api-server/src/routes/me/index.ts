@@ -6,6 +6,7 @@ import {
   spotifyConnectionsTable,
   libraryItemsTable,
   libraryImportJobsTable,
+  librarySyncJobsTable,
   keepTargetsTable,
   pendingKeepsTable,
   recordingsTable,
@@ -45,6 +46,7 @@ import {
   type LibraryExportRow,
 } from "../../lore/library-export.js";
 import { parseLibraryImport } from "../../lore/library-import.js";
+import { runSyncWorker, SYNC_ZOMBIE_AGE_MS } from "../../lore/library-sync.js";
 
 const router: IRouter = Router();
 
@@ -1591,12 +1593,145 @@ router.get("/me/overlaps/runs", h(async (req, res) => {
   });
 }));
 
+// ---------------------------------------------------------------------------
+// Library sync — push Lore library → Spotify saved tracks
+// ---------------------------------------------------------------------------
+
+/**
+ * POST /api/me/library/sync — start a background sync job.
+ * Returns 400 when the service connection has no write scope (canWrite=false)
+ * rather than starting a job that will inevitably fail, with a re-auth hint.
+ */
+router.post("/me/library/sync", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+  const service = typeof req.query["service"] === "string" ? req.query["service"].trim() : "spotify";
+
+  const [conn] = await db
+    .select()
+    .from(serviceConnectionsTable)
+    .where(and(eq(serviceConnectionsTable.userId, user.id), eq(serviceConnectionsTable.service, service)))
+    .limit(1);
+
+  if (!conn) {
+    return res.status(400).json({ error: `No ${service} connection found; connect first.` });
+  }
+
+  if (!conn.canWrite) {
+    return res.status(403).json({
+      error: "canWrite:false",
+      message: "Your Spotify connection doesn't have write access. Reconnect Spotify to grant it.",
+      reAuthUrl: null,
+    });
+  }
+
+  // Zombie-reset: mark stuck jobs as error before starting a new one.
+  const ZOMBIE_AGE_MS = SYNC_ZOMBIE_AGE_MS;
+  const [existingJob] = await db
+    .select({ id: librarySyncJobsTable.id, status: librarySyncJobsTable.status, startedAt: librarySyncJobsTable.startedAt })
+    .from(librarySyncJobsTable)
+    .where(and(
+      eq(librarySyncJobsTable.userId, user.id),
+      eq(librarySyncJobsTable.service, service),
+      inArray(librarySyncJobsTable.status, ["running", "pending"]),
+    ))
+    .limit(1);
+
+  if (existingJob) {
+    const ageMs = Date.now() - existingJob.startedAt.getTime();
+    if (ageMs > ZOMBIE_AGE_MS) {
+      console.warn(`[me/sync] job=${existingJob.id} orphaned (${Math.round(ageMs / 60_000)}m old) — resetting`);
+      await db
+        .update(librarySyncJobsTable)
+        .set({ status: "error", error: "Sync interrupted (server restarted) — please try again", finishedAt: new Date() })
+        .where(eq(librarySyncJobsTable.id, existingJob.id));
+    } else {
+      return res.status(409).json({
+        jobId: existingJob.id,
+        status: existingJob.status,
+        error: "A sync is already in progress.",
+      });
+    }
+  }
+
+  const [job] = await db
+    .insert(librarySyncJobsTable)
+    .values({ userId: user.id, service, status: "pending", total: 0, processed: 0, startedAt: new Date() })
+    .returning();
+
+  setImmediate(() => runSyncWorker(job!.id, user.id, conn));
+
+  return res.status(202).json({ jobId: job!.id, status: "pending" });
+}));
+
+function formatSyncJob(job: typeof librarySyncJobsTable.$inferSelect) {
+  return {
+    jobId: job.id,
+    service: job.service,
+    status: job.status,
+    phase: job.phase ?? null,
+    total: job.total,
+    processed: job.processed,
+    startedAt: job.startedAt.toISOString(),
+    finishedAt: job.finishedAt ? job.finishedAt.toISOString() : null,
+    error: job.error ?? null,
+    results: job.results ?? null,
+  };
+}
+
+/**
+ * GET /api/me/library/sync — most recent sync job for the user (404 if none).
+ */
+router.get("/me/library/sync", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+  const [job] = await db
+    .select()
+    .from(librarySyncJobsTable)
+    .where(eq(librarySyncJobsTable.userId, user.id))
+    .orderBy(desc(librarySyncJobsTable.startedAt))
+    .limit(1);
+  if (!job) return res.status(404).json({ error: "No sync jobs found" });
+  return res.json(formatSyncJob(job));
+}));
+
+/**
+ * GET /api/me/library/sync/:jobId — poll sync job progress.
+ */
+router.get("/me/library/sync/:jobId", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+  const rawJobId = req.params.jobId;
+  const jobId = parseInt(typeof rawJobId === "string" ? rawJobId : "", 10);
+  if (isNaN(jobId)) return res.status(400).json({ error: "Invalid jobId" });
+  const [job] = await db
+    .select()
+    .from(librarySyncJobsTable)
+    .where(and(eq(librarySyncJobsTable.id, jobId), eq(librarySyncJobsTable.userId, user.id)))
+    .limit(1);
+  if (!job) return res.status(404).json({ error: "Job not found" });
+  return res.json(formatSyncJob(job));
+}));
+
 /**
  * Mark any import jobs that are stuck in status="running" as failed.
  * Called once at server startup — if the process was killed mid-import the DB
  * row stays "running" forever with no worker driving it.  Resetting them to
  * "error" lets users see a clear failure message and re-trigger the import.
  */
+/** Reset stuck sync jobs on boot. */
+export async function markOrphanedSyncJobsAsError(): Promise<void> {
+  try {
+    const orphaned = await db
+      .update(librarySyncJobsTable)
+      .set({ status: "error", error: "Server restarted — please start a new sync", finishedAt: new Date() })
+      .where(inArray(librarySyncJobsTable.status, ["running", "pending"]))
+      .returning({ id: librarySyncJobsTable.id });
+    if (orphaned.length > 0) {
+      console.log(`[me] marked ${orphaned.length} orphaned sync job(s) as error`);
+    }
+  } catch (err) {
+    console.error("[me] failed to clear orphaned sync jobs", err);
+  }
+}
+
 export async function markOrphanedImportJobsAsError(): Promise<void> {
   try {
     const orphaned = await db

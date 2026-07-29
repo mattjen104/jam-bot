@@ -42,10 +42,11 @@ import { applyStationScheduleMigration } from "./lore/station-schedule-migration
 import { applyPendingKeepsMigration } from "./lore/pending-keeps-migration.js";
 import { applyLibraryExportMigration } from "./lore/library-export-migration.js";
 import { applyAutomationClassMigration } from "./lore/automation-class-migration.js";
+import { applyLibrarySyncMigration } from "./lore/library-sync-migration.js";
 import { syncScrapedShows } from "./lore/scraped-shows-sync.js";
 import { wireScheduleExtractor } from "./lore/schedule-wire.js";
 import { startScheduleScraper } from "./lore/schedule-scraper.js";
-import { markOrphanedImportJobsAsError } from "./routes/me/index.js";
+import { markOrphanedImportJobsAsError, markOrphanedSyncJobsAsError } from "./routes/me/index.js";
 
 const rawPort = process.env["PORT"];
 
@@ -80,6 +81,8 @@ async function bootLore(): Promise<void> {
     await applyPendingKeepsMigration();
     await applyLibraryExportMigration();
     await applyAutomationClassMigration();
+    await applyLibrarySyncMigration();
+    await markOrphanedSyncJobsAsError();
     await ensurePicksUnifiedView();
     await seedStations();
     try {
