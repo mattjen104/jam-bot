@@ -939,6 +939,131 @@ describe("scrapeStationSchedule — malformed LLM times never reach the DB", () 
     expect(station?.scheduleScrapedAt).toBeInstanceOf(Date);
     expect(station?.upcomingShowCount).toBe(1);
   });
+
+  it("stores exactly one row when the LLM returns the same show with a tab character in the name", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // An LLM transcribing a tab-delimited schedule page could emit
+    // "Morning\tJazz" as a show name. The seenSlots key collapses all
+    // whitespace runs (via .replace(/\s+/g, " ")) before lowercasing, so
+    // "Morning\tJazz" and "Morning Jazz" normalise to the same key and only
+    // one row is written. Without the \s+ collapse (e.g. if the regex were
+    // changed to / +/), the tab variant would pass through as a distinct key
+    // and either crash on the DB unique constraint or insert a silent duplicate.
+    const TAB_VARIANT_JSON = JSON.stringify([
+      {
+        showName: "Morning Jazz",
+        dayOfWeek: "Mon",
+        startTime: "08:00",
+        endTime: "10:00",
+        djName: "DJ Alice",
+      },
+      {
+        showName: "Morning\tJazz",
+        dayOfWeek: "Mon",
+        startTime: "08:00",
+        endTime: "10:00",
+        djName: "DJ Alice",
+      },
+    ]);
+
+    configureScheduleExtractor(async () => TAB_VARIANT_JSON);
+
+    const fetchFn = makeFetch([
+      { pattern: /robots\.txt/, body: "User-agent: *\nDisallow:\n" },
+      {
+        pattern: "/schedule",
+        body: "<html><body><p>Schedule page content</p></body></html>",
+      },
+    ]);
+
+    const target = {
+      id: stationId!,
+      slug: `test-sched-${run}`,
+      homepageUrl: HOMEPAGE,
+      scheduleUrl: SCHEDULE_URL,
+      city: null,
+      country: null,
+      ianaTimezone: null,
+    };
+
+    const result = await scrapeStationSchedule(target, { fetchFn });
+
+    // Tab-collapsed dedup reduces both variants to one row.
+    expect(result).toEqual({ scraped: true, showCount: 1 });
+
+    // Exactly one row in scraped_shows — the stored name is the first
+    // occurrence (canonical form without tab).
+    const shows = await fetchScrapedShows();
+    expect(shows).toHaveLength(1);
+    expect(shows[0]!.showName).toBe("Morning Jazz");
+    expect(shows[0]!.dayOfWeek).toBe("Mon");
+    expect(shows[0]!.startTime).toBe("08:00");
+
+    const station = await fetchStationRow();
+    expect(station?.scheduleScrapedAt).toBeInstanceOf(Date);
+    expect(station?.upcomingShowCount).toBe(1);
+  });
+
+  it("stores exactly one row when the LLM returns the same show with a mixed whitespace run in the name", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // Confirm that a mixed run such as "Morning \t Jazz" (space + tab + space)
+    // also collapses to the same slot key as "Morning Jazz". This exercises the
+    // multi-token case: a single \s+ match handles an arbitrary mix of spaces,
+    // tabs, and newlines in one pass, not just consecutive spaces or a lone tab.
+    const MIXED_WHITESPACE_JSON = JSON.stringify([
+      {
+        showName: "Morning Jazz",
+        dayOfWeek: "Mon",
+        startTime: "08:00",
+        endTime: "10:00",
+        djName: "DJ Alice",
+      },
+      {
+        showName: "Morning \t Jazz",
+        dayOfWeek: "Mon",
+        startTime: "08:00",
+        endTime: "10:00",
+        djName: "DJ Alice",
+      },
+    ]);
+
+    configureScheduleExtractor(async () => MIXED_WHITESPACE_JSON);
+
+    const fetchFn = makeFetch([
+      { pattern: /robots\.txt/, body: "User-agent: *\nDisallow:\n" },
+      {
+        pattern: "/schedule",
+        body: "<html><body><p>Schedule page content</p></body></html>",
+      },
+    ]);
+
+    const target = {
+      id: stationId!,
+      slug: `test-sched-${run}`,
+      homepageUrl: HOMEPAGE,
+      scheduleUrl: SCHEDULE_URL,
+      city: null,
+      country: null,
+      ianaTimezone: null,
+    };
+
+    const result = await scrapeStationSchedule(target, { fetchFn });
+
+    // Mixed-whitespace-collapsed dedup reduces both variants to one row.
+    expect(result).toEqual({ scraped: true, showCount: 1 });
+
+    const shows = await fetchScrapedShows();
+    expect(shows).toHaveLength(1);
+    expect(shows[0]!.showName).toBe("Morning Jazz");
+    expect(shows[0]!.dayOfWeek).toBe("Mon");
+    expect(shows[0]!.startTime).toBe("08:00");
+
+    const station = await fetchStationRow();
+    expect(station?.scheduleScrapedAt).toBeInstanceOf(Date);
+    expect(station?.upcomingShowCount).toBe(1);
+  });
 });
 
 // ---------------------------------------------------------------------------
