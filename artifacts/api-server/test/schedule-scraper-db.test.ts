@@ -1005,6 +1005,126 @@ describe("scrapeStationSchedule — malformed LLM times never reach the DB", () 
     expect(station?.upcomingShowCount).toBe(1);
   });
 
+  it("stores exactly one row when the LLM returns the same show with a newline in the name", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // An LLM handed multi-line HTML can join lines with a literal newline
+    // instead of a space, emitting "Morning\nJazz". The seenSlots key collapses
+    // all whitespace runs (via .replace(/\s+/g, " ")) before lowercasing, so
+    // "Morning\nJazz" and "Morning Jazz" normalise to the same key and only
+    // one row is written.
+    const NEWLINE_VARIANT_JSON = JSON.stringify([
+      {
+        showName: "Morning Jazz",
+        dayOfWeek: "Mon",
+        startTime: "08:00",
+        endTime: "10:00",
+        djName: "DJ Alice",
+      },
+      {
+        showName: "Morning\nJazz",
+        dayOfWeek: "Mon",
+        startTime: "08:00",
+        endTime: "10:00",
+        djName: "DJ Alice",
+      },
+    ]);
+
+    configureScheduleExtractor(async () => NEWLINE_VARIANT_JSON);
+
+    const fetchFn = makeFetch([
+      { pattern: /robots\.txt/, body: "User-agent: *\nDisallow:\n" },
+      {
+        pattern: "/schedule",
+        body: "<html><body><p>Schedule page content</p></body></html>",
+      },
+    ]);
+
+    const target = {
+      id: stationId!,
+      slug: `test-sched-${run}`,
+      homepageUrl: HOMEPAGE,
+      scheduleUrl: SCHEDULE_URL,
+      city: null,
+      country: null,
+      ianaTimezone: null,
+    };
+
+    const result = await scrapeStationSchedule(target, { fetchFn });
+
+    // Newline-collapsed dedup reduces both variants to one row.
+    expect(result).toEqual({ scraped: true, showCount: 1 });
+
+    const shows = await fetchScrapedShows();
+    expect(shows).toHaveLength(1);
+    expect(shows[0]!.showName).toBe("Morning Jazz");
+    expect(shows[0]!.dayOfWeek).toBe("Mon");
+    expect(shows[0]!.startTime).toBe("08:00");
+
+    const station = await fetchStationRow();
+    expect(station?.scheduleScrapedAt).toBeInstanceOf(Date);
+    expect(station?.upcomingShowCount).toBe(1);
+  });
+
+  it("stores exactly one row when the LLM returns the same show with a CRLF in the name", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // Windows-style line endings: "Morning\r\nJazz" is a two-character
+    // whitespace run that a single \s+ match collapses to one space, so it
+    // dedups against "Morning Jazz" exactly like the \n variant.
+    const CRLF_VARIANT_JSON = JSON.stringify([
+      {
+        showName: "Morning Jazz",
+        dayOfWeek: "Mon",
+        startTime: "08:00",
+        endTime: "10:00",
+        djName: "DJ Alice",
+      },
+      {
+        showName: "Morning\r\nJazz",
+        dayOfWeek: "Mon",
+        startTime: "08:00",
+        endTime: "10:00",
+        djName: "DJ Alice",
+      },
+    ]);
+
+    configureScheduleExtractor(async () => CRLF_VARIANT_JSON);
+
+    const fetchFn = makeFetch([
+      { pattern: /robots\.txt/, body: "User-agent: *\nDisallow:\n" },
+      {
+        pattern: "/schedule",
+        body: "<html><body><p>Schedule page content</p></body></html>",
+      },
+    ]);
+
+    const target = {
+      id: stationId!,
+      slug: `test-sched-${run}`,
+      homepageUrl: HOMEPAGE,
+      scheduleUrl: SCHEDULE_URL,
+      city: null,
+      country: null,
+      ianaTimezone: null,
+    };
+
+    const result = await scrapeStationSchedule(target, { fetchFn });
+
+    // CRLF-collapsed dedup reduces both variants to one row.
+    expect(result).toEqual({ scraped: true, showCount: 1 });
+
+    const shows = await fetchScrapedShows();
+    expect(shows).toHaveLength(1);
+    expect(shows[0]!.showName).toBe("Morning Jazz");
+    expect(shows[0]!.dayOfWeek).toBe("Mon");
+    expect(shows[0]!.startTime).toBe("08:00");
+
+    const station = await fetchStationRow();
+    expect(station?.scheduleScrapedAt).toBeInstanceOf(Date);
+    expect(station?.upcomingShowCount).toBe(1);
+  });
+
   it("stores exactly one row when the LLM returns the same show with a mixed whitespace run in the name", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
 
