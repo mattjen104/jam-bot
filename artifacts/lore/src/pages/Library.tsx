@@ -295,6 +295,40 @@ export default function Library() {
           )}
         </section>
 
+        {/* Export — take your library with you */}
+        <section className="mt-12 rounded-xl border border-card-border bg-card p-5" data-testid="library-export">
+          <h2 className="font-serif text-lg font-semibold text-foreground">Take it with you</h2>
+          <p className="mt-1 font-mono text-[11px] text-muted-foreground">
+            Download your kept and imported tracks. Fields we don't have yet export
+            empty — never guessed.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {(["csv", "json", "m3u8", "txt"] as const).map((fmt) => (
+              <a
+                key={fmt}
+                href={`/api/me/library/export?format=${fmt}`}
+                download
+                className="hover-elevate rounded-full border border-border px-4 py-2 font-mono text-[11px] uppercase tracking-wide text-foreground"
+                data-testid={`library-export-${fmt}`}
+              >
+                {fmt === "m3u8" ? "M3U8 playlist" : fmt.toUpperCase()}
+              </a>
+            ))}
+          </div>
+          <p className="mt-3 font-mono text-[11px] text-muted-foreground">
+            To move tracks into another streaming service, feed the CSV to a
+            transfer tool like{" "}
+            <a href="https://soundiiz.com" target="_blank" rel="noreferrer" className="underline">
+              Soundiiz
+            </a>{" "}
+            or{" "}
+            <a href="https://www.tunemymusic.com" target="_blank" rel="noreferrer" className="underline">
+              TuneMyMusic
+            </a>
+            .
+          </p>
+        </section>
+
         <footer className="mt-16 border-t border-border pt-6 font-mono text-[11px] text-muted-foreground">
           Your library is stored on the Lore server and tied to your session.
           Spotify mirroring applies when you've granted write access.

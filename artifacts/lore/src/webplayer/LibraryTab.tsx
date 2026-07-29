@@ -572,7 +572,7 @@ function LibraryRow({
           )}
           <p className="wp-mono" style={{ margin: "2px 0 0", fontSize: 11, color: "var(--wp-text-muted)" }}>
             kept {item.addedAt.slice(0, 10)}
-            {item.provenance.kind === "station" && item.provenance.stationSlug
+            {item.provenance.stationSlug
               ? ` · via ${item.provenance.stationSlug}`
               : item.provenance.service
                 ? ` · via ${item.provenance.service}`
@@ -880,6 +880,49 @@ export function LibraryTab({
               {totalLoaded} loaded
             </p>
           )}
+        </div>
+      )}
+      {isAuthenticated && (
+        <div
+          style={{ padding: "12px 16px", borderTop: "0.5px solid var(--wp-border)" }}
+          data-testid="wp-library-export"
+        >
+          <p className="wp-mono" style={{ margin: "0 0 8px", fontSize: 11, color: "var(--wp-text-muted)" }}>
+            take it with you — fields we don't have export empty, never guessed
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {(["csv", "json", "m3u8", "txt"] as const).map((fmt) => (
+              <a
+                key={fmt}
+                href={`/api/me/library/export?format=${fmt}`}
+                download
+                className="wp-mono"
+                style={{
+                  fontSize: 11,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.04em",
+                  color: "var(--wp-text-secondary)",
+                  border: "0.5px solid var(--wp-border)",
+                  borderRadius: 999,
+                  padding: "5px 12px",
+                  textDecoration: "none",
+                }}
+                data-testid={`wp-library-export-${fmt}`}
+              >
+                {fmt}
+              </a>
+            ))}
+          </div>
+          <p className="wp-mono" style={{ margin: "8px 0 0", fontSize: 11, color: "var(--wp-text-muted)" }}>
+            move to another service via{" "}
+            <a href="https://soundiiz.com" target="_blank" rel="noreferrer" style={{ color: "inherit" }}>
+              Soundiiz
+            </a>{" "}
+            or{" "}
+            <a href="https://www.tunemymusic.com" target="_blank" rel="noreferrer" style={{ color: "inherit" }}>
+              TuneMyMusic
+            </a>
+          </p>
         </div>
       )}
     </div>

@@ -95,7 +95,7 @@ export function KeepButton({ mbid, spinId, provenance, compact = false }: KeepBu
       }
     } else {
       if (mbid) {
-        keepMutation.mutate({ mbid, provenance });
+        keepMutation.mutate({ mbid, spinId, provenance });
       } else if (spinId != null) {
         keepSpinMutation.mutate({ spinId, provenance });
       }

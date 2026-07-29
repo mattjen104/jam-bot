@@ -186,6 +186,13 @@ export interface IsolatedMbResolver {
     title: string,
     signal?: AbortSignal,
   ): Promise<string | null>;
+  /**
+   * Reverse direction: fetch the ISRC(s) attached to a recording MBID via
+   * `/recording/{mbid}?inc=isrcs`. Returns the first ISRC or null (including
+   * on any error — callers must record "checked" separately so misses aren't
+   * retried forever).
+   */
+  fetchIsrcByMbid(mbid: string, signal?: AbortSignal): Promise<string | null>;
 }
 
 export function createMbResolver(): IsolatedMbResolver {
@@ -233,7 +240,27 @@ export function createMbResolver(): IsolatedMbResolver {
         return null;
       }
     },
+
+    async fetchIsrcByMbid(mbid: string, signal?: AbortSignal): Promise<string | null> {
+      if (!musicbrainzEnabled() || !mbid.trim()) return null;
+      try {
+        const body = await isolatedFetch(
+          `/recording/${encodeURIComponent(mbid.trim())}?inc=isrcs&fmt=json`,
+          signal,
+        );
+        return parseRecordingIsrcs(body);
+      } catch {
+        return null;
+      }
+    },
   };
+}
+
+/** Pure: first ISRC from a recording?inc=isrcs body, or null. */
+export function parseRecordingIsrcs(body: unknown): string | null {
+  const b = body as { isrcs?: unknown[] };
+  const first = b?.isrcs?.find((i) => typeof i === "string" && i.trim().length > 0);
+  return typeof first === "string" ? first.trim().toUpperCase() : null;
 }
 
 /** Pure: first recording id from an ISRC lookup body, or null. */

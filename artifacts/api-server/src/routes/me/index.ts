@@ -38,6 +38,12 @@ import { createMbResolver } from "@workspace/song-enrichment";
 import { h } from "../../middlewares/asyncHandler.js";
 import { spinDayExpr } from "../../lore/runs.js";
 import { getForYouStations, getForYouBlogs } from "../../lore/for-you.js";
+import {
+  buildExport,
+  isExportFormat,
+  EXPORT_CONTENT_TYPES,
+  type LibraryExportRow,
+} from "../../lore/library-export.js";
 
 const router: IRouter = Router();
 
@@ -872,6 +878,86 @@ router.get("/me/library", h(async (req, res) => {
   });
 }));
 
+/** Hard cap on rows in one export file. */
+const EXPORT_MAX_ROWS = 50_000;
+
+/**
+ * GET /api/me/library/export?format=csv|json|m3u8|txt — download the whole
+ * library as a file. One provenance-joined query, formatted synchronously —
+ * no inline MusicBrainz lookups (ISRCs converge via the background
+ * enrichment job; missing ones export empty/null, never fabricated).
+ */
+router.get("/me/library/export", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+  const format = req.query["format"];
+  if (!isExportFormat(format)) {
+    return res.status(400).json({ error: "format must be one of csv, json, m3u8, txt" });
+  }
+
+  const rows = await db
+    .select({
+      mbid: libraryItemsTable.mbid,
+      provenance: libraryItemsTable.provenance,
+      addedAt: libraryItemsTable.addedAt,
+      title: recordingsTable.title,
+      artist: recordingsTable.artist,
+      isrc: recordingsTable.isrc,
+      releaseYear: recordingsTable.releaseYear,
+      album: sql<string | null>`(
+        SELECT title FROM recording_release_groups
+        WHERE recording_mbid = ${libraryItemsTable.mbid} AND is_primary = true
+        LIMIT 1
+      )`,
+      releaseGroupMbid: sql<string | null>`(
+        SELECT release_group_mbid FROM recording_release_groups
+        WHERE recording_mbid = ${libraryItemsTable.mbid} AND is_primary = true
+        LIMIT 1
+      )`,
+      spinPlayedAt: spinsTable.playedAt,
+      spinStationSlug: stationsTable.slug,
+      spinStationName: stationsTable.name,
+      spinShowName: showsTable.name,
+    })
+    .from(libraryItemsTable)
+    .leftJoin(recordingsTable, eq(libraryItemsTable.mbid, recordingsTable.mbid))
+    .leftJoin(spinsTable, eq(libraryItemsTable.spinId, spinsTable.id))
+    .leftJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
+    .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id))
+    .where(eq(libraryItemsTable.userId, user.id))
+    .orderBy(desc(libraryItemsTable.addedAt))
+    .limit(EXPORT_MAX_ROWS);
+
+  const exportRows: LibraryExportRow[] = rows.map((r) => ({
+    mbid: r.mbid,
+    title: r.title,
+    artist: r.artist,
+    album: r.album,
+    releaseGroupMbid: r.releaseGroupMbid,
+    releaseYear: r.releaseYear,
+    isrc: r.isrc,
+    addedAt: r.addedAt,
+    provenance: r.provenance,
+    spin: r.spinPlayedAt || r.spinStationSlug
+      ? {
+          stationSlug: r.spinStationSlug,
+          stationName: r.spinStationName,
+          showName: r.spinShowName,
+          playedAt: r.spinPlayedAt,
+        }
+      : null,
+  }));
+
+  const now = new Date();
+  const body = buildExport(format, exportRows, now);
+  const stamp = now.toISOString().slice(0, 10);
+  res.setHeader("Content-Type", EXPORT_CONTENT_TYPES[format]);
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="lore-library-${stamp}.${format}"`,
+  );
+  return res.send(body);
+}));
+
 // ---------------------------------------------------------------------------
 // Keep endpoints
 // ---------------------------------------------------------------------------
@@ -903,13 +989,15 @@ router.post("/me/keep", h(async (req, res) => {
     // If the spin already resolved, also write to library_items.
     let promotedAt: Date | null = null;
     if (spin.mbid) {
-      const provenance: LibraryItemProvenance = { kind: "keep", ...provenanceOverride };
+      // Spread first, then force kind — clients may pass display kinds like
+      // "station" in the override, but the stored kind is always "keep".
+      const provenance: LibraryItemProvenance = { ...provenanceOverride, kind: "keep" };
       await db
         .insert(libraryItemsTable)
-        .values({ userId: user.id, mbid: spin.mbid, provenance, addedAt: new Date() })
+        .values({ userId: user.id, mbid: spin.mbid, provenance, spinId: spin.id, addedAt: new Date() })
         .onConflictDoUpdate({
           target: [libraryItemsTable.userId, libraryItemsTable.mbid],
-          set: { provenance, addedAt: new Date() },
+          set: { provenance, spinId: spin.id, addedAt: new Date() },
         });
       promotedAt = new Date();
     }
@@ -942,16 +1030,33 @@ router.post("/me/keep", h(async (req, res) => {
   }
 
   const provenance: LibraryItemProvenance = {
-    kind: "keep",
     ...provenanceOverride,
+    kind: "keep",
   };
+
+  // When the client keeps a resolved track off a live play it can pass the
+  // spin id alongside the mbid. Only store the link when the spin actually
+  // resolved to this mbid — never persist mismatched provenance.
+  let keepSpinId: number | null = null;
+  if (spinId != null) {
+    const [s] = await db
+      .select({ id: spinsTable.id })
+      .from(spinsTable)
+      .where(and(eq(spinsTable.id, spinId), eq(spinsTable.mbid, mbid)))
+      .limit(1);
+    keepSpinId = s?.id ?? null;
+  }
 
   await db
     .insert(libraryItemsTable)
-    .values({ userId: user.id, mbid, provenance, addedAt: new Date() })
+    .values({ userId: user.id, mbid, provenance, spinId: keepSpinId, addedAt: new Date() })
     .onConflictDoUpdate({
       target: [libraryItemsTable.userId, libraryItemsTable.mbid],
-      set: { provenance, addedAt: new Date() },
+      set: {
+        provenance,
+        addedAt: new Date(),
+        ...(keepSpinId != null ? { spinId: keepSpinId } : {}),
+      },
     });
 
   // Mirror to enabled service connectors.

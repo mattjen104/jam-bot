@@ -80,7 +80,7 @@ export function WpKeep({
       if (mbid) unkeepMutation.mutate(mbid);
       else if (spinId != null) unkeepSpinMutation.mutate(spinId);
     } else {
-      if (mbid) keepMutation.mutate({ mbid, provenance });
+      if (mbid) keepMutation.mutate({ mbid, spinId, provenance });
       else if (spinId != null) keepSpinMutation.mutate({ spinId, provenance });
     }
   };

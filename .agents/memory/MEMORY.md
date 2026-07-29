@@ -60,4 +60,5 @@
 - [Lore station curation flags](lore-station-curation-flags.md) — favorite gates ICY watchers (soft cap 40), hidden = soft-hide + poll stop; every new listener-facing query must add hidden=false (no central predicate).
 - [Blog picker identity = feedUrl](blog-picker-identity.md) — blog ingest must match pickers by sourceRef feedUrl, never slugified name, or seeded handles fork into duplicates every poll; tolerant flag lives in sourceRef.
 - [Scraped-show tz & slot matching](scraped-shows-timezone-matching.md) — RB countries are full names not ISO codes; overnight-wrap SQL pattern lives in 3 places; slot matches need explicit ORDER BY tie-breaks.
+- [Library export & spin provenance](library-export-format.md) — pure builders + null-honesty; provenance.kind forced to "keep" server-side (spread first); spinId only stored when spin.mbid matches; new columns need boot migrations.
 - [Pending keeps — spin-based saves](pending-keeps-pattern.md) — pending_keeps table for pre-resolution saves; spinId on NowPlaying; hand-patch BOTH api-client-react AND api-zod types and rebuild dist.

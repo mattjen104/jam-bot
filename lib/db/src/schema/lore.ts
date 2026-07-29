@@ -72,6 +72,12 @@ export const recordingsTable = pgTable("recordings", {
    * up, nothing there" result and must not be retried forever.
    */
   genreEnrichedAt: timestamp("genre_enriched_at"),
+  /**
+   * When an ISRC lookup (MusicBrainz `inc=isrcs`) was last attempted for this
+   * recording. Set regardless of whether an ISRC was found, so misses aren't
+   * re-fetched forever. Null means never attempted.
+   */
+  isrcCheckedAt: timestamp("isrc_checked_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -1055,6 +1061,12 @@ export const libraryItemsTable = pgTable(
     provenance: jsonb("provenance")
       .$type<LibraryItemProvenance>()
       .notNull(),
+    /**
+     * The spin this keep came from, when the save happened off a live play
+     * (station dial / ride / webplayer). Null for imports and direct keeps.
+     * Links exports back to real air history — never fabricated for old rows.
+     */
+    spinId: integer("spin_id").references(() => spinsTable.id),
     addedAt: timestamp("added_at").defaultNow().notNull(),
   },
   (t) => [

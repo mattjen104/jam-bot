@@ -262,14 +262,17 @@ export function useMutationKeep() {
   return useMutation({
     mutationFn: ({
       mbid,
+      spinId,
       provenance,
     }: {
       mbid: string;
+      /** Spin the keep came from, when known — links the save to real air history. */
+      spinId?: number | null;
       provenance?: Partial<LibraryProvenance>;
     }) =>
       apiFetch<{ keptToLore: boolean; mirrors: unknown[] }>("/api/me/keep", {
         method: "POST",
-        body: JSON.stringify({ mbid, provenance }),
+        body: JSON.stringify({ mbid, ...(spinId != null ? { spinId } : {}), provenance }),
       }),
     onSuccess: (_data, { mbid }) => {
       // Optimistically update all keep-status query caches that include this mbid.
