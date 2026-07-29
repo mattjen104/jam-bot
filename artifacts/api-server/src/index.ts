@@ -40,6 +40,7 @@ import { startQualityRecomputeJob } from "./lore/quality.js";
 import { applyStationScheduleMigration } from "./lore/station-schedule-migration.js";
 import { applyPendingKeepsMigration } from "./lore/pending-keeps-migration.js";
 import { applyAutomationClassMigration } from "./lore/automation-class-migration.js";
+import { syncScrapedShows } from "./lore/scraped-shows-sync.js";
 import { wireScheduleExtractor } from "./lore/schedule-wire.js";
 import { startScheduleScraper } from "./lore/schedule-scraper.js";
 import { markOrphanedImportJobsAsError } from "./routes/me/index.js";
@@ -76,6 +77,7 @@ async function bootLore(): Promise<void> {
     await applyStationScheduleMigration();
     await applyPendingKeepsMigration();
     await applyAutomationClassMigration();
+    await syncScrapedShows();
     await ensurePicksUnifiedView();
     await seedStations();
     try {

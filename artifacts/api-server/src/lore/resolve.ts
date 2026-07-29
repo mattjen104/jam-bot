@@ -18,6 +18,7 @@ import {
 } from "@workspace/song-enrichment";
 import { searchTrack } from "../spotify/appClient.js";
 import { recordAdSignal } from "./ads.js";
+import { lookupScrapedShowId } from "./scraped-shows-sync.js";
 import type { NowPlayingRaw, RawSpin, ShowAttribution } from "./types.js";
 
 /** Outcome of trying to place a now-playing track on the MusicBrainz spine. */
@@ -657,7 +658,11 @@ export async function logSpinIfChanged(
       ...(np.isrc ? { isrc: np.isrc } : {}),
     });
 
-    const showId = np.show ? await upsertShow(station.id, np.show) : null;
+    const showId = np.show
+      ? await upsertShow(station.id, np.show)
+      : station.ianaTimezone
+        ? await lookupScrapedShowId(station.id, station.ianaTimezone, new Date())
+        : null;
 
     const wrote = await persistSpin({
       station,
