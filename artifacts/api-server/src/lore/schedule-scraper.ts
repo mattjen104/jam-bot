@@ -327,7 +327,16 @@ export function parseExtractedSchedule(raw: string): ExtractedShow[] | null {
     if (!DAY_TOKENS.has(dayOfWeek)) continue;
     if (!HHMM_RE.test(startTime) || !HHMM_RE.test(endTime)) continue;
 
-    const slotKey = `${dayOfWeek}|${startTime}|${showName.replace(/\s+/g, " ").toLowerCase()}`;
+    // Strip zero-width characters (ZWSP/ZWNJ/ZWJ/BOM) before collapsing
+    // whitespace — \s does NOT match them, so "Morning\u200BJazz" would
+    // otherwise pass through as a distinct key from "Morning Jazz". Map them
+    // to a regular space (not the empty string) so a ZWSP standing in for a
+    // word break normalises to the same key as the spaced form; the \s+
+    // collapse then squashes any resulting runs.
+    const slotKey = `${dayOfWeek}|${startTime}|${showName
+      .replace(/[\u200B-\u200D\uFEFF]/g, " ")
+      .replace(/\s+/g, " ")
+      .toLowerCase()}`;
     if (seenSlots.has(slotKey)) continue;
     seenSlots.add(slotKey);
 

@@ -1125,6 +1125,68 @@ describe("scrapeStationSchedule — malformed LLM times never reach the DB", () 
     expect(station?.upcomingShowCount).toBe(1);
   });
 
+  it("stores exactly one row when the LLM returns the same show with a zero-width space in the name", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // JavaScript's \s does NOT match zero-width characters like U+200B
+    // (zero-width space) or U+FEFF (BOM), which LLMs occasionally emit when
+    // transcribing scraped HTML. The seenSlots key strips
+    // /[\u200B-\u200D\uFEFF]/g before collapsing whitespace, so
+    // "Morning\u200BJazz" normalises to the same key as "Morning Jazz" and
+    // only one row is written.
+    const ZERO_WIDTH_VARIANT_JSON = JSON.stringify([
+      {
+        showName: "Morning Jazz",
+        dayOfWeek: "Mon",
+        startTime: "08:00",
+        endTime: "10:00",
+        djName: "DJ Alice",
+      },
+      {
+        showName: "Morning\u200BJazz",
+        dayOfWeek: "Mon",
+        startTime: "08:00",
+        endTime: "10:00",
+        djName: "DJ Alice",
+      },
+    ]);
+
+    configureScheduleExtractor(async () => ZERO_WIDTH_VARIANT_JSON);
+
+    const fetchFn = makeFetch([
+      { pattern: /robots\.txt/, body: "User-agent: *\nDisallow:\n" },
+      {
+        pattern: "/schedule",
+        body: "<html><body><p>Schedule page content</p></body></html>",
+      },
+    ]);
+
+    const target = {
+      id: stationId!,
+      slug: `test-sched-${run}`,
+      homepageUrl: HOMEPAGE,
+      scheduleUrl: SCHEDULE_URL,
+      city: null,
+      country: null,
+      ianaTimezone: null,
+    };
+
+    const result = await scrapeStationSchedule(target, { fetchFn });
+
+    // Zero-width-stripped dedup reduces both variants to one row.
+    expect(result).toEqual({ scraped: true, showCount: 1 });
+
+    const shows = await fetchScrapedShows();
+    expect(shows).toHaveLength(1);
+    expect(shows[0]!.showName).toBe("Morning Jazz");
+    expect(shows[0]!.dayOfWeek).toBe("Mon");
+    expect(shows[0]!.startTime).toBe("08:00");
+
+    const station = await fetchStationRow();
+    expect(station?.scheduleScrapedAt).toBeInstanceOf(Date);
+    expect(station?.upcomingShowCount).toBe(1);
+  });
+
   it("stores exactly one row when the LLM returns the same show with a mixed whitespace run in the name", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
 
