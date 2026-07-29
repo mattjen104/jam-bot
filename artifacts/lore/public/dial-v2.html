@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Lore — Timeline Dial v2</title>
-<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Archivo:wght@400;500;600;700&family=Archivo+Narrow:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Archivo:wght@400;500;600;700&family=Archivo+Narrow:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
   --bg:#151310;--surface:#1D1A16;--raised:#241F1A;--sunk:#0F0D0B;
@@ -37,6 +37,7 @@ body{font-family:var(--ui);background:#0a0908;color:var(--ink);
 /* topbar */
 .topbar{display:flex;align-items:center;gap:10px;padding:12px 15px 10px;border-bottom:1px solid var(--rule)}
 .topbar .title{font-family:var(--label);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-2);flex:1}
+.topbar .wordmark{font-family:'Fraunces',Georgia,serif;font-size:19px;font-weight:600;letter-spacing:-.01em;color:var(--ink);line-height:1;flex-shrink:0}
 .topbar .sort-chip{font-family:var(--mono);font-size:9px;color:var(--library);border:1px solid rgba(232,106,78,.3);border-radius:2px;padding:3px 7px}
 .topbar .crumb-btn{font-family:var(--label);font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);background:none;border:none;cursor:pointer;padding:0}
 .topbar .crumb-btn:hover{color:var(--ink)}
@@ -340,7 +341,7 @@ const offlineStations=()=>sortedStations().filter(s=>!s.live);
 function renderTopbar(){
   const tb=document.getElementById('topbar');
   if(level==='all'){
-    tb.innerHTML=`<span class="title">Radio</span><span class="sort-chip">◆ by library overlap</span>`;
+    tb.innerHTML=`<span class="wordmark">Lore</span><span class="title">Radio</span><span class="sort-chip">◆ by library overlap</span>`;
   } else if(level==='station'){
     const s=STATIONS[si];
     tb.innerHTML=`<button class="crumb-btn" data-go="all">Radio</button>
