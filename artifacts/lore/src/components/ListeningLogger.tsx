@@ -8,7 +8,15 @@ import { usePlayer } from "../player/PlayerProvider";
 import { appendJournal } from "../lib/local";
 import { useIcecastFallback } from "../hooks/useIcecastFallback";
 import { useSpotifyHistorySync } from "../hooks/useSpotifyHistorySync";
-import { useLatestImportJob } from "../lib/meHooks";
+import {
+  useLatestImportJob,
+  useMyPreferences,
+  postListen,
+  patchListen,
+} from "../lib/meHooks";
+
+/** How often to send progress patches to the ledger (ms). */
+const LEDGER_PATCH_INTERVAL_MS = 10_000;
 
 // How long to wait before attempting an ACR fingerprint when neither the
 // server poller nor Icecast metadata have identified the playing track.
@@ -32,6 +40,15 @@ export function ListeningLogger() {
   const { data: importJob } = useLatestImportJob();
   const importActive = importJob?.status === "pending" || importJob?.status === "running";
   useSpotifyHistorySync(spotify.connected, importActive);
+
+  // Whether the listener opted into ledger recording.
+  const { data: prefs } = useMyPreferences();
+  const ledgerEnabled = prefs?.ledgerEnabled ?? false;
+
+  // Latest ride.progressMs kept fresh in a ref so interval callbacks always
+  // read the current position without being listed in their dependency arrays.
+  const rideProgressMsRef = useRef(ride.progressMs);
+  rideProgressMsRef.current = ride.progressMs;
 
   // --- Live radio: log the station's now-playing while the stream sounds ---
   const station = radio.station;
@@ -86,6 +103,42 @@ export function ListeningLogger() {
     npPlayedAt,
     npArtwork,
   ]);
+
+  // --- Broadcast ledger: record each spin in the server ledger ---------------
+  // npKey is non-empty only while listening AND now-playing data is available.
+  // Fires once per distinct track; a 10 s interval keeps msPlayed current.
+  // stationId is not in the public Station schema, so the server derives it
+  // from spinId when present.
+  const npSpinId = np?.spinId ?? null;
+  const broadcastOutputService = radio.casting === "casting" ? "spotify" : "broadcast";
+
+  useEffect(() => {
+    if (!ledgerEnabled) return;
+    if (!npKey || !stationSlug) return;
+    if (!npTitle && !npArtist) return;
+
+    let listenId: number | null = null;
+    const startMs = Date.now();
+
+    void postListen({
+      ...(npMbid ? { mbid: npMbid } : {}),
+      ...(npSpinId != null ? { spinId: npSpinId } : {}),
+      context: "broadcast",
+      outputService: broadcastOutputService,
+      startedAt: npPlayedAt ?? new Date().toISOString(),
+    }).then((res) => {
+      listenId = res.id;
+    }).catch(() => {/* silent — ledger is best-effort */});
+
+    const interval = setInterval(() => {
+      if (listenId == null) return;
+      const msPlayed = Date.now() - startMs;
+      void patchListen(listenId, msPlayed).catch(() => {});
+    }, LEDGER_PATCH_INTERVAL_MS);
+
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [npKey, ledgerEnabled]);
 
   // --- Icecast fallback: client-side stream metadata for unpolled stations ---
   // When the server has no now-playing data (no poller configured), try the
@@ -249,6 +302,39 @@ export function ListeningLogger() {
       ...(rideContext ? { context: rideContext } : {}),
     });
   }, [rideMbid, rideTitle, rideArtist, rideArtwork, rideKind, rideContext]);
+
+  // --- Ride / replay ledger: record each track when it starts playing -------
+  // rideMbid is non-null only while the ride is active AND status='playing'.
+  // Progress is read from the ref (kept sync'd above) so the interval never
+  // needs to be re-armed when progressMs updates.
+  const rideOutputService = ride.source === "spotify" ? "spotify" : "preview";
+  const rideListenContext = ride.mode === "replay" ? "replay" : "ride";
+
+  useEffect(() => {
+    if (!ledgerEnabled) return;
+    if (!rideMbid) return;
+
+    let listenId: number | null = null;
+
+    void postListen({
+      mbid: rideMbid,
+      context: rideListenContext,
+      outputService: rideOutputService,
+      startedAt: new Date().toISOString(),
+    }).then((res) => {
+      listenId = res.id;
+    }).catch(() => {/* silent — ledger is best-effort */});
+
+    const interval = setInterval(() => {
+      if (listenId == null) return;
+      const msPlayed = rideProgressMsRef.current ?? 0;
+      if (msPlayed <= 0) return;
+      void patchListen(listenId, msPlayed).catch(() => {});
+    }, LEDGER_PATCH_INTERVAL_MS);
+
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rideMbid, ledgerEnabled]);
 
   return null;
 }
