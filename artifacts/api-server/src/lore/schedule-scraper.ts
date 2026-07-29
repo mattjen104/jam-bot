@@ -327,7 +327,7 @@ export function parseExtractedSchedule(raw: string): ExtractedShow[] | null {
     if (!DAY_TOKENS.has(dayOfWeek)) continue;
     if (!HHMM_RE.test(startTime) || !HHMM_RE.test(endTime)) continue;
 
-    const slotKey = `${dayOfWeek}|${startTime}|${showName.toLowerCase()}`;
+    const slotKey = `${dayOfWeek}|${startTime}|${showName.replace(/\s+/g, " ").toLowerCase()}`;
     if (seenSlots.has(slotKey)) continue;
     seenSlots.add(slotKey);
 

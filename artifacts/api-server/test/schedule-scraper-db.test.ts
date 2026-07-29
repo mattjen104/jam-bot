@@ -873,6 +873,72 @@ describe("scrapeStationSchedule — malformed LLM times never reach the DB", () 
     expect(station?.scheduleScrapedAt).toBeInstanceOf(Date);
     expect(station?.upcomingShowCount).toBe(1);
   });
+
+  it("stores exactly one row when the LLM returns the same show twice with internal whitespace differences", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // The seenSlots key in parseExtractedSchedule collapses internal whitespace
+    // (via .replace(/\s+/g, " ")) before lowercasing, so "Morning Jazz" and
+    // "Morning  Jazz" (double internal space) for the same day+startTime are
+    // treated as the same slot and collapsed to one row. An LLM could emit
+    // either form from the same source text. Without the internal-whitespace
+    // collapse, the second variant would reach the DB and hit the unique
+    // constraint at runtime, turning a silent normalisation gap into a crash.
+    // Asserting showCount=1 here confirms the guard fires before the DB write.
+    const INTERNAL_WHITESPACE_VARIANT_JSON = JSON.stringify([
+      {
+        showName: "Morning Jazz",
+        dayOfWeek: "Mon",
+        startTime: "08:00",
+        endTime: "10:00",
+        djName: "DJ Alice",
+      },
+      {
+        showName: "Morning  Jazz",
+        dayOfWeek: "Mon",
+        startTime: "08:00",
+        endTime: "10:00",
+        djName: "DJ Alice",
+      },
+    ]);
+
+    configureScheduleExtractor(async () => INTERNAL_WHITESPACE_VARIANT_JSON);
+
+    const fetchFn = makeFetch([
+      { pattern: /robots\.txt/, body: "User-agent: *\nDisallow:\n" },
+      {
+        pattern: "/schedule",
+        body: "<html><body><p>Schedule page content</p></body></html>",
+      },
+    ]);
+
+    const target = {
+      id: stationId!,
+      slug: `test-sched-${run}`,
+      homepageUrl: HOMEPAGE,
+      scheduleUrl: SCHEDULE_URL,
+      city: null,
+      country: null,
+      ianaTimezone: null,
+    };
+
+    const result = await scrapeStationSchedule(target, { fetchFn });
+
+    // Internal-whitespace-collapsed dedup reduces two variants to one row.
+    expect(result).toEqual({ scraped: true, showCount: 1 });
+
+    // Exactly one row in scraped_shows — no DB unique-constraint error and no
+    // silent duplicate. The stored name is the first occurrence (single space).
+    const shows = await fetchScrapedShows();
+    expect(shows).toHaveLength(1);
+    expect(shows[0]!.showName).toBe("Morning Jazz");
+    expect(shows[0]!.dayOfWeek).toBe("Mon");
+    expect(shows[0]!.startTime).toBe("08:00");
+
+    const station = await fetchStationRow();
+    expect(station?.scheduleScrapedAt).toBeInstanceOf(Date);
+    expect(station?.upcomingShowCount).toBe(1);
+  });
 });
 
 // ---------------------------------------------------------------------------
