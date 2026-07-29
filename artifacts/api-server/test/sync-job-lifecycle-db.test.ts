@@ -227,7 +227,7 @@ beforeAll(async () => {
   });
   const [u] = await db
     .insert(loreUsersTable)
-    .values({ spotifyUserId: SP_UID, spotifyConnectionId: SID })
+    .values({ spotifyUserId: SP_UID, spotifyConnectionId: SID, deviceKey: SID })
     .returning({ id: loreUsersTable.id });
   userId = u!.id;
 
@@ -270,7 +270,7 @@ beforeAll(async () => {
   });
   const [uRo] = await db
     .insert(loreUsersTable)
-    .values({ spotifyUserId: SP_UID_RO, spotifyConnectionId: SID_RO })
+    .values({ spotifyUserId: SP_UID_RO, spotifyConnectionId: SID_RO, deviceKey: SID_RO })
     .returning({ id: loreUsersTable.id });
   userIdRo = uRo!.id;
 

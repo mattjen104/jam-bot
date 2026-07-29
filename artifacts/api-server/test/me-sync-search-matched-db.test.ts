@@ -267,7 +267,7 @@ beforeAll(async () => {
   });
   const [user2] = await db
     .insert(loreUsersTable)
-    .values({ spotifyUserId: `test-sync-sm-user2-${run}`, spotifyConnectionId: SID2 })
+    .values({ spotifyUserId: `test-sync-sm-user2-${run}`, spotifyConnectionId: SID2, deviceKey: SID2 })
     .returning({ id: loreUsersTable.id });
   userId2 = user2!.id;
 

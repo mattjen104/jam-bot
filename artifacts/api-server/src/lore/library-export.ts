@@ -72,28 +72,63 @@ function exportProvenance(r: LibraryExportRow): Record<string, unknown> {
   return p;
 }
 
+/** One listen row in the JSON export. */
+export interface ListenExportRow {
+  id: number;
+  mbid: string | null;
+  title: string | null;
+  artist: string | null;
+  stationName: string | null;
+  pickerName: string | null;
+  showName: string | null;
+  context: string;
+  outputService: string;
+  startedAt: Date;
+  msPlayed: number;
+  completed: boolean;
+}
+
 /** `lore.library.v1` — full-fidelity round-trippable format. */
-export function buildJson(rows: LibraryExportRow[], exportedAt: Date): string {
-  return JSON.stringify(
-    {
-      format: "lore.library.v1",
-      exported_at: exportedAt.toISOString(),
-      count: rows.length,
-      items: rows.map((r) => ({
-        mbid: r.mbid,
-        isrc: r.isrc,
-        title: r.title,
-        artist: r.artist,
-        release_group_mbid: r.releaseGroupMbid,
-        album: r.album,
-        year: r.releaseYear,
-        added_at: r.addedAt.toISOString(),
-        provenance: exportProvenance(r),
-      })),
-    },
-    null,
-    2,
-  );
+export function buildJson(
+  rows: LibraryExportRow[],
+  exportedAt: Date,
+  listens?: ListenExportRow[],
+): string {
+  const payload: Record<string, unknown> = {
+    format: "lore.library.v1",
+    exported_at: exportedAt.toISOString(),
+    count: rows.length,
+    items: rows.map((r) => ({
+      mbid: r.mbid,
+      isrc: r.isrc,
+      title: r.title,
+      artist: r.artist,
+      release_group_mbid: r.releaseGroupMbid,
+      album: r.album,
+      year: r.releaseYear,
+      added_at: r.addedAt.toISOString(),
+      provenance: exportProvenance(r),
+    })),
+  };
+
+  if (listens && listens.length > 0) {
+    payload["listens"] = listens.map((l) => ({
+      id: l.id,
+      mbid: l.mbid,
+      title: l.title,
+      artist: l.artist,
+      station_name: l.stationName,
+      picker_name: l.pickerName,
+      show_name: l.showName,
+      context: l.context,
+      output_service: l.outputService,
+      started_at: l.startedAt.toISOString(),
+      ms_played: l.msPlayed,
+      completed: l.completed,
+    }));
+  }
+
+  return JSON.stringify(payload, null, 2);
 }
 
 /** M3U8: `#EXTM3U` header + `#EXTINF:-1,Artist - Title` per track. */
@@ -124,12 +159,13 @@ export function buildExport(
   format: ExportFormat,
   rows: LibraryExportRow[],
   exportedAt: Date,
+  listens?: ListenExportRow[],
 ): string {
   switch (format) {
     case "csv":
       return buildCsv(rows);
     case "json":
-      return buildJson(rows, exportedAt);
+      return buildJson(rows, exportedAt, listens);
     case "m3u8":
       return buildM3u8(rows);
     case "txt":

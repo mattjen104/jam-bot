@@ -1070,6 +1070,12 @@ export const loreUsersTable = pgTable("lore_users", {
   /** Voluntarily provided email, for future recovery options. */
   email: text("email"),
   emailVerifiedAt: timestamp("email_verified_at"),
+  /**
+   * Opt-in server-side listen history (the ledger). Off by default — nothing
+   * is written to `listens` until the listener explicitly enables this. Set via
+   * PATCH /me/preferences.
+   */
+  ledgerEnabled: boolean("ledger_enabled").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -1749,3 +1755,77 @@ export type InsertLibrarySyncJob = typeof librarySyncJobsTable.$inferInsert;
 export type InsertSelectorClaim = typeof selectorClaimsTable.$inferInsert;
 
 export type SelectorClaim = typeof selectorClaimsTable.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Listening ledger
+// ---------------------------------------------------------------------------
+
+/**
+ * One listen event — a server-side record of what the user actually heard.
+ * Written ONLY when `lore_users.ledger_enabled = true`. The ledger is off by
+ * default; the user opts in via PATCH /me/preferences.
+ *
+ * `context` values:
+ *   'broadcast' — heard on a live station stream
+ *   'ride'      — heard in a Segue/ride session
+ *   'replay'    — heard in an archive-replay session
+ *   'library'   — heard from an explicit library play
+ *
+ * `outputService` values:
+ *   'broadcast' — audio came from the station's own stream (Lore player)
+ *   'spotify'   — audio came from Spotify Connect
+ *   'apple'     — reserved
+ *   'tidal'     — reserved
+ *
+ * `releaseGroupMbid` is denormalised from `recording_release_groups.is_primary`
+ * at write time so album-completion queries are a single aggregation over this
+ * table with no extra join.
+ */
+export const listensTable = pgTable(
+  "listens",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => loreUsersTable.id, { onDelete: "cascade" }),
+    /**
+     * MusicBrainz Recording ID. Nullable — unresolved spins produce a row
+     * with mbid=null (honest incompleteness, backfillable later).
+     */
+    mbid: text("mbid").references(() => recordingsTable.mbid),
+    /** FK to the spin that triggered this listen (absent for library rides). */
+    spinId: integer("spin_id").references(() => spinsTable.id),
+    stationId: integer("station_id").references(() => stationsTable.id),
+    pickerId: integer("picker_id").references(() => pickersTable.id),
+    showId: integer("show_id").references(() => showsTable.id),
+    /** 'broadcast' | 'ride' | 'replay' | 'library' */
+    context: text("context").notNull(),
+    /** 'broadcast' | 'spotify' | 'apple' | 'tidal' */
+    outputService: text("output_service").notNull(),
+    startedAt: timestamp("started_at").notNull(),
+    /** Milliseconds of this recording heard so far (updated in-place). */
+    msPlayed: integer("ms_played").notNull().default(0),
+    /**
+     * True once ≥ 70 % of track duration (or 4 minutes) have been heard.
+     * Flipped by PATCH /me/listens/:id when the threshold is crossed.
+     */
+    completed: boolean("completed").notNull().default(false),
+    /**
+     * Primary release group MBID, denormalised from recording_release_groups
+     * at write time for efficient album-completion rollups. Null when the
+     * recording has no primary release group in the spine.
+     */
+    releaseGroupMbid: text("release_group_mbid"),
+  },
+  (t) => [
+    // Primary read path: user's history newest-first.
+    index("listens_user_started_idx").on(t.userId, t.startedAt),
+    // Album-completion aggregation: which release groups has the user heard?
+    index("listens_user_rg_idx").on(t.userId, t.releaseGroupMbid),
+    // Station analytics (future): how many listens did a station receive?
+    index("listens_station_started_idx").on(t.stationId, t.startedAt),
+  ],
+);
+
+export type Listen = typeof listensTable.$inferSelect;
+export type InsertListen = typeof listensTable.$inferInsert;

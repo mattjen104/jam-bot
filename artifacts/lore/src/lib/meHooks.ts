@@ -594,6 +594,118 @@ export function useMyOverlapRuns() {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Preferences (ledger consent)
+// ---------------------------------------------------------------------------
+
+export interface MyPreferences {
+  ledgerEnabled: boolean;
+}
+
+export const ME_PREFERENCES_KEY = ["me", "preferences"] as const;
+
+export function useMyPreferences() {
+  return useQuery({
+    queryKey: ME_PREFERENCES_KEY,
+    queryFn: () =>
+      fetchOrNull<MyPreferences>("/api/me/preferences").then(
+        (d) => d ?? { ledgerEnabled: false },
+      ),
+    staleTime: 60_000,
+    retry: false,
+  });
+}
+
+export async function patchPreferences(prefs: Partial<MyPreferences>): Promise<MyPreferences> {
+  return apiFetch<MyPreferences>("/api/me/preferences", {
+    method: "PATCH",
+    body: JSON.stringify(prefs),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Listening ledger — album completion
+// ---------------------------------------------------------------------------
+
+export interface AlbumCompletion {
+  releaseGroupMbid: string;
+  title: string | null;
+  artistName: string | null;
+  totalTracks: number;
+  heardTracks: number;
+}
+
+export const ME_ALBUMS_COMPLETED_KEY = ["me", "albums", "completed"] as const;
+
+export function useMyAlbumsCompleted() {
+  return useQuery({
+    queryKey: ME_ALBUMS_COMPLETED_KEY,
+    queryFn: () =>
+      fetchOrNull<{ albums: AlbumCompletion[] }>("/api/me/albums/completed").then(
+        (d) => d?.albums ?? [],
+      ),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Listening ledger — listen CRUD
+// ---------------------------------------------------------------------------
+
+export interface ListenItem {
+  id: number;
+  mbid: string | null;
+  spinId: number | null;
+  stationId: number | null;
+  pickerId: number | null;
+  showId: number | null;
+  context: string;
+  outputService: string;
+  startedAt: string;
+  msPlayed: number;
+  completed: boolean;
+  releaseGroupMbid: string | null;
+  recording: { title: string; artist: string } | null;
+  station: { name: string; slug: string | null } | null;
+  picker: { name: string } | null;
+  show: { name: string } | null;
+}
+
+export async function postListen(body: {
+  mbid?: string | null;
+  spinId?: number | null;
+  stationId?: number | null;
+  pickerId?: number | null;
+  showId?: number | null;
+  context: string;
+  outputService: string;
+  startedAt?: string;
+}): Promise<{ id: number | null }> {
+  return apiFetch<{ id: number | null }>("/api/me/listens", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function patchListen(
+  listenId: number,
+  msPlayed: number,
+): Promise<{ id: number; msPlayed: number; completed: boolean }> {
+  return apiFetch(`/api/me/listens/${listenId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ msPlayed }),
+  });
+}
+
+export async function deleteListen(listenId: number): Promise<void> {
+  return apiFetch(`/api/me/listens/${listenId}`, { method: "DELETE" });
+}
+
+export async function deleteAllListens(): Promise<void> {
+  return apiFetch("/api/me/listens?confirm=true", { method: "DELETE" });
+}
+
 const RECOVERY_HINT_KEY = "lore:recovery_hint_until";
 
 function maybeShowRecoveryHint(show?: boolean): void {

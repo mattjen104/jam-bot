@@ -43,6 +43,7 @@ import { applyPendingKeepsMigration } from "./lore/pending-keeps-migration.js";
 import { applyLibraryExportMigration } from "./lore/library-export-migration.js";
 import { applyAutomationClassMigration } from "./lore/automation-class-migration.js";
 import { applyLibrarySyncMigration } from "./lore/library-sync-migration.js";
+import { applyLedgerMigration } from "./lore/ledger-migration.js";
 import { applySelectorClaimsMigration } from "./lore/selector-claims-migration.js";
 import { syncScrapedShows } from "./lore/scraped-shows-sync.js";
 import { wireScheduleExtractor } from "./lore/schedule-wire.js";
@@ -86,6 +87,7 @@ async function bootLore(): Promise<void> {
     await applyLibraryExportMigration();
     await applyAutomationClassMigration();
     await applyLibrarySyncMigration();
+    await applyLedgerMigration();
     await applySelectorClaimsMigration();
     await ensurePicksUnifiedView();
     await seedStations();

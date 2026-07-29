@@ -12,8 +12,14 @@ import {
   postStartImport,
   postStartSync,
   postImportLibraryFile,
+  useMyPreferences,
+  useMyAlbumsCompleted,
+  patchPreferences,
+  ME_PREFERENCES_KEY,
+  ME_ALBUMS_COMPLETED_KEY,
   type FileImportSummary,
   type SyncJobStatus,
+  type AlbumCompletion,
   ME_LATEST_IMPORT_JOB_KEY,
   ME_LATEST_SYNC_JOB_KEY,
 } from "../lib/meHooks";
@@ -34,6 +40,34 @@ import {
   XCircle,
 } from "lucide-react";
 
+// ---------------------------------------------------------------------------
+// Consent-prompt dismissal — stored in localStorage with a 30-day TTL so it
+// can reappear once more if the listener still hasn't opted in.
+// ---------------------------------------------------------------------------
+const LEDGER_PROMPT_DISMISSED_KEY = "lore:ledger_prompt_dismissed_until";
+const LEDGER_PROMPT_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+function shouldShowLedgerPrompt(ledgerEnabled: boolean): boolean {
+  if (ledgerEnabled) return false;
+  try {
+    const until = Number(localStorage.getItem(LEDGER_PROMPT_DISMISSED_KEY) ?? 0);
+    return Date.now() >= until;
+  } catch {
+    return true;
+  }
+}
+
+function dismissLedgerPrompt(): void {
+  try {
+    localStorage.setItem(
+      LEDGER_PROMPT_DISMISSED_KEY,
+      String(Date.now() + LEDGER_PROMPT_TTL_MS),
+    );
+  } catch {
+    // storage unavailable — prompt may reappear
+  }
+}
+
 export default function Library() {
   const queryClient = useQueryClient();
   const { ride, radio } = usePlayer();
@@ -42,6 +76,41 @@ export default function Library() {
   const { data: connections, isLoading: connLoading } = useMyConnections();
   const isAuthenticated = !connLoading && connections !== null;
   const hasSpotify = Array.isArray(connections) && connections.some((c) => c.service === "spotify");
+
+  // Ledger consent + preferences
+  const { data: prefs } = useMyPreferences();
+  const ledgerEnabled = prefs?.ledgerEnabled ?? false;
+  const [ledgerPromptVisible, setLedgerPromptVisible] = useState<boolean>(false);
+  const [ledgerBusy, setLedgerBusy] = useState(false);
+
+  // Show the consent prompt on first Library visit if not yet opted in.
+  useEffect(() => {
+    if (prefs !== undefined) {
+      setLedgerPromptVisible(shouldShowLedgerPrompt(prefs.ledgerEnabled));
+    }
+  }, [prefs]);
+
+  const handleEnableLedger = async () => {
+    setLedgerBusy(true);
+    try {
+      await patchPreferences({ ledgerEnabled: true });
+      void queryClient.invalidateQueries({ queryKey: ME_PREFERENCES_KEY });
+      void queryClient.invalidateQueries({ queryKey: ME_ALBUMS_COMPLETED_KEY });
+      setLedgerPromptVisible(false);
+    } catch {
+      // silent — try again next visit
+    } finally {
+      setLedgerBusy(false);
+    }
+  };
+
+  const handleDismissLedgerPrompt = () => {
+    dismissLedgerPrompt();
+    setLedgerPromptVisible(false);
+  };
+
+  // Album completion — only fetched when ledger is enabled
+  const { data: albumsData } = useMyAlbumsCompleted();
 
   // Infinite kept list — scrolls as user reaches the bottom
   const {
@@ -288,6 +357,47 @@ export default function Library() {
             </div>
           )}
         </header>
+
+        {/* Ledger consent prompt */}
+        {ledgerPromptVisible && (
+          <div
+            className="mb-8 rounded-xl border border-primary/30 bg-primary/5 px-5 py-4"
+            data-testid="ledger-consent-prompt"
+          >
+            <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
+              Listening history
+            </p>
+            <p className="mt-2 max-w-[56ch] font-serif text-base text-foreground">
+              Keep a record of what you hear? It powers album progress and lets
+              Lore route support to the stations you actually listen to. It's
+              yours, exportable, and deletable.
+            </p>
+            <div className="mt-4 flex gap-3">
+              <button
+                type="button"
+                disabled={ledgerBusy}
+                onClick={() => void handleEnableLedger()}
+                data-testid="ledger-enable-button"
+                className="hover-elevate inline-flex items-center gap-2 rounded-full border border-primary/50 bg-primary/15 px-4 py-2 font-mono text-[11px] uppercase tracking-wide text-primary disabled:opacity-60"
+              >
+                {ledgerBusy ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                )}
+                Start recording
+              </button>
+              <button
+                type="button"
+                onClick={handleDismissLedgerPrompt}
+                data-testid="ledger-dismiss-button"
+                className="inline-flex items-center px-4 py-2 font-mono text-[11px] uppercase tracking-wide text-muted-foreground hover:text-foreground"
+              >
+                Not now
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Import status banner */}
         {showImportBanner && jobData && (
@@ -566,6 +676,23 @@ export default function Library() {
           </section>
         )}
 
+        {/* Album completion — only shown when ledger is enabled and has data */}
+        {ledgerEnabled && albumsData && albumsData.length > 0 && (
+          <section className="mt-10" data-testid="library-albums-completed">
+            <div className="mb-4 flex items-baseline justify-between">
+              <h2 className="font-serif text-xl font-semibold text-foreground">Albums heard</h2>
+              <span className="font-mono text-xs text-muted-foreground">
+                {albumsData.length} album{albumsData.length === 1 ? "" : "s"}
+              </span>
+            </div>
+            <ul className="flex flex-col gap-2">
+              {albumsData.map((album) => (
+                <AlbumCompletionRow key={album.releaseGroupMbid} album={album} />
+              ))}
+            </ul>
+          </section>
+        )}
+
         {/* Export — take your library with you */}
         <section className="mt-12 rounded-xl border border-card-border bg-card p-5" data-testid="library-export">
           <h2 className="font-serif text-lg font-semibold text-foreground">Take it with you</h2>
@@ -649,6 +776,30 @@ export default function Library() {
         </footer>
       </div>
     </div>
+  );
+}
+
+/**
+ * One album row in the "Albums heard" section.
+ * Plain statement: "You've heard N of M tracks" — no percentage bar, no ring,
+ * no achievement framing. Anti-gamification: this is a fact, not a reward.
+ */
+function AlbumCompletionRow({ album }: { album: AlbumCompletion }) {
+  const { title, artistName, totalTracks, heardTracks } = album;
+  return (
+    <li className="flex items-center justify-between gap-3 rounded-xl border border-card-border bg-card px-4 py-3">
+      <div className="min-w-0">
+        <p className="truncate font-serif text-sm font-medium text-foreground">
+          {title ?? "Unknown album"}
+        </p>
+        {artistName && (
+          <p className="truncate font-mono text-[11px] text-muted-foreground">{artistName}</p>
+        )}
+      </div>
+      <p className="shrink-0 font-mono text-[11px] text-muted-foreground">
+        {heardTracks} of {totalTracks} tracks
+      </p>
+    </li>
   );
 }
 
