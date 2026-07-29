@@ -17,8 +17,6 @@ import {
   getGetRecordingsAvailabilityQueryKey,
   useLookupPickedMbids,
   getLookupPickedMbidsQueryKey,
-  useGetPickersDial,
-  getGetPickersDialQueryKey,
   useGetAllScrapedShows,
   getGetAllScrapedShowsQueryKey,
   type Station,
@@ -26,13 +24,11 @@ import {
   type StationScheduleRun,
   type StationRecentSpin,
   type RecordingAvailabilityItem,
-  type PickerDialItem,
 } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { useFollows, isFollowed } from "../lib/local";
 import { useNtsChannel1, useNtsChannel2 } from "../hooks/useNtsClientLive";
 import { StationList } from "../components/StationList";
-import { SelectorDial } from "../components/SelectorDial";
 import { NowPlaying } from "../components/NowPlaying";
 import { FollowingStrip } from "../components/FollowingStrip";
 import {
@@ -194,7 +190,7 @@ function DateSweep({
   );
 }
 
-type DialFilterTab = "all" | "live" | "flagship" | "featured" | "lists" | "following";
+type DialFilterTab = "all" | "live" | "flagship" | "featured" | "following";
 type DialSort = "default" | "popularity" | "discovery";
 
 /** Maps ISO-3166-1 alpha-2 codes to human-readable country names for the location filter. */
@@ -343,7 +339,6 @@ function DialFilter({
     { id: "live", label: "Live" },
     { id: "flagship", label: "Flagship" },
     { id: "featured", label: "Featured" },
-    { id: "lists", label: "Lists" },
     { id: "following", label: "Following" },
   ];
   return (
@@ -484,19 +479,6 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
     },
   });
 
-  // Curated picker dial — all active lists with mosaic artwork.
-  // Fetched once; no polling (lists update infrequently).
-  const { data: pickerDialData } = useGetPickersDial({
-    query: {
-      queryKey: getGetPickersDialQueryKey(),
-      staleTime: 5 * 60 * 1000,
-    },
-  });
-  const pickerItems = useMemo(
-    (): PickerDialItem[] => pickerDialData?.items ?? [],
-    [pickerDialData],
-  );
-
   // Derive follow counts for the badge on the Following tab.
   const dialFollowCount = useMemo(
     () => follows.filter((f) => f.kind === "station" || f.kind === "picker").length,
@@ -564,7 +546,6 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
   // Client-side filter — no network traffic.
   const filteredStations = useMemo((): Station[] => {
     let result = stations;
-    if (dialFilter === "lists") return [];
     if (dialFilter === "flagship")
       result = result.filter((s) => s.tier === "flagship");
     if (dialFilter === "featured")
@@ -626,16 +607,6 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
   }, [filteredStations, showAllStations]);
 
   const hiddenStationCount = filteredStations.length - visibleStations.length;
-
-  const filteredPickerItems = useMemo((): PickerDialItem[] => {
-    if (dialFilter === "live" || dialFilter === "featured") return [];
-    if (dialFilter === "lists") return pickerItems;
-    if (dialFilter === "following")
-      return pickerItems.filter((it) =>
-        isFollowed(follows, "picker", it.picker.handle),
-      );
-    return pickerItems;
-  }, [dialFilter, pickerItems, follows]);
 
   const handleGenreClick = (tag: string) => {
     setDialGenre(tag);
@@ -752,8 +723,7 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
 
   const followingEmpty =
     dialFilter === "following" &&
-    filteredStations.length === 0 &&
-    filteredPickerItems.length === 0;
+    filteredStations.length === 0;
 
   return (
     <section>
@@ -781,22 +751,20 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
         followCount={dialFollowCount}
       />
 
-      {dialFilter !== "lists" && (
-        <DialSortAndGenre
-          sort={dialSort}
-          onSortChange={setDialSort}
-          genre={dialGenre}
-          onGenreChange={setDialGenre}
-          genreOptions={genreOptions}
-          country={dialCountry}
-          onCountryChange={setDialCountry}
-          countryOptions={countryOptions}
-          descriptionOnly={descriptionOnly}
-          onDescriptionOnlyChange={setDescriptionOnly}
-          search={dialSearch}
-          onSearchChange={setDialSearch}
-        />
-      )}
+      <DialSortAndGenre
+        sort={dialSort}
+        onSortChange={setDialSort}
+        genre={dialGenre}
+        onGenreChange={setDialGenre}
+        genreOptions={genreOptions}
+        country={dialCountry}
+        onCountryChange={setDialCountry}
+        countryOptions={countryOptions}
+        descriptionOnly={descriptionOnly}
+        onDescriptionOnlyChange={setDescriptionOnly}
+        search={dialSearch}
+        onSearchChange={setDialSearch}
+      />
 
       {isLoading && <StationListSkeleton />}
       {isError && (
@@ -816,9 +784,6 @@ function LiveMode({ selectedDate }: { selectedDate: string | null }) {
           any station or list below to see it here.
         </div>
       )}
-      {/* Selectors — shown first to give human curation top billing */}
-      <SelectorDial items={filteredPickerItems} />
-
       {!isLoading && visibleStations.length > 0 && (
         <StationList
           stations={visibleStations}
