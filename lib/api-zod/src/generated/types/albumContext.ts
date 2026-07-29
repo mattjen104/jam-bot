@@ -13,5 +13,7 @@ export interface AlbumContext {
   year?: number | null;
   /** @nullable */
   spotifyAlbumId?: string | null;
+  /** @nullable */
+  releaseGroupMbid?: string | null;
   tracks: AlbumTrack[];
 }

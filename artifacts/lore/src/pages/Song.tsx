@@ -244,7 +244,11 @@ function AlbumSection({
         icon={<Disc3 className="h-5 w-5" />}
         title="On the album"
         hint={
-          artistMbid ? (
+          album.releaseGroupMbid ? (
+            <Link href={`/album/${album.releaseGroupMbid}`} className="hover:text-primary hover:underline">
+              {album.name}
+            </Link>
+          ) : artistMbid ? (
             <Link href={`/artist/${artistMbid}`} className="hover:text-primary hover:underline">
               {album.name}
             </Link>

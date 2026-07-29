@@ -813,6 +813,7 @@ export const GetRecordingKnowledgeResponse = zod.object({
         name: zod.string(),
         year: zod.number().nullish(),
         spotifyAlbumId: zod.string().nullish(),
+        releaseGroupMbid: zod.string().nullish(),
         tracks: zod.array(
           zod.object({
             title: zod.string(),
@@ -2219,6 +2220,41 @@ export const GetArtistResponse = zod
   })
   .describe(
     "Artist page data — Lore top tracks plus optional Spotify catalogue.",
+  );
+
+/**
+ * Returns all recordings in a MusicBrainz release group with their Lore spin counts.
+ *
+ * @summary Album page — recordings in the release group and their Lore spin history
+ */
+
+export const GetAlbumParams = zod.object({
+  releaseGroupMbid: zod.coerce
+    .string()
+    .min(1)
+    .describe("MusicBrainz release-group MBID."),
+});
+
+export const GetAlbumResponse = zod
+  .object({
+    releaseGroupMbid: zod.string(),
+    title: zod.string(),
+    releaseYear: zod.number().nullable(),
+    primaryType: zod.string().nullable(),
+    tracks: zod.array(
+      zod.object({
+        mbid: zod.string(),
+        title: zod.string(),
+        artist: zod.string(),
+        artistMbid: zod.string().nullable(),
+        artworkUrl: zod.string().nullable(),
+        spinCount: zod.number(),
+        lastSpunAt: zod.string().nullable(),
+      }),
+    ),
+  })
+  .describe(
+    "Album page data — all recordings in the release group with Lore spin counts.",
   );
 
 /**

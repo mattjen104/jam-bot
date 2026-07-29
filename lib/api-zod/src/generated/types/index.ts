@@ -10,6 +10,8 @@ export * from "./adminStationItem";
 export * from "./adminStationItemQualityTier";
 export * from "./adminStationListResponse";
 export * from "./albumContext";
+export * from "./albumResult";
+export * from "./albumResultTrack";
 export * from "./albumTrack";
 export * from "./allDraftClaim";
 export * from "./allDraftClaimsList";

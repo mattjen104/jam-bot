@@ -218,6 +218,7 @@ router.get("/recordings/:mbid/knowledge", h(async (req, res) => {
     name: string;
     year: number | null;
     spotifyAlbumId: string | null;
+    releaseGroupMbid: string | null;
     tracks: { title: string; trackNumber: number; mbid: string | null }[];
   } | null = null;
 
@@ -276,6 +277,7 @@ router.get("/recordings/:mbid/knowledge", h(async (req, res) => {
               name: spotifyTrack.album ?? "",
               year: knowledge?.pressing?.year ?? null,
               spotifyAlbumId: spotifyTrack.albumId,
+              releaseGroupMbid: null,
               tracks: albumTracksRaw.map((t) => ({
                 title: t.name,
                 trackNumber: t.trackNumber,
@@ -287,6 +289,27 @@ router.get("/recordings/:mbid/knowledge", h(async (req, res) => {
           console.warn("[lore] album context fetch failed", rec.mbid, err);
         }
       }
+    }
+  }
+
+  // Enrich album context with the primary release-group MBID so the UI can
+  // navigate to the Album page. Only attempted when Spotify already gave us
+  // an album context; if the query fails we leave releaseGroupMbid as null.
+  if (album) {
+    try {
+      const [rgRow] = await db
+        .select({ releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid })
+        .from(recordingReleaseGroupsTable)
+        .where(
+          and(
+            eq(recordingReleaseGroupsTable.recordingMbid, rec.mbid),
+            eq(recordingReleaseGroupsTable.isPrimary, true),
+          ),
+        )
+        .limit(1);
+      if (rgRow) album.releaseGroupMbid = rgRow.releaseGroupMbid;
+    } catch (err) {
+      console.warn("[lore] release-group MBID lookup failed", rec.mbid, err);
     }
   }
 

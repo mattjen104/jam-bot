@@ -631,7 +631,32 @@ export interface AlbumContext {
   year?: number | null;
   /** @nullable */
   spotifyAlbumId?: string | null;
+  /** @nullable */
+  releaseGroupMbid?: string | null;
   tracks: AlbumTrack[];
+}
+
+export interface AlbumResultTrack {
+  mbid: string;
+  title: string;
+  artist: string;
+  /** @nullable */
+  artistMbid: string | null;
+  /** @nullable */
+  artworkUrl: string | null;
+  spinCount: number;
+  /** @nullable */
+  lastSpunAt: string | null;
+}
+
+export interface AlbumResult {
+  releaseGroupMbid: string;
+  title: string;
+  /** @nullable */
+  releaseYear: number | null;
+  /** @nullable */
+  primaryType: string | null;
+  tracks: AlbumResultTrack[];
 }
 
 export interface RecordingKnowledge {

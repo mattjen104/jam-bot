@@ -6,6 +6,7 @@ import selectorsRouter from "./selectors.js";
 import archiveRouter from "./archive.js";
 import adminRouter from "./admin.js";
 import artistRouter from "./artist.js";
+import albumRouter from "./album.js";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(selectorsRouter);
 router.use(archiveRouter);
 router.use(adminRouter);
 router.use(artistRouter);
+router.use(albumRouter);
 
 export default router;

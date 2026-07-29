@@ -19,6 +19,7 @@ import type {
 import type {
   AdminStationListResponse,
   AllDraftClaimsList,
+  AlbumResult,
   ApiError,
   ArchiveCoverage,
   ArchiveRecentRuns,
@@ -3046,6 +3047,94 @@ export function useGetArtist<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetArtistQueryOptions(mbid, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns all recordings in a MusicBrainz release group with their Lore spin counts.
+ *
+ * @summary Album page — recordings in the release group and their Lore spin history
+ */
+export const getGetAlbumUrl = (releaseGroupMbid: string) => {
+  return `/api/album/${releaseGroupMbid}`;
+};
+
+export const getAlbum = async (
+  releaseGroupMbid: string,
+  options?: RequestInit,
+): Promise<AlbumResult> => {
+  return customFetch<AlbumResult>(getGetAlbumUrl(releaseGroupMbid), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAlbumQueryKey = (releaseGroupMbid: string) => {
+  return [`/api/album/${releaseGroupMbid}`] as const;
+};
+
+export const getGetAlbumQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAlbum>>,
+  TError = ErrorType<ApiError>,
+>(
+  releaseGroupMbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAlbum>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAlbumQueryKey(releaseGroupMbid);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAlbum>>> = ({
+    signal,
+  }) => getAlbum(releaseGroupMbid, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!releaseGroupMbid,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof getAlbum>>, TError, TData> & {
+    queryKey: QueryKey;
+  };
+};
+
+export type GetAlbumQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAlbum>>
+>;
+export type GetAlbumQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Album page — recordings in the release group and their Lore spin history
+ */
+
+export function useGetAlbum<
+  TData = Awaited<ReturnType<typeof getAlbum>>,
+  TError = ErrorType<ApiError>,
+>(
+  releaseGroupMbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAlbum>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAlbumQueryOptions(releaseGroupMbid, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

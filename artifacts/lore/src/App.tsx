@@ -7,6 +7,7 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import Song from "@/pages/Song";
 import Artist from "@/pages/Artist";
+import Album from "@/pages/Album";
 import Archive from "@/pages/Archive";
 import StationArchive from "@/pages/StationArchive";
 import StationRun from "@/pages/StationRun";
@@ -93,6 +94,7 @@ function Router() {
         <Route path="/" component={Home} />
         <Route path="/song/:mbid" component={Song} />
         <Route path="/artist/:mbid" component={Artist} />
+        <Route path="/album/:releaseGroupMbid" component={Album} />
         <Route path="/archive" component={Archive} />
         <Route path="/archive/stations/:slug" component={StationArchive} />
         <Route path="/archive/station-runs/:runId" component={StationRun} />
