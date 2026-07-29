@@ -77,3 +77,9 @@ id = "Es9HLjQVDJOxPAMojck1h"
 uri = "file://attached_assets/screenshots/328c7e60-1e3e-4285-858c-1e54fe82d9e8-00-cucr4lh7nj5q_worf_replit_dev_mockup_preview_music-explore_TheThread.png"
 type = "image"
 title = "Direction C — The Thread (lineage spine)"
+
+[[outputs]]
+id = "WOsKN9c1QEXrCGFPAC_I6"
+uri = "file://attached_assets/lore-dial-v2.html"
+type = "unspecified"
+title = "Timeline Dial v2 — tap to open"
