@@ -121,6 +121,8 @@ function Router() {
         <Route path="/admin/list-candidates" component={AdminListCandidates} />
         <Route path="/admin/cri" component={AdminCriCandidates} />
         <Route path="/admin/health" component={AdminHealth} />
+        {/* /stations is the Radio sub-nav entry — shows the full station directory */}
+        <Route path="/stations" component={Archive} />
         <Route path="/dj/:name" component={DjPage} />
         <Route path="/schedule" component={ScheduleCalendar} />
         {/* Legacy admin route */}

@@ -1,133 +1,160 @@
 import { Link, useLocation } from "wouter";
-import { BookOpen, CalendarDays, Headphones, Lock, Users } from "lucide-react";
-
-const NAV_TABS = [
-  { href: "/", label: "LISTEN", Icon: Headphones, exact: true },
-  { href: "/schedule", label: "SCHEDULE", Icon: CalendarDays, exact: false },
-  { href: "/journal", label: "LIBRARY", Icon: BookOpen, exact: false },
-  { href: "/selectors", label: "SELECTORS", Icon: Users, exact: false },
-];
 
 function isActive(href: string, exact: boolean, location: string): boolean {
   if (exact) return location === href;
   return location === href || location.startsWith(href + "/") || location.startsWith(href + "?");
 }
 
+/** True when location belongs to the Radio section (not Selectors or Library). */
+function isRadioSection(location: string): boolean {
+  if (
+    location === "/selectors" ||
+    location.startsWith("/selectors/") ||
+    location.startsWith("/archive/selectors") ||
+    location.startsWith("/archive/selector-runs") ||
+    location.startsWith("/archive/picker") ||
+    location === "/library" ||
+    location.startsWith("/library/") ||
+    location === "/journal" ||
+    location.startsWith("/journal/") ||
+    location === "/following" ||
+    location.startsWith("/following/") ||
+    location === "/taste-map" ||
+    location.startsWith("/taste-map/")
+  ) {
+    return false;
+  }
+  return true;
+}
+
+const RADIO_SUB_NAV = [
+  { href: "/", label: "Dial", exact: true },
+  { href: "/stations", label: "Stations", exact: false },
+  { href: "/schedule", label: "Schedule", exact: false },
+];
+
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
 
+  const radioActive = isRadioSection(location);
+  const selectorsActive =
+    location === "/selectors" ||
+    location.startsWith("/selectors/") ||
+    location.startsWith("/archive/selectors") ||
+    location.startsWith("/archive/selector-runs") ||
+    location.startsWith("/archive/picker");
+  const libraryActive =
+    location === "/library" ||
+    location.startsWith("/library/") ||
+    location === "/journal" ||
+    location.startsWith("/journal/") ||
+    location === "/following" ||
+    location.startsWith("/following/") ||
+    location === "/taste-map" ||
+    location.startsWith("/taste-map/");
+
   return (
     <>
-      {/* ── Desktop sidebar (lg+) ───────────────────────────────────── */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[220px] flex-col border-r border-border bg-card lg:flex">
-        <div className="flex flex-col gap-1 p-5 pt-7">
-          {/* Wordmark ● Lore — Fraunces with violet dot */}
-          <Link href="/" className="mb-7 flex items-center gap-2">
-            <span className="font-serif text-xl font-semibold text-primary">●</span>
-            <span className="font-serif text-xl font-semibold text-foreground">Lore</span>
-          </Link>
-
-          {/* Vertical nav tabs — IBM Plex Mono uppercase, active=--dim, inactive=--faint */}
-          {NAV_TABS.map(({ href, label, Icon, exact }) => {
-            const active = isActive(href, exact, location);
-            return (
-              <Link
-                key={href}
-                href={href}
-                className="flex items-center gap-3 rounded-lg px-3 py-2.5 font-mono text-[11px] uppercase tracking-wider transition-colors"
-                style={{
-                  color: active
-                    ? "hsl(var(--dim))"
-                    : "hsl(var(--faint))",
-                }}
-              >
-                <Icon
-                  className="h-4 w-4 shrink-0"
-                  style={{ color: active ? "hsl(var(--primary))" : "hsl(var(--faint))" }}
-                />
-                {label}
-              </Link>
-            );
-          })}
+      {/* ── Radio sub-nav strip (when Radio tab is active) ──────── */}
+      {radioActive && (
+        <div
+          className="sticky top-0 z-20 border-b border-border backdrop-blur-md"
+          style={{ background: "hsl(var(--background) / 0.95)" }}
+        >
+          <nav className="flex items-center gap-1 px-4 py-2">
+            {RADIO_SUB_NAV.map(({ href, label, exact }) => {
+              const active = isActive(href, exact, location);
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className="rounded-md px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider transition-colors"
+                  style={{
+                    color: active ? "hsl(var(--foreground))" : "hsl(var(--faint))",
+                    background: active ? "hsl(var(--secondary))" : "transparent",
+                  }}
+                >
+                  {label}
+                </Link>
+              );
+            })}
+          </nav>
         </div>
+      )}
 
-        <div className="mt-auto p-5">
-          <Link
-            href="/player"
-            className="mb-3 block font-mono text-[10px] uppercase tracking-widest transition-colors"
-            style={{ color: "hsl(var(--faint))" }}
-            data-testid="link-webplayer"
-          >
-            Webplayer →
+      {/* ── Main content (padded for bottom nav bar) ────────────── */}
+      <div className="pb-14">{children}</div>
+
+      {/* ── Bottom nav bar — 3 pills ────────────────────────────── */}
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-30 border-t border-border backdrop-blur-md"
+        style={{ background: "hsl(var(--background) / 0.97)" }}
+      >
+        <div
+          className="flex items-center justify-around px-6 pt-2"
+          style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))", height: "56px" }}
+        >
+          {/* Radio pill */}
+          <Link href="/">
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 font-mono text-[11px] uppercase tracking-wider transition-all"
+              style={
+                radioActive
+                  ? {
+                      background: "hsl(var(--foreground))",
+                      color: "hsl(var(--background))",
+                    }
+                  : {
+                      background: "transparent",
+                      color: "hsl(var(--faint))",
+                    }
+              }
+            >
+              Radio
+            </span>
           </Link>
-          <Link
-            href="/admin"
-            className="mb-3 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-widest transition-colors"
-            style={{ color: isActive("/admin", false, location) ? "hsl(var(--dim))" : "hsl(var(--faint))" }}
-            data-testid="link-admin"
-          >
-            <Lock
-              className="h-2.5 w-2.5 shrink-0"
-              style={{ color: isActive("/admin", false, location) ? "hsl(var(--primary))" : "hsl(var(--faint))" }}
-            />
-            Admin
+
+          {/* Selectors pill */}
+          <Link href="/selectors">
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 font-mono text-[11px] uppercase tracking-wider transition-all"
+              style={
+                selectorsActive
+                  ? {
+                      background: "hsl(var(--picker))",
+                      color: "hsl(var(--picker-foreground))",
+                    }
+                  : {
+                      background: "transparent",
+                      color: "hsl(var(--faint))",
+                    }
+              }
+            >
+              Selectors
+            </span>
           </Link>
-          <p
-            className="font-mono text-[10px] uppercase tracking-widest"
-            style={{ color: "hsl(var(--faint))" }}
-          >
-            No algorithms.
-          </p>
+
+          {/* Library pill */}
+          <Link href="/library">
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 font-mono text-[11px] uppercase tracking-wider transition-all"
+              style={
+                libraryActive
+                  ? {
+                      background: "hsl(var(--foreground))",
+                      color: "hsl(var(--background))",
+                    }
+                  : {
+                      background: "transparent",
+                      color: "hsl(var(--faint))",
+                    }
+              }
+            >
+              Library
+            </span>
+          </Link>
         </div>
-      </aside>
-
-      {/* ── Mobile top bar (below lg) ───────────────────────────────── */}
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-card/95 px-4 py-3 backdrop-blur-md lg:hidden">
-        <Link href="/" className="flex items-center gap-1.5">
-          <span className="font-serif text-lg font-semibold text-primary">●</span>
-          <span className="font-serif text-lg font-semibold text-foreground">Lore</span>
-        </Link>
-        <nav className="flex items-center gap-0.5">
-          {NAV_TABS.map(({ href, label, exact }) => {
-            const active = isActive(href, exact, location);
-            return (
-              <Link
-                key={href}
-                href={href}
-                className="rounded-md px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-wider transition-colors"
-                style={{
-                  color: active ? "hsl(var(--dim))" : "hsl(var(--faint))",
-                }}
-              >
-                {label}
-              </Link>
-            );
-          })}
-          <Link
-            href="/player"
-            className="rounded-md px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-wider transition-colors"
-            style={{ color: "hsl(var(--faint))" }}
-            data-testid="link-webplayer-mobile"
-          >
-            Player
-          </Link>
-          <Link
-            href="/admin"
-            className="flex items-center gap-1 rounded-md px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-wider transition-colors"
-            style={{ color: isActive("/admin", false, location) ? "hsl(var(--dim))" : "hsl(var(--faint))" }}
-            data-testid="link-admin-mobile"
-          >
-            <Lock
-              className="h-2.5 w-2.5 shrink-0"
-              style={{ color: isActive("/admin", false, location) ? "hsl(var(--primary))" : "hsl(var(--faint))" }}
-            />
-            Admin
-          </Link>
-        </nav>
-      </header>
-
-      {/* ── Main content ────────────────────────────────────────────── */}
-      <div className="lg:ml-[220px]">{children}</div>
+      </nav>
     </>
   );
 }

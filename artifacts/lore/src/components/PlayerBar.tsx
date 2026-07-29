@@ -82,8 +82,8 @@ export function PlayerBar({
   return (
     <div
       className="fixed z-40 border border-border bg-secondary/95 backdrop-blur-md shadow-lg
-        bottom-4 left-4 right-4 rounded-[18px]
-        lg:bottom-0 lg:left-[220px] lg:right-0 lg:rounded-none lg:shadow-none lg:border-x-0 lg:border-b-0"
+        bottom-[68px] left-4 right-4 rounded-[18px]
+        lg:bottom-[68px] lg:left-4 lg:right-4"
       data-testid="player-bar"
     >
       {/*
