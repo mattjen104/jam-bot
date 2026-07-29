@@ -3,6 +3,7 @@ import { and, eq, isNotNull, lt, or, isNull, sql } from "drizzle-orm";
 import { isCrawlBlocked } from "./blog-crossref.js";
 import { extractScheduleRaw } from "./schedule-llm.js";
 import { inferTimezone } from "./timezone.js";
+import { sanitizeScheduleName } from "./schedule-name-sanitizer.js";
 
 /**
  * Weekly-schedule scraper — a second, slower-paced sibling to
@@ -311,16 +312,14 @@ export function parseExtractedSchedule(raw: string): ExtractedShow[] | null {
   // that same key here so validation is the single source of truth for
   // "well-formed", rather than relying on the DB constraint to catch it.
   const seenSlots = new Set<string>();
-  // Sanitize stored names the same way the slot key is normalised: zero-width
-  // chars (ZWSP/ZWNJ/ZWJ/BOM) mapped to a space, whitespace collapsed,
-  // trimmed. Otherwise whichever variant the LLM emits FIRST is what gets
-  // stored — "Morning\u200BJazz" renders as "MorningJazz" in the schedule UI
-  // and breaks text matching against the clean name.
-  const sanitizeName = (s: string): string =>
-    s
-      .replace(/[\u200B-\u200D\uFEFF]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
+  // Sanitize stored names the same way the slot key is normalised: invisible/
+  // odd whitespace (zero-widths, NBSP, narrow NBSP, word joiner, directional
+  // marks, …) mapped to a space, whitespace collapsed, trimmed. Otherwise
+  // whichever variant the LLM emits FIRST is what gets stored —
+  // "Morning\u200BJazz" renders as "MorningJazz" in the schedule UI and
+  // breaks text matching against the clean name. Shared with the boot-time
+  // DB cleanup via schedule-name-sanitizer.ts so the two can't drift.
+  const sanitizeName = sanitizeScheduleName;
   for (const entry of parsed) {
     if (!entry || typeof entry !== "object") continue;
     const e = entry as Record<string, unknown>;
@@ -337,16 +336,9 @@ export function parseExtractedSchedule(raw: string): ExtractedShow[] | null {
     if (!DAY_TOKENS.has(dayOfWeek)) continue;
     if (!HHMM_RE.test(startTime) || !HHMM_RE.test(endTime)) continue;
 
-    // Strip zero-width characters (ZWSP/ZWNJ/ZWJ/BOM) before collapsing
-    // whitespace — \s does NOT match them, so "Morning\u200BJazz" would
-    // otherwise pass through as a distinct key from "Morning Jazz". Map them
-    // to a regular space (not the empty string) so a ZWSP standing in for a
-    // word break normalises to the same key as the spaced form; the \s+
-    // collapse then squashes any resulting runs.
-    const slotKey = `${dayOfWeek}|${startTime}|${showName
-      .replace(/[\u200B-\u200D\uFEFF]/g, " ")
-      .replace(/\s+/g, " ")
-      .toLowerCase()}`;
+    // showName is already sanitized above (invisible chars → space, collapsed,
+    // trimmed), so the slot key only needs case folding on top of it.
+    const slotKey = `${dayOfWeek}|${startTime}|${showName.toLowerCase()}`;
     if (seenSlots.has(slotKey)) continue;
     seenSlots.add(slotKey);
 

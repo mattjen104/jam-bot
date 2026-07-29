@@ -1,5 +1,12 @@
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
+import { INVISIBLE_CHARS_PG_CLASS } from "./schedule-name-sanitizer.js";
+
+// The shared invisible-char class, as a quoted Postgres string literal.
+// Derived from the same range list as the parse-time sanitizer in
+// schedule-scraper.ts so the two implementations cannot drift; interpolated
+// with sql.raw because it is a compile-time constant, never user input.
+const INVISIBLE_CLASS = sql.raw(`'${INVISIBLE_CHARS_PG_CLASS}'`);
 
 /**
  * Idempotent DDL migration for the scraped-schedule table. Uses
@@ -85,14 +92,14 @@ export async function applyStationScheduleMigration(): Promise<void> {
  * matching until the station happens to be re-scraped.
  *
  * Applies the same normalization as `sanitizeName` in schedule-scraper.ts:
- * zero-width chars (U+200B..U+200D, U+FEFF) → space, whitespace collapsed,
- * trimmed. Because (station_id, day_of_week, start_time, show_name) is a
+ * invisible/odd whitespace (see schedule-name-sanitizer.ts for the full
+ * codepoint list) → space, whitespace collapsed, trimmed. Because (station_id, day_of_week, start_time, show_name) is a
  * unique key, a dirty row whose cleaned name collides with an existing row
  * (or with another dirty row normalizing to the same name) is deleted
  * instead of updated.
  *
- * Postgres AREs support \uXXXX escapes, so the pattern mirrors the JS regex
- * /[\u200B-\u200D\uFEFF]/g exactly.
+ * Postgres AREs support \uXXXX escapes, so the pattern (interpolated from
+ * INVISIBLE_CHARS_PG_CLASS) mirrors the JS regex exactly.
  */
 async function cleanupInvisibleCharactersInShowNames(): Promise<void> {
   // 1) Delete dirty show_name rows whose cleaned name would collide with an
@@ -102,9 +109,9 @@ async function cleanupInvisibleCharactersInShowNames(): Promise<void> {
     WITH cleaned AS (
       SELECT id, station_id, day_of_week, start_time, show_name,
              btrim(regexp_replace(regexp_replace(show_name,
-               '[\\u200B-\\u200D\\uFEFF]', ' ', 'g'), '\\s+', ' ', 'g')) AS clean_name
+               ${INVISIBLE_CLASS}, ' ', 'g'), '\\s+', ' ', 'g')) AS clean_name
       FROM scraped_shows
-      WHERE show_name ~ '[\\u200B-\\u200D\\uFEFF]'
+      WHERE show_name ~ ${INVISIBLE_CLASS}
     )
     DELETE FROM scraped_shows s
     USING cleaned c
@@ -131,8 +138,8 @@ async function cleanupInvisibleCharactersInShowNames(): Promise<void> {
   const updatedShows = await db.execute(sql`
     UPDATE scraped_shows
     SET show_name = btrim(regexp_replace(regexp_replace(show_name,
-      '[\\u200B-\\u200D\\uFEFF]', ' ', 'g'), '\\s+', ' ', 'g'))
-    WHERE show_name ~ '[\\u200B-\\u200D\\uFEFF]'
+      ${INVISIBLE_CLASS}, ' ', 'g'), '\\s+', ' ', 'g'))
+    WHERE show_name ~ ${INVISIBLE_CLASS}
   `);
   // 3) dj_name is not part of the unique key, so a plain rewrite suffices;
   //    a name that cleans down to nothing becomes NULL (matching the parser,
@@ -140,8 +147,8 @@ async function cleanupInvisibleCharactersInShowNames(): Promise<void> {
   const updatedDjs = await db.execute(sql`
     UPDATE scraped_shows
     SET dj_name = nullif(btrim(regexp_replace(regexp_replace(dj_name,
-      '[\\u200B-\\u200D\\uFEFF]', ' ', 'g'), '\\s+', ' ', 'g')), '')
-    WHERE dj_name IS NOT NULL AND dj_name ~ '[\\u200B-\\u200D\\uFEFF]'
+      ${INVISIBLE_CLASS}, ' ', 'g'), '\\s+', ' ', 'g')), '')
+    WHERE dj_name IS NOT NULL AND dj_name ~ ${INVISIBLE_CLASS}
   `);
   const total =
     (deleted.rowCount ?? 0) +
