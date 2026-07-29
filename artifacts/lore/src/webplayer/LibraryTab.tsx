@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Disc3, Radio, Loader2, Search, X } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { ApiError } from "@workspace/api-client-react";
 import {
   useMyLibraryInfinite,
   useIsAuthenticated,
   startSpotifyLibraryConnect,
+  postImportLibraryFile,
+  type FileImportSummary,
   type LibraryItem,
   type LibraryQueryOptions,
 } from "../lib/meHooks";
@@ -635,6 +639,11 @@ export function LibraryTab({
   onOpenRun: (slug: string, runId: number | null) => void;
 }) {
   const isAuthenticated = useIsAuthenticated();
+  const queryClient = useQueryClient();
+  const importFileRef = useRef<HTMLInputElement | null>(null);
+  const [importingFile, setImportingFile] = useState(false);
+  const [fileImportSummary, setFileImportSummary] = useState<FileImportSummary | null>(null);
+  const [fileImportError, setFileImportError] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
   const [sort, setSort] = useState<NonNullable<LibraryQueryOptions["sort"]>>("added");
@@ -645,6 +654,32 @@ export function LibraryTab({
     const t = setTimeout(() => setDebouncedQ(searchInput.trim()), 300);
     return () => clearTimeout(t);
   }, [searchInput]);
+
+  const handleImportFile = async (file: File) => {
+    setImportingFile(true);
+    setFileImportError(null);
+    setFileImportSummary(null);
+    try {
+      let body: unknown;
+      try {
+        body = JSON.parse(await file.text());
+      } catch {
+        setFileImportError("That file isn't valid JSON.");
+        return;
+      }
+      const summary = await postImportLibraryFile(body);
+      setFileImportSummary(summary);
+      void queryClient.invalidateQueries({ queryKey: ["me", "library"] });
+    } catch (err) {
+      const msg =
+        err instanceof ApiError && err.data && typeof err.data === "object" && "error" in err.data
+          ? String((err.data as { error: unknown }).error)
+          : "Import failed. Try again.";
+      setFileImportError(msg);
+    } finally {
+      setImportingFile(false);
+    }
+  };
 
   const hasFilters = debouncedQ !== "" || sort !== "added" || source !== "";
   const {
@@ -912,6 +947,53 @@ export function LibraryTab({
                 {fmt}
               </a>
             ))}
+          </div>
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: "0.5px solid var(--wp-border)" }} data-testid="wp-library-import-file">
+            <input
+              ref={importFileRef}
+              type="file"
+              accept="application/json,.json"
+              style={{ display: "none" }}
+              data-testid="wp-library-import-file-input"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void handleImportFile(file);
+                e.target.value = "";
+              }}
+            />
+            <button
+              type="button"
+              disabled={importingFile}
+              onClick={() => importFileRef.current?.click()}
+              className="wp-mono"
+              style={{
+                fontSize: 11,
+                textTransform: "uppercase",
+                letterSpacing: "0.04em",
+                color: "var(--wp-text-secondary)",
+                background: "none",
+                border: "0.5px solid var(--wp-border)",
+                borderRadius: 999,
+                padding: "5px 12px",
+                cursor: importingFile ? "default" : "pointer",
+                opacity: importingFile ? 0.5 : 1,
+              }}
+              data-testid="wp-library-import-file-button"
+            >
+              {importingFile ? "importing…" : "import json file"}
+            </button>
+            {fileImportError && (
+              <p className="wp-mono" style={{ margin: "8px 0 0", fontSize: 11, color: "var(--wp-danger, #c0605f)" }} data-testid="wp-library-import-file-error">
+                {fileImportError}
+              </p>
+            )}
+            {fileImportSummary && (
+              <p className="wp-mono" style={{ margin: "8px 0 0", fontSize: 11, color: "var(--wp-text-muted)" }} data-testid="wp-library-import-file-summary">
+                imported {fileImportSummary.imported} · skipped {fileImportSummary.skipped} · rejected {fileImportSummary.rejected}
+                {fileImportSummary.errors.length > 0 &&
+                  ` — first issue: item ${fileImportSummary.errors[0].index + 1}: ${fileImportSummary.errors[0].reason}`}
+              </p>
+            )}
           </div>
           <p className="wp-mono" style={{ margin: "8px 0 0", fontSize: 11, color: "var(--wp-text-muted)" }}>
             move to another service via{" "}

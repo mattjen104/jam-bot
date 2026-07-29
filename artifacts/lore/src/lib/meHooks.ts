@@ -133,6 +133,21 @@ export async function postStartImport(service: string): Promise<{ jobId: number;
   );
 }
 
+export interface FileImportSummary {
+  imported: number;
+  skipped: number;
+  rejected: number;
+  errors: Array<{ index: number; reason: string }>;
+}
+
+/** Import a `lore.library.v1` JSON export file (parsed client-side). */
+export async function postImportLibraryFile(body: unknown): Promise<FileImportSummary> {
+  return apiFetch<FileImportSummary>("/api/me/library/import/file", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Query keys
 // ---------------------------------------------------------------------------

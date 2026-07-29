@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
+import express, { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import {
   db,
   serviceConnectionsTable,
@@ -44,6 +44,7 @@ import {
   EXPORT_CONTENT_TYPES,
   type LibraryExportRow,
 } from "../../lore/library-export.js";
+import { parseLibraryImport } from "../../lore/library-import.js";
 
 const router: IRouter = Router();
 
@@ -380,6 +381,117 @@ router.post("/me/library/import", h(async (req, res) => {
 
   return res.status(202).json({ jobId: job!.id, status: "pending" });
 }));
+
+/**
+ * POST /api/me/library/import/file — synchronous `lore.library.v1` JSON import.
+ * Round-trip contract: importing a Lore export reproduces the library exactly
+ * (mbids, added_at, provenance verbatim). Existing items are skipped
+ * idempotently; per-item failures are reported, never partial-silent.
+ * Unknown mbids: when the file carries title+artist we seed the spine row
+ * from that real exported data (background jobs enrich later); otherwise the
+ * item is rejected with a reason — mirroring the honesty rule everywhere else.
+ */
+router.post(
+  "/me/library/import/file",
+  h(async (req, res) => {
+    const user = (req as AuthedRequest).loreUser;
+    const parsed = parseLibraryImport(req.body);
+    if (!parsed.ok) return res.status(400).json({ error: parsed.error });
+
+    const { items, itemErrors } = parsed;
+    const errors: Array<{ index: number; reason: string }> = [...itemErrors];
+    let imported = 0;
+    let skipped = 0;
+
+    if (items.length > 0) {
+      // One query: which of the file's mbids are already on the spine, and
+      // which are already in this user's library.
+      const mbids = [...new Set(items.map((i) => i.mbid))];
+      const known = new Set(
+        (
+          await db
+            .select({ mbid: recordingsTable.mbid })
+            .from(recordingsTable)
+            .where(inArray(recordingsTable.mbid, mbids))
+        ).map((r) => r.mbid),
+      );
+      const owned = new Set(
+        (
+          await db
+            .select({ mbid: libraryItemsTable.mbid })
+            .from(libraryItemsTable)
+            .where(
+              and(
+                eq(libraryItemsTable.userId, user.id),
+                inArray(libraryItemsTable.mbid, mbids),
+              ),
+            )
+        ).map((r) => r.mbid),
+      );
+
+      const seenInFile = new Set<string>();
+      for (const item of items) {
+        const origIndex = item.sourceIndex;
+        if (seenInFile.has(item.mbid)) {
+          skipped++;
+          continue;
+        }
+        seenInFile.add(item.mbid);
+
+        if (owned.has(item.mbid)) {
+          skipped++;
+          continue;
+        }
+
+        // FK guard: recordings row must exist before library_items insert.
+        if (!known.has(item.mbid)) {
+          if (!item.title || !item.artist) {
+            errors.push({
+              index: origIndex,
+              reason: "unknown mbid and no title/artist in file to seed it",
+            });
+            continue;
+          }
+          // Seed the spine row from the file's own exported data — real
+          // values the user exported, never fabricated. Enrichment
+          // (links, genres, ISRC check) converges via background jobs.
+          await db
+            .insert(recordingsTable)
+            .values({
+              mbid: item.mbid,
+              title: item.title,
+              artist: item.artist,
+              ...(item.isrc ? { isrc: item.isrc } : {}),
+              ...(item.releaseYear != null ? { releaseYear: item.releaseYear } : {}),
+            })
+            .onConflictDoNothing();
+          known.add(item.mbid);
+        }
+
+        const inserted = await db
+          .insert(libraryItemsTable)
+          .values({
+            userId: user.id,
+            mbid: item.mbid,
+            provenance: item.provenance,
+            addedAt: item.addedAt,
+          })
+          .onConflictDoNothing()
+          .returning({ id: libraryItemsTable.id });
+        if (inserted.length > 0) imported++;
+        else skipped++;
+      }
+    }
+
+    return res.json({
+      imported,
+      skipped,
+      rejected: errors.length,
+      // Cap the error detail so a fully-malformed 50k file doesn't return MBs.
+      errors: errors.slice(0, 50),
+    });
+  }),
+);
 
 /**
  * GET /api/me/library/import — return the most recent import job for the user,

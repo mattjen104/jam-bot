@@ -8,8 +8,11 @@ import {
   useLatestImportJob,
   startSpotifyLibraryConnect,
   postStartImport,
+  postImportLibraryFile,
+  type FileImportSummary,
   ME_LATEST_IMPORT_JOB_KEY,
 } from "../lib/meHooks";
+import { ApiError } from "@workspace/api-client-react";
 import { InflowCard } from "../components/InflowCard";
 import { LibraryRow } from "../components/LibraryRow";
 import {
@@ -96,6 +99,37 @@ export default function Library() {
       await startSpotifyLibraryConnect();
     } finally {
       setConnectBusy(false);
+    }
+  };
+
+  const importFileRef = useRef<HTMLInputElement | null>(null);
+  const [importingFile, setImportingFile] = useState(false);
+  const [fileImportSummary, setFileImportSummary] = useState<FileImportSummary | null>(null);
+  const [fileImportError, setFileImportError] = useState<string | null>(null);
+
+  const handleImportFile = async (file: File) => {
+    setImportingFile(true);
+    setFileImportError(null);
+    setFileImportSummary(null);
+    try {
+      let body: unknown;
+      try {
+        body = JSON.parse(await file.text());
+      } catch {
+        setFileImportError("That file isn't valid JSON.");
+        return;
+      }
+      const summary = await postImportLibraryFile(body);
+      setFileImportSummary(summary);
+      void queryClient.invalidateQueries({ queryKey: ["me", "library"] });
+    } catch (err) {
+      const msg =
+        err instanceof ApiError && err.data && typeof err.data === "object" && "error" in err.data
+          ? String((err.data as { error: unknown }).error)
+          : "Import failed. Try again.";
+      setFileImportError(msg);
+    } finally {
+      setImportingFile(false);
     }
   };
 
@@ -314,6 +348,49 @@ export default function Library() {
                 {fmt === "m3u8" ? "M3U8 playlist" : fmt.toUpperCase()}
               </a>
             ))}
+          </div>
+          <div className="mt-5 border-t border-border pt-4" data-testid="library-import-file">
+            <h3 className="font-serif text-base font-semibold text-foreground">Bring it back</h3>
+            <p className="mt-1 font-mono text-[11px] text-muted-foreground">
+              Import a Lore JSON export. Already-kept tracks are skipped; anything
+              we can't read is reported, never silently dropped.
+            </p>
+            <div className="mt-3 flex items-center gap-3">
+              <input
+                ref={importFileRef}
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                data-testid="library-import-file-input"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void handleImportFile(file);
+                  e.target.value = "";
+                }}
+              />
+              <button
+                type="button"
+                disabled={importingFile}
+                onClick={() => importFileRef.current?.click()}
+                className="hover-elevate rounded-full border border-border px-4 py-2 font-mono text-[11px] uppercase tracking-wide text-foreground disabled:opacity-50"
+                data-testid="library-import-file-button"
+              >
+                {importingFile ? "Importing…" : "Import JSON file"}
+              </button>
+            </div>
+            {fileImportError && (
+              <p className="mt-2 font-mono text-[11px] text-destructive" data-testid="library-import-file-error">
+                {fileImportError}
+              </p>
+            )}
+            {fileImportSummary && (
+              <p className="mt-2 font-mono text-[11px] text-muted-foreground" data-testid="library-import-file-summary">
+                Imported {fileImportSummary.imported} · skipped {fileImportSummary.skipped} · rejected{" "}
+                {fileImportSummary.rejected}
+                {fileImportSummary.errors.length > 0 &&
+                  ` — first issue: item ${fileImportSummary.errors[0].index + 1}: ${fileImportSummary.errors[0].reason}`}
+              </p>
+            )}
           </div>
           <p className="mt-3 font-mono text-[11px] text-muted-foreground">
             To move tracks into another streaming service, feed the CSV to a
