@@ -1,7 +1,7 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { Router, type IRouter, type Request, type Response } from "express";
 import { SpotifyPlayBody } from "@workspace/api-zod";
-import { db, recordingsTable } from "@workspace/db";
+import { db, recordingsTable, loreUsersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import {
   spotifyConnectConfigured,
@@ -26,7 +26,14 @@ import {
   SpotifyLibraryError,
   fetchRecentlyPlayed,
 } from "../../lore/spotifyConnect.js";
-import { upsertLoreUserForSid } from "../../lore/userSession.js";
+import {
+  getUserFromSession,
+  getOrCreateAnonymousUser,
+  recoverUserByServiceId,
+  SID_COOKIE,
+  SID_MAX_AGE_MS,
+  cookieSidOpts,
+} from "../../lore/userSession.js";
 import { getTrackById, getAlbumTracks } from "../../spotify/appClient.js";
 
 /**
@@ -38,13 +45,21 @@ import { getTrackById, getAlbumTracks } from "../../spotify/appClient.js";
  * spec); the JSON endpoints (status/play/pause/resume/player/logout) are.
  */
 
-const SID_COOKIE = "lore_sid";
+// SID_COOKIE and SID_MAX_AGE_MS are imported from userSession (2-year lifetime).
 const STATE_COOKIE = "lore_spotify_state";
 /** Where to send the browser after the OAuth dance (the Lore app). */
 const APP_RETURN_PATH = process.env.LORE_APP_URL ?? "/lore/";
 
-const SID_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 180; // 180 days
 const STATE_MAX_AGE_MS = 1000 * 60 * 10; // 10 minutes
+
+/**
+ * Separate playback-only cookie.  Stores the `spotify_connections.sid` that
+ * playback endpoints need to look up Spotify tokens.  Intentionally distinct
+ * from `lore_sid` (Lore device identity) so that disconnecting Spotify
+ * playback never rotates or clears the user's durable Lore identity.
+ */
+const PLAYBACK_SID_COOKIE = "spotify_playback_sid";
+const PLAYBACK_SID_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
 
 const router: IRouter = Router();
 
@@ -58,10 +73,18 @@ function cookieOpts(maxAgeMs: number) {
   };
 }
 
+/**
+ * Returns the Spotify Connect session id used to look up playback tokens.
+ * Reads the dedicated `spotify_playback_sid` cookie first; falls back to
+ * `lore_sid` for sessions established before the cookie split.
+ */
 function sidFrom(req: Request): string | null {
   const cookies = (req as Request & { cookies?: Record<string, string> }).cookies;
-  const sid = cookies?.[SID_COOKIE];
-  return typeof sid === "string" && sid.length > 0 ? sid : null;
+  const playbackSid = cookies?.[PLAYBACK_SID_COOKIE];
+  if (typeof playbackSid === "string" && playbackSid.length > 0) return playbackSid;
+  // Backward compat: old sessions stored the spotify_connections.sid in lore_sid.
+  const loreSid = cookies?.[SID_COOKIE];
+  return typeof loreSid === "string" && loreSid.length > 0 ? loreSid : null;
 }
 
 function notConfigured(res: Response): void {
@@ -107,17 +130,64 @@ router.get("/spotify/callback", async (req: Request, res: Response) => {
   try {
     const tokens = await exchangeCode(code);
     const profile = await fetchProfile(tokens.access_token);
-    // A prior connection for this browser is superseded, not leaked.
-    const oldSid = sidFrom(req);
-    if (oldSid) await deleteConnection(oldSid).catch(() => {});
+
+    // Clean up any prior playback connection for this browser session.
+    // sidFrom() reads the dedicated playback cookie (falls back to lore_sid for
+    // old sessions), so this only removes the Spotify token row — it never
+    // touches the durable Lore identity.
+    const oldPlaybackSid = sidFrom(req);
+    if (oldPlaybackSid) await deleteConnection(oldPlaybackSid).catch(() => {});
+
+    // Create the new Spotify Connect (playback) token record.
     const sid = await createConnection(tokens, profile);
-    res.cookie(SID_COOKIE, sid, cookieOpts(SID_MAX_AGE_MS));
-    // Bootstrap persistent user identity keyed by Spotify user id.
+
+    // Set the playback-only cookie.  This intentionally does NOT overwrite
+    // lore_sid — playback state is separate from durable Lore identity.
+    res.cookie(PLAYBACK_SID_COOKIE, sid, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax" as const,
+      path: "/",
+      maxAge: PLAYBACK_SID_MAX_AGE_MS,
+    });
+
+    // Resolve the Lore device identity independently of the playback session.
+    // Prefer an existing lore_sid; provision a fresh anonymous device key only
+    // when the browser has no identity yet (true first-time visitor).
+    const existingLoreSid = (req as Request & { cookies?: Record<string, string> })
+      .cookies?.[SID_COOKIE];
+    const loreDeviceKey =
+      typeof existingLoreSid === "string" && existingLoreSid.length > 0
+        ? existingLoreSid
+        : randomUUID();
+    const user = await getOrCreateAnonymousUser(loreDeviceKey);
+    res.cookie(SID_COOKIE, loreDeviceKey, cookieSidOpts());
+
+    // Attempt library recovery: if this Spotify account is already anchored to
+    // a prior Lore identity (via service_connections.externalUserId), merge.
     if (profile.spotifyUserId) {
-      await upsertLoreUserForSid(profile.spotifyUserId, sid).catch((err) => {
-        console.error("[spotify] lore_users upsert failed", err);
-      });
+      const { user: recovered, recovered: didRecover } =
+        await recoverUserByServiceId("spotify", profile.spotifyUserId, user.id);
+      if (didRecover) {
+        // Update the recovered user's deviceKey to the preserved lore_sid so
+        // the identity cookie continues to resolve the right user.
+        await db
+          .update(loreUsersTable)
+          .set({ deviceKey: loreDeviceKey, spotifyConnectionId: sid })
+          .where(eq(loreUsersTable.id, recovered.id))
+          .catch((err: unknown) =>
+            console.error("[spotify] recovered user deviceKey update failed", err),
+          );
+      } else {
+        // No recovery — keep spotifyConnectionId pointing at the new playback row.
+        await db
+          .update(loreUsersTable)
+          .set({ spotifyConnectionId: sid })
+          .where(eq(loreUsersTable.id, user.id))
+          .catch(() => {});
+      }
     }
+
     res.redirect(`${APP_RETURN_PATH}?spotify=connected`);
   } catch (err) {
     console.error("[spotify] OAuth callback failed", err);
@@ -163,7 +233,9 @@ router.get("/spotify/status", async (req: Request, res: Response) => {
 router.post("/spotify/logout", async (req: Request, res: Response) => {
   const sid = sidFrom(req);
   if (sid) await deleteConnection(sid).catch(() => {});
-  res.clearCookie(SID_COOKIE, { path: "/" });
+  // Clear ONLY the playback cookie — never lore_sid.  lore_sid is the durable
+  // Lore identity; clearing it would strand the user's library on next visit.
+  res.clearCookie(PLAYBACK_SID_COOKIE, { path: "/" });
   res.status(204).end();
 });
 

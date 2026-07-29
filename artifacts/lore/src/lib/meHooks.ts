@@ -1,8 +1,11 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "@workspace/api-client-react";
+import { toast } from "../hooks/use-toast";
 
 // ---------------------------------------------------------------------------
-// Types mirroring /api/me/* response shapes
+// Recovery hint — shown once after the 3rd Keep to nudge linking a service.
+// Dismissed state lives in localStorage with a 30-day TTL so it stays out of
+// identity data and remains safely disposable.
 // ---------------------------------------------------------------------------
 
 export interface MeConnection {
@@ -384,11 +387,15 @@ export function useMutationKeep() {
       spinId?: number | null;
       provenance?: Partial<LibraryProvenance>;
     }) =>
-      apiFetch<{ keptToLore: boolean; mirrors: unknown[] }>("/api/me/keep", {
-        method: "POST",
-        body: JSON.stringify({ mbid, ...(spinId != null ? { spinId } : {}), provenance }),
-      }),
-    onSuccess: (_data, { mbid }) => {
+      apiFetch<{ keptToLore: boolean; mirrors: unknown[]; showRecoveryHint?: boolean }>(
+        "/api/me/keep",
+        {
+          method: "POST",
+          body: JSON.stringify({ mbid, ...(spinId != null ? { spinId } : {}), provenance }),
+        },
+      ),
+    onSuccess: (data, { mbid }) => {
+      maybeShowRecoveryHint(data.showRecoveryHint);
       // Optimistically update all keep-status query caches that include this mbid.
       queryClient.setQueriesData<Set<string>>(
         { queryKey: ["me", "keep-status"] },
@@ -417,11 +424,17 @@ export function useMutationKeepSpin() {
       spinId: number;
       provenance?: Partial<LibraryProvenance>;
     }) =>
-      apiFetch<{ keptToLore: boolean; pendingKept: boolean; mirrors: unknown[] }>(
-        "/api/me/keep",
-        { method: "POST", body: JSON.stringify({ spinId, provenance }) },
-      ),
+      apiFetch<{
+        keptToLore: boolean;
+        pendingKept: boolean;
+        mirrors: unknown[];
+        showRecoveryHint?: boolean;
+      }>("/api/me/keep", {
+        method: "POST",
+        body: JSON.stringify({ spinId, provenance }),
+      }),
     onSuccess: (data, { spinId }) => {
+      maybeShowRecoveryHint(data.showRecoveryHint);
       queryClient.setQueriesData<{ saved: Set<number>; pending: Set<number> }>(
         { queryKey: ["me", "pending-keep-status"] },
         (prev) => {
@@ -580,3 +593,23 @@ export function useMyOverlapRuns() {
     retry: false,
   });
 }
+
+const RECOVERY_HINT_KEY = "lore:recovery_hint_until";
+
+function maybeShowRecoveryHint(show?: boolean): void {
+  if (!show) return;
+  try {
+    const until = Number(localStorage.getItem(RECOVERY_HINT_KEY) ?? 0);
+    if (Date.now() < until) return; // suppressed within the 30-day window
+    localStorage.setItem(RECOVERY_HINT_KEY, String(Date.now() + RECOVERY_HINT_TTL_MS));
+  } catch {
+    // localStorage unavailable — show the hint anyway, just can't suppress it.
+  }
+  toast({
+    title: "Keep your library safe",
+    description:
+      "Link a service or download your library so this survives a cleared browser.",
+  });
+}
+
+const RECOVERY_HINT_TTL_MS = 30 * 24 * 60 * 60 * 1000;

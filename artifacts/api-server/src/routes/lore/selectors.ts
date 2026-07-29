@@ -13,6 +13,7 @@ import {
   spinsTable,
   recordingsTable,
   selectorClaimsTable,
+  serviceConnectionsTable,
   type LoreUser,
 } from "@workspace/db";
 import { eq, and, asc, isNotNull, inArray, sql } from "drizzle-orm";
@@ -336,6 +337,20 @@ router.post(
     const pickerId = parseInt(rawId, 10);
     if (!Number.isFinite(pickerId)) {
       return res.status(400).json({ error: "Invalid pickerId" });
+    }
+
+    // Require a verified service connection — prevents auto-provisioned
+    // anonymous sessions from silently claiming any picker.
+    // A real selector will always have connected at least one service.
+    const [conn] = await db
+      .select({ id: serviceConnectionsTable.id })
+      .from(serviceConnectionsTable)
+      .where(eq(serviceConnectionsTable.userId, user.id))
+      .limit(1);
+    if (!conn) {
+      return res.status(403).json({
+        error: "A verified service connection is required to manage selector preferences",
+      });
     }
 
     // Verify the picker exists.

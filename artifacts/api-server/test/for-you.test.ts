@@ -192,7 +192,7 @@ afterAll(async () => {
 async function insertTestUser(spotifyId: string): Promise<number> {
   const [row] = await db
     .insert(loreUsersTable)
-    .values({ spotifyUserId: spotifyId })
+    .values({ spotifyUserId: spotifyId, deviceKey: randomUUID() })
     .returning({ id: loreUsersTable.id });
   return row!.id;
 }

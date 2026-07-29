@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import express, { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import {
   db,
@@ -19,11 +19,14 @@ import {
   type LoreUser,
   type LibraryItemProvenance,
 } from "@workspace/db";
-import { eq, and, isNotNull, inArray, ne, desc, asc, sql } from "drizzle-orm";
+import { eq, and, isNotNull, isNull, inArray, ne, desc, asc, sql } from "drizzle-orm";
 import {
   getUserFromSession,
-  sidFromRequest,
-  upsertLoreUserForSid,
+  getOrCreateAnonymousUser,
+  recoverUserByServiceId,
+  SID_COOKIE,
+  SID_MAX_AGE_MS,
+  cookieSidOpts,
 } from "../../lore/userSession.js";
 import {
   fetchProfile,
@@ -55,10 +58,9 @@ const router: IRouter = Router();
 // Constants
 // ---------------------------------------------------------------------------
 
-const SID_COOKIE = "lore_sid";
 const STATE_COOKIE = "lore_me_spotify_state";
 const STATE_MAX_AGE_MS = 1000 * 60 * 10; // 10 min
-const SID_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 180; // 180 days
+// SID_COOKIE and SID_MAX_AGE_MS are imported from userSession (2-year lifetime).
 const APP_RETURN_PATH = process.env.LORE_APP_URL ?? "/lore/";
 /** Max MBIDs per batch keep-status check. */
 const KEEP_BATCH_MAX = 50;
@@ -82,8 +84,12 @@ export interface AuthedRequest extends Request {
 }
 
 /**
- * Middleware: reads `lore_sid`, resolves the `lore_users` row, attaches it as
- * `req.loreUser`. Returns 401 when no session or no user row exists.
+ * Middleware: resolves (or silently provisions) the `lore_users` row from the
+ * `lore_sid` cookie and attaches it as `req.loreUser`.
+ *
+ * If no valid `lore_sid` cookie is present, a fresh anonymous user is created
+ * and the cookie is set in the response before any handler runs. This means
+ * every `/me/*` request auto-provisions a device identity — no login wall.
  */
 async function requireUserMiddleware(
   req: Request,
@@ -91,10 +97,11 @@ async function requireUserMiddleware(
   next: NextFunction,
 ): Promise<void> {
   try {
-    const user = await getUserFromSession(req);
+    let user = await getUserFromSession(req);
     if (!user) {
-      res.status(401).json({ error: "Not authenticated" });
-      return;
+      const deviceKey = randomUUID();
+      user = await getOrCreateAnonymousUser(deviceKey);
+      res.cookie(SID_COOKIE, deviceKey, cookieSidOpts());
     }
     (req as AuthedRequest).loreUser = user;
     next();
@@ -129,9 +136,13 @@ router.post("/me/connect/spotify/start", h(async (req, res) => {
 
 /**
  * GET /api/me/connect/spotify/callback — OAuth callback for library connect.
- * Stores tokens in service_connections, enables keep_targets.
- * If no lore_sid session exists yet, bootstraps one from the library token
- * so first-time visitors don't need to connect playback first.
+ * Stores tokens in service_connections, enables keep_targets, and attempts
+ * library recovery so a listener on a fresh device gets their prior library
+ * back the moment they reconnect Spotify.
+ *
+ * Session provisioning: if no lore_sid cookie exists yet, an anonymous
+ * lore_users row is created and the cookie is set before any handler runs.
+ * Spotify is a recovery anchor, not a prerequisite for identity.
  */
 router.get("/me/connect/spotify/callback", async (req: Request, res: Response) => {
   const { code, state, error } = req.query as Record<string, string | undefined>;
@@ -154,28 +165,30 @@ router.get("/me/connect/spotify/callback", async (req: Request, res: Response) =
 
     const tokens = await connector.authCallback(code, meCallbackUri());
 
-    // Resolve (or bootstrap) the lore_users identity.
+    // Fetch the Spotify profile early — we need the externalUserId before we
+    // can attempt library recovery (recovery lookup is keyed on it).
+    const profile = await fetchProfile(tokens.accessToken);
+    const externalUserId = profile.spotifyUserId ?? null;
+
+    // Resolve (or provision) the device identity.
     let user = await getUserFromSession(req);
     if (!user) {
-      // No session yet — fetch the Spotify profile from the library token and
-      // create a spotify_connections stub + lore_users row so every user who
-      // links Spotify gets a persistent identity without needing playback first.
-      const profile = await fetchProfile(tokens.accessToken);
-      if (!profile.spotifyUserId) {
-        res.redirect(`${APP_RETURN_PATH}?library=error&reason=no_profile`);
-        return;
+      const deviceKey = randomUUID();
+      user = await getOrCreateAnonymousUser(deviceKey);
+      res.cookie(SID_COOKIE, deviceKey, cookieSidOpts());
+    }
+
+    // Recovery: if this Spotify account is already anchored to a prior Lore
+    // identity, re-point the session at that user before upserting tokens.
+    // This must happen BEFORE the service_connections upsert to avoid
+    // temporarily violating the (service, external_user_id) unique index.
+    if (externalUserId) {
+      const { user: recovered, recovered: didRecover } =
+        await recoverUserByServiceId("spotify", externalUserId, user.id);
+      if (didRecover) {
+        user = recovered;
+        res.cookie(SID_COOKIE, recovered.deviceKey, cookieSidOpts());
       }
-      const newSid = randomBytes(32).toString("hex");
-      await db.insert(spotifyConnectionsTable).values({
-        sid: newSid,
-        accessToken: encryptToken(tokens.accessToken),
-        refreshToken: encryptToken(tokens.refreshToken),
-        expiresAt: tokens.expiresAt,
-        displayName: profile.displayName ?? null,
-        spotifyUserId: profile.spotifyUserId,
-      });
-      user = await upsertLoreUserForSid(profile.spotifyUserId, newSid);
-      res.cookie(SID_COOKIE, newSid, cookieOpts(SID_MAX_AGE_MS));
     }
 
     const encAccessToken = encryptToken(tokens.accessToken);
@@ -186,6 +199,7 @@ router.get("/me/connect/spotify/callback", async (req: Request, res: Response) =
       .values({
         userId: user.id,
         service: "spotify",
+        externalUserId,
         accessToken: encAccessToken,
         refreshToken: encRefreshToken,
         expiresAt: tokens.expiresAt,
@@ -196,6 +210,7 @@ router.get("/me/connect/spotify/callback", async (req: Request, res: Response) =
       .onConflictDoUpdate({
         target: [serviceConnectionsTable.userId, serviceConnectionsTable.service],
         set: {
+          externalUserId,
           accessToken: encAccessToken,
           refreshToken: encRefreshToken,
           expiresAt: tokens.expiresAt,
@@ -1128,7 +1143,18 @@ router.post("/me/keep", h(async (req, res) => {
         set: { promotedAt },
       });
 
-    return res.json({ keptToLore: promotedAt != null, pendingKept: true, mirrors: [] });
+    // Show the recovery hint once — when this keep brings the total to exactly 3.
+    const [spinLibCount] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(libraryItemsTable)
+      .where(eq(libraryItemsTable.userId, user.id));
+    const [spinPendingCount] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(pendingKeepsTable)
+      .where(and(eq(pendingKeepsTable.userId, user.id), isNull(pendingKeepsTable.promotedAt)));
+    const showRecoveryHint = ((spinLibCount?.n ?? 0) + (spinPendingCount?.n ?? 0)) === 3;
+
+    return res.json({ keptToLore: promotedAt != null, pendingKept: true, mirrors: [], showRecoveryHint });
   }
 
   // ── MBID-based (resolved) keep ────────────────────────────────────────────
@@ -1228,7 +1254,18 @@ router.post("/me/keep", h(async (req, res) => {
     mirrors.push({ service: target.service, ...result });
   }
 
-  return res.json({ keptToLore: true, mirrors });
+  // Show the recovery hint once — when this keep brings the total to exactly 3.
+  const [libCount] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(libraryItemsTable)
+    .where(eq(libraryItemsTable.userId, user.id));
+  const [pendingCount] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(pendingKeepsTable)
+    .where(and(eq(pendingKeepsTable.userId, user.id), isNull(pendingKeepsTable.promotedAt)));
+  const showRecoveryHint = ((libCount?.n ?? 0) + (pendingCount?.n ?? 0)) === 3;
+
+  return res.json({ keptToLore: true, mirrors, showRecoveryHint });
 }));
 
 /**

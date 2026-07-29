@@ -48,6 +48,7 @@ import { syncScrapedShows } from "./lore/scraped-shows-sync.js";
 import { wireScheduleExtractor } from "./lore/schedule-wire.js";
 import { startScheduleScraper } from "./lore/schedule-scraper.js";
 import { markOrphanedImportJobsAsError, markOrphanedSyncJobsAsError } from "./routes/me/index.js";
+import { applyDeviceIdentityMigration } from "./lore/device-identity-migration.js";
 
 const rawPort = process.env["PORT"];
 
@@ -80,6 +81,7 @@ async function bootLore(): Promise<void> {
     await applyStationDiscoveryMigration();
     await applyPickerDiscoveryMigration();
     await applyStationScheduleMigration();
+    await applyDeviceIdentityMigration();
     await applyPendingKeepsMigration();
     await applyLibraryExportMigration();
     await applyAutomationClassMigration();

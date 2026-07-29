@@ -55,7 +55,9 @@ beforeAll(async () => {
   });
   const [user] = await db
     .insert(loreUsersTable)
-    .values({ spotifyUserId: `test-lib-user-${run}`, spotifyConnectionId: SID })
+    // deviceKey = SID so the test cookie `lore_sid=${SID}` is resolved by
+    // getUserFromSession (which now looks up lore_users.deviceKey, not sid).
+    .values({ spotifyUserId: `test-lib-user-${run}`, spotifyConnectionId: SID, deviceKey: SID })
     .returning({ id: loreUsersTable.id });
   userId = user!.id;
 

@@ -328,7 +328,7 @@ beforeAll(async () => {
   // A minimal lore_user is required as the FK anchor for library_items.
   const [userRow] = await db
     .insert(loreUsersTable)
-    .values({ spotifyUserId: `test-sl-user-${run}` })
+    .values({ spotifyUserId: `test-sl-user-${run}`, deviceKey: randomUUID() })
     .returning({ id: loreUsersTable.id });
   testUserId = userRow!.id;
 

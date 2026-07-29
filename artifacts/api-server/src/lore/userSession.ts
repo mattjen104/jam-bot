@@ -1,13 +1,33 @@
-import type { Request } from "express";
-import { eq } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import type { Request, Response } from "express";
+import { eq, and, sql } from "drizzle-orm";
 import {
   db,
   loreUsersTable,
-  spotifyConnectionsTable,
+  serviceConnectionsTable,
+  libraryItemsTable,
+  pendingKeepsTable,
   type LoreUser,
 } from "@workspace/db";
 
-const SID_COOKIE = "lore_sid";
+export const SID_COOKIE = "lore_sid";
+
+/**
+ * Cookie lifetime: 2 years. Clearing localStorage alone must not lose the
+ * library — the HttpOnly cookie is the durable identity anchor.
+ */
+export const SID_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 365 * 2;
+
+/** Standard options for the lore_sid identity cookie. */
+export function cookieSidOpts() {
+  return {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge: SID_MAX_AGE_MS,
+  };
+}
 
 export function sidFromRequest(req: Request): string | null {
   const cookies = (req as Request & { cookies?: Record<string, string> })
@@ -18,55 +38,148 @@ export function sidFromRequest(req: Request): string | null {
 
 /**
  * Resolve the Lore user identity from the `lore_sid` cookie.
- * Returns null when no session cookie is present or the sid has no
- * linked lore_users row (i.e. the user connected Spotify but the
- * upsert hasn't fired yet — very transient; return 401).
+ *
+ * The cookie value is now the `deviceKey` — an opaque UUID that maps directly
+ * to a `lore_users.device_key` row with no Spotify dependency.
+ * Updates `lastSeenAt` on every successful hit (fire-and-forget).
  */
 export async function getUserFromSession(
   req: Request,
 ): Promise<LoreUser | null> {
-  const sid = sidFromRequest(req);
-  if (!sid) return null;
+  const deviceKey = sidFromRequest(req);
+  if (!deviceKey) return null;
 
   const [user] = await db
     .select()
     .from(loreUsersTable)
-    .where(eq(loreUsersTable.spotifyConnectionId, sid))
+    .where(eq(loreUsersTable.deviceKey, deviceKey))
     .limit(1);
 
-  return user ?? null;
+  if (!user) return null;
+
+  // Fire-and-forget: keep lastSeenAt fresh without blocking the handler.
+  db.update(loreUsersTable)
+    .set({ lastSeenAt: new Date() })
+    .where(eq(loreUsersTable.id, user.id))
+    .catch(() => {});
+
+  return user;
 }
 
 /**
- * Upsert a lore_users row keyed by Spotify user id, pointing it at the
- * current session sid.  Called from the Spotify OAuth callback so that
- * every connected listener automatically gets a persistent identity.
+ * Look up or create an anonymous lore_users row for the given deviceKey.
+ *
+ * If no row exists for the `deviceKey`, inserts a fresh anonymous user.
+ * Handles the race where two concurrent requests both try to insert the same
+ * deviceKey (onConflictDoNothing + re-select).
  */
-export async function upsertLoreUserForSid(
-  spotifyUserId: string,
-  sid: string,
+export async function getOrCreateAnonymousUser(
+  deviceKey: string,
 ): Promise<LoreUser> {
-  const [row] = await db
+  const [existing] = await db
+    .select()
+    .from(loreUsersTable)
+    .where(eq(loreUsersTable.deviceKey, deviceKey))
+    .limit(1);
+  if (existing) return existing;
+
+  const [created] = await db
     .insert(loreUsersTable)
-    .values({ spotifyUserId, spotifyConnectionId: sid })
-    .onConflictDoUpdate({
-      target: loreUsersTable.spotifyUserId,
-      set: { spotifyConnectionId: sid },
-    })
+    .values({ deviceKey })
+    .onConflictDoNothing()
     .returning();
-  return row!;
+  if (created) return created;
+
+  // Race: another request inserted it first — re-fetch.
+  const [race] = await db
+    .select()
+    .from(loreUsersTable)
+    .where(eq(loreUsersTable.deviceKey, deviceKey))
+    .limit(1);
+  return race!;
 }
 
 /**
- * Verify the `lore_sid` cookie still maps to a live spotify_connections row
- * (i.e. the user hasn't logged out of Spotify Connect).  Used by the
- * requireUser middleware to guard all /me/* endpoints.
+ * Attempt to recover a prior library by matching `(service, externalUserId)`
+ * in service_connections.
+ *
+ * Scenarios:
+ *   A. Match found, different user → re-point the cookie at the recovered user;
+ *      delete the throwaway anonymous row when it has zero library data.
+ *   B. Match found, same user → no-op (idempotent re-connect).
+ *   C. No match → the anonymous user is the canonical identity; the caller
+ *      should upsert the service_connections row against this user.
+ *
+ * Returns `{ user, recovered }`:
+ *   - `user` is the definitive LoreUser after recovery.
+ *   - `recovered` is true only in scenario A.
+ *
+ * The caller is responsible for setting the new cookie value when recovered=true.
  */
-export async function sessionIsLive(sid: string): Promise<boolean> {
-  const [row] = await db
-    .select({ sid: spotifyConnectionsTable.sid })
-    .from(spotifyConnectionsTable)
-    .where(eq(spotifyConnectionsTable.sid, sid))
+export async function recoverUserByServiceId(
+  service: string,
+  externalUserId: string,
+  anonymousUserId: number,
+): Promise<{ user: LoreUser; recovered: boolean }> {
+  const [match] = await db
+    .select({ userId: serviceConnectionsTable.userId })
+    .from(serviceConnectionsTable)
+    .where(
+      and(
+        eq(serviceConnectionsTable.service, service),
+        eq(serviceConnectionsTable.externalUserId, externalUserId),
+      ),
+    )
     .limit(1);
-  return !!row;
+
+  // Scenario B or C.
+  if (!match || match.userId === anonymousUserId) {
+    const [anon] = await db
+      .select()
+      .from(loreUsersTable)
+      .where(eq(loreUsersTable.id, anonymousUserId))
+      .limit(1);
+    return { user: anon!, recovered: false };
+  }
+
+  // Scenario A: recovered a prior user.
+  const recoveredUserId = match.userId;
+  const [recoveredUser] = await db
+    .select()
+    .from(loreUsersTable)
+    .where(eq(loreUsersTable.id, recoveredUserId))
+    .limit(1);
+
+  if (!recoveredUser) {
+    // Shouldn't happen but be defensive.
+    const [anon] = await db
+      .select()
+      .from(loreUsersTable)
+      .where(eq(loreUsersTable.id, anonymousUserId))
+      .limit(1);
+    return { user: anon!, recovered: false };
+  }
+
+  // Check whether the throwaway anonymous row has any library data.
+  const [libCount] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(libraryItemsTable)
+    .where(eq(libraryItemsTable.userId, anonymousUserId));
+  const [pendingCount] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(pendingKeepsTable)
+    .where(eq(pendingKeepsTable.userId, anonymousUserId));
+
+  const isEmpty =
+    (libCount?.n ?? 0) === 0 && (pendingCount?.n ?? 0) === 0;
+
+  if (isEmpty) {
+    // Safe to delete the ephemeral anonymous row.
+    await db
+      .delete(loreUsersTable)
+      .where(eq(loreUsersTable.id, anonymousUserId))
+      .catch(() => {});
+  }
+
+  return { user: recoveredUser, recovered: true };
 }

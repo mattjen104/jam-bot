@@ -1043,21 +1043,33 @@ export type InsertGeniusAnnotationDraft =
 // ---- Library, Keep & Taste Overlap (meta-library) ---------------------
 
 /**
- * A Lore listener identity. Lore has no traditional accounts; a user row is
- * bootstrapped the first time a listener connects Spotify for playback and is
- * keyed by their Spotify user id. The `spotifyConnectionId` FK points at their
- * current `spotify_connections` session so `getUserFromSession` can resolve
- * user identity from the `lore_sid` cookie without a separate id token.
+ * A Lore listener identity. The primary key for identity is now the
+ * `deviceKey` — an opaque UUID written into the `lore_sid` HttpOnly cookie on
+ * first visit, before any service is connected. Spotify (and future services)
+ * are recovery anchors stored in `service_connections`, not the identity itself.
+ *
+ * `spotifyUserId` and `spotifyConnectionId` are kept nullable for the migration
+ * period and will be dropped in a follow-on migration once confirmed safe.
  */
 export const loreUsersTable = pgTable("lore_users", {
   id: serial("id").primaryKey(),
-  /** Spotify canonical user id — the upsert key. */
-  spotifyUserId: text("spotify_user_id").notNull().unique(),
-  /** FK to the most-recent spotify_connections row for this listener. */
+  /**
+   * Opaque UUID assigned on first visit — the value stored in the `lore_sid`
+   * cookie. This IS the session identity; no service connection required.
+   */
+  deviceKey: text("device_key").notNull().unique(),
+  /** Spotify canonical user id — nullable after decoupling. Legacy field. */
+  spotifyUserId: text("spotify_user_id").unique(),
+  /** FK to the most-recent spotify_connections row. Legacy field. */
   spotifyConnectionId: text("spotify_connection_id").references(
     () => spotifyConnectionsTable.sid,
     { onDelete: "set null" },
   ),
+  /** Stamped on every session resolution — drives idle-cleanup. */
+  lastSeenAt: timestamp("last_seen_at"),
+  /** Voluntarily provided email, for future recovery options. */
+  email: text("email"),
+  emailVerifiedAt: timestamp("email_verified_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -1079,6 +1091,13 @@ export const serviceConnectionsTable = pgTable(
       .references(() => loreUsersTable.id),
     /** "spotify" — the only supported value in this version. */
     service: text("service").notNull(),
+    /**
+     * The user's canonical id on the external service (e.g. Spotify user id).
+     * Used as a recovery anchor: when a listener connects on a fresh device,
+     * `(service, externalUserId)` resolves their prior library. Null for
+     * connections created before this column was added (backfilled by migration).
+     */
+    externalUserId: text("external_user_id"),
     accessToken: text("access_token").notNull(),
     refreshToken: text("refresh_token").notNull(),
     expiresAt: timestamp("expires_at").notNull(),
@@ -1091,6 +1110,12 @@ export const serviceConnectionsTable = pgTable(
   },
   (t) => [
     uniqueIndex("service_connections_user_service_idx").on(t.userId, t.service),
+    // Recovery anchor: a given external account can only be linked to one
+    // Lore identity. NULL rows are excluded so unset rows don't conflict.
+    uniqueIndex("service_connections_service_external_idx").on(
+      t.service,
+      t.externalUserId,
+    ),
   ],
 );
 
