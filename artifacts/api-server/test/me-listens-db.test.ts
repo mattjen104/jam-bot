@@ -19,6 +19,7 @@ import {
   spotifyConnectionsTable,
   recordingsTable,
   recordingReleaseGroupsTable,
+  libraryItemsTable,
   listensTable,
   stationsTable,
 } from "@workspace/db";
@@ -563,5 +564,98 @@ describe("DELETE /api/me/listens", () => {
     const { status } = await deleteAllListens({ confirm: "true" });
     expect(status).toBe(204);
     expect(await countListens()).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Full listen-then-keep flow
+// ---------------------------------------------------------------------------
+
+describe("listen-then-keep integration", () => {
+  it("listen completes, keep inserts library row, listen row is unaffected, album still appears", async () => {
+    if (!dbAvailable) return;
+
+    // Start with a clean slate for this user.
+    await db.delete(listensTable).where(eq(listensTable.userId, userId!));
+    await db
+      .delete(libraryItemsTable)
+      .where(
+        and(
+          eq(libraryItemsTable.userId, userId!),
+          eq(libraryItemsTable.mbid, MBID_LONG),
+        ),
+      );
+
+    // 1. Enable ledger and open a listen for MBID_LONG.
+    await setLedger(true);
+    const { status: postStatus, body: postBody } = await postListen({
+      mbid: MBID_LONG,
+      context: "broadcast",
+      outputService: "broadcast",
+    });
+    expect(postStatus).toBe(200);
+    const listenId: number = postBody.id;
+    expect(typeof listenId).toBe("number");
+
+    // 2. Mark the listen completed (70 % of 300 000 ms = 210 000 ms).
+    const { status: patchStatus, body: patchBody } = await patchListen(
+      listenId,
+      { msPlayed: 210_000 },
+    );
+    expect(patchStatus).toBe(200);
+    expect(patchBody.completed).toBe(true);
+
+    // 3. Keep the track.
+    const keepRes = await fetch(`${baseUrl}/api/me/keep`, {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: cookie() },
+      body: JSON.stringify({ mbid: MBID_LONG }),
+    });
+    expect(keepRes.status).toBe(200);
+    const keepBody = await keepRes.json();
+    expect(keepBody.keptToLore).toBe(true);
+
+    // 4. library_items row must exist for this user + MBID_LONG.
+    const libRows = await db
+      .select({ mbid: libraryItemsTable.mbid })
+      .from(libraryItemsTable)
+      .where(
+        and(
+          eq(libraryItemsTable.userId, userId!),
+          eq(libraryItemsTable.mbid, MBID_LONG),
+        ),
+      );
+    expect(libRows).toHaveLength(1);
+
+    // 5. The listen row must still be completed with releaseGroupMbid intact.
+    const [dbListen] = await db
+      .select({
+        completed: listensTable.completed,
+        releaseGroupMbid: listensTable.releaseGroupMbid,
+      })
+      .from(listensTable)
+      .where(eq(listensTable.id, listenId));
+    expect(dbListen?.completed).toBe(true);
+    expect(dbListen?.releaseGroupMbid).toBe(RG_MBID);
+
+    // 6. GET /me/albums/completed must still return the album.
+    const { status: albumStatus, body: albumBody } = await getAlbumsCompleted();
+    expect(albumStatus).toBe(200);
+    const album = albumBody.albums.find(
+      (a: { releaseGroupMbid: string }) => a.releaseGroupMbid === RG_MBID,
+    );
+    expect(album).toBeTruthy();
+    expect(album.heardTracks).toBeGreaterThanOrEqual(1);
+
+    // Cleanup.
+    await db.delete(listensTable).where(eq(listensTable.id, listenId));
+    await db
+      .delete(libraryItemsTable)
+      .where(
+        and(
+          eq(libraryItemsTable.userId, userId!),
+          eq(libraryItemsTable.mbid, MBID_LONG),
+        ),
+      );
   });
 });
