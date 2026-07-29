@@ -1187,6 +1187,62 @@ describe("scrapeStationSchedule — malformed LLM times never reach the DB", () 
     expect(station?.upcomingShowCount).toBe(1);
   });
 
+  it("stores the sanitized showName even when the zero-width variant appears first", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // Dedup keeps whichever entry appears FIRST — so when the zero-width
+    // variant "Morning\u200BJazz" comes first, the stored showName must
+    // still be the sanitized "Morning Jazz" (zero-width chars mapped to a
+    // space, whitespace collapsed, trimmed), not the raw variant that would
+    // render as "MorningJazz" and break text matching.
+    const ZERO_WIDTH_FIRST_JSON = JSON.stringify([
+      {
+        showName: "Morning\u200BJazz",
+        dayOfWeek: "Mon",
+        startTime: "08:00",
+        endTime: "10:00",
+        djName: "DJ\u200BAlice",
+      },
+      {
+        showName: "Morning Jazz",
+        dayOfWeek: "Mon",
+        startTime: "08:00",
+        endTime: "10:00",
+        djName: "DJ Alice",
+      },
+    ]);
+
+    configureScheduleExtractor(async () => ZERO_WIDTH_FIRST_JSON);
+
+    const fetchFn = makeFetch([
+      { pattern: /robots\.txt/, body: "User-agent: *\nDisallow:\n" },
+      {
+        pattern: "/schedule",
+        body: "<html><body><p>Schedule page content</p></body></html>",
+      },
+    ]);
+
+    const target = {
+      id: stationId!,
+      slug: `test-sched-${run}`,
+      homepageUrl: HOMEPAGE,
+      scheduleUrl: SCHEDULE_URL,
+      city: null,
+      country: null,
+      ianaTimezone: null,
+    };
+
+    const result = await scrapeStationSchedule(target, { fetchFn });
+    expect(result).toEqual({ scraped: true, showCount: 1 });
+
+    const shows = await fetchScrapedShows();
+    expect(shows).toHaveLength(1);
+    // The stored name is the clean, space-separated form — never the raw
+    // zero-width variant the LLM happened to emit first.
+    expect(shows[0]!.showName).toBe("Morning Jazz");
+    expect(shows[0]!.djName).toBe("DJ Alice");
+  });
+
   it("stores exactly one row when the LLM returns the same show with a mixed whitespace run in the name", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
 

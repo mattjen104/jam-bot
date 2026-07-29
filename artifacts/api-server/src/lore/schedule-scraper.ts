@@ -311,17 +311,27 @@ export function parseExtractedSchedule(raw: string): ExtractedShow[] | null {
   // that same key here so validation is the single source of truth for
   // "well-formed", rather than relying on the DB constraint to catch it.
   const seenSlots = new Set<string>();
+  // Sanitize stored names the same way the slot key is normalised: zero-width
+  // chars (ZWSP/ZWNJ/ZWJ/BOM) mapped to a space, whitespace collapsed,
+  // trimmed. Otherwise whichever variant the LLM emits FIRST is what gets
+  // stored — "Morning\u200BJazz" renders as "MorningJazz" in the schedule UI
+  // and breaks text matching against the clean name.
+  const sanitizeName = (s: string): string =>
+    s
+      .replace(/[\u200B-\u200D\uFEFF]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
   for (const entry of parsed) {
     if (!entry || typeof entry !== "object") continue;
     const e = entry as Record<string, unknown>;
-    const showName = typeof e["showName"] === "string" ? e["showName"].trim() : "";
+    const showName = typeof e["showName"] === "string" ? sanitizeName(e["showName"]) : "";
     const dayOfWeek = normalizeDayOfWeek(
       typeof e["dayOfWeek"] === "string" ? e["dayOfWeek"].trim() : "",
     );
     const startTime = typeof e["startTime"] === "string" ? e["startTime"].trim() : "";
     const endTime = typeof e["endTime"] === "string" ? e["endTime"].trim() : "";
-    const djName =
-      typeof e["djName"] === "string" && e["djName"].trim() ? e["djName"].trim() : null;
+    const djNameRaw = typeof e["djName"] === "string" ? sanitizeName(e["djName"]) : "";
+    const djName = djNameRaw ? djNameRaw : null;
 
     if (!showName || showName.length > 200) continue;
     if (!DAY_TOKENS.has(dayOfWeek)) continue;
