@@ -808,3 +808,259 @@ describe("scrapeStationSchedule — malformed LLM times never reach the DB", () 
     expect(station?.upcomingShowCount).toBe(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Path 7 — missing required fields from LLM are rejected before the DB write
+// ---------------------------------------------------------------------------
+
+/**
+ * These tests exercise the full scrapeStationSchedule write path with a mocked
+ * LLM that deliberately returns entries missing required fields: a blank
+ * showName, an unrecognised dayOfWeek, and an oversized showName (>200 chars).
+ * The parser guard (parseExtractedSchedule) must reject every such entry so
+ * that zero rows reach scraped_shows — even though the page fetch and LLM call
+ * both "succeed". This confirms the guard is not bypassed by the surrounding
+ * orchestration code and that a future refactor cannot silently admit bad rows.
+ */
+describe("scrapeStationSchedule — missing required fields never reach the DB", () => {
+  it("stores zero rows when the LLM returns a blank showName", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // LLM returns entries where showName is an empty string — rejected by the
+    // `!showName` check in parseExtractedSchedule.
+    const BLANK_NAME_JSON = JSON.stringify([
+      {
+        showName: "",
+        dayOfWeek: "Mon",
+        startTime: "09:00",
+        endTime: "11:00",
+        djName: "DJ Alice",
+      },
+      {
+        showName: "   ",
+        dayOfWeek: "Tue",
+        startTime: "14:00",
+        endTime: "16:00",
+        djName: null,
+      },
+    ]);
+
+    configureScheduleExtractor(async () => BLANK_NAME_JSON);
+
+    const fetchFn = makeFetch([
+      { pattern: /robots\.txt/, body: "User-agent: *\nDisallow:\n" },
+      {
+        pattern: "/schedule",
+        body: "<html><body><p>Schedule page content</p></body></html>",
+      },
+    ]);
+
+    const target = {
+      id: stationId!,
+      slug: `test-sched-${run}`,
+      homepageUrl: HOMEPAGE,
+      scheduleUrl: SCHEDULE_URL,
+      city: null,
+      country: null,
+      ianaTimezone: null,
+    };
+
+    const result = await scrapeStationSchedule(target, { fetchFn });
+
+    // All entries are rejected — empty array is a valid parse result.
+    expect(result).toEqual({ scraped: true, showCount: 0 });
+
+    const shows = await fetchScrapedShows();
+    expect(shows).toHaveLength(0);
+
+    const station = await fetchStationRow();
+    expect(station?.scheduleScrapedAt).toBeInstanceOf(Date);
+    expect(station?.upcomingShowCount).toBe(0);
+  });
+
+  it("stores zero rows when the LLM returns an unrecognised dayOfWeek", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // LLM returns entries with day strings not in the canonical 3-letter set —
+    // rejected by the `!DAY_TOKENS.has(dayOfWeek)` check.
+    const BAD_DAY_JSON = JSON.stringify([
+      {
+        showName: "Morning Show",
+        dayOfWeek: "Lun",
+        startTime: "09:00",
+        endTime: "11:00",
+        djName: null,
+      },
+      {
+        showName: "Evening Show",
+        dayOfWeek: "Lundi",
+        startTime: "20:00",
+        endTime: "22:00",
+        djName: "DJ Night",
+      },
+      {
+        showName: "Weekend Special",
+        dayOfWeek: "Weekend",
+        startTime: "12:00",
+        endTime: "14:00",
+        djName: null,
+      },
+    ]);
+
+    configureScheduleExtractor(async () => BAD_DAY_JSON);
+
+    const fetchFn = makeFetch([
+      { pattern: /robots\.txt/, body: "User-agent: *\nDisallow:\n" },
+      {
+        pattern: "/schedule",
+        body: "<html><body><p>Schedule page content</p></body></html>",
+      },
+    ]);
+
+    const target = {
+      id: stationId!,
+      slug: `test-sched-${run}`,
+      homepageUrl: HOMEPAGE,
+      scheduleUrl: SCHEDULE_URL,
+      city: null,
+      country: null,
+      ianaTimezone: null,
+    };
+
+    const result = await scrapeStationSchedule(target, { fetchFn });
+
+    expect(result).toEqual({ scraped: true, showCount: 0 });
+
+    const shows = await fetchScrapedShows();
+    expect(shows).toHaveLength(0);
+
+    const station = await fetchStationRow();
+    expect(station?.scheduleScrapedAt).toBeInstanceOf(Date);
+    expect(station?.upcomingShowCount).toBe(0);
+  });
+
+  it("stores zero rows when the LLM returns a showName longer than 200 chars", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // LLM returns entries where showName exceeds the 200-character limit —
+    // rejected by the `showName.length > 200` check.
+    const LONG_NAME_JSON = JSON.stringify([
+      {
+        showName: "A".repeat(201),
+        dayOfWeek: "Mon",
+        startTime: "09:00",
+        endTime: "11:00",
+        djName: null,
+      },
+      {
+        showName: "The " + "Very ".repeat(50) + "Long Show",
+        dayOfWeek: "Fri",
+        startTime: "18:00",
+        endTime: "20:00",
+        djName: "DJ Verbose",
+      },
+    ]);
+
+    configureScheduleExtractor(async () => LONG_NAME_JSON);
+
+    const fetchFn = makeFetch([
+      { pattern: /robots\.txt/, body: "User-agent: *\nDisallow:\n" },
+      {
+        pattern: "/schedule",
+        body: "<html><body><p>Schedule page content</p></body></html>",
+      },
+    ]);
+
+    const target = {
+      id: stationId!,
+      slug: `test-sched-${run}`,
+      homepageUrl: HOMEPAGE,
+      scheduleUrl: SCHEDULE_URL,
+      city: null,
+      country: null,
+      ianaTimezone: null,
+    };
+
+    const result = await scrapeStationSchedule(target, { fetchFn });
+
+    expect(result).toEqual({ scraped: true, showCount: 0 });
+
+    const shows = await fetchScrapedShows();
+    expect(shows).toHaveLength(0);
+
+    const station = await fetchStationRow();
+    expect(station?.scheduleScrapedAt).toBeInstanceOf(Date);
+    expect(station?.upcomingShowCount).toBe(0);
+  });
+
+  it("stores only valid entries when bad fields are mixed with well-formed ones", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // Mix of invalid entries (blank name, bad day, oversized name) alongside
+    // one valid entry — only the valid entry must reach the DB.
+    const MIXED_FIELDS_JSON = JSON.stringify([
+      {
+        showName: "Valid Show",
+        dayOfWeek: "Wed",
+        startTime: "10:00",
+        endTime: "12:00",
+        djName: "DJ Good",
+      },
+      {
+        showName: "",
+        dayOfWeek: "Mon",
+        startTime: "09:00",
+        endTime: "11:00",
+        djName: null,
+      },
+      {
+        showName: "Foreign Day Show",
+        dayOfWeek: "Lun",
+        startTime: "14:00",
+        endTime: "16:00",
+        djName: null,
+      },
+      {
+        showName: "Z".repeat(201),
+        dayOfWeek: "Sat",
+        startTime: "20:00",
+        endTime: "22:00",
+        djName: null,
+      },
+    ]);
+
+    configureScheduleExtractor(async () => MIXED_FIELDS_JSON);
+
+    const fetchFn = makeFetch([
+      { pattern: /robots\.txt/, body: "User-agent: *\nDisallow:\n" },
+      {
+        pattern: "/schedule",
+        body: "<html><body><p>Schedule page content</p></body></html>",
+      },
+    ]);
+
+    const target = {
+      id: stationId!,
+      slug: `test-sched-${run}`,
+      homepageUrl: HOMEPAGE,
+      scheduleUrl: SCHEDULE_URL,
+      city: null,
+      country: null,
+      ianaTimezone: null,
+    };
+
+    const result = await scrapeStationSchedule(target, { fetchFn });
+
+    // Only the one valid entry is stored.
+    expect(result).toEqual({ scraped: true, showCount: 1 });
+
+    const shows = await fetchScrapedShows();
+    expect(shows).toHaveLength(1);
+    expect(shows[0]!.showName).toBe("Valid Show");
+    expect(shows[0]!.dayOfWeek).toBe("Wed");
+
+    const station = await fetchStationRow();
+    expect(station?.scheduleScrapedAt).toBeInstanceOf(Date);
+    expect(station?.upcomingShowCount).toBe(1);
+  });
+});
