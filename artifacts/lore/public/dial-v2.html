@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Lore — Timeline Dial v2</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Archivo:wght@400;500;600;700&family=Archivo+Narrow:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#151310;--surface:#1D1A16;--raised:#241F1A;--sunk:#0F0D0B;
+  --ink:#EDE7DA;--ink-2:#B9B1A1;--muted:#8B8375;--absent:#5E574C;
+  --rule:#332E27;--rule-strong:#4A433A;
+  --library:#E86A4E;--library-bg:rgba(232,106,78,.12);
+  --live:#7FA8C9;--live-bg:rgba(127,168,201,.12);
+  --future-bg:rgba(255,255,255,.02);
+  --name:'Newsreader',Georgia,serif;
+  --ui:'Archivo',-apple-system,sans-serif;
+  --label:'Archivo Narrow',sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+  --r:3px;--track:.13em;
+  --blk:148px;--blk-gap:6px;--lane-pad:15px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{font-family:var(--ui);background:#0a0908;color:var(--ink);
+  display:flex;align-items:center;justify-content:center;
+  overflow:hidden;min-height:600px;-webkit-font-smoothing:antialiased}
+#p{position:relative;width:100%;max-width:412px;height:100vh;height:100dvh;
+  min-height:600px;max-height:880px;background:var(--bg);overflow:hidden;
+  display:flex;flex-direction:column;box-shadow:0 26px 82px rgba(0,0,0,.6)}
+@media(min-width:460px){#p{border-radius:6px}}
+/* grain */
+#p::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:99;opacity:.04;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+/* ── topbar ── */
+.topbar{display:flex;align-items:center;gap:10px;padding:12px 15px 10px;
+  border-bottom:1px solid var(--rule)}
+.topbar .title{font-family:var(--label);font-size:11px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.06em;color:var(--ink-2);flex:1}
+.topbar .sort-chip{font-family:var(--mono);font-size:9px;color:var(--library);
+  border:1px solid rgba(232,106,78,.3);border-radius:2px;padding:3px 7px}
+.topbar .crumb-btn{font-family:var(--label);font-size:9.5px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.05em;color:var(--muted);background:none;
+  border:none;cursor:pointer;padding:0}
+.topbar .crumb-btn:hover{color:var(--ink)}
+.topbar .back-btn{font-family:var(--label);font-size:9px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.05em;border:1px solid var(--rule-strong);
+  border-radius:var(--r);padding:5px 9px;color:var(--ink-2);background:var(--surface);
+  cursor:pointer;white-space:nowrap;flex-shrink:0}
+
+/* ── scan bar ── */
+.scanbar{display:flex;align-items:center;gap:9px;padding:9px 15px;
+  border-bottom:1px solid var(--rule);background:var(--surface)}
+.scanbtn{font-family:var(--label);font-size:10px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.06em;border:1px solid var(--rule-strong);background:var(--raised);
+  color:var(--ink-2);padding:7px 12px;border-radius:var(--r);cursor:pointer;flex-shrink:0}
+.scanbtn.on{background:var(--library);border-color:var(--library);color:var(--bg)}
+.scanbar .st{flex:1;min-width:0;font-family:var(--name);font-style:italic;
+  font-size:12px;color:var(--muted);line-height:1.35;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.scanbar .st b{font-style:normal;font-weight:600;color:var(--ink)}
+.landbtn{font-family:var(--label);font-size:9.5px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.06em;border:0;background:var(--live);color:var(--bg);
+  padding:7px 12px;border-radius:var(--r);cursor:pointer;white-space:nowrap;
+  opacity:0;pointer-events:none;transition:.15s;flex-shrink:0}
+.landbtn.show{opacity:1;pointer-events:auto}
+
+/* ── main scroll ── */
+.sc{flex:1;overflow-y:auto;overflow-x:hidden;padding-bottom:8px}
+
+/* ── station lane ── */
+.lane{margin-top:18px}
+.lane:first-child{margin-top:10px}
+.lane-hd{display:flex;align-items:center;gap:8px;padding:0 var(--lane-pad) 8px;
+  cursor:pointer}
+.lane-hd:hover .sname{color:var(--ink)}
+.sname{font-family:var(--label);font-size:12px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.06em;color:var(--ink-2);transition:.1s}
+.sname.tuned{color:var(--live)}
+.scross{font-family:var(--mono);font-size:9px;color:var(--library);
+  background:var(--library-bg);border:1px solid rgba(232,106,78,.2);
+  border-radius:2px;padding:2px 6px;flex-shrink:0}
+.scross.zero{color:var(--absent);background:none;border-color:var(--rule)}
+.pin-btn{margin-left:auto;font-family:var(--label);font-size:9px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.05em;color:var(--absent);border:none;
+  background:none;cursor:pointer;padding:0;flex-shrink:0}
+.pin-btn.pinned{color:var(--library)}
+.live-badge{font-family:var(--label);font-size:8.5px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.1em;color:var(--live)}
+
+/* ── block row ── */
+.block-row-wrap{position:relative}
+/* the NOW needle — absolute over the row, won't scroll */
+.now-needle{position:absolute;top:0;bottom:0;left:0;width:1px;
+  background:linear-gradient(to bottom,transparent 0%,var(--live) 15%,var(--live) 85%,transparent 100%);
+  pointer-events:none;z-index:5;opacity:.9}
+/* label above needle */
+.now-needle::before{content:'NOW';position:absolute;top:4px;left:4px;
+  font-family:var(--mono);font-size:7.5px;color:var(--live);letter-spacing:.08em;
+  white-space:nowrap}
+
+.block-row{display:flex;gap:var(--blk-gap);overflow-x:auto;
+  padding:0 var(--lane-pad);padding-right:var(--lane-pad);
+  scrollbar-width:none;-webkit-overflow-scrolling:touch;
+  /* extra right padding so last block doesn't hug edge */
+  padding-right:calc(var(--lane-pad) + 40px)}
+.block-row::-webkit-scrollbar{display:none}
+
+/* ── individual show block ── */
+.blk{width:var(--blk);flex:0 0 var(--blk);border:1px solid var(--rule-strong);
+  border-radius:var(--r);background:var(--surface);cursor:pointer;padding:10px 10px 9px;
+  overflow:hidden;transition:.12s;text-align:left;color:inherit;
+  position:relative;display:flex;flex-direction:column;gap:3px}
+.blk:hover{border-color:var(--rule-strong);background:var(--raised)}
+/* past (ghost radio) */
+.blk.past{opacity:.62;background:var(--sunk)}
+.blk.past:hover{opacity:.9;background:var(--surface)}
+/* live */
+.blk.live{border-color:var(--live);background:var(--live-bg);opacity:1}
+.blk.live:hover{background:rgba(127,168,201,.18)}
+/* future */
+.blk.future{opacity:.45;background:var(--sunk);border-style:dashed}
+.blk.future:hover{opacity:.75;background:var(--surface)}
+/* has library crossings */
+.blk.warm{border-color:rgba(232,106,78,.35);background:var(--library-bg)}
+.blk.warm.past{opacity:.7}
+.blk.warm:hover{background:rgba(232,106,78,.18)}
+/* live + warm */
+.blk.live.warm{border-color:var(--live)}
+
+/* block content */
+.blk .bshow{font-family:var(--label);font-size:10.5px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.025em;line-height:1.15;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
+.blk .bdj{font-family:var(--name);font-style:italic;font-size:12px;
+  color:var(--ink-2);line-height:1.2;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;margin-top:1px}
+.blk .btime{font-family:var(--mono);font-size:8px;color:var(--absent);
+  margin-top:auto;padding-top:6px;white-space:nowrap}
+.blk .bcross{font-family:var(--mono);font-size:8px;color:var(--library);white-space:nowrap}
+.blk .bcross.zero{color:var(--absent)}
+/* live pulse */
+.blk.live .bshow::before{content:'● ';color:var(--live);font-style:normal}
+/* ghost label for past */
+.blk.past .btime::before{content:'ghost · ';color:var(--absent)}
+/* next label for future */
+.blk.future .btime::before{content:'next · ';color:var(--absent)}
+/* ghost + warm: ghost radio specific */
+.blk.past.warm .bcross::after{content:' ◆';font-size:7px}
+
+/* ── station detail (level=station) ── */
+.fat-list{display:grid;gap:6px;padding:10px var(--lane-pad) 0}
+.fatblk{border:1px solid var(--rule-strong);border-radius:var(--r);
+  background:var(--surface);padding:12px 13px;cursor:pointer;transition:.12s}
+.fatblk:hover{background:var(--raised)}
+.fatblk.live{border-color:var(--live);background:var(--live-bg)}
+.fatblk.warm{background:var(--library-bg);border-color:rgba(232,106,78,.35)}
+.fatblk.future{opacity:.5;border-style:dashed}
+.fatblk .ftop{display:flex;align-items:baseline;gap:8px}
+.fatblk .fshow{font-family:var(--name);font-size:17px;font-weight:600;line-height:1.15}
+.fatblk .fwhen{font-family:var(--mono);font-size:9px;color:var(--absent);
+  margin-left:auto;flex-shrink:0}
+.fatblk .fdj{font-family:var(--name);font-style:italic;font-size:12.5px;
+  color:var(--muted);margin-top:3px}
+.fatblk .fdj b{font-style:normal;font-weight:600;color:var(--ink-2)}
+.fatblk .fbar{display:flex;gap:2px;margin-top:10px;height:4px}
+.fatblk .fbar i{flex:1;border-radius:1px;background:var(--absent);opacity:.25}
+.fatblk .fbar i.h{background:var(--library);opacity:1}
+.fatblk .fcross{font-family:var(--mono);font-size:9px;color:var(--library);margin-top:7px}
+.fatblk .fcross.zero{color:var(--absent)}
+.fatblk .fpeek{font-family:var(--name);font-size:12.5px;color:var(--ink-2);
+  margin-top:6px;line-height:1.45}
+.fatblk .fpeek em{color:var(--library);font-style:normal}
+
+/* ── show / track level ── */
+.djhd{padding:14px 15px 11px;border-bottom:1px solid var(--rule)}
+.djhd .nm{font-family:var(--name);font-size:24px;font-weight:600;line-height:1.05}
+.djhd .sub{font-family:var(--name);font-style:italic;font-size:13px;
+  color:var(--muted);margin-top:4px}
+.djhd .stats{display:flex;gap:16px;margin-top:11px;flex-wrap:wrap}
+.djhd .stat{font-family:var(--mono);font-size:9px;color:var(--absent);
+  text-transform:uppercase;letter-spacing:.06em}
+.djhd .stat b{display:block;font-family:var(--name);font-size:20px;font-weight:600;
+  color:var(--ink);text-transform:none;letter-spacing:0;margin-bottom:1px}
+.djhd .stat.warm b{color:var(--library)}
+.dj-chip{font-family:var(--label);font-size:9.5px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.05em;border:1px solid rgba(232,106,78,.4);
+  background:var(--library-bg);color:var(--library);padding:5px 10px;
+  border-radius:var(--r);cursor:pointer;margin-top:11px;display:inline-block}
+
+.sec-lbl{display:flex;align-items:center;gap:9px;padding:13px 15px 7px;
+  font-family:var(--label);font-size:9.5px;font-weight:600;text-transform:uppercase;
+  letter-spacing:var(--track);color:var(--muted)}
+.sec-lbl .hint{margin-left:auto;font-family:var(--name);font-style:italic;
+  font-weight:400;text-transform:none;letter-spacing:0;font-size:12px;color:var(--absent)}
+
+/* track row */
+.trow{display:flex;gap:11px;padding:11px 15px;align-items:baseline;
+  border-bottom:1px solid var(--rule);position:relative;cursor:pointer}
+.trow::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:transparent}
+.trow.hit::before{background:var(--library)}
+.trow.sampling{background:var(--library-bg)}
+.trow .tm{font-family:var(--mono);font-size:9.5px;color:var(--muted);
+  width:38px;flex-shrink:0;padding-top:4px}
+.trow .tc{flex:1;min-width:0}
+.trow .tr{font-family:var(--name);font-size:15.5px;font-weight:500;line-height:1.2}
+.trow .ar{font-size:12px;color:var(--ink-2);margin-top:2px}
+.trow .by{font-family:var(--name);font-style:italic;font-size:12px;
+  color:var(--muted);margin-top:5px}
+.trow .by b{font-style:normal;font-weight:600;color:var(--ink-2)}
+.trow .meta{font-family:var(--mono);font-size:9px;color:var(--absent);margin-top:3px}
+.trow .st{font-family:var(--label);font-size:9px;font-weight:700;text-transform:uppercase;
+  letter-spacing:var(--track);flex-shrink:0;padding-top:5px}
+.st.own{color:var(--library)}.st.new,.st.unres{color:var(--absent)}
+
+/* ── dock ── */
+.dock{display:flex;align-items:center;gap:10px;padding:10px 14px;
+  border-top:1px solid var(--rule-strong);background:var(--raised);flex-shrink:0}
+.dock .art{width:36px;height:36px;flex-shrink:0;border-radius:2px;
+  background:var(--sunk);border:1px solid var(--rule)}
+.dock .dc{flex:1;min-width:0}
+.dock .dtr{font-family:var(--name);font-size:13.5px;font-weight:600;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dock .dby{font-family:var(--name);font-style:italic;font-size:11.5px;
+  color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dock .dby b{font-style:normal;font-weight:600;color:var(--ink-2)}
+.dock .dby .lv{font-family:var(--label);font-style:normal;font-size:8.5px;
+  font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--live)}
+.dock .dby .sm{font-family:var(--label);font-style:normal;font-size:8.5px;
+  font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--library)}
+.dock .dsrc{font-family:var(--label);font-size:8.5px;font-weight:600;
+  text-transform:uppercase;letter-spacing:var(--track);padding:6px 9px;
+  border:1px solid var(--rule-strong);border-radius:var(--r);color:var(--muted);
+  background:var(--surface);white-space:nowrap;flex-shrink:0}
+
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.blk.live .bshow::before{animation:pulse 2.2s ease-in-out infinite}
+</style>
+</head>
+<body>
+<div id="p">
+  <div class="topbar" id="topbar"></div>
+  <div class="scanbar">
+    <button class="scanbtn" id="scanBtn">Scan</button>
+    <div class="st" id="scanSt">—</div>
+    <button class="landbtn" id="landBtn">Land</button>
+  </div>
+  <div class="sc" id="body"></div>
+  <div class="dock">
+    <div class="art" id="dart"></div>
+    <div class="dc">
+      <div class="dtr" id="dTr">Dragonaut · Sleep</div>
+      <div class="dby" id="dBy"><span class="lv">● Live</span> &nbsp;picked by <b>Diane Kamikaze</b></div>
+    </div>
+    <div class="dsrc" id="dSrc">Broadcast</div>
+  </div>
+</div>
+
+<script>
+const LIB=new Set(['Sleep','Boris','Yob','Sunn O)))','Neurosis','Earth','Om','Bell Witch','Elder','Pallbearer']);
+const POOL=[
+ ['Sleep','Dragonaut','Holy Mountain','Earache',1992],
+ ['Boris','Farewell','Pink','Diwphalanx',2005],
+ ['Yob','Marrow','Clearing the Path','Neurot',2014],
+ ['Sunn O)))','Aghartha','Monoliths','Southern Lord',2009],
+ ['Neurosis','Locust Star','Through Silver','Relapse',1996],
+ ['Earth','Old Black','Bees Made Honey','Southern Lord',2008],
+ ['Om','Pilgrimage','Pilgrimage','Southern Lord',2007],
+ ['Bell Witch','Mirror Reaper','Mirror Reaper','Profound Lore',2017],
+ ['Elder','Sanctuary','Reflections','Stickman',2017],
+ ['Pallbearer','Foundations','Sorrow & Extinction','Profound Lore',2012],
+ ['Hey Colossus','Hop the Railings','In Black & Gold','Rocket',2015],
+ ['Author & Punisher','Nihil Strength','Beastland','Relapse',2018],
+ ['Swans','The Seer','The Seer','Young God',2012],
+ ['Chelsea Wolfe','Carrion Flowers','Abyss','Sargent House',2015],
+ ['Conan','Foehammer','Monnos','Burning World',2012],
+ ['Windhand','Orchard','Soma','Relapse',2013],
+];
+const NOW=new Date('2026-07-29T14:10:00');
+
+// Shows: [name, dj, start_h (relative to now), end_h, highlight_flag]
+// end_h=0 means currently live. end_h>0 means future.
+const STATIONS=[
+ {n:'KFJC',cross:60,live:true,since:'3 Feb',pinned:false,shows:[
+   ['Rude Awakening','Pruitt',-7,-4,0],
+   ['Cosmic Slop','Halvorsen',-4,-1.5,1],
+   ['Chthonic','Vance Orrico',-1.5,0,1],  // live
+   ['Brain Surgery','Fong',0,2,0],         // next
+ ]},
+ {n:'WFMU',cross:46,live:true,since:'12 Jan',pinned:false,shows:[
+   ['Wake & Bake','Terre T.',-8,-5,0],
+   ['Shrunken Planet','Bronwyn C.',-5,-2.5,0],
+   ['Antique Phonograph','Diane K.',-2.5,-0.5,1],
+   ['Sleepless','Diane K.',-0.5,0,1],      // live
+   ['How It Sounds','Schofield',0,1.5,0],  // next
+ ]},
+ {n:'Marabu',cross:36,live:false,since:'21 Apr',pinned:false,shows:[
+   ['Nachtschicht','Weiss',-12,-8,1],
+   ['Schwerkraft','Böhm',-8,-4,1],
+   ['Tiefgang','Lenz',-4,-1,0],
+   ['Morgenstunde','Vogel',-1,0,1],        // most recent (off air)
+   ['Nachtschicht','Weiss',0,4,0],         // scheduled next
+ ]},
+ {n:'NTS 2',cross:30,live:true,since:'8 Nov',pinned:false,shows:[
+   ['Sunrise Sessions','Balint',-6,-3,0],
+   ['Late Junction','Okonkwo',-3,-0.5,0],
+   ['Low Ceiling','Kerrigan',-0.5,0,1],    // live
+   ['Weirdo Shrine','Birch',0,1,0],        // next
+ ]},
+ {n:'KZSU',cross:7,live:true,since:'14 Mar',pinned:false,shows:[
+   ['Night Shift','Ramos',-5,-2,0],
+   ['Deep Cuts','Ito',-2,0,0],             // live
+   ['Morning Report','Park',0,2,0],        // next
+ ]},
+];
+
+let sd=29;
+const rnd=()=>{sd=(sd*1664525+1013904223)>>>0;return sd/4294967296};
+const fmtHM=d=>{const h=d.getHours(),m=d.getMinutes();return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`};
+const shiftH=h=>new Date(NOW.getTime()+h*3600e3);
+const agoLabel=h=>{
+  if(Math.abs(h)<0.05)return 'live now';
+  if(h>=0)return `in ${h<1?Math.round(h*60)+'m':Math.round(h)+'h'}`;
+  return Math.abs(h)<1?Math.round(Math.abs(h)*60)+'m ago':Math.round(Math.abs(h))+'h ago';
+};
+
+// Generate spins for each show
+STATIONS.forEach(st=>{
+  st.shows.forEach(sh=>{
+    const a=shiftH(sh[2]).getTime(), b=sh[3]<=0?NOW.getTime():shiftH(sh[3]).getTime();
+    const spins=[];
+    let t=a;
+    while(t<b){
+      const r=POOL[(rnd()*POOL.length)|0];
+      spins.push({t:new Date(t),ar:r[0],tr:r[1],rl:r[2],lb:r[3],yr:r[4],
+        hit:LIB.has(r[0])&&rnd()<(st.cross/100+.15)});
+      t+=(180+rnd()*220)*1000;
+    }
+    sh.push(spins);                          // [5] spins
+    sh.push(spins.filter(s=>s.hit).length);  // [6] crossings
+    sh.push(st);                             // [7] station
+  });
+  st.cross=st.shows.filter(sh=>sh[3]<=0).reduce((m,sh)=>m+sh[6],0);
+});
+
+const ALLSHOWS=STATIONS.flatMap(s=>s.shows);
+const trackGrad=tr=>{let x=0;for(const c of tr)x=(x*31+c.charCodeAt(0))>>>0;
+  return `linear-gradient(150deg,hsl(${x%360},22%,20%),hsl(${(x%360+42)%360},28%,32%))`};
+
+let level='all', si=0, sh=null, djName=null;
+let scanning=false, scanIx=0, scanTimer=null, sampling=null;
+const S=()=>STATIONS[si];
+// Sort by crossings desc, pinned first
+const sortedStations=()=>[...STATIONS].sort((a,b)=>(b.pinned-a.pinned)||b.cross-a.cross);
+
+// ── TOPBAR ──
+function renderTopbar(){
+  const tb=document.getElementById('topbar');
+  if(level==='all'){
+    tb.innerHTML=`<span class="title">Radio</span><span class="sort-chip">◆ by library overlap</span>`;
+  } else if(level==='station'){
+    tb.innerHTML=`<button class="crumb-btn" data-go="all">Radio</button>
+    <span style="color:var(--absent);font-family:var(--label);font-size:9.5px;margin:0 2px">›</span>
+    <span class="title" style="color:var(--ink)">${S().n}</span>
+    <button class="back-btn" data-go="all">↑ Back</button>`;
+  } else if(level==='show'){
+    tb.innerHTML=`<button class="crumb-btn" data-go="all">Radio</button>
+    <span style="color:var(--absent);font-family:var(--label);font-size:9.5px;margin:0 2px">›</span>
+    <button class="crumb-btn" data-go="station">${sh[7].n}</button>
+    <span style="color:var(--absent);font-family:var(--label);font-size:9.5px;margin:0 2px">›</span>
+    <span class="title" style="color:var(--ink);overflow:hidden;text-overflow:ellipsis">${sh[0]}</span>
+    <button class="back-btn" data-go="station">↑ Back</button>`;
+  } else if(level==='dj'){
+    tb.innerHTML=`<button class="crumb-btn" data-go="all">Radio</button>
+    <span style="color:var(--absent);font-family:var(--label);font-size:9.5px;margin:0 2px">›</span>
+    <span class="title" style="color:var(--ink)">${djName}</span>
+    <button class="back-btn" data-go="all">↑ Back</button>`;
+  }
+  tb.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{
+    level=b.dataset.go;sampling=null;stopScan();render();});
+}
+
+// ── ALL STATIONS (timeline view) ──
+function blkClass(sh){
+  const isLive=sh[3]===0;
+  const isFuture=sh[3]>0;
+  const isPast=!isLive&&!isFuture;
+  const warm=sh[6]>0;
+  let c='blk';
+  if(isPast)c+=' past';
+  if(isLive)c+=' live';
+  if(isFuture)c+=' future';
+  if(warm)c+=' warm';
+  return c;
+}
+
+function renderAll(){
+  const sorted=sortedStations();
+  return sorted.map((st,i)=>{
+    const globalIdx=STATIONS.indexOf(st);
+    const crossLabel=st.cross>0?`◆ ${st.cross}`:st.cross===0?'no crossings':st.cross;
+    const liveBlk=st.shows.find(s=>s[3]===0);
+    return `
+<div class="lane">
+  <div class="lane-hd" data-st="${globalIdx}">
+    <span class="sname ${globalIdx===si?'tuned':''}">${st.n}</span>
+    ${st.live?`<span class="live-badge">● live</span>`:''}
+    <span class="scross ${st.cross===0?'zero':''}">${st.cross>0?`◆ ${st.cross}`:st.cross===0?'—':'—'}</span>
+    <button class="pin-btn ${st.pinned?'pinned':''}" data-pin="${globalIdx}">${st.pinned?'★ pinned':'☆ pin'}</button>
+  </div>
+  <div class="block-row-wrap" data-row="${globalIdx}">
+    <div class="now-needle" id="needle-${globalIdx}" style="display:none"></div>
+    <div class="block-row" id="brow-${globalIdx}">
+      ${st.shows.map((s,j)=>{
+        const startT=fmtHM(shiftH(s[2]));
+        const endT=s[3]===0?'now':fmtHM(shiftH(s[3]));
+        const crossTxt=s[6]>0?`${s[6]} crossing${s[6]!==1?'s':''}`:s[3]>0?'upcoming':'0 crossings';
+        return `<button class="${blkClass(s)}" data-sh="${ALLSHOWS.indexOf(s)}">
+          <div class="bshow">${s[0]}</div>
+          <div class="bdj">${s[1]}</div>
+          <div class="btime">${startT}–${endT}</div>
+          <div class="bcross ${s[6]===0?'zero':''}">${crossTxt}</div>
+        </button>`;
+      }).join('')}
+    </div>
+  </div>
+</div>`;
+  }).join('');
+}
+
+// ── STATION LEVEL ──
+function renderStation(){
+  const st=S();
+  return `<div class="fat-list">` +
+    st.shows.map(s=>{
+      const isLive=s[3]===0, isFuture=s[3]>0;
+      const bars=s[5].slice(0,28).map(sp=>`<i class="${sp.hit?'h':''}"></i>`).join('');
+      const first=s[5].find(sp=>sp.hit);
+      const when=`${fmtHM(shiftH(s[2]))}–${isLive?'now':fmtHM(shiftH(s[3]))} · ${agoLabel(s[3])}`;
+      return `<div class="fatblk ${isLive?'live':''} ${s[6]>0&&!isFuture?'warm':''} ${isFuture?'future':''}" data-sh="${ALLSHOWS.indexOf(s)}">
+        <div class="ftop"><div class="fshow">${s[0]}</div><div class="fwhen">${when}</div></div>
+        <div class="fdj">with <b>${s[1]}</b></div>
+        ${!isFuture?`<div class="fbar">${bars}</div>
+        <div class="fcross ${s[6]===0?'zero':''}">${s[6]} of ${s[5].length} were yours</div>
+        ${first?`<div class="fpeek">opened with <em>${first.ar} — ${first.tr}</em></div>`:''}`:
+        `<div class="fcross zero" style="margin-top:8px">scheduled · no data yet</div>`}
+      </div>`;
+    }).join('') + `</div>`;
+}
+
+// ── SHOW LEVEL ──
+function renderShow(){
+  const st=sh[7], spins=sh[5];
+  const same=ALLSHOWS.filter(x=>x[1]===sh[1]&&x!==sh);
+  const isLive=sh[3]===0;
+  return `<div class="djhd">
+    <div class="nm">${sh[0]}</div>
+    <div class="sub">with <b style="font-style:normal;font-weight:600;color:var(--ink)">${sh[1]}</b>
+     on ${st.n} · ${fmtHM(shiftH(sh[2]))}${isLive?'–now':'–'+fmtHM(shiftH(sh[3]))}</div>
+    <div class="stats">
+      <div class="stat"><b>${spins.length}</b>spins</div>
+      <div class="stat warm"><b>${sh[6]}</b>yours</div>
+      <div class="stat"><b>${same.length+1}</b>sets logged</div>
+    </div>
+    <button class="dj-chip" data-dj="${sh[1]}">All of ${sh[1].split(' ')[0]}'s sets →</button>
+  </div>
+  <div class="sec-lbl">In order<span class="hint">tap to ride from here</span></div>
+  ${spins.map((sp,i)=>{
+    const st2=sp.hit?'own':sp.un?'unres':'new';
+    const lbl=sp.hit?'◆ library':sp.un?'unresolved':'new';
+    return `<div class="trow ${sp.hit?'hit':''}" data-ix="${i}">
+      <div class="tm">${fmtHM(sp.t)}</div>
+      <div class="tc"><div class="tr">${sp.tr}</div><div class="ar">${sp.ar}</div>
+        <div class="meta">${sp.rl} · ${sp.lb} · ${sp.yr}</div></div>
+      <div class="st ${st2}">${lbl}</div>
+    </div>`;
+  }).join('')}`;
+}
+
+// ── DJ LEVEL ──
+function renderDJ(){
+  const sets=ALLSHOWS.filter(x=>x[1]===djName&&x[3]<=0).sort((a,b)=>a[2]-b[2]);
+  const tot=sets.reduce((m,s)=>m+s[5].length,0);
+  const cr=sets.reduce((m,s)=>m+s[6],0);
+  const stations=[...new Set(sets.map(x=>x[7].n))];
+  return `<div class="djhd">
+    <div class="nm">${djName}</div>
+    <div class="sub">${stations.join(' · ')}</div>
+    <div class="stats">
+      <div class="stat"><b>${sets.length}</b>sets</div>
+      <div class="stat"><b>${tot}</b>spins</div>
+      <div class="stat warm"><b>${cr}</b>yours</div>
+      <div class="stat"><b>${tot>0?Math.round(cr/tot*100):0}%</b>overlap</div>
+    </div>
+  </div>
+  <div class="sec-lbl">Every set in Lore's archive<span class="hint">oldest first</span></div>
+  <div class="fat-list">` +
+    sets.map(s=>{
+      const bars=s[5].slice(0,28).map(sp=>`<i class="${sp.hit?'h':''}"></i>`).join('');
+      return `<div class="fatblk ${s[3]===0?'live':''} ${s[6]>0?'warm':''}" data-sh="${ALLSHOWS.indexOf(s)}">
+        <div class="ftop"><div class="fshow">${s[0]}</div>
+          <div class="fwhen">${s[7].n} · ${agoLabel(s[3])}</div></div>
+        <div class="fdj">with <b>${s[1]}</b></div>
+        <div class="fbar">${bars}</div>
+        <div class="fcross ${s[6]===0?'zero':''}">${s[6]} of ${s[5].length} were yours</div>
+      </div>`;
+    }).join('') + `</div>`;
+}
+
+let trackCtx=[];
+function render(){
+  renderTopbar();
+  const b=document.getElementById('body');
+  trackCtx=[];
+  if(level==='all')     b.innerHTML=renderAll();
+  if(level==='station') b.innerHTML=renderStation();
+  if(level==='show')    b.innerHTML=renderShow();
+  if(level==='dj')      b.innerHTML=renderDJ();
+  wire();
+  updateScanBar();
+
+  // Position NOW needle and auto-scroll each timeline row
+  if(level==='all'){
+    requestAnimationFrame(()=>{
+      sortedStations().forEach(st=>{
+        const globalIdx=STATIONS.indexOf(st);
+        const row=document.getElementById(`brow-${globalIdx}`);
+        if(!row)return;
+        const blocks=[...row.children];
+        const liveIdx=st.shows.findIndex(s=>s[3]===0);
+        // Find index in sorted show array — for offline stations use last past show
+        const refIdx=liveIdx>=0?liveIdx:st.shows.filter(s=>s[3]<=0).length-1;
+        if(refIdx<0)return;
+        const BLK=148+6; // block width + gap
+        const PAD=15;
+        // We want 1 past block visible before the live/latest block,
+        // and the NOW line to sit ~60% into the live block.
+        // scroll so block[refIdx-1] starts at about 10px from left edge
+        const targetPastStart=10; // px from left edge of viewport
+        const pastIdx=Math.max(0,refIdx-1);
+        const blockLeft=PAD+pastIdx*BLK;
+        row.scrollLeft=blockLeft-targetPastStart;
+
+        // Place the NOW needle at the left edge of the live block + 60%
+        const needle=document.getElementById(`needle-${globalIdx}`);
+        if(!needle)return;
+        const liveBlockLeft=PAD+refIdx*BLK-row.scrollLeft;
+        const needleX=liveIdx>=0?liveBlockLeft+Math.round(148*.6):liveBlockLeft+148+3;
+        if(needleX>15&&needleX<row.offsetWidth-10){
+          needle.style.display='block';
+          needle.style.left=needleX+'px';
+        }
+        // Re-run needle position on scroll
+        row.addEventListener('scroll',()=>{
+          const lbLeft=PAD+refIdx*BLK-row.scrollLeft;
+          const nx=liveIdx>=0?lbLeft+Math.round(148*.6):lbLeft+148+3;
+          if(nx>10&&nx<row.offsetWidth-5){
+            needle.style.display='block';needle.style.left=nx+'px';
+          } else {
+            needle.style.display='none';
+          }
+        },{passive:true});
+      });
+    });
+  }
+}
+
+function wire(){
+  document.querySelectorAll('[data-st]').forEach(el=>el.onclick=e=>{
+    e.stopPropagation();si=+el.dataset.st;level='station';sampling=null;stopScan();render();});
+  document.querySelectorAll('[data-sh]').forEach(el=>el.onclick=e=>{
+    e.stopPropagation();const s=ALLSHOWS[+el.dataset.sh];
+    sh=s;si=STATIONS.indexOf(s[7]);level='show';sampling=null;stopScan();render();});
+  document.querySelectorAll('[data-dj]').forEach(el=>el.onclick=e=>{
+    e.stopPropagation();djName=el.dataset.dj;level='dj';sampling=null;stopScan();render();});
+  document.querySelectorAll('[data-pin]').forEach(el=>el.onclick=e=>{
+    e.stopPropagation();const i=+el.dataset.pin;STATIONS[i].pinned=!STATIONS[i].pinned;render();});
+  document.querySelectorAll('.trow').forEach((el,i)=>el.onclick=()=>land({sp:sh[5][i],show:sh}));
+}
+
+function updateScanBar(){
+  const el=document.getElementById('scanSt');
+  if(!el)return;
+  const c=cands();
+  const ctx=level==='all'?'All stations':level==='station'?S().n:level==='dj'?djName:sh&&sh[0]||'';
+  el.innerHTML=`<b>${ctx}</b> — ${c.length} stop${c.length!==1?'s':''}`;
+}
+
+function cands(){
+  if(level==='show')return(sh[5]||[]).filter(sp=>sp.hit).map(sp=>({sp,show:sh}));
+  if(level==='dj')return ALLSHOWS.filter(x=>x[1]===djName&&x[3]<=0)
+    .map(x=>({sp:x[5].find(z=>z.hit)||x[5][0],show:x})).filter(o=>o.sp);
+  if(level==='station')return S().shows.filter(x=>x[3]<=0)
+    .map(x=>({sp:x[5].find(z=>z.hit)||x[5][0],show:x})).filter(o=>o.sp);
+  return ALLSHOWS.filter(x=>x[3]<=0&&x[6]>0)
+    .map(x=>({sp:x[5].find(z=>z.hit),show:x})).filter(o=>o.sp);
+}
+
+function setDock(o,mode){
+  const sp=o.sp;if(!sp)return;
+  document.getElementById('dTr').textContent=`${sp.tr} · ${sp.ar}`;
+  document.getElementById('dBy').innerHTML=mode==='sample'
+    ?`<span class="sm">◆ Sampling</span> &nbsp;<b>${o.show[1]}</b> · ${o.show[0]}`
+    :`<span class="lv">● ${o.show[3]===0?'Live':'Ghost'}</span> &nbsp;picked by <b>${o.show[1]}</b>`;
+  document.getElementById('dSrc').textContent=mode==='sample'?'Ducked':'Broadcast';
+  document.getElementById('dart').style.background=trackGrad(sp.tr);
+}
+
+function sample(o){
+  sampling=o;setDock(o,'sample');
+  document.getElementById('scanSt').innerHTML=`<b>${o.show[0]}</b> · ${o.show[1]} — ${o.sp?o.sp.tr:'—'}`;
+  document.getElementById('landBtn').classList.add('show');
+}
+function land(o){
+  if(!o||!o.sp)return;
+  stopScan();sampling=null;setDock(o,'land');
+  document.getElementById('scanSt').innerHTML=`Landed · riding <b>${o.show[1]}</b>`;
+  document.getElementById('landBtn').classList.remove('show');
+}
+function startScan(){
+  const c=cands().filter(o=>o.sp);if(!c.length)return;
+  scanning=true;scanIx=0;
+  document.getElementById('scanBtn').classList.add('on');
+  document.getElementById('scanBtn').textContent='Stop';
+  const hop=()=>{if(!scanning)return;sample(c[scanIx%c.length]);scanIx++;scanTimer=setTimeout(hop,3000)};
+  hop();
+}
+function stopScan(){
+  scanning=false;clearTimeout(scanTimer);
+  const b=document.getElementById('scanBtn');
+  if(b){b.classList.remove('on');b.textContent='Scan';}
+}
+document.getElementById('scanBtn').onclick=()=>scanning?(stopScan(),updateScanBar()):startScan();
+document.getElementById('landBtn').onclick=()=>{if(sampling)land(sampling)};
+
+render();
+</script>
+</body>
+</html>
