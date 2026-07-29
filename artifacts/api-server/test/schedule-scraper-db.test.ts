@@ -807,6 +807,72 @@ describe("scrapeStationSchedule — malformed LLM times never reach the DB", () 
     expect(station?.scheduleScrapedAt).toBeInstanceOf(Date);
     expect(station?.upcomingShowCount).toBe(1);
   });
+
+  it("stores exactly one row when the LLM returns the same show twice with extra surrounding whitespace", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // The seenSlots key in parseExtractedSchedule trims the showName before
+    // lowercasing it, so "Morning Jazz" and "  Morning Jazz  " (with extra
+    // leading/trailing spaces) for the same day+startTime are treated as the
+    // same slot and collapsed to one row. This test confirms that behaviour
+    // survives future refactors of the dedup logic: a refactor that moves or
+    // removes the .trim() step would let both entries through and hit the DB
+    // unique constraint, turning a silent logic bug into a visible crash.
+    // Asserting showCount=1 here catches it earlier.
+    const WHITESPACE_VARIANT_JSON = JSON.stringify([
+      {
+        showName: "Morning Jazz",
+        dayOfWeek: "Mon",
+        startTime: "08:00",
+        endTime: "10:00",
+        djName: "DJ Alice",
+      },
+      {
+        showName: "  Morning Jazz  ",
+        dayOfWeek: "Mon",
+        startTime: "08:00",
+        endTime: "10:00",
+        djName: "DJ Alice",
+      },
+    ]);
+
+    configureScheduleExtractor(async () => WHITESPACE_VARIANT_JSON);
+
+    const fetchFn = makeFetch([
+      { pattern: /robots\.txt/, body: "User-agent: *\nDisallow:\n" },
+      {
+        pattern: "/schedule",
+        body: "<html><body><p>Schedule page content</p></body></html>",
+      },
+    ]);
+
+    const target = {
+      id: stationId!,
+      slug: `test-sched-${run}`,
+      homepageUrl: HOMEPAGE,
+      scheduleUrl: SCHEDULE_URL,
+      city: null,
+      country: null,
+      ianaTimezone: null,
+    };
+
+    const result = await scrapeStationSchedule(target, { fetchFn });
+
+    // Whitespace-trimmed dedup collapses the two variants to one row.
+    expect(result).toEqual({ scraped: true, showCount: 1 });
+
+    // Exactly one row in scraped_shows — no DB unique-constraint error and no
+    // silent duplicate. The stored name is the trimmed first occurrence.
+    const shows = await fetchScrapedShows();
+    expect(shows).toHaveLength(1);
+    expect(shows[0]!.showName).toBe("Morning Jazz");
+    expect(shows[0]!.dayOfWeek).toBe("Mon");
+    expect(shows[0]!.startTime).toBe("08:00");
+
+    const station = await fetchStationRow();
+    expect(station?.scheduleScrapedAt).toBeInstanceOf(Date);
+    expect(station?.upcomingShowCount).toBe(1);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1360,6 +1426,72 @@ describe("scrapeStationSchedule — missing required fields never reach the DB",
 
     // Exactly one row in scraped_shows — no DB unique-constraint error and no
     // silent duplicate. The stored name is the first occurrence's casing.
+    const shows = await fetchScrapedShows();
+    expect(shows).toHaveLength(1);
+    expect(shows[0]!.showName).toBe("Morning Jazz");
+    expect(shows[0]!.dayOfWeek).toBe("Mon");
+    expect(shows[0]!.startTime).toBe("08:00");
+
+    const station = await fetchStationRow();
+    expect(station?.scheduleScrapedAt).toBeInstanceOf(Date);
+    expect(station?.upcomingShowCount).toBe(1);
+  });
+
+  it("stores exactly one row when the LLM returns the same show twice with extra surrounding whitespace", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // The seenSlots key in parseExtractedSchedule trims the showName before
+    // lowercasing it, so "Morning Jazz" and "  Morning Jazz  " (with extra
+    // leading/trailing spaces) for the same day+startTime are treated as the
+    // same slot and collapsed to one row. This test confirms that behaviour
+    // survives future refactors of the dedup logic: a refactor that moves or
+    // removes the .trim() step would let both entries through and hit the DB
+    // unique constraint, turning a silent logic bug into a visible crash.
+    // Asserting showCount=1 here catches it earlier.
+    const WHITESPACE_VARIANT_JSON = JSON.stringify([
+      {
+        showName: "Morning Jazz",
+        dayOfWeek: "Mon",
+        startTime: "08:00",
+        endTime: "10:00",
+        djName: "DJ Alice",
+      },
+      {
+        showName: "  Morning Jazz  ",
+        dayOfWeek: "Mon",
+        startTime: "08:00",
+        endTime: "10:00",
+        djName: "DJ Alice",
+      },
+    ]);
+
+    configureScheduleExtractor(async () => WHITESPACE_VARIANT_JSON);
+
+    const fetchFn = makeFetch([
+      { pattern: /robots\.txt/, body: "User-agent: *\nDisallow:\n" },
+      {
+        pattern: "/schedule",
+        body: "<html><body><p>Schedule page content</p></body></html>",
+      },
+    ]);
+
+    const target = {
+      id: stationId!,
+      slug: `test-sched-${run}`,
+      homepageUrl: HOMEPAGE,
+      scheduleUrl: SCHEDULE_URL,
+      city: null,
+      country: null,
+      ianaTimezone: null,
+    };
+
+    const result = await scrapeStationSchedule(target, { fetchFn });
+
+    // Whitespace-trimmed dedup collapses the two variants to one row.
+    expect(result).toEqual({ scraped: true, showCount: 1 });
+
+    // Exactly one row in scraped_shows — no DB unique-constraint error and no
+    // silent duplicate. The stored name is the trimmed first occurrence.
     const shows = await fetchScrapedShows();
     expect(shows).toHaveLength(1);
     expect(shows[0]!.showName).toBe("Morning Jazz");
