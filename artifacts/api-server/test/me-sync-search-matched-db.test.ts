@@ -30,8 +30,12 @@ import app from "../src/app.js";
 const run = randomUUID().slice(0, 8);
 const SID = `test-sync-sm-sid-${run}`;
 
+/** Second user for cross-user isolation tests. */
+const SID2 = `test-sync-sm-sid2-${run}`;
+
 let dbAvailable = false;
 let userId: number | null = null;
+let userId2: number | null = null;
 let server: Server | undefined;
 let baseUrl = "";
 
@@ -46,12 +50,31 @@ const largeMbids: string[] = Array.from(
 const LEGACY_MBID_1 = `test-sm-leg-${run}-0001`;
 const LEGACY_MBID_2 = `test-sm-leg-${run}-0002`;
 
+/**
+ * MBIDs for the job-isolation tests: two jobs for user1 with distinct lists,
+ * plus one job belonging to user2.
+ */
+const ISO_MBID_A1 = `test-sm-iso-${run}-a1`;
+const ISO_MBID_A2 = `test-sm-iso-${run}-a2`;
+const ISO_MBID_B1 = `test-sm-iso-${run}-b1`;
+const ISO_MBID_B2 = `test-sm-iso-${run}-b2`;
+const ISO_MBID_U2 = `test-sm-iso-${run}-u2`;
+
 /** Job ids inserted in beforeAll, keyed by scenario. */
 let jobIdLarge = -1;
 let jobIdLegacy = -1;
+/** Isolation scenario: two jobs belonging to user1 with non-overlapping MBID sets. */
+let jobIdIsoA = -1;
+let jobIdIsoB = -1;
+/** Isolation scenario: a job belonging to user2. */
+let jobIdIsoUser2 = -1;
 
 function authHeaders() {
   return { cookie: `lore_sid=${SID}` };
+}
+
+function authHeaders2() {
+  return { cookie: `lore_sid=${SID2}` };
 }
 
 async function getSearchMatched(
@@ -185,6 +208,84 @@ beforeAll(async () => {
     .returning({ id: librarySyncJobsTable.id });
   jobIdLegacy = legacyJob!.id;
 
+  // ── Isolation scenario: recordings ─────────────────────────────────────────
+  await db.insert(recordingsTable).values([
+    { mbid: ISO_MBID_A1, title: "Isolation A Track 1", artist: `Artist ${run}` },
+    { mbid: ISO_MBID_A2, title: "Isolation A Track 2", artist: `Artist ${run}` },
+    { mbid: ISO_MBID_B1, title: "Isolation B Track 1", artist: `Artist ${run}` },
+    { mbid: ISO_MBID_B2, title: "Isolation B Track 2", artist: `Artist ${run}` },
+    { mbid: ISO_MBID_U2, title: "Isolation User2 Track", artist: `Artist ${run}` },
+  ]).onConflictDoNothing();
+
+  // ── Isolation scenario: two jobs for user1 with non-overlapping MBID sets ──
+  const makeIsoReceipt = (mbids: string[]): SyncReceipt => ({
+    synced: 0,
+    searchMatched: mbids.length,
+    alreadySaved: 0,
+    unavailable: 0,
+    unavailableItems: [],
+    searchMatchedItems: [],
+    searchMatchedMbids: mbids,
+  });
+
+  const [isoJobA] = await db
+    .insert(librarySyncJobsTable)
+    .values({
+      userId: userId!,
+      service: "spotify",
+      status: "done",
+      total: 2,
+      processed: 2,
+      startedAt: new Date(),
+      finishedAt: new Date(),
+      results: makeIsoReceipt([ISO_MBID_A1, ISO_MBID_A2]),
+    })
+    .returning({ id: librarySyncJobsTable.id });
+  jobIdIsoA = isoJobA!.id;
+
+  const [isoJobB] = await db
+    .insert(librarySyncJobsTable)
+    .values({
+      userId: userId!,
+      service: "spotify",
+      status: "done",
+      total: 2,
+      processed: 2,
+      startedAt: new Date(),
+      finishedAt: new Date(),
+      results: makeIsoReceipt([ISO_MBID_B1, ISO_MBID_B2]),
+    })
+    .returning({ id: librarySyncJobsTable.id });
+  jobIdIsoB = isoJobB!.id;
+
+  // ── Isolation scenario: second user with their own job ─────────────────────
+  await db.insert(spotifyConnectionsTable).values({
+    sid: SID2,
+    accessToken: "tok-access-2",
+    refreshToken: "tok-refresh-2",
+    expiresAt: new Date(Date.now() + 3_600_000),
+  });
+  const [user2] = await db
+    .insert(loreUsersTable)
+    .values({ spotifyUserId: `test-sync-sm-user2-${run}`, spotifyConnectionId: SID2 })
+    .returning({ id: loreUsersTable.id });
+  userId2 = user2!.id;
+
+  const [isoJobUser2] = await db
+    .insert(librarySyncJobsTable)
+    .values({
+      userId: userId2!,
+      service: "spotify",
+      status: "done",
+      total: 1,
+      processed: 1,
+      startedAt: new Date(),
+      finishedAt: new Date(),
+      results: makeIsoReceipt([ISO_MBID_U2]),
+    })
+    .returning({ id: librarySyncJobsTable.id });
+  jobIdIsoUser2 = isoJobUser2!.id;
+
   // ── Start the app server ───────────────────────────────────────────────────
   server = app.listen(0);
   await new Promise<void>((resolve) => server!.once("listening", resolve));
@@ -196,20 +297,32 @@ afterAll(async () => {
   if (server) await new Promise<void>((r) => server!.close(() => r()));
   if (!dbAvailable) return;
 
-  const jobIds = [jobIdLarge, jobIdLegacy].filter((id) => id > 0);
+  const jobIds = [
+    jobIdLarge, jobIdLegacy,
+    jobIdIsoA, jobIdIsoB, jobIdIsoUser2,
+  ].filter((id) => id > 0);
   if (jobIds.length > 0) {
     await db.delete(librarySyncJobsTable).where(
       sql`${librarySyncJobsTable.id} = ANY(ARRAY[${sql.join(jobIds.map((id) => sql`${id}`), sql`, `)}]::integer[])`,
     );
   }
   // Batch-delete all seeded recordings in one query.
-  const allMbids = [...largeMbids, LEGACY_MBID_1, LEGACY_MBID_2];
+  const allMbids = [
+    ...largeMbids,
+    LEGACY_MBID_1, LEGACY_MBID_2,
+    ISO_MBID_A1, ISO_MBID_A2, ISO_MBID_B1, ISO_MBID_B2, ISO_MBID_U2,
+  ];
   await db.delete(recordingsTable).where(inArray(recordingsTable.mbid, allMbids));
 
+  if (userId2 != null) {
+    await db.delete(loreUsersTable).where(eq(loreUsersTable.id, userId2));
+  }
   if (userId != null) {
     await db.delete(loreUsersTable).where(eq(loreUsersTable.id, userId));
   }
-  await db.delete(spotifyConnectionsTable).where(eq(spotifyConnectionsTable.sid, SID));
+  await db.delete(spotifyConnectionsTable).where(
+    inArray(spotifyConnectionsTable.sid, [SID, SID2]),
+  );
 }, 30_000);
 
 // ---------------------------------------------------------------------------
@@ -381,5 +494,57 @@ describe("GET /api/me/library/sync/:jobId/search-matched — pagination", () => 
     if (!dbAvailable) return;
     const { status } = await getSearchMatchedJson(9_999_999);
     expect(status).toBe(404);
+  });
+});
+
+describe("GET /api/me/library/sync/:jobId/search-matched — job isolation", () => {
+  it("jobIdIsoA returns only its own two MBIDs (not jobIdIsoB's)", async () => {
+    if (!dbAvailable) return;
+    const { status, body } = await getSearchMatchedJson(jobIdIsoA, { limit: "100" });
+    expect(status).toBe(200);
+    expect(body.total).toBe(2);
+    const mbids: string[] = body.items.map((i: { mbid: string }) => i.mbid);
+    expect(mbids).toContain(ISO_MBID_A1);
+    expect(mbids).toContain(ISO_MBID_A2);
+    expect(mbids).not.toContain(ISO_MBID_B1);
+    expect(mbids).not.toContain(ISO_MBID_B2);
+  });
+
+  it("jobIdIsoB returns only its own two MBIDs (not jobIdIsoA's)", async () => {
+    if (!dbAvailable) return;
+    const { status, body } = await getSearchMatchedJson(jobIdIsoB, { limit: "100" });
+    expect(status).toBe(200);
+    expect(body.total).toBe(2);
+    const mbids: string[] = body.items.map((i: { mbid: string }) => i.mbid);
+    expect(mbids).toContain(ISO_MBID_B1);
+    expect(mbids).toContain(ISO_MBID_B2);
+    expect(mbids).not.toContain(ISO_MBID_A1);
+    expect(mbids).not.toContain(ISO_MBID_A2);
+  });
+
+  it("user1 cannot access user2's job — returns 404", async () => {
+    if (!dbAvailable) return;
+    // jobIdIsoUser2 is owned by user2; user1's session must get 404.
+    const { status } = await getSearchMatchedJson(jobIdIsoUser2);
+    expect(status).toBe(404);
+  });
+
+  it("user2 cannot access user1's job — returns 404", async () => {
+    if (!dbAvailable) return;
+    // jobIdIsoA is owned by user1; user2's session must get 404.
+    const qs = new URLSearchParams().toString();
+    const url = `${baseUrl}/api/me/library/sync/${jobIdIsoA}/search-matched`;
+    const res = await fetch(url, { headers: authHeaders2() });
+    expect(res.status).toBe(404);
+  });
+
+  it("user2 can access their own job", async () => {
+    if (!dbAvailable) return;
+    const url = `${baseUrl}/api/me/library/sync/${jobIdIsoUser2}/search-matched`;
+    const res = await fetch(url, { headers: authHeaders2() });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const mbids: string[] = body.items.map((i: { mbid: string }) => i.mbid);
+    expect(mbids).toContain(ISO_MBID_U2);
   });
 });
