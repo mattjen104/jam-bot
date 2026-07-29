@@ -338,6 +338,9 @@ export async function runSyncWorker(
         bandcampUrl: bandcampUrl(u.artist, u.title),
       }));
 
+    // Full MBID list (no cap) — used by the /unavailable download endpoint.
+    const unavailableMbids = unmatched.map((u) => u.mbid);
+
     const searchMatchedItems: SyncReceiptSearchItem[] = searchSynced
       .slice(0, RECEIPT_LIST_CAP)
       .map((m) => ({
@@ -353,6 +356,7 @@ export async function runSyncWorker(
       alreadySaved: alreadySavedCount,
       unavailable: unmatched.length,
       unavailableItems,
+      unavailableMbids,
       searchMatchedItems,
     };
 

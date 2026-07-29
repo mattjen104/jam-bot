@@ -1699,6 +1699,104 @@ router.get("/me/library/sync", h(async (req, res) => {
 }));
 
 /**
+ * GET /api/me/library/sync/:jobId/unavailable — full paginated list of tracks
+ * that could not be found on Spotify for a completed sync job.
+ *
+ * Query params:
+ * - `format` — "json" (default) | "csv" — set Content-Disposition when csv.
+ * - `page`   — 1-based page number (default 1). Ignored for csv (returns all).
+ * - `limit`  — page size 1–1000 (default 200).
+ *
+ * Response body (json): { items: [{mbid,artist,title,bandcampUrl}], total, page, limit, pages }
+ *
+ * The list is sourced by joining the stored unavailableMbids from the receipt
+ * against the recordings table — artist/title are never fabricated, they come
+ * from the spine. Jobs from before this feature shipped have no unavailableMbids
+ * and fall back to the capped unavailableItems preview list.
+ */
+router.get("/me/library/sync/:jobId/unavailable", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+  const rawJobId = req.params.jobId;
+  const jobId = parseInt(typeof rawJobId === "string" ? rawJobId : "", 10);
+  if (isNaN(jobId)) return res.status(400).json({ error: "Invalid jobId" });
+
+  const [job] = await db
+    .select()
+    .from(librarySyncJobsTable)
+    .where(and(eq(librarySyncJobsTable.id, jobId), eq(librarySyncJobsTable.userId, user.id)))
+    .limit(1);
+  if (!job) return res.status(404).json({ error: "Job not found" });
+  if (job.status !== "done" || !job.results) {
+    return res.status(400).json({ error: "Job is not complete" });
+  }
+
+  const receipt = job.results;
+  const total = receipt.unavailable;
+
+  const formatRaw = req.query["format"];
+  const format = formatRaw === "csv" ? "csv" : "json";
+  const limitRaw = parseInt(typeof req.query["limit"] === "string" ? req.query["limit"] : "", 10);
+  const limit = isNaN(limitRaw) ? 200 : Math.max(1, Math.min(limitRaw, 1000));
+  const pageRaw = parseInt(typeof req.query["page"] === "string" ? req.query["page"] : "", 10);
+  const page = isNaN(pageRaw) ? 1 : Math.max(1, pageRaw);
+
+  /** Build Bandcamp search URL for a track. */
+  const bcUrl = (artist: string, title: string) =>
+    `https://bandcamp.com/search?q=${encodeURIComponent(`${artist} ${title}`)}`;
+
+  interface UnavailableRow { mbid: string; artist: string; title: string; bandcampUrl: string }
+
+  let allItems: UnavailableRow[];
+
+  if (receipt.unavailableMbids && receipt.unavailableMbids.length > 0) {
+    // New-style receipt: full MBID list stored, join recordings for details.
+    const mbids = receipt.unavailableMbids;
+    const recs = await db
+      .select({ mbid: recordingsTable.mbid, artist: recordingsTable.artist, title: recordingsTable.title })
+      .from(recordingsTable)
+      .where(inArray(recordingsTable.mbid, mbids));
+    const recMap = new Map(recs.map((r) => [r.mbid, r]));
+
+    allItems = mbids.map((mbid) => {
+      const rec = recMap.get(mbid);
+      const artist = rec?.artist ?? "";
+      const title = rec?.title ?? "";
+      return { mbid, artist, title, bandcampUrl: bcUrl(artist, title) };
+    });
+  } else {
+    // Legacy receipt (no unavailableMbids): fall back to the capped preview list.
+    allItems = receipt.unavailableItems.map((item) => ({
+      mbid: item.mbid,
+      artist: item.artist,
+      title: item.title,
+      bandcampUrl: item.bandcampUrl,
+    }));
+  }
+
+  if (format === "csv") {
+    const lines = [
+      "mbid,artist,title,bandcamp_url",
+      ...allItems.map((r) => [r.mbid, r.artist, r.title, r.bandcampUrl]
+        .map((v) => `"${v.replace(/"/g, '""')}"`)
+        .join(",")),
+    ];
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="sync-${jobId}-unavailable.csv"`,
+    );
+    return res.send(lines.join("\n"));
+  }
+
+  // JSON: paginate.
+  const offset = (page - 1) * limit;
+  const pageItems = allItems.slice(offset, offset + limit);
+  const pages = Math.ceil(allItems.length / limit) || 1;
+
+  return res.json({ items: pageItems, total, page, limit, pages });
+}));
+
+/**
  * GET /api/me/library/sync/:jobId — poll sync job progress.
  */
 router.get("/me/library/sync/:jobId", h(async (req, res) => {

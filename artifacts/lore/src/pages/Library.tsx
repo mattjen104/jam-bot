@@ -487,9 +487,21 @@ export default function Library() {
                   <div className="mt-3 space-y-4">
                     {syncJobData.results.unavailableItems.length > 0 && (
                       <div>
-                        <p className="mb-2 font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
-                          Not on Spotify — buy them properly
-                        </p>
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <p className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+                            Not on Spotify — buy them properly
+                          </p>
+                          {syncJobData.results.unavailable > 200 && (
+                            <a
+                              href={`/api/me/library/sync/${syncJobData.jobId}/unavailable?format=csv`}
+                              download
+                              className="shrink-0 font-mono text-[10px] uppercase tracking-wide text-primary hover:underline"
+                              data-testid="library-sync-unavailable-download"
+                            >
+                              Download full list ({syncJobData.results.unavailable}) ↓
+                            </a>
+                          )}
+                        </div>
                         <ul className="space-y-1">
                           {syncJobData.results.unavailableItems.map((item) => (
                             <li key={item.mbid} className="flex items-center justify-between gap-2 text-sm">

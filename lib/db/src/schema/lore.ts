@@ -1674,8 +1674,11 @@ export interface SyncReceipt {
   alreadySaved: number;
   /** Could not find on Spotify — listed with Bandcamp links. */
   unavailable: number;
-  /** Capped list of unavailable items (max 200). */
+  /** Capped list of unavailable items (max 200) — preview only. */
   unavailableItems: SyncReceiptUnavailableItem[];
+  /** Full list of all unavailable MBIDs (no cap). Used by the
+   *  /unavailable endpoint to serve the complete download. */
+  unavailableMbids?: string[];
   /** Capped list of search-matched items (max 200). */
   searchMatchedItems: SyncReceiptSearchItem[];
 }

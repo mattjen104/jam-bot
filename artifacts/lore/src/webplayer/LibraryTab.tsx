@@ -1141,15 +1141,28 @@ export function LibraryTab({
                 </p>
                 {syncJobData.results.unavailableItems.length > 0 && (
                   <>
-                    <button
-                      type="button"
-                      onClick={() => setSyncReceiptOpen((v) => !v)}
-                      className="wp-mono"
-                      style={{ margin: "6px 0 0", fontSize: 11, color: "var(--wp-text-muted)", background: "none", border: "none", padding: 0, cursor: "pointer" }}
-                      data-testid="wp-library-sync-receipt-toggle"
-                    >
-                      {syncReceiptOpen ? "▲ hide" : "▼ not on spotify"}
-                    </button>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 6 }}>
+                      <button
+                        type="button"
+                        onClick={() => setSyncReceiptOpen((v) => !v)}
+                        className="wp-mono"
+                        style={{ fontSize: 11, color: "var(--wp-text-muted)", background: "none", border: "none", padding: 0, cursor: "pointer" }}
+                        data-testid="wp-library-sync-receipt-toggle"
+                      >
+                        {syncReceiptOpen ? "▲ hide" : "▼ not on spotify"}
+                      </button>
+                      {syncJobData.results.unavailable > 200 && (
+                        <a
+                          href={`/api/me/library/sync/${syncJobData.jobId}/unavailable?format=csv`}
+                          download
+                          className="wp-mono"
+                          style={{ fontSize: 11, color: "var(--wp-text-muted)", flexShrink: 0, textDecoration: "none" }}
+                          data-testid="wp-library-sync-unavailable-download"
+                        >
+                          download full list ↓
+                        </a>
+                      )}
+                    </div>
                     {syncReceiptOpen && (
                       <ul style={{ margin: "6px 0 0", padding: 0, listStyle: "none" }}>
                         {syncJobData.results.unavailableItems.slice(0, 20).map((item) => (
