@@ -225,21 +225,113 @@ body{font-family:var(--ui);background:#0a0908;color:var(--ink);
 .ctx-chip.live-chip:hover{background:rgba(127,168,201,.18)}
 .ctx-chip.new-chip{border-color:var(--rule-strong);color:var(--muted);font-style:italic}
 
+/* ── radio sub-nav ── */
+.radio-subnav{display:flex;gap:4px;overflow-x:auto;padding:8px 15px;
+  border-bottom:1px solid var(--rule);background:var(--bg);flex-shrink:0;
+  scrollbar-width:none}
+.radio-subnav::-webkit-scrollbar{display:none}
+.subnav-chip{font-family:var(--label);font-size:10.5px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.06em;padding:6px 14px;
+  border-radius:20px;border:1px solid transparent;background:none;
+  color:var(--muted);cursor:pointer;white-space:nowrap;transition:.11s;flex-shrink:0}
+.subnav-chip.active{background:var(--surface);border-color:var(--rule-strong);color:var(--ink)}
+.subnav-chip:not(.active):hover{color:var(--ink-2)}
+
+/* ── stations list view ── */
+.stn-row{display:flex;align-items:center;gap:12px;padding:12px 15px;
+  border-bottom:1px solid var(--rule);cursor:pointer;transition:.1s}
+.stn-row:hover{background:var(--surface)}
+.stn-dot{width:7px;height:7px;border-radius:50%;background:var(--absent);flex-shrink:0}
+.stn-dot.live{background:var(--live);animation:pulse 2.4s ease-in-out infinite}
+.stn-info{flex:1;min-width:0}
+.stn-name{font-family:var(--label);font-size:13px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.05em;color:var(--ink)}
+.stn-now{font-family:var(--name);font-style:italic;font-size:12px;
+  color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stn-now b{font-style:normal;font-weight:600;color:var(--ink-2)}
+.stn-cross{font-family:var(--mono);font-size:9px;text-align:right;flex-shrink:0}
+.stn-cross .sc-num{color:var(--library);display:block}
+.stn-cross .sc-lbl{color:var(--absent);font-size:8px}
+.stn-cross.zero .sc-num{color:var(--absent)}
+
+/* ── selectors list view ── */
+.sel-row{display:flex;gap:12px;padding:13px 15px;border-bottom:1px solid var(--rule);
+  cursor:pointer;transition:.1s;align-items:flex-start}
+.sel-row:hover{background:var(--surface)}
+.sel-avatar{width:34px;height:34px;border-radius:50%;flex-shrink:0;
+  background:var(--picker-bg);border:1px solid rgba(200,169,107,.35);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--label);font-size:11px;font-weight:700;color:var(--picker)}
+.sel-info{flex:1;min-width:0}
+.sel-name{font-family:var(--name);font-size:16px;font-weight:600;line-height:1.1}
+.sel-stn{font-family:var(--label);font-size:9px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.07em;color:var(--muted);margin-top:3px}
+.sel-artists{font-family:var(--mono);font-size:8.5px;color:var(--library);
+  margin-top:5px;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sel-stat{text-align:right;flex-shrink:0}
+.sel-stat .ss-num{font-family:'Fraunces',Georgia,serif;font-size:22px;
+  font-weight:600;color:var(--library);line-height:1}
+.sel-stat .ss-lbl{font-family:var(--mono);font-size:8px;color:var(--absent);
+  text-transform:uppercase;letter-spacing:.06em;display:block;margin-top:2px}
+
+/* ── schedule view ── */
+.sch-day{padding:11px 15px 5px;display:flex;align-items:center;gap:9px}
+.sch-day .sd-lbl{font-family:var(--label);font-size:9px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}
+.sch-day .sd-rule{flex:1;height:1px;background:var(--rule)}
+.sch-row{display:flex;gap:11px;padding:10px 15px;border-bottom:1px solid var(--rule);
+  cursor:pointer;transition:.1s;align-items:baseline}
+.sch-row:hover{background:var(--surface)}
+.sch-row.live-row{background:var(--live-bg)}
+.sch-row.warm-row{background:var(--library-bg)}
+.sch-time{font-family:var(--mono);font-size:9px;color:var(--muted);
+  width:40px;flex-shrink:0;padding-top:3px;line-height:1.5}
+.sch-info{flex:1;min-width:0}
+.sch-show{font-family:var(--name);font-size:15px;font-weight:500;line-height:1.2}
+.sch-dj{font-family:var(--name);font-style:italic;font-size:12px;
+  color:var(--muted);margin-top:2px}
+.sch-dj b{font-style:normal;font-weight:600;color:var(--ink-2)}
+.sch-stn{font-family:var(--label);font-size:8.5px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.06em;color:var(--absent);margin-top:3px}
+.sch-badge{flex-shrink:0;font-family:var(--label);font-size:8px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.07em;padding-top:3px}
+.sch-badge.live-b{color:var(--live)}.sch-badge.cross-b{color:var(--library)}
+.sch-badge.sel-b{color:var(--picker)}
+
 /* ── nav bubbles ── */
 .nav-bar{display:flex;align-items:center;justify-content:center;gap:8px;
   padding:9px 15px 10px;background:var(--bg);border-top:1px solid var(--rule);
   flex-shrink:0}
-.nav-pill{font-family:var(--label);font-size:11px;font-weight:700;
-  text-transform:uppercase;letter-spacing:.07em;padding:8px 26px;
+.nav-pill{font-family:var(--label);font-size:10.5px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.06em;padding:8px 18px;
   border-radius:30px;border:1px solid var(--rule-strong);
   background:var(--surface);color:var(--muted);cursor:pointer;transition:.12s}
+/* Selectors nav pill gets picker colour when active */
+.nav-pill.sel-active{background:var(--picker);border-color:var(--picker);color:var(--bg)}
 .nav-pill.active{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .nav-pill:not(.active):hover{color:var(--ink-2);background:var(--raised)}
 .nav-gear{font-size:15px;color:var(--absent);background:none;border:none;
   cursor:pointer;padding:8px 4px;margin-left:auto;line-height:1;transition:.1s}
 .nav-gear:hover{color:var(--ink-2)}
 
-/* ── library view ── */
+/* ── selectors view ── */
+.sel-hero{padding:16px 15px 14px;border-bottom:1px solid var(--rule)}
+.sel-hero .sh-eyebrow{font-family:var(--label);font-size:9px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.1em;color:var(--picker);margin-bottom:6px}
+.sel-hero .sh-num{font-family:'Fraunces',Georgia,serif;font-size:36px;
+  font-weight:600;color:var(--ink);line-height:1}
+.sel-hero .sh-sub{font-family:var(--name);font-style:italic;font-size:13px;
+  color:var(--muted);margin-top:3px}
+.sel-hero .sh-sub b{font-style:normal;font-weight:600;color:var(--picker)}
+.sel-hero .sh-stats{display:flex;gap:18px;margin-top:12px;flex-wrap:wrap}
+.sel-hero .shstat{font-family:var(--mono);font-size:9px;color:var(--absent);
+  text-transform:uppercase;letter-spacing:.06em}
+.sel-hero .shstat b{display:block;font-family:var(--name);font-size:17px;
+  font-weight:600;color:var(--ink);text-transform:none;letter-spacing:0;margin-bottom:1px}
+.sel-hero .shstat.warm b{color:var(--library)}
+.sel-hero .shstat.pick b{color:var(--picker)}
+
+/* library view ── */
 .lib-hero{padding:16px 15px 14px;border-bottom:1px solid var(--rule)}
 .lib-hero .lh-num{font-family:'Fraunces',Georgia,serif;font-size:36px;
   font-weight:600;color:var(--ink);line-height:1}
@@ -306,16 +398,22 @@ body{font-family:var(--ui);background:#0a0908;color:var(--ink);
 <body>
 <div id="p">
   <div class="topbar" id="topbar"></div>
-  <div class="scanbar">
+  <div class="scanbar" id="scanbar">
     <button class="scanbtn" id="scanBtn">Scan</button>
     <div class="scan-track" id="scanTrack">
       <div class="st-idle" id="scanIdle"><b id="scanCtx">All stations</b> — 15 stops</div>
     </div>
     <button class="landbtn" id="landBtn">Land</button>
   </div>
+  <div class="radio-subnav" id="radioSubnav">
+    <button class="subnav-chip active" data-rv="dial">Dial</button>
+    <button class="subnav-chip" data-rv="stations">Stations</button>
+    <button class="subnav-chip" data-rv="schedule">Schedule</button>
+  </div>
   <div class="sc" id="body"></div>
   <div class="nav-bar">
     <button class="nav-pill active" id="navRadio">Radio</button>
+    <button class="nav-pill" id="navSelectors">Selectors</button>
     <button class="nav-pill" id="navLibrary">Library</button>
     <button class="nav-gear" title="Settings">⚙</button>
   </div>
@@ -466,7 +564,8 @@ const UNAVAIL=[
 const SYNC_STATE={status:'idle',lastAt:'2026-07-28 11:40',
   synced:8,matched:2,alreadySaved:6,unavailable:3};
 
-let tab='radio'; // 'radio' | 'library'
+let tab='radio';        // 'radio' | 'library'
+let radioView='dial';   // 'dial' | 'stations' | 'selectors' | 'schedule'
 let level='all',si=0,sh=null,djName=null;
 let scanning=false,scanIx=0,scanTimer=null,sampling=null;
 const sortedStations=()=>[...STATIONS].sort((a,b)=>(b.pinned-a.pinned)||b.cross-a.cross);
@@ -792,6 +891,61 @@ function renderDJ(){
   ${railForDJ()}`;
 }
 
+// ── selectors view ──
+function renderSelectors(){
+  // Build a rich profile for each picker DJ from generated spin data
+  const profiles=[...PICKERS].map(name=>{
+    const sets=ALLSHOWS.filter(x=>x[1]===name&&x[3]<=0);
+    const liveSet=sets.find(s=>s[3]===0);
+    const allSpins=sets.flatMap(s=>s[5]);
+    const crossCount=allSpins.filter(s=>s.hit).length;
+    const totalSpins=allSpins.length;
+    const pct=totalSpins>0?Math.round(crossCount/totalSpins*100):0;
+    const stations=[...new Set(sets.map(s=>s[7].n))];
+    const topArs=[...new Set(allSpins.filter(s=>s.hit).map(s=>s.ar))].slice(0,5);
+    const newArs=[...new Set(allSpins.filter(s=>!s.hit).map(s=>s.ar))]
+      .filter(a=>!topArs.includes(a)).slice(0,3);
+    const initials=name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    return{name,sets:sets.length,crossCount,totalSpins,pct,stations,topArs,newArs,liveSet,initials};
+  }).sort((a,b)=>b.pct-a.pct);
+
+  const totalCross=profiles.reduce((m,p)=>m+p.crossCount,0);
+  const liveNow=profiles.filter(p=>p.liveSet).length;
+
+  const rows=profiles.map(p=>`
+    <div class="sel-row" data-dj="${p.name}">
+      <div class="sel-avatar">${p.initials}</div>
+      <div class="sel-info">
+        <div class="sel-name">${p.name}
+          ${p.liveSet?`<span style="font-family:var(--label);font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--live);margin-left:7px">● Live</span>`:''}
+        </div>
+        <div class="sel-stn">${p.stations.join(' · ')}</div>
+        ${p.topArs.length?`<div class="sel-artists">${p.topArs.join(' · ')}${p.newArs.length?` <span style="color:var(--absent)">+ ${p.newArs.slice(0,2).join(', ')}</span>`:''}</div>`:''}
+        ${p.liveSet?`<div style="font-family:var(--name);font-style:italic;font-size:11.5px;color:var(--muted);margin-top:4px">
+          on air: <b style="font-style:normal;color:var(--ink-2)">${p.liveSet[0]}</b></div>`:''}
+      </div>
+      <div class="sel-stat">
+        <div class="ss-num">${p.pct}%</div>
+        <div class="ss-lbl">overlap</div>
+        <div style="font-family:var(--mono);font-size:8px;color:var(--absent);margin-top:5px">${p.crossCount} tracks<br>${p.sets} sets</div>
+      </div>
+    </div>`).join('');
+
+  return`<div class="sel-hero">
+    <div class="sh-eyebrow">◆ Selectors</div>
+    <div class="sh-num">${profiles.length}</div>
+    <div class="sh-sub">curators whose taste maps to yours · <b>${totalCross} crossings</b> found</div>
+    <div class="sh-stats">
+      ${liveNow?`<div class="shstat pick"><b>${liveNow}</b>on air now</div>`:''}
+      <div class="shstat warm"><b>${totalCross}</b>your tracks</div>
+      <div class="shstat"><b>${profiles.reduce((m,p)=>m+p.sets,0)}</b>sets archived</div>
+    </div>
+  </div>
+  <div class="sec-lbl" style="padding-top:14px">Ranked by your overlap</div>
+  ${rows}
+  <div style="height:20px"></div>`;
+}
+
 // ── library view ──
 function renderLibrary(){
   const totalHeard=ALLSHOWS.filter(s=>s[3]<=0&&s[6]>0).length;
@@ -856,9 +1010,28 @@ function renderLibrary(){
 function render(){
   renderTopbar();
   const b=document.getElementById('body');
-  // show/hide scan bar based on tab
-  document.querySelector('.scanbar').style.display=tab==='radio'?'':'none';
 
+  // scanbar: Radio only
+  document.getElementById('scanbar').style.display=tab==='radio'?'':'none';
+  // sub-nav: Radio only
+  document.getElementById('radioSubnav').style.display=tab==='radio'?'':'none';
+
+  // sync active state on all three pills
+  document.getElementById('navRadio').className='nav-pill'+(tab==='radio'?' active':'');
+  document.getElementById('navSelectors').className='nav-pill'+(tab==='selectors'?' sel-active':'');
+  document.getElementById('navLibrary').className='nav-pill'+(tab==='library'?' active':'');
+
+  if(tab==='selectors'){
+    b.innerHTML=renderSelectors();
+    // wire selector rows → DJ level
+    b.querySelectorAll('[data-dj]').forEach(el=>el.onclick=e=>{
+      e.stopPropagation();djName=el.dataset.dj;level='dj';tab='radio';
+      document.getElementById('navRadio').classList.add('active');
+      document.getElementById('navSelectors').classList.remove('sel-active');
+      render();
+    });
+    return;
+  }
   if(tab==='library'){
     b.innerHTML=renderLibrary();
     document.getElementById('syncBtn').onclick=()=>{
@@ -980,18 +1153,9 @@ document.getElementById('scanBtn').onclick=()=>scanning?(stopScan(),updateScanBa
 document.getElementById('landBtn').onclick=()=>{if(sampling)land(sampling)};
 
 // nav pills
-document.getElementById('navRadio').onclick=()=>{
-  tab='radio';
-  document.getElementById('navRadio').classList.add('active');
-  document.getElementById('navLibrary').classList.remove('active');
-  render();
-};
-document.getElementById('navLibrary').onclick=()=>{
-  tab='library';
-  document.getElementById('navLibrary').classList.add('active');
-  document.getElementById('navRadio').classList.remove('active');
-  stopScan();render();
-};
+document.getElementById('navRadio').onclick=()=>{tab='radio';level='all';render();};
+document.getElementById('navSelectors').onclick=()=>{tab='selectors';stopScan();render();};
+document.getElementById('navLibrary').onclick=()=>{tab='library';stopScan();render();};
 
 render();
 </script>
