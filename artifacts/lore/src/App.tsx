@@ -34,7 +34,7 @@ import { PlayerDock } from "./components/PlayerDock";
 import { ListeningLogger } from "./components/ListeningLogger";
 import { AppLayout } from "./components/AppLayout";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { prefersClassic } from "./lib/uiPrefs";
+
 
 const queryClient = new QueryClient();
 
@@ -55,35 +55,6 @@ function LibraryConnectRedirect() {
       setLocation(`/taste-map?import=1`);
     }
   }, [setLocation]);
-  return null;
-}
-
-/** Only redirect once per full page load, not on every in-app navigation. */
-let didInitialMobileRoute = false;
-
-/**
- * Mobile-first default: on phone-sized screens, an initial visit to the
- * classic home (/) lands on the webplayer (/player) instead. Opt-outs:
- * - the user tapped "CLASSIC SITE" in the webplayer this session, or
- * - they deep-linked to any non-home classic page.
- */
-function MobileDefaultRedirect() {
-  const [location, setLocation] = useLocation();
-  useEffect(() => {
-    if (didInitialMobileRoute) return;
-    didInitialMobileRoute = true;
-    const path = location.split("?")[0] ?? location;
-    if (path !== "/" && path !== "") return;
-    // OAuth callbacks land on / with a ?library= or ?spotify= param and must
-    // be handled by their own effects before we strip the URL via redirect.
-    const cbParams = new URLSearchParams(window.location.search);
-    if (cbParams.get("library") === "connected") return;
-    if (cbParams.has("spotify")) return;
-    if (prefersClassic()) return;
-    if (window.matchMedia("(max-width: 767px)").matches) {
-      setLocation("/player", { replace: true });
-    }
-  }, [location, setLocation]);
   return null;
 }
 
@@ -160,7 +131,6 @@ function Shell() {
 
   return (
     <>
-      <MobileDefaultRedirect />
       <AppLayout>
         <Router />
       </AppLayout>

@@ -1,5 +1,11 @@
 import { Link, useLocation } from "wouter";
+import { useState } from "react";
 import type { ReactNode } from "react";
+import { Music2, X } from "lucide-react";
+import { ImportStrip } from "./ImportStrip";
+import { useMyConnections, useLatestImportJob } from "../lib/meHooks";
+
+const SESSION_LIBRARY_PROMPT_DISMISSED = "lore_library_prompt_dismissed";
 
 function isActive(href: string, exact: boolean, location: string): boolean {
   if (exact) return location === href;
@@ -36,6 +42,66 @@ const RADIO_SUB_NAV = [
   { href: "/schedule", label: "Schedule", exact: false },
 ];
 
+/**
+ * Library import nudge — shown once per session to users who haven't yet
+ * connected a Spotify library. Dismisses permanently for the session.
+ */
+function LibraryPrompt() {
+  const [, navigate] = useLocation();
+  const [dismissed, setDismissed] = useState(() =>
+    sessionStorage.getItem(SESSION_LIBRARY_PROMPT_DISMISSED) === "1",
+  );
+
+  const { data: connections, isLoading: connLoading } = useMyConnections();
+  const { data: job } = useLatestImportJob();
+
+  // Don't flash before we know the connection state.
+  if (connLoading) return null;
+  // Already connected — no prompt needed.
+  if (Array.isArray(connections) && connections.some((c) => c.service === "spotify")) return null;
+  // Import already running/done elsewhere — suppress.
+  if (job && (job.status === "running" || job.status === "pending" || job.status === "done")) return null;
+  if (dismissed) return null;
+
+  const handleDismiss = () => {
+    sessionStorage.setItem(SESSION_LIBRARY_PROMPT_DISMISSED, "1");
+    setDismissed(true);
+  };
+
+  return (
+    <div
+      className="flex items-center gap-3 border-b border-border px-4 py-2"
+      style={{ background: "hsl(var(--card))" }}
+      data-testid="library-prompt"
+    >
+      <Music2
+        size={14}
+        className="shrink-0"
+        style={{ color: "hsl(var(--primary))" }}
+        aria-hidden="true"
+      />
+      <p className="flex-1 font-mono text-[11px] text-muted-foreground">
+        Connect your Spotify library to see which shows overlap with your taste
+      </p>
+      <button
+        type="button"
+        onClick={() => navigate("/taste-map")}
+        className="shrink-0 rounded-full border border-border px-3 py-1 font-mono text-[10px] uppercase tracking-wide text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+      >
+        Connect
+      </button>
+      <button
+        type="button"
+        onClick={handleDismiss}
+        aria-label="Dismiss"
+        className="shrink-0 text-muted-foreground hover:text-foreground"
+      >
+        <X size={13} aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
 export function AppLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
 
@@ -60,6 +126,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <>
+      {/* ── Library import prompt — nudges unconnected users ─────────── */}
+      <LibraryPrompt />
+
+      {/* ── Import progress strip — visible while a sync runs ────────── */}
+      <ImportStrip />
+
       {/* ── Radio sub-nav strip — only for non-Home radio pages ─────────── */}
       {radioActive && !isHome && (
         <div
