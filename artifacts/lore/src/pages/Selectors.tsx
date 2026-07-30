@@ -10,7 +10,7 @@ import {
   getLookupPickedMbidsQueryKey,
 } from "@workspace/api-client-react";
 import type { PickerDialItem, SelectorSummary } from "@workspace/api-client-react";
-import { useMyLibrary } from "../lib/meHooks";
+import { useMyLibrary, useMyOverlapSelectors } from "../lib/meHooks";
 import { usePlayer } from "../player/PlayerProvider";
 import { useFollows, isFollowed, toggleFollow } from "../lib/local";
 import { Search } from "lucide-react";
@@ -103,6 +103,10 @@ interface UnifiedSelector {
   spinCount: number;
   lastActiveAt?: string | null;
   overlapPct: number;
+  /** Absolute count of user's library tracks this selector has ever played/picked.
+   *  Undefined = data not yet loaded. Used for the "has played N of your records"
+   *  headline sentence on DJ cards (Selectors-surface only, never on Radio). */
+  sharedCount?: number;
   isLive: boolean;
 }
 
@@ -149,6 +153,16 @@ function SelectorCard({
     >
       <div className="sel-card__body">
         <div className="sel-card__nm">{sel.name}</div>
+
+        {/* Lifetime overlap sentence — Selectors surface only, never on Radio */}
+        {sel.kind === "dj" && sel.sharedCount !== undefined && (
+          <div className="sel-card__overlap-sentence">
+            {sel.sharedCount > 0
+              ? <><b className="sel-card__overlap-n">{sel.sharedCount.toLocaleString()}</b> of your records played</>
+              : <span className="sel-card__overlap-zero">hasn't played anything of yours yet</span>
+            }
+          </div>
+        )}
 
         {/* Show + station context */}
         {(sel.showName || sel.station) && (
@@ -323,9 +337,11 @@ function CuratedSelCard({
 function RadioDjCard({
   selector,
   overlapPct,
+  sharedCount,
 }: {
   selector: SelectorSummary;
   overlapPct: number;
+  sharedCount?: number;
 }) {
   const isLive =
     selector.lastPlayedAt != null &&
@@ -342,6 +358,7 @@ function RadioDjCard({
     spinCount: selector.recentSpinCount ?? 0,
     lastActiveAt: selector.lastPlayedAt,
     overlapPct,
+    sharedCount,
     isLive,
   };
 
@@ -359,7 +376,15 @@ export default function Selectors() {
   const { data: dialData } = useGetPickersDial();
   const { data: kexpData, isLoading: kexpLoading } = useListSelectors();
   const overlap = useLibraryOverlap();
+  const { data: selectorOverlaps } = useMyOverlapSelectors();
   void radio;
+
+  // Map<handle, sharedCount> from the new selectors-overlap endpoint
+  const selectorSharedByHandle = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const item of selectorOverlaps ?? []) m.set(item.selector.handle, item.sharedCount);
+    return m;
+  }, [selectorOverlaps]);
 
   const dialByHandle = useMemo((): Map<string, PickerDialItem> => {
     const m = new Map<string, PickerDialItem>();
@@ -592,6 +617,7 @@ export default function Selectors() {
             key={s.handle}
             selector={s}
             overlapPct={overlap?.overlapByHandle.get(s.handle) ?? 0}
+            sharedCount={selectorSharedByHandle.get(s.handle)}
           />
         ))}
 

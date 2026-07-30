@@ -1759,6 +1759,51 @@ router.get("/me/overlaps/pickers", h(async (req, res) => {
 }));
 
 /**
+ * GET /api/me/overlaps/selectors — DJ selectors (radio pickers) ranked by how
+ * many of the caller's library recordings they have ever aired.  Mirrors
+ * /overlaps/pickers but targets pickerType = 'dj' and uses the picks table
+ * (DJ show picks are ingested there the same as curated picks).
+ */
+router.get("/me/overlaps/selectors", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+
+  const userLib = db
+    .select({ mbid: libraryItemsTable.mbid })
+    .from(libraryItemsTable)
+    .where(eq(libraryItemsTable.userId, user.id));
+
+  const sharedExpr = sql<number>`count(distinct ${picksTable.mbid})::int`;
+
+  const rows = await db
+    .select({
+      name: pickersTable.name,
+      handle: pickersTable.handle,
+      sharedCount: sharedExpr,
+    })
+    .from(picksTable)
+    .innerJoin(pickersTable, eq(picksTable.pickerId, pickersTable.id))
+    .where(
+      and(
+        eq(pickersTable.active, true),
+        eq(pickersTable.pickerType, "dj"),
+        isNotNull(picksTable.mbid),
+        inArray(picksTable.mbid, userLib),
+        pickerNotOptedOut(pickersTable.id),
+      ),
+    )
+    .groupBy(pickersTable.id, pickersTable.name, pickersTable.handle)
+    .orderBy(sql`count(distinct ${picksTable.mbid}) desc`, asc(pickersTable.name))
+    .limit(500);
+
+  return res.json({
+    items: rows.map((r) => ({
+      selector: { name: r.name, handle: r.handle },
+      sharedCount: r.sharedCount,
+    })),
+  });
+}));
+
+/**
  * GET /api/me/overlaps/stations — stations ranked by shared spins with the
  * user's library_items.
  */

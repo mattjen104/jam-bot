@@ -5,11 +5,12 @@
  *   - station list (with live pulse)
  *   - today's schedule runs (show blocks per station)
  *   - today's recent spins per station
- *   - user's first-page library MBIDs (for library-crossing orange tinting)
+ *   - user's full library MBIDs (for library-crossing detection)
  *   - picked MBIDs lookup (to detect picker/selector shows)
  *
- * Returns an enriched `DialStation[]` array sorted live-first then by crossing
- * count, ready for the Dial to render.
+ * Returns an enriched `DialStation[]` array. Sorting is intentionally left to
+ * DialView, which applies the attribution-tier ladder: live crossing → named
+ * selector (lifetime overlap count) → unattributed station (24h crossings).
  */
 import { useMemo, useState, useEffect } from "react";
 import {

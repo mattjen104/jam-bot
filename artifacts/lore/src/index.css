@@ -2264,3 +2264,138 @@
   opacity: 0.35;
   cursor: not-allowed;
 }
+
+/* ── Live-show row (front-door radio list) ──────────────────────────────── */
+.lsrow {
+  display: flex;
+  gap: 12px;
+  padding: 13px 15px;
+  border-bottom: 1px solid hsl(var(--border) / 0.5);
+  cursor: pointer;
+  position: relative;
+  transition: background 0.12s;
+}
+.lsrow::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: transparent;
+  transition: background 0.12s;
+}
+.lsrow:hover { background: hsl(var(--secondary) / 0.4); }
+.lsrow--crossing { background: hsl(var(--library) / 0.08); }
+.lsrow--crossing::before { background: hsl(var(--library)); }
+.lsrow--active::before { background: hsl(var(--live)); }
+.lsrow--dark { opacity: 0.55; }
+
+.lsrow__c { flex: 1; min-width: 0; }
+
+.lsrow__stn {
+  font-family: var(--app-font-label);
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: hsl(var(--muted-foreground));
+  margin-bottom: 3px;
+}
+
+.lsrow__sh {
+  font-family: var(--app-font-display);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.15;
+  color: hsl(var(--foreground));
+}
+
+.lsrow__dj {
+  font-family: var(--app-font-display);
+  font-style: italic;
+  font-size: 12.5px;
+  color: hsl(var(--muted-foreground));
+  margin-top: 2px;
+}
+.lsrow__dj b { font-style: normal; font-weight: 600; color: hsl(var(--foreground) / 0.8); }
+
+.lsrow__np {
+  font-family: var(--app-font-mono);
+  font-size: 9px;
+  color: hsl(var(--muted-foreground) / 0.7);
+  margin-top: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lsrow__why {
+  font-family: var(--app-font-display);
+  font-style: italic;
+  font-size: 12.5px;
+  line-height: 1.4;
+  margin-top: 6px;
+}
+.lsrow__why--cross { color: hsl(var(--library)); }
+.lsrow__why--set   { color: hsl(var(--foreground) / 0.85); }
+.lsrow__why--onair { color: hsl(var(--muted-foreground)); }
+.lsrow__why--stn   { color: hsl(var(--muted-foreground)); }
+.lsrow__why--dark  { color: hsl(var(--muted-foreground) / 0.5); }
+
+.lsrow__rail {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  padding-top: 2px;
+  min-width: 36px;
+}
+
+.lsrow__badge {
+  font-family: var(--app-font-label);
+  font-size: 8.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: hsl(var(--library));
+}
+
+.lsrow__ov { text-align: right; }
+.lsrow__ov-n {
+  display: block;
+  font-family: var(--app-font-display);
+  font-size: 18px;
+  font-weight: 600;
+  color: hsl(var(--library));
+  line-height: 1;
+}
+.lsrow__ov-lbl {
+  display: block;
+  font-family: var(--app-font-mono);
+  font-size: 7px;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: hsl(var(--muted-foreground) / 0.6);
+  margin-top: 2px;
+}
+
+.lsrow__pin { font-size: 10px; opacity: 0.4; }
+
+/* ── Selectors page — overlap sentence ──────────────────────────────────── */
+.sel-card__overlap-sentence {
+  font-family: var(--app-font-display);
+  font-style: italic;
+  font-size: 12.5px;
+  color: hsl(var(--muted-foreground));
+  margin-top: 3px;
+  line-height: 1.4;
+}
+.sel-card__overlap-n {
+  font-style: normal;
+  font-weight: 600;
+  color: hsl(var(--library));
+}
+.sel-card__overlap-zero {
+  color: hsl(var(--muted-foreground) / 0.55);
+}

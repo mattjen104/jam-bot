@@ -9,6 +9,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useDialData, togglePin, readPins, type DialStation, type DialShow, type DialSpin } from "../hooks/useDialData";
+import { useMyOverlapSelectors } from "../lib/meHooks";
 import { StationLane } from "./StationLane";
 import { ContextRail } from "./ContextRail";
 import { SearchOverlay } from "./SearchOverlay";
@@ -42,6 +43,106 @@ function agoLabel(iso: string): string {
 }
 
 type Level = "all" | "station" | "show" | "dj";
+
+// ---------------------------------------------------------------------------
+// Reason ladder — one sentence per live row (radio surface only).
+// Radio sentences are about the present moment. Selector history is the sort
+// key and the rail number — it never appears as a sentence here.
+// ---------------------------------------------------------------------------
+
+function intoSet(startedAt: string): string {
+  const ms = Math.max(0, Date.now() - new Date(startedAt).getTime());
+  const totalMins = Math.floor(ms / 60_000);
+  if (totalMins < 60) return `${totalMins}m into the set`;
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+  return m > 0 ? `${h}h ${m}m into the set` : `${h}h into the set`;
+}
+
+interface ReasonResult { r: number; cls: string; text: string }
+
+/** Pure function — computes the strongest rung a live show earns. */
+function reason(show: DialShow | null, stationCrossings: number): ReasonResult {
+  if (!show) return { r: 0, cls: "lsrow__why--dark", text: "on air · Lore can't see who's playing" };
+  if (show.currentTrack?.isLibraryHit) {
+    return { r: 1, cls: "lsrow__why--cross", text: `◆ playing ${show.currentTrack.title} — in your library` };
+  }
+  if (show.crossings > 0) {
+    return { r: 2, cls: "lsrow__why--set", text: `${show.crossings} of yours already this set` };
+  }
+  if (show.djName) {
+    return { r: 6, cls: "lsrow__why--onair", text: `on air · ${intoSet(show.startedAt)}` };
+  }
+  if (stationCrossings > 0) {
+    return { r: 7, cls: "lsrow__why--stn", text: `${stationCrossings} of yours today — no selector listed` };
+  }
+  return { r: 0, cls: "lsrow__why--dark", text: "on air · Lore can't see who's playing" };
+}
+
+// ---------------------------------------------------------------------------
+// Live show row — the front-door row for each live station
+// ---------------------------------------------------------------------------
+function LiveShowRow({
+  ds,
+  show,
+  ov,
+  isActive,
+  isPinned,
+  onClick,
+}: {
+  ds: DialStation;
+  show: DialShow | null;
+  /** Lifetime selector overlap count. 0 = unknown or no data. */
+  ov: number;
+  isActive: boolean;
+  isPinned: boolean;
+  onClick: () => void;
+}) {
+  const rz = reason(show, ds.crossings);
+  const isCrossing = rz.r === 1;
+  const isDark = rz.r === 0;
+
+  const rowCls = [
+    "lsrow",
+    isCrossing ? "lsrow--crossing" : "",
+    isDark      ? "lsrow--dark"     : "",
+    isActive    ? "lsrow--active"   : "",
+  ].filter(Boolean).join(" ");
+
+  // Rail: lifetime ov if available, set crossings as fallback
+  const railNum = ov > 0 ? ov : (show?.crossings ?? 0);
+  const railLbl = ov > 0 ? "yours" : show?.crossings ? "this set" : null;
+
+  return (
+    <div className={rowCls} role="button" tabIndex={0} onClick={onClick}
+      onKeyDown={(e) => e.key === "Enter" && onClick()}>
+      <div className="lsrow__c">
+        <div className="lsrow__stn">{ds.station.name}</div>
+        <div className="lsrow__sh">{show?.showName ?? "Unlisted programme"}</div>
+        {show?.djName && (
+          <div className="lsrow__dj">with <b>{show.djName}</b></div>
+        )}
+        {show?.currentTrack && (
+          <div className="lsrow__np">
+            ♪ {show.currentTrack.title}
+            {show.currentTrack.artist ? ` — ${show.currentTrack.artist}` : ""}
+          </div>
+        )}
+        <div className={`lsrow__why ${rz.cls}`}>{rz.text}</div>
+      </div>
+      <div className="lsrow__rail">
+        {isCrossing && <span className="lsrow__badge">◆</span>}
+        {railNum > 0 && (
+          <div className="lsrow__ov">
+            <span className="lsrow__ov-n">{railNum}</span>
+            {railLbl && <span className="lsrow__ov-lbl">{railLbl}</span>}
+          </div>
+        )}
+        {isPinned && <span className="lsrow__pin">📌</span>}
+      </div>
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Tier header
@@ -549,6 +650,14 @@ export function DialView() {
 
   const { stations, isLoading } = useDialData();
   const { radio } = usePlayer();
+  const { data: selectorOverlaps } = useMyOverlapSelectors();
+
+  // Map<selector name, lifetime overlap count> — used for sort + rail
+  const ovByName = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const item of selectorOverlaps ?? []) m.set(item.selector.name, item.sharedCount);
+    return m;
+  }, [selectorOverlaps]);
 
   const currentStation = useMemo(
     () => stations.find((ds) => ds.station.slug === currentStationSlug) ?? null,
@@ -571,7 +680,41 @@ export function DialView() {
     setPins(readPins());
   }, []);
 
-  // --- sort stations: pinned first, then live, then by crossing count ---
+  // --- spec sort: live crossing → attribution tier → lifetime ov → 24h crossings ---
+  // Live tier: flatten to one row per live show, sorted by attribution ladder.
+  const sortedLiveShows = useMemo(() => {
+    const pairs: Array<{ ds: DialStation; show: DialShow | null }> = [];
+    for (const ds of stations) {
+      if (!ds.isLive) continue;
+      const liveShow = ds.shows.find((sh) => sh.state === "live") ?? null;
+      pairs.push({ ds, show: liveShow });
+    }
+    return pairs.sort((a, b) => {
+      // 0. Pinned stations first
+      const aPinned = pins.has(a.ds.station.slug) ? 0 : 1;
+      const bPinned = pins.has(b.ds.station.slug) ? 0 : 1;
+      if (aPinned !== bPinned) return aPinned - bPinned;
+      // 1. Live crossing floats first
+      const aCross = a.show?.currentTrack?.isLibraryHit ? 0 : 1;
+      const bCross = b.show?.currentTrack?.isLibraryHit ? 0 : 1;
+      if (aCross !== bCross) return aCross - bCross;
+      // 2. Attribution tier: named selector outranks unattributed station
+      const aAttr = a.show?.djName != null ? 0 : 1;
+      const bAttr = b.show?.djName != null ? 0 : 1;
+      if (aAttr !== bAttr) return aAttr - bAttr;
+      // 3. Within attributed: lifetime overlap count desc, then rung asc
+      if (a.show?.djName && b.show?.djName) {
+        const aOv = ovByName.get(a.show.djName) ?? 0;
+        const bOv = ovByName.get(b.show.djName) ?? 0;
+        if (aOv !== bOv) return bOv - aOv;
+        return reason(a.show, a.ds.crossings).r - reason(b.show, b.ds.crossings).r;
+      }
+      // 4. Within unattributed: station crossings desc
+      return b.ds.crossings - a.ds.crossings;
+    });
+  }, [stations, pins, ovByName]);
+
+  // Offline tier: stations not currently live, sorted for StationLane display
   const sortedStations = useMemo(
     () =>
       [...stations].sort((a, b) => {
@@ -584,8 +727,6 @@ export function DialView() {
     [stations, pins],
   );
 
-  // --- derived tiers ---
-  const liveStations = sortedStations.filter((s) => s.isLive);
   const offlineStations = sortedStations.filter((s) => !s.isLive);
 
   // --- topbar ---
@@ -682,20 +823,19 @@ export function DialView() {
           <div className="dial-loading">Loading stations…</div>
         )}
 
-        {/* DIAL view */}
+        {/* DIAL view — front door: show-level rows sorted by attribution ladder */}
         {level === "all" && (
           <>
-            {liveStations.length > 0 && <TierHeader live />}
-            {liveStations.map((ds) => (
-              <StationLane
+            {sortedLiveShows.length > 0 && <TierHeader live />}
+            {sortedLiveShows.map(({ ds, show }) => (
+              <LiveShowRow
                 key={ds.station.slug}
-                dialStation={ds}
-                isPinned={pins.has(ds.station.slug)}
+                ds={ds}
+                show={show}
+                ov={show?.djName ? (ovByName.get(show.djName) ?? 0) : 0}
                 isActive={ds.station.slug === radio.station?.slug}
-                onStationClick={() => goStation(ds.station.slug)}
-                onShowClick={(show) => goShow(show, ds)}
-                onPinToggle={() => handlePinToggle(ds.station.slug)}
-                onPlay={() => void radio.toggle(ds.station)}
+                isPinned={pins.has(ds.station.slug)}
+                onClick={() => goStation(ds.station.slug)}
               />
             ))}
             {offlineStations.length > 0 && <TierHeader live={false} />}

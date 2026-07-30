@@ -271,6 +271,12 @@ export const ME_KEEP_STATUS_KEY = (joined: string) => ["me", "keep-status", join
 export const ME_OVERLAP_PICKERS_KEY = ["me", "overlaps", "pickers"] as const;
 export const ME_OVERLAP_STATIONS_KEY = ["me", "overlaps", "stations"] as const;
 export const ME_OVERLAP_RUNS_KEY = ["me", "overlaps", "runs"] as const;
+export const ME_OVERLAP_SELECTORS_KEY = ["me", "overlaps", "selectors"] as const;
+
+export interface OverlapSelector {
+  selector: { name: string; handle: string };
+  sharedCount: number;
+}
 export const ME_IMPORT_JOB_KEY = (jobId: number) => ["me", "import-job", jobId] as const;
 export const ME_LATEST_IMPORT_JOB_KEY = ["me", "import-job", "latest"] as const;
 
@@ -628,6 +634,19 @@ export function useMyOverlapStations() {
     queryKey: ME_OVERLAP_STATIONS_KEY,
     queryFn: () =>
       fetchOrNull<{ items: OverlapStation[] }>("/api/me/overlaps/stations").then(
+        (d) => d?.items ?? [],
+      ),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+/** DJ selectors ranked by how many of the user's library tracks they've aired. */
+export function useMyOverlapSelectors() {
+  return useQuery({
+    queryKey: ME_OVERLAP_SELECTORS_KEY,
+    queryFn: () =>
+      fetchOrNull<{ items: OverlapSelector[] }>("/api/me/overlaps/selectors").then(
         (d) => d?.items ?? [],
       ),
     staleTime: 5 * 60_000,

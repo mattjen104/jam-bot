@@ -63,3 +63,4 @@
 - [Library export & spin provenance](library-export-format.md) — pure builders + null-honesty; provenance.kind forced to "keep" server-side (spread first); spinId only stored when spin.mbid matches; new columns need boot migrations.
 - [Pending keeps — spin-based saves](pending-keeps-pattern.md) — pending_keeps table for pre-resolution saves; spinId on NowPlaying; hand-patch BOTH api-client-react AND api-zod types and rebuild dist.
 - [MB ISRC endpoint parameter bug](mb-isrc-endpoint.md) — `/isrc/{isrc}?fmt=json` only; `inc=recordings` is invalid and silently returns null on every call.
+- [Radio front-door attribution ladder](radio-attribution-ladder.md) — sort: live crossing → named selector (lifetime ov, ovByName by djName) → unattributed (station crossings); reason() is pure, no hooks; show-level rows replace station-level rows in the live tier only; offline tier stays StationLane.
