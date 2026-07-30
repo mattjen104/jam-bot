@@ -6,8 +6,8 @@
 
 # Test info
 
-- Name: fallbackNotice.spec.ts >> PickerRun — fallback notice via 'hear it in context' deep link >> shows the amber fallback notice when the song MBID is absent from the run's picks
-- Location: e2e/fallbackNotice.spec.ts:223:3
+- Name: spotifyConnectButton.spec.ts >> LibraryPrompt Connect button >> Connect opens a new tab, not a navigation of the current page
+- Location: e2e/spotifyConnectButton.spec.ts:131:3
 
 # Error details
 

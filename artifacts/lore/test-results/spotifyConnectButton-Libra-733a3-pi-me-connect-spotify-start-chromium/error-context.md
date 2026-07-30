@@ -6,8 +6,8 @@
 
 # Test info
 
-- Name: fallbackNotice.spec.ts >> StationRun — fallback notice via 'hear it in context' deep link >> does NOT show the fallback notice when the song MBID is present in the run
-- Location: e2e/fallbackNotice.spec.ts:200:3
+- Name: spotifyConnectButton.spec.ts >> LibraryPrompt Connect button >> clicking Connect calls POST /api/me/connect/spotify/start
+- Location: e2e/spotifyConnectButton.spec.ts:95:3
 
 # Error details
 

@@ -6,8 +6,8 @@
 
 # Test info
 
-- Name: fallbackNotice.spec.ts >> StationRun — fallback notice via 'hear it in context' deep link >> hides the fallback notice after the user clicks Dismiss
-- Location: e2e/fallbackNotice.spec.ts:180:3
+- Name: spotifyConnectButton.spec.ts >> LibraryPrompt Connect button >> Connect button is not visible when Spotify is already connected
+- Location: e2e/spotifyConnectButton.spec.ts:169:3
 
 # Error details
 
