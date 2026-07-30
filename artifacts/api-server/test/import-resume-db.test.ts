@@ -578,6 +578,49 @@ describe("Zombie cleared → new worker resumes from ex-zombie's partial buffer"
   });
 });
 
+// ── Test: resumedFrom is set on the new job after a complete-buffer resume ────
+//
+// When a previous job completed the fetch phase (phase="spine", status="error")
+// and the worker reuses its buffer, it must write resumedFrom = prevJob.id on
+// the new job row so the frontend can show "Resuming from previous session…".
+
+describe("resumedFrom is written on the new job after a complete-buffer resume", () => {
+  it("sets resumedFrom = prevJob.id when the new worker reuses a complete buffer (phase=spine)", async () => {
+    if (!dbAvailable) return;
+
+    mockImportLibrary.mockClear();
+    mockResolveByText.mockClear();
+    mockResolveByIsrc.mockClear();
+
+    // Previous job completed the Spotify fetch (phase="spine") but crashed
+    // during resolution — the buffer is the full library snapshot.
+    const completeBuffer: ImportBufferEntry[] = [
+      { artist: ARTIST, title: "Resume Label Track", isrc: ISRC_BUF, durationMs: null, externalId: "sp-rf" },
+    ];
+    const prevJobId = await seedPrevJob({ bufferEntries: completeBuffer, phase: "spine", status: "error" });
+
+    // importLibrary must not be reached on the complete-buffer path.
+    mockImportLibrary.mockImplementation(async function* () {
+      throw new Error("importLibrary must NOT be called when a complete buffer exists");
+    });
+
+    const newJobId = await createJob();
+    await runImportWorker(newJobId, userId, "spotify", connRow);
+
+    // The new job's resumedFrom must equal the previous job's id.
+    const [newJob] = await db
+      .select({
+        status: libraryImportJobsTable.status,
+        resumedFrom: libraryImportJobsTable.resumedFrom,
+      })
+      .from(libraryImportJobsTable)
+      .where(eq(libraryImportJobsTable.id, newJobId));
+
+    expect(newJob!.resumedFrom).toBe(prevJobId);
+    expect(newJob!.status).toBe("done");
+  });
+});
+
 // ── Test: second zombie-clear preserves the latest partial buffer ─────────────
 //
 // Scenario — two consecutive server crashes:
