@@ -1,4 +1,4 @@
-import type { Station } from "@workspace/api-client-react";
+import type { Station, NowPlaying } from "@workspace/api-client-react";
 import type { PlayerStatus } from "../hooks/useRadioPlayer";
 import type {
   RadioCastStatus,
@@ -37,6 +37,8 @@ interface PlayerBarProps {
   onVolume: (v: number) => void;
   /** Spotify Connect state — when provided and connected+premium, shows the device picker. */
   spotify?: SpotifyConnectApi;
+  /** Live now-playing data — used to decide whether to show album art or the station mark. */
+  nowPlaying?: NowPlaying | null;
   /** Whether FM-style station scan is active. */
   scanActive?: boolean;
   /** 1-based index of the current scan position. */
@@ -63,6 +65,7 @@ export function PlayerBar({
   onToggle,
   onStop,
   onVolume,
+  nowPlaying,
   spotify,
   scanActive = false,
   scanCurrent = 1,
@@ -75,6 +78,13 @@ export function PlayerBar({
   const isPlaying = isCasting ? !castPaused : status === "playing";
   const isLoading = !isCasting && status === "loading";
   const showDevicePicker = !!(spotify?.connected && spotify.premium);
+
+  // Show album art only when the spin is confidently resolved; fall back to
+  // the station mark for unresolved / low-confidence / absent now-playing data.
+  const confirmedArtwork =
+    (nowPlaying?.confidence === "recording_id" || nowPlaying?.confidence === "isrc")
+      ? (nowPlaying.recording?.artworkUrl ?? nowPlaying.artworkUrl ?? null)
+      : null;
   // Not connected yet — show the cast icon as an entry point to connect.
   const showConnectPrompt = !!(spotify?.configured && !spotify.connected);
   const castDeviceName = spotify?.pinnedDevice?.name ?? "your Spotify";
@@ -91,9 +101,18 @@ export function PlayerBar({
         Desktop (lg): 3-column grid — [info] [play centered] [volume+stop right-aligned]
       */}
       <div className="flex items-center gap-4 px-5 py-3 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:gap-6">
-        {/* Station logo swatch — mobile only, violet border treatment */}
+        {/* Artwork swatch — mobile only. Shows album art when the spin is
+            confidently resolved (recording_id / isrc); falls back to the
+            station mark so unresolved ICY art never bleeds through. */}
         <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-primary/25 bg-primary/10 lg:hidden">
-          {station.logoUrl ? (
+          {confirmedArtwork ? (
+            <img
+              key={confirmedArtwork}
+              src={confirmedArtwork}
+              alt=""
+              className="h-full w-full object-cover"
+            />
+          ) : station.logoUrl ? (
             <img src={station.logoUrl} alt="" className="h-full w-full object-cover" />
           ) : (
             <div className="flex h-full w-full items-center justify-center">

@@ -64,6 +64,7 @@ export function PlayerDock() {
         onToggle={radio.toggle}
         onStop={radio.stop}
         onVolume={radio.setVolume}
+        nowPlaying={npData?.nowPlaying}
         spotify={spotify}
         scanActive={scan.active}
         onScanToggle={scan.toggle}
