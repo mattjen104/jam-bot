@@ -14,16 +14,17 @@ import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useListPickers, useListStations } from "@workspace/api-client-react";
 import type { DialStation, DialShow } from "../hooks/useDialData";
+import type { LibraryItem } from "../lib/meHooks";
 import { X, Search } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type Filter = "all" | "stations" | "selectors" | "shows" | "tracks";
+type Filter = "all" | "stations" | "selectors" | "shows" | "tracks" | "library";
 
 interface SearchResult {
-  kind: "station" | "selector" | "show" | "track";
+  kind: "station" | "selector" | "show" | "track" | "library";
   label: string;
   sub: string;
   badge?: string;
@@ -44,6 +45,7 @@ const KIND_LABEL: Record<SearchResult["kind"], string> = {
   selector: "Selectors",
   show: "Shows",
   track: "Tracks",
+  library: "Library",
 };
 
 const KIND_ICON: Record<SearchResult["kind"], string> = {
@@ -51,6 +53,7 @@ const KIND_ICON: Record<SearchResult["kind"], string> = {
   selector: "◆",
   show: "🎚",
   track: "♪",
+  library: "◆",
 };
 
 const MAX_PER_KIND = 6;
@@ -66,6 +69,11 @@ interface SearchOverlayProps {
   /** Navigate within the Dial's state machine. */
   onStationDrill: (slug: string) => void;
   onShowDrill: (show: DialShow, station: DialStation) => void;
+  /**
+   * Kept library items to search against. When provided a "Library" group
+   * appears in results and each result navigates to /song/:mbid.
+   */
+  libraryItems?: LibraryItem[];
 }
 
 export function SearchOverlay({
@@ -73,6 +81,7 @@ export function SearchOverlay({
   onClose,
   onStationDrill,
   onShowDrill,
+  libraryItems,
 }: SearchOverlayProps) {
   const [, setLocation] = useLocation();
   const [query, setQuery] = useState("");
@@ -197,23 +206,50 @@ export function SearchOverlay({
       }
     }
 
+    // ── Library (kept tracks) ─────────────────────────────────────────────────
+    if ((filter === "all" || filter === "library") && libraryItems && libraryItems.length > 0) {
+      const seen = new Set<string>();
+      let n = 0;
+      for (const item of libraryItems) {
+        if (n >= MAX_PER_KIND) break;
+        const rec = item.recording;
+        const title = rec?.title ?? "";
+        const artist = rec?.artist ?? "";
+        if (!title && !artist) continue;
+        if (seen.has(item.mbid)) continue;
+        if (fuzzy(title, q) || fuzzy(artist, q)) {
+          seen.add(item.mbid);
+          out.push({
+            kind: "library",
+            label: title || item.mbid,
+            sub: artist,
+            badge: "◆ kept",
+            onTap: () => goAndClose(`/song/${item.mbid}`),
+          });
+          n++;
+        }
+      }
+    }
+
     return out;
-  }, [query, filter, stationsData, pickersData, dialStations, onStationDrill, onShowDrill, onClose, goAndClose]);
+  }, [query, filter, stationsData, pickersData, dialStations, libraryItems, onStationDrill, onShowDrill, onClose, goAndClose]);
 
   // Group results by kind in display order
   const groups = useMemo(() => {
-    const kindOrder: SearchResult["kind"][] = ["station", "selector", "show", "track"];
+    const kindOrder: SearchResult["kind"][] = ["station", "selector", "show", "track", "library"];
     return kindOrder
       .map((kind) => ({ kind, items: results.filter((r) => r.kind === kind) }))
       .filter(({ items }) => items.length > 0);
   }, [results]);
 
+  const hasLibrary = (libraryItems?.length ?? 0) > 0;
   const FILTERS: { key: Filter; label: string }[] = [
     { key: "all", label: "All" },
     { key: "stations", label: "Stations" },
     { key: "selectors", label: "Selectors" },
     { key: "shows", label: "Shows" },
     { key: "tracks", label: "Tracks" },
+    ...(hasLibrary ? [{ key: "library" as Filter, label: "Library" }] : []),
   ];
 
   return (
@@ -272,7 +308,9 @@ export function SearchOverlay({
       <div className="srch-results">
         {!query.trim() && (
           <div className="srch-empty">
-            Search stations, selectors, shows, and tracks playing today.
+            {hasLibrary
+              ? "Search stations, selectors, shows, tracks, and your library."
+              : "Search stations, selectors, shows, and tracks playing today."}
           </div>
         )}
 

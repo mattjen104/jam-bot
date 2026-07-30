@@ -563,6 +563,7 @@ export default function Library() {
       {searchOpen && (
         <SearchOverlay
           dialStations={[]}
+          libraryItems={keptItems}
           onClose={() => setSearchOpen(false)}
           onStationDrill={(slug) => { setLocation(`/archive/stations/${slug}`); setSearchOpen(false); }}
           onShowDrill={(_show, station) => { setLocation(`/archive/stations/${station.station.slug}`); setSearchOpen(false); }}
