@@ -41,7 +41,6 @@ function agoLabel(iso: string): string {
 }
 
 type Level = "all" | "station" | "show" | "dj";
-type RadioView = "dial" | "stations" | "schedule";
 
 // ---------------------------------------------------------------------------
 // Tier header
@@ -535,7 +534,6 @@ function ScheduleView({ stations }: { stations: DialStation[] }) {
 export function DialView() {
   const [location] = useLocation();
   const [level, setLevel] = useState<Level>("all");
-  const [radioView, setRadioView] = useState<RadioView>("dial");
   const [currentStationSlug, setCurrentStationSlug] = useState<string | null>(null);
   const [currentShow, setCurrentShow] = useState<DialShow | null>(null);
   const [currentDjName, setCurrentDjName] = useState<string | null>(null);
@@ -588,7 +586,6 @@ export function DialView() {
       return (
         <div className="dial-topbar">
           <span className="dial-topbar__wordmark">Lore</span>
-          <span className="dial-topbar__title">Radio</span>
           <span className="dial-topbar__sort-chip">◆ by library overlap</span>
           <button
             type="button"
@@ -641,9 +638,6 @@ export function DialView() {
     return null;
   }
 
-  // --- sub-nav (only on 'all' level) ---
-  const showSubnav = level === "all";
-
   // determine if Radio tab is active (vs location being /selectors or /library)
   const isRadioActive = location === "/" || location === "" || location.startsWith("/?");
 
@@ -673,22 +667,6 @@ export function DialView() {
         />
       )}
 
-      {/* Radio sub-nav */}
-      {showSubnav && isRadioActive && (
-        <div className="dial-subnav">
-          {(["dial", "stations", "schedule"] as RadioView[]).map((rv) => (
-            <button
-              key={rv}
-              type="button"
-              className={`dial-subnav__chip${radioView === rv ? " dial-subnav__chip--active" : ""}`}
-              onClick={() => setRadioView(rv)}
-            >
-              {rv.charAt(0).toUpperCase() + rv.slice(1)}
-            </button>
-          ))}
-        </div>
-      )}
-
       {/* Main scroll body */}
       <div className="dial-body">
         {isLoading && sortedStations.length === 0 && (
@@ -696,7 +674,7 @@ export function DialView() {
         )}
 
         {/* DIAL view */}
-        {radioView === "dial" && level === "all" && (
+        {level === "all" && (
           <>
             {liveStations.length > 0 && <TierHeader live />}
             {liveStations.map((ds) => (
@@ -723,16 +701,6 @@ export function DialView() {
               />
             ))}
           </>
-        )}
-
-        {/* STATIONS list view */}
-        {radioView === "stations" && level === "all" && (
-          <StationsListView stations={sortedStations} onStationClick={goStation} />
-        )}
-
-        {/* SCHEDULE view */}
-        {radioView === "schedule" && level === "all" && (
-          <ScheduleView stations={sortedStations} />
         )}
 
         {/* STATION detail level */}

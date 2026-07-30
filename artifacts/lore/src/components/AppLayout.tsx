@@ -32,14 +32,6 @@ function isRadioSection(location: string): boolean {
   return true;
 }
 
-// Sub-nav is kept for non-Home radio pages (Archive, Schedule).
-// DialView (/) renders its own sub-nav internally.
-const RADIO_SUB_NAV = [
-  { href: "/", label: "Dial", exact: true },
-  { href: "/stations", label: "Stations", exact: false },
-  { href: "/schedule", label: "Schedule", exact: false },
-];
-
 /**
  * Library import nudge — shown once per session to users who haven't yet
  * connected a Spotify library. Dismisses permanently for the session.
@@ -131,32 +123,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
       {/* ── Import progress strip — visible while a sync runs ────────── */}
       <ImportStrip />
 
-      {/* ── Radio sub-nav strip — only for non-Home radio pages ─────────── */}
-      {radioActive && !isHome && (
-        <div
-          className="sticky top-0 z-20 border-b border-border backdrop-blur-md"
-          style={{ background: "hsl(var(--background) / 0.95)" }}
-        >
-          <nav className="flex items-center gap-1 px-4 py-2">
-            {RADIO_SUB_NAV.map(({ href, label, exact }) => {
-              const active = isActive(href, exact, location);
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  className="rounded-md px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider transition-colors"
-                  style={{
-                    color: active ? "hsl(var(--foreground))" : "hsl(var(--faint))",
-                    background: active ? "hsl(var(--secondary))" : "transparent",
-                  }}
-                >
-                  {label}
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
-      )}
 
       {/* ── Main content (padded for bottom nav bar) ────────────── */}
       <div className={isHome ? "" : "pb-14"}>{children}</div>
