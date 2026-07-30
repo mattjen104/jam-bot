@@ -6,9 +6,9 @@
  * Library) lives in AppLayout; DialView renders the topbar/scanbar/subnav
  * chrome above the scroll body.
  */
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
 import { useLocation } from "wouter";
-import { useDialData, togglePin, readPins, type DialStation, type DialShow, type DialSpin } from "../hooks/useDialData";
+import { useDialData, type DialStation, type DialShow, type DialSpin } from "../hooks/useDialData";
 import { useMyOverlapSelectors } from "../lib/meHooks";
 import { StationLane } from "./StationLane";
 import { ContextRail } from "./ContextRail";
@@ -45,130 +45,238 @@ function agoLabel(iso: string): string {
 type Level = "all" | "station" | "show" | "dj";
 
 // ---------------------------------------------------------------------------
-// Reason ladder — one sentence per live row (radio surface only).
-// Radio sentences are about the present moment. Selector history is the sort
-// key and the rail number — it never appears as a sentence here.
+// Reason-ladder helpers (spec §3, §9)
 // ---------------------------------------------------------------------------
 
+/** How far into the current show the set started */
 function intoSet(startedAt: string): string {
   const ms = Math.max(0, Date.now() - new Date(startedAt).getTime());
-  const totalMins = Math.floor(ms / 60_000);
-  if (totalMins < 60) return `${totalMins}m into the set`;
-  const h = Math.floor(totalMins / 60);
-  const m = totalMins % 60;
-  return m > 0 ? `${h}h ${m}m into the set` : `${h}h into the set`;
+  const mins = Math.floor(ms / 60_000);
+  if (mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
-interface ReasonResult { r: number; cls: string; text: string }
+/** Oxford-comma list with ≤3 full names; 4+ collapses to "A, B, C and N more" */
+function listNames(artists: string[]): string {
+  if (artists.length === 0) return "";
+  if (artists.length === 1) return artists[0];
+  if (artists.length <= 3) return `${artists.slice(0, -1).join(", ")} and ${artists[artists.length - 1]}`;
+  return `${artists.slice(0, 3).join(", ")} and ${artists.length - 3} more`;
+}
 
-/** Pure function — computes the strongest rung a live show earns. */
+interface ReasonResult { r: number; cls: string; node: ReactNode }
+
+/** One sentence per rung; returns the strongest rung that applies (spec §3). */
 function reason(show: DialShow | null, stationCrossings: number): ReasonResult {
-  if (!show) return { r: 0, cls: "lsrow__why--dark", text: "on air · Lore can't see who's playing" };
+  if (!show) return { r: 0, cls: "w0", node: "on air · Lore can't see who's playing" };
+
+  // Rung 1: crossing is playing right now
   if (show.currentTrack?.isLibraryHit) {
-    return { r: 1, cls: "lsrow__why--cross", text: `◆ playing ${show.currentTrack.title} — in your library` };
+    return {
+      r: 1, cls: "w1",
+      node: <>◆ playing <b>{show.currentTrack.title}</b> — in your library</>,
+    };
   }
+
+  // Rung 2: artist names from crossings already this set (§9 names, not counts)
   if (show.crossings > 0) {
-    return { r: 2, cls: "lsrow__why--set", text: `${show.crossings} of yours already this set` };
+    const names = show.topArtists.length > 0 ? listNames(show.topArtists) : null;
+    return {
+      r: 2, cls: "w2",
+      node: names
+        ? <><b>{names}</b> already this set</>
+        : <><b>{show.crossings} of yours</b> already this set</>,
+    };
   }
+
+  // Rung 6: on air, attributed, no evidence yet
   if (show.djName) {
-    return { r: 6, cls: "lsrow__why--onair", text: `on air · ${intoSet(show.startedAt)}` };
+    return { r: 6, cls: "w6", node: `on air · ${intoSet(show.startedAt)} into the set` };
   }
+
+  // Rung 7: 24h station crossings, no selector listed
   if (stationCrossings > 0) {
-    return { r: 7, cls: "lsrow__why--stn", text: `${stationCrossings} of yours today — no selector listed` };
+    return {
+      r: 7, cls: "w7",
+      node: <><b>{stationCrossings} of yours</b> here in the last 24h — no selector listed</>,
+    };
   }
-  return { r: 0, cls: "lsrow__why--dark", text: "on air · Lore can't see who's playing" };
+
+  // Rung 0: dark — nothing to go on
+  return { r: 0, cls: "w0", node: "on air · Lore can't see who's playing" };
 }
 
 // ---------------------------------------------------------------------------
-// Live show row — the front-door row for each live station
+// Front-door scan hook (spec §11)
 // ---------------------------------------------------------------------------
-function LiveShowRow({
-  ds,
-  show,
-  ov,
-  isActive,
-  isPinned,
-  onClick,
-  onPlay,
-  onPinToggle,
-  onShowClick,
-}: {
+
+const DWELL_PRESETS = [3000, 5000, 7000, 12000, 20000] as const;
+
+function useFrontDoorScan(count: number) {
+  const [scanning, setScanning] = useState(false);
+  const [samplingIdx, setSamplingIdx] = useState<number | null>(null);
+  const [dwellMs, setDwellMs] = useState(7000);
+  const [progress, setProgress] = useState(0);
+
+  // All mutable timer state in a single ref — avoids stale closures
+  const rt = useRef({ timer: null as ReturnType<typeof setTimeout> | null, raf: null as number | null, t0: 0, idx: 0, active: false });
+  const countRef = useRef(count);
+  const dwellRef = useRef(7000);
+  useEffect(() => { countRef.current = count; }, [count]);
+  useEffect(() => { dwellRef.current = dwellMs; }, [dwellMs]);
+
+  const cancelTimers = useCallback(() => {
+    if (rt.current.timer != null) { clearTimeout(rt.current.timer); rt.current.timer = null; }
+    if (rt.current.raf != null) { cancelAnimationFrame(rt.current.raf); rt.current.raf = null; }
+  }, []);
+
+  const tick = useCallback(() => {
+    if (!rt.current.active) return;
+    const p = Math.min(1, (Date.now() - rt.current.t0) / dwellRef.current);
+    setProgress(p);
+    if (p < 1) rt.current.raf = requestAnimationFrame(tick);
+  }, []);
+
+  const hop = useCallback((idx: number) => {
+    const n = countRef.current;
+    if (!n) return;
+    const i = ((idx % n) + n) % n;
+    rt.current.idx = i;
+    rt.current.t0 = Date.now();
+    cancelTimers();
+    setSamplingIdx(i);
+    setProgress(0);
+    rt.current.raf = requestAnimationFrame(tick);
+    rt.current.timer = setTimeout(() => hop(i + 1), dwellRef.current);
+  }, [cancelTimers, tick]);
+
+  const stop = useCallback(() => {
+    rt.current.active = false;
+    cancelTimers();
+    setScanning(false);
+    setSamplingIdx(null);
+    setProgress(0);
+  }, [cancelTimers]);
+
+  const start = useCallback(() => {
+    if (!countRef.current) return;
+    rt.current.active = true;
+    setScanning(true);
+    hop(0);
+  }, [hop]);
+
+  const toggle = useCallback(() => { if (rt.current.active) stop(); else start(); }, [stop, start]);
+
+  /** Back-one: go to previous sample, restart dwell from that position */
+  const back = useCallback(() => { if (rt.current.active) hop(rt.current.idx - 1); }, [hop]);
+  const next = useCallback(() => { if (rt.current.active) hop(rt.current.idx + 1); }, [hop]);
+
+  /** Land: commit current sample — stop auto-advance, keep highlight */
+  const land = useCallback(() => {
+    rt.current.active = false;
+    cancelTimers();
+    setScanning(false);
+    setProgress(0);
+    // samplingIdx intentionally kept so caller can read which row was landed on
+  }, [cancelTimers]);
+
+  const adjustDwell = useCallback((dir: 1 | -1) => {
+    setDwellMs(prev => {
+      const idx = DWELL_PRESETS.indexOf(prev as (typeof DWELL_PRESETS)[number]);
+      const ni = Math.max(0, Math.min(DWELL_PRESETS.length - 1, (idx < 0 ? 2 : idx) + dir));
+      return DWELL_PRESETS[ni];
+    });
+    if (rt.current.active) setTimeout(() => hop(rt.current.idx), 0);
+  }, [hop]);
+
+  useEffect(() => () => cancelTimers(), [cancelTimers]);
+
+  return { scanning, samplingIdx, dwellMs, progress, toggle, back, next, land, adjustDwell, stop };
+}
+
+// ---------------------------------------------------------------------------
+// Front-door row (spec §8, §9, §13)
+// ---------------------------------------------------------------------------
+
+interface FrontDoorRowProps {
   ds: DialStation;
   show: DialShow | null;
-  /** Lifetime selector overlap count. 0 = unknown or no data. */
-  ov: number;
+  ov: number;          // lifetime selector overlap (attributed) or 24h crossings (unattributed)
   isActive: boolean;
-  isPinned: boolean;
-  onClick: () => void;
-  onPlay: () => void;
-  onPinToggle: () => void;
-  onShowClick: (show: DialShow) => void;
-}) {
+  isSampling: boolean;
+  onTuneIn: () => void;
+  onEarlier: () => void;
+}
+
+function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onEarlier }: FrontDoorRowProps) {
   const rz = reason(show, ds.crossings);
-  const isCrossing = rz.r === 1;
-  const isDark = rz.r === 0;
+  const isAttributed = !!show?.djName;
+
+  // §8 Person leads — selector name when attributed, station name otherwise
+  const primary = show?.djName ?? ds.station.name;
+
+  // Mono ctx line: station · show · ♪ track (truncated, one line)
+  const ctxParts = isAttributed
+    ? [ds.station.name, show!.showName, show!.currentTrack ? `♪ ${show!.currentTrack.title}` : null]
+    : [show?.showName ?? null, show?.currentTrack ? `♪ ${show.currentTrack.title}` : null];
+  const ctx = ctxParts.filter(Boolean).join(" · ") || "—";
+
+  // ovi: sort key shown inline with person name
+  const oviStr = isAttributed
+    ? (ov > 0 ? String(ov) : "0")
+    : (ov > 0 ? String(ov) : "—");
 
   const rowCls = [
-    "lsrow",
-    isCrossing ? "lsrow--crossing" : "",
-    isDark      ? "lsrow--dark"     : "",
-    isActive    ? "lsrow--active"   : "",
+    "fdrow",
+    rz.r === 1 ? "fdrow--t1" : "",
+    rz.r === 0 || rz.r === 6 || rz.r === 7 ? "fdrow--dim" : "",
+    isSampling ? "fdrow--sampling" : "",
+    isActive ? "fdrow--playing" : "",
   ].filter(Boolean).join(" ");
 
-  // Rail: lifetime ov if available, set crossings as fallback
-  const railNum = ov > 0 ? ov : (show?.crossings ?? 0);
-  const railLbl = ov > 0 ? "yours" : show?.crossings ? "this set" : null;
-
   return (
-    <div className={rowCls} role="button" tabIndex={0} onClick={onClick}
-      onKeyDown={(e) => e.key === "Enter" && onClick()}>
-      <div className="lsrow__c">
-        <div className="lsrow__stn">{ds.station.name}</div>
-        <div
-          className="lsrow__sh"
-          role={show ? "button" : undefined}
-          tabIndex={show ? 0 : undefined}
-          onClick={show ? (e) => { e.stopPropagation(); onShowClick(show); } : undefined}
-          onKeyDown={show ? (e) => { if (e.key === "Enter") { e.stopPropagation(); onShowClick(show); } } : undefined}
-        >
-          {show?.showName ?? "Unlisted programme"}
+    <div
+      className={rowCls}
+      role="button"
+      tabIndex={0}
+      onClick={onTuneIn}
+      onKeyDown={(e) => e.key === "Enter" && onTuneIn()}
+    >
+      <div className="fdrow__c">
+        <div className="fdrow__hd">
+          <span className="fdrow__pri">{primary}</span>
+          <span className={`fdrow__ovi${!isAttributed ? " fdrow__ovi--st" : ov === 0 ? " fdrow__ovi--zero" : ""}`}>
+            {oviStr}
+          </span>
         </div>
-        {show?.djName && (
-          <div className="lsrow__dj">with <b>{show.djName}</b></div>
-        )}
-        {show?.currentTrack && (
-          <div className="lsrow__np">
-            ♪ {show.currentTrack.title}
-            {show.currentTrack.artist ? ` — ${show.currentTrack.artist}` : ""}
-          </div>
-        )}
-        <div className={`lsrow__why ${rz.cls}`}>{rz.text}</div>
+        <div className="fdrow__ctx">{ctx}</div>
+        <div className={`fdrow__why ${rz.cls}`}>{rz.node}</div>
+        <div className="fdrow__foot">
+          <button
+            type="button"
+            className="fdrow__back"
+            onClick={(e) => { e.stopPropagation(); onEarlier(); }}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); onEarlier(); } }}
+          >
+            ↩ earlier on {ds.station.name}
+          </button>
+        </div>
       </div>
-      <div className="lsrow__rail">
-        {isCrossing && <span className="lsrow__badge">◆</span>}
-        {railNum > 0 && (
-          <div className="lsrow__ov">
-            <span className="lsrow__ov-n">{railNum}</span>
-            {railLbl && <span className="lsrow__ov-lbl">{railLbl}</span>}
-          </div>
-        )}
-        <button
-          className={`lsrow__play-btn${isActive ? " lsrow__play-btn--active" : ""}`}
-          aria-label={isActive ? "Stop" : "Play"}
-          onClick={(e) => { e.stopPropagation(); onPlay(); }}
-          onKeyDown={(e) => e.key === "Enter" && e.stopPropagation()}
-        >
-          {isActive ? "■" : "▶"}
-        </button>
-        <button
-          className={`lsrow__pin-btn${isPinned ? " lsrow__pin-btn--pinned" : ""}`}
-          aria-label={isPinned ? "Unpin" : "Pin"}
-          onClick={(e) => { e.stopPropagation(); onPinToggle(); }}
-          onKeyDown={(e) => e.key === "Enter" && e.stopPropagation()}
-        >
-          📌
-        </button>
-      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Zone label (§6 section headers)
+// ---------------------------------------------------------------------------
+
+function ZoneLabel({ label, hint }: { label: string; hint?: string }) {
+  return (
+    <div className="fdzone-lbl">
+      <span className="fdzone-lbl__text">{label}</span>
+      {hint && <span className="fdzone-lbl__hint">{hint}</span>}
     </div>
   );
 }
@@ -671,14 +779,13 @@ export function DialView() {
   const [currentStationSlug, setCurrentStationSlug] = useState<string | null>(null);
   const [currentShow, setCurrentShow] = useState<DialShow | null>(null);
   const [currentDjName, setCurrentDjName] = useState<string | null>(null);
-  const [pins, setPins] = useState<Set<string>>(() => readPins());
   const [searchOpen, setSearchOpen] = useState(false);
 
   const { stations, isLoading } = useDialData();
   const { radio } = usePlayer();
-  const { data: selectorOverlaps } = useMyOverlapSelectors();
 
-  // Map<selector name, lifetime overlap count> — used for sort + rail
+  // Lifetime overlap counts per selector name (spec §4 sort key)
+  const { data: selectorOverlaps } = useMyOverlapSelectors();
   const ovByName = useMemo(() => {
     const m = new Map<string, number>();
     for (const item of selectorOverlaps ?? []) m.set(item.selector.name, item.sharedCount);
@@ -700,68 +807,94 @@ export function DialView() {
   }, []);
   const goDj = useCallback((name: string) => { setCurrentDjName(name); setLevel("dj"); }, []);
 
-  // --- pin toggle ---
-  const handlePinToggle = useCallback((slug: string) => {
-    togglePin(slug);
-    setPins(readPins());
-  }, []);
+  // --- attribution-ladder sort (spec §4) ---
+  // One live entry per stream (show and station are 1:1 at any instant — §5)
+  const sortedRows = useMemo(() => {
+    return [...stations]
+      .filter((ds) => ds.isLive)
+      .map((ds) => {
+        const show = ds.shows.find((sh) => sh.state === "live") ?? null;
+        const rz = reason(show, ds.crossings);
+        return { ds, show, rz };
+      })
+      .sort((a, b) => {
+        // 1. Live crossing (rung 1) floats to the very top
+        const ac = a.rz.r === 1 ? 0 : 1;
+        const bc = b.rz.r === 1 ? 0 : 1;
+        if (ac !== bc) return ac - bc;
+        // 2. Attribution tier: named selector unconditionally outranks station
+        const at = a.show?.djName != null ? 0 : 1;
+        const bt = b.show?.djName != null ? 0 : 1;
+        if (at !== bt) return at - bt;
+        // 3. Within attributed: lifetime overlap desc, then rung asc
+        if (a.show?.djName != null && b.show?.djName != null) {
+          const aOv = ovByName.get(a.show.djName) ?? 0;
+          const bOv = ovByName.get(b.show.djName) ?? 0;
+          if (aOv !== bOv) return bOv - aOv;
+          return a.rz.r - b.rz.r;
+        }
+        // 4. Within unattributed: 24h station crossings desc
+        return b.ds.crossings - a.ds.crossings;
+      });
+  }, [stations, ovByName]);
 
-  // --- spec sort: live crossing → attribution tier → lifetime ov → 24h crossings ---
-  // Live tier: flatten to one row per live show, sorted by attribution ladder.
-  const sortedLiveShows = useMemo(() => {
-    const pairs: Array<{ ds: DialStation; show: DialShow | null }> = [];
-    for (const ds of stations) {
-      if (!ds.isLive) continue;
-      const liveShow = ds.shows.find((sh) => sh.state === "live") ?? null;
-      pairs.push({ ds, show: liveShow });
-    }
-    return pairs.sort((a, b) => {
-      // 0. Pinned stations first
-      const aPinned = pins.has(a.ds.station.slug) ? 0 : 1;
-      const bPinned = pins.has(b.ds.station.slug) ? 0 : 1;
-      if (aPinned !== bPinned) return aPinned - bPinned;
-      // 1. Live crossing floats first
-      const aCross = a.show?.currentTrack?.isLibraryHit ? 0 : 1;
-      const bCross = b.show?.currentTrack?.isLibraryHit ? 0 : 1;
-      if (aCross !== bCross) return aCross - bCross;
-      // 2. Attribution tier: named selector outranks unattributed station
-      const aAttr = a.show?.djName != null ? 0 : 1;
-      const bAttr = b.show?.djName != null ? 0 : 1;
-      if (aAttr !== bAttr) return aAttr - bAttr;
-      // 3. Within attributed: lifetime overlap count desc, then rung asc
-      if (a.show?.djName && b.show?.djName) {
-        const aOv = ovByName.get(a.show.djName) ?? 0;
-        const bOv = ovByName.get(b.show.djName) ?? 0;
-        if (aOv !== bOv) return bOv - aOv;
-        return reason(a.show, a.ds.crossings).r - reason(b.show, b.ds.crossings).r;
-      }
-      // 4. Within unattributed: station crossings desc
-      return b.ds.crossings - a.ds.crossings;
-    });
-  }, [stations, pins, ovByName]);
+  // Three zones (spec §6)
+  const withReason = useMemo(() => sortedRows.filter((row) => row.rz.r >= 1 && row.rz.r <= 5), [sortedRows]);
+  const alsoOnAir = useMemo(() => sortedRows.filter((row) => !(row.rz.r >= 1 && row.rz.r <= 5)), [sortedRows]);
+  // Ghost zone: stub — requires /me/ghost/missed endpoint (spec §7)
+  const ghost: Array<unknown> = [];
 
-  // Offline tier: stations not currently live, sorted for StationLane display
-  const sortedStations = useMemo(
-    () =>
-      [...stations].sort((a, b) => {
-        const aPinned = pins.has(a.station.slug);
-        const bPinned = pins.has(b.station.slug);
-        if (aPinned !== bPinned) return aPinned ? -1 : 1;
-        if (a.isLive !== b.isLive) return a.isLive ? -1 : 1;
-        return b.crossings - a.crossings;
-      }),
-    [stations, pins],
+  // Offline stations (recently aired) — sorted by crossings desc
+  const offlineStations = useMemo(() =>
+    [...stations].filter((ds) => !ds.isLive).sort((a, b) => b.crossings - a.crossings),
+    [stations],
   );
 
-  const offlineStations = sortedStations.filter((s) => !s.isLive);
+  // --- front-door scan (spec §11) ---
+  const scan = useFrontDoorScan(withReason.length);
+
+  // Play each sample as scan advances
+  // TODO §11: scan samples must not write to listen ledger — needs radio.preview()
+  const prevSamplingIdx = useRef<number | null>(null);
+  useEffect(() => {
+    if (scan.scanning && scan.samplingIdx != null && scan.samplingIdx !== prevSamplingIdx.current) {
+      prevSamplingIdx.current = scan.samplingIdx;
+      const row = withReason[scan.samplingIdx];
+      if (row) void radio.toggle(row.ds.station);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scan.scanning, scan.samplingIdx]);
+
+  // Top row for Listen button label (spec §10)
+  const topRow = sortedRows[0] ?? null;
+  const topLabel = topRow?.show?.djName
+    ? `${topRow.show.djName} · ${topRow.ds.station.name}`
+    : (topRow?.ds.station.name ?? "—");
+
+  const tuneTop = useCallback(() => {
+    if (topRow) {
+      scan.stop();
+      void radio.toggle(topRow.ds.station);
+    }
+  }, [topRow, scan, radio]);
+
+  const handleScanLand = useCallback(() => {
+    const idx = scan.samplingIdx;
+    if (idx != null && withReason[idx]) {
+      scan.land();
+      void radio.toggle(withReason[idx].ds.station);
+    } else {
+      scan.land();
+    }
+  }, [scan, withReason, radio]);
 
   // --- topbar ---
   function renderTopbar() {
     if (level === "all") {
+      // Minimal header — action bar carries the primary actions (§10)
       return (
         <div className="dial-topbar">
           <span className="dial-topbar__wordmark">Lore</span>
-          <span className="dial-topbar__sort-chip">◆ by library overlap</span>
           <button
             type="button"
             className="dial-topbar__search"
@@ -813,12 +946,15 @@ export function DialView() {
     return null;
   }
 
-  // determine if Radio tab is active (vs location being /selectors or /library)
+  // determine if Radio tab is active
   const isRadioActive = location === "/" || location === "" || location.startsWith("/?");
+
+  // Current scan sample row (for scan band display)
+  const samplingRow = scan.samplingIdx != null ? (withReason[scan.samplingIdx] ?? null) : null;
 
   return (
     <div className="dial-root">
-      {/* Search overlay — covers the whole view when open */}
+      {/* Search overlay */}
       {searchOpen && (
         <SearchOverlay
           dialStations={stations}
@@ -831,8 +967,65 @@ export function DialView() {
       {/* Topbar */}
       {renderTopbar()}
 
-      {/* Scan bar — radio dial only */}
-      {isRadioActive && (
+      {/* Action bar — front door only (spec §10) */}
+      {level === "all" && isRadioActive && (
+        <div className="dial-actbar">
+          <button type="button" className="dial-act dial-act--listen" onClick={tuneTop} disabled={!topRow}>
+            <span className="dial-act__lbl">▶ Listen</span>
+            <span className="dial-act__dest">{topLabel}</span>
+          </button>
+          <button
+            type="button"
+            className={`dial-act dial-act--scan${scan.scanning ? " dial-act--on" : ""}`}
+            onClick={scan.toggle}
+            disabled={withReason.length === 0}
+          >
+            <span className="dial-act__lbl">{scan.scanning ? "■ Stop" : "⇢ Scan"}</span>
+            <span className="dial-act__dest">{scan.scanning ? "sampling" : `all ${withReason.length}`}</span>
+          </button>
+        </div>
+      )}
+
+      {/* Scan detail band — visible while scanning (spec §11) */}
+      {level === "all" && isRadioActive && scan.scanning && (
+        <div className="dial-scanband">
+          <div className="dial-sb-top">
+            <button type="button" className="dial-sb-step" onClick={scan.back} title="Back one">◀</button>
+            <div className="dial-sb-now">
+              {samplingRow ? (
+                <>
+                  <div className="dial-sb-t">
+                    {samplingRow.show?.currentTrack?.title ?? (samplingRow.show?.showName ?? samplingRow.ds.station.name)}
+                  </div>
+                  <div className="dial-sb-u">
+                    {samplingRow.show?.djName && <b>{samplingRow.show.djName}</b>}
+                    {samplingRow.show?.djName ? " · " : ""}{samplingRow.ds.station.name}
+                    {" · "}{(scan.samplingIdx! + 1)} of {withReason.length}
+                  </div>
+                </>
+              ) : (
+                <div className="dial-sb-t">—</div>
+              )}
+            </div>
+            <button type="button" className="dial-sb-step" onClick={scan.next} title="Next">▶</button>
+          </div>
+          <div className="dial-sb-track">
+            <div className="dial-sb-fill" style={{ width: `${scan.progress * 100}%` }} />
+          </div>
+          <div className="dial-sb-bot">
+            <button type="button" className="dial-sb-land" onClick={handleScanLand}>Land</button>
+            <div className="dial-sb-dwell">
+              <button type="button" onClick={() => scan.adjustDwell(-1)}>−</button>
+              <span>{scan.dwellMs / 1000}s</span>
+              <button type="button" onClick={() => scan.adjustDwell(1)}>+</button>
+            </div>
+            <button type="button" className="dial-sb-stop" onClick={scan.stop} title="Stop scan">✕</button>
+          </div>
+        </div>
+      )}
+
+      {/* Scan bar — station / show / dj levels only */}
+      {level !== "all" && isRadioActive && (
         <ScanBar
           stations={stations}
           level={level}
@@ -845,41 +1038,74 @@ export function DialView() {
 
       {/* Main scroll body */}
       <div className="dial-body">
-        {isLoading && sortedStations.length === 0 && (
+        {isLoading && sortedRows.length === 0 && offlineStations.length === 0 && (
           <div className="dial-loading">Loading stations…</div>
         )}
 
-        {/* DIAL view — front door: show-level rows sorted by attribution ladder */}
+        {/* DIAL view — three-zone front door (spec §6) */}
         {level === "all" && (
           <>
-            {sortedLiveShows.length > 0 && <TierHeader live />}
-            {sortedLiveShows.map(({ ds, show }) => (
-              <LiveShowRow
-                key={ds.station.slug}
-                ds={ds}
-                show={show}
-                ov={show?.djName ? (ovByName.get(show.djName) ?? 0) : 0}
-                isActive={ds.station.slug === radio.station?.slug}
-                isPinned={pins.has(ds.station.slug)}
-                onClick={() => goStation(ds.station.slug)}
-                onPlay={() => void radio.toggle(ds.station)}
-                onPinToggle={() => handlePinToggle(ds.station.slug)}
-                onShowClick={(sh) => goShow(sh, ds)}
-              />
-            ))}
+            {/* Zone 1: On air, with a reason (rungs 1–5) */}
+            {withReason.length > 0 && (
+              <>
+                <ZoneLabel label="On air, with a reason" hint="best first · scan walks this list" />
+                {withReason.map((row, i) => (
+                  <FrontDoorRow
+                    key={row.ds.station.slug}
+                    ds={row.ds}
+                    show={row.show}
+                    ov={row.show?.djName != null ? (ovByName.get(row.show.djName) ?? 0) : row.ds.crossings}
+                    isActive={row.ds.station.slug === radio.station?.slug}
+                    isSampling={scan.samplingIdx === i}
+                    onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
+                    onEarlier={() => goStation(row.ds.station.slug)}
+                  />
+                ))}
+              </>
+            )}
+
+            {/* Zone 2: Missed while you were away (ghost — stub, needs /me/ghost/missed, spec §7) */}
+            {ghost.length > 0 && (
+              <ZoneLabel label="Missed while you were away" />
+            )}
+
+            {/* Zone 3: Also on air (rungs 6, 7, 0 — dimmed) */}
+            {alsoOnAir.length > 0 && (
+              <>
+                <ZoneLabel label="Also on air" hint="nothing Lore can point to yet" />
+                {alsoOnAir.map((row) => (
+                  <FrontDoorRow
+                    key={row.ds.station.slug}
+                    ds={row.ds}
+                    show={row.show}
+                    ov={row.show?.djName != null ? (ovByName.get(row.show.djName) ?? 0) : row.ds.crossings}
+                    isActive={row.ds.station.slug === radio.station?.slug}
+                    isSampling={false}
+                    onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
+                    onEarlier={() => goStation(row.ds.station.slug)}
+                  />
+                ))}
+              </>
+            )}
+
+            {/* Recently aired — offline stations (unchanged StationLane) */}
             {offlineStations.length > 0 && <TierHeader live={false} />}
             {offlineStations.map((ds) => (
               <StationLane
                 key={ds.station.slug}
                 dialStation={ds}
-                isPinned={pins.has(ds.station.slug)}
+                isPinned={false}
                 isActive={ds.station.slug === radio.station?.slug}
                 onStationClick={() => goStation(ds.station.slug)}
                 onShowClick={(show) => goShow(show, ds)}
-                onPinToggle={() => handlePinToggle(ds.station.slug)}
+                onPinToggle={() => {}}
                 onPlay={() => void radio.toggle(ds.station)}
               />
             ))}
+
+            {sortedRows.length === 0 && offlineStations.length === 0 && !isLoading && (
+              <div className="dial-loading" style={{ opacity: 0.4 }}>No stations online</div>
+            )}
           </>
         )}
 

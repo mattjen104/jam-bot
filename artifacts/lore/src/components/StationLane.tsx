@@ -131,14 +131,6 @@ export function StationLane({ dialStation, isPinned, onStationClick, onShowClick
         >
           {isActive ? "■" : "▶"}
         </button>
-        <button
-          type="button"
-          className={`dial-lane__pin${isPinned ? " dial-lane__pin--on" : ""}`}
-          onClick={(e) => { e.stopPropagation(); onPinToggle(); }}
-          aria-label={isPinned ? "Unpin station" : "Pin station"}
-        >
-          {isPinned ? "★" : "☆"}
-        </button>
       </div>
 
       {/* block row with NOW needle */}

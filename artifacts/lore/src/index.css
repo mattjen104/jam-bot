@@ -2265,17 +2265,196 @@
   cursor: not-allowed;
 }
 
-/* ── Live-show row (front-door radio list) ──────────────────────────────── */
-.lsrow {
+/* ── Front-door action bar (spec §10) ──────────────────────────────────── */
+.dial-actbar {
   display: flex;
-  gap: 12px;
-  padding: 13px 15px;
+  gap: 8px;
+  padding: 8px 12px;
+  background: hsl(var(--background));
+  border-bottom: 1px solid hsl(var(--border) / 0.4);
+  flex-shrink: 0;
+}
+
+.dial-act {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 7px 11px;
+  border-radius: 6px;
+  border: 1px solid hsl(var(--border) / 0.5);
+  background: hsl(var(--secondary) / 0.3);
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+  min-width: 0;
+}
+.dial-act:hover:not(:disabled) { background: hsl(var(--secondary) / 0.6); }
+.dial-act:disabled { opacity: 0.35; cursor: default; }
+
+.dial-act--listen { flex: 2; }
+.dial-act--scan   { flex: 1; }
+
+.dial-act--on {
+  background: hsl(var(--live) / 0.15);
+  border-color: hsl(var(--live) / 0.5);
+}
+.dial-act--on .dial-act__lbl { color: hsl(var(--live)); }
+
+.dial-act__lbl {
+  font-family: var(--app-font-label);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: hsl(var(--foreground) / 0.7);
+}
+.dial-act__dest {
+  font-family: var(--app-font-display);
+  font-size: 12px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* ── Scan detail band (spec §11) ─────────────────────────────────────────── */
+.dial-scanband {
+  background: hsl(var(--secondary) / 0.2);
   border-bottom: 1px solid hsl(var(--border) / 0.5);
+  flex-shrink: 0;
+}
+
+.dial-sb-top {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 8px 4px;
+}
+
+.dial-sb-step {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: hsl(var(--secondary) / 0.4);
+  border: 1px solid hsl(var(--border) / 0.4);
+  border-radius: 4px;
+  font-size: 10px;
+  cursor: pointer;
+  color: hsl(var(--foreground) / 0.7);
+}
+.dial-sb-step:hover { background: hsl(var(--secondary) / 0.7); }
+
+.dial-sb-now { flex: 1; min-width: 0; text-align: center; }
+.dial-sb-t {
+  font-family: var(--app-font-display);
+  font-size: 12px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dial-sb-u {
+  font-family: var(--app-font-mono);
+  font-size: 9px;
+  color: hsl(var(--muted-foreground) / 0.7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+.dial-sb-u b { color: hsl(var(--foreground) / 0.8); }
+
+.dial-sb-track {
+  height: 2px;
+  background: hsl(var(--border) / 0.3);
+  margin: 4px 8px;
+  border-radius: 1px;
+  overflow: hidden;
+}
+.dial-sb-fill {
+  height: 100%;
+  background: hsl(var(--live));
+  border-radius: 1px;
+  transition: width 0.1s linear;
+}
+
+.dial-sb-bot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 7px;
+}
+
+.dial-sb-land {
+  flex: 1;
+  padding: 5px 8px;
+  font-family: var(--app-font-label);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  background: hsl(var(--library) / 0.15);
+  border: 1px solid hsl(var(--library) / 0.4);
+  border-radius: 4px;
+  color: hsl(var(--library));
+  cursor: pointer;
+}
+.dial-sb-land:hover { background: hsl(var(--library) / 0.25); }
+
+.dial-sb-dwell {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+  color: hsl(var(--muted-foreground));
+}
+.dial-sb-dwell button {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: hsl(var(--secondary) / 0.4);
+  border: 1px solid hsl(var(--border) / 0.4);
+  border-radius: 3px;
+  font-size: 11px;
+  cursor: pointer;
+  line-height: 1;
+}
+.dial-sb-dwell button:hover { background: hsl(var(--secondary) / 0.7); }
+
+.dial-sb-stop {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid hsl(var(--border) / 0.4);
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  color: hsl(var(--muted-foreground));
+}
+.dial-sb-stop:hover { background: hsl(var(--secondary) / 0.4); }
+
+/* ── Front-door row (spec §8) ────────────────────────────────────────────── */
+.fdrow {
+  display: flex;
+  padding: 12px 15px 10px;
+  border-bottom: 1px solid hsl(var(--border) / 0.4);
   cursor: pointer;
   position: relative;
-  transition: background 0.12s;
+  transition: background 0.1s;
 }
-.lsrow::before {
+.fdrow::before {
   content: '';
   position: absolute;
   left: 0; top: 0; bottom: 0;
@@ -2283,104 +2462,112 @@
   background: transparent;
   transition: background 0.12s;
 }
-.lsrow:hover { background: hsl(var(--secondary) / 0.4); }
-.lsrow--crossing { background: hsl(var(--library) / 0.08); }
-.lsrow--crossing::before { background: hsl(var(--library)); }
-.lsrow--active::before { background: hsl(var(--live)); }
-.lsrow--dark { opacity: 0.55; }
-
-.lsrow__c { flex: 1; min-width: 0; }
-
-.lsrow__stn {
-  font-family: var(--app-font-label);
-  font-size: 9.5px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: hsl(var(--muted-foreground));
-  margin-bottom: 3px;
+.fdrow:hover { background: hsl(var(--secondary) / 0.3); }
+.fdrow--t1 { background: hsl(var(--library) / 0.07); }
+.fdrow--t1::before { background: hsl(var(--library)); }
+.fdrow--playing::before { background: hsl(var(--live)); }
+.fdrow--dim { opacity: 0.6; }
+.fdrow--sampling {
+  background: hsl(var(--live) / 0.07);
+  outline: 1px solid hsl(var(--live) / 0.25);
 }
 
-.lsrow__sh {
+.fdrow__c { flex: 1; min-width: 0; }
+
+/* Person leads — 17px serif (spec §8) */
+.fdrow__hd {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+.fdrow__pri {
   font-family: var(--app-font-display);
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 600;
   line-height: 1.15;
   color: hsl(var(--foreground));
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-
-.lsrow__dj {
+.fdrow__ovi {
   font-family: var(--app-font-display);
-  font-style: italic;
-  font-size: 12.5px;
-  color: hsl(var(--muted-foreground));
-  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: hsl(var(--library));
+  flex-shrink: 0;
+  line-height: 1;
 }
-.lsrow__dj b { font-style: normal; font-weight: 600; color: hsl(var(--foreground) / 0.8); }
+.fdrow__ovi--zero { color: hsl(var(--muted-foreground) / 0.5); }
+.fdrow__ovi--st   { color: hsl(var(--muted-foreground) / 0.6); font-weight: 400; }
 
-.lsrow__np {
+/* Mono ctx line: station · show · ♪ track */
+.fdrow__ctx {
   font-family: var(--app-font-mono);
   font-size: 9px;
   color: hsl(var(--muted-foreground) / 0.7);
-  margin-top: 5px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  margin-bottom: 5px;
 }
 
-.lsrow__why {
+/* Reason sentence — italic serif (spec §3) */
+.fdrow__why {
   font-family: var(--app-font-display);
   font-style: italic;
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.4;
-  margin-top: 6px;
+  margin-bottom: 7px;
 }
-.lsrow__why--cross { color: hsl(var(--library)); }
-.lsrow__why--set   { color: hsl(var(--foreground) / 0.85); }
-.lsrow__why--onair { color: hsl(var(--muted-foreground)); }
-.lsrow__why--stn   { color: hsl(var(--muted-foreground)); }
-.lsrow__why--dark  { color: hsl(var(--muted-foreground) / 0.5); }
+.fdrow__why b { font-style: normal; font-weight: 600; }
 
-.lsrow__rail {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 5px;
-  padding-top: 2px;
-  min-width: 36px;
-}
+.fdrow__why.w1 { color: hsl(var(--library)); }
+.fdrow__why.w2 { color: hsl(var(--foreground) / 0.9); }
+.fdrow__why.w6 { color: hsl(var(--muted-foreground)); }
+.fdrow__why.w7 { color: hsl(var(--muted-foreground)); }
+.fdrow__why.w0 { color: hsl(var(--muted-foreground) / 0.5); }
 
-.lsrow__badge {
-  font-family: var(--app-font-label);
+/* ↩ earlier on STATION (spec §13) */
+.fdrow__foot { display: flex; }
+.fdrow__back {
+  font-family: var(--app-font-mono);
   font-size: 8.5px;
+  color: hsl(var(--muted-foreground) / 0.5);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: hsl(var(--border) / 0.6);
+  transition: color 0.1s;
+}
+.fdrow__back:hover { color: hsl(var(--foreground) / 0.7); }
+
+/* ── Zone section labels (spec §6) ──────────────────────────────────────── */
+.fdzone-lbl {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 14px 15px 5px;
+}
+.fdzone-lbl__text {
+  font-family: var(--app-font-label);
+  font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: hsl(var(--library));
+  letter-spacing: 0.09em;
+  color: hsl(var(--muted-foreground) / 0.7);
 }
-
-.lsrow__ov { text-align: right; }
-.lsrow__ov-n {
-  display: block;
-  font-family: var(--app-font-display);
-  font-size: 18px;
-  font-weight: 600;
-  color: hsl(var(--library));
-  line-height: 1;
-}
-.lsrow__ov-lbl {
-  display: block;
+.fdzone-lbl__hint {
   font-family: var(--app-font-mono);
-  font-size: 7px;
-  font-weight: 400;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: hsl(var(--muted-foreground) / 0.6);
-  margin-top: 2px;
+  font-size: 8px;
+  color: hsl(var(--muted-foreground) / 0.4);
 }
-
-.lsrow__pin { font-size: 10px; opacity: 0.4; }
 
 /* ── Selectors page — overlap sentence ──────────────────────────────────── */
 .sel-card__overlap-sentence {
