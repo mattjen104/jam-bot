@@ -1,6 +1,6 @@
 import { Switch, Route, Router as WouterRouter, useLocation, Redirect } from "wouter";
 import { useEffect } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useQueryClient, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
@@ -17,7 +17,6 @@ import Selectors from "@/pages/Selectors";
 import Journal from "@/pages/Journal";
 import Following from "@/pages/Following";
 import Library from "@/pages/Library";
-import TasteMap from "@/pages/TasteMap";
 import AdminClaims from "@/pages/AdminClaims";
 import AdminSongExploder from "@/pages/AdminSongExploder";
 import AdminSelectors from "@/pages/AdminSelectors";
@@ -34,27 +33,40 @@ import { PlayerDock } from "./components/PlayerDock";
 import { ListeningLogger } from "./components/ListeningLogger";
 import { AppLayout } from "./components/AppLayout";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { postStartImport, ME_LATEST_IMPORT_JOB_KEY } from "./lib/meHooks";
 
 
 const queryClient = new QueryClient();
 
 /**
  * After the Spotify library connect callback, the server redirects to
- * /lore/?library=connected. We catch that here and forward to /taste-map.
+ * /lore/?library=connected. We catch that here, strip the query param,
+ * and kick off the import in place — no navigation occurs.
  * This runs inside the Router so wouter's base is already applied.
  */
 function LibraryConnectRedirect() {
   const [, setLocation] = useLocation();
+  const qc = useQueryClient();
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const lib = params.get("library");
     if (lib === "connected") {
-      // Strip the param and navigate to the taste-map (auto-import on arrival)
+      // Strip the param from the URL so refreshing doesn't re-trigger.
       const newSearch = new URLSearchParams(params);
       newSearch.delete("library");
-      setLocation(`/taste-map?import=1`);
+      const qs = newSearch.toString();
+      setLocation(window.location.pathname.replace(/^\/lore/, "") + (qs ? `?${qs}` : ""), { replace: true });
+      // Start the import immediately; ImportStrip shows progress.
+      postStartImport("spotify")
+        .catch(() => {
+          // 409 (already running) or transient failure — invalidate to re-sync.
+        })
+        .finally(() => {
+          void qc.invalidateQueries({ queryKey: ME_LATEST_IMPORT_JOB_KEY });
+        });
     }
-  }, [setLocation]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return null;
 }
 
@@ -86,7 +98,10 @@ function Router() {
         <Route path="/journal" component={Journal} />
         <Route path="/following" component={Following} />
         <Route path="/library" component={Library} />
-        <Route path="/taste-map" component={TasteMap} />
+        {/* Redirect any deep-linked /taste-map URLs to home */}
+        <Route path="/taste-map">
+          {() => <Redirect to="/" />}
+        </Route>
         <Route path="/admin" component={AdminClaims} />
         <Route path="/admin/song-exploder" component={AdminSongExploder} />
         <Route path="/admin/selectors" component={AdminSelectors} />

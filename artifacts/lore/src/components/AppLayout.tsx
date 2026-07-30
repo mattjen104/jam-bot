@@ -3,7 +3,7 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import { Music2, X } from "lucide-react";
 import { ImportStrip } from "./ImportStrip";
-import { useMyConnections, useLatestImportJob } from "../lib/meHooks";
+import { useMyConnections, useLatestImportJob, startSpotifyLibraryConnect } from "../lib/meHooks";
 
 const SESSION_LIBRARY_PROMPT_DISMISSED = "lore_library_prompt_dismissed";
 
@@ -25,9 +25,7 @@ function isRadioSection(location: string): boolean {
     location === "/journal" ||
     location.startsWith("/journal/") ||
     location === "/following" ||
-    location.startsWith("/following/") ||
-    location === "/taste-map" ||
-    location.startsWith("/taste-map/")
+    location.startsWith("/following/")
   ) {
     return false;
   }
@@ -47,7 +45,6 @@ const RADIO_SUB_NAV = [
  * connected a Spotify library. Dismisses permanently for the session.
  */
 function LibraryPrompt() {
-  const [, navigate] = useLocation();
   const [dismissed, setDismissed] = useState(() =>
     sessionStorage.getItem(SESSION_LIBRARY_PROMPT_DISMISSED) === "1",
   );
@@ -68,6 +65,10 @@ function LibraryPrompt() {
     setDismissed(true);
   };
 
+  const handleConnect = () => {
+    void startSpotifyLibraryConnect();
+  };
+
   return (
     <div
       className="flex items-center gap-3 border-b border-border px-4 py-2"
@@ -85,7 +86,7 @@ function LibraryPrompt() {
       </p>
       <button
         type="button"
-        onClick={() => navigate("/taste-map")}
+        onClick={handleConnect}
         className="shrink-0 rounded-full border border-border px-3 py-1 font-mono text-[10px] uppercase tracking-wide text-muted-foreground transition-colors hover:border-primary hover:text-primary"
       >
         Connect
@@ -120,9 +121,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
     location === "/journal" ||
     location.startsWith("/journal/") ||
     location === "/following" ||
-    location.startsWith("/following/") ||
-    location === "/taste-map" ||
-    location.startsWith("/taste-map/");
+    location.startsWith("/following/");
 
   return (
     <>

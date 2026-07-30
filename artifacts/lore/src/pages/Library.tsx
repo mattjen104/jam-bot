@@ -541,10 +541,6 @@ export default function Library() {
     setImportBusy(true);
     try {
       await postStartImport("spotify");
-      window.location.href =
-        window.location.origin +
-        (import.meta.env.BASE_URL ?? "/lore/") +
-        "taste-map";
     } catch {
       // 409 or transient failure — refetch syncs state
     } finally {
