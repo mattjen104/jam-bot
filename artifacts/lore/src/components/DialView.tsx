@@ -343,6 +343,7 @@ interface ScanBarProps {
   currentStation: DialStation | null;
   currentShow: DialShow | null;
   currentDj: string | null;
+  onPlay: (ds: DialStation) => void;
 }
 
 function useScanState(cands: Array<{ sp: DialSpin; show: DialShow; station: DialStation }>) {
@@ -368,9 +369,13 @@ function useScanState(cands: Array<{ sp: DialSpin; show: DialShow; station: Dial
     timerRef.current = setInterval(hop, 3000);
   }, [cands]);
 
-  const land = useCallback(() => {
+  const land = useCallback((onLand?: (s: { sp: DialSpin; show: DialShow; station: DialStation }) => void) => {
     stopScan();
-    // sampling is kept as-is after land
+    // sampling is kept as-is after land; fire the callback with the frozen sample
+    setSampling((current) => {
+      if (current && onLand) onLand(current);
+      return current;
+    });
   }, [stopScan]);
 
   const toggle = useCallback(() => {
@@ -390,6 +395,7 @@ function ScanBar({
   currentStation,
   currentShow,
   currentDj,
+  onPlay,
 }: ScanBarProps) {
   // Collect library-crossing candidates for the current scope
   const cands = useMemo(() => {
@@ -461,7 +467,7 @@ function ScanBar({
       <button
         type="button"
         className={`dial-landbtn${sampling ? " dial-landbtn--show" : ""}`}
-        onClick={land}
+        onClick={() => land((s) => onPlay(s.station))}
       >
         Land
       </button>
@@ -666,6 +672,7 @@ export function DialView() {
           currentStation={currentStation}
           currentShow={currentShow}
           currentDj={currentDjName}
+          onPlay={(ds) => radio.toggle(ds.station)}
         />
       )}
 
