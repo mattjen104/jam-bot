@@ -46,6 +46,7 @@ import {
   Radio,
   Loader2,
   Music2,
+  Search,
   Upload,
   XCircle,
   Headphones,
@@ -629,12 +630,12 @@ export default function Library() {
             Your library
             <button
               type="button"
-              className="ml-auto dial-topbar__search"
+              className="ml-auto flex items-center justify-center rounded-full p-1 text-muted-foreground transition-colors hover:text-foreground"
               onClick={() => setSearchOpen(true)}
               aria-label="Search stations and selectors"
               title="Search"
             >
-              🔍
+              <Search className="h-4 w-4" />
             </button>
           </div>
           <h1 className="mt-3 max-w-[22ch] font-serif text-4xl font-semibold leading-[1.05] text-foreground sm:text-5xl">

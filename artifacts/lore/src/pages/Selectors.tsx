@@ -13,7 +13,7 @@ import type { PickerDialItem, SelectorSummary } from "@workspace/api-client-reac
 import { useMyLibrary } from "../lib/meHooks";
 import { usePlayer } from "../player/PlayerProvider";
 import { FollowButton } from "../components/FollowButton";
-import { Loader2, Play, Users } from "lucide-react";
+import { Loader2, Play, Search, Users } from "lucide-react";
 
 const ON_AIR_MS = 2 * 60 * 60 * 1000; // 2 hours = "live now"
 const RECENTLY_ACTIVE_MS = 14 * 24 * 60 * 60 * 1000;
@@ -450,12 +450,12 @@ export default function Selectors() {
             Selectors
             <button
               type="button"
-              className="ml-auto dial-topbar__search"
+              className="ml-auto flex items-center justify-center rounded-full p-1 text-muted-foreground transition-colors hover:text-foreground"
               onClick={() => setSearchOpen(true)}
               aria-label="Search stations and selectors"
               title="Search"
             >
-              🔍
+              <Search className="h-4 w-4" />
             </button>
           </div>
           <h1 className="mt-3 max-w-[22ch] font-serif text-4xl font-semibold leading-[1.05] text-foreground">
