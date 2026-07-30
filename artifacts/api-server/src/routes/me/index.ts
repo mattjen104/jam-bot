@@ -1015,6 +1015,24 @@ router.get("/me/library", h(async (req, res) => {
   });
 }));
 
+/**
+ * GET /api/me/library/mbids — all resolved MBIDs in the user's library,
+ * returned as a flat string array. No pagination — this is a lightweight
+ * crossing-detection endpoint for the dial. Unauthenticated → 200 [].
+ */
+router.get("/me/library/mbids", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+  if (!user) { res.json({ mbids: [] }); return; }
+
+  const rows = await db
+    .select({ mbid: libraryItemsTable.mbid })
+    .from(libraryItemsTable)
+    .where(and(eq(libraryItemsTable.userId, user.id), isNotNull(libraryItemsTable.mbid)));
+
+  const mbids = rows.map((r) => r.mbid).filter((m): m is string => !!m);
+  res.json({ mbids });
+}));
+
 /** Hard cap on rows in one export file. */
 const EXPORT_MAX_ROWS = 50_000;
 

@@ -26,7 +26,7 @@ import {
   type StationScheduleRun,
   type StationRecentSpin,
 } from "@workspace/api-client-react";
-import { useMyLibrary } from "../lib/meHooks";
+import { useMyLibraryMbids } from "../lib/meHooks";
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -170,14 +170,8 @@ export function useDialData(): {
     },
   );
 
-  // ── user library (first 60 MBIDs for crossing detection) ─────────────────
-  const { data: libraryData } = useMyLibrary(undefined, 60);
-
-  const libraryMbids = useMemo(() => {
-    return (libraryData?.items ?? [])
-      .map((item) => item.mbid)
-      .filter((mbid): mbid is string => !!mbid);
-  }, [libraryData]);
+  // ── user library MBIDs (all resolved, no pagination cap) ─────────────────
+  const { data: libraryMbids = [] } = useMyLibraryMbids();
 
   const libraryMbidSet = useMemo(() => new Set(libraryMbids), [libraryMbids]);
 

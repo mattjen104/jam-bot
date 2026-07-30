@@ -294,6 +294,21 @@ export function useSpotifyLibraryConnected(): boolean {
   return Array.isArray(data) && data.some((c) => c.service === "spotify");
 }
 
+/** All resolved MBIDs in the user's library — no pagination cap. */
+export const ME_LIBRARY_MBIDS_KEY = ["me", "library", "mbids"] as const;
+
+export function useMyLibraryMbids() {
+  return useQuery({
+    queryKey: ME_LIBRARY_MBIDS_KEY,
+    queryFn: () =>
+      fetchOrNull<{ mbids: string[] }>("/api/me/library/mbids").then(
+        (d) => d?.mbids ?? [],
+      ),
+    staleTime: 60_000,
+    retry: false,
+  });
+}
+
 /**
  * Paginated kept+imported library items, newest first.
  * Returns an empty list when unauthenticated.
