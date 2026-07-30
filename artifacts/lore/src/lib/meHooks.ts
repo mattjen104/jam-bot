@@ -53,6 +53,13 @@ export interface ImportJobStatus {
   startedAt: string;
   finishedAt: string | null;
   error: string | null;
+  /**
+   * Set when the job skipped the Spotify fetch and resumed from a prior job's
+   * stored buffer (complete-buffer resume path). The value is the id of that
+   * prior job. The UI uses this to show "Resuming from previous session…"
+   * instead of "Fetching your library…".
+   */
+  resumedFrom: number | null;
 }
 
 export interface OverlapPicker {

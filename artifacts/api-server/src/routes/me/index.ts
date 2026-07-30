@@ -588,6 +588,7 @@ router.get("/me/library/import", h(async (req, res) => {
     startedAt: job.startedAt.toISOString(),
     finishedAt: job.finishedAt ? job.finishedAt.toISOString() : null,
     error: job.error ?? null,
+    resumedFrom: job.resumedFrom ?? null,
   });
 }));
 
@@ -623,6 +624,7 @@ router.get("/me/library/import/:jobId", h(async (req, res) => {
     startedAt: job.startedAt.toISOString(),
     finishedAt: job.finishedAt ? job.finishedAt.toISOString() : null,
     error: job.error ?? null,
+    resumedFrom: job.resumedFrom ?? null,
   });
 }));
 
@@ -729,9 +731,11 @@ export async function runImportWorker(
         ` from job=${prevWithBuffer.id} (${buffer.length} tracks)`,
       );
       // Advance directly to the "spine" phase so progress reporting is accurate.
+      // Store resumedFrom so the frontend can show "Resuming from previous
+      // session…" instead of "Fetching your library…".
       await db
         .update(libraryImportJobsTable)
-        .set({ phase: "spine", total: buffer.length, bufferJson: buffer })
+        .set({ phase: "spine", total: buffer.length, bufferJson: buffer, resumedFrom: prevWithBuffer.id })
         .where(eq(libraryImportJobsTable.id, jobId));
     } else {
       // ── Path 2 / fresh: fetch from Spotify (optionally resumed) ───────────

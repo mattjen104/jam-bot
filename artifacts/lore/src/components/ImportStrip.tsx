@@ -24,8 +24,11 @@ export function ImportStrip() {
         aria-hidden="true"
       />
       <p className="flex-1 font-mono text-[11px] text-muted-foreground">
-        Reading your Spotify library · {job.resolved.toLocaleString()} /{" "}
-        {job.total.toLocaleString()} tracks resolved — matches update as we go
+        {job.resumedFrom != null && job.phase !== "fetching"
+          ? <>Resuming from previous session · {job.resolved.toLocaleString()} /{" "}
+              {job.total.toLocaleString()} tracks resolved — matches update as we go</>
+          : <>Reading your Spotify library · {job.resolved.toLocaleString()} /{" "}
+              {job.total.toLocaleString()} tracks resolved — matches update as we go</>}
       </p>
       <div
         className="shrink-0 overflow-hidden rounded-sm"

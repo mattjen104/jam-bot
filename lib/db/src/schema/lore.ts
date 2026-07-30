@@ -1211,6 +1211,13 @@ export const libraryImportJobsTable = pgTable("library_import_jobs", {
    * to Phase 3 without re-paging through the Spotify API.
    */
   bufferJson: jsonb("buffer_json").$type<ImportBufferEntry[]>(),
+  /**
+   * When a complete-buffer resume is used (the worker skipped the Spotify
+   * fetch entirely and drained a prior job's stored buffer), this stores the
+   * id of that prior job.  The frontend uses it to show
+   * "Resuming from previous session…" instead of "Fetching your library…".
+   */
+  resumedFrom: integer("resumed_from"),
 });
 
 export type LibraryImportJob = typeof libraryImportJobsTable.$inferSelect;
