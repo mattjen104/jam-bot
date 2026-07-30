@@ -27,6 +27,8 @@ function isRadioSection(location: string): boolean {
   return true;
 }
 
+// Sub-nav is kept for non-Home radio pages (Archive, Schedule).
+// DialView (/) renders its own sub-nav internally.
 const RADIO_SUB_NAV = [
   { href: "/", label: "Dial", exact: true },
   { href: "/stations", label: "Stations", exact: false },
@@ -37,6 +39,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
 
   const radioActive = isRadioSection(location);
+  const isHome = location === "/" || location === "";
+
   const selectorsActive =
     location === "/selectors" ||
     location.startsWith("/selectors/") ||
@@ -55,8 +59,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      {/* ── Radio sub-nav strip (when Radio tab is active) ──────── */}
-      {radioActive && (
+      {/* ── Radio sub-nav strip — only for non-Home radio pages ─────────── */}
+      {radioActive && !isHome && (
         <div
           className="sticky top-0 z-20 border-b border-border backdrop-blur-md"
           style={{ background: "hsl(var(--background) / 0.95)" }}
@@ -83,9 +87,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       )}
 
       {/* ── Main content (padded for bottom nav bar) ────────────── */}
-      <div className="pb-14">{children}</div>
+      <div className={isHome ? "" : "pb-14"}>{children}</div>
 
-      {/* ── Bottom nav bar — 3 pills ────────────────────────────── */}
+      {/* ── Bottom nav bar — 3 pills ─────────────────────────────── */}
+      {/* The Home page (DialView) renders its own nav via AppLayout below */}
       <nav
         className="fixed bottom-0 left-0 right-0 z-30 border-t border-border backdrop-blur-md"
         style={{ background: "hsl(var(--background) / 0.97)" }}
