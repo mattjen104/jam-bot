@@ -2,8 +2,8 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import type { LibraryItem } from "../lib/meHooks";
 import { usePlayer, type RideSeed } from "../player/PlayerProvider";
-import { getRecordingAlbumTracks } from "@workspace/api-client-react";
 import { getRecordingAlbumTracks, spotifyPlay } from "@workspace/api-client-react";
+import { toast } from "../hooks/use-toast";
 
 /** Deterministic gradient fallback for artwork */
 function artGradient(a: string, b: string): string {
@@ -96,9 +96,12 @@ function DoorStrip({ item, onClose }: { item: LibraryItem; onClose: () => void }
       void spotifyPlay({
         mbid: item.mbid,
         deviceId: spotify.pinnedDevice?.id ?? undefined,
+      }).then(() => {
+        toast({ title: `Playing on Spotify: ${title}` });
       }).catch(() => {
         // If the direct play fails, fall back to the replay ride.
         ride.startReplay([seed], title, { timeOrientation: "curated", context: "library" });
+        toast({ title: "Couldn't play on Spotify — using preview" });
       });
       onClose();
       return;
