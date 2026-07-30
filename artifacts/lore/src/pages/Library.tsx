@@ -127,10 +127,10 @@ function SyncBar({
       <div className="flex items-center justify-between gap-4 px-5 py-4">
         <div className="min-w-0">
           <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
-            Sync to Spotify
+            Export keeps → Spotify
           </p>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Push your kept tracks to Spotify's saved songs.
+            Push your Lore keeps into your Spotify saved songs.
           </p>
           {/* Counts from last sync */}
           {syncJobData?.status === "done" && syncJobData.results && (
@@ -661,7 +661,7 @@ export default function Library() {
             </div>
           )}
 
-          {isAuthenticated && hasSpotify && isEmpty && !libLoading && (
+          {isAuthenticated && hasSpotify && !isActive && (
             <div className="mt-6 flex flex-wrap gap-2">
               <button
                 type="button"
@@ -675,7 +675,7 @@ export default function Library() {
                 ) : (
                   <Music2 className="h-3.5 w-3.5" />
                 )}
-                Import Spotify library
+                {isEmpty ? "Import Spotify library" : "Re-import from Spotify"}
               </button>
             </div>
           )}
