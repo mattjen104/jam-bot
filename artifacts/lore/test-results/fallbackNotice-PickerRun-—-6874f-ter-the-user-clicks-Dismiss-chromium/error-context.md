@@ -6,8 +6,8 @@
 
 # Test info
 
-- Name: ntsOnAirBadge.spec.ts >> NTS 'On air' badge in the live station view >> DJ name appears inside the badge when djName is set
-- Location: e2e/ntsOnAirBadge.spec.ts:132:3
+- Name: fallbackNotice.spec.ts >> PickerRun — fallback notice via 'hear it in context' deep link >> hides the fallback notice after the user clicks Dismiss
+- Location: e2e/fallbackNotice.spec.ts:245:3
 
 # Error details
 

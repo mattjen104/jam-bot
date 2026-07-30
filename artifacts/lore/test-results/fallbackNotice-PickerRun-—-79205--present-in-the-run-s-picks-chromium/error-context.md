@@ -6,8 +6,8 @@
 
 # Test info
 
-- Name: ntsOnAirBadge.spec.ts >> NTS 'On air' badge in the live station view >> show name appears inside the badge
-- Location: e2e/ntsOnAirBadge.spec.ts:114:3
+- Name: fallbackNotice.spec.ts >> PickerRun — fallback notice via 'hear it in context' deep link >> does NOT show the fallback notice when the song MBID is present in the run's picks
+- Location: e2e/fallbackNotice.spec.ts:265:3
 
 # Error details
 

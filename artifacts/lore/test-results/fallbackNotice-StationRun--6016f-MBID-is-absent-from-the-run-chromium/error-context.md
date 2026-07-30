@@ -6,8 +6,8 @@
 
 # Test info
 
-- Name: ntsOnAirBadge.spec.ts >> NTS 'On air' badge in the live station view >> badge is absent when the spin has no show data
-- Location: e2e/ntsOnAirBadge.spec.ts:176:3
+- Name: fallbackNotice.spec.ts >> StationRun — fallback notice via 'hear it in context' deep link >> shows the amber fallback notice when the song MBID is absent from the run
+- Location: e2e/fallbackNotice.spec.ts:158:3
 
 # Error details
 

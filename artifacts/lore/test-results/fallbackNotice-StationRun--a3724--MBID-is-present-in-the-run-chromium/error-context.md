@@ -6,8 +6,8 @@
 
 # Test info
 
-- Name: ntsOnAirBadge.spec.ts >> NTS 'On air' badge in the live station view >> badge renders with show name only when djName is null
-- Location: e2e/ntsOnAirBadge.spec.ts:213:3
+- Name: fallbackNotice.spec.ts >> StationRun — fallback notice via 'hear it in context' deep link >> does NOT show the fallback notice when the song MBID is present in the run
+- Location: e2e/fallbackNotice.spec.ts:200:3
 
 # Error details
 
