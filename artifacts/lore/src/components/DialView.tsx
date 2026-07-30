@@ -473,43 +473,57 @@ function ScanBar({
 // ---------------------------------------------------------------------------
 function ScheduleView({ stations }: { stations: DialStation[] }) {
   const allShows = stations
-    .flatMap((ds) =>
-      ds.shows.map((sh) => ({ show: sh, station: ds })),
-    )
-    .filter(({ show }) => show.state !== "future")
+    .flatMap((ds) => ds.shows.map((sh) => ({ show: sh, station: ds })))
     .sort((a, b) => new Date(a.show.startedAt).getTime() - new Date(b.show.startedAt).getTime());
+
+  const pastAndLive = allShows.filter(({ show }) => show.state !== "future");
+  const upcoming = allShows.filter(({ show }) => show.state === "future");
+
+  const SectionLabel = ({ label }: { label: string }) => (
+    <div className="dial-sec-lbl" style={{ paddingTop: 16 }}>{label}</div>
+  );
+
+  const ShowRow = ({ show, station }: { show: import("../hooks/useDialData").DialShow; station: DialStation }) => {
+    const isLive = show.state === "live";
+    const isFuture = show.state === "future";
+    const warm = show.crossings > 0 && !isFuture;
+    return (
+      <div className={`dial-sch-row${isLive ? " dial-sch-row--live" : ""}${warm ? " dial-sch-row--warm" : ""}${isFuture ? " dial-sch-row--future" : ""}`}>
+        <div className="dial-sch-time">{fmtHM(show.startedAt)}</div>
+        <div className="dial-sch-info">
+          <div className="dial-sch-show">{show.showName}</div>
+          {show.djName && <div className="dial-sch-dj"><b>{show.djName}</b></div>}
+          <div className="dial-sch-stn">{station.station.name}</div>
+        </div>
+        <div className="dial-sch-badge">
+          {isLive && <span className="dial-sch-badge--live">● Live</span>}
+          {isFuture && <span style={{ color: "hsl(var(--faint))", fontSize: 8 }}>Soon</span>}
+          {!isLive && !isFuture && warm && <span className="dial-sch-badge--cross">◆ {show.crossings}</span>}
+          {show.isPickerShow && <span className="dial-sch-badge--sel">Selector</span>}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div>
-      {allShows.length === 0 && (
+      {pastAndLive.length === 0 && upcoming.length === 0 && (
         <div style={{ padding: "24px 15px", opacity: 0.4, fontFamily: "var(--app-font-display)", fontSize: 12 }}>
           No show data for today
         </div>
       )}
-      {allShows.map(({ show, station }, i) => {
-        const isLive = show.state === "live";
-        const warm = show.crossings > 0;
-        return (
-          <div
-            key={i}
-            className={`dial-sch-row${isLive ? " dial-sch-row--live" : ""}${warm && !isLive ? " dial-sch-row--warm" : ""}`}
-          >
-            <div className="dial-sch-time">{fmtHM(show.startedAt)}</div>
-            <div className="dial-sch-info">
-              <div className="dial-sch-show">{show.showName}</div>
-              <div className="dial-sch-dj">
-                {show.djName && <b>{show.djName}</b>}
-              </div>
-              <div className="dial-sch-stn">{station.station.name}</div>
-            </div>
-            <div className="dial-sch-badge">
-              {isLive && <span className="dial-sch-badge--live">Live</span>}
-              {!isLive && warm && <span className="dial-sch-badge--cross">◆ {show.crossings}</span>}
-              {show.isPickerShow && <span className="dial-sch-badge--sel">Selector</span>}
-            </div>
-          </div>
-        );
-      })}
+      {pastAndLive.length > 0 && (
+        <>
+          <SectionLabel label="Today so far" />
+          {pastAndLive.map(({ show, station }, i) => <ShowRow key={i} show={show} station={station} />)}
+        </>
+      )}
+      {upcoming.length > 0 && (
+        <>
+          <SectionLabel label="Coming up" />
+          {upcoming.map(({ show, station }, i) => <ShowRow key={i} show={show} station={station} />)}
+        </>
+      )}
     </div>
   );
 }

@@ -70,7 +70,8 @@ export interface DialStation {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const LIVE_WINDOW_MS = 15 * 60 * 1000; // 15 min
+const LIVE_WINDOW_MS = 20 * 60 * 1000; // 20 min — generous window for slow pollers
+const FUTURE_THRESHOLD_MS = 60 * 1000; // 1 min lookahead
 const LS_PINS_KEY = "lore:dialPins";
 
 function todayStr() {
@@ -101,8 +102,12 @@ export function togglePin(slug: string): void {
 
 function showState(run: StationScheduleRun, isStationLive: boolean): "live" | "past" | "future" {
   const now = Date.now();
-  const endedMs = new Date(run.endedAt).getTime();
-  if (isStationLive && now - endedMs < LIVE_WINDOW_MS) return "live";
+  const startMs = new Date(run.startedAt).getTime();
+  const endMs = new Date(run.endedAt).getTime();
+  // Future: hasn't started yet (with 1-min grace)
+  if (startMs > now + FUTURE_THRESHOLD_MS) return "future";
+  // Live: station is live and the show's end is within the live window
+  if (isStationLive && endMs > now - LIVE_WINDOW_MS) return "live";
   return "past";
 }
 
@@ -223,6 +228,27 @@ export function useDialData(): {
     return m;
   }, [liveData]);
 
+  // ── live now-playing track per station (for live block currentTrack) ───────
+  const nowPlayingBySlug = useMemo((): Map<string, DialSpin> => {
+    const m = new Map<string, DialSpin>();
+    for (const item of liveData?.items ?? []) {
+      const np = item.nowPlaying;
+      if (!np) continue;
+      const title = (np as { title?: string | null }).title ?? (np as { rawTitle?: string | null }).rawTitle ?? "";
+      const artist = (np as { artist?: string | null }).artist ?? (np as { rawArtist?: string | null }).rawArtist ?? "";
+      if (!title && !artist) continue;
+      const mbid = (np as { mbid?: string | null }).mbid ?? null;
+      m.set(item.slug, {
+        mbid,
+        title,
+        artist,
+        playedAt: new Date().toISOString(),
+        isLibraryHit: mbid != null && libraryMbidSet.has(mbid),
+      });
+    }
+    return m;
+  }, [liveData, libraryMbidSet]);
+
   const runsBySlug = useMemo(() => {
     const m = new Map<string, StationScheduleRun[]>();
     for (const item of scheduleData?.items ?? []) {
@@ -282,8 +308,11 @@ export function useDialData(): {
 
         const crossings = runSpins.filter((sp) => sp.isLibraryHit).length;
         const topArtists = topArtistsFromSpins(runSpins);
+        // Prefer the live now-playing API track; fall back to most recent spin in window
         const currentTrack =
-          state === "live" && runSpins.length > 0 ? runSpins[runSpins.length - 1] : null;
+          state === "live"
+            ? (nowPlayingBySlug.get(station.slug) ?? (runSpins.length > 0 ? runSpins[runSpins.length - 1] : null))
+            : null;
         const isPickerShow = run.show?.djName != null && pickerNames.has(run.show.djName);
 
         return {
@@ -307,8 +336,24 @@ export function useDialData(): {
       );
 
       return { station, isLive, shows, crossings };
+    })
+    // Determine which stations to surface in the Dial:
+    //   1. Any station that is currently live (has a now-playing signal)
+    //   2. Any "flagship" curated station (editorially selected) — shown even when
+    //      today's schedule data hasn't arrived yet so the dial is never empty
+    //   3. Any other station that has at least one named show (not "Unknown show")
+    //      — keeps Radio Browser stations with no show metadata out of the view
+    .filter((ds) => {
+      if (ds.isLive) return true;
+      if (ds.station.tier === "flagship") return true;
+      return ds.shows.some(
+        (sh) =>
+          sh.showName !== "Unknown show" &&
+          sh.showName !== "Unknown" &&
+          sh.showName.trim().length > 0,
+      );
     });
-  }, [stationsData, liveBySlug, runsBySlug, spinsBySlug, libraryMbidSet, pickerNames]);
+  }, [stationsData, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, libraryMbidSet, pickerNames]);
 
   const isLoading = stationsLoading || liveLoading || schedLoading || spinsLoading;
 

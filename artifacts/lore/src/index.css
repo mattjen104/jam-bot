@@ -1142,6 +1142,7 @@
 .dial-sch-row:hover { background: hsl(var(--card)); }
 .dial-sch-row--live { background: rgba(127,168,201,.11); }
 .dial-sch-row--warm { background: rgba(232,106,78,.07); }
+.dial-sch-row--future { opacity: 0.55; border-style: dashed; }
 .dial-sch-time {
   font-family: var(--app-font-mono);
   font-size: 9px;
