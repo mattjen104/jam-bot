@@ -415,6 +415,11 @@ router.post("/me/library/import", h(async (req, res) => {
     if (ageMs > ZOMBIE_AGE_MS) {
       // Orphaned job — clear it so the user gets a fresh import.
       console.warn(`[me/import] job=${existingJob.id} orphaned (${Math.round(ageMs / 60_000)}m old) — resetting`);
+      // NOTE: `phase` and `bufferJson` are intentionally NOT included in this
+      // set. They must survive so that runImportWorker can find the ex-zombie
+      // as `prevInterrupted` and resume the fetch from buffer.length rather
+      // than re-fetching tracks that were already downloaded before the server
+      // restart. Resetting phase/bufferJson here would silently break resume.
       await db
         .update(libraryImportJobsTable)
         .set({ status: "error", error: "Import interrupted (server restarted) — please try again", finishedAt: new Date() })
