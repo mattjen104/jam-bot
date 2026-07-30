@@ -23,6 +23,12 @@ import {
   type AlbumCompletion,
   ME_LATEST_IMPORT_JOB_KEY,
   ME_LATEST_SYNC_JOB_KEY,
+  useMyOverlapStations,
+  useMyOverlapPickers,
+  useMyOverlapRuns,
+  type OverlapStation,
+  type OverlapPicker,
+  type OverlapRun,
 } from "../lib/meHooks";
 import { ApiError } from "@workspace/api-client-react";
 import { InflowCard } from "../components/InflowCard";
@@ -39,6 +45,8 @@ import {
   Music2,
   Upload,
   XCircle,
+  Headphones,
+  UserRound,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -552,6 +560,17 @@ export default function Library() {
   const libLoading = keptLoading;
   const isEmpty = !libLoading && keptItems.length === 0;
 
+  // Overlap data (only meaningful once Spotify is connected + import ran)
+  const { data: overlapStations } = useMyOverlapStations();
+  const { data: overlapPickers } = useMyOverlapPickers();
+  const { data: overlapRuns } = useMyOverlapRuns();
+
+  const hasOverlapData =
+    hasSpotify &&
+    ((overlapStations ?? []).length > 0 ||
+      (overlapPickers ?? []).length > 0 ||
+      (overlapRuns ?? []).length > 0);
+
   // Unavailable items from last sync
   const unavailableItems =
     syncJobData?.status === "done" ? syncJobData.results?.unavailableItems ?? [] : [];
@@ -910,6 +929,71 @@ export default function Library() {
           </section>
         )}
 
+        {/* ── Stations & selectors that match your taste ───────── */}
+        {hasOverlapData && (
+          <section className="mt-12" data-testid="library-overlap">
+            <div className="mb-1">
+              <h2 className="font-serif text-xl font-semibold text-foreground">
+                Stations &amp; selectors that match your taste
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Based on the tracks in your Spotify library.
+              </p>
+            </div>
+
+            {/* Stations */}
+            {(overlapStations ?? []).length > 0 && (
+              <div className="mt-6" data-testid="library-overlap-stations">
+                <div className="mb-3 flex items-center gap-2">
+                  <Radio className="h-3.5 w-3.5 text-primary" />
+                  <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
+                    Stations
+                  </h3>
+                </div>
+                <div className="flex gap-3 overflow-x-auto pb-2">
+                  {(overlapStations ?? []).map((item) => (
+                    <OverlapStationCard key={item.station.slug} item={item} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Pickers / selectors */}
+            {(overlapPickers ?? []).length > 0 && (
+              <div className="mt-6" data-testid="library-overlap-pickers">
+                <div className="mb-3 flex items-center gap-2">
+                  <UserRound className="h-3.5 w-3.5 text-primary" />
+                  <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
+                    Selectors
+                  </h3>
+                </div>
+                <div className="flex gap-3 overflow-x-auto pb-2">
+                  {(overlapPickers ?? []).map((item) => (
+                    <OverlapPickerCard key={item.picker.handle} item={item} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Suggested runs */}
+            {(overlapRuns ?? []).length > 0 && (
+              <div className="mt-6" data-testid="library-overlap-runs">
+                <div className="mb-3 flex items-center gap-2">
+                  <Headphones className="h-3.5 w-3.5 text-primary" />
+                  <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
+                    Suggested sets to ride
+                  </h3>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {(overlapRuns ?? []).slice(0, 5).map((item) => (
+                    <OverlapRunCard key={item.runId} item={item} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+
         {/* ── Export ───────────────────────────────────────────── */}
         <section
           className="mt-12 rounded-2xl border border-card-border bg-card p-5"
@@ -1018,6 +1102,101 @@ export default function Library() {
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Overlap cards
+// ---------------------------------------------------------------------------
+
+function OverlapStationCard({ item }: { item: OverlapStation }) {
+  const { station, sharedCount } = item;
+  return (
+    <Link
+      href={`/archive/stations/${station.slug}`}
+      className="hover-elevate flex w-44 shrink-0 flex-col justify-between rounded-2xl border border-card-border bg-card px-4 py-4 transition-colors hover:border-primary/30"
+      data-testid="overlap-station-card"
+    >
+      <div>
+        <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+          {station.stationClass}
+        </p>
+        <p className="mt-1 line-clamp-2 font-serif text-base font-semibold leading-snug text-foreground">
+          {station.name}
+        </p>
+      </div>
+      <p className="mt-3 font-mono text-[11px] text-primary">
+        {sharedCount.toLocaleString()} track{sharedCount === 1 ? "" : "s"} in common
+      </p>
+    </Link>
+  );
+}
+
+function OverlapPickerCard({ item }: { item: OverlapPicker }) {
+  const { picker, sharedCount } = item;
+  return (
+    <Link
+      href={`/archive/selectors/${picker.handle}`}
+      className="hover-elevate flex w-44 shrink-0 flex-col justify-between rounded-2xl border border-card-border bg-card px-4 py-4 transition-colors hover:border-primary/30"
+      data-testid="overlap-picker-card"
+    >
+      <div>
+        <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+          {picker.pickerType === "dj" ? "DJ" : picker.pickerType}
+        </p>
+        <p className="mt-1 line-clamp-2 font-serif text-base font-semibold leading-snug text-foreground">
+          {picker.name}
+        </p>
+        <p className="mt-0.5 font-mono text-[10px] text-muted-foreground/70">
+          @{picker.handle}
+        </p>
+      </div>
+      <p className="mt-3 font-mono text-[11px] text-primary">
+        {sharedCount.toLocaleString()} track{sharedCount === 1 ? "" : "s"} in common
+      </p>
+    </Link>
+  );
+}
+
+function OverlapRunCard({ item }: { item: OverlapRun }) {
+  const { station, show, day, owned, discover } = item;
+  const dateLabel = (() => {
+    try {
+      return new Date(day).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    } catch {
+      return day;
+    }
+  })();
+  return (
+    <Link
+      href={`/archive/stations/${station.slug}`}
+      className="hover-elevate flex items-center justify-between gap-4 rounded-xl border border-card-border bg-card px-4 py-3 transition-colors hover:border-primary/30"
+      data-testid="overlap-run-card"
+    >
+      <div className="min-w-0">
+        <p className="truncate font-serif text-sm font-semibold text-foreground">
+          {show?.name ?? station.name}
+        </p>
+        <p className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">
+          {show?.djName ? `${show.djName} · ` : ""}
+          {station.name} · {dateLabel}
+        </p>
+      </div>
+      <div className="shrink-0 text-right">
+        <p className="font-mono text-[11px] text-primary">
+          {owned.toLocaleString()} you know
+        </p>
+        {discover > 0 && (
+          <p className="font-mono text-[10px] text-muted-foreground">
+            +{discover.toLocaleString()} to discover
+          </p>
+        )}
+      </div>
+    </Link>
+  );
+}
 
 function AlbumCompletionRow({ album }: { album: AlbumCompletion }) {
   const { title, artistName, totalTracks, heardTracks } = album;
