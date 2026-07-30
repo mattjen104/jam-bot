@@ -12,6 +12,7 @@ import { useDialData, togglePin, readPins, type DialStation, type DialShow, type
 import { StationLane } from "./StationLane";
 import { ContextRail } from "./ContextRail";
 import { SearchOverlay } from "./SearchOverlay";
+import { usePlayer } from "../player/PlayerProvider";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -541,6 +542,7 @@ export function DialView() {
   const [searchOpen, setSearchOpen] = useState(false);
 
   const { stations, isLoading } = useDialData();
+  const { radio } = usePlayer();
 
   const currentStation = useMemo(
     () => stations.find((ds) => ds.station.slug === currentStationSlug) ?? null,
@@ -682,10 +684,11 @@ export function DialView() {
                 key={ds.station.slug}
                 dialStation={ds}
                 isPinned={pins.has(ds.station.slug)}
-                isActive={ds.station.slug === currentStationSlug}
+                isActive={ds.station.slug === radio.station?.slug}
                 onStationClick={() => goStation(ds.station.slug)}
                 onShowClick={(show) => goShow(show, ds)}
                 onPinToggle={() => handlePinToggle(ds.station.slug)}
+                onPlay={() => void radio.toggle(ds.station)}
               />
             ))}
             {offlineStations.length > 0 && <TierHeader live={false} />}
@@ -694,10 +697,11 @@ export function DialView() {
                 key={ds.station.slug}
                 dialStation={ds}
                 isPinned={pins.has(ds.station.slug)}
-                isActive={ds.station.slug === currentStationSlug}
+                isActive={ds.station.slug === radio.station?.slug}
                 onStationClick={() => goStation(ds.station.slug)}
                 onShowClick={(show) => goShow(show, ds)}
                 onPinToggle={() => handlePinToggle(ds.station.slug)}
+                onPlay={() => void radio.toggle(ds.station)}
               />
             ))}
           </>

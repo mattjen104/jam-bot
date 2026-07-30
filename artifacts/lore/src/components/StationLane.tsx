@@ -92,10 +92,11 @@ interface StationLaneProps {
   onStationClick: () => void;
   onShowClick: (show: DialShow) => void;
   onPinToggle: () => void;
+  onPlay: () => void;
   isActive: boolean;
 }
 
-export function StationLane({ dialStation, isPinned, onStationClick, onShowClick, onPinToggle, isActive }: StationLaneProps) {
+export function StationLane({ dialStation, isPinned, onStationClick, onShowClick, onPinToggle, onPlay, isActive }: StationLaneProps) {
   const { station, isLive, shows, crossings } = dialStation;
   const rowRef = useRef<HTMLDivElement>(null);
 
@@ -122,6 +123,14 @@ export function StationLane({ dialStation, isPinned, onStationClick, onShowClick
         <span className={`dial-lane__cross${crossings === 0 ? " dial-lane__cross--zero" : ""}`}>
           {crossings > 0 ? `◆ ${crossings}` : "—"}
         </span>
+        <button
+          type="button"
+          className={`dial-lane__play${isActive ? " dial-lane__play--on" : ""}`}
+          onClick={(e) => { e.stopPropagation(); onPlay(); }}
+          aria-label={isActive ? `Stop ${station.name}` : `Play ${station.name}`}
+        >
+          {isActive ? "■" : "▶"}
+        </button>
         <button
           type="button"
           className={`dial-lane__pin${isPinned ? " dial-lane__pin--on" : ""}`}

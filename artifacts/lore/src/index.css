@@ -842,8 +842,27 @@
   background: none;
   border-color: hsl(var(--border));
 }
+.dial-lane__play {
+  font-size: 9px;
+  color: hsl(var(--faint));
+  border: 1px solid hsl(var(--card-border));
+  background: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 99px;
+  flex-shrink: 0;
+  transition: color 0.1s, border-color 0.1s, background 0.1s;
+  line-height: 1.4;
+}
+.dial-lane__play:hover { color: hsl(var(--live)); border-color: hsl(var(--live)); }
+.dial-lane__play--on {
+  color: hsl(var(--live));
+  border-color: hsl(var(--live));
+  background: rgba(127,168,201,.12);
+}
+
 .dial-lane__pin {
-  margin-left: auto;
+  margin-left: 4px;
   font-size: 10px;
   color: hsl(var(--faint));
   border: none;
