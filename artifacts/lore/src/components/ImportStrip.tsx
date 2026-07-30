@@ -1,5 +1,19 @@
 import { RefreshCw } from "lucide-react";
+import type { ImportJobStatus } from "../lib/meHooks";
 import { useLatestImportJob } from "../lib/meHooks";
+
+function phaseLabel(job: ImportJobStatus): string {
+  if (job.resumedFrom != null && job.phase !== "fetching") {
+    return "Resuming from previous session…";
+  }
+  switch (job.phase) {
+    case "fetching": return "Reading your Spotify library…";
+    case "spine":    return "Building track index…";
+    case "cache":    return "Loading cached matches…";
+    case "resolve":  return "Matching against your library…";
+    default:         return "Reading your Spotify library…";
+  }
+}
 
 /**
  * Site-wide import progress strip — visible while a Spotify library import
@@ -24,11 +38,8 @@ export function ImportStrip() {
         aria-hidden="true"
       />
       <p className="flex-1 font-mono text-[11px] text-muted-foreground">
-        {job.resumedFrom != null && job.phase !== "fetching"
-          ? <>Resuming from previous session · {job.resolved.toLocaleString()} /{" "}
-              {job.total.toLocaleString()} tracks resolved — matches update as we go</>
-          : <>Reading your Spotify library · {job.resolved.toLocaleString()} /{" "}
-              {job.total.toLocaleString()} tracks resolved — matches update as we go</>}
+          {phaseLabel(job)} · {job.resolved.toLocaleString()} /{" "}
+        {job.total.toLocaleString()} tracks resolved — matches update as we go
       </p>
       <div
         className="shrink-0 overflow-hidden rounded-sm"
