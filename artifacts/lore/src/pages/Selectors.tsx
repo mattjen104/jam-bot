@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import { SearchOverlay } from "../components/SearchOverlay";
 import {
   useListPickers,
   useGetPickersDial,
@@ -357,6 +358,8 @@ function HeroStat({ value, label }: { value: string | number; label: string }) {
 // ---------------------------------------------------------------------------
 
 export default function Selectors() {
+  const [, setLocation] = useLocation();
+  const [searchOpen, setSearchOpen] = useState(false);
   const { ride, radio } = usePlayer();
   const { data: listData, isLoading: listLoading, isError: listError } = useListPickers();
   const { data: dialData } = useGetPickersDial();
@@ -419,6 +422,14 @@ export default function Selectors() {
 
   return (
     <div className="min-h-screen">
+      {searchOpen && (
+        <SearchOverlay
+          dialStations={[]}
+          onClose={() => setSearchOpen(false)}
+          onStationDrill={(slug) => { setLocation(`/archive/stations/${slug}`); setSearchOpen(false); }}
+          onShowDrill={(_show, station) => { setLocation(`/archive/stations/${station.station.slug}`); setSearchOpen(false); }}
+        />
+      )}
       <div className={`mx-auto max-w-5xl px-4 pt-8 sm:px-6 ${dockPadding}`}>
 
         {/* ── Hero ─────────────────────────────────────────────── */}
@@ -426,6 +437,15 @@ export default function Selectors() {
           <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] text-picker">
             <Users className="h-4 w-4" />
             Selectors
+            <button
+              type="button"
+              className="ml-auto dial-topbar__search"
+              onClick={() => setSearchOpen(true)}
+              aria-label="Search stations and selectors"
+              title="Search"
+            >
+              🔍
+            </button>
           </div>
           <h1 className="mt-3 max-w-[22ch] font-serif text-4xl font-semibold leading-[1.05] text-foreground">
             Borrow real humans' taste.

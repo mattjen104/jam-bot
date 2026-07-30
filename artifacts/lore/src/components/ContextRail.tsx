@@ -79,6 +79,11 @@ export function ContextRail({
   const parts: ReactNode[] = [];
 
   if (level === "show" && show) {
+    // Collect artist → first recording MBID so we can navigate to /song/:mbid
+    const artistMbid = new Map<string, string | null>();
+    for (const sp of show.spins) {
+      if (!artistMbid.has(sp.artist)) artistMbid.set(sp.artist, sp.mbid ?? null);
+    }
     const yourArtists = [...new Set(show.spins.filter((s) => s.isLibraryHit).map((s) => s.artist))].slice(0, 4);
     const newArtists = [...new Set(show.spins.filter((s) => !s.isLibraryHit).map((s) => s.artist))]
       .filter((a) => !yourArtists.includes(a))
@@ -87,12 +92,20 @@ export function ContextRail({
     if (yourArtists.length > 0 || newArtists.length > 0) {
       parts.push(
         <Group key="artists" label="Artists">
-          {yourArtists.map((a) => (
-            <Chip key={a} label={a} variant="lib" onClick={() => showToast("Artist pages coming soon")} />
-          ))}
-          {newArtists.map((a) => (
-            <Chip key={a} label={a} variant="new" onClick={() => showToast("Artist pages coming soon")} />
-          ))}
+          {yourArtists.map((a) => {
+            const mbid = artistMbid.get(a);
+            return (
+              <Chip key={a} label={a} variant="lib"
+                onClick={() => mbid ? setLocation(`/song/${mbid}`) : showToast("No page available yet")} />
+            );
+          })}
+          {newArtists.map((a) => {
+            const mbid = artistMbid.get(a);
+            return (
+              <Chip key={a} label={a} variant="new"
+                onClick={() => mbid ? setLocation(`/song/${mbid}`) : showToast("No page available yet")} />
+            );
+          })}
         </Group>,
       );
     }

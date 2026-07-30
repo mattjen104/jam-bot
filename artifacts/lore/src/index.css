@@ -377,6 +377,170 @@
   background: hsl(var(--background));
 }
 
+/* ── Search overlay ── */
+.srch-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: hsl(var(--background));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.srch-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid hsl(var(--border));
+  flex-shrink: 0;
+}
+.srch-icon {
+  color: hsl(var(--dim));
+  flex-shrink: 0;
+}
+.srch-input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  font-family: var(--app-font-display);
+  font-size: 15px;
+  color: hsl(var(--foreground));
+  min-width: 0;
+}
+.srch-input::placeholder { color: hsl(var(--faint)); }
+.srch-clear {
+  display: flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: hsl(var(--secondary)); border: none; cursor: pointer;
+  color: hsl(var(--dim));
+}
+.srch-close {
+  font-family: var(--app-font-display);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: hsl(var(--dim));
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 0;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.srch-close:hover { color: hsl(var(--foreground)); }
+.srch-filters {
+  display: flex;
+  gap: 6px;
+  padding: 10px 14px;
+  border-bottom: 1px solid hsl(var(--border));
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+}
+.srch-filters::-webkit-scrollbar { display: none; }
+.srch-fchip {
+  font-family: var(--app-font-display);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 4px 10px;
+  border-radius: 3px;
+  border: 1px solid hsl(var(--border));
+  background: none;
+  color: hsl(var(--dim));
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
+}
+.srch-fchip:hover { background: hsl(var(--secondary)); color: hsl(var(--foreground)); }
+.srch-fchip--active { background: hsl(var(--foreground)); color: hsl(var(--background)); border-color: hsl(var(--foreground)); }
+.srch-results {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 80px;
+}
+.srch-empty {
+  padding: 32px 16px;
+  font-family: var(--app-font-display);
+  font-size: 12px;
+  color: hsl(var(--faint));
+  text-align: center;
+}
+.srch-empty em { font-style: italic; color: hsl(var(--dim)); }
+.srch-group { padding-bottom: 4px; }
+.srch-grp-lbl {
+  font-family: var(--app-font-display);
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: hsl(var(--faint));
+  padding: 12px 15px 5px;
+}
+.srch-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 15px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  border-bottom: 1px solid hsl(var(--border) / 0.5);
+  transition: background 0.1s;
+}
+.srch-row:hover, .srch-row:focus-visible { background: hsl(var(--secondary)); }
+.srch-row--muted { opacity: 0.45; cursor: default; }
+.srch-row__icon { font-size: 14px; flex-shrink: 0; width: 20px; text-align: center; }
+.srch-row__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.srch-row__label {
+  font-family: var(--app-font-serif);
+  font-size: 14px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.srch-row__sub {
+  font-family: var(--app-font-display);
+  font-size: 10px;
+  color: hsl(var(--dim));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.srch-row__badge {
+  font-family: var(--app-font-mono);
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 2px;
+  border: 1px solid hsl(var(--border));
+  color: hsl(var(--dim));
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.srch-row__badge--sel { border-color: rgba(200,169,107,.35); color: hsl(var(--picker)); background: rgba(200,169,107,.10); }
+
+/* ── Search icon in topbar ── */
+.dial-topbar__search {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 15px;
+  padding: 2px;
+  margin-left: auto;
+  line-height: 1;
+  opacity: 0.6;
+  transition: opacity 0.12s;
+}
+.dial-topbar__search:hover { opacity: 1; }
+
 /* ── Topbar ── */
 .dial-topbar {
   display: flex;

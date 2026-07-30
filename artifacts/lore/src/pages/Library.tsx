@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import { SearchOverlay } from "../components/SearchOverlay";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePlayer } from "../player/PlayerProvider";
 import {
@@ -331,6 +332,8 @@ function UnavailableSection({
 // ---------------------------------------------------------------------------
 
 export default function Library() {
+  const [, setLocation] = useLocation();
+  const [searchOpen, setSearchOpen] = useState(false);
   const queryClient = useQueryClient();
   const { ride, radio } = usePlayer();
   const dockPadding = ride.active || radio.station ? "pb-32" : "pb-16";
@@ -561,6 +564,14 @@ export default function Library() {
 
   return (
     <div className="lore-grain relative min-h-screen">
+      {searchOpen && (
+        <SearchOverlay
+          dialStations={[]}
+          onClose={() => setSearchOpen(false)}
+          onStationDrill={(slug) => { setLocation(`/archive/stations/${slug}`); setSearchOpen(false); }}
+          onShowDrill={(_show, station) => { setLocation(`/archive/stations/${station.station.slug}`); setSearchOpen(false); }}
+        />
+      )}
       <div className="lore-glow pointer-events-none absolute inset-0" />
       <div className={`relative z-10 mx-auto max-w-4xl px-4 pt-8 sm:px-6 ${dockPadding}`}>
         <Link
@@ -576,6 +587,15 @@ export default function Library() {
           <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] text-primary">
             <BookMarked className="h-4 w-4" />
             Your library
+            <button
+              type="button"
+              className="ml-auto dial-topbar__search"
+              onClick={() => setSearchOpen(true)}
+              aria-label="Search stations and selectors"
+              title="Search"
+            >
+              🔍
+            </button>
           </div>
           <h1 className="mt-3 max-w-[22ch] font-serif text-4xl font-semibold leading-[1.05] text-foreground sm:text-5xl">
             Songs worth keeping.

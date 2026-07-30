@@ -11,6 +11,7 @@ import { useLocation } from "wouter";
 import { useDialData, togglePin, readPins, type DialStation, type DialShow, type DialSpin } from "../hooks/useDialData";
 import { StationLane } from "./StationLane";
 import { ContextRail } from "./ContextRail";
+import { SearchOverlay } from "./SearchOverlay";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -539,6 +540,7 @@ export function DialView() {
   const [currentShow, setCurrentShow] = useState<DialShow | null>(null);
   const [currentDjName, setCurrentDjName] = useState<string | null>(null);
   const [pins, setPins] = useState<Set<string>>(() => readPins());
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const { stations, isLoading } = useDialData();
 
@@ -588,6 +590,15 @@ export function DialView() {
           <span className="dial-topbar__wordmark">Lore</span>
           <span className="dial-topbar__title">Radio</span>
           <span className="dial-topbar__sort-chip">◆ by library overlap</span>
+          <button
+            type="button"
+            className="dial-topbar__search"
+            onClick={() => setSearchOpen(true)}
+            aria-label="Search stations, selectors, shows"
+            title="Search"
+          >
+            🔍
+          </button>
         </div>
       );
     }
@@ -638,6 +649,16 @@ export function DialView() {
 
   return (
     <div className="dial-root">
+      {/* Search overlay — covers the whole view when open */}
+      {searchOpen && (
+        <SearchOverlay
+          dialStations={stations}
+          onClose={() => setSearchOpen(false)}
+          onStationDrill={(slug) => { goStation(slug); setSearchOpen(false); }}
+          onShowDrill={(show, station) => { goShow(show, station); setSearchOpen(false); }}
+        />
+      )}
+
       {/* Topbar */}
       {renderTopbar()}
 
