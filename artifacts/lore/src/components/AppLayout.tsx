@@ -184,8 +184,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
               style={
                 libraryActive
                   ? {
-                      background: "hsl(var(--foreground))",
-                      color: "hsl(var(--background))",
+                      background: "hsl(var(--keep))",
+                      color: "hsl(var(--keep-foreground))",
                     }
                   : {
                       background: "transparent",
