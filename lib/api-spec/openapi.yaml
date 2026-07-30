@@ -4862,13 +4862,17 @@ components:
         artistMbid:
           type: string
           nullable: true
+        releaseGroupMbid:
+          type: string
+          nullable: true
+          description: Primary release-group MBID for the recording, used for album-level library crossing detection.
         title:
           type: string
         artist:
           type: string
         playedAt:
           type: string
-      required: [mbid, artistMbid, title, artist, playedAt]
+      required: [mbid, artistMbid, releaseGroupMbid, title, artist, playedAt]
     StationScheduleRunShow:
       type: object
       properties:

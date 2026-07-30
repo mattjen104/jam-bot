@@ -91,6 +91,7 @@ function LiveShowRow({
   onClick,
   onPlay,
   onPinToggle,
+  onShowClick,
 }: {
   ds: DialStation;
   show: DialShow | null;
@@ -101,6 +102,7 @@ function LiveShowRow({
   onClick: () => void;
   onPlay: () => void;
   onPinToggle: () => void;
+  onShowClick: (show: DialShow) => void;
 }) {
   const rz = reason(show, ds.crossings);
   const isCrossing = rz.r === 1;
@@ -122,7 +124,15 @@ function LiveShowRow({
       onKeyDown={(e) => e.key === "Enter" && onClick()}>
       <div className="lsrow__c">
         <div className="lsrow__stn">{ds.station.name}</div>
-        <div className="lsrow__sh">{show?.showName ?? "Unlisted programme"}</div>
+        <div
+          className="lsrow__sh"
+          role={show ? "button" : undefined}
+          tabIndex={show ? 0 : undefined}
+          onClick={show ? (e) => { e.stopPropagation(); onShowClick(show); } : undefined}
+          onKeyDown={show ? (e) => { if (e.key === "Enter") { e.stopPropagation(); onShowClick(show); } } : undefined}
+        >
+          {show?.showName ?? "Unlisted programme"}
+        </div>
         {show?.djName && (
           <div className="lsrow__dj">with <b>{show.djName}</b></div>
         )}
@@ -143,16 +153,18 @@ function LiveShowRow({
           </div>
         )}
         <button
-          className={`lsrow__play${isActive ? " lsrow__play--active" : ""}`}
+          className={`lsrow__play-btn${isActive ? " lsrow__play-btn--active" : ""}`}
           aria-label={isActive ? "Stop" : "Play"}
           onClick={(e) => { e.stopPropagation(); onPlay(); }}
+          onKeyDown={(e) => e.key === "Enter" && e.stopPropagation()}
         >
           {isActive ? "■" : "▶"}
         </button>
         <button
           className={`lsrow__pin-btn${isPinned ? " lsrow__pin-btn--pinned" : ""}`}
-          aria-label={isPinned ? "Unpin station" : "Pin station"}
+          aria-label={isPinned ? "Unpin" : "Pin"}
           onClick={(e) => { e.stopPropagation(); onPinToggle(); }}
+          onKeyDown={(e) => e.key === "Enter" && e.stopPropagation()}
         >
           📌
         </button>
@@ -653,9 +665,6 @@ function ScheduleView({ stations }: { stations: DialStation[] }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// DialView — top-level
-// ---------------------------------------------------------------------------
 export function DialView() {
   const [location] = useLocation();
   const [level, setLevel] = useState<Level>("all");
@@ -855,6 +864,7 @@ export function DialView() {
                 onClick={() => goStation(ds.station.slug)}
                 onPlay={() => void radio.toggle(ds.station)}
                 onPinToggle={() => handlePinToggle(ds.station.slug)}
+                onShowClick={(sh) => goShow(sh, ds)}
               />
             ))}
             {offlineStations.length > 0 && <TierHeader live={false} />}

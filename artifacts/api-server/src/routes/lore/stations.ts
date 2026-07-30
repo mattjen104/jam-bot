@@ -701,6 +701,7 @@ router.get("/stations/recent-spins", h(async (req, res) => {
     station_slug: string;
     mbid: string | null;
     artist_mbid: string | null;
+    release_group_mbid: string | null;
     title: string | null;
     artist: string | null;
     raw_title: string | null;
@@ -712,6 +713,12 @@ router.get("/stations/recent-spins", h(async (req, res) => {
         s.slug AS station_slug,
         sp.mbid,
         r.artist_mbid,
+        (
+          SELECT rrg.release_group_mbid
+          FROM recording_release_groups rrg
+          WHERE rrg.recording_mbid = sp.mbid AND rrg.is_primary = true
+          LIMIT 1
+        ) AS release_group_mbid,
         r.title,
         r.artist,
         sp.raw_title,
@@ -724,7 +731,7 @@ router.get("/stations/recent-spins", h(async (req, res) => {
       WHERE sp.played_at::date = ${dateFilter}::date
         AND sp.station_id IS NOT NULL
     )
-    SELECT station_slug, mbid, artist_mbid, title, artist, raw_title, raw_artist, played_at
+    SELECT station_slug, mbid, artist_mbid, release_group_mbid, title, artist, raw_title, raw_artist, played_at
     FROM ranked
     -- Over-fetch beyond the 8 we actually want to render: some stations log
     -- the same track more than once in a row (metadata re-announces, ad-break
@@ -735,7 +742,7 @@ router.get("/stations/recent-spins", h(async (req, res) => {
   `);
 
   const CHIPS_PER_STATION = 8;
-  const bySlug = new Map<string, { mbid: string | null; artistMbid: string | null; title: string; artist: string; playedAt: string }[]>();
+  const bySlug = new Map<string, { mbid: string | null; artistMbid: string | null; releaseGroupMbid: string | null; title: string; artist: string; playedAt: string }[]>();
   const seenBySlug = new Map<string, Set<string>>();
   for (const row of rows.rows) {
     const title = row.title ?? row.raw_title ?? "";
@@ -758,6 +765,7 @@ router.get("/stations/recent-spins", h(async (req, res) => {
     const spin = {
       mbid: row.mbid ?? null,
       artistMbid: row.artist_mbid ?? null,
+      releaseGroupMbid: row.release_group_mbid ?? null,
       title,
       artist,
       playedAt: new Date(row.played_at).toISOString(),

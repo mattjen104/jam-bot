@@ -256,10 +256,21 @@ export function useDialData(): {
     },
   );
 
-  // ── user library MBIDs (all resolved, no pagination cap) ─────────────────
-  const { data: libraryMbids = [] } = useMyLibraryMbids();
+  // ── user library MBIDs + release-group MBIDs (all resolved, no pagination cap) ──
+  const { data: libraryData } = useMyLibraryMbids();
+  const libraryMbids = libraryData?.mbids ?? [];
 
-  const libraryMbidSet = useMemo(() => new Set(libraryMbids), [libraryMbids]);
+  const libraryMbidSet = useMemo(
+    () => new Set(libraryMbids),
+    [libraryMbids],
+  );
+  // Release-group set: if ANY track from the same album is in the library,
+  // isLibraryHit fires. Widening from exact MBID → release group is the
+  // primary fix for "◆ playing X" not appearing (stations air different releases).
+  const libraryReleaseGroupSet = useMemo(
+    () => new Set(libraryData?.releaseGroupMbids ?? []),
+    [libraryData],
+  );
 
   // ── picker detection via library MBID lookup ──────────────────────────────
   // Use library MBIDs to discover which selector/DJ names are in the system.
@@ -308,12 +319,37 @@ export function useDialData(): {
     return m;
   }, [liveData]);
 
+  // MBID → primary release-group MBID, derived from the recent-spins response.
+  // Declared early so nowPlayingBySlug (live chip) can use it for release-group
+  // expansion without a separate server round-trip.
+  const rgByMbid = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const item of spinsData?.items ?? []) {
+      for (const sp of item.spins) {
+        if (sp.mbid && sp.releaseGroupMbid) {
+          m.set(sp.mbid, sp.releaseGroupMbid);
+        }
+      }
+    }
+    return m;
+  }, [spinsData]);
+
   // ── live now-playing track per station (for live block currentTrack) ───────
   // REST poll data is the baseline; SSE overrides (fired the moment a spin is
   // persisted) are merged on top so live chips update instantly instead of
   // waiting up to 30s for the next poll cycle.
   const nowPlayingBySlug = useMemo((): Map<string, DialSpin> => {
     const m = new Map<string, DialSpin>();
+
+    /** True when the recording's exact MBID is in the library, OR when any
+     *  track from the same release group is. The release group is looked up
+     *  from the recent-spins data (rgByMbid) when not supplied directly. */
+    const hitCheck = (mbid: string | null, releaseGroupMbid?: string | null): boolean => {
+      if (mbid != null && libraryMbidSet.has(mbid)) return true;
+      const rg = releaseGroupMbid ?? (mbid != null ? rgByMbid.get(mbid) : undefined);
+      return rg != null && libraryReleaseGroupSet.has(rg);
+    };
+
     for (const item of liveData?.items ?? []) {
       const np = item.nowPlaying;
       if (!np) continue;
@@ -328,7 +364,7 @@ export function useDialData(): {
         title,
         artist,
         playedAt: new Date().toISOString(),
-        isLibraryHit: mbid != null && libraryMbidSet.has(mbid),
+        isLibraryHit: hitCheck(mbid),
       });
     }
     // SSE overrides: more recent than the REST poll, applied last so the Dial
@@ -340,11 +376,11 @@ export function useDialData(): {
         title: entry.title,
         artist: entry.artist,
         playedAt: entry.playedAt,
-        isLibraryHit: entry.mbid != null && libraryMbidSet.has(entry.mbid),
+        isLibraryHit: hitCheck(entry.mbid),
       });
     }
     return m;
-  }, [liveData, sseOverrides, libraryMbidSet]);
+  }, [liveData, sseOverrides, libraryMbidSet, libraryReleaseGroupSet, rgByMbid]);
 
   const runsBySlug = useMemo(() => {
     const m = new Map<string, StationScheduleRun[]>();
@@ -421,14 +457,21 @@ export function useDialData(): {
             const t = new Date(sp.playedAt).getTime();
             return t >= startMs - 60_000 && t <= endMs + 60_000;
           })
-          .map((sp) => ({
-            mbid: sp.mbid,
-            artistMbid: (sp as { artistMbid?: string | null }).artistMbid ?? null,
-            title: sp.title,
-            artist: sp.artist,
-            playedAt: sp.playedAt,
-            isLibraryHit: sp.mbid != null && libraryMbidSet.has(sp.mbid),
-          }));
+          .map((sp) => {
+            // Exact MBID match OR any track from the same release group is in
+            // the library — album-level widening so a different pressing or
+            // bonus-track edition still triggers the library crossing.
+            const exactHit = sp.mbid != null && libraryMbidSet.has(sp.mbid);
+            const rgHit = !exactHit && sp.releaseGroupMbid != null && libraryReleaseGroupSet.has(sp.releaseGroupMbid);
+            return {
+              mbid: sp.mbid,
+              artistMbid: sp.artistMbid ?? null,
+              title: sp.title,
+              artist: sp.artist,
+              playedAt: sp.playedAt,
+              isLibraryHit: exactHit || rgHit,
+            };
+          });
 
         // Count only spins within the rolling 24h window so that a show that
         // aired yesterday morning doesn't inflate today's crossing count.
@@ -481,7 +524,7 @@ export function useDialData(): {
           sh.showName.trim().length > 0,
       );
     });
-  }, [stationsData, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, libraryMbidSet, pickerNames]);
+  }, [stationsData, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, libraryMbidSet, libraryReleaseGroupSet, pickerNames]);
 
   const isLoading = stationsLoading || liveLoading || schedLoading || spinsLoading;
 

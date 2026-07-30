@@ -1186,12 +1186,14 @@ router.get("/me/library", h(async (req, res) => {
 
 /**
  * GET /api/me/library/mbids — all resolved MBIDs in the user's library,
- * returned as a flat string array. No pagination — this is a lightweight
- * crossing-detection endpoint for the dial. Unauthenticated → 200 [].
+ * returned as a flat string array, plus the set of release-group MBIDs that
+ * span all library recordings (for album-level crossing detection on the dial).
+ * No pagination — this is a lightweight crossing-detection endpoint.
+ * Unauthenticated → 200 { mbids: [], releaseGroupMbids: [] }.
  */
 router.get("/me/library/mbids", h(async (req, res) => {
   const user = (req as AuthedRequest).loreUser;
-  if (!user) { res.json({ mbids: [] }); return; }
+  if (!user) { res.json({ mbids: [], releaseGroupMbids: [] }); return; }
 
   const rows = await db
     .select({ mbid: libraryItemsTable.mbid })
@@ -1199,7 +1201,18 @@ router.get("/me/library/mbids", h(async (req, res) => {
     .where(and(eq(libraryItemsTable.userId, user.id), isNotNull(libraryItemsTable.mbid)));
 
   const mbids = rows.map((r) => r.mbid).filter((m): m is string => !!m);
-  res.json({ mbids });
+
+  // Expand to release groups so the dial can match any track from an owned album.
+  let releaseGroupMbids: string[] = [];
+  if (mbids.length > 0) {
+    const rgRows = await db
+      .selectDistinct({ releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid })
+      .from(recordingReleaseGroupsTable)
+      .where(inArray(recordingReleaseGroupsTable.recordingMbid, mbids));
+    releaseGroupMbids = rgRows.map((r) => r.releaseGroupMbid);
+  }
+
+  res.json({ mbids, releaseGroupMbids });
 }));
 
 /** Hard cap on rows in one export file. */

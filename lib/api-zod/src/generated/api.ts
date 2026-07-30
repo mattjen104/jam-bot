@@ -2430,6 +2430,7 @@ export const GetStationsRecentSpinsResponse = zod
             .object({
               mbid: zod.string().nullable(),
               artistMbid: zod.string().nullable(),
+              releaseGroupMbid: zod.string().nullable(),
               title: zod.string(),
               artist: zod.string(),
               playedAt: zod.string(),

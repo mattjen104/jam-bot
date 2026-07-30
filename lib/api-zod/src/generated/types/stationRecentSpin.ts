@@ -12,6 +12,8 @@
 export interface StationRecentSpin {
   mbid: string | null;
   artistMbid: string | null;
+  /** Primary release-group MBID for the recording, used for album-level library crossing detection. */
+  releaseGroupMbid: string | null;
   title: string;
   artist: string;
   playedAt: string;
