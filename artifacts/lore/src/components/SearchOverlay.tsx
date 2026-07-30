@@ -6,6 +6,7 @@
  *   - All stations (loaded via useListStations)
  *   - All selectors/pickers (loaded via useListPickers)
  *   - Shows and tracks from today's dial data (passed as props)
+ * Library search is delegated to the server so results span the full library.
  *
  * Results are grouped by entity type (Stations · Selectors · Shows · Tracks)
  * and filterable via chips. Navigation closes the overlay automatically.
@@ -14,9 +15,8 @@ import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useListPickers, useListStations } from "@workspace/api-client-react";
 import type { DialStation, DialShow } from "../hooks/useDialData";
-import type { LibraryItem } from "../lib/meHooks";
-import { useMyLibrary, useIsAuthenticated } from "../lib/meHooks";
-import { X, Search } from "lucide-react";
+import { useMyLibrarySearch, useIsAuthenticated, type LibraryItem } from "../lib/meHooks";
+import { X, Search, Loader2 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -86,24 +86,33 @@ export function SearchOverlay({
 }: SearchOverlayProps) {
   const [, setLocation] = useLocation();
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Debounce the query for server-side library search (300 ms)
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    return () => clearTimeout(t);
+  }, [query]);
 
   // Load full station + picker lists for search
   const { data: stationsData } = useListStations();
   const { data: pickersData } = useListPickers();
 
-  // Load library items internally so search works from any page
+  // Show Library chip for any authenticated user (not just those with items loaded)
   const isAuthenticated = useIsAuthenticated();
-  const { data: libraryData } = useMyLibrary(undefined, 200);
-  // Merge: internal fetch is primary; prop items fill in anything not already fetched
-  const effectiveLibraryItems = useMemo((): LibraryItem[] => {
-    const internal = libraryData?.items ?? [];
-    if (!libraryItems || libraryItems.length === 0) return internal;
-    const internalMbids = new Set(internal.map((i) => i.mbid));
-    const extras = libraryItems.filter((i) => !internalMbids.has(i.mbid));
-    return [...internal, ...extras];
-  }, [libraryData, libraryItems]);
+  const hasLibrary = (libraryItems?.length ?? 0) > 0 || isAuthenticated === true;
+  const isLibraryActive = (filter === "all" || filter === "library") && hasLibrary;
+
+  // Server-side library search — searches the full library, not just loaded pages
+  const {
+    data: librarySearchResults,
+    isFetching: librarySearchLoading,
+  } = useMyLibrarySearch(debouncedQuery, {
+    enabled: isLibraryActive,
+    limit: MAX_PER_KIND,
+  });
 
   useEffect(() => {
     // Autofocus the input when the overlay opens
@@ -219,43 +228,34 @@ export function SearchOverlay({
       }
     }
 
-    // ── Library (kept tracks) ─────────────────────────────────────────────────
-    if ((filter === "all" || filter === "library") && effectiveLibraryItems.length > 0) {
-      const seen = new Set<string>();
-      let n = 0;
-      for (const item of effectiveLibraryItems) {
-        if (n >= MAX_PER_KIND) break;
-        const rec = item.recording;
-        const title = rec?.title ?? "";
-        const artist = rec?.artist ?? "";
-        if (!title && !artist) continue;
-        if (seen.has(item.mbid)) continue;
-        if (fuzzy(title, q) || fuzzy(artist, q)) {
-          seen.add(item.mbid);
-          out.push({
-            kind: "library",
-            label: title || item.mbid,
-            sub: artist,
-            badge: "◆ kept",
-            onTap: () => goAndClose(`/song/${item.mbid}`),
-          });
-          n++;
-        }
-      }
-    }
-
     return out;
-  }, [query, filter, stationsData, pickersData, dialStations, effectiveLibraryItems, onStationDrill, onShowDrill, onClose, goAndClose]);
+  }, [query, filter, stationsData, pickersData, dialStations, onStationDrill, onShowDrill, onClose, goAndClose]);
+
+  // Build server library results into SearchResult shape
+  const libraryResults = useMemo((): SearchResult[] => {
+    if (!isLibraryActive || !librarySearchResults) return [];
+    return librarySearchResults.map((item) => {
+      const title = item.recording?.title ?? item.mbid;
+      const artist = item.recording?.artist ?? "";
+      return {
+        kind: "library" as const,
+        label: title,
+        sub: artist,
+        badge: "◆ kept",
+        onTap: () => goAndClose(`/song/${item.mbid}`),
+      };
+    });
+  }, [isLibraryActive, librarySearchResults, goAndClose]);
 
   // Group results by kind in display order
   const groups = useMemo(() => {
     const kindOrder: SearchResult["kind"][] = ["station", "selector", "show", "track", "library"];
+    const all = [...results, ...libraryResults];
     return kindOrder
-      .map((kind) => ({ kind, items: results.filter((r) => r.kind === kind) }))
+      .map((kind) => ({ kind, items: all.filter((r) => r.kind === kind) }))
       .filter(({ items }) => items.length > 0);
-  }, [results]);
+  }, [results, libraryResults]);
 
-  const hasLibrary = effectiveLibraryItems.length > 0 || isAuthenticated === true;
   const FILTERS: { key: Filter; label: string }[] = [
     { key: "all", label: "All" },
     { key: "stations", label: "Stations" },
@@ -327,7 +327,7 @@ export function SearchOverlay({
           </div>
         )}
 
-        {query.trim() && results.length === 0 && (
+        {query.trim() && results.length === 0 && libraryResults.length === 0 && !librarySearchLoading && (
           <div className="srch-empty">No results for <em>"{query}"</em></div>
         )}
 
@@ -358,6 +358,21 @@ export function SearchOverlay({
             ))}
           </div>
         ))}
+
+        {/* Library loading state — shown while the debounced fetch is in flight */}
+        {isLibraryActive && query.trim() && librarySearchLoading && libraryResults.length === 0 && (
+          <div className="srch-group">
+            <div className="srch-grp-lbl">{KIND_LABEL.library}</div>
+            <div className="srch-row srch-row--muted" aria-busy="true">
+              <span className="srch-row__icon" aria-hidden="true">
+                <Loader2 size={12} className="srch-spin" />
+              </span>
+              <div className="srch-row__body">
+                <span className="srch-row__sub">Searching your library…</span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -310,6 +310,34 @@ export function useMyLibraryMbids() {
 }
 
 /**
+ * Server-side library search: fetches `/api/me/library?q=<term>&source=keep`
+ * so results span the full library, not just already-loaded pages.
+ * Returns an empty list when unauthenticated or query is blank.
+ */
+export function useMyLibrarySearch(
+  q: string,
+  options: { enabled?: boolean; limit?: number } = {},
+) {
+  const { enabled = true, limit = 6 } = options;
+  const trimmed = q.trim();
+  return useQuery({
+    queryKey: ["me", "library", "search", trimmed, limit] as const,
+    queryFn: () => {
+      const params = new URLSearchParams();
+      params.set("q", trimmed);
+      params.set("source", "keep");
+      params.set("limit", String(limit));
+      return fetchOrNull<{ items: LibraryItem[]; nextCursor: string | null }>(
+        `/api/me/library?${params}`,
+      ).then((d) => d?.items ?? []);
+    },
+    enabled: enabled && trimmed.length > 0,
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
+/**
  * Paginated kept+imported library items, newest first.
  * Returns an empty list when unauthenticated.
  */

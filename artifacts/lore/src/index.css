@@ -546,6 +546,7 @@
   flex-shrink: 0;
 }
 .srch-row__badge--sel { border-color: rgba(200,169,107,.35); color: hsl(var(--picker)); background: rgba(200,169,107,.10); }
+.srch-spin { animation: lore-spin 1s linear infinite; display: inline-block; }
 
 /* ── Search icon in topbar ── */
 .dial-topbar__search {
