@@ -651,62 +651,49 @@ export async function runImportWorker(
     const connector = getConnector(service);
     if (!connector) throw new Error(`connector '${service}' not found`);
 
-    // ── Buffer drain (or reuse) ────────────────────────────────────────────────
+    // ── Buffer drain (or resume) ───────────────────────────────────────────────
     // Page through the service API and collect every track upfront so we know
     // the total before resolution begins.
     //
-    // OPTIMISATION: if a recent previous job for this user/service already
-    // completed the fetch phase (bufferJson IS NOT NULL), reuse its buffer and
-    // skip the Spotify pagination entirely.  This makes server-restart retries
-    // free — we never re-hit the Spotify rate limit just because tsx reloaded.
+    // RESUME ONLY: if a recent previous job was interrupted WHILE fetching
+    // (phase = "fetching"), its partial buffer is used as a starting offset so
+    // we continue from where it left off rather than re-fetching tracks already
+    // collected.  A job that COMPLETED the fetch phase (phase = "spine" or
+    // later) is never reused — the user may have changed their Spotify library
+    // and expects a fresh pull.
     const BUFFER_MAX_AGE_MS = 24 * 60 * 60_000; // 24 h
 
-    // Find the most recent job (other than this one) that has a stored buffer.
-    // We use it to either skip Spotify entirely (complete fetch) or resume from
-    // where it left off (partial fetch interrupted by rate-limit or restart).
-    const [prevWithBuffer] = await db
+    // Find the most recent job (other than this one) that was interrupted mid-
+    // fetch — i.e. it has a partial buffer but phase is still "fetching".
+    const [prevInterrupted] = await db
       .select({
         id: libraryImportJobsTable.id,
         bufferJson: libraryImportJobsTable.bufferJson,
-        phase: libraryImportJobsTable.phase,
       })
       .from(libraryImportJobsTable)
       .where(and(
         eq(libraryImportJobsTable.userId, userId),
         eq(libraryImportJobsTable.service, service),
         ne(libraryImportJobsTable.id, jobId),
+        eq(libraryImportJobsTable.phase, "fetching"),
         isNotNull(libraryImportJobsTable.bufferJson),
         gte(libraryImportJobsTable.startedAt, new Date(Date.now() - BUFFER_MAX_AGE_MS)),
       ))
       .orderBy(desc(libraryImportJobsTable.id))
       .limit(1);
 
-    // A complete buffer was written when the previous job transitioned out of
-    // "fetching" (phase became "spine" or later).  A partial buffer is one
-    // where the job died while still in "fetching" — resume from its length.
-    const prevBuf = prevWithBuffer?.bufferJson ?? [];
-    const fetchWasComplete = prevBuf.length > 0 && prevWithBuffer?.phase !== "fetching";
+    // Resume offset: number of tracks already collected by the interrupted job.
+    // Zero means a fresh fetch from the beginning of the Spotify library.
+    const partialBuf = prevInterrupted?.bufferJson ?? [];
+    let buffer: ImportBufferEntry[] = [...partialBuf];
 
-    let buffer: ImportBufferEntry[] = [...prevBuf];
-
-    if (fetchWasComplete) {
-      // ── Skip Spotify entirely — use the complete stored buffer ────────────
-      console.log(
-        `[me/import] job=${jobId} reusing complete buffer from job=${prevWithBuffer!.id}` +
-        ` (${buffer.length} tracks — skipping Spotify re-fetch)`,
-      );
-      await db
-        .update(libraryImportJobsTable)
-        .set({ total: buffer.length, phase: "spine", bufferJson: buffer })
-        .where(eq(libraryImportJobsTable.id, jobId));
-    } else {
-      // ── Fetch (or resume) from Spotify ────────────────────────────────────
-      // startOffset > 0 when we're resuming a partial buffer; 0 for fresh start.
+    {
+      // ── Fetch from Spotify (fresh or resumed) ─────────────────────────────
       const startOffset = buffer.length;
       if (startOffset > 0) {
         console.log(
           `[me/import] job=${jobId} resuming Spotify fetch from offset ${startOffset}` +
-          ` (${buffer.length} tracks already buffered from job=${prevWithBuffer!.id})`,
+          ` (${buffer.length} tracks already buffered from interrupted job=${prevInterrupted!.id})`,
         );
       }
 
