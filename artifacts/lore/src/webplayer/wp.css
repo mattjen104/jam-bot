@@ -2,8 +2,8 @@
    is untouched. Tokens match the approved lore-consolidated-v2 mockups. */
 
 .wp {
-  --wp-surface-1: #262521;
-  --wp-surface-2: #2e2d28;
+  --wp-surface-1: #151310;
+  --wp-surface-2: #1e1b17;
   --wp-border: #413f37;
   --wp-border-strong: #585549;
   --wp-radius: 8px;
@@ -11,13 +11,16 @@
   --wp-text-primary: #f0efe9;
   --wp-text-secondary: #b8b5ab;
   --wp-text-muted: #8a877c;
-  --wp-bg-accent: rgba(139, 124, 246, 0.16);
-  --wp-text-accent: #a99ff5;
-  --wp-fill-accent: #8b7cf6;
+  --wp-bg-accent: rgba(232, 106, 78, 0.16);
+  --wp-text-accent: #E86A4E;
+  --wp-fill-accent: #E86A4E;
   --wp-fill-primary: #f0efe9;
-  --wp-on-primary: #21201c;
+  --wp-on-primary: #151310;
+  --wp-fill-selector: #C8A96B;
   --wp-bg-success: rgba(143, 219, 105, 0.14);
   --wp-text-success: #8fdb69;
+  --wp-bg-live: rgba(127, 168, 201, 0.14);
+  --wp-text-live: #7FA8C9;
   --wp-bg-pro: rgba(201, 158, 242, 0.14);
   --wp-text-pro: #c99ef2;
 
@@ -127,7 +130,7 @@
   bottom: 0;
   z-index: 50;
   display: flex;
-  background: #21201c;
+  background: #151310;
   border-top: 1px solid #413f37;
   padding: 10px 8px calc(10px + env(safe-area-inset-bottom, 0px));
 }
@@ -152,7 +155,7 @@
 }
 
 .wp-bottomnav .wp-bottomnav-item.is-active {
-  color: #a99ff5;
+  color: #E86A4E;
 }
 
 .wp-bottomnav .wp-bottomnav-item:hover {
@@ -161,7 +164,7 @@
 }
 
 .wp-bottomnav .wp-bottomnav-item.is-active:hover {
-  color: #a99ff5;
+  color: #E86A4E;
 }
 
 /* Bottom sheet overlays (run drawer, album lore panel) */
@@ -180,7 +183,7 @@
   z-index: 61;
   max-height: 82vh;
   overflow-y: auto;
-  background: #262521;
+  background: #1e1b17;
   color: #f0efe9;
   border-top: 1px solid #585549;
   border-radius: 16px 16px 0 0;

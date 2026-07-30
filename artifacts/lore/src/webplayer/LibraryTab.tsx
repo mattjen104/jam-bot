@@ -179,10 +179,10 @@ function PlayModeButton({
 
   // Visual config per mode
   const modeAccent =
-    mode === "ghost" ? "#7c3aed" : mode === "album" ? "#c8a84b" : "var(--wp-text-muted)";
+    mode === "ghost" ? "var(--wp-fill-accent)" : mode === "album" ? "#c8a84b" : "var(--wp-text-muted)";
   const centerBg =
     mode === "ghost"
-      ? "#7c3aed"
+      ? "var(--wp-fill-accent)"
       : mode === "album"
         ? "var(--wp-surface-2)"
         : "var(--wp-surface-2)";
@@ -273,7 +273,7 @@ function PlayModeButton({
         >
           <Loader2
             size={CONTAINER - 4}
-            style={{ color: "rgba(124,58,237,0.2)", position: "absolute" }}
+            style={{ color: "rgba(232,106,78,0.2)", position: "absolute" }}
             className="animate-spin"
             aria-hidden="true"
           />
@@ -440,7 +440,7 @@ function PlayModeButton({
           height: 28,
           borderRadius: "50%",
           background: centerBg,
-          border: `1.5px solid ${mode === "ghost" ? "rgba(124,58,237,0.6)" : "var(--wp-border)"}`,
+          border: `1.5px solid ${mode === "ghost" ? "rgba(232,106,78,0.6)" : "var(--wp-border)"}`,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",

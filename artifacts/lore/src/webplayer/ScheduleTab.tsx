@@ -37,7 +37,7 @@ function SlotRow({
         className="wp-mono"
         style={{
           fontSize: 10,
-          color: slot.isLive ? "var(--wp-text-success)" : "var(--wp-text-muted)",
+          color: slot.isLive ? "var(--wp-text-live)" : "var(--wp-text-muted)",
           width: 44,
           textAlign: "left",
           flexShrink: 0,
@@ -81,8 +81,8 @@ function SlotRow({
         <span
           className="wp-pill wp-mono"
           style={{
-            background: "var(--wp-bg-success)",
-            color: "var(--wp-text-success)",
+            background: "var(--wp-bg-live)",
+            color: "var(--wp-text-live)",
             fontSize: 10,
             flexShrink: 0,
           }}
