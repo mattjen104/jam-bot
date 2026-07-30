@@ -19,6 +19,7 @@ import type {
 import type {
   AdminStationListResponse,
   AlbumResult,
+  AlbumTracksResponse,
   AllDraftClaimsList,
   ApiError,
   ArchiveCoverage,
@@ -1447,6 +1448,95 @@ export function useGetRecordingPreview<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetRecordingPreviewQueryOptions(mbid, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary All tracks in the same album as this recording
+ */
+export const getGetRecordingAlbumTracksUrl = (mbid: string) => {
+  return `/api/recordings/${mbid}/album-tracks`;
+};
+
+export const getRecordingAlbumTracks = async (
+  mbid: string,
+  options?: RequestInit,
+): Promise<AlbumTracksResponse> => {
+  return customFetch<AlbumTracksResponse>(getGetRecordingAlbumTracksUrl(mbid), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetRecordingAlbumTracksQueryKey = (mbid: string) => {
+  return [`/api/recordings/${mbid}/album-tracks`] as const;
+};
+
+export const getGetRecordingAlbumTracksQueryOptions = <
+  TData = Awaited<ReturnType<typeof getRecordingAlbumTracks>>,
+  TError = ErrorType<void>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecordingAlbumTracks>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetRecordingAlbumTracksQueryKey(mbid);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getRecordingAlbumTracks>>
+  > = ({ signal }) =>
+    getRecordingAlbumTracks(mbid, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!mbid,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getRecordingAlbumTracks>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetRecordingAlbumTracksQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getRecordingAlbumTracks>>
+>;
+export type GetRecordingAlbumTracksQueryError = ErrorType<void>;
+
+/**
+ * @summary All tracks in the same album as this recording
+ */
+
+export function useGetRecordingAlbumTracks<
+  TData = Awaited<ReturnType<typeof getRecordingAlbumTracks>>,
+  TError = ErrorType<void>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecordingAlbumTracks>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetRecordingAlbumTracksQueryOptions(mbid, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -3883,9 +3973,9 @@ export function useGetPickerStationOverlaps<
 }
 
 /**
- * Lists all active DJ-type pickers scoped to KEXP (source_ref.stationSlug='kexp'), ordered alphabetically. Each entry includes a 30-day spin count and last-played timestamp so the UI can surface the most active DJs.
+ * Lists all active DJ-type pickers regardless of station, ordered alphabetically. Each entry includes a 30-day spin count, last-played timestamp, and station/show attribution so the UI can filter by station and surface the most active DJs.
 
- * @summary Active KEXP DJ selectors with 30-day spin counts
+ * @summary Active DJ selectors with 30-day spin counts
  */
 export const getListSelectorsUrl = () => {
   return `/api/selectors`;
@@ -3936,7 +4026,7 @@ export type ListSelectorsQueryResult = NonNullable<
 export type ListSelectorsQueryError = ErrorType<unknown>;
 
 /**
- * @summary Active KEXP DJ selectors with 30-day spin counts
+ * @summary Active DJ selectors with 30-day spin counts
  */
 
 export function useListSelectors<

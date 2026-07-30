@@ -7,7 +7,7 @@
  */
 
 /**
- * One KEXP DJ selector with 30-day spin statistics. Only pickers with source_ref.stationSlug='kexp' and pickerType='dj' appear here.
+ * One DJ selector with 30-day spin statistics. All active pickerType='dj' pickers appear here regardless of station affiliation.
 
  */
 export interface SelectorSummary {
@@ -23,4 +23,19 @@ export interface SelectorSummary {
    * @nullable
    */
   lastPlayedAt: string | null;
+  /**
+   * Station slug from the picker's sourceRef (e.g. "kexp"), or null if not station-affiliated.
+   * @nullable
+   */
+  stationSlug: string | null;
+  /**
+   * Human-readable station name (e.g. "KEXP"), or null if station not found.
+   * @nullable
+   */
+  stationName: string | null;
+  /**
+   * Primary show name for this DJ at the station, or null if no shows are linked.
+   * @nullable
+   */
+  showName: string | null;
 }

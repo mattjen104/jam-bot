@@ -14,6 +14,7 @@ import {
   recordingsTable,
   selectorClaimsTable,
   serviceConnectionsTable,
+  stationsTable,
   type LoreUser,
 } from "@workspace/db";
 import { eq, and, asc, isNotNull, inArray, sql } from "drizzle-orm";
@@ -57,22 +58,23 @@ async function requireUserMiddleware(
 }
 
 // ---------------------------------------------------------------------------
-// GET /api/selectors — public list of KEXP DJ selectors with recent spin counts.
+// GET /api/selectors — public list of all DJ selectors with recent spin counts.
 // ---------------------------------------------------------------------------
 router.get("/selectors", h(async (_req, res) => {
+  // Fetch all active DJ pickers with their station slug (from sourceRef JSONB).
   const pickers = await db
     .select({
       id: pickersTable.id,
       name: pickersTable.name,
       handle: pickersTable.handle,
       homeUrl: pickersTable.homeUrl,
+      stationSlug: sql<string | null>`${pickersTable.sourceRef}->>'stationSlug'`,
     })
     .from(pickersTable)
     .where(
       and(
         eq(pickersTable.active, true),
         eq(pickersTable.pickerType, "dj"),
-        sql`${pickersTable.sourceRef}->>'stationSlug' = 'kexp'`,
         pickerNotOptedOut(pickersTable.id),
       ),
     )
@@ -84,11 +86,23 @@ router.get("/selectors", h(async (_req, res) => {
 
   const pickerIds = pickers.map((p) => p.id);
 
-  // Find shows linked to these pickers.
+  // Resolve station names for the slugs that appear in this batch.
+  const uniqueSlugs = [...new Set(pickers.map((p) => p.stationSlug).filter(Boolean))] as string[];
+  const stationNameBySlug = new Map<string, string>();
+  if (uniqueSlugs.length > 0) {
+    const stationRows = await db
+      .select({ slug: stationsTable.slug, name: stationsTable.name })
+      .from(stationsTable)
+      .where(inArray(stationsTable.slug, uniqueSlugs));
+    for (const s of stationRows) stationNameBySlug.set(s.slug, s.name);
+  }
+
+  // Find shows linked to these pickers (first show name per picker for display).
   const shows = await db
     .select({
       id: showsTable.id,
       pickerId: showsTable.pickerId,
+      name: showsTable.name,
     })
     .from(showsTable)
     .where(
@@ -100,6 +114,12 @@ router.get("/selectors", h(async (_req, res) => {
 
   const showIds = shows.map((s) => s.id);
   const pickerIdByShowId = new Map(shows.map((s) => [s.id, s.pickerId as number]));
+  // First show name per picker (alphabetical by show name).
+  const firstShowByPickerId = new Map<number, string>();
+  for (const s of shows) {
+    if (s.pickerId == null) continue;
+    if (!firstShowByPickerId.has(s.pickerId)) firstShowByPickerId.set(s.pickerId, s.name);
+  }
 
   const statsByPickerId = new Map<
     number,
@@ -143,6 +163,7 @@ router.get("/selectors", h(async (_req, res) => {
     ListSelectorsResponse.parse({
       selectors: pickers.map((p) => {
         const stats = statsByPickerId.get(p.id);
+        const slug = p.stationSlug ?? null;
         return {
           id: p.id,
           name: p.name,
@@ -150,6 +171,9 @@ router.get("/selectors", h(async (_req, res) => {
           homeUrl: p.homeUrl ?? null,
           recentSpinCount: stats?.recentSpinCount ?? 0,
           lastPlayedAt: stats?.lastPlayedAt ?? null,
+          stationSlug: slug,
+          stationName: slug ? (stationNameBySlug.get(slug) ?? null) : null,
+          showName: firstShowByPickerId.get(p.id) ?? null,
         };
       }),
     }),
@@ -166,12 +190,7 @@ router.get("/selectors/:handle/runs", h(async (req, res) => {
   }
 
   const picker = await getPickerByHandle(parsed.data.handle);
-  const isKexpDj =
-    picker?.pickerType === "dj" &&
-    (picker.sourceRef as Record<string, unknown> | null | undefined)?.[
-      "stationSlug"
-    ] === "kexp";
-  if (!picker || !isKexpDj) {
+  if (!picker || picker.pickerType !== "dj") {
     return res.status(404).json({ error: "Selector not found" });
   }
 
@@ -259,12 +278,7 @@ router.get("/selectors/:handle/insights", h(async (req, res) => {
   }
 
   const picker = await getPickerByHandle(parsed.data.handle);
-  const isKexpDj =
-    picker?.pickerType === "dj" &&
-    (picker.sourceRef as Record<string, unknown> | null | undefined)?.[
-      "stationSlug"
-    ] === "kexp";
-  if (!picker || !isKexpDj) {
+  if (!picker || picker.pickerType !== "dj") {
     return res.status(404).json({ error: "Selector not found" });
   }
 

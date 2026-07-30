@@ -429,6 +429,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /recordings/{mbid}/album-tracks:
+    get:
+      operationId: getRecordingAlbumTracks
+      tags: [recordings]
+      summary: All tracks in the same album as this recording
+      parameters:
+        - name: mbid
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Album track list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlbumTracksResponse"
+        "404":
+          description: No album found for this recording
   /recordings/{mbid}/list-provenance:
     get:
       operationId: getRecordingListProvenance
@@ -1209,11 +1230,12 @@ paths:
     get:
       operationId: listSelectors
       tags: [pickers]
-      summary: Active KEXP DJ selectors with 30-day spin counts
+      summary: Active DJ selectors with 30-day spin counts
       description: >
-        Lists all active DJ-type pickers scoped to KEXP (source_ref.stationSlug='kexp'),
-        ordered alphabetically. Each entry includes a 30-day spin count and
-        last-played timestamp so the UI can surface the most active DJs.
+        Lists all active DJ-type pickers regardless of station, ordered
+        alphabetically. Each entry includes a 30-day spin count, last-played
+        timestamp, and station/show attribution so the UI can filter by station
+        and surface the most active DJs.
       responses:
         "200":
           description: Active KEXP DJ selectors
@@ -4607,8 +4629,8 @@ components:
     SelectorSummary:
       type: object
       description: >
-        One KEXP DJ selector with 30-day spin statistics. Only pickers with
-        source_ref.stationSlug='kexp' and pickerType='dj' appear here.
+        One DJ selector with 30-day spin statistics. All active pickerType='dj'
+        pickers appear here regardless of station affiliation.
       properties:
         id:
           type: integer
@@ -4624,6 +4646,15 @@ components:
         lastPlayedAt:
           type: ["string", "null"]
           description: ISO-8601 timestamp of the most recent spin, or null if none in window.
+        stationSlug:
+          type: ["string", "null"]
+          description: Station slug from the picker's sourceRef (e.g. "kexp"), or null if not station-affiliated.
+        stationName:
+          type: ["string", "null"]
+          description: Human-readable station name (e.g. "KEXP"), or null if station not found.
+        showName:
+          type: ["string", "null"]
+          description: Primary show name for this DJ at the station, or null if no shows are linked.
       required:
         - id
         - name
@@ -4631,9 +4662,12 @@ components:
         - homeUrl
         - recentSpinCount
         - lastPlayedAt
+        - stationSlug
+        - stationName
+        - showName
     SelectorList:
       type: object
-      description: The full list of active KEXP DJ selectors.
+      description: The full list of active DJ selectors.
       properties:
         selectors:
           type: array
@@ -4778,6 +4812,32 @@ components:
             $ref: "#/components/schemas/ListProvenanceItem"
       required:
         - items
+    AlbumTracksTrack:
+      type: object
+      required: [mbid, title, artist]
+      properties:
+        mbid:
+          type: string
+        title:
+          type: string
+        artist:
+          type: string
+    AlbumTracksResponse:
+      type: object
+      required: [rgMbid, rgTitle, rgType, tracks]
+      properties:
+        rgMbid:
+          type: string
+        rgTitle:
+          type: string
+          nullable: true
+        rgType:
+          type: string
+          nullable: true
+        tracks:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlbumTracksTrack"
     StationsRollingGenresResult:
       description: >
         Map from station slug to an array of up to 3 recent genre chips, newest

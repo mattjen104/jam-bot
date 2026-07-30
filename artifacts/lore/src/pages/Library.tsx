@@ -24,7 +24,9 @@ import {
   type FileImportSummary,
   type SyncJobStatus,
 } from "../lib/meHooks";
-import { ApiError } from "@workspace/api-client-react";
+import { ApiError, useGetPickersDial } from "@workspace/api-client-react";
+import { useFollows } from "../lib/local";
+import { KeepButton } from "../components/KeepButton";
 import { LibraryRow } from "../components/LibraryRow";
 import {
   CheckCircle2,
@@ -444,45 +446,51 @@ function artGradient(a: string, b: string): string {
   return `linear-gradient(150deg,hsl(${h},22%,20%),hsl(${(h + 42) % 360},28%,32%))`;
 }
 
-function InflowCard({
-  item,
-}: {
-  item: {
-    mbid: string;
-    recording?: { title?: string; artist?: string; artworkUrl?: string | null } | null;
-    provenance: { pickerHandle?: string | null; pickerName?: string | null; stationSlug?: string | null };
-  };
-}) {
-  const title = item.recording?.title ?? item.mbid.slice(0, 8);
-  const artist = item.recording?.artist ?? "";
-  const artwork = item.recording?.artworkUrl ?? null;
-  const pickerName = item.provenance.pickerName ?? item.provenance.pickerHandle ?? null;
+interface InflowItem {
+  key: string;
+  mbid: string;
+  title: string;
+  artist: string;
+  artworkUrl: string | null;
+  pickerHandle: string;
+  pickerName: string;
+}
 
+function InflowCard({ item }: { item: InflowItem }) {
+  const [, navigate] = useLocation();
   return (
-    <Link href={`/song/${item.mbid}`} className="icard" data-testid="inflow-card">
+    <div
+      className="icard"
+      data-testid="inflow-card"
+      role="link"
+      tabIndex={0}
+      style={{ cursor: "pointer" }}
+      onClick={() => navigate(`/song/${item.mbid}`)}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") navigate(`/song/${item.mbid}`); }}
+    >
       <div
         className="icard__art"
-        style={artwork ? undefined : { background: artGradient(title, artist) }}
+        style={item.artworkUrl ? undefined : { background: artGradient(item.title, item.artist) }}
       >
-        {artwork && <img src={artwork} alt="" loading="lazy" />}
+        {item.artworkUrl && <img src={item.artworkUrl} alt="" loading="lazy" />}
       </div>
-      <p className="icard__tr">{title}</p>
-      {artist && <p className="icard__ar">{artist}</p>}
-      {pickerName && (
-        <p className="icard__by">
-          picked by{" "}
-          {item.provenance.pickerHandle ? (
-            <b>
-              <Link href={`/archive/selectors/${item.provenance.pickerHandle}`}>
-                {pickerName}
-              </Link>
-            </b>
-          ) : (
-            <b>{pickerName}</b>
-          )}
-        </p>
-      )}
-    </Link>
+      <p className="icard__tr">{item.title}</p>
+      {item.artist && <p className="icard__ar">{item.artist}</p>}
+      <p className="icard__by">
+        picked by{" "}
+        <b>
+          <a
+            href={`/archive/selectors/${item.pickerHandle}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {item.pickerName}
+          </a>
+        </b>
+      </p>
+      <div onClick={(e) => e.stopPropagation()}>
+        <KeepButton mbid={item.mbid} compact />
+      </div>
+    </div>
   );
 }
 
@@ -528,9 +536,36 @@ export default function Library() {
   } = useMyLibraryInfinite({ source: "keep" }, 50);
   const keptItems = keptData?.pages.flatMap((p) => p.items) ?? [];
 
-  // Inflow (recent imports / from selectors)
-  const { data: inflowData } = useMyLibraryInfinite({ source: "import" }, 20);
-  const inflowItems = inflowData?.pages[0]?.items?.slice(0, 20) ?? [];
+  // Single-open door strip: tracks which row has its door strip expanded
+  const [openDoorMbid, setOpenDoorMbid] = useState<string | null>(null);
+
+  // New from followed pickers (inflow row)
+  const { data: dialData } = useGetPickersDial();
+  const follows = useFollows();
+  const pickerInflow = useMemo((): InflowItem[] => {
+    if (!dialData?.items) return [];
+    const followedHandles = new Set(
+      follows.filter((f) => f.kind === "picker" || f.kind === "selector").map((f) => f.id)
+    );
+    if (followedHandles.size === 0) return [];
+    const result: InflowItem[] = [];
+    for (const item of dialData.items) {
+      if (!followedHandles.has(item.picker.handle)) continue;
+      for (const track of item.previewTracks) {
+        if (!track.mbid) continue;
+        result.push({
+          key: `${item.picker.handle}-${track.mbid}`,
+          mbid: track.mbid,
+          title: track.title,
+          artist: track.artist,
+          artworkUrl: track.artworkUrl,
+          pickerHandle: item.picker.handle,
+          pickerName: item.picker.name,
+        });
+      }
+    }
+    return result.slice(0, 20);
+  }, [dialData, follows]);
 
   // Sentinel for IntersectionObserver
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -865,6 +900,22 @@ export default function Library() {
           </div>
         )}
 
+        {/* ── New from your pickers (inflow) ── */}
+        {pickerInflow.length > 0 && (
+          <>
+            <TierHd
+              label="New from your selectors"
+              count={pickerInflow.length}
+              hint="recent picks from people you follow"
+            />
+            <div className="inflow-grid" data-testid="library-inflow">
+              {pickerInflow.map((item) => (
+                <InflowCard key={item.key} item={item} />
+              ))}
+            </div>
+          </>
+        )}
+
         {/* ── Kept tracks ── */}
         <TierHd
           label="Kept"
@@ -923,7 +974,12 @@ export default function Library() {
           <>
             <ul style={{ margin: 0, padding: 0, listStyle: "none" }} data-testid="library-kept">
               {keptItems.map((item) => (
-                <LibraryRow key={item.mbid} item={item} />
+                <LibraryRow
+                  key={item.mbid}
+                  item={item}
+                  isOpen={openDoorMbid === item.mbid}
+                  onToggle={() => setOpenDoorMbid((prev) => prev === item.mbid ? null : item.mbid)}
+                />
               ))}
             </ul>
             <div ref={sentinelRef} style={{ height: 1 }} aria-hidden />
@@ -956,24 +1012,6 @@ export default function Library() {
           </>
         )}
 
-        {/* ── New from your selectors (inflow) ── */}
-        {inflowItems.length > 0 && (
-          <>
-            <TierHd
-              label="New from your selectors"
-              count={inflowItems.length}
-              hint="played since you last looked"
-            />
-            <div className="inflow-grid" data-testid="library-inflow">
-              {inflowItems.map((item) => (
-                <InflowCard
-                  key={item.mbid}
-                  item={item as Parameters<typeof InflowCard>[0]["item"]}
-                />
-              ))}
-            </div>
-          </>
-        )}
 
         {/* ── Sync & export receipts ── */}
         <TierHd label="Sync & export" hint="receipts, not content" />

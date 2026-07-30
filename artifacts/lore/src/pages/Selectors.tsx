@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { SearchOverlay } from "../components/SearchOverlay";
 import {
   useListPickers,
@@ -136,8 +136,17 @@ function SelectorCard({
   if (sel.spinCount) metaParts.push(`${sel.spinCount.toLocaleString()} spins`);
   if (sel.lastActiveAt) metaParts.push(`last ${timeAgoShort(sel.lastActiveAt)}`);
 
+  const [, navigate] = useLocation();
   return (
-    <Link href={`/archive/selectors/${sel.handle}`} className={cardClass} data-testid="selector-card">
+    <div
+      role="link"
+      tabIndex={0}
+      className={cardClass}
+      data-testid="selector-card"
+      onClick={() => navigate(`/archive/selectors/${sel.handle}`)}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") navigate(`/archive/selectors/${sel.handle}`); }}
+      style={{ cursor: "pointer" }}
+    >
       <div className="sel-card__body">
         <div className="sel-card__nm">{sel.name}</div>
 
@@ -233,7 +242,7 @@ function SelectorCard({
           {following ? "✓" : "+"}
         </button>
       </div>
-    </Link>
+    </div>
   );
 }
 
@@ -322,15 +331,13 @@ function RadioDjCard({
     selector.lastPlayedAt != null &&
     Date.now() - new Date(selector.lastPlayedAt).getTime() < ON_AIR_MS;
 
-  // SelectorSummary currently has: id, name, handle, homeUrl, recentSpinCount, lastPlayedAt
-  // station/show fields are added in Phase 3 (selector endpoint generalization)
   const sel: UnifiedSelector = {
     handle: selector.handle,
     name: selector.name,
     kind: "dj",
-    station: null,
-    stationSlug: null,
-    showName: null,
+    station: selector.stationName ?? null,
+    stationSlug: selector.stationSlug ?? null,
+    showName: selector.showName ?? null,
     setCount: 0,
     spinCount: selector.recentSpinCount ?? 0,
     lastActiveAt: selector.lastPlayedAt,
@@ -376,13 +383,23 @@ export default function Selectors() {
 
   const kexpSelectors = kexpData?.selectors ?? [];
 
-  // Station filter options — empty until Phase 3 adds station fields to SelectorSummary
-  const stations: Array<{ name: string; slug: string }> = [];
+  // Station filter options — derived from real stationName/stationSlug fields now in SelectorSummary
+  const stations = useMemo(() => {
+    const seen = new Set<string>();
+    const list: Array<{ name: string; slug: string }> = [];
+    for (const s of kexpSelectors) {
+      if (s.stationSlug && s.stationName && !seen.has(s.stationSlug)) {
+        seen.add(s.stationSlug);
+        list.push({ name: s.stationName, slug: s.stationSlug });
+      }
+    }
+    return list.sort((a, b) => a.name.localeCompare(b.name));
+  }, [kexpSelectors]);
 
   // Filtered + sorted list
   const filteredKexp = useMemo(() => {
-    // stationFilter is always "all" until station info is available in SelectorSummary
-    return kexpSelectors;
+    if (stationFilter === "all") return kexpSelectors;
+    return kexpSelectors.filter((s: SelectorSummary) => s.stationSlug === stationFilter);
   }, [kexpSelectors, stationFilter]);
 
   const sortedKexp = useMemo(() => {
@@ -494,8 +511,7 @@ export default function Selectors() {
               </span>
             </button>
             {stations.map((st) => {
-              // stationSlug not yet in SelectorSummary; count is placeholder until Phase 3
-              const count = kexpSelectors.length;
+              const count = kexpSelectors.filter((s: SelectorSummary) => s.stationSlug === st.slug).length;
               return (
                 <button
                   key={st.slug}

@@ -13,6 +13,8 @@ export * from "./albumContext";
 export * from "./albumResult";
 export * from "./albumResultTrack";
 export * from "./albumTrack";
+export * from "./albumTracksResponse";
+export * from "./albumTracksTrack";
 export * from "./allDraftClaim";
 export * from "./allDraftClaimsList";
 export * from "./allDraftClaimStatus";

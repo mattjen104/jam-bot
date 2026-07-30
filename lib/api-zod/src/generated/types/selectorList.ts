@@ -8,7 +8,7 @@
 import type { SelectorSummary } from "./selectorSummary";
 
 /**
- * The full list of active KEXP DJ selectors.
+ * The full list of active DJ selectors.
  */
 export interface SelectorList {
   selectors: SelectorSummary[];

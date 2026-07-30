@@ -2221,3 +2221,46 @@
   font-weight: 600;
   color: hsl(var(--foreground));
 }
+
+/* ── Library door strip ─────────────────────────────────────────────────── */
+.lrow--open { background: hsl(var(--secondary) / 0.6); }
+
+.lrow__play--open {
+  color: hsl(var(--library));
+  border-color: hsl(var(--library) / 0.5);
+}
+
+.lrow__doors {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px 10px 12px;
+  border-top: 1px solid hsl(var(--border) / 0.4);
+}
+
+.lrow__door {
+  flex: 1;
+  padding: 7px 10px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 4px;
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+.lrow__door:hover:not(:disabled) {
+  border-color: hsl(var(--library) / 0.6);
+  background: hsl(var(--library) / 0.08);
+  color: hsl(var(--library));
+}
+.lrow__door--off,
+.lrow__door:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}

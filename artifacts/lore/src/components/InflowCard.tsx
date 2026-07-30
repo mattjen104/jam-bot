@@ -21,7 +21,7 @@ export function InflowCard({ item, pickerName, pickerHandle }: InflowCardProps) 
   const artwork = rec?.artworkUrl ?? null;
   const attribution = pickerName ?? item.provenance.pickerHandle ?? item.provenance.stationSlug ?? "";
   const attributionHref = pickerHandle
-    ? `/archive/pickers/${pickerHandle}`
+    ? `/archive/selectors/${pickerHandle}`
     : item.provenance.stationSlug
       ? `/archive/stations/${item.provenance.stationSlug}`
       : null;

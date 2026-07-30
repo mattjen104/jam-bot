@@ -633,4 +633,50 @@ router.get("/recordings/:mbid/list-provenance", h(async (req, res) => {
   );
 }));
 
+// GET /api/recordings/:mbid/album-tracks
+// Returns all tracks in the primary release group for this recording.
+router.get("/recordings/:mbid/album-tracks", h(async (req, res) => {
+  const mbid = req.params.mbid as string;
+  if (!mbid) return res.status(400).json({ error: "mbid required" });
+
+  const rgRow = await db
+    .select({
+      releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid,
+      title: recordingReleaseGroupsTable.title,
+      primaryType: recordingReleaseGroupsTable.primaryType,
+    })
+    .from(recordingReleaseGroupsTable)
+    .where(and(
+      eq(recordingReleaseGroupsTable.recordingMbid, mbid),
+      eq(recordingReleaseGroupsTable.isPrimary, true),
+    ))
+    .limit(1);
+
+  if (!rgRow[0]) return res.status(404).json({ error: "not_found" });
+
+  const { releaseGroupMbid, title: rgTitle, primaryType } = rgRow[0];
+
+  const tracks = await db
+    .select({
+      mbid: recordingReleaseGroupsTable.recordingMbid,
+      title: recordingsTable.title,
+      artist: recordingsTable.artist,
+    })
+    .from(recordingReleaseGroupsTable)
+    .leftJoin(recordingsTable, eq(recordingReleaseGroupsTable.recordingMbid, recordingsTable.mbid))
+    .where(eq(recordingReleaseGroupsTable.releaseGroupMbid, releaseGroupMbid))
+    .orderBy(asc(recordingReleaseGroupsTable.id));
+
+  return res.json({
+    rgMbid: releaseGroupMbid,
+    rgTitle: rgTitle ?? null,
+    rgType: primaryType ?? null,
+    tracks: tracks.map(t => ({
+      mbid: t.mbid,
+      title: t.title ?? t.mbid,
+      artist: t.artist ?? "",
+    })),
+  });
+}));
+
 export default router;

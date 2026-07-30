@@ -1,5 +1,8 @@
-import { Link } from "wouter";
+import { useState } from "react";
+import { Link, useLocation } from "wouter";
 import type { LibraryItem } from "../lib/meHooks";
+import { usePlayer, type RideSeed } from "../player/PlayerProvider";
+import { getRecordingAlbumTracks } from "@workspace/api-client-react";
 
 /** Deterministic gradient fallback for artwork */
 function artGradient(a: string, b: string): string {
@@ -13,12 +16,15 @@ interface LibraryRowProps {
   item: LibraryItem;
   /** When true the track is currently on air — shows live badge + blue rule */
   isOnAir?: boolean;
+  /** Whether this row's door strip is open */
+  isOpen?: boolean;
+  /** Called when the ▶ button is tapped — parent coordinates single-open */
+  onToggle?: () => void;
 }
 
 /** §7 byline ladder: picked-by+station → picked-by → heard-on → service import → null */
 function Byline({ prov }: { prov: LibraryItem["provenance"] }) {
   if (prov.kind === "keep") {
-    // Prefer rich names; fall back to slugs/handles
     const pickerName = prov.pickerName ?? prov.pickerHandle ?? null;
     const stationName = prov.stationName ?? prov.stationSlug ?? null;
 
@@ -67,8 +73,88 @@ function Byline({ prov }: { prov: LibraryItem["provenance"] }) {
   return null;
 }
 
+/** Three play doors — expands inline below the row. */
+function DoorStrip({ item, onClose }: { item: LibraryItem; onClose: () => void }) {
+  const { ride } = usePlayer();
+  const [, navigate] = useLocation();
+  const [albumBusy, setAlbumBusy] = useState(false);
+
+  const rec = item.recording;
+  const title = rec?.title ?? item.mbid.slice(0, 8);
+  const artist = rec?.artist ?? "";
+  const artworkUrl = rec?.artworkUrl ?? null;
+
+  const seed: RideSeed = { mbid: item.mbid, title, artist, artworkUrl, links: [] };
+
+  function handleTrack() {
+    ride.startReplay([seed], title, { timeOrientation: "curated", context: "library" });
+    onClose();
+  }
+
+  async function handleAlbum() {
+    setAlbumBusy(true);
+    try {
+      const data = await getRecordingAlbumTracks(item.mbid);
+      const seeds: RideSeed[] = data.tracks.map((t) => ({
+        mbid: t.mbid,
+        title: t.title,
+        artist: t.artist,
+        artworkUrl: null,
+        links: [],
+      }));
+      if (seeds.length > 0) {
+        ride.startReplay(seeds, data.rgTitle ?? title, { timeOrientation: "curated", context: "library" });
+        onClose();
+      }
+    } catch {
+      /* 404 = no album data yet */
+    } finally {
+      setAlbumBusy(false);
+    }
+  }
+
+  const prov = item.provenance;
+  const broadcastHref =
+    prov.kind === "keep" && prov.pickerHandle
+      ? `/archive/selectors/${prov.pickerHandle}`
+      : prov.kind === "keep" && prov.stationSlug
+      ? `/archive/stations/${prov.stationSlug}`
+      : null;
+
+  return (
+    <div className="lrow__doors" onClick={(e) => e.stopPropagation()}>
+      <button type="button" className="lrow__door" onClick={handleTrack} title="Play this track">
+        ▶ Track
+      </button>
+      <button
+        type="button"
+        className="lrow__door"
+        onClick={() => void handleAlbum()}
+        disabled={albumBusy}
+        title="Play full album from track 1"
+      >
+        {albumBusy ? "…" : "💿 Album"}
+      </button>
+      {broadcastHref ? (
+        <button
+          type="button"
+          className="lrow__door"
+          onClick={() => { navigate(broadcastHref); onClose(); }}
+          title="Go to broadcast context"
+        >
+          📻 Broadcast
+        </button>
+      ) : (
+        <button type="button" className="lrow__door lrow__door--off" disabled title="No broadcast history">
+          📻 Broadcast
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** A single row in the Library "Kept" list. */
-export function LibraryRow({ item, isOnAir = false }: LibraryRowProps) {
+export function LibraryRow({ item, isOnAir = false, isOpen = false, onToggle }: LibraryRowProps) {
   const rec = item.recording;
   const title = rec?.title ?? item.mbid.slice(0, 8);
   const artist = rec?.artist ?? "";
@@ -82,6 +168,7 @@ export function LibraryRow({ item, isOnAir = false }: LibraryRowProps) {
   const rowClass = [
     "lrow",
     isOnAir ? "lrow--onair" : hasProvenance ? "lrow--kept" : "",
+    isOpen ? "lrow--open" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -110,17 +197,21 @@ export function LibraryRow({ item, isOnAir = false }: LibraryRowProps) {
         {isOnAir && <p className="lrow__badge">● on air</p>}
       </div>
 
-      {/* Right rail */}
+      {/* Right rail — ▶ toggles the door strip */}
       <div className="lrow__rail">
         <button
           type="button"
-          className="lrow__play"
-          aria-label={`Play ${title}`}
-          onClick={(e) => e.preventDefault()}
+          className={`lrow__play${isOpen ? " lrow__play--open" : ""}`}
+          aria-label={isOpen ? "Close play options" : `Play ${title}`}
+          aria-expanded={isOpen}
+          onClick={(e) => { e.preventDefault(); onToggle?.(); }}
         >
-          ▶
+          {isOpen ? "✕" : "▶"}
         </button>
       </div>
+
+      {/* Door strip — only mounted when open */}
+      {isOpen && <DoorStrip item={item} onClose={() => onToggle?.()} />}
     </li>
   );
 }

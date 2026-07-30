@@ -1007,6 +1007,27 @@ export const GetRecordingPreviewResponse = zod
   );
 
 /**
+ * @summary All tracks in the same album as this recording
+ */
+
+export const GetRecordingAlbumTracksParams = zod.object({
+  mbid: zod.coerce.string().min(1),
+});
+
+export const GetRecordingAlbumTracksResponse = zod.object({
+  rgMbid: zod.string(),
+  rgTitle: zod.string().nullable(),
+  rgType: zod.string().nullable(),
+  tracks: zod.array(
+    zod.object({
+      mbid: zod.string(),
+      title: zod.string(),
+      artist: zod.string(),
+    }),
+  ),
+});
+
+/**
  * Returns year-end / all-time list entries from music publications that feature the primary album this recording appears on. Ordered by rank (ascending), then by list year (descending). Only confirmed or exact-confidence entries are returned. Returns an empty array when no list provenance has been scraped yet.
 
  * @summary Publication list appearances for a recording
@@ -2593,9 +2614,9 @@ export const GetPickerStationOverlapsResponse = zod.object({
 });
 
 /**
- * Lists all active DJ-type pickers scoped to KEXP (source_ref.stationSlug='kexp'), ordered alphabetically. Each entry includes a 30-day spin count and last-played timestamp so the UI can surface the most active DJs.
+ * Lists all active DJ-type pickers regardless of station, ordered alphabetically. Each entry includes a 30-day spin count, last-played timestamp, and station/show attribution so the UI can filter by station and surface the most active DJs.
 
- * @summary Active KEXP DJ selectors with 30-day spin counts
+ * @summary Active DJ selectors with 30-day spin counts
  */
 export const ListSelectorsResponse = zod
   .object({
@@ -2617,13 +2638,31 @@ export const ListSelectorsResponse = zod
             .describe(
               "ISO-8601 timestamp of the most recent spin, or null if none in window.",
             ),
+          stationSlug: zod
+            .string()
+            .nullable()
+            .describe(
+              'Station slug from the picker\'s sourceRef (e.g. \"kexp\"), or null if not station-affiliated.',
+            ),
+          stationName: zod
+            .string()
+            .nullable()
+            .describe(
+              'Human-readable station name (e.g. \"KEXP\"), or null if station not found.',
+            ),
+          showName: zod
+            .string()
+            .nullable()
+            .describe(
+              "Primary show name for this DJ at the station, or null if no shows are linked.",
+            ),
         })
         .describe(
-          "One KEXP DJ selector with 30-day spin statistics. Only pickers with source_ref.stationSlug='kexp' and pickerType='dj' appear here.\n",
+          "One DJ selector with 30-day spin statistics. All active pickerType='dj' pickers appear here regardless of station affiliation.\n",
         ),
     ),
   })
-  .describe("The full list of active KEXP DJ selectors.");
+  .describe("The full list of active DJ selectors.");
 
 /**
  * Returns the selector's spin history grouped into runs — one run per show × UTC broadcast day — newest first (limit 100). Only resolves for KEXP DJ selectors (source_ref.stationSlug='kexp'); non-KEXP or non-DJ handles return 404.
