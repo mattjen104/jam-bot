@@ -212,3 +212,95 @@ describe("Door 2 — empty tracklist does NOT call ride.startReplay", () => {
     expect(mockStartReplay).not.toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Pre-fetch label tests
+// ---------------------------------------------------------------------------
+
+describe("Door 2 — pre-fetch label: shows album title and track count before tapping", () => {
+  it("updates the button label with album title and track count once the pre-fetch resolves", async () => {
+    mockGetRecordingAlbumTracks.mockResolvedValue({
+      tracks: ALBUM_TRACKS,
+      rgTitle: "Some Album",
+    });
+
+    renderRow();
+
+    // After mount the useEffect fires; wait for the label to reflect the resolved data.
+    await waitFor(() => {
+      expect(
+        screen.getByTitle("Play full album from track 1").textContent,
+      ).toBe("💿 Some Album · 3 tracks");
+    });
+  });
+
+  it("uses the singular 'track' when the album has exactly one track", async () => {
+    mockGetRecordingAlbumTracks.mockResolvedValue({
+      tracks: [{ mbid: "single-track-mbid", title: "Solo", artist: "Solo Artist" }],
+      rgTitle: "Single",
+    });
+
+    renderRow();
+
+    await waitFor(() => {
+      expect(
+        screen.getByTitle("Play full album from track 1").textContent,
+      ).toBe("💿 Single · 1 track");
+    });
+  });
+});
+
+describe("Door 2 — pre-fetch label: stays generic when the pre-fetch rejects (404)", () => {
+  it("keeps '💿 Album' when getRecordingAlbumTracks rejects during the pre-fetch", async () => {
+    mockGetRecordingAlbumTracks.mockRejectedValue(new Error("404 Not Found"));
+
+    renderRow();
+
+    // Give the rejected promise time to settle; the label must remain generic.
+    await waitFor(() => {
+      expect(mockGetRecordingAlbumTracks).toHaveBeenCalledWith(MBID);
+    });
+
+    expect(
+      screen.getByTitle("Play full album from track 1").textContent,
+    ).toBe("💿 Album");
+  });
+});
+
+describe("Door 2 — pre-fetch label: shows '…' and is disabled while albumBusy", () => {
+  it("shows '…' and disables the button while the album click is in progress", async () => {
+    // Pre-fetch resolves quickly; button click uses a slow promise so we can
+    // observe the busy state.
+    let resolveClick!: (v: { tracks: typeof ALBUM_TRACKS; rgTitle: string }) => void;
+    const clickPromise = new Promise<{ tracks: typeof ALBUM_TRACKS; rgTitle: string }>(
+      (res) => { resolveClick = res; },
+    );
+
+    // First call (pre-fetch useEffect) resolves immediately; second call (button
+    // click) hangs so we can inspect the busy state.
+    mockGetRecordingAlbumTracks
+      .mockResolvedValueOnce({ tracks: ALBUM_TRACKS, rgTitle: "Some Album" })
+      .mockReturnValueOnce(clickPromise);
+
+    renderRow();
+
+    // Wait for the pre-fetch to settle so the button shows the real label first.
+    await waitFor(() => {
+      expect(
+        screen.getByTitle("Play full album from track 1").textContent,
+      ).toBe("💿 Some Album · 3 tracks");
+    });
+
+    // Tap the button — the second call hangs, keeping albumBusy=true.
+    fireEvent.click(screen.getByTitle("Play full album from track 1"));
+
+    await waitFor(() => {
+      const btn = screen.getByTitle("Play full album from track 1");
+      expect(btn.textContent).toBe("…");
+      expect((btn as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    // Resolve the click promise so the component can clean up without warnings.
+    resolveClick({ tracks: ALBUM_TRACKS, rgTitle: "Some Album" });
+  });
+});
