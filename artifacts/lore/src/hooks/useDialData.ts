@@ -11,7 +11,7 @@
  * Returns an enriched `DialStation[]` array sorted live-first then by crossing
  * count, ready for the Dial to render.
  */
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   useListStations,
   useListStationsNowPlaying,
@@ -126,6 +126,18 @@ function topArtistsFromSpins(spins: DialSpin[], max = 3): string[] {
 }
 
 // ---------------------------------------------------------------------------
+// SSE spin-changed event type (mirrors SpinChangedEvent on the server)
+// ---------------------------------------------------------------------------
+
+interface SseSpinEntry {
+  mbid: string | null;
+  artistMbid: string | null;
+  title: string;
+  artist: string;
+  playedAt: string;
+}
+
+// ---------------------------------------------------------------------------
 // Main hook
 // ---------------------------------------------------------------------------
 
@@ -134,6 +146,44 @@ export function useDialData(): {
   isLoading: boolean;
 } {
   const today = todayStr();
+
+  // ── SSE override: instant now-playing from the server's spin-changed stream ─
+  // When the server persists a new spin it pushes a spin-changed SSE event.
+  // We store the latest entry per station slug so the Dial updates immediately
+  // instead of waiting up to 30s for the REST poll to catch up.
+  const [sseOverrides, setSseOverrides] = useState<Map<string, SseSpinEntry>>(
+    () => new Map(),
+  );
+  useEffect(() => {
+    if (typeof EventSource === "undefined") return;
+    const es = new EventSource("/api/stations/now-playing/stream");
+    es.onmessage = (msg) => {
+      try {
+        const ev = JSON.parse(msg.data as string) as {
+          stationSlug?: string;
+          rawArtist?: string;
+          rawTitle?: string;
+          mbid?: string | null;
+          artistMbid?: string | null;
+        };
+        if (!ev.stationSlug) return;
+        setSseOverrides((prev) => {
+          const next = new Map(prev);
+          next.set(ev.stationSlug!, {
+            mbid: ev.mbid ?? null,
+            artistMbid: ev.artistMbid ?? null,
+            title: ev.rawTitle ?? "",
+            artist: ev.rawArtist ?? "",
+            playedAt: new Date().toISOString(),
+          });
+          return next;
+        });
+      } catch {
+        // ignore unparseable frames (ping comments arrive as empty data)
+      }
+    };
+    return () => es.close();
+  }, []);
 
   // ── fetch stations ──────────────────────────────────────────────────────
   const { data: stationsData, isLoading: stationsLoading } = useListStations();
@@ -224,6 +274,9 @@ export function useDialData(): {
   }, [liveData]);
 
   // ── live now-playing track per station (for live block currentTrack) ───────
+  // REST poll data is the baseline; SSE overrides (fired the moment a spin is
+  // persisted) are merged on top so live chips update instantly instead of
+  // waiting up to 30s for the next poll cycle.
   const nowPlayingBySlug = useMemo((): Map<string, DialSpin> => {
     const m = new Map<string, DialSpin>();
     for (const item of liveData?.items ?? []) {
@@ -243,8 +296,20 @@ export function useDialData(): {
         isLibraryHit: mbid != null && libraryMbidSet.has(mbid),
       });
     }
+    // SSE overrides: more recent than the REST poll, applied last so the Dial
+    // chip reflects the current on-air track the moment it is logged.
+    for (const [slug, entry] of sseOverrides) {
+      m.set(slug, {
+        mbid: entry.mbid,
+        artistMbid: entry.artistMbid,
+        title: entry.title,
+        artist: entry.artist,
+        playedAt: entry.playedAt,
+        isLibraryHit: entry.mbid != null && libraryMbidSet.has(entry.mbid),
+      });
+    }
     return m;
-  }, [liveData, libraryMbidSet]);
+  }, [liveData, sseOverrides, libraryMbidSet]);
 
   const runsBySlug = useMemo(() => {
     const m = new Map<string, StationScheduleRun[]>();

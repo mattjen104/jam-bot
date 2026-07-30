@@ -569,6 +569,8 @@ export interface SpinChangedEvent {
   rawTitle: string;
   /** Resolved MBID (or synthetic sp: id), null when unresolved. */
   mbid: string | null;
+  /** MusicBrainz Artist ID, null when not resolved. Powers artist-page navigation on live chips. */
+  artistMbid: string | null;
 }
 
 /**
@@ -680,6 +682,7 @@ export async function logSpinIfChanged(
         rawArtist: np.rawArtist,
         rawTitle: np.rawTitle,
         mbid: r.mbid,
+        artistMbid: r.artistMbid ?? null,
       } satisfies SpinChangedEvent);
     }
     return wrote;
