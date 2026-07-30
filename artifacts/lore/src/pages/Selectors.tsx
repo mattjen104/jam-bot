@@ -12,10 +12,10 @@ import type { PickerDialItem, SelectorSummary } from "@workspace/api-client-reac
 import { useMyLibrary } from "../lib/meHooks";
 import { usePlayer } from "../player/PlayerProvider";
 import { FollowButton } from "../components/FollowButton";
-import { Loader2, Music2, Play, Radio, Users, Zap } from "lucide-react";
+import { Loader2, Play, Users } from "lucide-react";
 
-const RECENTLY_ACTIVE_MS = 14 * 24 * 60 * 60 * 1000;
 const ON_AIR_MS = 2 * 60 * 60 * 1000; // 2 hours = "live now"
+const RECENTLY_ACTIVE_MS = 14 * 24 * 60 * 60 * 1000;
 
 function isRecentlyActive(pickedAt: string | null | undefined): boolean {
   if (!pickedAt) return false;
@@ -36,18 +36,21 @@ function timeAgoShort(iso: string | null | undefined): string {
   return `${Math.floor(days / 365)}y ago`;
 }
 
+/** Derive 1–2 character initials from a name. */
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return (parts[0]?.slice(0, 2) ?? "").toUpperCase();
+  return ((parts[0]?.[0] ?? "") + (parts[parts.length - 1]?.[0] ?? "")).toUpperCase();
+}
+
 // ---------------------------------------------------------------------------
 // Library overlap
 // ---------------------------------------------------------------------------
 
-/**
- * Computes per-picker overlap percentage against the user's saved library.
- * Fetches up to 60 library recordings and batch-queries the picks index.
- * Returns null when the user has no library items (unauthenticated or empty).
- */
 function useLibraryOverlap(): {
   overlapByHandle: Map<string, number>;
   totalMbids: number;
+  totalCrossings: number;
 } | null {
   const { data: libraryData } = useMyLibrary(undefined, 60);
 
@@ -94,60 +97,54 @@ function useLibraryOverlap(): {
     const total = libraryMbids.length;
     const overlapByHandle = new Map<string, number>();
     for (const [handle, count] of countByHandle) {
-      // Round to one decimal place
       overlapByHandle.set(handle, Math.round((count / total) * 1000) / 10);
     }
-    return { overlapByHandle, totalMbids: total };
+    const totalCrossings = allHits.length;
+    return { overlapByHandle, totalMbids: total, totalCrossings };
   }, [libraryMbids, hits1, hits2]);
 }
 
 // ---------------------------------------------------------------------------
-// Artwork mosaic
+// Initials avatar
 // ---------------------------------------------------------------------------
 
-/**
- * 2×2 artwork mosaic from the first 4 tracks of a curated list.
- */
-function ArtworkMosaic({ tracks }: { tracks: { artworkUrl: string | null }[] }) {
+function InitialsAvatar({ name, size = "lg" }: { name: string; size?: "sm" | "lg" }) {
+  const letters = initials(name);
+  const sz = size === "lg" ? "h-14 w-14 text-lg" : "h-9 w-9 text-xs";
   return (
-    <div className="grid h-full w-full grid-cols-2 grid-rows-2 overflow-hidden">
-      {[0, 1, 2, 3].map((i) => {
-        const art = tracks[i]?.artworkUrl ?? null;
-        return (
-          <div key={i} className="overflow-hidden bg-muted">
-            {art && <img src={art} alt="" className="h-full w-full object-cover" />}
-          </div>
-        );
-      })}
+    <div
+      className={`${sz} shrink-0 rounded-full border-2 border-picker bg-picker/10 flex items-center justify-center font-serif font-semibold text-picker`}
+    >
+      {letters}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Curated selector cards
+// Curated selector card (new design)
 // ---------------------------------------------------------------------------
 
-/** Full card for a selector that has a documented run (with artwork mosaic). */
-function SelectorDialCard({
+function CuratedSelectorCard({
   item,
+  picker,
   overlapPct,
 }: {
-  item: PickerDialItem;
+  item?: PickerDialItem;
+  picker: { handle: string; name: string; pickerType: string; description?: string | null };
   overlapPct?: number | null;
 }) {
   const { ride } = usePlayer();
   const [loading, setLoading] = useState(false);
 
-  if (!item.run) return null;
-
-  const recent = isRecentlyActive(item.run.pickedAt);
+  const run = item?.run;
 
   const handlePlay = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!run) return;
     setLoading(true);
     try {
-      const data = await getPickerRun(item.run!.runId);
+      const data = await getPickerRun(run.runId);
       const seeds = data.tracks
         .filter((t) => t.recording != null)
         .map((t) => ({
@@ -160,7 +157,7 @@ function SelectorDialCard({
       if (seeds.length > 0) {
         ride.startReplay(
           seeds,
-          `${item.picker.name}${item.run!.title ? ` — ${item.run!.title}` : ""}`,
+          `${picker.name}${run.title ? ` — ${run.title}` : ""}`,
           { timeOrientation: "curated" },
         );
       }
@@ -169,212 +166,189 @@ function SelectorDialCard({
     }
   };
 
-  return (
-    <li className="flex flex-col">
-      <Link
-        href={`/archive/selectors/${item.picker.handle}`}
-        className="hover-elevate group flex flex-col overflow-hidden rounded-2xl border border-card-border bg-card"
-      >
-        {/* Artwork mosaic */}
-        <div className="relative h-32 w-full shrink-0 overflow-hidden bg-muted">
-          <ArtworkMosaic tracks={item.previewTracks} />
-          {recent && (
-            <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full border border-primary/40 bg-background/80 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide text-primary backdrop-blur-sm">
-              <Zap className="h-2.5 w-2.5" />
-              Active
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={handlePlay}
-            disabled={loading}
-            aria-label={`Play ${item.run.title ?? item.picker.name}`}
-            className="absolute bottom-2 left-2 flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-black/50 text-white opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100 active:scale-95 disabled:opacity-40"
-          >
-            {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Play className="ml-0.5 h-4 w-4 fill-current" />
-            )}
-          </button>
-        </div>
+  // Derive preview artists from previewTracks (use up to 3 unique artists)
+  const previewArtists = useMemo(() => {
+    if (!item?.previewTracks) return [];
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const t of item.previewTracks) {
+      const a = (t as { artist?: string }).artist;
+      if (a && !seen.has(a)) {
+        seen.add(a);
+        out.push(a);
+        if (out.length >= 3) break;
+      }
+    }
+    return out;
+  }, [item]);
 
-        {/* Text */}
-        <div className="flex flex-1 flex-col gap-1 p-4">
-          <div className="flex items-start justify-between gap-2">
-            <h3 className="line-clamp-2 font-serif text-base font-semibold leading-snug text-foreground">
-              {item.picker.name}
-            </h3>
-            <span className="shrink-0 rounded-full border border-border px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide text-muted-foreground">
-              {item.picker.pickerType}
-            </span>
-          </div>
-          {item.picker.description && (
-            <p className="line-clamp-2 text-xs text-muted-foreground">
-              {item.picker.description}
-            </p>
-          )}
-          <div className="mt-auto flex flex-wrap items-center gap-2 pt-2 font-mono text-[10px] text-muted-foreground">
-            <Music2 className="h-3 w-3 text-primary/60" />
-            <span>
-              {item.run.trackCount} pick{item.run.trackCount === 1 ? "" : "s"}
-            </span>
-            {item.run.resolvedCount > 0 &&
-              item.run.resolvedCount < item.run.trackCount && (
-                <>
-                  <span>·</span>
-                  <span className="text-primary">{item.run.resolvedCount} playable</span>
-                </>
-              )}
-            {item.run.pickedAt && (
-              <>
-                <span>·</span>
-                <span>{timeAgoShort(item.run.pickedAt)}</span>
-              </>
-            )}
-            {overlapPct != null && (
-              <>
-                <span>·</span>
-                <span
-                  className={overlapPct > 0 ? "font-semibold text-primary" : ""}
-                >
-                  {overlapPct > 0 ? `${overlapPct}% match` : "0% match"}
-                </span>
-              </>
-            )}
-          </div>
-        </div>
-      </Link>
-      <div className="mt-2 flex justify-end px-1">
-        <FollowButton kind="picker" id={item.picker.handle} name={item.picker.name} />
-      </div>
-    </li>
-  );
-}
+  const hasOverlap = overlapPct != null && overlapPct > 0;
+  const recentlyActive = run ? isRecentlyActive(run.pickedAt) : false;
 
-/** Simpler card for a selector that has no documented runs yet. */
-function SelectorSimpleCard({
-  picker,
-  overlapPct,
-}: {
-  picker: {
-    handle: string;
-    name: string;
-    pickerType: string;
-    description?: string | null;
-  };
-  overlapPct?: number | null;
-}) {
   return (
-    <li className="flex flex-col">
+    <li>
       <Link
         href={`/archive/selectors/${picker.handle}`}
-        className="hover-elevate flex flex-col overflow-hidden rounded-2xl border border-card-border bg-card"
+        className="hover-elevate group flex flex-col gap-0 overflow-hidden rounded-2xl border border-card-border bg-card transition-shadow"
       >
-        <div className="flex h-32 w-full items-center justify-center bg-muted/40">
-          <Users className="h-10 w-10 text-muted-foreground/20" />
-        </div>
-        <div className="flex flex-1 flex-col gap-1 p-4">
-          <div className="flex items-start justify-between gap-2">
-            <h3 className="line-clamp-2 font-serif text-base font-semibold leading-snug text-foreground">
+        {/* Top bar: avatar + name + badge + overlap % */}
+        <div className="flex items-start gap-4 p-5 pb-4">
+          <InitialsAvatar name={picker.name} />
+
+          <div className="min-w-0 flex-1">
+            {/* Selector badge */}
+            <div className="mb-1 flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.2em] text-picker">
+                ◆ Selector
+              </span>
+              {recentlyActive && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-picker/40 bg-picker/10 px-1.5 py-px font-mono text-[9px] uppercase tracking-wide text-picker">
+                  Recent
+                </span>
+              )}
+            </div>
+            <h3 className="truncate font-serif text-lg font-semibold leading-tight text-foreground">
               {picker.name}
             </h3>
-            <span className="shrink-0 rounded-full border border-border px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide text-muted-foreground">
-              {picker.pickerType}
-            </span>
+            {picker.description && (
+              <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
+                {picker.description}
+              </p>
+            )}
           </div>
-          {picker.description && (
-            <p className="line-clamp-2 text-xs text-muted-foreground">
-              {picker.description}
-            </p>
+
+          {/* Overlap % — large Fraunces numeral */}
+          {overlapPct != null && (
+            <div className="shrink-0 text-right">
+              <p
+                className={`font-serif text-3xl font-semibold leading-none tabular-nums ${
+                  hasOverlap ? "text-primary" : "text-muted-foreground/40"
+                }`}
+              >
+                {overlapPct}
+              </p>
+              <p className="mt-0.5 font-mono text-[9px] uppercase tracking-wide text-muted-foreground">
+                % match
+              </p>
+            </div>
           )}
-          <div className="mt-auto flex flex-wrap items-center gap-2 pt-2 font-mono text-[10px] text-muted-foreground">
-            <span>No runs documented yet</span>
-            {overlapPct != null && (
-              <>
-                <span>·</span>
-                <span className={overlapPct > 0 ? "font-semibold text-primary" : ""}>
-                  {overlapPct > 0 ? `${overlapPct}% match` : "0% match"}
+        </div>
+
+        {/* Bottom row: set count + artists + play button */}
+        <div className="flex items-center gap-3 border-t border-card-border px-5 py-3">
+          <div className="min-w-0 flex-1">
+            {run ? (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="font-mono text-[10px] text-muted-foreground">
+                  {run.trackCount} tracks
                 </span>
-              </>
+                {run.pickedAt && (
+                  <span className="font-mono text-[10px] text-muted-foreground">
+                    {timeAgoShort(run.pickedAt)}
+                  </span>
+                )}
+                {previewArtists.length > 0 && (
+                  <span className="truncate font-mono text-[10px] text-primary/70">
+                    {previewArtists.join(", ")}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <span className="font-mono text-[10px] text-muted-foreground">No runs yet</span>
+            )}
+          </div>
+
+          <div
+            className="flex items-center gap-2"
+            onClick={(e) => e.preventDefault()}
+          >
+            <FollowButton kind="picker" id={picker.handle} name={picker.name} />
+            {run && (
+              <button
+                type="button"
+                onClick={(e) => { e.preventDefault(); void handlePlay(e); }}
+                disabled={loading}
+                aria-label={`Play ${run.title ?? picker.name}`}
+                className="flex h-7 w-7 items-center justify-center rounded-full border border-primary/40 bg-primary/10 text-primary opacity-0 transition-opacity group-hover:opacity-100 active:scale-95 disabled:opacity-30"
+              >
+                {loading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Play className="ml-px h-3.5 w-3.5 fill-current" />
+                )}
+              </button>
             )}
           </div>
         </div>
       </Link>
-      <div className="mt-2 flex justify-end px-1">
-        <FollowButton kind="picker" id={picker.handle} name={picker.name} />
-      </div>
     </li>
   );
 }
 
 // ---------------------------------------------------------------------------
-// KEXP radio selector card
+// KEXP radio selector card (new design)
 // ---------------------------------------------------------------------------
 
-/** Card for a KEXP radio selector (spin-based, no curated artwork mosaic). */
-function KexpSelectorCard({ selector }: { selector: SelectorSummary }) {
+function RadioSelectorCard({ selector }: { selector: SelectorSummary }) {
   const onAir =
     selector.lastPlayedAt != null &&
     Date.now() - new Date(selector.lastPlayedAt).getTime() < ON_AIR_MS;
-  const recentlyActive =
-    !onAir &&
-    selector.lastPlayedAt != null &&
-    Date.now() - new Date(selector.lastPlayedAt).getTime() < 30 * 24 * 60 * 60 * 1000;
 
   return (
-    <li className="flex flex-col">
+    <li>
       <Link
         href={`/archive/selectors/${selector.handle}`}
-        className="hover-elevate flex flex-col overflow-hidden rounded-2xl border border-card-border bg-card"
+        className="hover-elevate flex items-center gap-4 rounded-2xl border border-card-border bg-card p-4 transition-shadow"
       >
-        <div className="flex h-20 w-full items-center justify-center gap-3 bg-muted/40 px-4">
-          <Radio className="h-6 w-6 shrink-0 text-primary/40" />
-          <span className="truncate font-serif text-lg font-semibold text-foreground">
-            {selector.name}
-          </span>
-          {onAir && (
-            <span className="ml-auto shrink-0 inline-flex items-center gap-1 rounded-full border border-primary/60 bg-primary/15 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide text-primary">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
-              Live now
+        <InitialsAvatar name={selector.name} size="sm" />
+
+        <div className="min-w-0 flex-1">
+          <div className="mb-0.5 flex items-center gap-2">
+            <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-picker">
+              ◆ Selector
             </span>
-          )}
-          {recentlyActive && (
-            <span className="ml-auto shrink-0 inline-flex items-center gap-1 rounded-full border border-primary/40 bg-background/80 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide text-primary">
-              <Zap className="h-2.5 w-2.5" />
-              Active
-            </span>
-          )}
-        </div>
-        <div className="flex flex-1 flex-col gap-1 p-4">
-          <div className="flex items-start justify-between gap-2">
-            <span className="shrink-0 rounded-full border border-border px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide text-muted-foreground">
-              Selector
-            </span>
-          </div>
-          <div className="mt-auto flex items-center gap-2 pt-2 font-mono text-[10px] text-muted-foreground">
-            <Music2 className="h-3 w-3 text-primary/60" />
-            {selector.recentSpinCount > 0 ? (
-              <span>
-                {selector.recentSpinCount} spin{selector.recentSpinCount === 1 ? "" : "s"} this
-                month
+            {onAir && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-live/50 bg-live/10 px-1.5 py-px font-mono text-[9px] uppercase tracking-wide text-live">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-live" />
+                Live
               </span>
-            ) : (
-              <span>No recent spins</span>
-            )}
-            {selector.lastPlayedAt && (
-              <>
-                <span>·</span>
-                <span>{timeAgoShort(selector.lastPlayedAt)}</span>
-              </>
             )}
           </div>
+          <p className="truncate font-serif text-base font-semibold text-foreground">
+            {selector.name}
+          </p>
+          <p className="font-mono text-[10px] text-muted-foreground">
+            {selector.recentSpinCount > 0
+              ? `${selector.recentSpinCount} spin${selector.recentSpinCount === 1 ? "" : "s"} this month`
+              : "No recent spins"}
+            {selector.lastPlayedAt && ` · ${timeAgoShort(selector.lastPlayedAt)}`}
+          </p>
         </div>
+
+        <FollowButton
+          kind="selector"
+          id={selector.handle}
+          name={selector.name}
+        />
       </Link>
-      <div className="mt-2 flex justify-end px-1">
-        <FollowButton kind="selector" id={selector.handle} name={selector.name} />
-      </div>
     </li>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Hero stat block
+// ---------------------------------------------------------------------------
+
+function HeroStat({ value, label }: { value: string | number; label: string }) {
+  return (
+    <div className="flex flex-col">
+      <span className="font-serif text-3xl font-semibold tabular-nums text-foreground">
+        {typeof value === "number" ? value.toLocaleString() : value}
+      </span>
+      <span className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+        {label}
+      </span>
+    </div>
   );
 }
 
@@ -409,7 +383,6 @@ export default function Selectors() {
         const aOverlap = overlap.overlapByHandle.get(a.handle) ?? 0;
         const bOverlap = overlap.overlapByHandle.get(b.handle) ?? 0;
         if (bOverlap !== aOverlap) return bOverlap - aOverlap;
-        // Secondary: recently active first
         const aRecent = isRecentlyActive(dialByHandle.get(a.handle)?.run?.pickedAt) ? 1 : 0;
         const bRecent = isRecentlyActive(dialByHandle.get(b.handle)?.run?.pickedAt) ? 1 : 0;
         if (aRecent !== bRecent) return bRecent - aRecent;
@@ -417,7 +390,6 @@ export default function Selectors() {
       });
     }
 
-    // Fallback sort: recently active first, then alphabetically
     const toMs = (handle: string) => {
       const dialItem = dialByHandle.get(handle);
       if (!dialItem?.run?.pickedAt) return 0;
@@ -433,25 +405,14 @@ export default function Selectors() {
     });
   }, [listData, dialByHandle, overlap]);
 
-  // When no overlap data, split into recent / others for section headings.
-  const recentPickers = useMemo(
-    () =>
-      overlap
-        ? []
-        : sortedPickers.filter((p) =>
-            isRecentlyActive(dialByHandle.get(p.handle)?.run?.pickedAt),
-          ),
-    [sortedPickers, dialByHandle, overlap],
-  );
-  const otherPickers = useMemo(
-    () =>
-      overlap
-        ? sortedPickers
-        : sortedPickers.filter(
-            (p) => !isRecentlyActive(dialByHandle.get(p.handle)?.run?.pickedAt),
-          ),
-    [sortedPickers, dialByHandle, overlap],
-  );
+  // Hero stats
+  const kexpSelectors = kexpData?.selectors ?? [];
+  const liveCount = kexpSelectors.filter(
+    (s: SelectorSummary) =>
+      s.lastPlayedAt != null &&
+      Date.now() - new Date(s.lastPlayedAt).getTime() < ON_AIR_MS,
+  ).length;
+  const totalSelectorCount = sortedPickers.length + kexpSelectors.length;
 
   const isLoading = listLoading;
   const isError = listError;
@@ -459,130 +420,117 @@ export default function Selectors() {
   return (
     <div className="min-h-screen">
       <div className={`mx-auto max-w-5xl px-4 pt-8 sm:px-6 ${dockPadding}`}>
+
+        {/* ── Hero ─────────────────────────────────────────────── */}
         <header className="mb-10">
-          <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] text-primary">
+          <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] text-picker">
             <Users className="h-4 w-4" />
             Selectors
           </div>
-          <h1 className="mt-3 max-w-[20ch] font-serif text-4xl font-semibold leading-[1.05] text-foreground">
+          <h1 className="mt-3 max-w-[22ch] font-serif text-4xl font-semibold leading-[1.05] text-foreground">
             Borrow real humans' taste.
           </h1>
           <p className="mt-4 max-w-[52ch] text-base text-muted-foreground">
             DJs, blogs, labels, and curators whose picks are documented here.
             Every list is ordered, attributed, and rideable — never an algorithm.
           </p>
+
+          {/* Stats row */}
+          <div className="mt-8 flex flex-wrap gap-8">
+            {!listLoading && totalSelectorCount > 0 && (
+              <HeroStat value={totalSelectorCount} label="Selectors" />
+            )}
+            {overlap && overlap.totalCrossings > 0 && (
+              <HeroStat value={overlap.totalCrossings} label="Crossings with your library" />
+            )}
+            {liveCount > 0 && (
+              <div className="flex flex-col">
+                <span className="flex items-center gap-2 font-serif text-3xl font-semibold tabular-nums text-live">
+                  <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-live" />
+                  {liveCount}
+                </span>
+                <span className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                  Live right now
+                </span>
+              </div>
+            )}
+          </div>
+
           {overlap && (
-            <p className="mt-3 font-mono text-[11px] text-muted-foreground">
+            <p className="mt-4 font-mono text-[11px] text-muted-foreground">
               Sorted by match against your {overlap.totalMbids}-track library.
             </p>
           )}
         </header>
 
+        {/* ── Loading / error states ────────────────────────────── */}
         {isLoading && (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {[0, 1, 2, 3].map((i) => (
               <div
                 key={i}
-                className="h-64 animate-pulse rounded-2xl border border-card-border bg-card"
+                className="h-36 animate-pulse rounded-2xl border border-card-border bg-card"
               />
             ))}
           </div>
         )}
 
         {isError && (
-          <p className="rounded-xl border border-destructive-border bg-destructive/10 p-4 text-sm text-destructive-foreground">
+          <p className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive-foreground">
             Couldn't load selectors. Please refresh.
           </p>
         )}
 
-        {!isLoading && !isError && sortedPickers.length === 0 && recentPickers.length === 0 && (
+        {!isLoading && !isError && sortedPickers.length === 0 && kexpSelectors.length === 0 && (
           <p className="rounded-xl border border-card-border bg-card p-6 text-sm text-muted-foreground">
             No selectors enrolled yet.
           </p>
         )}
 
-        {/* When overlap data is available: single sorted list */}
-        {overlap && sortedPickers.length > 0 && (
-          <section className="mb-10">
+        {/* ── Curated selector cards ────────────────────────────── */}
+        {!isLoading && !isError && sortedPickers.length > 0 && (
+          <section className="mb-12">
             <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {sortedPickers.map((p) => {
                 const dialItem = dialByHandle.get(p.handle);
-                const overlapPct = overlap.overlapByHandle.get(p.handle) ?? 0;
-                return dialItem ? (
-                  <SelectorDialCard key={p.handle} item={dialItem} overlapPct={overlapPct} />
-                ) : (
-                  <SelectorSimpleCard key={p.handle} picker={p} overlapPct={overlapPct} />
+                const overlapPct = overlap ? (overlap.overlapByHandle.get(p.handle) ?? 0) : null;
+                return (
+                  <CuratedSelectorCard
+                    key={p.handle}
+                    item={dialItem}
+                    picker={p}
+                    overlapPct={overlapPct}
+                  />
                 );
               })}
             </ul>
           </section>
         )}
 
-        {/* When no overlap data: split into recently active / all selectors */}
-        {!overlap && recentPickers.length > 0 && (
-          <section className="mb-10">
-            <h2 className="mb-4 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] text-primary">
-              <Zap className="h-3.5 w-3.5" />
-              Recently active
-            </h2>
-            <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {recentPickers.map((p) => {
-                const dialItem = dialByHandle.get(p.handle);
-                return dialItem ? (
-                  <SelectorDialCard key={p.handle} item={dialItem} />
-                ) : (
-                  <SelectorSimpleCard key={p.handle} picker={p} />
-                );
-              })}
-            </ul>
-          </section>
-        )}
-
-        {!overlap && otherPickers.length > 0 && (
+        {/* ── Radio selectors ───────────────────────────────────── */}
+        {(kexpLoading || kexpSelectors.length > 0) && (
           <section>
-            {recentPickers.length > 0 && (
-              <h2 className="mb-4 font-mono text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
-                All selectors
-              </h2>
-            )}
-            <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {otherPickers.map((p) => {
-                const dialItem = dialByHandle.get(p.handle);
-                return dialItem ? (
-                  <SelectorDialCard key={p.handle} item={dialItem} />
-                ) : (
-                  <SelectorSimpleCard key={p.handle} picker={p} />
-                );
-              })}
-            </ul>
-          </section>
-        )}
-
-        {/* KEXP radio selectors — spin-backed DJ pickers */}
-        {(kexpLoading || (kexpData?.selectors ?? []).length > 0) && (
-          <section className="mt-12">
             <div className="mb-4 flex items-center gap-2">
-              <Radio className="h-3.5 w-3.5 text-primary" />
-              <h2 className="font-mono text-[11px] uppercase tracking-[0.3em] text-primary">
+              <h2 className="font-mono text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
                 Radio selectors
               </h2>
             </div>
             <p className="mb-6 max-w-[52ch] text-sm text-muted-foreground">
-              KEXP DJs whose every spin is attributed and browsable by show.
+              DJs whose every spin is attributed and browsable by show.
             </p>
             {kexpLoading ? (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {[0, 1, 2, 3].map((i) => (
+              <div className="flex flex-col gap-3">
+                {[0, 1, 2].map((i) => (
                   <div
                     key={i}
-                    className="h-40 animate-pulse rounded-2xl border border-card-border bg-card"
+                    className="h-20 animate-pulse rounded-2xl border border-card-border bg-card"
                   />
                 ))}
               </div>
             ) : (
-              <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {(kexpData?.selectors ?? []).map((s: SelectorSummary) => (
-                  <KexpSelectorCard key={s.handle} selector={s} />
+              <ul className="flex flex-col gap-3">
+                {kexpSelectors.map((s: SelectorSummary) => (
+                  <RadioSelectorCard key={s.handle} selector={s} />
                 ))}
               </ul>
             )}
