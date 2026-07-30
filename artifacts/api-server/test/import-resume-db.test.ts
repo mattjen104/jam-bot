@@ -292,6 +292,68 @@ describe("No resume from complete-phase buffer — always re-fetches Spotify", (
   });
 });
 
+// ── Test: expired buffer (> 24 h old) → fresh Spotify fetch ──────────────────
+//
+// A previous job interrupted in phase="fetching" but started more than 24 h
+// ago must NOT trigger a resume — the buffer is too stale to be useful and the
+// user's Spotify library may have changed significantly.  The worker should
+// call importLibrary with startOffset = 0.
+
+describe("Stale buffer (> 24 h old) — fresh fetch from offset 0", () => {
+  it("calls importLibrary with startOffset=0 when the prev fetching job is older than 24 h", async () => {
+    if (!dbAvailable) return;
+
+    mockImportLibrary.mockClear();
+    mockResolveByText.mockClear();
+    mockResolveByIsrc.mockClear();
+
+    // Seed a previous job that was interrupted mid-fetch but started 25 h ago —
+    // outside the BUFFER_MAX_AGE_MS (24 h) window.
+    const staleBuffer: ImportBufferEntry[] = [
+      { artist: ARTIST, title: "Stale Track A", isrc: null, durationMs: null, externalId: "sp-stale-a" },
+      { artist: ARTIST, title: "Stale Track B", isrc: null, durationMs: null, externalId: "sp-stale-b" },
+    ];
+
+    const [staleJob] = await db
+      .insert(libraryImportJobsTable)
+      .values({
+        userId,
+        service: "spotify",
+        status: "error",
+        phase: "fetching",
+        total: staleBuffer.length,
+        resolved: 0,
+        bufferJson: staleBuffer,
+        // 25 hours ago — just outside the 24 h window
+        startedAt: new Date(Date.now() - 25 * 60 * 60_000),
+        finishedAt: new Date(),
+      })
+      .returning({ id: libraryImportJobsTable.id });
+
+    expect(staleJob).toBeDefined();
+
+    // Fresh Spotify fetch yields nothing.
+    mockImportLibrary.mockImplementation(async function* () {
+      // yields nothing
+    });
+
+    const newJobId = await createJob();
+    await runImportWorker(newJobId, userId, "spotify", connRow);
+
+    // importLibrary MUST have been called — the stale buffer is not reused.
+    expect(mockImportLibrary).toHaveBeenCalledTimes(1);
+    // startOffset must be 0 — the expired buffer is ignored, fetch restarts.
+    const [, startOffset] = mockImportLibrary.mock.calls[0] as [string, number | undefined];
+    expect(startOffset ?? 0).toBe(0);
+
+    const [job] = await db
+      .select({ status: libraryImportJobsTable.status })
+      .from(libraryImportJobsTable)
+      .where(eq(libraryImportJobsTable.id, newJobId));
+    expect(job!.status).toBe("done");
+  });
+});
+
 // ── Test: prior successful job → fresh Spotify fetch ─────────────────────────
 //
 // A re-import after a fully-completed (status="done") job must NOT reuse the
