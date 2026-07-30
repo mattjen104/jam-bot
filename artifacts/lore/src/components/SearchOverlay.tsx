@@ -15,6 +15,7 @@ import { useLocation } from "wouter";
 import { useListPickers, useListStations } from "@workspace/api-client-react";
 import type { DialStation, DialShow } from "../hooks/useDialData";
 import type { LibraryItem } from "../lib/meHooks";
+import { useMyLibrary, useIsAuthenticated } from "../lib/meHooks";
 import { X, Search } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -91,6 +92,18 @@ export function SearchOverlay({
   // Load full station + picker lists for search
   const { data: stationsData } = useListStations();
   const { data: pickersData } = useListPickers();
+
+  // Load library items internally so search works from any page
+  const isAuthenticated = useIsAuthenticated();
+  const { data: libraryData } = useMyLibrary(undefined, 200);
+  // Merge: internal fetch is primary; prop items fill in anything not already fetched
+  const effectiveLibraryItems = useMemo((): LibraryItem[] => {
+    const internal = libraryData?.items ?? [];
+    if (!libraryItems || libraryItems.length === 0) return internal;
+    const internalMbids = new Set(internal.map((i) => i.mbid));
+    const extras = libraryItems.filter((i) => !internalMbids.has(i.mbid));
+    return [...internal, ...extras];
+  }, [libraryData, libraryItems]);
 
   useEffect(() => {
     // Autofocus the input when the overlay opens
@@ -207,10 +220,10 @@ export function SearchOverlay({
     }
 
     // ── Library (kept tracks) ─────────────────────────────────────────────────
-    if ((filter === "all" || filter === "library") && libraryItems && libraryItems.length > 0) {
+    if ((filter === "all" || filter === "library") && effectiveLibraryItems.length > 0) {
       const seen = new Set<string>();
       let n = 0;
-      for (const item of libraryItems) {
+      for (const item of effectiveLibraryItems) {
         if (n >= MAX_PER_KIND) break;
         const rec = item.recording;
         const title = rec?.title ?? "";
@@ -232,7 +245,7 @@ export function SearchOverlay({
     }
 
     return out;
-  }, [query, filter, stationsData, pickersData, dialStations, libraryItems, onStationDrill, onShowDrill, onClose, goAndClose]);
+  }, [query, filter, stationsData, pickersData, dialStations, effectiveLibraryItems, onStationDrill, onShowDrill, onClose, goAndClose]);
 
   // Group results by kind in display order
   const groups = useMemo(() => {
@@ -242,7 +255,7 @@ export function SearchOverlay({
       .filter(({ items }) => items.length > 0);
   }, [results]);
 
-  const hasLibrary = (libraryItems?.length ?? 0) > 0;
+  const hasLibrary = effectiveLibraryItems.length > 0 || isAuthenticated === true;
   const FILTERS: { key: Filter; label: string }[] = [
     { key: "all", label: "All" },
     { key: "stations", label: "Stations" },
