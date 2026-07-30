@@ -371,7 +371,8 @@
 .dial-root {
   display: flex;
   flex-direction: column;
-  height: calc(100dvh - 56px); /* subtract bottom nav */
+  height: calc(100vh - 56px);   /* fallback for browsers without dvh */
+  height: calc(100dvh - 56px);  /* overrides with dvh when supported */
   overflow: hidden;
   background: hsl(var(--background));
 }

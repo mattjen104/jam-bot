@@ -6,6 +6,7 @@
  * album chips show a toast (future entity pages).
  */
 import { useLocation } from "wouter";
+import type { ReactNode } from "react";
 import type { DialStation, DialShow } from "../hooks/useDialData";
 
 interface ContextRailProps {
@@ -42,7 +43,7 @@ function Sep() {
   return <span className="ctx-sep" aria-hidden="true" />;
 }
 
-function Group({ label, children }: { label: string; children: React.ReactNode }) {
+function Group({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="ctx-grp">
       <span className="ctx-grp-lbl">{label}</span>
@@ -75,7 +76,7 @@ export function ContextRail({
     setTimeout(() => el.remove(), 2200);
   }
 
-  const parts: React.ReactNode[] = [];
+  const parts: ReactNode[] = [];
 
   if (level === "show" && show) {
     const yourArtists = [...new Set(show.spins.filter((s) => s.isLibraryHit).map((s) => s.artist))].slice(0, 4);

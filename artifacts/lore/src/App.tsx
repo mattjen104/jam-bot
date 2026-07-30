@@ -33,6 +33,7 @@ import { PlayerProvider } from "./player/PlayerProvider";
 import { PlayerDock } from "./components/PlayerDock";
 import { ListeningLogger } from "./components/ListeningLogger";
 import { AppLayout } from "./components/AppLayout";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { prefersClassic } from "./lib/uiPrefs";
 
 const queryClient = new QueryClient();
@@ -91,7 +92,9 @@ function Router() {
     <>
       <LibraryConnectRedirect />
       <Switch>
-        <Route path="/" component={Home} />
+        <Route path="/">
+          {() => <ErrorBoundary><Home /></ErrorBoundary>}
+        </Route>
         <Route path="/song/:mbid" component={Song} />
         <Route path="/artist/:mbid" component={Artist} />
         <Route path="/album/:releaseGroupMbid" component={Album} />

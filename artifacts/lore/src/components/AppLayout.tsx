@@ -1,4 +1,5 @@
 import { Link, useLocation } from "wouter";
+import type { ReactNode } from "react";
 
 function isActive(href: string, exact: boolean, location: string): boolean {
   if (exact) return location === href;
@@ -35,7 +36,7 @@ const RADIO_SUB_NAV = [
   { href: "/schedule", label: "Schedule", exact: false },
 ];
 
-export function AppLayout({ children }: { children: React.ReactNode }) {
+export function AppLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
 
   const radioActive = isRadioSection(location);
