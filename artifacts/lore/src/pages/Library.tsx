@@ -312,7 +312,7 @@ function UnavailableSection({
         {items.map((item) => (
           <li
             key={item.mbid}
-            className="flex items-center justify-between gap-4 rounded-xl border border-card-border bg-card px-4 py-3"
+            className="flex items-center justify-between gap-4 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3"
           >
             <div className="min-w-0">
               <p className="truncate font-serif text-base font-semibold text-foreground">
@@ -802,12 +802,12 @@ export default function Library() {
               {[0, 1, 2, 3].map((i) => (
                 <li
                   key={i}
-                  className="h-[66px] animate-pulse rounded-xl border border-card-border bg-card"
+                  className="h-[66px] animate-pulse rounded-xl border border-primary/15 bg-primary/5"
                 />
               ))}
             </ul>
           ) : keptItems.length === 0 ? (
-            <div className="rounded-2xl border border-card-border bg-card p-8 text-center">
+            <div className="rounded-2xl border border-card-border/60 bg-card/40 p-8 text-center">
               <Disc3 className="mx-auto h-10 w-10 text-muted-foreground/40" />
               <p className="mx-auto mt-4 max-w-[36ch] font-serif text-lg text-muted-foreground">
                 Keep songs from the radio to build your library.
@@ -888,7 +888,7 @@ export default function Library() {
               {searchMatchedItems.map((item) => (
                 <li
                   key={item.mbid}
-                  className="flex items-center justify-between gap-4 rounded-xl border border-card-border bg-card px-4 py-3"
+                  className="flex items-center justify-between gap-4 rounded-xl border border-keep/20 bg-keep/5 px-4 py-3"
                 >
                   <div className="min-w-0">
                     <p className="truncate font-serif text-base font-semibold text-foreground">
@@ -996,7 +996,7 @@ export default function Library() {
 
         {/* ── Export ───────────────────────────────────────────── */}
         <section
-          className="mt-12 rounded-2xl border border-card-border bg-card p-5"
+          className="mt-12 rounded-2xl border border-card-border/60 bg-card/60 p-5"
           data-testid="library-export"
         >
           <h2 className="font-serif text-lg font-semibold text-foreground">Take it with you</h2>
@@ -1112,7 +1112,7 @@ function OverlapStationCard({ item }: { item: OverlapStation }) {
   return (
     <Link
       href={`/archive/stations/${station.slug}`}
-      className="hover-elevate flex w-44 shrink-0 flex-col justify-between rounded-2xl border border-card-border bg-card px-4 py-4 transition-colors hover:border-primary/30"
+      className="hover-elevate flex w-44 shrink-0 flex-col justify-between rounded-2xl border border-primary/20 bg-primary/5 px-4 py-4 transition-colors hover:border-primary/40"
       data-testid="overlap-station-card"
     >
       <div>
@@ -1135,7 +1135,7 @@ function OverlapPickerCard({ item }: { item: OverlapPicker }) {
   return (
     <Link
       href={`/archive/selectors/${picker.handle}`}
-      className="hover-elevate flex w-44 shrink-0 flex-col justify-between rounded-2xl border border-card-border bg-card px-4 py-4 transition-colors hover:border-primary/30"
+      className="hover-elevate flex w-44 shrink-0 flex-col justify-between rounded-2xl border border-picker/20 bg-picker/5 px-4 py-4 transition-colors hover:border-picker/40"
       data-testid="overlap-picker-card"
     >
       <div>
@@ -1172,7 +1172,7 @@ function OverlapRunCard({ item }: { item: OverlapRun }) {
   return (
     <Link
       href={`/archive/stations/${station.slug}`}
-      className="hover-elevate flex items-center justify-between gap-4 rounded-xl border border-card-border bg-card px-4 py-3 transition-colors hover:border-primary/30"
+      className="hover-elevate flex items-center justify-between gap-4 rounded-xl border border-live/20 bg-live/5 px-4 py-3 transition-colors hover:border-live/35"
       data-testid="overlap-run-card"
     >
       <div className="min-w-0">
@@ -1201,7 +1201,7 @@ function OverlapRunCard({ item }: { item: OverlapRun }) {
 function AlbumCompletionRow({ album }: { album: AlbumCompletion }) {
   const { title, artistName, totalTracks, heardTracks } = album;
   return (
-    <li className="flex items-center justify-between gap-3 rounded-xl border border-card-border bg-card px-4 py-3">
+    <li className="flex items-center justify-between gap-3 rounded-xl border border-keep/20 bg-keep/5 px-4 py-3">
       <div className="min-w-0">
         <p className="truncate font-serif text-sm font-medium text-foreground">
           {title ?? "Unknown album"}
