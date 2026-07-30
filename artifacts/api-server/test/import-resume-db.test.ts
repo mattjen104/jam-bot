@@ -491,3 +491,127 @@ describe("Zombie cleared → new worker resumes from ex-zombie's partial buffer"
     expect(newJob!.status).toBe("done");
   });
 });
+
+// ── Test: second zombie-clear preserves the latest partial buffer ─────────────
+//
+// Scenario — two consecutive server crashes:
+//   Crash 1: a running job (zombie1) is cleared → status="error", phase/bufferJson kept.
+//   Crash 2: the replacement job (zombie2) made additional progress before dying;
+//             it too is cleared → status="error", phase/bufferJson kept.
+//   Worker for job3 must find zombie2's buffer (it is more recent than zombie1's)
+//   and resume from zombie2.bufferJson.length, not zombie1's.
+//
+// This confirms that the zombie-clear path never overwrites bufferJson, so each
+// successive ex-zombie can still hand its partial progress to the next worker.
+
+describe("Second zombie-clear still preserves the latest partial buffer", () => {
+  it("resumes from the second ex-zombie's buffer after two consecutive zombie-clears", async () => {
+    if (!dbAvailable) return;
+
+    mockImportLibrary.mockClear();
+    mockResolveByText.mockClear();
+    mockResolveByIsrc.mockClear();
+
+    // Crash 1 buffer — 2 tracks fetched before the first server restart.
+    const firstBuffer: ImportBufferEntry[] = [
+      { artist: ARTIST, title: "Zombie2 Track A", isrc: null, durationMs: null, externalId: "sp-z2-a" },
+      { artist: ARTIST, title: "Zombie2 Track B", isrc: null, durationMs: null, externalId: "sp-z2-b" },
+    ];
+
+    // Crash 2 buffer — worker after crash 1 made extra progress; 4 tracks in buffer.
+    const secondBuffer: ImportBufferEntry[] = [
+      ...firstBuffer,
+      { artist: ARTIST, title: "Zombie2 Track C", isrc: null, durationMs: null, externalId: "sp-z2-c" },
+      { artist: ARTIST, title: "Zombie2 Track D", isrc: null, durationMs: null, externalId: "sp-z2-d" },
+    ];
+
+    // 1. Seed zombie1: already cleared from the first crash.
+    //    It is status="error" with the first-crash buffer intact.
+    const [zombie1Row] = await db
+      .insert(libraryImportJobsTable)
+      .values({
+        userId,
+        service: "spotify",
+        status: "error",
+        phase: "fetching",
+        total: firstBuffer.length,
+        resolved: 0,
+        bufferJson: firstBuffer,
+        error: "Import interrupted (server restarted) — please try again",
+        startedAt: new Date(Date.now() - 70 * 60_000), // 70 min ago (first crash)
+        finishedAt: new Date(Date.now() - 65 * 60_000),
+      })
+      .returning({ id: libraryImportJobsTable.id });
+    const zombie1Id = zombie1Row!.id;
+
+    // 2. Seed zombie2: the replacement job started after crash 1, made more
+    //    progress (secondBuffer), but is still "running" and old enough to be
+    //    considered a zombie (> 30 min).
+    const [zombie2Row] = await db
+      .insert(libraryImportJobsTable)
+      .values({
+        userId,
+        service: "spotify",
+        status: "running",
+        phase: "fetching",
+        total: secondBuffer.length,
+        resolved: 0,
+        bufferJson: secondBuffer,
+        startedAt: new Date(Date.now() - 40 * 60_000), // 40 min ago > ZOMBIE_AGE_MS
+      })
+      .returning({ id: libraryImportJobsTable.id });
+    const zombie2Id = zombie2Row!.id;
+
+    // 3. Simulate what POST /api/me/library/import does when it detects zombie2:
+    //    sets status="error" but leaves phase and bufferJson INTACT.
+    await db
+      .update(libraryImportJobsTable)
+      .set({
+        status: "error",
+        error: "Import interrupted (server restarted) — please try again",
+        finishedAt: new Date(),
+      })
+      .where(eq(libraryImportJobsTable.id, zombie2Id));
+
+    // Confirm zombie2 is cleared with its updated buffer still present.
+    const [zombie2] = await db
+      .select({
+        status: libraryImportJobsTable.status,
+        phase: libraryImportJobsTable.phase,
+        bufferJson: libraryImportJobsTable.bufferJson,
+      })
+      .from(libraryImportJobsTable)
+      .where(eq(libraryImportJobsTable.id, zombie2Id));
+    expect(zombie2!.status).toBe("error");                         // cleared
+    expect(zombie2!.phase).toBe("fetching");                       // preserved
+    expect(zombie2!.bufferJson).toHaveLength(secondBuffer.length); // preserved (4 tracks)
+
+    // Confirm zombie1 is also still intact (the second clear must not touch it).
+    const [zombie1] = await db
+      .select({
+        bufferJson: libraryImportJobsTable.bufferJson,
+      })
+      .from(libraryImportJobsTable)
+      .where(eq(libraryImportJobsTable.id, zombie1Id));
+    expect(zombie1!.bufferJson).toHaveLength(firstBuffer.length); // still 2 tracks
+
+    // 4. Spotify yields nothing beyond the resume point.
+    mockImportLibrary.mockImplementation(async function* () {});
+
+    // 5. Create the fresh job and run the worker.
+    const newJobId = await createJob();
+    await runImportWorker(newJobId, userId, "spotify", connRow);
+
+    // Worker must resume from zombie2's buffer length (4), not zombie1's (2).
+    expect(mockImportLibrary).toHaveBeenCalledTimes(1);
+    const [, startOffset] = mockImportLibrary.mock.calls[0] as [string, number];
+    expect(startOffset).toBe(secondBuffer.length); // 4
+
+    // New job finishes successfully.
+    const [newJob] = await db
+      .select({ status: libraryImportJobsTable.status })
+      .from(libraryImportJobsTable)
+      .where(eq(libraryImportJobsTable.id, newJobId));
+    expect(newJob!.status).toBe("done");
+  });
+});
