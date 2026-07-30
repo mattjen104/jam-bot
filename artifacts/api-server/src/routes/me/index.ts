@@ -660,17 +660,28 @@ export async function runImportWorker(
     // Page through the service API and collect every track upfront so we know
     // the total before resolution begins.
     //
-    // RESUME ONLY: if a recent previous job was interrupted WHILE fetching
-    // (phase = "fetching"), its partial buffer is used as a starting offset so
-    // we continue from where it left off rather than re-fetching tracks already
-    // collected.  A job that COMPLETED the fetch phase (phase = "spine" or
-    // later) is never reused — the user may have changed their Spotify library
-    // and expects a fresh pull.
+    // TWO resume paths:
+    //
+    //   1. COMPLETE-BUFFER RESUME: if a recent previous job advanced past the
+    //      fetch phase (phase ∈ "spine"|"cache"|"resolve") but then crashed, its
+    //      buffer is already complete — skip the Spotify fetch entirely and drain
+    //      the stored buffer through Phases 1–3.  This preserves API budget
+    //      and avoids re-fetching thousands of tracks from Spotify.
+    //
+    //   2. PARTIAL-BUFFER RESUME: if a recent previous job was interrupted WHILE
+    //      fetching (phase = "fetching"), its partial buffer is used as a
+    //      starting offset so we continue from where it left off.
+    //
+    //   A re-import after a successful (status = "done") job always fetches
+    //   fresh — the user's Spotify library may have changed.
     const BUFFER_MAX_AGE_MS = 24 * 60 * 60_000; // 24 h
 
-    // Find the most recent job (other than this one) that was interrupted mid-
-    // fetch — i.e. it has a partial buffer but phase is still "fetching".
-    const [prevInterrupted] = await db
+    // Path 1: look for a recent job that completed the fetch but crashed during
+    // resolution.  Its bufferJson is the full library snapshot — no re-fetch needed.
+    // Only crashed jobs qualify (status = "error") — a successfully completed job
+    // (status = "done") must not be reused because the user's Spotify library may
+    // have changed and they expect a fresh pull.
+    const [prevWithBuffer] = await db
       .select({
         id: libraryImportJobsTable.id,
         bufferJson: libraryImportJobsTable.bufferJson,
@@ -680,20 +691,52 @@ export async function runImportWorker(
         eq(libraryImportJobsTable.userId, userId),
         eq(libraryImportJobsTable.service, service),
         ne(libraryImportJobsTable.id, jobId),
-        eq(libraryImportJobsTable.phase, "fetching"),
+        eq(libraryImportJobsTable.status, "error"),
+        inArray(libraryImportJobsTable.phase, ["spine", "cache", "resolve"]),
         isNotNull(libraryImportJobsTable.bufferJson),
         gte(libraryImportJobsTable.startedAt, new Date(Date.now() - BUFFER_MAX_AGE_MS)),
       ))
       .orderBy(desc(libraryImportJobsTable.id))
       .limit(1);
 
-    // Resume offset: number of tracks already collected by the interrupted job.
-    // Zero means a fresh fetch from the beginning of the Spotify library.
-    const partialBuf = prevInterrupted?.bufferJson ?? [];
-    let buffer: ImportBufferEntry[] = [...partialBuf];
+    // Path 2: look for a job interrupted mid-fetch (partial buffer).
+    const [prevInterrupted] = prevWithBuffer
+      ? [undefined] // skip the second query — Path 1 takes priority
+      : await db
+          .select({
+            id: libraryImportJobsTable.id,
+            bufferJson: libraryImportJobsTable.bufferJson,
+          })
+          .from(libraryImportJobsTable)
+          .where(and(
+            eq(libraryImportJobsTable.userId, userId),
+            eq(libraryImportJobsTable.service, service),
+            ne(libraryImportJobsTable.id, jobId),
+            eq(libraryImportJobsTable.phase, "fetching"),
+            isNotNull(libraryImportJobsTable.bufferJson),
+            gte(libraryImportJobsTable.startedAt, new Date(Date.now() - BUFFER_MAX_AGE_MS)),
+          ))
+          .orderBy(desc(libraryImportJobsTable.id))
+          .limit(1);
 
-    {
-      // ── Fetch from Spotify (fresh or resumed) ─────────────────────────────
+    let buffer: ImportBufferEntry[];
+
+    if (prevWithBuffer?.bufferJson?.length) {
+      // ── Path 1: skip Spotify fetch — drain the complete stored buffer ──────
+      buffer = [...prevWithBuffer.bufferJson];
+      console.log(
+        `[me/import] job=${jobId} skipping Spotify fetch — using complete buffer` +
+        ` from job=${prevWithBuffer.id} (${buffer.length} tracks)`,
+      );
+      // Advance directly to the "spine" phase so progress reporting is accurate.
+      await db
+        .update(libraryImportJobsTable)
+        .set({ phase: "spine", total: buffer.length, bufferJson: buffer })
+        .where(eq(libraryImportJobsTable.id, jobId));
+    } else {
+      // ── Path 2 / fresh: fetch from Spotify (optionally resumed) ───────────
+      const partialBuf = prevInterrupted?.bufferJson ?? [];
+      buffer = [...partialBuf];
       const startOffset = buffer.length;
       if (startOffset > 0) {
         console.log(

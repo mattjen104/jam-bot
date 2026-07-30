@@ -251,39 +251,42 @@ describe("Resume from partial buffer — rate-limited previous job", () => {
   });
 });
 
-// ── Test: complete buffer (phase="spine") is NOT reused — fresh fetch ─────────
+// ── Test: complete buffer (phase="spine") skips Spotify fetch ─────────────────
 //
-// A previous job that reached phase="spine" (or beyond) completed the fetch.
-// The resume logic only triggers for phase="fetching" jobs, so a "spine" job's
-// buffer is ignored and Spotify is re-fetched from offset 0.
+// A previous job that reached phase="spine" (or "cache"/"resolve") completed
+// the fetch phase — its bufferJson is the full library snapshot.  The worker
+// must drain it directly through Phases 1–3 without calling importLibrary,
+// preserving API budget for large libraries.
 
-describe("No resume from complete-phase buffer — always re-fetches Spotify", () => {
-  it("calls importLibrary with startOffset=0 when the prev job's phase is spine", async () => {
+describe("Complete-buffer resume — importLibrary NOT called for phase=spine", () => {
+  it("does NOT call importLibrary when the prev job has a complete buffer (phase=spine)", async () => {
     if (!dbAvailable) return;
 
     mockImportLibrary.mockClear();
     mockResolveByText.mockClear();
     mockResolveByIsrc.mockClear();
 
-    // Previous job completed the fetch (phase="spine") but failed during
-    // resolution — its buffer should NOT trigger a resume.
+    // Previous job completed the fetch (phase="spine") but crashed during
+    // resolution — the buffer is the full library snapshot and should be reused.
     const completeBuffer: ImportBufferEntry[] = [
-      { artist: ARTIST, title: "Spine Track", isrc: null, durationMs: null, externalId: "sp-spine" },
+      { artist: ARTIST, title: "Spine Track", isrc: ISRC_BUF, durationMs: null, externalId: "sp-spine" },
     ];
     await seedPrevJob({ bufferEntries: completeBuffer, phase: "spine", status: "error" });
 
-    // Fresh Spotify fetch yields nothing.
-    mockImportLibrary.mockImplementation(async function* () {});
+    // importLibrary should never be reached — configure it to fail loudly if
+    // called so the assertion failure message is clear.
+    mockImportLibrary.mockImplementation(async function* () {
+      throw new Error("importLibrary must NOT be called when a complete buffer exists");
+    });
 
     const newJobId = await createJob();
     await runImportWorker(newJobId, userId, "spotify", connRow);
 
-    // importLibrary MUST have been called — the spine-phase buffer is not reused.
-    expect(mockImportLibrary).toHaveBeenCalledTimes(1);
-    // startOffset must be 0 — no partial buffer to resume from.
-    const [, startOffset] = mockImportLibrary.mock.calls[0] as [string, number | undefined];
-    expect(startOffset ?? 0).toBe(0);
+    // importLibrary must NOT have been called — the complete buffer was reused.
+    expect(mockImportLibrary).not.toHaveBeenCalled();
 
+    // Job should finish as "done" (ISRC_BUF is a known spine row so Phase 1
+    // resolves it without any MB call).
     const [job] = await db
       .select({ status: libraryImportJobsTable.status })
       .from(libraryImportJobsTable)
