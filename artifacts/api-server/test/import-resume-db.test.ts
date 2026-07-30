@@ -334,3 +334,95 @@ describe("Fresh fetch after successful import — status=done buffer is ignored"
     expect(job!.status).toBe("done");
   });
 });
+
+// ── Test: zombie cleared → worker resumes from ex-zombie's partial buffer ─────
+//
+// When POST /api/me/library/import finds a running job older than ZOMBIE_AGE_MS
+// (30 min), it marks it as status="error" WITHOUT touching phase or bufferJson.
+// The new job's worker then finds that ex-zombie (phase="fetching", bufferJson
+// intact) and uses its buffer.length as startOffset — so tracks already fetched
+// before the server restart are not re-fetched.
+//
+// This test exercises the full interaction:
+//   1. Zombie seeded (running, >30 min, phase="fetching", partial bufferJson).
+//   2. POST handler clears zombie → status="error", phase/bufferJson preserved.
+//   3. New job created and worker started.
+//   4. Worker finds ex-zombie as prevInterrupted and resumes from buffer.length.
+
+describe("Zombie cleared → new worker resumes from ex-zombie's partial buffer", () => {
+  it("calls importLibrary with startOffset = zombie buffer length after zombie is cleared", async () => {
+    if (!dbAvailable) return;
+
+    mockImportLibrary.mockClear();
+    mockResolveByText.mockClear();
+    mockResolveByIsrc.mockClear();
+
+    // Tracks already fetched before the server restarted mid-import.
+    const partialBuffer: ImportBufferEntry[] = [
+      { artist: ARTIST, title: "Zombie Track A", isrc: null, durationMs: null, externalId: "sp-z-a" },
+      { artist: ARTIST, title: "Zombie Track B", isrc: null, durationMs: null, externalId: "sp-z-b" },
+      { artist: ARTIST, title: "Zombie Track C", isrc: null, durationMs: null, externalId: "sp-z-c" },
+    ];
+
+    // 1. Seed the zombie: still "running", phase="fetching", startedAt 35 min
+    //    ago so it is past the 30-minute ZOMBIE_AGE_MS threshold.
+    const [zombieRow] = await db
+      .insert(libraryImportJobsTable)
+      .values({
+        userId,
+        service: "spotify",
+        status: "running",
+        phase: "fetching",
+        total: partialBuffer.length,
+        resolved: 0,
+        bufferJson: partialBuffer,
+        startedAt: new Date(Date.now() - 35 * 60_000), // 35 min > ZOMBIE_AGE_MS
+      })
+      .returning({ id: libraryImportJobsTable.id });
+    const zombieId = zombieRow!.id;
+
+    // 2. Simulate what POST /api/me/library/import does when it detects the
+    //    zombie: sets status="error" but leaves phase and bufferJson intact.
+    await db
+      .update(libraryImportJobsTable)
+      .set({
+        status: "error",
+        error: "Import interrupted (server restarted) — please try again",
+        finishedAt: new Date(),
+      })
+      .where(eq(libraryImportJobsTable.id, zombieId));
+
+    // Confirm zombie is cleared and phase/bufferJson are preserved.
+    const [zombie] = await db
+      .select({
+        status: libraryImportJobsTable.status,
+        phase: libraryImportJobsTable.phase,
+        bufferJson: libraryImportJobsTable.bufferJson,
+      })
+      .from(libraryImportJobsTable)
+      .where(eq(libraryImportJobsTable.id, zombieId));
+    expect(zombie!.status).toBe("error");           // cleared
+    expect(zombie!.phase).toBe("fetching");          // preserved — worker key
+    expect(zombie!.bufferJson).toHaveLength(partialBuffer.length); // preserved
+
+    // 3. Spotify yields nothing beyond the resume offset (simplest valid stub).
+    mockImportLibrary.mockImplementation(async function* () {});
+
+    // 4. Create the fresh job and run the worker (mirrors what POST does after
+    //    clearing the zombie).
+    const newJobId = await createJob();
+    await runImportWorker(newJobId, userId, "spotify", connRow);
+
+    // Worker must call importLibrary exactly once with startOffset = 3.
+    expect(mockImportLibrary).toHaveBeenCalledTimes(1);
+    const [, startOffset] = mockImportLibrary.mock.calls[0] as [string, number];
+    expect(startOffset).toBe(partialBuffer.length); // 3
+
+    // New job must finish successfully.
+    const [newJob] = await db
+      .select({ status: libraryImportJobsTable.status })
+      .from(libraryImportJobsTable)
+      .where(eq(libraryImportJobsTable.id, newJobId));
+    expect(newJob!.status).toBe("done");
+  });
+});
