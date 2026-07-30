@@ -209,7 +209,7 @@ export function createMbResolver(): IsolatedMbResolver {
       if (!musicbrainzEnabled() || !isrc.trim()) return null;
       try {
         const body = await isolatedFetch(
-          `/isrc/${encodeURIComponent(isrc.trim())}?inc=recordings&fmt=json`,
+          `/isrc/${encodeURIComponent(isrc.trim())}?fmt=json`,
           signal,
         );
         return parseIsrcRecordingId(body);
@@ -480,7 +480,7 @@ export async function resolveRecordingId(
   if (!musicbrainzEnabled() || !isrc.trim()) return null;
   try {
     const body = await mbFetch(
-      `/isrc/${encodeURIComponent(isrc.trim())}?inc=recordings&fmt=json`,
+      `/isrc/${encodeURIComponent(isrc.trim())}?fmt=json`,
     );
     return parseIsrcRecordingId(body);
   } catch (err) {

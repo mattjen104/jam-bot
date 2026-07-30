@@ -21,8 +21,9 @@ import {
   listensTable,
   type LoreUser,
   type LibraryItemProvenance,
+  type ImportBufferEntry,
 } from "@workspace/db";
-import { eq, and, isNotNull, isNull, inArray, ne, desc, asc, sql } from "drizzle-orm";
+import { eq, and, isNotNull, isNull, inArray, ne, desc, asc, sql, like, gte } from "drizzle-orm";
 import {
   getUserFromSession,
   getOrCreateAnonymousUser,
@@ -347,6 +348,44 @@ router.post("/me/library/import", h(async (req, res) => {
     return res.status(400).json({ error: `No ${service} connection found; connect first.` });
   }
 
+  // ── Spotify rate-limit gate ────────────────────────────────────────────────
+  // If the most recent import for this user/service failed with a Spotify 429,
+  // extract the Retry-After and reject immediately rather than starting a new
+  // job that would fail at the same point and waste the rate-limit allowance.
+  {
+    const [rateLimitedJob] = await db
+      .select({
+        error: libraryImportJobsTable.error,
+        finishedAt: libraryImportJobsTable.finishedAt,
+      })
+      .from(libraryImportJobsTable)
+      .where(and(
+        eq(libraryImportJobsTable.userId, user.id),
+        eq(libraryImportJobsTable.service, service),
+        eq(libraryImportJobsTable.status, "error"),
+        like(libraryImportJobsTable.error, "%Retry-After:%"),
+        gte(libraryImportJobsTable.startedAt, new Date(Date.now() - 48 * 60 * 60_000)),
+      ))
+      .orderBy(desc(libraryImportJobsTable.id))
+      .limit(1);
+
+    if (rateLimitedJob?.error && rateLimitedJob.finishedAt) {
+      const match = rateLimitedJob.error.match(/Retry-After:\s*(\d+)/i);
+      if (match) {
+        const retryAfterSec = parseInt(match[1]!, 10);
+        const unlockMs = rateLimitedJob.finishedAt.getTime() + retryAfterSec * 1000;
+        const remainingMs = unlockMs - Date.now();
+        if (remainingMs > 0) {
+          const remainingMin = Math.ceil(remainingMs / 60_000);
+          return res.status(429).json({
+            error: `Spotify is still rate-limiting this account. Try again in ${remainingMin} minute${remainingMin === 1 ? "" : "s"}.`,
+            retryAfterSec: Math.ceil(remainingMs / 1000),
+          });
+        }
+      }
+    }
+  }
+
   // Reject if a job is already actively running or pending — triggering another
   // would fire two concurrent Spotify API pagination loops, almost guaranteeing
   // a 429 rate-limit error on both.
@@ -612,40 +651,99 @@ export async function runImportWorker(
     const connector = getConnector(service);
     if (!connector) throw new Error(`connector '${service}' not found`);
 
-    // ── Buffer drain ───────────────────────────────────────────────────────────
-    // Page through the service API (fast, no rate-limit) and collect every
-    // track upfront so we know the total before any resolution work begins.
-    await db
-      .update(libraryImportJobsTable)
-      .set({ phase: "fetching" })
-      .where(eq(libraryImportJobsTable.id, jobId));
+    // ── Buffer drain (or reuse) ────────────────────────────────────────────────
+    // Page through the service API and collect every track upfront so we know
+    // the total before resolution begins.
+    //
+    // OPTIMISATION: if a recent previous job for this user/service already
+    // completed the fetch phase (bufferJson IS NOT NULL), reuse its buffer and
+    // skip the Spotify pagination entirely.  This makes server-restart retries
+    // free — we never re-hit the Spotify rate limit just because tsx reloaded.
+    const BUFFER_MAX_AGE_MS = 24 * 60 * 60_000; // 24 h
 
-    const buffer: Array<{ artist: string; title: string; isrc?: string; durationMs?: number; externalId: string }> = [];
-    let lastFetchStamp = 0;
-    for await (const raw of connector.importLibrary(accessToken)) {
-      buffer.push({
-        artist: raw.artist,
-        title: raw.title,
-        isrc: raw.isrc,
-        durationMs: raw.durationMs,
-        externalId: raw.externalId ?? `${raw.artist}\u001f${raw.title}`,
-      });
-      if (buffer.length - lastFetchStamp >= FETCH_STAMP_INTERVAL) {
-        lastFetchStamp = buffer.length;
-        await db
-          .update(libraryImportJobsTable)
-          .set({ total: buffer.length })
-          .where(eq(libraryImportJobsTable.id, jobId));
+    // Find the most recent job (other than this one) that has a stored buffer.
+    // We use it to either skip Spotify entirely (complete fetch) or resume from
+    // where it left off (partial fetch interrupted by rate-limit or restart).
+    const [prevWithBuffer] = await db
+      .select({
+        id: libraryImportJobsTable.id,
+        bufferJson: libraryImportJobsTable.bufferJson,
+        phase: libraryImportJobsTable.phase,
+      })
+      .from(libraryImportJobsTable)
+      .where(and(
+        eq(libraryImportJobsTable.userId, userId),
+        eq(libraryImportJobsTable.service, service),
+        ne(libraryImportJobsTable.id, jobId),
+        isNotNull(libraryImportJobsTable.bufferJson),
+        gte(libraryImportJobsTable.startedAt, new Date(Date.now() - BUFFER_MAX_AGE_MS)),
+      ))
+      .orderBy(desc(libraryImportJobsTable.id))
+      .limit(1);
+
+    // A complete buffer was written when the previous job transitioned out of
+    // "fetching" (phase became "spine" or later).  A partial buffer is one
+    // where the job died while still in "fetching" — resume from its length.
+    const prevBuf = prevWithBuffer?.bufferJson ?? [];
+    const fetchWasComplete = prevBuf.length > 0 && prevWithBuffer?.phase !== "fetching";
+
+    let buffer: ImportBufferEntry[] = [...prevBuf];
+
+    if (fetchWasComplete) {
+      // ── Skip Spotify entirely — use the complete stored buffer ────────────
+      console.log(
+        `[me/import] job=${jobId} reusing complete buffer from job=${prevWithBuffer!.id}` +
+        ` (${buffer.length} tracks — skipping Spotify re-fetch)`,
+      );
+      await db
+        .update(libraryImportJobsTable)
+        .set({ total: buffer.length, phase: "spine", bufferJson: buffer })
+        .where(eq(libraryImportJobsTable.id, jobId));
+    } else {
+      // ── Fetch (or resume) from Spotify ────────────────────────────────────
+      // startOffset > 0 when we're resuming a partial buffer; 0 for fresh start.
+      const startOffset = buffer.length;
+      if (startOffset > 0) {
+        console.log(
+          `[me/import] job=${jobId} resuming Spotify fetch from offset ${startOffset}` +
+          ` (${buffer.length} tracks already buffered from job=${prevWithBuffer!.id})`,
+        );
       }
+
+      await db
+        .update(libraryImportJobsTable)
+        .set({ phase: "fetching", total: startOffset })
+        .where(eq(libraryImportJobsTable.id, jobId));
+
+      let lastFetchStamp = startOffset;
+      for await (const raw of connector.importLibrary(accessToken, startOffset)) {
+        buffer.push({
+          artist: raw.artist,
+          title: raw.title,
+          isrc: raw.isrc ?? null,
+          durationMs: raw.durationMs ?? null,
+          externalId: raw.externalId ?? `${raw.artist}\u001f${raw.title}`,
+        });
+        if (buffer.length - lastFetchStamp >= FETCH_STAMP_INTERVAL) {
+          lastFetchStamp = buffer.length;
+          // Checkpoint: persist partial buffer so a future import can resume
+          // from this point even if we're rate-limited or the server restarts.
+          await db
+            .update(libraryImportJobsTable)
+            .set({ total: buffer.length, bufferJson: buffer })
+            .where(eq(libraryImportJobsTable.id, jobId));
+        }
+      }
+
+      // Fetch complete — persist final buffer and advance phase.
+      await db
+        .update(libraryImportJobsTable)
+        .set({ total: buffer.length, phase: "spine", bufferJson: buffer })
+        .where(eq(libraryImportJobsTable.id, jobId));
     }
+
     const total = buffer.length;
     let resolved = 0;
-
-    // Stamp total immediately so the progress bar is honest from the start.
-    await db
-      .update(libraryImportJobsTable)
-      .set({ total, phase: "spine" })
-      .where(eq(libraryImportJobsTable.id, jobId));
 
     const provenance: LibraryItemProvenance = { kind: "import", service };
 
@@ -723,29 +821,44 @@ export async function runImportWorker(
 
       // Per-track: collect the best mbid (prefer ISRC key hit over text key).
       // indexToMbid accumulates the first non-null hit per index.
+      // Negative cache hits (mbid = null) are added to matchedIdx to exclude
+      // them from Phase 3 — they already failed MB on a previous run and
+      // writing them to the cache preserved that fact so we don't retry.
       const indexToMbid = new Map<number, string>();
       for (const { t, i } of phase2Entries) {
-        if (indexToMbid.has(i)) continue;
-        // ISRC key first (stronger).
+        if (indexToMbid.has(i) || matchedIdx.has(i)) continue;
+        // ISRC key first (stronger). get() returns undefined (no entry),
+        // null (negative cache), or a string (positive hit).
         if (t.isrc) {
-          const mbid = cacheMap.get(isrcKey(t.isrc));
-          if (mbid) { indexToMbid.set(i, mbid); continue; }
+          const hit = cacheMap.get(isrcKey(t.isrc));
+          if (hit) { indexToMbid.set(i, hit); continue; }
+          if (hit === null) { matchedIdx.add(i); continue; } // confirmed miss
         }
-        const mbid = cacheMap.get(normalizeKey(t.artist, t.title));
-        if (mbid) indexToMbid.set(i, mbid);
+        const hit = cacheMap.get(normalizeKey(t.artist, t.title));
+        if (hit) { indexToMbid.set(i, hit); continue; }
+        if (hit === null) matchedIdx.add(i); // confirmed miss — skip Phase 3
       }
 
       if (indexToMbid.size > 0) {
-        // Batch-verify candidate MBIDs exist in recordings (FK guard).
-        const candidateMbids = [...new Set(indexToMbid.values())];
-        const existingRecs = await db
-          .select({ mbid: recordingsTable.mbid })
-          .from(recordingsTable)
-          .where(inArray(recordingsTable.mbid, candidateMbids));
-        const existingSet = new Set(existingRecs.map((r) => r.mbid));
+        // Build an index→track lookup so we can seed spine rows below.
+        const idxToTrack = new Map(phase2Entries.map(({ t, i }) => [i, t]));
 
         for (const [idx, mbid] of indexToMbid) {
-          if (!existingSet.has(mbid)) continue;
+          // Seed the spine row if not already present — the resolution_cache
+          // entry already confirmed this mbid is real; background enrichment
+          // (links, genres, ISRC) will fill in the rest.
+          const track = idxToTrack.get(idx);
+          if (track) {
+            await db
+              .insert(recordingsTable)
+              .values({
+                mbid,
+                title: track.title,
+                artist: track.artist,
+                ...(track.isrc ? { isrc: track.isrc } : {}),
+              })
+              .onConflictDoNothing();
+          }
           await db
             .insert(libraryItemsTable)
             .values({ userId, mbid, provenance, addedAt: new Date() })
@@ -780,7 +893,7 @@ export async function runImportWorker(
     // queued in the isolated chain exits immediately on abort-check — no sleep,
     // no network call — so the queue never backs up.
     const mbResolver = createMbResolver();
-    const PHASE3_BUDGET_MS = 5 * 60_000; // 5 minutes wall-clock max for Phase 3
+    const PHASE3_BUDGET_MS = 90 * 60_000; // 90 minutes — enough for ~4 900 tracks at 1.1 s each
     const phase3StartMs = Date.now();
 
     for (const { t } of phase3Entries) {
@@ -815,30 +928,47 @@ export async function runImportWorker(
       }
 
       if (mbid) {
-        // FK guard: only insert if recordings row exists.
-        const [rec] = await db
-          .select({ mbid: recordingsTable.mbid })
-          .from(recordingsTable)
-          .where(eq(recordingsTable.mbid, mbid))
-          .limit(1);
+        // Seed the spine row if not already present — MB already confirmed
+        // this mbid is real; enrichment (links, genres, ISRC check) fills
+        // in the rest via background jobs.
+        await db
+          .insert(recordingsTable)
+          .values({
+            mbid,
+            title: t.title,
+            artist: t.artist,
+            ...(t.isrc ? { isrc: t.isrc } : {}),
+          })
+          .onConflictDoNothing();
 
-        if (rec) {
-          await db
-            .insert(libraryItemsTable)
-            .values({ userId, mbid, provenance, addedAt: new Date() })
-            .onConflictDoNothing();
-          // Cache the result so future imports resolve this track from Phase 2
-          // (DB-only, no MB network call).
-          await db
-            .insert(resolutionCacheTable)
-            .values([
-              ...(t.isrc ? [{ key: isrcKey(t.isrc), mbid }] : []),
-              { key: normalizeKey(t.artist, t.title), mbid },
-            ])
-            .onConflictDoNothing()
-            .catch(() => {});
-          resolved++;
-        }
+        await db
+          .insert(libraryItemsTable)
+          .values({ userId, mbid, provenance, addedAt: new Date() })
+          .onConflictDoNothing();
+        // Cache the result so future imports resolve this track from Phase 2
+        // (DB-only, no MB network call).
+        await db
+          .insert(resolutionCacheTable)
+          .values([
+            ...(t.isrc ? [{ key: isrcKey(t.isrc), mbid }] : []),
+            { key: normalizeKey(t.artist, t.title), mbid },
+          ])
+          .onConflictDoNothing()
+          .catch(() => {});
+        resolved++;
+      } else if (!controller.signal.aborted) {
+        // Confirmed MB miss — write a negative cache entry so future imports
+        // skip this track in Phase 2 instead of burning another MB call on it.
+        // onConflictDoNothing preserves any positive entry that enrichment may
+        // have written for the same key in the meantime.
+        await db
+          .insert(resolutionCacheTable)
+          .values([
+            ...(t.isrc ? [{ key: isrcKey(t.isrc), mbid: null }] : []),
+            { key: normalizeKey(t.artist, t.title), mbid: null },
+          ])
+          .onConflictDoNothing()
+          .catch(() => {});
       }
 
       // Sleep only when we actually attempted a network call (signal not yet

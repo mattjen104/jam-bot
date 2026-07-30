@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import { SearchOverlay } from "../components/SearchOverlay";
 import {
   useListPickers,
@@ -12,10 +12,10 @@ import {
 import type { PickerDialItem, SelectorSummary } from "@workspace/api-client-react";
 import { useMyLibrary } from "../lib/meHooks";
 import { usePlayer } from "../player/PlayerProvider";
-import { FollowButton } from "../components/FollowButton";
-import { Loader2, Play, Search, Users } from "lucide-react";
+import { useFollows, isFollowed, toggleFollow } from "../lib/local";
+import { Search } from "lucide-react";
 
-const ON_AIR_MS = 2 * 60 * 60 * 1000; // 2 hours = "live now"
+const ON_AIR_MS = 2 * 60 * 60 * 1000;
 const RECENTLY_ACTIVE_MS = 14 * 24 * 60 * 60 * 1000;
 
 function isRecentlyActive(pickedAt: string | null | undefined): boolean {
@@ -37,17 +37,9 @@ function timeAgoShort(iso: string | null | undefined): string {
   return `${Math.floor(days / 365)}y ago`;
 }
 
-/** Derive 1–2 character initials from a name. */
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return (parts[0]?.slice(0, 2) ?? "").toUpperCase();
-  return ((parts[0]?.[0] ?? "") + (parts[parts.length - 1]?.[0] ?? "")).toUpperCase();
-}
-
 // ---------------------------------------------------------------------------
 // Library overlap
 // ---------------------------------------------------------------------------
-
 function useLibraryOverlap(): {
   overlapByHandle: Map<string, number>;
   totalMbids: number;
@@ -106,44 +98,135 @@ function useLibraryOverlap(): {
 }
 
 // ---------------------------------------------------------------------------
-// Initials avatar
+// Section header — matches dial-tier-hd
 // ---------------------------------------------------------------------------
-
-function InitialsAvatar({ name, size = "lg" }: { name: string; size?: "sm" | "lg" }) {
-  const letters = initials(name);
-  const sz = size === "lg" ? "h-14 w-14 text-lg" : "h-9 w-9 text-xs";
+function TierHd({ label, live }: { label: string; live?: boolean }) {
   return (
-    <div
-      className={`${sz} shrink-0 rounded-full border-2 border-picker bg-picker/10 flex items-center justify-center font-serif font-semibold text-picker`}
-    >
-      {letters}
+    <div className="dial-tier-hd">
+      <span className={`dial-tier-hd__label${live ? " dial-tier-hd__label--live" : ""}`}>
+        {live && "● "}{label}
+      </span>
+      <div className="dial-tier-hd__rule" />
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Curated selector card (new design)
+// Flat selector row
 // ---------------------------------------------------------------------------
+interface SelectorRowProps {
+  handle: string;
+  name: string;
+  followKind: "picker" | "selector";
+  kindLabel: string;
+  meta?: string;
+  artists?: string;
+  overlapPct?: number | null;
+  onPlay?: (e: React.MouseEvent) => void;
+  playLoading?: boolean;
+  isLive?: boolean;
+  isRecent?: boolean;
+}
 
-function CuratedSelectorCard({
-  item,
+function SelectorRow({
+  handle,
+  name,
+  followKind,
+  kindLabel,
+  meta,
+  artists,
+  overlapPct,
+  onPlay,
+  playLoading,
+  isLive,
+  isRecent,
+}: SelectorRowProps) {
+  const follows = useFollows();
+  const following = isFollowed(follows, followKind, handle);
+
+  return (
+    <Link
+      href={`/archive/selectors/${handle}`}
+      className={`sel-row${isRecent ? " sel-row--warm" : ""}`}
+    >
+      <span className={`sel-row__pip${isLive ? " sel-row__pip--live" : ""}`}>
+        {isLive ? "●" : "◆"}
+      </span>
+      <div className="sel-row__body">
+        <div className={`sel-row__kind${isLive ? " sel-row__kind--live" : ""}`}>
+          {kindLabel}{isLive ? " · Live" : ""}
+        </div>
+        <div className="sel-row__name">{name}</div>
+        {meta && <div className="sel-row__meta">{meta}</div>}
+        {artists && <div className="sel-row__artists">{artists}</div>}
+      </div>
+      <div
+        className="sel-row__right"
+        onClick={(e) => e.preventDefault()}
+      >
+        {overlapPct != null && (
+          <div className="sel-row__match">
+            <span className={`sel-row__match-num${!overlapPct ? " sel-row__match-num--zero" : ""}`}>
+              {overlapPct}
+            </span>
+            <span className="sel-row__match-lbl">% match</span>
+          </div>
+        )}
+        <button
+          type="button"
+          className={`sel-row__follow${following ? " sel-row__follow--on" : ""}`}
+          onClick={(e) => { e.stopPropagation(); toggleFollow(followKind, handle, name); }}
+          data-testid={`follow-${followKind}-${handle}`}
+        >
+          {following ? "✓ Following" : "+ Follow"}
+        </button>
+        {onPlay && (
+          <button
+            type="button"
+            className="sel-row__play"
+            onClick={(e) => { e.stopPropagation(); onPlay(e); }}
+            disabled={playLoading}
+            aria-label={`Play ${name}`}
+          >
+            {playLoading ? "…" : "▶"}
+          </button>
+        )}
+      </div>
+    </Link>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Curated selector row (with data fetch for play)
+// ---------------------------------------------------------------------------
+function CuratedSelRow({
   picker,
+  item,
   overlapPct,
 }: {
-  item?: PickerDialItem;
   picker: { handle: string; name: string; pickerType: string; description?: string | null };
+  item?: PickerDialItem;
   overlapPct?: number | null;
 }) {
   const { ride } = usePlayer();
-  const [loading, setLoading] = useState(false);
-
+  const [playLoading, setPlayLoading] = useState(false);
   const run = item?.run;
+
+  const previewArtists = useMemo(() => {
+    if (!item?.previewTracks) return [];
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const t of item.previewTracks) {
+      const a = (t as { artist?: string }).artist;
+      if (a && !seen.has(a)) { seen.add(a); out.push(a); if (out.length >= 4) break; }
+    }
+    return out;
+  }, [item]);
 
   const handlePlay = async (e: React.MouseEvent) => {
     e.preventDefault();
-    e.stopPropagation();
     if (!run) return;
-    setLoading(true);
+    setPlayLoading(true);
     try {
       const data = await getPickerRun(run.runId);
       const seeds = data.tracks
@@ -156,238 +239,82 @@ function CuratedSelectorCard({
           links: t.recording!.links ?? [],
         }));
       if (seeds.length > 0) {
-        ride.startReplay(
-          seeds,
-          `${picker.name}${run.title ? ` — ${run.title}` : ""}`,
-          { timeOrientation: "curated" },
-        );
+        ride.startReplay(seeds, `${picker.name}${run.title ? ` — ${run.title}` : ""}`, { timeOrientation: "curated" });
       }
     } finally {
-      setLoading(false);
+      setPlayLoading(false);
     }
   };
 
-  // Derive preview artists from previewTracks (use up to 3 unique artists)
-  const previewArtists = useMemo(() => {
-    if (!item?.previewTracks) return [];
-    const seen = new Set<string>();
-    const out: string[] = [];
-    for (const t of item.previewTracks) {
-      const a = (t as { artist?: string }).artist;
-      if (a && !seen.has(a)) {
-        seen.add(a);
-        out.push(a);
-        if (out.length >= 3) break;
-      }
-    }
-    return out;
-  }, [item]);
-
-  const hasOverlap = overlapPct != null && overlapPct > 0;
   const recentlyActive = run ? isRecentlyActive(run.pickedAt) : false;
 
+  const metaParts: string[] = [];
+  if (run) {
+    if (run.trackCount) metaParts.push(`${run.trackCount} tracks`);
+    if (run.pickedAt) metaParts.push(timeAgoShort(run.pickedAt));
+    if (run.title) metaParts.push(run.title);
+  }
+
   return (
-    <li>
-      <Link
-        href={`/archive/selectors/${picker.handle}`}
-        className={`hover-elevate group relative flex flex-col gap-0 overflow-hidden rounded-2xl border transition-shadow ${
-          recentlyActive 
-            ? "border-picker/30 bg-picker/10" 
-            : "border-picker/20 bg-picker/5"
-        }`}
-      >
-        {recentlyActive && (
-          <div className="absolute bottom-0 left-0 top-0 w-1 bg-picker/50" />
-        )}
-        {/* Top bar: avatar + name + badge + overlap % */}
-        <div className="flex items-start gap-4 p-5 pb-4">
-          <InitialsAvatar name={picker.name} />
-
-          <div className="min-w-0 flex-1">
-            {/* Selector badge */}
-            <div className="mb-1 flex items-center gap-2">
-              <span className="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.2em] text-picker">
-                ◆ Selector
-              </span>
-              {recentlyActive && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-picker/40 bg-picker/10 px-1.5 py-px font-mono text-[9px] uppercase tracking-wide text-picker">
-                  Recent
-                </span>
-              )}
-            </div>
-            <h3 className="truncate font-serif text-lg font-semibold leading-tight text-foreground">
-              {picker.name}
-            </h3>
-            {picker.description && (
-              <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
-                {picker.description}
-              </p>
-            )}
-          </div>
-
-          {/* Overlap % — large Fraunces numeral */}
-          {overlapPct != null && (
-            <div className="shrink-0 text-right">
-              <p
-                className={`font-serif text-3xl font-semibold leading-none tabular-nums ${
-                  hasOverlap ? "text-primary" : "text-muted-foreground/40"
-                }`}
-              >
-                {overlapPct}
-              </p>
-              <p className="mt-0.5 font-mono text-[9px] uppercase tracking-wide text-muted-foreground">
-                % match
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Bottom row: set count + artists + play button */}
-        <div className="flex items-center gap-3 border-t border-picker/20 px-5 py-3">
-          <div className="min-w-0 flex-1">
-            {run ? (
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span className="font-mono text-[10px] text-muted-foreground">
-                  {run.trackCount} tracks
-                </span>
-                {run.pickedAt && (
-                  <span className="font-mono text-[10px] text-muted-foreground">
-                    {timeAgoShort(run.pickedAt)}
-                  </span>
-                )}
-                {previewArtists.length > 0 && (
-                  <span className="truncate font-mono text-[10px] text-primary/70">
-                    {previewArtists.join(", ")}
-                  </span>
-                )}
-              </div>
-            ) : (
-              <span className="font-mono text-[10px] text-muted-foreground">No runs yet</span>
-            )}
-          </div>
-
-          <div
-            className="flex items-center gap-2"
-            onClick={(e) => e.preventDefault()}
-          >
-            <FollowButton kind="picker" id={picker.handle} name={picker.name} />
-            {run && (
-              <button
-                type="button"
-                onClick={(e) => { e.preventDefault(); void handlePlay(e); }}
-                disabled={loading}
-                aria-label={`Play ${run.title ?? picker.name}`}
-                className="flex h-7 w-7 items-center justify-center rounded-full border border-primary/40 bg-primary/10 text-primary opacity-0 transition-opacity group-hover:opacity-100 active:scale-95 disabled:opacity-30"
-              >
-                {loading ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Play className="ml-px h-3.5 w-3.5 fill-current" />
-                )}
-              </button>
-            )}
-          </div>
-        </div>
-      </Link>
-    </li>
+    <SelectorRow
+      handle={picker.handle}
+      name={picker.name}
+      followKind="picker"
+      kindLabel="Selector"
+      meta={metaParts.join(" · ") || undefined}
+      artists={previewArtists.length > 0 ? previewArtists.join(", ") : undefined}
+      overlapPct={overlapPct}
+      onPlay={run ? handlePlay : undefined}
+      playLoading={playLoading}
+      isRecent={recentlyActive}
+    />
   );
 }
 
 // ---------------------------------------------------------------------------
-// KEXP radio selector card (new design)
+// Radio DJ row
 // ---------------------------------------------------------------------------
-
-function RadioSelectorCard({ selector }: { selector: SelectorSummary }) {
+function RadioDjRow({ selector }: { selector: SelectorSummary }) {
   const onAir =
     selector.lastPlayedAt != null &&
     Date.now() - new Date(selector.lastPlayedAt).getTime() < ON_AIR_MS;
 
+  const metaParts: string[] = [];
+  if (selector.recentSpinCount > 0) {
+    metaParts.push(`${selector.recentSpinCount} spin${selector.recentSpinCount === 1 ? "" : "s"} this month`);
+  }
+  if (selector.lastPlayedAt) metaParts.push(timeAgoShort(selector.lastPlayedAt));
+
   return (
-    <li>
-      <Link
-        href={`/archive/selectors/${selector.handle}`}
-        className={`hover-elevate relative flex items-center gap-4 rounded-2xl border p-4 transition-shadow ${
-          onAir ? "border-picker/30 bg-picker/10" : "border-picker/20 bg-picker/5"
-        }`}
-      >
-        {onAir && <div className="absolute bottom-0 left-0 top-0 w-1 bg-picker/50 rounded-l-2xl" />}
-        <InitialsAvatar name={selector.name} size="sm" />
-
-        <div className="min-w-0 flex-1">
-          <div className="mb-0.5 flex items-center gap-2">
-            <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-picker">
-              ◆ Selector
-            </span>
-            {onAir && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-live/50 bg-live/10 px-1.5 py-px font-mono text-[9px] uppercase tracking-wide text-live">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-live" />
-                Live
-              </span>
-            )}
-          </div>
-          <p className="truncate font-serif text-base font-semibold text-foreground">
-            {selector.name}
-          </p>
-          <p className="font-mono text-[10px] text-muted-foreground">
-            {selector.recentSpinCount > 0
-              ? `${selector.recentSpinCount} spin${selector.recentSpinCount === 1 ? "" : "s"} this month`
-              : "No recent spins"}
-            {selector.lastPlayedAt && ` · ${timeAgoShort(selector.lastPlayedAt)}`}
-          </p>
-        </div>
-
-        <FollowButton
-          kind="selector"
-          id={selector.handle}
-          name={selector.name}
-        />
-      </Link>
-    </li>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Hero stat block
-// ---------------------------------------------------------------------------
-
-function HeroStat({ value, label }: { value: string | number; label: string }) {
-  return (
-    <div className="flex flex-col">
-      <span className="font-serif text-3xl font-semibold tabular-nums text-foreground">
-        {typeof value === "number" ? value.toLocaleString() : value}
-      </span>
-      <span className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-        {label}
-      </span>
-    </div>
+    <SelectorRow
+      handle={selector.handle}
+      name={selector.name}
+      followKind="selector"
+      kindLabel="Radio DJ"
+      meta={metaParts.join(" · ") || "No recent spins"}
+      isLive={onAir}
+      isRecent={onAir}
+    />
   );
 }
 
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
-
 export default function Selectors() {
-  const [, setLocation] = useLocation();
   const [searchOpen, setSearchOpen] = useState(false);
-  const { ride, radio } = usePlayer();
+  const { radio } = usePlayer();
   const { data: listData, isLoading: listLoading, isError: listError } = useListPickers();
   const { data: dialData } = useGetPickersDial();
   const { data: kexpData, isLoading: kexpLoading } = useListSelectors();
   const overlap = useLibraryOverlap();
-  const dockPadding = ride.active || radio.station ? "pb-32" : "pb-16";
 
-  // Build a lookup map of dial items by picker handle for O(1) merge.
   const dialByHandle = useMemo((): Map<string, PickerDialItem> => {
     const m = new Map<string, PickerDialItem>();
-    for (const item of dialData?.items ?? []) {
-      m.set(item.picker.handle, item);
-    }
+    for (const item of dialData?.items ?? []) m.set(item.picker.handle, item);
     return m;
   }, [dialData]);
 
-  // All active non-DJ pickers, sorted by overlap % when library is available,
-  // otherwise by most recently active first then alphabetically.
   const sortedPickers = useMemo(() => {
     const all = (listData?.pickers ?? []).filter((p) => p.active && p.pickerType !== "dj");
 
@@ -418,7 +345,6 @@ export default function Selectors() {
     });
   }, [listData, dialByHandle, overlap]);
 
-  // Hero stats
   const kexpSelectors = kexpData?.selectors ?? [];
   const liveCount = kexpSelectors.filter(
     (s: SelectorSummary) =>
@@ -426,147 +352,112 @@ export default function Selectors() {
       Date.now() - new Date(s.lastPlayedAt).getTime() < ON_AIR_MS,
   ).length;
   const totalSelectorCount = sortedPickers.length + kexpSelectors.length;
-
   const isLoading = listLoading;
-  const isError = listError;
+
+  // suppress unused warning — radio is referenced to match AppLayout usage
+  void radio;
 
   return (
-    <div className="lore-grain relative min-h-screen">
+    <div className="dial-root">
       {searchOpen && (
         <SearchOverlay
           dialStations={[]}
           onClose={() => setSearchOpen(false)}
-          onStationDrill={(slug) => { setLocation(`/archive/stations/${slug}`); setSearchOpen(false); }}
-          onShowDrill={(_show, station) => { setLocation(`/archive/stations/${station.station.slug}`); setSearchOpen(false); }}
+          onStationDrill={() => setSearchOpen(false)}
+          onShowDrill={() => setSearchOpen(false)}
         />
       )}
-      <div className="lore-glow pointer-events-none absolute inset-0" />
-      <div className={`relative z-10 mx-auto max-w-5xl px-4 pt-8 sm:px-6 ${dockPadding}`}>
 
-        {/* ── Hero ─────────────────────────────────────────────── */}
-        <header className="mb-10">
-          <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] text-picker">
-            <Users className="h-4 w-4" />
-            Selectors
-            <button
-              type="button"
-              className="ml-auto flex items-center justify-center rounded-full p-1 text-muted-foreground transition-colors hover:text-foreground"
-              onClick={() => setSearchOpen(true)}
-              aria-label="Search stations and selectors"
-              title="Search"
-            >
-              <Search className="h-4 w-4" />
-            </button>
-          </div>
-          <h1 className="mt-3 max-w-[22ch] font-serif text-4xl font-semibold leading-[1.05] text-foreground">
-            Borrow real humans' taste.
-          </h1>
-          <p className="mt-4 max-w-[52ch] text-base text-muted-foreground">
-            DJs, blogs, labels, and curators whose picks are documented here.
-            Every list is ordered, attributed, and rideable — never an algorithm.
-          </p>
+      {/* Topbar */}
+      <div className="dial-topbar">
+        <span className="dial-topbar__wordmark">Lore</span>
+        <span className="dial-topbar__title dial-topbar__title--active">Selectors</span>
+        {totalSelectorCount > 0 && (
+          <span className="dial-topbar__sort-chip">
+            ◆ {totalSelectorCount}
+            {liveCount > 0 && ` · ${liveCount} live`}
+          </span>
+        )}
+        {overlap && (
+          <span className="dial-topbar__sort-chip" style={{ marginLeft: 2 }}>
+            match sorted
+          </span>
+        )}
+        <button
+          type="button"
+          className="dial-topbar__search"
+          onClick={() => setSearchOpen(true)}
+          aria-label="Search"
+        >
+          <Search size={14} />
+        </button>
+      </div>
 
-          {/* Stats row */}
-          <div className="mt-8 flex flex-wrap gap-8">
-            {!listLoading && totalSelectorCount > 0 && (
-              <HeroStat value={totalSelectorCount} label="Selectors" />
-            )}
-            {overlap && overlap.totalCrossings > 0 && (
-              <HeroStat value={overlap.totalCrossings} label="Crossings with your library" />
-            )}
-            {liveCount > 0 && (
-              <div className="flex flex-col">
-                <span className="flex items-center gap-2 font-serif text-3xl font-semibold tabular-nums text-live">
-                  <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-live" />
-                  {liveCount}
-                </span>
-                <span className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                  Live right now
-                </span>
-              </div>
-            )}
-          </div>
-
-          {overlap && (
-            <p className="mt-4 font-mono text-[11px] text-muted-foreground">
-              Sorted by match against your {overlap.totalMbids}-track library.
-            </p>
-          )}
-        </header>
-
-        {/* ── Loading / error states ────────────────────────────── */}
+      {/* Body */}
+      <div className="dial-body">
+        {/* Loading skeletons */}
         {isLoading && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {[0, 1, 2, 3].map((i) => (
+          <div style={{ padding: "16px 15px", display: "flex", flexDirection: "column", gap: 1 }}>
+            {[0, 1, 2, 3, 4].map((i) => (
               <div
                 key={i}
-                className="h-36 animate-pulse rounded-2xl border border-card-border bg-card"
+                style={{
+                  height: 62,
+                  background: "hsl(var(--secondary))",
+                  borderBottom: "1px solid hsl(var(--border) / 0.4)",
+                  opacity: 0.5 + i * 0.05,
+                  animation: "lore-eq 1.8s ease-in-out infinite",
+                  animationDelay: `${i * 0.12}s`,
+                }}
               />
             ))}
           </div>
         )}
 
-        {isError && (
-          <p className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive-foreground">
-            Couldn't load selectors. Please refresh.
-          </p>
+        {listError && !isLoading && (
+          <div className="dial-loading">
+            Couldn't load selectors — please refresh.
+          </div>
         )}
 
-        {!isLoading && !isError && sortedPickers.length === 0 && kexpSelectors.length === 0 && (
-          <p className="rounded-xl border border-card-border bg-card p-6 text-sm text-muted-foreground">
-            No selectors enrolled yet.
-          </p>
+        {!isLoading && !listError && totalSelectorCount === 0 && (
+          <div className="dial-loading">No selectors enrolled yet.</div>
         )}
 
-        {/* ── Curated selector cards ────────────────────────────── */}
-        {!isLoading && !isError && sortedPickers.length > 0 && (
-          <section className="mb-12">
-            <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {sortedPickers.map((p) => {
-                const dialItem = dialByHandle.get(p.handle);
-                const overlapPct = overlap ? (overlap.overlapByHandle.get(p.handle) ?? 0) : null;
-                return (
-                  <CuratedSelectorCard
-                    key={p.handle}
-                    item={dialItem}
-                    picker={p}
-                    overlapPct={overlapPct}
-                  />
-                );
-              })}
-            </ul>
-          </section>
+        {/* Curated selectors */}
+        {!isLoading && !listError && sortedPickers.length > 0 && (
+          <>
+            <TierHd label="Curators" />
+            {sortedPickers.map((p) => {
+              const dialItem = dialByHandle.get(p.handle);
+              const overlapPct = overlap ? (overlap.overlapByHandle.get(p.handle) ?? 0) : null;
+              return (
+                <CuratedSelRow
+                  key={p.handle}
+                  picker={p}
+                  item={dialItem}
+                  overlapPct={overlapPct}
+                />
+              );
+            })}
+          </>
         )}
 
-        {/* ── Radio selectors ───────────────────────────────────── */}
+        {/* Radio DJs */}
         {(kexpLoading || kexpSelectors.length > 0) && (
-          <section>
-            <div className="mb-4 flex items-center gap-2">
-              <h2 className="font-mono text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
-                Radio selectors
-              </h2>
-            </div>
-            <p className="mb-6 max-w-[52ch] text-sm text-muted-foreground">
-              DJs whose every spin is attributed and browsable by show.
-            </p>
+          <>
+            <TierHd label="Radio DJs" live={liveCount > 0} />
             {kexpLoading ? (
-              <div className="flex flex-col gap-3">
-                {[0, 1, 2].map((i) => (
-                  <div
-                    key={i}
-                    className="h-20 animate-pulse rounded-2xl border border-card-border bg-card"
-                  />
-                ))}
-              </div>
+              <div className="dial-loading">Loading…</div>
             ) : (
-              <ul className="flex flex-col gap-3">
-                {kexpSelectors.map((s: SelectorSummary) => (
-                  <RadioSelectorCard key={s.handle} selector={s} />
-                ))}
-              </ul>
+              kexpSelectors.map((s: SelectorSummary) => (
+                <RadioDjRow key={s.handle} selector={s} />
+              ))
             )}
-          </section>
+          </>
         )}
+
+        <div style={{ height: 80 }} />
       </div>
     </div>
   );

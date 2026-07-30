@@ -1176,6 +1176,16 @@ export type InsertLibraryItem = typeof libraryItemsTable.$inferInsert;
  * into `library_items`. `total` is set once the first page comes back; each
  * resolved+upserted row increments `resolved`.
  */
+/** One entry in the in-flight import buffer — persisted after the fetch phase
+ *  so a restarted server can resume Phase 3 without re-fetching Spotify. */
+export interface ImportBufferEntry {
+  artist: string;
+  title: string;
+  isrc?: string | null;
+  durationMs?: number | null;
+  externalId: string;
+}
+
 export const libraryImportJobsTable = pgTable("library_import_jobs", {
   id: serial("id").primaryKey(),
   userId: integer("user_id")
@@ -1195,6 +1205,12 @@ export const libraryImportJobsTable = pgTable("library_import_jobs", {
   startedAt: timestamp("started_at").defaultNow().notNull(),
   finishedAt: timestamp("finished_at"),
   error: text("error"),
+  /**
+   * The raw Spotify track list captured after the fetching phase.
+   * Persisted so a resumed import (after server restart) can jump straight
+   * to Phase 3 without re-paging through the Spotify API.
+   */
+  bufferJson: jsonb("buffer_json").$type<ImportBufferEntry[]>(),
 });
 
 export type LibraryImportJob = typeof libraryImportJobsTable.$inferSelect;

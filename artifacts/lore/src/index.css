@@ -1463,3 +1463,245 @@
 .ctx-chip--live:hover { background: rgba(127,168,201,.18); }
 .ctx-chip--new { border-color: hsl(var(--border)); color: hsl(var(--muted-foreground)); font-style: italic; }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   Selector & Library flat rows — same design language as .dial-*
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Selector / curator row ── */
+.sel-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 12px var(--dial-lane-pad);
+  border-bottom: 1px solid hsl(var(--border) / 0.5);
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.1s;
+  cursor: pointer;
+}
+.sel-row:hover { background: hsl(var(--secondary)); }
+.sel-row--warm { background: rgba(200,169,107,.05); }
+
+.sel-row__pip {
+  font-size: 9px;
+  color: hsl(var(--picker));
+  flex-shrink: 0;
+  margin-top: 5px;
+  line-height: 1;
+}
+.sel-row__pip--live {
+  color: hsl(var(--live));
+  animation: lore-eq 2.4s ease-in-out infinite;
+}
+
+.sel-row__body { flex: 1; min-width: 0; }
+.sel-row__kind {
+  font-family: var(--app-font-display);
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: hsl(var(--faint));
+  line-height: 1;
+  margin-bottom: 3px;
+}
+.sel-row__kind--live { color: hsl(var(--live)); }
+.sel-row__name {
+  font-family: var(--app-font-serif);
+  font-size: 14px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+.sel-row__meta {
+  font-family: var(--app-font-mono);
+  font-size: 9.5px;
+  color: hsl(var(--dim));
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sel-row__artists {
+  font-family: var(--app-font-mono);
+  font-size: 9px;
+  color: hsl(var(--library));
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.65;
+}
+
+.sel-row__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+.sel-row__match { text-align: right; min-width: 30px; }
+.sel-row__match-num {
+  font-family: var(--app-font-serif);
+  font-size: 18px;
+  font-weight: 600;
+  color: hsl(var(--picker));
+  line-height: 1;
+  display: block;
+}
+.sel-row__match-num--zero { color: hsl(var(--faint)); font-size: 13px; }
+.sel-row__match-lbl {
+  font-family: var(--app-font-display);
+  font-size: 7px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: hsl(var(--faint));
+  display: block;
+  margin-top: 2px;
+}
+
+.sel-row__follow {
+  font-family: var(--app-font-display);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  border: 1px solid hsl(var(--border));
+  background: none;
+  color: hsl(var(--dim));
+  padding: 4px 9px;
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.1s, background 0.1s;
+  text-decoration: none;
+  display: inline-block;
+}
+.sel-row__follow:hover { color: hsl(var(--foreground)); background: hsl(var(--secondary)); }
+.sel-row__follow--on {
+  color: hsl(var(--library));
+  border-color: rgba(232,106,78,.35);
+  background: rgba(232,106,78,.08);
+}
+
+.sel-row__play {
+  font-size: 9px;
+  color: hsl(var(--faint));
+  border: 1px solid hsl(var(--card-border));
+  background: none;
+  cursor: pointer;
+  padding: 3px 7px;
+  border-radius: 99px;
+  flex-shrink: 0;
+  transition: color 0.1s, border-color 0.1s;
+  line-height: 1.4;
+}
+.sel-row__play:hover { color: hsl(var(--live)); border-color: hsl(var(--live)); }
+.sel-row__play:disabled { opacity: 0.4; cursor: default; }
+
+/* ── Library overlap row ── */
+.lib-ol-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px var(--dial-lane-pad);
+  border-bottom: 1px solid hsl(var(--border) / 0.5);
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.1s;
+  cursor: pointer;
+}
+.lib-ol-row:hover { background: hsl(var(--secondary)); }
+.lib-ol-row__dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.lib-ol-row__dot--stn { background: hsl(var(--library)); }
+.lib-ol-row__dot--sel { background: hsl(var(--picker)); }
+.lib-ol-row__dot--run { background: hsl(var(--live)); }
+.lib-ol-row__body { flex: 1; min-width: 0; }
+.lib-ol-row__name {
+  font-family: var(--app-font-serif);
+  font-size: 14px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lib-ol-row__sub {
+  font-family: var(--app-font-mono);
+  font-size: 9.5px;
+  color: hsl(var(--dim));
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lib-ol-row__count {
+  font-family: var(--app-font-mono);
+  font-size: 9.5px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.lib-ol-row__count--stn { color: hsl(var(--library)); }
+.lib-ol-row__count--sel { color: hsl(var(--picker)); }
+.lib-ol-row__count--run { color: hsl(var(--live)); }
+
+/* ── Library CTA bar (mirrors .dial-scanbar) ── */
+.dial-ctabar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px var(--dial-lane-pad);
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  flex-shrink: 0;
+}
+.dial-ctabar__label {
+  font-family: var(--app-font-display);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: hsl(var(--dim));
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dial-ctabtn {
+  font-family: var(--app-font-display);
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--secondary));
+  color: hsl(var(--dim));
+  padding: 6px 12px;
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: color 0.1s, background 0.1s, border-color 0.1s;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.dial-ctabtn:hover { color: hsl(var(--foreground)); }
+.dial-ctabtn:disabled { opacity: 0.45; cursor: default; pointer-events: none; }
+.dial-ctabtn--keep {
+  background: hsl(var(--keep));
+  border-color: hsl(var(--keep));
+  color: hsl(var(--keep-foreground));
+}
+.dial-ctabtn--keep:hover { opacity: 0.9; color: hsl(var(--keep-foreground)); }
+

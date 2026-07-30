@@ -63,8 +63,11 @@ export interface ServiceConnector {
    * Async iterable over all tracks in the user's library.  May page lazily.
    * The caller must NOT call MusicBrainz inside this loop — resolution happens
    * outside (in the import worker), respecting the 1 req/sec budget.
+   *
+   * `startOffset` lets the worker resume a partial fetch after an interruption
+   * (rate-limit, server restart) without re-fetching tracks already buffered.
    */
-  importLibrary(accessToken: string): AsyncIterable<RawLibraryTrack>;
+  importLibrary(accessToken: string, startOffset?: number): AsyncIterable<RawLibraryTrack>;
 
   /**
    * Mirror a kept recording to the service's library.
@@ -196,8 +199,11 @@ export class SpotifyConnector implements ServiceConnector {
     };
   }
 
-  async *importLibrary(accessToken: string): AsyncIterable<RawLibraryTrack> {
-    let url: string | null = `${API_BASE}/me/tracks?limit=50`;
+  async *importLibrary(accessToken: string, startOffset = 0): AsyncIterable<RawLibraryTrack> {
+    const firstUrl = startOffset > 0
+      ? `${API_BASE}/me/tracks?limit=50&offset=${startOffset}`
+      : `${API_BASE}/me/tracks?limit=50`;
+    let url: string | null = firstUrl;
     let pageNum = 0;
     const FETCH_TIMEOUT_MS = 20_000;
     const PAGE_GAP_MS = 300; // proactive throttle — stay well under Spotify's limit

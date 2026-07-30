@@ -62,3 +62,4 @@
 - [Scraped-show tz & slot matching](scraped-shows-timezone-matching.md) — RB countries are full names not ISO codes; overnight-wrap SQL pattern lives in 3 places; slot matches need explicit ORDER BY tie-breaks.
 - [Library export & spin provenance](library-export-format.md) — pure builders + null-honesty; provenance.kind forced to "keep" server-side (spread first); spinId only stored when spin.mbid matches; new columns need boot migrations.
 - [Pending keeps — spin-based saves](pending-keeps-pattern.md) — pending_keeps table for pre-resolution saves; spinId on NowPlaying; hand-patch BOTH api-client-react AND api-zod types and rebuild dist.
+- [MB ISRC endpoint parameter bug](mb-isrc-endpoint.md) — `/isrc/{isrc}?fmt=json` only; `inc=recordings` is invalid and silently returns null on every call.
