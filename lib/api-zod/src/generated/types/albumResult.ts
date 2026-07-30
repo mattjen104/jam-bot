@@ -7,12 +7,13 @@
  */
 import type { AlbumResultTrack } from "./albumResultTrack";
 
+/**
+ * An album (release group) with its tracks, cross-referenced with Lore spin data.
+ */
 export interface AlbumResult {
   releaseGroupMbid: string;
   title: string;
-  /** @nullable */
   releaseYear: number | null;
-  /** @nullable */
   primaryType: string | null;
   tracks: AlbumResultTrack[];
 }

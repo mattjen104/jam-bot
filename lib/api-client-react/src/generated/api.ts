@@ -18,8 +18,8 @@ import type {
 
 import type {
   AdminStationListResponse,
-  AllDraftClaimsList,
   AlbumResult,
+  AllDraftClaimsList,
   ApiError,
   ArchiveCoverage,
   ArchiveRecentRuns,
@@ -3056,9 +3056,9 @@ export function useGetArtist<
 }
 
 /**
- * Returns all recordings in a MusicBrainz release group with their Lore spin counts.
- *
- * @summary Album page — recordings in the release group and their Lore spin history
+ * Returns an album (release group) by its MusicBrainz release group MBID with its tracks cross-referenced against Lore spin history. Includes spin counts and last-spun timestamps per track. 404 when the release group has no spin history on Lore.
+
+ * @summary Album page — tracks cross-referenced with Lore spin data
  */
 export const getGetAlbumUrl = (releaseGroupMbid: string) => {
   return `/api/album/${releaseGroupMbid}`;
@@ -3117,7 +3117,7 @@ export type GetAlbumQueryResult = NonNullable<
 export type GetAlbumQueryError = ErrorType<ApiError>;
 
 /**
- * @summary Album page — recordings in the release group and their Lore spin history
+ * @summary Album page — tracks cross-referenced with Lore spin data
  */
 
 export function useGetAlbum<

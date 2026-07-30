@@ -636,25 +636,26 @@ export interface AlbumContext {
   tracks: AlbumTrack[];
 }
 
+/**
+ * A single track within an album result, cross-referenced with Lore spin data.
+ */
 export interface AlbumResultTrack {
   mbid: string;
   title: string;
   artist: string;
-  /** @nullable */
   artistMbid: string | null;
-  /** @nullable */
   artworkUrl: string | null;
   spinCount: number;
-  /** @nullable */
   lastSpunAt: string | null;
 }
 
+/**
+ * An album (release group) with its tracks, cross-referenced with Lore spin data.
+ */
 export interface AlbumResult {
   releaseGroupMbid: string;
   title: string;
-  /** @nullable */
   releaseYear: number | null;
-  /** @nullable */
   primaryType: string | null;
   tracks: AlbumResultTrack[];
 }
@@ -1811,6 +1812,7 @@ export interface StationsRollingGenresResult {
  */
 export interface StationRecentSpin {
   mbid: string | null;
+  artistMbid: string | null;
   title: string;
   artist: string;
   playedAt: string;

@@ -34,6 +34,7 @@ import { useMyLibraryMbids } from "../lib/meHooks";
 
 export interface DialSpin {
   mbid: string | null;
+  artistMbid: string | null;
   title: string;
   artist: string;
   playedAt: string;
@@ -232,8 +233,10 @@ export function useDialData(): {
       const artist = (np as { artist?: string | null }).artist ?? (np as { rawArtist?: string | null }).rawArtist ?? "";
       if (!title && !artist) continue;
       const mbid = (np as { mbid?: string | null }).mbid ?? null;
+      const artistMbid = (np as { artistMbid?: string | null }).artistMbid ?? null;
       m.set(item.slug, {
         mbid,
+        artistMbid,
         title,
         artist,
         playedAt: new Date().toISOString(),
@@ -294,6 +297,7 @@ export function useDialData(): {
           })
           .map((sp) => ({
             mbid: sp.mbid,
+            artistMbid: (sp as { artistMbid?: string | null }).artistMbid ?? null,
             title: sp.title,
             artist: sp.artist,
             playedAt: sp.playedAt,

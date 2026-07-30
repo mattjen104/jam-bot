@@ -11,6 +11,7 @@
  */
 export interface StationRecentSpin {
   mbid: string | null;
+  artistMbid: string | null;
   title: string;
   artist: string;
   playedAt: string;

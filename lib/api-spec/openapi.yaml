@@ -954,6 +954,37 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /album/{releaseGroupMbid}:
+    get:
+      operationId: getAlbum
+      tags: [recordings]
+      summary: Album page — tracks cross-referenced with Lore spin data
+      description: >
+        Returns an album (release group) by its MusicBrainz release group MBID
+        with its tracks cross-referenced against Lore spin history. Includes
+        spin counts and last-spun timestamps per track. 404 when the release
+        group has no spin history on Lore.
+      parameters:
+        - name: releaseGroupMbid
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+          description: MusicBrainz release group MBID.
+      responses:
+        "200":
+          description: Album data with Lore spin cross-reference
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlbumResult"
+        "404":
+          description: No spin data found for this album
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /stations/{slug}/upcoming-schedule:
     get:
       operationId: getStationUpcomingSchedule
@@ -3167,6 +3198,8 @@ components:
           type: ["integer", "null"]
         spotifyAlbumId:
           type: ["string", "null"]
+        releaseGroupMbid:
+          type: ["string", "null"]
         tracks:
           type: array
           items:
@@ -3174,6 +3207,47 @@ components:
       required:
         - name
         - tracks
+    AlbumResultTrack:
+      type: object
+      description: A single track within an album result, cross-referenced with Lore spin data.
+      properties:
+        mbid:
+          type: string
+        title:
+          type: string
+        artist:
+          type: string
+        artistMbid:
+          type: string
+          nullable: true
+        artworkUrl:
+          type: string
+          nullable: true
+        spinCount:
+          type: integer
+        lastSpunAt:
+          type: string
+          nullable: true
+      required: [mbid, title, artist, artistMbid, artworkUrl, spinCount, lastSpunAt]
+    AlbumResult:
+      type: object
+      description: An album (release group) with its tracks, cross-referenced with Lore spin data.
+      properties:
+        releaseGroupMbid:
+          type: string
+        title:
+          type: string
+        releaseYear:
+          type: integer
+          nullable: true
+        primaryType:
+          type: string
+          nullable: true
+        tracks:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlbumResultTrack"
+      required: [releaseGroupMbid, title, releaseYear, primaryType, tracks]
     RecordingKnowledge:
       type: object
       properties:
@@ -4725,13 +4799,16 @@ components:
         mbid:
           type: string
           nullable: true
+        artistMbid:
+          type: string
+          nullable: true
         title:
           type: string
         artist:
           type: string
         playedAt:
           type: string
-      required: [mbid, title, artist, playedAt]
+      required: [mbid, artistMbid, title, artist, playedAt]
     StationScheduleRunShow:
       type: object
       properties:

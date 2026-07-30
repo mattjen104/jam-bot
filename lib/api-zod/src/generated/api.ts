@@ -2223,16 +2223,16 @@ export const GetArtistResponse = zod
   );
 
 /**
- * Returns all recordings in a MusicBrainz release group with their Lore spin counts.
- *
- * @summary Album page — recordings in the release group and their Lore spin history
+ * Returns an album (release group) by its MusicBrainz release group MBID with its tracks cross-referenced against Lore spin history. Includes spin counts and last-spun timestamps per track. 404 when the release group has no spin history on Lore.
+
+ * @summary Album page — tracks cross-referenced with Lore spin data
  */
 
 export const GetAlbumParams = zod.object({
   releaseGroupMbid: zod.coerce
     .string()
     .min(1)
-    .describe("MusicBrainz release-group MBID."),
+    .describe("MusicBrainz release group MBID."),
 });
 
 export const GetAlbumResponse = zod
@@ -2242,19 +2242,23 @@ export const GetAlbumResponse = zod
     releaseYear: zod.number().nullable(),
     primaryType: zod.string().nullable(),
     tracks: zod.array(
-      zod.object({
-        mbid: zod.string(),
-        title: zod.string(),
-        artist: zod.string(),
-        artistMbid: zod.string().nullable(),
-        artworkUrl: zod.string().nullable(),
-        spinCount: zod.number(),
-        lastSpunAt: zod.string().nullable(),
-      }),
+      zod
+        .object({
+          mbid: zod.string(),
+          title: zod.string(),
+          artist: zod.string(),
+          artistMbid: zod.string().nullable(),
+          artworkUrl: zod.string().nullable(),
+          spinCount: zod.number(),
+          lastSpunAt: zod.string().nullable(),
+        })
+        .describe(
+          "A single track within an album result, cross-referenced with Lore spin data.",
+        ),
     ),
   })
   .describe(
-    "Album page data — all recordings in the release group with Lore spin counts.",
+    "An album (release group) with its tracks, cross-referenced with Lore spin data.",
   );
 
 /**
@@ -2404,6 +2408,7 @@ export const GetStationsRecentSpinsResponse = zod
           zod
             .object({
               mbid: zod.string().nullable(),
+              artistMbid: zod.string().nullable(),
               title: zod.string(),
               artist: zod.string(),
               playedAt: zod.string(),

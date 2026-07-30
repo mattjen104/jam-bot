@@ -79,33 +79,34 @@ export function ContextRail({
   const parts: ReactNode[] = [];
 
   if (level === "show" && show) {
-    // Collect artist → first recording MBID so we can navigate to /song/:mbid
-    const artistMbid = new Map<string, string | null>();
+    // Collect artist → artistMbid (preferred) or recording mbid (fallback) for navigation
+    const artistNavMbid = new Map<string, { artistMbid: string | null; recordingMbid: string | null }>();
     for (const sp of show.spins) {
-      if (!artistMbid.has(sp.artist)) artistMbid.set(sp.artist, sp.mbid ?? null);
+      if (!artistNavMbid.has(sp.artist)) {
+        artistNavMbid.set(sp.artist, { artistMbid: sp.artistMbid ?? null, recordingMbid: sp.mbid ?? null });
+      }
     }
     const yourArtists = [...new Set(show.spins.filter((s) => s.isLibraryHit).map((s) => s.artist))].slice(0, 4);
     const newArtists = [...new Set(show.spins.filter((s) => !s.isLibraryHit).map((s) => s.artist))]
       .filter((a) => !yourArtists.includes(a))
       .slice(0, 2);
 
+    function artistClickHandler(name: string) {
+      const nav = artistNavMbid.get(name);
+      if (nav?.artistMbid) return () => setLocation(`/artist/${nav.artistMbid}`);
+      if (nav?.recordingMbid) return () => setLocation(`/song/${nav.recordingMbid}`);
+      return () => showToast("No page available yet");
+    }
+
     if (yourArtists.length > 0 || newArtists.length > 0) {
       parts.push(
         <Group key="artists" label="Artists">
-          {yourArtists.map((a) => {
-            const mbid = artistMbid.get(a);
-            return (
-              <Chip key={a} label={a} variant="lib"
-                onClick={() => mbid ? setLocation(`/song/${mbid}`) : showToast("No page available yet")} />
-            );
-          })}
-          {newArtists.map((a) => {
-            const mbid = artistMbid.get(a);
-            return (
-              <Chip key={a} label={a} variant="new"
-                onClick={() => mbid ? setLocation(`/song/${mbid}`) : showToast("No page available yet")} />
-            );
-          })}
+          {yourArtists.map((a) => (
+            <Chip key={a} label={a} variant="lib" onClick={artistClickHandler(a)} />
+          ))}
+          {newArtists.map((a) => (
+            <Chip key={a} label={a} variant="new" onClick={artistClickHandler(a)} />
+          ))}
         </Group>,
       );
     }
@@ -169,10 +170,24 @@ export function ContextRail({
     const djNames = [...new Set(pastShows.map((s) => s.djName).filter(Boolean) as string[])];
     const selectors = djNames.filter((d) => pastShows.some((s) => s.djName === d && s.isPickerShow));
     const others = djNames.filter((d) => !selectors.includes(d)).slice(0, 2);
+    // Build artist → artistMbid map from all past spins
+    const stationArtistNav = new Map<string, { artistMbid: string | null; recordingMbid: string | null }>();
+    for (const sp of pastShows.flatMap((s) => s.spins)) {
+      if (!stationArtistNav.has(sp.artist)) {
+        stationArtistNav.set(sp.artist, { artistMbid: sp.artistMbid ?? null, recordingMbid: sp.mbid ?? null });
+      }
+    }
     const yourArtists = [
       ...new Set(pastShows.flatMap((s) => s.spins.filter((sp) => sp.isLibraryHit).map((sp) => sp.artist))),
     ].slice(0, 4);
     const totalCross = station.crossings;
+
+    function stationArtistClick(name: string) {
+      const nav = stationArtistNav.get(name);
+      if (nav?.artistMbid) return () => setLocation(`/artist/${nav.artistMbid}`);
+      if (nav?.recordingMbid) return () => setLocation(`/song/${nav.recordingMbid}`);
+      return () => showToast("No page available yet");
+    }
 
     if (selectors.length > 0) {
       parts.push(
@@ -207,7 +222,7 @@ export function ContextRail({
       parts.push(
         <Group key="artists" label="Your artists">
           {yourArtists.map((a) => (
-            <Chip key={a} label={a} variant="lib" onClick={() => showToast("Artist pages coming soon")} />
+            <Chip key={a} label={a} variant="lib" onClick={stationArtistClick(a)} />
           ))}
         </Group>,
       );
@@ -233,6 +248,13 @@ export function ContextRail({
       .filter(({ show }) => show.djName === djName && show.state !== "future");
 
     const stationNames = [...new Set(djShows.map((x) => x.station.station.name))];
+    // Build artist → artistMbid map from all DJ spins
+    const djArtistNav = new Map<string, { artistMbid: string | null; recordingMbid: string | null }>();
+    for (const sp of djShows.flatMap(({ show }) => show.spins)) {
+      if (!djArtistNav.has(sp.artist)) {
+        djArtistNav.set(sp.artist, { artistMbid: sp.artistMbid ?? null, recordingMbid: sp.mbid ?? null });
+      }
+    }
     const yourArtists = [
       ...new Set(djShows.flatMap(({ show }) => show.spins.filter((sp) => sp.isLibraryHit).map((sp) => sp.artist))),
     ].slice(0, 4);
@@ -242,6 +264,13 @@ export function ContextRail({
       .filter((a) => !yourArtists.includes(a))
       .slice(0, 2);
     const totalCross = djShows.reduce((sum, { show }) => sum + show.crossings, 0);
+
+    function djArtistClick(name: string) {
+      const nav = djArtistNav.get(name);
+      if (nav?.artistMbid) return () => setLocation(`/artist/${nav.artistMbid}`);
+      if (nav?.recordingMbid) return () => setLocation(`/song/${nav.recordingMbid}`);
+      return () => showToast("No page available yet");
+    }
 
     parts.push(
       <Group key="stations" label="Stations">
@@ -264,7 +293,7 @@ export function ContextRail({
       parts.push(
         <Group key="artists" label="Your artists">
           {yourArtists.map((a) => (
-            <Chip key={a} label={a} variant="lib" onClick={() => showToast("Artist pages coming soon")} />
+            <Chip key={a} label={a} variant="lib" onClick={djArtistClick(a)} />
           ))}
         </Group>,
       );
@@ -274,7 +303,7 @@ export function ContextRail({
       parts.push(
         <Group key="new" label="New to you">
           {newArtists.map((a) => (
-            <Chip key={a} label={a} variant="new" onClick={() => showToast("Artist pages coming soon")} />
+            <Chip key={a} label={a} variant="new" onClick={djArtistClick(a)} />
           ))}
         </Group>,
       );
