@@ -295,6 +295,92 @@ describe("Complete-buffer resume — importLibrary NOT called for phase=spine", 
   });
 });
 
+// ── Test: complete buffer (phase="cache") skips Spotify fetch ────────────────
+//
+// A previous job that reached phase="cache" (spine written, cache lookup in
+// progress) has a complete buffer.  The worker must drain it directly without
+// calling importLibrary.
+
+describe("Complete-buffer resume — importLibrary NOT called for phase=cache", () => {
+  it("does NOT call importLibrary when the prev job has a complete buffer (phase=cache)", async () => {
+    if (!dbAvailable) return;
+
+    mockImportLibrary.mockClear();
+    mockResolveByText.mockClear();
+    mockResolveByIsrc.mockClear();
+
+    // Previous job completed the fetch (phase="cache") but crashed during
+    // the cache lookup phase — the buffer is the full library snapshot and
+    // should be reused.
+    const completeBuffer: ImportBufferEntry[] = [
+      { artist: ARTIST, title: "Cache Track", isrc: ISRC_BUF, durationMs: null, externalId: "sp-cache" },
+    ];
+    await seedPrevJob({ bufferEntries: completeBuffer, phase: "cache", status: "error" });
+
+    // importLibrary should never be reached — configure it to fail loudly if
+    // called so the assertion failure message is clear.
+    mockImportLibrary.mockImplementation(async function* () {
+      throw new Error("importLibrary must NOT be called when a complete buffer exists");
+    });
+
+    const newJobId = await createJob();
+    await runImportWorker(newJobId, userId, "spotify", connRow);
+
+    // importLibrary must NOT have been called — the complete buffer was reused.
+    expect(mockImportLibrary).not.toHaveBeenCalled();
+
+    // Job should finish as "done".
+    const [job] = await db
+      .select({ status: libraryImportJobsTable.status })
+      .from(libraryImportJobsTable)
+      .where(eq(libraryImportJobsTable.id, newJobId));
+    expect(job!.status).toBe("done");
+  });
+});
+
+// ── Test: complete buffer (phase="resolve") skips Spotify fetch ───────────────
+//
+// A previous job that reached phase="resolve" (cache done, MusicBrainz
+// resolution in progress) has a complete buffer.  The worker must drain it
+// directly without calling importLibrary.
+
+describe("Complete-buffer resume — importLibrary NOT called for phase=resolve", () => {
+  it("does NOT call importLibrary when the prev job has a complete buffer (phase=resolve)", async () => {
+    if (!dbAvailable) return;
+
+    mockImportLibrary.mockClear();
+    mockResolveByText.mockClear();
+    mockResolveByIsrc.mockClear();
+
+    // Previous job completed the fetch (phase="resolve") but crashed during
+    // the MusicBrainz resolution phase — the buffer is the full library snapshot
+    // and should be reused.
+    const completeBuffer: ImportBufferEntry[] = [
+      { artist: ARTIST, title: "Resolve Track", isrc: ISRC_BUF, durationMs: null, externalId: "sp-resolve" },
+    ];
+    await seedPrevJob({ bufferEntries: completeBuffer, phase: "resolve", status: "error" });
+
+    // importLibrary should never be reached — configure it to fail loudly if
+    // called so the assertion failure message is clear.
+    mockImportLibrary.mockImplementation(async function* () {
+      throw new Error("importLibrary must NOT be called when a complete buffer exists");
+    });
+
+    const newJobId = await createJob();
+    await runImportWorker(newJobId, userId, "spotify", connRow);
+
+    // importLibrary must NOT have been called — the complete buffer was reused.
+    expect(mockImportLibrary).not.toHaveBeenCalled();
+
+    // Job should finish as "done".
+    const [job] = await db
+      .select({ status: libraryImportJobsTable.status })
+      .from(libraryImportJobsTable)
+      .where(eq(libraryImportJobsTable.id, newJobId));
+    expect(job!.status).toBe("done");
+  });
+});
+
 // ── Test: expired buffer (> 24 h old) → fresh Spotify fetch ──────────────────
 //
 // A previous job interrupted in phase="fetching" but started more than 24 h
