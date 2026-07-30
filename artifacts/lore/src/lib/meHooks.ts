@@ -28,7 +28,11 @@ export interface LibraryProvenance {
   kind: string;
   service?: string;
   stationSlug?: string;
+  /** Display name of the station (joined from spins → stations) */
+  stationName?: string;
   pickerHandle?: string;
+  /** Display name of the picker/DJ (joined from spins → pickers) */
+  pickerName?: string;
 }
 
 export interface LibraryItem {
