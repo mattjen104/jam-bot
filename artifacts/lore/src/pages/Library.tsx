@@ -23,6 +23,9 @@ import {
   type AlbumCompletion,
   ME_LATEST_IMPORT_JOB_KEY,
   ME_LATEST_SYNC_JOB_KEY,
+  ME_OVERLAP_PICKERS_KEY,
+  ME_OVERLAP_STATIONS_KEY,
+  ME_OVERLAP_RUNS_KEY,
   useMyOverlapStations,
   useMyOverlapPickers,
   useMyOverlapRuns,
@@ -436,8 +439,13 @@ export default function Library() {
   useEffect(() => {
     if (jobData?.status !== "done") return;
     const t = setTimeout(() => setBannerDismissed(true), 8_000);
+    // Invalidate overlap data — the import may have resolved new tracks that
+    // now match stations or selectors the user hadn't seen before.
+    void queryClient.invalidateQueries({ queryKey: ME_OVERLAP_PICKERS_KEY });
+    void queryClient.invalidateQueries({ queryKey: ME_OVERLAP_STATIONS_KEY });
+    void queryClient.invalidateQueries({ queryKey: ME_OVERLAP_RUNS_KEY });
     return () => clearTimeout(t);
-  }, [jobData?.status]);
+  }, [jobData?.status]); // queryClient is stable; overlap keys are module-level constants
 
   const isActive = jobData?.status === "pending" || jobData?.status === "running";
   const isRecentlyFinished = (() => {
