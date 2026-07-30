@@ -89,6 +89,8 @@ function LiveShowRow({
   isActive,
   isPinned,
   onClick,
+  onPlay,
+  onPinToggle,
 }: {
   ds: DialStation;
   show: DialShow | null;
@@ -97,6 +99,8 @@ function LiveShowRow({
   isActive: boolean;
   isPinned: boolean;
   onClick: () => void;
+  onPlay: () => void;
+  onPinToggle: () => void;
 }) {
   const rz = reason(show, ds.crossings);
   const isCrossing = rz.r === 1;
@@ -138,7 +142,20 @@ function LiveShowRow({
             {railLbl && <span className="lsrow__ov-lbl">{railLbl}</span>}
           </div>
         )}
-        {isPinned && <span className="lsrow__pin">📌</span>}
+        <button
+          className={`lsrow__play${isActive ? " lsrow__play--active" : ""}`}
+          aria-label={isActive ? "Stop" : "Play"}
+          onClick={(e) => { e.stopPropagation(); onPlay(); }}
+        >
+          {isActive ? "■" : "▶"}
+        </button>
+        <button
+          className={`lsrow__pin-btn${isPinned ? " lsrow__pin-btn--pinned" : ""}`}
+          aria-label={isPinned ? "Unpin station" : "Pin station"}
+          onClick={(e) => { e.stopPropagation(); onPinToggle(); }}
+        >
+          📌
+        </button>
       </div>
     </div>
   );
@@ -836,6 +853,8 @@ export function DialView() {
                 isActive={ds.station.slug === radio.station?.slug}
                 isPinned={pins.has(ds.station.slug)}
                 onClick={() => goStation(ds.station.slug)}
+                onPlay={() => void radio.toggle(ds.station)}
+                onPinToggle={() => handlePinToggle(ds.station.slug)}
               />
             ))}
             {offlineStations.length > 0 && <TierHeader live={false} />}

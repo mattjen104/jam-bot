@@ -3,10 +3,15 @@
  *
  * Fetches:
  *   - station list (with live pulse)
- *   - today's schedule runs (show blocks per station)
- *   - today's recent spins per station
+ *   - rolling 24-hour schedule runs (show blocks per station, today + yesterday)
+ *   - rolling 24-hour recent spins per station (today + yesterday)
  *   - user's full library MBIDs (for library-crossing detection)
  *   - picked MBIDs lookup (to detect picker/selector shows)
+ *
+ * Both schedule and recent-spins cover the past 24 hours (today + yesterday)
+ * so that overnight shows that started before midnight are included in the
+ * `crossings` count. The server endpoints filter by calendar day, so we fetch
+ * both days and merge the results client-side.
  *
  * Returns an enriched `DialStation[]` array. Sorting is intentionally left to
  * DialView, which applies the attribution-tier ladder: live crossing → named
@@ -81,6 +86,10 @@ function todayStr() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function yesterdayStr() {
+  const d = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 export function readPins(): Set<string> {
   try {
     const raw = localStorage.getItem(LS_PINS_KEY);
@@ -147,6 +156,7 @@ export function useDialData(): {
   isLoading: boolean;
 } {
   const today = todayStr();
+  const yesterday = yesterdayStr();
 
   // ── SSE override: instant now-playing from the server's spin-changed stream ─
   // When the server persists a new spin it pushes a spin-changed SSE event.
@@ -198,7 +208,7 @@ export function useDialData(): {
     },
   });
 
-  // ── schedule runs ────────────────────────────────────────────────────────
+  // ── schedule runs (today + yesterday for rolling 24h window) ────────────
   const { data: scheduleData, isLoading: schedLoading } = useGetStationsSchedule(
     { date: today },
     {
@@ -209,8 +219,21 @@ export function useDialData(): {
       },
     },
   );
+  // Yesterday's runs — overnight shows that started before midnight are absent
+  // from today's calendar-day slice; fetching yesterday closes the 24h gap.
+  const { data: scheduleDataYesterday } = useGetStationsSchedule(
+    { date: yesterday },
+    {
+      query: {
+        queryKey: getGetStationsScheduleQueryKey({ date: yesterday }),
+        // Yesterday's data is stable; refresh infrequently.
+        staleTime: 5 * 60_000,
+        refetchInterval: 10 * 60_000,
+      },
+    },
+  );
 
-  // ── recent spins ─────────────────────────────────────────────────────────
+  // ── recent spins (today + yesterday for rolling 24h window) ──────────────
   const { data: spinsData, isLoading: spinsLoading } = useGetStationsRecentSpins(
     { date: today },
     {
@@ -218,6 +241,17 @@ export function useDialData(): {
         queryKey: getGetStationsRecentSpinsQueryKey({ date: today }),
         staleTime: 60_000,
         refetchInterval: 2 * 60_000,
+      },
+    },
+  );
+  // Yesterday's spins — needed to count library crossings on overnight shows.
+  const { data: spinsDataYesterday } = useGetStationsRecentSpins(
+    { date: yesterday },
+    {
+      query: {
+        queryKey: getGetStationsRecentSpinsQueryKey({ date: yesterday }),
+        staleTime: 5 * 60_000,
+        refetchInterval: 10 * 60_000,
       },
     },
   );
@@ -314,25 +348,49 @@ export function useDialData(): {
 
   const runsBySlug = useMemo(() => {
     const m = new Map<string, StationScheduleRun[]>();
+    // Yesterday first so today's runs sort after them chronologically when merged.
+    for (const item of scheduleDataYesterday?.items ?? []) {
+      m.set(item.stationSlug, [...item.runs]);
+    }
     for (const item of scheduleData?.items ?? []) {
-      m.set(item.stationSlug, item.runs);
+      const existing = m.get(item.stationSlug);
+      if (existing) {
+        existing.push(...item.runs);
+      } else {
+        m.set(item.stationSlug, [...item.runs]);
+      }
     }
     return m;
-  }, [scheduleData]);
+  }, [scheduleData, scheduleDataYesterday]);
 
   const spinsBySlug = useMemo(() => {
     const m = new Map<string, StationRecentSpin[]>();
+    // Yesterday first; today's spins are appended so newest-first sorting
+    // (done during station assembly) handles ordering correctly.
+    for (const item of spinsDataYesterday?.items ?? []) {
+      m.set(item.stationSlug, [...item.spins]);
+    }
     for (const item of spinsData?.items ?? []) {
-      m.set(item.stationSlug, item.spins);
+      const existing = m.get(item.stationSlug);
+      if (existing) {
+        existing.push(...item.spins);
+      } else {
+        m.set(item.stationSlug, [...item.spins]);
+      }
     }
     return m;
-  }, [spinsData]);
+  }, [spinsData, spinsDataYesterday]);
 
   // pins are managed externally by DialView; not needed for data assembly
 
   // ── assemble enriched stations ────────────────────────────────────────────
   const stations = useMemo((): DialStation[] => {
     const raw = stationsData?.stations ?? [];
+    // Rolling 24-hour cutoff for crossings. We fetch both today's and
+    // yesterday's data so that overnight shows are present, but only spins
+    // within the past 24 hours count toward crossings — spins from earlier
+    // yesterday (e.g. 6 am when it is now 9 am) are excluded.
+    const window24hCutoffMs = Date.now() - 24 * 60 * 60 * 1000;
 
     return raw.map((station) => {
       const isLive = liveBySlug.get(station.slug) ?? false;
@@ -355,7 +413,9 @@ export function useDialData(): {
         const startMs = new Date(run.startedAt).getTime();
         const endMs = new Date(run.endedAt).getTime();
 
-        // Assign spins that fall within this run's time window
+        // Assign spins that fall within this run's time window.
+        // All matching spins are kept for display (chip timeline, currentTrack);
+        // only spins inside the rolling 24h window count toward crossings.
         const runSpins: DialSpin[] = sortedSpins
           .filter((sp) => {
             const t = new Date(sp.playedAt).getTime();
@@ -370,7 +430,11 @@ export function useDialData(): {
             isLibraryHit: sp.mbid != null && libraryMbidSet.has(sp.mbid),
           }));
 
-        const crossings = runSpins.filter((sp) => sp.isLibraryHit).length;
+        // Count only spins within the rolling 24h window so that a show that
+        // aired yesterday morning doesn't inflate today's crossing count.
+        const crossings = runSpins.filter(
+          (sp) => sp.isLibraryHit && new Date(sp.playedAt).getTime() >= window24hCutoffMs,
+        ).length;
         const topArtists = topArtistsFromSpins(runSpins);
         // Prefer the live now-playing API track; fall back to most recent spin in window
         const currentTrack =
