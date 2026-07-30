@@ -573,11 +573,27 @@ export default function Library() {
   const { data: overlapPickers } = useMyOverlapPickers();
   const { data: overlapRuns } = useMyOverlapRuns();
 
+  // Overlap data is derived from library_items which includes kept tracks — no
+  // Spotify import required.  Remove the hasSpotify gate so keepers see results.
   const hasOverlapData =
-    hasSpotify &&
-    ((overlapStations ?? []).length > 0 ||
-      (overlapPickers ?? []).length > 0 ||
-      (overlapRuns ?? []).length > 0);
+    (overlapStations ?? []).length > 0 ||
+    (overlapPickers ?? []).length > 0 ||
+    (overlapRuns ?? []).length > 0;
+
+  // Overlap queries have all loaded (undefined = still loading, [] = loaded+empty)
+  const overlapLoaded =
+    overlapStations !== undefined &&
+    overlapPickers !== undefined &&
+    overlapRuns !== undefined;
+
+  // Show a Spotify teaser when: authenticated, no Spotify, has kept tracks,
+  // and overlap queries finished but found nothing (too few kept tracks to match).
+  const showOverlapSpotifyTeaser =
+    isAuthenticated &&
+    !hasSpotify &&
+    keptItems.length > 0 &&
+    overlapLoaded &&
+    !hasOverlapData;
 
   // Unavailable items from last sync
   const unavailableItems =
@@ -937,6 +953,46 @@ export default function Library() {
           </section>
         )}
 
+        {/* ── Spotify teaser when keeper has no Spotify + no overlap yet ── */}
+        {showOverlapSpotifyTeaser && (
+          <section
+            className="mt-12 rounded-2xl border border-primary/20 bg-primary/5 px-5 py-6"
+            data-testid="library-overlap-teaser"
+          >
+            <div className="flex items-start gap-4">
+              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-primary/10">
+                <Radio className="h-4 w-4 text-primary" />
+              </div>
+              <div className="min-w-0">
+                <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
+                  Discover your stations
+                </p>
+                <p className="mt-2 font-serif text-base text-foreground">
+                  Connect Spotify to see which stations and selectors share your taste.
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Keep a few more tracks from the radio, or import your Spotify library
+                  to unlock stations and selectors that already play what you love.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void handleConnect()}
+                  disabled={connectBusy}
+                  data-testid="library-overlap-teaser-connect"
+                  className="hover-elevate mt-4 inline-flex items-center gap-2 rounded-full border border-primary/50 bg-primary/15 px-4 py-2 font-mono text-[11px] uppercase tracking-wide text-primary disabled:opacity-60"
+                >
+                  {connectBusy ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Music2 className="h-3.5 w-3.5" />
+                  )}
+                  Connect Spotify
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* ── Stations & selectors that match your taste ───────── */}
         {hasOverlapData && (
           <section className="mt-12" data-testid="library-overlap">
@@ -945,7 +1001,9 @@ export default function Library() {
                 Stations &amp; selectors that match your taste
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Based on the tracks in your Spotify library.
+                {hasSpotify
+                  ? "Based on the tracks in your Spotify library."
+                  : "Based on tracks you've kept from the radio."}
               </p>
             </div>
 
