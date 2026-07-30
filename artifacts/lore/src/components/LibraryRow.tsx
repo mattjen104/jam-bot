@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import type { LibraryItem } from "../lib/meHooks";
 import { usePlayer, type RideSeed } from "../player/PlayerProvider";
 import { getRecordingAlbumTracks } from "@workspace/api-client-react";
+import { getRecordingAlbumTracks, spotifyPlay } from "@workspace/api-client-react";
 
 /** Deterministic gradient fallback for artwork */
 function artGradient(a: string, b: string): string {
@@ -75,7 +76,7 @@ function Byline({ prov }: { prov: LibraryItem["provenance"] }) {
 
 /** Three play doors — expands inline below the row. */
 function DoorStrip({ item, onClose }: { item: LibraryItem; onClose: () => void }) {
-  const { ride } = usePlayer();
+  const { ride, spotify } = usePlayer();
   const [, navigate] = useLocation();
   const [albumBusy, setAlbumBusy] = useState(false);
 
@@ -86,7 +87,22 @@ function DoorStrip({ item, onClose }: { item: LibraryItem; onClose: () => void }
 
   const seed: RideSeed = { mbid: item.mbid, title, artist, artworkUrl, links: [] };
 
+  const spotifyEligible = spotify.connected && spotify.premium;
+
   function handleTrack() {
+    if (spotifyEligible) {
+      // Spotify connected: play the track directly on the listener's device,
+      // bypassing the preview fallback entirely.
+      void spotifyPlay({
+        mbid: item.mbid,
+        deviceId: spotify.pinnedDevice?.id ?? undefined,
+      }).catch(() => {
+        // If the direct play fails, fall back to the replay ride.
+        ride.startReplay([seed], title, { timeOrientation: "curated", context: "library" });
+      });
+      onClose();
+      return;
+    }
     ride.startReplay([seed], title, { timeOrientation: "curated", context: "library" });
     onClose();
   }
