@@ -30,9 +30,20 @@ export function LibraryRow({ item }: LibraryRowProps) {
   const isImportedFromSpotify =
     item.provenance.kind === "import" && item.provenance.service === "spotify";
 
+  const isKeep = item.provenance.kind === "keep";
+  const isImport = item.provenance.kind === "import";
+
+  const containerClass = `group flex items-center gap-3 rounded-xl border px-4 py-3 transition-colors ${
+    isKeep
+      ? "border-primary/30 bg-primary/10 hover:bg-primary/15"
+      : isImport
+      ? "border-keep/20 bg-keep/5 hover:bg-keep/10"
+      : "border-card-border bg-card hover:bg-card/80"
+  }`;
+
   return (
     <li
-      className="group flex items-center gap-3 rounded-xl border border-card-border bg-card px-4 py-3 transition-colors hover:bg-card/80"
+      className={containerClass}
       data-testid="library-row"
     >
       {/* 40×40 artwork swatch */}

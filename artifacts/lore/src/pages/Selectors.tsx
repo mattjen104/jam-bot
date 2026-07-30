@@ -190,8 +190,15 @@ function CuratedSelectorCard({
     <li>
       <Link
         href={`/archive/selectors/${picker.handle}`}
-        className="hover-elevate group flex flex-col gap-0 overflow-hidden rounded-2xl border border-card-border bg-card transition-shadow"
+        className={`hover-elevate group relative flex flex-col gap-0 overflow-hidden rounded-2xl border transition-shadow ${
+          recentlyActive 
+            ? "border-picker/30 bg-picker/10" 
+            : "border-picker/20 bg-picker/5"
+        }`}
       >
+        {recentlyActive && (
+          <div className="absolute bottom-0 left-0 top-0 w-1 bg-picker/50" />
+        )}
         {/* Top bar: avatar + name + badge + overlap % */}
         <div className="flex items-start gap-4 p-5 pb-4">
           <InitialsAvatar name={picker.name} />
@@ -236,7 +243,7 @@ function CuratedSelectorCard({
         </div>
 
         {/* Bottom row: set count + artists + play button */}
-        <div className="flex items-center gap-3 border-t border-card-border px-5 py-3">
+        <div className="flex items-center gap-3 border-t border-picker/20 px-5 py-3">
           <div className="min-w-0 flex-1">
             {run ? (
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -299,8 +306,11 @@ function RadioSelectorCard({ selector }: { selector: SelectorSummary }) {
     <li>
       <Link
         href={`/archive/selectors/${selector.handle}`}
-        className="hover-elevate flex items-center gap-4 rounded-2xl border border-card-border bg-card p-4 transition-shadow"
+        className={`hover-elevate relative flex items-center gap-4 rounded-2xl border p-4 transition-shadow ${
+          onAir ? "border-picker/30 bg-picker/10" : "border-picker/20 bg-picker/5"
+        }`}
       >
+        {onAir && <div className="absolute bottom-0 left-0 top-0 w-1 bg-picker/50 rounded-l-2xl" />}
         <InitialsAvatar name={selector.name} size="sm" />
 
         <div className="min-w-0 flex-1">
@@ -421,7 +431,7 @@ export default function Selectors() {
   const isError = listError;
 
   return (
-    <div className="min-h-screen">
+    <div className="lore-grain relative min-h-screen">
       {searchOpen && (
         <SearchOverlay
           dialStations={[]}
@@ -430,7 +440,8 @@ export default function Selectors() {
           onShowDrill={(_show, station) => { setLocation(`/archive/stations/${station.station.slug}`); setSearchOpen(false); }}
         />
       )}
-      <div className={`mx-auto max-w-5xl px-4 pt-8 sm:px-6 ${dockPadding}`}>
+      <div className="lore-glow pointer-events-none absolute inset-0" />
+      <div className={`relative z-10 mx-auto max-w-5xl px-4 pt-8 sm:px-6 ${dockPadding}`}>
 
         {/* ── Hero ─────────────────────────────────────────────── */}
         <header className="mb-10">
