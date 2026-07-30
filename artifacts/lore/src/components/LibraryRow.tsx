@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import type { LibraryItem } from "../lib/meHooks";
 import { usePlayer, type RideSeed } from "../player/PlayerProvider";
@@ -79,6 +79,21 @@ function DoorStrip({ item, onClose }: { item: LibraryItem; onClose: () => void }
   const { ride, spotify } = usePlayer();
   const [, navigate] = useLocation();
   const [albumBusy, setAlbumBusy] = useState(false);
+  const [albumPreview, setAlbumPreview] = useState<{ rgTitle: string; trackCount: number } | null>(null);
+
+  // Pre-fetch album info as soon as the strip opens so the label is informative
+  // before the listener commits to tapping.
+  useEffect(() => {
+    let cancelled = false;
+    getRecordingAlbumTracks(item.mbid)
+      .then((data) => {
+        if (!cancelled) {
+          setAlbumPreview({ rgTitle: data.rgTitle ?? "", trackCount: data.tracks.length });
+        }
+      })
+      .catch(() => { /* 404 = no album data yet — label stays generic */ });
+    return () => { cancelled = true; };
+  }, [item.mbid]);
 
   const rec = item.recording;
   const title = rec?.title ?? item.mbid.slice(0, 8);
@@ -152,7 +167,11 @@ function DoorStrip({ item, onClose }: { item: LibraryItem; onClose: () => void }
         disabled={albumBusy}
         title="Play full album from track 1"
       >
-        {albumBusy ? "…" : "💿 Album"}
+        {albumBusy
+          ? "…"
+          : albumPreview
+          ? `💿 ${albumPreview.rgTitle} · ${albumPreview.trackCount} track${albumPreview.trackCount === 1 ? "" : "s"}`
+          : "💿 Album"}
       </button>
       {broadcastHref ? (
         <button
