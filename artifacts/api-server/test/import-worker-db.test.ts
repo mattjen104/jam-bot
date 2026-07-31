@@ -664,6 +664,88 @@ describe("Soft-row exclusion — Phase 1 ISRC-resolved track never written to sp
   });
 });
 
+// ── Soft-row exclusion: resolution-cache-resolved tracks must not appear in spotify_library_items ──
+
+describe("Soft-row exclusion — Phase 2 cache-resolved track never written to spotify_library_items", () => {
+  // Unique externalId so this describe block's assertions are isolated from
+  // any residual rows created by other describe blocks.
+  const SOFT_P2_EXT_ID = `sp-soft-p2-${run}`;
+
+  it("leaves spotify_library_items empty after the first import run", async () => {
+    if (!dbAvailable) return;
+
+    mockResolveByText.mockClear();
+    mockResolveByIsrc.mockClear();
+
+    // No ISRC → Phase 1 won't match; artist+title normalises to the
+    // resolution_cache key seeded in beforeAll → Phase 2 hits.
+    setupConnector([
+      { artist: ARTIST, title: "Phase2 Track", externalId: SOFT_P2_EXT_ID },
+    ]);
+
+    const jid = await createJob();
+    await runImportWorker(jid, userId, "spotify", connRow);
+
+    // Phase 3 must not have been reached.
+    expect(mockResolveByText).not.toHaveBeenCalled();
+
+    // The track must be in library_items (resolved via Phase 2).
+    const items = await db
+      .select({ mbid: libraryItemsTable.mbid })
+      .from(libraryItemsTable)
+      .where(eq(libraryItemsTable.userId, userId));
+    expect(items.map((r) => r.mbid)).toContain(MBID_P2);
+
+    // The resolved track must NOT appear as a soft row.
+    const softRows = await db
+      .select({ spotifyId: spotifyLibraryItemsTable.spotifyId })
+      .from(spotifyLibraryItemsTable)
+      .where(eq(spotifyLibraryItemsTable.userId, userId));
+    const softIds = softRows.map((r) => r.spotifyId);
+    expect(softIds).not.toContain(SOFT_P2_EXT_ID);
+
+    const [job] = await db
+      .select({ status: libraryImportJobsTable.status, resolved: libraryImportJobsTable.resolved })
+      .from(libraryImportJobsTable)
+      .where(eq(libraryImportJobsTable.id, jid));
+    expect(job!.status).toBe("done");
+    expect(job!.resolved).toBe(1);
+  });
+
+  it("leaves spotify_library_items empty after a second re-import run", async () => {
+    if (!dbAvailable) return;
+
+    mockResolveByText.mockClear();
+    mockResolveByIsrc.mockClear();
+
+    // Same track, same cache key — simulates the user triggering a re-import.
+    setupConnector([
+      { artist: ARTIST, title: "Phase2 Track", externalId: SOFT_P2_EXT_ID },
+    ]);
+
+    const jid = await createJob();
+    await runImportWorker(jid, userId, "spotify", connRow);
+
+    // Phase 3 must still have been skipped.
+    expect(mockResolveByText).not.toHaveBeenCalled();
+
+    // Soft table must remain clean after the re-import.
+    const softRows = await db
+      .select({ spotifyId: spotifyLibraryItemsTable.spotifyId })
+      .from(spotifyLibraryItemsTable)
+      .where(eq(spotifyLibraryItemsTable.userId, userId));
+    const softIds = softRows.map((r) => r.spotifyId);
+    expect(softIds).not.toContain(SOFT_P2_EXT_ID);
+
+    const [job] = await db
+      .select({ status: libraryImportJobsTable.status, resolved: libraryImportJobsTable.resolved })
+      .from(libraryImportJobsTable)
+      .where(eq(libraryImportJobsTable.id, jid));
+    expect(job!.status).toBe("done");
+    expect(job!.resolved).toBe(1);
+  });
+});
+
 // ── Mixed-phase regression test ──────────────────────────────────────────────
 
 describe("Mixed all-3 phases — large re-import short-circuit", () => {
