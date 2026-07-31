@@ -3761,18 +3761,26 @@ router.get("/me/crossings", h(async (req, res) => {
 
   // Fetch soft artist names (unresolved Spotify imports — name-based fallback
   // when the spin's recording has no artistMbid to compare against).
-  const softRows = await db
-    .selectDistinct({ artist: spotifyLibraryItemsTable.artist })
-    .from(spotifyLibraryItemsTable)
-    .where(
-      and(
-        eq(spotifyLibraryItemsTable.userId, user.id),
-        isNull(spotifyLibraryItemsTable.mbid),
-      ),
-    );
-  const softArtistNames = softRows
-    .map((r) => r.artist.toLowerCase().trim())
-    .filter(Boolean);
+  // Wrapped in try/catch: the table may not exist in environments where the
+  // schema migration hasn't run yet; degrade to an empty list rather than
+  // crashing the whole crossings request.
+  let softArtistNames: string[] = [];
+  try {
+    const softRows = await db
+      .selectDistinct({ artist: spotifyLibraryItemsTable.artist })
+      .from(spotifyLibraryItemsTable)
+      .where(
+        and(
+          eq(spotifyLibraryItemsTable.userId, user.id),
+          isNull(spotifyLibraryItemsTable.mbid),
+        ),
+      );
+    softArtistNames = softRows
+      .map((r) => r.artist.toLowerCase().trim())
+      .filter(Boolean);
+  } catch (err) {
+    console.warn("[me/crossings] soft-artist lookup failed (table may not exist yet)", err);
+  }
 
   // ── Composite SQL predicates ──────────────────────────────────────────────
   // Library hit: exact MBID OR any track from the same primary release group.
