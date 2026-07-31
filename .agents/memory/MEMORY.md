@@ -67,3 +67,6 @@
 - [isCoreLoading live-gate hang](icore-loading-hang.md) — gating the offline section AND spinner on liveLoading causes blank/infinite hang; only gate spinner on stationsLoading.
 - [Import Phase 3 negative cache on MB 503](import-negative-cache-503.md) — MB 503 errors must not write negative cache; use resolveErrored flag to guard the else-if branch.
 - [Canadian campus radio ICY fix](canadian-stations-icy-fix.md) — CFUV/CHMR/CISM/CJSR/CKCU/CKUT not on Spinitron; need radio_browser_icy + favorite=true (mux reads empty status.xsl; only watcher reads inline ICY metadata).
+- [ICY watcher startup failure limit](icy-watcher-startup-failure.md) — FAILURE_LIMIT=5 / 10min caused permanent fallback during boot (mux probes 400+ hosts concurrently); raised to 12/30min + 15s timeout so startup contention doesn't trigger permanent fallback.
+- [Dial crossing computation — three gaps](dial-crossing-gaps.md) — (1) recent-spins API capped at 8/station (raise to 80, chip strip already slices client-side); (2) artistCrossings excluded from station-level sum; (3) live artist-hit not checked in reason() rung 1 (add rung 1.5 for currentTrack.isArtistHit).
+- [Library API total count](library-total-count.md) — GET /api/me/library omits total on pages 2+; run COUNT(*) only on first page (cursor IS NULL) and spread into response; client reads keptData.pages[0].total.

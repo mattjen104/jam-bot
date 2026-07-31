@@ -737,11 +737,17 @@ router.get("/stations/recent-spins", h(async (req, res) => {
     -- the same track more than once in a row (metadata re-announces, ad-break
     -- interruptions that resume the same song, etc), so we need extra rows
     -- to still land on 8 *distinct* tracks after de-duping below.
-    WHERE rn <= 30
+    -- 80 rows per station: enough to cover a 3-hour show at ~1 spin/2min.
+    -- The chip strip is capped client-side (show.spins.slice(0,28)) so UI
+    -- is unaffected; the extra rows only widen crossing detection.
+    WHERE rn <= 80
     ORDER BY station_slug, played_at DESC
   `);
 
-  const CHIPS_PER_STATION = 8;
+  // No per-station cap: return all fetched spins so the client can compute
+  // library crossings against the FULL show history, not just the latest 8.
+  // The chip strip limits display client-side via slice(0, 28).
+  const CHIPS_PER_STATION = 80;
   const bySlug = new Map<string, { mbid: string | null; artistMbid: string | null; releaseGroupMbid: string | null; title: string; artist: string; playedAt: string }[]>();
   const seenBySlug = new Map<string, Set<string>>();
   for (const row of rows.rows) {

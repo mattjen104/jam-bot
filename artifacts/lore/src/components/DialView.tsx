@@ -68,11 +68,26 @@ function listNames(artists: string[]): string {
 
 interface ReasonResult { r: number; cls: string; node: ReactNode }
 
-/** One sentence per rung; returns the strongest rung that applies (spec §3). */
-function reason(show: DialShow | null, stationCrossings: number): ReasonResult {
+/** One sentence per rung; returns the strongest rung that applies (spec §3).
+ *
+ * Crossing ladder (strongest first):
+ *   1   — exact library track playing right now
+ *   1.5 — library artist playing right now (artist hit, live track)
+ *   2   — exact library tracks already aired this show
+ *   3   — library artists already aired this show (no exact match)
+ *   6   — attributed show on air, no evidence yet
+ *   7   — 24h station exact crossings (no selector listed)
+ *   7.5 — 24h station artist crossings (no exact hits, no selector)
+ *   0   — dark: nothing to go on
+ */
+function reason(
+  show: DialShow | null,
+  stationCrossings: number,
+  stationArtistCrossings = 0,
+): ReasonResult {
   if (!show) return { r: 0, cls: "w0", node: "on air · Lore can't see who's playing" };
 
-  // Rung 1: crossing is playing right now
+  // Rung 1: exact library track playing right now
   if (show.currentTrack?.isLibraryHit) {
     return {
       r: 1, cls: "w1",
@@ -80,7 +95,17 @@ function reason(show: DialShow | null, stationCrossings: number): ReasonResult {
     };
   }
 
-  // Rung 2: artist names from crossings already this set (§9 names, not counts)
+  // Rung 1.5: library artist playing right now (not an exact track match).
+  // The live track hasn't been logged into spins yet (SSE lag), so
+  // show.artistCrossings won't include it — check currentTrack directly.
+  if (show.currentTrack?.isArtistHit) {
+    return {
+      r: 2, cls: "w2",
+      node: <>playing <b>{show.currentTrack.artist}</b> — an artist from your library</>,
+    };
+  }
+
+  // Rung 2: exact library tracks already aired this show
   if (show.crossings > 0) {
     const names = show.topArtists.length > 0 ? listNames(show.topArtists) : null;
     return {
@@ -91,7 +116,7 @@ function reason(show: DialShow | null, stationCrossings: number): ReasonResult {
     };
   }
 
-  // Rung 3: artists from user's library played this set (no exact track match)
+  // Rung 3: library artists already aired this show (no exact track match)
   if (show.artistCrossings > 0) {
     const names = show.topArtistNames.length > 0 ? listNames(show.topArtistNames) : null;
     return {
@@ -102,16 +127,24 @@ function reason(show: DialShow | null, stationCrossings: number): ReasonResult {
     };
   }
 
-  // Rung 6: on air, attributed, no evidence yet
+  // Rung 6: attributed show on air, no evidence yet
   if (show.djName) {
     return { r: 6, cls: "w6", node: `on air · ${intoSet(show.startedAt)} into the set` };
   }
 
-  // Rung 7: 24h station crossings, no selector listed
+  // Rung 7: 24h station exact crossings (no selector listed)
   if (stationCrossings > 0) {
     return {
       r: 7, cls: "w7",
       node: <><b>{stationCrossings} of yours</b> here in the last 24h — no selector listed</>,
+    };
+  }
+
+  // Rung 7.5: 24h station artist crossings (no exact hits, no selector listed)
+  if (stationArtistCrossings > 0) {
+    return {
+      r: 7, cls: "w7",
+      node: <><b>{stationArtistCrossings}</b> tracks by your artists here in the last 24h</>,
     };
   }
 
@@ -222,7 +255,7 @@ interface FrontDoorRowProps {
 }
 
 function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onEarlier }: FrontDoorRowProps) {
-  const rz = reason(show, ds.crossings);
+  const rz = reason(show, ds.crossings, ds.artistCrossings);
   const isAttributed = !!show?.djName;
 
   // §8 Person leads — selector name when attributed, station name otherwise
@@ -882,7 +915,7 @@ export function DialView() {
       .filter((ds) => ds.isLive)
       .map((ds) => {
         const show = ds.shows.find((sh) => sh.state === "live") ?? null;
-        const rz = reason(show, ds.crossings);
+        const rz = reason(show, ds.crossings, ds.artistCrossings);
         return { ds, show, rz };
       })
       .sort((a, b) => {

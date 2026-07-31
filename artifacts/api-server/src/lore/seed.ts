@@ -326,13 +326,14 @@ function canadianCampusStations(): InsertStation[] {
       name: "CISM 89.3 FM",
       org: "Université de Montréal",
       country: "CA",
-      // Icecast (Liquidsoap) stream at ustream.ca — confirmed 200 + ICY headers.
-      streamUrl: "http://stream03.ustream.ca/cism128.mp3",
+      // Icecast (Liquidsoap) stream at ustream.ca — must include port 8000;
+      // the default-port URL (port 80) returns 400 Bad Request from Icecast.
+      streamUrl: "http://stream03.ustream.ca:8000/cism128.mp3",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://cism.umontreal.ca",
       nowPlayingSource: "radio_browser_icy",
-      nowPlayingConfig: { streamUrl: "http://stream03.ustream.ca/cism128.mp3" },
+      nowPlayingConfig: { streamUrl: "http://stream03.ustream.ca:8000/cism128.mp3" },
       source: "curated",
       stationClass: "community",
       favorite: true,
@@ -351,6 +352,7 @@ function canadianCampusStations(): InsertStation[] {
       streamFormat: "aac",
       homepageUrl: "https://www.cjsr.com",
       donateUrl: "https://www.cjsr.com/donate/",
+      scheduleUrl: "https://www.cjsr.com/schedule/",
       nowPlayingSource: "radio_browser_icy",
       nowPlayingConfig: { streamUrl: "http://ais-sa1.streamon.fm/7093_24k.aac" },
       source: "curated",

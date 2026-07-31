@@ -32,9 +32,16 @@ import {
 const BACKOFF_FLOOR_MS = 5_000;
 const BACKOFF_CAP_MS = 300_000;
 const WATCHDOG_MS = 30_000;
-const FAILURE_WINDOW_MS = 10 * 60_000;
-const FAILURE_LIMIT = 5;
-const CONNECT_TIMEOUT_MS = 8_000;
+// Wider window + higher limit so startup-burst timeouts (mux probing 400+
+// hosts concurrently during boot) don't trigger a permanent fallback to
+// interval polling.  With 12 failures allowed over 30 min, the watcher
+// survives the ~2-3 min boot contention and reconnects cleanly once the
+// network load drops.
+const FAILURE_WINDOW_MS = 30 * 60_000;
+const FAILURE_LIMIT = 12;
+// 15 s — gives more headroom when Replit's outbound queue is saturated
+// during the startup burst; curl connects in <8 s under normal load.
+const CONNECT_TIMEOUT_MS = 15_000;
 
 export class IcyWatcher extends EventEmitter {
   private socket: net.Socket | null = null;
@@ -175,7 +182,7 @@ export class IcyWatcher extends EventEmitter {
     this.failureTimestamps.push(now);
     if (this.failureTimestamps.length >= FAILURE_LIMIT) {
       this.emitPersistentFailed(
-        `${FAILURE_LIMIT} failures in 10 min (last: ${message})`,
+        `${FAILURE_LIMIT} failures in 30 min (last: ${message})`,
       );
       return;
     }

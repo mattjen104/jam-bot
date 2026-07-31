@@ -77,8 +77,10 @@ export interface DialStation {
   /** true when the station is airing right now */
   isLive: boolean;
   shows: DialShow[];
-  /** total library crossings across all past+live shows */
+  /** total exact-MBID/release-group crossings across all past+live shows */
   crossings: number;
+  /** total artist-level crossings across all past+live shows (exact track not in library) */
+  artistCrossings: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -548,10 +550,14 @@ export function useDialData(): {
         (sum, sh) => sum + (sh.state !== "future" ? sh.crossings : 0),
         0,
       );
+      // Artist-level crossings: spins by library artists where the exact track
+      // isn't in the library.  Used by rung 7.5 in reason() and station sorting.
+      const artistCrossings = shows.reduce(
+        (sum, sh) => sum + (sh.state !== "future" ? sh.artistCrossings : 0),
+        0,
+      );
 
-      return { station, isLive, shows, crossings };
-      // Note: station-level artistCrossings are intentionally not pre-summed here —
-      // the dial reads them per-show via reason(), so no aggregate is needed.
+      return { station, isLive, shows, crossings, artistCrossings };
     })
     // Determine which stations to surface in the Dial:
     //   1. Any station that is currently live (has a now-playing signal)

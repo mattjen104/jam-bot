@@ -578,9 +578,14 @@ export default function Library() {
     isLoading: keptLoading,
     isFetchingNextPage,
     fetchNextPage,
+    // libraryTotal is populated from the first-page COUNT query (no cursor).
+    // Subsequent pages omit it; we keep the first-page value for display.
     hasNextPage,
   } = useMyLibraryInfinite({ source: sourceFilter || undefined }, 50);
   const keptItems = keptData?.pages.flatMap((p) => p.items) ?? [];
+  // Total count from the server's first-page COUNT query — reflects the real
+  // library size even before all pages are loaded.
+  const libraryTotal: number | undefined = keptData?.pages[0]?.total;
 
   // Single-open door strip: tracks which row has its door strip expanded
   const [openDoorMbid, setOpenDoorMbid] = useState<string | null>(null);
@@ -765,10 +770,10 @@ export default function Library() {
       <div className="dial-topbar">
         <span className="dial-topbar__wordmark">Lore</span>
         <span className="dial-topbar__title dial-topbar__title--active">Library</span>
-        {keptItems.length > 0 && (
+        {(libraryTotal ?? keptItems.length) > 0 && (
           <span className="dial-topbar__sort-chip">
             {sourceFilter === "keep" ? "📻" : sourceFilter === "import" ? "🎵" : "◆"}{" "}
-            {keptItems.length.toLocaleString()}{hasNextPage ? "+" : ""}
+            {(libraryTotal ?? keptItems.length).toLocaleString()}
           </span>
         )}
         <button
@@ -793,7 +798,7 @@ export default function Library() {
         <div className="lib-hero">
           <div className="lib-hero__kicker">◆ Your library</div>
           <div className="lib-hero__headline">
-            <b>{keptItems.length.toLocaleString()}{hasNextPage ? "+" : ""} recordings</b>
+            <b>{(libraryTotal ?? keptItems.length).toLocaleString()} recordings</b>
             {radioHeardCount > 0 && `, ${radioHeardCount} of them found on air`}
           </div>
           <div className="lib-hero__stats">
@@ -802,9 +807,14 @@ export default function Library() {
                 <b>{radioHeardCount}</b> kept from radio
               </span>
             )}
-            {keptItems.length > 0 && keptItems.length - radioHeardCount > 0 && (
+            {jobData?.status === "done" && jobData.total > 0 && sourceFilter !== "keep" && (
               <span className="lib-hero__stat">
-                <b>{(keptItems.length - radioHeardCount).toLocaleString()}</b> imported
+                <b>{jobData.resolved.toLocaleString()}</b> of {jobData.total.toLocaleString()} from Spotify matched
+              </span>
+            )}
+            {jobData?.status === "done" && jobData.total > jobData.resolved && sourceFilter !== "keep" && (
+              <span className="lib-hero__stat lib-hero__stat--dim">
+                {(jobData.total - jobData.resolved).toLocaleString()} not in MusicBrainz
               </span>
             )}
             {selectorCount > 0 && (

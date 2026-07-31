@@ -1537,6 +1537,18 @@ router.get("/me/library", h(async (req, res) => {
     );
   }
 
+  // First-page total count — only run when there is no cursor (page 1).
+  // Subsequent pages skip the extra round-trip; the client caches the value
+  // from the first page.
+  const total: number | undefined = !cursor
+    ? await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(libraryItemsTable)
+        .leftJoin(recordingsTable, eq(libraryItemsTable.mbid, recordingsTable.mbid))
+        .where(and(...conditions))
+        .then((r) => r[0]?.count ?? 0)
+    : undefined;
+
   // Sort key for name sorts: lower(primary field, then the other as tiebreak),
   // coalesced so join-miss rows (no recordings match) sort deterministically.
   const sortKeyExpr =
@@ -1616,6 +1628,7 @@ router.get("/me/library", h(async (req, res) => {
       : sort === "added"
         ? last.addedAt.toISOString()
         : `${last.sortKey}${LIB_CURSOR_SEP}${last.mbid}`,
+    ...(total !== undefined ? { total } : {}),
   });
 }));
 

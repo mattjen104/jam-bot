@@ -1814,6 +1814,9 @@
   font-weight: 400;
   color: hsl(var(--foreground));
 }
+.lib-hero__stat--dim {
+  opacity: 0.55;
+}
 .lib-hero__stat--warm {
   border-color: hsl(var(--library) / 0.4);
   color: hsl(var(--library));
