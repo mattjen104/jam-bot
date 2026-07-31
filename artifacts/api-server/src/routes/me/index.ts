@@ -1147,7 +1147,7 @@ export async function runImportWorker(
  *
  * Called from `startPhase3RetryScheduler` during off-peak hours only.
  */
-export async function runPhase3RetryPass(): Promise<void> {
+export async function runPhase3RetryPass(deadline?: Date): Promise<void> {
   // Find the most recent completed import job per user/service that still has
   // unresolved tracks and a stored buffer (so we can derive the un-cached set).
   const cutoff = new Date(Date.now() - PHASE3_RETRY_MAX_JOB_AGE_MS);
@@ -1192,7 +1192,19 @@ export async function runPhase3RetryPass(): Promise<void> {
     `[me/import/retry] off-peak pass: ${dedupedCandidates.length} candidate job(s) to check`,
   );
 
+  let processedCount = 0;
   for (const candidate of dedupedCandidates) {
+    // ── Window-deadline guard ────────────────────────────────────────────────
+    // Stop the entire pass if we've crossed the off-peak window boundary so a
+    // long-running pass cannot spill into business hours.
+    if (deadline && Date.now() >= deadline.getTime()) {
+      console.warn(
+        `[me/import/retry] window deadline reached — stopping pass early ` +
+        `(${processedCount} of ${dedupedCandidates.length} candidate(s) processed)`,
+      );
+      break;
+    }
+
     const buffer = candidate.bufferJson;
     if (!buffer || buffer.length === 0) continue;
 
@@ -1289,6 +1301,13 @@ export async function runPhase3RetryPass(): Promise<void> {
           console.warn(
             `[me/import/retry] job=${retryJobId} 30-minute budget exceeded — ` +
             `resolved ${retryResolved}/${uncachedEntries.length}`,
+          );
+          break;
+        }
+        if (deadline && Date.now() >= deadline.getTime()) {
+          console.warn(
+            `[me/import/retry] job=${retryJobId} window deadline reached — ` +
+            `stopping track loop (resolved ${retryResolved}/${uncachedEntries.length})`,
           );
           break;
         }
@@ -1443,6 +1462,8 @@ export async function runPhase3RetryPass(): Promise<void> {
     }
     // If retryPassFailed (hard MB error), do NOT increment retryAttempts —
     // MB being down is not the track's fault; we want to retry again tomorrow.
+
+    processedCount++;
   }
 }
 
@@ -1474,7 +1495,15 @@ export function startPhase3RetryScheduler(): void {
       return;
     }
     passInFlight = true;
-    runPhase3RetryPass()
+    // Compute the hard deadline as the UTC end-of-window (e.g. 06:00:00 UTC).
+    // If the wall-clock is already past it (shouldn't happen given the gate
+    // above, but be defensive), pass undefined so the pass runs normally.
+    const [, windowEnd] = PHASE3_RETRY_OFF_PEAK_HOURS;
+    const nowForDeadline = new Date();
+    const windowEndDate = new Date(nowForDeadline);
+    windowEndDate.setUTCHours(windowEnd, 0, 0, 0);
+    const passDeadline = windowEndDate > nowForDeadline ? windowEndDate : undefined;
+    runPhase3RetryPass(passDeadline)
       .catch((err) => console.error("[me/import/retry] scheduler pass failed", err))
       .finally(() => { passInFlight = false; });
   }, PHASE3_RETRY_POLL_MS);

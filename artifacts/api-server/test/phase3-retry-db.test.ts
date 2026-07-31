@@ -104,8 +104,9 @@ const MBID_UNCACHED  = `retry-uc-${run}`;   // track that has no cache entry
 const MBID_CACHED_P  = `retry-cp-${run}`;   // track with a POSITIVE cache entry
 const MBID_CACHED_N  = `retry-cn-${run}`;   // track with a NEGATIVE cache entry
 const MBID_BLOCKED   = `retry-bl-${run}`;   // track for the "blocked by live job" test
+const MBID_DEADLINE  = `retry-dl-${run}`;   // track for the "expired deadline" test
 
-const ALL_TEST_MBIDS = [MBID_UNCACHED, MBID_CACHED_P, MBID_CACHED_N, MBID_BLOCKED];
+const ALL_TEST_MBIDS = [MBID_UNCACHED, MBID_CACHED_P, MBID_CACHED_N, MBID_BLOCKED, MBID_DEADLINE];
 
 const ARTIST = `RetryWorker ${run}`;
 
@@ -144,6 +145,7 @@ let dbAvailable = false;
 let userIdUncached: number;
 let userIdCached: number;
 let userIdBlocked: number;
+let userIdDeadline: number;
 
 beforeAll(async () => {
   try {
@@ -172,12 +174,19 @@ beforeAll(async () => {
     .returning({ id: loreUsersTable.id });
   userIdBlocked = u3!.id;
 
+  const [u4] = await db
+    .insert(loreUsersTable)
+    .values({ spotifyUserId: `retry-dl-${run}`, deviceKey: randomUUID() })
+    .returning({ id: loreUsersTable.id });
+  userIdDeadline = u4!.id;
+
   // Insert recordings spine rows so library_items FK constraints are satisfied.
   await db.insert(recordingsTable).values([
     { mbid: MBID_UNCACHED, title: "Uncached Track", artist: ARTIST },
     { mbid: MBID_CACHED_P, title: "CachedPos Track", artist: ARTIST },
     { mbid: MBID_CACHED_N, title: "CachedNeg Track", artist: ARTIST },
     { mbid: MBID_BLOCKED,  title: "Blocked Track",   artist: ARTIST },
+    { mbid: MBID_DEADLINE, title: "Deadline Track",  artist: ARTIST },
   ]);
 
   // Seed the resolution_cache entries used by the "cached" isolation group.
@@ -196,7 +205,7 @@ beforeAll(async () => {
 afterAll(async () => {
   if (!dbAvailable) return;
 
-  const allUserIds = [userIdUncached, userIdCached, userIdBlocked].filter(Boolean);
+  const allUserIds = [userIdUncached, userIdCached, userIdBlocked, userIdDeadline].filter(Boolean);
 
   // Delete library_items for ALL users that reference any of our test MBIDs.
   // This covers rows inserted by runPhase3RetryPass for users outside our
@@ -225,6 +234,7 @@ afterAll(async () => {
         normalizeKey(ARTIST, "CachedNeg Track"),
         normalizeKey(ARTIST, "Uncached Track"),
         normalizeKey(ARTIST, "Blocked Track"),
+        normalizeKey(ARTIST, "Deadline Track"),
       ]),
     );
 
@@ -461,6 +471,68 @@ describe("runPhase3RetryPass — skips when a live import is already running", (
       .from(libraryItemsTable)
       .where(eq(libraryItemsTable.userId, userIdBlocked));
     expect(items.map((r) => r.mbid)).not.toContain(MBID_BLOCKED);
+  },
+  30_000,
+  );
+});
+
+// ── Test 5: expired deadline — pass bails before processing any candidate ───
+//
+// When runPhase3RetryPass is called with a deadline that is already in the
+// past, the outer-loop deadline guard fires on the very first candidate and
+// breaks immediately.  No retry job should be created and no tracks should be
+// processed.
+
+describe("runPhase3RetryPass — stops immediately when deadline is already expired", () => {
+  it("does not create a retry job when the deadline has already passed", async () => {
+    if (!dbAvailable) return;
+
+    mockResolveByText.mockClear();
+    mockResolveByIsrc.mockClear();
+    // Would resolve if the deadline guard weren't in place.
+    mockResolveByText.mockResolvedValue(MBID_DEADLINE);
+
+    // A completed import with an un-cached track — eligible for retry.
+    const sourceJobId = await insertDoneJob(
+      userIdDeadline,
+      [{ artist: ARTIST, title: "Deadline Track", externalId: "sp-dl-1" }],
+      { total: 1, resolved: 0 },
+    );
+
+    // Deadline set 1 ms in the past — already expired before the pass starts.
+    const expiredDeadline = new Date(Date.now() - 1);
+
+    const spy = installSleepBypass();
+    try {
+      await runPhase3RetryPass(expiredDeadline);
+    } finally {
+      spy.mockRestore();
+    }
+
+    // Only the source job should exist — no retry job was created.
+    const jobs = await db
+      .select({ id: libraryImportJobsTable.id })
+      .from(libraryImportJobsTable)
+      .where(
+        and(
+          eq(libraryImportJobsTable.userId, userIdDeadline),
+          eq(libraryImportJobsTable.service, "spotify"),
+        ),
+      );
+
+    expect(jobs.length).toBe(1);
+    expect(jobs[0]!.id).toBe(sourceJobId);
+
+    // Track must NOT have been resolved into library_items.
+    const items = await db
+      .select({ mbid: libraryItemsTable.mbid })
+      .from(libraryItemsTable)
+      .where(eq(libraryItemsTable.userId, userIdDeadline));
+    expect(items.map((r) => r.mbid)).not.toContain(MBID_DEADLINE);
+
+    // No MB resolver calls should have been made for this user's tracks.
+    expect(mockResolveByText).not.toHaveBeenCalled();
+    expect(mockResolveByIsrc).not.toHaveBeenCalled();
   },
   30_000,
   );
