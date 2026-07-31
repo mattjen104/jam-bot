@@ -1206,8 +1206,9 @@ export function DialView() {
               />
             )}
 
-            {/* Zone 2: Ghost — stations that played your artists while you were away */}
-            {ghost.length > 0 && (
+            {/* Zone 2: Ghost — shown only after crossings load so it never
+                jumps above Zone 1 while scores are still in-flight */}
+            {!crossingsLoading && ghost.length > 0 && (
               <ZoneLabel label="Missed while you were away" />
             )}
 

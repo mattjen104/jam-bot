@@ -2568,10 +2568,12 @@
   transition: background 0.12s;
 }
 .fdrow:hover { background: hsl(var(--secondary) / 0.3); }
-.fdrow--t1 { background: hsl(var(--library) / 0.07); }
+.fdrow--t1 { background: hsl(var(--library) / 0.12); }
 .fdrow--t1::before { background: hsl(var(--library)); }
+/* Zone 1 non-t1 rows (r=2–4): soft library left bar to hold the warm zone coherence */
+.fdrow--z1::before { background: hsl(var(--library) / 0.38); }
 .fdrow--playing::before { background: hsl(var(--live)); }
-.fdrow--dim { opacity: 0.6; }
+.fdrow--dim { opacity: 0.55; }
 .fdrow--sampling {
   background: hsl(var(--live) / 0.07);
   outline: 1px solid hsl(var(--live) / 0.25);
@@ -2657,10 +2659,20 @@
 /* ── Zone section labels (spec §6) ──────────────────────────────────────── */
 .fdzone-lbl {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
   padding: 14px 15px 7px;
 }
+/* coloured pip — signals zone identity before the text */
+.fdzone-lbl__pip {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-right: 1px;
+}
+.fdzone-lbl__pip--library { background: hsl(var(--library)); }
+.fdzone-lbl__pip--picker  { background: hsl(var(--picker)); }
 .fdzone-lbl__text {
   font-family: var(--app-font-label);
   font-size: 9.5px;
@@ -2669,12 +2681,14 @@
   letter-spacing: 0.13em;
   color: hsl(var(--muted-foreground));
 }
-/* count badge — library colour, mono, matches spec .seclbl .n */
+/* count badge — inherits zone accent colour via inline style */
 .fdzone-lbl__n {
   font-family: var(--app-font-mono);
   font-size: 9px;
   color: hsl(var(--library));
 }
+.fdzone-lbl__n--picker { color: hsl(var(--picker)); }
+.fdzone-lbl__n--dim    { color: hsl(var(--faint)); }
 /* hint pushes to the right edge, Newsreader italic per spec */
 .fdzone-lbl__hint {
   margin-left: auto;
