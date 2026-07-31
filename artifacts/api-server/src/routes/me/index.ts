@@ -1193,7 +1193,7 @@ router.get("/me/library", h(async (req, res) => {
  */
 router.get("/me/library/mbids", h(async (req, res) => {
   const user = (req as AuthedRequest).loreUser;
-  if (!user) { res.json({ mbids: [], releaseGroupMbids: [] }); return; }
+  if (!user) { res.json({ mbids: [], releaseGroupMbids: [], artistMbids: [] }); return; }
 
   const rows = await db
     .select({ mbid: libraryItemsTable.mbid })
@@ -1204,15 +1204,23 @@ router.get("/me/library/mbids", h(async (req, res) => {
 
   // Expand to release groups so the dial can match any track from an owned album.
   let releaseGroupMbids: string[] = [];
+  let artistMbids: string[] = [];
   if (mbids.length > 0) {
-    const rgRows = await db
-      .selectDistinct({ releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid })
-      .from(recordingReleaseGroupsTable)
-      .where(inArray(recordingReleaseGroupsTable.recordingMbid, mbids));
+    const [rgRows, artistRows] = await Promise.all([
+      db.selectDistinct({ releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid })
+        .from(recordingReleaseGroupsTable)
+        .where(inArray(recordingReleaseGroupsTable.recordingMbid, mbids)),
+      // Artist MBIDs: let the dial fire on any track by a library artist,
+      // not just exact recordings. Widens crossing detection significantly.
+      db.selectDistinct({ artistMbid: recordingsTable.artistMbid })
+        .from(recordingsTable)
+        .where(and(inArray(recordingsTable.mbid, mbids), isNotNull(recordingsTable.artistMbid))),
+    ]);
     releaseGroupMbids = rgRows.map((r) => r.releaseGroupMbid);
+    artistMbids = artistRows.map((r) => r.artistMbid).filter((m): m is string => !!m);
   }
 
-  res.json({ mbids, releaseGroupMbids });
+  res.json({ mbids, releaseGroupMbids, artistMbids });
 }));
 
 /** Hard cap on rows in one export file. */

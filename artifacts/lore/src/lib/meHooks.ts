@@ -318,8 +318,8 @@ export function useMyLibraryMbids() {
   return useQuery({
     queryKey: ME_LIBRARY_MBIDS_KEY,
     queryFn: () =>
-      fetchOrNull<{ mbids: string[]; releaseGroupMbids: string[] }>("/api/me/library/mbids").then(
-        (d) => ({ mbids: d?.mbids ?? [], releaseGroupMbids: d?.releaseGroupMbids ?? [] }),
+      fetchOrNull<{ mbids: string[]; releaseGroupMbids: string[]; artistMbids: string[] }>("/api/me/library/mbids").then(
+        (d) => ({ mbids: d?.mbids ?? [], releaseGroupMbids: d?.releaseGroupMbids ?? [], artistMbids: d?.artistMbids ?? [] }),
       ),
     staleTime: 60_000,
     retry: false,

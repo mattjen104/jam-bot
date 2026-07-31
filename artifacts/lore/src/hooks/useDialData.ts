@@ -44,7 +44,10 @@ export interface DialSpin {
   title: string;
   artist: string;
   playedAt: string;
+  /** Exact recording or release-group match against user's library. */
   isLibraryHit: boolean;
+  /** Artist is in the user's library but this exact track/album is not. */
+  isArtistHit: boolean;
 }
 
 export interface DialShow {
@@ -56,9 +59,14 @@ export interface DialShow {
   /** visual state of the block */
   state: "live" | "past" | "future";
   spins: DialSpin[];
+  /** Count of spins that exactly match the user's library (recording/album). */
   crossings: number;
-  /** up to 3 library-hit artist names, for display on the block */
+  /** Count of spins by artists in the user's library (no exact track match). */
+  artistCrossings: number;
+  /** Up to 3 library-hit artist names (exact matches), for display. */
   topArtists: string[];
+  /** Up to 3 artist-hit names (artist-only matches), for display. */
+  topArtistNames: string[];
   /** last spin (if state=live) or null */
   currentTrack: DialSpin | null;
   isPickerShow: boolean;
@@ -122,11 +130,11 @@ function showState(run: StationScheduleRun, isStationLive: boolean): "live" | "p
   return "past";
 }
 
-function topArtistsFromSpins(spins: DialSpin[], max = 3): string[] {
+function topArtistsFromSpins(spins: DialSpin[], max = 3, hitField: "isLibraryHit" | "isArtistHit" = "isLibraryHit"): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const sp of spins) {
-    if (sp.isLibraryHit && !seen.has(sp.artist)) {
+    if (sp[hitField] && sp.artist && !seen.has(sp.artist)) {
       seen.add(sp.artist);
       out.push(sp.artist);
       if (out.length >= max) break;
@@ -272,6 +280,12 @@ export function useDialData(): {
     () => new Set(libraryData?.releaseGroupMbids ?? []),
     [libraryData],
   );
+  // Artist set: stations that play any track by a library artist get rung 3 on
+  // the dial, even when the exact recording isn't in the library.
+  const libraryArtistMbidSet = useMemo(
+    () => new Set(libraryData?.artistMbids ?? []),
+    [libraryData],
+  );
 
   // ── picker detection via library MBID lookup ──────────────────────────────
   // Use library MBIDs to discover which selector/DJ names are in the system.
@@ -317,7 +331,8 @@ export function useDialData(): {
   // so a stale entry (hours/days old) must not be treated as currently on-air.
   // 60 min is generous enough to cover slow-polling hosts while still reliably
   // excluding stations that are genuinely off-air.
-  const LIVE_WINDOW_MS = 60 * 60 * 1000;
+  // NB: different from module-level LIVE_WINDOW_MS (20 min show-state window).
+  const LIVE_PULSE_WINDOW_MS = 60 * 60 * 1000;
   const liveBySlug = useMemo(() => {
     const m = new Map<string, boolean>();
     const now = Date.now();
@@ -327,7 +342,7 @@ export function useDialData(): {
       const isRecent =
         np != null &&
         playedAt != null &&
-        now - new Date(playedAt).getTime() <= LIVE_WINDOW_MS;
+        now - new Date(playedAt).getTime() <= LIVE_PULSE_WINDOW_MS;
       m.set(item.slug, isRecent);
     }
     return m;
@@ -372,29 +387,33 @@ export function useDialData(): {
       if (!title && !artist) continue;
       const mbid = (np as { mbid?: string | null }).mbid ?? null;
       const artistMbid = (np as { artistMbid?: string | null }).artistMbid ?? null;
+      const isLibraryHit = hitCheck(mbid);
       m.set(item.slug, {
         mbid,
         artistMbid,
         title,
         artist,
         playedAt: new Date().toISOString(),
-        isLibraryHit: hitCheck(mbid),
+        isLibraryHit,
+        isArtistHit: !isLibraryHit && artistMbid != null && libraryArtistMbidSet.has(artistMbid),
       });
     }
     // SSE overrides: more recent than the REST poll, applied last so the Dial
     // chip reflects the current on-air track the moment it is logged.
     for (const [slug, entry] of sseOverrides) {
+      const isLibraryHit = hitCheck(entry.mbid);
       m.set(slug, {
         mbid: entry.mbid,
         artistMbid: entry.artistMbid,
         title: entry.title,
         artist: entry.artist,
         playedAt: entry.playedAt,
-        isLibraryHit: hitCheck(entry.mbid),
+        isLibraryHit,
+        isArtistHit: !isLibraryHit && entry.artistMbid != null && libraryArtistMbidSet.has(entry.artistMbid),
       });
     }
     return m;
-  }, [liveData, sseOverrides, libraryMbidSet, libraryReleaseGroupSet, rgByMbid]);
+  }, [liveData, sseOverrides, libraryMbidSet, libraryReleaseGroupSet, libraryArtistMbidSet, rgByMbid]);
 
   const runsBySlug = useMemo(() => {
     const m = new Map<string, StationScheduleRun[]>();
@@ -477,6 +496,8 @@ export function useDialData(): {
             // bonus-track edition still triggers the library crossing.
             const exactHit = sp.mbid != null && libraryMbidSet.has(sp.mbid);
             const rgHit = !exactHit && sp.releaseGroupMbid != null && libraryReleaseGroupSet.has(sp.releaseGroupMbid);
+            // Artist hit: artist is in library but this exact recording/album isn't.
+            const artistHit = !exactHit && !rgHit && sp.artistMbid != null && libraryArtistMbidSet.has(sp.artistMbid);
             return {
               mbid: sp.mbid,
               artistMbid: sp.artistMbid ?? null,
@@ -484,15 +505,20 @@ export function useDialData(): {
               artist: sp.artist,
               playedAt: sp.playedAt,
               isLibraryHit: exactHit || rgHit,
+              isArtistHit: artistHit,
             };
           });
 
         // Count only spins within the rolling 24h window so that a show that
         // aired yesterday morning doesn't inflate today's crossing count.
-        const crossings = runSpins.filter(
-          (sp) => sp.isLibraryHit && new Date(sp.playedAt).getTime() >= window24hCutoffMs,
-        ).length;
-        const topArtists = topArtistsFromSpins(runSpins);
+        const recentSpins = runSpins.filter(
+          (sp) => new Date(sp.playedAt).getTime() >= window24hCutoffMs,
+        );
+        const crossings = recentSpins.filter((sp) => sp.isLibraryHit).length;
+        // Artist crossings: spins by library artists where the exact track wasn't in library.
+        const artistCrossings = recentSpins.filter((sp) => sp.isArtistHit).length;
+        const topArtists = topArtistsFromSpins(runSpins, 3, "isLibraryHit");
+        const topArtistNames = topArtistsFromSpins(runSpins, 3, "isArtistHit");
         // Prefer the live now-playing API track; fall back to most recent spin in window
         const currentTrack =
           state === "live"
@@ -509,7 +535,9 @@ export function useDialData(): {
           state,
           spins: runSpins,
           crossings,
+          artistCrossings,
           topArtists,
+          topArtistNames,
           currentTrack,
           isPickerShow,
         };
@@ -521,6 +549,8 @@ export function useDialData(): {
       );
 
       return { station, isLive, shows, crossings };
+      // Note: station-level artistCrossings are intentionally not pre-summed here —
+      // the dial reads them per-show via reason(), so no aggregate is needed.
     })
     // Determine which stations to surface in the Dial:
     //   1. Any station that is currently live (has a now-playing signal)
@@ -538,7 +568,7 @@ export function useDialData(): {
           sh.showName.trim().length > 0,
       );
     });
-  }, [stationsData, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, libraryMbidSet, libraryReleaseGroupSet, pickerNames]);
+  }, [stationsData, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, libraryMbidSet, libraryReleaseGroupSet, libraryArtistMbidSet, pickerNames]);
 
   const isLoading = stationsLoading || liveLoading || schedLoading || spinsLoading;
   // Narrower gate: only blocks until we know which stations are live vs offline.

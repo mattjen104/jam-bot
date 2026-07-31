@@ -2527,6 +2527,7 @@
 
 .fdrow__why.w1 { color: hsl(var(--library)); }
 .fdrow__why.w2 { color: hsl(var(--foreground) / 0.9); }
+.fdrow__why.w3 { color: hsl(var(--foreground) / 0.7); }
 .fdrow__why.w6 { color: hsl(var(--muted-foreground)); }
 .fdrow__why.w7 { color: hsl(var(--muted-foreground)); }
 .fdrow__why.w0 { color: hsl(var(--muted-foreground) / 0.5); }

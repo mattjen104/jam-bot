@@ -91,6 +91,17 @@ function reason(show: DialShow | null, stationCrossings: number): ReasonResult {
     };
   }
 
+  // Rung 3: artists from user's library played this set (no exact track match)
+  if (show.artistCrossings > 0) {
+    const names = show.topArtistNames.length > 0 ? listNames(show.topArtistNames) : null;
+    return {
+      r: 3, cls: "w3",
+      node: names
+        ? <><b>{names}</b> — an artist from your library</>
+        : <><b>{show.artistCrossings}</b> tracks by artists from your library</>,
+    };
+  }
+
   // Rung 6: on air, attributed, no evidence yet
   if (show.djName) {
     return { r: 6, cls: "w6", node: `on air · ${intoSet(show.startedAt)} into the set` };
