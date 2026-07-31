@@ -329,6 +329,33 @@ export function useSpotifyLibraryConnected(): boolean {
 /** All resolved MBIDs in the user's library — no pagination cap. */
 export const ME_LIBRARY_MBIDS_KEY = ["me", "library", "mbids"] as const;
 
+export const ME_DIAL_CROSSINGS_KEY = (date: string) =>
+  ["me", "crossings", date] as const;
+
+export interface DialCrossing {
+  stationSlug: string;
+  crossings: number;
+  artistCrossings: number;
+}
+
+/**
+ * Server-computed station crossing scores for the rolling 24-hour window.
+ * Results are cacheable for 5 minutes; two clients always agree on the same
+ * ranking instead of diverging based on fetch timing.
+ */
+export function useMyDialCrossings(date: string) {
+  return useQuery({
+    queryKey: ME_DIAL_CROSSINGS_KEY(date),
+    queryFn: () =>
+      fetchOrNull<{ items: DialCrossing[] }>(
+        `/api/me/crossings?date=${encodeURIComponent(date)}`,
+      ).then((d) => d?.items ?? []),
+    staleTime: 5 * 60_000,
+    refetchInterval: 5 * 60_000,
+    retry: false,
+  });
+}
+
 export function useMyLibraryMbids() {
   return useQuery({
     queryKey: ME_LIBRARY_MBIDS_KEY,

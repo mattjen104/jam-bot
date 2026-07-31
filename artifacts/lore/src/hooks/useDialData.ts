@@ -32,7 +32,7 @@ import {
   type StationScheduleRun,
   type StationRecentSpin,
 } from "@workspace/api-client-react";
-import { useMyLibraryMbids } from "../lib/meHooks";
+import { useMyLibraryMbids, useMyDialCrossings } from "../lib/meHooks";
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -267,6 +267,19 @@ export function useDialData(): {
       },
     },
   );
+
+  // ── server-computed crossing scores (rolling 24h, full spin history) ────────
+  // These replace the client-side crossing reduction at the station level so
+  // ranking is consistent across clients and not bounded by the fetch page cap.
+  const { data: serverCrossings } = useMyDialCrossings(today);
+
+  const serverCrossingsBySlug = useMemo(() => {
+    const m = new Map<string, { crossings: number; artistCrossings: number }>();
+    for (const cx of serverCrossings ?? []) {
+      m.set(cx.stationSlug, { crossings: cx.crossings, artistCrossings: cx.artistCrossings });
+    }
+    return m;
+  }, [serverCrossings]);
 
   // ── user library MBIDs + release-group MBIDs (all resolved, no pagination cap) ──
   const { data: libraryData } = useMyLibraryMbids();
@@ -562,16 +575,18 @@ export function useDialData(): {
         };
       });
 
-      const crossings = shows.reduce(
-        (sum, sh) => sum + (sh.state !== "future" ? sh.crossings : 0),
-        0,
-      );
-      // Artist-level crossings: spins by library artists where the exact track
-      // isn't in the library.  Used by rung 7.5 in reason() and station sorting.
-      const artistCrossings = shows.reduce(
-        (sum, sh) => sum + (sh.state !== "future" ? sh.artistCrossings : 0),
-        0,
-      );
+      // Prefer server-computed crossings (accurate 24h window, full spin
+      // history, consistent across clients); fall back to client-computed
+      // reduction if the server endpoint hasn't resolved yet.
+      const serverCx = serverCrossingsBySlug.get(station.slug);
+      const crossings =
+        serverCx !== undefined
+          ? serverCx.crossings
+          : shows.reduce((sum, sh) => sum + (sh.state !== "future" ? sh.crossings : 0), 0);
+      const artistCrossings =
+        serverCx !== undefined
+          ? serverCx.artistCrossings
+          : shows.reduce((sum, sh) => sum + (sh.state !== "future" ? sh.artistCrossings : 0), 0);
 
       return { station, isLive, shows, crossings, artistCrossings };
     })
@@ -591,7 +606,7 @@ export function useDialData(): {
           sh.showName.trim().length > 0,
       );
     });
-  }, [stationsData, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, libraryMbidSet, libraryReleaseGroupSet, libraryArtistMbidSet, pickerNames]);
+  }, [stationsData, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, libraryMbidSet, libraryReleaseGroupSet, libraryArtistMbidSet, pickerNames, serverCrossingsBySlug]);
 
   const isLoading = stationsLoading || liveLoading || schedLoading || spinsLoading;
   // Narrower gate: only blocks until the station list arrives. The live pulse

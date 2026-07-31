@@ -3614,4 +3614,137 @@ router.get("/me/albums/completed", h(async (req, res) => {
   return res.json({ albums });
 }));
 
+/**
+ * GET /api/me/crossings?date=YYYY-MM-DD — rolling 24-hour station crossing
+ * scores computed server-side.
+ *
+ * Returns { items: { stationSlug, crossings, artistCrossings }[] } for
+ * stations that have ≥ 1 crossing of either type in the past 24 hours.
+ * Only non-hidden stations are included.
+ *
+ * Crossings   = spins whose exact MBID *or* any track from the same primary
+ *               release group is in the user's library_items.
+ * ArtistCrossings = spins by library artists (artistMbid or soft name-based
+ *               fallback) where the exact track/album is NOT in the library.
+ *
+ * The `date` param is accepted for client-side cache-key alignment but the
+ * server always computes a true rolling NOW() − 24 h window.
+ */
+router.get("/me/crossings", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+  // Subquery: recording MBIDs in user's library.
+  const userLibMbids = db
+    .select({ mbid: libraryItemsTable.mbid })
+    .from(libraryItemsTable)
+    .where(eq(libraryItemsTable.userId, user.id));
+
+  // Subquery: release-group MBIDs represented in the user's library (album widening).
+  const userLibRgs = db
+    .select({ releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid })
+    .from(recordingReleaseGroupsTable)
+    .innerJoin(
+      libraryItemsTable,
+      eq(recordingReleaseGroupsTable.recordingMbid, libraryItemsTable.mbid),
+    )
+    .where(eq(libraryItemsTable.userId, user.id));
+
+  // Subquery: artist MBIDs whose recordings are in the user's library.
+  const userLibArtists = db
+    .select({ artistMbid: recordingsTable.artistMbid })
+    .from(recordingsTable)
+    .innerJoin(libraryItemsTable, eq(recordingsTable.mbid, libraryItemsTable.mbid))
+    .where(
+      and(
+        eq(libraryItemsTable.userId, user.id),
+        isNotNull(recordingsTable.artistMbid),
+      ),
+    );
+
+  // Fetch soft artist names (unresolved Spotify imports — name-based fallback
+  // when the spin's recording has no artistMbid to compare against).
+  const softRows = await db
+    .selectDistinct({ artist: spotifyLibraryItemsTable.artist })
+    .from(spotifyLibraryItemsTable)
+    .where(
+      and(
+        eq(spotifyLibraryItemsTable.userId, user.id),
+        isNull(spotifyLibraryItemsTable.mbid),
+      ),
+    );
+  const softArtistNames = softRows
+    .map((r) => r.artist.toLowerCase().trim())
+    .filter(Boolean);
+
+  // ── Composite SQL predicates ──────────────────────────────────────────────
+  // Library hit: exact MBID OR any track from the same primary release group.
+  const libHit = sql`(
+    ${spinsTable.mbid} in (${userLibMbids})
+    or (
+      ${recordingReleaseGroupsTable.releaseGroupMbid} is not null
+      and ${recordingReleaseGroupsTable.releaseGroupMbid} in (${userLibRgs})
+    )
+  )`;
+
+  // Explicit negation of libHit (avoids NOT IN on a nullable column; both
+  // subqueries return non-null rows so NOT IN is safe here).
+  const notLibHit = sql`(
+    ${spinsTable.mbid} not in (${userLibMbids})
+    and (
+      ${recordingReleaseGroupsTable.releaseGroupMbid} is null
+      or ${recordingReleaseGroupsTable.releaseGroupMbid} not in (${userLibRgs})
+    )
+  )`;
+
+  // Artist match: MBID-based lookup plus optional name-based soft fallback.
+  const artistMatch =
+    softArtistNames.length > 0
+      ? sql`(
+          ${recordingsTable.artistMbid} in (${userLibArtists})
+          or lower(trim(${recordingsTable.artist})) = any(array[${sql.join(
+            softArtistNames.map((a) => sql`${a}`),
+            sql`, `,
+          )}]::text[])
+        )`
+      : sql`${recordingsTable.artistMbid} in (${userLibArtists})`;
+
+  const rows = await db
+    .select({
+      stationSlug: stationsTable.slug,
+      crossings:       sql<number>`count(*) filter (where ${libHit})::int`,
+      artistCrossings: sql<number>`count(*) filter (where ${notLibHit} and ${artistMatch})::int`,
+    })
+    .from(spinsTable)
+    .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
+    .innerJoin(recordingsTable, eq(recordingsTable.mbid, spinsTable.mbid!))
+    .leftJoin(
+      recordingReleaseGroupsTable,
+      and(
+        eq(recordingReleaseGroupsTable.recordingMbid, recordingsTable.mbid),
+        eq(recordingReleaseGroupsTable.isPrimary, true),
+      ),
+    )
+    .where(
+      and(
+        isNotNull(spinsTable.mbid),
+        gte(spinsTable.playedAt, cutoff),
+        eq(stationsTable.hidden, false),
+      ),
+    )
+    .groupBy(stationsTable.id, stationsTable.slug)
+    .having(
+      sql`count(*) filter (where ${libHit}) > 0
+       or count(*) filter (where ${notLibHit} and ${artistMatch}) > 0`,
+    );
+
+  return res.json({
+    items: rows.map((r) => ({
+      stationSlug: r.stationSlug,
+      crossings: r.crossings,
+      artistCrossings: r.artistCrossings,
+    })),
+  });
+}));
+
 export default router;
