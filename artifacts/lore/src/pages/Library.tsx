@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { SearchOverlay } from "../components/SearchOverlay";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePlayer } from "../player/PlayerProvider";
@@ -527,10 +527,27 @@ function InflowCard({ item }: { item: InflowItem }) {
 // Main page
 // ---------------------------------------------------------------------------
 export default function Library() {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
+  const search = useSearch();
   const [searchOpen, setSearchOpen] = useState(false);
   const queryClient = useQueryClient();
   const { radio } = usePlayer();
+
+  // Source filter — persisted in URL as ?source=keep|import
+  const sourceFilter = useMemo((): "" | "keep" | "import" => {
+    const v = new URLSearchParams(search).get("source");
+    if (v === "keep" || v === "import") return v;
+    return "";
+  }, [search]);
+
+  const setSourceFilter = (src: "" | "keep" | "import") => {
+    const p = new URLSearchParams(search);
+    if (src) p.set("source", src);
+    else p.delete("source");
+    const qs = p.toString();
+    // strip the path portion (e.g. /library) and just update search
+    setLocation(qs ? `${location.split("?")[0]}?${qs}` : location.split("?")[0]!);
+  };
 
   const { data: connections, isLoading: connLoading } = useMyConnections();
   const isAuthenticated = !connLoading && connections !== null;
@@ -562,7 +579,7 @@ export default function Library() {
     isFetchingNextPage,
     fetchNextPage,
     hasNextPage,
-  } = useMyLibraryInfinite({}, 50);
+  } = useMyLibraryInfinite({ source: sourceFilter || undefined }, 50);
   const keptItems = keptData?.pages.flatMap((p) => p.items) ?? [];
 
   // Single-open door strip: tracks which row has its door strip expanded
@@ -750,7 +767,8 @@ export default function Library() {
         <span className="dial-topbar__title dial-topbar__title--active">Library</span>
         {keptItems.length > 0 && (
           <span className="dial-topbar__sort-chip">
-            ◆ {keptItems.length.toLocaleString()}{hasNextPage ? "+" : ""}
+            {sourceFilter === "keep" ? "📻" : sourceFilter === "import" ? "🎵" : "◆"}{" "}
+            {keptItems.length.toLocaleString()}{hasNextPage ? "+" : ""}
           </span>
         )}
         <button
@@ -945,9 +963,63 @@ export default function Library() {
           </>
         )}
 
+        {/* ── Source filter pills ── */}
+        <div
+          style={{
+            display: "flex",
+            gap: 6,
+            padding: "10px 15px",
+            borderBottom: "1px solid hsl(var(--border) / 0.5)",
+          }}
+          data-testid="library-source-filter"
+        >
+          {(
+            [
+              { value: "" as const, label: "All" },
+              { value: "keep" as const, label: "Saved from radio" },
+              { value: "import" as const, label: "Imported" },
+            ] as const
+          ).map(({ value, label }) => (
+            <button
+              key={value || "all"}
+              type="button"
+              onClick={() => setSourceFilter(value)}
+              style={{
+                fontFamily: "var(--app-font-display)",
+                fontSize: 9,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.07em",
+                padding: "4px 10px",
+                borderRadius: 3,
+                border: sourceFilter === value
+                  ? "1px solid hsl(var(--library))"
+                  : "1px solid hsl(var(--border))",
+                background: sourceFilter === value
+                  ? "hsl(var(--library) / 0.12)"
+                  : "transparent",
+                color: sourceFilter === value
+                  ? "hsl(var(--library))"
+                  : "hsl(var(--dim))",
+                cursor: "pointer",
+                transition: "color 0.15s, border-color 0.15s, background 0.15s",
+              }}
+              data-testid={`library-filter-${value || "all"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
         {/* ── Kept tracks ── */}
         <TierHd
-          label="Kept"
+          label={
+            sourceFilter === "keep"
+              ? "Saved from radio"
+              : sourceFilter === "import"
+              ? "Imported"
+              : "Kept"
+          }
           count={keptItems.length > 0 ? `${keptItems.length.toLocaleString()}${hasNextPage ? "+" : ""}` : undefined}
           hint="most recent first"
         />
@@ -976,28 +1048,57 @@ export default function Library() {
                 marginBottom: 12,
               }}
             >
-              Keep songs from the radio to build your library.
+              {sourceFilter === "keep"
+                ? "Nothing saved from radio yet."
+                : sourceFilter === "import"
+                ? "No imported tracks yet."
+                : "Keep songs from the radio to build your library."}
             </div>
-            <Link
-              href="/"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                fontFamily: "var(--app-font-display)",
-                fontSize: 10,
-                fontWeight: 700,
-                textTransform: "uppercase",
-                letterSpacing: "0.07em",
-                color: "hsl(var(--library))",
-                textDecoration: "none",
-                border: "1px solid rgba(232,106,78,.35)",
-                borderRadius: 3,
-                padding: "6px 12px",
-              }}
-            >
-              <Radio style={{ width: 10, height: 10 }} /> Open the dial
-            </Link>
+            {sourceFilter ? (
+              <button
+                type="button"
+                onClick={() => setSourceFilter("")}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontFamily: "var(--app-font-display)",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.07em",
+                  color: "hsl(var(--library))",
+                  background: "none",
+                  border: "1px solid rgba(232,106,78,.35)",
+                  borderRadius: 3,
+                  padding: "6px 12px",
+                  cursor: "pointer",
+                }}
+              >
+                Show all
+              </button>
+            ) : (
+              <Link
+                href="/"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontFamily: "var(--app-font-display)",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.07em",
+                  color: "hsl(var(--library))",
+                  textDecoration: "none",
+                  border: "1px solid rgba(232,106,78,.35)",
+                  borderRadius: 3,
+                  padding: "6px 12px",
+                }}
+              >
+                <Radio style={{ width: 10, height: 10 }} /> Open the dial
+              </Link>
+            )}
           </div>
         ) : (
           <>
