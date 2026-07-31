@@ -346,6 +346,75 @@ describe("sync worker resume — restores matchedJson, skips committed items", (
   });
 });
 
+describe("sync worker double-crash resume — second resume uses the latest committedOffset", () => {
+  it("resumes from the latest committedOffset after two successive crashes, no duplicate search calls", async () => {
+    if (!dbAvailable) return;
+
+    // ── Simulate first crash ──────────────────────────────────────────────────
+    // The worker processed MBID_LINK (index 0) then crashed.
+    // committedOffset=1, matchedJson contains only the first item.
+    const job = await seedJob({
+      committedOffset: 1,
+      matchedJson: {
+        matched: [
+          { mbid: MBID_LINK, title: "Link Track", artist: `Sync Resume ${run}`, spotifyId: SP_ID_LINK, confidence: "link" },
+        ],
+        unmatched: [],
+      },
+    });
+
+    // ── Simulate second partial run that advances offset then crashes ─────────
+    // The worker resumed from offset=1, processed MBID_ISRC (index 1), stamped
+    // committedOffset=2 with an updated matchedJson, then crashed before MBID_NONE.
+    // We replicate that DB state directly to avoid needing a real crash hook.
+    await db
+      .update(librarySyncJobsTable)
+      .set({
+        committedOffset: 2,
+        matchedJson: {
+          matched: [
+            { mbid: MBID_LINK, title: "Link Track", artist: `Sync Resume ${run}`, spotifyId: SP_ID_LINK, confidence: "link" },
+            { mbid: MBID_ISRC, title: "ISRC Track", artist: `Sync Resume ${run}`, spotifyId: SP_ID_ISRC, confidence: "isrc" },
+          ],
+          unmatched: [],
+        },
+      })
+      .where(eq(librarySyncJobsTable.id, job.id));
+
+    // ── Second resume — picks up from latest committedOffset=2 ───────────────
+    await runSyncWorker(job.id, userId, connRow, 2);
+
+    const final = await readJob(job.id);
+
+    // Job must complete successfully.
+    expect(final.status).toBe("done");
+    expect(final.results).toBeTruthy();
+
+    const r = final.results!;
+    // MBID_LINK + MBID_ISRC → both synced (confidence link + isrc)
+    // MBID_NONE → unavailable (no Spotify match)
+    expect(r.synced).toBe(2);
+    expect(r.unavailable).toBe(1);
+    expect(r.alreadySaved).toBe(0);
+    expect(r.searchMatched).toBe(0);
+
+    // matchedJson must be cleared once matching is complete.
+    expect(final.matchedJson).toBeNull();
+
+    // resumedFrom must be set (it's a resumed run).
+    expect(final.resumedFrom).toBe(job.id);
+
+    // No duplicate Spotify search calls for items already in the latest
+    // matchedJson snapshot. MBID_LINK uses an Odesli link (no search call ever).
+    // MBID_ISRC was already committed — its ISRC search must NOT fire again.
+    expect(searchQueriesLog.some((q) => q.includes(ISRC_VAL))).toBe(false);
+
+    // The only search call permitted is the text search for MBID_NONE (which
+    // yields no result). At most 1 call total.
+    expect(searchCallCount).toBeLessThanOrEqual(1);
+  });
+});
+
 describe("sync worker — committedOffset is stamped during a fresh run", () => {
   it("committed_offset advances in the DB while matching is in progress", async () => {
     if (!dbAvailable) return;
