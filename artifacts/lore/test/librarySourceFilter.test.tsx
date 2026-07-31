@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
- * Tests for the source-filter pills in Library.tsx.
+ * Tests for the source-filter pills and sort controls in Library.tsx.
  *
- * Covers URL persistence contract:
+ * Source filter — URL persistence contract:
  *   - Selecting "Saved from radio" pushes ?source=keep to the URL.
  *   - Selecting "Imported" pushes ?source=import to the URL.
  *   - Selecting "All" removes the source param from the URL.
@@ -10,6 +10,14 @@
  *   - Mounting with ?source=keep pre-selects the Saved-from-radio pill.
  *   - Empty state with an active filter shows "Show all" instead of "Open the dial".
  *   - Empty state with no filter shows "Open the dial".
+ *
+ * Sort controls — URL persistence contract:
+ *   - Selecting "Artist" sort pushes ?sort=artist to the URL.
+ *   - Selecting "Title" sort pushes ?sort=title to the URL.
+ *   - Selecting the default "Added" sort removes the sort param from the URL.
+ *   - Mounting with ?sort=artist pre-selects the Artist sort button.
+ *   - Mounting with ?sort=title pre-selects the Title sort button.
+ *   - An unrecognised sort value is ignored (treated as "Added").
  */
 
 import React from "react";
@@ -296,5 +304,105 @@ describe("Empty state CTA with and without active filter", () => {
     expect(mockSetLocation).toHaveBeenCalledTimes(1);
     const [url] = mockSetLocation.mock.calls[0] as [string];
     expect(url).not.toContain("source=");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sort controls — rendering
+// ---------------------------------------------------------------------------
+
+describe("Sort controls are always rendered", () => {
+  it("renders Added, Artist, and Title sort buttons", async () => {
+    await renderLibrary();
+    expect(screen.getByTestId("library-sort-added")).toBeTruthy();
+    expect(screen.getByTestId("library-sort-artist")).toBeTruthy();
+    expect(screen.getByTestId("library-sort-title")).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sort controls — URL writes
+// ---------------------------------------------------------------------------
+
+describe("Selecting a sort button updates the URL", () => {
+  it("clicking 'Artist' calls setLocation with ?sort=artist", async () => {
+    await renderLibrary();
+    fireEvent.click(screen.getByTestId("library-sort-artist"));
+    expect(mockSetLocation).toHaveBeenCalledTimes(1);
+    const [url] = mockSetLocation.mock.calls[0] as [string];
+    expect(url).toContain("sort=artist");
+  });
+
+  it("clicking 'Title' calls setLocation with ?sort=title", async () => {
+    await renderLibrary();
+    fireEvent.click(screen.getByTestId("library-sort-title"));
+    expect(mockSetLocation).toHaveBeenCalledTimes(1);
+    const [url] = mockSetLocation.mock.calls[0] as [string];
+    expect(url).toContain("sort=title");
+  });
+
+  it("clicking 'Added' (default) calls setLocation WITHOUT a sort param", async () => {
+    // Start with an active sort so clicking Added is meaningful
+    mockUseSearch.mockReturnValue("sort=artist");
+    await renderLibrary();
+    fireEvent.click(screen.getByTestId("library-sort-added"));
+    expect(mockSetLocation).toHaveBeenCalledTimes(1);
+    const [url] = mockSetLocation.mock.calls[0] as [string];
+    expect(url).not.toContain("sort=");
+  });
+
+  it("'Added' navigates to the bare path when sort was the only param", async () => {
+    mockUseSearch.mockReturnValue("sort=title");
+    await renderLibrary();
+    fireEvent.click(screen.getByTestId("library-sort-added"));
+    const [url] = mockSetLocation.mock.calls[0] as [string];
+    expect(url).toBe("/library");
+  });
+
+  it("preserves existing source param when changing sort", async () => {
+    mockUseSearch.mockReturnValue("source=keep");
+    await renderLibrary();
+    fireEvent.click(screen.getByTestId("library-sort-artist"));
+    const [url] = mockSetLocation.mock.calls[0] as [string];
+    expect(url).toContain("source=keep");
+    expect(url).toContain("sort=artist");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sort controls — URL reads (pre-selection on mount)
+// ---------------------------------------------------------------------------
+
+describe("Pre-selecting sort from URL on load", () => {
+  it("?sort=artist passes sort:'artist' to useMyLibraryInfinite", async () => {
+    mockUseSearch.mockReturnValue("sort=artist");
+    await renderLibrary();
+    const calls = mockUseMyLibraryInfinite.mock.calls;
+    const lastCall = calls[calls.length - 1] as [{ sort?: string }];
+    expect(lastCall[0].sort).toBe("artist");
+  });
+
+  it("?sort=title passes sort:'title' to useMyLibraryInfinite", async () => {
+    mockUseSearch.mockReturnValue("sort=title");
+    await renderLibrary();
+    const calls = mockUseMyLibraryInfinite.mock.calls;
+    const lastCall = calls[calls.length - 1] as [{ sort?: string }];
+    expect(lastCall[0].sort).toBe("title");
+  });
+
+  it("no sort param passes sort:'added' to useMyLibraryInfinite", async () => {
+    mockUseSearch.mockReturnValue("");
+    await renderLibrary();
+    const calls = mockUseMyLibraryInfinite.mock.calls;
+    const lastCall = calls[calls.length - 1] as [{ sort?: string }];
+    expect(lastCall[0].sort).toBe("added");
+  });
+
+  it("an unrecognised sort value is ignored (treated as Added)", async () => {
+    mockUseSearch.mockReturnValue("sort=random");
+    await renderLibrary();
+    const calls = mockUseMyLibraryInfinite.mock.calls;
+    const lastCall = calls[calls.length - 1] as [{ sort?: string }];
+    expect(lastCall[0].sort).toBe("added");
   });
 });

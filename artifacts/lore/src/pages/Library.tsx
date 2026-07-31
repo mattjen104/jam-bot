@@ -549,6 +549,21 @@ export default function Library() {
     setLocation(qs ? `${location.split("?")[0]}?${qs}` : location.split("?")[0]!);
   };
 
+  // Sort — persisted in URL as ?sort=artist|title (default = "added", omitted from URL)
+  const sortFilter = useMemo((): "added" | "artist" | "title" => {
+    const v = new URLSearchParams(search).get("sort");
+    if (v === "artist" || v === "title") return v;
+    return "added";
+  }, [search]);
+
+  const setSortFilter = (sort: "added" | "artist" | "title") => {
+    const p = new URLSearchParams(search);
+    if (sort !== "added") p.set("sort", sort);
+    else p.delete("sort");
+    const qs = p.toString();
+    setLocation(qs ? `${location.split("?")[0]}?${qs}` : location.split("?")[0]!);
+  };
+
   const { data: connections, isLoading: connLoading } = useMyConnections();
   const isAuthenticated = !connLoading && connections !== null;
   const hasSpotify =
@@ -581,7 +596,7 @@ export default function Library() {
     // libraryTotal is populated from the first-page COUNT query (no cursor).
     // Subsequent pages omit it; we keep the first-page value for display.
     hasNextPage,
-  } = useMyLibraryInfinite({ source: sourceFilter || undefined }, 50);
+  } = useMyLibraryInfinite({ source: sourceFilter || undefined, sort: sortFilter }, 50);
   const keptItems = keptData?.pages.flatMap((p) => p.items) ?? [];
   // Total count from the server's first-page COUNT query — reflects the real
   // library size even before all pages are loaded.
@@ -1021,6 +1036,68 @@ export default function Library() {
           ))}
         </div>
 
+        {/* ── Sort controls ── */}
+        <div
+          style={{
+            display: "flex",
+            gap: 6,
+            padding: "8px 15px",
+            borderBottom: "1px solid hsl(var(--border) / 0.5)",
+            alignItems: "center",
+          }}
+          data-testid="library-sort-controls"
+        >
+          <span
+            style={{
+              fontFamily: "var(--app-font-display)",
+              fontSize: 9,
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: "0.07em",
+              color: "hsl(var(--dim))",
+              marginRight: 2,
+            }}
+          >
+            Sort
+          </span>
+          {(
+            [
+              { value: "added" as const, label: "Added" },
+              { value: "artist" as const, label: "Artist" },
+              { value: "title" as const, label: "Title" },
+            ] as const
+          ).map(({ value, label }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setSortFilter(value)}
+              style={{
+                fontFamily: "var(--app-font-display)",
+                fontSize: 9,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.07em",
+                padding: "4px 10px",
+                borderRadius: 3,
+                border: sortFilter === value
+                  ? "1px solid hsl(var(--library))"
+                  : "1px solid hsl(var(--border))",
+                background: sortFilter === value
+                  ? "hsl(var(--library) / 0.12)"
+                  : "transparent",
+                color: sortFilter === value
+                  ? "hsl(var(--library))"
+                  : "hsl(var(--dim))",
+                cursor: "pointer",
+                transition: "color 0.15s, border-color 0.15s, background 0.15s",
+              }}
+              data-testid={`library-sort-${value}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
         {/* ── Kept tracks ── */}
         <TierHd
           label={
@@ -1031,7 +1108,7 @@ export default function Library() {
               : "Kept"
           }
           count={keptItems.length > 0 ? `${keptItems.length.toLocaleString()}${hasNextPage ? "+" : ""}` : undefined}
-          hint="most recent first"
+          hint={sortFilter === "artist" ? "A → Z by artist" : sortFilter === "title" ? "A → Z by title" : "most recent first"}
         />
 
         {libLoading ? (
