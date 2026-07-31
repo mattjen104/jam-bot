@@ -855,9 +855,20 @@ export function DialView() {
   // Ghost zone: stub — requires /me/ghost/missed endpoint (spec §7)
   const ghost: Array<unknown> = [];
 
-  // Offline stations (recently aired) — sorted by crossings desc
+  // Offline stations (recently aired):
+  //   1. Crossings desc — library matches first
+  //   2. Stations with any show history above stations with no data ever
+  //      (prevents "NO DATA TODAY" stations from clogging the top of the list)
+  //   3. Stable within each tier
   const offlineStations = useMemo(() =>
-    [...stations].filter((ds) => !ds.isLive).sort((a, b) => b.crossings - a.crossings),
+    [...stations]
+      .filter((ds) => !ds.isLive)
+      .sort((a, b) => {
+        if (b.crossings !== a.crossings) return b.crossings - a.crossings;
+        const aHas = a.shows.length > 0 ? 1 : 0;
+        const bHas = b.shows.length > 0 ? 1 : 0;
+        return bHas - aHas;
+      }),
     [stations],
   );
 
