@@ -1129,7 +1129,7 @@ export async function runImportWorker(
  *
  * Called from `startPhase3RetryScheduler` during off-peak hours only.
  */
-async function runPhase3RetryPass(): Promise<void> {
+export async function runPhase3RetryPass(): Promise<void> {
   // Find the most recent completed import job per user/service that still has
   // unresolved tracks and a stored buffer (so we can derive the un-cached set).
   const cutoff = new Date(Date.now() - PHASE3_RETRY_MAX_JOB_AGE_MS);
