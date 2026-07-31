@@ -25,6 +25,7 @@ import {
   recordingsTable,
   resolutionCacheTable,
   spotifyLibraryItemsTable,
+  type LibraryItemProvenance,
 } from "@workspace/db";
 
 // ── Hoisted mock fns (created before vi.mock factories are evaluated) ────────
@@ -817,5 +818,70 @@ describe("Mixed all-3 phases — large re-import short-circuit", () => {
       .where(eq(libraryImportJobsTable.id, jid));
     expect(job!.status).toBe("done");
     expect(job!.resolved).toBe(3);
+  });
+});
+
+// ── Re-import preservation: tracks absent from Spotify are not deleted ────────
+//
+// When a user removes a track from Spotify (or Spotify revokes it due to
+// licensing), a subsequent re-import must NOT delete the existing library_items
+// row.  Two provenance cases are covered:
+//   • provenance.kind = "import" — a track that was imported via Spotify
+//   • provenance.kind = "keep"   — a track the user explicitly kept in Lore
+// The connector yields neither track, simulating Spotify having removed both
+// since the prior import.  Both rows must survive the re-import.
+
+describe("Re-import preservation — tracks absent from Spotify survive re-import", () => {
+  it("keeps both 'import' and 'keep' provenance rows after a re-import that omits them", async () => {
+    if (!dbAvailable) return;
+
+    mockResolveByText.mockClear();
+    mockResolveByIsrc.mockClear();
+
+    // Pre-seed two library_items rows using recordings already in the spine
+    // (MBID_P1 and MBID_P2 were seeded in beforeAll).
+    await db
+      .insert(libraryItemsTable)
+      .values([
+        {
+          userId,
+          mbid: MBID_P1,
+          provenance: { kind: "import", service: "spotify" } as LibraryItemProvenance,
+          addedAt: new Date(),
+        },
+        {
+          userId,
+          mbid: MBID_P2,
+          provenance: { kind: "keep" } as LibraryItemProvenance,
+          addedAt: new Date(),
+        },
+      ])
+      .onConflictDoNothing();
+
+    // Connector yields a completely different track — neither MBID_P1 nor MBID_P2.
+    // resolveByText returns null so the new track stays unresolved.
+    mockResolveByText.mockResolvedValue(null);
+    setupConnector([
+      { artist: ARTIST, title: "Preservation New Track", externalId: "sp-preservation-new" },
+    ]);
+
+    const jid = await createJob();
+    await runImportWorker(jid, userId, "spotify", connRow);
+
+    // Both pre-seeded rows must still be in library_items after the re-import.
+    const items = await db
+      .select({ mbid: libraryItemsTable.mbid })
+      .from(libraryItemsTable)
+      .where(eq(libraryItemsTable.userId, userId));
+    const mbids = items.map((r) => r.mbid);
+    expect(mbids).toContain(MBID_P1);
+    expect(mbids).toContain(MBID_P2);
+
+    // Job must reach "done" cleanly.
+    const [job] = await db
+      .select({ status: libraryImportJobsTable.status })
+      .from(libraryImportJobsTable)
+      .where(eq(libraryImportJobsTable.id, jid));
+    expect(job!.status).toBe("done");
   });
 });
