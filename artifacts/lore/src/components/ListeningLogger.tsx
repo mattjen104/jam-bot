@@ -52,7 +52,10 @@ export function ListeningLogger() {
 
   // --- Live radio: log the station's now-playing while the stream sounds ---
   const station = radio.station;
-  const listening = radio.status === "playing" && !!station;
+  // Suppress all ledger + journal writes during a scan preview — the listener
+  // is browsing, not committing. `radio.scanning` is cleared by `radio.toggle`
+  // when they actually land on a station.
+  const listening = radio.status === "playing" && !!station && !radio.scanning;
   const slug = station?.slug ?? "";
   const { data } = useGetStationNowPlaying(slug, {
     query: {

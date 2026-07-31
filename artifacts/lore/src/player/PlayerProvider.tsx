@@ -124,6 +124,16 @@ interface RadioApi {
    */
   castRetry: () => void;
   toggle: (station: Station) => void;
+  /**
+   * Play a station's stream as a transient sample — audio plays but NO listen
+   * event is written to the local journal or the server ledger. Use for
+   * scan/browse gestures where the listener hasn't committed. Calling
+   * `toggle` afterwards (on "land") clears the preview flag and resumes
+   * normal ledger tracking.
+   */
+  preview: (station: Station) => void;
+  /** True while audio is playing in preview (scan) mode — suppresses ledger. */
+  scanning: boolean;
   stop: () => void;
   setVolume: (v: number) => void;
 }
@@ -1452,11 +1462,19 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => () => stop(), [stop]);
 
+  // --- Scan-preview flag: set when playing a station as a browse sample ------
+  // When true, ListeningLogger skips all journal + ledger writes. Cleared when
+  // the listener commits ("lands") via a normal toggle call.
+  const [isScanPreview, setIsScanPreview] = useState(false);
+
   // Starting the radio cancels any ride (audio is exclusive).
   // While casting, the toggle controls the listener's Spotify — the browser
   // stream is intentionally paused, so resuming it would double the audio.
   const toggleRadio = useCallback(
     (station: Station) => {
+      // Committing to a station clears the scan-preview flag so the ledger
+      // resumes normal tracking from this point forward.
+      setIsScanPreview(false);
       if (active) stop();
       if (castStatus === "casting" && radio.station?.slug === station.slug) {
         castTogglePause();
@@ -1465,6 +1483,20 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       radio.toggle(station);
     },
     [active, radio, stop, castStatus, castTogglePause],
+  );
+
+  /**
+   * Play a station as a transient scan sample — audio starts but no listen
+   * event is written to the journal or the server ledger. Calling `toggle`
+   * afterwards ("landing") clears the preview flag and resumes normal tracking.
+   */
+  const previewRadio = useCallback(
+    (station: Station) => {
+      setIsScanPreview(true);
+      if (active) stop();
+      radio.toggle(station);
+    },
+    [active, radio, stop],
   );
 
   const value = useMemo<PlayerContextValue>(
@@ -1479,6 +1511,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         castPaused,
         castRetry,
         toggle: toggleRadio,
+        preview: previewRadio,
+        scanning: isScanPreview,
         stop: stopRadio,
         setVolume: radio.setVolume,
       },
@@ -1531,6 +1565,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       castPaused,
       castRetry,
       toggleRadio,
+      previewRadio,
+      isScanPreview,
       stopRadio,
       active,
       status,

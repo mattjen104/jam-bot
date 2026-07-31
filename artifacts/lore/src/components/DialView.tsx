@@ -853,14 +853,14 @@ export function DialView() {
   // --- front-door scan (spec §11) ---
   const scan = useFrontDoorScan(withReason.length);
 
-  // Play each sample as scan advances
-  // TODO §11: scan samples must not write to listen ledger — needs radio.preview()
+  // Play each sample as scan advances — uses radio.preview() so no listen event
+  // is written to the journal or server ledger (spec §11).
   const prevSamplingIdx = useRef<number | null>(null);
   useEffect(() => {
     if (scan.scanning && scan.samplingIdx != null && scan.samplingIdx !== prevSamplingIdx.current) {
       prevSamplingIdx.current = scan.samplingIdx;
       const row = withReason[scan.samplingIdx];
-      if (row) void radio.toggle(row.ds.station);
+      if (row) void radio.preview(row.ds.station);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scan.scanning, scan.samplingIdx]);
