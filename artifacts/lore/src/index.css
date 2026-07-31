@@ -1379,6 +1379,17 @@
 .dial-stn-cross__lbl { color: hsl(var(--faint)); font-size: 8px; }
 .dial-stn-cross--zero .dial-stn-cross__num { color: hsl(var(--faint)); }
 
+/* Track sub-line under the show name in an offline row */
+.dial-stn-track {
+  font-family: var(--app-font-mono);
+  font-size: 9px;
+  color: hsl(var(--faint));
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ── Schedule view ── */
 .dial-sch-row {
   display: flex;

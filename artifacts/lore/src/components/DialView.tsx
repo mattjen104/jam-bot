@@ -784,6 +784,76 @@ function ScheduleView({ stations }: { stations: DialStation[] }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Offline station row — compact vertical list for the "Recently Aired" section.
+// No horizontal scrolling; click row → station detail, play button → tune in.
+// ---------------------------------------------------------------------------
+function OfflineRow({
+  dialStation,
+  isActive,
+  onStationClick,
+  onPlay,
+}: {
+  dialStation: DialStation;
+  isActive: boolean;
+  onStationClick: () => void;
+  onPlay: () => void;
+}) {
+  const { station, shows, crossings } = dialStation;
+  // Most recent show (shows are sorted oldest→newest)
+  const lastShow = shows.length > 0 ? shows[shows.length - 1] : null;
+  // Most recent spin in that show
+  const lastSpin = lastShow && lastShow.spins.length > 0
+    ? lastShow.spins[lastShow.spins.length - 1]
+    : null;
+  const hasShowName = lastShow && lastShow.showName && lastShow.showName.toLowerCase() !== "unknown show";
+
+  return (
+    <div
+      className="dial-stn-row"
+      onClick={onStationClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === "Enter" && onStationClick()}
+    >
+      <span className="dial-stn-dot" />
+      <div className="dial-stn-info">
+        <div className="dial-stn-name">{station.name}</div>
+        {hasShowName ? (
+          <div className="dial-stn-now">
+            {lastShow!.showName}
+            {lastShow!.djName && <> · <b>{lastShow!.djName}</b></>}
+          </div>
+        ) : lastSpin ? (
+          <div className="dial-stn-now">
+            {lastSpin.title}
+            {lastSpin.artist && <> — <b>{lastSpin.artist}</b></>}
+          </div>
+        ) : (
+          <div className="dial-stn-now" style={{ opacity: 0.35 }}>No data today</div>
+        )}
+        {hasShowName && lastSpin && (
+          <div className="dial-stn-track">
+            {lastSpin.title}{lastSpin.artist ? ` — ${lastSpin.artist}` : ""}
+          </div>
+        )}
+      </div>
+      <div className={`dial-stn-cross${crossings === 0 ? " dial-stn-cross--zero" : ""}`}>
+        <span className="dial-stn-cross__num">{crossings > 0 ? `◆ ${crossings}` : "—"}</span>
+        {crossings > 0 && <span className="dial-stn-cross__lbl">yours</span>}
+      </div>
+      <button
+        type="button"
+        className={`dial-lane__play${isActive ? " dial-lane__play--on" : ""}`}
+        onClick={(e) => { e.stopPropagation(); onPlay(); }}
+        aria-label={isActive ? `Stop ${station.name}` : `Play ${station.name}`}
+      >
+        {isActive ? "■" : "▶"}
+      </button>
+    </div>
+  );
+}
+
 export function DialView() {
   const [location] = useLocation();
   const [level, setLevel] = useState<Level>("all");
@@ -1132,14 +1202,11 @@ export function DialView() {
                 section doesn't jump when live data arrives. */}
             {!isCoreLoading && offlineStations.length > 0 && <TierHeader live={false} />}
             {!isCoreLoading && visibleOffline.map((ds) => (
-              <StationLane
+              <OfflineRow
                 key={ds.station.slug}
                 dialStation={ds}
-                isPinned={false}
                 isActive={ds.station.slug === radio.station?.slug}
                 onStationClick={() => goStation(ds.station.slug)}
-                onShowClick={(show) => goShow(show, ds)}
-                onPinToggle={() => {}}
                 onPlay={() => void radio.toggle(ds.station)}
               />
             ))}
