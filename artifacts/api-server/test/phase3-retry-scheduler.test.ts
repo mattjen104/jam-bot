@@ -242,4 +242,38 @@ describe("startPhase3RetryScheduler — off-peak gate (via fake timers)", () => 
 
     expect(mockDbSelect).not.toHaveBeenCalled();
   });
+
+  // ── Midnight boundary crossing: entering the window ──────────────────────
+  //
+  // These tests advance the clock *across* the [2, 6) boundary so that the
+  // tick fires inside a different hour than when the scheduler was started.
+  // A rounding bug that snapshots the hour at start-time rather than at each
+  // tick would break exactly these cases.
+
+  it("calls runPhase3RetryPass when the clock crosses 02:00 into the window (start 01:58, tick at 02:13)", async () => {
+    // Start just before the window: 01:58 UTC.
+    vi.setSystemTime(new Date("2026-07-31T01:58:00Z"));
+    startPhase3RetryScheduler();
+
+    // One full poll (15 min) moves the fake clock to 02:13 UTC — inside [2, 6).
+    // The setInterval callback reads new Date().getUTCHours() at fire time,
+    // so it should see hour 2 and invoke runPhase3RetryPass.
+    await vi.advanceTimersByTimeAsync(SCHEDULER_POLL_MS);
+
+    expect(mockDbSelect).toHaveBeenCalled();
+  });
+
+  // ── Boundary crossing: leaving the window ────────────────────────────────
+
+  it("does not call runPhase3RetryPass when the clock crosses 06:00 out of the window (start 05:58, tick at 06:13)", async () => {
+    // Start just before the window closes: 05:58 UTC.
+    vi.setSystemTime(new Date("2026-07-31T05:58:00Z"));
+    startPhase3RetryScheduler();
+
+    // One full poll (15 min) moves the fake clock to 06:13 UTC — outside [2, 6).
+    // The gate (utcHour >= end) is true at tick time, so it should be a no-op.
+    await vi.advanceTimersByTimeAsync(SCHEDULER_POLL_MS);
+
+    expect(mockDbSelect).not.toHaveBeenCalled();
+  });
 });
