@@ -2647,6 +2647,54 @@
   color: hsl(var(--muted-foreground) / 0.45);
 }
 
+/* ── Zone 2 ghost rows — discovers tier ─────────────────────────────────── */
+/* Less warm than Zone 1, not dimmed like Zone 3. Neutral-cool left accent. */
+.ghost-row {
+  display: flex;
+  padding: 11px 15px 9px;
+  border-bottom: 1px solid hsl(var(--border) / 0.4);
+  cursor: pointer;
+  position: relative;
+  transition: background 0.1s;
+}
+.ghost-row::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: hsl(var(--muted-foreground) / 0.35);
+  transition: background 0.12s;
+}
+.ghost-row:hover { background: hsl(var(--secondary) / 0.25); }
+.ghost-row--playing::before { background: hsl(var(--live)); }
+
+.ghost-row__c { flex: 1; min-width: 0; }
+
+.ghost-row__name {
+  font-family: var(--app-font-display);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.15;
+  color: hsl(var(--foreground) / 0.85);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 3px;
+}
+
+.ghost-row__reason {
+  font-family: var(--app-font-display);
+  font-style: italic;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: hsl(var(--muted-foreground) / 0.8);
+}
+.ghost-row__reason b {
+  font-style: normal;
+  font-weight: 600;
+  color: hsl(var(--foreground) / 0.7);
+}
+
 /* ── Selectors page — overlap sentence ──────────────────────────────────── */
 .sel-card__overlap-sentence {
   font-family: var(--app-font-display);

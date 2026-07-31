@@ -2526,6 +2526,86 @@ router.get("/me/blogs/for-you", h(async (req, res) => {
 }));
 
 /**
+ * GET /api/me/ghost/missed — stations that played the user's library artists
+ * in the rolling 24 h window but that the user has never consciously tuned
+ * into (no listens record for that station).
+ *
+ * Join path: library_items → recordings (artist_mbid) → spins (24 h) →
+ * stations.  Excludes stations with any listens row for this user.
+ * Returns at most 20 stations ordered by sort_order, name.
+ */
+router.get("/me/ghost/missed", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+
+  type GhostRow = {
+    station_id: number;
+    slug: string;
+    name: string;
+    stream_url: string;
+    stream_format: string;
+    mode: string;
+    attribution: boolean;
+    artist_name: string;
+  };
+
+  const rows = await db.execute<GhostRow>(sql`
+    WITH lib_artists AS (
+      SELECT DISTINCT r.artist_mbid
+      FROM library_items li
+      JOIN recordings r ON li.mbid = r.mbid
+      WHERE li.user_id = ${user.id}
+        AND r.artist_mbid IS NOT NULL
+    ),
+    heard_stations AS (
+      SELECT DISTINCT station_id
+      FROM listens
+      WHERE user_id = ${user.id}
+        AND station_id IS NOT NULL
+    ),
+    ghost_candidates AS (
+      SELECT DISTINCT ON (s.station_id)
+        s.station_id,
+        r.artist AS artist_name
+      FROM spins s
+      JOIN recordings r ON s.mbid = r.mbid
+      JOIN lib_artists la ON r.artist_mbid = la.artist_mbid
+      WHERE s.played_at >= NOW() - INTERVAL '24 hours'
+      ORDER BY s.station_id, s.played_at DESC
+    )
+    SELECT
+      st.id             AS station_id,
+      st.slug,
+      st.name,
+      st.stream_url,
+      st.stream_format,
+      st.mode,
+      st.attribution,
+      gc.artist_name
+    FROM ghost_candidates gc
+    JOIN stations st ON gc.station_id = st.id
+    LEFT JOIN heard_stations hs ON hs.station_id = st.id
+    WHERE st.active = true
+      AND st.hidden = false
+      AND hs.station_id IS NULL
+    ORDER BY st.sort_order, st.name
+    LIMIT 20
+  `);
+
+  return res.json({
+    stations: rows.rows.map((r) => ({
+      stationId: r.station_id,
+      slug: r.slug,
+      name: r.name,
+      streamUrl: r.stream_url,
+      streamFormat: r.stream_format ?? "aac",
+      mode: r.mode ?? "live",
+      attribution: r.attribution ?? true,
+      artistName: r.artist_name,
+    })),
+  });
+}));
+
+/**
  * GET /api/me/overlaps/pickers — pickers ranked by exact-MBID intersection
  * with the user's library_items.  Shape mirrors station→picker overlaps.
  */

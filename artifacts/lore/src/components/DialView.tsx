@@ -9,7 +9,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { useDialData, type DialStation, type DialShow, type DialSpin } from "../hooks/useDialData";
-import { useMyOverlapSelectors } from "../lib/meHooks";
+import { useMyOverlapSelectors, useMyGhostMissed, type GhostStation } from "../lib/meHooks";
 import { StationLane } from "./StationLane";
 import { ContextRail } from "./ContextRail";
 import { SearchOverlay } from "./SearchOverlay";
@@ -315,10 +315,11 @@ function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onEarlier 
   );
 }
 
-// ---------------------------------------------------------------------------
-// Zone label (§6 section headers)
-// ---------------------------------------------------------------------------
-
+interface GhostRowProps {
+  station: GhostStation;
+  isActive: boolean;
+  onTuneIn: () => void;
+}
 function ZoneLabel({ label, n, hint }: { label: string; n?: number; hint?: string }) {
   return (
     <div className="fdzone-lbl">
@@ -945,8 +946,17 @@ export function DialView() {
   // Zone 3: r=0 or r>=5 — attributed-only or dark (dimmed).
   const withReason = useMemo(() => sortedRows.filter((row) => row.rz.r >= 1 && row.rz.r <= 4), [sortedRows]);
   const alsoOnAir = useMemo(() => sortedRows.filter((row) => row.rz.r === 0 || row.rz.r >= 5), [sortedRows]);
-  // Ghost zone: stub — requires /me/ghost/missed endpoint (spec §7)
-  const ghost: Array<unknown> = [];
+  // Ghost zone: stations that played library artists but user hasn't tuned into
+  const { data: ghostStations = [] } = useMyGhostMissed();
+  // Exclude any ghost station already appearing in Zone 1 or Zone 3 (live sets)
+  const liveSlugSet = useMemo(
+    () => new Set(sortedRows.map((r) => r.ds.station.slug)),
+    [sortedRows],
+  );
+  const ghost = useMemo(
+    () => ghostStations.filter((g) => !liveSlugSet.has(g.slug)),
+    [ghostStations, liveSlugSet],
+  );
 
   // Offline stations (recently aired):
   //   1. Crossings desc — library matches first
@@ -1314,6 +1324,26 @@ export function DialView() {
             />
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+function GhostRow({ station, isActive, onTuneIn }: GhostRowProps) {
+  const cls = ["ghost-row", isActive ? "ghost-row--playing" : ""].filter(Boolean).join(" ");
+  return (
+    <div
+      className={cls}
+      role="button"
+      tabIndex={0}
+      onClick={onTuneIn}
+      onKeyDown={(e) => e.key === "Enter" && onTuneIn()}
+    >
+      <div className="ghost-row__c">
+        <div className="ghost-row__name">{station.name}</div>
+        <div className="ghost-row__reason">
+          played <b>{station.artistName}</b> — an artist from your library
+        </div>
       </div>
     </div>
   );

@@ -288,6 +288,7 @@ export const ME_OVERLAP_STATIONS_KEY = ["me", "overlaps", "stations"] as const;
 export const ME_OVERLAP_RUNS_KEY = ["me", "overlaps", "runs"] as const;
 export const ME_OVERLAP_SELECTORS_KEY = ["me", "overlaps", "selectors"] as const;
 
+export const ME_GHOST_MISSED_KEY = ["me", "ghost", "missed"] as const;
 export interface OverlapSelector {
   selector: { name: string; handle: string };
   sharedCount: number;
@@ -717,10 +718,17 @@ export function useMyOverlapRuns() {
   });
 }
 
-// ---------------------------------------------------------------------------
-// Preferences (ledger consent)
-// ---------------------------------------------------------------------------
-
+export interface GhostStation {
+  stationId: number;
+  slug: string;
+  name: string;
+  streamUrl: string;
+  streamFormat: string;
+  mode: string;
+  attribution: boolean;
+  /** The library artist name that links the listener to this station. */
+  artistName: string;
+}
 export interface MyPreferences {
   ledgerEnabled: boolean;
 }
@@ -848,3 +856,22 @@ function maybeShowRecoveryHint(show?: boolean): void {
 }
 
 const RECOVERY_HINT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * Stations that have played the user's library artists in the rolling 24 h
+ * window but that the user has never consciously tuned into (no listens row
+ * for that station). Returns [] when unauthenticated or library is empty.
+ * Refetches every 5 minutes so new ghost stations surface during a session.
+ */
+export function useMyGhostMissed() {
+  return useQuery({
+    queryKey: ME_GHOST_MISSED_KEY,
+    queryFn: () =>
+      fetchOrNull<{ stations: GhostStation[] }>("/api/me/ghost/missed").then(
+        (d) => d?.stations ?? [],
+      ),
+    staleTime: 5 * 60_000,
+    refetchInterval: 5 * 60_000,
+    retry: false,
+  });
+}
