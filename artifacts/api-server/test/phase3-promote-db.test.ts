@@ -88,23 +88,28 @@ import { runPhase3RetryPass } from "../src/routes/me/index.js";
 
 const run = randomUUID().slice(0, 8);
 
-// Two users: one for the fresh-promotion test, one for the idempotent test.
+// Three users: fresh-promotion, idempotent, and synthesised-key tests.
 const ARTIST = `PromoArtist ${run}`;
 
 // The MBID the mocked resolver will return for this test run.
 const MBID_PROMO    = `promo-mbid-${run}`;   // fresh promotion
 const MBID_IDEM     = `idem-mbid-${run}`;    // idempotent (already in library_items)
+const MBID_SYNTH    = `synth-mbid-${run}`;   // synthesised-key promotion
 
 const SPOTIFY_ID_PROMO = `sp-promo-${run}`;  // Spotify track id for the soft row
 const SPOTIFY_ID_IDEM  = `sp-idem-${run}`;
+// Synthesised key mirrors what the import worker produces when no real Spotify
+// ID is available: "artist\u001ftitle".
+const SYNTH_EXTERNAL_ID = `${ARTIST}\u001fSynth Track`;
 
-const ALL_MBIDS = [MBID_PROMO, MBID_IDEM];
+const ALL_MBIDS = [MBID_PROMO, MBID_IDEM, MBID_SYNTH];
 
 let dbAvailable = false;
 let softTableAvailable = false;
 
 let userIdPromo: number;
 let userIdIdem: number;
+let userIdSynth: number;
 
 // ── Sleep bypass ─────────────────────────────────────────────────────────────
 
@@ -145,7 +150,7 @@ beforeAll(async () => {
     return;
   }
 
-  // Create two isolated users.
+  // Create three isolated users.
   const [u1] = await db
     .insert(loreUsersTable)
     .values({ spotifyUserId: `promo-fresh-${run}`, deviceKey: randomUUID() })
@@ -158,10 +163,17 @@ beforeAll(async () => {
     .returning({ id: loreUsersTable.id });
   userIdIdem = u2!.id;
 
+  const [u3] = await db
+    .insert(loreUsersTable)
+    .values({ spotifyUserId: `promo-synth-${run}`, deviceKey: randomUUID() })
+    .returning({ id: loreUsersTable.id });
+  userIdSynth = u3!.id;
+
   // Seed recordings rows so library_items FK is satisfiable.
   await db.insert(recordingsTable).values([
-    { mbid: MBID_PROMO, title: "Promo Track", artist: ARTIST },
-    { mbid: MBID_IDEM,  title: "Idem Track",  artist: ARTIST },
+    { mbid: MBID_PROMO,  title: "Promo Track",  artist: ARTIST },
+    { mbid: MBID_IDEM,   title: "Idem Track",   artist: ARTIST },
+    { mbid: MBID_SYNTH,  title: "Synth Track",  artist: ARTIST },
   ]);
 
   // Seed the staging spotify_library_items rows (unresolved, mbid = null).
@@ -182,6 +194,16 @@ beforeAll(async () => {
       addedAt: new Date(),
       mbid: null,
     },
+    // Synthesised-key soft row: spotifyId is the "artist\u001ftitle" fallback
+    // that the import worker writes when no real Spotify track ID is available.
+    {
+      userId: userIdSynth,
+      spotifyId: SYNTH_EXTERNAL_ID,
+      title: "Synth Track",
+      artist: ARTIST,
+      addedAt: new Date(),
+      mbid: null,
+    },
   ]);
 });
 
@@ -190,7 +212,7 @@ beforeAll(async () => {
 afterAll(async () => {
   if (!dbAvailable || !softTableAvailable) return;
 
-  const allUserIds = [userIdPromo, userIdIdem].filter(Boolean);
+  const allUserIds = [userIdPromo, userIdIdem, userIdSynth].filter(Boolean);
 
   // Remove soft rows that might have survived (e.g. if a test failed before cleanup).
   await db
@@ -221,6 +243,7 @@ afterAll(async () => {
       inArray(resolutionCacheTable.key, [
         normalizeKey(ARTIST, "Promo Track"),
         normalizeKey(ARTIST, "Idem Track"),
+        normalizeKey(ARTIST, "Synth Track"),
       ]),
     )
     .catch(() => {});
@@ -426,6 +449,82 @@ describe("runPhase3RetryPass — idempotent when track is already in library_ite
           ),
         );
       expect(softRows.length).toBe(0);
+    },
+    TEST_TIMEOUT,
+  );
+});
+
+// ── Test 3: synthesised-key promotion ─────────────────────────────────────────
+//
+// When the connector yields no real Spotify ID the import worker falls back to
+// "artist\u001ftitle" as the buffer entry's externalId.  seedSpotifySoftRows
+// stores that same synthesised key as the spotifyId column value.  The retry
+// pass must detect a non-22-char externalId and delete the soft row by
+// artist+title (or ISRC), not by the synthesised spotifyId string.
+//
+// This test confirms the promotion works end-to-end for that path.
+
+describe("runPhase3RetryPass — promotes soft row seeded with a synthesised externalId", () => {
+  it(
+    "removes the spotify_library_items row and inserts into library_items when externalId is artist+title fallback",
+    async () => {
+      if (!dbAvailable || !softTableAvailable) return;
+
+      mockResolveByText.mockClear();
+      mockResolveByIsrc.mockClear();
+      // Resolver finds the track on this retry.
+      mockResolveByText.mockResolvedValue(MBID_SYNTH);
+
+      // Source job: buffer entry uses the synthesised key (not a real Spotify ID).
+      await insertDoneJob(userIdSynth, {
+        artist: ARTIST,
+        title: "Synth Track",
+        externalId: SYNTH_EXTERNAL_ID,   // "Artist\u001fSynth Track" — not 22 chars
+      });
+
+      const spy = installSleepBypass();
+      try {
+        await runPhase3RetryPass();
+      } finally {
+        spy.mockRestore();
+      }
+
+      // 1. The track must appear in library_items for this user.
+      const libRows = await db
+        .select({ mbid: libraryItemsTable.mbid })
+        .from(libraryItemsTable)
+        .where(
+          and(
+            eq(libraryItemsTable.userId, userIdSynth),
+            eq(libraryItemsTable.mbid, MBID_SYNTH),
+          ),
+        );
+      expect(libRows.length).toBe(1);
+      expect(libRows[0]!.mbid).toBe(MBID_SYNTH);
+
+      // 2. The soft row must be gone from spotify_library_items.
+      //    Query by userId + title (not by spotifyId) to confirm the fallback
+      //    delete path correctly removed the row regardless of which key it
+      //    was stored under.
+      const softRows = await db
+        .select({ id: spotifyLibraryItemsTable.id, title: spotifyLibraryItemsTable.title })
+        .from(spotifyLibraryItemsTable)
+        .where(
+          and(
+            eq(spotifyLibraryItemsTable.userId, userIdSynth),
+            eq(spotifyLibraryItemsTable.title, "Synth Track"),
+          ),
+        );
+      expect(softRows.length).toBe(0);
+
+      // 3. Resolution cache must have a positive entry for the text key.
+      const { normalizeKey } = resolveModule;
+      const cacheRows = await db
+        .select({ mbid: resolutionCacheTable.mbid })
+        .from(resolutionCacheTable)
+        .where(eq(resolutionCacheTable.key, normalizeKey(ARTIST, "Synth Track")));
+      expect(cacheRows.length).toBeGreaterThanOrEqual(1);
+      expect(cacheRows[0]!.mbid).toBe(MBID_SYNTH);
     },
     TEST_TIMEOUT,
   );

@@ -1512,15 +1512,40 @@ export async function runPhase3RetryPass(deadline?: Date): Promise<void> {
             .catch(() => {});
           // Promote: remove the soft row now that library_items has the track.
           if (candidate.service === "spotify") {
-            await db
-              .delete(spotifyLibraryItemsTable)
-              .where(
-                and(
-                  eq(spotifyLibraryItemsTable.userId, candidate.userId),
-                  eq(spotifyLibraryItemsTable.spotifyId, t.externalId),
-                ),
-              )
-              .catch(() => {});
+            // A real Spotify track ID is always 22 alphanumeric characters.
+            // When no ID was available during the original import, the buffer
+            // entry was seeded with a synthesised "artist\u001ftitle" fallback
+            // key.  The soft row in spotify_library_items may carry that same
+            // synthesised key (or may have been inserted under a different value
+            // in a prior run), so the spotifyId match alone is unreliable.
+            // Fall back to ISRC (most precise) or artist+title when the
+            // externalId is not a genuine Spotify track ID.
+            const isRealSpotifyId = /^[A-Za-z0-9]{22}$/.test(t.externalId);
+            if (isRealSpotifyId) {
+              await db
+                .delete(spotifyLibraryItemsTable)
+                .where(
+                  and(
+                    eq(spotifyLibraryItemsTable.userId, candidate.userId),
+                    eq(spotifyLibraryItemsTable.spotifyId, t.externalId),
+                  ),
+                )
+                .catch(() => {});
+            } else {
+              // Synthesised-key path: match by ISRC if present, otherwise by
+              // artist + title.  Both are already available on the buffer entry
+              // and were written to the soft row when it was seeded.
+              const fallbackCond = t.isrc
+                ? eq(spotifyLibraryItemsTable.isrc, t.isrc)
+                : and(
+                    eq(spotifyLibraryItemsTable.artist, t.artist),
+                    eq(spotifyLibraryItemsTable.title, t.title),
+                  );
+              await db
+                .delete(spotifyLibraryItemsTable)
+                .where(and(eq(spotifyLibraryItemsTable.userId, candidate.userId), fallbackCond))
+                .catch(() => {});
+            }
           }
           retryResolved++;
         } else if (!controller.signal.aborted && !resolveErrored) {
