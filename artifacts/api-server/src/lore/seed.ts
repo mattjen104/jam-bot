@@ -272,15 +272,19 @@ function indieInternetStations(): InsertStation[] {
 
 /**
  * Six curated Canadian campus stations that are NOT on Spinitron's public web.
- * All were originally configured as `spinitron_web` with callsign-based URLs
- * that returned 404. The correct source is `radio_browser_icy` with persistent
- * watcher sockets (`favorite: true`) because their Icecast status.xsl pages
- * show empty "Currently playing" fields — only inline ICY metadata blocks
- * carry the track data that the watcher reads.
  *
- * Stream URLs are confirmed reachable from the Replit container (200 + ICY
- * headers). Radio Browser UUIDs match the `ICY_HEALTH_SEEDS` entries so
- * `ensureIcyHealthRows()` can link a health row and patch `radioBrowserId`.
+ * CFUV, CJSR, and CKUT use `radio_browser_icy` with persistent watcher sockets
+ * (`favorite: true`) — their DAS/Icecast streams carry inline ICY metadata that
+ * the watcher reads (confirmed live). Radio Browser UUIDs match `ICY_HEALTH_SEEDS`
+ * so `ensureIcyHealthRows()` links a health row and patches `radioBrowserId`.
+ *
+ * CHMR, CISM, and CKCU have ICY streams with permanently null StreamTitle —
+ * their broadcast automation systems never populate the ICY metadata field.
+ * Thorough investigation (2026-07) found no publicly accessible now-playing API
+ * for any of the three (see per-station comments). Their `nowPlayingSource` is
+ * null and they are omitted from `ICY_HEALTH_SEEDS`. They remain on the dial
+ * and retain `favorite: true` for curation purposes, but will not log spins
+ * until a working source is identified and configured.
  */
 function canadianCampusStations(): InsertStation[] {
   return [
@@ -309,13 +313,24 @@ function canadianCampusStations(): InsertStation[] {
       name: "CHMR 93.5 FM",
       org: "Memorial University of Newfoundland",
       country: "CA",
-      // Icecast 2.4.4 stream — confirmed 200 + ICY headers.
+      // Icecast 2.4.4 stream — confirmed 200 + ICY headers, but StreamTitle
+      // is permanently null (stream_start July 2025, "Currently playing" field
+      // empty in status-json.xsl). The broadcast automation system does not
+      // populate ICY metadata, so radio_browser_icy will never produce spins.
+      //
+      // Investigation (2026-07): No publicly accessible now-playing API found.
+      //   • chmr.ca — Weebly site, no now-playing endpoint or widget.
+      //   • Centova Cast 3.2.15 at 192.99.14.49:2199 — requires authentication;
+      //     no public song endpoint accessible without credentials.
+      //   • StatsRadio API (api.statsradio.com) — CHMR slug invalid (404).
+      //   • TuneIn guide_id s24751 — show-level subtext only, no track data.
+      // nowPlayingSource is null until a working source is identified.
       streamUrl: "http://192.99.14.49:9005/live128",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://www.chmr.ca",
-      nowPlayingSource: "radio_browser_icy",
-      nowPlayingConfig: { streamUrl: "http://192.99.14.49:9005/live128" },
+      nowPlayingSource: null,
+      nowPlayingConfig: {},
       source: "curated",
       stationClass: "community",
       favorite: true,
@@ -328,12 +343,24 @@ function canadianCampusStations(): InsertStation[] {
       country: "CA",
       // Icecast (Liquidsoap) stream at ustream.ca — must include port 8000;
       // the default-port URL (port 80) returns 400 Bad Request from Icecast.
+      // StreamTitle is permanently null — 20+ listeners but ICY metadata field
+      // is empty; the broadcast automation does not populate it.
+      //
+      // Investigation (2026-07): No publicly accessible now-playing API found.
+      //   • cism893.ca — Nuxt 3 SSR app; nowplaying Pinia store fetches from
+      //     admin.cism893.ca, which redirects to a Filament admin panel
+      //     (authentication required). All /api/* routes return 404.
+      //   • cism.umontreal.ca — redirects to cism893.ca (BigIP 301).
+      //   • StatsRadio API — CISM slug returns NO_PLAYING_SONG (not a valid
+      //     registered station; the slug match is unvalidated).
+      //   • TuneIn guide_id s24807 — show-level subtext only, no track data.
+      // nowPlayingSource is null until a working source is identified.
       streamUrl: "http://stream03.ustream.ca:8000/cism128.mp3",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://cism.umontreal.ca",
-      nowPlayingSource: "radio_browser_icy",
-      nowPlayingConfig: { streamUrl: "http://stream03.ustream.ca:8000/cism128.mp3" },
+      nowPlayingSource: null,
+      nowPlayingConfig: {},
       source: "curated",
       stationClass: "community",
       favorite: true,
@@ -365,13 +392,26 @@ function canadianCampusStations(): InsertStation[] {
       name: "CKCU 93.1 FM",
       org: "Carleton University",
       country: "CA",
-      // StatsRadio Icecast (kh15 fork) — confirmed 200 + ICY headers.
+      // StatsRadio Icecast kh15 stream — confirmed 200 + ICY headers (256 kbps
+      // AAC), 26–31 listeners. StreamTitle is permanently null — the broadcast
+      // automation at Carleton does not populate ICY metadata.
+      //
+      // Investigation (2026-07): No publicly accessible now-playing API found.
+      //   • ckcu.ca — DNS does not resolve from the Replit container (000).
+      //   • StatsRadio API (api.statsradio.com/player/ckcu/song/now-playing) —
+      //     endpoint exists (200) but returns {"code":"NO_PLAYING_SONG"} and
+      //     recently-played is [] even during active music programming (Fri
+      //     Special Blend confirmed live). CKCU does not use StatsRadio's song
+      //     reporting feature; the platform is listener-analytics-only for them.
+      //   • TuneIn guide_id s24763 — show-level current_track only ("Friday
+      //     Special Blend"), not per-song track data.
+      // nowPlayingSource is null until a working source is identified.
       streamUrl: "https://stream2.statsradio.com:8124/stream",
-      streamQuality: "128kbps MP3",
-      streamFormat: "mp3",
+      streamQuality: "256kbps AAC",
+      streamFormat: "aac",
       homepageUrl: "https://ckcu.ca",
-      nowPlayingSource: "radio_browser_icy",
-      nowPlayingConfig: { streamUrl: "https://stream2.statsradio.com:8124/stream" },
+      nowPlayingSource: null,
+      nowPlayingConfig: {},
       source: "curated",
       stationClass: "community",
       favorite: true,
@@ -508,11 +548,13 @@ const ICY_HEALTH_SEEDS: Array<{
   // Canadian campus stations — real Radio Browser UUIDs (confirmed via API).
   // These stations do not have Spinitron pages; ICY metadata is the only
   // source. favorite=true gives them a persistent watcher socket.
+  //
+  // CHMR, CISM, and CKCU are intentionally omitted: their ICY streams have
+  // permanently null StreamTitle (broadcast automation does not populate it),
+  // and no publicly accessible now-playing API was found after investigation
+  // (2026-07). Their nowPlayingSource is null and they need no health row.
   { stationSlug: "cfuv", radioBrowserUuid: "9619dcac-0601-11e8-ae97-52543be04c81" },
-  { stationSlug: "chmr", radioBrowserUuid: "578192b2-6656-41c7-802a-19f1dfa472e0" },
-  { stationSlug: "cism", radioBrowserUuid: "961b9db8-0601-11e8-ae97-52543be04c81" },
   { stationSlug: "cjsr", radioBrowserUuid: "961a1782-0601-11e8-ae97-52543be04c81" },
-  { stationSlug: "ckcu", radioBrowserUuid: "f8b2cd78-5142-4978-a222-5d0435fe10dd" },
   { stationSlug: "ckut", radioBrowserUuid: "c25963ed-7ef5-4789-b8ca-190cbb110154" },
 ];
 
