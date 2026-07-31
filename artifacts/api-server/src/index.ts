@@ -50,7 +50,7 @@ import { applySelectorClaimsMigration } from "./lore/selector-claims-migration.j
 import { syncScrapedShows } from "./lore/scraped-shows-sync.js";
 import { wireScheduleExtractor } from "./lore/schedule-wire.js";
 import { startScheduleScraper } from "./lore/schedule-scraper.js";
-import { markOrphanedImportJobsAsError, markOrphanedSyncJobsAsError } from "./routes/me/index.js";
+import { markOrphanedImportJobsAsError, markOrphanedSyncJobsAsError, startPhase3RetryScheduler } from "./routes/me/index.js";
 import { applyDeviceIdentityMigration } from "./lore/device-identity-migration.js";
 
 const rawPort = process.env["PORT"];
@@ -152,6 +152,7 @@ async function bootLore(): Promise<void> {
     }
     startDiscoveryScoreJob();
     startQualityRecomputeJob();
+    startPhase3RetryScheduler();
   } catch (err) {
     console.error("[lore] boot failed", err);
   }

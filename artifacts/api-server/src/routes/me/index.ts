@@ -1392,8 +1392,11 @@ export async function runPhase3RetryPass(): Promise<void> {
  * when the current UTC hour falls within PHASE3_RETRY_OFF_PEAK_HOURS (2–6 AM).
  * During business hours the scheduler is a no-op — it fires but immediately
  * returns, adding no load.
+ *
+ * Called from the boot entrypoint (src/index.ts) so it never runs during
+ * tests or non-worker module imports.
  */
-function startPhase3RetryScheduler(): void {
+export function startPhase3RetryScheduler(): void {
   setInterval(() => {
     const utcHour = new Date().getUTCHours();
     const [start, end] = PHASE3_RETRY_OFF_PEAK_HOURS;
@@ -1404,9 +1407,6 @@ function startPhase3RetryScheduler(): void {
   }, PHASE3_RETRY_POLL_MS);
   console.log("[me/import/retry] off-peak retry scheduler started (active 02–06 UTC)");
 }
-
-// Boot the scheduler immediately when this module is first loaded.
-startPhase3RetryScheduler();
 
 // ---------------------------------------------------------------------------
 // Library endpoints

@@ -84,6 +84,7 @@ const SEED_STATIONS: InsertStation[] = [
   ...spinitronCollegeStations(),
   ...nprListStations(),
   ...indieInternetStations(),
+  ...canadianCampusStations(),
 ];
 
 /**
@@ -269,6 +270,131 @@ function indieInternetStations(): InsertStation[] {
   ];
 }
 
+/**
+ * Six curated Canadian campus stations that are NOT on Spinitron's public web.
+ * All were originally configured as `spinitron_web` with callsign-based URLs
+ * that returned 404. The correct source is `radio_browser_icy` with persistent
+ * watcher sockets (`favorite: true`) because their Icecast status.xsl pages
+ * show empty "Currently playing" fields — only inline ICY metadata blocks
+ * carry the track data that the watcher reads.
+ *
+ * Stream URLs are confirmed reachable from the Replit container (200 + ICY
+ * headers). Radio Browser UUIDs match the `ICY_HEALTH_SEEDS` entries so
+ * `ensureIcyHealthRows()` can link a health row and patch `radioBrowserId`.
+ */
+function canadianCampusStations(): InsertStation[] {
+  return [
+    {
+      slug: "cfuv",
+      name: "CFUV 101.9 FM",
+      org: "University of Victoria",
+      country: "CA",
+      // DAS (Digital Audio Services) stream — confirmed ICY (icy-metaint:16000).
+      // cfuv.streamon.fm redirects here; using the resolved URL so the ICY
+      // watcher (raw TCP, no redirect support) can connect directly.
+      streamUrl: "http://ais-sa1.streamon.fm/7132_64k.aac",
+      streamQuality: "64kbps AAC",
+      streamFormat: "aac",
+      homepageUrl: "https://cfuv.uvic.ca",
+      donateUrl: "https://cfuv.uvic.ca/support/",
+      nowPlayingSource: "radio_browser_icy",
+      nowPlayingConfig: { streamUrl: "http://ais-sa1.streamon.fm/7132_64k.aac" },
+      source: "curated",
+      stationClass: "community",
+      favorite: true,
+      sortOrder: 900,
+    },
+    {
+      slug: "chmr",
+      name: "CHMR 93.5 FM",
+      org: "Memorial University of Newfoundland",
+      country: "CA",
+      // Icecast 2.4.4 stream — confirmed 200 + ICY headers.
+      streamUrl: "http://192.99.14.49:9005/live128",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://www.chmr.ca",
+      nowPlayingSource: "radio_browser_icy",
+      nowPlayingConfig: { streamUrl: "http://192.99.14.49:9005/live128" },
+      source: "curated",
+      stationClass: "community",
+      favorite: true,
+      sortOrder: 901,
+    },
+    {
+      slug: "cism",
+      name: "CISM 89.3 FM",
+      org: "Université de Montréal",
+      country: "CA",
+      // Icecast (Liquidsoap) stream at ustream.ca — confirmed 200 + ICY headers.
+      streamUrl: "http://stream03.ustream.ca/cism128.mp3",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://cism.umontreal.ca",
+      nowPlayingSource: "radio_browser_icy",
+      nowPlayingConfig: { streamUrl: "http://stream03.ustream.ca/cism128.mp3" },
+      source: "curated",
+      stationClass: "community",
+      favorite: true,
+      sortOrder: 902,
+    },
+    {
+      slug: "cjsr",
+      name: "CJSR 88.5 FM",
+      org: "University of Alberta",
+      country: "CA",
+      // DAS stream — confirmed ICY (icy-metaint:16000) with cdnstream1.com
+      // metadata service; StreamTitle is populated during music programming.
+      // cjsr.streamon.fm redirects here; using the resolved URL directly.
+      streamUrl: "http://ais-sa1.streamon.fm/7093_24k.aac",
+      streamQuality: "24kbps AAC",
+      streamFormat: "aac",
+      homepageUrl: "https://www.cjsr.com",
+      donateUrl: "https://www.cjsr.com/donate/",
+      nowPlayingSource: "radio_browser_icy",
+      nowPlayingConfig: { streamUrl: "http://ais-sa1.streamon.fm/7093_24k.aac" },
+      source: "curated",
+      stationClass: "community",
+      favorite: true,
+      sortOrder: 903,
+    },
+    {
+      slug: "ckcu",
+      name: "CKCU 93.1 FM",
+      org: "Carleton University",
+      country: "CA",
+      // StatsRadio Icecast (kh15 fork) — confirmed 200 + ICY headers.
+      streamUrl: "https://stream2.statsradio.com:8124/stream",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://ckcu.ca",
+      nowPlayingSource: "radio_browser_icy",
+      nowPlayingConfig: { streamUrl: "https://stream2.statsradio.com:8124/stream" },
+      source: "curated",
+      stationClass: "community",
+      favorite: true,
+      sortOrder: 904,
+    },
+    {
+      slug: "ckut",
+      name: "CKUT 90.3 FM",
+      org: "McGill University",
+      country: "CA",
+      // Airtime Pro Icecast (kh15) — confirmed 200 + ICY headers.
+      streamUrl: "https://ckut.out.airtime.pro/ckut_a",
+      streamQuality: "128kbps MP3",
+      streamFormat: "mp3",
+      homepageUrl: "https://ckut.ca",
+      nowPlayingSource: "radio_browser_icy",
+      nowPlayingConfig: { streamUrl: "https://ckut.out.airtime.pro/ckut_a" },
+      source: "curated",
+      stationClass: "community",
+      favorite: true,
+      sortOrder: 905,
+    },
+  ];
+}
+
 function nprListStations(): InsertStation[] {
   return [
     {
@@ -369,6 +495,15 @@ const ICY_HEALTH_SEEDS: Array<{
     stationSlug: "refuge-worldwide",
     radioBrowserUuid: "manual-refuge-worldwide",
   },
+  // Canadian campus stations — real Radio Browser UUIDs (confirmed via API).
+  // These stations do not have Spinitron pages; ICY metadata is the only
+  // source. favorite=true gives them a persistent watcher socket.
+  { stationSlug: "cfuv", radioBrowserUuid: "9619dcac-0601-11e8-ae97-52543be04c81" },
+  { stationSlug: "chmr", radioBrowserUuid: "578192b2-6656-41c7-802a-19f1dfa472e0" },
+  { stationSlug: "cism", radioBrowserUuid: "961b9db8-0601-11e8-ae97-52543be04c81" },
+  { stationSlug: "cjsr", radioBrowserUuid: "961a1782-0601-11e8-ae97-52543be04c81" },
+  { stationSlug: "ckcu", radioBrowserUuid: "f8b2cd78-5142-4978-a222-5d0435fe10dd" },
+  { stationSlug: "ckut", radioBrowserUuid: "c25963ed-7ef5-4789-b8ca-190cbb110154" },
 ];
 
 /**
@@ -1395,6 +1530,9 @@ export async function seedStations(): Promise<void> {
           // one is genuinely dead. Without this, a legacy inactive row stays
           // hidden from GET /api/stations (active=true filter) forever.
           active: true,
+          // Propagate the favorite flag so hand-verified ICY stations get
+          // persistent watcher sockets without a manual DB edit.
+          favorite: s.favorite ?? false,
           sortOrder: s.sortOrder ?? 0,
           updatedAt: sql`now()`,
         },
