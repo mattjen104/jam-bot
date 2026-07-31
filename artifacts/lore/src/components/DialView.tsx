@@ -482,10 +482,12 @@ function StationDetailView({
               <div className="dial-fatblk__show">{show.showName}</div>
               <div className="dial-fatblk__when">{when}</div>
             </div>
-            <div className="dial-fatblk__dj">
-              with <b>{show.djName ?? "Unknown"}</b>
-              {isPicker && <span className="dial-fatblk__pickerbadge">◆ Selector</span>}
-            </div>
+            {(show.djName || isPicker) && (
+              <div className="dial-fatblk__dj">
+                {show.djName && <>with <b>{show.djName}</b></>}
+                {isPicker && <span className="dial-fatblk__pickerbadge">◆ Selector</span>}
+              </div>
+            )}
             {!isFuture && (
               <>
                 <div className="dial-fbar">{bars}</div>
@@ -542,8 +544,8 @@ function ShowTracklistView({
       <div className="dial-djhd">
         <div className="dial-djhd__name">{show.showName}</div>
         <div className="dial-djhd__sub">
-          with <b style={{ fontStyle: "normal", fontWeight: 600 }}>{show.djName ?? "Unknown"}</b>
-          {" "}on {station.station.name} · {fmtHM(show.startedAt)}{isLive ? "–now" : `–${fmtHM(show.endedAt)}`}
+          {show.djName && <><b style={{ fontStyle: "normal", fontWeight: 600 }}>{show.djName}</b>{" · "}</>}
+          {station.station.name} · {fmtHM(show.startedAt)}{isLive ? "–now" : `–${fmtHM(show.endedAt)}`}
         </div>
         <div className="dial-djhd__stats">
           <div className="dial-djhd__stat">
