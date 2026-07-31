@@ -926,19 +926,17 @@ export function DialView() {
         const ac = a.rz.r === 1 ? 0 : 1;
         const bc = b.rz.r === 1 ? 0 : 1;
         if (ac !== bc) return ac - bc;
-        // 2. Attribution tier: named selector unconditionally outranks station
+        // 2. Lifetime overlap desc — attributed uses selector lifetime ov,
+        //    unattributed uses 24h station crossings (same numeric scale for comparison)
+        const aOv = a.show?.djName != null ? (ovByName.get(a.show.djName) ?? 0) : a.ds.crossings;
+        const bOv = b.show?.djName != null ? (ovByName.get(b.show.djName) ?? 0) : b.ds.crossings;
+        if (aOv !== bOv) return bOv - aOv;
+        // 3. Attribution tier as tiebreaker within the same overlap band
         const at = a.show?.djName != null ? 0 : 1;
         const bt = b.show?.djName != null ? 0 : 1;
         if (at !== bt) return at - bt;
-        // 3. Within attributed: lifetime overlap desc, then rung asc
-        if (a.show?.djName != null && b.show?.djName != null) {
-          const aOv = ovByName.get(a.show.djName) ?? 0;
-          const bOv = ovByName.get(b.show.djName) ?? 0;
-          if (aOv !== bOv) return bOv - aOv;
-          return a.rz.r - b.rz.r;
-        }
-        // 4. Within unattributed: 24h station crossings desc
-        return b.ds.crossings - a.ds.crossings;
+        // 4. Rung asc as final tiebreaker
+        return a.rz.r - b.rz.r;
       });
   }, [stations, ovByName]);
 
