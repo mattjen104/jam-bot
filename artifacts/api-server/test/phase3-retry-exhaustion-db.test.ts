@@ -125,8 +125,10 @@ const MBID_EXHAUST = `ex-exhaust-${run}`; // test 1: exhaustion path
 const MBID_RESET   = `ex-reset-${run}`;   // test 2: success reset path
 const MBID_HARDERR = `ex-harderr-${run}`; // test 3: hard error (outer try) path
 const MBID_EXCL    = `ex-excl-${run}`;    // test 4: retryExhausted exclusion path
+const MBID_EARLY1  = `ex-early1-${run}`;  // test 5: 0→1 must not exhaust
+const MBID_EARLY2  = `ex-early2-${run}`;  // test 6: 1→2 must not exhaust
 
-const ALL_MBIDS = [MBID_EXHAUST, MBID_RESET, MBID_HARDERR, MBID_EXCL];
+const ALL_MBIDS = [MBID_EXHAUST, MBID_RESET, MBID_HARDERR, MBID_EXCL, MBID_EARLY1, MBID_EARLY2];
 
 /** Track titles per group — used to build resolution_cache keys in afterAll. */
 const TITLES: Record<string, string> = {
@@ -134,6 +136,8 @@ const TITLES: Record<string, string> = {
   [MBID_RESET]:   "Reset Track",
   [MBID_HARDERR]: "HardErr Track",
   [MBID_EXCL]:    "Excl Track",
+  [MBID_EARLY1]:  "Early1 Track",
+  [MBID_EARLY2]:  "Early2 Track",
 };
 
 // ---------------------------------------------------------------------------
@@ -200,6 +204,8 @@ let userIdExhaust: number;
 let userIdReset: number;
 let userIdHardErr: number;
 let userIdExcl: number;
+let userIdEarly1: number;
+let userIdEarly2: number;
 
 beforeAll(async () => {
   try {
@@ -221,6 +227,8 @@ beforeAll(async () => {
   userIdReset   = await insertUser("reset");
   userIdHardErr = await insertUser("harderr");
   userIdExcl    = await insertUser("excl");
+  userIdEarly1  = await insertUser("early1");
+  userIdEarly2  = await insertUser("early2");
 
   // Seed spine rows so library_items FK constraints are satisfied.
   await db.insert(recordingsTable).values(
@@ -231,7 +239,7 @@ beforeAll(async () => {
 afterAll(async () => {
   if (!dbAvailable) return;
 
-  const userIds = [userIdExhaust, userIdReset, userIdHardErr, userIdExcl].filter(Boolean);
+  const userIds = [userIdExhaust, userIdReset, userIdHardErr, userIdExcl, userIdEarly1, userIdEarly2].filter(Boolean);
 
   // library_items first (FK to recordings).
   await db.delete(libraryItemsTable).where(inArray(libraryItemsTable.mbid, ALL_MBIDS));
@@ -498,6 +506,106 @@ describe("runPhase3RetryPass — exclusion: skips source jobs where retryExhaust
         .from(libraryItemsTable)
         .where(eq(libraryItemsTable.userId, userIdExcl));
       expect(items.map((r) => r.mbid)).not.toContain(MBID_EXCL);
+    },
+    30_000,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Test 5 — Early pass 0→1: retryExhausted must remain false
+// ---------------------------------------------------------------------------
+//
+// A source job whose retryAttempts is 0 receives a zero-resolved pass.
+// The counter must advance to 1 but retryExhausted must stay false because
+// PHASE3_MAX_RETRY_ATTEMPTS (3) has not been reached yet.
+
+describe("runPhase3RetryPass — early pass 0→1: retryExhausted stays false after first zero-resolved pass", () => {
+  it(
+    "sets retryAttempts=1 but leaves retryExhausted=false after the first zero-resolved pass",
+    async () => {
+      if (!dbAvailable) return;
+
+      mockResolveByText.mockClear();
+      mockResolveByIsrc.mockClear();
+      // MB returns no match — zero tracks resolved.
+      mockResolveByText.mockResolvedValue(null);
+      mockResolveByIsrc.mockResolvedValue(null);
+
+      // Source job starts at attempt 0 — its first ever failed pass.
+      const sourceJobId = await insertDoneJob(
+        userIdEarly1,
+        [{ artist: ARTIST, title: "Early1 Track", externalId: "sp-early1-1" }],
+        { total: 1, resolved: 0, retryAttempts: 0 },
+      );
+
+      const spy = installSleepBypass();
+      try {
+        await runPhase3RetryPass();
+      } finally {
+        spy.mockRestore();
+      }
+
+      const [sourceJob] = await db
+        .select({
+          retryAttempts: libraryImportJobsTable.retryAttempts,
+          retryExhausted: libraryImportJobsTable.retryExhausted,
+        })
+        .from(libraryImportJobsTable)
+        .where(eq(libraryImportJobsTable.id, sourceJobId));
+
+      expect(sourceJob, "source job should still exist").toBeDefined();
+      expect(sourceJob!.retryAttempts).toBe(1);
+      expect(sourceJob!.retryExhausted).toBe(false);
+    },
+    30_000,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Test 6 — Early pass 1→2: retryExhausted must remain false
+// ---------------------------------------------------------------------------
+//
+// A source job whose retryAttempts is 1 receives another zero-resolved pass.
+// The counter must advance to 2 but retryExhausted must stay false; only the
+// third consecutive failure (2→3) triggers exhaustion.
+
+describe("runPhase3RetryPass — early pass 1→2: retryExhausted stays false after second zero-resolved pass", () => {
+  it(
+    "sets retryAttempts=2 but leaves retryExhausted=false after the second zero-resolved pass",
+    async () => {
+      if (!dbAvailable) return;
+
+      mockResolveByText.mockClear();
+      mockResolveByIsrc.mockClear();
+      // MB returns no match — zero tracks resolved.
+      mockResolveByText.mockResolvedValue(null);
+      mockResolveByIsrc.mockResolvedValue(null);
+
+      // Source job is at attempt 1 — one prior failed pass already recorded.
+      const sourceJobId = await insertDoneJob(
+        userIdEarly2,
+        [{ artist: ARTIST, title: "Early2 Track", externalId: "sp-early2-1" }],
+        { total: 1, resolved: 0, retryAttempts: 1 },
+      );
+
+      const spy = installSleepBypass();
+      try {
+        await runPhase3RetryPass();
+      } finally {
+        spy.mockRestore();
+      }
+
+      const [sourceJob] = await db
+        .select({
+          retryAttempts: libraryImportJobsTable.retryAttempts,
+          retryExhausted: libraryImportJobsTable.retryExhausted,
+        })
+        .from(libraryImportJobsTable)
+        .where(eq(libraryImportJobsTable.id, sourceJobId));
+
+      expect(sourceJob, "source job should still exist").toBeDefined();
+      expect(sourceJob!.retryAttempts).toBe(2);
+      expect(sourceJob!.retryExhausted).toBe(false);
     },
     30_000,
   );
