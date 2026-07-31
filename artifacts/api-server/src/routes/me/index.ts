@@ -95,6 +95,11 @@ const PHASE3_RETRY_POLL_MS = 15 * 60_000; // 15 min
 const PHASE3_RETRY_OFF_PEAK_HOURS: [number, number] = [2, 6]; // 2–6 AM UTC
 /** Max age of a completed import job eligible for off-peak retry. */
 const PHASE3_RETRY_MAX_JOB_AGE_MS = 7 * 24 * 60 * 60_000; // 7 days
+/** Number of consecutive failed retry passes (zero tracks resolved) before a
+ *  source job is marked retry_exhausted and skipped in all future passes.
+ *  Prevents un-resolvable tracks from spawning a new retry job every night
+ *  when MusicBrainz is persistently degraded. */
+const PHASE3_MAX_RETRY_ATTEMPTS = 3;
 
 // ---------------------------------------------------------------------------
 // Auth middleware
@@ -606,6 +611,7 @@ router.get("/me/library/import", h(async (req, res) => {
     finishedAt: job.finishedAt ? job.finishedAt.toISOString() : null,
     error: job.error ?? null,
     resumedFrom: job.resumedFrom ?? null,
+    retryExhausted: job.retryExhausted ?? false,
   });
 }));
 
@@ -642,6 +648,7 @@ router.get("/me/library/import/:jobId", h(async (req, res) => {
     finishedAt: job.finishedAt ? job.finishedAt.toISOString() : null,
     error: job.error ?? null,
     resumedFrom: job.resumedFrom ?? null,
+    retryExhausted: job.retryExhausted ?? false,
   });
 }));
 
@@ -1155,11 +1162,13 @@ export async function runPhase3RetryPass(): Promise<void> {
       total: libraryImportJobsTable.total,
       resolved: libraryImportJobsTable.resolved,
       bufferJson: libraryImportJobsTable.bufferJson,
+      retryAttempts: libraryImportJobsTable.retryAttempts,
     })
     .from(libraryImportJobsTable)
     .where(
       and(
         eq(libraryImportJobsTable.status, "done"),
+        eq(libraryImportJobsTable.retryExhausted, false),
         isNotNull(libraryImportJobsTable.bufferJson),
         sql`COALESCE(${libraryImportJobsTable.finishedAt}, ${libraryImportJobsTable.startedAt}) >= ${cutoff}`,
         sql`${libraryImportJobsTable.total} > ${libraryImportJobsTable.resolved}`,
@@ -1261,6 +1270,10 @@ export async function runPhase3RetryPass(): Promise<void> {
     const retryJobId = retryJob.id;
     const provenance: LibraryItemProvenance = { kind: "import", service: candidate.service };
     let retryResolved = 0;
+
+    // Track whether the retry pass encountered a hard MB failure (thrown error)
+    // so we can distinguish "MB was down" from "MB confirmed no match".
+    let retryPassFailed = false;
 
     try {
       const mbResolver = createMbResolver();
@@ -1374,6 +1387,7 @@ export async function runPhase3RetryPass(): Promise<void> {
         `resolved ${retryResolved}/${uncachedEntries.length}`,
       );
     } catch (err) {
+      retryPassFailed = true;
       const message = err instanceof Error ? err.message : String(err);
       console.error(`[me/import/retry] job=${retryJobId} failed`, err);
       await db
@@ -1382,6 +1396,53 @@ export async function runPhase3RetryPass(): Promise<void> {
         .where(eq(libraryImportJobsTable.id, retryJobId))
         .catch(() => {});
     }
+
+    // ── Update retry-exhaustion state on the source job ──────────────────────
+    // A pass is "successful" when it resolves at least one previously un-cached
+    // track. Anything else — zero resolved, thrown error, budget exceeded — is
+    // a failed attempt. After PHASE3_MAX_RETRY_ATTEMPTS consecutive failures the
+    // source job is marked exhausted and dropped from all future passes.
+    //
+    // We do NOT count toward exhaustion when the pass threw a hard MB error,
+    // because the failure is infrastructure-level not a definitive "not in MB".
+    // However we do count budget-exceeded (retryResolved === 0 && !failed) as
+    // a failed attempt: if a retry pass keeps running out of time it's unlikely
+    // to make progress on subsequent nights either.
+    if (retryResolved > 0) {
+      // Success: reset the counter and clear the exhausted flag.
+      await db
+        .update(libraryImportJobsTable)
+        .set({ retryAttempts: 0, retryExhausted: false })
+        .where(eq(libraryImportJobsTable.id, candidate.id))
+        .catch(() => {});
+      console.log(
+        `[me/import/retry] source job=${candidate.id} retry counter reset (resolved ${retryResolved})`,
+      );
+    } else if (!retryPassFailed) {
+      // Zero resolved, no hard failure: count as a failed attempt.
+      const newAttempts = (candidate.retryAttempts ?? 0) + 1;
+      const nowExhausted = newAttempts >= PHASE3_MAX_RETRY_ATTEMPTS;
+      await db
+        .update(libraryImportJobsTable)
+        .set({
+          retryAttempts: newAttempts,
+          ...(nowExhausted ? { retryExhausted: true } : {}),
+        })
+        .where(eq(libraryImportJobsTable.id, candidate.id))
+        .catch(() => {});
+      if (nowExhausted) {
+        console.warn(
+          `[me/import/retry] source job=${candidate.id} marked retry_exhausted ` +
+          `after ${newAttempts} consecutive failed passes`,
+        );
+      } else {
+        console.log(
+          `[me/import/retry] source job=${candidate.id} failed attempt ${newAttempts}/${PHASE3_MAX_RETRY_ATTEMPTS}`,
+        );
+      }
+    }
+    // If retryPassFailed (hard MB error), do NOT increment retryAttempts —
+    // MB being down is not the track's fault; we want to retry again tomorrow.
   }
 }
 

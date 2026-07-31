@@ -45,6 +45,7 @@ import { applyLibraryExportMigration } from "./lore/library-export-migration.js"
 import { applyAutomationClassMigration } from "./lore/automation-class-migration.js";
 import { applyLibrarySyncMigration } from "./lore/library-sync-migration.js";
 import { applyImportBufferMigration } from "./lore/import-buffer-migration.js";
+import { applyImportRetryExhaustedMigration } from "./lore/import-retry-exhausted-migration.js";
 import { applyLedgerMigration } from "./lore/ledger-migration.js";
 import { applySelectorClaimsMigration } from "./lore/selector-claims-migration.js";
 import { syncScrapedShows } from "./lore/scraped-shows-sync.js";
@@ -90,6 +91,7 @@ async function bootLore(): Promise<void> {
     await runMigration("applyAutomationClassMigration", applyAutomationClassMigration);
     await runMigration("applyLibrarySyncMigration", applyLibrarySyncMigration);
     await runMigration("applyImportBufferMigration", applyImportBufferMigration);
+    await runMigration("applyImportRetryExhaustedMigration", applyImportRetryExhaustedMigration);
     await runMigration("applyLedgerMigration", applyLedgerMigration);
     await runMigration("applySelectorClaimsMigration", applySelectorClaimsMigration);
     await ensurePicksUnifiedView();

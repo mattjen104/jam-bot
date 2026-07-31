@@ -1218,6 +1218,23 @@ export const libraryImportJobsTable = pgTable("library_import_jobs", {
    * "Resuming from previous session…" instead of "Fetching your library…".
    */
   resumedFrom: integer("resumed_from"),
+  /**
+   * How many consecutive off-peak retry passes have resolved zero new tracks
+   * for this job's un-cached entries. Incremented after each failed retry;
+   * reset to 0 when a retry pass resolves at least one track.
+   *
+   * When this reaches PHASE3_MAX_RETRY_ATTEMPTS (3) the job is marked
+   * `retryExhausted` and skipped in all future retry passes, preventing
+   * un-resolvable tracks from accumulating nightly retry jobs indefinitely.
+   */
+  retryAttempts: integer("retry_attempts").notNull().default(0),
+  /**
+   * Set true when `retryAttempts` has reached the exhaustion threshold (3
+   * consecutive failed retry passes). The off-peak scheduler skips exhausted
+   * jobs entirely. Reset to false (and retryAttempts to 0) when a future
+   * retry pass successfully resolves at least one previously un-cached track.
+   */
+  retryExhausted: boolean("retry_exhausted").notNull().default(false),
 });
 
 export type LibraryImportJob = typeof libraryImportJobsTable.$inferSelect;
