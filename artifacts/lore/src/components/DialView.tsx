@@ -283,25 +283,12 @@ function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onEarlier 
 // Zone label (§6 section headers)
 // ---------------------------------------------------------------------------
 
-function ZoneLabel({ label, hint }: { label: string; hint?: string }) {
+function ZoneLabel({ label, n, hint }: { label: string; n?: number; hint?: string }) {
   return (
     <div className="fdzone-lbl">
       <span className="fdzone-lbl__text">{label}</span>
+      {n != null && <span className="fdzone-lbl__n">{n}</span>}
       {hint && <span className="fdzone-lbl__hint">{hint}</span>}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Tier header
-// ---------------------------------------------------------------------------
-function TierHeader({ live }: { live: boolean }) {
-  return (
-    <div className="dial-tier-hd">
-      <span className={`dial-tier-hd__label${live ? " dial-tier-hd__label--live" : ""}`}>
-        {live ? "● On air" : "Recently aired"}
-      </span>
-      <div className="dial-tier-hd__rule" />
     </div>
   );
 }
@@ -1145,7 +1132,7 @@ export function DialView() {
             {/* Zone 1: On air, with a reason (rungs 1–5) */}
             {withReason.length > 0 && (
               <>
-                <ZoneLabel label="On air, with a reason" hint="best first · scan walks this list" />
+                <ZoneLabel label="On air, with a reason" n={withReason.length} hint="best first · scan walks this list" />
                 {withReason.map((row, i) => (
                   <FrontDoorRow
                     key={row.ds.station.slug}
@@ -1169,7 +1156,7 @@ export function DialView() {
             {/* Zone 3: Also on air (rungs 6, 7, 0 — dimmed) */}
             {alsoOnAir.length > 0 && (
               <>
-                <ZoneLabel label="Also on air" hint="nothing Lore can point to yet" />
+                <ZoneLabel label="Also on air" n={alsoOnAir.length} hint="nothing Lore can point to yet" />
                 {alsoOnAir.map((row) => (
                   <FrontDoorRow
                     key={row.ds.station.slug}
@@ -1200,7 +1187,9 @@ export function DialView() {
                 blank page for unauthenticated users (no live zones, no offline
                 section). The skeleton above reserves the live slot so this
                 section doesn't jump when live data arrives. */}
-            {!isCoreLoading && offlineStations.length > 0 && <TierHeader live={false} />}
+            {!isCoreLoading && offlineStations.length > 0 && (
+              <ZoneLabel label="Recently aired" n={offlineStations.length} />
+            )}
             {!isCoreLoading && visibleOffline.map((ds) => (
               <OfflineRow
                 key={ds.station.slug}
