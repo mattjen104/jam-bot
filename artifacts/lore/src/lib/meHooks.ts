@@ -465,6 +465,27 @@ export function useMyLibraryInfinite(opts: LibraryQueryOptions = {}, limit = 50)
 }
 
 /**
+ * Stable import-scoped counts for the "X of Y from Spotify matched" stat.
+ * Always scoped to source=import so the numbers don't change with whatever
+ * filter the user has active in the Library view.
+ * Returns null when unauthenticated or no import has been run yet.
+ */
+export function useMyImportStats() {
+  return useQuery({
+    queryKey: ["me", "library", "import-stats"] as const,
+    queryFn: () =>
+      fetchOrNull<{ items: LibraryItem[]; nextCursor: string | null; total?: number; softCount?: number }>(
+        "/api/me/library?source=import&limit=1",
+      ).then((d) => {
+        if (d == null) return null;
+        return { total: d.total ?? 0, softCount: d.softCount ?? 0 };
+      }),
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
+/**
  * Batch kept-status check for a list of MBIDs.
  * Returns a Set of kept MBIDs; empty when unauthenticated or mbids is empty.
  */

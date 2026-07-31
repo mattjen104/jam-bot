@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { usePlayer } from "../player/PlayerProvider";
 import {
   useMyLibraryInfinite,
+  useMyImportStats,
   useMyConnections,
   useLatestImportJob,
   useLatestSyncJob,
@@ -602,6 +603,10 @@ export default function Library() {
   // library size even before all pages are loaded.
   const libraryTotal: number | undefined = keptData?.pages[0]?.total;
 
+  // Stable import-scoped counts for the "X of Y matched" stat.
+  // Always scoped to source=import so numbers are unaffected by sourceFilter.
+  const { data: importStats } = useMyImportStats();
+
   // Single-open door strip: tracks which row has its door strip expanded
   const [openDoorMbid, setOpenDoorMbid] = useState<string | null>(null);
 
@@ -829,9 +834,13 @@ export default function Library() {
                 <b>{keepCount}</b> kept from radio
               </button>
             )}
-            {jobData?.status === "done" && jobData.total > 0 && sourceFilter !== "keep" && (
+            {jobData?.status === "done" && sourceFilter !== "keep" && importStats != null && importStats.total > 0 && (
+              // importStats is always scoped to source=import, so these numbers
+              // are stable regardless of the active sourceFilter.  jobData is
+              // only used to gate visibility (an import has run); the counts
+              // come from the live library so retry-pass resolutions show up.
               <span className="lib-hero__stat">
-                <b>{jobData.resolved.toLocaleString()}</b> of {jobData.total.toLocaleString()} from Spotify matched
+                <b>{(importStats.total - importStats.softCount).toLocaleString()}</b> of {importStats.total.toLocaleString()} from Spotify matched
               </span>
             )}
             {(() => {
