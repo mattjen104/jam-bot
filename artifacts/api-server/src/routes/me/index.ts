@@ -1229,10 +1229,24 @@ export async function runImportWorker(
           })
           .onConflictDoNothing();
 
-        await db
-          .insert(libraryItemsTable)
-          .values({ userId, mbid, provenance, addedAt: new Date() })
-          .onConflictDoNothing();
+        try {
+          await db
+            .insert(libraryItemsTable)
+            .values({ userId, mbid, provenance, addedAt: new Date() })
+            .onConflictDoNothing();
+          resolved++;
+        } catch (insertErr) {
+          // 23503 = FK violation: the recordings row was deleted between the
+          // MB resolve and this insert (race condition).  The track is
+          // genuinely resolved — don't demote it to a soft row.  Log and
+          // continue so the rest of the job is unaffected.
+          const pgCode = (insertErr as { code?: string }).code;
+          if (pgCode !== "23503") throw insertErr;
+          console.warn(
+            `[me/import] Phase 3 FK violation for mbid=${mbid} — ` +
+            `recordings row gone between MB resolve and insert; excluding from soft rows`,
+          );
+        }
         // Cache the result so future imports resolve this track from Phase 2
         // (DB-only, no MB network call).
         await db
@@ -1246,7 +1260,6 @@ export async function runImportWorker(
         // Mark as resolved so Phase 3 iteration and soft-row seeding exclude it.
         matchedIdx.add(i);
         resolvedMbidIdx.add(i); // positive MB hit — not a soft row
-        resolved++;
       } else if (!controller.signal.aborted && !resolveErrored) {
         // Confirmed MB miss (null return + no error + not timed out) — write
         // a negative cache entry so future imports skip this track in Phase 2
