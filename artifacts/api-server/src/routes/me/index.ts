@@ -1454,17 +1454,29 @@ export async function runPhase3RetryPass(): Promise<void> {
  * During business hours the scheduler is a no-op — it fires but immediately
  * returns, adding no load.
  *
+ * An in-flight guard ensures that if a pass takes longer than the poll interval
+ * (e.g. many unresolved tracks with 1.1 s sleeps), the next tick is skipped
+ * rather than launching a second concurrent pass that would defeat the
+ * rate-limit protection and double the DB load.
+ *
  * Called from the boot entrypoint (src/index.ts) so it never runs during
  * tests or non-worker module imports.
  */
 export function startPhase3RetryScheduler(): void {
+  let passInFlight = false;
+
   setInterval(() => {
     const utcHour = new Date().getUTCHours();
     const [start, end] = PHASE3_RETRY_OFF_PEAK_HOURS;
     if (utcHour < start || utcHour >= end) return;
-    runPhase3RetryPass().catch((err) =>
-      console.error("[me/import/retry] scheduler pass failed", err),
-    );
+    if (passInFlight) {
+      console.log("[me/import/retry] previous pass still running — skipping tick");
+      return;
+    }
+    passInFlight = true;
+    runPhase3RetryPass()
+      .catch((err) => console.error("[me/import/retry] scheduler pass failed", err))
+      .finally(() => { passInFlight = false; });
   }, PHASE3_RETRY_POLL_MS);
   console.log("[me/import/retry] off-peak retry scheduler started (active 02–06 UTC)");
 }

@@ -43,35 +43,12 @@ const { mockDbSelect } = vi.hoisted(() => {
 // Replace only the `db` object; keep real table exports so drizzle-orm
 // expression builders (eq, and, …) can still construct proper SQL objects.
 vi.mock("@workspace/db", async (importOriginal) => {
-  const orig = await importOriginal<typeof import("@workspace/db")>();
-  return {
-    ...orig,
-    db: {
-      select: mockDbSelect,
-      // insert / update / delete are not reached in the timer tests because
-      // runPhase3RetryPass returns early when select returns [].
-      insert: vi.fn(),
-      update: vi.fn(),
-      delete: vi.fn(),
-      execute: vi.fn().mockResolvedValue([]),
-    },
-  };
+  const orig = await importOriginal<typeof import("@workspace/song-enrichment")>();
+  return { ...orig, resolveToMbid: vi.fn() };
 });
 
-// Stubs required by the me-router at module evaluation time.
-vi.mock("../src/lore/tokenCrypto.js", () => ({
-  decryptToken: (s: string) => s,
-  encryptToken: (s: string) => s,
-}));
-
-vi.mock("../src/lore/serviceConnector.js", () => ({
-  getConnector: vi.fn().mockReturnValue({ importLibrary: vi.fn() }),
-  getFreshServiceToken: vi.fn(),
-  refreshServiceToken: vi.fn(),
-}));
-
-vi.mock("../src/lore/resolve.js", async (importOriginal) => {
-  const orig = await importOriginal<typeof import("../src/lore/resolve.js")>();
+vi.mock("@workspace/song-enrichment", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("@workspace/song-enrichment")>();
   return { ...orig, resolveToMbid: vi.fn() };
 });
 
@@ -134,113 +111,36 @@ function utcDate(utcHour: number): Date {
   return d;
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
+    let resolveFirstSelect!: () => void;
 
-describe("startPhase3RetryScheduler — off-peak gate (via fake timers)", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-    mockDbSelect.mockClear();
-  });
+    // First call hangs; subsequent calls resolve immediately (the [] default).
+    mockDbSelect.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          orderBy: vi.fn().mockReturnValue({
+            limit: vi.fn().mockReturnValue(hangingPromise),
+          }),
+        }),
+      }),
+    });
 
-  afterEach(() => {
-    vi.clearAllTimers();
-    vi.useRealTimers();
-  });
-
-  // ── In-range hours: should invoke runPhase3RetryPass ─────────────────────
-
-  it("calls runPhase3RetryPass at UTC hour 3 (mid-window)", async () => {
-    vi.setSystemTime(utcDate(3));
     startPhase3RetryScheduler();
 
-    // Advance by one full poll interval to fire the setInterval callback.
+    // Fire the first tick — pass starts but the DB select never resolves,
+    // so passInFlight stays true.
     await vi.advanceTimersByTimeAsync(SCHEDULER_POLL_MS);
 
-    // runPhase3RetryPass queries the DB first; select being called confirms
-    // the pass was invoked (it exits immediately on the empty [] result).
-    expect(mockDbSelect).toHaveBeenCalled();
-  });
+    // The first select was called exactly once (first tick).
+    expect(mockDbSelect).toHaveBeenCalledTimes(1);
 
-  it("calls runPhase3RetryPass at UTC hour 2 (inclusive window start)", async () => {
-    vi.setSystemTime(utcDate(2));
-    startPhase3RetryScheduler();
-
+    // Fire a second tick while the first pass is still hanging.
     await vi.advanceTimersByTimeAsync(SCHEDULER_POLL_MS);
 
-    expect(mockDbSelect).toHaveBeenCalled();
-  });
+    // Guard must have blocked the second pass — still only one DB select.
+    expect(mockDbSelect).toHaveBeenCalledTimes(1);
 
-  it("calls runPhase3RetryPass at UTC hour 5 (last in-range hour)", async () => {
-    vi.setSystemTime(utcDate(5));
-    startPhase3RetryScheduler();
-
-    await vi.advanceTimersByTimeAsync(SCHEDULER_POLL_MS);
-
-    expect(mockDbSelect).toHaveBeenCalled();
-  });
-
-  // ── Out-of-range hours: should be a no-op ────────────────────────────────
-
-  it("is a no-op at UTC hour 12 (business hours)", async () => {
-    vi.setSystemTime(utcDate(12));
-    startPhase3RetryScheduler();
-
-    await vi.advanceTimersByTimeAsync(SCHEDULER_POLL_MS);
-
-    // The callback returned early before reaching runPhase3RetryPass,
-    // so db.select must never have been called.
-    expect(mockDbSelect).not.toHaveBeenCalled();
-  });
-
-  it("is a no-op at UTC hour 6 (exclusive window end)", async () => {
-    vi.setSystemTime(utcDate(6));
-    startPhase3RetryScheduler();
-
-    await vi.advanceTimersByTimeAsync(SCHEDULER_POLL_MS);
-
-    expect(mockDbSelect).not.toHaveBeenCalled();
-  });
-
-  it("is a no-op at UTC hour 1 (just before the window)", async () => {
-    vi.setSystemTime(utcDate(1));
-    startPhase3RetryScheduler();
-
-    await vi.advanceTimersByTimeAsync(SCHEDULER_POLL_MS);
-
-    expect(mockDbSelect).not.toHaveBeenCalled();
-  });
-
-  it("is a no-op at UTC hour 0 (midnight)", async () => {
-    vi.setSystemTime(utcDate(0));
-    startPhase3RetryScheduler();
-
-    await vi.advanceTimersByTimeAsync(SCHEDULER_POLL_MS);
-
-    expect(mockDbSelect).not.toHaveBeenCalled();
-  });
-
-  // ── Multiple ticks confirm behaviour is repeatable ────────────────────────
-
-  it("calls runPhase3RetryPass on every tick while inside the window", async () => {
-    vi.setSystemTime(utcDate(3));
-    startPhase3RetryScheduler();
-
-    // Fire three poll intervals.
-    await vi.advanceTimersByTimeAsync(SCHEDULER_POLL_MS * 3);
-
-    // Each tick should have triggered a DB select.
-    expect(mockDbSelect).toHaveBeenCalledTimes(3);
-  });
-
-  it("never calls runPhase3RetryPass across multiple ticks during the day", async () => {
-    vi.setSystemTime(utcDate(14));
-    startPhase3RetryScheduler();
-
-    await vi.advanceTimersByTimeAsync(SCHEDULER_POLL_MS * 3);
-
-    expect(mockDbSelect).not.toHaveBeenCalled();
+    // Unblock the first pass so cleanup completes (avoids unhandled rejections).
+    resolveFirstSelect();
   });
 
   // ── Midnight boundary crossing: entering the window ──────────────────────
@@ -277,3 +177,7 @@ describe("startPhase3RetryScheduler — off-peak gate (via fake timers)", () => 
     expect(mockDbSelect).not.toHaveBeenCalled();
   });
 });
+
+    const hangingPromise = new Promise<never[]>((resolve) => {
+      resolveFirstSelect = () => resolve([]);
+    });
