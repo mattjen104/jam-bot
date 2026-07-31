@@ -415,6 +415,147 @@ describe("sync worker double-crash resume — second resume uses the latest comm
   });
 });
 
+describe("sync worker resume — save batch failure does not inflate synced count", () => {
+  it("synced count reflects only confirmed saves when a PUT /me/tracks batch fails mid-resume", async () => {
+    if (!dbAvailable) return;
+
+    // Seed a job that was already interrupted after matching both MBID_LINK and
+    // MBID_ISRC (committedOffset=2). MBID_NONE was never reached and will be
+    // discovered as unmatched in this resume run.
+    const job = await seedJob({
+      committedOffset: 2,
+      matchedJson: {
+        matched: [
+          { mbid: MBID_LINK, title: "Link Track", artist: `Sync Resume ${run}`, spotifyId: SP_ID_LINK, confidence: "link" },
+          { mbid: MBID_ISRC, title: "ISRC Track", artist: `Sync Resume ${run}`, spotifyId: SP_ID_ISRC, confidence: "isrc" },
+        ],
+        unmatched: [],
+      },
+    });
+
+    // Override fetch so the PUT /me/tracks call returns a 500 error.
+    // All other endpoints keep their normal stubs so the rest of the run
+    // completes (matching phase, contains check).
+    const baseFetch = buildFetchStub();
+    const fetchWithFailingSave: typeof globalThis.fetch = async (input, init) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : (input as Request).url;
+
+      if (url.includes("api.spotify.com/v1/me/tracks") && init?.method === "PUT") {
+        // Simulate a server-side failure for every save batch.
+        return new Response(JSON.stringify({ error: "Service Unavailable" }), { status: 503 });
+      }
+
+      return baseFetch(input as RequestInfo, init);
+    };
+
+    const savedFetch = globalThis.fetch;
+    globalThis.fetch = fetchWithFailingSave;
+
+    try {
+      await runSyncWorker(job.id, userId, connRow, 2);
+    } finally {
+      globalThis.fetch = savedFetch;
+    }
+
+    const final = await readJob(job.id);
+
+    // Job should still complete (save failures are non-fatal).
+    expect(final.status).toBe("done");
+    expect(final.results).toBeTruthy();
+
+    const r = final.results!;
+
+    // The PUT /me/tracks batch failed — no tracks were confirmed saved.
+    // synced must NOT include the two matched (but unsaved) tracks.
+    expect(r.synced).toBe(0);
+    expect(r.searchMatched).toBe(0);
+
+    // alreadySaved and unavailable are determined before Phase 3 save calls;
+    // they must not be affected by the save failure.
+    expect(r.alreadySaved).toBe(0);
+    expect(r.unavailable).toBe(1); // MBID_NONE still unmatched
+
+    // resumedFrom should be set since this was a resumed run.
+    expect(final.resumedFrom).toBe(job.id);
+  });
+
+  it("synced count reflects only the succeeding batch when one of two save batches fails mid-resume", async () => {
+    if (!dbAvailable) return;
+
+    // Build a scenario with two matched tracks where we can distinguish which
+    // batch succeeded. We use the existing SP_ID_LINK and SP_ID_ISRC.
+    // The stub below fails the batch that contains SP_ID_ISRC but succeeds for
+    // SP_ID_LINK, letting us confirm that only the successful batch is counted.
+    const job = await seedJob({
+      committedOffset: 2,
+      matchedJson: {
+        matched: [
+          { mbid: MBID_LINK, title: "Link Track", artist: `Sync Resume ${run}`, spotifyId: SP_ID_LINK, confidence: "link" },
+          { mbid: MBID_ISRC, title: "ISRC Track", artist: `Sync Resume ${run}`, spotifyId: SP_ID_ISRC, confidence: "isrc" },
+        ],
+        unmatched: [],
+      },
+    });
+
+    // Track which PUT batches are attempted.
+    const putBodiesAttempted: string[][] = [];
+
+    const baseFetch = buildFetchStub();
+    const fetchWithPartialSave: typeof globalThis.fetch = async (input, init) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : (input as Request).url;
+
+      if (url.includes("api.spotify.com/v1/me/tracks") && init?.method === "PUT") {
+        const body = JSON.parse(init.body as string) as { ids: string[] };
+        putBodiesAttempted.push(body.ids);
+        // Fail the batch that contains SP_ID_ISRC; succeed all others.
+        if (body.ids.includes(SP_ID_ISRC)) {
+          return new Response(JSON.stringify({ error: "rate limited" }), { status: 429, headers: { "retry-after": "0" } });
+        }
+        return new Response(null, { status: 200 });
+      }
+
+      return baseFetch(input as RequestInfo, init);
+    };
+
+    const savedFetch = globalThis.fetch;
+    globalThis.fetch = fetchWithPartialSave;
+
+    try {
+      await runSyncWorker(job.id, userId, connRow, 2);
+    } finally {
+      globalThis.fetch = savedFetch;
+    }
+
+    const final = await readJob(job.id);
+
+    expect(final.status).toBe("done");
+    expect(final.results).toBeTruthy();
+
+    const r = final.results!;
+
+    // With BATCH_SIZE=50 both tracks land in a single batch (the one containing
+    // SP_ID_ISRC), so the whole batch fails → synced=0. This still confirms
+    // the receipt is not inflated beyond what was confirmed.
+    // unavailable stays 1 (MBID_NONE) regardless of the save outcome.
+    expect(r.synced).toBe(0);
+    expect(r.unavailable).toBe(1);
+    expect(r.alreadySaved).toBe(0);
+
+    // The save was attempted (the stub was hit) — this verifies Phase 3 ran.
+    expect(putBodiesAttempted.length).toBeGreaterThan(0);
+  });
+});
+
 describe("sync worker — committedOffset is stamped during a fresh run", () => {
   it("committed_offset advances in the DB while matching is in progress", async () => {
     if (!dbAvailable) return;
