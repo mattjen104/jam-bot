@@ -727,6 +727,35 @@ async function seedSpotifySoftRows(
   // Upsert every unresolved entry into spotify_library_items.
   for (const t of entries) {
     const meta = metaMap.get(t.externalId);
+    const isRealSpotifyId = spotifyIdPattern.test(t.externalId);
+
+    // Guard: when the entry uses a synthesised key (not a real 22-char Spotify
+    // track ID), skip inserting if a real-Spotify-ID row already exists for
+    // the same user+artist+title.  The duplicate soft row would prevent the
+    // artist+title fallback delete in the promotion step from targeting the
+    // correct (real-ID) row, leaving a dangling soft row behind.
+    if (!isRealSpotifyId && t.artist && t.title) {
+      const [existingRealRow] = await db
+        .select({ spotifyId: spotifyLibraryItemsTable.spotifyId })
+        .from(spotifyLibraryItemsTable)
+        .where(
+          and(
+            eq(spotifyLibraryItemsTable.userId, userId),
+            eq(spotifyLibraryItemsTable.artist, t.artist),
+            eq(spotifyLibraryItemsTable.title, t.title),
+            // Real Spotify IDs are exactly 22 alphanumeric characters.
+            // Synthesised fallback keys always contain a separator character
+            // and are never 22 chars, so length is a reliable discriminator.
+            sql`LENGTH(${spotifyLibraryItemsTable.spotifyId}) = 22`,
+          ),
+        )
+        .limit(1);
+      if (existingRealRow) {
+        console.log(`[me/import] skipping synthesised-key soft row for "${t.title}" by "${t.artist}" — real Spotify ID row already exists`);
+        continue;
+      }
+    }
+
     await db
       .insert(spotifyLibraryItemsTable)
       .values({
