@@ -166,6 +166,8 @@ export function useDialData(): {
   isLoading: boolean;
   isCoreLoading: boolean;
   liveLoading: boolean;
+  crossingsLoading: boolean;
+  hasLibrary: boolean;
 } {
   const today = todayStr();
   const yesterday = yesterdayStr();
@@ -591,11 +593,14 @@ export function useDialData(): {
   }, [stationsData, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, libraryMbidSet, libraryReleaseGroupSet, libraryArtistMbidSet, pickerNames, serverCrossingsBySlug]);
 
   const isLoading = stationsLoading || liveLoading || schedLoading || spinsLoading;
-  // isCoreLoading gates the front-door zones (1, 2, 3).  It must include
-  // crossingsLoading so ranking is stable before zones render — otherwise
-  // Zone 3 paints first (all stations, crossings=0) and then jumps when the
-  // server scores arrive, which the user sees as "lower sections load first".
-  const isCoreLoading = stationsLoading || crossingsLoading;
+  // isCoreLoading: only block until the station list arrives so the offline
+  // section and Zone 3 appear immediately.  Zone 1 has its own crossingsLoading
+  // gate so it shows a context-sensitive placeholder instead of loading nothing.
+  const isCoreLoading = stationsLoading;
 
-  return { stations, isLoading, isCoreLoading, liveLoading };
+  // hasLibrary: true once at least one resolved MBID is in the user's library.
+  // Passed to DialView so the Zone 1 loading placeholder can show the right CTA.
+  const hasLibrary = libraryMbids.length > 0;
+
+  return { stations, isLoading, isCoreLoading, liveLoading, crossingsLoading, hasLibrary };
 }

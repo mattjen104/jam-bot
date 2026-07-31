@@ -9,7 +9,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { useDialData, type DialStation, type DialShow, type DialSpin } from "../hooks/useDialData";
-import { useMyOverlapSelectors, useMyGhostMissed, type GhostStation } from "../lib/meHooks";
+import { useMyOverlapSelectors, useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, type GhostStation } from "../lib/meHooks";
 import { StationLane } from "./StationLane";
 import { ContextRail } from "./ContextRail";
 import { SearchOverlay } from "./SearchOverlay";
@@ -886,7 +886,8 @@ export function DialView() {
   const [currentDjName, setCurrentDjName] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
 
-  const { stations, isLoading, isCoreLoading, liveLoading } = useDialData();
+  const { stations, isLoading, isCoreLoading, liveLoading, crossingsLoading, hasLibrary } = useDialData();
+  const isSpotifyConnected = useSpotifyLibraryConnected();
   const { radio } = usePlayer();
 
   // Lifetime overlap counts per selector name (spec §4 sort key)
@@ -1175,8 +1176,8 @@ export function DialView() {
         {/* DIAL view — three-zone front door (spec §6) */}
         {level === "all" && (
           <>
-            {/* Zone 1: On air, with a reason (rungs 1–5) */}
-            {!isCoreLoading && withReason.length > 0 && (
+            {/* Zone 1: On air, with a reason — only once crossing scores are ready */}
+            {!crossingsLoading && withReason.length > 0 && (
               <>
                 <ZoneLabel label="On air, with a reason" n={withReason.length} hint="best first · scan walks this list" />
                 {withReason.map((row, i) => (
@@ -1194,13 +1195,25 @@ export function DialView() {
               </>
             )}
 
+            {/* Zone 1 placeholder — shown while crossings are fetching so there's
+                something useful at the top of the page instead of a blank gap.
+                Context-sensitive: Connect CTA for new users, import nudge for
+                connected users without a library, subtle indicator otherwise. */}
+            {crossingsLoading && !isCoreLoading && (
+              <Zone1Placeholder
+                isSpotifyConnected={isSpotifyConnected}
+                hasLibrary={hasLibrary}
+              />
+            )}
+
             {/* Zone 2: Ghost — stations that played your artists while you were away */}
-            {!isCoreLoading && ghost.length > 0 && (
+            {ghost.length > 0 && (
               <ZoneLabel label="Missed while you were away" />
             )}
 
-            {/* Zone 3: Also on air (rungs 6, 7, 0 — dimmed) */}
-            {!isCoreLoading && alsoOnAir.length > 0 && (
+            {/* Zone 3: Also on air — visible immediately; stations promote to Zone 1
+                once crossing scores arrive (felt as enrichment, not a jump) */}
+            {alsoOnAir.length > 0 && (
               <>
                 <ZoneLabel label="Also on air" n={alsoOnAir.length} hint="nothing Lore can point to yet" />
                 {alsoOnAir.map((row) => (
@@ -1325,6 +1338,64 @@ export function DialView() {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Zone 1 loading placeholder
+// ---------------------------------------------------------------------------
+
+function Zone1Placeholder({
+  isSpotifyConnected,
+  hasLibrary,
+}: {
+  isSpotifyConnected: boolean;
+  hasLibrary: boolean;
+}) {
+  if (!isSpotifyConnected) {
+    // New user — explain Lore and invite them to connect.
+    return (
+      <div className="z1-placeholder z1-placeholder--connect">
+        <div className="z1-placeholder__body">
+          <p className="z1-placeholder__pitch">
+            Lore finds the stations playing <em>your</em> music — right now,
+            live, ranked by how much of your library they've touched.
+          </p>
+          <button
+            type="button"
+            className="dial-ctabtn dial-ctabtn--keep"
+            onClick={() => void startSpotifyLibraryConnect()}
+          >
+            Connect Spotify to see what's playing your music
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!hasLibrary) {
+    // Connected but library empty — prompt an import.
+    return (
+      <div className="z1-placeholder z1-placeholder--import">
+        <div className="z1-placeholder__body">
+          <p className="z1-placeholder__pitch">
+            Import your Spotify library so Lore can match it against what's
+            on air right now.
+          </p>
+          <a className="dial-ctabtn dial-ctabtn--keep" href="/lore/library">
+            Go to Library → Import
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  // Library exists — just show a subtle "working on it" indicator.
+  return (
+    <div className="z1-placeholder z1-placeholder--loading">
+      <span className="dial-live-skeleton__pip" />
+      <span className="z1-placeholder__lbl">Finding which stations are playing your music…</span>
     </div>
   );
 }

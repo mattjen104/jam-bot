@@ -824,6 +824,46 @@
   50%       { opacity: 1; }
 }
 
+/* ── Zone 1 loading placeholder ── */
+.z1-placeholder {
+  padding: 18px 15px;
+  border-bottom: 1px solid hsl(var(--border) / 0.35);
+}
+.z1-placeholder--loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--app-font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: hsl(var(--muted-foreground));
+  opacity: 0.55;
+}
+.z1-placeholder__lbl { }
+.z1-placeholder--connect,
+.z1-placeholder--import {
+  background: hsl(var(--card) / 0.5);
+  border-radius: 6px;
+  margin: 6px 10px;
+  padding: 18px 16px;
+}
+.z1-placeholder__body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.z1-placeholder__pitch {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: hsl(var(--muted-foreground));
+}
+.z1-placeholder__pitch em {
+  font-style: normal;
+  color: hsl(var(--foreground));
+}
+
 /* ── Tier header ── */
 .dial-tier-hd {
   padding: 13px 15px 5px;
