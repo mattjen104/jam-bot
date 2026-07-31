@@ -1990,12 +1990,25 @@ router.post("/me/library/sync", h(async (req, res) => {
     if (ageMs > ZOMBIE_AGE_MS) {
       if (existingJob.committedOffset > 0) {
         // Has committed matching progress — resume it rather than starting over.
-        console.log(
-          `[me/sync] job=${existingJob.id} orphaned (${Math.round(ageMs / 60_000)}m old) ` +
-          `but has committedOffset=${existingJob.committedOffset} — resuming`,
-        );
-        setImmediate(() => runSyncWorker(existingJob.id, user.id, conn, existingJob.committedOffset));
-        return res.status(202).json({ jobId: existingJob.id, status: "running" });
+        // But first confirm the token is still refreshable: if the user
+        // disconnected Spotify while the server was down the job would spin
+        // forever until the next poll surfaces the error.
+        const freshToken = await getFreshToken(conn);
+        if (!freshToken) {
+          await db
+            .update(librarySyncJobsTable)
+            .set({ status: "error", error: "Spotify token expired or revoked — please reconnect Spotify and sync again", finishedAt: new Date() })
+            .where(eq(librarySyncJobsTable.id, existingJob.id));
+          console.warn(`[me/sync] job=${existingJob.id} token refresh failed during zombie-resume — marked error`);
+          // Fall through so a new job is created once the user reconnects.
+        } else {
+          console.log(
+            `[me/sync] job=${existingJob.id} orphaned (${Math.round(ageMs / 60_000)}m old) ` +
+            `but has committedOffset=${existingJob.committedOffset} — resuming`,
+          );
+          setImmediate(() => runSyncWorker(existingJob.id, user.id, conn, existingJob.committedOffset));
+          return res.status(202).json({ jobId: existingJob.id, status: "running" });
+        }
       }
       // No committed progress — reset so the user can start fresh.
       console.warn(`[me/sync] job=${existingJob.id} orphaned (${Math.round(ageMs / 60_000)}m old) — resetting`);
@@ -2321,6 +2334,19 @@ export async function markOrphanedSyncJobsAsError(): Promise<void> {
           .set({ status: "error", error: "Server restarted — Spotify connection not found, please sync again", finishedAt: new Date() })
           .where(eq(librarySyncJobsTable.id, job.id));
         console.warn(`[me] sync job=${job.id} has progress but no service connection — marked error`);
+        continue;
+      }
+
+      // Check token freshness before resuming — if the refresh token is expired
+      // or revoked (user disconnected Spotify while the server was down) the job
+      // would otherwise spin forever until the next poll surfaces the error.
+      const freshToken = await getFreshToken(conn);
+      if (!freshToken) {
+        await db
+          .update(librarySyncJobsTable)
+          .set({ status: "error", error: "Spotify token expired or revoked — please reconnect Spotify and sync again", finishedAt: new Date() })
+          .where(eq(librarySyncJobsTable.id, job.id));
+        console.warn(`[me] sync job=${job.id} token refresh failed on boot — marked error`);
         continue;
       }
 
