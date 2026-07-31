@@ -4,14 +4,14 @@
  * Fetches:
  *   - station list (with live pulse)
  *   - rolling 24-hour schedule runs (show blocks per station, today + yesterday)
- *   - rolling 24-hour recent spins per station (today + yesterday)
+ *   - today's recent spins per station (for per-show display and chip timeline)
  *   - user's full library MBIDs (for library-crossing detection)
  *   - picked MBIDs lookup (to detect picker/selector shows)
  *
- * Both schedule and recent-spins cover the past 24 hours (today + yesterday)
- * so that overnight shows that started before midnight are included in the
- * `crossings` count. The server endpoints filter by calendar day, so we fetch
- * both days and merge the results client-side.
+ * Station-level crossing scores come from GET /api/me/crossings, which runs a
+ * true NOW() − 24h query server-side, so yesterday's spins are no longer needed
+ * for ranking. Yesterday's schedule runs are still fetched so that overnight
+ * shows that started before midnight appear in the timeline.
  *
  * Returns an enriched `DialStation[]` array. Sorting is intentionally left to
  * DialView, which applies the attribution-tier ladder: live crossing → named
@@ -245,7 +245,10 @@ export function useDialData(): {
     },
   );
 
-  // ── recent spins (today + yesterday for rolling 24h window) ──────────────
+  // ── recent spins (today only — station-level crossings come from the server) ─
+  // Yesterday's spins are no longer fetched: station ranking uses
+  // GET /api/me/crossings (a true NOW() − 24h server-side query), so the
+  // client only needs today's spins for per-show chip display.
   const { data: spinsData, isLoading: spinsLoading } = useGetStationsRecentSpins(
     { date: today },
     {
@@ -253,17 +256,6 @@ export function useDialData(): {
         queryKey: getGetStationsRecentSpinsQueryKey({ date: today }),
         staleTime: 60_000,
         refetchInterval: 2 * 60_000,
-      },
-    },
-  );
-  // Yesterday's spins — needed to count library crossings on overnight shows.
-  const { data: spinsDataYesterday } = useGetStationsRecentSpins(
-    { date: yesterday },
-    {
-      query: {
-        queryKey: getGetStationsRecentSpinsQueryKey({ date: yesterday }),
-        staleTime: 5 * 60_000,
-        refetchInterval: 10 * 60_000,
       },
     },
   );
@@ -462,21 +454,11 @@ export function useDialData(): {
 
   const spinsBySlug = useMemo(() => {
     const m = new Map<string, StationRecentSpin[]>();
-    // Yesterday first; today's spins are appended so newest-first sorting
-    // (done during station assembly) handles ordering correctly.
-    for (const item of spinsDataYesterday?.items ?? []) {
+    for (const item of spinsData?.items ?? []) {
       m.set(item.stationSlug, [...item.spins]);
     }
-    for (const item of spinsData?.items ?? []) {
-      const existing = m.get(item.stationSlug);
-      if (existing) {
-        existing.push(...item.spins);
-      } else {
-        m.set(item.stationSlug, [...item.spins]);
-      }
-    }
     return m;
-  }, [spinsData, spinsDataYesterday]);
+  }, [spinsData]);
 
   // pins are managed externally by DialView; not needed for data assembly
 
