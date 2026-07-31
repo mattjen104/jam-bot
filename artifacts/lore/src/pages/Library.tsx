@@ -104,7 +104,7 @@ function TierHd({
 // ---------------------------------------------------------------------------
 // Sync bar
 // ---------------------------------------------------------------------------
-function SyncBar({
+export function SyncBar({
   syncJobData,
   syncBusy,
   isSyncActive,
