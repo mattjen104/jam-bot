@@ -24,8 +24,7 @@ import { sql } from "drizzle-orm";
  * conditional UPDATE that is a no-op when already applied.
  */
 export async function applyDeviceIdentityMigration(): Promise<void> {
-  try {
-    // ── Step 1: add device_key as nullable first (can't set NOT NULL on a
+  // ── Step 1: add device_key as nullable first (can't set NOT NULL on a
     //   populated table until after back-fill).
     await db.execute(sql`
       ALTER TABLE lore_users
@@ -114,8 +113,4 @@ export async function applyDeviceIdentityMigration(): Promise<void> {
           AND sc.external_user_id   IS NULL
     `);
 
-    console.log("[lore] applyDeviceIdentityMigration: done");
-  } catch (err) {
-    console.error("[lore] applyDeviceIdentityMigration failed", err);
-  }
 }

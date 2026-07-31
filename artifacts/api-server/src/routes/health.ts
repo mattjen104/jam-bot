@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { HealthCheckResponse } from "@workspace/api-zod";
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
+import { getMigrationFailures } from "../lore/boot-migrations.js";
 
 const router: IRouter = Router();
 
@@ -20,6 +21,14 @@ router.get("/health", async (_req, res) => {
   } catch {
     res.status(503).json({ ok: false, db: "error", uptimeSeconds });
   }
+});
+
+router.get("/health/migrations", (_req, res) => {
+  const failures = getMigrationFailures();
+  const ok = failures.length === 0;
+  res
+    .status(ok ? 200 : 503)
+    .json({ ok, failures });
 });
 
 export default router;

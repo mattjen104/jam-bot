@@ -9,24 +9,37 @@ import { sql } from "drizzle-orm";
  *   record which prior job's buffer was reused (complete-buffer resume path)
  *   and the frontend can show "Resuming from previous session…" instead of
  *   "Fetching your library…".
+ *
+ * Uses two independent try/catch blocks so that a failure on the first column
+ * does not prevent the second column from being applied.  If either step fails,
+ * the collected errors are thrown at the end so the caller (`runMigration`) can
+ * record and log the failure — ensuring no misleading "ok" status is emitted.
  */
 export async function applyImportBufferMigration(): Promise<void> {
+  const stepErrors: Array<{ step: string; err: unknown }> = [];
+
   try {
     await db.execute(sql`
       ALTER TABLE library_import_jobs
         ADD COLUMN IF NOT EXISTS buffer_json jsonb
     `);
-    console.log("[migration] import buffer column: OK");
   } catch (err) {
-    console.error("[lore] applyImportBufferMigration failed (buffer_json)", err);
+    stepErrors.push({ step: "buffer_json", err });
   }
+
   try {
     await db.execute(sql`
       ALTER TABLE library_import_jobs
         ADD COLUMN IF NOT EXISTS resumed_from integer
     `);
-    console.log("[migration] import resumed_from column: OK");
   } catch (err) {
-    console.error("[lore] applyImportBufferMigration failed (resumed_from)", err);
+    stepErrors.push({ step: "resumed_from", err });
+  }
+
+  if (stepErrors.length > 0) {
+    const detail = stepErrors
+      .map(({ step, err }) => `${step}: ${err instanceof Error ? err.message : String(err)}`)
+      .join("; ");
+    throw new Error(`partial failure — ${detail}`);
   }
 }

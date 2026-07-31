@@ -31,6 +31,7 @@ import {
 import { startStreamHealthWorker } from "./lore/stream-health.js";
 import { applyStationDiscoveryMigration } from "./lore/station-migration.js";
 import { applyPickerDiscoveryMigration } from "./lore/picker-migration.js";
+import { runMigration } from "./lore/boot-migrations.js";
 import { startGenreBackfillJob } from "./lore/genre-backfill.js";
 import { startIsrcEnrichmentJob } from "./lore/isrc-enrichment.js";
 import { startHomepageScraper } from "./lore/homepage-scraper.js";
@@ -80,17 +81,17 @@ async function bootLore(): Promise<void> {
     await markOrphanedImportJobsAsError();
     await markOrphanedSyncJobsAsError();
     wireSongEnrichment();
-    await applyStationDiscoveryMigration();
-    await applyPickerDiscoveryMigration();
-    await applyStationScheduleMigration();
-    await applyDeviceIdentityMigration();
-    await applyPendingKeepsMigration();
-    await applyLibraryExportMigration();
-    await applyAutomationClassMigration();
-    await applyLibrarySyncMigration();
-    await applyImportBufferMigration();
-    await applyLedgerMigration();
-    await applySelectorClaimsMigration();
+    await runMigration("applyStationDiscoveryMigration", applyStationDiscoveryMigration);
+    await runMigration("applyPickerDiscoveryMigration", applyPickerDiscoveryMigration);
+    await runMigration("applyStationScheduleMigration", applyStationScheduleMigration);
+    await runMigration("applyDeviceIdentityMigration", applyDeviceIdentityMigration);
+    await runMigration("applyPendingKeepsMigration", applyPendingKeepsMigration);
+    await runMigration("applyLibraryExportMigration", applyLibraryExportMigration);
+    await runMigration("applyAutomationClassMigration", applyAutomationClassMigration);
+    await runMigration("applyLibrarySyncMigration", applyLibrarySyncMigration);
+    await runMigration("applyImportBufferMigration", applyImportBufferMigration);
+    await runMigration("applyLedgerMigration", applyLedgerMigration);
+    await runMigration("applySelectorClaimsMigration", applySelectorClaimsMigration);
     await ensurePicksUnifiedView();
     await seedStations();
     try {
@@ -144,7 +145,7 @@ async function bootLore(): Promise<void> {
     startGenreBackfillJob();
     startIsrcEnrichmentJob();
     startHomepageScraper();
-    await applyDonateCheckerMigration();
+    await runMigration("applyDonateCheckerMigration", applyDonateCheckerMigration);
     startDonateChecker();
     if (await wireScheduleExtractor()) {
       startScheduleScraper();
