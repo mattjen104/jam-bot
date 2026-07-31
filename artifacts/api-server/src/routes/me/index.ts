@@ -1801,8 +1801,12 @@ router.get("/me/library", h(async (req, res) => {
   // keepCount: always the full radio-keep count regardless of current source/q
   // filter, so the hero stat is accurate even when the user has a filter active.
   let keepCount: number | undefined;
+  // softCount: live count of unresolved rows — returned on page 1 so the client
+  // can gate the "Not in MusicBrainz" button on the real current count rather
+  // than the stale import-job totals (retry passes resolve more tracks later).
+  let softCount: number | undefined;
   if (!cursor) {
-    const [resolvedCount, softCount, rawKeepCount] = await Promise.all([
+    const [resolvedCount, rawSoftCount, rawKeepCount] = await Promise.all([
       includeResolved
         ? db
             .select({ count: sql<number>`count(*)::int` })
@@ -1843,6 +1847,7 @@ router.get("/me/library", h(async (req, res) => {
         )
         .then((r) => r[0]?.count ?? 0),
     ]);
+    softCount = rawSoftCount;
     total = resolvedCount + softCount;
     keepCount = rawKeepCount;
   }
@@ -2055,6 +2060,7 @@ router.get("/me/library", h(async (req, res) => {
     nextCursor,
     ...(total !== undefined ? { total } : {}),
     ...(keepCount !== undefined ? { keepCount } : {}),
+    ...(softCount !== undefined ? { softCount } : {}),
   });
 }));
 

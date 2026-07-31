@@ -59,11 +59,19 @@ function intoSet(startedAt: string): string {
 }
 
 /** Oxford-comma list with ≤3 full names; 4+ collapses to "A, B, C and N more" */
-function listNames(artists: string[]): string {
-  if (artists.length === 0) return "";
-  if (artists.length === 1) return artists[0];
-  if (artists.length <= 3) return `${artists.slice(0, -1).join(", ")} and ${artists[artists.length - 1]}`;
-  return `${artists.slice(0, 3).join(", ")} and ${artists.length - 3} more`;
+/** Renders a list of artist names with each name in its own {@code <b>}
+ *  so the CSS amber colour applies only to the names, not the separators. */
+function nameNodes(artists: string[]): ReactNode {
+  if (artists.length === 0) return null;
+  const shown = artists.slice(0, 3);
+  const rest  = artists.length - shown.length;
+  const nodes: ReactNode[] = [];
+  shown.forEach((name, i) => {
+    if (i > 0) nodes.push(i === shown.length - 1 && rest === 0 ? " and " : ", ");
+    nodes.push(<b key={i}>{name}</b>);
+  });
+  if (rest > 0) nodes.push(` and ${rest} more`);
+  return <>{nodes}</>;
 }
 
 interface ReasonResult { r: number; cls: string; node: ReactNode }
@@ -110,22 +118,22 @@ function reason(
 
   // r=3: exact library tracks already aired this show
   if (show.crossings > 0) {
-    const names = show.topArtists.length > 0 ? listNames(show.topArtists) : null;
+    const nn = show.topArtists.length > 0 ? nameNodes(show.topArtists) : null;
     return {
       r: 3, cls: "w3",
-      node: names
-        ? <><b>{names}</b> already this set</>
+      node: nn
+        ? <>{nn} already this set</>
         : <><b>{show.crossings} of yours</b> already this set</>,
     };
   }
 
   // r=4: library artists aired this show, no exact track match
   if (show.artistCrossings > 0) {
-    const names = show.topArtistNames.length > 0 ? listNames(show.topArtistNames) : null;
+    const nn = show.topArtistNames.length > 0 ? nameNodes(show.topArtistNames) : null;
     return {
       r: 4, cls: "w4",
-      node: names
-        ? <><b>{names}</b> — an artist from your library</>
+      node: nn
+        ? <>{nn} — an artist from your library</>
         : <><b>{show.artistCrossings}</b> tracks by artists from your library</>,
     };
   }
@@ -264,11 +272,20 @@ function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onEarlier 
   // §8 Person leads — selector name when attributed, station name otherwise
   const primary = show?.djName ?? ds.station.name;
 
-  // Mono ctx line: station · show · ♪ track (truncated, one line)
-  const ctxParts = isAttributed
-    ? [ds.station.name, show!.showName, show!.currentTrack ? `♪ ${show!.currentTrack.title}` : null]
-    : [show?.showName ?? null, show?.currentTrack ? `♪ ${show.currentTrack.title}` : null];
-  const ctx = ctxParts.filter(Boolean).join(" · ") || "—";
+  // Mono ctx line rendered as JSX so the live ♪ symbol can be coloured blue.
+  const currentTrack = show?.currentTrack ?? null;
+  const ctxTextParts = isAttributed
+    ? [ds.station.name, show!.showName].filter(Boolean)
+    : [show?.showName ?? null].filter(Boolean);
+  const ctxText = (ctxTextParts as string[]).join(" · ") || (currentTrack ? "" : "—");
+  const ctxNode = (
+    <>
+      {ctxText}
+      {currentTrack && (
+        <>{ctxText ? " · " : ""}<span className="fdrow__ctx-live">♪</span>{` ${currentTrack.title}`}</>
+      )}
+    </>
+  );
 
   // ovi: sort key shown inline with person name
   const oviStr = isAttributed
@@ -299,7 +316,7 @@ function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onEarlier 
             {oviStr}
           </span>
         </div>
-        <div className="fdrow__ctx">{ctx}</div>
+        <div className="fdrow__ctx">{ctxNode}</div>
         <div className={`fdrow__why ${rz.cls}`}>{rz.node}</div>
         <div className="fdrow__foot">
           <button
@@ -325,7 +342,7 @@ function ZoneLabel({ label, n, hint, accent }: {
   label: string;
   n?: number;
   hint?: string;
-  accent?: "library" | "picker";
+  accent?: "library" | "picker" | "live";
 }) {
   return (
     <div className="fdzone-lbl">
@@ -1228,7 +1245,7 @@ export function DialView() {
                 once crossing scores arrive (felt as enrichment, not a jump) */}
             {alsoOnAir.length > 0 && (
               <>
-                <ZoneLabel label="Also on air" n={alsoOnAir.length} hint="nothing Lore can point to yet" />
+                <ZoneLabel label="Also on air" n={alsoOnAir.length} hint="nothing Lore can point to yet" accent="live" />
                 {alsoOnAir.map((row) => (
                   <FrontDoorRow
                     key={row.ds.station.slug}
@@ -1254,15 +1271,13 @@ export function DialView() {
               </div>
             )}
 
-            {/* Recently aired — shown once stations are loaded.
-                liveLoading is no longer gated here: waiting for it caused a
-                blank page for unauthenticated users (no live zones, no offline
-                section). The skeleton above reserves the live slot so this
-                section doesn't jump when live data arrives. */}
-            {!isCoreLoading && offlineStations.length > 0 && (
+            {/* Recently aired — held until crossings load so it never appears
+                above Zone 1.  For unauthenticated users crossingsLoading
+                resolves fast (empty 200), so the delay is < 1 s. */}
+            {!crossingsLoading && offlineStations.length > 0 && (
               <ZoneLabel label="Recently aired" n={offlineStations.length} />
             )}
-            {!isCoreLoading && visibleOffline.map((ds) => (
+            {!crossingsLoading && visibleOffline.map((ds) => (
               <OfflineRow
                 key={ds.station.slug}
                 dialStation={ds}
@@ -1271,7 +1286,7 @@ export function DialView() {
                 onPlay={() => void radio.toggle(ds.station)}
               />
             ))}
-            {!isCoreLoading && visibleOfflineCount < offlineStations.length && (
+            {!crossingsLoading && visibleOfflineCount < offlineStations.length && (
               <button
                 className="dial-show-more"
                 onClick={() => setVisibleOfflineCount((n) => n + OFFLINE_PAGE)}

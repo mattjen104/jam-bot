@@ -3,7 +3,7 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import { Music2, X } from "lucide-react";
 import { ImportStrip } from "./ImportStrip";
-import { useMyConnections, useLatestImportJob, startSpotifyLibraryConnect } from "../lib/meHooks";
+import { useMyConnections, useLatestImportJob, startSpotifyLibraryConnect, useMyDialCrossings } from "../lib/meHooks";
 
 const SESSION_LIBRARY_PROMPT_DISMISSED = "lore_library_prompt_dismissed";
 
@@ -97,6 +97,12 @@ function LibraryPrompt() {
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
+
+  // Prefetch crossings as soon as the app shell mounts — not just when the
+  // Radio tab renders.  React Query deduplicates the call so DialView gets
+  // a warm cache hit instead of waiting for a cold network round-trip.
+  const today = new Date().toISOString().slice(0, 10);
+  useMyDialCrossings(today);
 
   const radioActive = isRadioSection(location);
   const isHome = location === "/" || location === "";

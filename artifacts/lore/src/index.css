@@ -2628,6 +2628,11 @@
   text-overflow: ellipsis;
   margin-bottom: 5px;
 }
+/* ♪ now-playing symbol — blue to signal live audio */
+.fdrow__ctx-live {
+  color: hsl(var(--live));
+  font-style: normal;
+}
 
 /* Reason sentence — italic serif (spec §3) */
 .fdrow__why {
@@ -2637,7 +2642,7 @@
   line-height: 1.4;
   margin-bottom: 7px;
 }
-.fdrow__why b { font-style: normal; font-weight: 600; }
+.fdrow__why b { font-style: normal; font-weight: 600; color: hsl(var(--picker)); }
 
 .fdrow__why.w1 { color: hsl(var(--library)); }
 .fdrow__why.w2 { color: hsl(var(--foreground) / 0.9); }
@@ -2680,6 +2685,7 @@
 }
 .fdzone-lbl__pip--library { background: hsl(var(--library)); }
 .fdzone-lbl__pip--picker  { background: hsl(var(--picker)); }
+.fdzone-lbl__pip--live    { background: hsl(var(--live)); animation: lore-live-pip 1.4s ease-in-out infinite; }
 .fdzone-lbl__text {
   font-family: var(--app-font-label);
   font-size: 9.5px;

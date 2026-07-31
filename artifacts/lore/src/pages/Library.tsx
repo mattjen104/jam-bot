@@ -834,17 +834,30 @@ export default function Library() {
                 <b>{jobData.resolved.toLocaleString()}</b> of {jobData.total.toLocaleString()} from Spotify matched
               </span>
             )}
-            {jobData?.status === "done" && jobData.total > jobData.resolved && sourceFilter !== "keep" && (
-              <button
-                type="button"
-                className={`lib-hero__stat${sourceFilter === "soft" ? " lib-hero__stat--warm" : " lib-hero__stat--dim"}`}
-                style={{ cursor: "pointer", border: "none" }}
-                onClick={() => setSourceFilter(sourceFilter === "soft" ? "" : "soft")}
-                title="Filter to tracks Spotify has but MusicBrainz doesn't"
-              >
-                {(jobData.total - jobData.resolved).toLocaleString()} not in MusicBrainz
-              </button>
-            )}
+            {(() => {
+              // Use the live soft-row count from the library response (page 1).
+              // The import-job totals are frozen at import time; retry passes
+              // resolve more tracks later and would leave the button showing a
+              // stale non-zero number while the list is actually empty.
+              const liveSoftCount = keptData?.pages[0]?.softCount;
+              const showSoftBtn = liveSoftCount != null
+                ? liveSoftCount > 0
+                : (jobData?.status === "done" && jobData.total > jobData.resolved);
+              const softLabel = liveSoftCount != null
+                ? liveSoftCount.toLocaleString()
+                : (jobData ? jobData.total - jobData.resolved : 0).toLocaleString();
+              return showSoftBtn && sourceFilter !== "keep" ? (
+                <button
+                  type="button"
+                  className={`lib-hero__stat${sourceFilter === "soft" ? " lib-hero__stat--warm" : " lib-hero__stat--dim"}`}
+                  style={{ cursor: "pointer", border: "none" }}
+                  onClick={() => setSourceFilter(sourceFilter === "soft" ? "" : "soft")}
+                  title="Filter to tracks Spotify has but MusicBrainz doesn't"
+                >
+                  {softLabel} not in MusicBrainz
+                </button>
+              ) : null;
+            })()}
             {selectorCount > 0 && (
               <Link href="/selectors" className="lib-hero__stat lib-hero__stat--warm">
                 <b>{selectorCount}</b> selector{selectorCount === 1 ? "" : "s"} fed it
