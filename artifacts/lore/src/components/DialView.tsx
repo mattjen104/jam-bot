@@ -781,7 +781,7 @@ export function DialView() {
   const [currentDjName, setCurrentDjName] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
 
-  const { stations, isLoading } = useDialData();
+  const { stations, isLoading, isCoreLoading } = useDialData();
   const { radio } = usePlayer();
 
   // Lifetime overlap counts per selector name (spec §4 sort key)
@@ -1038,10 +1038,6 @@ export function DialView() {
 
       {/* Main scroll body */}
       <div className="dial-body">
-        {isLoading && sortedRows.length === 0 && offlineStations.length === 0 && (
-          <div className="dial-loading">Loading stations…</div>
-        )}
-
         {/* DIAL view — three-zone front door (spec §6) */}
         {level === "all" && (
           <>
@@ -1088,9 +1084,11 @@ export function DialView() {
               </>
             )}
 
-            {/* Recently aired — offline stations (unchanged StationLane) */}
-            {offlineStations.length > 0 && <TierHeader live={false} />}
-            {offlineStations.map((ds) => (
+            {/* Recently aired — only shown once live/offline split is known so
+                the list doesn't flash as offline before live zones appear above.
+                isCoreLoading = stationsLoading || liveLoading. */}
+            {!isCoreLoading && offlineStations.length > 0 && <TierHeader live={false} />}
+            {!isCoreLoading && offlineStations.map((ds) => (
               <StationLane
                 key={ds.station.slug}
                 dialStation={ds}
@@ -1102,6 +1100,11 @@ export function DialView() {
                 onPlay={() => void radio.toggle(ds.station)}
               />
             ))}
+
+            {/* Spinner while the live pulse hasn't arrived yet */}
+            {isCoreLoading && (
+              <div className="dial-loading">Loading stations…</div>
+            )}
 
             {sortedRows.length === 0 && offlineStations.length === 0 && !isLoading && (
               <div className="dial-loading" style={{ opacity: 0.4 }}>No stations online</div>

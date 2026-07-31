@@ -154,6 +154,7 @@ interface SseSpinEntry {
 export function useDialData(): {
   stations: DialStation[];
   isLoading: boolean;
+  isCoreLoading: boolean;
 } {
   const today = todayStr();
   const yesterday = yesterdayStr();
@@ -311,10 +312,23 @@ export function useDialData(): {
   }, [hits1, hits2]);
 
   // ── index by station slug ─────────────────────────────────────────────────
+  // A station is "live" only if its most-recent spin arrived within the last
+  // 60 minutes.  The endpoint returns the all-time latest spin per station,
+  // so a stale entry (hours/days old) must not be treated as currently on-air.
+  // 60 min is generous enough to cover slow-polling hosts while still reliably
+  // excluding stations that are genuinely off-air.
+  const LIVE_WINDOW_MS = 60 * 60 * 1000;
   const liveBySlug = useMemo(() => {
     const m = new Map<string, boolean>();
+    const now = Date.now();
     for (const item of liveData?.items ?? []) {
-      m.set(item.slug, item.nowPlaying !== null);
+      const np = item.nowPlaying;
+      const playedAt = np != null ? (np as { playedAt?: string }).playedAt : undefined;
+      const isRecent =
+        np != null &&
+        playedAt != null &&
+        now - new Date(playedAt).getTime() <= LIVE_WINDOW_MS;
+      m.set(item.slug, isRecent);
     }
     return m;
   }, [liveData]);
@@ -527,6 +541,10 @@ export function useDialData(): {
   }, [stationsData, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, libraryMbidSet, libraryReleaseGroupSet, pickerNames]);
 
   const isLoading = stationsLoading || liveLoading || schedLoading || spinsLoading;
+  // Narrower gate: only blocks until we know which stations are live vs offline.
+  // Schedule and spin data enrich crossings/show info but arrive later; the
+  // front door can render safely once the station list and live pulse are ready.
+  const isCoreLoading = stationsLoading || liveLoading;
 
-  return { stations, isLoading };
+  return { stations, isLoading, isCoreLoading };
 }
