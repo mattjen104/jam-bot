@@ -48,6 +48,7 @@ import { applyImportBufferMigration } from "./lore/import-buffer-migration.js";
 import { applyImportRetryExhaustedMigration } from "./lore/import-retry-exhausted-migration.js";
 import { applyLedgerMigration } from "./lore/ledger-migration.js";
 import { applySelectorClaimsMigration } from "./lore/selector-claims-migration.js";
+import { applySpotifyLibraryItemsMigration } from "./lore/spotify-library-items-migration.js";
 import { syncScrapedShows } from "./lore/scraped-shows-sync.js";
 import { wireScheduleExtractor } from "./lore/schedule-wire.js";
 import { startScheduleScraper } from "./lore/schedule-scraper.js";
@@ -94,6 +95,7 @@ async function bootLore(): Promise<void> {
     await runMigration("applyImportRetryExhaustedMigration", applyImportRetryExhaustedMigration);
     await runMigration("applyLedgerMigration", applyLedgerMigration);
     await runMigration("applySelectorClaimsMigration", applySelectorClaimsMigration);
+    await runMigration("applySpotifyLibraryItemsMigration", applySpotifyLibraryItemsMigration);
     await ensurePicksUnifiedView();
     await seedStations();
     try {

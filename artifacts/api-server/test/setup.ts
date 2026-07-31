@@ -19,6 +19,11 @@ beforeAll(async () => {
       "../src/lore/selector-claims-migration.js"
     );
     await applySelectorClaimsMigration();
+
+    const { applySpotifyLibraryItemsMigration } = await import(
+      "../src/lore/spotify-library-items-migration.js"
+    );
+    await applySpotifyLibraryItemsMigration();
   } catch {
     // No real DB — pure-unit test file, silently skip.
   }
