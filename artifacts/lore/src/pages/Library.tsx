@@ -533,14 +533,14 @@ export default function Library() {
   const queryClient = useQueryClient();
   const { radio } = usePlayer();
 
-  // Source filter — persisted in URL as ?source=keep|import
-  const sourceFilter = useMemo((): "" | "keep" | "import" => {
+  // Source filter — persisted in URL as ?source=keep|import|soft
+  const sourceFilter = useMemo((): "" | "keep" | "import" | "soft" => {
     const v = new URLSearchParams(search).get("source");
-    if (v === "keep" || v === "import") return v;
+    if (v === "keep" || v === "import" || v === "soft") return v;
     return "";
   }, [search]);
 
-  const setSourceFilter = (src: "" | "keep" | "import") => {
+  const setSourceFilter = (src: "" | "keep" | "import" | "soft") => {
     const p = new URLSearchParams(search);
     if (src) p.set("source", src);
     else p.delete("source");
@@ -787,7 +787,7 @@ export default function Library() {
         <span className="dial-topbar__title dial-topbar__title--active">Library</span>
         {(libraryTotal ?? keptItems.length) > 0 && (
           <span className="dial-topbar__sort-chip">
-            {sourceFilter === "keep" ? "📻" : sourceFilter === "import" ? "🎵" : "◆"}{" "}
+            {sourceFilter === "keep" ? "📻" : sourceFilter === "import" ? "🎵" : sourceFilter === "soft" ? "✦" : "◆"}{" "}
             {(libraryTotal ?? keptItems.length).toLocaleString()}
           </span>
         )}
@@ -813,7 +813,7 @@ export default function Library() {
         <div className="lib-hero">
           <div className="lib-hero__kicker">◆ Your library</div>
           <div className="lib-hero__headline">
-            <b>{(libraryTotal ?? keptItems.length).toLocaleString()} recordings</b>
+            <b>{(libraryTotal ?? keptItems.length).toLocaleString()} tracks</b>
             {radioHeardCount > 0 && `, ${radioHeardCount} of them found on air`}
           </div>
           <div className="lib-hero__stats">
@@ -828,9 +828,15 @@ export default function Library() {
               </span>
             )}
             {jobData?.status === "done" && jobData.total > jobData.resolved && sourceFilter !== "keep" && (
-              <span className="lib-hero__stat lib-hero__stat--dim">
+              <button
+                type="button"
+                className={`lib-hero__stat${sourceFilter === "soft" ? " lib-hero__stat--warm" : " lib-hero__stat--dim"}`}
+                style={{ cursor: "pointer", border: "none" }}
+                onClick={() => setSourceFilter(sourceFilter === "soft" ? "" : "soft")}
+                title="Filter to tracks Spotify has but MusicBrainz doesn't"
+              >
                 {(jobData.total - jobData.resolved).toLocaleString()} not in MusicBrainz
-              </span>
+              </button>
             )}
             {selectorCount > 0 && (
               <Link href="/selectors" className="lib-hero__stat lib-hero__stat--warm">
@@ -1003,6 +1009,7 @@ export default function Library() {
               { value: "" as const, label: "All" },
               { value: "keep" as const, label: "Saved from radio" },
               { value: "import" as const, label: "Imported" },
+              { value: "soft" as const, label: "Not in MusicBrainz" },
             ] as const
           ).map(({ value, label }) => (
             <button
@@ -1105,6 +1112,8 @@ export default function Library() {
               ? "Saved from radio"
               : sourceFilter === "import"
               ? "Imported"
+              : sourceFilter === "soft"
+              ? "Not in MusicBrainz"
               : "Kept"
           }
           count={keptItems.length > 0 ? `${keptItems.length.toLocaleString()}${hasNextPage ? "+" : ""}` : undefined}
@@ -1139,6 +1148,8 @@ export default function Library() {
                 ? "Nothing saved from radio yet."
                 : sourceFilter === "import"
                 ? "No imported tracks yet."
+                : sourceFilter === "soft"
+                ? "No unresolved tracks — everything matched MusicBrainz."
                 : "Keep songs from the radio to build your library."}
             </div>
             {sourceFilter ? (

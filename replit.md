@@ -2,142 +2,105 @@
 
 ## Overview
 
-pnpm workspace monorepo using TypeScript. Contains a Slack bot ("TunePool") that helps a friend group discover shared music taste and build group Spotify playlists.
+pnpm workspace monorepo using TypeScript. Contains **Lore Radio** — a radio discovery app that surfaces live radio stations playing music from the listener's personal library, and **jam-bot** — a Slack bot that provides live music knowledge during listening sessions.
+
+## Products
+
+### Lore Radio (`artifacts/lore`)
+A web app with three surfaces:
+- **The Dial** — front door; ranks live stations by library overlap, attribution (selector/DJ), and taste signal. Three-zone layout: Zone 1 (with a reason), Zone 2 (ghost — library that discovers, currently unbuilt), Zone 3 (also on air, dimmed).
+- **The Library** — the listener's full track collection: MB-resolved library items + Spotify-only soft rows; filters by provenance; source for crossing detection.
+- **The Archive** — station/show/selector history; run replay; selector profiles.
+
+### jam-bot (`artifacts/api-server/src/slack/`)
+Slack bot (Socket Mode) that answers music questions in a Jam session, posts timed insights at key moments in a track, and surfaces song knowledge (liner notes, relationships, Song Exploder, Wikipedia).
 
 ## Stack
 
-- **Monorepo tool**: pnpm workspaces
-- **Node.js version**: 24
-- **Package manager**: pnpm
-- **TypeScript version**: 5.9
-- **API framework**: Express 5
+- **Monorepo**: pnpm workspaces
+- **Node.js**: 24
+- **TypeScript**: 5.9
+- **API server**: Express 5 (`artifacts/api-server`)
+- **Web frontend**: React + Vite (`artifacts/lore`)
 - **Slack bot**: @slack/bolt (Socket Mode)
-- **Spotify API**: spotify-web-api-node
 - **Database**: PostgreSQL + Drizzle ORM
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
-- **API codegen**: Orval (from OpenAPI spec)
-- **Build**: esbuild (CJS bundle)
-
-## App Name
-
-The bot is called **TunePool** — this is a placeholder. To rename, update references in:
-- `artifacts/api-server/src/slack/format.ts` (APP_NAME constant)
-- `artifacts/api-server/src/services/blend.ts` (playlist description)
-- `artifacts/api-server/src/slack/commands/help.ts`
-- `artifacts/api-server/src/slack/commands/connect.ts`
-- `artifacts/api-server/src/routes/spotify-auth.ts` (callback HTML pages)
+- **API codegen**: Orval (from `lib/api-spec/openapi.yaml`)
+- **Now-playing**: ICY watcher (persistent TCP), SSE push, 5s REST backstop
 
 ## Structure
 
 ```text
-artifacts-monorepo/
-├── artifacts/              # Deployable applications
-│   └── api-server/         # Express API server + Slack bot
-│       └── src/
-│           ├── index.ts          # Entry: starts Express + Slack bot
-│           ├── app.ts            # Express app setup
-│           ├── routes/           # Express routes
-│           │   ├── health.ts     # GET /api/healthz
-│           │   └── spotify-auth.ts # GET /api/spotify/callback (OAuth)
-│           ├── slack/            # Slack bot module
-│           │   ├── bot.ts        # Bolt app setup, Socket Mode
-│           │   ├── format.ts     # Slack Block Kit formatting helpers
-│           │   └── commands/     # Slash command handlers
-│           │       ├── connect.ts    # /tunepool-connect
-│           │       ├── blend.ts      # /tunepool-blend, /tunepool-mood
-│           │       ├── pair-blend.ts # /tunepool-pair
-│           │       ├── taste-dna.ts  # /tunepool-taste
-│           │       ├── deep-dive.ts  # /tunepool-dive, /tunepool-connections
-│           │       ├── hidden-gems.ts # /tunepool-gems, /tunepool-whofirst
-│           │       └── help.ts       # /tunepool-help
-│           ├── spotify/          # Spotify API integration
-│           │   ├── auth.ts       # OAuth flow + state management
-│           │   ├── client.ts     # Per-user authenticated client + token refresh
-│           │   └── data.ts       # Fetch & cache user tracks/artists
-│           └── services/         # Core business logic
-│               ├── blend.ts      # Group blend, mood mixer, pair blend, playlist creation
-│               ├── discovery.ts  # Hidden gems, who brought it first
-│               ├── taste-analysis.ts # Taste DNA, group comparison
-│               └── artist-intel.ts   # Track deep dive, artist connections
-├── lib/                    # Shared libraries
-│   ├── api-spec/           # OpenAPI spec + Orval codegen config
-│   ├── api-client-react/   # Generated React Query hooks
-│   ├── api-zod/            # Generated Zod schemas from OpenAPI
-│   └── db/                 # Drizzle ORM schema + DB connection
-│       └── src/schema/
-│           ├── users.ts          # Slack/Spotify user accounts + tokens
-│           ├── cached-tracks.ts  # Cached Spotify tracks with audio features
-│           └── cached-artists.ts # Cached Spotify artists with genres
-├── scripts/                # Utility scripts
-├── pnpm-workspace.yaml
-├── tsconfig.base.json
-├── tsconfig.json
-└── package.json
+artifacts/
+├── api-server/           # Express API + Slack bot + all pollers/workers
+│   └── src/
+│       ├── index.ts              # Entry point
+│       ├── routes/               # Express routes
+│       │   ├── me/index.ts       # Library import, keep, sync (3600+ lines — split pending)
+│       │   ├── lore/stations.ts  # Station/spin/schedule/now-playing endpoints
+│       │   └── spotify/          # Spotify OAuth + playback
+│       ├── lore/                 # Core workers and pollers
+│       │   ├── icy-watcher.ts    # Persistent ICY TCP connections (watcher tier)
+│       │   ├── multiplexer.ts    # Host classifier + poller routing
+│       │   ├── serviceConnector.ts # Pluggable streaming-service interface (Spotify impl)
+│       │   └── library-sync.ts   # Spotify sync worker
+│       └── slack/                # jam-bot (Bolt)
+├── lore/                 # React/Vite web frontend
+│   └── src/
+│       ├── components/
+│       │   ├── DialView.tsx      # Front door (1300+ lines — split pending)
+│       │   └── LibraryRow.tsx    # Library track row
+│       ├── hooks/
+│       │   └── useDialData.ts    # Crossing computation (client-side — server-side pending)
+│       ├── pages/
+│       │   ├── Library.tsx       # Library page
+│       │   └── Archive/          # Station/show/selector archive pages
+│       └── lib/
+│           └── meHooks.ts        # React Query hooks for /api/me/*
+lib/
+├── api-spec/             # openapi.yaml + orval config
+├── api-client-react/     # Generated React Query hooks
+├── api-zod/              # Generated Zod schemas
+└── db/                   # Drizzle schema + DB connection
+    └── src/schema/lore.ts  # Main schema (stations, spins, library, selectors, …)
 ```
 
-## Environment Variables Required
+## Environment Variables
 
-### Slack (from api.slack.com/apps)
-- `SLACK_BOT_TOKEN` — Bot User OAuth Token (xoxb-...)
-- `SLACK_SIGNING_SECRET` — App signing secret
-- `SLACK_APP_TOKEN` — App-Level Token for Socket Mode (xapp-...)
+### Spotify
+- `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`
 
-### Spotify (from developer.spotify.com/dashboard)
-- `SPOTIFY_CLIENT_ID` — Spotify app Client ID
-- `SPOTIFY_CLIENT_SECRET` — Spotify app Client Secret
-- **Redirect URI**: `https://<your-domain>/api/spotify/callback` (add to Spotify app settings)
+### Slack (jam-bot)
+- `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `SLACK_APP_TOKEN`
+
+### AI (jam-bot knowledge)
+- `AI_INTEGRATIONS_ANTHROPIC_API_KEY` / `AI_INTEGRATIONS_ANTHROPIC_BASE_URL`
+- `AI_INTEGRATIONS_OPENAI_API_KEY` / `AI_INTEGRATIONS_OPENAI_BASE_URL`
 
 ### Auto-provisioned
-- `DATABASE_URL` — PostgreSQL connection string (Replit)
-
-## Slack Commands
-
-| Command | Description |
-|---|---|
-| `/tunepool-connect` | Connect your Spotify account |
-| `/tunepool-blend` | Group blend playlist from everyone's taste |
-| `/tunepool-mood <mood>` | Mood-filtered mix (chill, hype, melancholy, driving, feel_good, focus, party) |
-| `/tunepool-pair @user` | Taste compatibility & blend with someone |
-| `/tunepool-taste` | Your personal taste DNA |
-| `/tunepool-taste group` | Compare everyone's taste side by side |
-| `/tunepool-dive <song>` | Deep dive on any track |
-| `/tunepool-connections` | Map artist connections across the group |
-| `/tunepool-gems` | Hidden gems from each person's library |
-| `/tunepool-whofirst` | Who discovered shared tracks first? |
-| `/tunepool-help` | Show all commands |
-
-## Slack App Setup
-
-1. Create app at api.slack.com/apps
-2. Enable Socket Mode → get App-Level Token (xapp-...)
-3. Add slash commands: `/tunepool-connect`, `/tunepool-blend`, `/tunepool-mood`, `/tunepool-pair`, `/tunepool-taste`, `/tunepool-dive`, `/tunepool-connections`, `/tunepool-gems`, `/tunepool-whofirst`, `/tunepool-help`
-4. OAuth scopes: `chat:write`, `commands`, `im:history`, `im:read`, `im:write`, `users:read`
-5. Subscribe to bot events: `message.im`
-6. Install to workspace → get Bot Token (xoxb-...)
-
-## Database Schema
-
-- **users** — Slack user ID, Spotify tokens (with auto-refresh), display names
-- **cached_tracks** — User's Spotify tracks with audio features (energy, danceability, tempo, valence, acousticness, instrumentalness), cached for 6 hours
-- **cached_artists** — User's top artists with genres, cached for 6 hours
-
-## TypeScript & Composite Projects
-
-Every package extends `tsconfig.base.json` which sets `composite: true`. The root `tsconfig.json` lists all packages as project references.
-
-- **Always typecheck from the root** — run `pnpm run typecheck`
-- **`emitDeclarationOnly`** — only `.d.ts` files during typecheck; actual JS bundling is handled by esbuild/tsx/vite
-
-## Root Scripts
-
-- `pnpm run build` — runs `typecheck` first, then recursively runs `build` in all packages
-- `pnpm run typecheck` — runs `tsc --build --emitDeclarationOnly` using project references
+- `DATABASE_URL` — PostgreSQL (Replit managed)
+- `SESSION_SECRET` — Express session
 
 ## Key Design Decisions
 
-- **Socket Mode** for Slack — no need for public webhook URLs, simpler development
-- **Per-user Spotify OAuth** — each friend connects their own account, tokens stored in PostgreSQL with automatic refresh
-- **Audio features** used for smart matching — energy, danceability, valence, tempo drive the blend algorithm
-- **6-hour cache** on Spotify data to minimize API calls while staying reasonably fresh
-- **Mood profiles** define audio feature ranges for each mood (chill, hype, melancholy, etc.)
-- **Compatibility scores** use a weighted mix of track overlap (30%), artist overlap (30%), and audio feature similarity (40%)
+- **Library crossings drive ranking** — stations are ranked by how many of the listener's library tracks (and artists) have played there. Exact MBID match > artist match > historical 24h window.
+- **reason() ladder** (DialView.tsx) — r=1..4 are "warm" (Zone 1); r=5..7 and r=0 are "dim" (Zone 3). r values are consecutive integers with no gaps or collisions.
+- **Crossing computation is currently client-side** (useDialData.ts) — a server endpoint returning `{stationId, crossings, artistCrossings}` is planned.
+- **ServiceConnector interface** — streaming library import is service-agnostic; SpotifyConnector is the only current implementation. Adding Apple Music/Tidal means implementing the interface.
+- **Soft library rows** — Spotify tracks that didn't resolve to MusicBrainz live in `spotify_library_items` and appear in the Library alongside resolved `library_items`.
+- **ICY watchers** — favorite stations get a persistent TCP socket for instant now-playing; FAILURE_LIMIT=12 / 30min prevents boot-contention from triggering permanent fallback.
+- **No client-side audio features** — compatibility is library overlap + artist overlap only; audio feature similarity was explicitly ruled out.
+- **Ghost zone (Zone 2)** — unbuilt; will surface stations the library "discovers" for the listener (tracks that crossed the library but weren't known to the listener). Requires `/me/ghost/missed` endpoint.
+
+## TypeScript & Build
+
+- Every package extends `tsconfig.base.json` (`composite: true`).
+- After any schema or type change in `lib/db` or `lib/api-zod`, rebuild with `tsc -p tsconfig.json` in that lib before running the consumer.
+- `pnpm run typecheck` — root-level composite typecheck.
+- `pnpm run build` — typecheck then recursive build.
+
+## User Preferences
+
+- Crossing computation should move server-side (planned).
+- Front-door primary sort key is lifetime overlap; live crossings are a promotion signal only.
+- The "library that discovers" premise (Zone 2 / ghost zone) is the core differentiating feature and must be built.

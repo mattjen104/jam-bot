@@ -408,7 +408,7 @@ export interface LibraryQueryOptions {
   /** "added" (default, newest first) | "artist" | "title" (A→Z). */
   sort?: "added" | "artist" | "title";
   /** Filter by provenance kind: "keep" | "import". */
-  source?: "keep" | "import" | "";
+  source?: "keep" | "import" | "soft" | "";
 }
 
 export function useMyLibraryInfinite(opts: LibraryQueryOptions = {}, limit = 50) {

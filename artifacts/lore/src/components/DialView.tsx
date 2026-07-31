@@ -70,15 +70,18 @@ interface ReasonResult { r: number; cls: string; node: ReactNode }
 
 /** One sentence per rung; returns the strongest rung that applies (spec §3).
  *
- * Crossing ladder (strongest first):
- *   1   — exact library track playing right now
- *   1.5 — library artist playing right now (artist hit, live track)
- *   2   — exact library tracks already aired this show
- *   3   — library artists already aired this show (no exact match)
- *   6   — attributed show on air, no evidence yet
- *   7   — 24h station exact crossings (no selector listed)
- *   7.5 — 24h station artist crossings (no exact hits, no selector)
- *   0   — dark: nothing to go on
+ * r values are consecutive integers — no gaps, no shared values:
+ *   r=1 — exact library track playing right now             (Zone 1, warm)
+ *   r=2 — library artist playing right now (live, SSE-fresh)(Zone 1, warm)
+ *   r=3 — exact library tracks already aired this show      (Zone 1, warm)
+ *   r=4 — library artists aired this show, no exact match   (Zone 1, warm)
+ *   r=5 — attributed show on air, no crossing evidence yet  (Zone 3, dim)
+ *   r=6 — 24h station exact crossings, no selector listed   (Zone 3, dim)
+ *   r=7 — 24h station artist crossings, no exact hits       (Zone 3, dim)
+ *   r=0 — dark: Lore has no now-playing data                (Zone 3, dim)
+ *
+ * Zone boundary: r >= 1 && r <= 4 → Zone 1 ("with a reason").
+ *                r === 0 || r >= 5 → Zone 3 ("also on air", dimmed).
  */
 function reason(
   show: DialShow | null,
@@ -87,7 +90,7 @@ function reason(
 ): ReasonResult {
   if (!show) return { r: 0, cls: "w0", node: "on air · Lore can't see who's playing" };
 
-  // Rung 1: exact library track playing right now
+  // r=1: exact library track playing right now
   if (show.currentTrack?.isLibraryHit) {
     return {
       r: 1, cls: "w1",
@@ -95,7 +98,7 @@ function reason(
     };
   }
 
-  // Rung 1.5: library artist playing right now (not an exact track match).
+  // r=2: library artist playing right now (not an exact track match).
   // The live track hasn't been logged into spins yet (SSE lag), so
   // show.artistCrossings won't include it — check currentTrack directly.
   if (show.currentTrack?.isArtistHit) {
@@ -105,42 +108,42 @@ function reason(
     };
   }
 
-  // Rung 2: exact library tracks already aired this show
+  // r=3: exact library tracks already aired this show
   if (show.crossings > 0) {
     const names = show.topArtists.length > 0 ? listNames(show.topArtists) : null;
     return {
-      r: 2, cls: "w2",
+      r: 3, cls: "w3",
       node: names
         ? <><b>{names}</b> already this set</>
         : <><b>{show.crossings} of yours</b> already this set</>,
     };
   }
 
-  // Rung 3: library artists already aired this show (no exact track match)
+  // r=4: library artists aired this show, no exact track match
   if (show.artistCrossings > 0) {
     const names = show.topArtistNames.length > 0 ? listNames(show.topArtistNames) : null;
     return {
-      r: 3, cls: "w3",
+      r: 4, cls: "w4",
       node: names
         ? <><b>{names}</b> — an artist from your library</>
         : <><b>{show.artistCrossings}</b> tracks by artists from your library</>,
     };
   }
 
-  // Rung 6: attributed show on air, no evidence yet
+  // r=5: attributed show on air, no crossing evidence yet
   if (show.djName) {
-    return { r: 6, cls: "w6", node: `on air · ${intoSet(show.startedAt)} into the set` };
+    return { r: 5, cls: "w5", node: `on air · ${intoSet(show.startedAt)} into the set` };
   }
 
-  // Rung 7: 24h station exact crossings (no selector listed)
+  // r=6: 24h station exact crossings (no selector listed)
   if (stationCrossings > 0) {
     return {
-      r: 7, cls: "w7",
+      r: 6, cls: "w6",
       node: <><b>{stationCrossings} of yours</b> here in the last 24h — no selector listed</>,
     };
   }
 
-  // Rung 7.5: 24h station artist crossings (no exact hits, no selector listed)
+  // r=7: 24h station artist crossings (no exact hits, no selector listed)
   if (stationArtistCrossings > 0) {
     return {
       r: 7, cls: "w7",
@@ -148,7 +151,7 @@ function reason(
     };
   }
 
-  // Rung 0: dark — nothing to go on
+  // r=0: dark — nothing to go on
   return { r: 0, cls: "w0", node: "on air · Lore can't see who's playing" };
 }
 
@@ -275,7 +278,7 @@ function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onEarlier 
   const rowCls = [
     "fdrow",
     rz.r === 1 ? "fdrow--t1" : "",
-    rz.r === 0 || rz.r === 6 || rz.r === 7 ? "fdrow--dim" : "",
+    rz.r === 0 || rz.r >= 5 ? "fdrow--dim" : "",
     isSampling ? "fdrow--sampling" : "",
     isActive ? "fdrow--playing" : "",
   ].filter(Boolean).join(" ");
@@ -940,8 +943,10 @@ export function DialView() {
   }, [stations, ovByName]);
 
   // Three zones (spec §6)
-  const withReason = useMemo(() => sortedRows.filter((row) => row.rz.r >= 1 && row.rz.r <= 5), [sortedRows]);
-  const alsoOnAir = useMemo(() => sortedRows.filter((row) => !(row.rz.r >= 1 && row.rz.r <= 5)), [sortedRows]);
+  // Zone 1: r=1..4 — has crossing evidence (warm).
+  // Zone 3: r=0 or r>=5 — attributed-only or dark (dimmed).
+  const withReason = useMemo(() => sortedRows.filter((row) => row.rz.r >= 1 && row.rz.r <= 4), [sortedRows]);
+  const alsoOnAir = useMemo(() => sortedRows.filter((row) => row.rz.r === 0 || row.rz.r >= 5), [sortedRows]);
   // Ghost zone: stub — requires /me/ghost/missed endpoint (spec §7)
   const ghost: Array<unknown> = [];
 

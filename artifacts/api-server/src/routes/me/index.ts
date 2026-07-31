@@ -1704,12 +1704,15 @@ router.get("/me/library", h(async (req, res) => {
     sortRaw === "artist" || sortRaw === "title" ? sortRaw : "added";
   const sourceRaw =
     typeof req.query["source"] === "string" ? req.query["source"] : "";
-  const source: "keep" | "import" | null =
-    sourceRaw === "keep" || sourceRaw === "import" ? sourceRaw : null;
+  const source: "keep" | "import" | "soft" | null =
+    sourceRaw === "keep" || sourceRaw === "import" || sourceRaw === "soft" ? sourceRaw : null;
 
-  // Soft rows have kind="import" provenance — they are hidden by the "keep"
-  // filter and appear under both "import" and the default (no filter).
+  // "soft"   → only spotify_library_items rows (unresolved, no MBID yet).
+  // "keep"   → only library_items with provenance.kind='keep', no soft rows.
+  // "import" → library_items with provenance.kind='import' + soft rows.
+  // null     → all resolved + soft rows.
   const includeSoft = source !== "keep";
+  const includeResolved = source !== "soft";
 
   // ── Resolved rows conditions ─────────────────────────────────────────────
   const conditions = [eq(libraryItemsTable.userId, user.id)];
@@ -1730,12 +1733,14 @@ router.get("/me/library", h(async (req, res) => {
   let total: number | undefined;
   if (!cursor) {
     const [resolvedCount, softCount] = await Promise.all([
-      db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(libraryItemsTable)
-        .leftJoin(recordingsTable, eq(libraryItemsTable.mbid, recordingsTable.mbid))
-        .where(and(...conditions))
-        .then((r) => r[0]?.count ?? 0),
+      includeResolved
+        ? db
+            .select({ count: sql<number>`count(*)::int` })
+            .from(libraryItemsTable)
+            .leftJoin(recordingsTable, eq(libraryItemsTable.mbid, recordingsTable.mbid))
+            .where(and(...conditions))
+            .then((r) => r[0]?.count ?? 0)
+        : Promise.resolve(0),
       includeSoft
         ? (async () => {
             const softConds = [
@@ -1827,7 +1832,14 @@ router.get("/me/library", h(async (req, res) => {
   }
 
   // ── Resolved rows query ──────────────────────────────────────────────────
-  const resolvedRows = await db
+  // Skipped entirely when source=soft (only unresolved tracks requested).
+  type ResolvedRow = {
+    mbid: string; provenance: LibraryItemProvenance; addedAt: Date;
+    title: string | null; artist: string | null; artworkUrl: string | null;
+    links: Array<{ url: string }> | null; sortKey: string; albumTitle: string | null;
+  };
+  let resolvedRows: ResolvedRow[] = [];
+  if (includeResolved) resolvedRows = await db
     .select({
       mbid: libraryItemsTable.mbid,
       provenance: libraryItemsTable.provenance,
