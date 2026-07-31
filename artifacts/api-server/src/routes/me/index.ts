@@ -3759,29 +3759,6 @@ router.get("/me/crossings", h(async (req, res) => {
       ),
     );
 
-  // Fetch soft artist names (unresolved Spotify imports — name-based fallback
-  // when the spin's recording has no artistMbid to compare against).
-  // Wrapped in try/catch: the table may not exist in environments where the
-  // schema migration hasn't run yet; degrade to an empty list rather than
-  // crashing the whole crossings request.
-  let softArtistNames: string[] = [];
-  try {
-    const softRows = await db
-      .selectDistinct({ artist: spotifyLibraryItemsTable.artist })
-      .from(spotifyLibraryItemsTable)
-      .where(
-        and(
-          eq(spotifyLibraryItemsTable.userId, user.id),
-          isNull(spotifyLibraryItemsTable.mbid),
-        ),
-      );
-    softArtistNames = softRows
-      .map((r) => r.artist.toLowerCase().trim())
-      .filter(Boolean);
-  } catch (err) {
-    console.warn("[me/crossings] soft-artist lookup failed (table may not exist yet)", err);
-  }
-
   // ── Composite SQL predicates ──────────────────────────────────────────────
   // Library hit: exact MBID OR any track from the same primary release group.
   const libHit = sql`(
@@ -3802,17 +3779,35 @@ router.get("/me/crossings", h(async (req, res) => {
     )
   )`;
 
-  // Artist match: MBID-based lookup plus optional name-based soft fallback.
-  const artistMatch =
-    softArtistNames.length > 0
-      ? sql`(
-          ${recordingsTable.artistMbid} in (${userLibArtists})
-          or lower(trim(${recordingsTable.artist})) = any(array[${sql.join(
-            softArtistNames.map((a) => sql`${a}`),
-            sql`, `,
-          )}]::text[])
-        )`
-      : sql`${recordingsTable.artistMbid} in (${userLibArtists})`;
+  // Soft-artist subquery: unresolved Spotify imports matched by lowercased
+  // artist name when no artistMbid is available on the spin's recording.
+  //
+  // Previously this was fetched in application code and passed as a literal
+  // array — e.g. = any(array['artist1','artist2',...1500 more...]).  With a
+  // large unresolved import that produces ~1,500 distinct artist names the
+  // serialised array literal alone took several seconds to parse and Postgres
+  // could not plan it as a hash-join, driving total query time to 20 s+.
+  //
+  // A SQL subquery lets the planner build a hash-table of soft artist names
+  // once and probe it per recording row — effectively O(n) instead of O(n·m).
+  // The try/catch around the old fetch is no longer needed: if the table is
+  // absent the subquery returns zero rows and the query degrades cleanly.
+  const userSoftArtists = db
+    .selectDistinct({ artistLower: sql<string>`lower(trim(${spotifyLibraryItemsTable.artist}))` })
+    .from(spotifyLibraryItemsTable)
+    .where(
+      and(
+        eq(spotifyLibraryItemsTable.userId, user.id),
+        isNull(spotifyLibraryItemsTable.mbid),
+        ne(spotifyLibraryItemsTable.artist, ""),
+      ),
+    );
+
+  // Artist match: MBID-based lookup + soft name subquery fallback.
+  const artistMatch = sql`(
+    ${recordingsTable.artistMbid} in (${userLibArtists})
+    or lower(trim(${recordingsTable.artist})) in (${userSoftArtists})
+  )`;
 
   const rows = await db
     .select({

@@ -56,6 +56,10 @@ export type RadioBrowserGenre = (typeof RADIO_BROWSER_GENRE_WHITELIST)[number];
  */
 export const RADIO_BROWSER_NAME_BLOCKLIST = Object.freeze([
   "epic lounge",
+  // Single-artist stations don't fit Lore's mission of discovering music
+  // through human-curated radio.  The "Exclusively X" family from Radio
+  // Browser is the primary example; the prefix match catches all variants.
+  "exclusively ",
 ] as const);
 
 function isNameBlocked(name: string | null | undefined): boolean {
