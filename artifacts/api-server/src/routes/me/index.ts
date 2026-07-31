@@ -1026,7 +1026,18 @@ export async function runImportWorker(
           `[me/import] job=${jobId} Phase 3 — ${consecutiveErrors} consecutive MB errors, ` +
           `pausing ${currentBackoffMs / 1000}s before continuing`,
         );
+        // Signal the frontend that we're in a back-off pause so the progress
+        // bar doesn't appear frozen.  Keep status="running" so polling
+        // continues; clear the hint once we resume.
+        await db
+          .update(libraryImportJobsTable)
+          .set({ total, resolved, error: "resolve:backoff" })
+          .where(eq(libraryImportJobsTable.id, jobId));
         await sleep(currentBackoffMs);
+        await db
+          .update(libraryImportJobsTable)
+          .set({ total, resolved, error: null })
+          .where(eq(libraryImportJobsTable.id, jobId));
         currentBackoffMs = Math.min(currentBackoffMs * 2, PHASE3_503_MAX_BACKOFF_MS);
         consecutiveErrors = 0; // reset streak so the next breach gets its own pause
       }

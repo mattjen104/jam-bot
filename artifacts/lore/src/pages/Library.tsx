@@ -368,7 +368,9 @@ export function LibraryImportBanner({
   const isError = job.status === "error";
   const isDone = job.status === "done";
   const isFetchingPhase = job.phase === "fetching";
-  const label = isError ? "Import failed" : isDone ? "Library imported" : phaseLabel(job.phase);
+  /** True while Phase 3 is paused waiting for MusicBrainz to recover. */
+  const isBackoff = !isError && !isDone && job.error === "resolve:backoff";
+  const label = isError ? "Import failed" : isDone ? "Library imported" : isBackoff ? "Resolving new tracks…" : phaseLabel(job.phase);
   const accent = isError ? "var(--destructive)" : "var(--keep)";
   const progressPct = job.total > 0 ? Math.min(100, (job.resolved / job.total) * 100) : 0;
 
@@ -414,9 +416,11 @@ export function LibraryImportBanner({
           )}
           {!isDone && !isError && job.total > 0 && (
             <div style={{ fontFamily: "var(--app-font-mono)", fontSize: 10, color: "hsl(var(--dim))", marginTop: 2 }}>
-              {isFetchingPhase
-                ? `Found ${job.total.toLocaleString()} tracks…`
-                : `${job.resolved.toLocaleString()} / ~${job.total.toLocaleString()}`}
+              {isBackoff
+                ? "MusicBrainz is busy — resuming shortly"
+                : isFetchingPhase
+                  ? `Found ${job.total.toLocaleString()} tracks…`
+                  : `${job.resolved.toLocaleString()} / ~${job.total.toLocaleString()}`}
             </div>
           )}
           {isError && job.error && (
