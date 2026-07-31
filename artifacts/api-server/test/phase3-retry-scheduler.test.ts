@@ -282,6 +282,47 @@ describe("startPhase3RetryScheduler — off-peak gate (via fake timers)", () => 
     resolveFirstSelect();
   });
 
+  // ── In-flight guard reset: new pass starts after hung pass resolves ───────
+
+  it("allows a third pass once the hung first pass has resolved", async () => {
+    vi.setSystemTime(utcDate(3));
+
+    let resolveFirstSelect!: () => void;
+    const hangingPromise = new Promise<never[]>((resolve) => {
+      resolveFirstSelect = () => resolve([]);
+    });
+
+    // First call hangs; all subsequent calls resolve immediately (the [] default).
+    mockDbSelect.mockReturnValueOnce({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          orderBy: vi.fn().mockReturnValue({
+            limit: vi.fn().mockReturnValue(hangingPromise),
+          }),
+        }),
+      }),
+    });
+
+    startPhase3RetryScheduler();
+
+    // Tick 1 — first pass starts but hangs (passInFlight = true).
+    await vi.advanceTimersByTimeAsync(SCHEDULER_POLL_MS);
+    expect(mockDbSelect).toHaveBeenCalledTimes(1);
+
+    // Tick 2 — guard blocks it; select still called only once.
+    await vi.advanceTimersByTimeAsync(SCHEDULER_POLL_MS);
+    expect(mockDbSelect).toHaveBeenCalledTimes(1);
+
+    // Resolve the first pass — .finally() resets passInFlight to false.
+    resolveFirstSelect();
+    // Let the microtask queue flush so the .finally() handler runs.
+    await Promise.resolve();
+
+    // Tick 3 — passInFlight is now false, so a new pass should start.
+    await vi.advanceTimersByTimeAsync(SCHEDULER_POLL_MS);
+    expect(mockDbSelect).toHaveBeenCalledTimes(2);
+  });
+
   // ── Midnight boundary crossing: entering the window ──────────────────────
   //
   // These tests advance the clock *across* the [2, 6) boundary so that the
