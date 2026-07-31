@@ -838,7 +838,11 @@
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: hsl(var(--muted-foreground));
-  opacity: 0.55;
+  opacity: 0.65;
+}
+/* Loading state pip uses library orange instead of the generic live blue */
+.z1-placeholder--loading .dial-live-skeleton__pip {
+  background: hsl(var(--library));
 }
 .z1-placeholder__lbl { }
 .z1-placeholder--connect,
@@ -1389,6 +1393,9 @@
   background: hsl(var(--live));
   animation: lore-eq 2.4s ease-in-out infinite;
 }
+/* Offline row has crossings from this station — warm dot + faint warm bg */
+.dial-stn-dot--cross { background: hsl(var(--library) / 0.75); }
+.dial-stn-row--cross { background: hsl(var(--library) / 0.06); }
 .dial-stn-info { flex: 1; min-width: 0; }
 .dial-stn-name {
   font-family: var(--app-font-display);
@@ -2716,7 +2723,7 @@
   position: absolute;
   left: 0; top: 0; bottom: 0;
   width: 3px;
-  background: hsl(var(--muted-foreground) / 0.35);
+  background: hsl(var(--picker) / 0.55);
   transition: background 0.12s;
 }
 .ghost-row:hover { background: hsl(var(--secondary) / 0.25); }

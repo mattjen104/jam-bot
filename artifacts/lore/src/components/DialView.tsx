@@ -278,6 +278,7 @@ function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onEarlier 
   const rowCls = [
     "fdrow",
     rz.r === 1 ? "fdrow--t1" : "",
+    rz.r >= 2 && rz.r <= 4 ? "fdrow--z1" : "",
     rz.r === 0 || rz.r >= 5 ? "fdrow--dim" : "",
     isSampling ? "fdrow--sampling" : "",
     isActive ? "fdrow--playing" : "",
@@ -320,11 +321,21 @@ interface GhostRowProps {
   isActive: boolean;
   onTuneIn: () => void;
 }
-function ZoneLabel({ label, n, hint }: { label: string; n?: number; hint?: string }) {
+function ZoneLabel({ label, n, hint, accent }: {
+  label: string;
+  n?: number;
+  hint?: string;
+  accent?: "library" | "picker";
+}) {
   return (
     <div className="fdzone-lbl">
+      {accent && <span className={`fdzone-lbl__pip fdzone-lbl__pip--${accent}`} />}
       <span className="fdzone-lbl__text">{label}</span>
-      {n != null && <span className="fdzone-lbl__n">{n}</span>}
+      {n != null && (
+        <span className={`fdzone-lbl__n${accent === "picker" ? " fdzone-lbl__n--picker" : accent == null ? " fdzone-lbl__n--dim" : ""}`}>
+          {n}
+        </span>
+      )}
       {hint && <span className="fdzone-lbl__hint">{hint}</span>}
     </div>
   );
@@ -832,15 +843,16 @@ function OfflineRow({
     : null;
   const hasShowName = lastShow && lastShow.showName && lastShow.showName.toLowerCase() !== "unknown show";
 
+  const hasCrossings = crossings > 0;
   return (
     <div
-      className="dial-stn-row"
+      className={`dial-stn-row${hasCrossings ? " dial-stn-row--cross" : ""}`}
       onClick={onStationClick}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && onStationClick()}
     >
-      <span className="dial-stn-dot" />
+      <span className={`dial-stn-dot${hasCrossings ? " dial-stn-dot--cross" : ""}`} />
       <div className="dial-stn-info">
         <div className="dial-stn-name">{station.name}</div>
         {hasShowName ? (
@@ -1179,7 +1191,7 @@ export function DialView() {
             {/* Zone 1: On air, with a reason — only once crossing scores are ready */}
             {!crossingsLoading && withReason.length > 0 && (
               <>
-                <ZoneLabel label="On air, with a reason" n={withReason.length} hint="best first · scan walks this list" />
+                <ZoneLabel label="On air, with a reason" n={withReason.length} hint="best first · scan walks this list" accent="library" />
                 {withReason.map((row, i) => (
                   <FrontDoorRow
                     key={row.ds.station.slug}
@@ -1209,7 +1221,7 @@ export function DialView() {
             {/* Zone 2: Ghost — shown only after crossings load so it never
                 jumps above Zone 1 while scores are still in-flight */}
             {!crossingsLoading && ghost.length > 0 && (
-              <ZoneLabel label="Missed while you were away" />
+              <ZoneLabel label="Missed while you were away" accent="picker" />
             )}
 
             {/* Zone 3: Also on air — visible immediately; stations promote to Zone 1
