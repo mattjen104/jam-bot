@@ -135,10 +135,31 @@ router.get("/stations/now-playing", h(async (req, res) => {
     )
     .orderBy(asc(spinsTable.stationId), desc(spinsTable.playedAt));
 
+  // Batch-check which resolved MBIDs have been seen in the archive before today.
+  // A track is "first in archive" only when it has never been logged on any prior day.
+  const nowPlayingMbids = new Set<string>();
+  for (const row of rows) { if (row.mbid) nowPlayingMbids.add(row.mbid); }
+  const seenBefore = new Set<string>();
+  if (nowPlayingMbids.size > 0) {
+    const mbidArr = [...nowPlayingMbids];
+    const mbidSql = sql.join(mbidArr.map((m) => sql`${m}`), sql`, `);
+    const seenRows = await db.execute<{ mbid: string }>(sql`
+      SELECT DISTINCT mbid FROM spins
+      WHERE mbid = ANY(ARRAY[${mbidSql}]::text[])
+        AND played_at::date < CURRENT_DATE
+    `);
+    for (const r of seenRows.rows) seenBefore.add(r.mbid);
+  }
+
   const byStation = new Map(rows.map((r) => [r.stationId, r]));
   const items = stations.map((s) => {
     const row = byStation.get(s.id);
-    return { slug: s.slug, nowPlaying: row ? toNowPlaying(row) : null };
+    return {
+      slug: s.slug,
+      nowPlaying: row
+        ? toNowPlaying({ ...row, isFirstSpin: row.mbid != null && !seenBefore.has(row.mbid) })
+        : null,
+    };
   });
 
   return res.json(ListStationsNowPlayingResponse.parse({ items }));
@@ -221,10 +242,30 @@ router.get("/stations/at/:date/now-playing", h(async (req, res) => {
     )
     .orderBy(asc(spinsTable.stationId), desc(spinsTable.playedAt));
 
+  // Batch-check which resolved MBIDs have been seen before the requested date.
+  const atDateMbids = new Set<string>();
+  for (const row of rows) { if (row.mbid) atDateMbids.add(row.mbid); }
+  const seenBeforeDate = new Set<string>();
+  if (atDateMbids.size > 0) {
+    const mbidArr = [...atDateMbids];
+    const mbidSql = sql.join(mbidArr.map((m) => sql`${m}`), sql`, `);
+    const seenRows = await db.execute<{ mbid: string }>(sql`
+      SELECT DISTINCT mbid FROM spins
+      WHERE mbid = ANY(ARRAY[${mbidSql}]::text[])
+        AND played_at::date < ${dateFilter}::date
+    `);
+    for (const r of seenRows.rows) seenBeforeDate.add(r.mbid);
+  }
+
   const byStation = new Map(rows.map((r) => [r.stationId, r]));
   const items = stations.map((s) => {
     const row = byStation.get(s.id);
-    return { slug: s.slug, nowPlaying: row ? toNowPlaying(row) : null };
+    return {
+      slug: s.slug,
+      nowPlaying: row
+        ? toNowPlaying({ ...row, isFirstSpin: row.mbid != null && !seenBeforeDate.has(row.mbid) })
+        : null,
+    };
   });
 
   return res.json(ListStationsNowPlayingResponse.parse({ items }));
@@ -271,10 +312,22 @@ router.get("/stations/:slug/now-playing", h(async (req, res) => {
     .orderBy(desc(spinsTable.playedAt))
     .limit(1);
 
+  // Check whether this MBID has been seen in the archive before today.
+  let isFirstSpin = false;
+  if (row?.mbid) {
+    const seenRows = await db.execute<{ found: number }>(sql`
+      SELECT 1 AS found FROM spins
+      WHERE mbid = ${row.mbid}
+        AND played_at::date < CURRENT_DATE
+      LIMIT 1
+    `);
+    isFirstSpin = seenRows.rows.length === 0;
+  }
+
   return res.json(
     GetStationNowPlayingResponse.parse({
       station: toStation(station),
-      nowPlaying: row ? toNowPlaying(row) : null,
+      nowPlaying: row ? toNowPlaying({ ...row, isFirstSpin }) : null,
     }),
   );
 }));

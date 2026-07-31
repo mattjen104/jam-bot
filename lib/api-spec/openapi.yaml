@@ -2875,6 +2875,12 @@ components:
           anyOf:
             - $ref: "#/components/schemas/ShowRef"
             - type: "null"
+        isFirstSpin:
+          type: boolean
+          description: >-
+            True when this is the first time this recording (by MBID) has
+            appeared in the archive. False when the recording has been logged
+            before, or when the spin has no resolved MBID.
       required:
         - rawArtist
         - rawTitle

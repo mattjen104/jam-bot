@@ -107,6 +107,7 @@ export function toNowPlaying(row: {
   genres?: string[] | null;
   showName: string | null;
   showDj: string | null;
+  isFirstSpin?: boolean;
 }) {
   return {
     spinId: row.spinId ?? null,
@@ -130,6 +131,7 @@ export function toNowPlaying(row: {
     show: row.showName
       ? { name: row.showName, djName: row.showDj ?? null }
       : null,
+    isFirstSpin: row.isFirstSpin ?? false,
   };
 }
 

@@ -393,6 +393,12 @@ export const ListStationsAtDateResponse = zod.object({
                   .describe(
                     "Show + DJ on air for this spin, when the source exposes it.",
                   ),
+                isFirstSpin: zod
+                  .boolean()
+                  .optional()
+                  .describe(
+                    "True when this is the first time this recording (by MBID) has appeared in the archive.",
+                  ),
               })
               .describe(
                 "The most recent spin on a station. `recording` is null when the track could not be resolved to the MusicBrainz spine (raw metadata preserved).",
@@ -483,6 +489,12 @@ export const ListStationsNowPlayingResponse = zod.object({
                   .optional()
                   .describe(
                     "Show + DJ on air for this spin, when the source exposes it.",
+                  ),
+                isFirstSpin: zod
+                  .boolean()
+                  .optional()
+                  .describe(
+                    "True when this is the first time this recording (by MBID) has appeared in the archive.",
                   ),
               })
               .describe(
@@ -667,6 +679,12 @@ export const GetStationNowPlayingResponse = zod.object({
             .optional()
             .describe(
               "Show + DJ on air for this spin, when the source exposes it.",
+            ),
+          isFirstSpin: zod
+            .boolean()
+            .optional()
+            .describe(
+              "True when this is the first time this recording (by MBID) has appeared in the archive.",
             ),
         })
         .describe(

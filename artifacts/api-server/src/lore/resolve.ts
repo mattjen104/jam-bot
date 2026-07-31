@@ -571,6 +571,8 @@ export interface SpinChangedEvent {
   mbid: string | null;
   /** MusicBrainz Artist ID, null when not resolved. Powers artist-page navigation on live chips. */
   artistMbid: string | null;
+  /** True when this is the first time this recording (by MBID) has appeared in the archive. */
+  isFirstSpin: boolean;
 }
 
 /**
@@ -674,6 +676,18 @@ export async function logSpinIfChanged(
       source: station.nowPlayingSource ?? "unknown",
     });
     if (wrote) {
+      // Check whether this MBID has been logged on any prior calendar day so
+      // the SSE event carries the same isFirstSpin flag as the REST response.
+      let isFirstSpin = false;
+      if (r.mbid) {
+        const prior = await db.execute<{ found: number }>(sql`
+          SELECT 1 AS found FROM spins
+          WHERE mbid = ${r.mbid}
+            AND played_at::date < CURRENT_DATE
+          LIMIT 1
+        `);
+        isFirstSpin = prior.rows.length === 0;
+      }
       // MBID is fully resolved before persist, so subscribers (SSE clients)
       // get everything they need without a follow-up round-trip.
       spinEvents.emit("spin-changed", {
@@ -683,6 +697,7 @@ export async function logSpinIfChanged(
         rawTitle: np.rawTitle,
         mbid: r.mbid,
         artistMbid: r.artistMbid ?? null,
+        isFirstSpin,
       } satisfies SpinChangedEvent);
     }
     return wrote;

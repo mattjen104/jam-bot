@@ -157,6 +157,7 @@ interface SseSpinEntry {
   title: string;
   artist: string;
   playedAt: string;
+  isFirstSpin: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -192,6 +193,7 @@ export function useDialData(): {
           rawTitle?: string;
           mbid?: string | null;
           artistMbid?: string | null;
+          isFirstSpin?: boolean;
         };
         if (!ev.stationSlug) return;
         setSseOverrides((prev) => {
@@ -202,6 +204,7 @@ export function useDialData(): {
             title: ev.rawTitle ?? "",
             artist: ev.rawArtist ?? "",
             playedAt: new Date().toISOString(),
+            isFirstSpin: ev.isFirstSpin ?? false,
           });
           return next;
         });
@@ -417,9 +420,9 @@ export function useDialData(): {
           !isLibraryHit &&
           ((artistMbid != null && libraryArtistMbidSet.has(artistMbid)) ||
             softArtistSet.has(artist.toLowerCase().trim())),
-        // Live-polled tracks don't go through the recent-spins archive batch
-        // that computes isFirstSpin — conservatively set to false.
-        isFirstSpin: false,
+        // Read isFirstSpin from the server response — the now-playing endpoint
+        // now performs the same archive batch check as the recent-spins endpoint.
+        isFirstSpin: (np as { isFirstSpin?: boolean }).isFirstSpin ?? false,
       });
     }
     // SSE overrides: more recent than the REST poll, applied last so the Dial
@@ -437,7 +440,9 @@ export function useDialData(): {
           !isLibraryHit &&
           ((entry.artistMbid != null && libraryArtistMbidSet.has(entry.artistMbid)) ||
             softArtistSet.has(entry.artist.toLowerCase().trim())),
-        isFirstSpin: false,
+        // Read isFirstSpin from the SSE event — the server computes and emits
+        // the flag at spin-write time so instant SSE chips carry the correct mark.
+        isFirstSpin: entry.isFirstSpin,
       });
     }
     return m;
