@@ -13,6 +13,13 @@
  *   committedOffset stamped — during a fresh run the committed_offset column
  *             advances in STAMP_EVERY increments alongside matchedJson.
  *
+ *   Post-matching crash recovery — if the process crashes after the matching
+ *             phase stamps committedOffset == total (but before the "done"
+ *             stamp), matchedJson is still present in the DB.  A resumed
+ *             worker must skip Phase 1 entirely and proceed directly to Phase
+ *             2 (contains-check) + Phase 3 (save) without any Spotify search
+ *             calls.
+ *
  * Self-skips when the database is unavailable (same pattern as other *-db tests).
  */
 
@@ -293,7 +300,7 @@ describe("sync worker resume — restores matchedJson, skips committed items", (
     // resumedFrom must be set to signal the UI to show "Resuming…"
     expect(final.resumedFrom).toBe(job.id);
 
-    // matchedJson must be cleared once matching is complete.
+    // matchedJson must be cleared when the job reaches "done" status.
     expect(final.matchedJson).toBeNull();
   });
 
@@ -398,7 +405,7 @@ describe("sync worker double-crash resume — second resume uses the latest comm
     expect(r.alreadySaved).toBe(0);
     expect(r.searchMatched).toBe(0);
 
-    // matchedJson must be cleared once matching is complete.
+    // matchedJson must be cleared when the job reaches "done" status.
     expect(final.matchedJson).toBeNull();
 
     // resumedFrom must be set (it's a resumed run).
@@ -556,6 +563,104 @@ describe("sync worker resume — save batch failure does not inflate synced coun
   });
 });
 
+describe("sync worker — post-matching crash recovery (committedOffset == total, matchedJson present)", () => {
+  it("skips Phase 1 entirely and completes successfully when crash happened after matching stamp", async () => {
+    if (!dbAvailable) return;
+
+    // Simulate a job that completed matching (committedOffset == total == 3)
+    // but crashed before the final "done" stamp.  matchedJson is still present
+    // because it is only cleared in the terminal "done" stamp.
+    //
+    // The library has 3 items and STAMP_EVERY == 20, so NO intermediate
+    // checkpoint stamps fire during Phase 1.  The ONLY stamp that includes
+    // matchedJson is the matching-complete stamp at the end of Phase 1.
+    // This test therefore exercises the case where total % STAMP_EVERY != 0
+    // (3 % 20 = 3) and confirms the authoritative final snapshot is used.
+    const job = await seedJob({
+      committedOffset: 3, // == total; written by the matching-complete stamp
+      phase: "checking",  // crashed while in Phase 2/3
+      processed: 3,
+      matchedJson: {
+        // Full snapshot: matched.length + unmatched.length == total (3)
+        matched: [
+          { mbid: MBID_LINK, title: "Link Track", artist: `Sync Resume ${run}`, spotifyId: SP_ID_LINK, confidence: "link" },
+          { mbid: MBID_ISRC, title: "ISRC Track", artist: `Sync Resume ${run}`, spotifyId: SP_ID_ISRC, confidence: "isrc" },
+        ],
+        unmatched: [
+          { mbid: MBID_NONE, title: "Unavailable Track", artist: `Sync Resume ${run}` },
+        ],
+      },
+    });
+
+    await runSyncWorker(job.id, userId, connRow, 3);
+
+    const final = await readJob(job.id);
+
+    // Job must complete successfully.
+    expect(final.status).toBe("done");
+    expect(final.results).toBeTruthy();
+
+    const r = final.results!;
+    // MBID_LINK + MBID_ISRC → synced (link + isrc confidence)
+    // MBID_NONE → unavailable
+    expect(r.synced).toBe(2);
+    expect(r.unavailable).toBe(1);
+    expect(r.alreadySaved).toBe(0);
+    expect(r.searchMatched).toBe(0);
+
+    // NO Spotify search calls must have been made — all match data was
+    // restored from matchedJson; Phase 1 was skipped entirely.
+    expect(searchCallCount).toBe(0);
+    expect(searchQueriesLog).toHaveLength(0);
+
+    // matchedJson cleared in the final "done" stamp.
+    expect(final.matchedJson).toBeNull();
+
+    // resumedFrom set because committedOffset > 0 on entry.
+    expect(final.resumedFrom).toBe(job.id);
+  });
+
+  it("falls back to a full re-run when the post-matching snapshot is incomplete (tail items missing)", async () => {
+    if (!dbAvailable) return;
+
+    // Guard against an incomplete snapshot where committedOffset == total but
+    // matched + unmatched < total (e.g. a pre-fix binary that failed to flush
+    // the final tail).  The worker must detect the mismatch and re-run Phase 1
+    // from scratch rather than silently dropping the missing items.
+    const job = await seedJob({
+      committedOffset: 3, // == total
+      phase: "checking",
+      processed: 3,
+      matchedJson: {
+        // Incomplete: only 2 of 3 items recorded (MBID_NONE tail is missing)
+        matched: [
+          { mbid: MBID_LINK, title: "Link Track", artist: `Sync Resume ${run}`, spotifyId: SP_ID_LINK, confidence: "link" },
+          { mbid: MBID_ISRC, title: "ISRC Track", artist: `Sync Resume ${run}`, spotifyId: SP_ID_ISRC, confidence: "isrc" },
+        ],
+        unmatched: [], // missing MBID_NONE — total mismatch: 2 != 3
+      },
+    });
+
+    await runSyncWorker(job.id, userId, connRow, 3);
+
+    const final = await readJob(job.id);
+
+    // Job must still complete successfully after the fallback re-run.
+    expect(final.status).toBe("done");
+    expect(final.results).toBeTruthy();
+
+    const r = final.results!;
+    // After a full re-run all items must be accounted for, including MBID_NONE.
+    expect(r.synced).toBe(2);      // LINK + ISRC
+    expect(r.unavailable).toBe(1); // NONE (would be 0 if tail were silently dropped)
+    expect(r.alreadySaved).toBe(0);
+    expect(r.searchMatched).toBe(0);
+
+    // The fallback re-ran Phase 1, so the ISRC search was called.
+    expect(searchQueriesLog.some((q) => q.includes(ISRC_VAL))).toBe(true);
+  });
+});
+
 describe("sync worker — committedOffset is stamped during a fresh run", () => {
   it("committed_offset advances in the DB while matching is in progress", async () => {
     if (!dbAvailable) return;
@@ -571,7 +676,7 @@ describe("sync worker — committedOffset is stamped during a fresh run", () => 
 
     // After matching completes the offset equals the total library size (3).
     expect(final.committedOffset).toBe(3);
-    // matchedJson is cleared at the end of the matching phase.
+    // matchedJson is cleared when the job reaches "done" status.
     expect(final.matchedJson).toBeNull();
     // resumedFrom stays null on a non-resumed run.
     expect(final.resumedFrom).toBeNull();

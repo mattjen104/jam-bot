@@ -273,7 +273,30 @@ export async function runSyncWorker(
       if (saved) {
         matched = saved.matched;
         unmatched = saved.unmatched;
-        console.log(`[me/sync] job=${jobId} restored ${matched.length} matched + ${unmatched.length} unmatched from checkpoint`);
+        if (committedOffset >= total) {
+          // Post-matching crash recovery: the matching phase completed and
+          // stamped committedOffset == total (with the full final snapshot),
+          // but the process died before Phase 3 (save) finished.
+          // Validate the snapshot covers all items before skipping Phase 1 —
+          // an incomplete snapshot (e.g. from a pre-fix binary) must fall back
+          // to a full re-run rather than silently dropping tail items.
+          if (matched.length + unmatched.length !== total) {
+            console.warn(
+              `[me/sync] job=${jobId} post-matching matchedJson is incomplete ` +
+              `(${matched.length + unmatched.length} of ${total} items) — restarting from scratch`,
+            );
+            matched = [];
+            unmatched = [];
+            committedOffset = 0;
+          } else {
+            console.log(
+              `[me/sync] job=${jobId} post-matching crash recovery — skipping Phase 1, ` +
+              `restoring ${matched.length} matched + ${unmatched.length} unmatched`,
+            );
+          }
+        } else {
+          console.log(`[me/sync] job=${jobId} restored ${matched.length} matched + ${unmatched.length} unmatched from checkpoint`);
+        }
       } else {
         // No persisted state — fall back to re-running from scratch.
         console.warn(`[me/sync] job=${jobId} resume requested but no matchedJson found — restarting from scratch`);
@@ -345,9 +368,22 @@ export async function runSyncWorker(
       }
     }
 
-    // Matching phase complete — clear the intermediate checkpoint (it's large
-    // and no longer needed) and advance to the contains-check phase.
-    await stamp({ processed, committedOffset: processed, matchedJson: null, phase: "checking" });
+    // Matching phase complete — flush the authoritative final snapshot and
+    // advance to the contains-check phase.
+    //
+    // IMPORTANT: always write the full { matched, unmatched } here regardless
+    // of whether the last STAMP_EVERY checkpoint already captured them.  The
+    // periodic checkpoints only fire every STAMP_EVERY items, so if
+    // total % STAMP_EVERY !== 0 the last DB write missed the tail items.  This
+    // stamp is the single authoritative source of truth for post-matching
+    // crash recovery.
+    //
+    // matchedJson is intentionally kept alive through Phase 2 and Phase 3 so
+    // that a crash between this stamp and the terminal "done" stamp can be
+    // detected and recovered: a resumed worker that sees committedOffset ==
+    // total and a complete matchedJson will skip Phase 1 entirely.
+    // It is cleared only in the terminal "done" stamp below.
+    await stamp({ processed, committedOffset: processed, phase: "checking", matchedJson: { matched, unmatched } });
 
     // ── Phase 2: Contains check — idempotency pre-filter ────────────────────
     const matchedIds = matched.map((m) => m.spotifyId);
@@ -413,6 +449,8 @@ export async function runSyncWorker(
       processed: total,
       results: receipt,
       finishedAt: new Date(),
+      // Clear the intermediate match checkpoint now that the job is fully done.
+      matchedJson: null,
     });
 
     console.log(
