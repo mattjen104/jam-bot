@@ -163,6 +163,7 @@ export function useDialData(): {
   stations: DialStation[];
   isLoading: boolean;
   isCoreLoading: boolean;
+  liveLoading: boolean;
 } {
   const today = todayStr();
   const yesterday = yesterdayStr();
@@ -571,10 +572,11 @@ export function useDialData(): {
   }, [stationsData, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, libraryMbidSet, libraryReleaseGroupSet, libraryArtistMbidSet, pickerNames]);
 
   const isLoading = stationsLoading || liveLoading || schedLoading || spinsLoading;
-  // Narrower gate: only blocks until we know which stations are live vs offline.
-  // Schedule and spin data enrich crossings/show info but arrive later; the
-  // front door can render safely once the station list and live pulse are ready.
-  const isCoreLoading = stationsLoading || liveLoading;
+  // Narrower gate: only blocks until the station list arrives. The live pulse
+  // races independently — the offline section waits for it (no-flash guarantee)
+  // but the spinner drops as soon as stations load so a slow pulse doesn't hang
+  // the whole page.
+  const isCoreLoading = stationsLoading;
 
-  return { stations, isLoading, isCoreLoading };
+  return { stations, isLoading, isCoreLoading, liveLoading };
 }

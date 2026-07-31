@@ -952,6 +952,11 @@ export async function runImportWorker(
       }, IMPORT_RESOLVE_TIMEOUT_MS);
 
       let mbid: string | null = null;
+      // Tracks whether the resolver threw (MB network error, 503, etc.).
+      // A thrown error is NOT a confirmed miss — the track may be in MB but
+      // MB was temporarily unavailable. We must not write a negative cache
+      // entry in that case or future imports skip the track forever.
+      let resolveErrored = false;
       try {
         // Try ISRC first (one MB lookup, high confidence); fall back to text.
         if (t.isrc) {
@@ -961,7 +966,8 @@ export async function runImportWorker(
           mbid = await mbResolver.resolveByText(t.artist, t.title, controller.signal);
         }
       } catch {
-        // resolveBy* are best-effort and never throw — defensive catch only.
+        // resolveBy* threw — likely a MB 503 or network error, not a real miss.
+        resolveErrored = true;
       } finally {
         clearTimeout(timer);
       }
@@ -995,9 +1001,10 @@ export async function runImportWorker(
           .onConflictDoNothing()
           .catch(() => {});
         resolved++;
-      } else if (!controller.signal.aborted) {
-        // Confirmed MB miss — write a negative cache entry so future imports
-        // skip this track in Phase 2 instead of burning another MB call on it.
+      } else if (!controller.signal.aborted && !resolveErrored) {
+        // Confirmed MB miss (null return + no error + not timed out) — write
+        // a negative cache entry so future imports skip this track in Phase 2
+        // instead of burning another MB call on a genuine non-match.
         // onConflictDoNothing preserves any positive entry that enrichment may
         // have written for the same key in the meantime.
         await db

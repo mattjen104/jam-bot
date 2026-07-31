@@ -792,7 +792,7 @@ export function DialView() {
   const [currentDjName, setCurrentDjName] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
 
-  const { stations, isLoading, isCoreLoading } = useDialData();
+  const { stations, isLoading, isCoreLoading, liveLoading } = useDialData();
   const { radio } = usePlayer();
 
   // Lifetime overlap counts per selector name (spec §4 sort key)
@@ -1095,9 +1095,11 @@ export function DialView() {
               </>
             )}
 
-            {/* Recently aired — only shown once live/offline split is known so
-                the list doesn't flash as offline before live zones appear above.
-                isCoreLoading = stationsLoading || liveLoading. */}
+            {/* Recently aired — shown once stations are loaded.
+                liveLoading is no longer gated here: waiting for it caused a
+                blank page for unauthenticated users (no live zones, no offline
+                section). A brief re-sort when the live pulse arrives is the
+                lesser cosmetic trade-off vs a blank/hanging page. */}
             {!isCoreLoading && offlineStations.length > 0 && <TierHeader live={false} />}
             {!isCoreLoading && offlineStations.map((ds) => (
               <StationLane
