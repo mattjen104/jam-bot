@@ -88,21 +88,25 @@ import { runPhase3RetryPass } from "../src/routes/me/index.js";
 
 const run = randomUUID().slice(0, 8);
 
-// Three users: fresh-promotion, idempotent, and synthesised-key tests.
+// Four users: fresh-promotion, idempotent, synthesised-key, and ISRC-keyed tests.
 const ARTIST = `PromoArtist ${run}`;
 
 // The MBID the mocked resolver will return for this test run.
 const MBID_PROMO    = `promo-mbid-${run}`;   // fresh promotion
 const MBID_IDEM     = `idem-mbid-${run}`;    // idempotent (already in library_items)
 const MBID_SYNTH    = `synth-mbid-${run}`;   // synthesised-key promotion
+const MBID_ISRC     = `isrc-mbid-${run}`;    // ISRC sub-path promotion
 
 const SPOTIFY_ID_PROMO = `sp-promo-${run}`;  // Spotify track id for the soft row
 const SPOTIFY_ID_IDEM  = `sp-idem-${run}`;
 // Synthesised key mirrors what the import worker produces when no real Spotify
 // ID is available: "artist\u001ftitle".
 const SYNTH_EXTERNAL_ID = `${ARTIST}\u001fSynth Track`;
+// ISRC sub-path: externalId is also synthesised (not 22 chars) but isrc IS present.
+const ISRC_VALUE         = `USAAA${run.padEnd(7, "0").slice(0, 7)}`;
+const ISRC_EXTERNAL_ID   = `${ARTIST}\u001fISRC Track`;
 
-const ALL_MBIDS = [MBID_PROMO, MBID_IDEM, MBID_SYNTH];
+const ALL_MBIDS = [MBID_PROMO, MBID_IDEM, MBID_SYNTH, MBID_ISRC];
 
 let dbAvailable = false;
 let softTableAvailable = false;
@@ -110,6 +114,7 @@ let softTableAvailable = false;
 let userIdPromo: number;
 let userIdIdem: number;
 let userIdSynth: number;
+let userIdIsrc: number;
 
 // ── Sleep bypass ─────────────────────────────────────────────────────────────
 
@@ -150,7 +155,7 @@ beforeAll(async () => {
     return;
   }
 
-  // Create three isolated users.
+  // Create four isolated users.
   const [u1] = await db
     .insert(loreUsersTable)
     .values({ spotifyUserId: `promo-fresh-${run}`, deviceKey: randomUUID() })
@@ -169,11 +174,18 @@ beforeAll(async () => {
     .returning({ id: loreUsersTable.id });
   userIdSynth = u3!.id;
 
+  const [u4] = await db
+    .insert(loreUsersTable)
+    .values({ spotifyUserId: `promo-isrc-${run}`, deviceKey: randomUUID() })
+    .returning({ id: loreUsersTable.id });
+  userIdIsrc = u4!.id;
+
   // Seed recordings rows so library_items FK is satisfiable.
   await db.insert(recordingsTable).values([
     { mbid: MBID_PROMO,  title: "Promo Track",  artist: ARTIST },
     { mbid: MBID_IDEM,   title: "Idem Track",   artist: ARTIST },
     { mbid: MBID_SYNTH,  title: "Synth Track",  artist: ARTIST },
+    { mbid: MBID_ISRC,   title: "ISRC Track",   artist: ARTIST, isrc: ISRC_VALUE },
   ]);
 
   // Seed the staging spotify_library_items rows (unresolved, mbid = null).
@@ -204,6 +216,17 @@ beforeAll(async () => {
       addedAt: new Date(),
       mbid: null,
     },
+    // ISRC sub-path: externalId is synthesised but the buffer entry has isrc set.
+    // The soft row stores the isrc column so the retry pass can match by ISRC.
+    {
+      userId: userIdIsrc,
+      spotifyId: ISRC_EXTERNAL_ID,
+      title: "ISRC Track",
+      artist: ARTIST,
+      isrc: ISRC_VALUE,
+      addedAt: new Date(),
+      mbid: null,
+    },
   ]);
 });
 
@@ -212,7 +235,7 @@ beforeAll(async () => {
 afterAll(async () => {
   if (!dbAvailable || !softTableAvailable) return;
 
-  const allUserIds = [userIdPromo, userIdIdem, userIdSynth].filter(Boolean);
+  const allUserIds = [userIdPromo, userIdIdem, userIdSynth, userIdIsrc].filter(Boolean);
 
   // Remove soft rows that might have survived (e.g. if a test failed before cleanup).
   await db
@@ -236,7 +259,7 @@ afterAll(async () => {
   }
 
   // Resolution-cache entries written by the retry pass.
-  const { normalizeKey } = resolveModule;
+  const { normalizeKey, isrcKey } = resolveModule;
   await db
     .delete(resolutionCacheTable)
     .where(
@@ -244,6 +267,8 @@ afterAll(async () => {
         normalizeKey(ARTIST, "Promo Track"),
         normalizeKey(ARTIST, "Idem Track"),
         normalizeKey(ARTIST, "Synth Track"),
+        normalizeKey(ARTIST, "ISRC Track"),
+        isrcKey(ISRC_VALUE),
       ]),
     )
     .catch(() => {});
@@ -267,7 +292,7 @@ afterAll(async () => {
 /** Insert a completed import job whose buffer contains a single unresolved entry. */
 async function insertDoneJob(
   userId: number,
-  entry: { artist: string; title: string; externalId: string },
+  entry: { artist: string; title: string; externalId: string; isrc?: string },
 ): Promise<number> {
   const [job] = await db
     .insert(libraryImportJobsTable)
@@ -278,7 +303,7 @@ async function insertDoneJob(
       phase: "resolve",
       total: 1,
       resolved: 0,
-      bufferJson: [{ artist: entry.artist, title: entry.title, externalId: entry.externalId, isrc: null, durationMs: null }],
+      bufferJson: [{ artist: entry.artist, title: entry.title, externalId: entry.externalId, isrc: entry.isrc ?? null, durationMs: null }],
       startedAt: new Date(),
       finishedAt: new Date(),
     })
@@ -525,6 +550,84 @@ describe("runPhase3RetryPass — promotes soft row seeded with a synthesised ext
         .where(eq(resolutionCacheTable.key, normalizeKey(ARTIST, "Synth Track")));
       expect(cacheRows.length).toBeGreaterThanOrEqual(1);
       expect(cacheRows[0]!.mbid).toBe(MBID_SYNTH);
+    },
+    TEST_TIMEOUT,
+  );
+});
+
+// ── Test 4: ISRC sub-path promotion ──────────────────────────────────────────
+//
+// When the buffer entry has isrc set but externalId is still a synthesised
+// "artist\u001ftitle" key (no real Spotify track ID), the retry pass should:
+//   • Resolve the MBID via resolveByIsrc (not resolveByText).
+//   • Delete the soft row by matching spotify_library_items.isrc (not spotifyId
+//     or artist+title), scoped to the correct userId.
+//   • Insert the track into library_items.
+//
+// A bug in the ISRC branch (e.g. missing AND userId, wrong column) would
+// silently delete the wrong user's row or leave the row un-deleted.
+
+describe("runPhase3RetryPass — promotes soft row with synthesised externalId via ISRC match", () => {
+  it(
+    "removes the spotify_library_items row by isrc and inserts into library_items when isrc is present",
+    async () => {
+      if (!dbAvailable || !softTableAvailable) return;
+
+      mockResolveByText.mockClear();
+      mockResolveByIsrc.mockClear();
+      // ISRC resolver finds the track; text resolver must not be needed.
+      mockResolveByIsrc.mockResolvedValue(MBID_ISRC);
+      mockResolveByText.mockResolvedValue(null);
+
+      // Buffer entry: synthesised externalId but real ISRC.
+      await insertDoneJob(userIdIsrc, {
+        artist: ARTIST,
+        title: "ISRC Track",
+        externalId: ISRC_EXTERNAL_ID,   // not 22 chars → synthesised-key branch
+        isrc: ISRC_VALUE,
+      });
+
+      const spy = installSleepBypass();
+      try {
+        await runPhase3RetryPass();
+      } finally {
+        spy.mockRestore();
+      }
+
+      // 1. The track must appear in library_items for this user.
+      const libRows = await db
+        .select({ mbid: libraryItemsTable.mbid })
+        .from(libraryItemsTable)
+        .where(
+          and(
+            eq(libraryItemsTable.userId, userIdIsrc),
+            eq(libraryItemsTable.mbid, MBID_ISRC),
+          ),
+        );
+      expect(libRows.length).toBe(1);
+      expect(libRows[0]!.mbid).toBe(MBID_ISRC);
+
+      // 2. The soft row must be gone — matched by isrc, scoped to this user.
+      //    Query by isrc to confirm the ISRC delete path ran (not artist+title).
+      const softRows = await db
+        .select({ id: spotifyLibraryItemsTable.id })
+        .from(spotifyLibraryItemsTable)
+        .where(
+          and(
+            eq(spotifyLibraryItemsTable.userId, userIdIsrc),
+            eq(spotifyLibraryItemsTable.isrc, ISRC_VALUE),
+          ),
+        );
+      expect(softRows.length).toBe(0);
+
+      // 3. Resolution cache must have a positive entry for the ISRC key.
+      const { isrcKey } = resolveModule;
+      const cacheRows = await db
+        .select({ mbid: resolutionCacheTable.mbid })
+        .from(resolutionCacheTable)
+        .where(eq(resolutionCacheTable.key, isrcKey(ISRC_VALUE)));
+      expect(cacheRows.length).toBeGreaterThanOrEqual(1);
+      expect(cacheRows[0]!.mbid).toBe(MBID_ISRC);
     },
     TEST_TIMEOUT,
   );
