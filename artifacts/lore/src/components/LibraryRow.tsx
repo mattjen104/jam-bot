@@ -24,7 +24,7 @@ interface LibraryRowProps {
 }
 
 /** §7 byline ladder: picked-by+station → picked-by → heard-on → service import → null */
-function Byline({ prov }: { prov: LibraryItem["provenance"] }) {
+function Byline({ prov, soft }: { prov: LibraryItem["provenance"]; soft?: boolean }) {
   if (prov.kind === "keep") {
     const pickerName = prov.pickerName ?? prov.pickerHandle ?? null;
     const stationName = prov.stationName ?? prov.stationSlug ?? null;
@@ -68,7 +68,16 @@ function Byline({ prov }: { prov: LibraryItem["provenance"] }) {
   }
   if (prov.kind === "import" && prov.service) {
     return (
-      <p className="lrow__by lrow__by--import">imported from {prov.service}</p>
+      <p className="lrow__by lrow__by--import">
+        {soft ? (
+          <>
+            <span style={{ opacity: 0.5, fontSize: "0.85em", marginRight: 3 }}>𝗦</span>
+            from Spotify · unmatched
+          </>
+        ) : (
+          <>imported from {prov.service}</>
+        )}
+      </p>
     );
   }
   return null;
@@ -76,6 +85,9 @@ function Byline({ prov }: { prov: LibraryItem["provenance"] }) {
 
 /** Three play doors — expands inline below the row. */
 function DoorStrip({ item, onClose }: { item: LibraryItem; onClose: () => void }) {
+  // DoorStrip is only rendered for resolved rows (item.mbid is non-null).
+  const mbid = item.mbid!;
+
   const { ride, spotify } = usePlayer();
   const [, navigate] = useLocation();
   const [albumBusy, setAlbumBusy] = useState(false);
@@ -85,7 +97,7 @@ function DoorStrip({ item, onClose }: { item: LibraryItem; onClose: () => void }
   // before the listener commits to tapping.
   useEffect(() => {
     let cancelled = false;
-    getRecordingAlbumTracks(item.mbid)
+    getRecordingAlbumTracks(mbid)
       .then((data) => {
         if (!cancelled) {
           setAlbumPreview({ rgTitle: data.rgTitle ?? "", trackCount: data.tracks.length });
@@ -93,14 +105,14 @@ function DoorStrip({ item, onClose }: { item: LibraryItem; onClose: () => void }
       })
       .catch(() => { /* 404 = no album data yet — label stays generic */ });
     return () => { cancelled = true; };
-  }, [item.mbid]);
+  }, [mbid]);
 
   const rec = item.recording;
-  const title = rec?.title ?? item.mbid.slice(0, 8);
+  const title = rec?.title ?? mbid.slice(0, 8);
   const artist = rec?.artist ?? "";
   const artworkUrl = rec?.artworkUrl ?? null;
 
-  const seed: RideSeed = { mbid: item.mbid, title, artist, artworkUrl, links: [] };
+  const seed: RideSeed = { mbid, title, artist, artworkUrl, links: [] };
 
   const spotifyEligible = spotify.connected && spotify.premium;
 
@@ -109,7 +121,7 @@ function DoorStrip({ item, onClose }: { item: LibraryItem; onClose: () => void }
       // Spotify connected: play the track directly on the listener's device,
       // bypassing the preview fallback entirely.
       void spotifyPlay({
-        mbid: item.mbid,
+        mbid,
         deviceId: spotify.pinnedDevice?.id ?? undefined,
       }).then(() => {
         toast({ title: `Playing on Spotify: ${title}` });
@@ -128,7 +140,7 @@ function DoorStrip({ item, onClose }: { item: LibraryItem; onClose: () => void }
   async function handleAlbum() {
     setAlbumBusy(true);
     try {
-      const data = await getRecordingAlbumTracks(item.mbid);
+      const data = await getRecordingAlbumTracks(mbid);
       const seeds: RideSeed[] = data.tracks.map((t) => ({
         mbid: t.mbid,
         title: t.title,
@@ -194,10 +206,11 @@ function DoorStrip({ item, onClose }: { item: LibraryItem; onClose: () => void }
 /** A single row in the Library "Kept" list. */
 export function LibraryRow({ item, isOnAir = false, isOpen = false, onToggle }: LibraryRowProps) {
   const rec = item.recording;
-  const title = rec?.title ?? item.mbid.slice(0, 8);
+  const title = rec?.title ?? (item.mbid ? item.mbid.slice(0, 8) : "Unknown track");
   const artist = rec?.artist ?? "";
   const artwork = rec?.artworkUrl ?? null;
   const prov = item.provenance;
+  const isSoft = item.soft === true;
 
   const hasProvenance =
     prov.kind === "keep" &&
@@ -205,51 +218,70 @@ export function LibraryRow({ item, isOnAir = false, isOpen = false, onToggle }: 
 
   const rowClass = [
     "lrow",
-    isOnAir ? "lrow--onair" : hasProvenance ? "lrow--kept" : "",
+    isSoft ? "lrow--soft" : isOnAir ? "lrow--onair" : hasProvenance ? "lrow--kept" : "",
     isOpen ? "lrow--open" : "",
   ]
     .filter(Boolean)
     .join(" ");
 
+  // Artwork swatch — for soft rows, links to Spotify instead of the song page.
+  const artSwatch = (
+    <>
+      {artwork ? (
+        <img src={artwork} alt="" className="lrow__art-img" loading="lazy" />
+      ) : (
+        <span
+          className="lrow__art-grad"
+          style={{ background: artGradient(title, artist) }}
+        />
+      )}
+    </>
+  );
+
   return (
     <li className={rowClass} data-testid="library-row">
       {/* 38×38 artwork swatch */}
-      <Link href={`/song/${item.mbid}`} className="lrow__art" tabIndex={-1} aria-hidden="true">
-        {artwork ? (
-          <img src={artwork} alt="" className="lrow__art-img" loading="lazy" />
-        ) : (
-          <span
-            className="lrow__art-grad"
-            style={{ background: artGradient(title, artist) }}
-          />
-        )}
-      </Link>
+      {item.mbid ? (
+        <Link href={`/song/${item.mbid}`} className="lrow__art" tabIndex={-1} aria-hidden="true">
+          {artSwatch}
+        </Link>
+      ) : (
+        <span className="lrow__art lrow__art--soft" aria-hidden="true">
+          {artSwatch}
+        </span>
+      )}
 
       {/* Main text */}
       <div className="lrow__body">
-        <Link href={`/song/${item.mbid}`} className="lrow__tr">
-          {title}
-        </Link>
+        {item.mbid ? (
+          <Link href={`/song/${item.mbid}`} className="lrow__tr">
+            {title}
+          </Link>
+        ) : (
+          <span className="lrow__tr lrow__tr--soft">{title}</span>
+        )}
         {artist && <p className="lrow__ar">{artist}</p>}
-        <Byline prov={prov} />
+        <Byline prov={prov} soft={isSoft} />
         {isOnAir && <p className="lrow__badge">● on air</p>}
       </div>
 
-      {/* Right rail — ▶ toggles the door strip */}
-      <div className="lrow__rail">
-        <button
-          type="button"
-          className={`lrow__play${isOpen ? " lrow__play--open" : ""}`}
-          aria-label={isOpen ? "Close play options" : `Play ${title}`}
-          aria-expanded={isOpen}
-          onClick={(e) => { e.preventDefault(); onToggle?.(); }}
-        >
-          {isOpen ? "✕" : "▶"}
-        </button>
-      </div>
+      {/* Right rail — soft rows have no playback door (no MBID to queue) */}
+      {!isSoft && (
+        <div className="lrow__rail">
+          <button
+            type="button"
+            className={`lrow__play${isOpen ? " lrow__play--open" : ""}`}
+            aria-label={isOpen ? "Close play options" : `Play ${title}`}
+            aria-expanded={isOpen}
+            onClick={(e) => { e.preventDefault(); onToggle?.(); }}
+          >
+            {isOpen ? "✕" : "▶"}
+          </button>
+        </div>
+      )}
 
-      {/* Door strip — only mounted when open */}
-      {isOpen && <DoorStrip item={item} onClose={() => onToggle?.()} />}
+      {/* Door strip — only for resolved rows, only when open */}
+      {!isSoft && isOpen && <DoorStrip item={item} onClose={() => onToggle?.()} />}
     </li>
   );
 }

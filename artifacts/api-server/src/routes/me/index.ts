@@ -13,6 +13,7 @@ import {
   recordingsTable,
   recordingReleaseGroupsTable,
   resolutionCacheTable,
+  spotifyLibraryItemsTable,
   picksTable,
   pickersTable,
   spinsTable,
@@ -653,6 +654,109 @@ router.get("/me/library/import/:jobId", h(async (req, res) => {
 }));
 
 // ---------------------------------------------------------------------------
+// Soft-row helper: batch-fetch Spotify track metadata and seed spotify_library_items
+// ---------------------------------------------------------------------------
+
+const SPOTIFY_TRACK_API = "https://api.spotify.com/v1/tracks";
+const ARTWORK_BATCH_SIZE = 50;
+const ARTWORK_FETCH_TIMEOUT_MS = 20_000;
+const ARTWORK_BATCH_GAP_MS = 200;
+
+/**
+ * For unresolved import buffer entries, fetch artwork/album/ISRC from the
+ * Spotify GET /v1/tracks API (up to 50 per call) and upsert rows into
+ * `spotify_library_items`.  Failures in any batch are silently skipped —
+ * the row is still inserted without artwork rather than being dropped.
+ *
+ * Only called for service="spotify" imports.
+ */
+async function seedSpotifySoftRows(
+  userId: number,
+  accessToken: string,
+  entries: ImportBufferEntry[],
+): Promise<void> {
+  if (entries.length === 0) return;
+
+  // Map spotifyId → { albumName, artworkUrl, isrc } from the Spotify API.
+  const metaMap = new Map<string, { albumName: string | null; artworkUrl: string | null; isrc: string | null }>();
+
+  // Only call the API for entries whose externalId looks like a real Spotify
+  // track ID (22 alphanumeric chars). Synthesised fallback keys are skipped.
+  const spotifyIdPattern = /^[A-Za-z0-9]{22}$/;
+  const batchableEntries = entries.filter((t) => spotifyIdPattern.test(t.externalId));
+
+  for (let i = 0; i < batchableEntries.length; i += ARTWORK_BATCH_SIZE) {
+    const batch = batchableEntries.slice(i, i + ARTWORK_BATCH_SIZE);
+    const ids = batch.map((t) => t.externalId).join(",");
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ARTWORK_FETCH_TIMEOUT_MS);
+    try {
+      const res = await fetch(`${SPOTIFY_TRACK_API}?ids=${ids}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        signal: controller.signal,
+      });
+      if (res.ok) {
+        const data = await res.json() as {
+          tracks: Array<{
+            id: string;
+            album: { name: string; images: Array<{ url: string; height: number | null }> };
+            external_ids?: { isrc?: string };
+          } | null>;
+        };
+        for (const track of data.tracks ?? []) {
+          if (!track) continue;
+          // Prefer the 300 px image; fall back to the first available.
+          const img =
+            track.album.images.find((im) => im.height === 300) ??
+            track.album.images[0];
+          metaMap.set(track.id, {
+            albumName: track.album.name ?? null,
+            artworkUrl: img?.url ?? null,
+            isrc: track.external_ids?.isrc ?? null,
+          });
+        }
+      }
+    } catch {
+      // Network error or timeout — continue without artwork for this batch.
+    } finally {
+      clearTimeout(timer);
+    }
+    if (i + ARTWORK_BATCH_SIZE < batchableEntries.length) await sleep(ARTWORK_BATCH_GAP_MS);
+  }
+
+  // Upsert every unresolved entry into spotify_library_items.
+  for (const t of entries) {
+    const meta = metaMap.get(t.externalId);
+    await db
+      .insert(spotifyLibraryItemsTable)
+      .values({
+        userId,
+        spotifyId: t.externalId,
+        title: t.title,
+        artist: t.artist,
+        albumName: meta?.albumName ?? null,
+        artworkUrl: meta?.artworkUrl ?? null,
+        isrc: meta?.isrc ?? t.isrc ?? null,
+        addedAt: new Date(),
+        mbid: null,
+      })
+      .onConflictDoUpdate({
+        target: [spotifyLibraryItemsTable.userId, spotifyLibraryItemsTable.spotifyId],
+        set: {
+          title: t.title,
+          artist: t.artist,
+          albumName: meta?.albumName ?? null,
+          artworkUrl: meta?.artworkUrl ?? null,
+          isrc: meta?.isrc ?? t.isrc ?? null,
+        },
+      })
+      .catch(() => {}); // Silently skip FK or other errors.
+  }
+
+  console.log(`[me/import] seeded ${entries.length} soft rows into spotify_library_items`);
+}
+
+// ---------------------------------------------------------------------------
 // Import worker (runs off the hot path via setImmediate)
 // ---------------------------------------------------------------------------
 
@@ -812,6 +916,11 @@ export async function runImportWorker(
 
     // Track which buffer entries have already been resolved (by position).
     const matchedIdx = new Set<number>();
+    // Subset of matchedIdx: entries that were actually resolved to a real MBID.
+    // Entries added to matchedIdx for confirmed-miss negative-cache hits are NOT
+    // added here because those tracks are still genuinely unresolved and should
+    // appear as soft rows in the library.
+    const resolvedMbidIdx = new Set<number>();
 
     // ── Phase 1: ISRC bulk pre-match against recordings ───────────────────────
     // Tracks whose ISRC is already on the spine need zero MB calls and no sleep.
@@ -836,6 +945,7 @@ export async function runImportWorker(
             .onConflictDoNothing();
           resolved++;
           matchedIdx.add(i);
+          resolvedMbidIdx.add(i); // positive MBID match — exclude from soft rows
         }
       }
 
@@ -928,6 +1038,7 @@ export async function runImportWorker(
             .onConflictDoNothing();
           resolved++;
           matchedIdx.add(idx);
+          resolvedMbidIdx.add(idx); // positive cache hit — exclude from soft rows
         }
       }
 
@@ -975,7 +1086,7 @@ export async function runImportWorker(
     let currentBackoffMs = PHASE3_503_BACKOFF_BASE_MS;
     let mbDegraded = false;
 
-    for (const { t } of phase3Entries) {
+    for (const { t, i } of phase3Entries) {
       // Hard wall-clock budget: stop gracefully rather than running forever.
       if (Date.now() - phase3StartMs > PHASE3_BUDGET_MS) {
         console.warn(
@@ -1077,6 +1188,9 @@ export async function runImportWorker(
           ])
           .onConflictDoNothing()
           .catch(() => {});
+        // Mark as resolved so Phase 3 iteration and soft-row seeding exclude it.
+        matchedIdx.add(i);
+        resolvedMbidIdx.add(i); // positive MB hit — not a soft row
         resolved++;
       } else if (!controller.signal.aborted && !resolveErrored) {
         // Confirmed MB miss (null return + no error + not timed out) — write
@@ -1106,6 +1220,29 @@ export async function runImportWorker(
         .update(libraryImportJobsTable)
         .set({ total, resolved })
         .where(eq(libraryImportJobsTable.id, jobId));
+    }
+
+    // ── Seed soft rows for unresolved tracks (Spotify only) ─────────────────
+    // Every entry that Phase 1-3 could not match to an MBID is written to
+    // spotify_library_items so the listener sees their whole library, not
+    // just the ~55 % we could resolve.  A nightly retry pass will promote
+    // any that MusicBrainz finally matches.
+    if (service === "spotify") {
+      // Use resolvedMbidIdx (not matchedIdx) so confirmed-miss negative-cache
+      // entries (which are in matchedIdx but have no MBID) still appear as soft
+      // rows — they are genuinely unresolved tracks the listener saved.
+      const unresolvedEntries = buffer
+        .map((t, i) => ({ t, i }))
+        .filter(({ i }) => !resolvedMbidIdx.has(i))
+        .map(({ t }) => t);
+      if (unresolvedEntries.length > 0) {
+        console.log(
+          `[me/import] job=${jobId} seeding ${unresolvedEntries.length} unresolved tracks as soft rows`,
+        );
+        // Token may have expired during Phase 3 (up to 90 min) — refresh.
+        const softToken = await getFreshToken(conn);
+        await seedSpotifySoftRows(userId, softToken ?? "", unresolvedEntries);
+      }
     }
 
     // Update service_connections.lastImportAt.
@@ -1373,6 +1510,18 @@ export async function runPhase3RetryPass(deadline?: Date): Promise<void> {
             ])
             .onConflictDoNothing()
             .catch(() => {});
+          // Promote: remove the soft row now that library_items has the track.
+          if (candidate.service === "spotify") {
+            await db
+              .delete(spotifyLibraryItemsTable)
+              .where(
+                and(
+                  eq(spotifyLibraryItemsTable.userId, candidate.userId),
+                  eq(spotifyLibraryItemsTable.spotifyId, t.externalId),
+                ),
+              )
+              .catch(() => {});
+          }
           retryResolved++;
         } else if (!controller.signal.aborted && !resolveErrored) {
           // Confirmed MB miss — write negative cache so future runs skip it.
@@ -1525,12 +1674,18 @@ function escapeLike(s: string): string {
 /**
  * GET /api/me/library — paginated list of kept + imported recordings.
  *
+ * Unions `library_items` (MBID-resolved) and `spotify_library_items`
+ * (unresolved soft rows) so the listener sees their whole Spotify library,
+ * not just the ~55 % that resolved to MusicBrainz.
+ *
  * Query params:
  * - `sort`  — "added" (default, newest first) | "artist" | "title" (A→Z).
  * - `q`     — case-insensitive substring match on title or artist.
  * - `source`— "keep" | "import" (provenance.kind filter).
+ *             Soft rows are hidden under "keep" (they are import-provenance).
  * - `cursor`— keyset cursor. For sort=added it's the last row's addedAt ISO;
- *   for name sorts it's `<sortKey>\u001f<mbid>` (tuple keyset, mbid tiebreak).
+ *   for name sorts it's `<sortKey>\u001f<mbid>` (resolved rows) or
+ *   `<sortKey>\u001f` (soft rows at the end of page 1).
  * - `limit` — page size (max 100).
  */
 router.get("/me/library", h(async (req, res) => {
@@ -1552,6 +1707,11 @@ router.get("/me/library", h(async (req, res) => {
   const source: "keep" | "import" | null =
     sourceRaw === "keep" || sourceRaw === "import" ? sourceRaw : null;
 
+  // Soft rows have kind="import" provenance — they are hidden by the "keep"
+  // filter and appear under both "import" and the default (no filter).
+  const includeSoft = source !== "keep";
+
+  // ── Resolved rows conditions ─────────────────────────────────────────────
   const conditions = [eq(libraryItemsTable.userId, user.id)];
 
   if (q.length > 0) {
@@ -1566,44 +1726,108 @@ router.get("/me/library", h(async (req, res) => {
     );
   }
 
-  // First-page total count — only run when there is no cursor (page 1).
-  // Subsequent pages skip the extra round-trip; the client caches the value
-  // from the first page.
-  const total: number | undefined = !cursor
-    ? await db
+  // ── Total count (page 1 only) — sum of resolved + soft ──────────────────
+  let total: number | undefined;
+  if (!cursor) {
+    const [resolvedCount, softCount] = await Promise.all([
+      db
         .select({ count: sql<number>`count(*)::int` })
         .from(libraryItemsTable)
         .leftJoin(recordingsTable, eq(libraryItemsTable.mbid, recordingsTable.mbid))
         .where(and(...conditions))
-        .then((r) => r[0]?.count ?? 0)
-    : undefined;
+        .then((r) => r[0]?.count ?? 0),
+      includeSoft
+        ? (async () => {
+            const softConds = [
+              eq(spotifyLibraryItemsTable.userId, user.id),
+              isNull(spotifyLibraryItemsTable.mbid),
+            ];
+            if (q.length > 0) {
+              const pattern = `%${escapeLike(q)}%`;
+              softConds.push(
+                sql`(${spotifyLibraryItemsTable.title} ILIKE ${pattern} OR ${spotifyLibraryItemsTable.artist} ILIKE ${pattern})`,
+              );
+            }
+            return db
+              .select({ count: sql<number>`count(*)::int` })
+              .from(spotifyLibraryItemsTable)
+              .where(and(...softConds))
+              .then((r) => r[0]?.count ?? 0);
+          })()
+        : Promise.resolve(0),
+    ]);
+    total = resolvedCount + softCount;
+  }
 
-  // Sort key for name sorts: lower(primary field, then the other as tiebreak),
-  // coalesced so join-miss rows (no recordings match) sort deterministically.
+  // Sort key expression for resolved rows (name sorts).
   const sortKeyExpr =
     sort === "artist"
       ? sql<string>`lower(coalesce(${recordingsTable.artist}, '') || ' ' || coalesce(${recordingsTable.title}, ''))`
       : sql<string>`lower(coalesce(${recordingsTable.title}, '') || ' ' || coalesce(${recordingsTable.artist}, ''))`;
 
+  // ── Soft rows base conditions (shared; cursor applied below) ────────────
+  const softConds = [
+    eq(spotifyLibraryItemsTable.userId, user.id),
+    isNull(spotifyLibraryItemsTable.mbid),
+  ];
+  if (q.length > 0) {
+    const pattern = `%${escapeLike(q)}%`;
+    softConds.push(
+      sql`(${spotifyLibraryItemsTable.title} ILIKE ${pattern} OR ${spotifyLibraryItemsTable.artist} ILIKE ${pattern})`,
+    );
+  }
+
+  // Sort-key expression for soft rows (name sorts).
+  const softSortKeyExpr =
+    sort === "artist"
+      ? sql<string>`lower(coalesce(${spotifyLibraryItemsTable.artist}, '') || ' ' || coalesce(${spotifyLibraryItemsTable.title}, ''))`
+      : sql<string>`lower(coalesce(${spotifyLibraryItemsTable.title}, '') || ' ' || coalesce(${spotifyLibraryItemsTable.artist}, ''))`;
+
+  // ── Cursor decoding and per-table conditions ─────────────────────────────
+  // Cursor format (all sorts):
+  //   sort=added  → addedAt ISO string  (e.g. "2026-07-31T12:00:00.000Z")
+  //   sort=name   → "sortKey\x1faddedAt" (ISO timestamp tiebreak — works for
+  //                 both resolved and soft rows since both tables have addedAt)
+  //
+  // Backward compat: cursors generated before this change used "sortKey\x1fmbid"
+  // (UUID tiebreak, resolved-only).  Detect by testing whether the suffix
+  // looks like an ISO date; if not, treat it as the old mbid format and show
+  // soft rows from the beginning (no cursor applied to soft table).
+  let legacyNameCursor = false;
   if (cursor) {
     if (sort === "added") {
-      conditions.push(
-        sql`${libraryItemsTable.addedAt} < ${cursor}::timestamptz`,
-      );
+      conditions.push(sql`${libraryItemsTable.addedAt} < ${cursor}::timestamptz`);
+      softConds.push(sql`${spotifyLibraryItemsTable.addedAt} < ${cursor}::timestamptz`);
     } else {
       const sep = cursor.lastIndexOf(LIB_CURSOR_SEP);
       if (sep < 0) {
         return res.status(400).json({ error: "Malformed cursor for this sort" });
       }
       const keyPart = cursor.slice(0, sep);
-      const mbidPart = cursor.slice(sep + 1);
-      conditions.push(
-        sql`(${sortKeyExpr}, ${libraryItemsTable.mbid}) > (${keyPart}, ${mbidPart})`,
-      );
+      const suffixPart = cursor.slice(sep + 1);
+      // ISO date starts with "20" (e.g. 2026-…); UUID tiebreaks do not.
+      const isAddedAtSuffix = /^\d{4}-\d{2}-\d{2}T/.test(suffixPart);
+      if (isAddedAtSuffix) {
+        // New format: (sortKey, addedAt) tuple keyset — works for both tables.
+        conditions.push(
+          sql`(${sortKeyExpr}, ${libraryItemsTable.addedAt}) > (${keyPart}, ${suffixPart}::timestamptz)`,
+        );
+        softConds.push(
+          sql`(${softSortKeyExpr}, ${spotifyLibraryItemsTable.addedAt}) > (${keyPart}, ${suffixPart}::timestamptz)`,
+        );
+      } else {
+        // Legacy format: (sortKey, mbid) — resolved rows only; show all soft
+        // rows again from the top (they were skipped in old sessions).
+        conditions.push(
+          sql`(${sortKeyExpr}, ${libraryItemsTable.mbid}) > (${keyPart}, ${suffixPart})`,
+        );
+        legacyNameCursor = true;
+      }
     }
   }
 
-  const rows = await db
+  // ── Resolved rows query ──────────────────────────────────────────────────
+  const resolvedRows = await db
     .select({
       mbid: libraryItemsTable.mbid,
       provenance: libraryItemsTable.provenance,
@@ -1613,7 +1837,6 @@ router.get("/me/library", h(async (req, res) => {
       artworkUrl: recordingsTable.artworkUrl,
       links: recordingsTable.links,
       sortKey: sortKeyExpr.as("sort_key"),
-      // Scalar subquery: primary release group title (at most one row).
       albumTitle: sql<string | null>`(
         SELECT title FROM recording_release_groups
         WHERE recording_mbid = ${libraryItemsTable.mbid} AND is_primary = true
@@ -1626,13 +1849,96 @@ router.get("/me/library", h(async (req, res) => {
     .orderBy(
       ...(sort === "added"
         ? [desc(libraryItemsTable.addedAt)]
-        : [asc(sortKeyExpr), asc(libraryItemsTable.mbid)]),
+        : [asc(sortKeyExpr), asc(libraryItemsTable.addedAt)]),
     )
     .limit(limit + 1);
 
-  const hasMore = rows.length > limit;
-  const items = rows.slice(0, limit);
+  // ── Soft rows query ───────────────────────────────────────────────────────
+  // Included for all pages for all sort modes (both tables use addedAt cursor).
+  // Exception: legacy name-sort cursors (old format) always include all soft
+  // rows since those sessions never applied a cursor to the soft table.
+  // legacyNameCursor is set but unused in the soft query because the legacy
+  // code path never pushed a cursor condition into softConds, so softConds
+  // already has the right (no-cursor) state for that case.
+  void legacyNameCursor;
+
+  type SoftRow = { spotifyId: string; addedAt: Date; title: string; artist: string; artworkUrl: string | null; albumName: string | null; sortKey: string };
+  let softRows: SoftRow[] = [];
+  if (includeSoft) {
+    softRows = await db
+      .select({
+        spotifyId: spotifyLibraryItemsTable.spotifyId,
+        addedAt: spotifyLibraryItemsTable.addedAt,
+        title: spotifyLibraryItemsTable.title,
+        artist: spotifyLibraryItemsTable.artist,
+        artworkUrl: spotifyLibraryItemsTable.artworkUrl,
+        albumName: spotifyLibraryItemsTable.albumName,
+        sortKey: softSortKeyExpr.as("soft_sort_key"),
+      })
+      .from(spotifyLibraryItemsTable)
+      .where(and(...softConds))
+      .orderBy(
+        ...(sort === "added"
+          ? [desc(spotifyLibraryItemsTable.addedAt)]
+          : [asc(softSortKeyExpr), asc(spotifyLibraryItemsTable.addedAt)]),
+      )
+      .limit(limit + 1);
+  }
+
+  // ── Merge resolved + soft in JS ───────────────────────────────────────────
+  const softProvenance: LibraryItemProvenance = { kind: "import", service: "spotify" };
+
+  const unified = [
+    ...resolvedRows.map((r) => ({
+      soft: false as const,
+      mbid: r.mbid as string | null,
+      spotifyId: null as string | null,
+      provenance: r.provenance,
+      addedAt: r.addedAt,
+      title: r.title,
+      artist: r.artist,
+      artworkUrl: r.artworkUrl,
+      links: r.links as Array<{ url: string }> | null,
+      albumTitle: r.albumTitle,
+      sortKey: r.sortKey,
+    })),
+    ...softRows.map((s) => ({
+      soft: true as const,
+      mbid: null as string | null,
+      spotifyId: s.spotifyId,
+      provenance: softProvenance,
+      addedAt: s.addedAt,
+      title: s.title,
+      artist: s.artist,
+      artworkUrl: s.artworkUrl,
+      links: null as Array<{ url: string }> | null,
+      albumTitle: s.albumName,
+      sortKey: s.sortKey,
+    })),
+  ];
+
+  if (sort === "added") {
+    unified.sort((a, b) => b.addedAt.getTime() - a.addedAt.getTime());
+  } else {
+    unified.sort(
+      (a, b) =>
+        a.sortKey.localeCompare(b.sortKey) ||
+        a.addedAt.getTime() - b.addedAt.getTime(),
+    );
+  }
+
+  const hasMore = unified.length > limit;
+  const items = unified.slice(0, limit);
   const last = items[items.length - 1];
+
+  // Build cursor.
+  // sort=added  → addedAt ISO string (works for both tables).
+  // sort=name   → "sortKey\x1faddedAt" (new unified format for both tables).
+  const nextCursor = !hasMore || !last
+    ? null
+    : sort === "added"
+      ? last.addedAt.toISOString()
+      : `${last.sortKey}${LIB_CURSOR_SEP}${last.addedAt.toISOString()}`;
 
   return res.json({
     items: items.map((r) => ({
@@ -1646,17 +1952,12 @@ router.get("/me/library", h(async (req, res) => {
             artworkUrl: r.artworkUrl ?? null,
             albumTitle: r.albumTitle ?? null,
             spotifyUrl:
-              (r.links as Array<{ url: string }> | null)?.find((l) =>
-                l.url.includes("open.spotify.com"),
-              )?.url ?? null,
+              r.links?.find((l) => l.url.includes("open.spotify.com"))?.url ?? null,
           }
         : null,
+      ...(r.soft ? { soft: true, spotifyId: r.spotifyId } : {}),
     })),
-    nextCursor: !hasMore || !last
-      ? null
-      : sort === "added"
-        ? last.addedAt.toISOString()
-        : `${last.sortKey}${LIB_CURSOR_SEP}${last.mbid}`,
+    nextCursor,
     ...(total !== undefined ? { total } : {}),
   });
 }));
@@ -1697,7 +1998,23 @@ router.get("/me/library/mbids", h(async (req, res) => {
     artistMbids = artistRows.map((r) => r.artistMbid).filter((m): m is string => !!m);
   }
 
-  res.json({ mbids, releaseGroupMbids, artistMbids });
+  // Soft-row artists: stations that play any track by a library artist
+  // (without an MBID match) still get an isArtistHit on the dial.
+  let softArtists: string[] = [];
+  {
+    const softRows = await db
+      .selectDistinct({ artist: spotifyLibraryItemsTable.artist })
+      .from(spotifyLibraryItemsTable)
+      .where(
+        and(
+          eq(spotifyLibraryItemsTable.userId, user.id),
+          isNull(spotifyLibraryItemsTable.mbid),
+        ),
+      );
+    softArtists = softRows.map((r) => r.artist).filter(Boolean);
+  }
+
+  res.json({ mbids, releaseGroupMbids, artistMbids, softArtists });
 }));
 
 /** Hard cap on rows in one export file. */

@@ -571,7 +571,7 @@ function LibraryRow({
         )}
         <div style={{ minWidth: 0, flex: 1 }}>
           <p style={{ margin: 0, fontSize: 14 }}>
-            {rec ? `${rec.artist} — ${rec.title}` : item.mbid}
+            {rec ? `${rec.artist} — ${rec.title}` : (item.mbid ?? "Unknown track")}
           </p>
           {rec?.albumTitle && (
             <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--wp-text-secondary)" }}>
@@ -587,13 +587,17 @@ function LibraryRow({
                 : ""}
           </p>
         </div>
-        <LoreChip count={loreCounts?.get(item.mbid)} onOpen={() => onOpenLore(item.mbid)} />
-        <PlayModeButton
-          mbid={item.mbid}
-          rec={rec}
-          onOpenRun={onOpenRun}
-          data-testid={`hear-in-runs-${item.mbid}`}
-        />
+        {item.mbid && (
+          <>
+            <LoreChip count={loreCounts?.get(item.mbid)} onOpen={() => onOpenLore(item.mbid!)} />
+            <PlayModeButton
+              mbid={item.mbid}
+              rec={rec}
+              onOpenRun={onOpenRun}
+              data-testid={`hear-in-runs-${item.mbid}`}
+            />
+          </>
+        )}
       </div>
     </div>
   );
@@ -613,12 +617,12 @@ function LibraryPage({
   onOpenLore: (mbid: string) => void;
   onOpenRun: (slug: string, runId: number | null) => void;
 }) {
-  const { data: loreCounts } = useWpLoreCounts(items.map((i) => i.mbid));
+  const { data: loreCounts } = useWpLoreCounts(items.flatMap((i) => i.mbid ? [i.mbid] : []));
   return (
     <>
       {items.map((item) => (
         <LibraryRow
-          key={item.mbid}
+          key={item.mbid ?? item.spotifyId ?? item.addedAt}
           item={item}
           loreCounts={loreCounts}
           onOpenLore={onOpenLore}

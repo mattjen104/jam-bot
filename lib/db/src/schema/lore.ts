@@ -1896,3 +1896,51 @@ export const listensTable = pgTable(
 
 export type Listen = typeof listensTable.$inferSelect;
 export type InsertListen = typeof listensTable.$inferInsert;
+
+/**
+ * Unresolved Spotify library tracks — the ~45 % of saved songs that the
+ * import worker could not match to a MusicBrainz MBID.  Stored with full
+ * Spotify metadata (artwork, album name, ISRC) so the listener sees their
+ * whole library, not just the resolved fraction.
+ *
+ * Lifecycle:
+ *  - Written at the end of every Spotify import for entries that Phase 3
+ *    could not resolve.  `artworkUrl` is filled by a batch call to
+ *    Spotify GET /v1/tracks so artwork renders immediately.
+ *  - When a nightly off-peak retry later resolves the track, `mbid` is
+ *    set (still in this table) and the row is promoted: a `library_items`
+ *    row is inserted and this row is deleted in the same operation.
+ *  - The unique key is `(user_id, spotify_id)` so re-imports are idempotent.
+ */
+export const spotifyLibraryItemsTable = pgTable(
+  "spotify_library_items",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => loreUsersTable.id, { onDelete: "cascade" }),
+    /** Spotify track ID (22-char alphanumeric). */
+    spotifyId: text("spotify_id").notNull(),
+    title: text("title").notNull(),
+    artist: text("artist").notNull(),
+    albumName: text("album_name"),
+    /** 300 px album artwork URL from the Spotify CDN. */
+    artworkUrl: text("artwork_url"),
+    isrc: text("isrc"),
+    addedAt: timestamp("added_at").defaultNow().notNull(),
+    /**
+     * Set once a nightly retry resolves this row to a MusicBrainz MBID.
+     * Non-null rows have a matching `library_items` row and are ready to
+     * be cleaned up.  Null = still unresolved.
+     */
+    mbid: text("mbid").references(() => recordingsTable.mbid),
+  },
+  (t) => [
+    uniqueIndex("spotify_library_items_user_spotify_idx").on(t.userId, t.spotifyId),
+    index("spotify_library_items_user_added_idx").on(t.userId, t.addedAt),
+    index("spotify_library_items_isrc_idx").on(t.isrc),
+  ],
+);
+
+export type SpotifyLibraryItem = typeof spotifyLibraryItemsTable.$inferSelect;
+export type InsertSpotifyLibraryItem = typeof spotifyLibraryItemsTable.$inferInsert;

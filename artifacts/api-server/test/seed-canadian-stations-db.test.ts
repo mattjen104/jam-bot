@@ -33,7 +33,7 @@ const EXPECTED_STREAM_URLS: Record<string, string> = {
   cism: "http://stream03.ustream.ca/cism128.mp3",
   cjsr: "http://ais-sa1.streamon.fm/7093_24k.aac",
   ckcu: "https://stream2.statsradio.com:8124/stream",
-  ckut: "https://ckut.out.airtime.pro/ckut_a",
+  ckut: "http://delray.ckut.ca:8000/903fm-128-stereo",
 };
 
 let dbAvailable = false;
@@ -167,6 +167,6 @@ describe("Canadian campus station seed enrollment", () => {
 
     expect(row?.nowPlayingSource).toBe("radio_browser_icy");
     const config = row?.nowPlayingConfig as Record<string, unknown>;
-    expect(config?.streamUrl).toBe("https://ckut.out.airtime.pro/ckut_a");
+    expect(config?.streamUrl).toBe("http://delray.ckut.ca:8000/903fm-128-stereo");
   });
 });

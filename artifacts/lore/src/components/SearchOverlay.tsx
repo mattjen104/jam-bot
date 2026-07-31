@@ -235,14 +235,14 @@ export function SearchOverlay({
   const libraryResults = useMemo((): SearchResult[] => {
     if (!isLibraryActive || !librarySearchResults) return [];
     return librarySearchResults.map((item) => {
-      const title = item.recording?.title ?? item.mbid;
+      const title = item.recording?.title ?? item.mbid ?? "Unknown track";
       const artist = item.recording?.artist ?? "";
       return {
         kind: "library" as const,
         label: title,
         sub: artist,
         badge: "◆ kept",
-        onTap: () => goAndClose(`/song/${item.mbid}`),
+        onTap: () => item.mbid ? goAndClose(`/song/${item.mbid}`) : undefined,
       };
     });
   }, [isLibraryActive, librarySearchResults, goAndClose]);

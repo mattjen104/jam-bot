@@ -289,6 +289,12 @@ export function useDialData(): {
     () => new Set(libraryData?.artistMbids ?? []),
     [libraryData],
   );
+  // Soft-row artist set: unresolved Spotify tracks that have no MBID — checked
+  // by lowercased artist name since there is no artistMbid to match on.
+  const softArtistSet = useMemo(
+    () => new Set((libraryData?.softArtists ?? []).map((a) => a.toLowerCase().trim())),
+    [libraryData],
+  );
 
   // ── picker detection via library MBID lookup ──────────────────────────────
   // Use library MBIDs to discover which selector/DJ names are in the system.
@@ -398,7 +404,10 @@ export function useDialData(): {
         artist,
         playedAt: new Date().toISOString(),
         isLibraryHit,
-        isArtistHit: !isLibraryHit && artistMbid != null && libraryArtistMbidSet.has(artistMbid),
+        isArtistHit:
+          !isLibraryHit &&
+          ((artistMbid != null && libraryArtistMbidSet.has(artistMbid)) ||
+            softArtistSet.has(artist.toLowerCase().trim())),
       });
     }
     // SSE overrides: more recent than the REST poll, applied last so the Dial
@@ -412,11 +421,14 @@ export function useDialData(): {
         artist: entry.artist,
         playedAt: entry.playedAt,
         isLibraryHit,
-        isArtistHit: !isLibraryHit && entry.artistMbid != null && libraryArtistMbidSet.has(entry.artistMbid),
+        isArtistHit:
+          !isLibraryHit &&
+          ((entry.artistMbid != null && libraryArtistMbidSet.has(entry.artistMbid)) ||
+            softArtistSet.has(entry.artist.toLowerCase().trim())),
       });
     }
     return m;
-  }, [liveData, sseOverrides, libraryMbidSet, libraryReleaseGroupSet, libraryArtistMbidSet, rgByMbid]);
+  }, [liveData, sseOverrides, libraryMbidSet, libraryReleaseGroupSet, libraryArtistMbidSet, softArtistSet, rgByMbid]);
 
   const runsBySlug = useMemo(() => {
     const m = new Map<string, StationScheduleRun[]>();
@@ -500,7 +512,11 @@ export function useDialData(): {
             const exactHit = sp.mbid != null && libraryMbidSet.has(sp.mbid);
             const rgHit = !exactHit && sp.releaseGroupMbid != null && libraryReleaseGroupSet.has(sp.releaseGroupMbid);
             // Artist hit: artist is in library but this exact recording/album isn't.
-            const artistHit = !exactHit && !rgHit && sp.artistMbid != null && libraryArtistMbidSet.has(sp.artistMbid);
+            const artistHit =
+              !exactHit &&
+              !rgHit &&
+              ((sp.artistMbid != null && libraryArtistMbidSet.has(sp.artistMbid)) ||
+                softArtistSet.has(sp.artist.toLowerCase().trim()));
             return {
               mbid: sp.mbid,
               artistMbid: sp.artistMbid ?? null,

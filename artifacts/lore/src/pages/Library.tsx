@@ -1190,14 +1190,23 @@ export default function Library() {
         ) : (
           <>
             <ul style={{ margin: 0, padding: 0, listStyle: "none" }} data-testid="library-kept">
-              {keptItems.map((item) => (
-                <LibraryRow
-                  key={item.mbid}
-                  item={item}
-                  isOpen={openDoorMbid === item.mbid}
-                  onToggle={() => setOpenDoorMbid((prev) => prev === item.mbid ? null : item.mbid)}
-                />
-              ))}
+              {keptItems.map((item) => {
+                // Soft rows (item.mbid === null) use spotifyId as their identity.
+                // Resolved rows use mbid.  A stable non-null key prevents React
+                // reconciliation issues when mbid is null for multiple soft rows.
+                const rowKey = item.mbid ?? `soft:${item.spotifyId ?? item.addedAt}`;
+                return (
+                  <LibraryRow
+                    key={rowKey}
+                    item={item}
+                    // Soft rows have no DoorStrip — they can never be "open".
+                    isOpen={item.mbid != null && openDoorMbid === item.mbid}
+                    onToggle={item.mbid != null
+                      ? () => setOpenDoorMbid((prev) => prev === item.mbid ? null : item.mbid)
+                      : undefined}
+                  />
+                );
+              })}
             </ul>
             <div ref={sentinelRef} style={{ height: 1 }} aria-hidden />
             {isFetchingNextPage && (

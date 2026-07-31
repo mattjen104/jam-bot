@@ -1887,6 +1887,11 @@
 }
 .lrow:hover { background: hsl(var(--secondary) / 0.5); }
 .lrow--kept   { border-left-color: hsl(var(--library) / 0.5); }
+/* Soft rows: unresolved Spotify tracks stored in spotify_library_items.
+   Slightly muted so the listener can distinguish them from fully-resolved rows. */
+.lrow--soft   { opacity: 0.82; border-left-color: hsl(var(--muted-foreground) / 0.25); }
+.lrow--soft .lrow__art--soft { cursor: default; }
+.lrow--soft .lrow__tr--soft  { color: inherit; cursor: default; }
 .lrow--onair  {
   border-left-color: hsl(var(--live));
   background: hsl(var(--live) / 0.04);

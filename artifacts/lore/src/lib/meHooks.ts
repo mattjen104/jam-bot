@@ -36,10 +36,20 @@ export interface LibraryProvenance {
 }
 
 export interface LibraryItem {
-  mbid: string;
+  /** MusicBrainz recording ID. Null for unresolved soft rows (Spotify import). */
+  mbid: string | null;
   provenance: LibraryProvenance;
   addedAt: string;
   recording: LibraryRecording | null;
+  /**
+   * True for tracks that could not be matched to a MusicBrainz MBID during
+   * import.  Stored in `spotify_library_items`; shown with Spotify artwork
+   * and a provenance badge.  A nightly retry may later resolve them and
+   * promote to `library_items`.
+   */
+  soft?: boolean;
+  /** Spotify track ID, populated on soft rows. */
+  spotifyId?: string | null;
 }
 
 export interface ImportJobStatus {
@@ -323,9 +333,17 @@ export function useMyLibraryMbids() {
   return useQuery({
     queryKey: ME_LIBRARY_MBIDS_KEY,
     queryFn: () =>
-      fetchOrNull<{ mbids: string[]; releaseGroupMbids: string[]; artistMbids: string[] }>("/api/me/library/mbids").then(
-        (d) => ({ mbids: d?.mbids ?? [], releaseGroupMbids: d?.releaseGroupMbids ?? [], artistMbids: d?.artistMbids ?? [] }),
-      ),
+      fetchOrNull<{
+        mbids: string[];
+        releaseGroupMbids: string[];
+        artistMbids: string[];
+        softArtists: string[];
+      }>("/api/me/library/mbids").then((d) => ({
+        mbids: d?.mbids ?? [],
+        releaseGroupMbids: d?.releaseGroupMbids ?? [],
+        artistMbids: d?.artistMbids ?? [],
+        softArtists: d?.softArtists ?? [],
+      })),
     staleTime: 60_000,
     retry: false,
   });

@@ -16,7 +16,7 @@ interface InflowCardProps {
  */
 export function InflowCard({ item, pickerName, pickerHandle }: InflowCardProps) {
   const rec = item.recording;
-  const title = rec?.title ?? item.mbid.slice(0, 8);
+  const title = rec?.title ?? (item.mbid ? item.mbid.slice(0, 8) : "Unknown track");
   const artist = rec?.artist ?? "";
   const artwork = rec?.artworkUrl ?? null;
   const attribution = pickerName ?? item.provenance.pickerHandle ?? item.provenance.stationSlug ?? "";
