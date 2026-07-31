@@ -76,8 +76,25 @@ const IMPORT_RESOLVE_DELAY_MS = 1100;
 /** Hard cap per MB resolve call — prevents a single hanging network call from
  *  stalling the entire import indefinitely. Track is counted as unresolved. */
 const IMPORT_RESOLVE_TIMEOUT_MS = 12_000;
+/** Shortened per-track timeout used when MB is clearly struggling (consecutive
+ *  errors ≥ threshold). Prevents the budget from being burned on 12 s timeouts
+ *  during a sustained rate-limit period. */
+const PHASE3_HIGH_ERROR_TIMEOUT_MS = 4_000;
+/** Number of consecutive MB errors (503s, network failures) before Phase 3
+ *  pauses and backs off. */
+const PHASE3_503_THRESHOLD = 3;
+/** Base backoff duration on first threshold breach (doubles each time, capped). */
+const PHASE3_503_BACKOFF_BASE_MS = 30_000; // 30 s
+/** Max backoff so a sustained MB outage never stalls the worker longer than this. */
+const PHASE3_503_MAX_BACKOFF_MS = 5 * 60_000; // 5 min
 /** Stamp partial total to DB every N items during the buffer-drain (fetching) phase. */
 const FETCH_STAMP_INTERVAL = 50;
+/** How often the off-peak Phase 3 retry scheduler wakes up to check for work. */
+const PHASE3_RETRY_POLL_MS = 15 * 60_000; // 15 min
+/** UTC hour range [start, end) during which the off-peak retry scheduler runs. */
+const PHASE3_RETRY_OFF_PEAK_HOURS: [number, number] = [2, 6]; // 2–6 AM UTC
+/** Max age of a completed import job eligible for off-peak retry. */
+const PHASE3_RETRY_MAX_JOB_AGE_MS = 7 * 24 * 60 * 60_000; // 7 days
 
 // ---------------------------------------------------------------------------
 // Auth middleware
@@ -935,6 +952,22 @@ export async function runImportWorker(
     const PHASE3_BUDGET_MS = 90 * 60_000; // 90 minutes — enough for ~4 900 tracks at 1.1 s each
     const phase3StartMs = Date.now();
 
+    // Consecutive-error tracking for 503 / network-failure back-off.
+    // When MB is rate-limiting, we pause rather than burning the full budget
+    // on 12 s timeouts.
+    //
+    // Two separate pieces of state:
+    //   consecutiveErrors — counts unbroken error streak; resets to 0 after
+    //     each backoff pause so the next breach gets its own fresh pause.
+    //   mbDegraded — latching flag set when the first threshold breach fires.
+    //     It persists across the post-backoff reset and is only cleared when
+    //     MB delivers a clean definitive response (hit or confirmed null).
+    //     This ensures the shorter PHASE3_HIGH_ERROR_TIMEOUT_MS stays active
+    //     throughout the degraded period, not just within a single streak.
+    let consecutiveErrors = 0;
+    let currentBackoffMs = PHASE3_503_BACKOFF_BASE_MS;
+    let mbDegraded = false;
+
     for (const { t } of phase3Entries) {
       // Hard wall-clock budget: stop gracefully rather than running forever.
       if (Date.now() - phase3StartMs > PHASE3_BUDGET_MS) {
@@ -945,11 +978,17 @@ export async function runImportWorker(
         break;
       }
 
+      // Use a shorter per-track timeout when MB is degraded (latching flag).
+      // This remains active across multiple backoff cycles until MB recovers.
+      const resolveTimeoutMs = mbDegraded
+        ? PHASE3_HIGH_ERROR_TIMEOUT_MS
+        : IMPORT_RESOLVE_TIMEOUT_MS;
+
       const controller = new AbortController();
       const timer = setTimeout(() => {
         console.warn(`[me/import] resolve timeout for "${t.title}" by "${t.artist}" — skipping`);
         controller.abort();
-      }, IMPORT_RESOLVE_TIMEOUT_MS);
+      }, resolveTimeoutMs);
 
       let mbid: string | null = null;
       // Tracks whether the resolver threw (MB network error, 503, etc.).
@@ -965,11 +1004,31 @@ export async function runImportWorker(
         if (!mbid && !controller.signal.aborted) {
           mbid = await mbResolver.resolveByText(t.artist, t.title, controller.signal);
         }
+        // Definitive response (hit or confirmed null) — MB is healthy again.
+        if (!controller.signal.aborted) {
+          consecutiveErrors = 0;
+          mbDegraded = false;
+        }
       } catch {
         // resolveBy* threw — likely a MB 503 or network error, not a real miss.
         resolveErrored = true;
+        consecutiveErrors++;
       } finally {
         clearTimeout(timer);
+      }
+
+      // Back-off when consecutive errors reach the threshold.  Pause, then
+      // continue from the next track — the failing ones stay un-cached so the
+      // off-peak retry scheduler can pick them up later.
+      if (consecutiveErrors >= PHASE3_503_THRESHOLD) {
+        mbDegraded = true; // latch: shorter timeout applies until MB recovers
+        console.warn(
+          `[me/import] job=${jobId} Phase 3 — ${consecutiveErrors} consecutive MB errors, ` +
+          `pausing ${currentBackoffMs / 1000}s before continuing`,
+        );
+        await sleep(currentBackoffMs);
+        currentBackoffMs = Math.min(currentBackoffMs * 2, PHASE3_503_MAX_BACKOFF_MS);
+        consecutiveErrors = 0; // reset streak so the next breach gets its own pause
       }
 
       if (mbid) {
@@ -1052,6 +1111,291 @@ export async function runImportWorker(
       .catch(() => {});
   }
 }
+
+// ---------------------------------------------------------------------------
+// Off-peak Phase 3 retry scheduler
+// ---------------------------------------------------------------------------
+
+/**
+ * Runs once: finds completed import jobs where MB resolved fewer tracks than
+ * fetched (total > resolved) and there are still un-cached entries (no row in
+ * resolution_cache — meaning neither a positive hit nor a confirmed miss was
+ * stored).  Those tracks were likely missed because MB was rate-limiting during
+ * the original Phase 3 run.
+ *
+ * For each eligible user/service pair the function creates a new import job
+ * that covers only the un-cached tracks, then runs a standalone Phase 3 loop.
+ * No Spotify API calls are needed — the buffer from the original job is reused.
+ *
+ * Called from `startPhase3RetryScheduler` during off-peak hours only.
+ */
+async function runPhase3RetryPass(): Promise<void> {
+  // Find the most recent completed import job per user/service that still has
+  // unresolved tracks and a stored buffer (so we can derive the un-cached set).
+  const cutoff = new Date(Date.now() - PHASE3_RETRY_MAX_JOB_AGE_MS);
+
+  // Drizzle doesn't support DISTINCT ON — use a raw-ish approach: fetch
+  // all eligible jobs ordered newest-first and keep the first per user+service.
+  const candidates = await db
+    .select({
+      id: libraryImportJobsTable.id,
+      userId: libraryImportJobsTable.userId,
+      service: libraryImportJobsTable.service,
+      total: libraryImportJobsTable.total,
+      resolved: libraryImportJobsTable.resolved,
+      bufferJson: libraryImportJobsTable.bufferJson,
+    })
+    .from(libraryImportJobsTable)
+    .where(
+      and(
+        eq(libraryImportJobsTable.status, "done"),
+        isNotNull(libraryImportJobsTable.bufferJson),
+        sql`COALESCE(${libraryImportJobsTable.finishedAt}, ${libraryImportJobsTable.startedAt}) >= ${cutoff}`,
+        sql`${libraryImportJobsTable.total} > ${libraryImportJobsTable.resolved}`,
+      ),
+    )
+    .orderBy(desc(libraryImportJobsTable.id))
+    .limit(100); // safety cap — one pass shouldn't fan out unboundedly
+
+  // Deduplicate to the most recent job per (userId, service) pair.
+  const seen = new Set<string>();
+  const dedupedCandidates = candidates.filter((c) => {
+    const k = `${c.userId}:${c.service}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+
+  if (dedupedCandidates.length === 0) return;
+
+  console.log(
+    `[me/import/retry] off-peak pass: ${dedupedCandidates.length} candidate job(s) to check`,
+  );
+
+  for (const candidate of dedupedCandidates) {
+    const buffer = candidate.bufferJson;
+    if (!buffer || buffer.length === 0) continue;
+
+    // Determine which buffer entries are genuinely un-cached (no entry at all
+    // in resolution_cache — neither positive nor negative).
+    const keySet = new Set<string>();
+    for (const t of buffer) {
+      if (t.isrc) keySet.add(isrcKey(t.isrc));
+      keySet.add(normalizeKey(t.artist, t.title));
+    }
+    const allKeys = [...keySet];
+    const cachedRows = await db
+      .select({ key: resolutionCacheTable.key })
+      .from(resolutionCacheTable)
+      .where(inArray(resolutionCacheTable.key, allKeys));
+    const cachedKeySet = new Set(cachedRows.map((r) => r.key));
+
+    // Un-cached = no cache row at all (positive OR negative) for any of the
+    // track's keys.  This means the track hasn't been touched since the import.
+    const uncachedEntries = buffer.filter((t) => {
+      const hasIsrcCached = t.isrc ? cachedKeySet.has(isrcKey(t.isrc)) : false;
+      const hasTextCached = cachedKeySet.has(normalizeKey(t.artist, t.title));
+      return !hasIsrcCached && !hasTextCached;
+    });
+
+    if (uncachedEntries.length === 0) {
+      console.log(
+        `[me/import/retry] job=${candidate.id} user=${candidate.userId} — no un-cached tracks, skipping`,
+      );
+      continue;
+    }
+
+    console.log(
+      `[me/import/retry] job=${candidate.id} user=${candidate.userId} — ` +
+      `retrying ${uncachedEntries.length} un-cached track(s)`,
+    );
+
+    // Skip if a live import is already running for this user+service to avoid
+    // concurrent Spotify or MB request races.
+    const [activeJob] = await db
+      .select({ id: libraryImportJobsTable.id })
+      .from(libraryImportJobsTable)
+      .where(
+        and(
+          eq(libraryImportJobsTable.userId, candidate.userId),
+          eq(libraryImportJobsTable.service, candidate.service),
+          inArray(libraryImportJobsTable.status, ["running", "pending"]),
+        ),
+      )
+      .limit(1);
+    if (activeJob) {
+      console.log(
+        `[me/import/retry] skipping user=${candidate.userId} — job=${activeJob.id} already running`,
+      );
+      continue;
+    }
+
+    // Create a dedicated retry job so progress is visible and errors are
+    // recorded per-attempt, not silently swallowed.
+    const [retryJob] = await db
+      .insert(libraryImportJobsTable)
+      .values({
+        userId: candidate.userId,
+        service: candidate.service,
+        status: "running",
+        phase: "resolve",
+        total: uncachedEntries.length,
+        resolved: 0,
+        startedAt: new Date(),
+      })
+      .returning();
+
+    if (!retryJob) continue;
+
+    const retryJobId = retryJob.id;
+    const provenance: LibraryItemProvenance = { kind: "import", service: candidate.service };
+    let retryResolved = 0;
+
+    try {
+      const mbResolver = createMbResolver();
+      const RETRY_BUDGET_MS = 30 * 60_000; // 30-minute budget per retry pass
+      const retryStartMs = Date.now();
+
+      let consecutiveErrors = 0;
+      let currentBackoffMs = PHASE3_503_BACKOFF_BASE_MS;
+      let mbDegraded = false;
+
+      for (const t of uncachedEntries) {
+        if (Date.now() - retryStartMs > RETRY_BUDGET_MS) {
+          console.warn(
+            `[me/import/retry] job=${retryJobId} 30-minute budget exceeded — ` +
+            `resolved ${retryResolved}/${uncachedEntries.length}`,
+          );
+          break;
+        }
+
+        const resolveTimeoutMs = mbDegraded
+          ? PHASE3_HIGH_ERROR_TIMEOUT_MS
+          : IMPORT_RESOLVE_TIMEOUT_MS;
+
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), resolveTimeoutMs);
+
+        let mbid: string | null = null;
+        let resolveErrored = false;
+        try {
+          if (t.isrc) {
+            mbid = await mbResolver.resolveByIsrc(t.isrc, controller.signal);
+          }
+          if (!mbid && !controller.signal.aborted) {
+            mbid = await mbResolver.resolveByText(t.artist, t.title, controller.signal);
+          }
+          if (!controller.signal.aborted) {
+            consecutiveErrors = 0;
+            mbDegraded = false;
+          }
+        } catch {
+          resolveErrored = true;
+          consecutiveErrors++;
+        } finally {
+          clearTimeout(timer);
+        }
+
+        // Back off when MB is clearly struggling.
+        if (consecutiveErrors >= PHASE3_503_THRESHOLD) {
+          mbDegraded = true;
+          console.warn(
+            `[me/import/retry] job=${retryJobId} ${consecutiveErrors} consecutive MB errors — ` +
+            `pausing ${currentBackoffMs / 1000}s`,
+          );
+          await sleep(currentBackoffMs);
+          currentBackoffMs = Math.min(currentBackoffMs * 2, PHASE3_503_MAX_BACKOFF_MS);
+          consecutiveErrors = 0;
+        }
+
+        if (mbid) {
+          await db
+            .insert(recordingsTable)
+            .values({
+              mbid,
+              title: t.title,
+              artist: t.artist,
+              ...(t.isrc ? { isrc: t.isrc } : {}),
+            })
+            .onConflictDoNothing();
+          await db
+            .insert(libraryItemsTable)
+            .values({ userId: candidate.userId, mbid, provenance, addedAt: new Date() })
+            .onConflictDoNothing();
+          await db
+            .insert(resolutionCacheTable)
+            .values([
+              ...(t.isrc ? [{ key: isrcKey(t.isrc), mbid }] : []),
+              { key: normalizeKey(t.artist, t.title), mbid },
+            ])
+            .onConflictDoNothing()
+            .catch(() => {});
+          retryResolved++;
+        } else if (!controller.signal.aborted && !resolveErrored) {
+          // Confirmed MB miss — write negative cache so future runs skip it.
+          await db
+            .insert(resolutionCacheTable)
+            .values([
+              ...(t.isrc ? [{ key: isrcKey(t.isrc), mbid: null }] : []),
+              { key: normalizeKey(t.artist, t.title), mbid: null },
+            ])
+            .onConflictDoNothing()
+            .catch(() => {});
+        }
+
+        if (!controller.signal.aborted) {
+          await sleep(IMPORT_RESOLVE_DELAY_MS);
+        }
+
+        await db
+          .update(libraryImportJobsTable)
+          .set({ resolved: retryResolved })
+          .where(eq(libraryImportJobsTable.id, retryJobId));
+      }
+
+      await db
+        .update(libraryImportJobsTable)
+        .set({ status: "done", resolved: retryResolved, finishedAt: new Date() })
+        .where(eq(libraryImportJobsTable.id, retryJobId));
+
+      console.log(
+        `[me/import/retry] job=${retryJobId} complete — ` +
+        `resolved ${retryResolved}/${uncachedEntries.length}`,
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`[me/import/retry] job=${retryJobId} failed`, err);
+      await db
+        .update(libraryImportJobsTable)
+        .set({ status: "error", error: message.slice(0, 500), finishedAt: new Date() })
+        .where(eq(libraryImportJobsTable.id, retryJobId))
+        .catch(() => {});
+    }
+  }
+}
+
+/**
+ * Starts the recurring Phase 3 off-peak retry scheduler.
+ *
+ * Wakes up every PHASE3_RETRY_POLL_MS (15 min) and runs a retry pass only
+ * when the current UTC hour falls within PHASE3_RETRY_OFF_PEAK_HOURS (2–6 AM).
+ * During business hours the scheduler is a no-op — it fires but immediately
+ * returns, adding no load.
+ */
+function startPhase3RetryScheduler(): void {
+  setInterval(() => {
+    const utcHour = new Date().getUTCHours();
+    const [start, end] = PHASE3_RETRY_OFF_PEAK_HOURS;
+    if (utcHour < start || utcHour >= end) return;
+    runPhase3RetryPass().catch((err) =>
+      console.error("[me/import/retry] scheduler pass failed", err),
+    );
+  }, PHASE3_RETRY_POLL_MS);
+  console.log("[me/import/retry] off-peak retry scheduler started (active 02–06 UTC)");
+}
+
+// Boot the scheduler immediately when this module is first loaded.
+startPhase3RetryScheduler();
 
 // ---------------------------------------------------------------------------
 // Library endpoints

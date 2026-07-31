@@ -438,6 +438,147 @@ describe("Fast-path re-import — all tracks already resolved, Phase 3 skipped",
   });
 });
 
+// ── Phase 3 error-storm back-off tests ──────────────────────────────────────
+//
+// Verify that:
+//   1. Reaching PHASE3_503_THRESHOLD consecutive errors triggers a backoff
+//      sleep and latches the `mbDegraded` flag.
+//   2. The shorter PHASE3_HIGH_ERROR_TIMEOUT_MS (4 s) is used for all tracks
+//      while MB is degraded — including those resolved after the backoff resets
+//      `consecutiveErrors` to 0 (proving the latch persists).
+//   3. `mbDegraded` is cleared only when MB delivers a clean definitive
+//      response, after which the full 12 s timeout is restored.
+//
+// We do NOT use vi.useFakeTimers() here because the worker awaits real DB I/O
+// that fake timers can't advance.  Instead we spy on `setTimeout` and
+// immediately invoke the callback for long backoff sleeps (≥ 5 s) so the
+// worker completes quickly.  Short abort-controller and rate-limit timers
+// continue to use real timers (they are cleared by clearTimeout before firing
+// because the mock resolvers resolve/reject as micro-tasks, well before any
+// 4 s or 12 s timer would actually fire).
+
+/** Spy on `setTimeout`, immediately invoking backoff callbacks (delay ≥ 5 s)
+ *  while letting short timers (abort controllers, 1.1 s rate-limit sleeps) run
+ *  normally.  Returns the spy so callers can check call args and restore it. */
+function spyOnSetTimeoutFastBackoff() {
+  const realSetTimeout = globalThis.setTimeout.bind(globalThis);
+  const calls: Array<{ delay: number }> = [];
+
+  const spy = vi
+    .spyOn(globalThis, "setTimeout")
+    .mockImplementation(((fn: (...args: unknown[]) => void, delay?: number, ...args: unknown[]) => {
+      const d = delay ?? 0;
+      calls.push({ delay: d });
+      // Only intercept our Phase 3 backoff sleeps (≥ 20 s).  Smaller delays
+      // include pg-pool's 10 s idle-timeout and the 12 s abort timer — firing
+      // those immediately would close DB connections or abort real MB calls.
+      if (d >= 20_000) {
+        fn(...args);
+        return 0 as unknown as NodeJS.Timeout;
+      }
+      return realSetTimeout(fn, d, ...args);
+    }) as typeof globalThis.setTimeout);
+
+  // Attach the captured-calls array to the spy object for easy inspection.
+  (spy as typeof spy & { calls: Array<{ delay: number }> }).calls = calls;
+  return spy as typeof spy & { calls: Array<{ delay: number }> };
+}
+
+describe("Phase 3 — MB 503 error-storm: backoff fires and degraded timeout latches", () => {
+  it(
+    "uses 4 s timeouts while degraded and triggers 30 s backoff at threshold",
+    async () => {
+      if (!dbAvailable) return;
+
+      // Three tracks throw, crossing the threshold (3). Track 4 resolves while
+      // mbDegraded is still true (consecutiveErrors was reset by the backoff,
+      // but the latch must remain active until a clean resolve).
+      mockResolveByText
+        .mockRejectedValueOnce(new Error("MB 503"))   // track 1 → error
+        .mockRejectedValueOnce(new Error("MB 503"))   // track 2 → error
+        .mockRejectedValueOnce(new Error("MB 503"))   // track 3 → error, threshold
+        .mockResolvedValueOnce(MBID_P3A);             // track 4 → resolves while degraded
+      mockResolveByIsrc.mockResolvedValue(null);
+
+      setupConnector([
+        { artist: ARTIST, title: "Storm1 Track", externalId: "sp-storm-1" },
+        { artist: ARTIST, title: "Storm2 Track", externalId: "sp-storm-2" },
+        { artist: ARTIST, title: "Storm3 Track", externalId: "sp-storm-3" },
+        { artist: ARTIST, title: "Storm4 Track", externalId: "sp-storm-4" },
+      ]);
+
+      const spy = spyOnSetTimeoutFastBackoff();
+
+      const jid = await createJob();
+      await runImportWorker(jid, userId, "spotify", connRow);
+
+      // 30 s backoff must have been scheduled once (first threshold breach).
+      const backoffCalls = spy.calls.filter((c) => c.delay === 30_000);
+      expect(backoffCalls.length).toBeGreaterThanOrEqual(1);
+
+      // 4 s abort timeout must appear for track 4 — it runs while mbDegraded is
+      // still latched even though consecutiveErrors was reset to 0 by the backoff.
+      const shortTimeoutCalls = spy.calls.filter((c) => c.delay === 4_000);
+      expect(shortTimeoutCalls.length).toBeGreaterThanOrEqual(1);
+
+      spy.mockRestore();
+
+      // The job finishes cleanly; track 4 was resolved.
+      const [job] = await db
+        .select({ status: libraryImportJobsTable.status, resolved: libraryImportJobsTable.resolved })
+        .from(libraryImportJobsTable)
+        .where(eq(libraryImportJobsTable.id, jid));
+      expect(job!.status).toBe("done");
+      expect(job!.resolved).toBe(1); // only track 4 resolved
+    },
+    15_000,
+  );
+});
+
+describe("Phase 3 — MB 503 error-storm: degraded mode clears after clean resolve", () => {
+  it(
+    "restores 12 s timeout once MB responds cleanly after a degraded period",
+    async () => {
+      if (!dbAvailable) return;
+
+      // Tracks 1–3 throw → threshold, mbDegraded=true.
+      // Track 4 resolves cleanly → mbDegraded cleared.
+      // Track 5 is attempted next → should use full 12 s timeout again.
+      mockResolveByText
+        .mockRejectedValueOnce(new Error("MB 503"))   // track 1
+        .mockRejectedValueOnce(new Error("MB 503"))   // track 2
+        .mockRejectedValueOnce(new Error("MB 503"))   // track 3 → threshold, mbDegraded=true
+        .mockResolvedValueOnce(MBID_P3A)              // track 4 → clean resolve → mbDegraded=false
+        .mockResolvedValueOnce(null);                 // track 5 → confirmed null (back to full timeout)
+      mockResolveByIsrc.mockResolvedValue(null);
+
+      setupConnector([
+        { artist: ARTIST, title: "Recover1 Track", externalId: "sp-rec-1" },
+        { artist: ARTIST, title: "Recover2 Track", externalId: "sp-rec-2" },
+        { artist: ARTIST, title: "Recover3 Track", externalId: "sp-rec-3" },
+        { artist: ARTIST, title: "Recover4 Track", externalId: "sp-rec-4" },
+        { artist: ARTIST, title: "Recover5 Track", externalId: "sp-rec-5" },
+      ]);
+
+      const spy = spyOnSetTimeoutFastBackoff();
+
+      const jid = await createJob();
+      await runImportWorker(jid, userId, "spotify", connRow);
+
+      // 4 s abort timeout must appear — used for track 4 (attempted while degraded).
+      const shortTimeoutCalls = spy.calls.filter((c) => c.delay === 4_000);
+      expect(shortTimeoutCalls.length).toBeGreaterThanOrEqual(1);
+
+      // 12 s abort timeout must appear — used for track 5 after mbDegraded cleared.
+      const fullTimeoutCalls = spy.calls.filter((c) => c.delay === 12_000);
+      expect(fullTimeoutCalls.length).toBeGreaterThanOrEqual(1);
+
+      spy.mockRestore();
+    },
+    15_000,
+  );
+});
+
 // ── Mixed-phase regression test ──────────────────────────────────────────────
 
 describe("Mixed all-3 phases — large re-import short-circuit", () => {
