@@ -778,6 +778,32 @@
   color: hsl(var(--muted-foreground));
 }
 
+/* ── Live-zone skeleton (shown while first live pulse is in-flight) ── */
+.dial-live-skeleton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 15px;
+  font-family: var(--app-font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: hsl(var(--muted-foreground));
+  opacity: 0.5;
+}
+.dial-live-skeleton__pip {
+  flex-shrink: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: lore-live-pip 1.4s ease-in-out infinite;
+}
+@keyframes lore-live-pip {
+  0%, 100% { opacity: 0.25; }
+  50%       { opacity: 1; }
+}
+
 /* ── Tier header ── */
 .dial-tier-hd {
   padding: 13px 15px 5px;

@@ -1095,11 +1095,21 @@ export function DialView() {
               </>
             )}
 
+            {/* Live-zone skeleton — shown while the first live pulse is in-flight
+                and no live stations have appeared yet. Holds the zone-1 slot so
+                the offline section below doesn't jump down when live data lands. */}
+            {liveLoading && !isCoreLoading && sortedRows.length === 0 && (
+              <div className="dial-live-skeleton">
+                <span className="dial-live-skeleton__pip" />
+                <span className="dial-live-skeleton__label">Finding what's on air…</span>
+              </div>
+            )}
+
             {/* Recently aired — shown once stations are loaded.
                 liveLoading is no longer gated here: waiting for it caused a
                 blank page for unauthenticated users (no live zones, no offline
-                section). A brief re-sort when the live pulse arrives is the
-                lesser cosmetic trade-off vs a blank/hanging page. */}
+                section). The skeleton above reserves the live slot so this
+                section doesn't jump when live data arrives. */}
             {!isCoreLoading && offlineStations.length > 0 && <TierHeader live={false} />}
             {!isCoreLoading && offlineStations.map((ds) => (
               <StationLane
