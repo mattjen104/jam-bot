@@ -1074,13 +1074,26 @@ export async function runImportWorker(
               })
               .onConflictDoNothing();
           }
-          await db
-            .insert(libraryItemsTable)
-            .values({ userId, mbid, provenance, addedAt: new Date() })
-            .onConflictDoNothing();
-          resolved++;
+          try {
+            await db
+              .insert(libraryItemsTable)
+              .values({ userId, mbid, provenance, addedAt: new Date() })
+              .onConflictDoNothing();
+            resolved++;
+          } catch (insertErr) {
+            // 23503 = FK violation: the recordings row was deleted between the
+            // cache lookup and this insert (race condition).  The track is
+            // genuinely resolved — don't demote it to a soft row.  Log and
+            // continue so the rest of the job is unaffected.
+            const pgCode = (insertErr as { code?: string }).code;
+            if (pgCode !== "23503") throw insertErr;
+            console.warn(
+              `[me/import] Phase 2 FK violation for mbid=${mbid} — ` +
+              `recordings row gone between cache lookup and insert; excluding from soft rows`,
+            );
+          }
           matchedIdx.add(idx);
-          resolvedMbidIdx.add(idx); // positive cache hit — exclude from soft rows
+          resolvedMbidIdx.add(idx); // positive cache hit — exclude from soft rows even if insert failed
         }
       }
 
