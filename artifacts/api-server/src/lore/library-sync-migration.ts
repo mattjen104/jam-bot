@@ -4,7 +4,8 @@ import { sql } from "drizzle-orm";
 /**
  * Idempotent DDL for the library-sync feature:
  * - `library_sync_jobs` table (push Lore library → streaming service).
- * Safe to run on every boot — uses CREATE TABLE IF NOT EXISTS.
+ * - Resume columns: `committed_offset`, `resumed_from`, `matched_json`.
+ * Safe to run on every boot — uses CREATE TABLE IF NOT EXISTS + ADD COLUMN IF NOT EXISTS.
  */
 export async function applyLibrarySyncMigration(): Promise<void> {
   try {
@@ -23,6 +24,15 @@ export async function applyLibrarySyncMigration(): Promise<void> {
         results       jsonb
       )
     `);
+
+    // Resume-support columns — added after initial rollout; idempotent.
+    await db.execute(sql`
+      ALTER TABLE library_sync_jobs
+        ADD COLUMN IF NOT EXISTS committed_offset integer NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS resumed_from     integer,
+        ADD COLUMN IF NOT EXISTS matched_json     jsonb
+    `);
+
     console.log("[migration] library sync jobs table: OK");
   } catch (err) {
     console.error("[lore] applyLibrarySyncMigration failed", err);

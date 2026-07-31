@@ -194,13 +194,37 @@ export async function runSyncWorker(
   jobId: number,
   userId: number,
   conn: typeof serviceConnectionsTable.$inferSelect,
+  /** When resuming after a server restart, skip this many already-matched items. */
+  committedOffset = 0,
 ): Promise<void> {
   const stamp = (patch: object) =>
     db.update(librarySyncJobsTable).set(patch).where(eq(librarySyncJobsTable.id, jobId));
 
+  const isResume = committedOffset > 0;
+
+  // Intermediate match state — shared type used for persistence.
+  interface MatchedItem {
+    mbid: string;
+    title: string;
+    artist: string;
+    spotifyId: string;
+    confidence: "link" | "isrc" | "search";
+  }
+  interface UnmatchedItem {
+    mbid: string;
+    title: string;
+    artist: string;
+  }
+
   try {
-    console.log(`[me/sync] job=${jobId} starting`);
-    await stamp({ status: "running", phase: "matching" });
+    console.log(`[me/sync] job=${jobId} ${isResume ? `resuming from offset=${committedOffset}` : "starting"}`);
+    // Stamp resumedFrom = jobId when this is a continuation run so the
+    // frontend can show "Resuming…" instead of the normal phase label.
+    await stamp({
+      status: "running",
+      phase: "matching",
+      ...(isResume ? { resumedFrom: jobId } : {}),
+    });
 
     // Refresh token before the first call.
     // `currentConn` is mutable so mid-job refreshes carry forward the updated expiry.
@@ -227,33 +251,43 @@ export async function runSyncWorker(
 
     const total = items.length;
     await stamp({ total, phase: "matching" });
-    console.log(`[me/sync] job=${jobId} library: ${total} items`);
+    console.log(`[me/sync] job=${jobId} library: ${total} items${isResume ? `, resuming after ${committedOffset} already matched` : ""}`);
 
     // ── Phase 1: Match each item to a Spotify track ID ───────────────────────
     // Priority: Odesli-link (exact, no API call) → ISRC search → text search.
+    //
+    // On resume: items before committedOffset were fully processed in the prior
+    // run. Their match results (including ISRC/text Spotify IDs) were persisted
+    // in matchedJson so we can restore them without repeating any API calls.
 
-    interface MatchedItem {
-      mbid: string;
-      title: string;
-      artist: string;
-      spotifyId: string;
-      confidence: "link" | "isrc" | "search";
+    // Restore previously matched state from DB when resuming.
+    let matched: MatchedItem[] = [];
+    let unmatched: UnmatchedItem[] = [];
+    if (isResume) {
+      const [jobRow] = await db
+        .select({ matchedJson: librarySyncJobsTable.matchedJson })
+        .from(librarySyncJobsTable)
+        .where(eq(librarySyncJobsTable.id, jobId))
+        .limit(1);
+      const saved = jobRow?.matchedJson;
+      if (saved) {
+        matched = saved.matched;
+        unmatched = saved.unmatched;
+        console.log(`[me/sync] job=${jobId} restored ${matched.length} matched + ${unmatched.length} unmatched from checkpoint`);
+      } else {
+        // No persisted state — fall back to re-running from scratch.
+        console.warn(`[me/sync] job=${jobId} resume requested but no matchedJson found — restarting from scratch`);
+        committedOffset = 0;
+      }
     }
-    interface UnmatchedItem {
-      mbid: string;
-      title: string;
-      artist: string;
-    }
 
-    const matched: MatchedItem[] = [];
-    const unmatched: UnmatchedItem[] = [];
-
-    let processed = 0;
+    let processed = committedOffset;
     const STAMP_EVERY = 20;
 
-    for (const item of items) {
+    for (let i = committedOffset; i < items.length; i++) {
+      const item = items[i]!;
+
       // Refresh token mid-job if it's within 30s of expiry.
-      // Update currentConn so subsequent iterations see the new expiry.
       if (currentConn.expiresAt.getTime() < Date.now() + 30_000) {
         const r = await getFreshUserToken(currentConn);
         if (r) { token = r.token; currentConn = r.conn; }
@@ -300,11 +334,20 @@ export async function runSyncWorker(
 
       processed++;
       if (processed % STAMP_EVERY === 0) {
-        await stamp({ processed });
+        // Persist both the progress counter and the accumulated match results so
+        // that a future restart can restore the exact Spotify IDs found so far
+        // without re-running any API calls.
+        await stamp({
+          processed,
+          committedOffset: processed,
+          matchedJson: { matched, unmatched },
+        });
       }
     }
 
-    await stamp({ processed, phase: "checking" });
+    // Matching phase complete — clear the intermediate checkpoint (it's large
+    // and no longer needed) and advance to the contains-check phase.
+    await stamp({ processed, committedOffset: processed, matchedJson: null, phase: "checking" });
 
     // ── Phase 2: Contains check — idempotency pre-filter ────────────────────
     const matchedIds = matched.map((m) => m.spotifyId);

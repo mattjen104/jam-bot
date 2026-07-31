@@ -203,6 +203,11 @@ export interface SyncJobStatus {
   finishedAt: string | null;
   error: string | null;
   results: SyncReceipt | null;
+  /**
+   * Set when this job resumed from a prior interrupted job's committed offset.
+   * The UI uses this to show "Resuming…" instead of the plain phase label.
+   */
+  resumedFrom: number | null;
 }
 
 export const ME_LATEST_SYNC_JOB_KEY = ["me", "sync-job", "latest"] as const;

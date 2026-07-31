@@ -141,7 +141,9 @@ function SyncBar({
       <div className="dial-ctabar">
         <span className="dial-ctabar__label">
           {isSyncActive
-            ? syncJobData?.phase === "matching"
+            ? syncJobData?.resumedFrom != null && syncJobData?.phase === "matching"
+              ? "Resuming…"
+              : syncJobData?.phase === "matching"
               ? "Matching on Spotify…"
               : syncJobData?.phase === "checking"
               ? "Checking saved…"

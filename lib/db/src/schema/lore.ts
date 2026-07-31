@@ -1765,11 +1765,38 @@ export const librarySyncJobsTable = pgTable("library_sync_jobs", {
   total: integer("total").notNull().default(0),
   /** Items processed so far (not necessarily saved — includes all outcomes). */
   processed: integer("processed").notNull().default(0),
+  /**
+   * The number of library items that have been fully matched and committed to
+   * memory at the last DB stamp. When the server restarts mid-matching, this
+   * lets the worker skip ahead to where it left off rather than starting over.
+   * Stamped every STAMP_EVERY items during the matching phase.
+   */
+  committedOffset: integer("committed_offset").notNull().default(0),
   startedAt: timestamp("started_at").defaultNow().notNull(),
   finishedAt: timestamp("finished_at"),
   error: text("error"),
   /** Completion receipt: counts + unavailable/search-matched item lists. */
   results: jsonb("results").$type<SyncReceipt>(),
+  /**
+   * When a resume is used (the worker picked up from a prior interrupted job's
+   * committedOffset), this stores the id of that prior job.  The frontend uses
+   * it to show "Resuming…" instead of "Starting…".
+   */
+  resumedFrom: integer("resumed_from"),
+  /**
+   * Intermediate match state persisted alongside committedOffset so that a
+   * resumed worker can restore previously found Spotify IDs rather than
+   * re-running expensive ISRC / text searches for those items.
+   *
+   * Shape: { matched: MatchedItem[]; unmatched: UnmatchedItem[] }
+   * where MatchedItem = { mbid, title, artist, spotifyId, confidence }
+   *       UnmatchedItem = { mbid, title, artist }
+   * Cleared to null once the matching phase completes.
+   */
+  matchedJson: jsonb("matched_json").$type<{
+    matched: Array<{ mbid: string; title: string; artist: string; spotifyId: string; confidence: "link" | "isrc" | "search" }>;
+    unmatched: Array<{ mbid: string; title: string; artist: string }>;
+  }>(),
 });
 
 export type LibrarySyncJob = typeof librarySyncJobsTable.$inferSelect;

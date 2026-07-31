@@ -1966,10 +1966,17 @@ router.post("/me/library/sync", h(async (req, res) => {
     });
   }
 
-  // Zombie-reset: mark stuck jobs as error before starting a new one.
+  // Zombie-reset: a stuck job is one that's older than ZOMBIE_AGE_MS with no
+  // active worker (the process must have been restarted). If it has committed
+  // matching progress, resume it rather than losing the work.
   const ZOMBIE_AGE_MS = SYNC_ZOMBIE_AGE_MS;
   const [existingJob] = await db
-    .select({ id: librarySyncJobsTable.id, status: librarySyncJobsTable.status, startedAt: librarySyncJobsTable.startedAt })
+    .select({
+      id: librarySyncJobsTable.id,
+      status: librarySyncJobsTable.status,
+      startedAt: librarySyncJobsTable.startedAt,
+      committedOffset: librarySyncJobsTable.committedOffset,
+    })
     .from(librarySyncJobsTable)
     .where(and(
       eq(librarySyncJobsTable.userId, user.id),
@@ -1981,6 +1988,16 @@ router.post("/me/library/sync", h(async (req, res) => {
   if (existingJob) {
     const ageMs = Date.now() - existingJob.startedAt.getTime();
     if (ageMs > ZOMBIE_AGE_MS) {
+      if (existingJob.committedOffset > 0) {
+        // Has committed matching progress — resume it rather than starting over.
+        console.log(
+          `[me/sync] job=${existingJob.id} orphaned (${Math.round(ageMs / 60_000)}m old) ` +
+          `but has committedOffset=${existingJob.committedOffset} — resuming`,
+        );
+        setImmediate(() => runSyncWorker(existingJob.id, user.id, conn, existingJob.committedOffset));
+        return res.status(202).json({ jobId: existingJob.id, status: "running" });
+      }
+      // No committed progress — reset so the user can start fresh.
       console.warn(`[me/sync] job=${existingJob.id} orphaned (${Math.round(ageMs / 60_000)}m old) — resetting`);
       await db
         .update(librarySyncJobsTable)
@@ -2017,6 +2034,7 @@ function formatSyncJob(job: typeof librarySyncJobsTable.$inferSelect) {
     finishedAt: job.finishedAt ? job.finishedAt.toISOString() : null,
     error: job.error ?? null,
     results: job.results ?? null,
+    resumedFrom: job.resumedFrom ?? null,
   };
 }
 
@@ -2248,24 +2266,69 @@ router.get("/me/library/sync/:jobId", h(async (req, res) => {
 }));
 
 /**
- * Mark any import jobs that are stuck in status="running" as failed.
- * Called once at server startup — if the process was killed mid-import the DB
- * row stays "running" forever with no worker driving it.  Resetting them to
- * "error" lets users see a clear failure message and re-trigger the import.
+ * On boot: find sync jobs that were interrupted mid-run.
+ * - Jobs with committedOffset > 0 have real progress — resume them immediately.
+ * - Jobs with no committed progress are marked as error so the user can start fresh.
+ *
+ * Called once at server startup so users with large libraries pick up where
+ * they left off instead of losing all their matching work.
  */
-/** Reset stuck sync jobs on boot. */
 export async function markOrphanedSyncJobsAsError(): Promise<void> {
   try {
-    const orphaned = await db
-      .update(librarySyncJobsTable)
-      .set({ status: "error", error: "Server restarted — please start a new sync", finishedAt: new Date() })
-      .where(inArray(librarySyncJobsTable.status, ["running", "pending"]))
-      .returning({ id: librarySyncJobsTable.id });
-    if (orphaned.length > 0) {
-      console.log(`[me] marked ${orphaned.length} orphaned sync job(s) as error`);
+    const stuck = await db
+      .select()
+      .from(librarySyncJobsTable)
+      .where(inArray(librarySyncJobsTable.status, ["running", "pending"]));
+
+    if (stuck.length === 0) return;
+
+    const resumable: typeof stuck = [];
+    const dead: typeof stuck = [];
+
+    for (const job of stuck) {
+      if (job.committedOffset > 0) {
+        resumable.push(job);
+      } else {
+        dead.push(job);
+      }
+    }
+
+    if (dead.length > 0) {
+      await db
+        .update(librarySyncJobsTable)
+        .set({ status: "error", error: "Server restarted — please start a new sync", finishedAt: new Date() })
+        .where(inArray(librarySyncJobsTable.id, dead.map((j) => j.id)));
+      console.log(`[me] marked ${dead.length} orphaned sync job(s) as error (no committed progress)`);
+    }
+
+    // Resume jobs that have committed matching progress.
+    for (const job of resumable) {
+      const [conn] = await db
+        .select()
+        .from(serviceConnectionsTable)
+        .where(
+          and(
+            eq(serviceConnectionsTable.userId, job.userId),
+            eq(serviceConnectionsTable.service, job.service),
+          ),
+        )
+        .limit(1);
+
+      if (!conn) {
+        // No connection available — cannot resume.
+        await db
+          .update(librarySyncJobsTable)
+          .set({ status: "error", error: "Server restarted — Spotify connection not found, please sync again", finishedAt: new Date() })
+          .where(eq(librarySyncJobsTable.id, job.id));
+        console.warn(`[me] sync job=${job.id} has progress but no service connection — marked error`);
+        continue;
+      }
+
+      console.log(`[me] resuming sync job=${job.id} from committedOffset=${job.committedOffset}`);
+      setImmediate(() => runSyncWorker(job.id, job.userId, conn, job.committedOffset));
     }
   } catch (err) {
-    console.error("[me] failed to clear orphaned sync jobs", err);
+    console.error("[me] failed to handle orphaned sync jobs on boot", err);
   }
 }
 
