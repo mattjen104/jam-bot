@@ -469,6 +469,12 @@ export async function purgeNonQualifyingStations(): Promise<number> {
     DELETE FROM radio_browser_stations
     WHERE station_id IN (SELECT id FROM stations WHERE ${whereClause})
   `));
+  // station_quality has a FK to stations with no CASCADE — must be cleared
+  // before the stations row is deleted or every purge throws a 23503.
+  await db.execute(sql.raw(`
+    DELETE FROM station_quality
+    WHERE station_id IN (SELECT id FROM stations WHERE ${whereClause})
+  `));
   const result = await db.execute(sql.raw(`
     DELETE FROM stations
     WHERE ${whereClause}

@@ -872,6 +872,15 @@ export function DialView() {
     [stations],
   );
 
+  // Render cap — start with 40 rows, expand on demand. Prevents mounting
+  // 500+ StationLane components at once when the user hasn't scrolled there.
+  const OFFLINE_PAGE = 40;
+  const [visibleOfflineCount, setVisibleOfflineCount] = useState(OFFLINE_PAGE);
+  const visibleOffline = useMemo(
+    () => offlineStations.slice(0, visibleOfflineCount),
+    [offlineStations, visibleOfflineCount],
+  );
+
   // --- front-door scan (spec §11) ---
   const scan = useFrontDoorScan(withReason.length);
 
@@ -1122,7 +1131,7 @@ export function DialView() {
                 section). The skeleton above reserves the live slot so this
                 section doesn't jump when live data arrives. */}
             {!isCoreLoading && offlineStations.length > 0 && <TierHeader live={false} />}
-            {!isCoreLoading && offlineStations.map((ds) => (
+            {!isCoreLoading && visibleOffline.map((ds) => (
               <StationLane
                 key={ds.station.slug}
                 dialStation={ds}
@@ -1134,6 +1143,14 @@ export function DialView() {
                 onPlay={() => void radio.toggle(ds.station)}
               />
             ))}
+            {!isCoreLoading && visibleOfflineCount < offlineStations.length && (
+              <button
+                className="dial-show-more"
+                onClick={() => setVisibleOfflineCount((n) => n + OFFLINE_PAGE)}
+              >
+                Show {Math.min(OFFLINE_PAGE, offlineStations.length - visibleOfflineCount)} more stations
+              </button>
+            )}
 
             {/* Spinner while the live pulse hasn't arrived yet */}
             {isCoreLoading && (

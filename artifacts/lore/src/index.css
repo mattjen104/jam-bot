@@ -778,6 +778,26 @@
   color: hsl(var(--muted-foreground));
 }
 
+.dial-show-more {
+  display: block;
+  width: 100%;
+  padding: 14px 15px;
+  background: none;
+  border: none;
+  border-top: 1px solid hsl(var(--border) / 0.4);
+  font-family: var(--app-font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.15s;
+}
+.dial-show-more:hover {
+  color: hsl(var(--foreground));
+}
+
 /* ── Live-zone skeleton (shown while first live pulse is in-flight) ── */
 .dial-live-skeleton {
   display: flex;
