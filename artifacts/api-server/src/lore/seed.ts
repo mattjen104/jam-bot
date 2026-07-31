@@ -382,13 +382,21 @@ function canadianCampusStations(): InsertStation[] {
       name: "CKUT 90.3 FM",
       org: "McGill University",
       country: "CA",
-      // Airtime Pro Icecast (kh15) — confirmed 200 + ICY headers.
-      streamUrl: "https://ckut.out.airtime.pro/ckut_a",
+      // CKUT's own Icecast 2.4.4 server at delray.ckut.ca:8000 — this is the
+      // live broadcast feed (10+ listeners observed, mount started continuously
+      // since July 2026). The Airtime Pro mounts (ckut.out.airtime.pro/ckut_a
+      // and ckut_b) always return "CKUT (BACKUP ONLY!)" in StreamTitle and
+      // are now filtered as junk, producing zero spins. delray.ckut.ca:8001
+      // resets connections from the Replit container; port 8000 is reachable.
+      // HTTP (not HTTPS) — the server's TLS on :8001 resets from this IP.
+      streamUrl: "http://delray.ckut.ca:8000/903fm-128-stereo",
       streamQuality: "128kbps MP3",
       streamFormat: "mp3",
       homepageUrl: "https://ckut.ca",
       nowPlayingSource: "radio_browser_icy",
-      nowPlayingConfig: { streamUrl: "https://ckut.out.airtime.pro/ckut_a" },
+      nowPlayingConfig: {
+        streamUrl: "http://delray.ckut.ca:8000/903fm-128-stereo",
+      },
       source: "curated",
       stationClass: "community",
       favorite: true,
