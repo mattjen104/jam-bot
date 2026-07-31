@@ -202,6 +202,11 @@ export function isJunkMetadata(rawArtist: string, rawTitle: string): boolean {
     /^[A-Z][A-Z0-9_-]+$/.test(s) && s.includes("_");
   if (isSlug(rawArtist) || isSlug(rawTitle)) return true;
 
+  // Backup-stream indicators — a station's fallback feed annotates itself
+  // with a parenthetical like "(BACKUP ONLY!)" or "(BACKUP)" in the artist
+  // field instead of a real artist name.  No real track has this pattern.
+  if (/\(backup\b/i.test(rawArtist) || /\(backup\b/i.test(rawTitle)) return true;
+
   return false;
 }
 

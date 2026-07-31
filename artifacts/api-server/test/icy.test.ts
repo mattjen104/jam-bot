@@ -223,4 +223,22 @@ describe("isJunkMetadata", () => {
     // "Vocalo / Chicago" — unusual but not a junk pattern
     expect(isJunkMetadata("Vocalo", "Chicago")).toBe(false);
   });
+
+  it("flags backup-stream indicators in the artist field", () => {
+    // CKUT Airtime backup feed: artist = "CKUT (BACKUP ONLY!)", title = show name
+    expect(isJunkMetadata("CKUT (BACKUP ONLY!)", "Listen! You Smell Something?")).toBe(true);
+    // Generic variant
+    expect(isJunkMetadata("Station (BACKUP)", "Some Show Title")).toBe(true);
+    expect(isJunkMetadata("WKUT (backup only!)", "Night Shift")).toBe(true);
+  });
+
+  it("flags backup-stream indicators in the title field", () => {
+    expect(isJunkMetadata("CKUT", "(BACKUP ONLY!) Stream")).toBe(true);
+  });
+
+  it("does NOT flag tracks whose title legitimately contains 'back'", () => {
+    // "back" must not be mis-triggered — only "(backup" with the opening paren
+    expect(isJunkMetadata("Charli XCX", "Backseat")).toBe(false);
+    expect(isJunkMetadata("Fleetwood Mac", "Go Your Own Way (Back to Back)")).toBe(false);
+  });
 });
