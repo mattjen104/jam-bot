@@ -169,6 +169,33 @@ describe("SyncBar — 'Sync again' disabled states", () => {
 });
 
 // ---------------------------------------------------------------------------
+// "Sync now" button disabled states and click
+// ---------------------------------------------------------------------------
+
+describe("SyncBar — 'Sync now' button", () => {
+  it("is disabled when isSyncActive is true", () => {
+    renderSyncBar({ isSyncActive: true });
+    expect(
+      (screen.getByTestId("library-sync-button") as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
+  it("is disabled when syncBusy is true", () => {
+    renderSyncBar({ syncBusy: true });
+    expect(
+      (screen.getByTestId("library-sync-button") as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
+  it("calls onSync when clicked while enabled", () => {
+    const onSync = vi.fn();
+    renderSyncBar({ syncBusy: false, isSyncActive: false, onSync });
+    fireEvent.click(screen.getByTestId("library-sync-button"));
+    expect(onSync).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Progress bar appears during active sync
 // ---------------------------------------------------------------------------
 
