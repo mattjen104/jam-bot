@@ -268,15 +268,17 @@ interface FrontDoorRowProps {
 function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onEarlier }: FrontDoorRowProps) {
   const rz = reason(show, ds.crossings, ds.artistCrossings);
 
-  // Tier 2: DJ name. Automated-rotation stations have no human host — suppress
-  // the slot entirely so there is no empty placeholder implying a missing DJ.
-  const isAutomated = ds.station.automationClass === "automated";
+  // Tier 2: DJ name. Non-human stations (automated or mixed) have no reliable
+  // human host — suppress the fallback slot so an automated period on a mixed
+  // station doesn't surface a stale DJ name implying they're still on air.
+  // Only pure "human" stations (or unclassified, null) get the fallback logic.
+  const isNonHuman = ds.station.automationClass != null && ds.station.automationClass !== "human";
   const liveDjName = show?.djName ?? null;
   // When the station is live but no schedule run has attached yet (run creation
   // lags the first logged spin by up to a few minutes), fall back to the most
   // recently-ended show's DJ name so the slot doesn't silently disappear.
   // A 4-hour cutoff prevents surfacing a stale name from a prior day's show.
-  const fallbackDjName = !isAutomated && liveDjName === null
+  const fallbackDjName = !isNonHuman && liveDjName === null
     ? (() => {
         const CUTOFF_MS = 4 * 60 * 60 * 1000;
         const now = Date.now();
