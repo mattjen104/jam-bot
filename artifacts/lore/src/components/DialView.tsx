@@ -332,7 +332,7 @@ function ZoneLabel({ label, n, hint, accent }: {
       {accent && <span className={`fdzone-lbl__pip fdzone-lbl__pip--${accent}`} />}
       <span className="fdzone-lbl__text">{label}</span>
       {n != null && (
-        <span className={`fdzone-lbl__n${accent === "picker" ? " fdzone-lbl__n--picker" : accent == null ? " fdzone-lbl__n--dim" : ""}`}>
+        <span className={`fdzone-lbl__n${accent === "picker" ? " fdzone-lbl__n--picker" : ""}`}>
           {n}
         </span>
       )}
