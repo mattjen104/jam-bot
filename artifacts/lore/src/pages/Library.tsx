@@ -562,7 +562,7 @@ export default function Library() {
     isFetchingNextPage,
     fetchNextPage,
     hasNextPage,
-  } = useMyLibraryInfinite({ source: "keep" }, 50);
+  } = useMyLibraryInfinite({}, 50);
   const keptItems = keptData?.pages.flatMap((p) => p.items) ?? [];
 
   // Single-open door strip: tracks which row has its door strip expanded
