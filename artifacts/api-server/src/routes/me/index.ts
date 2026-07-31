@@ -968,13 +968,26 @@ export async function runImportWorker(
       for (const { t, i } of isrcEntries) {
         const mbid = isrcToMbid.get(t.isrc!);
         if (mbid) {
-          await db
-            .insert(libraryItemsTable)
-            .values({ userId, mbid, provenance, addedAt: new Date() })
-            .onConflictDoNothing();
-          resolved++;
+          try {
+            await db
+              .insert(libraryItemsTable)
+              .values({ userId, mbid, provenance, addedAt: new Date() })
+              .onConflictDoNothing();
+            resolved++;
+          } catch (insertErr) {
+            // 23503 = FK violation: the recordings row was deleted between the
+            // ISRC bulk-lookup and this insert (race condition).  The track is
+            // genuinely resolved — don't demote it to a soft row.  Log and
+            // continue so the rest of the job is unaffected.
+            const pgCode = (insertErr as { code?: string }).code;
+            if (pgCode !== "23503") throw insertErr;
+            console.warn(
+              `[me/import] Phase 1 FK violation for mbid=${mbid} isrc=${t.isrc} — ` +
+              `recordings row gone between lookup and insert; excluding from soft rows`,
+            );
+          }
           matchedIdx.add(i);
-          resolvedMbidIdx.add(i); // positive MBID match — exclude from soft rows
+          resolvedMbidIdx.add(i); // MBID confirmed via ISRC — exclude from soft rows even if insert failed
         }
       }
 

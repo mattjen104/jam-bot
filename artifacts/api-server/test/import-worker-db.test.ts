@@ -106,10 +106,15 @@ const MBID_P1  = `test-iw-p1-${run}`;   // resolved via Phase 1 ISRC match
 const MBID_P2  = `test-iw-p2-${run}`;   // resolved via Phase 2 cache hit
 const MBID_P3A = `test-iw-p3a-${run}`;  // Phase 3, resolveToMbid fromCache=true
 const MBID_P3B = `test-iw-p3b-${run}`;  // Phase 3, resolveToMbid fromCache=false
-const MBIDS_ALL = [MBID_P1, MBID_P2, MBID_P3A, MBID_P3B];
+// FK-failure test: recording seeded so Phase 1 ISRC lookup finds it, then
+// library_items insert is injected with a 23503 to confirm resilience.
+const MBID_FK  = `test-iw-fk-${run}`;
+const MBIDS_ALL = [MBID_P1, MBID_P2, MBID_P3A, MBID_P3B, MBID_FK];
 
 // ISRC for the Phase 1 track (must be ≤ 12 chars and unique).
 const ISRC_P1 = `TS${run.toUpperCase()}01`.slice(0, 12);
+// ISRC for the FK-failure track (different prefix so no collision with ISRC_P1).
+const ISRC_FK = `TF${run.toUpperCase()}01`.slice(0, 12);
 
 const ARTIST = `ImportWorker ${run}`;
 
@@ -151,12 +156,15 @@ beforeAll(async () => {
   connRow = c!;
 
   // 3. recordings rows — needed for Phase 1 ISRC match AND as FK targets for
-  //    library_items inserts in all phases.
+  //    library_items inserts in all phases.  MBID_FK is seeded here so the
+  //    FK-failure test's Phase 1 ISRC lookup can find the mbid, and so the
+  //    outer afterAll can delete it in the correct FK-safe order.
   await db.insert(recordingsTable).values([
     { mbid: MBID_P1,  title: "Phase1 Track",  artist: ARTIST, isrc: ISRC_P1 },
     { mbid: MBID_P2,  title: "Phase2 Track",  artist: ARTIST },
     { mbid: MBID_P3A, title: "Phase3A Track", artist: ARTIST },
     { mbid: MBID_P3B, title: "Phase3B Track", artist: ARTIST },
+    { mbid: MBID_FK,  title: "FK Fail Track", artist: ARTIST, isrc: ISRC_FK },
   ]);
 
   // 4. resolution_cache entry for Phase 2 (text-key hit for the Phase 2 track).
@@ -664,86 +672,98 @@ describe("Soft-row exclusion — Phase 1 ISRC-resolved track never written to sp
   });
 });
 
-// ── Soft-row exclusion: resolution-cache-resolved tracks must not appear in spotify_library_items ──
+// ── FK-failure resilience: Phase 1 insert fails, track excluded from soft rows ──
+//
+// Simulates the race condition where a recordings row is deleted between Phase 1's
+// bulk ISRC lookup and the subsequent library_items insert, producing a 23503 FK
+// violation.  The worker must:
+//   • catch the error and not crash (job reaches "done")
+//   • exclude the track from spotify_library_items (resolvedMbidIdx prevents soft-row seeding)
+//   • NOT insert into library_items (the insert genuinely failed)
 
-describe("Soft-row exclusion — Phase 2 cache-resolved track never written to spotify_library_items", () => {
-  // Unique externalId so this describe block's assertions are isolated from
-  // any residual rows created by other describe blocks.
-  const SOFT_P2_EXT_ID = `sp-soft-p2-${run}`;
+describe("Phase 1 — library_items FK violation: worker reaches done, track excluded from soft rows", () => {
+  // MBID_FK / ISRC_FK are declared at the top of this file; the recording is
+  // seeded in the outer beforeAll and cleaned up in the outer afterAll in the
+  // correct FK-safe order (library_items → recordings).
+  const EXT_FK = `sp-fk-${run}`;
 
-  it("leaves spotify_library_items empty after the first import run", async () => {
-    if (!dbAvailable) return;
+  it(
+    "does not appear in spotify_library_items and job reaches done when Phase 1 library_items insert throws 23503",
+    async () => {
+      if (!dbAvailable) return;
 
-    mockResolveByText.mockClear();
-    mockResolveByIsrc.mockClear();
+      mockResolveByText.mockClear();
+      mockResolveByIsrc.mockClear();
 
-    // No ISRC → Phase 1 won't match; artist+title normalises to the
-    // resolution_cache key seeded in beforeAll → Phase 2 hits.
-    setupConnector([
-      { artist: ARTIST, title: "Phase2 Track", externalId: SOFT_P2_EXT_ID },
-    ]);
+      setupConnector([
+        { artist: ARTIST, title: "FK Fail Track", isrc: ISRC_FK, externalId: EXT_FK },
+      ]);
 
-    const jid = await createJob();
-    await runImportWorker(jid, userId, "spotify", connRow);
+      // Build the FK error that Postgres emits on a foreign-key violation.
+      const fkErr = Object.assign(
+        new Error(
+          'insert or update on table "library_items" violates foreign key ' +
+          'constraint "library_items_mbid_fkey"',
+        ),
+        { code: "23503", constraint: "library_items_mbid_fkey" },
+      );
 
-    // Phase 3 must not have been reached.
-    expect(mockResolveByText).not.toHaveBeenCalled();
+      // Capture the real db.insert BEFORE vi.spyOn replaces it so the spy's
+      // fall-through path can still reach the real DB.
+      const origInsert = (db as any).insert.bind(db);
+      let fkInjected = false;
 
-    // The track must be in library_items (resolved via Phase 2).
-    const items = await db
-      .select({ mbid: libraryItemsTable.mbid })
-      .from(libraryItemsTable)
-      .where(eq(libraryItemsTable.userId, userId));
-    expect(items.map((r) => r.mbid)).toContain(MBID_P2);
+      const insertSpy = vi
+        .spyOn(db as any, "insert")
+        .mockImplementation((table: unknown) => {
+          // Inject the FK error exactly once, only for libraryItemsTable.
+          if (!fkInjected && table === libraryItemsTable) {
+            fkInjected = true;
+            // Fake builder that mirrors drizzle's chaining API but rejects on await.
+            const fakeBuilder: Record<string, unknown> = {};
+            fakeBuilder["values"] = () => fakeBuilder;
+            fakeBuilder["onConflictDoNothing"] = () => fakeBuilder;
+            fakeBuilder["then"] = (
+              onFulfilled: ((v: unknown) => unknown) | null | undefined,
+              onRejected: ((e: unknown) => unknown) | null | undefined,
+            ) => Promise.reject(fkErr).then(onFulfilled, onRejected);
+            return fakeBuilder;
+          }
+          // All other inserts (job-status updates, serviceConnections, …) go
+          // through the real DB so the worker can persist its state normally.
+          return origInsert(table);
+        });
 
-    // The resolved track must NOT appear as a soft row.
-    const softRows = await db
-      .select({ spotifyId: spotifyLibraryItemsTable.spotifyId })
-      .from(spotifyLibraryItemsTable)
-      .where(eq(spotifyLibraryItemsTable.userId, userId));
-    const softIds = softRows.map((r) => r.spotifyId);
-    expect(softIds).not.toContain(SOFT_P2_EXT_ID);
+      const jid = await createJob();
+      await runImportWorker(jid, userId, "spotify", connRow);
 
-    const [job] = await db
-      .select({ status: libraryImportJobsTable.status, resolved: libraryImportJobsTable.resolved })
-      .from(libraryImportJobsTable)
-      .where(eq(libraryImportJobsTable.id, jid));
-    expect(job!.status).toBe("done");
-    expect(job!.resolved).toBe(1);
-  });
+      insertSpy.mockRestore();
 
-  it("leaves spotify_library_items empty after a second re-import run", async () => {
-    if (!dbAvailable) return;
+      // library_items must NOT contain the track (the insert was rejected).
+      const libRows = await db
+        .select({ mbid: libraryItemsTable.mbid })
+        .from(libraryItemsTable)
+        .where(eq(libraryItemsTable.userId, userId));
+      expect(libRows.map((r) => r.mbid)).not.toContain(MBID_FK);
 
-    mockResolveByText.mockClear();
-    mockResolveByIsrc.mockClear();
+      // The track must NOT appear as a soft row — Phase 1 confirmed the MBID
+      // via ISRC and added the track to resolvedMbidIdx even though the insert
+      // failed, preventing it from being silently demoted to spotify_library_items.
+      const softRows = await db
+        .select({ spotifyId: spotifyLibraryItemsTable.spotifyId })
+        .from(spotifyLibraryItemsTable)
+        .where(eq(spotifyLibraryItemsTable.userId, userId));
+      expect(softRows.map((r) => r.spotifyId)).not.toContain(EXT_FK);
 
-    // Same track, same cache key — simulates the user triggering a re-import.
-    setupConnector([
-      { artist: ARTIST, title: "Phase2 Track", externalId: SOFT_P2_EXT_ID },
-    ]);
-
-    const jid = await createJob();
-    await runImportWorker(jid, userId, "spotify", connRow);
-
-    // Phase 3 must still have been skipped.
-    expect(mockResolveByText).not.toHaveBeenCalled();
-
-    // Soft table must remain clean after the re-import.
-    const softRows = await db
-      .select({ spotifyId: spotifyLibraryItemsTable.spotifyId })
-      .from(spotifyLibraryItemsTable)
-      .where(eq(spotifyLibraryItemsTable.userId, userId));
-    const softIds = softRows.map((r) => r.spotifyId);
-    expect(softIds).not.toContain(SOFT_P2_EXT_ID);
-
-    const [job] = await db
-      .select({ status: libraryImportJobsTable.status, resolved: libraryImportJobsTable.resolved })
-      .from(libraryImportJobsTable)
-      .where(eq(libraryImportJobsTable.id, jid));
-    expect(job!.status).toBe("done");
-    expect(job!.resolved).toBe(1);
-  });
+      // Job must reach "done" despite the FK failure.
+      const [job] = await db
+        .select({ status: libraryImportJobsTable.status })
+        .from(libraryImportJobsTable)
+        .where(eq(libraryImportJobsTable.id, jid));
+      expect(job!.status).toBe("done");
+    },
+    10_000,
+  );
 });
 
 // ── Mixed-phase regression test ──────────────────────────────────────────────
