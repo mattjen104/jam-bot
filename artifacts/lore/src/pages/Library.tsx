@@ -225,16 +225,29 @@ export function SyncBar({
           >
             {syncJobData.error ?? "Sync failed — try again."}
           </p>
-          <button
-            type="button"
-            onClick={onSync}
-            disabled={syncBusy || isSyncActive}
-            className="dial-ctabtn"
-            style={{ marginTop: 6 }}
-            data-testid="library-sync-again"
-          >
-            Sync again
-          </button>
+          {syncJobData.error?.toLowerCase().includes("reconnect spotify") ? (
+            <button
+              type="button"
+              onClick={onReconnect}
+              disabled={reconnectBusy}
+              className="dial-ctabtn"
+              style={{ marginTop: 6 }}
+              data-testid="library-reconnect-spotify"
+            >
+              {reconnectBusy ? "…" : "Reconnect Spotify"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onSync}
+              disabled={syncBusy || isSyncActive}
+              className="dial-ctabtn"
+              style={{ marginTop: 6 }}
+              data-testid="library-sync-again"
+            >
+              Sync again
+            </button>
+          )}
         </div>
       )}
       {syncJobData?.status === "done" &&

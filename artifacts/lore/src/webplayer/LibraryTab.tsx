@@ -1209,9 +1209,58 @@ export function LibraryTab({
             )}
 
             {syncJobData?.status === "error" && (
-              <p className="wp-mono" style={{ margin: "8px 0 0", fontSize: 11, color: "var(--wp-danger, #c0605f)" }} data-testid="wp-library-sync-job-error">
-                {syncJobData.error ?? "sync failed — please try again"}
-              </p>
+              <div style={{ margin: "8px 0 0" }} data-testid="wp-library-sync-job-error">
+                <p className="wp-mono" style={{ margin: 0, fontSize: 11, color: "var(--wp-danger, #c0605f)" }}>
+                  {syncJobData.error ?? "sync failed — please try again"}
+                </p>
+                {syncJobData.error?.toLowerCase().includes("reconnect spotify") ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleReconnect()}
+                    disabled={reconnectBusy}
+                    className="wp-mono"
+                    style={{
+                      marginTop: 6,
+                      fontSize: 11,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                      color: "var(--wp-text-secondary)",
+                      background: "none",
+                      border: "0.5px solid var(--wp-border)",
+                      borderRadius: 999,
+                      padding: "5px 12px",
+                      cursor: reconnectBusy ? "default" : "pointer",
+                      opacity: reconnectBusy ? 0.5 : 1,
+                    }}
+                    data-testid="wp-library-reconnect-spotify"
+                  >
+                    {reconnectBusy ? "opening…" : "reconnect spotify"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void handleSync()}
+                    disabled={syncBusy || isSyncActive}
+                    className="wp-mono"
+                    style={{
+                      marginTop: 6,
+                      fontSize: 11,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                      color: "var(--wp-text-secondary)",
+                      background: "none",
+                      border: "0.5px solid var(--wp-border)",
+                      borderRadius: 999,
+                      padding: "5px 12px",
+                      cursor: syncBusy || isSyncActive ? "default" : "pointer",
+                      opacity: syncBusy || isSyncActive ? 0.5 : 1,
+                    }}
+                    data-testid="wp-library-sync-again"
+                  >
+                    try again
+                  </button>
+                )}
+              </div>
             )}
           </div>
 
