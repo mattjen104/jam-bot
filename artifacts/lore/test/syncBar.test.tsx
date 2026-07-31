@@ -11,6 +11,9 @@
  *  - The button is enabled when both syncBusy and isSyncActive are false
  *  - The progress bar appears while isSyncActive is true and total > 0
  *  - The error block does NOT render when syncJobData.status !== "error"
+ *  - The "Reconnect Spotify" button appears only when syncNeedsReconnect is true
+ *  - Clicking "Reconnect Spotify" calls onReconnect
+ *  - The "Reconnect Spotify" button is disabled when reconnectBusy is true
  */
 import React from "react";
 import { describe, expect, it, vi, afterEach } from "vitest";
@@ -192,6 +195,93 @@ describe("SyncBar — 'Sync now' button", () => {
     renderSyncBar({ syncBusy: false, isSyncActive: false, onSync });
     fireEvent.click(screen.getByTestId("library-sync-button"));
     expect(onSync).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// "Reconnect Spotify" button — presence
+// ---------------------------------------------------------------------------
+
+describe("SyncBar — 'Reconnect Spotify' button presence", () => {
+  it("renders when syncError is set and syncNeedsReconnect is true", () => {
+    renderSyncBar({
+      syncError: "Token expired — please reconnect.",
+      syncNeedsReconnect: true,
+    });
+    expect(screen.getByTestId("library-reconnect-spotify")).toBeTruthy();
+  });
+
+  it("does NOT render when syncNeedsReconnect is false even if syncError is set", () => {
+    renderSyncBar({
+      syncError: "Something went wrong.",
+      syncNeedsReconnect: false,
+    });
+    expect(screen.queryByTestId("library-reconnect-spotify")).toBeNull();
+  });
+
+  it("does NOT render when syncError is null even if syncNeedsReconnect is true", () => {
+    renderSyncBar({
+      syncError: null,
+      syncNeedsReconnect: true,
+    });
+    expect(screen.queryByTestId("library-reconnect-spotify")).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// "Reconnect Spotify" button — click fires onReconnect
+// ---------------------------------------------------------------------------
+
+describe("SyncBar — 'Reconnect Spotify' calls onReconnect", () => {
+  it("triggers onReconnect when clicked", () => {
+    const onReconnect = vi.fn();
+    renderSyncBar({
+      syncError: "Token expired — please reconnect.",
+      syncNeedsReconnect: true,
+      onReconnect,
+    });
+    fireEvent.click(screen.getByTestId("library-reconnect-spotify"));
+    expect(onReconnect).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// "Reconnect Spotify" button — disabled while busy
+// ---------------------------------------------------------------------------
+
+describe("SyncBar — 'Reconnect Spotify' disabled states", () => {
+  it("is disabled when reconnectBusy is true", () => {
+    renderSyncBar({
+      syncError: "Token expired — please reconnect.",
+      syncNeedsReconnect: true,
+      reconnectBusy: true,
+    });
+    expect(
+      (screen.getByTestId("library-reconnect-spotify") as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
+  it("is enabled when reconnectBusy is false", () => {
+    renderSyncBar({
+      syncError: "Token expired — please reconnect.",
+      syncNeedsReconnect: true,
+      reconnectBusy: false,
+    });
+    expect(
+      (screen.getByTestId("library-reconnect-spotify") as HTMLButtonElement).disabled,
+    ).toBe(false);
+  });
+
+  it("does not fire onReconnect when disabled via reconnectBusy", () => {
+    const onReconnect = vi.fn();
+    renderSyncBar({
+      syncError: "Token expired — please reconnect.",
+      syncNeedsReconnect: true,
+      reconnectBusy: true,
+      onReconnect,
+    });
+    fireEvent.click(screen.getByTestId("library-reconnect-spotify"));
+    expect(onReconnect).not.toHaveBeenCalled();
   });
 });
 
