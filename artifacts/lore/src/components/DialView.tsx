@@ -271,7 +271,22 @@ function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onEarlier 
   // Tier 2: DJ name. Automated-rotation stations have no human host — suppress
   // the slot entirely so there is no empty placeholder implying a missing DJ.
   const isAutomated = ds.station.automationClass === "automated";
-  const djName = !isAutomated ? (show?.djName ?? null) : null;
+  const liveDjName = show?.djName ?? null;
+  // When the station is live but no schedule run has attached yet (run creation
+  // lags the first logged spin by up to a few minutes), fall back to the most
+  // recently-ended show's DJ name so the slot doesn't silently disappear.
+  // A 4-hour cutoff prevents surfacing a stale name from a prior day's show.
+  const fallbackDjName = !isAutomated && liveDjName === null
+    ? (() => {
+        const CUTOFF_MS = 4 * 60 * 60 * 1000;
+        const now = Date.now();
+        return ds.shows
+          .filter(sh => sh.djName != null && sh.state !== "future" && (now - new Date(sh.endedAt).getTime()) < CUTOFF_MS)
+          .sort((a, b) => new Date(b.endedAt).getTime() - new Date(a.endedAt).getTime())[0]
+          ?.djName ?? null;
+      })()
+    : null;
+  const djName = liveDjName ?? fallbackDjName;
 
   // Tier 3: [showName ·] station.name — destination label only.
   // Collapse showName when null or any "unknown show" variant.
