@@ -2016,13 +2016,14 @@ router.post("/me/library/sync", h(async (req, res) => {
           setImmediate(() => runSyncWorker(existingJob.id, user.id, conn, existingJob.committedOffset));
           return res.status(202).json({ jobId: existingJob.id, status: "running" });
         }
+      } else {
+        // No committed progress — reset so the user can start fresh.
+        console.warn(`[me/sync] job=${existingJob.id} orphaned (${Math.round(ageMs / 60_000)}m old) — resetting`);
+        await db
+          .update(librarySyncJobsTable)
+          .set({ status: "error", error: "Sync interrupted (server restarted) — please try again", finishedAt: new Date() })
+          .where(eq(librarySyncJobsTable.id, existingJob.id));
       }
-      // No committed progress — reset so the user can start fresh.
-      console.warn(`[me/sync] job=${existingJob.id} orphaned (${Math.round(ageMs / 60_000)}m old) — resetting`);
-      await db
-        .update(librarySyncJobsTable)
-        .set({ status: "error", error: "Sync interrupted (server restarted) — please try again", finishedAt: new Date() })
-        .where(eq(librarySyncJobsTable.id, existingJob.id));
     } else {
       return res.status(409).json({
         jobId: existingJob.id,
