@@ -2717,6 +2717,15 @@ components:
             resolution (≥20% yield); "silent" = active but near-zero usable
             metadata; "unscored" = fewer than 20 spins in the window. Null
             until the nightly quality recompute job has run at least once.
+        automationClass:
+          type: ["string", "null"]
+          enum: ["automated", "human", "mixed", null]
+          description: >-
+            Broad classification of how a station's programming is produced.
+            "automated" = algorithmic/jukebox rotation, no human curation;
+            "human" = live or pre-recorded human-selected programming;
+            "mixed" = both (e.g. overnight automation + daytime shows).
+            Null when not yet classified.
       required:
         - id
         - slug
@@ -4872,7 +4881,10 @@ components:
           type: string
         playedAt:
           type: string
-      required: [mbid, artistMbid, releaseGroupMbid, title, artist, playedAt]
+        isFirstSpin:
+          type: boolean
+          description: True when this is the first time this recording (by MBID) has ever appeared in the archive. False when mbid is null (unresolved).
+      required: [mbid, artistMbid, releaseGroupMbid, title, artist, playedAt, isFirstSpin]
     StationScheduleRunShow:
       type: object
       properties:

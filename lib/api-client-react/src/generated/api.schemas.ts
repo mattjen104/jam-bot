@@ -206,6 +206,20 @@ export const StationQualityTier = {
 } as const;
 
 /**
+ * Broad classification of how a station's programming is produced. "automated" = algorithmic/jukebox rotation, no human curation; "human" = live or pre-recorded human-selected programming; "mixed" = both (e.g. overnight automation + daytime shows). Null when not yet classified.
+ * @nullable
+ */
+export type StationAutomationClass =
+  | (typeof StationAutomationClass)[keyof typeof StationAutomationClass]
+  | null;
+
+export const StationAutomationClass = {
+  automated: "automated",
+  human: "human",
+  mixed: "mixed",
+} as const;
+
+/**
  * A curated radio station in the public directory.
  */
 export interface Station {
@@ -265,6 +279,11 @@ export interface Station {
    * @nullable
    */
   qualityTier?: StationQualityTier;
+  /**
+   * Broad classification of how a station's programming is produced. "automated" = algorithmic/jukebox rotation, no human curation; "human" = live or pre-recorded human-selected programming; "mixed" = both (e.g. overnight automation + daytime shows). Null when not yet classified.
+   * @nullable
+   */
+  automationClass?: StationAutomationClass;
 }
 
 export interface StationList {
@@ -1846,6 +1865,8 @@ export interface StationRecentSpin {
   title: string;
   artist: string;
   playedAt: string;
+  /** True when this is the first time this recording (by MBID) has ever appeared in the archive. False when mbid is null (unresolved). */
+  isFirstSpin: boolean;
 }
 
 export interface StationScheduleRunShow {

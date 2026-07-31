@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { StationAutomationClass } from "./stationAutomationClass";
 import type { StationQualityTier } from "./stationQualityTier";
 
 /**
@@ -67,4 +68,9 @@ export interface Station {
    * @nullable
    */
   qualityTier?: StationQualityTier;
+  /**
+   * Broad classification of how a station's programming is produced. "automated" = algorithmic/jukebox rotation, no human curation; "human" = live or pre-recorded human-selected programming; "mixed" = both (e.g. overnight automation + daytime shows). Null when not yet classified.
+   * @nullable
+   */
+  automationClass?: StationAutomationClass;
 }

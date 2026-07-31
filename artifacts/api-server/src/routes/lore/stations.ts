@@ -780,9 +780,30 @@ router.get("/stations/recent-spins", h(async (req, res) => {
     else bySlug.set(row.station_slug, [spin]);
   }
 
+  // Batch-check which resolved mbids have been seen in the archive before today.
+  // A single ANY() query is cheaper than N correlated sub-selects.
+  const allMbids = new Set<string>();
+  for (const spins of bySlug.values()) {
+    for (const sp of spins) { if (sp.mbid) allMbids.add(sp.mbid); }
+  }
+  const seenBeforeToday = new Set<string>();
+  if (allMbids.size > 0) {
+    const mbidArr = [...allMbids];
+    const mbidSql = sql.join(mbidArr.map((m) => sql`${m}`), sql`, `);
+    const seenRows = await db.execute<{ mbid: string }>(sql`
+      SELECT DISTINCT mbid FROM spins
+      WHERE mbid = ANY(ARRAY[${mbidSql}]::text[])
+        AND played_at::date < ${dateFilter}::date
+    `);
+    for (const row of seenRows.rows) seenBeforeToday.add(row.mbid);
+  }
+
   const items = [...bySlug.entries()].map(([stationSlug, spins]) => ({
     stationSlug,
-    spins,
+    spins: spins.map((sp) => ({
+      ...sp,
+      isFirstSpin: sp.mbid != null && !seenBeforeToday.has(sp.mbid),
+    })),
   }));
 
   return res.json(GetStationsRecentSpinsResponse.parse({ items }));

@@ -287,6 +287,17 @@ export const ListStationsResponse = zod.object({
           .describe(
             'Ingest quality tier derived from the last 7 days of logged spins. \"proven\" = strong MBID resolution (≥40%); \"promising\" = mostly track-shaped spins (≥50%); \"raw\" = metadata present but low resolution (≥20% yield); \"silent\" = active but near-zero usable metadata; \"unscored\" = fewer than 20 spins in the window. Null until the nightly quality recompute job has run at least once.',
           ),
+        automationClass: zod
+          .union([
+            zod.literal("automated"),
+            zod.literal("human"),
+            zod.literal("mixed"),
+            zod.literal(null),
+          ])
+          .nullish()
+          .describe(
+            'Broad classification of how a station\'s programming is produced. \"automated\" = algorithmic\/jukebox rotation, no human curation; \"human\" = live or pre-recorded human-selected programming; \"mixed\" = both (e.g. overnight automation + daytime shows). Null when not yet classified.',
+          ),
       })
       .describe("A curated radio station in the public directory."),
   ),
@@ -574,6 +585,17 @@ export const GetStationNowPlayingResponse = zod.object({
         .nullish()
         .describe(
           'Ingest quality tier derived from the last 7 days of logged spins. \"proven\" = strong MBID resolution (≥40%); \"promising\" = mostly track-shaped spins (≥50%); \"raw\" = metadata present but low resolution (≥20% yield); \"silent\" = active but near-zero usable metadata; \"unscored\" = fewer than 20 spins in the window. Null until the nightly quality recompute job has run at least once.',
+        ),
+      automationClass: zod
+        .union([
+          zod.literal("automated"),
+          zod.literal("human"),
+          zod.literal("mixed"),
+          zod.literal(null),
+        ])
+        .nullish()
+        .describe(
+          'Broad classification of how a station\'s programming is produced. \"automated\" = algorithmic\/jukebox rotation, no human curation; \"human\" = live or pre-recorded human-selected programming; \"mixed\" = both (e.g. overnight automation + daytime shows). Null when not yet classified.',
         ),
     })
     .describe("A curated radio station in the public directory."),
@@ -1295,6 +1317,17 @@ export const GetStationArchiveResponse = zod.object({
         .nullish()
         .describe(
           'Ingest quality tier derived from the last 7 days of logged spins. \"proven\" = strong MBID resolution (≥40%); \"promising\" = mostly track-shaped spins (≥50%); \"raw\" = metadata present but low resolution (≥20% yield); \"silent\" = active but near-zero usable metadata; \"unscored\" = fewer than 20 spins in the window. Null until the nightly quality recompute job has run at least once.',
+        ),
+      automationClass: zod
+        .union([
+          zod.literal("automated"),
+          zod.literal("human"),
+          zod.literal("mixed"),
+          zod.literal(null),
+        ])
+        .nullish()
+        .describe(
+          'Broad classification of how a station\'s programming is produced. \"automated\" = algorithmic\/jukebox rotation, no human curation; \"human\" = live or pre-recorded human-selected programming; \"mixed\" = both (e.g. overnight automation + daytime shows). Null when not yet classified.',
         ),
     })
     .describe("A curated radio station in the public directory."),
@@ -2430,10 +2463,20 @@ export const GetStationsRecentSpinsResponse = zod
             .object({
               mbid: zod.string().nullable(),
               artistMbid: zod.string().nullable(),
-              releaseGroupMbid: zod.string().nullable(),
+              releaseGroupMbid: zod
+                .string()
+                .nullable()
+                .describe(
+                  "Primary release-group MBID for the recording, used for album-level library crossing detection.",
+                ),
               title: zod.string(),
               artist: zod.string(),
               playedAt: zod.string(),
+              isFirstSpin: zod
+                .boolean()
+                .describe(
+                  "True when this is the first time this recording (by MBID) has ever appeared in the archive. False when mbid is null (unresolved).",
+                ),
             })
             .describe("One deduped spin chip for a station on a given day."),
         ),

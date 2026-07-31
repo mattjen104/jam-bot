@@ -267,30 +267,38 @@ interface FrontDoorRowProps {
 
 function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onEarlier }: FrontDoorRowProps) {
   const rz = reason(show, ds.crossings, ds.artistCrossings);
-  const isAttributed = !!show?.djName;
 
-  // §8 Person leads — selector name when attributed, station name otherwise
-  const primary = show?.djName ?? ds.station.name;
+  // Tier 2: DJ name. Automated-rotation stations have no human host — suppress
+  // the slot entirely so there is no empty placeholder implying a missing DJ.
+  const isAutomated = ds.station.automationClass === "automated";
+  const djName = !isAutomated ? (show?.djName ?? null) : null;
 
-  // Mono ctx line rendered as JSX so the live ♪ symbol can be coloured blue.
+  // Tier 3: [showName ·] station.name — destination label only.
+  // Collapse showName when null or any "unknown show" variant.
+  const rawShow = show?.showName ?? null;
+  const showName = rawShow && rawShow.toLowerCase() !== "unknown show" ? rawShow : null;
+
   const currentTrack = show?.currentTrack ?? null;
-  const ctxTextParts = isAttributed
-    ? [ds.station.name, show!.showName].filter(Boolean)
-    : [show?.showName ?? null].filter(Boolean);
-  const ctxText = (ctxTextParts as string[]).join(" · ") || (currentTrack ? "" : "—");
-  const ctxNode = (
-    <>
-      {ctxText}
-      {currentTrack && (
-        <>{ctxText ? " · " : ""}<span className="fdrow__ctx-live">♪</span>{` ${currentTrack.title}`}</>
-      )}
-    </>
-  );
 
-  // ovi: sort key shown inline with person name
-  const oviStr = isAttributed
-    ? (ov > 0 ? String(ov) : "0")
-    : (ov > 0 ? String(ov) : "—");
+  // T3 carries the ♪ track note only for Zone 1 crossing rows (r=3/r=4) where
+  // the reason mentions artist names — not the current track title. All other
+  // rungs either already have the title in the reason (r=1) or get a more
+  // prominent bare-fact slot below (Zone 3: r=0/r≥5).
+  const showTrackInT3 = (rz.r === 3 || rz.r === 4) && currentTrack !== null;
+  // Zone 3 rows get a standalone bare-fact track line, more legible than T3.
+  const showBareTrack = (rz.r === 0 || rz.r >= 5) && currentTrack !== null;
+
+  const tier3Text = [showName, ds.station.name].filter(Boolean).join(" · ");
+  const tier3Node = showTrackInT3 ? (
+    <>
+      {tier3Text}
+      {" · "}
+      <span className="fdrow__t3-live">♪</span>
+      {` ${currentTrack!.title}`}
+    </>
+  ) : (
+    <>{tier3Text}</>
+  );
 
   const rowCls = [
     "fdrow",
@@ -310,14 +318,29 @@ function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onEarlier 
       onKeyDown={(e) => e.key === "Enter" && onTuneIn()}
     >
       <div className="fdrow__c">
-        <div className="fdrow__hd">
-          <span className="fdrow__pri">{primary}</span>
-          <span className={`fdrow__ovi${!isAttributed ? " fdrow__ovi--st" : ov === 0 ? " fdrow__ovi--zero" : ""}`}>
-            {oviStr}
-          </span>
-        </div>
-        <div className="fdrow__ctx">{ctxNode}</div>
-        <div className={`fdrow__why ${rz.cls}`}>{rz.node}</div>
+        {/* Tier 1: reason sentence — leads at full display weight */}
+        <div className={`fdrow__t1 ${rz.cls}`}>{rz.node}</div>
+
+        {/* Tier 2: human DJ name when known. Never rendered for automated stations. */}
+        {djName && (
+          <div className="fdrow__t2">
+            {djName}
+            {ov > 0 && <span className="fdrow__t2-ov">{ov}</span>}
+          </div>
+        )}
+
+        {/* Tier 3: show · station — small identity label */}
+        <div className="fdrow__t3">{tier3Node}</div>
+
+        {/* Bare track: Zone 3 rows only — a legible plain fact, not a caption */}
+        {showBareTrack && (
+          <div className="fdrow__bare-track">
+            {currentTrack!.isFirstSpin && <span className="fdrow__bare-track__new" title="First time in the archive">◈ </span>}
+            {currentTrack!.title}
+          </div>
+        )}
+
+        {/* Footer: station is always in Tier 3, so we never need to repeat it */}
         <div className="fdrow__foot">
           <button
             type="button"
@@ -325,7 +348,7 @@ function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onEarlier 
             onClick={(e) => { e.stopPropagation(); onEarlier(); }}
             onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); onEarlier(); } }}
           >
-            ↩ earlier on {ds.station.name}
+            ↩ earlier
           </button>
         </div>
       </div>
@@ -872,22 +895,13 @@ function OfflineRow({
       <span className={`dial-stn-dot${hasCrossings ? " dial-stn-dot--cross" : ""}`} />
       <div className="dial-stn-info">
         <div className="dial-stn-name">{station.name}</div>
-        {hasShowName ? (
-          <div className="dial-stn-now">
-            {lastShow!.showName}
-            {lastShow!.djName && <> · <b>{lastShow!.djName}</b></>}
-          </div>
-        ) : lastSpin ? (
-          <div className="dial-stn-now">
-            {lastSpin.title}
-            {lastSpin.artist && <> — <b>{lastSpin.artist}</b></>}
-          </div>
-        ) : (
-          <div className="dial-stn-now" style={{ opacity: 0.35 }}>No data today</div>
+        {hasShowName && (
+          <div className="dial-stn-now">{lastShow!.showName}</div>
         )}
-        {hasShowName && lastSpin && (
+        {lastSpin && (
           <div className="dial-stn-track">
-            {lastSpin.title}{lastSpin.artist ? ` — ${lastSpin.artist}` : ""}
+            {lastSpin.isFirstSpin && <span className="dial-stn-track__new" title="First time in the archive">◈ </span>}
+            {lastSpin.title}
           </div>
         )}
       </div>

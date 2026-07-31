@@ -17,4 +17,6 @@ export interface StationRecentSpin {
   title: string;
   artist: string;
   playedAt: string;
+  /** True when this is the first time this recording (by MBID) has ever appeared in the archive. False when mbid is null (unresolved). */
+  isFirstSpin: boolean;
 }

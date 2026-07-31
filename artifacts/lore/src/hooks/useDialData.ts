@@ -48,6 +48,8 @@ export interface DialSpin {
   isLibraryHit: boolean;
   /** Artist is in the user's library but this exact track/album is not. */
   isArtistHit: boolean;
+  /** First-ever appearance of this recording (by MBID) in the archive. */
+  isFirstSpin: boolean;
 }
 
 export interface DialShow {
@@ -415,6 +417,9 @@ export function useDialData(): {
           !isLibraryHit &&
           ((artistMbid != null && libraryArtistMbidSet.has(artistMbid)) ||
             softArtistSet.has(artist.toLowerCase().trim())),
+        // Live-polled tracks don't go through the recent-spins archive batch
+        // that computes isFirstSpin — conservatively set to false.
+        isFirstSpin: false,
       });
     }
     // SSE overrides: more recent than the REST poll, applied last so the Dial
@@ -432,6 +437,7 @@ export function useDialData(): {
           !isLibraryHit &&
           ((entry.artistMbid != null && libraryArtistMbidSet.has(entry.artistMbid)) ||
             softArtistSet.has(entry.artist.toLowerCase().trim())),
+        isFirstSpin: false,
       });
     }
     return m;
@@ -522,6 +528,7 @@ export function useDialData(): {
               playedAt: sp.playedAt,
               isLibraryHit: exactHit || rgHit,
               isArtistHit: artistHit,
+              isFirstSpin: sp.isFirstSpin ?? false,
             };
           });
 

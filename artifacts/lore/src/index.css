@@ -1416,17 +1416,8 @@
   text-overflow: ellipsis;
 }
 .dial-stn-now b { font-style: normal; font-weight: 600; color: hsl(var(--dim)); }
-.dial-stn-cross {
-  font-family: var(--app-font-mono);
-  font-size: 9px;
-  text-align: right;
-  flex-shrink: 0;
-}
-.dial-stn-cross__num { color: hsl(var(--library)); display: block; }
-.dial-stn-cross__lbl { color: hsl(var(--faint)); font-size: 8px; }
-.dial-stn-cross--zero .dial-stn-cross__num { color: hsl(var(--faint)); }
 
-/* Track sub-line under the show name in an offline row */
+/* Track sub-line — bare title fact, no artist appended */
 .dial-stn-track {
   font-family: var(--app-font-mono);
   font-size: 9px;
@@ -1436,6 +1427,18 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* ◈ first-ever-spin mark in offline rows */
+.dial-stn-track__new { color: hsl(var(--library) / 0.7); font-style: normal; }
+
+.dial-stn-cross {
+  font-family: var(--app-font-mono);
+  font-size: 9px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.dial-stn-cross__num { color: hsl(var(--library)); display: block; }
+.dial-stn-cross__lbl { color: hsl(var(--faint)); font-size: 8px; }
+.dial-stn-cross--zero .dial-stn-cross__num { color: hsl(var(--faint)); }
 
 /* ── Schedule view ── */
 .dial-sch-row {
@@ -2588,38 +2591,51 @@
 
 .fdrow__c { flex: 1; min-width: 0; }
 
-/* Person leads — 17px serif (spec §8) */
-.fdrow__hd {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  margin-bottom: 3px;
-}
-.fdrow__pri {
+/* Tier 1: reason sentence — leads at full display weight */
+.fdrow__t1 {
   font-family: var(--app-font-display);
   font-size: 17px;
   font-weight: 600;
-  line-height: 1.15;
-  color: hsl(var(--foreground));
-  flex: 1;
-  min-width: 0;
+  line-height: 1.2;
+  margin-bottom: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fdrow__t1 b { font-style: normal; font-weight: 600; color: hsl(var(--picker)); }
+.fdrow__t1.w1 { color: hsl(var(--library)); }
+.fdrow__t1.w2 { color: hsl(var(--foreground) / 0.9); }
+.fdrow__t1.w3 { color: hsl(var(--foreground) / 0.7); }
+.fdrow__t1.w4 { color: hsl(var(--foreground) / 0.7); }
+.fdrow__t1.w5 { color: hsl(var(--muted-foreground)); }
+.fdrow__t1.w6 { color: hsl(var(--muted-foreground)); }
+.fdrow__t1.w7 { color: hsl(var(--muted-foreground)); }
+.fdrow__t1.w0 { color: hsl(var(--muted-foreground) / 0.5); }
+
+/* Tier 2: human DJ name — secondary identity, clearly readable */
+.fdrow__t2 {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--app-font-display);
+  font-size: 13px;
+  font-weight: 600;
+  color: hsl(var(--foreground) / 0.85);
+  line-height: 1.2;
+  margin-bottom: 3px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.fdrow__ovi {
-  font-family: var(--app-font-display);
-  font-size: 13px;
-  font-weight: 600;
+/* Lifetime overlap count — small muted number alongside DJ name */
+.fdrow__t2-ov {
+  font-size: 11px;
+  font-weight: 400;
   color: hsl(var(--library));
   flex-shrink: 0;
-  line-height: 1;
 }
-.fdrow__ovi--zero { color: hsl(var(--muted-foreground) / 0.5); }
-.fdrow__ovi--st   { color: hsl(var(--muted-foreground) / 0.6); font-weight: 400; }
 
-/* Mono ctx line: station · show · ♪ track */
-.fdrow__ctx {
+/* Tier 3: show · station — small identifier label */
+.fdrow__t3 {
   font-family: var(--app-font-mono);
   font-size: 9px;
   color: hsl(var(--muted-foreground) / 0.7);
@@ -2628,30 +2644,23 @@
   text-overflow: ellipsis;
   margin-bottom: 5px;
 }
-/* ♪ now-playing symbol — blue to signal live audio */
-.fdrow__ctx-live {
-  color: hsl(var(--live));
-  font-style: normal;
+/* ♪ live symbol in Tier 3 — blue */
+.fdrow__t3-live { color: hsl(var(--live)); font-style: normal; }
+
+/* Bare track: Zone 3 rows — legible plain fact below the identity label */
+.fdrow__bare-track {
+  font-family: var(--app-font-reading);
+  font-size: 12px;
+  color: hsl(var(--muted-foreground) / 0.75);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
 }
+/* ◈ first-ever-spin mark */
+.fdrow__bare-track__new { color: hsl(var(--library) / 0.8); font-style: normal; }
 
-/* Reason sentence — italic serif (spec §3) */
-.fdrow__why {
-  font-family: var(--app-font-display);
-  font-style: italic;
-  font-size: 13px;
-  line-height: 1.4;
-  margin-bottom: 7px;
-}
-.fdrow__why b { font-style: normal; font-weight: 600; color: hsl(var(--picker)); }
-
-.fdrow__why.w1 { color: hsl(var(--library)); }
-.fdrow__why.w2 { color: hsl(var(--foreground) / 0.9); }
-.fdrow__why.w3 { color: hsl(var(--foreground) / 0.7); }
-.fdrow__why.w6 { color: hsl(var(--muted-foreground)); }
-.fdrow__why.w7 { color: hsl(var(--muted-foreground)); }
-.fdrow__why.w0 { color: hsl(var(--muted-foreground) / 0.5); }
-
-/* ↩ earlier on STATION (spec §13) */
+/* ↩ earlier */
 .fdrow__foot { display: flex; }
 .fdrow__back {
   font-family: var(--app-font-mono);

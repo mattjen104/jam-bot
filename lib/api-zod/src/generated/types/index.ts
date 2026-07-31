@@ -165,6 +165,7 @@ export * from "./spotifySaveResult";
 export * from "./spotifyStatus";
 export * from "./station";
 export * from "./stationArchive";
+export * from "./stationAutomationClass";
 export * from "./stationCoverage";
 export * from "./stationInsights";
 export * from "./stationList";

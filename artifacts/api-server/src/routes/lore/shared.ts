@@ -71,6 +71,7 @@ export function toStation(
     upcomingShowCount: s.upcomingShowCount ?? 0,
     tier: s.tier ?? null,
     qualityTier: qualityTier ?? null,
+    automationClass: s.automationClass ?? null,
   };
 }
 
