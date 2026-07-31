@@ -263,7 +263,7 @@ export function useDialData(): {
   // ── server-computed crossing scores (rolling 24h, full spin history) ────────
   // These replace the client-side crossing reduction at the station level so
   // ranking is consistent across clients and not bounded by the fetch page cap.
-  const { data: serverCrossings } = useMyDialCrossings(today);
+  const { data: serverCrossings, isLoading: crossingsLoading } = useMyDialCrossings(today);
 
   const serverCrossingsBySlug = useMemo(() => {
     const m = new Map<string, { crossings: number; artistCrossings: number }>();
@@ -591,11 +591,11 @@ export function useDialData(): {
   }, [stationsData, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, libraryMbidSet, libraryReleaseGroupSet, libraryArtistMbidSet, pickerNames, serverCrossingsBySlug]);
 
   const isLoading = stationsLoading || liveLoading || schedLoading || spinsLoading;
-  // Narrower gate: only blocks until the station list arrives. The live pulse
-  // races independently — the offline section waits for it (no-flash guarantee)
-  // but the spinner drops as soon as stations load so a slow pulse doesn't hang
-  // the whole page.
-  const isCoreLoading = stationsLoading;
+  // isCoreLoading gates the front-door zones (1, 2, 3).  It must include
+  // crossingsLoading so ranking is stable before zones render — otherwise
+  // Zone 3 paints first (all stations, crossings=0) and then jumps when the
+  // server scores arrive, which the user sees as "lower sections load first".
+  const isCoreLoading = stationsLoading || crossingsLoading;
 
   return { stations, isLoading, isCoreLoading, liveLoading };
 }

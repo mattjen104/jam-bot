@@ -1731,8 +1731,11 @@ router.get("/me/library", h(async (req, res) => {
 
   // ── Total count (page 1 only) — sum of resolved + soft ──────────────────
   let total: number | undefined;
+  // keepCount: always the full radio-keep count regardless of current source/q
+  // filter, so the hero stat is accurate even when the user has a filter active.
+  let keepCount: number | undefined;
   if (!cursor) {
-    const [resolvedCount, softCount] = await Promise.all([
+    const [resolvedCount, softCount, rawKeepCount] = await Promise.all([
       includeResolved
         ? db
             .select({ count: sql<number>`count(*)::int` })
@@ -1760,8 +1763,21 @@ router.get("/me/library", h(async (req, res) => {
               .then((r) => r[0]?.count ?? 0);
           })()
         : Promise.resolve(0),
+      // Radio keeps — always counted regardless of active source/q filter so the
+      // hero stat is stable and doesn't disappear when a different filter is active.
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(libraryItemsTable)
+        .where(
+          and(
+            eq(libraryItemsTable.userId, user.id),
+            sql`${libraryItemsTable.provenance}->>'kind' = 'keep'`,
+          ),
+        )
+        .then((r) => r[0]?.count ?? 0),
     ]);
     total = resolvedCount + softCount;
+    keepCount = rawKeepCount;
   }
 
   // Sort key expression for resolved rows (name sorts).
@@ -1971,6 +1987,7 @@ router.get("/me/library", h(async (req, res) => {
     })),
     nextCursor,
     ...(total !== undefined ? { total } : {}),
+    ...(keepCount !== undefined ? { keepCount } : {}),
   });
 }));
 

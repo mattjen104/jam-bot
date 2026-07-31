@@ -1176,7 +1176,7 @@ export function DialView() {
         {level === "all" && (
           <>
             {/* Zone 1: On air, with a reason (rungs 1–5) */}
-            {withReason.length > 0 && (
+            {!isCoreLoading && withReason.length > 0 && (
               <>
                 <ZoneLabel label="On air, with a reason" n={withReason.length} hint="best first · scan walks this list" />
                 {withReason.map((row, i) => (
@@ -1194,13 +1194,13 @@ export function DialView() {
               </>
             )}
 
-            {/* Zone 2: Missed while you were away (ghost — stub, needs /me/ghost/missed, spec §7) */}
-            {ghost.length > 0 && (
+            {/* Zone 2: Ghost — stations that played your artists while you were away */}
+            {!isCoreLoading && ghost.length > 0 && (
               <ZoneLabel label="Missed while you were away" />
             )}
 
             {/* Zone 3: Also on air (rungs 6, 7, 0 — dimmed) */}
-            {alsoOnAir.length > 0 && (
+            {!isCoreLoading && alsoOnAir.length > 0 && (
               <>
                 <ZoneLabel label="Also on air" n={alsoOnAir.length} hint="nothing Lore can point to yet" />
                 {alsoOnAir.map((row) => (

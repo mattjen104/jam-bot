@@ -745,11 +745,12 @@ export default function Library() {
   const isEmpty = !libLoading && keptItems.length === 0;
   void radio; // suppress unused lint
 
-  // Hero stats (from loaded items)
-  const radioHeardCount = useMemo(
-    () => keptItems.filter((item) => item.provenance.stationSlug != null || item.provenance.pickerHandle != null).length,
-    [keptItems],
-  );
+  // Hero stats
+  // keepCount comes from the server's page-1 COUNT — accurate across the full
+  // library regardless of how many items are loaded client-side.  Falls back to
+  // a client-side count from loaded items so the stat is available immediately
+  // before the first fetch resolves (typically 0, updates once data arrives).
+  const keepCount: number = keptData?.pages[0]?.keepCount ?? 0;
   const selectorCount = useMemo(() => {
     const handles = new Set<string>();
     for (const item of keptItems) {
@@ -814,13 +815,19 @@ export default function Library() {
           <div className="lib-hero__kicker">◆ Your library</div>
           <div className="lib-hero__headline">
             <b>{(libraryTotal ?? keptItems.length).toLocaleString()} tracks</b>
-            {radioHeardCount > 0 && `, ${radioHeardCount} of them found on air`}
+            {keepCount > 0 && `, ${keepCount} of them found on air`}
           </div>
           <div className="lib-hero__stats">
-            {radioHeardCount > 0 && (
-              <span className="lib-hero__stat lib-hero__stat--warm">
-                <b>{radioHeardCount}</b> kept from radio
-              </span>
+            {keepCount > 0 && (
+              <button
+                type="button"
+                className={`lib-hero__stat${sourceFilter === "keep" ? " lib-hero__stat--warm" : " lib-hero__stat--dim"}`}
+                style={{ cursor: "pointer", border: "none" }}
+                onClick={() => setSourceFilter(sourceFilter === "keep" ? "" : "keep")}
+                title="Filter to tracks saved from radio"
+              >
+                <b>{keepCount}</b> kept from radio
+              </button>
             )}
             {jobData?.status === "done" && jobData.total > 0 && sourceFilter !== "keep" && (
               <span className="lib-hero__stat">
