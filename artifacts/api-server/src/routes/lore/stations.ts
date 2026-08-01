@@ -219,7 +219,7 @@ router.get("/stations/now-playing/stream", h(async (req, res) => {
   // here (session lookup, DB query) falls back to the empty context so the
   // stream still opens — hit flags just won't fire for that connection.
   const user = await getUserFromSession(req).catch(() => null);
-  const hitCtx = user
+  let hitCtx = user
     ? await buildLibraryHitContext(user.id).catch(() => EMPTY_HIT_CONTEXT)
     : EMPTY_HIT_CONTEXT;
 
@@ -249,8 +249,21 @@ router.get("/stations/now-playing/stream", h(async (req, res) => {
   // Keep-alive comment every 30s so idle proxies don't kill the connection.
   const ping = setInterval(() => res.write(":ping\n\n"), 30_000);
 
+  // Refresh the library hit context every 5 minutes so a Spotify import or
+  // manual keep completed mid-session is reflected within one polling cycle.
+  // Fire-and-forget: if the DB is temporarily unavailable the stale context
+  // is kept and the stream continues uninterrupted.
+  const hitCtxRefresh = user
+    ? setInterval(() => {
+        buildLibraryHitContext(user.id)
+          .then((fresh) => { hitCtx = fresh; })
+          .catch(() => { /* keep stale context on error */ });
+      }, 5 * 60 * 1000)
+    : null;
+
   req.on("close", () => {
     clearInterval(ping);
+    if (hitCtxRefresh !== null) clearInterval(hitCtxRefresh);
     spinEvents.off("spin-changed", onSpin);
   });
 }));
