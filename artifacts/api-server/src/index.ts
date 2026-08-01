@@ -54,6 +54,7 @@ import { wireScheduleExtractor } from "./lore/schedule-wire.js";
 import { startScheduleScraper } from "./lore/schedule-scraper.js";
 import { markOrphanedImportJobsAsError, markOrphanedSyncJobsAsError, startPhase3RetryScheduler } from "./routes/me/index.js";
 import { applyDeviceIdentityMigration } from "./lore/device-identity-migration.js";
+import { applySpinDedupCleanup } from "./lore/spin-dedup-cleanup.js";
 
 const rawPort = process.env["PORT"];
 
@@ -96,6 +97,7 @@ async function bootLore(): Promise<void> {
     await runMigration("applyLedgerMigration", applyLedgerMigration);
     await runMigration("applySelectorClaimsMigration", applySelectorClaimsMigration);
     await runMigration("applySpotifyLibraryItemsMigration", applySpotifyLibraryItemsMigration);
+    await runMigration("applySpinDedupCleanup", applySpinDedupCleanup);
     await ensurePicksUnifiedView();
     await seedStations();
     try {
