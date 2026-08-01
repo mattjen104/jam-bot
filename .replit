@@ -36,6 +36,10 @@ LORE_BACKFILL_FLOOR = "2012-01-01T00:00:00Z"
 
 [userenv.development]
 
+[userenv.production]
+SPOTIFY_LIBRARY_REDIRECT_URI = "https://tune-tribe.replit.app/api/me/connect/spotify/callback"
+SPOTIFY_REDIRECT_URI = "https://tune-tribe.replit.app/api/spotify/callback"
+
 [[ports]]
 localPort = 8080
 externalPort = 8080
