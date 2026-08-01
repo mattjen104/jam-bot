@@ -233,6 +233,55 @@ describe("ShowTimeline — stale-only run (the latent-bug scenario)", () => {
   });
 });
 
+describe("ShowTimeline — active chip highlight drops when a show ends", () => {
+  it("chip has the active class when endedAt is just now (within the 4-hour recency window)", () => {
+    const now = Date.now();
+    // Show started 2 h ago and ended right now — still within the recency window.
+    const run = makeRun({
+      runId: 30,
+      resolvedCount: 0,
+      startedAt: new Date(now - 2 * 60 * 60_000).toISOString(),
+      endedAt: new Date(now).toISOString(),
+    });
+
+    const { container } = renderList("test-fm", [run]);
+
+    const chip = getChip(container, 30);
+    expect(chip, "show-chip-30 should be in the DOM").not.toBeNull();
+    expect(
+      chip!.className,
+      "chip should carry the active border class when endedAt is just now",
+    ).toContain("border-primary/40");
+  });
+
+  it("chip loses the active class when endedAt is 5 hours ago (outside the 4-hour recency window)", () => {
+    const now = Date.now();
+    // Run A: ended 5 hours ago — outside the 4-hour recency window, must NOT be active.
+    const staleRun = makeRun({
+      runId: 31,
+      resolvedCount: 0,
+      startedAt: new Date(now - 7 * 60 * 60_000).toISOString(),
+      endedAt: new Date(now - 5 * 60 * 60_000).toISOString(),
+    });
+    // Run B: currently live — becomes the activeRunId so the fallback never promotes staleRun.
+    const activeRun = makeRun({
+      runId: 32,
+      resolvedCount: 0,
+      startedAt: new Date(now - 30 * 60_000).toISOString(),
+      endedAt: new Date(now + 90 * 60_000).toISOString(),
+    });
+
+    const { container } = renderList("test-fm", [staleRun, activeRun]);
+
+    const chip = getChip(container, 31);
+    expect(chip, "show-chip-31 should be in the DOM").not.toBeNull();
+    expect(
+      chip!.className,
+      "chip should NOT carry the active border class when endedAt is 5 hours ago",
+    ).not.toContain("border-primary/40");
+  });
+});
+
 describe("ShowTimeline — Play icon on replayable chips (existing behaviour)", () => {
   it("renders the Play icon on a past chip that has resolved tracks even when not active", () => {
     const now = Date.now();
