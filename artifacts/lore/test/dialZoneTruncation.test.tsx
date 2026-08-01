@@ -685,25 +685,20 @@ describe("Expansion state reset behaviour", () => {
   });
 
   /**
-   * Fast-refresh / transient-shrink contract.
+   * Transient-shrink resilience.
    *
-   * Current behaviour: expansion resets on ANY slug-key change, including a
-   * transient shrink followed by a full recovery.  This means:
+   * When a slow-connection refetch temporarily drops stations and then restores
+   * the original set, Zone 1 should stay expanded rather than collapsing on the
+   * user mid-session.
    *
-   *   expand (9 slugs) → shrink (7 slugs) → key change → COLLAPSED
-   *                    → recover (9 slugs) → key change → COLLAPSED
+   *   expand (9 slugs) → shrink (7 slugs) → collapses to default truncated view
+   *                    → recover (9 slugs) → silently re-expands (key matches
+   *                                          the expand-time anchor)
    *
-   * The zone does NOT re-expand automatically once the full set returns because
-   * the useEffect fires again on the recovery key change and resets the flag.
-   * This is the accepted contract: any membership change resets expansion, and
-   * a user who had expanded must click "See all" again after a reshuffle.
-   *
-   * If the product decision changes to "stay expanded when the set recovers to
-   * its original membership", the useEffect condition must change (e.g. only
-   * reset when the NEW key differs from the key at expand-time), and this test
-   * should be updated to assert `fdrowCount() === 9` after the recovery step.
+   * Only a genuinely different slug set (new stations appear / old ones stay
+   * gone) triggers a permanent reset.
    */
-  it("collapses on transient shrink and stays collapsed once the full slug set recovers (current contract)", () => {
+  it("restores expanded state when the full slug set recovers after a transient shrink", () => {
     const stations9 = Array.from({ length: 9 }, (_, i) => makeZone1Station(`s${i}`));
     mockDialData(stations9);
     mockGhosts([]);
@@ -719,7 +714,7 @@ describe("Expansion state reset behaviour", () => {
     mockDialData(stations7);
     act(() => { rerender(<DialView />); });
 
-    // Slug key changed → zone collapses immediately.
+    // Slug key changed → zone collapses to default truncated view.
     expect(fdrowCount()).toBe(5);
     expect(screen.getByRole("button", { name: "See all 7" })).toBeTruthy();
 
@@ -727,9 +722,7 @@ describe("Expansion state reset behaviour", () => {
     mockDialData(stations9);
     act(() => { rerender(<DialView />); });
 
-    // Slug key changed again (7→9) → another reset fires → still collapsed.
-    // The user must manually re-expand after the reshuffle.
-    expect(fdrowCount()).toBe(5);
-    expect(screen.getByRole("button", { name: "See all 9" })).toBeTruthy();
+    // Key matches the expand-time anchor → zone silently re-expands.
+    expect(fdrowCount()).toBe(9);
   });
 });
