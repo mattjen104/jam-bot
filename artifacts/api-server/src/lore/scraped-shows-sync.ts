@@ -246,6 +246,22 @@ export async function stampSpinShowIds(): Promise<number> {
 // ---------------------------------------------------------------------------
 
 /**
+ * Clear cached automation-class entries for the given station IDs, or clear
+ * the entire cache when no IDs are supplied. Call after any operation that
+ * rewrites a station's scraped_shows schedule so the dial reflects the new
+ * data on the very next request rather than serving a stale TTL value.
+ */
+export function clearAutomationClassCache(stationIds?: number[]): void {
+  if (!stationIds || stationIds.length === 0) {
+    automationClassCache.clear();
+    return;
+  }
+  for (const id of stationIds) {
+    automationClassCache.delete(id);
+  }
+}
+
+/**
  * Full sync: create shows rows from scraped_shows, link DJ pickers, then
  * backfill spins.show_id for stations with a known timezone. Idempotent and
  * safe to run at boot or after each schedule scrape cycle. Never throws —
@@ -260,6 +276,13 @@ export async function syncScrapedShows(): Promise<void> {
       `[scraped-shows-sync] shows created: ${showsCreated}, ` +
         `pickers linked: ${pickersLinked}, spins stamped: ${spinsStamped}`,
     );
+
+    // Evict stale automation-class cache entries for every station whose
+    // schedule was just (re)written so the next dial refresh reads live data.
+    const affected = await db.execute<{ station_id: number }>(
+      sql`SELECT DISTINCT station_id FROM scraped_shows`,
+    );
+    clearAutomationClassCache(affected.rows.map((r) => r.station_id));
   } catch (err) {
     console.error("[scraped-shows-sync] sync failed", err);
   }
