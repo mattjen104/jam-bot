@@ -6,12 +6,13 @@ function phaseLabel(job: ImportJobStatus): string {
   if (job.resumedFrom != null && job.phase !== "fetching") {
     return "Resuming from previous session…";
   }
+  const isManual = job.service === "manual";
   switch (job.phase) {
     case "fetching": return "Reading your Spotify library…";
-    case "spine":    return "Building track index…";
+    case "spine":    return isManual ? "Preparing track list…" : "Building track index…";
     case "cache":    return "Loading cached matches…";
     case "resolve":  return "Matching against your library…";
-    default:         return "Reading your Spotify library…";
+    default:         return isManual ? "Preparing track list…" : "Reading your Spotify library…";
   }
 }
 

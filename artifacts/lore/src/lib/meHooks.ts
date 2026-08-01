@@ -175,6 +175,16 @@ export async function postStartImport(service: string): Promise<{ jobId: number;
   );
 }
 
+/** Start a manual track-list import (CSV/paste). No service connection required. */
+export async function postStartManualImport(
+  tracks: Array<{ artist: string; title: string }>,
+): Promise<{ jobId: number; status: string }> {
+  return apiFetch<{ jobId: number; status: string }>(
+    "/api/me/library/import/manual",
+    { method: "POST", body: JSON.stringify({ tracks }), headers: { "Content-Type": "application/json" } },
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Sync (push Lore library → Spotify)
 // ---------------------------------------------------------------------------

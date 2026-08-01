@@ -345,6 +345,68 @@ router.post(
 );
 
 /**
+ * POST /api/me/library/import/manual — kick off a background import from a
+ * user-supplied track list (CSV/paste).  No service connection required.
+ * Body: { tracks: [{ artist: string; title: string }] }
+ */
+router.post("/me/library/import/manual", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+
+  const raw = req.body?.tracks;
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return res.status(400).json({ error: "tracks must be a non-empty array" });
+  }
+  if (raw.length > 10_000) {
+    return res.status(400).json({ error: `Too many tracks (max 10,000; got ${raw.length})` });
+  }
+
+  const tracks: ImportBufferEntry[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const t = raw[i];
+    if (typeof t?.artist !== "string" || !t.artist.trim()) {
+      return res.status(400).json({ error: `Track ${i}: artist is required` });
+    }
+    if (typeof t?.title !== "string" || !t.title.trim()) {
+      return res.status(400).json({ error: `Track ${i}: title is required` });
+    }
+    const artist = t.artist.trim();
+    const title = t.title.trim();
+    tracks.push({ artist, title, isrc: null, durationMs: null, externalId: `${artist}\u001f${title}` });
+  }
+
+  // Zombie guard — same pattern as Spotify import.
+  const ZOMBIE_AGE_MS = 30 * 60_000;
+  const [existingJob] = await db
+    .select({ id: libraryImportJobsTable.id, status: libraryImportJobsTable.status, startedAt: libraryImportJobsTable.startedAt })
+    .from(libraryImportJobsTable)
+    .where(and(
+      eq(libraryImportJobsTable.userId, user.id),
+      eq(libraryImportJobsTable.service, "manual"),
+      inArray(libraryImportJobsTable.status, ["running", "pending"]),
+    ))
+    .limit(1);
+
+  if (existingJob) {
+    const ageMs = Date.now() - existingJob.startedAt.getTime();
+    if (ageMs > ZOMBIE_AGE_MS) {
+      await db.update(libraryImportJobsTable)
+        .set({ status: "error", error: "Import interrupted — please try again", finishedAt: new Date() })
+        .where(eq(libraryImportJobsTable.id, existingJob.id));
+    } else {
+      return res.status(409).json({ jobId: existingJob.id, status: existingJob.status, error: "An import is already in progress." });
+    }
+  }
+
+  const [job] = await db
+    .insert(libraryImportJobsTable)
+    .values({ userId: user.id, service: "manual", status: "pending", total: tracks.length, resolved: 0, startedAt: new Date() })
+    .returning();
+
+  setImmediate(() => runManualImportWorker(job!.id, user.id, tracks));
+  return res.status(202).json({ jobId: job!.id, status: "pending" });
+}));
+
+/**
  * GET /api/me/library/import — return the most recent import job for the user,
  * or 404 if no jobs exist yet.  Used by the frontend to detect in-progress or
  * recently finished imports without needing to track a jobId across tabs.
@@ -965,6 +1027,186 @@ export async function runImportWorker(
     console.error(`[me] import worker job=${jobId} failed`, err);
     await db
       .update(libraryImportJobsTable)
+      .set({ status: "error", error: message.slice(0, 500), finishedAt: new Date() })
+      .where(eq(libraryImportJobsTable.id, jobId))
+      .catch(() => {});
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Manual import worker (no service connection, no soft rows)
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolves a user-supplied track list against the MusicBrainz spine.
+ * Runs Phases 2 (cache) and 3 (MB text) only — no Spotify fetch, no soft rows.
+ */
+export async function runManualImportWorker(
+  jobId: number,
+  userId: number,
+  buffer: ImportBufferEntry[],
+): Promise<void> {
+  try {
+    console.log(`[me/import:manual] job=${jobId} starting (${buffer.length} tracks)`);
+    await db.update(libraryImportJobsTable)
+      .set({ status: "running", phase: "spine", total: buffer.length, bufferJson: buffer })
+      .where(eq(libraryImportJobsTable.id, jobId));
+
+    const total = buffer.length;
+    let resolved = 0;
+    const matchedIdx = new Set<number>();
+    const provenance: LibraryItemProvenance = { kind: "import", service: "manual" };
+
+    // ── Phase 2: resolution-cache bulk pre-check ──────────────────────────
+    await db.update(libraryImportJobsTable)
+      .set({ phase: "cache" })
+      .where(eq(libraryImportJobsTable.id, jobId));
+
+    const keySet = new Set<string>();
+    const keyToIndices = new Map<string, number[]>();
+    for (let i = 0; i < buffer.length; i++) {
+      const t = buffer[i]!;
+      const k = normalizeKey(t.artist, t.title);
+      keySet.add(k);
+      const arr = keyToIndices.get(k) ?? [];
+      arr.push(i);
+      keyToIndices.set(k, arr);
+    }
+
+    if (keySet.size > 0) {
+      const cacheRows = await db
+        .select({ key: resolutionCacheTable.key, mbid: resolutionCacheTable.mbid })
+        .from(resolutionCacheTable)
+        .where(inArray(resolutionCacheTable.key, [...keySet]));
+      const cacheMap = new Map(cacheRows.map((r) => [r.key, r.mbid]));
+
+      const indexToMbid = new Map<number, string>();
+      for (let i = 0; i < buffer.length; i++) {
+        if (matchedIdx.has(i)) continue;
+        const t = buffer[i]!;
+        const hit = cacheMap.get(normalizeKey(t.artist, t.title));
+        if (hit) { indexToMbid.set(i, hit); continue; }
+        if (hit === null) matchedIdx.add(i);
+      }
+
+      for (const [idx, mbid] of indexToMbid) {
+        const t = buffer[idx]!;
+        await db.insert(recordingsTable)
+          .values({ mbid, title: t.title, artist: t.artist })
+          .onConflictDoNothing();
+        try {
+          await db.insert(libraryItemsTable)
+            .values({ userId, mbid, provenance, addedAt: new Date() })
+            .onConflictDoNothing();
+          resolved++;
+        } catch (e) {
+          const pgCode = (e as { code?: string }).code;
+          if (pgCode !== "23503") throw e;
+          console.warn(`[me/import:manual] Phase 2 FK violation mbid=${mbid}`);
+        }
+        matchedIdx.add(idx);
+      }
+
+      await db.update(libraryImportJobsTable)
+        .set({ total, resolved })
+        .where(eq(libraryImportJobsTable.id, jobId));
+    }
+
+    // ── Phase 3: serial MB text resolution ───────────────────────────────
+    const phase3Entries = buffer
+      .map((t, i) => ({ t, i }))
+      .filter(({ i }) => !matchedIdx.has(i));
+
+    await db.update(libraryImportJobsTable)
+      .set({ phase: "resolve", total, resolved })
+      .where(eq(libraryImportJobsTable.id, jobId));
+
+    const mbResolver = createMbResolver();
+    const PHASE3_BUDGET_MS = 90 * 60_000;
+    const phase3StartMs = Date.now();
+    let consecutiveErrors = 0;
+    let currentBackoffMs = PHASE3_503_BACKOFF_BASE_MS;
+    let mbDegraded = false;
+
+    for (const { t, i } of phase3Entries) {
+      if (Date.now() - phase3StartMs > PHASE3_BUDGET_MS) {
+        console.warn(`[me/import:manual] job=${jobId} Phase 3 budget exceeded — ${resolved}/${total} resolved`);
+        break;
+      }
+
+      const resolveTimeoutMs = mbDegraded ? PHASE3_HIGH_ERROR_TIMEOUT_MS : IMPORT_RESOLVE_TIMEOUT_MS;
+      const controller = new AbortController();
+      const timer = setTimeout(() => {
+        console.warn(`[me/import:manual] resolve timeout for "${t.title}" by "${t.artist}"`);
+        controller.abort();
+      }, resolveTimeoutMs);
+
+      let mbid: string | null = null;
+      let resolveErrored = false;
+      try {
+        mbid = await mbResolver.resolveByText(t.artist, t.title, controller.signal);
+        if (!controller.signal.aborted) { consecutiveErrors = 0; mbDegraded = false; }
+      } catch {
+        resolveErrored = true;
+        consecutiveErrors++;
+      } finally {
+        clearTimeout(timer);
+      }
+
+      if (consecutiveErrors >= PHASE3_503_THRESHOLD) {
+        mbDegraded = true;
+        console.warn(`[me/import:manual] job=${jobId} ${consecutiveErrors} consecutive MB errors, pausing ${currentBackoffMs / 1000}s`);
+        await db.update(libraryImportJobsTable)
+          .set({ total, resolved, error: "resolve:backoff" })
+          .where(eq(libraryImportJobsTable.id, jobId));
+        await sleep(currentBackoffMs);
+        await db.update(libraryImportJobsTable)
+          .set({ total, resolved, error: null })
+          .where(eq(libraryImportJobsTable.id, jobId));
+        currentBackoffMs = Math.min(currentBackoffMs * 2, PHASE3_503_MAX_BACKOFF_MS);
+        consecutiveErrors = 0;
+      }
+
+      if (mbid) {
+        await db.insert(recordingsTable)
+          .values({ mbid, title: t.title, artist: t.artist })
+          .onConflictDoNothing();
+        try {
+          await db.insert(libraryItemsTable)
+            .values({ userId, mbid, provenance, addedAt: new Date() })
+            .onConflictDoNothing();
+          resolved++;
+        } catch (e) {
+          const pgCode = (e as { code?: string }).code;
+          if (pgCode !== "23503") throw e;
+          console.warn(`[me/import:manual] Phase 3 FK violation mbid=${mbid}`);
+        }
+        await db.insert(resolutionCacheTable)
+          .values([{ key: normalizeKey(t.artist, t.title), mbid }])
+          .onConflictDoNothing()
+          .catch(() => {});
+      } else if (!controller.signal.aborted && !resolveErrored) {
+        await db.insert(resolutionCacheTable)
+          .values([{ key: normalizeKey(t.artist, t.title), mbid: null }])
+          .onConflictDoNothing()
+          .catch(() => {});
+      }
+
+      if (!controller.signal.aborted) await sleep(IMPORT_RESOLVE_DELAY_MS);
+
+      await db.update(libraryImportJobsTable)
+        .set({ total, resolved })
+        .where(eq(libraryImportJobsTable.id, jobId));
+    }
+
+    await db.update(libraryImportJobsTable)
+      .set({ status: "done", total, resolved, finishedAt: new Date() })
+      .where(eq(libraryImportJobsTable.id, jobId));
+    console.log(`[me/import:manual] job=${jobId} done — ${resolved}/${total} resolved`);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[me/import:manual] worker job=${jobId} failed`, err);
+    await db.update(libraryImportJobsTable)
       .set({ status: "error", error: message.slice(0, 500), finishedAt: new Date() })
       .where(eq(libraryImportJobsTable.id, jobId))
       .catch(() => {});
