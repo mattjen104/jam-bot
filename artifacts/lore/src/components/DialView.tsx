@@ -10,6 +10,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } fro
 import { useLocation } from "wouter";
 import { useDialData, normalizeDjName, type DialStation, type DialShow, type DialSpin } from "../hooks/useDialData";
 import { useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, type GhostStation } from "../lib/meHooks";
+import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
 import { StationLane } from "./StationLane";
 import { ContextRail } from "./ContextRail";
 import { SearchOverlay } from "./SearchOverlay";
@@ -167,90 +168,6 @@ function reason(
 // Front-door scan hook (spec §11)
 // ---------------------------------------------------------------------------
 
-const DWELL_PRESETS = [3000, 5000, 7000, 12000, 20000] as const;
-
-function useFrontDoorScan(count: number) {
-  const [scanning, setScanning] = useState(false);
-  const [samplingIdx, setSamplingIdx] = useState<number | null>(null);
-  const [dwellMs, setDwellMs] = useState(7000);
-  const [progress, setProgress] = useState(0);
-
-  // All mutable timer state in a single ref — avoids stale closures
-  const rt = useRef({ timer: null as ReturnType<typeof setTimeout> | null, raf: null as number | null, t0: 0, idx: 0, active: false });
-  const countRef = useRef(count);
-  const dwellRef = useRef(7000);
-  useEffect(() => { countRef.current = count; }, [count]);
-  useEffect(() => { dwellRef.current = dwellMs; }, [dwellMs]);
-
-  const cancelTimers = useCallback(() => {
-    if (rt.current.timer != null) { clearTimeout(rt.current.timer); rt.current.timer = null; }
-    if (rt.current.raf != null) { cancelAnimationFrame(rt.current.raf); rt.current.raf = null; }
-  }, []);
-
-  const tick = useCallback(() => {
-    if (!rt.current.active) return;
-    const p = Math.min(1, (Date.now() - rt.current.t0) / dwellRef.current);
-    setProgress(p);
-    if (p < 1) rt.current.raf = requestAnimationFrame(tick);
-  }, []);
-
-  const hop = useCallback((idx: number) => {
-    const n = countRef.current;
-    if (!n) return;
-    const i = ((idx % n) + n) % n;
-    rt.current.idx = i;
-    rt.current.t0 = Date.now();
-    cancelTimers();
-    setSamplingIdx(i);
-    setProgress(0);
-    rt.current.raf = requestAnimationFrame(tick);
-    rt.current.timer = setTimeout(() => hop(i + 1), dwellRef.current);
-  }, [cancelTimers, tick]);
-
-  const stop = useCallback(() => {
-    rt.current.active = false;
-    cancelTimers();
-    setScanning(false);
-    setSamplingIdx(null);
-    setProgress(0);
-  }, [cancelTimers]);
-
-  const start = useCallback(() => {
-    if (!countRef.current) return;
-    rt.current.active = true;
-    setScanning(true);
-    hop(0);
-  }, [hop]);
-
-  const toggle = useCallback(() => { if (rt.current.active) stop(); else start(); }, [stop, start]);
-
-  /** Back-one: go to previous sample, restart dwell from that position */
-  const back = useCallback(() => { if (rt.current.active) hop(rt.current.idx - 1); }, [hop]);
-  const next = useCallback(() => { if (rt.current.active) hop(rt.current.idx + 1); }, [hop]);
-
-  /** Land: commit current sample — stop auto-advance, keep highlight */
-  const land = useCallback(() => {
-    rt.current.active = false;
-    cancelTimers();
-    setScanning(false);
-    setProgress(0);
-    // samplingIdx intentionally kept so caller can read which row was landed on
-  }, [cancelTimers]);
-
-  const adjustDwell = useCallback((dir: 1 | -1) => {
-    setDwellMs(prev => {
-      const idx = DWELL_PRESETS.indexOf(prev as (typeof DWELL_PRESETS)[number]);
-      const ni = Math.max(0, Math.min(DWELL_PRESETS.length - 1, (idx < 0 ? 2 : idx) + dir));
-      return DWELL_PRESETS[ni];
-    });
-    if (rt.current.active) setTimeout(() => hop(rt.current.idx), 0);
-  }, [hop]);
-
-  useEffect(() => () => cancelTimers(), [cancelTimers]);
-
-  return { scanning, samplingIdx, dwellMs, progress, toggle, back, next, land, adjustDwell, stop };
-}
-
 // ---------------------------------------------------------------------------
 // Front-door row (spec §8, §9, §13)
 // ---------------------------------------------------------------------------
@@ -400,6 +317,17 @@ function ZoneLabel({ label, n, hint, accent, estimated }: {
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Per-zone visible-row budgets (truncation defaults).
+// Zone distribution over a representative 7-day window (scripts/zoneDistribution.ts):
+//   Zone 1 p50≈4  p90≈9  max≈18
+//   Zone 3 p50≈3  p90≈7  max≈12
+// Zone 1 p90 > 5, so truncation is worth shipping.
+// ---------------------------------------------------------------------------
+const ZONE1_VISIBLE = 5;
+const ZONE2_VISIBLE = 3;
+const ZONE3_VISIBLE = 3;
 
 // ---------------------------------------------------------------------------
 // Stations list view
@@ -1116,6 +1044,26 @@ export function DialView() {
     [offlineStations, visibleOfflineCount],
   );
 
+  // --- per-zone truncation (spec §16) ---
+  // Zone 1: rung-1 rows are never hidden — expand the budget to cover them all.
+  const rung1Count = useMemo(() => withReason.filter((r) => r.rz.r === 1).length, [withReason]);
+  const zone1Visible = Math.max(Math.min(ZONE1_VISIBLE, 7), rung1Count);
+
+  const [zone1Expanded, setZone1Expanded] = useState(false);
+  const [zone2Expanded, setZone2Expanded] = useState(false);
+  const [zone3Expanded, setZone3Expanded] = useState(false);
+
+  // Slug-key strings — order-insensitive (sorted) so a live reorder of the same
+  // stations does NOT reset expansion; only a real membership change does.
+  const zone1SlugKey = useMemo(() => withReason.map((r) => r.ds.station.slug).sort().join(","), [withReason]);
+  const zone2SlugKey = useMemo(() => ghost.map((g) => g.slug).sort().join(","), [ghost]);
+  const zone3SlugKey = useMemo(() => alsoOnAir.map((r) => r.ds.station.slug).sort().join(","), [alsoOnAir]);
+
+  // Reset expansion when zone membership genuinely changes (not on every re-render).
+  useEffect(() => { setZone1Expanded(false); }, [zone1SlugKey]);
+  useEffect(() => { setZone2Expanded(false); }, [zone2SlugKey]);
+  useEffect(() => { setZone3Expanded(false); }, [zone3SlugKey]);
+
   // --- front-door scan (spec §11) ---
   const scan = useFrontDoorScan(withReason.length);
 
@@ -1130,6 +1078,16 @@ export function DialView() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scan.scanning, scan.samplingIdx]);
+
+  // Auto-expand Zone 1 when the scan cursor advances into a hidden row so the
+  // highlighted station is always visible.  setZone1Expanded(true) when already
+  // true is a React no-op (no re-render), so the dependency on zone1Visible alone
+  // is safe.
+  useEffect(() => {
+    if (scan.samplingIdx != null && scan.samplingIdx >= zone1Visible) {
+      setZone1Expanded(true);
+    }
+  }, [scan.samplingIdx, zone1Visible]);
 
   // Top row for Listen button label (spec §10)
   const topRow = sortedRows[0] ?? null;
@@ -1350,25 +1308,64 @@ export function DialView() {
             {!crossingsLoading && withReason.length > 0 && (
               <>
                 <ZoneLabel label="On air, with a reason" n={withReason.length} hint="best first · scan walks this list" accent="library" />
-                {withReason.map((row, i) => (
-                  <FrontDoorRow
-                    key={row.ds.station.slug}
-                    ds={row.ds}
-                    show={row.show}
-                    ov={row.show?.djName != null ? pickerOv(row.show?.pickerId ?? null, row.show.djName) : row.ds.lifetimeCrossings}
-                    isActive={row.ds.station.slug === radio.station?.slug}
-                    isSampling={scan.samplingIdx === i}
-                    onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
-                    onEarlier={() => goStation(row.ds.station.slug)}
-                  />
-                ))}
+                {/* Map over the FULL array so isSampling index is always the
+                    unsliced position; rows beyond zone1Visible are null until
+                    zone1Expanded is true. */}
+                <div id="zone1-rows">
+                  {withReason.map((row, i) =>
+                    !zone1Expanded && i >= zone1Visible ? null : (
+                      <FrontDoorRow
+                        key={row.ds.station.slug}
+                        ds={row.ds}
+                        show={row.show}
+                        ov={row.show?.djName != null ? pickerOv(row.show?.pickerId ?? null, row.show.djName) : row.ds.lifetimeCrossings}
+                        isActive={row.ds.station.slug === radio.station?.slug}
+                        isSampling={scan.samplingIdx === i}
+                        onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
+                        onEarlier={() => goStation(row.ds.station.slug)}
+                      />
+                    )
+                  )}
+                </div>
+                {withReason.length > zone1Visible && (
+                  <button
+                    className="dial-show-more"
+                    aria-expanded={zone1Expanded}
+                    aria-controls="zone1-rows"
+                    onClick={() => setZone1Expanded((e) => !e)}
+                  >
+                    {zone1Expanded ? "See less" : `See all ${withReason.length}`}
+                  </button>
+                )}
               </>
             )}
 
             {/* Zone 2: Ghost — shown only after crossings load so it never
                 jumps above Zone 1 while scores are still in-flight */}
             {!crossingsLoading && ghost.length > 0 && (
-              <ZoneLabel label="Missed while you were away" accent="picker" />
+              <>
+                <ZoneLabel label="Missed while you were away" n={ghost.length} accent="picker" />
+                <div id="zone2-rows">
+                  {ghost.slice(0, zone2Expanded ? ghost.length : ZONE2_VISIBLE).map((g) => (
+                    <GhostRow
+                      key={g.slug}
+                      station={g}
+                      isActive={g.slug === radio.station?.slug}
+                      onTuneIn={() => goStation(g.slug)}
+                    />
+                  ))}
+                </div>
+                {ghost.length > ZONE2_VISIBLE && (
+                  <button
+                    className="dial-show-more"
+                    aria-expanded={zone2Expanded}
+                    aria-controls="zone2-rows"
+                    onClick={() => setZone2Expanded((e) => !e)}
+                  >
+                    {zone2Expanded ? "See less" : `See all ${ghost.length}`}
+                  </button>
+                )}
+              </>
             )}
 
             {/* Zone 3: Also on air — gated on crossingsLoading like Zones 1 & 2
@@ -1376,18 +1373,30 @@ export function DialView() {
             {!crossingsLoading && alsoOnAir.length > 0 && (
               <>
                 <ZoneLabel label="Also on air" n={alsoOnAir.length} hint="nothing Lore can point to yet" accent="live" />
-                {alsoOnAir.map((row) => (
-                  <FrontDoorRow
-                    key={row.ds.station.slug}
-                    ds={row.ds}
-                    show={row.show}
-                    ov={row.show?.djName != null ? pickerOv(row.show?.pickerId ?? null, row.show.djName) : row.ds.lifetimeCrossings}
-                    isActive={row.ds.station.slug === radio.station?.slug}
-                    isSampling={false}
-                    onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
-                    onEarlier={() => goStation(row.ds.station.slug)}
-                  />
-                ))}
+                <div id="zone3-rows">
+                  {alsoOnAir.slice(0, zone3Expanded ? alsoOnAir.length : ZONE3_VISIBLE).map((row) => (
+                    <FrontDoorRow
+                      key={row.ds.station.slug}
+                      ds={row.ds}
+                      show={row.show}
+                      ov={row.show?.djName != null ? pickerOv(row.show?.pickerId ?? null, row.show.djName) : row.ds.lifetimeCrossings}
+                      isActive={row.ds.station.slug === radio.station?.slug}
+                      isSampling={false}
+                      onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
+                      onEarlier={() => goStation(row.ds.station.slug)}
+                    />
+                  ))}
+                </div>
+                {alsoOnAir.length > ZONE3_VISIBLE && (
+                  <button
+                    className="dial-show-more"
+                    aria-expanded={zone3Expanded}
+                    aria-controls="zone3-rows"
+                    onClick={() => setZone3Expanded((e) => !e)}
+                  >
+                    {zone3Expanded ? "See less" : `See all ${alsoOnAir.length}`}
+                  </button>
+                )}
               </>
             )}
 
