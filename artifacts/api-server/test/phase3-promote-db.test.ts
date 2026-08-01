@@ -358,7 +358,7 @@ describe("runPhase3RetryPass — promotes staged soft row to library_items", () 
 
       const spy = installSleepBypass();
       try {
-        await runPhase3RetryPass();
+        await runPhase3RetryPass(undefined, [userIdPromo, userIdIdem, userIdSynth, userIdIsrc, userIdIsrc2]);
       } finally {
         spy.mockRestore();
       }
@@ -453,7 +453,7 @@ describe("runPhase3RetryPass — idempotent when track is already in library_ite
 
       const spy = installSleepBypass();
       try {
-        await runPhase3RetryPass();
+        await runPhase3RetryPass(undefined, [userIdPromo, userIdIdem, userIdSynth, userIdIsrc, userIdIsrc2]);
       } finally {
         spy.mockRestore();
       }
@@ -529,7 +529,7 @@ describe("runPhase3RetryPass — promotes soft row seeded with a synthesised ext
 
       const spy = installSleepBypass();
       try {
-        await runPhase3RetryPass();
+        await runPhase3RetryPass(undefined, [userIdPromo, userIdIdem, userIdSynth, userIdIsrc, userIdIsrc2]);
       } finally {
         spy.mockRestore();
       }
@@ -609,7 +609,7 @@ describe("runPhase3RetryPass — promotes soft row with synthesised externalId v
 
       const spy = installSleepBypass();
       try {
-        await runPhase3RetryPass();
+        await runPhase3RetryPass(undefined, [userIdPromo, userIdIdem, userIdSynth, userIdIsrc, userIdIsrc2]);
       } finally {
         spy.mockRestore();
       }

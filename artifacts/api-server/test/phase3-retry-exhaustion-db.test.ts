@@ -300,7 +300,7 @@ describe("runPhase3RetryPass — exhaustion: increments retryAttempts and sets r
 
       const spy = installSleepBypass();
       try {
-        await runPhase3RetryPass();
+        await runPhase3RetryPass(undefined, [userIdExhaust, userIdReset, userIdHardErr, userIdExcl, userIdEarly1, userIdEarly2]);
       } finally {
         spy.mockRestore();
       }
@@ -351,7 +351,7 @@ describe("runPhase3RetryPass — success reset: clears retryAttempts and retryEx
 
       const spy = installSleepBypass();
       try {
-        await runPhase3RetryPass();
+        await runPhase3RetryPass(undefined, [userIdExhaust, userIdReset, userIdHardErr, userIdExcl, userIdEarly1, userIdEarly2]);
       } finally {
         spy.mockRestore();
       }
@@ -431,7 +431,7 @@ describe("runPhase3RetryPass — hard MB error: does not increment retryAttempts
 
       const spy = installSleepBypass();
       try {
-        await runPhase3RetryPass();
+        await runPhase3RetryPass(undefined, [userIdExhaust, userIdReset, userIdHardErr, userIdExcl, userIdEarly1, userIdEarly2]);
       } finally {
         spy.mockRestore();
       }
@@ -481,7 +481,7 @@ describe("runPhase3RetryPass — exclusion: skips source jobs where retryExhaust
 
       const spy = installSleepBypass();
       try {
-        await runPhase3RetryPass();
+        await runPhase3RetryPass(undefined, [userIdExhaust, userIdReset, userIdHardErr, userIdExcl, userIdEarly1, userIdEarly2]);
       } finally {
         spy.mockRestore();
       }
@@ -540,7 +540,7 @@ describe("runPhase3RetryPass — early pass 0→1: retryExhausted stays false af
 
       const spy = installSleepBypass();
       try {
-        await runPhase3RetryPass();
+        await runPhase3RetryPass(undefined, [userIdExhaust, userIdReset, userIdHardErr, userIdExcl, userIdEarly1, userIdEarly2]);
       } finally {
         spy.mockRestore();
       }
@@ -590,7 +590,7 @@ describe("runPhase3RetryPass — early pass 1→2: retryExhausted stays false af
 
       const spy = installSleepBypass();
       try {
-        await runPhase3RetryPass();
+        await runPhase3RetryPass(undefined, [userIdExhaust, userIdReset, userIdHardErr, userIdExcl, userIdEarly1, userIdEarly2]);
       } finally {
         spy.mockRestore();
       }

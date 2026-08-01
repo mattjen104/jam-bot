@@ -302,7 +302,7 @@ describe("runPhase3RetryPass — triggers retry job and resolves un-cached track
 
       const spy = installSleepBypass();
       try {
-        await runPhase3RetryPass();
+        await runPhase3RetryPass(undefined, [userIdUncached, userIdCached, userIdBlocked, userIdDeadline]);
       } finally {
         spy.mockRestore();
       }
@@ -377,7 +377,7 @@ describe("runPhase3RetryPass — skips tracks already in resolution_cache", () =
 
     const spy = installSleepBypass();
     try {
-      await runPhase3RetryPass();
+      await runPhase3RetryPass(undefined, [userIdUncached, userIdCached, userIdBlocked, userIdDeadline]);
     } finally {
       spy.mockRestore();
     }
@@ -397,7 +397,6 @@ describe("runPhase3RetryPass — skips tracks already in resolution_cache", () =
     expect(jobs[0]!.id).toBe(sourceJobId);
 
     // No resolve calls should have been made for this user's tracks.
-    // (Other users' uncached tracks may still trigger calls from the global scan.)
     const items = await db
       .select({ mbid: libraryItemsTable.mbid })
       .from(libraryItemsTable)
@@ -445,7 +444,7 @@ describe("runPhase3RetryPass — skips when a live import is already running", (
 
     const spy = installSleepBypass();
     try {
-      await runPhase3RetryPass();
+      await runPhase3RetryPass(undefined, [userIdUncached, userIdCached, userIdBlocked, userIdDeadline]);
     } finally {
       spy.mockRestore();
     }
@@ -504,7 +503,7 @@ describe("runPhase3RetryPass — stops immediately when deadline is already expi
 
     const spy = installSleepBypass();
     try {
-      await runPhase3RetryPass(expiredDeadline);
+      await runPhase3RetryPass(expiredDeadline, [userIdUncached, userIdCached, userIdBlocked, userIdDeadline]);
     } finally {
       spy.mockRestore();
     }

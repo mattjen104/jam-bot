@@ -1401,7 +1401,7 @@ describe("Phase 3 off-peak retry — soft-row removed after retry promotion", ()
       mockResolveByText.mockResolvedValue(MBID_RETRY_SOFT);
       mockCheckSpotifyLibraryContains.mockResolvedValue({ ok: true, savedIds: new Set([RETRY_EXT_ID]) });
 
-      await runPhase3RetryPass();
+      await runPhase3RetryPass(undefined, [userId]);
 
       // The track must now appear in library_items.
       const libRows = await db
@@ -1506,7 +1506,7 @@ describe("Retry guard — track removed from Spotify after original import is no
       });
 
       // ── 3. Run the retry pass ─────────────────────────────────────────────
-      await runPhase3RetryPass();
+      await runPhase3RetryPass(undefined, [userId]);
 
       // ── 4. Assert the removed track never landed in library_items ─────────
       const libRows = await db
@@ -1583,7 +1583,7 @@ describe("Retry guard — track removed from Spotify after original import is no
         .returning({ id: libraryImportJobsTable.id });
 
       // ── 3. Run the retry pass ─────────────────────────────────────────────
-      await runPhase3RetryPass();
+      await runPhase3RetryPass(undefined, [userId]);
 
       // ── 4. Assert the removed track never landed in library_items ─────────
       const libRows = await db
@@ -1658,7 +1658,7 @@ describe("Retry pass — no newer import snapshot: all uncached tracks resolved 
       const sourceJobId = sourceJobRow!.id;
 
       // ── 2. Run the retry pass (no newer job exists for this user+service) ──
-      await runPhase3RetryPass();
+      await runPhase3RetryPass(undefined, [userId]);
 
       // ── 3. Assert the track landed in library_items ────────────────────────
       const libRows = await db
@@ -1757,7 +1757,7 @@ describe("Retry pass — library_items FK violation: pass reaches done, track st
         });
 
       // ── 3. Run the retry pass ──────────────────────────────────────────────
-      await runPhase3RetryPass();
+      await runPhase3RetryPass(undefined, [userId]);
 
       insertSpy.mockRestore();
 
@@ -1904,7 +1904,7 @@ describe("Retry pass — FK violation (real 22-char Spotify ID): pass reaches do
         });
 
       // ── 3. Run the retry pass ──────────────────────────────────────────────
-      await runPhase3RetryPass();
+      await runPhase3RetryPass(undefined, [userId]);
 
       insertSpy.mockRestore();
 
@@ -2023,7 +2023,7 @@ describe("Retry pass — FK violation (synthesised externalId): pass reaches don
         });
 
       // ── 3. Run the retry pass ──────────────────────────────────────────────
-      await runPhase3RetryPass();
+      await runPhase3RetryPass(undefined, [userId]);
 
       insertSpy.mockRestore();
 
@@ -2209,7 +2209,7 @@ describe("Retry pass — FK violation with pre-existing soft row: soft row stays
         });
 
       // ── 5. Run the retry pass ──────────────────────────────────────────────
-      await runPhase3RetryPass();
+      await runPhase3RetryPass(undefined, [userId]);
 
       insertSpy.mockRestore();
 
@@ -2314,7 +2314,7 @@ describe("Phase 3 retry — seam returns null: candidate skipped, library_items 
         .returning({ id: libraryImportJobsTable.id });
       const sourceJobId = sourceJobRow!.id;
 
-      await runPhase3RetryPass();
+      await runPhase3RetryPass(undefined, [userId]);
 
       // Seam was invoked (live check path was reached).
       expect(mockCheckSpotifyLibraryContains).toHaveBeenCalled();
@@ -2394,7 +2394,7 @@ describe("Phase 3 retry — seam returns Set missing the candidate externalId: e
         .returning({ id: libraryImportJobsTable.id });
       const sourceJobId = sourceJobRow!.id;
 
-      await runPhase3RetryPass();
+      await runPhase3RetryPass(undefined, [userId]);
 
       // Seam was invoked.
       expect(mockCheckSpotifyLibraryContains).toHaveBeenCalled();

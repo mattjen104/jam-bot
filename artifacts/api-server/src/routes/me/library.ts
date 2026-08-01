@@ -980,7 +980,7 @@ export async function runImportWorker(
  * fetched (total > resolved) and there are still un-cached entries.
  * Called from `startPhase3RetryScheduler` during off-peak hours only.
  */
-export async function runPhase3RetryPass(deadline?: Date): Promise<void> {
+export async function runPhase3RetryPass(deadline?: Date, _testUserIds?: number[]): Promise<void> {
   const cutoff = new Date(Date.now() - PHASE3_RETRY_MAX_JOB_AGE_MS);
 
   const candidates = await db
@@ -1001,6 +1001,9 @@ export async function runPhase3RetryPass(deadline?: Date): Promise<void> {
         isNotNull(libraryImportJobsTable.bufferJson),
         sql`COALESCE(${libraryImportJobsTable.finishedAt}, ${libraryImportJobsTable.startedAt}) >= ${cutoff}`,
         sql`${libraryImportJobsTable.total} > ${libraryImportJobsTable.resolved}`,
+        ...(_testUserIds && _testUserIds.length > 0
+          ? [inArray(libraryImportJobsTable.userId, _testUserIds)]
+          : []),
       ),
     )
     .orderBy(desc(libraryImportJobsTable.id))

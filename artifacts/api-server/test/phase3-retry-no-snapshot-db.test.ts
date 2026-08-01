@@ -229,7 +229,7 @@ describe("runPhase3RetryPass — no newer snapshot: live Spotify check prevents 
 
       const sleepSpy = installSleepBypass();
       try {
-        await runPhase3RetryPass();
+        await runPhase3RetryPass(undefined, [userId]);
       } finally {
         sleepSpy.mockRestore();
       }

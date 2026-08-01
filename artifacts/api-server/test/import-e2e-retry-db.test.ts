@@ -359,7 +359,7 @@ describe("end-to-end: confirmed negative-cache entry blocks retry pass (soft row
 
       const sleepSpy2 = installSleepBypass();
       try {
-        await runPhase3RetryPass();
+        await runPhase3RetryPass(undefined, [userId]);
       } finally {
         sleepSpy2.mockRestore();
       }
@@ -539,7 +539,7 @@ describe("end-to-end: ISRC-keyed negative cache entry blocks retry pass (soft ro
 
       const sleepSpy2 = installSleepBypass();
       try {
-        await runPhase3RetryPass();
+        await runPhase3RetryPass(undefined, [userId]);
       } finally {
         sleepSpy2.mockRestore();
       }
@@ -679,7 +679,7 @@ describe("end-to-end: import worker seeds soft row, retry pass promotes it", () 
 
       const sleepSpy2 = installSleepBypass();
       try {
-        await runPhase3RetryPass();
+        await runPhase3RetryPass(undefined, [userId]);
       } finally {
         sleepSpy2.mockRestore();
       }
