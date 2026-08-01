@@ -1057,6 +1057,22 @@ export async function runPhase3RetryPass(deadline?: Date): Promise<void> {
       continue;
     }
 
+    // Pre-flight window estimate: if resolving every uncached track at the
+    // nominal inter-request delay would overrun the remaining window, skip
+    // this candidate entirely rather than burning the budget and failing.
+    if (deadline) {
+      const remainingMs = deadline.getTime() - Date.now();
+      const estimatedMs = uncachedEntries.length * IMPORT_RESOLVE_DELAY_MS;
+      if (estimatedMs > remainingMs) {
+        console.warn(
+          `[me/import/retry] job=${candidate.id} user=${candidate.userId} — ` +
+          `skipping: estimated ${estimatedMs}ms for ${uncachedEntries.length} uncached entries ` +
+          `exceeds remaining window ${remainingMs}ms`,
+        );
+        continue;
+      }
+    }
+
     // Cross-check against the newest completed import snapshot for this
     // user+service.  If a newer import ran after the source job and its buffer
     // does not contain a track, the user removed that track from Spotify since
