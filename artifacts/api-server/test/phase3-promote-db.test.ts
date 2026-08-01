@@ -88,7 +88,9 @@ import { runPhase3RetryPass } from "../src/routes/me/index.js";
 
 const run = randomUUID().slice(0, 8);
 
-// Four users: fresh-promotion, idempotent, synthesised-key, and ISRC-keyed tests.
+// Five users: fresh-promotion, idempotent, synthesised-key, ISRC-keyed, and
+// ISRC-bystander (a second user whose soft row shares the ISRC_VALUE to confirm
+// the userId guard prevents cross-user deletion).
 const ARTIST = `PromoArtist ${run}`;
 
 // The MBID the mocked resolver will return for this test run.
@@ -115,6 +117,7 @@ let userIdPromo: number;
 let userIdIdem: number;
 let userIdSynth: number;
 let userIdIsrc: number;
+let userIdIsrc2: number;  // bystander: same ISRC, must survive the retry pass
 
 // ── Sleep bypass ─────────────────────────────────────────────────────────────
 
@@ -180,6 +183,12 @@ beforeAll(async () => {
     .returning({ id: loreUsersTable.id });
   userIdIsrc = u4!.id;
 
+  const [u5] = await db
+    .insert(loreUsersTable)
+    .values({ spotifyUserId: `promo-isrc2-${run}`, deviceKey: randomUUID() })
+    .returning({ id: loreUsersTable.id });
+  userIdIsrc2 = u5!.id;
+
   // Seed recordings rows so library_items FK is satisfiable.
   await db.insert(recordingsTable).values([
     { mbid: MBID_PROMO,  title: "Promo Track",  artist: ARTIST },
@@ -227,6 +236,17 @@ beforeAll(async () => {
       addedAt: new Date(),
       mbid: null,
     },
+    // Bystander: a second user who has saved the same ISRC.  No import job
+    // will be created for this user, so the retry pass must never touch this row.
+    {
+      userId: userIdIsrc2,
+      spotifyId: `${ARTIST}\u001fISRC Track bystander`,
+      title: "ISRC Track",
+      artist: ARTIST,
+      isrc: ISRC_VALUE,
+      addedAt: new Date(),
+      mbid: null,
+    },
   ]);
 });
 
@@ -235,7 +255,7 @@ beforeAll(async () => {
 afterAll(async () => {
   if (!dbAvailable || !softTableAvailable) return;
 
-  const allUserIds = [userIdPromo, userIdIdem, userIdSynth, userIdIsrc].filter(Boolean);
+  const allUserIds = [userIdPromo, userIdIdem, userIdSynth, userIdIsrc, userIdIsrc2].filter(Boolean);
 
   // Remove soft rows that might have survived (e.g. if a test failed before cleanup).
   await db
@@ -285,7 +305,7 @@ afterAll(async () => {
       .where(inArray(loreUsersTable.id, allUserIds))
       .catch(() => {});
   }
-});
+}, 30_000);
 
 // ── Helper ────────────────────────────────────────────────────────────────────
 
@@ -628,6 +648,21 @@ describe("runPhase3RetryPass — promotes soft row with synthesised externalId v
         .where(eq(resolutionCacheTable.key, isrcKey(ISRC_VALUE)));
       expect(cacheRows.length).toBeGreaterThanOrEqual(1);
       expect(cacheRows[0]!.mbid).toBe(MBID_ISRC);
+
+      // 4. The bystander user's soft row (same ISRC, different userId) must be
+      //    untouched — confirming the "AND userId" guard in the ISRC delete
+      //    condition is present and effective.
+      const bystanderRows = await db
+        .select({ id: spotifyLibraryItemsTable.id, isrc: spotifyLibraryItemsTable.isrc })
+        .from(spotifyLibraryItemsTable)
+        .where(
+          and(
+            eq(spotifyLibraryItemsTable.userId, userIdIsrc2),
+            eq(spotifyLibraryItemsTable.isrc, ISRC_VALUE),
+          ),
+        );
+      expect(bystanderRows.length).toBe(1);
+      expect(bystanderRows[0]!.isrc).toBe(ISRC_VALUE);
     },
     TEST_TIMEOUT,
   );
