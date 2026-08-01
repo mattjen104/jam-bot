@@ -180,8 +180,11 @@ beforeAll(async () => {
   await db.insert(spinsTable).values([
     // Scenario 1 — aired recording A (shares RG with library recording B)
     { stationId: stationId!, mbid: MBID_SPIN_RG,       confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: now },
-    // Scenario 2 — aired by ARTIST_MBID but the exact track is not in the library
+    // Scenario 2 — aired by ARTIST_MBID but the exact track is not in the library.
+    // Seeded TWICE (>2 min apart) to confirm count(distinct mbid) collapses replays
+    // into a single artistCrossings unit rather than counting spin events.
     { stationId: stationId!, mbid: MBID_SPIN_ART,      confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: new Date(now.getTime() - 1000) },
+    { stationId: stationId!, mbid: MBID_SPIN_ART,      confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: new Date(now.getTime() - 1000 - 3 * 60 * 1000) },
     // Scenario 3 — aired by SOFT_ARTIST (no artistMbid on recording)
     { stationId: stationId!, mbid: MBID_SPIN_SOFT,     confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: new Date(now.getTime() - 2000) },
     // Scenario 4 — aired 25h ago (outside rolling window) — lifetime-only crossing
@@ -326,6 +329,21 @@ describe("GET /api/me/crossings — artist MBID crossing", () => {
     expect(row!.crossings).toBe(0);
     expect(row!.artistCrossings).toBeGreaterThanOrEqual(1);
   }, TEST_TIMEOUT);
+
+  it("collapses duplicate spins of the same track into a single artistCrossings unit", async () => {
+    if (!dbAvailable) return;
+    // MBID_SPIN_ART was seeded twice (>2 min apart) in beforeAll.
+    // count(distinct mbid) must collapse both spin events into 1 distinct recording.
+    _testOnly_clearCrossingsCache(userArtId!);
+    const { status, body } = await get("/api/me/crossings", SID_ART);
+    expect(status).toBe(200);
+
+    const row = (body.items as Array<{ stationSlug: string; crossings: number; artistCrossings: number }>)
+      .find((r) => r.stationSlug === STATION_SLUG);
+
+    expect(row).toBeDefined();
+    expect(row!.artistCrossings).toBe(1);
+  }, TEST_TIMEOUT);
 });
 
 describe("GET /api/me/crossings — soft artist name fallback", () => {
@@ -339,9 +357,10 @@ describe("GET /api/me/crossings — soft artist name fallback", () => {
 
     // MBID_SPIN_SOFT has no artistMbid; artist name = SOFT_ARTIST.
     // The soft-artist path must match the spotify_library_items row by name.
+    // Exactly one distinct recording aired by this artist → artistCrossings must be 1.
     expect(row).toBeDefined();
     expect(row!.crossings).toBe(0);
-    expect(row!.artistCrossings).toBeGreaterThanOrEqual(1);
+    expect(row!.artistCrossings).toBe(1);
   });
 });
 

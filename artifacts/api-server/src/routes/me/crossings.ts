@@ -175,14 +175,19 @@ router.get("/me/crossings", h(async (req, res) => {
   const rows = await db
     .select({
       stationSlug: stationsTable.slug,
-      // 24-hour rolling counts
+      // 24-hour rolling counts.
+      // All four fields share the unit "distinct library-relevant recordings" so
+      // consumers can safely compare or combine them.  A station that replays one
+      // artist track 50× scores 1, not 50 — count(distinct mbid) collapses replays.
       crossings:       sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${libHit})::int`,
-      artistCrossings: sql<number>`count(*) filter (where ${inWindow} and ${notLibHit} and ${artistMatch})::int`,
+      // Unit: distinct recordings (not spin events) — same scale as `crossings` above.
+      artistCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${notLibHit} and ${artistMatch})::int`,
       // All-time (lifetime) counts — distinct mbid so the scale matches pickerOv()
       // (count(distinct picks.mbid)) and attributed DJ rows don't get systematically
       // outranked by stations with high-replay playlists.
       lifetimeCrossings:       sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${libHit})::int`,
-      lifetimeArtistCrossings: sql<number>`count(*) filter (where ${notLibHit} and ${artistMatch})::int`,
+      // Unit: distinct recordings — same scale as `lifetimeCrossings` and `crossings`.
+      lifetimeArtistCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${notLibHit} and ${artistMatch})::int`,
     })
     .from(spinsTable)
     .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
