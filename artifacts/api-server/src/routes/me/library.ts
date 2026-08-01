@@ -1074,22 +1074,6 @@ export async function runPhase3RetryPass(deadline?: Date): Promise<void> {
       continue;
     }
 
-    // Pre-flight window estimate: if resolving every uncached track at the
-    // nominal inter-request delay would overrun the remaining window, skip
-    // this candidate entirely rather than burning the budget and failing.
-    if (deadline) {
-      const remainingMs = Math.max(0, deadline.getTime() - Date.now());
-      const estimatedMs = uncachedEntries.length * IMPORT_RESOLVE_DELAY_MS;
-      if (estimatedMs > remainingMs) {
-        console.warn(
-          `[me/import/retry] job=${candidate.id} user=${candidate.userId} — ` +
-          `skipping: estimated ${estimatedMs}ms for ${uncachedEntries.length} uncached entries ` +
-          `exceeds remaining window ${remainingMs}ms`,
-        );
-        continue;
-      }
-    }
-
     // Cross-check against the newest completed import snapshot for this
     // user+service.  If a newer import ran after the source job and its buffer
     // does not contain a track, the user removed that track from Spotify since
@@ -1239,6 +1223,39 @@ export async function runPhase3RetryPass(deadline?: Date): Promise<void> {
         `all un-cached tracks filtered by newer snapshot, skipping`,
       );
       continue;
+    }
+
+    // Window cap: applied AFTER snapshot/Spotify filtering so we always
+    // select from the set of valid, still-present tracks.  Slicing before
+    // filtering could stall the buffer indefinitely if the front slice is
+    // entirely filtered out (e.g. those tracks were removed from Spotify)
+    // while valid entries deeper in the buffer are never reached.
+    //
+    // Each nightly pass resolves as many valid tracks as the window allows;
+    // the next pass picks up where the cache left off (resolved entries are
+    // now cached and are excluded from uncachedEntries on the next run).
+    if (deadline) {
+      const remainingMs = Math.max(0, deadline.getTime() - Date.now());
+      const estimatedMs = entriesToRetry.length * IMPORT_RESOLVE_DELAY_MS;
+      if (estimatedMs > remainingMs) {
+        const maxFit = Math.floor(remainingMs / IMPORT_RESOLVE_DELAY_MS);
+        if (maxFit < 1) {
+          // Window is too small for even one valid track.  Defer to next
+          // night without counting this as a failed retry attempt.
+          console.warn(
+            `[me/import/retry] job=${candidate.id} user=${candidate.userId} — ` +
+            `window too small for even one entry (${remainingMs}ms remaining); deferring`,
+          );
+          continue;
+        }
+        // Process only the first maxFit valid entries this pass.
+        console.warn(
+          `[me/import/retry] job=${candidate.id} user=${candidate.userId} — ` +
+          `buffer too large for one pass (${entriesToRetry.length} valid entries, ` +
+          `${remainingMs}ms remaining); slicing to ${maxFit} for this pass`,
+        );
+        entriesToRetry = entriesToRetry.slice(0, maxFit);
+      }
     }
 
     console.log(

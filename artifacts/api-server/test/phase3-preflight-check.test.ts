@@ -245,10 +245,9 @@ describe("runPhase3RetryPass — pre-flight window estimate", () => {
     expect(mockResolveByText).toHaveBeenCalled();
   });
 
-  it("skips without calling resolution when estimate is exactly equal to remaining window", async () => {
-    // Edge case: estimated === remaining should also skip (strictly greater-than check).
-    // 2 tracks × 1 100 ms = 2 200 ms. Set deadline so remaining ≈ 2 200 ms.
-    // Use slightly less to ensure estimate > remaining.
+  it("processes a partial slice when buffer exceeds remaining window but at least one entry fits", async () => {
+    // 2 tracks × 1 100 ms = 2 200 ms, but only 2 199 ms remain.
+    // maxFit = Math.floor(2199 / 1100) = 1 → should process 1 track, not skip.
     const buffer = makeLargeBuffer(2);
     const candidate = {
       id: 44,
@@ -262,11 +261,37 @@ describe("runPhase3RetryPass — pre-flight window estimate", () => {
 
     setupSelectsForCandidates([candidate]);
 
-    // Remaining window = 2 tracks × 1100ms - 1ms = 2199ms → estimate (2200ms) > remaining.
+    // Remaining window = 2 tracks × 1100ms - 1ms = 2199ms → maxFit = 1.
     const deadline = new Date(Date.now() + 2 * IMPORT_RESOLVE_DELAY_MS - 1);
 
     await runPhase3RetryPass(deadline);
 
+    // Resolution must have been attempted for the partial slice (1 entry).
+    expect(mockResolveByText).toHaveBeenCalled();
+  });
+
+  it("skips without resolution when window is too small for even one entry", async () => {
+    // 5 tracks × 1 100 ms = 5 500 ms, but remaining < 1 100 ms.
+    // maxFit = Math.floor(remaining / 1100) = 0 → skip entirely, no retry attempt counted.
+    const buffer = makeLargeBuffer(5);
+    const candidate = {
+      id: 46,
+      userId: "user-mno",
+      service: "spotify",
+      total: 5,
+      resolved: 0,
+      bufferJson: buffer,
+      retryAttempts: 0,
+    };
+
+    setupSelectsForCandidates([candidate]);
+
+    // Remaining < one track's worth of delay → cannot process even one entry.
+    const deadline = new Date(Date.now() + IMPORT_RESOLVE_DELAY_MS - 1);
+
+    await runPhase3RetryPass(deadline);
+
+    // Must not have attempted resolution.
     expect(mockResolveByIsrc).not.toHaveBeenCalled();
     expect(mockResolveByText).not.toHaveBeenCalled();
   });
@@ -288,6 +313,64 @@ describe("runPhase3RetryPass — pre-flight window estimate", () => {
     // No deadline → pre-flight check is bypassed.
     await runPhase3RetryPass(/* deadline= */ undefined);
 
+    expect(mockResolveByText).toHaveBeenCalled();
+  });
+
+  it("resolves valid entries deeper in the buffer when front entries are filtered by the snapshot", async () => {
+    // Regression: with the old order (cap-then-filter), a window of 2 would
+    // slice entries [0,1], the snapshot would filter both out, leaving nothing
+    // to process — entries [2,3,4] would never be reached.
+    //
+    // With the correct order (filter-then-cap), the snapshot removes [0,1]
+    // first, then the window cap takes [2,3] from the valid remainder.
+    const buffer = makeLargeBuffer(5);
+
+    const candidate = {
+      id: 47,
+      userId: "user-pqr",
+      service: "spotify",
+      total: 5,
+      resolved: 0,
+      bufferJson: buffer,
+      retryAttempts: 0,
+    };
+
+    // Newer snapshot: only entries 2-4 are still in the user's library.
+    const snapshotBuffer = buffer.slice(2);
+
+    function makeChain(value: unknown) {
+      const resolved = Promise.resolve(value);
+      const chain: Record<string, unknown> = {
+        then: (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) =>
+          resolved.then(res, rej),
+        catch: (rej: (e: unknown) => unknown) => resolved.catch(rej),
+        finally: (fin: () => void) => resolved.finally(fin),
+        limit: vi.fn().mockResolvedValue(value),
+      };
+      chain.from = vi.fn().mockReturnValue(chain);
+      chain.where = vi.fn().mockReturnValue(chain);
+      chain.orderBy = vi.fn().mockReturnValue(chain);
+      return chain;
+    }
+
+    // Select call order inside runPhase3RetryPass for the first candidate:
+    //   1. candidates query
+    //   2. cache check (inArray on resolutionCacheTable)
+    //   3. newer snapshot query → snapshot with entries 2-4 only (entries 0-1 removed)
+    //   4+ active job check and anything else
+    mockDbSelect
+      .mockReturnValueOnce(makeChain([candidate]))
+      .mockReturnValueOnce(makeChain([]))
+      .mockReturnValueOnce(makeChain([{ id: 100, bufferJson: snapshotBuffer }]))
+      .mockReturnValue(makeChain([]));
+
+    // Window fits 2 entries — entries 0 and 1 (the filtered-out ones) would
+    // consume the full slice under the old approach, leaving nothing to process.
+    const deadline = new Date(Date.now() + 2 * IMPORT_RESOLVE_DELAY_MS + 50);
+
+    await runPhase3RetryPass(deadline);
+
+    // Resolution must have been attempted for valid entries from deeper in the buffer.
     expect(mockResolveByText).toHaveBeenCalled();
   });
 });
