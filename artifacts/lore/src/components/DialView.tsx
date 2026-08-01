@@ -1364,13 +1364,16 @@ export function DialView() {
               </div>
             )}
 
-            {/* Recently aired — held until crossings load so it never appears
-                above Zone 1.  For unauthenticated users crossingsLoading
-                resolves fast (empty 200), so the delay is < 1 s. */}
-            {!crossingsLoading && offlineStations.length > 0 && (
+            {/* Recently aired — held until both crossings AND live data have
+                loaded so it never appears above the live zones.
+                For unauthenticated users crossingsLoading resolves in ~100 ms
+                (empty 200) but liveLoading can take several seconds, so gating
+                on crossingsLoading alone would flood the screen with 100+
+                offline rows before any live station has had a chance to appear. */}
+            {!crossingsLoading && !liveLoading && offlineStations.length > 0 && (
               <ZoneLabel label="Recently aired" n={offlineStations.length} />
             )}
-            {!crossingsLoading && visibleOffline.map((ds) => (
+            {!crossingsLoading && !liveLoading && visibleOffline.map((ds) => (
               <OfflineRow
                 key={ds.station.slug}
                 dialStation={ds}
@@ -1379,7 +1382,7 @@ export function DialView() {
                 onPlay={() => void radio.toggle(ds.station)}
               />
             ))}
-            {!crossingsLoading && visibleOfflineCount < offlineStations.length && (
+            {!crossingsLoading && !liveLoading && visibleOfflineCount < offlineStations.length && (
               <button
                 className="dial-show-more"
                 onClick={() => setVisibleOfflineCount((n) => n + OFFLINE_PAGE)}
