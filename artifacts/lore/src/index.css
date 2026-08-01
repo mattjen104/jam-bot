@@ -2711,6 +2711,9 @@
 }
 .fdzone-lbl__n--picker { color: hsl(var(--picker)); }
 .fdzone-lbl__n--dim    { color: hsl(var(--faint)); }
+/* Estimated count shown during crossings-loading skeleton — slightly muted to
+   signal it's a pre-score approximation, not the final value */
+.fdzone-lbl__n--est    { opacity: 0.55; }
 /* hint pushes to the right edge, Newsreader italic per spec */
 .fdzone-lbl__hint {
   margin-left: auto;

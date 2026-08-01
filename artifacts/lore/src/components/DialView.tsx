@@ -378,19 +378,21 @@ interface GhostRowProps {
   isActive: boolean;
   onTuneIn: () => void;
 }
-function ZoneLabel({ label, n, hint, accent }: {
+function ZoneLabel({ label, n, hint, accent, estimated }: {
   label: string;
   n?: number;
   hint?: string;
   accent?: "library" | "picker" | "live";
+  /** When true, renders the count with a leading ~ to signal it's a pre-load estimate */
+  estimated?: boolean;
 }) {
   return (
     <div className="fdzone-lbl">
       {accent && <span className={`fdzone-lbl__pip fdzone-lbl__pip--${accent}`} />}
       <span className="fdzone-lbl__text">{label}</span>
       {n != null && (
-        <span className={`fdzone-lbl__n${accent === "picker" ? " fdzone-lbl__n--picker" : ""}`}>
-          {n}
+        <span className={`fdzone-lbl__n${accent === "picker" ? " fdzone-lbl__n--picker" : ""}${estimated ? " fdzone-lbl__n--est" : ""}`}>
+          {estimated ? `~${n}` : n}
         </span>
       )}
       {hint && <span className="fdzone-lbl__hint">{hint}</span>}
@@ -1306,19 +1308,32 @@ export function DialView() {
                 placeholder; Zones 2 and 3 show a pulsing dot. */}
             {!isCoreLoading && crossingsLoading && (
               <>
-                {/* Zone 1 heading + context-sensitive placeholder */}
-                <ZoneLabel label="On air, with a reason" accent="library" />
+                {/* Zone 1 heading + context-sensitive placeholder.
+                    Show an estimated count (~N) derived from client-side crossings
+                    (server crossings haven't resolved yet, so these are pre-scores). */}
+                <ZoneLabel
+                  label="On air, with a reason"
+                  accent="library"
+                  n={withReason.length > 0 ? withReason.length : undefined}
+                  estimated={withReason.length > 0}
+                />
                 <Zone1Placeholder
                   isSpotifyConnected={isSpotifyConnected}
                   hasLibrary={hasLibrary}
                 />
-                {/* Zone 2 heading + loading dot */}
+                {/* Zone 2 heading + loading dot — no pre-load signal for ghost stations */}
                 <ZoneLabel label="Missed while you were away" accent="picker" />
                 <div className="dial-live-skeleton">
                   <span className="dial-live-skeleton__pip" />
                 </div>
-                {/* Zone 3 heading + loading dot */}
-                <ZoneLabel label="Also on air" accent="live" />
+                {/* Zone 3 heading + loading dot.
+                    Estimated count from stations with no crossing evidence yet. */}
+                <ZoneLabel
+                  label="Also on air"
+                  accent="live"
+                  n={alsoOnAir.length > 0 ? alsoOnAir.length : undefined}
+                  estimated={alsoOnAir.length > 0}
+                />
                 <div className="dial-live-skeleton">
                   <span className="dial-live-skeleton__pip" />
                 </div>
