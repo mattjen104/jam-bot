@@ -15,7 +15,7 @@
  */
 import React from "react";
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, act } from "@testing-library/react";
 import { ImportStrip } from "../src/components/ImportStrip";
 
 // ---------------------------------------------------------------------------
@@ -160,5 +160,45 @@ describe("ImportStrip — 'Reading your Spotify library' label", () => {
     render(<ImportStrip />);
     expect(screen.getByText(/reading your spotify library/i)).toBeTruthy();
     expect(screen.queryByText(/resuming from previous session/i)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Transition: resumed job running → done
+// Confirms the "Resuming" badge and subtitle vanish once the job finishes and
+// the done-state strip takes over.
+// ---------------------------------------------------------------------------
+
+describe("ImportStrip — 'Resuming' badge vanishes once import finishes", () => {
+  it("shows the Resuming badge and subtitle while a resumed job is running", () => {
+    mockJob({ status: "running", phase: "spine", resumedFrom: 42 });
+    render(<ImportStrip />);
+
+    expect(screen.getByTestId("import-resuming-badge")).toBeTruthy();
+    expect(screen.getByText(/picked up where it left off/i)).toBeTruthy();
+    expect(screen.queryByTestId("import-strip-done")).toBeNull();
+  });
+
+  it("badge and subtitle are gone once the job transitions to done; done strip renders instead", async () => {
+    mockJob({ status: "running", phase: "spine", resumedFrom: 42 });
+    const { rerender } = render(<ImportStrip />);
+
+    // Sanity-check: badge is present in the running state.
+    expect(screen.getByTestId("import-resuming-badge")).toBeTruthy();
+    expect(screen.getByText(/picked up where it left off/i)).toBeTruthy();
+
+    // Simulate the job completing (same jobId, same resumedFrom).
+    mockJob({ status: "done", phase: null, resumedFrom: 42 });
+    await act(async () => {
+      rerender(<ImportStrip />);
+    });
+
+    // The done-state strip must be visible.
+    expect(screen.getByTestId("import-strip-done")).toBeTruthy();
+    // The "Resuming" badge and its subtitle must be gone.
+    expect(screen.queryByTestId("import-resuming-badge")).toBeNull();
+    expect(screen.queryByText(/picked up where it left off/i)).toBeNull();
+    // The running strip must also be gone.
+    expect(screen.queryByTestId("import-strip")).toBeNull();
   });
 });
