@@ -265,7 +265,7 @@ interface FrontDoorRowProps {
   onEarlier: () => void;
 }
 
-function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onEarlier }: FrontDoorRowProps) {
+export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onEarlier }: FrontDoorRowProps) {
   const rz = reason(show, ds.crossings, ds.artistCrossings);
 
   // Tier 2: DJ name. Non-human stations (automated or mixed) have no reliable
