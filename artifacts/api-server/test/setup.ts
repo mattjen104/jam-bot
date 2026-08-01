@@ -3,6 +3,14 @@
 // they never open a DB connection. We still provide a dummy DATABASE_URL because
 // the db package constructs a lazy connection Pool at module load — the Pool is
 // created but never queried in these tests.
+//
+// ── Test conventions ──────────────────────────────────────────────────────────
+// See TEST_CONVENTIONS.md in this directory for the full authoring guide.
+// Key rule: any function that scans a DB table without a userId predicate
+// (a "global-scan function") must be called with its `_testUserIds` scope
+// hook so it doesn't touch rows from other concurrently-running test files.
+// Forgetting the hook causes tests that pass in isolation to flake in CI.
+// ─────────────────────────────────────────────────────────────────────────────
 process.env.DATABASE_URL ??= "postgres://test:test@localhost:5432/test";
 process.env.MUSICBRAINZ_CONTACT ??= "test@example.com";
 
