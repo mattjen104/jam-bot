@@ -85,7 +85,7 @@ lib/
 
 - **Library crossings drive ranking** — stations are ranked by how many of the listener's library tracks (and artists) have played there. Exact MBID match > artist match > historical 24h window.
 - **reason() ladder** (DialView.tsx) — r=1..4 are "warm" (Zone 1); r=5..7 and r=0 are "dim" (Zone 3). r values are consecutive integers with no gaps or collisions.
-- **Crossing computation is server-side** — `GET /api/me/crossings` runs a true `NOW() − 24h` query and returns `{ items: [{ stationSlug, crossings, artistCrossings }] }`. `useDialData.ts` consumes it via `useMyDialCrossings`; client-side reduction is no longer used for station ranking.
+- **Crossing computation is server-side** — `GET /api/me/crossings` runs a true `NOW() − 24h` query and returns `{ items: [{ stationSlug, crossings, artistCrossings }] }`. `useDialData.ts` consumes it via `useMyDialCrossings`; client-side reduction is no longer used for station ranking. The result cache is **per-process** (in-memory Map, 5-min TTL); running more than one server instance gives each instance an independent window — move to a shared store (Postgres or Redis) before horizontal scaling.
 - **ServiceConnector interface** — streaming library import is service-agnostic; SpotifyConnector is the only current implementation. Adding Apple Music/Tidal means implementing the interface.
 - **Soft library rows** — Spotify tracks that didn't resolve to MusicBrainz live in `spotify_library_items` and appear in the Library alongside resolved `library_items`.
 - **ICY watchers** — favorite stations get a persistent TCP socket for instant now-playing; FAILURE_LIMIT=12 / 30min prevents boot-contention from triggering permanent fallback.

@@ -21,6 +21,15 @@ const router: IRouter = Router();
 // with the archive.  A 5-minute stale window is harmless for sort purposes —
 // a new spin that tips a station's lifetime count rarely changes relative order
 // on the dial within that window.  Key: userId (number).
+//
+// ⚠ Deployment constraint: this is a plain in-process Map, so it is local to
+// the running server instance.  With more than one instance (horizontal
+// scaling / load balancing) each instance holds an independent 5-minute
+// window, meaning two requests for the same user routed to different instances
+// can return results computed from data up to 5 minutes apart.  This is
+// acceptable today (single-instance deploy) but must be addressed before
+// scaling out.  Before adding a second instance, replace this Map with a
+// shared store — a Postgres materialised row or Redis — keyed on userId.
 // ---------------------------------------------------------------------------
 
 const CROSSINGS_CACHE_TTL_MS = 5 * 60 * 1000;
