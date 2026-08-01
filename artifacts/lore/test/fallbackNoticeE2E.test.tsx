@@ -18,48 +18,40 @@ import { Route, Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-vi.mock("@workspace/api-client-react", () => ({
-  useGetRecording: vi.fn(),
-  useGetRecordingPreview: vi.fn(),
-  useGetRecordingEntry: vi.fn(),
-  useGetRecordingKnowledge: vi.fn(),
-  useGetRecordingLyrics: vi.fn(),
-  useGetRecordingSongExploder: vi.fn(() => ({ data: null, isLoading: false })),
-  useGetRecordingSpins: vi.fn(),
-  useGetRecordingSegues: vi.fn(),
-  useGetRecordingPicks: vi.fn(),
-  useGetStationRun: vi.fn(),
-  useGetPickerRun: vi.fn(),
-  useGetStationRunInsights: vi.fn(() => ({ data: null, isLoading: false })),
-  useGetPickerRunInsights: vi.fn(() => ({ data: null, isLoading: false })),
-  getRecording: vi.fn(async () => ({ links: [] })),
-  getRecordingSegues: vi.fn(async () => ({ next: [] })),
-  getRecordingPreview: vi.fn(async (mbid: string) => ({
-    previewUrl: `https://previews.example/${mbid}.mp3`,
-    artworkUrl: null,
-  })),
-  getStationNowPlaying: vi.fn(),
-  useGetStationNowPlaying: vi.fn(() => ({ data: null, isLoading: false })),
-  getGetStationNowPlayingQueryKey: vi.fn((slug: string) => [
-    "station-now-playing",
-    slug,
-  ]),
-  spotifyPlay: vi.fn(),
-  spotifyPause: vi.fn(async () => {}),
-  spotifyResume: vi.fn(),
-  getSpotifyPlayer: vi.fn(),
-  getSpotifyStatus: vi.fn(async () => ({
-    configured: false,
-    connected: false,
-    premium: false,
-    displayName: null,
-    product: null,
-  })),
-  spotifyLogout: vi.fn(),
-  useListStations: vi.fn(() => ({ data: null, isLoading: false })),
-  useGetRecordingListProvenance: vi.fn(() => ({ data: null, isLoading: false })),
-  getGetRecordingListProvenanceQueryKey: vi.fn((mbid: string) => ["recording-list-provenance", mbid]),
-}));
+vi.mock("@workspace/api-client-react", async (importOriginal) => {
+  const { makeApiClientMock } = await import("./helpers/apiClientMock");
+  return makeApiClientMock(importOriginal, {
+    useGetStationRun: vi.fn(),
+    useGetPickerRun: vi.fn(),
+    useGetStationRunInsights: vi.fn(() => ({ data: null, isLoading: false })),
+    useGetPickerRunInsights: vi.fn(() => ({ data: null, isLoading: false })),
+    getRecording: vi.fn(async () => ({ links: [] })),
+    getRecordingSegues: vi.fn(async () => ({ next: [] })),
+    getRecordingPreview: vi.fn(async (mbid: string) => ({
+      previewUrl: `https://previews.example/${mbid}.mp3`,
+      artworkUrl: null,
+    })),
+    getStationNowPlaying: vi.fn(),
+    getGetStationNowPlayingQueryKey: vi.fn((slug: string) => [
+      "station-now-playing",
+      slug,
+    ]),
+    spotifyPlay: vi.fn(),
+    spotifyPause: vi.fn(async () => {}),
+    spotifyResume: vi.fn(),
+    getSpotifyPlayer: vi.fn(),
+    getSpotifyStatus: vi.fn(async () => ({
+      configured: false,
+      connected: false,
+      premium: false,
+      displayName: null,
+      product: null,
+    })),
+    spotifyLogout: vi.fn(),
+    useGetRecordingListProvenance: vi.fn(() => ({ data: null, isLoading: false })),
+    getGetRecordingListProvenanceQueryKey: vi.fn((mbid: string) => ["recording-list-provenance", mbid]),
+  });
+});
 
 import {
   useGetRecording,

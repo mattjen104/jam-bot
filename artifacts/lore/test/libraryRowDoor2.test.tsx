@@ -35,10 +35,13 @@ vi.mock("../src/player/PlayerProvider", () => ({
   usePlayer: vi.fn(),
 }));
 
-vi.mock("@workspace/api-client-react", () => ({
-  spotifyPlay: vi.fn(async () => undefined),
-  getRecordingAlbumTracks: mockGetRecordingAlbumTracks,
-}));
+vi.mock("@workspace/api-client-react", async (importOriginal) => {
+  const { makeApiClientMock } = await import("./helpers/apiClientMock");
+  return makeApiClientMock(importOriginal, {
+    spotifyPlay: vi.fn(async () => undefined),
+    getRecordingAlbumTracks: mockGetRecordingAlbumTracks,
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Imports (must follow vi.mock calls)

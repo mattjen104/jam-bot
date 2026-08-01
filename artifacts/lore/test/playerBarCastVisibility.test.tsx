@@ -10,10 +10,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
-vi.mock("@workspace/api-client-react", () => ({
-  spotifyPause: vi.fn(async () => {}),
-  getRecordingPreview: vi.fn(async () => ({ previewUrl: null, artworkUrl: null })),
-}));
+vi.mock("@workspace/api-client-react", async (importOriginal) => {
+  const { makeApiClientMock } = await import("./helpers/apiClientMock");
+  return makeApiClientMock(importOriginal, {
+    spotifyPause: vi.fn(async () => {}),
+    getRecordingPreview: vi.fn(async () => ({ previewUrl: null, artworkUrl: null })),
+  });
+});
 
 import { PlayerBar } from "../src/components/PlayerBar";
 import type { SpotifyConnectApi } from "../src/player/useSpotifyConnect";

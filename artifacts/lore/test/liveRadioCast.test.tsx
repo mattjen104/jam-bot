@@ -16,34 +16,35 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vite
 import { cleanup, render, screen, act } from "@testing-library/react";
 import { useEffect, useRef } from "react";
 
-vi.mock("@workspace/api-client-react", () => ({
-  getSpotifyStatus: vi.fn(async () => ({
-    configured: true,
-    connected: true,
-    displayName: "Test User",
-    product: "premium",
-  })),
-  spotifyLogout: vi.fn(async () => {}),
-  getSpotifyDevices: vi.fn(async () => ({ devices: [] })),
-  spotifyPlay: vi.fn(async () => ({ trackUri: "spotify:track:cast-uri" })),
-  spotifyPause: vi.fn(async () => {}),
-  spotifyResume: vi.fn(async () => {}),
-  getSpotifyPlayer: vi.fn(async () => ({
-    trackUri: "spotify:track:cast-uri",
-    isPlaying: true,
-    active: true,
-    progressMs: 1000,
-  })),
-  getRecording: vi.fn(async () => ({ links: [] })),
-  getRecordingSegues: vi.fn(async () => ({ next: [] })),
-  getRecordingPreview: vi.fn(async () => ({ previewUrl: null, artworkUrl: null })),
-  getStationNowPlaying: vi.fn(async () => ({
-    nowPlaying: { recording: { mbid: "mbid-track-1" } },
-  })),
-  useGetStationNowPlaying: vi.fn(() => ({ data: null, isLoading: false })),
-  getGetStationNowPlayingQueryKey: vi.fn(() => ["station-now-playing"]),
-  useListStations: vi.fn(() => ({ data: null, isLoading: false })),
-}));
+vi.mock("@workspace/api-client-react", async (importOriginal) => {
+  const { makeApiClientMock } = await import("./helpers/apiClientMock");
+  return makeApiClientMock(importOriginal, {
+    getSpotifyStatus: vi.fn(async () => ({
+      configured: true,
+      connected: true,
+      displayName: "Test User",
+      product: "premium",
+    })),
+    spotifyLogout: vi.fn(async () => {}),
+    getSpotifyDevices: vi.fn(async () => ({ devices: [] })),
+    spotifyPlay: vi.fn(async () => ({ trackUri: "spotify:track:cast-uri" })),
+    spotifyPause: vi.fn(async () => {}),
+    spotifyResume: vi.fn(async () => {}),
+    getSpotifyPlayer: vi.fn(async () => ({
+      trackUri: "spotify:track:cast-uri",
+      isPlaying: true,
+      active: true,
+      progressMs: 1000,
+    })),
+    getRecording: vi.fn(async () => ({ links: [] })),
+    getRecordingSegues: vi.fn(async () => ({ next: [] })),
+    getRecordingPreview: vi.fn(async () => ({ previewUrl: null, artworkUrl: null })),
+    getStationNowPlaying: vi.fn(async () => ({
+      nowPlaying: { recording: { mbid: "mbid-track-1" } },
+    })),
+    getGetStationNowPlayingQueryKey: vi.fn(() => ["station-now-playing"]),
+  });
+});
 
 const radioPause = vi.fn();
 const radioResume = vi.fn();

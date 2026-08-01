@@ -37,61 +37,39 @@ vi.mock("../src/player/PlayerProvider", () => ({
   })),
 }));
 
-vi.mock("@workspace/api-client-react", () => ({
-  ApiError: class ApiError extends Error {
-    status: number;
-    data: unknown;
-    constructor(res: { status: number }, data: unknown) {
-      super("ApiError");
-      this.status = res.status;
-      this.data = data;
-    }
-  },
-  useGetPickersDial: vi.fn(() => ({ data: null })),
-}));
+vi.mock("@workspace/api-client-react", async (importOriginal) => {
+  const { makeApiClientMock } = await import("./helpers/apiClientMock");
+  return makeApiClientMock(importOriginal, {
+    useGetPickersDial: vi.fn(() => ({ data: null })),
+  });
+});
 
 vi.mock("../src/lib/local", () => ({
   useFollows: vi.fn(() => []),
 }));
 
-vi.mock("../src/lib/meHooks", () => ({
-  // Query key constants
-  ME_LATEST_IMPORT_JOB_KEY: ["me", "import-job", "latest"],
-  ME_LATEST_SYNC_JOB_KEY: ["me", "sync-job", "latest"],
-  ME_OVERLAP_PICKERS_KEY: ["me", "overlaps", "pickers"],
-  ME_OVERLAP_STATIONS_KEY: ["me", "overlaps", "stations"],
-  ME_OVERLAP_RUNS_KEY: ["me", "overlaps", "runs"],
-  ME_PREFERENCES_KEY: ["me", "preferences"],
-  ME_LIBRARY_COVERAGE_KEY: ["me", "library", "list-coverage"],
-
-  // Async helpers (never called in these tests)
-  startSpotifyLibraryConnect: vi.fn(),
-  startSpotifyLibraryReconnect: vi.fn(),
-  postStartImport: vi.fn(),
-  postStartSync: vi.fn(),
-  postImportLibraryFile: vi.fn(),
-  patchPreferences: vi.fn(),
-
-  // Hooks — default safe stubs (overridden per test)
-  useMyConnections: vi.fn(() => ({
-    data: [{ service: "spotify", canWrite: true, connectedAt: "2026-01-01T00:00:00Z", lastImportAt: null }],
-    isLoading: false,
-  })),
-  useMyPreferences: vi.fn(() => ({ data: { ledgerEnabled: false } })),
-  useMyLibraryInfinite: vi.fn(() => ({
-    data: { pages: [{ items: [], nextCursor: null, total: 0, keepCount: 0, softCount: 0 }] },
-    isLoading: false,
-    isFetchingNextPage: false,
-    fetchNextPage: vi.fn(),
-    hasNextPage: false,
-  })),
-  useMyImportStats: vi.fn(() => ({ data: null })),
-  useLatestImportJob: vi.fn(() => ({ data: null })),
-  useLatestSyncJob: vi.fn(() => ({ data: null })),
-  useMyLibraryCoverage: vi.fn(() => ({ data: null })),
-  ME_ALBUMS_COMPLETED_KEY: ["me", "albums", "completed"],
-  useMyAlbumsCompleted: vi.fn(() => ({ data: undefined })),
-}));
+vi.mock("../src/lib/meHooks", async (importOriginal) => {
+  const { makeMeHooksMock } = await import("./helpers/meHooksMock");
+  return makeMeHooksMock(importOriginal, {
+    useMyConnections: vi.fn(() => ({
+      data: [{ service: "spotify", canWrite: true, connectedAt: "2026-01-01T00:00:00Z", lastImportAt: null }],
+      isLoading: false,
+    })),
+    useMyPreferences: vi.fn(() => ({ data: { ledgerEnabled: false } })),
+    useMyLibraryInfinite: vi.fn(() => ({
+      data: { pages: [{ items: [], nextCursor: null, total: 0, keepCount: 0, softCount: 0 }] },
+      isLoading: false,
+      isFetchingNextPage: false,
+      fetchNextPage: vi.fn(),
+      hasNextPage: false,
+    })),
+    useMyImportStats: vi.fn(() => ({ data: null })),
+    useLatestImportJob: vi.fn(() => ({ data: null })),
+    useLatestSyncJob: vi.fn(() => ({ data: null })),
+    useMyLibraryCoverage: vi.fn(() => ({ data: null })),
+    useMyAlbumsCompleted: vi.fn(() => ({ data: undefined })),
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Helpers

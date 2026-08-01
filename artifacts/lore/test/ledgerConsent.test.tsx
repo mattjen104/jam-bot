@@ -72,29 +72,25 @@ vi.mock("../src/player/PlayerProvider", () => ({
   })),
 }));
 
-vi.mock("../src/lib/meHooks", () => ({
-  useMyConnections: mockUseMyConnections,
-  useMyLibraryInfinite: mockUseMyLibraryInfinite,
-  useLatestImportJob: mockUseLatestImportJob,
-  useLatestSyncJob: mockUseLatestSyncJob,
-  useMyPreferences: mockUseMyPreferences,
-  useMyAlbumsCompleted: mockUseMyAlbumsCompleted,
-  useMyImportStats: vi.fn(() => ({ data: null })),
-  useMyLibraryCoverage: vi.fn(() => ({ data: null })),
-  patchPreferences: mockPatchPreferences,
-  startSpotifyLibraryConnect: vi.fn(),
-  startSpotifyLibraryReconnect: vi.fn(),
-  postStartImport: vi.fn(),
-  postStartSync: vi.fn(),
-  postImportLibraryFile: vi.fn(),
-  ME_PREFERENCES_KEY: ["me", "preferences"],
-  ME_ALBUMS_COMPLETED_KEY: ["me", "albums", "completed"],
-  ME_LATEST_IMPORT_JOB_KEY: ["me", "import-job", "latest"],
-  ME_LATEST_SYNC_JOB_KEY: ["me", "sync-job", "latest"],
-  ME_OVERLAP_PICKERS_KEY: ["me", "overlaps", "pickers"],
-  ME_OVERLAP_STATIONS_KEY: ["me", "overlaps", "stations"],
-  ME_OVERLAP_RUNS_KEY: ["me", "overlaps", "runs"],
-}));
+vi.mock("../src/lib/meHooks", async (importOriginal) => {
+  const { makeMeHooksMock } = await import("./helpers/meHooksMock");
+  return makeMeHooksMock(importOriginal, {
+    useMyConnections: mockUseMyConnections,
+    useMyLibraryInfinite: mockUseMyLibraryInfinite,
+    useLatestImportJob: mockUseLatestImportJob,
+    useLatestSyncJob: mockUseLatestSyncJob,
+    useMyPreferences: mockUseMyPreferences,
+    useMyAlbumsCompleted: mockUseMyAlbumsCompleted,
+    useMyImportStats: vi.fn(() => ({ data: null })),
+    useMyLibraryCoverage: vi.fn(() => ({ data: null })),
+    patchPreferences: mockPatchPreferences,
+    startSpotifyLibraryConnect: vi.fn(),
+    startSpotifyLibraryReconnect: vi.fn(),
+    postStartImport: vi.fn(),
+    postStartSync: vi.fn(),
+    postImportLibraryFile: vi.fn(),
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Helpers

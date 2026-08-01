@@ -79,36 +79,32 @@ vi.mock("../src/player/PlayerProvider", () => ({
   })),
 }));
 
-vi.mock("../src/lib/meHooks", () => ({
-  useMyConnections: mockUseMyConnections,
-  useMyLibraryInfinite: mockUseMyLibraryInfinite,
-  useLatestImportJob: mockUseLatestImportJob,
-  useLatestSyncJob: mockUseLatestSyncJob,
-  useMyPreferences: mockUseMyPreferences,
-  useMyAlbumsCompleted: mockUseMyAlbumsCompleted,
-  useMyImportStats: vi.fn(() => ({ data: null })),
-  useMyLibraryCoverage: vi.fn(() => ({ data: null })),
-  patchPreferences: vi.fn(),
-  startSpotifyLibraryConnect: vi.fn(),
-  startSpotifyLibraryReconnect: vi.fn(),
-  postStartImport: vi.fn(),
-  postStartSync: vi.fn(),
-  postImportLibraryFile: vi.fn(),
-  ME_PREFERENCES_KEY: ["me", "preferences"],
-  ME_ALBUMS_COMPLETED_KEY: ["me", "albums", "completed"],
-  ME_LATEST_IMPORT_JOB_KEY: ["me", "import-job", "latest"],
-  ME_LATEST_SYNC_JOB_KEY: ["me", "sync-job", "latest"],
-  ME_OVERLAP_PICKERS_KEY: ["me", "overlaps", "pickers"],
-  ME_OVERLAP_STATIONS_KEY: ["me", "overlaps", "stations"],
-  ME_OVERLAP_RUNS_KEY: ["me", "overlaps", "runs"],
-}));
+vi.mock("../src/lib/meHooks", async (importOriginal) => {
+  const { makeMeHooksMock } = await import("./helpers/meHooksMock");
+  return makeMeHooksMock(importOriginal, {
+    useMyConnections: mockUseMyConnections,
+    useMyLibraryInfinite: mockUseMyLibraryInfinite,
+    useLatestImportJob: mockUseLatestImportJob,
+    useLatestSyncJob: mockUseLatestSyncJob,
+    useMyPreferences: mockUseMyPreferences,
+    useMyAlbumsCompleted: mockUseMyAlbumsCompleted,
+    useMyImportStats: vi.fn(() => ({ data: null })),
+    useMyLibraryCoverage: vi.fn(() => ({ data: null })),
+    patchPreferences: vi.fn(),
+    startSpotifyLibraryConnect: vi.fn(),
+    startSpotifyLibraryReconnect: vi.fn(),
+    postStartImport: vi.fn(),
+    postStartSync: vi.fn(),
+    postImportLibraryFile: vi.fn(),
+  });
+});
 
-vi.mock("@workspace/api-client-react", () => ({
-  ApiError: class ApiError extends Error {
-    constructor(public status = 500) { super("ApiError"); }
-  },
-  useGetPickersDial: vi.fn(() => ({ data: null })),
-}));
+vi.mock("@workspace/api-client-react", async (importOriginal) => {
+  const { makeApiClientMock } = await import("./helpers/apiClientMock");
+  return makeApiClientMock(importOriginal, {
+    useGetPickersDial: vi.fn(() => ({ data: null })),
+  });
+});
 
 vi.mock("../src/lib/local", () => ({
   useFollows: vi.fn(() => []),

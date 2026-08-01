@@ -44,24 +44,27 @@ vi.mock("../src/webplayer/hooks", async (importOriginal) => {
   };
 });
 
-vi.mock("../src/lib/meHooks", () => ({
-  useMyConnections: vi.fn(() => ({ data: null, isLoading: false })),
-  useIsAuthenticated: vi.fn(() => true),
-  useMyKeepStatus: vi.fn(() => ({ data: new Set() })),
-  useMutationKeep: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-  useMutationUnkeep: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-  useMyLibraryInfinite: vi.fn(() => ({
-    data: undefined,
-    isLoading: true,
-    hasNextPage: false,
-    isFetchingNextPage: false,
-    fetchNextPage: vi.fn(),
-  })),
-  useLatestImportJob: vi.fn(() => ({ data: undefined })),
-  useLatestSyncJob: vi.fn(() => ({ data: null })),
-  useMySpinKeepStatus: vi.fn(() => ({ data: new Map() })),
-  startSpotifyLibraryConnect: vi.fn(),
-}));
+vi.mock("../src/lib/meHooks", async (importOriginal) => {
+  const { makeMeHooksMock } = await import("./helpers/meHooksMock");
+  return makeMeHooksMock(importOriginal, {
+    useMyConnections: vi.fn(() => ({ data: null, isLoading: false })),
+    useIsAuthenticated: vi.fn(() => true),
+    useMyKeepStatus: vi.fn(() => ({ data: new Set() })),
+    useMutationKeep: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+    useMutationUnkeep: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+    useMyLibraryInfinite: vi.fn(() => ({
+      data: undefined,
+      isLoading: true,
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: vi.fn(),
+    })),
+    useLatestImportJob: vi.fn(() => ({ data: undefined })),
+    useLatestSyncJob: vi.fn(() => ({ data: null })),
+    useMySpinKeepStatus: vi.fn(() => ({ data: new Map() })),
+    startSpotifyLibraryConnect: vi.fn(),
+  });
+});
 
 vi.mock("../src/player/PlayerProvider", () => ({
   usePlayer: vi.fn(() => ({

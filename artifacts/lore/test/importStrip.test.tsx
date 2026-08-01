@@ -22,9 +22,12 @@ import { ImportStrip } from "../src/components/ImportStrip";
 // Mock useLatestImportJob — ImportStrip's only external dependency.
 // ---------------------------------------------------------------------------
 
-vi.mock("../src/lib/meHooks", () => ({
-  useLatestImportJob: vi.fn(),
-}));
+vi.mock("../src/lib/meHooks", async (importOriginal) => {
+  const { makeMeHooksMock } = await import("./helpers/meHooksMock");
+  return makeMeHooksMock(importOriginal, {
+    useLatestImportJob: vi.fn(),
+  });
+});
 
 import { useLatestImportJob } from "../src/lib/meHooks";
 

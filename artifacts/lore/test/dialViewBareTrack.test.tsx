@@ -30,12 +30,15 @@ vi.mock("../src/hooks/useDialData", () => ({
   normalizeDjName: vi.fn((s: string | null) => s ?? ""),
 }));
 
-vi.mock("../src/lib/meHooks", () => ({
-  useMyOverlapSelectors: vi.fn(() => ({ data: [] })),
-  useMyGhostMissed: vi.fn(() => ({ data: [] })),
-  useSpotifyLibraryConnected: vi.fn(() => false),
-  startSpotifyLibraryConnect: vi.fn(),
-}));
+vi.mock("../src/lib/meHooks", async (importOriginal) => {
+  const { makeMeHooksMock } = await import("./helpers/meHooksMock");
+  return makeMeHooksMock(importOriginal, {
+    useMyOverlapSelectors: vi.fn(() => ({ data: [] })),
+    useMyGhostMissed: vi.fn(() => ({ data: [] })),
+    useSpotifyLibraryConnected: vi.fn(() => false),
+    startSpotifyLibraryConnect: vi.fn(),
+  });
+});
 
 vi.mock("../src/player/PlayerProvider", () => ({
   usePlayer: vi.fn(() => ({

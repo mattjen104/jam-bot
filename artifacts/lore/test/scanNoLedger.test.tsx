@@ -60,39 +60,40 @@ vi.mock("../src/lib/local", () => ({
   getFollows: vi.fn(() => []),
 }));
 
-vi.mock("../src/lib/meHooks", () => ({
-  useLatestImportJob: mockUseLatestImportJob,
-  useMyPreferences: mockUseMyPreferences,
-  postListen: mockPostListen,
-  patchListen: mockPatchListen,
-  // Stubs for other exports consumed by the module barrel.
-  useMyConnections: vi.fn(() => ({ data: null, isLoading: false })),
-  useMyLibraryInfinite: vi.fn(() => ({
-    data: undefined,
-    isLoading: false,
-    isFetchingNextPage: false,
-    fetchNextPage: vi.fn(),
-    hasNextPage: false,
-  })),
-  useLatestSyncJob: vi.fn(() => ({ data: null })),
-  useMyAlbumsCompleted: vi.fn(() => ({ data: undefined })),
-  ME_PREFERENCES_KEY: ["me", "preferences"],
-  ME_ALBUMS_COMPLETED_KEY: ["me", "albums", "completed"],
-  ME_LATEST_IMPORT_JOB_KEY: ["me", "import-job", "latest"],
-  ME_LATEST_SYNC_JOB_KEY: ["me", "sync-job", "latest"],
-}));
+vi.mock("../src/lib/meHooks", async (importOriginal) => {
+  const { makeMeHooksMock } = await import("./helpers/meHooksMock");
+  return makeMeHooksMock(importOriginal, {
+    useLatestImportJob: mockUseLatestImportJob,
+    useMyPreferences: mockUseMyPreferences,
+    postListen: mockPostListen,
+    patchListen: mockPatchListen,
+    useMyConnections: vi.fn(() => ({ data: null, isLoading: false })),
+    useMyLibraryInfinite: vi.fn(() => ({
+      data: undefined,
+      isLoading: false,
+      isFetchingNextPage: false,
+      fetchNextPage: vi.fn(),
+      hasNextPage: false,
+    })),
+    useLatestSyncJob: vi.fn(() => ({ data: null })),
+    useMyAlbumsCompleted: vi.fn(() => ({ data: undefined })),
+  });
+});
 
 vi.mock("../src/player/PlayerProvider", () => ({
   usePlayer: mockUsePlayer,
 }));
 
-vi.mock("@workspace/api-client-react", () => ({
-  useGetStationNowPlaying: mockUseGetStationNowPlaying,
-  getGetStationNowPlayingQueryKey: vi.fn((slug: string) => [
-    "station-now-playing",
-    slug,
-  ]),
-}));
+vi.mock("@workspace/api-client-react", async (importOriginal) => {
+  const { makeApiClientMock } = await import("./helpers/apiClientMock");
+  return makeApiClientMock(importOriginal, {
+    useGetStationNowPlaying: mockUseGetStationNowPlaying,
+    getGetStationNowPlayingQueryKey: vi.fn((slug: string) => [
+      "station-now-playing",
+      slug,
+    ]),
+  });
+});
 
 vi.mock("../src/hooks/useIcecastFallback", () => ({
   useIcecastFallback: mockUseIcecastFallback,

@@ -27,25 +27,27 @@ vi.mock("../src/webplayer/hooks", async (importOriginal) => {
   };
 });
 
-vi.mock("@workspace/api-client-react", () => ({
-  useGetAllScrapedShows: vi.fn(),
-  useGetStationsRollingGenres: vi.fn(() => ({ data: undefined })),
-  useListStations: vi.fn(() => ({ data: null, isLoading: false })),
-  getSpotifyStatus: vi.fn(async () => ({
-    configured: false,
-    connected: false,
-    premium: false,
-    displayName: null,
-    product: null,
-  })),
-  getStationNowPlaying: vi.fn(),
-  getSpotifyPlayer: vi.fn(),
-  spotifyPlay: vi.fn(),
-  spotifyPause: vi.fn(async () => {}),
-  spotifyResume: vi.fn(),
-  spotifyLogout: vi.fn(),
-  getRecordingPreview: vi.fn(async () => ({ previewUrl: null, artworkUrl: null })),
-}));
+vi.mock("@workspace/api-client-react", async (importOriginal) => {
+  const { makeApiClientMock } = await import("./helpers/apiClientMock");
+  return makeApiClientMock(importOriginal, {
+    useGetAllScrapedShows: vi.fn(),
+    useGetStationsRollingGenres: vi.fn(() => ({ data: undefined })),
+    getSpotifyStatus: vi.fn(async () => ({
+      configured: false,
+      connected: false,
+      premium: false,
+      displayName: null,
+      product: null,
+    })),
+    getStationNowPlaying: vi.fn(),
+    getSpotifyPlayer: vi.fn(),
+    spotifyPlay: vi.fn(),
+    spotifyPause: vi.fn(async () => {}),
+    spotifyResume: vi.fn(),
+    spotifyLogout: vi.fn(),
+    getRecordingPreview: vi.fn(async () => ({ previewUrl: null, artworkUrl: null })),
+  });
+});
 
 import {
   useGetAllScrapedShows,

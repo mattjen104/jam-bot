@@ -34,16 +34,19 @@ vi.mock("../src/webplayer/hooks", async (importOriginal) => {
   };
 });
 
-vi.mock("../src/lib/meHooks", () => ({
-  useMyConnections: vi.fn(() => ({ data: null, isLoading: false })),
-  useMyKeepStatus: vi.fn(() => ({ data: new Set() })),
-  useMutationKeep: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-  useMutationUnkeep: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-  useMySpinKeepStatus: vi.fn(() => ({ data: new Map() })),
-  useMutationKeepSpin: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-  useMutationUnkeepSpin: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-  startSpotifyLibraryConnect: vi.fn(),
-}));
+vi.mock("../src/lib/meHooks", async (importOriginal) => {
+  const { makeMeHooksMock } = await import("./helpers/meHooksMock");
+  return makeMeHooksMock(importOriginal, {
+    useMyConnections: vi.fn(() => ({ data: null, isLoading: false })),
+    useMyKeepStatus: vi.fn(() => ({ data: new Set() })),
+    useMutationKeep: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+    useMutationUnkeep: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+    useMySpinKeepStatus: vi.fn(() => ({ data: new Map() })),
+    useMutationKeepSpin: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+    useMutationUnkeepSpin: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+    startSpotifyLibraryConnect: vi.fn(),
+  });
+});
 
 vi.mock("../src/player/PlayerProvider", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/player/PlayerProvider")>();
