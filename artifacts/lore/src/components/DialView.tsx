@@ -1327,12 +1327,12 @@ export function DialView() {
                   isSpotifyConnected={isSpotifyConnected}
                   hasLibrary={hasLibrary}
                 />
-                {/* Zone 2 heading + loading dot — no pre-load signal for ghost stations */}
+                {/* Zone 2 heading + skeleton rows — no pre-load signal for ghost stations */}
                 <ZoneLabel label="Missed while you were away" accent="picker" />
-                <div className="dial-live-skeleton">
-                  <span className="dial-live-skeleton__pip" />
-                </div>
-                {/* Zone 3 heading + loading dot.
+                <DialRowSkeleton delay={0} />
+                <DialRowSkeleton delay={1} />
+                <DialRowSkeleton delay={2} />
+                {/* Zone 3 heading + skeleton rows.
                     Estimated count from stations with no crossing evidence yet. */}
                 <ZoneLabel
                   label="Also on air"
@@ -1340,9 +1340,9 @@ export function DialView() {
                   n={alsoOnAir.length > 0 ? alsoOnAir.length : undefined}
                   estimated={alsoOnAir.length > 0}
                 />
-                <div className="dial-live-skeleton">
-                  <span className="dial-live-skeleton__pip" />
-                </div>
+                <DialRowSkeleton delay={0} />
+                <DialRowSkeleton delay={1} />
+                <DialRowSkeleton delay={2} />
               </>
             )}
 
@@ -1396,10 +1396,11 @@ export function DialView() {
                 Suppressed during the crossings-loading window because the three
                 zone skeletons above already hold the layout. */}
             {!crossingsLoading && liveLoading && !isCoreLoading && sortedRows.length === 0 && (
-              <div className="dial-live-skeleton">
-                <span className="dial-live-skeleton__pip" />
-                <span className="dial-live-skeleton__label">Finding what's on air…</span>
-              </div>
+              <>
+                <DialRowSkeleton delay={0} />
+                <DialRowSkeleton delay={1} />
+                <DialRowSkeleton delay={2} />
+              </>
             )}
 
             {/* Recently aired — held until both crossings AND live data have
@@ -1508,6 +1509,19 @@ export function DialView() {
 // Zone 1 loading placeholder
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// DialRowSkeleton — shimmer placeholder that mimics the shape of a FrontDoorRow
+// ---------------------------------------------------------------------------
+
+function DialRowSkeleton({ delay = 0 }: { delay?: 0 | 1 | 2 }) {
+  return (
+    <div className="fdrow-skeleton" style={{ "--delay": delay } as React.CSSProperties}>
+      <div className="fdrow-skeleton__name" />
+      <div className="fdrow-skeleton__sub" />
+    </div>
+  );
+}
+
 function Zone1Placeholder({
   isSpotifyConnected,
   hasLibrary,
@@ -1553,11 +1567,15 @@ function Zone1Placeholder({
     );
   }
 
-  // Library exists — just show a subtle "working on it" indicator.
+  // Library exists — show a "working on it" status line + skeleton rows.
   return (
     <div className="z1-placeholder z1-placeholder--loading">
-      <span className="dial-live-skeleton__pip" />
-      <span className="z1-placeholder__lbl">Finding which stations are playing your music…</span>
+      <div className="z1-placeholder__status">
+        <span className="dial-live-skeleton__pip" />
+        <span className="z1-placeholder__lbl">Finding which stations are playing your music…</span>
+      </div>
+      <DialRowSkeleton delay={0} />
+      <DialRowSkeleton delay={1} />
     </div>
   );
 }
