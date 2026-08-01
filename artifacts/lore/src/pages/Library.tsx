@@ -414,11 +414,19 @@ export function LibraryImportBanner({
           >
             {label}
           </div>
-          {isDone && (
-            <div style={{ fontFamily: "var(--app-font-mono)", fontSize: 10, color: "hsl(var(--dim))", marginTop: 2 }}>
-              {job.resolved.toLocaleString()} track{job.resolved === 1 ? "" : "s"} matched
-            </div>
-          )}
+          {isDone && (() => {
+            const unresolved = Math.max(0, job.total - job.resolved);
+            return (
+              <div style={{ fontFamily: "var(--app-font-mono)", fontSize: 10, color: "hsl(var(--dim))", marginTop: 2 }}>
+                {job.resolved.toLocaleString()} of {job.total.toLocaleString()} track{job.total === 1 ? "" : "s"} matched
+                {unresolved > 0 && (
+                  <span style={{ color: "hsl(var(--faint))" }}>
+                    {" · "}{unresolved.toLocaleString()} resolving overnight
+                  </span>
+                )}
+              </div>
+            );
+          })()}
           {!isDone && !isError && job.total > 0 && (
             <div style={{ fontFamily: "var(--app-font-mono)", fontSize: 10, color: "hsl(var(--dim))", marginTop: 2 }}>
               {isBackoff
@@ -665,7 +673,7 @@ export default function Library() {
   }, [jobData?.status]);
   useEffect(() => {
     if (jobData?.status !== "done") return;
-    const t = setTimeout(() => setBannerDismissed(true), 8_000);
+    const t = setTimeout(() => setBannerDismissed(true), 60_000);
     // Refresh overlap data after import
     void queryClient.invalidateQueries({ queryKey: ME_OVERLAP_PICKERS_KEY });
     void queryClient.invalidateQueries({ queryKey: ME_OVERLAP_STATIONS_KEY });

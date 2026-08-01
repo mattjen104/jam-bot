@@ -1,6 +1,10 @@
-import { RefreshCw } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { CheckCircle2, RefreshCw, X } from "lucide-react";
 import type { ImportJobStatus } from "../lib/meHooks";
 import { useLatestImportJob } from "../lib/meHooks";
+
+/** How long (ms) to keep the done-state strip visible before it self-dismisses. */
+const DONE_TTL_MS = 45_000;
 
 function phaseLabel(job: ImportJobStatus): string {
   if (job.resumedFrom != null && job.phase !== "fetching") {
@@ -17,14 +21,77 @@ function phaseLabel(job: ImportJobStatus): string {
 }
 
 /**
- * Site-wide import progress strip — visible while a Spotify library import
- * is running or pending. Renders nothing otherwise.
+ * Site-wide import progress strip — visible while an import is running or
+ * pending, and briefly after it completes so users get a match summary.
+ * Renders nothing otherwise.
  */
 export function ImportStrip() {
   const { data: job } = useLatestImportJob();
-  if (!job || (job.status !== "running" && job.status !== "pending")) return null;
+  const [doneDismissed, setDoneDismissed] = useState(false);
+  // Track which job id we last saw as done so we reset dismissal on a new job.
+  const doneJobRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (job?.status !== "done") return;
+    // New job finished — reset dismissal.
+    if (job.jobId !== doneJobRef.current) {
+      doneJobRef.current = job.jobId;
+      setDoneDismissed(false);
+    }
+    // Auto-dismiss after TTL.
+    const t = setTimeout(() => setDoneDismissed(true), DONE_TTL_MS);
+    return () => clearTimeout(t);
+  }, [job?.status, job?.jobId]);
+
+  if (!job) return null;
+
+  const isActive = job.status === "running" || job.status === "pending";
+  const isDone = job.status === "done" && !doneDismissed;
+
+  if (!isActive && !isDone) return null;
 
   const pct = job.total > 0 ? Math.round((100 * job.resolved) / job.total) : 0;
+  const unresolved = Math.max(0, job.total - job.resolved);
+
+  if (isDone) {
+    return (
+      <div
+        className="flex items-center gap-3 border-b border-border px-4 py-2.5"
+        style={{ background: "hsl(var(--card))" }}
+        data-testid="import-strip-done"
+      >
+        <CheckCircle2
+          size={13}
+          className="shrink-0"
+          style={{ color: "hsl(var(--keep))" }}
+          aria-hidden="true"
+        />
+        <p className="flex-1 font-mono text-[11px] text-muted-foreground">
+          {job.resolved.toLocaleString()} of {job.total.toLocaleString()} track{job.total === 1 ? "" : "s"} matched
+          {unresolved > 0 && (
+            <> · <span style={{ color: "hsl(var(--faint))" }}>{unresolved.toLocaleString()} resolving overnight</span></>
+          )}
+        </p>
+        <button
+          type="button"
+          onClick={() => setDoneDismissed(true)}
+          aria-label="Dismiss"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            color: "hsl(var(--faint))",
+            padding: 0,
+            flexShrink: 0,
+          }}
+        >
+          <X size={11} />
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div
