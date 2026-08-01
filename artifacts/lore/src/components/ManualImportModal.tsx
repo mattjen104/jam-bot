@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { X, Upload, FileText } from "lucide-react";
+import { X, Upload, FileText, ArrowLeft, ExternalLink } from "lucide-react";
 import { postStartManualImport, ME_LATEST_IMPORT_JOB_KEY } from "../lib/meHooks";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -88,12 +88,87 @@ function parseTracks(text: string): Track[] {
 }
 
 // ---------------------------------------------------------------------------
+// Service config
+// ---------------------------------------------------------------------------
+
+type ServiceId = "spotify" | "apple" | "tidal" | "youtube" | "other";
+
+interface ServiceConfig {
+  id: ServiceId;
+  label: string;
+  emoji: string;
+  steps: string[];
+  linkLabel?: string;
+  linkUrl?: string;
+  hint?: string;
+}
+
+const SERVICES: ServiceConfig[] = [
+  {
+    id: "spotify",
+    label: "Spotify",
+    emoji: "🎵",
+    steps: [
+      "Open Exportify (free, no login required beyond Spotify).",
+      "Click \"Get Playlist\" — choose Liked Songs or any playlist.",
+      "Download the CSV, then upload it below.",
+    ],
+    linkLabel: "Open Exportify",
+    linkUrl: "https://exportify.net",
+  },
+  {
+    id: "apple",
+    label: "Apple Music",
+    emoji: "🎶",
+    steps: [
+      "Open TuneMyMusic and connect your Apple Music account.",
+      "Select your library or a playlist to export.",
+      "Download the CSV, then upload it below.",
+    ],
+    linkLabel: "Open TuneMyMusic",
+    linkUrl: "https://www.tunemymusic.com/transfer",
+  },
+  {
+    id: "tidal",
+    label: "Tidal",
+    emoji: "🌊",
+    steps: [
+      "Open TuneMyMusic and connect your Tidal account.",
+      "Choose the playlist or favourites you want to export.",
+      "Download the CSV, then upload it below.",
+    ],
+    linkLabel: "Open TuneMyMusic",
+    linkUrl: "https://www.tunemymusic.com/transfer",
+  },
+  {
+    id: "youtube",
+    label: "YouTube Music",
+    emoji: "▶️",
+    steps: [
+      "Open TuneMyMusic and connect your YouTube Music account.",
+      "Select the playlist you want to export.",
+      "Download the CSV, then upload it below.",
+    ],
+    linkLabel: "Open TuneMyMusic",
+    linkUrl: "https://www.tunemymusic.com/transfer",
+  },
+  {
+    id: "other",
+    label: "Other",
+    emoji: "📋",
+    steps: [],
+    hint: "One track per line: Artist – Title or Artist - Title.  You can also try Soundiiz to export from most streaming services.",
+  },
+];
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
 interface Props { onClose(): void }
 
 export function ManualImportModal({ onClose }: Props) {
+  const [service, setService] = useState<ServiceId | null>(null);
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -101,6 +176,7 @@ export function ManualImportModal({ onClose }: Props) {
   const qc = useQueryClient();
 
   const tracks = parseTracks(text);
+  const cfg = service ? SERVICES.find((s) => s.id === service) ?? null : null;
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -127,6 +203,11 @@ export function ManualImportModal({ onClose }: Props) {
     }
   };
 
+  const handleBack = () => {
+    setService(null);
+    setError(null);
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
@@ -142,11 +223,27 @@ export function ManualImportModal({ onClose }: Props) {
       >
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="font-mono text-sm font-semibold text-foreground">Import your tracks</h2>
-            <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
-              Paste a track list or upload a CSV from Spotify, Apple Music, or any service.
-            </p>
+          <div className="flex items-center gap-2">
+            {service && (
+              <button
+                type="button"
+                onClick={handleBack}
+                aria-label="Back to service picker"
+                className="shrink-0 text-muted-foreground hover:text-foreground"
+              >
+                <ArrowLeft size={15} aria-hidden />
+              </button>
+            )}
+            <div>
+              <h2 className="font-mono text-sm font-semibold text-foreground">
+                {service ? `Import from ${cfg?.label ?? ""}` : "Import your tracks"}
+              </h2>
+              {!service && (
+                <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+                  Choose a service to get step-by-step instructions.
+                </p>
+              )}
+            </div>
           </div>
           <button
             type="button"
@@ -158,79 +255,139 @@ export function ManualImportModal({ onClose }: Props) {
           </button>
         </div>
 
-        {/* Format hints */}
-        <div
-          className="rounded-lg border border-border px-3 py-2.5 font-mono text-[10px] text-muted-foreground"
-          style={{ background: "hsl(var(--muted)/0.3)" }}
-        >
-          <p className="mb-1 font-semibold text-foreground/70 uppercase tracking-wide">Accepted formats</p>
-          <ul className="space-y-0.5">
-            <li>• CSV from <span className="text-foreground/80">Spotify Exportify</span> or <span className="text-foreground/80">Apple Music</span> export</li>
-            <li>• One track per line: <span className="text-foreground/80">Artist – Title</span> or <span className="text-foreground/80">Artist - Title</span></li>
-          </ul>
-        </div>
-
-        {/* File upload */}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1 font-mono text-[10px] uppercase tracking-wide text-muted-foreground transition-colors hover:border-primary hover:text-primary"
-          >
-            <Upload size={11} aria-hidden />
-            Upload CSV
-          </button>
-          <span className="font-mono text-[10px] text-muted-foreground">or paste below</span>
-          <input ref={fileRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFile} />
-        </div>
-
-        {/* Textarea */}
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder={"Artist – Title\nArtist – Title\n…"}
-          rows={8}
-          className="w-full resize-y rounded-lg border border-border bg-background px-3 py-2 font-mono text-[11px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-          spellCheck={false}
-        />
-
-        {/* Parse preview */}
-        {text.trim() && (
-          <p className="font-mono text-[11px] text-muted-foreground">
-            {tracks.length > 0
-              ? <><span className="text-foreground">{tracks.length.toLocaleString()}</span> tracks found</>
-              : <span className="text-destructive">No tracks recognised — check the format above.</span>}
-          </p>
+        {/* ── Service picker ── */}
+        {!service && (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {SERVICES.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setService(s.id)}
+                className="flex flex-col items-center gap-1.5 rounded-xl border border-border px-3 py-4 font-mono text-[11px] text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+                style={{ background: "hsl(var(--muted)/0.2)" }}
+              >
+                <span className="text-xl leading-none">{s.emoji}</span>
+                <span className="font-semibold tracking-wide uppercase text-[10px]">{s.label}</span>
+              </button>
+            ))}
+          </div>
         )}
 
-        {error && (
-          <p className="font-mono text-[11px] text-destructive">{error}</p>
+        {/* ── Per-service instruction pane ── */}
+        {service && cfg && (
+          <>
+            {/* Steps */}
+            {cfg.steps.length > 0 && (
+              <div
+                className="rounded-lg border border-border px-3 py-2.5 font-mono text-[11px] text-muted-foreground"
+                style={{ background: "hsl(var(--muted)/0.3)" }}
+              >
+                <ol className="space-y-1.5 list-none">
+                  {cfg.steps.map((step, i) => (
+                    <li key={i} className="flex gap-2">
+                      <span
+                        className="shrink-0 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold"
+                        style={{
+                          background: "hsl(var(--primary)/0.15)",
+                          color: "hsl(var(--primary))",
+                        }}
+                        aria-hidden
+                      >
+                        {i + 1}
+                      </span>
+                      <span>{step}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+
+            {/* "Other" hint */}
+            {cfg.id === "other" && cfg.hint && (
+              <div
+                className="rounded-lg border border-border px-3 py-2.5 font-mono text-[11px] text-muted-foreground"
+                style={{ background: "hsl(var(--muted)/0.3)" }}
+              >
+                <p>{cfg.hint}</p>
+              </div>
+            )}
+
+            {/* External link */}
+            {cfg.linkUrl && cfg.linkLabel && (
+              <a
+                href={cfg.linkUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 self-start rounded-full border border-primary px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide text-primary transition-opacity hover:opacity-75"
+              >
+                <ExternalLink size={10} aria-hidden />
+                {cfg.linkLabel}
+              </a>
+            )}
+
+            {/* File upload */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1 font-mono text-[10px] uppercase tracking-wide text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+              >
+                <Upload size={11} aria-hidden />
+                Upload CSV
+              </button>
+              <span className="font-mono text-[10px] text-muted-foreground">or paste below</span>
+              <input ref={fileRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFile} />
+            </div>
+
+            {/* Textarea */}
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder={"Artist – Title\nArtist – Title\n…"}
+              rows={8}
+              className="w-full resize-y rounded-lg border border-border bg-background px-3 py-2 font-mono text-[11px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              spellCheck={false}
+            />
+
+            {/* Parse preview */}
+            {text.trim() && (
+              <p className="font-mono text-[11px] text-muted-foreground">
+                {tracks.length > 0
+                  ? <><span className="text-foreground">{tracks.length.toLocaleString()}</span> tracks found</>
+                  : <span className="text-destructive">No tracks recognised — check the format above.</span>}
+              </p>
+            )}
+
+            {error && (
+              <p className="font-mono text-[11px] text-destructive">{error}</p>
+            )}
+
+            {/* Actions */}
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-full border border-border px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSubmit()}
+                disabled={submitting || tracks.length === 0}
+                className="rounded-full border border-primary bg-primary px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-primary-foreground transition-opacity disabled:opacity-40"
+              >
+                {submitting ? "Starting…" : `Import ${tracks.length > 0 ? tracks.length.toLocaleString() + " " : ""}tracks`}
+              </button>
+            </div>
+
+            {/* Inline tip */}
+            <p className="font-mono text-[10px] text-muted-foreground/60">
+              <FileText size={10} className="inline mr-1 -mt-px" aria-hidden />
+              Matching runs overnight for unrecognised tracks. Spotify users: connect your account for richer matching.
+            </p>
+          </>
         )}
-
-        {/* Actions */}
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full border border-border px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleSubmit()}
-            disabled={submitting || tracks.length === 0}
-            className="rounded-full border border-primary bg-primary px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-primary-foreground transition-opacity disabled:opacity-40"
-          >
-            {submitting ? "Starting…" : `Import ${tracks.length > 0 ? tracks.length.toLocaleString() + " " : ""}tracks`}
-          </button>
-        </div>
-
-        {/* Inline tip */}
-        <p className="font-mono text-[10px] text-muted-foreground/60">
-          <FileText size={10} className="inline mr-1 -mt-px" aria-hidden />
-          Matching runs overnight for unrecognised tracks. Spotify users: connect your account for richer matching.
-        </p>
       </div>
     </div>
   );
