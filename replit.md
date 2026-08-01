@@ -8,7 +8,7 @@ pnpm workspace monorepo using TypeScript. Contains **Lore Radio** — a radio di
 
 ### Lore Radio (`artifacts/lore`)
 A web app with three surfaces:
-- **The Dial** — front door; ranks live stations by library overlap, attribution (selector/DJ), and taste signal. Three-zone layout: Zone 1 (with a reason), Zone 2 (ghost — library that discovers, currently unbuilt), Zone 3 (also on air, dimmed).
+- **The Dial** — front door; ranks live stations by library overlap, attribution (selector/DJ), and taste signal. Three-zone layout: Zone 1 (with a reason), Zone 2 (ghost — stations playing library-artist tracks the listener hasn't heard there before), Zone 3 (also on air, dimmed).
 - **The Library** — the listener's full track collection: MB-resolved library items + Spotify-only soft rows; filters by provenance; source for crossing detection.
 - **The Archive** — station/show/selector history; run replay; selector profiles.
 
@@ -36,7 +36,7 @@ artifacts/
 │   └── src/
 │       ├── index.ts              # Entry point
 │       ├── routes/               # Express routes
-│       │   ├── me/index.ts       # Library import, keep, sync (3600+ lines — split pending)
+│       │   ├── me/index.ts       # Library import, keep, sync, crossings, ghost (4100+ lines)
 │       │   ├── lore/stations.ts  # Station/spin/schedule/now-playing endpoints
 │       │   └── spotify/          # Spotify OAuth + playback
 │       ├── lore/                 # Core workers and pollers
@@ -48,10 +48,10 @@ artifacts/
 ├── lore/                 # React/Vite web frontend
 │   └── src/
 │       ├── components/
-│       │   ├── DialView.tsx      # Front door (1300+ lines — split pending)
+│       │   ├── DialView.tsx      # Front door (1500+ lines)
 │       │   └── LibraryRow.tsx    # Library track row
 │       ├── hooks/
-│       │   └── useDialData.ts    # Crossing computation (client-side — server-side pending)
+│       │   └── useDialData.ts    # Dial data assembly; station crossing scores come from GET /api/me/crossings
 │       ├── pages/
 │       │   ├── Library.tsx       # Library page
 │       │   └── Archive/          # Station/show/selector archive pages
@@ -85,12 +85,12 @@ lib/
 
 - **Library crossings drive ranking** — stations are ranked by how many of the listener's library tracks (and artists) have played there. Exact MBID match > artist match > historical 24h window.
 - **reason() ladder** (DialView.tsx) — r=1..4 are "warm" (Zone 1); r=5..7 and r=0 are "dim" (Zone 3). r values are consecutive integers with no gaps or collisions.
-- **Crossing computation is currently client-side** (useDialData.ts) — a server endpoint returning `{stationId, crossings, artistCrossings}` is planned.
+- **Crossing computation is server-side** — `GET /api/me/crossings` runs a true `NOW() − 24h` query and returns `{ items: [{ stationSlug, crossings, artistCrossings }] }`. `useDialData.ts` consumes it via `useMyDialCrossings`; client-side reduction is no longer used for station ranking.
 - **ServiceConnector interface** — streaming library import is service-agnostic; SpotifyConnector is the only current implementation. Adding Apple Music/Tidal means implementing the interface.
 - **Soft library rows** — Spotify tracks that didn't resolve to MusicBrainz live in `spotify_library_items` and appear in the Library alongside resolved `library_items`.
 - **ICY watchers** — favorite stations get a persistent TCP socket for instant now-playing; FAILURE_LIMIT=12 / 30min prevents boot-contention from triggering permanent fallback.
 - **No client-side audio features** — compatibility is library overlap + artist overlap only; audio feature similarity was explicitly ruled out.
-- **Ghost zone (Zone 2)** — unbuilt; will surface stations the library "discovers" for the listener (tracks that crossed the library but weren't known to the listener). Requires `/me/ghost/missed` endpoint.
+- **Ghost zone (Zone 2)** — shipped; surfaces stations playing tracks by library artists that the listener hasn't heard at those stations before. `GET /api/me/ghost/missed` returns up to 20 such stations; `DialView.tsx` renders them as Zone 2 rows.
 
 ## TypeScript & Build
 
@@ -101,6 +101,5 @@ lib/
 
 ## User Preferences
 
-- Crossing computation should move server-side (planned).
 - Front-door primary sort key is lifetime overlap; live crossings are a promotion signal only.
-- The "library that discovers" premise (Zone 2 / ghost zone) is the core differentiating feature and must be built.
+- The "library that discovers" premise (Zone 2 / ghost zone) is the core differentiating feature; the endpoint and dial section are now live.
