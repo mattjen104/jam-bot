@@ -2334,6 +2334,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /me/library/list-coverage:
+    get:
+      operationId: getMyLibraryListCoverage
+      tags: [me]
+      summary: Publication list coverage for the user's library
+      description: >
+        Returns lists from music publications that feature albums from the
+        listener's library. Grouped by list (publication name + year), each
+        entry includes the matched albums with their rank. Only confirmed or
+        exact-confidence list_entries are returned. Returns an empty array
+        when the library has no list coverage. Requires an active lore session
+        cookie — returns an empty array for unauthenticated requests.
+      responses:
+        "200":
+          description: List coverage (may be empty)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LibraryCoverageResponse"
 components:
   schemas:
     HealthStatus:
@@ -5313,3 +5332,66 @@ components:
         - raw
         - silent
         - unscored
+    LibraryCoverageAlbum:
+      type: object
+      description: An album from the user's library that appears on a critic list.
+      properties:
+        releaseGroupMbid:
+          type: string
+        albumTitle:
+          type: ["string", "null"]
+        releaseYear:
+          type: ["integer", "null"]
+        rank:
+          type: ["integer", "null"]
+          description: Position in the list, null for unranked appearances.
+      required:
+        - releaseGroupMbid
+        - albumTitle
+        - releaseYear
+        - rank
+    LibraryCoverageList:
+      type: object
+      description: >
+        A publication list that contains at least one album from the user's
+        library, with the matched albums included.
+      properties:
+        listId:
+          type: integer
+        listTitle:
+          type: string
+        listUrl:
+          type: string
+          description: URL to the original list page.
+        listYear:
+          type: ["integer", "null"]
+        listKind:
+          type: string
+          description: "year_end | mid_year | decade | all_time | genre | custom"
+        isRanked:
+          type: boolean
+        sourceName:
+          type: string
+          description: Publication name (e.g. "Pitchfork").
+        albums:
+          type: array
+          items:
+            $ref: "#/components/schemas/LibraryCoverageAlbum"
+      required:
+        - listId
+        - listTitle
+        - listUrl
+        - listYear
+        - listKind
+        - isRanked
+        - sourceName
+        - albums
+    LibraryCoverageResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/LibraryCoverageList"
+      required:
+        - items

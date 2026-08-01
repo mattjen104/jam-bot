@@ -739,6 +739,46 @@ export function useMyOverlapRuns() {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Library list coverage — publication lists featuring the user's albums
+// ---------------------------------------------------------------------------
+
+export interface LibraryCoverageAlbum {
+  releaseGroupMbid: string;
+  albumTitle: string | null;
+  releaseYear: number | null;
+  rank: number | null;
+}
+
+export interface LibraryCoverageList {
+  listId: number;
+  listTitle: string;
+  listUrl: string;
+  listYear: number | null;
+  listKind: string;
+  isRanked: boolean;
+  sourceName: string;
+  albums: LibraryCoverageAlbum[];
+}
+
+export const ME_LIBRARY_COVERAGE_KEY = ["me", "library", "list-coverage"] as const;
+
+/**
+ * Publication lists that contain albums from the user's library.
+ * Empty when the library has no critic list coverage or when unauthenticated.
+ */
+export function useMyLibraryCoverage() {
+  return useQuery({
+    queryKey: ME_LIBRARY_COVERAGE_KEY,
+    queryFn: () =>
+      fetchOrNull<{ items: LibraryCoverageList[] }>(
+        "/api/me/library/list-coverage",
+      ).then((d) => d?.items ?? []),
+    staleTime: 10 * 60_000,
+    retry: false,
+  });
+}
+
 export interface GhostStation {
   stationId: number;
   slug: string;

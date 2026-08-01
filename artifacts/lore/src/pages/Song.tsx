@@ -18,6 +18,7 @@ import {
 import { LyricView } from "../components/LyricView";
 import { usePlayer } from "../player/PlayerProvider";
 import { DeepLinks } from "../components/NowPlaying";
+import { ListProvenance } from "../components/ListProvenance";
 import { CONFIDENCE_LABEL } from "../lib/format";
 import { ShareButton } from "../components/ShareButton";
 import { clockTime, timeAgo } from "../lib/format";
@@ -220,6 +221,7 @@ export default function Song() {
             <Segues next={seguesData?.next ?? []} />
             <Spins spins={spinsData?.spins ?? []} mbid={rec.mbid} />
             <Picks picks={picksData?.picks ?? []} mbid={rec.mbid} />
+            <ListProvenance mbid={rec.mbid} />
             <AlbumSection album={knowledgeData?.album ?? null} currentMbid={rec.mbid} artistMbid={rec.artistMbid} />
           </>
         )}

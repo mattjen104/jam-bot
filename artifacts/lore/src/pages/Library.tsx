@@ -22,6 +22,9 @@ import {
   ME_OVERLAP_PICKERS_KEY,
   ME_OVERLAP_STATIONS_KEY,
   ME_OVERLAP_RUNS_KEY,
+  useMyLibraryCoverage,
+  ME_LIBRARY_COVERAGE_KEY,
+  type LibraryCoverageList,
   type FileImportSummary,
   type SyncJobStatus,
 } from "../lib/meHooks";
@@ -33,6 +36,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  ExternalLink,
   Loader2,
   Music2,
   Radio,
@@ -666,6 +670,7 @@ export default function Library() {
     void queryClient.invalidateQueries({ queryKey: ME_OVERLAP_PICKERS_KEY });
     void queryClient.invalidateQueries({ queryKey: ME_OVERLAP_STATIONS_KEY });
     void queryClient.invalidateQueries({ queryKey: ME_OVERLAP_RUNS_KEY });
+    void queryClient.invalidateQueries({ queryKey: ME_LIBRARY_COVERAGE_KEY });
     return () => clearTimeout(t);
   }, [jobData?.status]); // eslint-disable-line react-hooks/exhaustive-deps
   const isImportActive = jobData?.status === "pending" || jobData?.status === "running";
@@ -697,6 +702,11 @@ export default function Library() {
   const [syncReceiptOpen, setSyncReceiptOpen] = useState(false);
   const [reconnectBusy, setReconnectBusy] = useState(false);
   const isSyncActive = syncJobData?.status === "pending" || syncJobData?.status === "running";
+
+  // Critics' lists coverage
+  const { data: criticsCovData } = useMyLibraryCoverage();
+  const criticsCovItems: LibraryCoverageList[] = criticsCovData ?? [];
+  const [criticsCovOpen, setCriticsCovOpen] = useState(false);
   const handleSync = async () => {
     setSyncBusy(true); setSyncError(null); setSyncNeedsReconnect(false);
     try {
@@ -1278,6 +1288,119 @@ export default function Library() {
           </>
         )}
 
+
+        {/* ── In critics' lists ── */}
+        {criticsCovItems.length > 0 && (
+          <>
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => setCriticsCovOpen((v) => !v)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") setCriticsCovOpen((v) => !v);
+              }}
+              className="dial-tier-hd"
+              style={{ cursor: "pointer" }}
+              data-testid="library-critics-lists-toggle"
+            >
+              <span className="dial-tier-hd__label">
+                In critics' lists
+                <span style={{ fontFamily: "var(--app-font-mono)", fontWeight: 400 }}>
+                  {" "}· {criticsCovItems.length}
+                </span>
+              </span>
+              {criticsCovOpen ? (
+                <ChevronUp style={{ width: 10, height: 10, color: "hsl(var(--faint))", flexShrink: 0, marginLeft: 6 }} />
+              ) : (
+                <ChevronDown style={{ width: 10, height: 10, color: "hsl(var(--faint))", flexShrink: 0, marginLeft: 6 }} />
+              )}
+              <div className="dial-tier-hd__rule" />
+            </div>
+            {criticsCovOpen && (
+              <div data-testid="library-critics-lists">
+                {criticsCovItems.map((listEntry) => (
+                  <div
+                    key={listEntry.listId}
+                    style={{ borderBottom: "1px solid hsl(var(--border) / 0.5)", padding: "10px 15px" }}
+                  >
+                    {/* List header with external link */}
+                    <a
+                      href={listEntry.listUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 5,
+                        fontFamily: "var(--app-font-display)",
+                        fontSize: 10,
+                        fontWeight: 700,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.07em",
+                        color: "hsl(var(--library))",
+                        textDecoration: "none",
+                        marginBottom: 8,
+                      }}
+                    >
+                      {listEntry.sourceName}
+                      {listEntry.listYear ? ` ${listEntry.listYear}` : ""}
+                      <ExternalLink style={{ width: 9, height: 9 }} />
+                    </a>
+                    {/* Album rows */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                      {listEntry.albums.map((album) => (
+                        <div
+                          key={album.releaseGroupMbid}
+                          style={{
+                            display: "flex",
+                            alignItems: "baseline",
+                            gap: 8,
+                          }}
+                        >
+                          {listEntry.isRanked && album.rank != null && (
+                            <span
+                              style={{
+                                fontFamily: "var(--app-font-mono)",
+                                fontSize: 10,
+                                color: "hsl(var(--library))",
+                                minWidth: 28,
+                                textAlign: "right",
+                                flexShrink: 0,
+                              }}
+                            >
+                              #{album.rank}
+                            </span>
+                          )}
+                          <span
+                            style={{
+                              fontFamily: "var(--app-font-reading)",
+                              fontSize: 13,
+                              color: "hsl(var(--foreground))",
+                            }}
+                          >
+                            {album.albumTitle ?? album.releaseGroupMbid.slice(0, 8)}
+                            {album.releaseYear != null && (
+                              <span
+                                style={{
+                                  fontFamily: "var(--app-font-mono)",
+                                  fontSize: 10,
+                                  color: "hsl(var(--dim))",
+                                  marginLeft: 5,
+                                }}
+                              >
+                                {album.releaseYear}
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
 
         {/* ── Sync & export receipts ── */}
         <TierHd label="Sync & export" hint="receipts, not content" />

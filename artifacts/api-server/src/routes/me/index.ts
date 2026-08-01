@@ -12,6 +12,9 @@ import {
   pendingKeepsTable,
   recordingsTable,
   recordingReleaseGroupsTable,
+  listEntriesTable,
+  listsTable,
+  listSourcesTable,
   resolutionCacheTable,
   spotifyLibraryItemsTable,
   picksTable,
@@ -2731,6 +2734,103 @@ router.get("/me/ghost/missed", h(async (req, res) => {
       artistName: r.artist_name,
     })),
   });
+}));
+
+/**
+ * GET /api/me/library/list-coverage — publication lists that feature albums
+ * from the user's library. Only exact/confirmed list_entries are returned.
+ * Results are grouped by list (listId → albums) in the response shape.
+ */
+router.get("/me/library/list-coverage", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+
+  const rows = await db
+    .select({
+      listId: listsTable.id,
+      listTitle: listsTable.title,
+      listUrl: listsTable.url,
+      listYear: listsTable.year,
+      listKind: listsTable.kind,
+      isRanked: listsTable.isRanked,
+      sourceName: listSourcesTable.name,
+      rank: listEntriesTable.rank,
+      releaseGroupMbid: listEntriesTable.releaseGroupMbid,
+      albumTitle: recordingReleaseGroupsTable.title,
+      releaseYear: recordingReleaseGroupsTable.releaseYear,
+    })
+    .from(libraryItemsTable)
+    .innerJoin(
+      recordingReleaseGroupsTable,
+      eq(recordingReleaseGroupsTable.recordingMbid, libraryItemsTable.mbid),
+    )
+    .innerJoin(
+      listEntriesTable,
+      eq(listEntriesTable.releaseGroupMbid, recordingReleaseGroupsTable.releaseGroupMbid),
+    )
+    .innerJoin(listsTable, eq(listsTable.id, listEntriesTable.listId))
+    .innerJoin(listSourcesTable, eq(listSourcesTable.id, listsTable.sourceId))
+    .where(
+      and(
+        eq(libraryItemsTable.userId, user.id),
+        isNotNull(libraryItemsTable.mbid),
+        sql`(${listEntriesTable.confidence} = 'exact' OR ${listEntriesTable.confirmed} = true)`,
+      ),
+    )
+    .orderBy(
+      asc(listSourcesTable.name),
+      sql`${listsTable.year} desc nulls last`,
+      sql`${listEntriesTable.rank} asc nulls last`,
+    );
+
+  // Group by listId, deduplicating albums that appear via multiple recordings.
+  const listMap = new Map<
+    number,
+    {
+      listId: number;
+      listTitle: string;
+      listUrl: string;
+      listYear: number | null;
+      listKind: string;
+      isRanked: boolean;
+      sourceName: string;
+      albums: Array<{
+        releaseGroupMbid: string;
+        albumTitle: string | null;
+        releaseYear: number | null;
+        rank: number | null;
+      }>;
+    }
+  >();
+  const seenAlbums = new Set<string>();
+
+  for (const r of rows) {
+    const albumKey = `${r.listId}:${r.releaseGroupMbid}`;
+    if (seenAlbums.has(albumKey)) continue;
+    seenAlbums.add(albumKey);
+
+    let entry = listMap.get(r.listId);
+    if (!entry) {
+      entry = {
+        listId: r.listId,
+        listTitle: r.listTitle,
+        listUrl: r.listUrl,
+        listYear: r.listYear ?? null,
+        listKind: r.listKind,
+        isRanked: r.isRanked,
+        sourceName: r.sourceName,
+        albums: [],
+      };
+      listMap.set(r.listId, entry);
+    }
+    entry.albums.push({
+      releaseGroupMbid: r.releaseGroupMbid,
+      albumTitle: r.albumTitle ?? null,
+      releaseYear: r.releaseYear ?? null,
+      rank: r.rank ?? null,
+    });
+  }
+
+  return res.json({ items: Array.from(listMap.values()) });
 }));
 
 /**
