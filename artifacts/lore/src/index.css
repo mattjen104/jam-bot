@@ -2770,6 +2770,28 @@
   letter-spacing: 0;
   color: hsl(var(--muted-foreground) / 0.45);
 }
+/* collapse/expand toggle — sits at the trailing edge of the zone header */
+.fdzone-lbl__collapse {
+  margin-left: auto;
+  background: none;
+  border: none;
+  padding: 0 2px;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  color: hsl(var(--muted-foreground) / 0.5);
+  transition: color 0.15s;
+  flex-shrink: 0;
+}
+.fdzone-lbl__collapse:hover {
+  color: hsl(var(--muted-foreground));
+}
+/* when the zone is collapsed the whole label row gets a slight bottom border
+   so it reads as a closed section, not an orphaned header */
+.fdzone-lbl--collapsed {
+  border-bottom: 1px solid hsl(var(--border) / 0.3);
+  margin-bottom: 2px;
+}
 
 /* ── Zone 2 ghost rows — discovers tier ─────────────────────────────────── */
 /* Less warm than Zone 1, not dimmed like Zone 3. Neutral-cool left accent. */

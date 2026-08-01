@@ -410,6 +410,189 @@ describe("Scan regression — auto-expand when scan index exceeds visible budget
   });
 });
 
+// ---------------------------------------------------------------------------
+// Collapse behaviour
+// ---------------------------------------------------------------------------
+
+describe("Zone collapse — clicking 'Collapse zone' hides all rows", () => {
+  it("Zone 1: collapse button hides all fdrows; label remains; no see-more", () => {
+    const stations = Array.from({ length: 9 }, (_, i) => makeZone1Station(`s${i}`));
+    mockDialData(stations);
+    mockGhosts([]);
+    mockScan(null);
+
+    renderDial();
+
+    // Default: 5 rows visible.
+    expect(fdrowCount()).toBe(5);
+
+    // Find the collapse button on the zone label.
+    const collapseBtn = screen.getByRole("button", { name: "Collapse zone" });
+    expect(collapseBtn.getAttribute("aria-expanded")).toBe("true");
+
+    act(() => { fireEvent.click(collapseBtn); });
+
+    // All rows hidden.
+    expect(fdrowCount()).toBe(0);
+    // No see-more control either.
+    expect(screen.queryByRole("button", { name: /^See all/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "See less" })).toBeNull();
+
+    // The button should now read "Expand zone" with aria-expanded=false.
+    const expandBtn = screen.getByRole("button", { name: "Expand zone" });
+    expect(expandBtn.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("Zone 1: collapsing an expanded zone hides rows and removes see-less", () => {
+    const stations = Array.from({ length: 9 }, (_, i) => makeZone1Station(`s${i}`));
+    mockDialData(stations);
+    mockGhosts([]);
+    mockScan(null);
+
+    renderDial();
+
+    // First expand.
+    act(() => { fireEvent.click(screen.getByRole("button", { name: "See all 9" })); });
+    expect(fdrowCount()).toBe(9);
+
+    // Now collapse.
+    act(() => { fireEvent.click(screen.getByRole("button", { name: "Collapse zone" })); });
+
+    expect(fdrowCount()).toBe(0);
+    expect(screen.queryByRole("button", { name: "See less" })).toBeNull();
+  });
+
+  it("Zone 1: re-clicking Expand zone restores the default truncated view", () => {
+    const stations = Array.from({ length: 9 }, (_, i) => makeZone1Station(`s${i}`));
+    mockDialData(stations);
+    mockGhosts([]);
+    mockScan(null);
+
+    renderDial();
+
+    // Collapse.
+    act(() => { fireEvent.click(screen.getByRole("button", { name: "Collapse zone" })); });
+    expect(fdrowCount()).toBe(0);
+
+    // Expand again.
+    act(() => { fireEvent.click(screen.getByRole("button", { name: "Expand zone" })); });
+
+    // Back to default truncated view (5 of 9).
+    expect(fdrowCount()).toBe(5);
+    expect(screen.getByRole("button", { name: "See all 9" })).toBeTruthy();
+  });
+});
+
+describe("Zone collapse — Zone 2 (ghost) and Zone 3", () => {
+  it("Zone 2: collapse hides ghost rows", () => {
+    const zone3Stations = Array.from({ length: 3 }, (_, i) => makeZone3Station(`z3s${i}`));
+    mockDialData(zone3Stations);
+    const ghosts = Array.from({ length: 5 }, (_, i) => makeGhostStation(`ghost${i}`));
+    mockGhosts(ghosts);
+    mockScan(null);
+
+    renderDial();
+
+    expect(ghostRowCount()).toBe(3); // ZONE2_VISIBLE
+
+    // There are two collapse buttons (Zone 2 and Zone 3) — find the right one by
+    // confirming ghost rows disappear after clicking the first one.
+    const collapseBtns = screen.getAllByRole("button", { name: "Collapse zone" });
+    // Zone 2 is rendered before Zone 3.
+    act(() => { fireEvent.click(collapseBtns[0]); });
+
+    expect(ghostRowCount()).toBe(0);
+    // Zone 3 rows are unaffected.
+    expect(fdrowCount()).toBe(3);
+  });
+
+  it("Zone 3: collapse hides fdrows while Zone 2 stays visible", () => {
+    const zone3Stations = Array.from({ length: 5 }, (_, i) => makeZone3Station(`z3s${i}`));
+    mockDialData(zone3Stations);
+    const ghosts = Array.from({ length: 2 }, (_, i) => makeGhostStation(`ghost${i}`));
+    mockGhosts(ghosts);
+    mockScan(null);
+
+    renderDial();
+
+    expect(fdrowCount()).toBe(3); // ZONE3_VISIBLE
+
+    const collapseBtns = screen.getAllByRole("button", { name: "Collapse zone" });
+    // Zone 3 collapse button is last.
+    act(() => { fireEvent.click(collapseBtns[collapseBtns.length - 1]); });
+
+    expect(fdrowCount()).toBe(0);
+    // Zone 2 ghost rows are unaffected.
+    expect(ghostRowCount()).toBe(2);
+  });
+});
+
+describe("Zone collapse — resets on slug-set change", () => {
+  it("collapsed zone re-shows rows when the station set changes", () => {
+    const stations9 = Array.from({ length: 9 }, (_, i) => makeZone1Station(`s${i}`));
+    mockDialData(stations9);
+    mockGhosts([]);
+    mockScan(null);
+    const { rerender } = renderDial();
+
+    // Collapse Zone 1.
+    act(() => { fireEvent.click(screen.getByRole("button", { name: "Collapse zone" })); });
+    expect(fdrowCount()).toBe(0);
+
+    // New slug set arrives.
+    const stations9New = Array.from({ length: 9 }, (_, i) => makeZone1Station(`new${i}`));
+    mockDialData(stations9New);
+    act(() => { rerender(<DialView />); });
+
+    // Should be back to default truncated view (collapsed reset).
+    expect(fdrowCount()).toBe(5);
+  });
+
+  it("does NOT reset collapse when same slugs arrive with new object identities", () => {
+    const stations9 = Array.from({ length: 9 }, (_, i) => makeZone1Station(`s${i}`));
+    mockDialData(stations9);
+    mockGhosts([]);
+    mockScan(null);
+    const { rerender } = renderDial();
+
+    // Collapse.
+    act(() => { fireEvent.click(screen.getByRole("button", { name: "Collapse zone" })); });
+    expect(fdrowCount()).toBe(0);
+
+    // Same slugs, fresh object references.
+    const stationsCopy = stations9.map((ds) => ({ ...ds, station: { ...ds.station } }));
+    mockDialData(stationsCopy);
+    act(() => { rerender(<DialView />); });
+
+    // Still collapsed.
+    expect(fdrowCount()).toBe(0);
+    expect(screen.getByRole("button", { name: "Expand zone" })).toBeTruthy();
+  });
+});
+
+describe("Zone collapse — scan auto-uncollapses Zone 1", () => {
+  it("advancing samplingIdx into a collapsed Zone 1 uncollapses and expands it", () => {
+    const stations = Array.from({ length: 9 }, (_, i) => makeZone1Station(`s${i}`));
+    mockDialData(stations);
+    mockGhosts([]);
+
+    mockScan(null, false);
+    const { rerender } = renderDial();
+
+    // Collapse Zone 1.
+    act(() => { fireEvent.click(screen.getByRole("button", { name: "Collapse zone" })); });
+    expect(fdrowCount()).toBe(0);
+
+    // Scan advances into index 7 (beyond zone1Visible=5).
+    mockScan(7, true);
+    act(() => { rerender(<DialView />); });
+
+    // Zone 1 should be un-collapsed and expanded so station 7 is visible.
+    expect(fdrowCount()).toBe(9);
+    expect(document.querySelectorAll(".fdrow--sampling").length).toBeGreaterThan(0);
+  });
+});
+
 describe("Expansion state reset behaviour", () => {
   it("resets to collapsed when slug set changes", () => {
     const stations9 = Array.from({ length: 9 }, (_, i) => makeZone1Station(`s${i}`));
