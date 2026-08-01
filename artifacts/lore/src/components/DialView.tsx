@@ -978,26 +978,40 @@ export function DialView() {
   // --- attribution-ladder sort (spec §4) ---
   // One live entry per stream (show and station are 1:1 at any instant — §5)
   const sortedRows = useMemo(() => {
+    const FALLBACK_CUTOFF_MS = 4 * 60 * 60 * 1000;
+    const now = Date.now();
     return [...stations]
       .filter((ds) => ds.isLive)
       .map((ds) => {
         const show = ds.shows.find((sh) => sh.state === "live") ?? null;
         const rz = reason(show, ds.crossings, ds.artistCrossings);
-        return { ds, show, rz };
+        // Mirror the fallback-DJ logic from FrontDoorRow so the sort key matches
+        // what the row actually displays (Task #774 + #780).
+        const isNonHuman = ds.station.automationClass != null && ds.station.automationClass !== "human";
+        const liveDjName = show?.djName ?? null;
+        const fallbackDjName = !isNonHuman && liveDjName === null
+          ? ds.shows
+              .filter((sh) => sh.djName != null && sh.state !== "future" && (now - new Date(sh.endedAt).getTime()) < FALLBACK_CUTOFF_MS)
+              .sort((a, b) => new Date(b.endedAt).getTime() - new Date(a.endedAt).getTime())[0]
+              ?.djName ?? null
+          : null;
+        const effectiveDjName = liveDjName ?? fallbackDjName;
+        return { ds, show, rz, effectiveDjName };
       })
       .sort((a, b) => {
         // 1. Live crossing (rung 1) floats to the very top
         const ac = a.rz.r === 1 ? 0 : 1;
         const bc = b.rz.r === 1 ? 0 : 1;
         if (ac !== bc) return ac - bc;
-        // 2. Lifetime overlap desc — attributed uses selector lifetime ov,
-        //    unattributed uses 24h station crossings (same numeric scale for comparison)
-        const aOv = a.show?.djName != null ? (ovByName.get(a.show.djName) ?? 0) : a.ds.crossings;
-        const bOv = b.show?.djName != null ? (ovByName.get(b.show.djName) ?? 0) : b.ds.crossings;
+        // 2. Lifetime overlap desc — attributed uses selector lifetime ov (by
+        //    effectiveDjName, which includes the fallback when show hasn't attached
+        //    yet), unattributed uses 24h station crossings as a proxy.
+        const aOv = a.effectiveDjName != null ? (ovByName.get(a.effectiveDjName) ?? 0) : a.ds.crossings;
+        const bOv = b.effectiveDjName != null ? (ovByName.get(b.effectiveDjName) ?? 0) : b.ds.crossings;
         if (aOv !== bOv) return bOv - aOv;
         // 3. Attribution tier as tiebreaker within the same overlap band
-        const at = a.show?.djName != null ? 0 : 1;
-        const bt = b.show?.djName != null ? 0 : 1;
+        const at = a.effectiveDjName != null ? 0 : 1;
+        const bt = b.effectiveDjName != null ? 0 : 1;
         if (at !== bt) return at - bt;
         // 4. Rung asc as final tiebreaker
         return a.rz.r - b.rz.r;
