@@ -611,7 +611,7 @@ function ShowTimeline({
                 : "border-border bg-background/50 text-muted-foreground hover:border-primary/30 hover:text-foreground"
             }`}
           >
-            {replayable && (
+            {(replayable || isActive) && (
               <Play className="h-2 w-2 shrink-0 fill-current" />
             )}
             <span className="max-w-[12ch] truncate">{label}</span>
