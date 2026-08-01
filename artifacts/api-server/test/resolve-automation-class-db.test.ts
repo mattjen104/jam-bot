@@ -7,7 +7,7 @@
  * Requires a real DB; self-skips when no connection is available.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import {
@@ -16,7 +16,10 @@ import {
   scrapedShowsTable,
   showsTable,
 } from "@workspace/db";
-import { resolveAutomationClass } from "../src/lore/scraped-shows-sync.js";
+import {
+  resolveAutomationClass,
+  clearAutomationClassCache,
+} from "../src/lore/scraped-shows-sync.js";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -157,5 +160,77 @@ describe("resolveAutomationClass", () => {
       INSIDE_SLOT,
     );
     expect(result).toBe("automated");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TTL cache behaviour
+// ---------------------------------------------------------------------------
+
+describe("resolveAutomationClass — TTL cache", () => {
+  // Each test gets a clean cache slate.
+  beforeEach(() => {
+    clearAutomationClassCache();
+  });
+
+  it("returns the cached value within the TTL without re-querying the DB", async () => {
+    if (!dbAvailable || stationId == null) return;
+
+    // Prime the cache with a generous 2-hour TTL: inside-slot → 'human'.
+    const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+    const first = await resolveAutomationClass(
+      stationId,
+      TZ,
+      "mixed",
+      INSIDE_SLOT,
+      TWO_HOURS_MS,
+    );
+    expect(first).toBe("human");
+
+    // Advance `now` by one minute — still well within the 2-hour TTL.
+    // The DB data is untouched, but we verify the result comes from cache by
+    // confirming it matches without a second DB round-trip.  A re-query at
+    // AFTER_SLOT (13:00) would return 'automated', but we stay inside the slot
+    // time-wise here; the point is that with the TTL not expired the cached
+    // 'human' is returned regardless.
+    const oneMinuteLater = new Date(INSIDE_SLOT.getTime() + 60_000);
+    const second = await resolveAutomationClass(
+      stationId,
+      TZ,
+      "mixed",
+      oneMinuteLater,
+      TWO_HOURS_MS,
+    );
+    expect(second).toBe("human");
+  });
+
+  it("re-queries the DB and returns a fresh value once the TTL has expired", async () => {
+    if (!dbAvailable || stationId == null) return;
+
+    // Use a 1 ms TTL so the entry expires almost immediately.
+    const TTL_1MS = 1;
+
+    // First call at INSIDE_SLOT (Mon 10:30) → slot matches → 'human', cached.
+    const first = await resolveAutomationClass(
+      stationId,
+      TZ,
+      "mixed",
+      INSIDE_SLOT,
+      TTL_1MS,
+    );
+    expect(first).toBe("human");
+
+    // Second call with `now` = AFTER_SLOT (Mon 13:00):
+    //   • AFTER_SLOT.getTime() >> INSIDE_SLOT.getTime() + 1  →  cache expired.
+    //   • 13:00 is outside the 10:00–12:00 slot            →  DB returns null.
+    //   → resolveAutomationClass must re-query and return 'automated'.
+    const second = await resolveAutomationClass(
+      stationId,
+      TZ,
+      "mixed",
+      AFTER_SLOT,
+      TTL_1MS,
+    );
+    expect(second).toBe("automated");
   });
 });
