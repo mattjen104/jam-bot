@@ -45,12 +45,14 @@ import type {
   IcecastReportResult,
   IngestResult,
   LabelSeedRequest,
+  LibraryCoverageResponse,
   ListAllDraftClaimsParams,
   ListGeniusDraftsParams,
   ListPickersParams,
   LookupPickedMbidsParams,
   ManualSpinRequest,
   ManualSpinResponse,
+  MePickerOverlapResult,
   OEmbed,
   PatchClaimRequest,
   PickedLookup,
@@ -1631,108 +1633,6 @@ export function useGetRecordingListProvenance<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetRecordingListProvenanceQueryOptions(mbid, options);
-
-  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
-    queryKey: QueryKey;
-  };
-
-  return { ...query, queryKey: queryOptions.queryKey };
-}
-
-/**
- * @summary Publication list appearances for an album (release group)
- */
-export const getGetReleaseGroupListProvenanceUrl = (
-  releaseGroupMbid: string,
-) => {
-  return `/api/album/${releaseGroupMbid}/list-provenance`;
-};
-
-export const getReleaseGroupListProvenance = async (
-  releaseGroupMbid: string,
-  options?: RequestInit,
-): Promise<RecordingListProvenanceResponse> => {
-  return customFetch<RecordingListProvenanceResponse>(
-    getGetReleaseGroupListProvenanceUrl(releaseGroupMbid),
-    {
-      ...options,
-      method: "GET",
-    },
-  );
-};
-
-export const getGetReleaseGroupListProvenanceQueryKey = (
-  releaseGroupMbid: string,
-) => {
-  return [`/api/album/${releaseGroupMbid}/list-provenance`] as const;
-};
-
-export const getGetReleaseGroupListProvenanceQueryOptions = <
-  TData = Awaited<ReturnType<typeof getReleaseGroupListProvenance>>,
-  TError = ErrorType<unknown>,
->(
-  releaseGroupMbid: string,
-  options?: {
-    query?: UseQueryOptions<
-      Awaited<ReturnType<typeof getReleaseGroupListProvenance>>,
-      TError,
-      TData
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-) => {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ??
-    getGetReleaseGroupListProvenanceQueryKey(releaseGroupMbid);
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof getReleaseGroupListProvenance>>
-  > = ({ signal }) =>
-    getReleaseGroupListProvenance(releaseGroupMbid, {
-      signal,
-      ...requestOptions,
-    });
-
-  return {
-    queryKey,
-    queryFn,
-    enabled: !!releaseGroupMbid,
-    ...queryOptions,
-  } as UseQueryOptions<
-    Awaited<ReturnType<typeof getReleaseGroupListProvenance>>,
-    TError,
-    TData
-  > & { queryKey: QueryKey };
-};
-
-export type GetReleaseGroupListProvenanceQueryResult = NonNullable<
-  Awaited<ReturnType<typeof getReleaseGroupListProvenance>>
->;
-export type GetReleaseGroupListProvenanceQueryError = ErrorType<unknown>;
-
-/**
- * @summary Publication list appearances for an album (release group)
- */
-export function useGetReleaseGroupListProvenance<
-  TData = Awaited<ReturnType<typeof getReleaseGroupListProvenance>>,
-  TError = ErrorType<unknown>,
->(
-  releaseGroupMbid: string,
-  options?: {
-    query?: UseQueryOptions<
-      Awaited<ReturnType<typeof getReleaseGroupListProvenance>>,
-      TError,
-      TData
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetReleaseGroupListProvenanceQueryOptions(
-    releaseGroupMbid,
-    options,
-  );
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -3327,6 +3227,111 @@ export function useGetAlbum<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetAlbumQueryOptions(releaseGroupMbid, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns year-end / all-time list entries from music publications that feature this release group. Ordered by rank (ascending), then by list year (descending). Only confirmed or exact-confidence entries are returned. Returns an empty array when no list provenance has been scraped yet.
+
+ * @summary Publication list appearances for an album
+ */
+export const getGetReleaseGroupListProvenanceUrl = (
+  releaseGroupMbid: string,
+) => {
+  return `/api/album/${releaseGroupMbid}/list-provenance`;
+};
+
+export const getReleaseGroupListProvenance = async (
+  releaseGroupMbid: string,
+  options?: RequestInit,
+): Promise<RecordingListProvenanceResponse> => {
+  return customFetch<RecordingListProvenanceResponse>(
+    getGetReleaseGroupListProvenanceUrl(releaseGroupMbid),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetReleaseGroupListProvenanceQueryKey = (
+  releaseGroupMbid: string,
+) => {
+  return [`/api/album/${releaseGroupMbid}/list-provenance`] as const;
+};
+
+export const getGetReleaseGroupListProvenanceQueryOptions = <
+  TData = Awaited<ReturnType<typeof getReleaseGroupListProvenance>>,
+  TError = ErrorType<unknown>,
+>(
+  releaseGroupMbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getReleaseGroupListProvenance>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetReleaseGroupListProvenanceQueryKey(releaseGroupMbid);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getReleaseGroupListProvenance>>
+  > = ({ signal }) =>
+    getReleaseGroupListProvenance(releaseGroupMbid, {
+      signal,
+      ...requestOptions,
+    });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!releaseGroupMbid,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getReleaseGroupListProvenance>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetReleaseGroupListProvenanceQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getReleaseGroupListProvenance>>
+>;
+export type GetReleaseGroupListProvenanceQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Publication list appearances for an album
+ */
+
+export function useGetReleaseGroupListProvenance<
+  TData = Awaited<ReturnType<typeof getReleaseGroupListProvenance>>,
+  TError = ErrorType<unknown>,
+>(
+  releaseGroupMbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getReleaseGroupListProvenance>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetReleaseGroupListProvenanceQueryOptions(
+    releaseGroupMbid,
+    options,
+  );
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -6680,6 +6685,164 @@ export function useGetSpotifyDevices<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetSpotifyDevicesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns all DJ pickers whose picks intersect the caller's library_items, using exact-MBID and primary-release-group widening — same logic as /me/crossings. Counts are over the full library (no sampling cap). Results are cached per-user for 5 minutes server-side. Returns an empty array for unauthenticated requests.
+
+ * @summary DJ picker overlap with the user's full library (RG-widened)
+ */
+export const getGetMyPickerOverlapUrl = () => {
+  return `/api/me/pickers/overlap`;
+};
+
+export const getMyPickerOverlap = async (
+  options?: RequestInit,
+): Promise<MePickerOverlapResult> => {
+  return customFetch<MePickerOverlapResult>(getGetMyPickerOverlapUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyPickerOverlapQueryKey = () => {
+  return [`/api/me/pickers/overlap`] as const;
+};
+
+export const getGetMyPickerOverlapQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyPickerOverlap>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyPickerOverlap>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMyPickerOverlapQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMyPickerOverlap>>
+  > = ({ signal }) => getMyPickerOverlap({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyPickerOverlap>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyPickerOverlapQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyPickerOverlap>>
+>;
+export type GetMyPickerOverlapQueryError = ErrorType<unknown>;
+
+/**
+ * @summary DJ picker overlap with the user's full library (RG-widened)
+ */
+
+export function useGetMyPickerOverlap<
+  TData = Awaited<ReturnType<typeof getMyPickerOverlap>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyPickerOverlap>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyPickerOverlapQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns lists from music publications that feature albums from the listener's library. Grouped by list (publication name + year), each entry includes the matched albums with their rank. Only confirmed or exact-confidence list_entries are returned. Returns an empty array when the library has no list coverage. Requires an active lore session cookie — returns an empty array for unauthenticated requests.
+
+ * @summary Publication list coverage for the user's library
+ */
+export const getGetMyLibraryListCoverageUrl = () => {
+  return `/api/me/library/list-coverage`;
+};
+
+export const getMyLibraryListCoverage = async (
+  options?: RequestInit,
+): Promise<LibraryCoverageResponse> => {
+  return customFetch<LibraryCoverageResponse>(
+    getGetMyLibraryListCoverageUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetMyLibraryListCoverageQueryKey = () => {
+  return [`/api/me/library/list-coverage`] as const;
+};
+
+export const getGetMyLibraryListCoverageQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyLibraryListCoverage>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyLibraryListCoverage>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetMyLibraryListCoverageQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMyLibraryListCoverage>>
+  > = ({ signal }) => getMyLibraryListCoverage({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyLibraryListCoverage>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyLibraryListCoverageQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyLibraryListCoverage>>
+>;
+export type GetMyLibraryListCoverageQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Publication list coverage for the user's library
+ */
+
+export function useGetMyLibraryListCoverage<
+  TData = Awaited<ReturnType<typeof getMyLibraryListCoverage>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyLibraryListCoverage>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyLibraryListCoverageQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import type { Server } from "node:http";
 import { eq, sql } from "drizzle-orm";
@@ -15,6 +15,7 @@ import {
   spinsTable,
 } from "@workspace/db";
 import app from "../src/app.js";
+import { _testOnly_clearCrossingsCache, _testOnly_getCrossingsCache } from "../src/routes/me/crossings.js";
 
 /**
  * Integration tests for GET /api/me/crossings.
@@ -41,10 +42,11 @@ import app from "../src/app.js";
 const run = randomUUID().slice(0, 8);
 
 // ── Session IDs (used as deviceKey / cookie) ──────────────────────────────────
-const SID_RG    = `test-cross-rg-${run}`;     // release-group widening user
-const SID_ART   = `test-cross-art-${run}`;    // artist MBID crossing user
-const SID_SOFT  = `test-cross-soft-${run}`;   // soft artist fallback user
-const SID_EMPTY = `test-cross-empty-${run}`;  // empty library (baseline)
+const SID_RG       = `test-cross-rg-${run}`;       // release-group widening user
+const SID_ART      = `test-cross-art-${run}`;      // artist MBID crossing user
+const SID_SOFT     = `test-cross-soft-${run}`;     // soft artist fallback user
+const SID_EMPTY    = `test-cross-empty-${run}`;    // empty library (baseline)
+const SID_LIFETIME = `test-cross-lifetime-${run}`; // lifetime-only crossing (spin > 24h old)
 
 // ── Recordings ────────────────────────────────────────────────────────────────
 // Scenario 1 — release-group widening
@@ -63,6 +65,10 @@ const SOFT_ARTIST    = `Soft Artist ${run}`;   // artist name to match
 const MBID_SPIN_SOFT = `tc-spin-soft-${run}`; // aired track (no artistMbid)
 // Library item is a spotify_library_items row (unresolved mbid) with artist = SOFT_ARTIST
 
+// Scenario 4 — lifetime-only crossing (spin > 24h old, crossings=0 but lifetimeCrossings≥1)
+// The library holds the EXACT same MBID that aired, so no release-group join is needed.
+const MBID_SPIN_LIFETIME = `tc-spin-lt-${run}`; // aired 25h ago AND is in the library
+
 // ── Station ───────────────────────────────────────────────────────────────────
 const STATION_SLUG = `test-cross-sta-${run}`;
 
@@ -77,6 +83,7 @@ let userRgId: number | null = null;
 let userArtId: number | null = null;
 let userSoftId: number | null = null;
 let userEmptyId: number | null = null;
+let userLifetimeId: number | null = null;
 
 // ── HTTP helper ───────────────────────────────────────────────────────────────
 async function get(path: string, sid?: string) {
@@ -96,7 +103,7 @@ beforeAll(async () => {
   }
 
   // Legacy spotify_connections (FK required by lore_users)
-  for (const sid of [SID_RG, SID_ART, SID_SOFT, SID_EMPTY]) {
+  for (const sid of [SID_RG, SID_ART, SID_SOFT, SID_EMPTY, SID_LIFETIME]) {
     await db.insert(spotifyConnectionsTable).values({
       sid,
       accessToken: "t",
@@ -130,17 +137,24 @@ beforeAll(async () => {
     .returning({ id: loreUsersTable.id });
   userEmptyId = uEmpty!.id;
 
+  const [uLifetime] = await db
+    .insert(loreUsersTable)
+    .values({ spotifyUserId: `cross-lt-${run}`, spotifyConnectionId: SID_LIFETIME, deviceKey: SID_LIFETIME })
+    .returning({ id: loreUsersTable.id });
+  userLifetimeId = uLifetime!.id;
+
   // ── Recordings ───────────────────────────────────────────────────────────────
   await db.insert(recordingsTable).values([
     // Scenario 1
-    { mbid: MBID_SPIN_RG,   title: "Spin Track RG",   artist: `Album Artist ${run}` },
-    { mbid: MBID_LIB_RG,    title: "Lib Track RG",    artist: `Album Artist ${run}` },
+    { mbid: MBID_SPIN_RG,       title: "Spin Track RG",       artist: `Album Artist ${run}` },
+    { mbid: MBID_LIB_RG,        title: "Lib Track RG",        artist: `Album Artist ${run}` },
     // Scenario 2
-    { mbid: MBID_SPIN_ART,  title: "Spin Track Art",  artist: `Artist ${run}`, artistMbid: ARTIST_MBID },
-    { mbid: MBID_LIB_ART,   title: "Lib Track Art",   artist: `Artist ${run}`, artistMbid: ARTIST_MBID },
+    { mbid: MBID_SPIN_ART,      title: "Spin Track Art",      artist: `Artist ${run}`, artistMbid: ARTIST_MBID },
+    { mbid: MBID_LIB_ART,       title: "Lib Track Art",       artist: `Artist ${run}`, artistMbid: ARTIST_MBID },
     // Scenario 3
-    { mbid: MBID_SPIN_SOFT, title: "Spin Track Soft", artist: SOFT_ARTIST },
-    // artistMbid intentionally absent (null) for soft-fallback test
+    { mbid: MBID_SPIN_SOFT,     title: "Spin Track Soft",     artist: SOFT_ARTIST },
+    // Scenario 4 — lifetime-only (spin is the same MBID that's in the library)
+    { mbid: MBID_SPIN_LIFETIME, title: "Spin Track Lifetime", artist: `Lifetime Artist ${run}` },
   ]);
 
   // Release-group bridge rows (both recordings share the same primary RG)
@@ -162,13 +176,16 @@ beforeAll(async () => {
   stationId = station!.id;
 
   const now = new Date();
+  const ago25h = new Date(now.getTime() - 25 * 60 * 60 * 1000); // outside the 24h window
   await db.insert(spinsTable).values([
     // Scenario 1 — aired recording A (shares RG with library recording B)
-    { stationId: stationId!, mbid: MBID_SPIN_RG,   confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: now },
+    { stationId: stationId!, mbid: MBID_SPIN_RG,       confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: now },
     // Scenario 2 — aired by ARTIST_MBID but the exact track is not in the library
-    { stationId: stationId!, mbid: MBID_SPIN_ART,  confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: new Date(now.getTime() - 1000) },
+    { stationId: stationId!, mbid: MBID_SPIN_ART,      confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: new Date(now.getTime() - 1000) },
     // Scenario 3 — aired by SOFT_ARTIST (no artistMbid on recording)
-    { stationId: stationId!, mbid: MBID_SPIN_SOFT, confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: new Date(now.getTime() - 2000) },
+    { stationId: stationId!, mbid: MBID_SPIN_SOFT,     confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: new Date(now.getTime() - 2000) },
+    // Scenario 4 — aired 25h ago (outside rolling window) — lifetime-only crossing
+    { stationId: stationId!, mbid: MBID_SPIN_LIFETIME, confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: ago25h },
   ]);
 
   // ── Library items ────────────────────────────────────────────────────────────
@@ -205,6 +222,11 @@ beforeAll(async () => {
 
   // User EMPTY: no library items at all
 
+  // User LIFETIME: library has the exact MBID that aired 25h ago
+  await db.insert(libraryItemsTable).values([
+    { userId: userLifetimeId!, mbid: MBID_SPIN_LIFETIME, provenance: { kind: "keep" }, addedAt: new Date() },
+  ]);
+
   // ── Server ───────────────────────────────────────────────────────────────────
   server = app.listen(0);
   await new Promise<void>((resolve) => server!.once("listening", resolve));
@@ -225,7 +247,7 @@ afterAll(async () => {
   }
 
   // Library items
-  for (const userId of [userRgId, userArtId, userSoftId, userEmptyId]) {
+  for (const userId of [userRgId, userArtId, userSoftId, userEmptyId, userLifetimeId]) {
     if (userId != null) {
       await db.delete(libraryItemsTable).where(eq(libraryItemsTable.userId, userId));
     }
@@ -239,7 +261,7 @@ afterAll(async () => {
 
   // Release-group bridge rows + recordings (cascade deletes rrg rows automatically,
   // but explicit delete is safe and avoids relying on cascade order)
-  for (const mbid of [MBID_SPIN_RG, MBID_LIB_RG, MBID_SPIN_ART, MBID_LIB_ART, MBID_SPIN_SOFT]) {
+  for (const mbid of [MBID_SPIN_RG, MBID_LIB_RG, MBID_SPIN_ART, MBID_LIB_ART, MBID_SPIN_SOFT, MBID_SPIN_LIFETIME]) {
     await db
       .delete(recordingReleaseGroupsTable)
       .where(eq(recordingReleaseGroupsTable.recordingMbid, mbid));
@@ -247,14 +269,14 @@ afterAll(async () => {
   }
 
   // Lore users
-  for (const userId of [userRgId, userArtId, userSoftId, userEmptyId]) {
+  for (const userId of [userRgId, userArtId, userSoftId, userEmptyId, userLifetimeId]) {
     if (userId != null) {
       await db.delete(loreUsersTable).where(eq(loreUsersTable.id, userId));
     }
   }
 
   // Legacy spotify connections
-  for (const sid of [SID_RG, SID_ART, SID_SOFT, SID_EMPTY]) {
+  for (const sid of [SID_RG, SID_ART, SID_SOFT, SID_EMPTY, SID_LIFETIME]) {
     await db.delete(spotifyConnectionsTable).where(eq(spotifyConnectionsTable.sid, sid));
   }
 });
@@ -321,4 +343,61 @@ describe("GET /api/me/crossings — soft artist name fallback", () => {
     expect(row!.crossings).toBe(0);
     expect(row!.artistCrossings).toBeGreaterThanOrEqual(1);
   });
+});
+
+describe("GET /api/me/crossings — lifetime-only crossing (spin outside 24h window)", () => {
+  it("includes the station when the only crossing is older than 24h, with crossings=0 and lifetimeCrossings≥1", async () => {
+    if (!dbAvailable) return;
+
+    // Evict any cached result so we hit the DB fresh for this user.
+    _testOnly_clearCrossingsCache(userLifetimeId!);
+
+    const { status, body } = await get("/api/me/crossings", SID_LIFETIME);
+    expect(status).toBe(200);
+
+    type CrossingItem = {
+      stationSlug: string;
+      crossings: number;
+      artistCrossings: number;
+      lifetimeCrossings: number;
+      lifetimeArtistCrossings: number;
+    };
+    const row = (body.items as CrossingItem[]).find((r) => r.stationSlug === STATION_SLUG);
+
+    // The spin was played 25h ago — outside the 24h window — but MBID_SPIN_LIFETIME
+    // matches MBID_LIB_LIFETIME in the user's library exactly.
+    // The HAVING clause must pass on the lifetime aggregate, not the 24h count.
+    expect(row).toBeDefined();
+    expect(row!.crossings).toBe(0);                           // nothing within 24h
+    expect(row!.artistCrossings).toBe(0);                     // nothing within 24h
+    expect(row!.lifetimeCrossings).toBeGreaterThanOrEqual(1); // the 25h-old spin
+  }, TEST_TIMEOUT);
+});
+
+describe("GET /api/me/crossings — TTL cache", () => {
+  it("serves the second request from the in-memory cache without updating builtAt", async () => {
+    if (!dbAvailable) return;
+
+    // Evict so the first request populates the cache fresh.
+    _testOnly_clearCrossingsCache(userRgId!);
+
+    // First request — populates cache.
+    const first = await get("/api/me/crossings", SID_RG);
+    expect(first.status).toBe(200);
+
+    // Record the builtAt timestamp the first request wrote.
+    const afterFirst = _testOnly_getCrossingsCache(userRgId!);
+    expect(afterFirst).toBeDefined();
+    const builtAt1 = afterFirst!.builtAt;
+
+    // Second request — must be a cache hit (builtAt must not change).
+    const second = await get("/api/me/crossings", SID_RG);
+    expect(second.status).toBe(200);
+
+    const afterSecond = _testOnly_getCrossingsCache(userRgId!);
+    expect(afterSecond!.builtAt).toBe(builtAt1); // same timestamp → no DB re-query
+
+    // Response content must match.
+    expect(second.body).toEqual(first.body);
+  }, TEST_TIMEOUT);
 });

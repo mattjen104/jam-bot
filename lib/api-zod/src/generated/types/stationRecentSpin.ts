@@ -19,4 +19,8 @@ export interface StationRecentSpin {
   playedAt: string;
   /** True when this is the first time this recording (by MBID) has ever appeared in the archive. False when mbid is null (unresolved). */
   isFirstSpin: boolean;
+  /** True when the spin's recording (or any track from the same primary release group) is in the authenticated listener's library. Always false for unauthenticated requests. */
+  isLibraryHit: boolean;
+  /** True when the spin's artist is in the listener's library but the exact track/album is not. Always false for unauthenticated requests. */
+  isArtistHit: boolean;
 }

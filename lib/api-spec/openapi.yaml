@@ -2360,6 +2360,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /me/pickers/overlap:
+    get:
+      operationId: getMyPickerOverlap
+      tags: [me]
+      summary: DJ picker overlap with the user's full library (RG-widened)
+      description: >
+        Returns all DJ pickers whose picks intersect the caller's library_items,
+        using exact-MBID and primary-release-group widening — same logic as
+        /me/crossings. Counts are over the full library (no sampling cap).
+        Results are cached per-user for 5 minutes server-side. Returns an empty
+        array for unauthenticated requests.
+      responses:
+        "200":
+          description: Picker overlap items (may be empty)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MePickerOverlapResult"
   /me/library/list-coverage:
     get:
       operationId: getMyLibraryListCoverage
@@ -2926,11 +2944,25 @@ components:
             True when this is the first time this recording (by MBID) has
             appeared in the archive. False when the recording has been logged
             before, or when the spin has no resolved MBID.
+        isLibraryHit:
+          type: boolean
+          description: >-
+            True when the spin's recording (or any track from the same primary
+            release group) is in the authenticated listener's library. Always
+            false for unauthenticated requests.
+        isArtistHit:
+          type: boolean
+          description: >-
+            True when the spin's artist is in the listener's library but the
+            exact track/album is not — the rung-3 "fan" signal. Always false
+            for unauthenticated requests.
       required:
         - rawArtist
         - rawTitle
         - confidence
         - playedAt
+        - isLibraryHit
+        - isArtistHit
     StationNowPlaying:
       type: object
       properties:
@@ -4935,7 +4967,18 @@ components:
         isFirstSpin:
           type: boolean
           description: True when this is the first time this recording (by MBID) has ever appeared in the archive. False when mbid is null (unresolved).
-      required: [mbid, artistMbid, releaseGroupMbid, title, artist, playedAt, isFirstSpin]
+        isLibraryHit:
+          type: boolean
+          description: >-
+            True when the spin's recording (or any track from the same primary
+            release group) is in the authenticated listener's library. Always
+            false for unauthenticated requests.
+        isArtistHit:
+          type: boolean
+          description: >-
+            True when the spin's artist is in the listener's library but the
+            exact track/album is not. Always false for unauthenticated requests.
+      required: [mbid, artistMbid, releaseGroupMbid, title, artist, playedAt, isFirstSpin, isLibraryHit, isArtistHit]
     StationScheduleRunShow:
       type: object
       properties:
@@ -4944,7 +4987,10 @@ components:
         djName:
           type: string
           nullable: true
-      required: [name, djName]
+        pickerId:
+          type: integer
+          nullable: true
+      required: [name, djName, pickerId]
     StationScheduleRun:
       type: object
       description: One spin-run block for a station on a given day.
@@ -4983,6 +5029,24 @@ components:
                 items:
                   $ref: "#/components/schemas/StationRecentSpin"
             required: [stationSlug, spins]
+      required: [items]
+    PickerOverlapItem:
+      type: object
+      properties:
+        pickerId:
+          type: integer
+        pickerName:
+          type: string
+        overlapCount:
+          type: integer
+      required: [pickerId, pickerName, overlapCount]
+    MePickerOverlapResult:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PickerOverlapItem"
       required: [items]
     StationsScheduleResult:
       type: object

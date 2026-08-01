@@ -5,6 +5,7 @@ import {
   showsTable,
   stationsTable,
   resolutionCacheTable,
+  recordingReleaseGroupsTable,
   type Station,
 } from "@workspace/db";
 import { eq, and, desc, inArray, sql, gte } from "drizzle-orm";
@@ -571,6 +572,8 @@ export interface SpinChangedEvent {
   mbid: string | null;
   /** MusicBrainz Artist ID, null when not resolved. Powers artist-page navigation on live chips. */
   artistMbid: string | null;
+  /** Primary release-group MBID for the recording, used for album-level library crossing detection in SSE handlers. */
+  releaseGroupMbid: string | null;
   /** True when this is the first time this recording (by MBID) has appeared in the archive. */
   isFirstSpin: boolean;
 }
@@ -679,14 +682,28 @@ export async function logSpinIfChanged(
       // Check whether this MBID has been logged on any prior calendar day so
       // the SSE event carries the same isFirstSpin flag as the REST response.
       let isFirstSpin = false;
+      let releaseGroupMbid: string | null = null;
       if (r.mbid) {
-        const prior = await db.execute<{ found: number }>(sql`
-          SELECT 1 AS found FROM spins
-          WHERE mbid = ${r.mbid}
-            AND played_at::date < CURRENT_DATE
-          LIMIT 1
-        `);
+        const [prior, rgRow] = await Promise.all([
+          db.execute<{ found: number }>(sql`
+            SELECT 1 AS found FROM spins
+            WHERE mbid = ${r.mbid}
+              AND played_at::date < CURRENT_DATE
+            LIMIT 1
+          `),
+          db
+            .select({ rg: recordingReleaseGroupsTable.releaseGroupMbid })
+            .from(recordingReleaseGroupsTable)
+            .where(
+              and(
+                eq(recordingReleaseGroupsTable.recordingMbid, r.mbid),
+                eq(recordingReleaseGroupsTable.isPrimary, true),
+              ),
+            )
+            .limit(1),
+        ]);
         isFirstSpin = prior.rows.length === 0;
+        releaseGroupMbid = rgRow[0]?.rg ?? null;
       }
       // MBID is fully resolved before persist, so subscribers (SSE clients)
       // get everything they need without a follow-up round-trip.
@@ -697,6 +714,7 @@ export async function logSpinIfChanged(
         rawTitle: np.rawTitle,
         mbid: r.mbid,
         artistMbid: r.artistMbid ?? null,
+        releaseGroupMbid,
         isFirstSpin,
       } satisfies SpinChangedEvent);
     }

@@ -392,6 +392,12 @@ export interface NowPlaying {
   recording?: NowPlayingRecording | null;
   /** Show + DJ on air for this spin, when the source exposes it. */
   show?: ShowRef | null;
+  /** True when this is the first time this recording (by MBID) has appeared in the archive. False when the recording has been logged before, or when the spin has no resolved MBID. */
+  isFirstSpin?: boolean;
+  /** True when the spin's recording (or any track from the same primary release group) is in the authenticated listener's library. Always false for unauthenticated requests. */
+  isLibraryHit: boolean;
+  /** True when the spin's artist is in the listener's library but the exact track/album is not — the rung-3 "fan" signal. Always false for unauthenticated requests. */
+  isArtistHit: boolean;
 }
 
 export interface StationNowPlaying {
@@ -1867,11 +1873,16 @@ export interface StationRecentSpin {
   playedAt: string;
   /** True when this is the first time this recording (by MBID) has ever appeared in the archive. False when mbid is null (unresolved). */
   isFirstSpin: boolean;
+  /** True when the spin's recording (or any track from the same primary release group) is in the authenticated listener's library. Always false for unauthenticated requests. */
+  isLibraryHit: boolean;
+  /** True when the spin's artist is in the listener's library but the exact track/album is not. Always false for unauthenticated requests. */
+  isArtistHit: boolean;
 }
 
 export interface StationScheduleRunShow {
   name: string;
   djName: string | null;
+  pickerId: number | null;
 }
 
 /**
@@ -1896,6 +1907,16 @@ export type StationsRecentSpinsResultItemsItem = {
  */
 export interface StationsRecentSpinsResult {
   items: StationsRecentSpinsResultItemsItem[];
+}
+
+export interface PickerOverlapItem {
+  pickerId: number;
+  pickerName: string;
+  overlapCount: number;
+}
+
+export interface MePickerOverlapResult {
+  items: PickerOverlapItem[];
 }
 
 export type StationsScheduleResultItemsItem = {
@@ -2138,6 +2159,45 @@ export interface RecomputeQualityResponse {
   raw: number;
   silent: number;
   unscored: number;
+}
+
+/**
+ * An album from the user's library that appears on a critic list.
+ */
+export interface LibraryCoverageAlbum {
+  releaseGroupMbid: string;
+  /** @nullable */
+  albumTitle: string | null;
+  /** @nullable */
+  releaseYear: number | null;
+  /**
+   * Position in the list, null for unranked appearances.
+   * @nullable
+   */
+  rank: number | null;
+}
+
+/**
+ * A publication list that contains at least one album from the user's library, with the matched albums included.
+
+ */
+export interface LibraryCoverageList {
+  listId: number;
+  listTitle: string;
+  /** URL to the original list page. */
+  listUrl: string;
+  /** @nullable */
+  listYear: number | null;
+  /** year_end | mid_year | decade | all_time | genre | custom */
+  listKind: string;
+  isRanked: boolean;
+  /** Publication name (e.g. "Pitchfork"). */
+  sourceName: string;
+  albums: LibraryCoverageAlbum[];
+}
+
+export interface LibraryCoverageResponse {
+  items: LibraryCoverageList[];
 }
 
 export type ResolveSongParams = {

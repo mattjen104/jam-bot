@@ -4,6 +4,7 @@ import {
   libraryItemsTable,
   picksTable,
   pickersTable,
+  recordingReleaseGroupsTable,
   spinsTable,
   stationsTable,
   showsTable,
@@ -278,6 +279,104 @@ router.get("/me/overlaps/selectors", h(async (req, res) => {
       sharedCount: r.sharedCount,
     })),
   });
+}));
+
+// ---------------------------------------------------------------------------
+// Picker overlap with full library — pickerId-keyed, RG-widened, TTL-cached
+// ---------------------------------------------------------------------------
+
+const PICKER_OVERLAP_TTL_MS = 5 * 60 * 1000;
+
+type PickerOverlapRow = { pickerId: number; pickerName: string; overlapCount: number };
+const pickerOverlapCache = new Map<number, { builtAt: number; data: PickerOverlapRow[] }>();
+
+/** Evict a user's cached entry — for tests only. */
+export function _testOnly_clearPickerOverlapCache(userId: number): void {
+  pickerOverlapCache.delete(userId);
+}
+
+/** Return the raw cached entry — lets tests verify cache hits without DB spying. */
+export function _testOnly_getPickerOverlapCache(
+  userId: number,
+): { builtAt: number; data: PickerOverlapRow[] } | undefined {
+  return pickerOverlapCache.get(userId);
+}
+
+/**
+ * GET /api/me/pickers/overlap — DJ pickers ranked by how many of the caller's
+ * library recordings they have ever picked, using exact-MBID + primary-RG
+ * widening over the *full* library (no sampling cap).  Distinct from
+ * /overlaps/selectors which does exact-MBID only and returns a name-keyed
+ * shape.  Results are cached per-user for 5 minutes.
+ */
+router.get("/me/pickers/overlap", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+
+  const cached = pickerOverlapCache.get(user.id);
+  if (cached && Date.now() - cached.builtAt < PICKER_OVERLAP_TTL_MS) {
+    return res.json({ items: cached.data });
+  }
+
+  // Subquery: exact library MBIDs.
+  const userLibMbids = db
+    .select({ mbid: libraryItemsTable.mbid })
+    .from(libraryItemsTable)
+    .where(eq(libraryItemsTable.userId, user.id));
+
+  // Subquery: release-group MBIDs for the user's library (album widening).
+  const userLibRgs = db
+    .select({ releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid })
+    .from(recordingReleaseGroupsTable)
+    .innerJoin(
+      libraryItemsTable,
+      eq(recordingReleaseGroupsTable.recordingMbid, libraryItemsTable.mbid),
+    )
+    .where(eq(libraryItemsTable.userId, user.id));
+
+  // Library-hit predicate (mirroring crossings.ts): exact MBID OR same primary RG.
+  const libHit = sql`(
+    ${picksTable.mbid} in (${userLibMbids})
+    or (
+      ${recordingReleaseGroupsTable.releaseGroupMbid} is not null
+      and ${recordingReleaseGroupsTable.releaseGroupMbid} in (${userLibRgs})
+    )
+  )`;
+
+  const rows = await db
+    .select({
+      pickerId: pickersTable.id,
+      pickerName: pickersTable.name,
+      overlapCount: sql<number>`count(distinct ${picksTable.mbid})::int`,
+    })
+    .from(picksTable)
+    .innerJoin(pickersTable, eq(picksTable.pickerId, pickersTable.id))
+    .leftJoin(
+      recordingReleaseGroupsTable,
+      and(
+        eq(recordingReleaseGroupsTable.recordingMbid, picksTable.mbid),
+        eq(recordingReleaseGroupsTable.isPrimary, true),
+      ),
+    )
+    .where(
+      and(
+        eq(pickersTable.active, true),
+        eq(pickersTable.pickerType, "dj"),
+        isNotNull(picksTable.mbid),
+        pickerNotOptedOut(pickersTable.id),
+        libHit,
+      ),
+    )
+    .groupBy(pickersTable.id, pickersTable.name)
+    .orderBy(sql`count(distinct ${picksTable.mbid}) desc`, asc(pickersTable.name));
+
+  const items: PickerOverlapRow[] = rows.map((r) => ({
+    pickerId: r.pickerId,
+    pickerName: r.pickerName,
+    overlapCount: r.overlapCount,
+  }));
+
+  pickerOverlapCache.set(user.id, { builtAt: Date.now(), data: items });
+  return res.json({ items });
 }));
 
 /**

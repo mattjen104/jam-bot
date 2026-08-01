@@ -28,6 +28,7 @@ import {
   spinsTable,
   showsTable,
   recordingsTable,
+  recordingReleaseGroupsTable,
   pickersTable,
   picksTable,
   scrapedShowsTable,
@@ -38,6 +39,8 @@ import { stationArchiveUrl } from "../../lore/adapters.js";
 import { inferTimezone } from "../../lore/timezone.js";
 import { h } from "../../middlewares/asyncHandler.js";
 import { toStation, toNowPlaying, toArchiveRecording, spinDayExpr, pickerNotOptedOut } from "./shared.js";
+import { getUserFromSession } from "../../lore/userSession.js";
+import { buildLibraryHitContext, checkLibraryHit, EMPTY_HIT_CONTEXT } from "../../lore/library-hits.js";
 import { spinRunIdExpr } from "../../lore/runs.js";
 import { logSpinIfChanged, spinEvents, type SpinChangedEvent } from "../../lore/resolve.js";
 import { fingerprintStream, fingerprintAvailable } from "../../lore/stream-fingerprint.js";
@@ -100,6 +103,13 @@ router.get("/stations/now-playing", h(async (req, res) => {
   const rawDate = typeof req.query.date === "string" ? req.query.date.trim() : null;
   const dateFilter = rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null;
 
+  // Soft auth: enrich with library hit flags when the listener has a session;
+  // unauthenticated requests receive isLibraryHit=false, isArtistHit=false.
+  const user = await getUserFromSession(req).catch(() => null);
+  const hitCtx = user
+    ? await buildLibraryHitContext(user.id).catch(() => EMPTY_HIT_CONTEXT)
+    : EMPTY_HIT_CONTEXT;
+
   const stations = await db
     .select({ id: stationsTable.id, slug: stationsTable.slug })
     .from(stationsTable)
@@ -139,26 +149,55 @@ router.get("/stations/now-playing", h(async (req, res) => {
   // A track is "first in archive" only when it has never been logged on any prior day.
   const nowPlayingMbids = new Set<string>();
   for (const row of rows) { if (row.mbid) nowPlayingMbids.add(row.mbid); }
+
+  // Batch-fetch the primary release-group MBID for each now-playing spin so we
+  // can do album-level library widening without joining the RG table in the
+  // selectDistinctOn query (which would complicate the DISTINCT ON semantics).
+  const rgMap = new Map<string, string>(); // recording MBID → release-group MBID
+  const [seenRows, rgRows] = await Promise.all([
+    nowPlayingMbids.size > 0
+      ? db.execute<{ mbid: string }>(sql`
+          SELECT DISTINCT mbid FROM spins
+          WHERE mbid = ANY(ARRAY[${sql.join([...nowPlayingMbids].map((m) => sql`${m}`), sql`, `)}]::text[])
+            AND played_at::date < CURRENT_DATE
+        `)
+      : Promise.resolve({ rows: [] as { mbid: string }[] }),
+    nowPlayingMbids.size > 0
+      ? db
+          .select({
+            recordingMbid: recordingReleaseGroupsTable.recordingMbid,
+            releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid,
+          })
+          .from(recordingReleaseGroupsTable)
+          .where(
+            and(
+              inArray(recordingReleaseGroupsTable.recordingMbid, [...nowPlayingMbids]),
+              eq(recordingReleaseGroupsTable.isPrimary, true),
+            ),
+          )
+      : Promise.resolve([] as { recordingMbid: string; releaseGroupMbid: string }[]),
+  ]);
+
   const seenBefore = new Set<string>();
-  if (nowPlayingMbids.size > 0) {
-    const mbidArr = [...nowPlayingMbids];
-    const mbidSql = sql.join(mbidArr.map((m) => sql`${m}`), sql`, `);
-    const seenRows = await db.execute<{ mbid: string }>(sql`
-      SELECT DISTINCT mbid FROM spins
-      WHERE mbid = ANY(ARRAY[${mbidSql}]::text[])
-        AND played_at::date < CURRENT_DATE
-    `);
-    for (const r of seenRows.rows) seenBefore.add(r.mbid);
-  }
+  for (const r of seenRows.rows) seenBefore.add(r.mbid);
+  for (const r of rgRows) rgMap.set(r.recordingMbid, r.releaseGroupMbid);
 
   const byStation = new Map(rows.map((r) => [r.stationId, r]));
   const items = stations.map((s) => {
     const row = byStation.get(s.id);
+    if (!row) return { slug: s.slug, nowPlaying: null };
+    const isFirstSpin = row.mbid != null && !seenBefore.has(row.mbid);
+    const hitFlags = user
+      ? checkLibraryHit(hitCtx, {
+          mbid: row.mbid,
+          releaseGroupMbid: row.mbid ? (rgMap.get(row.mbid) ?? null) : null,
+          artistMbid: row.artistMbid,
+          artist: row.artist ?? row.rawArtist ?? "",
+        })
+      : { isLibraryHit: false as const, isArtistHit: false as const };
     return {
       slug: s.slug,
-      nowPlaying: row
-        ? toNowPlaying({ ...row, isFirstSpin: row.mbid != null && !seenBefore.has(row.mbid) })
-        : null,
+      nowPlaying: toNowPlaying({ ...row, isFirstSpin, ...hitFlags }),
     };
   });
 
@@ -171,7 +210,19 @@ router.get("/stations/now-playing", h(async (req, res) => {
 // Payload carries the resolved MBID so clients need no follow-up request.
 // Plain SSE, deliberately outside the OpenAPI/orval surface (EventSource, not
 // fetch). Must be registered before any /stations/:slug route.
-router.get("/stations/now-playing/stream", (req, res) => {
+//
+// Library hit flags (isLibraryHit / isArtistHit) are computed per-connection
+// using a context built from the listener's library at connect time. Unauthenticated
+// connections receive both flags as false.
+router.get("/stations/now-playing/stream", h(async (req, res) => {
+  // Build the per-listener hit context before opening the stream. Any error
+  // here (session lookup, DB query) falls back to the empty context so the
+  // stream still opens — hit flags just won't fire for that connection.
+  const user = await getUserFromSession(req).catch(() => null);
+  const hitCtx = user
+    ? await buildLibraryHitContext(user.id).catch(() => EMPTY_HIT_CONTEXT)
+    : EMPTY_HIT_CONTEXT;
+
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache, no-transform",
@@ -185,7 +236,13 @@ router.get("/stations/now-playing/stream", (req, res) => {
 
   const onSpin = (ev: SpinChangedEvent) => {
     if (res.writableEnded) return;
-    res.write(`data: ${JSON.stringify(ev)}\n\n`);
+    const { isLibraryHit, isArtistHit } = checkLibraryHit(hitCtx, {
+      mbid: ev.mbid,
+      releaseGroupMbid: ev.releaseGroupMbid,
+      artistMbid: ev.artistMbid,
+      artist: ev.rawArtist,
+    });
+    res.write(`data: ${JSON.stringify({ ...ev, isLibraryHit, isArtistHit })}\n\n`);
   };
   spinEvents.on("spin-changed", onSpin);
 
@@ -196,7 +253,7 @@ router.get("/stations/now-playing/stream", (req, res) => {
     clearInterval(ping);
     spinEvents.off("spin-changed", onSpin);
   });
-});
+}));
 
 // GET /api/stations/at/:date/now-playing — path-param variant of the above.
 // The OpenAPI client generates path-param hooks for typed date routing; this
@@ -750,6 +807,12 @@ router.get("/stations/recent-spins", h(async (req, res) => {
     return res.status(400).json({ error: "date query param required (YYYY-MM-DD)" });
   }
 
+  // Soft auth: annotate spins with library hit flags for authenticated listeners.
+  const user = await getUserFromSession(req).catch(() => null);
+  const hitCtx = user
+    ? await buildLibraryHitContext(user.id).catch(() => EMPTY_HIT_CONTEXT)
+    : EMPTY_HIT_CONTEXT;
+
   const rows = await db.execute<{
     station_slug: string;
     mbid: string | null;
@@ -853,10 +916,18 @@ router.get("/stations/recent-spins", h(async (req, res) => {
 
   const items = [...bySlug.entries()].map(([stationSlug, spins]) => ({
     stationSlug,
-    spins: spins.map((sp) => ({
-      ...sp,
-      isFirstSpin: sp.mbid != null && !seenBeforeToday.has(sp.mbid),
-    })),
+    spins: spins.map((sp) => {
+      const isFirstSpin = sp.mbid != null && !seenBeforeToday.has(sp.mbid);
+      const hitFlags = user
+        ? checkLibraryHit(hitCtx, {
+            mbid: sp.mbid,
+            releaseGroupMbid: sp.releaseGroupMbid,
+            artistMbid: sp.artistMbid,
+            artist: sp.artist,
+          })
+        : { isLibraryHit: false as const, isArtistHit: false as const };
+      return { ...sp, isFirstSpin, ...hitFlags };
+    }),
   }));
 
   return res.json(GetStationsRecentSpinsResponse.parse({ items }));
@@ -882,6 +953,7 @@ router.get("/stations/schedule", h(async (req, res) => {
       endedAt: sql<string>`max(${spinsTable.playedAt})`,
       showName: showsTable.name,
       djName: showsTable.djName,
+      pickerId: showsTable.pickerId,
     })
     .from(spinsTable)
     .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
@@ -899,6 +971,7 @@ router.get("/stations/schedule", h(async (req, res) => {
       spinsTable.showId,
       showsTable.name,
       showsTable.djName,
+      showsTable.pickerId,
     )
     .orderBy(stationsTable.slug, sql`min(${spinsTable.playedAt})`);
 
@@ -914,7 +987,7 @@ router.get("/stations/schedule", h(async (req, res) => {
     stationSlug,
     runs: stationRuns.map((r) => ({
       runId: r.runId,
-      show: r.showName ? { name: r.showName, djName: r.djName ?? null } : null,
+      show: r.showName ? { name: r.showName, djName: r.djName ?? null, pickerId: r.pickerId ?? null } : null,
       spinCount: r.spinCount,
       resolvedCount: r.resolvedCount,
       startedAt: new Date(r.startedAt).toISOString(),

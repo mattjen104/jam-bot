@@ -397,7 +397,17 @@ export const ListStationsAtDateResponse = zod.object({
                   .boolean()
                   .optional()
                   .describe(
-                    "True when this is the first time this recording (by MBID) has appeared in the archive.",
+                    "True when this is the first time this recording (by MBID) has appeared in the archive. False when the recording has been logged before, or when the spin has no resolved MBID.",
+                  ),
+                isLibraryHit: zod
+                  .boolean()
+                  .describe(
+                    "True when the spin's recording (or any track from the same primary release group) is in the authenticated listener's library. Always false for unauthenticated requests.",
+                  ),
+                isArtistHit: zod
+                  .boolean()
+                  .describe(
+                    "True when the spin's artist is in the listener's library but the exact track\/album is not — the rung-3 \"fan\" signal. Always false for unauthenticated requests.",
                   ),
               })
               .describe(
@@ -494,7 +504,17 @@ export const ListStationsNowPlayingResponse = zod.object({
                   .boolean()
                   .optional()
                   .describe(
-                    "True when this is the first time this recording (by MBID) has appeared in the archive.",
+                    "True when this is the first time this recording (by MBID) has appeared in the archive. False when the recording has been logged before, or when the spin has no resolved MBID.",
+                  ),
+                isLibraryHit: zod
+                  .boolean()
+                  .describe(
+                    "True when the spin's recording (or any track from the same primary release group) is in the authenticated listener's library. Always false for unauthenticated requests.",
+                  ),
+                isArtistHit: zod
+                  .boolean()
+                  .describe(
+                    "True when the spin's artist is in the listener's library but the exact track\/album is not — the rung-3 \"fan\" signal. Always false for unauthenticated requests.",
                   ),
               })
               .describe(
@@ -684,7 +704,17 @@ export const GetStationNowPlayingResponse = zod.object({
             .boolean()
             .optional()
             .describe(
-              "True when this is the first time this recording (by MBID) has appeared in the archive.",
+              "True when this is the first time this recording (by MBID) has appeared in the archive. False when the recording has been logged before, or when the spin has no resolved MBID.",
+            ),
+          isLibraryHit: zod
+            .boolean()
+            .describe(
+              "True when the spin's recording (or any track from the same primary release group) is in the authenticated listener's library. Always false for unauthenticated requests.",
+            ),
+          isArtistHit: zod
+            .boolean()
+            .describe(
+              "True when the spin's artist is in the listener's library but the exact track\/album is not — the rung-3 \"fan\" signal. Always false for unauthenticated requests.",
             ),
         })
         .describe(
@@ -1122,12 +1152,6 @@ export const GetRecordingListProvenanceResponse = zod.object({
       ),
   ),
 });
-
-export const GetReleaseGroupListProvenanceParams = zod.object({
-  releaseGroupMbid: zod.coerce.string().min(1),
-});
-
-export const GetReleaseGroupListProvenanceResponse = GetRecordingListProvenanceResponse;
 
 /**
  * Real DJ transitions observed after this recording, ranked by a station-class-weighted frequency so curated/community segues outrank commercial ones. Powers Segue mode.
@@ -2340,6 +2364,65 @@ export const GetAlbumResponse = zod
   );
 
 /**
+ * Returns year-end / all-time list entries from music publications that feature this release group. Ordered by rank (ascending), then by list year (descending). Only confirmed or exact-confidence entries are returned. Returns an empty array when no list provenance has been scraped yet.
+
+ * @summary Publication list appearances for an album
+ */
+
+export const GetReleaseGroupListProvenanceParams = zod.object({
+  releaseGroupMbid: zod.coerce
+    .string()
+    .min(1)
+    .describe("MusicBrainz release group MBID."),
+});
+
+export const GetReleaseGroupListProvenanceResponse = zod.object({
+  items: zod.array(
+    zod
+      .object({
+        listId: zod.number(),
+        listTitle: zod
+          .string()
+          .describe('Name of the list (e.g. \"50 Best Albums of 2025\").'),
+        listYear: zod
+          .number()
+          .nullable()
+          .describe("Calendar year of the list (null for all-time lists)."),
+        listUrl: zod.string().describe("URL to the list page."),
+        listKind: zod
+          .string()
+          .describe("year_end | mid_year | decade | all_time | genre | custom"),
+        isRanked: zod.boolean(),
+        sourceName: zod
+          .string()
+          .describe(
+            'Publication \/ selector \/ station name (e.g. \"The Quietus\").',
+          ),
+        rank: zod
+          .number()
+          .nullable()
+          .describe("Position in the list, null for unranked appearances."),
+        listLength: zod
+          .number()
+          .nullable()
+          .describe("Total list length (e.g. 50), null when unknown."),
+        releaseGroupMbid: zod.string(),
+        releaseGroupTitle: zod
+          .string()
+          .nullable()
+          .describe("Cached album title from the bridge table."),
+        releaseYear: zod
+          .number()
+          .nullable()
+          .describe("Earliest release year for the album."),
+      })
+      .describe(
+        "A single publication list entry that features this recording's album.",
+      ),
+  ),
+});
+
+/**
  * The station's own published upcoming-show schedule — show name, day of week, start/end time, and DJ when stated — scraped from its homepage or a linked schedule page and extracted via LLM. Distinct from `/stations/schedule`, which derives a timeline from already-logged spins; this reflects what the station itself publishes about shows to come. Returns an empty `shows` array (never fabricated entries) when the station has no parseable schedule, along with `lastScrapedAt` so clients can show "no schedule available" honestly.
 
  * @summary A station's scraped weekly programming grid
@@ -2501,6 +2584,16 @@ export const GetStationsRecentSpinsResponse = zod
                 .describe(
                   "True when this is the first time this recording (by MBID) has ever appeared in the archive. False when mbid is null (unresolved).",
                 ),
+              isLibraryHit: zod
+                .boolean()
+                .describe(
+                  "True when the spin's recording (or any track from the same primary release group) is in the authenticated listener's library. Always false for unauthenticated requests.",
+                ),
+              isArtistHit: zod
+                .boolean()
+                .describe(
+                  "True when the spin's artist is in the listener's library but the exact track\/album is not. Always false for unauthenticated requests.",
+                ),
             })
             .describe("One deduped spin chip for a station on a given day."),
         ),
@@ -2538,6 +2631,7 @@ export const GetStationsScheduleResponse = zod
                 zod.object({
                   name: zod.string(),
                   djName: zod.string().nullable(),
+                  pickerId: zod.number().nullable(),
                 }),
                 zod.null(),
               ]),
@@ -3572,3 +3666,62 @@ export const GetSpotifyDevicesResponse = zod
     ),
   })
   .describe("Available Spotify Connect devices for this session.");
+
+/**
+ * Returns all DJ pickers whose picks intersect the caller's library_items, using exact-MBID and primary-release-group widening — same logic as /me/crossings. Counts are over the full library (no sampling cap). Results are cached per-user for 5 minutes server-side. Returns an empty array for unauthenticated requests.
+
+ * @summary DJ picker overlap with the user's full library (RG-widened)
+ */
+export const GetMyPickerOverlapResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      pickerId: zod.number(),
+      pickerName: zod.string(),
+      overlapCount: zod.number(),
+    }),
+  ),
+});
+
+/**
+ * Returns lists from music publications that feature albums from the listener's library. Grouped by list (publication name + year), each entry includes the matched albums with their rank. Only confirmed or exact-confidence list_entries are returned. Returns an empty array when the library has no list coverage. Requires an active lore session cookie — returns an empty array for unauthenticated requests.
+
+ * @summary Publication list coverage for the user's library
+ */
+export const GetMyLibraryListCoverageResponse = zod.object({
+  items: zod.array(
+    zod
+      .object({
+        listId: zod.number(),
+        listTitle: zod.string(),
+        listUrl: zod.string().describe("URL to the original list page."),
+        listYear: zod.number().nullable(),
+        listKind: zod
+          .string()
+          .describe("year_end | mid_year | decade | all_time | genre | custom"),
+        isRanked: zod.boolean(),
+        sourceName: zod
+          .string()
+          .describe('Publication name (e.g. \"Pitchfork\").'),
+        albums: zod.array(
+          zod
+            .object({
+              releaseGroupMbid: zod.string(),
+              albumTitle: zod.string().nullable(),
+              releaseYear: zod.number().nullable(),
+              rank: zod
+                .number()
+                .nullable()
+                .describe(
+                  "Position in the list, null for unranked appearances.",
+                ),
+            })
+            .describe(
+              "An album from the user's library that appears on a critic list.",
+            ),
+        ),
+      })
+      .describe(
+        "A publication list that contains at least one album from the user's library, with the matched albums included.\n",
+      ),
+  ),
+});

@@ -287,6 +287,7 @@ export const ME_OVERLAP_PICKERS_KEY = ["me", "overlaps", "pickers"] as const;
 export const ME_OVERLAP_STATIONS_KEY = ["me", "overlaps", "stations"] as const;
 export const ME_OVERLAP_RUNS_KEY = ["me", "overlaps", "runs"] as const;
 export const ME_OVERLAP_SELECTORS_KEY = ["me", "overlaps", "selectors"] as const;
+export const ME_PICKER_OVERLAP_KEY = ["me", "pickers", "overlap"] as const;
 
 export const ME_GHOST_MISSED_KEY = ["me", "ghost", "missed"] as const;
 export interface OverlapSelector {
@@ -721,6 +722,26 @@ export function useMyOverlapSelectors() {
     queryKey: ME_OVERLAP_SELECTORS_KEY,
     queryFn: () =>
       fetchOrNull<{ items: OverlapSelector[] }>("/api/me/overlaps/selectors").then(
+        (d) => d?.items ?? [],
+      ),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+export interface PickerOverlapItem {
+  pickerId: number;
+  pickerName: string;
+  overlapCount: number;
+}
+
+/** DJ picker overlap with the caller's full library (exact MBID + RG widening).
+ *  Returns [] for unauthenticated users. Stale for 5 minutes. */
+export function useMyPickerOverlap() {
+  return useQuery({
+    queryKey: ME_PICKER_OVERLAP_KEY,
+    queryFn: () =>
+      fetchOrNull<{ items: PickerOverlapItem[] }>("/api/me/pickers/overlap").then(
         (d) => d?.items ?? [],
       ),
     staleTime: 5 * 60_000,

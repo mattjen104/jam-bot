@@ -29,4 +29,10 @@ export interface NowPlaying {
   recording?: NowPlayingRecording | null;
   /** Show + DJ on air for this spin, when the source exposes it. */
   show?: ShowRef | null;
+  /** True when this is the first time this recording (by MBID) has appeared in the archive. False when the recording has been logged before, or when the spin has no resolved MBID. */
+  isFirstSpin?: boolean;
+  /** True when the spin's recording (or any track from the same primary release group) is in the authenticated listener's library. Always false for unauthenticated requests. */
+  isLibraryHit: boolean;
+  /** True when the spin's artist is in the listener's library but the exact track/album is not — the rung-3 "fan" signal. Always false for unauthenticated requests. */
+  isArtistHit: boolean;
 }

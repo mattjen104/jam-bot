@@ -108,6 +108,9 @@ export function toNowPlaying(row: {
   showName: string | null;
   showDj: string | null;
   isFirstSpin?: boolean;
+  /** Server-computed library hit flags for the authenticated listener. */
+  isLibraryHit?: boolean;
+  isArtistHit?: boolean;
 }) {
   return {
     spinId: row.spinId ?? null,
@@ -132,6 +135,8 @@ export function toNowPlaying(row: {
       ? { name: row.showName, djName: row.showDj ?? null }
       : null,
     isFirstSpin: row.isFirstSpin ?? false,
+    isLibraryHit: row.isLibraryHit ?? false,
+    isArtistHit: row.isArtistHit ?? false,
   };
 }
 

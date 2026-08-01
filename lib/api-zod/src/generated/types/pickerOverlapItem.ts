@@ -6,8 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface StationScheduleRunShow {
-  name: string;
-  djName: string | null;
-  pickerId: number | null;
+export interface PickerOverlapItem {
+  pickerId: number;
+  pickerName: string;
+  overlapCount: number;
 }

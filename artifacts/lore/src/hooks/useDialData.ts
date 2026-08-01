@@ -26,13 +26,22 @@ import {
   getGetStationsScheduleQueryKey,
   useGetStationsRecentSpins,
   getGetStationsRecentSpinsQueryKey,
-  useLookupPickedMbids,
-  getLookupPickedMbidsQueryKey,
   type Station,
   type StationScheduleRun,
   type StationRecentSpin,
 } from "@workspace/api-client-react";
-import { useMyLibraryMbids, useMyDialCrossings } from "../lib/meHooks";
+import { useMyLibraryMbids, useMyDialCrossings, useMyPickerOverlap } from "../lib/meHooks";
+
+// ---------------------------------------------------------------------------
+// Shared name normaliser — strips zero-width chars, trims, collapses spaces.
+// Used by useDialData (building pickerNameToId) and DialView (sort bridge).
+// ---------------------------------------------------------------------------
+export function normalizeDjName(s: string): string {
+  return s
+    .replace(/[\u200B-\u200D\uFEFF\u2060]/g, "") // zero-width chars
+    .trim()
+    .replace(/\s+/g, " ");
+}
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -72,6 +81,8 @@ export interface DialShow {
   /** last spin (if state=live) or null */
   currentTrack: DialSpin | null;
   isPickerShow: boolean;
+  /** Picker id from the linked shows row — null when show has no picker attached. */
+  pickerId: number | null;
 }
 
 export interface DialStation {
@@ -162,6 +173,9 @@ interface SseSpinEntry {
   artist: string;
   playedAt: string;
   isFirstSpin: boolean;
+  /** Server-computed hit flags — sent in the spin-changed SSE payload. */
+  isLibraryHit: boolean;
+  isArtistHit: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -175,6 +189,10 @@ export function useDialData(): {
   liveLoading: boolean;
   crossingsLoading: boolean;
   hasLibrary: boolean;
+  /** pickerId → overlap count from the server-computed full-library RG-widened endpoint. */
+  overlapByPickerId: Map<number, number>;
+  /** Normalised picker display name → pickerId — bridge for shows lacking a linked pickerId. */
+  pickerNameToId: Map<string, number>;
 } {
   const today = todayStr();
   const yesterday = yesterdayStr();
@@ -198,6 +216,8 @@ export function useDialData(): {
           mbid?: string | null;
           artistMbid?: string | null;
           isFirstSpin?: boolean;
+          isLibraryHit?: boolean;
+          isArtistHit?: boolean;
         };
         if (!ev.stationSlug) return;
         setSseOverrides((prev) => {
@@ -209,6 +229,9 @@ export function useDialData(): {
             artist: ev.rawArtist ?? "",
             playedAt: new Date().toISOString(),
             isFirstSpin: ev.isFirstSpin ?? false,
+            // Hit flags computed server-side per listener at spin-write time.
+            isLibraryHit: ev.isLibraryHit ?? false,
+            isArtistHit: ev.isArtistHit ?? false,
           });
           return next;
         });
@@ -289,71 +312,28 @@ export function useDialData(): {
     return m;
   }, [serverCrossings]);
 
-  // ── user library MBIDs + release-group MBIDs (all resolved, no pagination cap) ──
+  // ── user library MBIDs — kept for the hasLibrary gate only ──────────────────
   const { data: libraryData } = useMyLibraryMbids();
   const libraryMbids = libraryData?.mbids ?? [];
 
-  const libraryMbidSet = useMemo(
-    () => new Set(libraryMbids),
-    [libraryMbids],
-  );
-  // Release-group set: if ANY track from the same album is in the library,
-  // isLibraryHit fires. Widening from exact MBID → release group is the
-  // primary fix for "◆ playing X" not appearing (stations air different releases).
-  const libraryReleaseGroupSet = useMemo(
-    () => new Set(libraryData?.releaseGroupMbids ?? []),
-    [libraryData],
-  );
-  // Artist set: stations that play any track by a library artist get rung 3 on
-  // the dial, even when the exact recording isn't in the library.
-  const libraryArtistMbidSet = useMemo(
-    () => new Set(libraryData?.artistMbids ?? []),
-    [libraryData],
-  );
-  // Soft-row artist set: unresolved Spotify tracks that have no MBID — checked
-  // by lowercased artist name since there is no artistMbid to match on.
-  const softArtistSet = useMemo(
-    () => new Set((libraryData?.softArtists ?? []).map((a) => a.toLowerCase().trim())),
-    [libraryData],
-  );
+  // ── picker overlap — full library, RG-widened, server-computed ─────────────
+  // Replaces the 60-MBID sampled batch lookup.  Keyed by pickerId (integer) so
+  // the sort is identity-safe even when two pickers share a display name.
+  const { data: pickerOverlapItems = [] } = useMyPickerOverlap();
 
-  // ── picker detection via library MBID lookup ──────────────────────────────
-  // Use library MBIDs to discover which selector/DJ names are in the system.
-  // This gives us the set of picker names to mark picker shows.
-  const batch1 = useMemo(() => libraryMbids.slice(0, 30), [libraryMbids]);
-  const batch2 = useMemo(() => libraryMbids.slice(30, 60), [libraryMbids]);
+  const overlapByPickerId = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const item of pickerOverlapItems) m.set(item.pickerId, item.overlapCount);
+    return m;
+  }, [pickerOverlapItems]);
 
-  const mbids1Str = batch1.join(",") || "_";
-  const { data: hits1 } = useLookupPickedMbids(
-    { mbids: mbids1Str },
-    {
-      query: {
-        queryKey: getLookupPickedMbidsQueryKey({ mbids: mbids1Str }),
-        enabled: batch1.length > 0,
-        staleTime: 5 * 60_000,
-      },
-    },
-  );
-  const mbids2Str = batch2.join(",") || "_";
-  const { data: hits2 } = useLookupPickedMbids(
-    { mbids: mbids2Str },
-    {
-      query: {
-        queryKey: getLookupPickedMbidsQueryKey({ mbids: mbids2Str }),
-        enabled: batch2.length > 0,
-        staleTime: 5 * 60_000,
-      },
-    },
-  );
-
-  // Set of selector/picker display names
-  const pickerNames = useMemo((): Set<string> => {
-    const names = new Set<string>();
-    for (const item of [...(hits1?.items ?? []), ...(hits2?.items ?? [])]) {
-      if (item.picker?.name) names.add(item.picker.name);
-    }
-    return names;
-  }, [hits1, hits2]);
+  // Normalised picker name → pickerId bridge: used when a live show has a djName
+  // but no linked pickerId yet (e.g. show not yet attached to a picker row).
+  const pickerNameToId = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const item of pickerOverlapItems) m.set(normalizeDjName(item.pickerName), item.pickerId);
+    return m;
+  }, [pickerOverlapItems]);
 
   // ── index by station slug ─────────────────────────────────────────────────
   // A station is "live" only if its most-recent spin arrived within the last
@@ -378,36 +358,16 @@ export function useDialData(): {
     return m;
   }, [liveData]);
 
-  // MBID → primary release-group MBID, derived from the recent-spins response.
-  // Declared early so nowPlayingBySlug (live chip) can use it for release-group
-  // expansion without a separate server round-trip.
-  const rgByMbid = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const item of spinsData?.items ?? []) {
-      for (const sp of item.spins) {
-        if (sp.mbid && sp.releaseGroupMbid) {
-          m.set(sp.mbid, sp.releaseGroupMbid);
-        }
-      }
-    }
-    return m;
-  }, [spinsData]);
-
   // ── live now-playing track per station (for live block currentTrack) ───────
   // REST poll data is the baseline; SSE overrides (fired the moment a spin is
   // persisted) are merged on top so live chips update instantly instead of
   // waiting up to 30s for the next poll cycle.
+  //
+  // isLibraryHit / isArtistHit are now server-computed per listener and
+  // returned in both the now-playing REST response and the SSE event payload.
+  // No client-side library set membership is needed here.
   const nowPlayingBySlug = useMemo((): Map<string, DialSpin> => {
     const m = new Map<string, DialSpin>();
-
-    /** True when the recording's exact MBID is in the library, OR when any
-     *  track from the same release group is. The release group is looked up
-     *  from the recent-spins data (rgByMbid) when not supplied directly. */
-    const hitCheck = (mbid: string | null, releaseGroupMbid?: string | null): boolean => {
-      if (mbid != null && libraryMbidSet.has(mbid)) return true;
-      const rg = releaseGroupMbid ?? (mbid != null ? rgByMbid.get(mbid) : undefined);
-      return rg != null && libraryReleaseGroupSet.has(rg);
-    };
 
     for (const item of liveData?.items ?? []) {
       const np = item.nowPlaying;
@@ -417,45 +377,35 @@ export function useDialData(): {
       if (!title && !artist) continue;
       const mbid = (np as { mbid?: string | null }).mbid ?? null;
       const artistMbid = (np as { artistMbid?: string | null }).artistMbid ?? null;
-      const isLibraryHit = hitCheck(mbid);
       m.set(item.slug, {
         mbid,
         artistMbid,
         title,
         artist,
         playedAt: new Date().toISOString(),
-        isLibraryHit,
-        isArtistHit:
-          !isLibraryHit &&
-          ((artistMbid != null && libraryArtistMbidSet.has(artistMbid)) ||
-            softArtistSet.has(artist.toLowerCase().trim())),
-        // Read isFirstSpin from the server response — the now-playing endpoint
-        // now performs the same archive batch check as the recent-spins endpoint.
+        isLibraryHit: (np as { isLibraryHit?: boolean }).isLibraryHit ?? false,
+        isArtistHit: (np as { isArtistHit?: boolean }).isArtistHit ?? false,
         isFirstSpin: (np as { isFirstSpin?: boolean }).isFirstSpin ?? false,
       });
     }
     // SSE overrides: more recent than the REST poll, applied last so the Dial
     // chip reflects the current on-air track the moment it is logged.
+    // Hit flags are included in the SSE payload (computed server-side at
+    // spin-write time) and stored in the SseSpinEntry, so no recomputation needed.
     for (const [slug, entry] of sseOverrides) {
-      const isLibraryHit = hitCheck(entry.mbid);
       m.set(slug, {
         mbid: entry.mbid,
         artistMbid: entry.artistMbid,
         title: entry.title,
         artist: entry.artist,
         playedAt: entry.playedAt,
-        isLibraryHit,
-        isArtistHit:
-          !isLibraryHit &&
-          ((entry.artistMbid != null && libraryArtistMbidSet.has(entry.artistMbid)) ||
-            softArtistSet.has(entry.artist.toLowerCase().trim())),
-        // Read isFirstSpin from the SSE event — the server computes and emits
-        // the flag at spin-write time so instant SSE chips carry the correct mark.
+        isLibraryHit: entry.isLibraryHit,
+        isArtistHit: entry.isArtistHit,
         isFirstSpin: entry.isFirstSpin,
       });
     }
     return m;
-  }, [liveData, sseOverrides, libraryMbidSet, libraryReleaseGroupSet, libraryArtistMbidSet, softArtistSet, rgByMbid]);
+  }, [liveData, sseOverrides]);
 
   const runsBySlug = useMemo(() => {
     const m = new Map<string, StationScheduleRun[]>();
@@ -522,29 +472,18 @@ export function useDialData(): {
             const t = new Date(sp.playedAt).getTime();
             return t >= startMs - 60_000 && t <= endMs + 60_000;
           })
-          .map((sp) => {
-            // Exact MBID match OR any track from the same release group is in
-            // the library — album-level widening so a different pressing or
-            // bonus-track edition still triggers the library crossing.
-            const exactHit = sp.mbid != null && libraryMbidSet.has(sp.mbid);
-            const rgHit = !exactHit && sp.releaseGroupMbid != null && libraryReleaseGroupSet.has(sp.releaseGroupMbid);
-            // Artist hit: artist is in library but this exact recording/album isn't.
-            const artistHit =
-              !exactHit &&
-              !rgHit &&
-              ((sp.artistMbid != null && libraryArtistMbidSet.has(sp.artistMbid)) ||
-                softArtistSet.has(sp.artist.toLowerCase().trim()));
-            return {
-              mbid: sp.mbid,
-              artistMbid: sp.artistMbid ?? null,
-              title: sp.title,
-              artist: sp.artist,
-              playedAt: sp.playedAt,
-              isLibraryHit: exactHit || rgHit,
-              isArtistHit: artistHit,
-              isFirstSpin: sp.isFirstSpin ?? false,
-            };
-          });
+          .map((sp) => ({
+            mbid: sp.mbid,
+            artistMbid: sp.artistMbid ?? null,
+            title: sp.title,
+            artist: sp.artist,
+            playedAt: sp.playedAt,
+            // isLibraryHit / isArtistHit computed server-side per listener;
+            // returned in the recent-spins response and consumed directly here.
+            isLibraryHit: sp.isLibraryHit,
+            isArtistHit: sp.isArtistHit,
+            isFirstSpin: sp.isFirstSpin ?? false,
+          }));
 
         // Count only spins within the rolling 24h window so that a show that
         // aired yesterday morning doesn't inflate today's crossing count.
@@ -561,12 +500,16 @@ export function useDialData(): {
           state === "live"
             ? (nowPlayingBySlug.get(station.slug) ?? (runSpins.length > 0 ? runSpins[runSpins.length - 1] : null))
             : null;
-        const isPickerShow = run.show?.djName != null && pickerNames.has(run.show.djName);
+        // isPickerShow: derived from pickerId presence on the show row — no name
+        // set membership, no library dependency.  Name-bridge is a sort-only aid.
+        const pickerId = run.show?.pickerId ?? null;
+        const isPickerShow = pickerId != null;
 
         return {
           runId: run.runId,
           showName: run.show?.name ?? "Unknown show",
           djName: run.show?.djName ?? null,
+          pickerId,
           startedAt: run.startedAt,
           endedAt: run.endedAt,
           state,
@@ -621,7 +564,7 @@ export function useDialData(): {
           sh.showName.trim().length > 0,
       );
     });
-  }, [stationsData, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, libraryMbidSet, libraryReleaseGroupSet, libraryArtistMbidSet, pickerNames, serverCrossingsBySlug]);
+  }, [stationsData, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, serverCrossingsBySlug]);
 
   const isLoading = stationsLoading || liveLoading || schedLoading || spinsLoading;
   // isCoreLoading: only block until the station list arrives so the offline
@@ -633,5 +576,5 @@ export function useDialData(): {
   // Passed to DialView so the Zone 1 loading placeholder can show the right CTA.
   const hasLibrary = libraryMbids.length > 0;
 
-  return { stations, isLoading, isCoreLoading, liveLoading, crossingsLoading, hasLibrary };
+  return { stations, isLoading, isCoreLoading, liveLoading, crossingsLoading, hasLibrary, overlapByPickerId, pickerNameToId };
 }

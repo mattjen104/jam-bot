@@ -8,8 +8,8 @@
  */
 import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
 import { useLocation } from "wouter";
-import { useDialData, type DialStation, type DialShow, type DialSpin } from "../hooks/useDialData";
-import { useMyOverlapSelectors, useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, type GhostStation } from "../lib/meHooks";
+import { useDialData, normalizeDjName, type DialStation, type DialShow, type DialSpin } from "../hooks/useDialData";
+import { useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, type GhostStation } from "../lib/meHooks";
 import { StationLane } from "./StationLane";
 import { ContextRail } from "./ContextRail";
 import { SearchOverlay } from "./SearchOverlay";
@@ -996,17 +996,20 @@ export function DialView() {
   const [currentDjName, setCurrentDjName] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
 
-  const { stations, isLoading, isCoreLoading, liveLoading, crossingsLoading, hasLibrary } = useDialData();
+  const { stations, isLoading, isCoreLoading, liveLoading, crossingsLoading, hasLibrary, overlapByPickerId, pickerNameToId } = useDialData();
   const isSpotifyConnected = useSpotifyLibraryConnected();
   const { radio } = usePlayer();
 
-  // Lifetime overlap counts per selector name (spec §4 sort key)
-  const { data: selectorOverlaps } = useMyOverlapSelectors();
-  const ovByName = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const item of selectorOverlaps ?? []) m.set(item.selector.name, item.sharedCount);
-    return m;
-  }, [selectorOverlaps]);
+  // Picker overlap lookup — pickerId-first, normalised-name bridge fallback.
+  // Both maps come from useDialData (same fetch, no double network call).
+  function pickerOv(pickerId: number | null, djName: string | null): number {
+    if (pickerId != null) return overlapByPickerId.get(pickerId) ?? 0;
+    if (djName != null) {
+      const pid = pickerNameToId.get(normalizeDjName(djName));
+      if (pid != null) return overlapByPickerId.get(pid) ?? 0;
+    }
+    return 0;
+  }
 
   const currentStation = useMemo(
     () => stations.find((ds) => ds.station.slug === currentStationSlug) ?? null,
@@ -1051,12 +1054,12 @@ export function DialView() {
         const ac = a.rz.r === 1 ? 0 : 1;
         const bc = b.rz.r === 1 ? 0 : 1;
         if (ac !== bc) return ac - bc;
-        // 2. Lifetime overlap desc — attributed uses selector lifetime ov (by
-        //    effectiveDjName, which includes the fallback when show hasn't attached
-        //    yet), unattributed uses lifetime station crossings so both axes are
+        // 2. Lifetime overlap desc — attributed rows use pickerId-first overlap
+        //    (falling back to normalised-name bridge when no pickerId is linked);
+        //    unattributed rows use lifetime station crossings so both axes are
         //    comparable (all-time vs all-time, not lifetime vs 24h).
-        const aOv = a.effectiveDjName != null ? (ovByName.get(a.effectiveDjName) ?? 0) : a.ds.lifetimeCrossings;
-        const bOv = b.effectiveDjName != null ? (ovByName.get(b.effectiveDjName) ?? 0) : b.ds.lifetimeCrossings;
+        const aOv = a.effectiveDjName != null ? pickerOv(a.show?.pickerId ?? null, a.effectiveDjName) : a.ds.lifetimeCrossings;
+        const bOv = b.effectiveDjName != null ? pickerOv(b.show?.pickerId ?? null, b.effectiveDjName) : b.ds.lifetimeCrossings;
         if (aOv !== bOv) return bOv - aOv;
         // 3. Attribution tier as tiebreaker within the same overlap band
         const at = a.effectiveDjName != null ? 0 : 1;
@@ -1065,7 +1068,7 @@ export function DialView() {
         // 4. Rung asc as final tiebreaker
         return a.rz.r - b.rz.r;
       });
-  }, [stations, ovByName]);
+  }, [stations, overlapByPickerId, pickerNameToId]);
 
   // Three zones (spec §6)
   // Zone 1: r=1..4 — has crossing evidence (warm).
@@ -1349,7 +1352,7 @@ export function DialView() {
                     key={row.ds.station.slug}
                     ds={row.ds}
                     show={row.show}
-                    ov={row.show?.djName != null ? (ovByName.get(row.show.djName) ?? 0) : row.ds.lifetimeCrossings}
+                    ov={row.show?.djName != null ? pickerOv(row.show?.pickerId ?? null, row.show.djName) : row.ds.lifetimeCrossings}
                     isActive={row.ds.station.slug === radio.station?.slug}
                     isSampling={scan.samplingIdx === i}
                     onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
@@ -1375,7 +1378,7 @@ export function DialView() {
                     key={row.ds.station.slug}
                     ds={row.ds}
                     show={row.show}
-                    ov={row.show?.djName != null ? (ovByName.get(row.show.djName) ?? 0) : row.ds.lifetimeCrossings}
+                    ov={row.show?.djName != null ? pickerOv(row.show?.pickerId ?? null, row.show.djName) : row.ds.lifetimeCrossings}
                     isActive={row.ds.station.slug === radio.station?.slug}
                     isSampling={false}
                     onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}

@@ -15,6 +15,37 @@ import { type AuthedRequest } from "./auth.js";
 const router: IRouter = Router();
 
 // ---------------------------------------------------------------------------
+// Per-user TTL cache (5 min)
+//
+// The lifetime aggregate scans the full spins table on every call, which grows
+// with the archive.  A 5-minute stale window is harmless for sort purposes —
+// a new spin that tips a station's lifetime count rarely changes relative order
+// on the dial within that window.  Key: userId (number).
+// ---------------------------------------------------------------------------
+
+const CROSSINGS_CACHE_TTL_MS = 5 * 60 * 1000;
+
+type CrossingsRow = {
+  stationSlug: string;
+  crossings: number;
+  artistCrossings: number;
+  lifetimeCrossings: number;
+  lifetimeArtistCrossings: number;
+};
+
+const crossingsCache = new Map<number, { builtAt: number; data: CrossingsRow[] }>();
+
+/** Evict a user's cached entry — call before a test that needs a fresh DB hit. */
+export function _testOnly_clearCrossingsCache(userId: number): void {
+  crossingsCache.delete(userId);
+}
+
+/** Return the raw cached entry for a user — lets tests verify cache hits without spying on db. */
+export function _testOnly_getCrossingsCache(userId: number): { builtAt: number; data: CrossingsRow[] } | undefined {
+  return crossingsCache.get(userId);
+}
+
+// ---------------------------------------------------------------------------
 // Crossings endpoint
 // ---------------------------------------------------------------------------
 
@@ -36,6 +67,13 @@ const router: IRouter = Router();
  */
 router.get("/me/crossings", h(async (req, res) => {
   const user = (req as AuthedRequest).loreUser;
+
+  // Serve from cache if still fresh.
+  const cached = crossingsCache.get(user.id);
+  if (cached && Date.now() - cached.builtAt < CROSSINGS_CACHE_TTL_MS) {
+    return res.json({ items: cached.data });
+  }
+
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
   // Subquery: recording MBIDs in user's library.
@@ -153,15 +191,17 @@ router.get("/me/crossings", h(async (req, res) => {
        or count(*) filter (where ${notLibHit} and ${artistMatch}) > 0`,
     );
 
-  return res.json({
-    items: rows.map((r) => ({
-      stationSlug: r.stationSlug,
-      crossings: r.crossings,
-      artistCrossings: r.artistCrossings,
-      lifetimeCrossings: r.lifetimeCrossings,
-      lifetimeArtistCrossings: r.lifetimeArtistCrossings,
-    })),
-  });
+  const items: CrossingsRow[] = rows.map((r) => ({
+    stationSlug: r.stationSlug,
+    crossings: r.crossings,
+    artistCrossings: r.artistCrossings,
+    lifetimeCrossings: r.lifetimeCrossings,
+    lifetimeArtistCrossings: r.lifetimeArtistCrossings,
+  }));
+
+  crossingsCache.set(user.id, { builtAt: Date.now(), data: items });
+
+  return res.json({ items });
 }));
 
 export default router;
