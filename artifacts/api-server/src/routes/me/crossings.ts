@@ -40,6 +40,12 @@ export function _testOnly_clearCrossingsCache(userId: number): void {
   crossingsCache.delete(userId);
 }
 
+/** Returns true when a fresh cache entry exists for the user — used in tests only. */
+export function _testOnly_hasCrossingsCache(userId: number): boolean {
+  const entry = crossingsCache.get(userId);
+  return entry !== undefined && Date.now() - entry.builtAt < CROSSINGS_CACHE_TTL_MS;
+}
+
 /** Return the raw cached entry for a user — lets tests verify cache hits without spying on db. */
 export function _testOnly_getCrossingsCache(userId: number): { builtAt: number; data: CrossingsRow[] } | undefined {
   return crossingsCache.get(userId);

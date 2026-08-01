@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import type { Server } from "node:http";
 import { eq, sql } from "drizzle-orm";
@@ -365,7 +365,7 @@ describe("GET /api/me/crossings — lifetime-only crossing (spin outside 24h win
     const row = (body.items as CrossingItem[]).find((r) => r.stationSlug === STATION_SLUG);
 
     // The spin was played 25h ago — outside the 24h window — but MBID_SPIN_LIFETIME
-    // matches MBID_LIB_LIFETIME in the user's library exactly.
+    // is in the user's library exactly (same MBID).
     // The HAVING clause must pass on the lifetime aggregate, not the 24h count.
     expect(row).toBeDefined();
     expect(row!.crossings).toBe(0);                           // nothing within 24h
