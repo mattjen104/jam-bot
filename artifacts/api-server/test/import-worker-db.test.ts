@@ -125,7 +125,11 @@ const MBID_RETRY_SOFT = `test-iw-rt-${run}`;
 // 22-char alphanumeric externalId → uses the simple spotifyId deletion path
 // in the retry promotion code (isRealSpotifyId branch).
 const RETRY_EXT_ID = `SPRetry${run.toUpperCase()}0000000`.slice(0, 22);
-const MBIDS_ALL = [MBID_P1, MBID_P2, MBID_P3A, MBID_P3B, MBID_FK, MBID_FK2, MBID_FK3, MBID_RETRY_SOFT];
+// Removed-track guard test: MBID that should never appear in library_items
+// because a newer import snapshot doesn't contain the track.
+const MBID_REMOVED = `test-iw-rmv-${run}`;
+const REMOVED_EXT_ID = `SPRemvd${run.toUpperCase()}0000000`.slice(0, 22);
+const MBIDS_ALL = [MBID_P1, MBID_P2, MBID_P3A, MBID_P3B, MBID_FK, MBID_FK2, MBID_FK3, MBID_RETRY_SOFT, MBID_REMOVED];
 
 // ISRC for the Phase 1 track (must be ≤ 12 chars and unique).
 const ISRC_P1 = `TS${run.toUpperCase()}01`.slice(0, 12);
@@ -1357,6 +1361,184 @@ describe("Phase 3 off-peak retry — soft-row removed after retry promotion", ()
       expect(softAfterRetry.map((r) => r.spotifyId)).not.toContain(RETRY_EXT_ID);
     },
     // Allow up to 15 s: 1.1 s real sleep + DB round-trips in both runs.
+    15_000,
+  );
+});
+
+// ── Retry guard: tracks absent from a newer import snapshot are not re-inserted ──
+//
+// When a user removes a track from Spotify between imports, the source job's
+// buffer still contains it, but a newer completed import's buffer does not.
+// runPhase3RetryPass must skip re-insertion for any track absent from the
+// newest completed snapshot so that deliberate removals are respected.
+//
+// Setup:
+//   1. Seed a source job (status=done, total=1, resolved=0) with the removed
+//      track in its bufferJson.
+//   2. Insert a newer completed import job (higher id) with a bufferJson that
+//      does NOT include the removed track.
+//   3. Call runPhase3RetryPass — mockResolveByText is set to return MBID_REMOVED
+//      so the track would have been resolved if not filtered.
+//   4. Assert MBID_REMOVED is absent from library_items and that
+//      mockResolveByText was never called (the track was filtered before MB I/O).
+
+describe("Retry guard — track removed from Spotify after original import is not re-inserted", () => {
+  it(
+    "does not insert a track into library_items when it is absent from a newer import snapshot",
+    async () => {
+      if (!dbAvailable) return;
+
+      mockResolveByText.mockClear();
+      mockResolveByIsrc.mockClear();
+      mockResolveByText.mockResolvedValue(MBID_REMOVED);
+
+      // ── 1. Seed the source job (unresolved track in buffer) ───────────────
+      const [sourceJobRow] = await db
+        .insert(libraryImportJobsTable)
+        .values({
+          userId,
+          service: "spotify",
+          status: "done",
+          phase: "resolve",
+          total: 1,
+          resolved: 0,
+          retryExhausted: false,
+          bufferJson: [
+            {
+              artist: ARTIST,
+              title: "Removed Track",
+              isrc: null,
+              durationMs: null,
+              externalId: REMOVED_EXT_ID,
+            },
+          ],
+          startedAt: new Date(),
+          finishedAt: new Date(),
+        })
+        .returning({ id: libraryImportJobsTable.id });
+      const sourceJobId = sourceJobRow!.id;
+
+      // ── 2. Seed the newer completed import job (removed track absent) ─────
+      // This job has a higher id (inserted after the source job) and its buffer
+      // contains a different track — simulating a fresh Spotify fetch where the
+      // user had already removed "Removed Track".
+      await db.insert(libraryImportJobsTable).values({
+        userId,
+        service: "spotify",
+        status: "done",
+        phase: "resolve",
+        total: 1,
+        resolved: 1,
+        retryExhausted: false,
+        bufferJson: [
+          {
+            artist: "Other Artist",
+            title: "Other Track",
+            isrc: null,
+            durationMs: null,
+            externalId: `sp-other-newer-${run}`,
+          },
+        ],
+        startedAt: new Date(),
+        finishedAt: new Date(),
+      });
+
+      // ── 3. Run the retry pass ─────────────────────────────────────────────
+      await runPhase3RetryPass();
+
+      // ── 4. Assert the removed track never landed in library_items ─────────
+      const libRows = await db
+        .select({ mbid: libraryItemsTable.mbid })
+        .from(libraryItemsTable)
+        .where(eq(libraryItemsTable.userId, userId));
+      expect(libRows.map((r) => r.mbid)).not.toContain(MBID_REMOVED);
+
+      // The guard must have filtered the track before reaching MB resolution.
+      expect(mockResolveByText).not.toHaveBeenCalled();
+      expect(mockResolveByIsrc).not.toHaveBeenCalled();
+
+      // Clean up the two jobs created for this test (afterAll only cleans up
+      // by userId which would catch them, but be explicit to stay tidy).
+      await db
+        .delete(libraryImportJobsTable)
+        .where(eq(libraryImportJobsTable.id, sourceJobId));
+    },
+    15_000,
+  );
+
+  it(
+    "does not insert a track into library_items when the newer import snapshot is empty (user removed all tracks)",
+    async () => {
+      if (!dbAvailable) return;
+
+      mockResolveByText.mockClear();
+      mockResolveByIsrc.mockClear();
+      mockResolveByText.mockResolvedValue(MBID_REMOVED);
+
+      // ── 1. Seed the source job ────────────────────────────────────────────
+      const [sourceJobRow] = await db
+        .insert(libraryImportJobsTable)
+        .values({
+          userId,
+          service: "spotify",
+          status: "done",
+          phase: "resolve",
+          total: 1,
+          resolved: 0,
+          retryExhausted: false,
+          bufferJson: [
+            {
+              artist: ARTIST,
+              title: "Removed Track Empty Snap",
+              isrc: null,
+              durationMs: null,
+              externalId: `${REMOVED_EXT_ID}B`.slice(0, 22),
+            },
+          ],
+          startedAt: new Date(),
+          finishedAt: new Date(),
+        })
+        .returning({ id: libraryImportJobsTable.id });
+      const sourceJobId = sourceJobRow!.id;
+
+      // ── 2. Seed a newer completed import with an empty buffer ─────────────
+      // Simulates the user having removed ALL tracks from Spotify — the fresh
+      // Spotify fetch returned nothing, so bufferJson is [].
+      const [newerJobRow] = await db
+        .insert(libraryImportJobsTable)
+        .values({
+          userId,
+          service: "spotify",
+          status: "done",
+          phase: "resolve",
+          total: 0,
+          resolved: 0,
+          retryExhausted: false,
+          bufferJson: [],   // ← empty but NOT null
+          startedAt: new Date(),
+          finishedAt: new Date(),
+        })
+        .returning({ id: libraryImportJobsTable.id });
+
+      // ── 3. Run the retry pass ─────────────────────────────────────────────
+      await runPhase3RetryPass();
+
+      // ── 4. Assert the removed track never landed in library_items ─────────
+      const libRows = await db
+        .select({ mbid: libraryItemsTable.mbid })
+        .from(libraryItemsTable)
+        .where(eq(libraryItemsTable.userId, userId));
+      expect(libRows.map((r) => r.mbid)).not.toContain(MBID_REMOVED);
+
+      // Guard must have filtered the track before any MB I/O.
+      expect(mockResolveByText).not.toHaveBeenCalled();
+      expect(mockResolveByIsrc).not.toHaveBeenCalled();
+
+      // Clean up.
+      await db
+        .delete(libraryImportJobsTable)
+        .where(inArray(libraryImportJobsTable.id, [sourceJobId, newerJobRow!.id]));
+    },
     15_000,
   );
 });

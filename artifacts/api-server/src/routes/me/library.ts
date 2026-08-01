@@ -1053,9 +1053,57 @@ export async function runPhase3RetryPass(deadline?: Date): Promise<void> {
       continue;
     }
 
+    // Cross-check against the newest completed import snapshot for this
+    // user+service.  If a newer import ran after the source job and its buffer
+    // does not contain a track, the user removed that track from Spotify since
+    // the original import — skip re-insertion to avoid ghost-restoring a
+    // deliberate removal.
+    let entriesToRetry = uncachedEntries;
+    const [newerSnapshot] = await db
+      .select({
+        id: libraryImportJobsTable.id,
+        bufferJson: libraryImportJobsTable.bufferJson,
+      })
+      .from(libraryImportJobsTable)
+      .where(
+        and(
+          eq(libraryImportJobsTable.userId, candidate.userId),
+          eq(libraryImportJobsTable.service, candidate.service),
+          eq(libraryImportJobsTable.status, "done"),
+          isNotNull(libraryImportJobsTable.bufferJson),
+          sql`${libraryImportJobsTable.id} > ${candidate.id}`,
+        ),
+      )
+      .orderBy(desc(libraryImportJobsTable.id))
+      .limit(1);
+
+    if (newerSnapshot) {
+      // Apply unconditionally — an empty snapshot (user removed all tracks) is
+      // as authoritative as a non-empty one; both should filter out tracks that
+      // no longer appear in the user's Spotify library.
+      const snapshotIds = new Set((newerSnapshot.bufferJson ?? []).map((t) => t.externalId));
+      const before = entriesToRetry.length;
+      entriesToRetry = entriesToRetry.filter((t) => snapshotIds.has(t.externalId));
+      const skipped = before - entriesToRetry.length;
+      if (skipped > 0) {
+        console.log(
+          `[me/import/retry] job=${candidate.id} user=${candidate.userId} — ` +
+          `skipping ${skipped} track(s) absent from newer snapshot (job=${newerSnapshot.id})`,
+        );
+      }
+    }
+
+    if (entriesToRetry.length === 0) {
+      console.log(
+        `[me/import/retry] job=${candidate.id} user=${candidate.userId} — ` +
+        `all un-cached tracks filtered by newer snapshot, skipping`,
+      );
+      continue;
+    }
+
     console.log(
       `[me/import/retry] job=${candidate.id} user=${candidate.userId} — ` +
-      `retrying ${uncachedEntries.length} un-cached track(s)`,
+      `retrying ${entriesToRetry.length} un-cached track(s)`,
     );
 
     const [activeJob] = await db
@@ -1083,7 +1131,7 @@ export async function runPhase3RetryPass(deadline?: Date): Promise<void> {
         service: candidate.service,
         status: "running",
         phase: "resolve",
-        total: uncachedEntries.length,
+        total: entriesToRetry.length,
         resolved: 0,
         startedAt: new Date(),
       })
@@ -1105,18 +1153,18 @@ export async function runPhase3RetryPass(deadline?: Date): Promise<void> {
       let currentBackoffMs = PHASE3_503_BACKOFF_BASE_MS;
       let mbDegraded = false;
 
-      for (const t of uncachedEntries) {
+      for (const t of entriesToRetry) {
         if (Date.now() - retryStartMs > RETRY_BUDGET_MS) {
           console.warn(
             `[me/import/retry] job=${retryJobId} 30-minute budget exceeded — ` +
-            `resolved ${retryResolved}/${uncachedEntries.length}`,
+            `resolved ${retryResolved}/${entriesToRetry.length}`,
           );
           break;
         }
         if (deadline && Date.now() >= deadline.getTime()) {
           console.warn(
             `[me/import/retry] job=${retryJobId} window deadline reached — ` +
-            `stopping track loop (resolved ${retryResolved}/${uncachedEntries.length})`,
+            `stopping track loop (resolved ${retryResolved}/${entriesToRetry.length})`,
           );
           break;
         }
@@ -1240,7 +1288,7 @@ export async function runPhase3RetryPass(deadline?: Date): Promise<void> {
 
       console.log(
         `[me/import/retry] job=${retryJobId} complete — ` +
-        `resolved ${retryResolved}/${uncachedEntries.length}`,
+        `resolved ${retryResolved}/${entriesToRetry.length}`,
       );
     } catch (err) {
       retryPassFailed = true;
