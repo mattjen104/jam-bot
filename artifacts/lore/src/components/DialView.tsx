@@ -20,6 +20,27 @@ import { usePlayer } from "../player/PlayerProvider";
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Returns a version of `value` that only flips to `true` after it has been
+ * `true` continuously for `delayMs` milliseconds.  Flipping back to `false`
+ * is immediate, so skeleton rows vanish the instant real data arrives.
+ *
+ * Usage: avoids a jarring flash of skeleton rows on fast connections where
+ * the loading state resolves in under ~150 ms.
+ */
+function useDelayedBoolean(value: boolean, delayMs = 150): boolean {
+  const [delayed, setDelayed] = useState(false);
+  useEffect(() => {
+    if (!value) {
+      setDelayed(false);
+      return;
+    }
+    const id = setTimeout(() => setDelayed(true), delayMs);
+    return () => clearTimeout(id);
+  }, [value, delayMs]);
+  return delayed;
+}
+
 function todayStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -941,6 +962,11 @@ export function DialView() {
   const [searchOpen, setSearchOpen] = useState(false);
 
   const { stations, isLoading, isCoreLoading, liveLoading, crossingsLoading, hasLibrary, overlapByPickerId, pickerNameToId } = useDialData();
+  // Delay skeleton visibility so fast loads (< 150 ms) never flash shimmer rows.
+  // The delayed flag only flips true after crossingsLoading has been true for
+  // 150 ms; it resets to false immediately when crossingsLoading clears so that
+  // real content replaces skeletons without any extra lag.
+  const showSkeleton = useDelayedBoolean(crossingsLoading, 150);
   const isSpotifyConnected = useSpotifyLibraryConnected();
   const { radio } = usePlayer();
 
@@ -1293,7 +1319,7 @@ export function DialView() {
                 of another. Each heading is accompanied by a loading indicator
                 until real content is ready. Zone 1 keeps its context-sensitive
                 placeholder; Zones 2 and 3 show a pulsing dot. */}
-            {!isCoreLoading && crossingsLoading && (
+            {!isCoreLoading && showSkeleton && (
               <>
                 {/* Zone 1 heading + context-sensitive placeholder.
                     Show an estimated count (~N) derived from client-side crossings
