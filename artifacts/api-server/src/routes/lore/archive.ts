@@ -351,7 +351,9 @@ router.get("/archive/recent-runs", h(async (_req, res) => {
       sql`(count(*) filter (where ${spinsTable.mbid} is not null))::float / count(*) desc`,
       sql`max(${spinsTable.playedAt}) desc`,
     )
-    .limit(40);
+    // 200 gives comfortable headroom when the full test suite runs with many
+    // concurrent files all seeding future-dated spins (LIMIT 40 caused flakes).
+    .limit(200);
 
   const stationIds = [...new Set(runs.map((r) => r.stationId))];
   const stations = stationIds.length

@@ -116,7 +116,7 @@ describe("applySpinDedupCleanup", () => {
       playedAt: new Date(base.getTime() + 60_000),
     });
 
-    await applySpinDedupCleanup();
+    await applySpinDedupCleanup({ _testStationIds: [stationId!] });
 
     expect(await spinExists(rootId)).toBe(true);
     expect(await spinExists(dupId)).toBe(false);
@@ -143,7 +143,7 @@ describe("applySpinDedupCleanup", () => {
       playedAt: new Date(base.getTime() + 190_000),
     });
 
-    await applySpinDedupCleanup();
+    await applySpinDedupCleanup({ _testStationIds: [stationId!] });
 
     expect(await spinExists(aId)).toBe(true);
     expect(await spinExists(bId)).toBe(false);
@@ -177,7 +177,7 @@ describe("applySpinDedupCleanup", () => {
         sql`INSERT INTO pending_keeps (user_id, spin_id) VALUES (${userId}, ${dupId})`,
       );
 
-      await applySpinDedupCleanup();
+      await applySpinDedupCleanup({ _testStationIds: [stationId!] });
 
       // Dup spin should be gone.
       expect(await spinExists(dupId)).toBe(false);
@@ -221,7 +221,7 @@ describe("applySpinDedupCleanup", () => {
       source: "manual",
     });
 
-    await applySpinDedupCleanup();
+    await applySpinDedupCleanup({ _testStationIds: [stationId!] });
 
     expect(await spinExists(liveId)).toBe(true);
     expect(await spinExists(manualId)).toBe(true); // must survive
@@ -247,7 +247,7 @@ describe("applySpinDedupCleanup", () => {
       source: "backfill",
     });
 
-    await applySpinDedupCleanup();
+    await applySpinDedupCleanup({ _testStationIds: [stationId!] });
 
     expect(await spinExists(liveId)).toBe(true);
     expect(await spinExists(backfillId)).toBe(true); // must survive
@@ -268,7 +268,7 @@ describe("applySpinDedupCleanup", () => {
     });
 
     // First call: does the work, inserts completion row.
-    await applySpinDedupCleanup();
+    await applySpinDedupCleanup({ _testStationIds: [stationId!] });
     expect(await spinExists(rootId)).toBe(true);
     expect(await spinExists(dupId)).toBe(false);
 
@@ -293,7 +293,7 @@ describe("applySpinDedupCleanup", () => {
       playedAt: new Date(base.getTime() + 230_000), // dup of afterRoot — would be deleted if cleanup ran
     });
 
-    await applySpinDedupCleanup(); // second call — must be a no-op
+    await applySpinDedupCleanup({ _testStationIds: [stationId!] }); // second call — must be a no-op
 
     // Both spins inserted after the first run must still be present because
     // the second call returned immediately without touching spins.

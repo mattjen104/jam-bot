@@ -54,7 +54,22 @@ import { sql } from "drizzle-orm";
  * `applyMigrationCompletionsMigration` must have run first (it is registered
  * before this migration in `index.ts`).
  */
-export async function applySpinDedupCleanup(): Promise<void> {
+/**
+ * Options accepted by applySpinDedupCleanup.
+ *
+ * _testStationIds — restrict the candidate set to these station IDs.
+ *   ONLY for use in tests: scopes the full-table CTE to a single test
+ *   station so the migration doesn't scan every spin inserted by the
+ *   other 86 parallel test workers, which would inflate the query time
+ *   past the per-test timeout budget.  Production callers omit this.
+ */
+export interface SpinDedupCleanupOptions {
+  _testStationIds?: number[];
+}
+
+export async function applySpinDedupCleanup(
+  opts?: SpinDedupCleanupOptions,
+): Promise<void> {
   // ── Completion-ledger gate ─────────────────────────────────────────────────
   // One SELECT — the common path on every boot after the first.
   const completionCheck = await db.execute(
@@ -64,6 +79,16 @@ export async function applySpinDedupCleanup(): Promise<void> {
     console.info("[migration] spin dedup cleanup: already complete, skipping");
     return;
   }
+
+  // Optional station filter — used in tests to avoid scanning the full spins
+  // table while other test workers are concurrently inserting their own rows.
+  const stationClause =
+    opts?._testStationIds?.length
+      ? sql` AND station_id = ANY(ARRAY[${sql.join(
+          opts._testStationIds.map((id) => sql`${id}`),
+          sql`, `,
+        )}]::int[])`
+      : sql``;
 
   await db.transaction(async (tx) => {
     // ── Step 1: build the dup → keeper map ─────────────────────────────────
@@ -100,6 +125,7 @@ export async function applySpinDedupCleanup(): Promise<void> {
         WHERE raw_artist IS NOT NULL
           AND raw_title   IS NOT NULL
           AND source NOT IN ('manual', 'backfill')
+          ${stationClause}
       ),
       roots AS (
         -- A spin is a root if nothing earlier with the same sig sits within

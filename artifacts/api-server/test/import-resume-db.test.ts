@@ -158,14 +158,6 @@ beforeEach(async () => {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-// Wipe import jobs and library items between tests so seeded prev-job rows
-// from one test don't pollute the next test's prevWithBuffer lookup.
-beforeEach(async () => {
-  if (!dbAvailable) return;
-  await db.delete(libraryItemsTable).where(eq(libraryItemsTable.userId, userId));
-  await db.delete(libraryImportJobsTable).where(eq(libraryImportJobsTable.userId, userId));
-});
-
 /** Insert a previous finished/failed job row with a stored buffer. */
 async function seedPrevJob(
   opts: {
