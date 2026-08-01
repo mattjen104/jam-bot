@@ -24,7 +24,7 @@ import {
   type LibraryItemProvenance,
   type ImportBufferEntry,
 } from "@workspace/db";
-import { eq, and, isNotNull, isNull, inArray, ne, desc, asc, sql, like, gte } from "drizzle-orm";
+import { eq, and, or, isNotNull, isNull, inArray, ne, desc, asc, sql, like, gte } from "drizzle-orm";
 import {
   getUserFromSession,
   getOrCreateAnonymousUser,
@@ -1603,12 +1603,24 @@ export async function runPhase3RetryPass(deadline?: Date): Promise<void> {
               // Synthesised-key path: match by ISRC if present, otherwise by
               // artist + title.  Both are already available on the buffer entry
               // and were written to the soft row when it was seeded.
+              //
+              // When an ISRC is available we also OR in (isrc IS NULL AND
+              // artist+title) so that a pre-existing real-Spotify-ID soft row
+              // whose isrc column is NULL (e.g. the Spotify API did not return
+              // an ISRC for that track) is also removed.  The IS NULL guard is
+              // essential: without it, rows carrying a *different* non-null ISRC
+              // (edit/remaster/live variant sharing artist+title) would be
+              // incorrectly deleted.
+              const artistTitleCond = and(
+                eq(spotifyLibraryItemsTable.artist, t.artist),
+                eq(spotifyLibraryItemsTable.title, t.title),
+              );
               const fallbackCond = t.isrc
-                ? eq(spotifyLibraryItemsTable.isrc, t.isrc)
-                : and(
-                    eq(spotifyLibraryItemsTable.artist, t.artist),
-                    eq(spotifyLibraryItemsTable.title, t.title),
-                  );
+                ? or(
+                    eq(spotifyLibraryItemsTable.isrc, t.isrc),
+                    and(isNull(spotifyLibraryItemsTable.isrc), artistTitleCond),
+                  )
+                : artistTitleCond;
               await db
                 .delete(spotifyLibraryItemsTable)
                 .where(and(eq(spotifyLibraryItemsTable.userId, candidate.userId), fallbackCond))
