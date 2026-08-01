@@ -75,7 +75,11 @@ const PHASE3_RETRY_MAX_JOB_AGE_MS = 7 * 24 * 60 * 60_000; // 7 days
 const PHASE3_MAX_RETRY_ATTEMPTS = 3;
 
 const SPOTIFY_TRACK_API = "https://api.spotify.com/v1/tracks";
+/** Endpoint for checking whether tracks are saved in the user's Spotify library. */
+const SPOTIFY_ME_TRACKS_CONTAINS = "https://api.spotify.com/v1/me/tracks/contains";
 const ARTWORK_BATCH_SIZE = 50;
+/** Max IDs per Spotify /me/tracks/contains call (Spotify hard cap). */
+const SPOTIFY_CONTAINS_BATCH_SIZE = 50;
 const ARTWORK_FETCH_TIMEOUT_MS = 20_000;
 const ARTWORK_BATCH_GAP_MS = 200;
 
@@ -1090,6 +1094,109 @@ export async function runPhase3RetryPass(deadline?: Date): Promise<void> {
           `[me/import/retry] job=${candidate.id} user=${candidate.userId} — ` +
           `skipping ${skipped} track(s) absent from newer snapshot (job=${newerSnapshot.id})`,
         );
+      }
+    } else {
+      // No newer completed import snapshot exists — live-check the Spotify API
+      // to confirm each candidate with a real Spotify ID is still in the user's
+      // library before re-inserting it.
+      //
+      // Entries with a synthetic externalId (not a 22-char alphanumeric Spotify
+      // track ID) cannot be verified via the API and pass through unchanged.
+      //
+      // Fail safe: if the connection is missing, the token is stale, or the API
+      // errors, skip this candidate entirely rather than risking ghost-restoring
+      // a deliberate removal.
+      if (candidate.service === "spotify") {
+        const spotifyIdPattern = /^[A-Za-z0-9]{22}$/;
+        const realIdEntries    = entriesToRetry.filter((t) =>  spotifyIdPattern.test(t.externalId));
+        const syntheticEntries = entriesToRetry.filter((t) => !spotifyIdPattern.test(t.externalId));
+
+        // Only hit the API when there are real Spotify IDs to verify.
+        // Synthetic-key-only candidates pass through without a token lookup.
+        if (realIdEntries.length > 0) {
+          const [conn] = await db
+            .select()
+            .from(serviceConnectionsTable)
+            .where(
+              and(
+                eq(serviceConnectionsTable.userId, candidate.userId),
+                eq(serviceConnectionsTable.service, candidate.service),
+              ),
+            )
+            .limit(1);
+
+          if (!conn) {
+            console.warn(
+              `[me/import/retry] job=${candidate.id} user=${candidate.userId} — ` +
+              `no Spotify connection found; skipping (no snapshot, cannot verify library)`,
+            );
+            continue;
+          }
+
+          const accessToken = await getFreshToken(conn);
+          if (!accessToken) {
+            console.warn(
+              `[me/import/retry] job=${candidate.id} user=${candidate.userId} — ` +
+              `token refresh failed; skipping (no snapshot, cannot verify library)`,
+            );
+            continue;
+          }
+
+          const savedIds = new Set<string>();
+          let containsCheckFailed = false;
+
+          for (let i = 0; i < realIdEntries.length; i += SPOTIFY_CONTAINS_BATCH_SIZE) {
+            const batch = realIdEntries.slice(i, i + SPOTIFY_CONTAINS_BATCH_SIZE);
+            const ids = batch.map((t) => t.externalId).join(",");
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), ARTWORK_FETCH_TIMEOUT_MS);
+            try {
+              const res = await fetch(
+                `${SPOTIFY_ME_TRACKS_CONTAINS}?ids=${ids}`,
+                { headers: { Authorization: `Bearer ${accessToken}` }, signal: controller.signal },
+              );
+              if (res.ok) {
+                const saved = await res.json() as boolean[];
+                for (let j = 0; j < batch.length; j++) {
+                  if (saved[j]) savedIds.add(batch[j]!.externalId);
+                }
+              } else {
+                console.warn(
+                  `[me/import/retry] job=${candidate.id} user=${candidate.userId} — ` +
+                  `Spotify contains API returned ${res.status}; skipping candidate`,
+                );
+                containsCheckFailed = true;
+                break;
+              }
+            } catch {
+              console.warn(
+                `[me/import/retry] job=${candidate.id} user=${candidate.userId} — ` +
+                `Spotify contains API error; skipping candidate`,
+              );
+              containsCheckFailed = true;
+              break;
+            } finally {
+              clearTimeout(timer);
+            }
+          }
+
+          if (containsCheckFailed) continue;
+
+          // Confirmed entries: real IDs still saved in Spotify + synthetic-key
+          // entries (no checkable Spotify ID — passed through unchanged).
+          const before = entriesToRetry.length;
+          entriesToRetry = [
+            ...realIdEntries.filter((t) => savedIds.has(t.externalId)),
+            ...syntheticEntries,
+          ];
+          const skipped = before - entriesToRetry.length;
+          if (skipped > 0) {
+            console.log(
+              `[me/import/retry] job=${candidate.id} user=${candidate.userId} — ` +
+              `skipping ${skipped} track(s) absent from Spotify library (live check, no snapshot)`,
+            );
+          }
+        }
       }
     }
 
