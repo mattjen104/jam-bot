@@ -473,4 +473,53 @@ describe("Expansion state reset behaviour", () => {
     expect(fdrowCount()).toBe(9);
     expect(screen.getByRole("button", { name: "See less" })).toBeTruthy();
   });
+
+  /**
+   * Fast-refresh / transient-shrink contract.
+   *
+   * Current behaviour: expansion resets on ANY slug-key change, including a
+   * transient shrink followed by a full recovery.  This means:
+   *
+   *   expand (9 slugs) → shrink (7 slugs) → key change → COLLAPSED
+   *                    → recover (9 slugs) → key change → COLLAPSED
+   *
+   * The zone does NOT re-expand automatically once the full set returns because
+   * the useEffect fires again on the recovery key change and resets the flag.
+   * This is the accepted contract: any membership change resets expansion, and
+   * a user who had expanded must click "See all" again after a reshuffle.
+   *
+   * If the product decision changes to "stay expanded when the set recovers to
+   * its original membership", the useEffect condition must change (e.g. only
+   * reset when the NEW key differs from the key at expand-time), and this test
+   * should be updated to assert `fdrowCount() === 9` after the recovery step.
+   */
+  it("collapses on transient shrink and stays collapsed once the full slug set recovers (current contract)", () => {
+    const stations9 = Array.from({ length: 9 }, (_, i) => makeZone1Station(`s${i}`));
+    mockDialData(stations9);
+    mockGhosts([]);
+    mockScan(null);
+    const { rerender } = renderDial();
+
+    // Expand Zone 1.
+    act(() => { fireEvent.click(screen.getByRole("button", { name: "See all 9" })); });
+    expect(fdrowCount()).toBe(9);
+
+    // Simulate a fast refetch that temporarily drops two stations.
+    const stations7 = stations9.slice(0, 7);
+    mockDialData(stations7);
+    act(() => { rerender(<DialView />); });
+
+    // Slug key changed → zone collapses immediately.
+    expect(fdrowCount()).toBe(5);
+    expect(screen.getByRole("button", { name: "See all 7" })).toBeTruthy();
+
+    // Full set returns (same nine slugs as the original expanded state).
+    mockDialData(stations9);
+    act(() => { rerender(<DialView />); });
+
+    // Slug key changed again (7→9) → another reset fires → still collapsed.
+    // The user must manually re-expand after the reshuffle.
+    expect(fdrowCount()).toBe(5);
+    expect(screen.getByRole("button", { name: "See all 9" })).toBeTruthy();
+  });
 });
