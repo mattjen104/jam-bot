@@ -1298,6 +1298,32 @@ export function DialView() {
         {/* DIAL view — three-zone front door (spec §6) */}
         {level === "all" && (
           <>
+            {/* While crossing scores are in-flight, render all three zone headings
+                immediately in their canonical order so no section can jump ahead
+                of another. Each heading is accompanied by a loading indicator
+                until real content is ready. Zone 1 keeps its context-sensitive
+                placeholder; Zones 2 and 3 show a pulsing dot. */}
+            {!isCoreLoading && crossingsLoading && (
+              <>
+                {/* Zone 1 heading + context-sensitive placeholder */}
+                <ZoneLabel label="On air, with a reason" accent="library" />
+                <Zone1Placeholder
+                  isSpotifyConnected={isSpotifyConnected}
+                  hasLibrary={hasLibrary}
+                />
+                {/* Zone 2 heading + loading dot */}
+                <ZoneLabel label="Missed while you were away" accent="picker" />
+                <div className="dial-live-skeleton">
+                  <span className="dial-live-skeleton__pip" />
+                </div>
+                {/* Zone 3 heading + loading dot */}
+                <ZoneLabel label="Also on air" accent="live" />
+                <div className="dial-live-skeleton">
+                  <span className="dial-live-skeleton__pip" />
+                </div>
+              </>
+            )}
+
             {/* Zone 1: On air, with a reason — only once crossing scores are ready */}
             {!crossingsLoading && withReason.length > 0 && (
               <>
@@ -1317,26 +1343,15 @@ export function DialView() {
               </>
             )}
 
-            {/* Zone 1 placeholder — shown while crossings are fetching so there's
-                something useful at the top of the page instead of a blank gap.
-                Context-sensitive: Connect CTA for new users, import nudge for
-                connected users without a library, subtle indicator otherwise. */}
-            {crossingsLoading && !isCoreLoading && (
-              <Zone1Placeholder
-                isSpotifyConnected={isSpotifyConnected}
-                hasLibrary={hasLibrary}
-              />
-            )}
-
             {/* Zone 2: Ghost — shown only after crossings load so it never
                 jumps above Zone 1 while scores are still in-flight */}
             {!crossingsLoading && ghost.length > 0 && (
               <ZoneLabel label="Missed while you were away" accent="picker" />
             )}
 
-            {/* Zone 3: Also on air — visible immediately; stations promote to Zone 1
-                once crossing scores arrive (felt as enrichment, not a jump) */}
-            {alsoOnAir.length > 0 && (
+            {/* Zone 3: Also on air — gated on crossingsLoading like Zones 1 & 2
+                so it never jumps ahead while scores are still in-flight */}
+            {!crossingsLoading && alsoOnAir.length > 0 && (
               <>
                 <ZoneLabel label="Also on air" n={alsoOnAir.length} hint="nothing Lore can point to yet" accent="live" />
                 {alsoOnAir.map((row) => (
@@ -1354,10 +1369,11 @@ export function DialView() {
               </>
             )}
 
-            {/* Live-zone skeleton — shown while the first live pulse is in-flight
-                and no live stations have appeared yet. Holds the zone-1 slot so
-                the offline section below doesn't jump down when live data lands. */}
-            {liveLoading && !isCoreLoading && sortedRows.length === 0 && (
+            {/* Live-zone skeleton — shown after crossings resolve but while the
+                first live pulse is still in-flight and no stations have appeared.
+                Suppressed during the crossings-loading window because the three
+                zone skeletons above already hold the layout. */}
+            {!crossingsLoading && liveLoading && !isCoreLoading && sortedRows.length === 0 && (
               <div className="dial-live-skeleton">
                 <span className="dial-live-skeleton__pip" />
                 <span className="dial-live-skeleton__label">Finding what's on air…</span>
