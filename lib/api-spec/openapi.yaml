@@ -1006,6 +1006,32 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /album/{releaseGroupMbid}/list-provenance:
+    get:
+      operationId: getReleaseGroupListProvenance
+      tags: [recordings]
+      summary: Publication list appearances for an album
+      description: >
+        Returns year-end / all-time list entries from music publications that
+        feature this release group. Ordered by rank (ascending), then by list
+        year (descending). Only confirmed or exact-confidence entries are
+        returned. Returns an empty array when no list provenance has been
+        scraped yet.
+      parameters:
+        - name: releaseGroupMbid
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+          description: MusicBrainz release group MBID.
+      responses:
+        "200":
+          description: List provenance items (may be empty)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecordingListProvenanceResponse"
   /stations/{slug}/upcoming-schedule:
     get:
       operationId: getStationUpcomingSchedule

@@ -1640,6 +1640,108 @@ export function useGetRecordingListProvenance<
 }
 
 /**
+ * @summary Publication list appearances for an album (release group)
+ */
+export const getGetReleaseGroupListProvenanceUrl = (
+  releaseGroupMbid: string,
+) => {
+  return `/api/album/${releaseGroupMbid}/list-provenance`;
+};
+
+export const getReleaseGroupListProvenance = async (
+  releaseGroupMbid: string,
+  options?: RequestInit,
+): Promise<RecordingListProvenanceResponse> => {
+  return customFetch<RecordingListProvenanceResponse>(
+    getGetReleaseGroupListProvenanceUrl(releaseGroupMbid),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetReleaseGroupListProvenanceQueryKey = (
+  releaseGroupMbid: string,
+) => {
+  return [`/api/album/${releaseGroupMbid}/list-provenance`] as const;
+};
+
+export const getGetReleaseGroupListProvenanceQueryOptions = <
+  TData = Awaited<ReturnType<typeof getReleaseGroupListProvenance>>,
+  TError = ErrorType<unknown>,
+>(
+  releaseGroupMbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getReleaseGroupListProvenance>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetReleaseGroupListProvenanceQueryKey(releaseGroupMbid);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getReleaseGroupListProvenance>>
+  > = ({ signal }) =>
+    getReleaseGroupListProvenance(releaseGroupMbid, {
+      signal,
+      ...requestOptions,
+    });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!releaseGroupMbid,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getReleaseGroupListProvenance>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetReleaseGroupListProvenanceQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getReleaseGroupListProvenance>>
+>;
+export type GetReleaseGroupListProvenanceQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Publication list appearances for an album (release group)
+ */
+export function useGetReleaseGroupListProvenance<
+  TData = Awaited<ReturnType<typeof getReleaseGroupListProvenance>>,
+  TError = ErrorType<unknown>,
+>(
+  releaseGroupMbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getReleaseGroupListProvenance>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetReleaseGroupListProvenanceQueryOptions(
+    releaseGroupMbid,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * Real DJ transitions observed after this recording, ranked by a station-class-weighted frequency so curated/community segues outrank commercial ones. Powers Segue mode.
 
  * @summary Songs observed playing next (Segue mode)

@@ -4,6 +4,7 @@ import {
   type AlbumResult,
 } from "@workspace/api-client-react";
 import { ArrowLeft, Disc3, Music4, Play, Radio } from "lucide-react";
+import { AlbumListProvenance } from "../components/ListProvenance";
 import { timeAgo } from "../lib/format";
 
 function SectionHeading({
@@ -232,6 +233,8 @@ export default function Album() {
             </p>
           </div>
         )}
+
+        <AlbumListProvenance releaseGroupMbid={releaseGroupMbid} />
       </div>
     </div>
   );

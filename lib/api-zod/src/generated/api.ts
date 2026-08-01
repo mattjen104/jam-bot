@@ -1123,6 +1123,12 @@ export const GetRecordingListProvenanceResponse = zod.object({
   ),
 });
 
+export const GetReleaseGroupListProvenanceParams = zod.object({
+  releaseGroupMbid: zod.coerce.string().min(1),
+});
+
+export const GetReleaseGroupListProvenanceResponse = GetRecordingListProvenanceResponse;
+
 /**
  * Real DJ transitions observed after this recording, ranked by a station-class-weighted frequency so curated/community segues outrank commercial ones. Powers Segue mode.
 

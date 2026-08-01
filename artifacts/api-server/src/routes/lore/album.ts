@@ -4,9 +4,16 @@ import {
   recordingsTable,
   recordingReleaseGroupsTable,
   spinsTable,
+  listEntriesTable,
+  listsTable,
+  listSourcesTable,
 } from "@workspace/db";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, and } from "drizzle-orm";
 import { h } from "../../middlewares/asyncHandler.js";
+import {
+  GetReleaseGroupListProvenanceParams,
+  GetReleaseGroupListProvenanceResponse,
+} from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -79,6 +86,73 @@ router.get("/album/:releaseGroupMbid", h(async (req, res) => {
       lastSpunAt: r.lastSpunAt ? new Date(r.lastSpunAt).toISOString() : null,
     })),
   });
+}));
+
+// GET /api/album/:releaseGroupMbid/list-provenance
+// Returns publication list entries that feature this release group directly.
+router.get("/album/:releaseGroupMbid/list-provenance", h(async (req, res) => {
+  const parsed = GetReleaseGroupListProvenanceParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid release group MBID" });
+  }
+  const { releaseGroupMbid } = parsed.data;
+
+  // Join: list_entries → lists → list_sources
+  // Also pull title/year from any recordingReleaseGroups row for display.
+  const [rgMeta] = await db
+    .select({
+      title: recordingReleaseGroupsTable.title,
+      releaseYear: recordingReleaseGroupsTable.releaseYear,
+    })
+    .from(recordingReleaseGroupsTable)
+    .where(eq(recordingReleaseGroupsTable.releaseGroupMbid, releaseGroupMbid))
+    .limit(1);
+
+  const rows = await db
+    .select({
+      listId: listsTable.id,
+      listTitle: listsTable.title,
+      listYear: listsTable.year,
+      listUrl: listsTable.url,
+      listKind: listsTable.kind,
+      isRanked: listsTable.isRanked,
+      listLength: listsTable.listLength,
+      sourceName: listSourcesTable.name,
+      rank: listEntriesTable.rank,
+      releaseGroupMbid: listEntriesTable.releaseGroupMbid,
+    })
+    .from(listEntriesTable)
+    .innerJoin(listsTable, eq(listsTable.id, listEntriesTable.listId))
+    .innerJoin(listSourcesTable, eq(listSourcesTable.id, listsTable.sourceId))
+    .where(
+      and(
+        eq(listEntriesTable.releaseGroupMbid, releaseGroupMbid),
+        sql`(${listEntriesTable.confidence} = 'exact' OR ${listEntriesTable.confirmed} = true)`,
+      ),
+    )
+    .orderBy(
+      sql`${listEntriesTable.rank} asc nulls last`,
+      sql`${listsTable.year} desc nulls last`,
+    );
+
+  return res.json(
+    GetReleaseGroupListProvenanceResponse.parse({
+      items: rows.map((r) => ({
+        listId: r.listId,
+        listTitle: r.listTitle,
+        listYear: r.listYear ?? null,
+        listUrl: r.listUrl,
+        listKind: r.listKind,
+        isRanked: r.isRanked,
+        listLength: r.listLength ?? null,
+        sourceName: r.sourceName,
+        rank: r.rank ?? null,
+        releaseGroupMbid: r.releaseGroupMbid,
+        releaseGroupTitle: rgMeta?.title ?? null,
+        releaseYear: rgMeta?.releaseYear ?? null,
+      })),
+    }),
+  );
 }));
 
 export default router;
