@@ -29,9 +29,10 @@ import {
 
 // ── Hoisted mock fns ──────────────────────────────────────────────────────────
 
-const { mockResolveByText, mockResolveByIsrc } = vi.hoisted(() => ({
+const { mockResolveByText, mockResolveByIsrc, mockCheckSpotifyLibraryContains } = vi.hoisted(() => ({
   mockResolveByText: vi.fn<[string, string, (AbortSignal | undefined)?], Promise<string | null>>(),
   mockResolveByIsrc: vi.fn<[string, (AbortSignal | undefined)?], Promise<string | null>>(),
+  mockCheckSpotifyLibraryContains: vi.fn<[unknown, string[]], Promise<Set<string> | null>>(),
 }));
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
@@ -62,6 +63,12 @@ vi.mock("@workspace/song-enrichment", async (importOriginal) => {
     }),
   };
 });
+
+// Mock the injectable Spotify live-check seam so the test never hits the
+// network and can control whether the track is present in Spotify.
+vi.mock("../src/routes/me/spotify-library-check.js", () => ({
+  checkSpotifyLibraryContains: mockCheckSpotifyLibraryContains,
+}));
 
 vi.mock("../src/lore/userSession.js", () => ({
   getUserFromSession: vi.fn(),
@@ -195,8 +202,12 @@ describe("runPhase3RetryPass — no newer snapshot: live Spotify check prevents 
 
       mockResolveByText.mockClear();
       mockResolveByIsrc.mockClear();
-      // MB would succeed if it were reached — confirms the guard fires before MB.
+      mockCheckSpotifyLibraryContains.mockClear();
+      // MB would succeed if it were reached — confirms the seam fires before MB.
       mockResolveByText.mockResolvedValue(MBID);
+      // Seam returns an empty Set — track is not saved in the user's Spotify
+      // library, so the retry pass must filter it out and skip re-insertion.
+      mockCheckSpotifyLibraryContains.mockResolvedValue(new Set<string>());
 
       // Completed import job with one unresolved track.  No newer job exists for
       // this user, so the no-snapshot live-check path activates.
@@ -216,21 +227,6 @@ describe("runPhase3RetryPass — no newer snapshot: live Spotify check prevents 
         .returning({ id: libraryImportJobsTable.id });
       const sourceJobId = jobRow!.id;
 
-      // Mock globalThis.fetch: the contains check returns [false] — track removed.
-      const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(
-        async (input: RequestInfo | URL, _init?: RequestInit) => {
-          const url = typeof input === "string" ? input : input.toString();
-          if (url.includes("/me/tracks/contains")) {
-            return new Response(JSON.stringify([false]), {
-              status: 200,
-              headers: { "Content-Type": "application/json" },
-            });
-          }
-          // Unexpected fetch — reject loudly so we notice if something else fires.
-          throw new Error(`Unexpected fetch call: ${url}`);
-        },
-      );
-
       const sleepSpy = installSleepBypass();
       try {
         await runPhase3RetryPass();
@@ -238,19 +234,12 @@ describe("runPhase3RetryPass — no newer snapshot: live Spotify check prevents 
         sleepSpy.mockRestore();
       }
 
-      // Capture calls before restoring so mock.calls is still populated.
-      const containsCalls = fetchSpy.mock.calls.filter(([input]) => {
-        const url = typeof input === "string" ? input : String(input);
-        return url.includes("/me/tracks/contains");
-      });
-      fetchSpy.mockRestore();
+      // The injectable seam must have been called (live check was reached).
+      expect(mockCheckSpotifyLibraryContains, "seam must be called once").toHaveBeenCalledTimes(1);
 
-      // The Spotify contains endpoint must have been called.
-      expect(containsCalls.length, "contains API must be called once").toBeGreaterThanOrEqual(1);
-
-      // The track ID must appear in the contains query.
-      const firstCallUrl = String(containsCalls[0]![0]);
-      expect(firstCallUrl).toContain(SPOTIFY_TRACK_ID);
+      // The seam must have been called with the candidate's Spotify track ID.
+      const seamCallIds = mockCheckSpotifyLibraryContains.mock.calls[0]![1];
+      expect(seamCallIds).toContain(SPOTIFY_TRACK_ID);
 
       // No retry job should have been created — the candidate was skipped because
       // entriesToRetry became empty after the live filter.
@@ -273,8 +262,8 @@ describe("runPhase3RetryPass — no newer snapshot: live Spotify check prevents 
         .where(eq(libraryItemsTable.userId, userId));
       expect(items.map((r) => r.mbid)).not.toContain(MBID);
 
-      // MB resolver must not have been called — the live check should have
-      // filtered the track before the resolve loop.
+      // MB resolver must not have been called — the live check filtered the
+      // track before the resolve loop.
       expect(mockResolveByText).not.toHaveBeenCalled();
       expect(mockResolveByIsrc).not.toHaveBeenCalled();
     },

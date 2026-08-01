@@ -30,10 +30,11 @@ import {
 
 // ── Hoisted mock fns (created before vi.mock factories are evaluated) ────────
 
-const { mockImportLibrary, mockResolveByText, mockResolveByIsrc } = vi.hoisted(() => ({
+const { mockImportLibrary, mockResolveByText, mockResolveByIsrc, mockCheckSpotifyLibraryContains } = vi.hoisted(() => ({
   mockImportLibrary: vi.fn(),
   mockResolveByText: vi.fn<[string, string, (AbortSignal | undefined)?], Promise<string | null>>(),
   mockResolveByIsrc: vi.fn<[string, (AbortSignal | undefined)?], Promise<string | null>>(),
+  mockCheckSpotifyLibraryContains: vi.fn<[unknown, string[]], Promise<Set<string> | null>>(),
 }));
 
 // ── Module mocks (vi.mock is hoisted before any import) ─────────────────────
@@ -74,6 +75,12 @@ vi.mock("@workspace/song-enrichment", async (importOriginal) => {
     }),
   };
 });
+
+// Mock the injectable Spotify live-check seam so tests never make real network
+// calls to /me/tracks/contains, and the return value can be set per-test.
+vi.mock("../src/routes/me/spotify-library-check.js", () => ({
+  checkSpotifyLibraryContains: mockCheckSpotifyLibraryContains,
+}));
 
 // Stub transitive imports that have nothing to do with the import worker but
 // are evaluated when the me-router module is loaded.
@@ -158,7 +165,17 @@ const RETRY_FK_SYNTH_EXT_ID = `synth-rfks-${run}`; // contains hyphens → not 2
 // documents that outcome and confirms the retry job still reaches "done".
 const MBID_RETRY_FK_STUCK = `test-iw-rfkstk-${run}`;
 const RETRY_FK_STUCK_EXT_ID = `synth-rfkstk-${run}`; // synthesised key (contains hyphens)
-const MBIDS_ALL = [MBID_P1, MBID_P2, MBID_P3A, MBID_P3B, MBID_FK, MBID_FK2, MBID_FK3, MBID_RETRY_SOFT, MBID_REMOVED, MBID_NO_SNAP, MBID_RETRY_FK, MBID_RETRY_FK_REAL, MBID_RETRY_FK_SYNTH, MBID_RETRY_FK_STUCK];
+// Seam-behaviour test (a): checkSpotifyLibraryContains returns null →
+// candidate is skipped entirely, library_items unchanged, soft row survives.
+const MBID_SEAM_NULL = `test-iw-smn-${run}`;
+// "SNUL" (4) + run.toUpperCase() (8) + "0000000000" (10) = 22 chars — real Spotify ID format.
+const SEAM_NULL_EXT_ID = `SNUL${run.toUpperCase()}0000000000`.slice(0, 22);
+// Seam-behaviour test (b): checkSpotifyLibraryContains returns a Set that does
+// not contain the candidate's externalId → entry filtered out, not promoted.
+const MBID_SEAM_ABSENT = `test-iw-sma-${run}`;
+// "SABS" (4) + run.toUpperCase() (8) + "0000000000" (10) = 22 chars — real Spotify ID format.
+const SEAM_ABSENT_EXT_ID = `SABS${run.toUpperCase()}0000000000`.slice(0, 22);
+const MBIDS_ALL = [MBID_P1, MBID_P2, MBID_P3A, MBID_P3B, MBID_FK, MBID_FK2, MBID_FK3, MBID_RETRY_SOFT, MBID_REMOVED, MBID_NO_SNAP, MBID_RETRY_FK, MBID_RETRY_FK_REAL, MBID_RETRY_FK_SYNTH, MBID_RETRY_FK_STUCK, MBID_SEAM_NULL, MBID_SEAM_ABSENT];
 
 // ISRC for the Phase 1 track (must be ≤ 12 chars and unique).
 const ISRC_P1 = `TS${run.toUpperCase()}01`.slice(0, 12);
@@ -1375,8 +1392,14 @@ describe("Phase 3 off-peak retry — soft-row removed after retry promotion", ()
       //   • seed the recordings spine row
       //   • insert into library_items
       //   • delete the soft row from spotify_library_items
+      //
+      // RETRY_EXT_ID is exactly 22 alphanumeric chars (a real Spotify ID), so
+      // the no-snapshot live-check path activates.  Stub the injectable seam to
+      // return a Set containing RETRY_EXT_ID (track is still saved in Spotify)
+      // so the retry proceeds instead of being skipped.
       mockResolveByText.mockClear();
       mockResolveByText.mockResolvedValue(MBID_RETRY_SOFT);
+      mockCheckSpotifyLibraryContains.mockResolvedValue(new Set([RETRY_EXT_ID]));
 
       await runPhase3RetryPass();
 
@@ -2228,6 +2251,168 @@ describe("Retry pass — FK violation with pre-existing soft row: soft row stays
       await db
         .delete(libraryImportJobsTable)
         .where(inArray(libraryImportJobsTable.id, [sourceJobId, newerJobId]));
+    },
+    15_000,
+  );
+});
+
+// ── Seam-behaviour (a): checkSpotifyLibraryContains returns null ──────────────
+//
+// When the injectable live-check seam returns null (connection missing, token
+// stale, API error, network timeout), the retry pass must skip the candidate
+// entirely — no library_items insert, no soft-row removal.
+
+describe("Phase 3 retry — seam returns null: candidate skipped, library_items unchanged, soft row survives", () => {
+  it(
+    "does not insert into library_items and leaves a pre-existing soft row when checkSpotifyLibraryContains returns null",
+    async () => {
+      if (!dbAvailable) return;
+
+      mockResolveByText.mockClear();
+      mockResolveByIsrc.mockClear();
+      mockCheckSpotifyLibraryContains.mockClear();
+      // null → fail-safe skip
+      mockCheckSpotifyLibraryContains.mockResolvedValue(null);
+
+      // Pre-seed a soft row for the track so we can confirm it survives.
+      await db
+        .insert(spotifyLibraryItemsTable)
+        .values({
+          userId,
+          spotifyId: SEAM_NULL_EXT_ID,
+          title: "SeamNull Track",
+          artist: ARTIST,
+          addedAt: new Date(),
+        })
+        .onConflictDoNothing();
+
+      // Source job — no newer snapshot, so the live-check path activates.
+      // SEAM_NULL_EXT_ID is exactly 22 alphanumeric chars (real Spotify format)
+      // so it goes through realIdEntries and reaches the seam.
+      const [sourceJobRow] = await db
+        .insert(libraryImportJobsTable)
+        .values({
+          userId,
+          service: "spotify",
+          status: "done",
+          phase: "resolve",
+          total: 1,
+          resolved: 0,
+          retryExhausted: false,
+          bufferJson: [
+            {
+              artist: ARTIST,
+              title: "SeamNull Track",
+              isrc: null,
+              durationMs: null,
+              externalId: SEAM_NULL_EXT_ID,
+            },
+          ],
+          startedAt: new Date(),
+          finishedAt: new Date(),
+        })
+        .returning({ id: libraryImportJobsTable.id });
+      const sourceJobId = sourceJobRow!.id;
+
+      await runPhase3RetryPass();
+
+      // Seam was invoked (live check path was reached).
+      expect(mockCheckSpotifyLibraryContains).toHaveBeenCalled();
+
+      // No MB resolution — candidate skipped before the resolve loop.
+      expect(mockResolveByText).not.toHaveBeenCalled();
+      expect(mockResolveByIsrc).not.toHaveBeenCalled();
+
+      // Track must NOT appear in library_items.
+      const libRows = await db
+        .select({ mbid: libraryItemsTable.mbid })
+        .from(libraryItemsTable)
+        .where(eq(libraryItemsTable.userId, userId));
+      expect(libRows.map((r) => r.mbid)).not.toContain(MBID_SEAM_NULL);
+
+      // Pre-seeded soft row must still be present — no promotion occurred.
+      const softRows = await db
+        .select({ spotifyId: spotifyLibraryItemsTable.spotifyId })
+        .from(spotifyLibraryItemsTable)
+        .where(
+          and(
+            eq(spotifyLibraryItemsTable.userId, userId),
+            eq(spotifyLibraryItemsTable.spotifyId, SEAM_NULL_EXT_ID),
+          ),
+        );
+      expect(softRows.map((r) => r.spotifyId)).toContain(SEAM_NULL_EXT_ID);
+
+      await db
+        .delete(libraryImportJobsTable)
+        .where(eq(libraryImportJobsTable.id, sourceJobId));
+    },
+    15_000,
+  );
+});
+
+// ── Seam-behaviour (b): checkSpotifyLibraryContains returns Set missing the ID ─
+//
+// When the live-check seam returns a non-null Set that does not contain the
+// candidate's externalId, the entry is filtered out before the resolve loop —
+// library_items must not gain a row.
+
+describe("Phase 3 retry — seam returns Set missing the candidate externalId: entry filtered, not promoted", () => {
+  it(
+    "does not insert into library_items when checkSpotifyLibraryContains returns a Set that excludes the candidate externalId",
+    async () => {
+      if (!dbAvailable) return;
+
+      mockResolveByText.mockClear();
+      mockResolveByIsrc.mockClear();
+      mockCheckSpotifyLibraryContains.mockClear();
+      // Non-null empty Set → track not present in Spotify library.
+      mockCheckSpotifyLibraryContains.mockResolvedValue(new Set<string>());
+
+      // Source job — no newer snapshot, live-check path activates.
+      const [sourceJobRow] = await db
+        .insert(libraryImportJobsTable)
+        .values({
+          userId,
+          service: "spotify",
+          status: "done",
+          phase: "resolve",
+          total: 1,
+          resolved: 0,
+          retryExhausted: false,
+          bufferJson: [
+            {
+              artist: ARTIST,
+              title: "SeamAbsent Track",
+              isrc: null,
+              durationMs: null,
+              externalId: SEAM_ABSENT_EXT_ID,
+            },
+          ],
+          startedAt: new Date(),
+          finishedAt: new Date(),
+        })
+        .returning({ id: libraryImportJobsTable.id });
+      const sourceJobId = sourceJobRow!.id;
+
+      await runPhase3RetryPass();
+
+      // Seam was invoked.
+      expect(mockCheckSpotifyLibraryContains).toHaveBeenCalled();
+
+      // MB must not have been reached — entry was filtered before the resolve loop.
+      expect(mockResolveByText).not.toHaveBeenCalled();
+      expect(mockResolveByIsrc).not.toHaveBeenCalled();
+
+      // Track must NOT appear in library_items.
+      const libRows = await db
+        .select({ mbid: libraryItemsTable.mbid })
+        .from(libraryItemsTable)
+        .where(eq(libraryItemsTable.userId, userId));
+      expect(libRows.map((r) => r.mbid)).not.toContain(MBID_SEAM_ABSENT);
+
+      await db
+        .delete(libraryImportJobsTable)
+        .where(eq(libraryImportJobsTable.id, sourceJobId));
     },
     15_000,
   );

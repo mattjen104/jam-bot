@@ -35,6 +35,7 @@ import {
 import { parseLibraryImport } from "../../lore/library-import.js";
 import { runSyncWorker, SYNC_ZOMBIE_AGE_MS } from "../../lore/library-sync.js";
 import { type AuthedRequest, getFreshToken, sleep } from "./auth.js";
+import { checkSpotifyLibraryContains } from "./spotify-library-check.js";
 
 const router: IRouter = Router();
 
@@ -79,11 +80,7 @@ const PHASE3_MAX_RETRY_ATTEMPTS = 3;
 const PHASE3_RETRY_MIN_WINDOW_WARN_MS = 60_000; // 60 s
 
 const SPOTIFY_TRACK_API = "https://api.spotify.com/v1/tracks";
-/** Endpoint for checking whether tracks are saved in the user's Spotify library. */
-const SPOTIFY_ME_TRACKS_CONTAINS = "https://api.spotify.com/v1/me/tracks/contains";
 const ARTWORK_BATCH_SIZE = 50;
-/** Max IDs per Spotify /me/tracks/contains call (Spotify hard cap). */
-const SPOTIFY_CONTAINS_BATCH_SIZE = 50;
 const ARTWORK_FETCH_TIMEOUT_MS = 20_000;
 const ARTWORK_BATCH_GAP_MS = 200;
 
@@ -1150,54 +1147,18 @@ export async function runPhase3RetryPass(deadline?: Date): Promise<void> {
             continue;
           }
 
-          const accessToken = await getFreshToken(conn);
-          if (!accessToken) {
+          const savedIds = await checkSpotifyLibraryContains(
+            conn,
+            realIdEntries.map((t) => t.externalId),
+          );
+
+          if (savedIds === null) {
             console.warn(
               `[me/import/retry] job=${candidate.id} user=${candidate.userId} — ` +
-              `token refresh failed; skipping (no snapshot, cannot verify library)`,
+              `Spotify contains check failed; skipping candidate`,
             );
             continue;
           }
-
-          const savedIds = new Set<string>();
-          let containsCheckFailed = false;
-
-          for (let i = 0; i < realIdEntries.length; i += SPOTIFY_CONTAINS_BATCH_SIZE) {
-            const batch = realIdEntries.slice(i, i + SPOTIFY_CONTAINS_BATCH_SIZE);
-            const ids = batch.map((t) => t.externalId).join(",");
-            const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), ARTWORK_FETCH_TIMEOUT_MS);
-            try {
-              const res = await fetch(
-                `${SPOTIFY_ME_TRACKS_CONTAINS}?ids=${ids}`,
-                { headers: { Authorization: `Bearer ${accessToken}` }, signal: controller.signal },
-              );
-              if (res.ok) {
-                const saved = await res.json() as boolean[];
-                for (let j = 0; j < batch.length; j++) {
-                  if (saved[j]) savedIds.add(batch[j]!.externalId);
-                }
-              } else {
-                console.warn(
-                  `[me/import/retry] job=${candidate.id} user=${candidate.userId} — ` +
-                  `Spotify contains API returned ${res.status}; skipping candidate`,
-                );
-                containsCheckFailed = true;
-                break;
-              }
-            } catch {
-              console.warn(
-                `[me/import/retry] job=${candidate.id} user=${candidate.userId} — ` +
-                `Spotify contains API error; skipping candidate`,
-              );
-              containsCheckFailed = true;
-              break;
-            } finally {
-              clearTimeout(timer);
-            }
-          }
-
-          if (containsCheckFailed) continue;
 
           // Confirmed entries: real IDs still saved in Spotify + synthetic-key
           // entries (no checkable Spotify ID — passed through unchanged).
