@@ -1356,14 +1356,26 @@ export function DialView() {
             {/* Zone 1: On air, with a reason — only once crossing scores are ready */}
             {!crossingsLoading && withReason.length > 0 && (
               <>
-                <ZoneLabel
-                  label="On air, with a reason"
-                  n={withReason.length}
-                  hint="best first · scan walks this list"
-                  accent="library"
-                  collapsed={zone1Collapsed}
-                  onCollapse={() => { setZone1Collapsed((c) => !c); if (!zone1Collapsed) setZone1Expanded(false); }}
-                />
+                <div className="fdzone-lbl-row">
+                  <ZoneLabel
+                    label="On air, with a reason"
+                    n={withReason.length}
+                    hint="best first · scan walks this list"
+                    accent="library"
+                    collapsed={zone1Collapsed}
+                    onCollapse={() => { setZone1Collapsed((c) => !c); if (!zone1Collapsed) setZone1Expanded(false); }}
+                  />
+                  {zone1Expanded && !zone1Collapsed && withReason.length > zone1Visible && (
+                    <button
+                      className="dial-show-more-inline"
+                      aria-expanded={true}
+                      aria-controls="zone1-rows"
+                      onClick={() => setZone1Expanded(false)}
+                    >
+                      See less
+                    </button>
+                  )}
+                </div>
                 {!zone1Collapsed && (
                   <>
                     {/* Map over the FULL array so isSampling index is always the

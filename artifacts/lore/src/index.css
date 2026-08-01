@@ -2793,6 +2793,34 @@
   margin-bottom: 2px;
 }
 
+/* Zone label row — wraps ZoneLabel + optional inline collapse button */
+.fdzone-lbl-row {
+  display: flex;
+  align-items: center;
+}
+.fdzone-lbl-row .fdzone-lbl {
+  flex: 1;
+  min-width: 0;
+}
+/* Inline "See less" anchored at the zone header — stays above the fold */
+.dial-show-more-inline {
+  flex-shrink: 0;
+  padding: 4px 12px 4px 8px;
+  background: none;
+  border: none;
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s;
+}
+.dial-show-more-inline:hover {
+  color: hsl(var(--foreground));
+}
+
 /* ── Zone 2 ghost rows — discovers tier ─────────────────────────────────── */
 /* Less warm than Zone 1, not dimmed like Zone 3. Neutral-cool left accent. */
 .ghost-row {
