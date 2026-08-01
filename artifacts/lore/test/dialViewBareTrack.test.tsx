@@ -302,10 +302,12 @@ describe("OfflineRow — show-name and track-title rendering", () => {
     const station = makeStation({ isLive: false, shows: [show], crossings: 0 });
     mockDialData([station]);
 
-    renderDial();
+    const { container } = renderDial();
 
-    // Show name should appear in the offline section
-    expect(screen.getByText("Late Night Jazz")).toBeTruthy();
+    // Show name appears inside the tier-3 destination label (e.g. "Late Night Jazz · Test Radio")
+    const t3El = container.querySelector(".fdrow__t3");
+    expect(t3El).not.toBeNull();
+    expect(t3El!.textContent).toContain("Late Night Jazz");
   });
 
   it("does NOT show the showName label when showName is 'Unknown show'", () => {
@@ -361,12 +363,12 @@ describe("OfflineRow — show-name and track-title rendering", () => {
 
     const { container } = renderDial();
 
-    // Track line should show title only
-    const trackEl = container.querySelector(".dial-stn-track");
+    // Tier-1 reason element holds the bare track title when there are no crossings
+    const trackEl = container.querySelector(".fdrow__t1");
     expect(trackEl).not.toBeNull();
     const trackText = trackEl!.textContent ?? "";
     expect(trackText).toContain("So What");
-    // No artist name or em-dash in the track element
+    // No artist name or em-dash in the reason element
     expect(trackText).not.toContain("Miles Davis");
     expect(trackText).not.toMatch(/[—–]/);
   });
@@ -385,7 +387,8 @@ describe("OfflineRow — show-name and track-title rendering", () => {
 
     const { container } = renderDial();
 
-    const trackEl = container.querySelector(".dial-stn-track");
+    // Tier-1 reason element holds the bare track title when there are no crossings
+    const trackEl = container.querySelector(".fdrow__t1");
     expect(trackEl).not.toBeNull();
     const trackText = trackEl!.textContent ?? "";
     expect(trackText).toContain("Kind of Blue");

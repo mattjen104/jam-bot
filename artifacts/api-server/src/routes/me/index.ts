@@ -670,7 +670,7 @@ const ARTWORK_BATCH_GAP_MS = 200;
  *
  * Only called for service="spotify" imports.
  */
-async function seedSpotifySoftRows(
+export async function seedSpotifySoftRows(
   userId: number,
   accessToken: string,
   entries: ImportBufferEntry[],
