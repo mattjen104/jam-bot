@@ -331,6 +331,7 @@ export function useSpotifyLibraryConnected(): boolean {
 /** All resolved MBIDs in the user's library — no pagination cap. */
 export const ME_LIBRARY_MBIDS_KEY = ["me", "library", "mbids"] as const;
 
+export const ME_PICKER_NAMES_KEY = ["me", "picker-names"] as const;
 export const ME_DIAL_CROSSINGS_KEY = (date: string) =>
   ["me", "crossings", date] as const;
 
@@ -342,6 +343,22 @@ export interface DialCrossing {
   lifetimeArtistCrossings: number;
 }
 
+/**
+ * Picker display names whose curated tracks overlap the listener's library.
+ * Used by the Dial to mark picker shows without downloading the full MBID list.
+ * Returns `{ names: [], hasLibrary: false }` when unauthenticated or library is empty.
+ */
+export function useMyPickerNames() {
+  return useQuery({
+    queryKey: ME_PICKER_NAMES_KEY,
+    queryFn: () =>
+      fetchOrNull<{ names: string[]; hasLibrary: boolean }>(
+        "/api/me/picker-names",
+      ).then((d) => d ?? { names: [], hasLibrary: false }),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
 /**
  * Server-computed station crossing scores for the rolling 24-hour window.
  * Results are cacheable for 5 minutes; two clients always agree on the same

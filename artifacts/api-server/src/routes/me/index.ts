@@ -17,6 +17,7 @@ import keepRouter from "./keep.js";
 import overlapsRouter from "./overlaps.js";
 import crossingsRouter from "./crossings.js";
 import ledgerRouter from "./ledger.js";
+import pickerNamesRouter from "./picker-names.js";
 
 export {
   startPhase3RetryScheduler,
@@ -44,5 +45,6 @@ router.use(keepRouter);
 router.use(overlapsRouter);
 router.use(crossingsRouter);
 router.use(ledgerRouter);
+router.use(pickerNamesRouter);
 
 export default router;

@@ -5,8 +5,7 @@
  *   - station list (with live pulse)
  *   - rolling 24-hour schedule runs (show blocks per station, today + yesterday)
  *   - today's recent spins per station (for per-show display and chip timeline)
- *   - user's full library MBIDs (for library-crossing detection)
- *   - picked MBIDs lookup (to detect picker/selector shows)
+ *   - picker overlap + hasLibrary flag (server-side join, no MBID download)
  *
  * Station-level crossing scores come from GET /api/me/crossings, which runs a
  * true NOW() − 24h query server-side, so yesterday's spins are no longer needed
@@ -30,12 +29,13 @@ import {
   type StationScheduleRun,
   type StationRecentSpin,
 } from "@workspace/api-client-react";
-import { useMyLibraryMbids, useMyDialCrossings, useMyPickerOverlap } from "../lib/meHooks";
+import { useMyPickerNames, useMyDialCrossings, useMyPickerOverlap } from "../lib/meHooks";
 
 // ---------------------------------------------------------------------------
 // Shared name normaliser — strips zero-width chars, trims, collapses spaces.
 // Used by useDialData (building pickerNameToId) and DialView (sort bridge).
 // ---------------------------------------------------------------------------
+
 export function normalizeDjName(s: string): string {
   return s
     .replace(/[\u200B-\u200D\uFEFF\u2060]/g, "") // zero-width chars
@@ -312,9 +312,10 @@ export function useDialData(): {
     return m;
   }, [serverCrossings]);
 
-  // ── user library MBIDs — kept for the hasLibrary gate only ──────────────────
-  const { data: libraryData } = useMyLibraryMbids();
-  const libraryMbids = libraryData?.mbids ?? [];
+  // ── hasLibrary flag — from the picker-names endpoint (no MBID download) ─────
+  // GET /api/me/picker-names returns both the picker display names and a
+  // hasLibrary boolean so the client never has to download the full MBID list.
+  const { data: pickerNamesData } = useMyPickerNames();
 
   // ── picker overlap — full library, RG-widened, server-computed ─────────────
   // Replaces the 60-MBID sampled batch lookup.  Keyed by pickerId (integer) so
@@ -572,9 +573,10 @@ export function useDialData(): {
   // gate so it shows a context-sensitive placeholder instead of loading nothing.
   const isCoreLoading = stationsLoading;
 
-  // hasLibrary: true once at least one resolved MBID is in the user's library.
+  // hasLibrary: true once the server confirms the library has ≥ 1 resolved MBID.
   // Passed to DialView so the Zone 1 loading placeholder can show the right CTA.
-  const hasLibrary = libraryMbids.length > 0;
+  // Sourced from GET /api/me/picker-names so no MBID list download is needed.
+  const hasLibrary = pickerNamesData?.hasLibrary ?? false;
 
   return { stations, isLoading, isCoreLoading, liveLoading, crossingsLoading, hasLibrary, overlapByPickerId, pickerNameToId };
 }
