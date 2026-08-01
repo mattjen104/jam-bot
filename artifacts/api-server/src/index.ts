@@ -86,6 +86,8 @@ async function bootLore(): Promise<void> {
     await markOrphanedImportJobsAsError();
     await markOrphanedSyncJobsAsError();
     wireSongEnrichment();
+    // Must run first — other ledger-gated migrations depend on this table.
+    await runMigration("applyMigrationCompletionsMigration", applyMigrationCompletionsMigration);
     await runMigration("applyStationDiscoveryMigration", applyStationDiscoveryMigration);
     await runMigration("applyPickerDiscoveryMigration", applyPickerDiscoveryMigration);
     await runMigration("applyStationScheduleMigration", applyStationScheduleMigration);
@@ -99,7 +101,6 @@ async function bootLore(): Promise<void> {
     await runMigration("applyLedgerMigration", applyLedgerMigration);
     await runMigration("applySelectorClaimsMigration", applySelectorClaimsMigration);
     await runMigration("applySpotifyLibraryItemsMigration", applySpotifyLibraryItemsMigration);
-    await runMigration("applyMigrationCompletionsMigration", applyMigrationCompletionsMigration);
     await runMigration("applySpinDedupCleanup", applySpinDedupCleanup);
     await runMigration("applyCrossingsCacheMigration", applyCrossingsCacheMigration);
     await ensurePicksUnifiedView();

@@ -15,8 +15,20 @@ const INVISIBLE_CLASS = sql.raw(`'${INVISIBLE_CHARS_PG_CLASS}'`);
  * `scraped_shows` holds the station's own published weekly programming grid
  * (LLM-extracted from its homepage/schedule page) — distinct from `shows`,
  * which is derived from actually-logged spins.
+ *
+ * ## Idempotency / completion ledger
+ * The DDL statements (CREATE TABLE / INDEX IF NOT EXISTS, ALTER TABLE ADD
+ * COLUMN IF NOT EXISTS) are safe to run on every boot. The DML — the
+ * `upcoming_show_count` backfill UPDATE and the one-time invisible-character
+ * cleanup — run exactly once: on first run they insert a row into
+ * `migration_completions` (inside a transaction) so every subsequent boot
+ * skips the DML entirely.
+ *
+ * `applyMigrationCompletionsMigration` must have run first (it is registered
+ * before this migration in `index.ts`).
  */
 export async function applyStationScheduleMigration(): Promise<void> {
+  // ── DDL: always run (all statements are idempotent) ───────────────────────
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS scraped_shows (
       id            serial PRIMARY KEY,
@@ -56,17 +68,6 @@ export async function applyStationScheduleMigration(): Promise<void> {
   await db.execute(sql`
     ALTER TABLE stations ADD COLUMN IF NOT EXISTS upcoming_show_count integer NOT NULL DEFAULT 0
   `);
-  // Backfill: stations that already have scraped_shows rows would stay at 0
-  // until their next weekly re-scrape without this one-time fix. Running the
-  // UPDATE unconditionally is safe — it is idempotent, cheap (index scan on
-  // station_id), and stations that have never been scraped correctly stay 0.
-  await db.execute(sql`
-    UPDATE stations s
-    SET upcoming_show_count = (
-      SELECT count(*)::int FROM scraped_shows ss WHERE ss.station_id = s.id
-    )
-    WHERE upcoming_show_count = 0
-  `);
   // Pre-known schedule page URL — when set, the scraper fetches this directly
   // and skips the homepage + link-discovery step. Null = fall back to discovery.
   await db.execute(sql`
@@ -82,81 +83,107 @@ export async function applyStationScheduleMigration(): Promise<void> {
   `);
   console.info("[migration] scraped_shows table: OK");
 
-  await cleanupInvisibleCharactersInShowNames();
-}
-
-/**
- * One-time (but idempotent) data cleanup: rows written before the parse-time
- * sanitizer landed can still hold zero-width characters in show_name/dj_name
- * (e.g. "Morning\u200BJazz"), which render without a space and break text
- * matching until the station happens to be re-scraped.
- *
- * Applies the same normalization as `sanitizeName` in schedule-scraper.ts:
- * invisible/odd whitespace (see schedule-name-sanitizer.ts for the full
- * codepoint list) → space, whitespace collapsed, trimmed. Because (station_id, day_of_week, start_time, show_name) is a
- * unique key, a dirty row whose cleaned name collides with an existing row
- * (or with another dirty row normalizing to the same name) is deleted
- * instead of updated.
- *
- * Postgres AREs support \uXXXX escapes, so the pattern (interpolated from
- * INVISIBLE_CHARS_PG_CLASS) mirrors the JS regex exactly.
- */
-async function cleanupInvisibleCharactersInShowNames(): Promise<void> {
-  // 1) Delete dirty show_name rows whose cleaned name would collide with an
-  //    already-clean row, or with a lower-id dirty sibling normalizing to the
-  //    same slot key (keep the lowest id among those siblings).
-  const deleted = await db.execute(sql`
-    WITH cleaned AS (
-      SELECT id, station_id, day_of_week, start_time, show_name,
-             btrim(regexp_replace(regexp_replace(show_name,
-               ${INVISIBLE_CLASS}, ' ', 'g'), '\\s+', ' ', 'g')) AS clean_name
-      FROM scraped_shows
-      WHERE show_name ~ ${INVISIBLE_CLASS}
-    )
-    DELETE FROM scraped_shows s
-    USING cleaned c
-    WHERE s.id = c.id
-      AND (
-        EXISTS (
-          SELECT 1 FROM scraped_shows o
-          WHERE o.station_id = c.station_id
-            AND o.day_of_week = c.day_of_week
-            AND o.start_time = c.start_time
-            AND o.show_name = c.clean_name
-        )
-        OR EXISTS (
-          SELECT 1 FROM cleaned o
-          WHERE o.station_id = c.station_id
-            AND o.day_of_week = c.day_of_week
-            AND o.start_time = c.start_time
-            AND o.clean_name = c.clean_name
-            AND o.id < c.id
-        )
-      )
-  `);
-  // 2) Rewrite the surviving dirty show_name rows in place.
-  const updatedShows = await db.execute(sql`
-    UPDATE scraped_shows
-    SET show_name = btrim(regexp_replace(regexp_replace(show_name,
-      ${INVISIBLE_CLASS}, ' ', 'g'), '\\s+', ' ', 'g'))
-    WHERE show_name ~ ${INVISIBLE_CLASS}
-  `);
-  // 3) dj_name is not part of the unique key, so a plain rewrite suffices;
-  //    a name that cleans down to nothing becomes NULL (matching the parser,
-  //    which stores null for empty DJ names).
-  const updatedDjs = await db.execute(sql`
-    UPDATE scraped_shows
-    SET dj_name = nullif(btrim(regexp_replace(regexp_replace(dj_name,
-      ${INVISIBLE_CLASS}, ' ', 'g'), '\\s+', ' ', 'g')), '')
-    WHERE dj_name IS NOT NULL AND dj_name ~ ${INVISIBLE_CLASS}
-  `);
-  const total =
-    (deleted.rowCount ?? 0) +
-    (updatedShows.rowCount ?? 0) +
-    (updatedDjs.rowCount ?? 0);
-  if (total > 0) {
-    console.info(
-      `[migration] scraped_shows zero-width cleanup: ${deleted.rowCount ?? 0} duplicate(s) deleted, ${updatedShows.rowCount ?? 0} show name(s) rewritten, ${updatedDjs.rowCount ?? 0} DJ name(s) rewritten`,
-    );
+  // ── Completion-ledger gate (DML only) ─────────────────────────────────────
+  const completionCheck = await db.execute(
+    sql`SELECT 1 FROM migration_completions WHERE name = 'applyStationScheduleMigration' LIMIT 1`,
+  );
+  if ((completionCheck.rows?.length ?? 0) > 0) {
+    console.info("[migration] station-schedule DML: already complete, skipping");
+    return;
   }
+
+  await db.transaction(async (tx) => {
+    // ── upcoming_show_count backfill ──────────────────────────────────────
+    // Stations that already have scraped_shows rows would stay at 0 until
+    // their next weekly re-scrape without this one-time fix. Running the
+    // UPDATE is safe — it is cheap (index scan on station_id), and stations
+    // that have never been scraped correctly stay 0.
+    await tx.execute(sql`
+      UPDATE stations s
+      SET upcoming_show_count = (
+        SELECT count(*)::int FROM scraped_shows ss WHERE ss.station_id = s.id
+      )
+      WHERE upcoming_show_count = 0
+    `);
+
+    // ── Invisible-character cleanup ───────────────────────────────────────
+    // One-time data cleanup: rows written before the parse-time sanitizer
+    // landed can still hold zero-width characters in show_name/dj_name
+    // (e.g. "Morning\u200BJazz"), which render without a space and break
+    // text matching until the station happens to be re-scraped.
+    //
+    // Applies the same normalization as `sanitizeName` in schedule-scraper.ts:
+    // invisible/odd whitespace → space, whitespace collapsed, trimmed.
+    // Because (station_id, day_of_week, start_time, show_name) is a unique
+    // key, a dirty row whose cleaned name collides with an existing row (or
+    // with another dirty row normalizing to the same name) is deleted instead
+    // of updated.
+
+    // 1) Delete dirty show_name rows whose cleaned name would collide with an
+    //    already-clean row, or with a lower-id dirty sibling normalizing to
+    //    the same slot key (keep the lowest id among those siblings).
+    const deleted = await tx.execute(sql`
+      WITH cleaned AS (
+        SELECT id, station_id, day_of_week, start_time, show_name,
+               btrim(regexp_replace(regexp_replace(show_name,
+                 ${INVISIBLE_CLASS}, ' ', 'g'), '\\s+', ' ', 'g')) AS clean_name
+        FROM scraped_shows
+        WHERE show_name ~ ${INVISIBLE_CLASS}
+      )
+      DELETE FROM scraped_shows s
+      USING cleaned c
+      WHERE s.id = c.id
+        AND (
+          EXISTS (
+            SELECT 1 FROM scraped_shows o
+            WHERE o.station_id = c.station_id
+              AND o.day_of_week = c.day_of_week
+              AND o.start_time = c.start_time
+              AND o.show_name = c.clean_name
+          )
+          OR EXISTS (
+            SELECT 1 FROM cleaned o
+            WHERE o.station_id = c.station_id
+              AND o.day_of_week = c.day_of_week
+              AND o.start_time = c.start_time
+              AND o.clean_name = c.clean_name
+              AND o.id < c.id
+          )
+        )
+    `);
+    // 2) Rewrite the surviving dirty show_name rows in place.
+    const updatedShows = await tx.execute(sql`
+      UPDATE scraped_shows
+      SET show_name = btrim(regexp_replace(regexp_replace(show_name,
+        ${INVISIBLE_CLASS}, ' ', 'g'), '\\s+', ' ', 'g'))
+      WHERE show_name ~ ${INVISIBLE_CLASS}
+    `);
+    // 3) dj_name is not part of the unique key, so a plain rewrite suffices;
+    //    a name that cleans down to nothing becomes NULL (matching the parser,
+    //    which stores null for empty DJ names).
+    const updatedDjs = await tx.execute(sql`
+      UPDATE scraped_shows
+      SET dj_name = nullif(btrim(regexp_replace(regexp_replace(dj_name,
+        ${INVISIBLE_CLASS}, ' ', 'g'), '\\s+', ' ', 'g')), '')
+      WHERE dj_name IS NOT NULL AND dj_name ~ ${INVISIBLE_CLASS}
+    `);
+    const total =
+      (deleted.rowCount ?? 0) +
+      (updatedShows.rowCount ?? 0) +
+      (updatedDjs.rowCount ?? 0);
+    if (total > 0) {
+      console.info(
+        `[migration] scraped_shows zero-width cleanup: ${deleted.rowCount ?? 0} duplicate(s) deleted, ${updatedShows.rowCount ?? 0} show name(s) rewritten, ${updatedDjs.rowCount ?? 0} DJ name(s) rewritten`,
+      );
+    }
+
+    // Mark complete inside the transaction so the flag is atomic with the work.
+    await tx.execute(sql`
+      INSERT INTO migration_completions (name)
+      VALUES ('applyStationScheduleMigration')
+      ON CONFLICT (name) DO NOTHING
+    `);
+  });
+
+  console.info("[migration] station-schedule DML: OK");
 }
