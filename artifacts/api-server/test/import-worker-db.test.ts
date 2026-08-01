@@ -138,7 +138,19 @@ const NO_SNAP_EXT_ID = `SPNoSnap${run.toUpperCase()}00000`.slice(0, 22);
 // the track must stay absent from both library_items and spotify_library_items.
 const MBID_RETRY_FK = `test-iw-rfk-${run}`;
 const RETRY_FK_EXT_ID = `SPRetryFK${run.toUpperCase()}0000`.slice(0, 22);
-const MBIDS_ALL = [MBID_P1, MBID_P2, MBID_P3A, MBID_P3B, MBID_FK, MBID_FK2, MBID_FK3, MBID_RETRY_SOFT, MBID_REMOVED, MBID_NO_SNAP, MBID_RETRY_FK];
+// Retry-pass FK-failure — real 22-char Spotify ID path: externalId is exactly
+// 22 alphanumeric characters so the isRealSpotifyId branch would be taken on
+// success, but the FK failure must cause both tables to stay clean anyway.
+const MBID_RETRY_FK_REAL = `test-iw-rfkr-${run}`;
+// "RFKR" (4) + run.toUpperCase() (8) + "0000000000" (10) = 22 chars.
+const RETRY_FK_REAL_EXT_ID = `RFKR${run.toUpperCase()}0000000000`.slice(0, 22);
+// Retry-pass FK-failure — synthesised-key path: externalId is NOT 22
+// alphanumeric characters (contains hyphens) so isRealSpotifyId=false and the
+// fallback artist/title delete branch would be taken on success; the FK failure
+// must cause both tables to stay clean regardless.
+const MBID_RETRY_FK_SYNTH = `test-iw-rfks-${run}`;
+const RETRY_FK_SYNTH_EXT_ID = `synth-rfks-${run}`; // contains hyphens → not 22 alphanumeric chars
+const MBIDS_ALL = [MBID_P1, MBID_P2, MBID_P3A, MBID_P3B, MBID_FK, MBID_FK2, MBID_FK3, MBID_RETRY_SOFT, MBID_REMOVED, MBID_NO_SNAP, MBID_RETRY_FK, MBID_RETRY_FK_REAL, MBID_RETRY_FK_SYNTH];
 
 // ISRC for the Phase 1 track (must be ≤ 12 chars and unique).
 const ISRC_P1 = `TS${run.toUpperCase()}01`.slice(0, 12);
@@ -238,6 +250,10 @@ afterAll(async () => {
         normalizeKey(ARTIST, "NoSnap Track"),
         // Written by the retry pass during the retry-FK-failure test.
         normalizeKey(ARTIST, "RetryFK Track"),
+        // Written by the retry pass during the real-Spotify-ID FK-failure test.
+        normalizeKey(ARTIST, "RetryFKReal Track"),
+        // Written by the retry pass during the synthesised-key FK-failure test.
+        normalizeKey(ARTIST, "RetryFKSynth Track"),
       ]),
     );
   await db
@@ -1735,6 +1751,271 @@ describe("Retry pass — library_items FK violation: pass reaches done, track st
         .from(libraryImportJobsTable)
         .where(eq(libraryImportJobsTable.userId, userId));
       // The retry job (not the source job) must be "done".
+      const retryJob = allJobs.find((j) => j.id !== sourceJobId && j.status === "done");
+      expect(retryJob).toBeDefined();
+
+      // Clean up the source job.
+      await db
+        .delete(libraryImportJobsTable)
+        .where(eq(libraryImportJobsTable.id, sourceJobId));
+    },
+    15_000,
+  );
+});
+
+// ── Retry-pass FK-failure — real 22-char Spotify ID path ─────────────────────
+//
+// When the retry pass resolves a track whose externalId is a real 22-char
+// Spotify ID (isRealSpotifyId=true), a successful insert would delete the soft
+// row by spotifyId.  A 23503 FK violation must prevent both tables from gaining
+// a row — the isRealSpotifyId deletion branch must never be reached.
+//
+// A newer completed snapshot that includes the track is required so the retry
+// pass takes the snapshot-filter path rather than making a live Spotify
+// "contains" API call (which would fail with 401 in the test environment).
+
+describe("Retry pass — FK violation (real 22-char Spotify ID): pass reaches done, both tables stay clean", () => {
+  it(
+    "does not appear in library_items or spotify_library_items and retry job reaches done when insert throws 23503",
+    async () => {
+      if (!dbAvailable) return;
+
+      mockResolveByText.mockClear();
+      mockResolveByIsrc.mockClear();
+
+      // resolveByText returns MBID_RETRY_FK_REAL so the pass reaches the insert path.
+      // The recordings row will be seeded by the retry pass itself (onConflictDoNothing).
+      mockResolveByText.mockResolvedValue(MBID_RETRY_FK_REAL);
+
+      // ── 1a. Seed the source job (older, unresolved) ───────────────────────
+      const [sourceJobRow] = await db
+        .insert(libraryImportJobsTable)
+        .values({
+          userId,
+          service: "spotify",
+          status: "done",
+          phase: "resolve",
+          total: 1,
+          resolved: 0,
+          retryExhausted: false,
+          bufferJson: [
+            {
+              artist: ARTIST,
+              title: "RetryFKReal Track",
+              isrc: null,
+              durationMs: null,
+              externalId: RETRY_FK_REAL_EXT_ID,  // exactly 22 alphanumeric chars
+            },
+          ],
+          startedAt: new Date(),
+          finishedAt: new Date(),
+        })
+        .returning({ id: libraryImportJobsTable.id });
+      const sourceJobId = sourceJobRow!.id;
+
+      // ── 1b. Seed a newer completed snapshot that includes the same track ──
+      // This causes the retry pass to take the snapshot-filter path instead of
+      // making a live Spotify "contains" API call (which would fail with 401).
+      // The track appears in the newer snapshot so it is NOT filtered out.
+      const [newerJobRow] = await db
+        .insert(libraryImportJobsTable)
+        .values({
+          userId,
+          service: "spotify",
+          status: "done",
+          phase: "resolve",
+          total: 1,
+          resolved: 1,
+          retryExhausted: false,
+          bufferJson: [
+            {
+              artist: ARTIST,
+              title: "RetryFKReal Track",
+              isrc: null,
+              durationMs: null,
+              externalId: RETRY_FK_REAL_EXT_ID,
+            },
+          ],
+          startedAt: new Date(),
+          finishedAt: new Date(),
+        })
+        .returning({ id: libraryImportJobsTable.id });
+
+      // ── 2. Inject the FK violation on the library_items insert ────────────
+      const fkErr = Object.assign(
+        new Error(
+          'insert or update on table "library_items" violates foreign key ' +
+          'constraint "library_items_mbid_fkey"',
+        ),
+        { code: "23503", constraint: "library_items_mbid_fkey" },
+      );
+
+      const origInsert = (db as any).insert.bind(db);
+      let fkInjected = false;
+
+      const insertSpy = vi
+        .spyOn(db as any, "insert")
+        .mockImplementation((table: unknown) => {
+          if (!fkInjected && table === libraryItemsTable) {
+            fkInjected = true;
+            const fakeBuilder: Record<string, unknown> = {};
+            fakeBuilder["values"] = () => fakeBuilder;
+            fakeBuilder["onConflictDoNothing"] = () => fakeBuilder;
+            fakeBuilder["then"] = (
+              onFulfilled: ((v: unknown) => unknown) | null | undefined,
+              onRejected: ((e: unknown) => unknown) | null | undefined,
+            ) => Promise.reject(fkErr).then(onFulfilled, onRejected);
+            return fakeBuilder;
+          }
+          return origInsert(table);
+        });
+
+      // ── 3. Run the retry pass ──────────────────────────────────────────────
+      await runPhase3RetryPass();
+
+      insertSpy.mockRestore();
+
+      // ── 4. Assertions ─────────────────────────────────────────────────────
+
+      // library_items must NOT contain the track.
+      const libRows = await db
+        .select({ mbid: libraryItemsTable.mbid })
+        .from(libraryItemsTable)
+        .where(eq(libraryItemsTable.userId, userId));
+      expect(libRows.map((r) => r.mbid)).not.toContain(MBID_RETRY_FK_REAL);
+
+      // spotify_library_items must NOT contain the soft row — the isRealSpotifyId
+      // deletion branch must not have been reached since libItemInserted=false.
+      const softRows = await db
+        .select({ spotifyId: spotifyLibraryItemsTable.spotifyId })
+        .from(spotifyLibraryItemsTable)
+        .where(eq(spotifyLibraryItemsTable.userId, userId));
+      expect(softRows.map((r) => r.spotifyId)).not.toContain(RETRY_FK_REAL_EXT_ID);
+
+      // The retry job must have reached "done" despite the FK failure.
+      // Exclude both the source job and the newer snapshot job (both pre-seeded
+      // as "done") so only the job created by runPhase3RetryPass is matched.
+      const newerJobId = newerJobRow!.id;
+      const allJobs = await db
+        .select({ status: libraryImportJobsTable.status, id: libraryImportJobsTable.id })
+        .from(libraryImportJobsTable)
+        .where(eq(libraryImportJobsTable.userId, userId));
+      const retryJob = allJobs.find(
+        (j) => j.id !== sourceJobId && j.id !== newerJobId && j.status === "done",
+      );
+      expect(retryJob).toBeDefined();
+
+      // Clean up the source and newer snapshot jobs.
+      await db
+        .delete(libraryImportJobsTable)
+        .where(inArray(libraryImportJobsTable.id, [sourceJobId, newerJobId]));
+    },
+    15_000,
+  );
+});
+
+// ── Retry-pass FK-failure — synthesised-key path ──────────────────────────────
+//
+// When the retry pass resolves a track whose externalId is a synthesised key
+// (NOT 22 alphanumeric chars, so isRealSpotifyId=false), a successful insert
+// would delete the soft row by artist/title fallback.  A 23503 FK violation must
+// prevent both tables from gaining a row — the synthesised-key deletion branch
+// must never be reached.
+
+describe("Retry pass — FK violation (synthesised externalId): pass reaches done, both tables stay clean", () => {
+  it(
+    "does not appear in library_items or spotify_library_items and retry job reaches done when insert throws 23503",
+    async () => {
+      if (!dbAvailable) return;
+
+      mockResolveByText.mockClear();
+      mockResolveByIsrc.mockClear();
+
+      // resolveByText returns MBID_RETRY_FK_SYNTH so the pass reaches the insert path.
+      mockResolveByText.mockResolvedValue(MBID_RETRY_FK_SYNTH);
+
+      // ── 1. Seed the source job directly ───────────────────────────────────
+      const [sourceJobRow] = await db
+        .insert(libraryImportJobsTable)
+        .values({
+          userId,
+          service: "spotify",
+          status: "done",
+          phase: "resolve",
+          total: 1,
+          resolved: 0,
+          retryExhausted: false,
+          bufferJson: [
+            {
+              artist: ARTIST,
+              title: "RetryFKSynth Track",
+              isrc: null,
+              durationMs: null,
+              externalId: RETRY_FK_SYNTH_EXT_ID,  // contains hyphens → not 22 alphanumeric chars
+            },
+          ],
+          startedAt: new Date(),
+          finishedAt: new Date(),
+        })
+        .returning({ id: libraryImportJobsTable.id });
+      const sourceJobId = sourceJobRow!.id;
+
+      // ── 2. Inject the FK violation on the library_items insert ────────────
+      const fkErr = Object.assign(
+        new Error(
+          'insert or update on table "library_items" violates foreign key ' +
+          'constraint "library_items_mbid_fkey"',
+        ),
+        { code: "23503", constraint: "library_items_mbid_fkey" },
+      );
+
+      const origInsert = (db as any).insert.bind(db);
+      let fkInjected = false;
+
+      const insertSpy = vi
+        .spyOn(db as any, "insert")
+        .mockImplementation((table: unknown) => {
+          if (!fkInjected && table === libraryItemsTable) {
+            fkInjected = true;
+            const fakeBuilder: Record<string, unknown> = {};
+            fakeBuilder["values"] = () => fakeBuilder;
+            fakeBuilder["onConflictDoNothing"] = () => fakeBuilder;
+            fakeBuilder["then"] = (
+              onFulfilled: ((v: unknown) => unknown) | null | undefined,
+              onRejected: ((e: unknown) => unknown) | null | undefined,
+            ) => Promise.reject(fkErr).then(onFulfilled, onRejected);
+            return fakeBuilder;
+          }
+          return origInsert(table);
+        });
+
+      // ── 3. Run the retry pass ──────────────────────────────────────────────
+      await runPhase3RetryPass();
+
+      insertSpy.mockRestore();
+
+      // ── 4. Assertions ─────────────────────────────────────────────────────
+
+      // library_items must NOT contain the track.
+      const libRows = await db
+        .select({ mbid: libraryItemsTable.mbid })
+        .from(libraryItemsTable)
+        .where(eq(libraryItemsTable.userId, userId));
+      expect(libRows.map((r) => r.mbid)).not.toContain(MBID_RETRY_FK_SYNTH);
+
+      // spotify_library_items must NOT contain a soft row by the synthesised
+      // externalId — the fallback deletion branch was not reached (libItemInserted=false).
+      const softRows = await db
+        .select({ spotifyId: spotifyLibraryItemsTable.spotifyId })
+        .from(spotifyLibraryItemsTable)
+        .where(eq(spotifyLibraryItemsTable.userId, userId));
+      expect(softRows.map((r) => r.spotifyId)).not.toContain(RETRY_FK_SYNTH_EXT_ID);
+
+      // The retry job must have reached "done" despite the FK failure.
+      const allJobs = await db
+        .select({ status: libraryImportJobsTable.status, id: libraryImportJobsTable.id })
+        .from(libraryImportJobsTable)
+        .where(eq(libraryImportJobsTable.userId, userId));
       const retryJob = allJobs.find((j) => j.id !== sourceJobId && j.status === "done");
       expect(retryJob).toBeDefined();
 
