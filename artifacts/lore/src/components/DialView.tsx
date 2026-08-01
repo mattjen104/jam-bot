@@ -1059,7 +1059,8 @@ export function DialView() {
         // 2. Lifetime overlap desc — attributed rows use pickerId-first overlap
         //    (falling back to normalised-name bridge when no pickerId is linked);
         //    unattributed rows use lifetime station crossings so both axes are
-        //    comparable (all-time vs all-time, not lifetime vs 24h).
+        //    comparable (all-time vs all-time, not lifetime vs 24h). Both values
+        //    are now count(distinct mbid) so the scale is identical to pickerOv().
         const aOv = a.effectiveDjName != null ? pickerOv(a.show?.pickerId ?? null, a.effectiveDjName) : a.ds.lifetimeCrossings;
         const bOv = b.effectiveDjName != null ? pickerOv(b.show?.pickerId ?? null, b.effectiveDjName) : b.ds.lifetimeCrossings;
         if (aOv !== bOv) return bOv - aOv;

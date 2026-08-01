@@ -167,10 +167,12 @@ router.get("/me/crossings", h(async (req, res) => {
     .select({
       stationSlug: stationsTable.slug,
       // 24-hour rolling counts
-      crossings:       sql<number>`count(*) filter (where ${inWindow} and ${libHit})::int`,
+      crossings:       sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${libHit})::int`,
       artistCrossings: sql<number>`count(*) filter (where ${inWindow} and ${notLibHit} and ${artistMatch})::int`,
-      // All-time (lifetime) counts — same logic, no time filter
-      lifetimeCrossings:       sql<number>`count(*) filter (where ${libHit})::int`,
+      // All-time (lifetime) counts — distinct mbid so the scale matches pickerOv()
+      // (count(distinct picks.mbid)) and attributed DJ rows don't get systematically
+      // outranked by stations with high-replay playlists.
+      lifetimeCrossings:       sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${libHit})::int`,
       lifetimeArtistCrossings: sql<number>`count(*) filter (where ${notLibHit} and ${artistMatch})::int`,
     })
     .from(spinsTable)
