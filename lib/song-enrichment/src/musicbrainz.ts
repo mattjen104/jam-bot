@@ -187,6 +187,16 @@ export interface IsolatedMbResolver {
     signal?: AbortSignal,
   ): Promise<string | null>;
   /**
+   * Same as `resolveByText` but also returns the raw MusicBrainz search score
+   * (0–100, already filtered ≥ 90) so callers can store it as a normalised
+   * confidence value.  Returns null when no match meets the threshold.
+   */
+  resolveByTextWithScore(
+    artist: string,
+    title: string,
+    signal?: AbortSignal,
+  ): Promise<{ mbid: string; score: number } | null>;
+  /**
    * Reverse direction: fetch the ISRC(s) attached to a recording MBID via
    * `/recording/{mbid}?inc=isrcs`. Returns the first ISRC or null (including
    * on any error — callers must record "checked" separately so misses aren't
@@ -223,6 +233,15 @@ export function createMbResolver(): IsolatedMbResolver {
       title: string,
       signal?: AbortSignal,
     ): Promise<string | null> {
+      const result = await this.resolveByTextWithScore(artist, title, signal);
+      return result?.mbid ?? null;
+    },
+
+    async resolveByTextWithScore(
+      artist: string,
+      title: string,
+      signal?: AbortSignal,
+    ): Promise<{ mbid: string; score: number } | null> {
       if (!musicbrainzEnabled() || !artist.trim() || !title.trim()) return null;
       const a = escapeQuery(artist);
       const t = escapeQuery(title);
@@ -235,7 +254,7 @@ export function createMbResolver(): IsolatedMbResolver {
         );
         const match = parseRecordingSearch(body);
         if (!match || match.score < 90) return null;
-        return match.recordingId;
+        return { mbid: match.recordingId, score: match.score };
       } catch {
         return null;
       }

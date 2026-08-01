@@ -50,6 +50,12 @@ export interface LibraryItem {
   soft?: boolean;
   /** Spotify track ID, populated on soft rows. */
   spotifyId?: string | null;
+  /**
+   * True when the track was matched via MusicBrainz scored text search
+   * (Tier 3 / "text" resolution tier).  Shown as a "(fuzzy match)" badge so
+   * users can verify the result.
+   */
+  fuzzyMatch?: boolean;
 }
 
 export interface ImportJobStatus {
@@ -70,6 +76,18 @@ export interface ImportJobStatus {
    * instead of "Fetching your library…".
    */
   resumedFrom: number | null;
+  /**
+   * Number of tracks that could not be matched to a MusicBrainz MBID.
+   * Only populated when `status === "done"`.  The nightly retry pass will
+   * attempt to resolve these overnight.
+   */
+  unresolvedCount?: number;
+  /**
+   * A sample of up to 50 unresolved tracks (raw artist + title strings) so the
+   * Library page can render a dismissable review section without a second
+   * request.  Only populated when `status === "done"` and `unresolvedCount > 0`.
+   */
+  unresolvedSample?: Array<{ rawArtist: string; rawTitle: string }>;
 }
 
 export interface OverlapPicker {

@@ -12,6 +12,7 @@ import {
   listSourcesTable,
   resolutionCacheTable,
   spotifyLibraryItemsTable,
+  importItemsTable,
   spinsTable,
   stationsTable,
   showsTable,
@@ -424,6 +425,24 @@ router.get("/me/library/import", h(async (req, res) => {
 
   if (!job) return res.status(404).json({ error: "No import jobs found" });
 
+  let unresolvedCount: number | undefined;
+  let unresolvedSample: Array<{ rawArtist: string; rawTitle: string }> | undefined;
+  if (job.status === "done") {
+    const [countRow] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(importItemsTable)
+      .where(and(eq(importItemsTable.jobId, job.id), isNull(importItemsTable.recordingMbid)));
+    unresolvedCount = countRow?.count ?? 0;
+    if (unresolvedCount > 0) {
+      const rows = await db
+        .select({ rawArtist: importItemsTable.rawArtist, rawTitle: importItemsTable.rawTitle })
+        .from(importItemsTable)
+        .where(and(eq(importItemsTable.jobId, job.id), isNull(importItemsTable.recordingMbid)))
+        .limit(50);
+      unresolvedSample = rows;
+    }
+  }
+
   return res.json({
     jobId: job.id,
     service: job.service,
@@ -436,6 +455,9 @@ router.get("/me/library/import", h(async (req, res) => {
     error: job.error ?? null,
     resumedFrom: job.resumedFrom ?? null,
     retryExhausted: job.retryExhausted ?? false,
+    ...(unresolvedCount !== undefined
+      ? { unresolvedCount, unresolvedSample: unresolvedSample ?? [] }
+      : {}),
   });
 }));
 
@@ -461,6 +483,24 @@ router.get("/me/library/import/:jobId", h(async (req, res) => {
 
   if (!job) return res.status(404).json({ error: "Job not found" });
 
+  let unresolvedCount: number | undefined;
+  let unresolvedSample: Array<{ rawArtist: string; rawTitle: string }> | undefined;
+  if (job.status === "done") {
+    const [countRow] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(importItemsTable)
+      .where(and(eq(importItemsTable.jobId, job.id), isNull(importItemsTable.recordingMbid)));
+    unresolvedCount = countRow?.count ?? 0;
+    if (unresolvedCount > 0) {
+      const rows = await db
+        .select({ rawArtist: importItemsTable.rawArtist, rawTitle: importItemsTable.rawTitle })
+        .from(importItemsTable)
+        .where(and(eq(importItemsTable.jobId, job.id), isNull(importItemsTable.recordingMbid)))
+        .limit(50);
+      unresolvedSample = rows;
+    }
+  }
+
   return res.json({
     jobId: job.id,
     service: job.service,
@@ -473,6 +513,9 @@ router.get("/me/library/import/:jobId", h(async (req, res) => {
     error: job.error ?? null,
     resumedFrom: job.resumedFrom ?? null,
     retryExhausted: job.retryExhausted ?? false,
+    ...(unresolvedCount !== undefined
+      ? { unresolvedCount, unresolvedSample: unresolvedSample ?? [] }
+      : {}),
   });
 }));
 
@@ -601,6 +644,58 @@ export async function seedSpotifySoftRows(
   }
 
   console.log(`[me/import] seeded ${entries.length} soft rows into spotify_library_items`);
+}
+
+// ---------------------------------------------------------------------------
+// import_items audit-trail writer
+// ---------------------------------------------------------------------------
+
+/** Chunk size for import_items bulk inserts (avoids oversized SQL statements). */
+const IMPORT_ITEMS_CHUNK = 500;
+
+type ImportItemRow = {
+  rawArtist: string;
+  rawTitle: string;
+  rawRelease?: string | null;
+  sourceRef?: string | null;
+  isrc?: string | null;
+  recordingMbid?: string | null;
+  resolutionTier?: string | null;
+  confidence?: number | null;
+};
+
+/**
+ * Bulk-inserts per-item resolution audit rows into `import_items`.
+ * Called once per worker run after all phases complete.  Failures are logged
+ * and swallowed — the import itself must not be blocked by an audit write.
+ */
+async function writeImportItems(
+  jobId: number,
+  userId: number,
+  rows: ImportItemRow[],
+): Promise<void> {
+  if (rows.length === 0) return;
+  for (let i = 0; i < rows.length; i += IMPORT_ITEMS_CHUNK) {
+    const chunk = rows.slice(i, i + IMPORT_ITEMS_CHUNK).map((r) => ({
+      jobId,
+      userId,
+      rawArtist: r.rawArtist,
+      rawTitle: r.rawTitle,
+      rawRelease: r.rawRelease ?? null,
+      sourceRef: r.sourceRef ?? null,
+      isrc: r.isrc ?? null,
+      recordingMbid: r.recordingMbid ?? null,
+      resolutionTier: r.resolutionTier ?? null,
+      confidence: r.confidence ?? null,
+    }));
+    await db
+      .insert(importItemsTable)
+      .values(chunk)
+      .onConflictDoNothing()
+      .catch((err) => {
+        console.warn(`[me/import] import_items insert failed (offset ${i}):`, err);
+      });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -738,6 +833,8 @@ export async function runImportWorker(
 
     const matchedIdx = new Set<number>();
     const resolvedMbidIdx = new Set<number>();
+    /** Per-index resolution outcome — written to import_items at worker completion. */
+    const resolvedMap = new Map<number, { mbid: string; tier: string; confidence: number | null }>();
 
     // ── Phase 1: ISRC bulk pre-match against recordings ───────────────────────
     const isrcEntries = buffer
@@ -771,6 +868,7 @@ export async function runImportWorker(
           }
           matchedIdx.add(i);
           resolvedMbidIdx.add(i);
+          resolvedMap.set(i, { mbid, tier: "isrc", confidence: null });
         }
       }
 
@@ -813,15 +911,16 @@ export async function runImportWorker(
       const cacheMap = new Map(cacheRows.map((r) => [r.key, r.mbid]));
 
       const indexToMbid = new Map<number, string>();
+      const indexToTier = new Map<number, string>();
       for (const { t, i } of phase2Entries) {
         if (indexToMbid.has(i) || matchedIdx.has(i)) continue;
         if (t.isrc) {
           const hit = cacheMap.get(isrcKey(t.isrc));
-          if (hit) { indexToMbid.set(i, hit); continue; }
+          if (hit) { indexToMbid.set(i, hit); indexToTier.set(i, "isrc"); continue; }
           if (hit === null) { matchedIdx.add(i); continue; }
         }
         const hit = cacheMap.get(normalizeKey(t.artist, t.title));
-        if (hit) { indexToMbid.set(i, hit); continue; }
+        if (hit) { indexToMbid.set(i, hit); indexToTier.set(i, "text"); continue; }
         if (hit === null) matchedIdx.add(i);
       }
 
@@ -857,6 +956,7 @@ export async function runImportWorker(
           }
           matchedIdx.add(idx);
           resolvedMbidIdx.add(idx);
+          resolvedMap.set(idx, { mbid, tier: indexToTier.get(idx) ?? "text", confidence: null });
         }
       }
 
@@ -905,12 +1005,16 @@ export async function runImportWorker(
 
       let mbid: string | null = null;
       let resolveErrored = false;
+      let phase3Tier = "text";
+      let phase3Confidence: number | null = null;
       try {
         if (t.isrc) {
           mbid = await mbResolver.resolveByIsrc(t.isrc, controller.signal);
+          if (mbid) phase3Tier = "isrc";
         }
         if (!mbid && !controller.signal.aborted) {
-          mbid = await mbResolver.resolveByText(t.artist, t.title, controller.signal);
+          const textResult = await mbResolver.resolveByTextWithScore(t.artist, t.title, controller.signal);
+          if (textResult) { mbid = textResult.mbid; phase3Tier = "text"; phase3Confidence = textResult.score / 100; }
         }
         if (!controller.signal.aborted) {
           consecutiveErrors = 0;
@@ -977,6 +1081,7 @@ export async function runImportWorker(
           .catch(() => {});
         matchedIdx.add(i);
         resolvedMbidIdx.add(i);
+        resolvedMap.set(i, { mbid, tier: phase3Tier, confidence: phase3Confidence });
       } else if (!controller.signal.aborted && !resolveErrored) {
         await db
           .insert(resolutionCacheTable)
@@ -997,6 +1102,20 @@ export async function runImportWorker(
         .set({ total, resolved })
         .where(eq(libraryImportJobsTable.id, jobId));
     }
+
+    // ── Write per-item resolution audit trail ────────────────────────────────
+    await writeImportItems(jobId, userId, buffer.map((t, i) => {
+      const r = resolvedMap.get(i);
+      return {
+        rawArtist: t.artist,
+        rawTitle: t.title,
+        sourceRef: t.externalId,
+        isrc: t.isrc ?? null,
+        recordingMbid: r?.mbid ?? null,
+        resolutionTier: r?.tier ?? null,
+        confidence: r?.confidence ?? null,
+      };
+    }));
 
     // ── Seed soft rows for unresolved tracks (Spotify only) ─────────────────
     if (service === "spotify") {
@@ -1071,6 +1190,8 @@ export async function runManualImportWorker(
     const total = buffer.length;
     let resolved = 0;
     const matchedIdx = new Set<number>();
+    /** Per-index resolution outcome for the import_items audit trail. */
+    const resolvedMap = new Map<number, { mbid: string; tier: string; confidence: number | null }>();
     const provenance: LibraryItemProvenance = { kind: "import", service: "manual" };
 
     // ── Phase 2: resolution-cache bulk pre-check ──────────────────────────
@@ -1097,11 +1218,17 @@ export async function runManualImportWorker(
       const cacheMap = new Map(cacheRows.map((r) => [r.key, r.mbid]));
 
       const indexToMbid = new Map<number, string>();
+      const indexToTier = new Map<number, string>();
       for (let i = 0; i < buffer.length; i++) {
         if (matchedIdx.has(i)) continue;
         const t = buffer[i]!;
+        if (t.isrc) {
+          const hit = cacheMap.get(isrcKey(t.isrc));
+          if (hit) { indexToMbid.set(i, hit); indexToTier.set(i, "isrc"); continue; }
+          if (hit === null) { matchedIdx.add(i); continue; }
+        }
         const hit = cacheMap.get(normalizeKey(t.artist, t.title));
-        if (hit) { indexToMbid.set(i, hit); continue; }
+        if (hit) { indexToMbid.set(i, hit); indexToTier.set(i, "text"); continue; }
         if (hit === null) matchedIdx.add(i);
       }
 
@@ -1121,6 +1248,7 @@ export async function runManualImportWorker(
           console.warn(`[me/import:manual] Phase 2 FK violation mbid=${mbid}`);
         }
         matchedIdx.add(idx);
+        resolvedMap.set(idx, { mbid, tier: indexToTier.get(idx) ?? "text", confidence: null });
       }
 
       await db.update(libraryImportJobsTable)
@@ -1159,8 +1287,17 @@ export async function runManualImportWorker(
 
       let mbid: string | null = null;
       let resolveErrored = false;
+      let phase3Tier = "text";
+      let phase3Confidence: number | null = null;
       try {
-        mbid = await mbResolver.resolveByText(t.artist, t.title, controller.signal);
+        if (t.isrc) {
+          mbid = await mbResolver.resolveByIsrc(t.isrc, controller.signal);
+          if (mbid) phase3Tier = "isrc";
+        }
+        if (!mbid && !controller.signal.aborted) {
+          const textResult = await mbResolver.resolveByTextWithScore(t.artist, t.title, controller.signal);
+          if (textResult) { mbid = textResult.mbid; phase3Tier = "text"; phase3Confidence = textResult.score / 100; }
+        }
         if (!controller.signal.aborted) { consecutiveErrors = 0; mbDegraded = false; }
       } catch {
         resolveErrored = true;
@@ -1198,9 +1335,13 @@ export async function runManualImportWorker(
           console.warn(`[me/import:manual] Phase 3 FK violation mbid=${mbid}`);
         }
         await db.insert(resolutionCacheTable)
-          .values([{ key: normalizeKey(t.artist, t.title), mbid }])
+          .values([
+            ...(t.isrc ? [{ key: isrcKey(t.isrc), mbid }] : []),
+            { key: normalizeKey(t.artist, t.title), mbid },
+          ])
           .onConflictDoNothing()
           .catch(() => {});
+        resolvedMap.set(i, { mbid, tier: phase3Tier, confidence: phase3Confidence });
       } else if (!controller.signal.aborted && !resolveErrored) {
         await db.insert(resolutionCacheTable)
           .values([{ key: normalizeKey(t.artist, t.title), mbid: null }])
@@ -1214,6 +1355,20 @@ export async function runManualImportWorker(
         .set({ total, resolved })
         .where(eq(libraryImportJobsTable.id, jobId));
     }
+
+    // ── Write per-item resolution audit trail ────────────────────────────────
+    await writeImportItems(jobId, userId, buffer.map((t, i) => {
+      const r = resolvedMap.get(i);
+      return {
+        rawArtist: t.artist,
+        rawTitle: t.title,
+        sourceRef: t.externalId,
+        isrc: t.isrc ?? null,
+        recordingMbid: r?.mbid ?? null,
+        resolutionTier: r?.tier ?? null,
+        confidence: r?.confidence ?? null,
+      };
+    }));
 
     await db.update(libraryImportJobsTable)
       .set({ status: "done", total, resolved, finishedAt: new Date() })
@@ -1381,6 +1536,8 @@ export async function runListenBrainzImportWorker(
       .where(eq(libraryImportJobsTable.id, jobId));
 
     const matchedIdx = new Set<number>();
+    /** Per-index resolution outcome (buffer indices only) for the audit trail. */
+    const resolvedMap = new Map<number, { mbid: string; tier: string; confidence: number | null }>();
 
     if (buffer.length > 0) {
       const keySet = new Set<string>();
@@ -1407,16 +1564,17 @@ export async function runListenBrainzImportWorker(
       const cacheMap = new Map(cacheRows.map((r) => [r.key, r.mbid]));
 
       const indexToMbid = new Map<number, string>();
+      const indexToTier = new Map<number, string>();
       for (let i = 0; i < buffer.length; i++) {
         if (matchedIdx.has(i)) continue;
         const t = buffer[i]!;
         if (t.isrc) {
           const hit = cacheMap.get(isrcKey(t.isrc));
-          if (hit) { indexToMbid.set(i, hit); continue; }
+          if (hit) { indexToMbid.set(i, hit); indexToTier.set(i, "isrc"); continue; }
           if (hit === null) { matchedIdx.add(i); continue; }
         }
         const hit = cacheMap.get(normalizeKey(t.artist, t.title));
-        if (hit) { indexToMbid.set(i, hit); continue; }
+        if (hit) { indexToMbid.set(i, hit); indexToTier.set(i, "text"); continue; }
         if (hit === null) matchedIdx.add(i);
       }
 
@@ -1436,6 +1594,7 @@ export async function runListenBrainzImportWorker(
           console.warn(`[me/import:lb] Phase 2 FK violation mbid=${mbid}`);
         }
         matchedIdx.add(idx);
+        resolvedMap.set(idx, { mbid, tier: indexToTier.get(idx) ?? "text", confidence: null });
       }
 
       await db.update(libraryImportJobsTable)
@@ -1459,7 +1618,7 @@ export async function runListenBrainzImportWorker(
     let currentBackoffMs = PHASE3_503_BACKOFF_BASE_MS;
     let mbDegraded = false;
 
-    for (const { t, i: _i } of phase3Entries) {
+    for (const { t, i } of phase3Entries) {
       if (Date.now() - phase3StartMs > PHASE3_BUDGET_MS) {
         console.warn(`[me/import:lb] job=${jobId} Phase 3 budget exceeded — ${resolved}/${total} resolved`);
         break;
@@ -1474,8 +1633,17 @@ export async function runListenBrainzImportWorker(
 
       let mbid: string | null = null;
       let resolveErrored = false;
+      let phase3Tier = "text";
+      let phase3Confidence: number | null = null;
       try {
-        mbid = await mbResolver.resolveByText(t.artist, t.title, controller.signal);
+        if (t.isrc) {
+          mbid = await mbResolver.resolveByIsrc(t.isrc, controller.signal);
+          if (mbid) phase3Tier = "isrc";
+        }
+        if (!mbid && !controller.signal.aborted) {
+          const textResult = await mbResolver.resolveByTextWithScore(t.artist, t.title, controller.signal);
+          if (textResult) { mbid = textResult.mbid; phase3Tier = "text"; phase3Confidence = textResult.score / 100; }
+        }
         if (!controller.signal.aborted) { consecutiveErrors = 0; mbDegraded = false; }
       } catch {
         resolveErrored = true;
@@ -1513,9 +1681,13 @@ export async function runListenBrainzImportWorker(
           console.warn(`[me/import:lb] Phase 3 FK violation mbid=${mbid}`);
         }
         await db.insert(resolutionCacheTable)
-          .values([{ key: normalizeKey(t.artist, t.title), mbid }])
+          .values([
+            ...(t.isrc ? [{ key: isrcKey(t.isrc), mbid }] : []),
+            { key: normalizeKey(t.artist, t.title), mbid },
+          ])
           .onConflictDoNothing()
           .catch(() => {});
+        resolvedMap.set(i, { mbid, tier: phase3Tier, confidence: phase3Confidence });
       } else if (!controller.signal.aborted && !resolveErrored) {
         await db.insert(resolutionCacheTable)
           .values([{ key: normalizeKey(t.artist, t.title), mbid: null }])
@@ -1529,6 +1701,32 @@ export async function runListenBrainzImportWorker(
         .set({ total, resolved })
         .where(eq(libraryImportJobsTable.id, jobId));
     }
+
+    // ── Write per-item resolution audit trail ────────────────────────────────
+    // Tier-1 rows (direct MBID from LB) first, then the Phase-2/3 buffer.
+    const tier1AuditRows: ImportItemRow[] = tier1Items.map((item) => ({
+      rawArtist: item.artist,
+      rawTitle: item.title,
+      rawRelease: item.release ?? null,
+      sourceRef: item.sourceRef ?? null,
+      isrc: item.isrc ?? null,
+      recordingMbid: item.recordingMbid ?? null,
+      resolutionTier: item.recordingMbid ? "recording_id" : null,
+      confidence: null,
+    }));
+    const bufferAuditRows: ImportItemRow[] = buffer.map((t, i) => {
+      const r = resolvedMap.get(i);
+      return {
+        rawArtist: t.artist,
+        rawTitle: t.title,
+        sourceRef: t.externalId,
+        isrc: t.isrc ?? null,
+        recordingMbid: r?.mbid ?? null,
+        resolutionTier: r?.tier ?? null,
+        confidence: r?.confidence ?? null,
+      };
+    });
+    await writeImportItems(jobId, userId, [...tier1AuditRows, ...bufferAuditRows]);
 
     await db.update(libraryImportJobsTable)
       .set({ status: "done", total, resolved, finishedAt: new Date() })
@@ -1873,12 +2071,15 @@ export async function runPhase3RetryPass(deadline?: Date, _testUserIds?: number[
 
         let mbid: string | null = null;
         let resolveErrored = false;
+        let retryTier = "text";
         try {
           if (t.isrc) {
             mbid = await mbResolver.resolveByIsrc(t.isrc, controller.signal);
+            if (mbid) retryTier = "isrc";
           }
           if (!mbid && !controller.signal.aborted) {
-            mbid = await mbResolver.resolveByText(t.artist, t.title, controller.signal);
+            const textResult = await mbResolver.resolveByTextWithScore(t.artist, t.title, controller.signal);
+            if (textResult) { mbid = textResult.mbid; retryTier = "text"; }
           }
           if (!controller.signal.aborted) {
             consecutiveErrors = 0;
@@ -1941,6 +2142,21 @@ export async function runPhase3RetryPass(deadline?: Date, _testUserIds?: number[
             .catch(() => {});
 
           if (libItemInserted) {
+            // Back-fill resolution in the original job's import_items audit row
+            // so the Library page review section count decays correctly overnight.
+            await db.execute(sql`
+              UPDATE import_items
+              SET recording_mbid = ${mbid}, resolution_tier = ${retryTier}
+              WHERE id = (
+                SELECT id FROM import_items
+                WHERE job_id = ${candidate.id}
+                  AND raw_artist = ${t.artist}
+                  AND raw_title = ${t.title}
+                  AND recording_mbid IS NULL
+                LIMIT 1
+              )
+            `).catch(() => {});
+
             // Promote: remove the soft row now that library_items has the track.
             if (candidate.service === "spotify") {
               const isRealSpotifyId = /^[A-Za-z0-9]{22}$/.test(t.externalId);
@@ -2286,6 +2502,25 @@ router.get("/me/library", h(async (req, res) => {
     )
     .limit(limit + 1);
 
+  // Fuzzy-match flag: find which MBIDs on this page were resolved via
+  // MusicBrainz scored text search (tier = "text") so the UI can badge them.
+  const fuzzyMbidSet = new Set<string>();
+  if (resolvedRows.length > 0 && user) {
+    const mbids = resolvedRows.map((r) => r.mbid);
+    const fuzzyRows = await db
+      .select({ mbid: importItemsTable.recordingMbid })
+      .from(importItemsTable)
+      .where(and(
+        eq(importItemsTable.userId, user.id),
+        eq(importItemsTable.resolutionTier, "text"),
+        isNotNull(importItemsTable.recordingMbid),
+        inArray(importItemsTable.recordingMbid, mbids),
+      ));
+    for (const r of fuzzyRows) {
+      if (r.mbid) fuzzyMbidSet.add(r.mbid);
+    }
+  }
+
   void legacyNameCursor;
 
   type SoftRow = { spotifyId: string; addedAt: Date; title: string; artist: string; artworkUrl: string | null; albumName: string | null; sortKey: string };
@@ -2378,6 +2613,7 @@ router.get("/me/library", h(async (req, res) => {
           }
         : null,
       ...(r.soft ? { soft: true, spotifyId: r.spotifyId } : {}),
+      ...(r.mbid && fuzzyMbidSet.has(r.mbid) ? { fuzzyMatch: true } : {}),
     })),
     nextCursor,
     ...(total !== undefined ? { total } : {}),

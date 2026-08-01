@@ -262,6 +262,11 @@ export function LibraryRow({ item, isOnAir = false, isOpen = false, onToggle }: 
         )}
         {artist && <p className="lrow__ar">{artist}</p>}
         <Byline prov={prov} soft={isSoft} />
+        {item.fuzzyMatch && (
+          <p className="lrow__badge lrow__badge--fuzzy" title="Matched by MusicBrainz text search — verify if unexpected">
+            fuzzy match
+          </p>
+        )}
         {isOnAir && <p className="lrow__badge">● on air</p>}
       </div>
 

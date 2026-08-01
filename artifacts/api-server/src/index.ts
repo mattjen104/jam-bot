@@ -57,6 +57,7 @@ import { applyDeviceIdentityMigration } from "./lore/device-identity-migration.j
 import { applyMigrationCompletionsMigration } from "./lore/migration-completions-migration.js";
 import { applySpinDedupCleanup } from "./lore/spin-dedup-cleanup.js";
 import { applyCrossingsCacheMigration } from "./lore/crossings-cache-migration.js";
+import { applyImportItemsMigration } from "./lore/import-items-migration.js";
 
 const rawPort = process.env["PORT"];
 
@@ -103,6 +104,7 @@ async function bootLore(): Promise<void> {
     await runMigration("applySpotifyLibraryItemsMigration", applySpotifyLibraryItemsMigration);
     await runMigration("applySpinDedupCleanup", applySpinDedupCleanup);
     await runMigration("applyCrossingsCacheMigration", applyCrossingsCacheMigration);
+    await runMigration("applyImportItemsMigration", applyImportItemsMigration);
     await ensurePicksUnifiedView();
     await seedStations();
     try {

@@ -668,6 +668,9 @@ export default function Library() {
   // Import job
   const { data: jobData } = useLatestImportJob();
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  /** Stores the jobId the user dismissed the unresolved-review section for. */
+  const [reviewDismissedJobId, setReviewDismissedJobId] = useState<number | null>(null);
+  const [reviewExpanded, setReviewExpanded] = useState(false);
   useEffect(() => {
     if (jobData?.status === "pending" || jobData?.status === "running") setBannerDismissed(false);
   }, [jobData?.status]);
@@ -687,6 +690,10 @@ export default function Library() {
     return Date.now() - new Date(jobData.finishedAt).getTime() < 10 * 60_000;
   })();
   const showImportBanner = !bannerDismissed && jobData != null && (isImportActive || isRecentlyFinished);
+  const showReviewSection =
+    jobData?.status === "done" &&
+    (jobData.unresolvedCount ?? 0) > 0 &&
+    reviewDismissedJobId !== jobData.jobId;
 
   const [connectBusy, setConnectBusy] = useState(false);
   const [importBusy, setImportBusy] = useState(false);
@@ -829,6 +836,129 @@ export default function Library() {
       {/* Import banner (sticky — only while active/recent) */}
       {showImportBanner && jobData && (
         <LibraryImportBanner job={jobData} onDismiss={() => setBannerDismissed(true)} />
+      )}
+
+      {/* Unresolved review section — shown after import when some tracks couldn't be matched */}
+      {showReviewSection && jobData && (
+        <div
+          style={{
+            borderBottom: "1px solid hsl(var(--border))",
+            background: "hsl(var(--card))",
+            flexShrink: 0,
+          }}
+          data-testid="library-unresolved-review"
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 15px" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <span
+                style={{
+                  fontFamily: "var(--app-font-mono)",
+                  fontSize: 10,
+                  color: "hsl(var(--faint))",
+                }}
+              >
+                {(jobData.unresolvedCount ?? 0).toLocaleString()} track
+                {(jobData.unresolvedCount ?? 0) === 1 ? "" : "s"} couldn't be matched — retrying overnight
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setReviewExpanded((v) => !v)}
+              aria-expanded={reviewExpanded}
+              style={{
+                fontFamily: "var(--app-font-mono)",
+                fontSize: 9,
+                color: "hsl(var(--dim))",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                flexShrink: 0,
+                display: "flex",
+                alignItems: "center",
+                gap: 3,
+              }}
+            >
+              {reviewExpanded
+                ? <ChevronUp style={{ width: 9, height: 9 }} />
+                : <ChevronDown style={{ width: 9, height: 9 }} />}
+              {reviewExpanded ? "hide" : "show"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setReviewDismissedJobId(jobData.jobId)}
+              style={{
+                fontFamily: "var(--app-font-display)",
+                fontSize: 9,
+                textTransform: "uppercase",
+                letterSpacing: "0.07em",
+                color: "hsl(var(--faint))",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                flexShrink: 0,
+              }}
+            >
+              dismiss
+            </button>
+          </div>
+          {reviewExpanded && (jobData.unresolvedSample?.length ?? 0) > 0 && (
+            <div
+              style={{
+                borderTop: "1px solid hsl(var(--border) / 0.5)",
+                maxHeight: 220,
+                overflowY: "auto",
+              }}
+              data-testid="library-unresolved-list"
+            >
+              {jobData.unresolvedSample!.map((item, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    padding: "5px 15px",
+                    borderBottom: "1px solid hsl(var(--border) / 0.3)",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontFamily: "var(--app-font-display)",
+                      fontSize: 10,
+                      color: "hsl(var(--dim))",
+                    }}
+                  >
+                    {item.rawArtist}
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: "var(--app-font-mono)",
+                      fontSize: 10,
+                      color: "hsl(var(--faint))",
+                    }}
+                  >
+                    {item.rawTitle}
+                  </span>
+                </div>
+              ))}
+              {(jobData.unresolvedCount ?? 0) > (jobData.unresolvedSample?.length ?? 0) && (
+                <div
+                  style={{
+                    padding: "5px 15px",
+                    fontFamily: "var(--app-font-mono)",
+                    fontSize: 9,
+                    color: "hsl(var(--faint))",
+                  }}
+                >
+                  …and{" "}
+                  {(
+                    (jobData.unresolvedCount ?? 0) - (jobData.unresolvedSample?.length ?? 0)
+                  ).toLocaleString()}{" "}
+                  more
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Body */}

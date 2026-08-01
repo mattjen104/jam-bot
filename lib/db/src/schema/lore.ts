@@ -1269,6 +1269,63 @@ export type LibraryImportJob = typeof libraryImportJobsTable.$inferSelect;
 export type InsertLibraryImportJob = typeof libraryImportJobsTable.$inferInsert;
 
 /**
+ * Per-item resolution audit trail for an import job.
+ * One row per track per import: stores the raw input, resolved MBID (or null
+ * for unresolved), the resolution tier, and a normalised confidence score for
+ * Tier 3 (fuzzy MB text) matches.
+ *
+ * This table is the canonical source of truth for "what couldn't be matched"
+ * — the off-peak nightly retry pass reads unresolved rows here instead of
+ * reconstructing them from `bufferJson`.
+ */
+export const importItemsTable = pgTable(
+  "import_items",
+  {
+    id: serial("id").primaryKey(),
+    jobId: integer("job_id")
+      .notNull()
+      .references(() => libraryImportJobsTable.id),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => loreUsersTable.id),
+    rawArtist: text("raw_artist").notNull(),
+    rawTitle: text("raw_title").notNull(),
+    rawRelease: text("raw_release"),
+    sourceRef: text("source_ref"),
+    isrc: text("isrc"),
+    /**
+     * Resolved MusicBrainz Recording ID, or null when unresolved.
+     * Intentionally no FK — the recording row may not yet exist when an
+     * unresolved row is inserted.  Written null at import time; updated to
+     * the MBID if the nightly retry pass later resolves the track.
+     */
+    recordingMbid: text("recording_mbid"),
+    /**
+     * How the track was resolved:
+     *   "recording_id" — source supplied the MBID directly (e.g. ListenBrainz)
+     *   "isrc"         — matched via ISRC lookup
+     *   "text"         — matched via MusicBrainz scored artist+title search
+     *   null           — unresolved (no MBID found)
+     */
+    resolutionTier: text("resolution_tier"),
+    /**
+     * Normalised MB text-search score (0–1).  Only set when
+     * `resolution_tier = 'text'`; null otherwise.
+     * Derived from MusicBrainz's own 0–100 score (already filtered ≥ 90).
+     */
+    confidence: real("confidence"),
+    addedAt: timestamp("added_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("import_items_job_idx").on(t.jobId),
+    index("import_items_user_mbid_idx").on(t.userId, t.recordingMbid),
+  ],
+);
+
+export type ImportItemRecord = typeof importItemsTable.$inferSelect;
+export type InsertImportItem = typeof importItemsTable.$inferInsert;
+
+/**
  * Per-user, per-service toggle: whether the Keep action should mirror to that
  * service's library. Defaults to enabled on first successful connection.
  */
