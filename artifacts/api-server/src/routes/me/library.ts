@@ -1324,10 +1324,25 @@ export async function runPhase3RetryPass(deadline?: Date): Promise<void> {
               ...(t.isrc ? { isrc: t.isrc } : {}),
             })
             .onConflictDoNothing();
-          await db
-            .insert(libraryItemsTable)
-            .values({ userId: candidate.userId, mbid, provenance, addedAt: new Date() })
-            .onConflictDoNothing();
+
+          // FK guard: recordings row may disappear between the insert above and
+          // the library_items insert (same race as the main Phase 3 worker).
+          let libItemInserted = false;
+          try {
+            await db
+              .insert(libraryItemsTable)
+              .values({ userId: candidate.userId, mbid, provenance, addedAt: new Date() })
+              .onConflictDoNothing();
+            libItemInserted = true;
+          } catch (insertErr) {
+            const pgCode = (insertErr as { code?: string }).code;
+            if (pgCode !== "23503") throw insertErr;
+            console.warn(
+              `[me/import/retry] FK violation for mbid=${mbid} — ` +
+              `recordings row gone between resolve and insert; skipping`,
+            );
+          }
+
           await db
             .insert(resolutionCacheTable)
             .values([
@@ -1336,37 +1351,40 @@ export async function runPhase3RetryPass(deadline?: Date): Promise<void> {
             ])
             .onConflictDoNothing()
             .catch(() => {});
-          // Promote: remove the soft row now that library_items has the track.
-          if (candidate.service === "spotify") {
-            const isRealSpotifyId = /^[A-Za-z0-9]{22}$/.test(t.externalId);
-            if (isRealSpotifyId) {
-              await db
-                .delete(spotifyLibraryItemsTable)
-                .where(
-                  and(
-                    eq(spotifyLibraryItemsTable.userId, candidate.userId),
-                    eq(spotifyLibraryItemsTable.spotifyId, t.externalId),
-                  ),
-                )
-                .catch(() => {});
-            } else {
-              const artistTitleCond = and(
-                eq(spotifyLibraryItemsTable.artist, t.artist),
-                eq(spotifyLibraryItemsTable.title, t.title),
-              );
-              const fallbackCond = t.isrc
-                ? or(
-                    eq(spotifyLibraryItemsTable.isrc, t.isrc),
-                    and(isNull(spotifyLibraryItemsTable.isrc), artistTitleCond),
+
+          if (libItemInserted) {
+            // Promote: remove the soft row now that library_items has the track.
+            if (candidate.service === "spotify") {
+              const isRealSpotifyId = /^[A-Za-z0-9]{22}$/.test(t.externalId);
+              if (isRealSpotifyId) {
+                await db
+                  .delete(spotifyLibraryItemsTable)
+                  .where(
+                    and(
+                      eq(spotifyLibraryItemsTable.userId, candidate.userId),
+                      eq(spotifyLibraryItemsTable.spotifyId, t.externalId),
+                    ),
                   )
-                : artistTitleCond;
-              await db
-                .delete(spotifyLibraryItemsTable)
-                .where(and(eq(spotifyLibraryItemsTable.userId, candidate.userId), fallbackCond))
-                .catch(() => {});
+                  .catch(() => {});
+              } else {
+                const artistTitleCond = and(
+                  eq(spotifyLibraryItemsTable.artist, t.artist),
+                  eq(spotifyLibraryItemsTable.title, t.title),
+                );
+                const fallbackCond = t.isrc
+                  ? or(
+                      eq(spotifyLibraryItemsTable.isrc, t.isrc),
+                      and(isNull(spotifyLibraryItemsTable.isrc), artistTitleCond),
+                    )
+                  : artistTitleCond;
+                await db
+                  .delete(spotifyLibraryItemsTable)
+                  .where(and(eq(spotifyLibraryItemsTable.userId, candidate.userId), fallbackCond))
+                  .catch(() => {});
+              }
             }
+            retryResolved++;
           }
-          retryResolved++;
         } else if (!controller.signal.aborted && !resolveErrored) {
           await db
             .insert(resolutionCacheTable)

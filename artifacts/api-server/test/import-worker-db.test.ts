@@ -133,7 +133,12 @@ const REMOVED_EXT_ID = `SPRemvd${run.toUpperCase()}0000000`.slice(0, 22);
 // exists — the pass must resolve it unconditionally (currentLibraryKeys is null).
 const MBID_NO_SNAP = `test-iw-ns-${run}`;
 const NO_SNAP_EXT_ID = `SPNoSnap${run.toUpperCase()}00000`.slice(0, 22);
-const MBIDS_ALL = [MBID_P1, MBID_P2, MBID_P3A, MBID_P3B, MBID_FK, MBID_FK2, MBID_FK3, MBID_RETRY_SOFT, MBID_REMOVED, MBID_NO_SNAP];
+// Retry-pass FK-failure test: the retry pass resolves the MBID but the
+// library_items insert throws a 23503 — the pass must still reach done and
+// the track must stay absent from both library_items and spotify_library_items.
+const MBID_RETRY_FK = `test-iw-rfk-${run}`;
+const RETRY_FK_EXT_ID = `SPRetryFK${run.toUpperCase()}0000`.slice(0, 22);
+const MBIDS_ALL = [MBID_P1, MBID_P2, MBID_P3A, MBID_P3B, MBID_FK, MBID_FK2, MBID_FK3, MBID_RETRY_SOFT, MBID_REMOVED, MBID_NO_SNAP, MBID_RETRY_FK];
 
 // ISRC for the Phase 1 track (must be ≤ 12 chars and unique).
 const ISRC_P1 = `TS${run.toUpperCase()}01`.slice(0, 12);
@@ -231,6 +236,8 @@ afterAll(async () => {
         normalizeKey(ARTIST, "Phase3Retry Track"),
         // Written by the retry pass during the no-newer-snapshot test.
         normalizeKey(ARTIST, "NoSnap Track"),
+        // Written by the retry pass during the retry-FK-failure test.
+        normalizeKey(ARTIST, "RetryFK Track"),
       ]),
     );
   await db
@@ -1615,6 +1622,123 @@ describe("Retry pass — no newer import snapshot: all uncached tracks resolved 
       expect(mockResolveByText).toHaveBeenCalled();
 
       // Clean up the source job (afterAll covers library_items + recordings).
+      await db
+        .delete(libraryImportJobsTable)
+        .where(eq(libraryImportJobsTable.id, sourceJobId));
+    },
+    15_000,
+  );
+});
+
+// ── Retry-pass FK-failure resilience ─────────────────────────────────────────
+//
+// Simulates the race condition where a recordings row disappears between the
+// retry pass's MB resolve (which seeds the spine row) and its library_items
+// insert, producing a 23503 FK violation.  The retry pass must:
+//   • catch the error and not crash (job reaches "done")
+//   • leave the track absent from library_items (the insert genuinely failed)
+//   • leave the track absent from spotify_library_items (no promotion occurred)
+
+describe("Retry pass — library_items FK violation: pass reaches done, track stays absent", () => {
+  it(
+    "does not appear in library_items or spotify_library_items and retry job reaches done when insert throws 23503",
+    async () => {
+      if (!dbAvailable) return;
+
+      mockResolveByText.mockClear();
+      mockResolveByIsrc.mockClear();
+
+      // resolveByText returns MBID_RETRY_FK so the pass reaches the insert path.
+      // The recordings row will be seeded by the retry pass itself (onConflictDoNothing).
+      mockResolveByText.mockResolvedValue(MBID_RETRY_FK);
+
+      // ── 1. Seed the source job directly ───────────────────────────────────
+      const [sourceJobRow] = await db
+        .insert(libraryImportJobsTable)
+        .values({
+          userId,
+          service: "spotify",
+          status: "done",
+          phase: "resolve",
+          total: 1,
+          resolved: 0,
+          retryExhausted: false,
+          bufferJson: [
+            {
+              artist: ARTIST,
+              title: "RetryFK Track",
+              isrc: null,
+              durationMs: null,
+              externalId: RETRY_FK_EXT_ID,
+            },
+          ],
+          startedAt: new Date(),
+          finishedAt: new Date(),
+        })
+        .returning({ id: libraryImportJobsTable.id });
+      const sourceJobId = sourceJobRow!.id;
+
+      // ── 2. Inject the FK violation on the library_items insert ────────────
+      const fkErr = Object.assign(
+        new Error(
+          'insert or update on table "library_items" violates foreign key ' +
+          'constraint "library_items_mbid_fkey"',
+        ),
+        { code: "23503", constraint: "library_items_mbid_fkey" },
+      );
+
+      const origInsert = (db as any).insert.bind(db);
+      let fkInjected = false;
+
+      const insertSpy = vi
+        .spyOn(db as any, "insert")
+        .mockImplementation((table: unknown) => {
+          if (!fkInjected && table === libraryItemsTable) {
+            fkInjected = true;
+            const fakeBuilder: Record<string, unknown> = {};
+            fakeBuilder["values"] = () => fakeBuilder;
+            fakeBuilder["onConflictDoNothing"] = () => fakeBuilder;
+            fakeBuilder["then"] = (
+              onFulfilled: ((v: unknown) => unknown) | null | undefined,
+              onRejected: ((e: unknown) => unknown) | null | undefined,
+            ) => Promise.reject(fkErr).then(onFulfilled, onRejected);
+            return fakeBuilder;
+          }
+          return origInsert(table);
+        });
+
+      // ── 3. Run the retry pass ──────────────────────────────────────────────
+      await runPhase3RetryPass();
+
+      insertSpy.mockRestore();
+
+      // ── 4. Assertions ─────────────────────────────────────────────────────
+
+      // library_items must NOT contain the track.
+      const libRows = await db
+        .select({ mbid: libraryItemsTable.mbid })
+        .from(libraryItemsTable)
+        .where(eq(libraryItemsTable.userId, userId));
+      expect(libRows.map((r) => r.mbid)).not.toContain(MBID_RETRY_FK);
+
+      // spotify_library_items must NOT contain the soft row — no promotion occurred.
+      const softRows = await db
+        .select({ spotifyId: spotifyLibraryItemsTable.spotifyId })
+        .from(spotifyLibraryItemsTable)
+        .where(eq(spotifyLibraryItemsTable.userId, userId));
+      expect(softRows.map((r) => r.spotifyId)).not.toContain(RETRY_FK_EXT_ID);
+
+      // The retry job itself must have reached "done" despite the FK failure.
+      // (The source job's retryAttempts counter increments; that's fine.)
+      const allJobs = await db
+        .select({ status: libraryImportJobsTable.status, id: libraryImportJobsTable.id })
+        .from(libraryImportJobsTable)
+        .where(eq(libraryImportJobsTable.userId, userId));
+      // The retry job (not the source job) must be "done".
+      const retryJob = allJobs.find((j) => j.id !== sourceJobId && j.status === "done");
+      expect(retryJob).toBeDefined();
+
+      // Clean up the source job.
       await db
         .delete(libraryImportJobsTable)
         .where(eq(libraryImportJobsTable.id, sourceJobId));
