@@ -129,7 +129,11 @@ const RETRY_EXT_ID = `SPRetry${run.toUpperCase()}0000000`.slice(0, 22);
 // because a newer import snapshot doesn't contain the track.
 const MBID_REMOVED = `test-iw-rmv-${run}`;
 const REMOVED_EXT_ID = `SPRemvd${run.toUpperCase()}0000000`.slice(0, 22);
-const MBIDS_ALL = [MBID_P1, MBID_P2, MBID_P3A, MBID_P3B, MBID_FK, MBID_FK2, MBID_FK3, MBID_RETRY_SOFT, MBID_REMOVED];
+// No-snapshot retry test: MBID for a track retried when no newer import job
+// exists — the pass must resolve it unconditionally (currentLibraryKeys is null).
+const MBID_NO_SNAP = `test-iw-ns-${run}`;
+const NO_SNAP_EXT_ID = `SPNoSnap${run.toUpperCase()}00000`.slice(0, 22);
+const MBIDS_ALL = [MBID_P1, MBID_P2, MBID_P3A, MBID_P3B, MBID_FK, MBID_FK2, MBID_FK3, MBID_RETRY_SOFT, MBID_REMOVED, MBID_NO_SNAP];
 
 // ISRC for the Phase 1 track (must be ≤ 12 chars and unique).
 const ISRC_P1 = `TS${run.toUpperCase()}01`.slice(0, 12);
@@ -225,6 +229,8 @@ afterAll(async () => {
         normalizeKey(ARTIST, "Phase3Soft Track"),
         // Written (then deleted) during the off-peak retry soft-row test.
         normalizeKey(ARTIST, "Phase3Retry Track"),
+        // Written by the retry pass during the no-newer-snapshot test.
+        normalizeKey(ARTIST, "NoSnap Track"),
       ]),
     );
   await db
@@ -1538,6 +1544,80 @@ describe("Retry guard — track removed from Spotify after original import is no
       await db
         .delete(libraryImportJobsTable)
         .where(inArray(libraryImportJobsTable.id, [sourceJobId, newerJobRow!.id]));
+    },
+    15_000,
+  );
+});
+
+// ── Retry pass with no newer import snapshot — unconditional resolution ───────
+//
+// When no newer completed import job exists for the user+service pair,
+// `newerSnapshot` is undefined and `currentLibraryKeys` is null.  The retry
+// pass must resolve all un-cached entries unconditionally (no filtering step).
+//
+// Setup:
+//   1. Insert a source job (status=done, total=1, resolved=0, bufferJson present,
+//      retryExhausted=false, finishedAt=now) with a single unresolved track.
+//   2. Do NOT create any newer completed import job for this user+service.
+//   3. Call runPhase3RetryPass — mockResolveByText is set to return MBID_NO_SNAP.
+//   4. Assert MBID_NO_SNAP appears in library_items and mockResolveByText was
+//      called (track was not filtered out before MB I/O).
+
+describe("Retry pass — no newer import snapshot: all uncached tracks resolved unconditionally", () => {
+  it(
+    "resolves every un-cached entry into library_items when no newer completed job exists",
+    async () => {
+      if (!dbAvailable) return;
+
+      mockResolveByText.mockClear();
+      mockResolveByIsrc.mockClear();
+      mockResolveByText.mockResolvedValue(MBID_NO_SNAP);
+
+      // ── 1. Seed the source job directly (bypassing runImportWorker) ────────
+      // This is the only completed import job for this user+service with a
+      // bufferJson — no newer one will exist, so newerSnapshot will be undefined.
+      const [sourceJobRow] = await db
+        .insert(libraryImportJobsTable)
+        .values({
+          userId,
+          service: "spotify",
+          status: "done",
+          phase: "resolve",
+          total: 1,
+          resolved: 0,
+          retryExhausted: false,
+          bufferJson: [
+            {
+              artist: ARTIST,
+              title: "NoSnap Track",
+              isrc: null,
+              durationMs: null,
+              externalId: NO_SNAP_EXT_ID,
+            },
+          ],
+          startedAt: new Date(),
+          finishedAt: new Date(),
+        })
+        .returning({ id: libraryImportJobsTable.id });
+      const sourceJobId = sourceJobRow!.id;
+
+      // ── 2. Run the retry pass (no newer job exists for this user+service) ──
+      await runPhase3RetryPass();
+
+      // ── 3. Assert the track landed in library_items ────────────────────────
+      const libRows = await db
+        .select({ mbid: libraryItemsTable.mbid })
+        .from(libraryItemsTable)
+        .where(eq(libraryItemsTable.userId, userId));
+      expect(libRows.map((r) => r.mbid)).toContain(MBID_NO_SNAP);
+
+      // ── 4. Assert MB resolution was reached (no filtering step skipped it) ─
+      expect(mockResolveByText).toHaveBeenCalled();
+
+      // Clean up the source job (afterAll covers library_items + recordings).
+      await db
+        .delete(libraryImportJobsTable)
+        .where(eq(libraryImportJobsTable.id, sourceJobId));
     },
     15_000,
   );
