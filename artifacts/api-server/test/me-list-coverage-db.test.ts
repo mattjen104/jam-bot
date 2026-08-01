@@ -315,3 +315,196 @@ describe("GET /api/me/library/list-coverage", () => {
     expect(albumCEntries[0].releaseGroupMbid).toBe(RG_ALBUM_C);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scenario: one recording → two release groups (one listed, one not)
+//
+// A recording can be linked to multiple release groups (e.g. original album +
+// compilation). The JOIN from library_items → recording_release_groups fans out
+// one library row into two candidate rows. Only the RG that has an
+// exact/confirmed list_entries row should appear in coverage; the unlisted RG
+// must be silently dropped by the INNER JOIN and never surface as a phantom
+// album in the response.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const run2 = randomUUID().slice(0, 8);
+
+const SID_MULTI = `test-lcov-multi-${run2}`;
+
+/** The one recording that belongs to both release groups. */
+const MBID_MULTI = `test-lcov-multi-rec-${run2}`;
+/** Release group that IS on a list (exact confidence). */
+const RG_LISTED = `test-lcov-rg-listed-${run2}`;
+/** Release group that is NOT on any list. */
+const RG_UNLISTED = `test-lcov-rg-unlisted-${run2}`;
+
+let dbAvailable2 = false;
+let server2: Server | undefined;
+let baseUrl2 = "";
+let userId2: number | null = null;
+let sourceId2: number | null = null;
+let listId2: number | null = null;
+
+async function getCoverage2(sid: string) {
+  const res = await fetch(`${baseUrl2}/api/me/library/list-coverage`, {
+    headers: { cookie: `lore_sid=${sid}` },
+  });
+  return { status: res.status, body: await res.json() };
+}
+
+beforeAll(async () => {
+  try {
+    await db.execute(sql`select 1`);
+    dbAvailable2 = true;
+  } catch {
+    return;
+  }
+
+  await db.insert(spotifyConnectionsTable).values({
+    sid: SID_MULTI,
+    accessToken: "t",
+    refreshToken: "r",
+    expiresAt: new Date(Date.now() + 3_600_000),
+  });
+
+  const [u] = await db
+    .insert(loreUsersTable)
+    .values({ spotifyUserId: `lcov-multi-u-${run2}`, spotifyConnectionId: SID_MULTI, deviceKey: SID_MULTI })
+    .returning({ id: loreUsersTable.id });
+  userId2 = u!.id;
+
+  // One recording linked to TWO release groups.
+  await db.insert(recordingsTable).values([
+    { mbid: MBID_MULTI, title: `Multi-RG Track ${run2}`, artist: `Artist ${run2}` },
+  ]);
+  await db.insert(recordingReleaseGroupsTable).values([
+    { recordingMbid: MBID_MULTI, releaseGroupMbid: RG_LISTED,   isPrimary: true,  title: `Listed Album ${run2}`,   releaseYear: 2019 },
+    { recordingMbid: MBID_MULTI, releaseGroupMbid: RG_UNLISTED, isPrimary: false, title: `Unlisted Album ${run2}`, releaseYear: 2022 },
+  ]);
+
+  // Library: the user owns the single recording.
+  await db.insert(libraryItemsTable).values([
+    { userId: userId2!, mbid: MBID_MULTI, provenance: { kind: "keep" }, addedAt: new Date() },
+  ]);
+
+  // List that contains ONLY the listed release group.
+  const [src] = await db
+    .insert(listSourcesTable)
+    .values({ kind: "publication", name: `Test Pub Multi ${run2}`, homepageUrl: "https://example.invalid" })
+    .returning({ id: listSourcesTable.id });
+  sourceId2 = src!.id;
+
+  const [lst] = await db
+    .insert(listsTable)
+    .values({
+      sourceId: sourceId2!,
+      title: `Multi RG List ${run2}`,
+      year: 2019,
+      kind: "year_end",
+      isRanked: true,
+      url: `https://example.invalid/lists/multi-${run2}`,
+    })
+    .returning({ id: listsTable.id });
+  listId2 = lst!.id;
+
+  // Only RG_LISTED has a list entry; RG_UNLISTED has none.
+  await db.insert(listEntriesTable).values([
+    {
+      listId: listId2!,
+      releaseGroupMbid: RG_LISTED,
+      rank: 1,
+      confidence: "exact",
+      confirmed: false,
+      rawAlbum: `Listed Album ${run2}`,
+      rawArtist: `Artist ${run2}`,
+    },
+  ]);
+
+  server2 = app.listen(0);
+  await new Promise<void>((resolve) => server2!.once("listening", resolve));
+  const addr = server2.address();
+  if (addr && typeof addr === "object") baseUrl2 = `http://127.0.0.1:${addr.port}`;
+});
+
+afterAll(async () => {
+  if (server2) await new Promise<void>((r) => server2!.close(() => r()));
+  if (!dbAvailable2) return;
+
+  if (listId2 != null) {
+    await db.delete(listEntriesTable).where(eq(listEntriesTable.listId, listId2));
+    await db.delete(listsTable).where(eq(listsTable.id, listId2));
+  }
+  if (sourceId2 != null) {
+    await db.delete(listSourcesTable).where(eq(listSourcesTable.id, sourceId2));
+  }
+  if (userId2 != null) {
+    await db.delete(libraryItemsTable).where(eq(libraryItemsTable.userId, userId2));
+    await db.delete(loreUsersTable).where(eq(loreUsersTable.id, userId2));
+  }
+  await db.delete(recordingReleaseGroupsTable).where(
+    inArray(recordingReleaseGroupsTable.recordingMbid, [MBID_MULTI]),
+  );
+  await db.delete(recordingsTable).where(
+    inArray(recordingsTable.mbid, [MBID_MULTI]),
+  );
+  await db.delete(spotifyConnectionsTable).where(eq(spotifyConnectionsTable.sid, SID_MULTI));
+});
+
+describe("GET /api/me/library/list-coverage — one recording, two release groups", () => {
+  it("returns 200 with items array", async () => {
+    if (!dbAvailable2) return;
+    const { status, body } = await getCoverage2(SID_MULTI);
+    expect(status).toBe(200);
+    expect(body).toHaveProperty("items");
+    expect(Array.isArray(body.items)).toBe(true);
+  });
+
+  it("only the listed release group appears — unlisted RG is not surfaced", async () => {
+    if (!dbAvailable2) return;
+    const { body } = await getCoverage2(SID_MULTI);
+
+    const listEntry = body.items.find((i: { listId: number }) => i.listId === listId2);
+    expect(listEntry).toBeDefined();
+
+    // RG_LISTED has an exact list_entries row → must be present.
+    const listedAlbums = listEntry.albums.filter(
+      (a: { releaseGroupMbid: string }) => a.releaseGroupMbid === RG_LISTED,
+    );
+    expect(listedAlbums).toHaveLength(1);
+
+    // RG_UNLISTED has no list_entries row → must not appear even though
+    // the same recording is linked to it in recording_release_groups.
+    const unlistedAlbums = listEntry.albums.filter(
+      (a: { releaseGroupMbid: string }) => a.releaseGroupMbid === RG_UNLISTED,
+    );
+    expect(unlistedAlbums).toHaveLength(0);
+  });
+
+  it("the listed release group appears exactly once despite the multi-RG fanout", async () => {
+    if (!dbAvailable2) return;
+    const { body } = await getCoverage2(SID_MULTI);
+
+    // Collect every album across all list entries in the response.
+    const allAlbums: { releaseGroupMbid: string }[] = body.items.flatMap(
+      (i: { albums: { releaseGroupMbid: string }[] }) => i.albums,
+    );
+
+    const listedOccurrences = allAlbums.filter(
+      (a) => a.releaseGroupMbid === RG_LISTED,
+    );
+    expect(listedOccurrences).toHaveLength(1);
+  });
+
+  it("the listed album carries correct metadata", async () => {
+    if (!dbAvailable2) return;
+    const { body } = await getCoverage2(SID_MULTI);
+
+    const listEntry = body.items.find((i: { listId: number }) => i.listId === listId2);
+    const album = listEntry?.albums.find(
+      (a: { releaseGroupMbid: string }) => a.releaseGroupMbid === RG_LISTED,
+    );
+    expect(album).toBeDefined();
+    expect(album.rank).toBe(1);
+    expect(album.releaseYear).toBe(2019);
+  });
+});
