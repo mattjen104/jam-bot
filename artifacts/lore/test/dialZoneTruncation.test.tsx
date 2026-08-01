@@ -248,6 +248,7 @@ function renderDial() {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  localStorage.clear();
 });
 
 // ---------------------------------------------------------------------------
@@ -698,6 +699,128 @@ describe("Expansion state reset behaviour", () => {
    * Only a genuinely different slug set (new stations appear / old ones stay
    * gone) triggers a permanent reset.
    */
+// ---------------------------------------------------------------------------
+// localStorage persistence
+// ---------------------------------------------------------------------------
+
+describe("Zone collapse — localStorage persistence", () => {
+  const LS_ZONE1 = "lore.zone.1.collapsed";
+  const LS_ZONE2 = "lore.zone.2.collapsed";
+  const LS_ZONE3 = "lore.zone.3.collapsed";
+
+  it("collapsing Zone 1 writes 'true' to localStorage", () => {
+    const stations = Array.from({ length: 9 }, (_, i) => makeZone1Station(`s${i}`));
+    mockDialData(stations);
+    mockGhosts([]);
+    mockScan(null);
+
+    renderDial();
+
+    expect(localStorage.getItem(LS_ZONE1)).toBeNull();
+
+    act(() => { fireEvent.click(screen.getByRole("button", { name: "Collapse zone" })); });
+
+    expect(localStorage.getItem(LS_ZONE1)).toBe("true");
+    expect(fdrowCount()).toBe(0);
+  });
+
+  it("expanding a collapsed Zone 1 removes the localStorage key", () => {
+    const stations = Array.from({ length: 9 }, (_, i) => makeZone1Station(`s${i}`));
+    mockDialData(stations);
+    mockGhosts([]);
+    mockScan(null);
+
+    renderDial();
+
+    // Collapse then expand.
+    act(() => { fireEvent.click(screen.getByRole("button", { name: "Collapse zone" })); });
+    expect(localStorage.getItem(LS_ZONE1)).toBe("true");
+
+    act(() => { fireEvent.click(screen.getByRole("button", { name: "Expand zone" })); });
+    expect(localStorage.getItem(LS_ZONE1)).toBeNull();
+    expect(fdrowCount()).toBe(5); // back to default truncated view
+  });
+
+  it("on mount, reads Zone 1 collapsed preference from localStorage", () => {
+    localStorage.setItem(LS_ZONE1, "true");
+
+    const stations = Array.from({ length: 9 }, (_, i) => makeZone1Station(`s${i}`));
+    mockDialData(stations);
+    mockGhosts([]);
+    mockScan(null);
+
+    renderDial();
+
+    // Should start collapsed because localStorage says so.
+    expect(fdrowCount()).toBe(0);
+    expect(screen.getByRole("button", { name: "Expand zone" })).toBeTruthy();
+  });
+
+  it("on mount, reads Zone 2 and Zone 3 collapsed preferences from localStorage", () => {
+    localStorage.setItem(LS_ZONE2, "true");
+    localStorage.setItem(LS_ZONE3, "true");
+
+    const zone3Stations = Array.from({ length: 5 }, (_, i) => makeZone3Station(`z3s${i}`));
+    mockDialData(zone3Stations);
+    const ghosts = Array.from({ length: 4 }, (_, i) => makeGhostStation(`ghost${i}`));
+    mockGhosts(ghosts);
+    mockScan(null);
+
+    renderDial();
+
+    // Both Zone 2 and Zone 3 start collapsed.
+    expect(ghostRowCount()).toBe(0);
+    expect(fdrowCount()).toBe(0);
+
+    // Both expand buttons should be present.
+    const expandBtns = screen.getAllByRole("button", { name: "Expand zone" });
+    expect(expandBtns.length).toBe(2);
+  });
+
+  it("slug-set change resets both in-memory state and localStorage", () => {
+    const stations9 = Array.from({ length: 9 }, (_, i) => makeZone1Station(`s${i}`));
+    mockDialData(stations9);
+    mockGhosts([]);
+    mockScan(null);
+    const { rerender } = renderDial();
+
+    // Collapse Zone 1 — should write to localStorage.
+    act(() => { fireEvent.click(screen.getByRole("button", { name: "Collapse zone" })); });
+    expect(localStorage.getItem(LS_ZONE1)).toBe("true");
+    expect(fdrowCount()).toBe(0);
+
+    // New slug set arrives — reset should fire.
+    const stations9New = Array.from({ length: 9 }, (_, i) => makeZone1Station(`new${i}`));
+    mockDialData(stations9New);
+    act(() => { rerender(<DialView />); });
+
+    // Back to default truncated view, localStorage cleared.
+    expect(fdrowCount()).toBe(5);
+    expect(localStorage.getItem(LS_ZONE1)).toBeNull();
+  });
+
+  it("same slugs with new object identities do NOT clear localStorage", () => {
+    const stations9 = Array.from({ length: 9 }, (_, i) => makeZone1Station(`s${i}`));
+    mockDialData(stations9);
+    mockGhosts([]);
+    mockScan(null);
+    const { rerender } = renderDial();
+
+    // Collapse Zone 1.
+    act(() => { fireEvent.click(screen.getByRole("button", { name: "Collapse zone" })); });
+    expect(localStorage.getItem(LS_ZONE1)).toBe("true");
+
+    // Same slugs, fresh object references (live poll re-render).
+    const stationsCopy = stations9.map((ds) => ({ ...ds, station: { ...ds.station } }));
+    mockDialData(stationsCopy);
+    act(() => { rerender(<DialView />); });
+
+    // Still collapsed; localStorage still set.
+    expect(fdrowCount()).toBe(0);
+    expect(localStorage.getItem(LS_ZONE1)).toBe("true");
+  });
+});
+
   it("restores expanded state when the full slug set recovers after a transient shrink", () => {
     const stations9 = Array.from({ length: 9 }, (_, i) => makeZone1Station(`s${i}`));
     mockDialData(stations9);

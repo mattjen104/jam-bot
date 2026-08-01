@@ -376,6 +376,29 @@ const ZONE2_VISIBLE = 3;
 const ZONE3_VISIBLE = 3;
 
 // ---------------------------------------------------------------------------
+// Zone collapse localStorage persistence
+// Keys are stable identifiers — not tied to station slugs — so the preference
+// survives even when zone membership changes between sessions.
+// ---------------------------------------------------------------------------
+const LS_ZONE1_COLLAPSED = "lore.zone.1.collapsed";
+const LS_ZONE2_COLLAPSED = "lore.zone.2.collapsed";
+const LS_ZONE3_COLLAPSED = "lore.zone.3.collapsed";
+
+function readLSBool(key: string): boolean {
+  try { return localStorage.getItem(key) === "true"; } catch { return false; }
+}
+
+function writeLSBool(key: string, value: boolean): void {
+  try {
+    if (value) {
+      localStorage.setItem(key, "true");
+    } else {
+      localStorage.removeItem(key);
+    }
+  } catch { /* storage unavailable — silently ignore */ }
+}
+
+// ---------------------------------------------------------------------------
 // Stations list view
 // ---------------------------------------------------------------------------
 function StationsListView({
@@ -1104,12 +1127,17 @@ export function DialView() {
   const [zone2Expanded, setZone2Expanded] = useState(false);
   const [zone3Expanded, setZone3Expanded] = useState(false);
 
-  // Collapsed state — session-only. A collapsed zone shows only the ZoneLabel
-  // header (no rows, no see-more button).  Distinct from expanded: collapsed=true
-  // hides even the default N-row truncated view.
-  const [zone1Collapsed, setZone1Collapsed] = useState(false);
-  const [zone2Collapsed, setZone2Collapsed] = useState(false);
-  const [zone3Collapsed, setZone3Collapsed] = useState(false);
+  // Collapsed state — persisted to localStorage so the layout survives a reload.
+  // A collapsed zone shows only the ZoneLabel header (no rows, no see-more
+  // button).  Distinct from expanded: collapsed=true hides even the default
+  // N-row truncated view.
+  const [zone1Collapsed, setZone1CollapsedState] = useState(() => readLSBool(LS_ZONE1_COLLAPSED));
+  const [zone2Collapsed, setZone2CollapsedState] = useState(() => readLSBool(LS_ZONE2_COLLAPSED));
+  const [zone3Collapsed, setZone3CollapsedState] = useState(() => readLSBool(LS_ZONE3_COLLAPSED));
+
+  const setZone1Collapsed = useCallback((v: boolean) => { writeLSBool(LS_ZONE1_COLLAPSED, v); setZone1CollapsedState(v); }, []);
+  const setZone2Collapsed = useCallback((v: boolean) => { writeLSBool(LS_ZONE2_COLLAPSED, v); setZone2CollapsedState(v); }, []);
+  const setZone3Collapsed = useCallback((v: boolean) => { writeLSBool(LS_ZONE3_COLLAPSED, v); setZone3CollapsedState(v); }, []);
 
   // Slug-key strings — order-insensitive (sorted) so a live reorder of the same
   // stations does NOT reset expansion; only a real membership change does.
@@ -1117,10 +1145,47 @@ export function DialView() {
   const zone2SlugKey = useMemo(() => ghost.map((g) => g.slug).sort().join(","), [ghost]);
   const zone3SlugKey = useMemo(() => alsoOnAir.map((r) => r.ds.station.slug).sort().join(","), [alsoOnAir]);
 
-  // Reset expansion AND collapse when zone membership genuinely changes (not on every re-render).
-  useEffect(() => { setZone1Expanded(false); setZone1Collapsed(false); }, [zone1SlugKey]);
-  useEffect(() => { setZone2Expanded(false); setZone2Collapsed(false); }, [zone2SlugKey]);
-  useEffect(() => { setZone3Expanded(false); setZone3Collapsed(false); }, [zone3SlugKey]);
+  // Track previous slug keys so the reset effect only fires on genuine membership
+  // changes and NOT on the initial mount.  Without this guard, the effect would
+  // run after first render and overwrite the localStorage-read collapsed state.
+  const prevZone1SlugKey = useRef<string | null>(null);
+  const prevZone2SlugKey = useRef<string | null>(null);
+  const prevZone3SlugKey = useRef<string | null>(null);
+
+  // Expand-time anchor — the slug key that was current when the user last clicked
+  // "See all". If the zone's membership temporarily shrinks and then recovers to
+  // exactly this key, the zone silently re-expands rather than staying collapsed.
+  const zone1ExpandAnchor = useRef<string | null>(null);
+  const zone2ExpandAnchor = useRef<string | null>(null);
+  const zone3ExpandAnchor = useRef<string | null>(null);
+
+  // Reset expansion AND collapse when zone membership genuinely changes.
+  // If the new key matches the expand-time anchor the user set, re-expand
+  // silently instead of collapsing (transient-shrink recovery).
+  useEffect(() => {
+    if (prevZone1SlugKey.current === null) { prevZone1SlugKey.current = zone1SlugKey; return; }
+    if (prevZone1SlugKey.current === zone1SlugKey) return;
+    prevZone1SlugKey.current = zone1SlugKey;
+    if (zone1ExpandAnchor.current === zone1SlugKey) { setZone1Expanded(true); return; }
+    setZone1Expanded(false); setZone1Collapsed(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zone1SlugKey]);
+  useEffect(() => {
+    if (prevZone2SlugKey.current === null) { prevZone2SlugKey.current = zone2SlugKey; return; }
+    if (prevZone2SlugKey.current === zone2SlugKey) return;
+    prevZone2SlugKey.current = zone2SlugKey;
+    if (zone2ExpandAnchor.current === zone2SlugKey) { setZone2Expanded(true); return; }
+    setZone2Expanded(false); setZone2Collapsed(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zone2SlugKey]);
+  useEffect(() => {
+    if (prevZone3SlugKey.current === null) { prevZone3SlugKey.current = zone3SlugKey; return; }
+    if (prevZone3SlugKey.current === zone3SlugKey) return;
+    prevZone3SlugKey.current = zone3SlugKey;
+    if (zone3ExpandAnchor.current === zone3SlugKey) { setZone3Expanded(true); return; }
+    setZone3Expanded(false); setZone3Collapsed(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zone3SlugKey]);
 
   // --- front-door scan (spec §11) ---
   const scan = useFrontDoorScan(withReason.length);
@@ -1377,7 +1442,7 @@ export function DialView() {
                     hint="best first · scan walks this list"
                     accent="library"
                     collapsed={zone1Collapsed}
-                    onCollapse={() => { setZone1Collapsed((c) => !c); if (!zone1Collapsed) setZone1Expanded(false); }}
+                    onCollapse={() => { setZone1Collapsed(!zone1Collapsed); if (!zone1Collapsed) setZone1Expanded(false); }}
                   />
                   {zone1Expanded && !zone1Collapsed && withReason.length > zone1Visible && (
                     <button
@@ -1416,7 +1481,7 @@ export function DialView() {
                         className="dial-show-more"
                         aria-expanded={zone1Expanded}
                         aria-controls="zone1-rows"
-                        onClick={() => setZone1Expanded((e) => !e)}
+                        onClick={() => { if (!zone1Expanded) zone1ExpandAnchor.current = zone1SlugKey; else zone1ExpandAnchor.current = null; setZone1Expanded((e) => !e); }}
                       >
                         {zone1Expanded ? "See less" : `See all ${withReason.length}`}
                       </button>
@@ -1435,7 +1500,7 @@ export function DialView() {
                   n={ghost.length}
                   accent="picker"
                   collapsed={zone2Collapsed}
-                  onCollapse={() => { setZone2Collapsed((c) => !c); if (!zone2Collapsed) setZone2Expanded(false); }}
+                  onCollapse={() => { setZone2Collapsed(!zone2Collapsed); if (!zone2Collapsed) setZone2Expanded(false); }}
                 />
                 {!zone2Collapsed && (
                   <>
@@ -1454,7 +1519,7 @@ export function DialView() {
                         className="dial-show-more"
                         aria-expanded={zone2Expanded}
                         aria-controls="zone2-rows"
-                        onClick={() => setZone2Expanded((e) => !e)}
+                        onClick={() => { if (!zone2Expanded) zone2ExpandAnchor.current = zone2SlugKey; else zone2ExpandAnchor.current = null; setZone2Expanded((e) => !e); }}
                       >
                         {zone2Expanded ? "See less" : `See all ${ghost.length}`}
                       </button>
@@ -1474,7 +1539,7 @@ export function DialView() {
                   hint="nothing Lore can point to yet"
                   accent="live"
                   collapsed={zone3Collapsed}
-                  onCollapse={() => { setZone3Collapsed((c) => !c); if (!zone3Collapsed) setZone3Expanded(false); }}
+                  onCollapse={() => { setZone3Collapsed(!zone3Collapsed); if (!zone3Collapsed) setZone3Expanded(false); }}
                 />
                 {!zone3Collapsed && (
                   <>
@@ -1497,7 +1562,7 @@ export function DialView() {
                         className="dial-show-more"
                         aria-expanded={zone3Expanded}
                         aria-controls="zone3-rows"
-                        onClick={() => setZone3Expanded((e) => !e)}
+                        onClick={() => { if (!zone3Expanded) zone3ExpandAnchor.current = zone3SlugKey; else zone3ExpandAnchor.current = null; setZone3Expanded((e) => !e); }}
                       >
                         {zone3Expanded ? "See less" : `See all ${alsoOnAir.length}`}
                       </button>
