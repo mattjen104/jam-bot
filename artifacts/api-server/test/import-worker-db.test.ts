@@ -210,6 +210,8 @@ afterAll(async () => {
       inArray(resolutionCacheTable.key, [
         normalizeKey(ARTIST, "Phase2 Track"),
         normalizeKey(ARTIST, "FK2 Fail Track"),
+        // Written by Phase 3 during the soft-row exclusion test.
+        normalizeKey(ARTIST, "Phase3Soft Track"),
       ]),
     );
   await db
@@ -679,6 +681,90 @@ describe("Soft-row exclusion — Phase 1 ISRC-resolved track never written to sp
       .where(eq(spotifyLibraryItemsTable.userId, userId));
     const softIds = softRows.map((r) => r.spotifyId);
     expect(softIds).not.toContain(SOFT_EXCL_EXT_ID);
+
+    const [job] = await db
+      .select({ status: libraryImportJobsTable.status, resolved: libraryImportJobsTable.resolved })
+      .from(libraryImportJobsTable)
+      .where(eq(libraryImportJobsTable.id, jid));
+    expect(job!.status).toBe("done");
+    expect(job!.resolved).toBe(1);
+  });
+});
+
+// ── Soft-row exclusion: Phase 3 MB-resolved tracks must not appear in spotify_library_items ──
+
+describe("Soft-row exclusion — Phase 3 MB-resolved track never written to spotify_library_items", () => {
+  // Unique externalId so this block's soft-row assertions are not polluted by
+  // residual rows from other describe blocks.
+  const SOFT_P3_EXT_ID = `sp-soft-p3-${run}`;
+
+  it("leaves spotify_library_items empty after the first import run", async () => {
+    if (!dbAvailable) return;
+
+    mockResolveByText.mockClear();
+    mockResolveByIsrc.mockClear();
+
+    // "Phase3Soft Track" has no ISRC and no resolution_cache entry, so it
+    // falls through to Phase 3.  resolveByText returns MBID_P3A which is
+    // already in the recordings spine (seeded in beforeAll).
+    mockResolveByText.mockResolvedValue(MBID_P3A);
+
+    setupConnector([
+      { artist: ARTIST, title: "Phase3Soft Track", externalId: SOFT_P3_EXT_ID },
+    ]);
+
+    const jid = await createJob();
+    await runImportWorker(jid, userId, "spotify", connRow);
+
+    // Phase 3 must have been reached (no ISRC, no cache).
+    expect(mockResolveByText).toHaveBeenCalledTimes(1);
+
+    // The track must be in library_items (resolved via Phase 3 MB hit).
+    const items = await db
+      .select({ mbid: libraryItemsTable.mbid })
+      .from(libraryItemsTable)
+      .where(eq(libraryItemsTable.userId, userId));
+    expect(items.map((r) => r.mbid)).toContain(MBID_P3A);
+
+    // The resolved track must NOT appear as a soft row.
+    const softRows = await db
+      .select({ spotifyId: spotifyLibraryItemsTable.spotifyId })
+      .from(spotifyLibraryItemsTable)
+      .where(eq(spotifyLibraryItemsTable.userId, userId));
+    expect(softRows.map((r) => r.spotifyId)).not.toContain(SOFT_P3_EXT_ID);
+
+    const [job] = await db
+      .select({ status: libraryImportJobsTable.status, resolved: libraryImportJobsTable.resolved })
+      .from(libraryImportJobsTable)
+      .where(eq(libraryImportJobsTable.id, jid));
+    expect(job!.status).toBe("done");
+    expect(job!.resolved).toBe(1);
+  });
+
+  it("leaves spotify_library_items empty after a second re-import run", async () => {
+    if (!dbAvailable) return;
+
+    mockResolveByText.mockClear();
+    mockResolveByIsrc.mockClear();
+
+    // Same track — the first run wrote a resolution_cache entry for it, so
+    // this run resolves via Phase 2 (cache hit) without reaching Phase 3.
+    // The soft-row exclusion must still hold regardless of which phase resolved it.
+    mockResolveByText.mockResolvedValue(MBID_P3A);
+
+    setupConnector([
+      { artist: ARTIST, title: "Phase3Soft Track", externalId: SOFT_P3_EXT_ID },
+    ]);
+
+    const jid = await createJob();
+    await runImportWorker(jid, userId, "spotify", connRow);
+
+    // Soft table must remain clean after the re-import.
+    const softRows = await db
+      .select({ spotifyId: spotifyLibraryItemsTable.spotifyId })
+      .from(spotifyLibraryItemsTable)
+      .where(eq(spotifyLibraryItemsTable.userId, userId));
+    expect(softRows.map((r) => r.spotifyId)).not.toContain(SOFT_P3_EXT_ID);
 
     const [job] = await db
       .select({ status: libraryImportJobsTable.status, resolved: libraryImportJobsTable.resolved })
