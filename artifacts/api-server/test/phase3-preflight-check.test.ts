@@ -499,6 +499,106 @@ describe("runPhase3RetryPass — pre-flight window estimate", () => {
     expect(uniqueAttempts.size).toBe(2 * N);
   }, 20_000);
 
+  // ---------------------------------------------------------------------------
+  // Retry-exhaustion tests
+  // ---------------------------------------------------------------------------
+
+  it("marks retry_exhausted after three consecutive zero-resolve passes and skips the candidate on a fourth pass", async () => {
+    // PHASE3_MAX_RETRY_ATTEMPTS = 3: three zero-resolve nights exhaust the budget.
+    // The test runs 4 passes:
+    //   Night 1 (retryAttempts=0): resolves 0 → increments to 1
+    //   Night 2 (retryAttempts=1): resolves 0 → increments to 2
+    //   Night 3 (retryAttempts=2): resolves 0 → increments to 3, sets retryExhausted=true
+    //   Night 4: candidates query returns [] (retryExhausted=true jobs excluded) → no resolution
+    function makeChain(value: unknown) {
+      const resolved = Promise.resolve(value);
+      const chain: Record<string, unknown> = {
+        then: (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) =>
+          resolved.then(res, rej),
+        catch: (rej: (e: unknown) => unknown) => resolved.catch(rej),
+        finally: (fin: () => void) => resolved.finally(fin),
+        limit: vi.fn().mockResolvedValue(value),
+      };
+      chain.from = vi.fn().mockReturnValue(chain);
+      chain.where = vi.fn().mockReturnValue(chain);
+      chain.orderBy = vi.fn().mockReturnValue(chain);
+      return chain;
+    }
+
+    const buffer = makeLargeBuffer(1);
+
+    // Return fresh candidate objects reflecting the real retryAttempts for each pass.
+    const candidatePass1 = {
+      id: 80, userId: "user-exhaust", service: "spotify",
+      total: 1, resolved: 0, bufferJson: buffer, retryAttempts: 0,
+    };
+    const candidatePass2 = { ...candidatePass1, retryAttempts: 1 };
+    const candidatePass3 = { ...candidatePass1, retryAttempts: 2 };
+
+    // Track update() calls to verify the exhaustion flag is set on pass 3.
+    const localSetMock = vi.fn().mockReturnValue({
+      where: vi.fn().mockResolvedValue([]),
+    });
+    mockDbUpdate.mockReturnValue({ set: localSetMock });
+
+    // Each pass issues 4 selects: candidates, cache-check, newer-snapshot, active-job.
+    // Pass 4 issues 1 select (candidates → [] because retryExhausted jobs are filtered out).
+    mockDbSelect
+      // ── Pass 1 ──
+      .mockReturnValueOnce(makeChain([candidatePass1]))  // candidates
+      .mockReturnValueOnce(makeChain([]))                // cache check
+      .mockReturnValueOnce(makeChain([]))                // newer snapshot
+      .mockReturnValueOnce(makeChain([]))                // active job check
+      // ── Pass 2 ──
+      .mockReturnValueOnce(makeChain([candidatePass2]))  // candidates
+      .mockReturnValueOnce(makeChain([]))                // cache check
+      .mockReturnValueOnce(makeChain([]))                // newer snapshot
+      .mockReturnValueOnce(makeChain([]))                // active job check
+      // ── Pass 3 ──
+      .mockReturnValueOnce(makeChain([candidatePass3]))  // candidates
+      .mockReturnValueOnce(makeChain([]))                // cache check
+      .mockReturnValueOnce(makeChain([]))                // newer snapshot
+      .mockReturnValueOnce(makeChain([]))                // active job check
+      // ── Pass 4 ──  retryExhausted=true candidates are excluded by the query
+      .mockReturnValue(makeChain([]));
+
+    // All resolve attempts return null — nothing resolved across all three nights.
+    mockResolveByText.mockResolvedValue(null);
+    mockResolveByIsrc.mockResolvedValue(null);
+
+    const ampleDeadline = () => new Date(Date.now() + 60_000);
+
+    // Three consecutive zero-resolve passes.
+    await runPhase3RetryPass(ampleDeadline());
+    await runPhase3RetryPass(ampleDeadline());
+    await runPhase3RetryPass(ampleDeadline());
+
+    // Pass 3 must have set retryExhausted = true on the source job.
+    const hadExhaustedSet = localSetMock.mock.calls.some(
+      ([args]) =>
+        args != null &&
+        (args as Record<string, unknown>).retryExhausted === true,
+    );
+    expect(hadExhaustedSet).toBe(true);
+
+    // The stored retryAttempts counter must have reached PHASE3_MAX_RETRY_ATTEMPTS (3).
+    const hadMaxAttemptsSet = localSetMock.mock.calls.some(
+      ([args]) =>
+        args != null &&
+        (args as Record<string, unknown>).retryAttempts === 3,
+    );
+    expect(hadMaxAttemptsSet).toBe(true);
+
+    // Record how many resolve attempts were made across the first three passes.
+    const attemptsAfterThreePasses = mockResolveByText.mock.calls.length;
+    expect(attemptsAfterThreePasses).toBeGreaterThan(0);
+
+    // Pass 4: candidates query returns [] — no new resolution attempts should occur.
+    await runPhase3RetryPass(ampleDeadline());
+
+    expect(mockResolveByText.mock.calls.length).toBe(attemptsAfterThreePasses);
+  }, 20_000);
+
   it("resolves valid entries deeper in the buffer when front entries are filtered by the snapshot", async () => {
     // Regression: with the old order (cap-then-filter), a window of 2 would
     // slice entries [0,1], the snapshot would filter both out, leaving nothing
