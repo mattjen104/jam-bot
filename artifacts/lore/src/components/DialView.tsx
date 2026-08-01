@@ -879,8 +879,8 @@ function ScheduleView({ stations }: { stations: DialStation[] }) {
 }
 
 // ---------------------------------------------------------------------------
-// Offline station row — compact vertical list for the "Recently Aired" section.
-// No horizontal scrolling; click row → station detail, play button → tune in.
+// Offline station row — reason-first layout matching FrontDoorRow's three-tier
+// reading order: reason / what was aired → DJ attribution → station label.
 // ---------------------------------------------------------------------------
 function OfflineRow({
   dialStation,
@@ -893,41 +893,87 @@ function OfflineRow({
   onStationClick: () => void;
   onPlay: () => void;
 }) {
-  const { station, shows, crossings } = dialStation;
-  // Most recent show (shows are sorted oldest→newest)
-  const lastShow = shows.length > 0 ? shows[shows.length - 1] : null;
+  const { station, shows, crossings, artistCrossings } = dialStation;
+  // Most recent non-future show (shows are sorted oldest→newest)
+  const lastShow = [...shows].reverse().find((sh) => sh.state !== "future") ?? null;
   // Most recent spin in that show
   const lastSpin = lastShow && lastShow.spins.length > 0
     ? lastShow.spins[lastShow.spins.length - 1]
     : null;
-  const hasShowName = lastShow && lastShow.showName && lastShow.showName.toLowerCase() !== "unknown show";
 
-  const hasCrossings = crossings > 0;
+  // ── Tier 1: reason — what was aired ──────────────────────────────────────
+  // Mirror the live reason() rungs adapted for past context:
+  //   crossings (exact library hits) → w3 warm
+  //   artist crossings only          → w4 warm
+  //   last track title (bare fact)   → w5 dim
+  //   no data                        → w0 very dim
+  let t1Node: ReactNode;
+  let t1Cls: string;
+  if (crossings > 0) {
+    const topArtists = lastShow?.topArtists ?? [];
+    const nn = topArtists.length > 0 ? nameNodes(topArtists) : null;
+    t1Node = nn
+      ? <>{nn} aired here</>
+      : <><b>{crossings} of yours</b> aired here</>;
+    t1Cls = "w3";
+  } else if (artistCrossings > 0) {
+    const topArtistNames = lastShow?.topArtistNames ?? [];
+    const nn = topArtistNames.length > 0 ? nameNodes(topArtistNames) : null;
+    t1Node = nn
+      ? <>{nn} — an artist from your library</>
+      : <><b>{artistCrossings}</b> tracks by your artists here</>;
+    t1Cls = "w4";
+  } else if (lastSpin) {
+    t1Node = (
+      <>
+        {lastSpin.isFirstSpin && <span className="fdrow__bare-track__new">◈ </span>}
+        {lastSpin.title}
+      </>
+    );
+    t1Cls = "w5";
+  } else {
+    t1Node = "no recent data";
+    t1Cls = "w0";
+  }
+
+  // ── Tier 2: DJ attribution (omit unknown show) ────────────────────────────
+  const djName = lastShow?.djName ?? null;
+  // Suppress "Unknown show" — never surface it
+  const showName = lastShow?.showName && lastShow.showName.toLowerCase() !== "unknown show"
+    ? lastShow.showName
+    : null;
+
+  // ── Tier 3: station destination label ────────────────────────────────────
+  const t3Text = showName ? `${showName} · ${station.name}` : station.name;
+
+  const hasCrossings = crossings > 0 || artistCrossings > 0;
+  const rowCls = [
+    "fdrow",
+    hasCrossings ? "fdrow--z1" : "fdrow--dim",
+    isActive ? "fdrow--playing" : "",
+  ].filter(Boolean).join(" ");
+
   return (
     <div
-      className={`dial-stn-row${hasCrossings ? " dial-stn-row--cross" : ""}`}
-      onClick={onStationClick}
+      className={rowCls}
       role="button"
       tabIndex={0}
+      onClick={onStationClick}
       onKeyDown={(e) => e.key === "Enter" && onStationClick()}
     >
-      <span className={`dial-stn-dot${hasCrossings ? " dial-stn-dot--cross" : ""}`} />
-      <div className="dial-stn-info">
-        <div className="dial-stn-name">{station.name}</div>
-        {hasShowName && (
-          <div className="dial-stn-now">{lastShow!.showName}</div>
+      <div className="fdrow__c">
+        {/* Tier 1: reason sentence — leads at full display weight */}
+        <div className={`fdrow__t1 ${t1Cls}`}>{t1Node}</div>
+
+        {/* Tier 2: human DJ name when known */}
+        {djName && (
+          <div className="fdrow__t2">{djName}</div>
         )}
-        {lastSpin && (
-          <div className="dial-stn-track">
-            {lastSpin.isFirstSpin && <span className="dial-stn-track__new" title="First time in the archive">◈ </span>}
-            {lastSpin.title}
-          </div>
-        )}
+
+        {/* Tier 3: show · station — small identity label */}
+        <div className="fdrow__t3">{t3Text}</div>
       </div>
-      <div className={`dial-stn-cross${crossings === 0 ? " dial-stn-cross--zero" : ""}`}>
-        <span className="dial-stn-cross__num">{crossings > 0 ? `◆ ${crossings}` : "—"}</span>
-        {crossings > 0 && <span className="dial-stn-cross__lbl">yours</span>}
-      </div>
+
       <button
         type="button"
         className={`dial-lane__play${isActive ? " dial-lane__play--on" : ""}`}
