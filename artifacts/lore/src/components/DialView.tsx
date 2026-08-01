@@ -1140,11 +1140,15 @@ export function DialView() {
   // Auto-expand Zone 1 when the scan cursor advances into a hidden row so the
   // highlighted station is always visible.  setZone1Expanded(true) when already
   // true is a React no-op (no re-render), so the dependency on zone1Visible alone
-  // is safe.  Also un-collapse so the scanning station is never hidden.
+  // is safe.  Also un-collapse so the scanning station is never hidden — this
+  // applies even when samplingIdx is within the default budget, because a
+  // collapsed zone hides rows independently of the truncation budget.
   useEffect(() => {
-    if (scan.samplingIdx != null && scan.samplingIdx >= zone1Visible) {
-      setZone1Expanded(true);
+    if (scan.samplingIdx != null) {
       setZone1Collapsed(false);
+      if (scan.samplingIdx >= zone1Visible) {
+        setZone1Expanded(true);
+      }
     }
   }, [scan.samplingIdx, zone1Visible]);
 

@@ -574,7 +574,31 @@ describe("Zone collapse — resets on slug-set change", () => {
 });
 
 describe("Zone collapse — scan auto-uncollapses Zone 1", () => {
-  it("advancing samplingIdx into a collapsed Zone 1 uncollapses and expands it", () => {
+  it("advancing samplingIdx within zone1Visible into a collapsed Zone 1 uncollapses (default budget rows appear)", () => {
+    const stations = Array.from({ length: 9 }, (_, i) => makeZone1Station(`s${i}`));
+    mockDialData(stations);
+    mockGhosts([]);
+
+    mockScan(null, false);
+    const { rerender } = renderDial();
+
+    // Collapse Zone 1 — all rows hidden.
+    act(() => { fireEvent.click(screen.getByRole("button", { name: "Collapse zone" })); });
+    expect(fdrowCount()).toBe(0);
+
+    // Scan advances to index 3 (within zone1Visible=5).
+    mockScan(3, true);
+    act(() => { rerender(<DialView />); });
+
+    // Zone 1 should be un-collapsed — default budget (5) rows now visible.
+    expect(fdrowCount()).toBe(5);
+    // The row at index 3 ("s3") should carry the sampling class.
+    const samplingRows = document.querySelectorAll(".fdrow--sampling");
+    expect(samplingRows.length).toBeGreaterThan(0);
+    expect(samplingRows[0].textContent).toContain("s3");
+  });
+
+  it("advancing samplingIdx beyond zone1Visible into a collapsed Zone 1 uncollapses AND expands it", () => {
     const stations = Array.from({ length: 9 }, (_, i) => makeZone1Station(`s${i}`));
     mockDialData(stations);
     mockGhosts([]);
