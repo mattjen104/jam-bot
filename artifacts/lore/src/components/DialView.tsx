@@ -1051,9 +1051,10 @@ export function DialView() {
         if (ac !== bc) return ac - bc;
         // 2. Lifetime overlap desc — attributed uses selector lifetime ov (by
         //    effectiveDjName, which includes the fallback when show hasn't attached
-        //    yet), unattributed uses 24h station crossings as a proxy.
-        const aOv = a.effectiveDjName != null ? (ovByName.get(a.effectiveDjName) ?? 0) : a.ds.crossings;
-        const bOv = b.effectiveDjName != null ? (ovByName.get(b.effectiveDjName) ?? 0) : b.ds.crossings;
+        //    yet), unattributed uses lifetime station crossings so both axes are
+        //    comparable (all-time vs all-time, not lifetime vs 24h).
+        const aOv = a.effectiveDjName != null ? (ovByName.get(a.effectiveDjName) ?? 0) : a.ds.lifetimeCrossings;
+        const bOv = b.effectiveDjName != null ? (ovByName.get(b.effectiveDjName) ?? 0) : b.ds.lifetimeCrossings;
         if (aOv !== bOv) return bOv - aOv;
         // 3. Attribution tier as tiebreaker within the same overlap band
         const at = a.effectiveDjName != null ? 0 : 1;
@@ -1333,7 +1334,7 @@ export function DialView() {
                     key={row.ds.station.slug}
                     ds={row.ds}
                     show={row.show}
-                    ov={row.show?.djName != null ? (ovByName.get(row.show.djName) ?? 0) : row.ds.crossings}
+                    ov={row.show?.djName != null ? (ovByName.get(row.show.djName) ?? 0) : row.ds.lifetimeCrossings}
                     isActive={row.ds.station.slug === radio.station?.slug}
                     isSampling={scan.samplingIdx === i}
                     onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
@@ -1359,7 +1360,7 @@ export function DialView() {
                     key={row.ds.station.slug}
                     ds={row.ds}
                     show={row.show}
-                    ov={row.show?.djName != null ? (ovByName.get(row.show.djName) ?? 0) : row.ds.crossings}
+                    ov={row.show?.djName != null ? (ovByName.get(row.show.djName) ?? 0) : row.ds.lifetimeCrossings}
                     isActive={row.ds.station.slug === radio.station?.slug}
                     isSampling={false}
                     onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}

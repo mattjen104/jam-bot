@@ -79,10 +79,14 @@ export interface DialStation {
   /** true when the station is airing right now */
   isLive: boolean;
   shows: DialShow[];
-  /** total exact-MBID/release-group crossings across all past+live shows */
+  /** rolling 24h exact-MBID/release-group crossings (used for Zone 1 eligibility threshold) */
   crossings: number;
-  /** total artist-level crossings across all past+live shows (exact track not in library) */
+  /** rolling 24h artist-level crossings (exact track not in library) */
   artistCrossings: number;
+  /** lifetime (all-time) exact-MBID/release-group crossings — primary sort key for unattributed rows */
+  lifetimeCrossings: number;
+  /** lifetime artist-level crossings — all-time equivalent of artistCrossings */
+  lifetimeArtistCrossings: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -273,9 +277,14 @@ export function useDialData(): {
   const { data: serverCrossings, isLoading: crossingsLoading } = useMyDialCrossings(today);
 
   const serverCrossingsBySlug = useMemo(() => {
-    const m = new Map<string, { crossings: number; artistCrossings: number }>();
+    const m = new Map<string, { crossings: number; artistCrossings: number; lifetimeCrossings: number; lifetimeArtistCrossings: number }>();
     for (const cx of serverCrossings ?? []) {
-      m.set(cx.stationSlug, { crossings: cx.crossings, artistCrossings: cx.artistCrossings });
+      m.set(cx.stationSlug, {
+        crossings: cx.crossings,
+        artistCrossings: cx.artistCrossings,
+        lifetimeCrossings: cx.lifetimeCrossings,
+        lifetimeArtistCrossings: cx.lifetimeArtistCrossings,
+      });
     }
     return m;
   }, [serverCrossings]);
@@ -571,9 +580,9 @@ export function useDialData(): {
         };
       });
 
-      // Prefer server-computed crossings (accurate 24h window, full spin
-      // history, consistent across clients); fall back to client-computed
-      // reduction if the server endpoint hasn't resolved yet.
+      // Prefer server-computed crossings (accurate window, full spin history,
+      // consistent across clients); fall back to client-computed reduction if
+      // the server endpoint hasn't resolved yet.
       const serverCx = serverCrossingsBySlug.get(station.slug);
       const crossings =
         serverCx !== undefined
@@ -583,8 +592,18 @@ export function useDialData(): {
         serverCx !== undefined
           ? serverCx.artistCrossings
           : shows.reduce((sum, sh) => sum + (sh.state !== "future" ? sh.artistCrossings : 0), 0);
+      // Lifetime counts: server always provides these; client-side fallback
+      // uses the same show-level sums as a best-effort approximation.
+      const lifetimeCrossings =
+        serverCx !== undefined
+          ? serverCx.lifetimeCrossings
+          : crossings; // fallback: same as 24h sum until server data arrives
+      const lifetimeArtistCrossings =
+        serverCx !== undefined
+          ? serverCx.lifetimeArtistCrossings
+          : artistCrossings;
 
-      return { station, isLive, shows, crossings, artistCrossings };
+      return { station, isLive, shows, crossings, artistCrossings, lifetimeCrossings, lifetimeArtistCrossings };
     })
     // Determine which stations to surface in the Dial:
     //   1. Any station that is currently live (has a now-playing signal)

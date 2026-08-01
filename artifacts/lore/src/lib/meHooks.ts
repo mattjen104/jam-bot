@@ -337,6 +337,8 @@ export interface DialCrossing {
   stationSlug: string;
   crossings: number;
   artistCrossings: number;
+  lifetimeCrossings: number;
+  lifetimeArtistCrossings: number;
 }
 
 /**

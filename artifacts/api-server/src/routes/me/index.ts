@@ -4057,11 +4057,21 @@ router.get("/me/crossings", h(async (req, res) => {
     or lower(trim(${recordingsTable.artist})) in (${userSoftArtists})
   )`;
 
+  // Time-gated predicates for the rolling 24h window (used in FILTER clauses).
+  const libHit24h   = sql`(${libHit}   and ${spinsTable.playedAt} >= ${cutoff})`;
+  const artistHit24h = sql`(${notLibHit} and ${artistMatch} and ${spinsTable.playedAt} >= ${cutoff})`;
+
+  // Single-pass query: both 24h counts (for Zone 1 threshold / sort fallback) and
+  // lifetime counts (for the unified sort axis) are derived from the same join
+  // without a WHERE time-gate.  The HAVING still requires at least one 24h hit so
+  // only stations that crossed in the past day are returned.
   const rows = await db
     .select({
-      stationSlug: stationsTable.slug,
-      crossings:       sql<number>`count(*) filter (where ${libHit})::int`,
-      artistCrossings: sql<number>`count(*) filter (where ${notLibHit} and ${artistMatch})::int`,
+      stationSlug:            stationsTable.slug,
+      crossings:              sql<number>`count(*) filter (where ${libHit24h})::int`,
+      artistCrossings:        sql<number>`count(*) filter (where ${artistHit24h})::int`,
+      lifetimeCrossings:      sql<number>`count(*) filter (where ${libHit})::int`,
+      lifetimeArtistCrossings: sql<number>`count(*) filter (where ${notLibHit} and ${artistMatch})::int`,
     })
     .from(spinsTable)
     .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
@@ -4076,14 +4086,13 @@ router.get("/me/crossings", h(async (req, res) => {
     .where(
       and(
         isNotNull(spinsTable.mbid),
-        gte(spinsTable.playedAt, cutoff),
         eq(stationsTable.hidden, false),
       ),
     )
     .groupBy(stationsTable.id, stationsTable.slug)
     .having(
-      sql`count(*) filter (where ${libHit}) > 0
-       or count(*) filter (where ${notLibHit} and ${artistMatch}) > 0`,
+      sql`count(*) filter (where ${libHit24h}) > 0
+       or count(*) filter (where ${artistHit24h}) > 0`,
     );
 
   return res.json({
@@ -4091,6 +4100,8 @@ router.get("/me/crossings", h(async (req, res) => {
       stationSlug: r.stationSlug,
       crossings: r.crossings,
       artistCrossings: r.artistCrossings,
+      lifetimeCrossings: r.lifetimeCrossings,
+      lifetimeArtistCrossings: r.lifetimeArtistCrossings,
     })),
   });
 }));
