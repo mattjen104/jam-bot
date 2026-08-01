@@ -165,10 +165,30 @@ const SERVICES: ServiceConfig[] = [
 // Component
 // ---------------------------------------------------------------------------
 
+const LAST_SERVICE_KEY = "lore:lastImportService";
+
+function readLastService(): ServiceId | null {
+  try {
+    const v = localStorage.getItem(LAST_SERVICE_KEY);
+    if (v && SERVICES.some((s) => s.id === v)) return v as ServiceId;
+  } catch {
+    // localStorage may be unavailable
+  }
+  return null;
+}
+
+function saveLastService(id: ServiceId) {
+  try {
+    localStorage.setItem(LAST_SERVICE_KEY, id);
+  } catch {
+    // ignore
+  }
+}
+
 interface Props { onClose(): void }
 
 export function ManualImportModal({ onClose }: Props) {
-  const [service, setService] = useState<ServiceId | null>(null);
+  const [service, setService] = useState<ServiceId | null>(() => readLastService());
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -195,6 +215,7 @@ export function ManualImportModal({ onClose }: Props) {
     setSubmitting(true);
     try {
       await postStartManualImport(tracks);
+      if (service) saveLastService(service);
       await qc.invalidateQueries({ queryKey: ME_LATEST_IMPORT_JOB_KEY });
       onClose();
     } catch (err) {
@@ -242,6 +263,15 @@ export function ManualImportModal({ onClose }: Props) {
                 <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
                   Choose a service to get step-by-step instructions.
                 </p>
+              )}
+              {service && (
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  className="mt-0.5 font-mono text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                >
+                  Change service
+                </button>
               )}
             </div>
           </div>
