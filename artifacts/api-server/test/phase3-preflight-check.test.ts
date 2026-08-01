@@ -1,8 +1,15 @@
 /**
- * Unit tests for the pre-flight window estimate in runPhase3RetryPass.
+ * Unit tests for the pre-flight window estimate and multi-pass forward
+ * progress of runPhase3RetryPass.
  *
- * Confirms that when uncachedEntries.length × IMPORT_RESOLVE_DELAY_MS exceeds
- * the remaining window, the candidate is skipped without starting resolution.
+ * Pre-flight suite: confirms that when uncachedEntries.length ×
+ * IMPORT_RESOLVE_DELAY_MS exceeds the remaining window, the candidate is
+ * skipped without starting resolution.
+ *
+ * Multi-pass suite: confirms that entries resolved on night 1 are excluded
+ * from night 2's uncachedEntries (via the resolution-cache check), so the
+ * nightly scheduler always makes forward progress rather than re-processing
+ * the same entries each night.
  */
 
 // @vitest-environment node
@@ -394,6 +401,103 @@ describe("runPhase3RetryPass — pre-flight window estimate", () => {
 
     expect(mockResolveByText).toHaveBeenCalled();
   });
+
+  // ---------------------------------------------------------------------------
+  // Multi-pass forward-progress tests
+  // ---------------------------------------------------------------------------
+
+  it("night 2 excludes entries resolved on night 1 — no double-work across two consecutive passes", async () => {
+    // NOTE: Two passes of N=3 entries each produce 6 × 1100ms sleeps (the MB
+    // rate-limit delay after each resolve attempt).  The default vitest timeout
+    // of 5s is not enough; this test is explicitly granted 20s.
+    // Buffer: 2N entries (N=3), none with ISRC.
+    // Night 1: cache empty → 6 uncached → window fits N=3 → resolveByText ×3.
+    // Night 2: first N entries are now cached → 3 uncached (entries 3-5) →
+    //          window fits N=3 → resolveByText ×3 more.
+    // Total unique resolution attempts = 2N = 6 (no entry retried twice).
+    const N = 3;
+    const buffer = makeLargeBuffer(2 * N); // externalId: spotify0..spotify5
+
+    const candidate = {
+      id: 70,
+      userId: "user-multipass",
+      service: "spotify",
+      total: 2 * N,
+      resolved: 0,
+      bufferJson: buffer,
+      retryAttempts: 0,
+    };
+
+    function makeChain(value: unknown) {
+      const resolved = Promise.resolve(value);
+      const chain: Record<string, unknown> = {
+        then: (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) =>
+          resolved.then(res, rej),
+        catch: (rej: (e: unknown) => unknown) => resolved.catch(rej),
+        finally: (fin: () => void) => resolved.finally(fin),
+        limit: vi.fn().mockResolvedValue(value),
+      };
+      chain.from = vi.fn().mockReturnValue(chain);
+      chain.where = vi.fn().mockReturnValue(chain);
+      chain.orderBy = vi.fn().mockReturnValue(chain);
+      return chain;
+    }
+
+    // Keys the resolution cache would hold after night 1 resolves entries 0..N-1.
+    // normalizeKey("Artist i", "Track i") strips to lowercase ASCII + U+001F sep:
+    //   "artist 0\u001ftrack 0", "artist 1\u001ftrack 1", "artist 2\u001ftrack 2"
+    const night1CachedKeys = Array.from({ length: N }, (_, i) => ({
+      key: `artist ${i}\u001ftrack ${i}`,
+    }));
+
+    // Select call sequence (4 calls per pass):
+    //   1. candidates query
+    //   2. cache check (inArray on resolutionCacheTable)
+    //   3. newer snapshot query
+    //   4. active job check
+    mockDbSelect
+      // ── Night 1 ──
+      .mockReturnValueOnce(makeChain([candidate])) // 1. candidates
+      .mockReturnValueOnce(makeChain([]))           // 2. cache check → empty
+      .mockReturnValueOnce(makeChain([]))           // 3. newer snapshot → none
+      .mockReturnValueOnce(makeChain([]))           // 4. active job check
+      // ── Night 2 ──
+      .mockReturnValueOnce(makeChain([candidate])) // 1. candidates (same job, still unresolved)
+      .mockReturnValueOnce(makeChain(night1CachedKeys)) // 2. cache check → entries 0-2 cached
+      .mockReturnValueOnce(makeChain([]))           // 3. newer snapshot → none
+      .mockReturnValue(makeChain([]));              // 4. active job check + any further calls
+
+    // Night 1: window fits exactly N entries (sliced by the pre-flight cap).
+    const deadline1 = new Date(Date.now() + N * IMPORT_RESOLVE_DELAY_MS + 50);
+    await runPhase3RetryPass(deadline1);
+
+    const pass1Attempts = mockResolveByText.mock.calls.length;
+    expect(pass1Attempts).toBe(N);
+
+    // Night 2: uncachedEntries = entries 3-5 (entries 0-2 excluded by cache).
+    // Window fits all remaining N entries.
+    const deadline2 = new Date(Date.now() + N * IMPORT_RESOLVE_DELAY_MS + 50);
+    await runPhase3RetryPass(deadline2);
+
+    const totalAttempts = mockResolveByText.mock.calls.length;
+    const pass2Attempts = totalAttempts - pass1Attempts;
+
+    // Night 2 must have resolved exactly N new (previously uncached) entries.
+    expect(pass2Attempts).toBe(N);
+
+    // Grand total across both passes = 2N — no double-work.
+    expect(totalAttempts).toBe(2 * N);
+
+    // No artist+title pair appears in both passes.
+    const pass1Args = mockResolveByText.mock.calls
+      .slice(0, N)
+      .map(([artist, title]: [string, string]) => `${artist}|${title}`);
+    const pass2Args = mockResolveByText.mock.calls
+      .slice(N)
+      .map(([artist, title]: [string, string]) => `${artist}|${title}`);
+    const uniqueAttempts = new Set([...pass1Args, ...pass2Args]);
+    expect(uniqueAttempts.size).toBe(2 * N);
+  }, 20_000);
 
   it("resolves valid entries deeper in the buffer when front entries are filtered by the snapshot", async () => {
     // Regression: with the old order (cap-then-filter), a window of 2 would
