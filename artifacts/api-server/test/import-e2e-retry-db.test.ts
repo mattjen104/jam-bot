@@ -111,6 +111,12 @@ const EXTERNAL_ID_NEG = `sp-e2e-neg-${run}`;
 const ARTIST_NEG      = `E2ENegArtist ${run}`;
 const TITLE_NEG       = `E2ENegTrack ${run}`;
 
+// Constants for the ISRC-keyed negative-cache scenario (third describe block).
+const EXTERNAL_ID_ISRC = `sp-e2e-isrc-${run}`;
+const ARTIST_ISRC      = `E2EIsrcArtist ${run}`;
+const TITLE_ISRC       = `E2EIsrcTrack ${run}`;
+const ISRC_VAL         = `TST${run.toUpperCase().slice(0, 9)}`;
+
 let dbAvailable        = false;
 let softTableAvailable = false;
 
@@ -380,6 +386,186 @@ describe("end-to-end: confirmed negative-cache entry blocks retry pass (soft row
       expect(softAfterRetry.length).toBe(1);
 
       // library_items must still not contain the track.
+      const libAfterRetry = await db
+        .select({ mbid: libraryItemsTable.mbid })
+        .from(libraryItemsTable)
+        .where(eq(libraryItemsTable.userId, userId));
+      expect(libAfterRetry.length).toBe(0);
+
+      // Resolver must not have been called (track was served from cache).
+      expect(mockResolveByText).not.toHaveBeenCalled();
+      expect(mockResolveByIsrc).not.toHaveBeenCalled();
+    },
+    TEST_TIMEOUT,
+  );
+});
+
+describe("end-to-end: ISRC-keyed negative cache entry blocks retry pass (soft row kept)", () => {
+  /**
+   * When the initial import resolves a track via ISRC and resolveByIsrc returns
+   * null, it writes a negative cache entry keyed by isrcKey(isrc).  The retry
+   * pass must recognise that ISRC-keyed entry as already-cached and not create
+   * a retry job.  The soft row must remain intact.
+   */
+  afterAll(async () => {
+    if (!dbAvailable || !softTableAvailable) return;
+    const { isrcKey } = resolveModule;
+    await db
+      .delete(resolutionCacheTable)
+      .where(eq(resolutionCacheTable.key, isrcKey(ISRC_VAL)))
+      .catch(() => {});
+    const { normalizeKey } = resolveModule;
+    await db
+      .delete(resolutionCacheTable)
+      .where(eq(resolutionCacheTable.key, normalizeKey(ARTIST_ISRC, TITLE_ISRC)))
+      .catch(() => {});
+    // Soft row and import jobs for userId are cleaned by the outer afterAll.
+  });
+
+  it(
+    "keeps the soft row and skips the retry job when only an ISRC-keyed negative cache entry exists",
+    async () => {
+      if (!dbAvailable || !softTableAvailable) return;
+
+      // ── Step 1: initial import — resolveByIsrc returns null (confirmed miss).
+      //    This writes a negative cache entry keyed by isrcKey(isrc) and leaves
+      //    the track as an unresolved soft row in spotify_library_items. ───────
+
+      mockResolveByText.mockClear();
+      mockResolveByIsrc.mockClear();
+
+      // Confirmed miss via ISRC path: resolveByIsrc returns null (not a throw).
+      // resolveByText also returns null so both negative entries are written.
+      mockResolveByIsrc.mockResolvedValue(null);
+      mockResolveByText.mockResolvedValue(null);
+
+      mockImportLibrary.mockImplementation(async function* () {
+        yield {
+          artist:     ARTIST_ISRC,
+          title:      TITLE_ISRC,
+          externalId: EXTERNAL_ID_ISRC,
+          isrc:       ISRC_VAL,
+        };
+      });
+
+      const [j] = await db
+        .insert(libraryImportJobsTable)
+        .values({
+          userId,
+          service:   "spotify",
+          status:    "pending",
+          total:     0,
+          resolved:  0,
+          startedAt: new Date(),
+        })
+        .returning({ id: libraryImportJobsTable.id });
+      const jobId = j!.id;
+
+      const sleepSpy1 = installSleepBypass();
+      try {
+        await runImportWorker(jobId, userId, "spotify", connRow);
+      } finally {
+        sleepSpy1.mockRestore();
+      }
+
+      // ── Step 1 assertions ─────────────────────────────────────────────────
+
+      const [importJob] = await db
+        .select({
+          status:   libraryImportJobsTable.status,
+          total:    libraryImportJobsTable.total,
+          resolved: libraryImportJobsTable.resolved,
+        })
+        .from(libraryImportJobsTable)
+        .where(eq(libraryImportJobsTable.id, jobId));
+      expect(importJob!.status).toBe("done");
+      expect(importJob!.total).toBe(1);
+      expect(importJob!.resolved).toBe(0);
+
+      // The soft row must be present.
+      const softAfterImport = await db
+        .select({ spotifyId: spotifyLibraryItemsTable.spotifyId })
+        .from(spotifyLibraryItemsTable)
+        .where(
+          and(
+            eq(spotifyLibraryItemsTable.userId, userId),
+            eq(spotifyLibraryItemsTable.spotifyId, EXTERNAL_ID_ISRC),
+          ),
+        );
+      expect(softAfterImport.length).toBe(1);
+
+      // The ISRC-keyed negative cache entry must exist (mbid = null).
+      const { isrcKey } = resolveModule;
+      const isrcCacheAfterImport = await db
+        .select({ mbid: resolutionCacheTable.mbid })
+        .from(resolutionCacheTable)
+        .where(eq(resolutionCacheTable.key, isrcKey(ISRC_VAL)));
+      expect(isrcCacheAfterImport.length).toBe(1);
+      expect(isrcCacheAfterImport[0]!.mbid).toBeNull();
+
+      // Remove the artist+title text-key entry so the retry pass must rely
+      // solely on the ISRC key to determine the track is cached.
+      const { normalizeKey: normalizeKeyLocal } = resolveModule;
+      await db
+        .delete(resolutionCacheTable)
+        .where(eq(resolutionCacheTable.key, normalizeKeyLocal(ARTIST_ISRC, TITLE_ISRC)));
+
+      // Confirm the text key is gone before the retry pass runs.
+      const textCacheAfterPrune = await db
+        .select({ key: resolutionCacheTable.key })
+        .from(resolutionCacheTable)
+        .where(eq(resolutionCacheTable.key, normalizeKeyLocal(ARTIST_ISRC, TITLE_ISRC)));
+      expect(textCacheAfterPrune.length).toBe(0);
+
+      // Confirm the ISRC key is still present — this is the sole cache signal.
+      const isrcCacheBeforeRetry = await db
+        .select({ mbid: resolutionCacheTable.mbid })
+        .from(resolutionCacheTable)
+        .where(eq(resolutionCacheTable.key, isrcKey(ISRC_VAL)));
+      expect(isrcCacheBeforeRetry.length).toBe(1);
+      expect(isrcCacheBeforeRetry[0]!.mbid).toBeNull();
+
+      // ── Step 2: retry pass — the ISRC-keyed negative cache entry must prevent
+      //    a retry job from being created; the soft row must survive. ──────────
+
+      const jobsBefore = await db
+        .select({ id: libraryImportJobsTable.id })
+        .from(libraryImportJobsTable)
+        .where(eq(libraryImportJobsTable.userId, userId));
+      const jobCountBefore = jobsBefore.length;
+
+      mockResolveByText.mockClear();
+      mockResolveByIsrc.mockClear();
+
+      const sleepSpy2 = installSleepBypass();
+      try {
+        await runPhase3RetryPass();
+      } finally {
+        sleepSpy2.mockRestore();
+      }
+
+      // ── Step 2 assertions ─────────────────────────────────────────────────
+
+      // No new import job must have been created for this user.
+      const jobsAfter = await db
+        .select({ id: libraryImportJobsTable.id })
+        .from(libraryImportJobsTable)
+        .where(eq(libraryImportJobsTable.userId, userId));
+      expect(jobsAfter.length).toBe(jobCountBefore);
+
+      // The soft row must still be present (not silently orphaned).
+      const softAfterRetry = await db
+        .select({ spotifyId: spotifyLibraryItemsTable.spotifyId })
+        .from(spotifyLibraryItemsTable)
+        .where(
+          and(
+            eq(spotifyLibraryItemsTable.userId, userId),
+            eq(spotifyLibraryItemsTable.spotifyId, EXTERNAL_ID_ISRC),
+          ),
+        );
+      expect(softAfterRetry.length).toBe(1);
+
+      // library_items must not contain this track.
       const libAfterRetry = await db
         .select({ mbid: libraryItemsTable.mbid })
         .from(libraryItemsTable)
