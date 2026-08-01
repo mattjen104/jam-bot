@@ -65,7 +65,7 @@ import {
 } from "@workspace/db";
 import { eq, and, asc, desc, sql, count, isNull, gt } from "drizzle-orm";
 import { wireListExtractor } from "../../lore/list-wire.js";
-import { processListCandidate, writeCandidateOutcome } from "../../lore/list-candidates.js";
+import { processListCandidate, writeCandidateOutcome, runListCandidateBatch } from "../../lore/list-candidates.js";
 import { scrapeAndPopulateList, enrichRecordingReleaseGroups } from "../../lore/list-scraper.js";
 import { recomputeAllQualityScores } from "../../lore/quality.js";
 import { ingestManualSpin } from "../../lore/resolve.js";
@@ -84,7 +84,7 @@ import {
 } from "../../lore/picks.js";
 import { validateNtsShowAlias } from "../../lore/nts.js";
 import { seedLabelPicker } from "../../lore/label.js";
-import { ingestBlogFeed, discoverFeedUrl } from "../../lore/blog.js";
+import { ingestBlogFeed, discoverFeedUrl, extractFeedLinksFromHtml } from "../../lore/blog.js";
 import { ingestDiscogsList, addRymPicker } from "../../lore/collector.js";
 import { addSongExploderClaim } from "../../lore/song-exploder.js";
 import { publishGeniusDraft, rejectGeniusDraft } from "../../lore/genius-annotations.js";
@@ -1927,6 +1927,216 @@ router.post("/admin/cri/candidates/:slug/promote", h(async (req, res) => {
     country: stationRow.country ?? null,
     city: stationRow.city ?? null,
   });
+}));
+
+// ---------------------------------------------------------------------------
+// AOTY publication import
+// ---------------------------------------------------------------------------
+
+// Already-enrolled publications (by home domain) — never re-enrolled.
+const ALREADY_ENROLLED_DOMAINS = new Set([
+  "pitchfork.com",
+  "www.pitchfork.com",
+  "stereogum.com",
+  "www.stereogum.com",
+  "theguardian.com",
+  "www.theguardian.com",
+  "npr.org",
+  "www.npr.org",
+  "thewire.co.uk",
+  "www.thewire.co.uk",
+  "thequietus.com",
+  "www.thequietus.com",
+  "brooklynvegan.com",
+  "www.brooklynvegan.com",
+  "gorillavsbear.net",
+  "www.gorillavsbear.net",
+  "aquariumdrunkard.com",
+  "daily.bandcamp.com",
+  "bandcamp.com",
+  "soundonsound.com",
+  "www.soundonsound.com",
+]);
+
+/**
+ * Parse publication entries from the AOTY publications page HTML.
+ * Returns an array of { name, homeUrl } extracted from the page.
+ * Captures any external (non-albumoftheyear.org) link that is accompanied by
+ * a text label in a nearby heading, td, or anchor.
+ */
+function parseAotyPublications(
+  html: string,
+): Array<{ name: string; homeUrl: string }> {
+  const results: Array<{ name: string; homeUrl: string }> = [];
+  const seen = new Set<string>();
+
+  // Pattern: look for anchor tags with external href and meaningful text.
+  // AOTY's publication list rows typically look like:
+  //   <a href="https://EXTERNAL.com" ...>Publication Name</a>
+  // or contain the external link near the publication name text.
+  const linkRe = /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let m: RegExpExecArray | null;
+
+  while ((m = linkRe.exec(html))) {
+    const rawHref = m[1]!.trim();
+    const rawText = m[2]!.replace(/<[^>]+>/g, "").trim();
+
+    // Only external links (https, not albumoftheyear.org itself)
+    if (!rawHref.startsWith("http")) continue;
+    try {
+      const u = new URL(rawHref);
+      if (u.hostname.includes("albumoftheyear.org")) continue;
+      if (u.hostname.includes("albumoftheyear.com")) continue;
+
+      const homeUrl = `${u.protocol}//${u.hostname}`;
+      if (seen.has(homeUrl)) continue;
+      if (!rawText || rawText.length < 2 || rawText.length > 100) continue;
+      // Skip pure icon links, social links, etc.
+      if (/^(facebook|twitter|instagram|youtube|spotify|apple|google)/i.test(rawText)) continue;
+      if (/^\s*[@#]/.test(rawText)) continue;
+
+      seen.add(homeUrl);
+      results.push({ name: rawText, homeUrl });
+    } catch {
+      /* skip malformed href */
+    }
+  }
+
+  return results;
+}
+
+// POST /api/admin/aoty-publications/import — fetch AOTY's publication list,
+// run RSS discovery on each home URL, and enroll as blog or link-out pickers.
+router.post("/admin/aoty-publications/import", h(async (req, res) => {
+  const AOTY_URL = "https://www.albumoftheyear.org/publication/list.php";
+
+  let html: string;
+  try {
+    const r = await fetch(AOTY_URL, {
+      signal: AbortSignal.timeout(15_000),
+      headers: { Accept: "text/html", "User-Agent": "Lore-Admin-Bot/1.0" },
+    });
+    if (!r.ok) {
+      return res.status(502).json({ error: `AOTY fetch failed: ${r.status}` });
+    }
+    html = await r.text();
+  } catch (err) {
+    return res
+      .status(502)
+      .json({ error: `AOTY fetch error: ${err instanceof Error ? err.message : String(err)}` });
+  }
+
+  const publications = parseAotyPublications(html);
+  if (publications.length === 0) {
+    return res.status(200).json({
+      enrolled: 0,
+      linkOutOnly: 0,
+      skipped: 0,
+      note: "No publications parsed from AOTY page — HTML structure may have changed",
+    });
+  }
+
+  let enrolled = 0;
+  let linkOutOnly = 0;
+  let skipped = 0;
+
+  for (const pub of publications) {
+    let domain: string;
+    try {
+      domain = new URL(pub.homeUrl).hostname;
+    } catch {
+      skipped++;
+      continue;
+    }
+
+    // Skip already-enrolled publications
+    if (ALREADY_ENROLLED_DOMAINS.has(domain)) {
+      skipped++;
+      continue;
+    }
+
+    const handle = slugify(domain);
+    if (!handle) {
+      skipped++;
+      continue;
+    }
+
+    // Skip if a picker for this handle already exists
+    const existing = await db
+      .select({ id: pickersTable.id })
+      .from(pickersTable)
+      .where(eq(pickersTable.handle, handle))
+      .limit(1);
+    if (existing.length > 0) {
+      skipped++;
+      continue;
+    }
+
+    // Try RSS autodiscovery
+    const feedUrl = await discoverFeedUrl(pub.homeUrl, {
+      timeoutMs: 10_000,
+    }).catch(() => null);
+
+    if (feedUrl) {
+      // Enroll as an inactive blog picker (requires human review to activate)
+      await db
+        .insert(pickersTable)
+        .values({
+          pickerType: "blog",
+          name: pub.name,
+          handle,
+          homeUrl: pub.homeUrl,
+          sourceRef: { feedUrl, tolerant: true },
+          trustTier: 2,
+          active: false,
+          description: `AOTY-sourced publication — feed discovered via auto-discovery. Activate after review.`,
+        })
+        .onConflictDoNothing({ target: pickersTable.handle });
+      console.info(`[aoty-import] enrolled ${pub.name} (${feedUrl})`);
+      enrolled++;
+    } else {
+      // Register as a link-out-only picker (no feed to poll)
+      await db
+        .insert(pickersTable)
+        .values({
+          pickerType: "collector",
+          name: pub.name,
+          handle,
+          homeUrl: pub.homeUrl,
+          sourceRef: { linkOnly: true, aotySourced: true },
+          trustTier: 3,
+          active: false,
+          description: `AOTY-sourced publication — no RSS feed found. Link-out only.`,
+        })
+        .onConflictDoNothing({ target: pickersTable.handle });
+      console.info(`[aoty-import] link-out only: ${pub.name}`);
+      linkOutOnly++;
+    }
+  }
+
+  console.info(
+    `[aoty-import] done: ${enrolled} enrolled, ${linkOutOnly} link-out only, ${skipped} skipped`,
+  );
+  return res.status(200).json({ enrolled, linkOutOnly, skipped });
+}));
+
+// POST /api/admin/list-candidates/process-batch — admin-triggered backfill that
+// bypasses the rolling DAILY_CAP. Accepts optional ?limit=N (default 20, max 50).
+// Secured by the admin token gate above.
+router.post("/admin/list-candidates/process-batch", h(async (req, res) => {
+  const rawLimit = req.query["limit"] ?? req.body?.limit;
+  const limit = Math.min(
+    50,
+    Math.max(1, parseInt(String(rawLimit ?? "20"), 10) || 20),
+  );
+
+  const contact = process.env["MUSICBRAINZ_CONTACT"]?.trim();
+  if (!contact) {
+    return res.status(503).json({ error: "MUSICBRAINZ_CONTACT not configured" });
+  }
+
+  const result = await runListCandidateBatch(limit);
+  return res.status(200).json(result);
 }));
 
 // POST /api/admin/rym-lists — admin-only RateYourMusic link-out picker.

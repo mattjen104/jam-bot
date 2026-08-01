@@ -75,6 +75,10 @@ export function parseListMeta(title: string, publishedAt?: Date | null): ListMet
     if (year == null && publishedAt) year = publishedAt.getUTCFullYear();
   } else if (
     /year[\s-]?end|of the year\b|\baoty\b/.test(t) ||
+    // "Year in Music/Review 2024" — NME, Pitchfork, Consequence of Sound
+    /\byear\s+in\s+(music|review|albums|songs|tracks|culture)\b/.test(t) ||
+    // "Albums/Songs of 2024" without "the year" — Under the Radar, etc.
+    /\b(albums|songs|tracks|records|releases)\s+of\s+(?:19[5-9]\d|20[0-4]\d)\b/.test(t) ||
     (yearMatch != null && /\bbest\b|\btop\b|\bfavorite|\bfavourite/.test(t))
   ) {
     kind = "year_end";
@@ -353,4 +357,50 @@ export function stopListCandidateWorker(): void {
   for (const t of timers) clearTimeout(t);
   timers.length = 0;
   started = false;
+}
+
+/**
+ * Admin-triggered backfill: process up to `limit` pending candidates
+ * immediately, bypassing the rolling DAILY_CAP. Designed for first-run
+ * batches after a new publication cohort is enrolled (e.g. AOTY import).
+ * Never throws.
+ */
+export async function runListCandidateBatch(limit: number): Promise<{
+  processed: number;
+  outcomes: Array<{ id: number; title: string; status: string; note: string }>;
+}> {
+  const contact = process.env["MUSICBRAINZ_CONTACT"]?.trim();
+  if (!contact) {
+    return { processed: 0, outcomes: [] };
+  }
+
+  const pending = await db
+    .select({
+      id: blogListCandidatesTable.id,
+      pickerId: blogListCandidatesTable.pickerId,
+      url: blogListCandidatesTable.url,
+      title: blogListCandidatesTable.title,
+      publishedAt: blogListCandidatesTable.publishedAt,
+    })
+    .from(blogListCandidatesTable)
+    .where(eq(blogListCandidatesTable.status, "pending"))
+    .orderBy(asc(blogListCandidatesTable.id))
+    .limit(Math.min(limit, 50)); // absolute cap: never more than 50 at once
+
+  if (pending.length === 0) return { processed: 0, outcomes: [] };
+
+  const ready = await wireListExtractor();
+  if (!ready) return { processed: 0, outcomes: [] };
+
+  const outcomes: Array<{ id: number; title: string; status: string; note: string }> = [];
+  for (const c of pending) {
+    const outcome = await processListCandidate(c, contact);
+    await writeCandidateOutcome(c.id, outcome).catch((e) =>
+      console.error("[list-candidates] batch outcome write failed", c.id, e),
+    );
+    outcomes.push({ id: c.id, title: c.title, status: outcome.status, note: outcome.note });
+  }
+
+  console.info(`[list-candidates] admin batch: processed ${outcomes.length} candidates`);
+  return { processed: outcomes.length, outcomes };
 }

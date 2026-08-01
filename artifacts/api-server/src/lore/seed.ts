@@ -1925,6 +1925,16 @@ const SEED_BLOG_PICKERS: ReadonlyArray<{
     feedUrl: "https://downbeat.com/news/rss",
     tolerant: true,
   },
+  // --- Tech / recording / production ----------------------------------------
+  {
+    handle: "sound-on-sound",
+    name: "Sound on Sound",
+    homeUrl: "https://www.soundonsound.com",
+    // Main news/features feed — includes "Classic Album:" deep-dive column.
+    // The blog poller detects that prefix and logs series picks (artist + album)
+    // rather than routing them through the list-candidates queue.
+    feedUrl: "https://www.soundonsound.com/feed",
+  },
   // --- Deliberately NOT enrolled (per task spec) -----------------------------
   // Boomkat          — no RSS at all; scrape-only (out of scope).
   // JazzTimes        — feed unstable/dead since the 2023 ownership collapse.

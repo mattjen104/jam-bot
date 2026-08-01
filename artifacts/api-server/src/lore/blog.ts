@@ -254,6 +254,10 @@ const LIST_TITLE_RES: RegExp[] = [
   /\brecord\(?s?\)?\s+o'?\s*the\s+month\b/i,
   /\bupcoming\b.{0,40}\breleases\b/i,
   /\broundup\b/i,
+  // "Year in Music/Review/Albums 2024" — common editorial format (NME, Pitchfork)
+  /\byear\s+in\s+(music|review|albums|songs|tracks|culture)\b/i,
+  // "Albums/Songs/Tracks of 2024" without "the year" (Under the Radar, etc.)
+  /\b(albums|songs|tracks|records|releases)\s+of\s+(?:19[5-9]\d|20[0-4]\d)\b/i,
 ];
 
 const LIST_TAG_RES: RegExp[] = [
@@ -494,6 +498,30 @@ export async function ingestBlogFeed(args: {
   let logged = 0;
   let listCandidates = 0;
   for (const item of items) {
+    // Sound on Sound "Classic Album:" column — deep-dive series posts. Parse
+    // the artist + album from the title (after the colon) and log as a series
+    // pick linked directly to the article, rather than routing through the
+    // list-candidates queue (these are single-work features, not ranked lists).
+    if (/^classic album\s*:/i.test(item.title.trim())) {
+      const rest = item.title.replace(/^classic album\s*:\s*/i, "").trim();
+      const guess = extractArtistTrack(rest, item.tags);
+      if (guess) {
+        matched++;
+        const { logged: wrote } = await persistPick({
+          pickerId: picker.id,
+          source: "blog_post",
+          rawArtist: guess.artist,
+          rawTitle: guess.title,
+          sourceUrl: item.link,
+          context: item.title,
+          externalId: `blog:${item.guid}`,
+          ...(item.publishedAt ? { pickedAt: item.publishedAt } : {}),
+        });
+        if (wrote) logged++;
+      }
+      continue; // Never route SOS Classic Album posts to list-candidates
+    }
+
     // Stage-1 list detection: a year-end/best-of/roundup post is a queue entry
     // for the extraction stage, never a single artist–track guess.
     if (isListCandidate(item.title, item.tags)) {

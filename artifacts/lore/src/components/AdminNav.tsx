@@ -10,7 +10,8 @@ const NAV_LINKS: { label: string; href: string }[] = [
   { label: "Selectors", href: "/admin/selectors" },
   { label: "Radio Browser", href: "/admin/radio-browser" },
   { label: "Stations", href: "/admin/stations" },
-  { label: "Lists", href: "/admin/list-candidates" },
+  { label: "Lists", href: "/admin/lists" },
+  { label: "Candidates", href: "/admin/list-candidates" },
   { label: "CRI", href: "/admin/cri" },
   { label: "Feed health", href: "/admin/health" },
 ];

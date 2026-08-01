@@ -23,6 +23,7 @@ import AdminSelectors from "@/pages/AdminSelectors";
 import AdminRadioBrowser from "@/pages/AdminRadioBrowser";
 import AdminStations from "@/pages/AdminStations";
 import AdminListCandidates from "@/pages/AdminListCandidates";
+import AdminLists from "@/pages/AdminLists";
 import AdminCriCandidates from "@/pages/AdminCriCandidates";
 import AdminHealth from "@/pages/AdminHealth";
 import DjPage from "@/pages/DjPage";
@@ -107,6 +108,7 @@ function Router() {
         <Route path="/admin/selectors" component={AdminSelectors} />
         <Route path="/admin/radio-browser" component={AdminRadioBrowser} />
         <Route path="/admin/stations" component={AdminStations} />
+        <Route path="/admin/lists" component={AdminLists} />
         <Route path="/admin/list-candidates" component={AdminListCandidates} />
         <Route path="/admin/cri" component={AdminCriCandidates} />
         <Route path="/admin/health" component={AdminHealth} />
