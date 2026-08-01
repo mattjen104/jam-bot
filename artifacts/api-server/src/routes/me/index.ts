@@ -1812,14 +1812,15 @@ router.get("/me/library", h(async (req, res) => {
     sortRaw === "artist" || sortRaw === "title" ? sortRaw : "added";
   const sourceRaw =
     typeof req.query["source"] === "string" ? req.query["source"] : "";
-  const source: "keep" | "import" | "soft" | null =
-    sourceRaw === "keep" || sourceRaw === "import" || sourceRaw === "soft" ? sourceRaw : null;
+  const source: "keep" | "import" | "soft" | "critic" | null =
+    sourceRaw === "keep" || sourceRaw === "import" || sourceRaw === "soft" || sourceRaw === "critic" ? sourceRaw : null;
 
   // "soft"   → only spotify_library_items rows (unresolved, no MBID yet).
   // "keep"   → only library_items with provenance.kind='keep', no soft rows.
   // "import" → library_items with provenance.kind='import' + soft rows.
+  // "critic" → only library_items whose album appears in at least one confirmed list entry; no soft rows.
   // null     → all resolved + soft rows.
-  const includeSoft = source !== "keep";
+  const includeSoft = source !== "keep" && source !== "critic";
   const includeResolved = source !== "soft";
 
   // ── Resolved rows conditions ─────────────────────────────────────────────
@@ -1831,9 +1832,21 @@ router.get("/me/library", h(async (req, res) => {
       sql`(${recordingsTable.title} ILIKE ${pattern} OR ${recordingsTable.artist} ILIKE ${pattern})`,
     );
   }
-  if (source) {
+  if (source && source !== "critic") {
     conditions.push(
       sql`${libraryItemsTable.provenance}->>'kind' = ${source}`,
+    );
+  }
+  if (source === "critic") {
+    // Filter to recordings whose primary release group has at least one confirmed list entry.
+    conditions.push(
+      sql`EXISTS (
+        SELECT 1
+        FROM recording_release_groups rrg
+        JOIN list_entries le ON le.release_group_mbid = rrg.release_group_mbid
+        WHERE rrg.recording_mbid = ${libraryItemsTable.mbid}
+          AND (le.confidence = 'exact' OR le.confirmed = true)
+      )`,
     );
   }
 

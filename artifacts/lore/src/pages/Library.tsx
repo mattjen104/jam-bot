@@ -538,14 +538,14 @@ export default function Library() {
   const queryClient = useQueryClient();
   const { radio } = usePlayer();
 
-  // Source filter — persisted in URL as ?source=keep|import|soft
-  const sourceFilter = useMemo((): "" | "keep" | "import" | "soft" => {
+  // Source filter — persisted in URL as ?source=keep|import|soft|critic
+  const sourceFilter = useMemo((): "" | "keep" | "import" | "soft" | "critic" => {
     const v = new URLSearchParams(search).get("source");
-    if (v === "keep" || v === "import" || v === "soft") return v;
+    if (v === "keep" || v === "import" || v === "soft" || v === "critic") return v;
     return "";
   }, [search]);
 
-  const setSourceFilter = (src: "" | "keep" | "import" | "soft") => {
+  const setSourceFilter = (src: "" | "keep" | "import" | "soft" | "critic") => {
     const p = new URLSearchParams(search);
     if (src) p.set("source", src);
     else p.delete("source");
@@ -803,7 +803,7 @@ export default function Library() {
         <span className="dial-topbar__title dial-topbar__title--active">Library</span>
         {(libraryTotal ?? keptItems.length) > 0 && (
           <span className="dial-topbar__sort-chip">
-            {sourceFilter === "keep" ? "📻" : sourceFilter === "import" ? "🎵" : sourceFilter === "soft" ? "✦" : "◆"}{" "}
+            {sourceFilter === "keep" ? "📻" : sourceFilter === "import" ? "🎵" : sourceFilter === "soft" ? "✦" : sourceFilter === "critic" ? "★" : "◆"}{" "}
             {(libraryTotal ?? keptItems.length).toLocaleString()}
           </span>
         )}
@@ -1049,6 +1049,9 @@ export default function Library() {
               { value: "keep" as const, label: "Saved from radio" },
               { value: "import" as const, label: "Imported" },
               { value: "soft" as const, label: "Not in MusicBrainz" },
+              ...(criticsCovItems.length > 0
+                ? [{ value: "critic" as const, label: "Critics' picks" }]
+                : []),
             ] as const
           ).map(({ value, label }) => (
             <button
@@ -1153,6 +1156,8 @@ export default function Library() {
               ? "Imported"
               : sourceFilter === "soft"
               ? "Not in MusicBrainz"
+              : sourceFilter === "critic"
+              ? "Critics' picks"
               : "Kept"
           }
           count={keptItems.length > 0 ? `${keptItems.length.toLocaleString()}${hasNextPage ? "+" : ""}` : undefined}
@@ -1189,6 +1194,8 @@ export default function Library() {
                 ? "No imported tracks yet."
                 : sourceFilter === "soft"
                 ? "No unresolved tracks — everything matched MusicBrainz."
+                : sourceFilter === "critic"
+                ? "None of your kept tracks are from critically listed albums yet."
                 : "Keep songs from the radio to build your library."}
             </div>
             {sourceFilter ? (
