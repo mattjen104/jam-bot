@@ -150,7 +150,15 @@ const RETRY_FK_REAL_EXT_ID = `RFKR${run.toUpperCase()}0000000000`.slice(0, 22);
 // must cause both tables to stay clean regardless.
 const MBID_RETRY_FK_SYNTH = `test-iw-rfks-${run}`;
 const RETRY_FK_SYNTH_EXT_ID = `synth-rfks-${run}`; // contains hyphens → not 22 alphanumeric chars
-const MBIDS_ALL = [MBID_P1, MBID_P2, MBID_P3A, MBID_P3B, MBID_FK, MBID_FK2, MBID_FK3, MBID_RETRY_SOFT, MBID_REMOVED, MBID_NO_SNAP, MBID_RETRY_FK, MBID_RETRY_FK_REAL, MBID_RETRY_FK_SYNTH];
+// Retry-pass FK-failure with a pre-existing soft row: a spotify_library_items
+// row is seeded BEFORE the retry pass runs.  The pass resolves the MBID but
+// the library_items insert is injected with a 23503.  Because libItemInserted
+// stays false, the promotion branch (which would delete the soft row) is
+// skipped — the soft row remains stuck in spotify_library_items.  This test
+// documents that outcome and confirms the retry job still reaches "done".
+const MBID_RETRY_FK_STUCK = `test-iw-rfkstk-${run}`;
+const RETRY_FK_STUCK_EXT_ID = `synth-rfkstk-${run}`; // synthesised key (contains hyphens)
+const MBIDS_ALL = [MBID_P1, MBID_P2, MBID_P3A, MBID_P3B, MBID_FK, MBID_FK2, MBID_FK3, MBID_RETRY_SOFT, MBID_REMOVED, MBID_NO_SNAP, MBID_RETRY_FK, MBID_RETRY_FK_REAL, MBID_RETRY_FK_SYNTH, MBID_RETRY_FK_STUCK];
 
 // ISRC for the Phase 1 track (must be ≤ 12 chars and unique).
 const ISRC_P1 = `TS${run.toUpperCase()}01`.slice(0, 12);
@@ -254,6 +262,8 @@ afterAll(async () => {
         normalizeKey(ARTIST, "RetryFKReal Track"),
         // Written by the retry pass during the synthesised-key FK-failure test.
         normalizeKey(ARTIST, "RetryFKSynth Track"),
+        // Written by the retry pass during the pre-existing-soft-row FK-failure test.
+        normalizeKey(ARTIST, "RetryFKStuck Track"),
       ]),
     );
   await db
@@ -2023,6 +2033,201 @@ describe("Retry pass — FK violation (synthesised externalId): pass reaches don
       await db
         .delete(libraryImportJobsTable)
         .where(eq(libraryImportJobsTable.id, sourceJobId));
+    },
+    15_000,
+  );
+});
+
+// ── Retry-pass FK-failure with a pre-existing soft row ───────────────────────
+//
+// The more dangerous real-world scenario than a clean-state FK failure is when
+// a spotify_library_items soft row ALREADY EXISTS at the time the retry pass
+// runs — meaning the import worker wrote it during the original unresolved pass.
+//
+// Sequence:
+//   1. A soft row is pre-seeded in spotify_library_items for this user/track.
+//   2. The retry pass resolves the MBID via MB, seeds the recordings row, then
+//      attempts the library_items insert — which is injected with a 23503.
+//   3. Because libItemInserted stays false, the promotion branch (which would
+//      delete the soft row) is skipped entirely.
+//   4. The soft row is now STUCK in spotify_library_items and the track is
+//      absent from library_items.
+//
+// Current behaviour (documented, not changed here):
+//   • The stuck-soft-row outcome is accepted: the track remains in the
+//     "pending" state visible to the UI but never promotes.  A future cleanup
+//     pass or a subsequent successful retry would eventually resolve it.
+//   • The retry job still reaches "done" — the FK failure is not fatal.
+//
+// A newer completed snapshot that includes the track is seeded so the pass
+// takes the snapshot-filter path (avoids a live Spotify contains API call that
+// would fail with 401 in the test environment).
+
+describe("Retry pass — FK violation with pre-existing soft row: soft row stays stuck, library_items stays clean", () => {
+  it(
+    "soft row remains in spotify_library_items and track absent from library_items when library_items insert throws 23503",
+    async () => {
+      if (!dbAvailable) return;
+
+      mockResolveByText.mockClear();
+      mockResolveByIsrc.mockClear();
+
+      // resolveByText returns MBID_RETRY_FK_STUCK so the pass reaches the
+      // recordings seed + library_items insert path.
+      mockResolveByText.mockResolvedValue(MBID_RETRY_FK_STUCK);
+
+      // ── 1. Pre-seed the spotify_library_items soft row ────────────────────
+      // This simulates the original import worker having written the soft row
+      // for this unresolved track before the retry pass runs.
+      await db
+        .insert(spotifyLibraryItemsTable)
+        .values({
+          userId,
+          spotifyId: RETRY_FK_STUCK_EXT_ID,
+          title: "RetryFKStuck Track",
+          artist: ARTIST,
+          addedAt: new Date(),
+        })
+        .onConflictDoNothing();
+
+      // Confirm the soft row is present before the retry.
+      const softBefore = await db
+        .select({ spotifyId: spotifyLibraryItemsTable.spotifyId })
+        .from(spotifyLibraryItemsTable)
+        .where(
+          and(
+            eq(spotifyLibraryItemsTable.userId, userId),
+            eq(spotifyLibraryItemsTable.spotifyId, RETRY_FK_STUCK_EXT_ID),
+          ),
+        );
+      expect(softBefore.map((r) => r.spotifyId)).toContain(RETRY_FK_STUCK_EXT_ID);
+
+      // ── 2. Seed the source job (unresolved, with track in buffer) ─────────
+      const [sourceJobRow] = await db
+        .insert(libraryImportJobsTable)
+        .values({
+          userId,
+          service: "spotify",
+          status: "done",
+          phase: "resolve",
+          total: 1,
+          resolved: 0,
+          retryExhausted: false,
+          bufferJson: [
+            {
+              artist: ARTIST,
+              title: "RetryFKStuck Track",
+              isrc: null,
+              durationMs: null,
+              externalId: RETRY_FK_STUCK_EXT_ID,
+            },
+          ],
+          startedAt: new Date(),
+          finishedAt: new Date(),
+        })
+        .returning({ id: libraryImportJobsTable.id });
+      const sourceJobId = sourceJobRow!.id;
+
+      // ── 3. Seed a newer completed snapshot that includes the track ────────
+      // This prevents the pass from making a live Spotify contains API call
+      // (which would fail with 401 in the test environment) — the track appears
+      // in the newer snapshot so it is NOT filtered out by the snapshot guard.
+      const [newerJobRow] = await db
+        .insert(libraryImportJobsTable)
+        .values({
+          userId,
+          service: "spotify",
+          status: "done",
+          phase: "resolve",
+          total: 1,
+          resolved: 1,
+          retryExhausted: false,
+          bufferJson: [
+            {
+              artist: ARTIST,
+              title: "RetryFKStuck Track",
+              isrc: null,
+              durationMs: null,
+              externalId: RETRY_FK_STUCK_EXT_ID,
+            },
+          ],
+          startedAt: new Date(),
+          finishedAt: new Date(),
+        })
+        .returning({ id: libraryImportJobsTable.id });
+
+      // ── 4. Inject the FK violation on the library_items insert ────────────
+      const fkErr = Object.assign(
+        new Error(
+          'insert or update on table "library_items" violates foreign key ' +
+          'constraint "library_items_mbid_fkey"',
+        ),
+        { code: "23503", constraint: "library_items_mbid_fkey" },
+      );
+
+      const origInsert = (db as any).insert.bind(db);
+      let fkInjected = false;
+
+      const insertSpy = vi
+        .spyOn(db as any, "insert")
+        .mockImplementation((table: unknown) => {
+          if (!fkInjected && table === libraryItemsTable) {
+            fkInjected = true;
+            const fakeBuilder: Record<string, unknown> = {};
+            fakeBuilder["values"] = () => fakeBuilder;
+            fakeBuilder["onConflictDoNothing"] = () => fakeBuilder;
+            fakeBuilder["then"] = (
+              onFulfilled: ((v: unknown) => unknown) | null | undefined,
+              onRejected: ((e: unknown) => unknown) | null | undefined,
+            ) => Promise.reject(fkErr).then(onFulfilled, onRejected);
+            return fakeBuilder;
+          }
+          return origInsert(table);
+        });
+
+      // ── 5. Run the retry pass ──────────────────────────────────────────────
+      await runPhase3RetryPass();
+
+      insertSpy.mockRestore();
+
+      // ── 6. Assertions ─────────────────────────────────────────────────────
+
+      // library_items must NOT contain the track — the insert was rejected.
+      const libRows = await db
+        .select({ mbid: libraryItemsTable.mbid })
+        .from(libraryItemsTable)
+        .where(eq(libraryItemsTable.userId, userId));
+      expect(libRows.map((r) => r.mbid)).not.toContain(MBID_RETRY_FK_STUCK);
+
+      // The pre-existing soft row must STILL be present in spotify_library_items.
+      // Because libItemInserted=false the promotion branch was skipped, leaving
+      // the soft row stuck.  This is the documented stuck-soft-row outcome.
+      const softAfter = await db
+        .select({ spotifyId: spotifyLibraryItemsTable.spotifyId })
+        .from(spotifyLibraryItemsTable)
+        .where(
+          and(
+            eq(spotifyLibraryItemsTable.userId, userId),
+            eq(spotifyLibraryItemsTable.spotifyId, RETRY_FK_STUCK_EXT_ID),
+          ),
+        );
+      expect(softAfter.map((r) => r.spotifyId)).toContain(RETRY_FK_STUCK_EXT_ID);
+
+      // The retry job itself must have reached "done" despite the FK failure.
+      const newerJobId = newerJobRow!.id;
+      const allJobs = await db
+        .select({ status: libraryImportJobsTable.status, id: libraryImportJobsTable.id })
+        .from(libraryImportJobsTable)
+        .where(eq(libraryImportJobsTable.userId, userId));
+      const retryJob = allJobs.find(
+        (j) => j.id !== sourceJobId && j.id !== newerJobId && j.status === "done",
+      );
+      expect(retryJob).toBeDefined();
+
+      // Clean up the two jobs created for this test.
+      await db
+        .delete(libraryImportJobsTable)
+        .where(inArray(libraryImportJobsTable.id, [sourceJobId, newerJobId]));
     },
     15_000,
   );
