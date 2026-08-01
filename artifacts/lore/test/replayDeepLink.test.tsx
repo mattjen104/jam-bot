@@ -45,13 +45,15 @@ vi.mock("@workspace/api-client-react", () => ({
     product: null,
   })),
   spotifyLogout: vi.fn(),
+  useListStations: vi.fn(() => ({ data: null, isLoading: false })),
 }));
 
 import { useGetPickerRun, useGetStationRun } from "@workspace/api-client-react";
 import { PlayerProvider } from "../src/player/PlayerProvider";
 import { PlayerDock } from "../src/components/PlayerDock";
 import StationRun from "../src/pages/StationRun";
-import PickerRun from "../src/pages/PickerRun";
+// PickerRun was renamed to SelectorRun — update import accordingly.
+import SelectorRun from "../src/pages/SelectorRun";
 
 /**
  * Build a tracklist with `resolvedCount` resolved tracks (mbid-0..mbid-N-1)
@@ -125,7 +127,7 @@ function renderRunPage(
     searchPath,
     static: true,
   });
-  const PageComponent = page === "station" ? StationRun : PickerRun;
+  const PageComponent = page === "station" ? StationRun : SelectorRun;
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, enabled: false } },
   });

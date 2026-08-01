@@ -35,6 +35,7 @@ vi.mock("../src/hooks/useDialData", () => ({
   useDialData: vi.fn(),
   readPins: vi.fn(() => new Set<string>()),
   togglePin: vi.fn(),
+  normalizeDjName: vi.fn((s: string | null) => s ?? ""),
 }));
 
 vi.mock("../src/lib/meHooks", () => ({
@@ -95,6 +96,8 @@ function mockDialDataLoading() {
     liveLoading: false,
     crossingsLoading: true,
     hasLibrary: true,
+    overlapByPickerId: new Map<number, number>(),
+    pickerNameToId: new Map<string, number>(),
   });
 }
 
@@ -106,6 +109,8 @@ function mockDialDataLoaded() {
     liveLoading: false,
     crossingsLoading: false,
     hasLibrary: true,
+    overlapByPickerId: new Map<number, number>(),
+    pickerNameToId: new Map<string, number>(),
   });
 }
 

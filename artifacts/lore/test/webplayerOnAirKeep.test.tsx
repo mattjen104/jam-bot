@@ -16,7 +16,7 @@
  *  - when there is no next page the footer shows "that's everything"
  */
 import React from "react";
-import { describe, expect, it, vi, afterEach } from "vitest";
+import { describe, beforeEach, expect, it, vi, afterEach } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import WebPlayer from "../src/webplayer/WebPlayer";
@@ -58,12 +58,17 @@ vi.mock("../src/lib/meHooks", () => ({
     fetchNextPage: vi.fn(),
   })),
   useLatestImportJob: vi.fn(() => ({ data: undefined })),
+  useLatestSyncJob: vi.fn(() => ({ data: null })),
+  useMySpinKeepStatus: vi.fn(() => ({ data: new Map() })),
   startSpotifyLibraryConnect: vi.fn(),
 }));
 
 vi.mock("../src/player/PlayerProvider", () => ({
   usePlayer: vi.fn(() => ({
     radio: { station: null, status: "idle", toggle: vi.fn() },
+    scan: { active: false },
+    ride: { active: false },
+    spotify: { connected: false },
   })),
 }));
 
@@ -250,6 +255,14 @@ const libItem = (mbid: string, title: string): LibraryItem =>
   }) as unknown as LibraryItem;
 
 describe("LibraryTab paging", () => {
+  // The OnAirKeep visibility tests above may leave useIsAuthenticated returning
+  // false (via mockReturnValueOnce that was never consumed because WebPlayer
+  // crashed before reaching the hook). Reset it explicitly for each LibraryTab
+  // test so the authenticated view renders.
+  beforeEach(() => {
+    vi.mocked(useIsAuthenticated).mockReturnValue(true);
+  });
+
   it("Load more appends the next page", () => {
     const fetchNextPage = vi.fn();
     vi.mocked(useMyLibraryInfinite).mockReturnValue({
@@ -311,7 +324,10 @@ describe("LibraryTab paging", () => {
 
     wrap(<LibraryTab onOpenLore={() => {}} onOpenRun={() => {}} />);
     expect(screen.queryByTestId("wp-library-load-more")).toBeNull();
-    expect(screen.getByText("that's everything")).toBeTruthy();
-    expect(screen.getByTestId("wp-library-footer").textContent).toContain("2 loaded");
+    // Footer now shows "that's everything · N tracks" in one element.
+    // Use textContent so the embedded track count doesn't break the match.
+    expect(
+      screen.getByTestId("wp-library-footer").textContent,
+    ).toContain("that's everything");
   });
 });

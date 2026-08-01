@@ -42,6 +42,7 @@ vi.mock("@workspace/api-client-react", () => ({
   })),
   useGetStationNowPlaying: vi.fn(() => ({ data: null, isLoading: false })),
   getGetStationNowPlayingQueryKey: vi.fn(() => ["station-now-playing"]),
+  useListStations: vi.fn(() => ({ data: null, isLoading: false })),
 }));
 
 const radioPause = vi.fn();
@@ -66,6 +67,23 @@ vi.mock("../src/hooks/useRadioPlayer", () => ({
     resume: radioResume,
   })),
 }));
+
+// PlayerProvider uses useWpOnAir internally (React Query). Stub it so tests
+// that render <PlayerProvider> don't need a real QueryClientProvider.
+vi.mock("../src/webplayer/hooks", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/webplayer/hooks")>();
+  return {
+    ...actual,
+    useWpOnAir: vi.fn(() => ({ data: undefined, isLoading: false, dataUpdatedAt: 0 })),
+    useWpLoreCounts: vi.fn(() => ({ data: undefined })),
+    useWpRecordingSpins: vi.fn(() => ({
+      data: undefined,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    })),
+  };
+});
 
 import { PlayerProvider, usePlayer } from "../src/player/PlayerProvider";
 import { WpCast } from "../src/webplayer/WpCast";

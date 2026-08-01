@@ -56,6 +56,9 @@ vi.mock("@workspace/api-client-react", () => ({
     product: null,
   })),
   spotifyLogout: vi.fn(),
+  useListStations: vi.fn(() => ({ data: null, isLoading: false })),
+  useGetRecordingListProvenance: vi.fn(() => ({ data: null, isLoading: false })),
+  getGetRecordingListProvenanceQueryKey: vi.fn((mbid: string) => ["recording-list-provenance", mbid]),
 }));
 
 import {
@@ -74,7 +77,8 @@ import { PlayerProvider } from "../src/player/PlayerProvider";
 import { PlayerDock } from "../src/components/PlayerDock";
 import Song from "../src/pages/Song";
 import StationRun from "../src/pages/StationRun";
-import PickerRun from "../src/pages/PickerRun";
+// PickerRun was renamed to SelectorRun — update import accordingly.
+import SelectorRun from "../src/pages/SelectorRun";
 
 // --------------------------------------------------------------------------
 // Shared test data
@@ -207,7 +211,7 @@ function renderRunPage(
     searchPath,
     static: true,
   });
-  const PageComponent = kind === "station" ? StationRun : PickerRun;
+  const PageComponent = kind === "station" ? StationRun : SelectorRun;
   return render(
     <QueryClientProvider client={makeQueryClient()}>
       <Router hook={hook} searchHook={searchHook}>

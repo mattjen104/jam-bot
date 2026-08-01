@@ -86,6 +86,8 @@ vi.mock("../src/lib/meHooks", () => ({
   useLatestSyncJob: mockUseLatestSyncJob,
   useMyPreferences: mockUseMyPreferences,
   useMyAlbumsCompleted: mockUseMyAlbumsCompleted,
+  useMyImportStats: vi.fn(() => ({ data: null })),
+  useMyLibraryCoverage: vi.fn(() => ({ data: null })),
   patchPreferences: vi.fn(),
   startSpotifyLibraryConnect: vi.fn(),
   startSpotifyLibraryReconnect: vi.fn(),

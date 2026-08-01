@@ -62,6 +62,7 @@ vi.mock("../src/lib/meHooks", () => ({
   ME_OVERLAP_STATIONS_KEY: ["me", "overlaps", "stations"],
   ME_OVERLAP_RUNS_KEY: ["me", "overlaps", "runs"],
   ME_PREFERENCES_KEY: ["me", "preferences"],
+  ME_LIBRARY_COVERAGE_KEY: ["me", "library", "list-coverage"],
 
   // Async helpers (never called in these tests)
   startSpotifyLibraryConnect: vi.fn(),
@@ -87,6 +88,9 @@ vi.mock("../src/lib/meHooks", () => ({
   useMyImportStats: vi.fn(() => ({ data: null })),
   useLatestImportJob: vi.fn(() => ({ data: null })),
   useLatestSyncJob: vi.fn(() => ({ data: null })),
+  useMyLibraryCoverage: vi.fn(() => ({ data: null })),
+  ME_ALBUMS_COMPLETED_KEY: ["me", "albums", "completed"],
+  useMyAlbumsCompleted: vi.fn(() => ({ data: undefined })),
 }));
 
 // ---------------------------------------------------------------------------

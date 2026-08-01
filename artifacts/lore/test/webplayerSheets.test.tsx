@@ -39,8 +39,24 @@ vi.mock("../src/lib/meHooks", () => ({
   useMyKeepStatus: vi.fn(() => ({ data: new Set() })),
   useMutationKeep: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useMutationUnkeep: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useMySpinKeepStatus: vi.fn(() => ({ data: new Map() })),
+  useMutationKeepSpin: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useMutationUnkeepSpin: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   startSpotifyLibraryConnect: vi.fn(),
 }));
+
+vi.mock("../src/player/PlayerProvider", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/player/PlayerProvider")>();
+  return {
+    ...actual,
+    usePlayer: vi.fn(() => ({
+      radio: { station: null, status: "idle", toggle: vi.fn() },
+      ride: { active: false },
+      spotify: { connected: false },
+      scan: {},
+    })),
+  };
+});
 
 vi.mock("../src/lib/local", () => ({
   useFollows: vi.fn(() => []),
