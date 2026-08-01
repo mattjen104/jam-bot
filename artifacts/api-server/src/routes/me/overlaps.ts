@@ -1,0 +1,396 @@
+import { Router, type IRouter } from "express";
+import {
+  db,
+  libraryItemsTable,
+  picksTable,
+  pickersTable,
+  spinsTable,
+  stationsTable,
+  showsTable,
+} from "@workspace/db";
+import { eq, and, ne, isNotNull, inArray, asc, sql } from "drizzle-orm";
+import { spinDayExpr } from "../../lore/runs.js";
+import { h } from "../../middlewares/asyncHandler.js";
+import { pickerNotOptedOut } from "../lore/shared.js";
+import { getForYouStations, getForYouBlogs } from "../../lore/for-you.js";
+import { type AuthedRequest } from "./auth.js";
+
+const router: IRouter = Router();
+
+// ---------------------------------------------------------------------------
+// For-You endpoints
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /api/me/stations/for-you — stations ranked by four-tier personalization:
+ * (1) artist overlap with user's library, (2) in-Lore keeps, (3) followed-picker
+ * affinity (future), (4) popularity cold-start. Grouped by genre pole.
+ * Optional: ?genre=jazz  ?limit=20
+ */
+router.get("/me/stations/for-you", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+  const genre =
+    typeof req.query["genre"] === "string" && req.query["genre"].trim()
+      ? req.query["genre"].trim().toLowerCase()
+      : undefined;
+  const limitRaw = parseInt(String(req.query["limit"] ?? ""), 10);
+  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 20;
+
+  const result = await getForYouStations(user, { genre, limit });
+
+  return res.json({
+    genre_poles: result.genre_poles.map((pole) => ({
+      genre: pole.genre,
+      items: pole.items.map((s) => ({
+        slug: s.slug,
+        name: s.name,
+        org: s.org,
+        streamUrl: s.streamUrl,
+        streamFormat: s.streamFormat,
+        homepageUrl: s.homepageUrl,
+        logoUrl: s.logoUrl,
+        tags: s.tags,
+        popularity: s.clickcount + s.votes,
+        overlap: s.overlap,
+      })),
+    })),
+    cold_start: result.cold_start,
+    ...(result.prompt ? { prompt: result.prompt } : {}),
+  });
+}));
+
+/**
+ * GET /api/me/blogs/for-you — blog pickers ranked by four-tier personalization.
+ * Optional: ?genre=jazz  ?limit=20
+ */
+router.get("/me/blogs/for-you", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+  const genre =
+    typeof req.query["genre"] === "string" && req.query["genre"].trim()
+      ? req.query["genre"].trim().toLowerCase()
+      : undefined;
+  const limitRaw = parseInt(String(req.query["limit"] ?? ""), 10);
+  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 20;
+
+  const result = await getForYouBlogs(user, { genre, limit });
+
+  return res.json({
+    genre_poles: result.genre_poles.map((pole) => ({
+      genre: pole.genre,
+      items: pole.items.map((b) => ({
+        handle: b.handle,
+        name: b.name,
+        homeUrl: b.homeUrl,
+        tags: b.tags,
+        pick_count: b.pickCount,
+        overlap: b.overlap,
+      })),
+    })),
+    cold_start: result.cold_start,
+    ...(result.prompt ? { prompt: result.prompt } : {}),
+  });
+}));
+
+/**
+ * GET /api/me/ghost/missed — stations that played the user's library artists
+ * in the rolling 24 h window but that the user has never consciously tuned
+ * into (no listens record for that station).
+ *
+ * Join path: library_items → recordings (artist_mbid) → spins (24 h) →
+ * stations.  Excludes stations with any listens row for this user.
+ * Returns at most 20 stations ordered by sort_order, name.
+ */
+router.get("/me/ghost/missed", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+
+  type GhostRow = {
+    station_id: number;
+    slug: string;
+    name: string;
+    stream_url: string;
+    stream_format: string;
+    mode: string;
+    attribution: boolean;
+    artist_name: string;
+  };
+
+  const rows = await db.execute<GhostRow>(sql`
+    WITH lib_artists AS (
+      SELECT DISTINCT r.artist_mbid
+      FROM library_items li
+      JOIN recordings r ON li.mbid = r.mbid
+      WHERE li.user_id = ${user.id}
+        AND r.artist_mbid IS NOT NULL
+    ),
+    heard_stations AS (
+      SELECT DISTINCT station_id
+      FROM listens
+      WHERE user_id = ${user.id}
+        AND station_id IS NOT NULL
+    ),
+    ghost_candidates AS (
+      SELECT DISTINCT ON (s.station_id)
+        s.station_id,
+        r.artist AS artist_name
+      FROM spins s
+      JOIN recordings r ON s.mbid = r.mbid
+      JOIN lib_artists la ON r.artist_mbid = la.artist_mbid
+      WHERE s.played_at >= NOW() - INTERVAL '24 hours'
+      ORDER BY s.station_id, s.played_at DESC
+    )
+    SELECT
+      st.id             AS station_id,
+      st.slug,
+      st.name,
+      st.stream_url,
+      st.stream_format,
+      st.mode,
+      st.attribution,
+      gc.artist_name
+    FROM ghost_candidates gc
+    JOIN stations st ON gc.station_id = st.id
+    LEFT JOIN heard_stations hs ON hs.station_id = st.id
+    WHERE st.active = true
+      AND st.hidden = false
+      AND hs.station_id IS NULL
+    ORDER BY st.sort_order, st.name
+    LIMIT 20
+  `);
+
+  return res.json({
+    stations: rows.rows.map((r) => ({
+      stationId: r.station_id,
+      slug: r.slug,
+      name: r.name,
+      streamUrl: r.stream_url,
+      streamFormat: r.stream_format ?? "aac",
+      mode: r.mode ?? "live",
+      attribution: r.attribution ?? true,
+      artistName: r.artist_name,
+    })),
+  });
+}));
+
+// ---------------------------------------------------------------------------
+// Taste overlap endpoints
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /api/me/overlaps/pickers — pickers ranked by exact-MBID intersection
+ * with the user's library_items.  Shape mirrors station→picker overlaps.
+ */
+router.get("/me/overlaps/pickers", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+
+  const userLib = db
+    .select({ mbid: libraryItemsTable.mbid })
+    .from(libraryItemsTable)
+    .where(eq(libraryItemsTable.userId, user.id));
+
+  const sharedExpr = sql<number>`count(distinct ${picksTable.mbid})::int`;
+
+  const rows = await db
+    .select({
+      name: pickersTable.name,
+      handle: pickersTable.handle,
+      pickerType: pickersTable.pickerType,
+      trustTier: pickersTable.trustTier,
+      sharedCount: sharedExpr,
+    })
+    .from(picksTable)
+    .innerJoin(pickersTable, eq(picksTable.pickerId, pickersTable.id))
+    .where(
+      and(
+        eq(pickersTable.active, true),
+        ne(pickersTable.pickerType, "dj"),
+        isNotNull(picksTable.mbid),
+        inArray(picksTable.mbid, userLib),
+        pickerNotOptedOut(pickersTable.id),
+      ),
+    )
+    .groupBy(
+      pickersTable.id,
+      pickersTable.name,
+      pickersTable.handle,
+      pickersTable.pickerType,
+      pickersTable.trustTier,
+    )
+    .orderBy(
+      sql`count(distinct ${picksTable.mbid}) desc`,
+      asc(pickersTable.trustTier),
+      asc(pickersTable.name),
+    )
+    .limit(20);
+
+  return res.json({
+    items: rows.map((r) => ({
+      picker: {
+        name: r.name,
+        handle: r.handle,
+        pickerType: r.pickerType,
+        trustTier: r.trustTier,
+      },
+      sharedCount: r.sharedCount,
+    })),
+  });
+}));
+
+/**
+ * GET /api/me/overlaps/selectors — DJ selectors (radio pickers) ranked by how
+ * many of the caller's library recordings they have ever aired.  Mirrors
+ * /overlaps/pickers but targets pickerType = 'dj' and uses the picks table
+ * (DJ show picks are ingested there the same as curated picks).
+ */
+router.get("/me/overlaps/selectors", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+
+  const userLib = db
+    .select({ mbid: libraryItemsTable.mbid })
+    .from(libraryItemsTable)
+    .where(eq(libraryItemsTable.userId, user.id));
+
+  const sharedExpr = sql<number>`count(distinct ${picksTable.mbid})::int`;
+
+  const rows = await db
+    .select({
+      name: pickersTable.name,
+      handle: pickersTable.handle,
+      sharedCount: sharedExpr,
+    })
+    .from(picksTable)
+    .innerJoin(pickersTable, eq(picksTable.pickerId, pickersTable.id))
+    .where(
+      and(
+        eq(pickersTable.active, true),
+        eq(pickersTable.pickerType, "dj"),
+        isNotNull(picksTable.mbid),
+        inArray(picksTable.mbid, userLib),
+        pickerNotOptedOut(pickersTable.id),
+      ),
+    )
+    .groupBy(pickersTable.id, pickersTable.name, pickersTable.handle)
+    .orderBy(sql`count(distinct ${picksTable.mbid}) desc`, asc(pickersTable.name))
+    .limit(500);
+
+  return res.json({
+    items: rows.map((r) => ({
+      selector: { name: r.name, handle: r.handle },
+      sharedCount: r.sharedCount,
+    })),
+  });
+}));
+
+/**
+ * GET /api/me/overlaps/stations — stations ranked by shared spins with the
+ * user's library_items.
+ */
+router.get("/me/overlaps/stations", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+
+  const userLib = db
+    .select({ mbid: libraryItemsTable.mbid })
+    .from(libraryItemsTable)
+    .where(eq(libraryItemsTable.userId, user.id));
+
+  const sharedExpr = sql<number>`count(distinct ${spinsTable.mbid})::int`;
+
+  const rows = await db
+    .select({
+      slug: stationsTable.slug,
+      name: stationsTable.name,
+      stationClass: stationsTable.stationClass,
+      sharedCount: sharedExpr,
+    })
+    .from(spinsTable)
+    .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
+    .where(
+      and(
+        isNotNull(spinsTable.mbid),
+        inArray(spinsTable.mbid, userLib),
+        eq(stationsTable.hidden, false),
+      ),
+    )
+    .groupBy(stationsTable.id, stationsTable.slug, stationsTable.name, stationsTable.stationClass)
+    .orderBy(
+      sql`count(distinct ${spinsTable.mbid}) desc`,
+      asc(stationsTable.name),
+    )
+    .limit(20);
+
+  return res.json({
+    items: rows.map((r) => ({
+      station: {
+        slug: r.slug,
+        name: r.name,
+        stationClass: r.stationClass,
+      },
+      sharedCount: r.sharedCount,
+    })),
+  });
+}));
+
+/**
+ * GET /api/me/overlaps/runs — station broadcast runs with `owned` (MBIDs in
+ * user's library) and `discover` (resolved MBIDs NOT in library), ranked by
+ * owned desc, then discover desc.
+ */
+router.get("/me/overlaps/runs", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+  const { showsTable } = await import("@workspace/db");
+  const { spinDayExpr } = await import("../../lore/runs.js");
+
+  const userMbids = db
+    .select({ mbid: libraryItemsTable.mbid })
+    .from(libraryItemsTable)
+    .where(eq(libraryItemsTable.userId, user.id));
+
+  const rows = await db
+    .select({
+      runId: sql<number>`min(${spinsTable.id})`,
+      day: spinDayExpr,
+      stationSlug: stationsTable.slug,
+      stationName: stationsTable.name,
+      stationClass: stationsTable.stationClass,
+      showName: showsTable.name,
+      djName: showsTable.djName,
+      owned: sql<number>`count(*) filter (where ${spinsTable.mbid} in (${userMbids}))::int`,
+      discover: sql<number>`count(*) filter (where ${spinsTable.mbid} is not null and ${spinsTable.mbid} not in (${userMbids}))::int`,
+    })
+    .from(spinsTable)
+    .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
+    .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id))
+    .where(and(isNotNull(spinsTable.mbid), eq(stationsTable.hidden, false)))
+    .groupBy(
+      spinDayExpr,
+      spinsTable.stationId,
+      spinsTable.showId,
+      stationsTable.slug,
+      stationsTable.name,
+      stationsTable.stationClass,
+      showsTable.name,
+      showsTable.djName,
+    )
+    .having(sql`count(*) filter (where ${spinsTable.mbid} in (${userMbids})) > 0`)
+    .orderBy(
+      sql`count(*) filter (where ${spinsTable.mbid} in (${userMbids})) desc`,
+      sql`count(*) filter (where ${spinsTable.mbid} is not null and ${spinsTable.mbid} not in (${userMbids})) desc`,
+    )
+    .limit(30);
+
+  return res.json({
+    items: rows.map((r) => ({
+      runId: r.runId,
+      day: r.day,
+      station: {
+        slug: r.stationSlug,
+        name: r.stationName,
+        stationClass: r.stationClass,
+      },
+      show: r.showName ? { name: r.showName, djName: r.djName ?? null } : null,
+      owned: r.owned,
+      discover: r.discover,
+    })),
+  });
+}));
+
+export default router;
