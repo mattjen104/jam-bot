@@ -181,6 +181,58 @@ describe("ShowTimeline — Play icon on active chip with zero resolved tracks", 
   });
 });
 
+describe("ShowTimeline — stale-only run (the latent-bug scenario)", () => {
+  /**
+   * When the ONLY run ended more than 4 hours ago the previous code fell back to
+   * runs[runs.length - 1] as the activeRunId, making that stale chip appear
+   * "live" and showing the Play icon.  After the fix, no run is active and the
+   * Play icon must be absent (resolvedCount is also 0, so replayable is false).
+   */
+  it("does NOT show the Play icon when the only run ended >4 hours ago and has no resolved tracks", () => {
+    const now = Date.now();
+    const staleRun = makeRun({
+      runId: 99,
+      resolvedCount: 0,
+      startedAt: new Date(now - 10 * 60 * 60_000).toISOString(), // 10 h ago
+      endedAt: new Date(now - 6 * 60 * 60_000).toISOString(),    // 6 h ago — outside 4 h window
+    });
+
+    const { container } = renderList("test-fm", [staleRun]);
+
+    const chip = getChip(container, 99);
+    expect(chip, "show-chip-99 should be in the DOM").not.toBeNull();
+
+    // Neither active (ended long ago) nor replayable (no resolved tracks).
+    const svg = chip!.querySelector("svg");
+    expect(
+      svg,
+      "Play icon <svg> must NOT appear when the only run ended >4 h ago and resolvedCount=0",
+    ).toBeNull();
+  });
+
+  it("DOES show the Play icon when the only run ended >4 hours ago but has resolved tracks (replayable)", () => {
+    const now = Date.now();
+    const replayableStaleRun = makeRun({
+      runId: 100,
+      resolvedCount: 7,
+      startedAt: new Date(now - 10 * 60 * 60_000).toISOString(),
+      endedAt: new Date(now - 6 * 60 * 60_000).toISOString(),
+    });
+
+    const { container } = renderList("test-fm", [replayableStaleRun]);
+
+    const chip = getChip(container, 100);
+    expect(chip, "show-chip-100 should be in the DOM").not.toBeNull();
+
+    // Not active, but replayable — Play icon should still appear.
+    const svg = chip!.querySelector("svg");
+    expect(
+      svg,
+      "Play icon <svg> SHOULD appear when resolvedCount > 0 even though the run is stale",
+    ).not.toBeNull();
+  });
+});
+
 describe("ShowTimeline — Play icon on replayable chips (existing behaviour)", () => {
   it("renders the Play icon on a past chip that has resolved tracks even when not active", () => {
     const now = Date.now();

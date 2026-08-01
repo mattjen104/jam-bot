@@ -576,12 +576,16 @@ function ShowTimeline({
   stationSlug: string;
 }) {
   const now = Date.now();
-  const activeRunId =
-    runs.find(
-      (r) =>
-        new Date(r.startedAt).getTime() <= now &&
-        new Date(r.endedAt).getTime() >= now - 4 * 60 * 60 * 1000,
-    )?.runId ?? runs[runs.length - 1]?.runId;
+  // Only mark a run active when it genuinely overlaps the current window (started
+  // already and ended no more than 4 hours ago).  The previous fallback to
+  // runs[runs.length - 1] caused stale runs that ended hours ago to appear
+  // "live" and show the Play icon to listeners who opened the page long after
+  // the station had gone off air.
+  const activeRunId = runs.find(
+    (r) =>
+      new Date(r.startedAt).getTime() <= now &&
+      new Date(r.endedAt).getTime() >= now - 4 * 60 * 60 * 1000,
+  )?.runId;
 
   return (
     <div
