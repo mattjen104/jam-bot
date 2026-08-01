@@ -46,6 +46,8 @@ const SID_OTHER = `test-lcov-other-${run}`;
 const RG_ALBUM_A = `test-lcov-rg-a-${run}`;
 /** Album only linked via a fuzzy list_entries row → must be excluded. */
 const RG_ALBUM_B = `test-lcov-rg-b-${run}`;
+/** Album linked via a fuzzy list_entries row with confirmed=true → must be included. */
+const RG_ALBUM_C = `test-lcov-rg-c-${run}`;
 
 // ── recordings ───────────────────────────────────────────────────────────────
 /** First recording belonging to album A. */
@@ -54,6 +56,8 @@ const MBID_A1 = `test-lcov-a1-${run}`;
 const MBID_A2 = `test-lcov-a2-${run}`;
 /** Recording belonging to album B (fuzzy entry — should not appear). */
 const MBID_B = `test-lcov-b-${run}`;
+/** Recording belonging to album C (fuzzy + confirmed=true — should appear). */
+const MBID_C = `test-lcov-c-${run}`;
 
 // ── DB row IDs for cleanup ───────────────────────────────────────────────────
 let dbAvailable = false;
@@ -110,20 +114,24 @@ beforeAll(async () => {
     { mbid: MBID_A1, title: "Track One (Album A)", artist: `Artist ${run}` },
     { mbid: MBID_A2, title: "Track Two (Album A)", artist: `Artist ${run}` },
     { mbid: MBID_B,  title: "Track One (Album B)", artist: `Artist ${run}` },
+    { mbid: MBID_C,  title: "Track One (Album C)", artist: `Artist ${run}` },
   ]);
 
-  // Link both A-recordings to release group A, and B-recording to release group B.
+  // Link both A-recordings to release group A, B-recording to release group B,
+  // and C-recording to release group C.
   await db.insert(recordingReleaseGroupsTable).values([
     { recordingMbid: MBID_A1, releaseGroupMbid: RG_ALBUM_A, isPrimary: true,  title: `Album A ${run}`, releaseYear: 2020 },
     { recordingMbid: MBID_A2, releaseGroupMbid: RG_ALBUM_A, isPrimary: false, title: `Album A ${run}`, releaseYear: 2020 },
     { recordingMbid: MBID_B,  releaseGroupMbid: RG_ALBUM_B, isPrimary: true,  title: `Album B ${run}`, releaseYear: 2021 },
+    { recordingMbid: MBID_C,  releaseGroupMbid: RG_ALBUM_C, isPrimary: true,  title: `Album C ${run}`, releaseYear: 2022 },
   ]);
 
-  // Library: user owns both Album A recordings and the Album B recording.
+  // Library: user owns both Album A recordings, the Album B recording, and the Album C recording.
   await db.insert(libraryItemsTable).values([
     { userId: userId!, mbid: MBID_A1, provenance: { kind: "keep" }, addedAt: new Date() },
     { userId: userId!, mbid: MBID_A2, provenance: { kind: "keep" }, addedAt: new Date() },
     { userId: userId!, mbid: MBID_B,  provenance: { kind: "keep" }, addedAt: new Date() },
+    { userId: userId!, mbid: MBID_C,  provenance: { kind: "keep" }, addedAt: new Date() },
   ]);
 
   // List source (publication).
@@ -149,6 +157,7 @@ beforeAll(async () => {
 
   // Album A → exact confidence (should appear).
   // Album B → fuzzy, not confirmed (should NOT appear).
+  // Album C → fuzzy, confirmed=true (should appear — the regression case).
   await db.insert(listEntriesTable).values([
     {
       listId: listId!,
@@ -166,6 +175,15 @@ beforeAll(async () => {
       confidence: "fuzzy",
       confirmed: false,
       rawAlbum: `Album B ${run}`,
+      rawArtist: `Artist ${run}`,
+    },
+    {
+      listId: listId!,
+      releaseGroupMbid: RG_ALBUM_C,
+      rank: 3,
+      confidence: "fuzzy",
+      confirmed: true,
+      rawAlbum: `Album C ${run}`,
       rawArtist: `Artist ${run}`,
     },
   ]);
@@ -197,15 +215,15 @@ afterAll(async () => {
     }
   }
   await db.delete(recordingReleaseGroupsTable).where(
-    inArray(recordingReleaseGroupsTable.recordingMbid, [MBID_A1, MBID_A2, MBID_B]),
+    inArray(recordingReleaseGroupsTable.recordingMbid, [MBID_A1, MBID_A2, MBID_B, MBID_C]),
   );
   await db.delete(recordingsTable).where(
-    inArray(recordingsTable.mbid, [MBID_A1, MBID_A2, MBID_B]),
+    inArray(recordingsTable.mbid, [MBID_A1, MBID_A2, MBID_B, MBID_C]),
   );
   for (const sid of [SID, SID_OTHER]) {
     await db.delete(spotifyConnectionsTable).where(eq(spotifyConnectionsTable.sid, sid));
   }
-});
+}, 30_000);
 
 // ── tests ─────────────────────────────────────────────────────────────────────
 describe("GET /api/me/library/list-coverage", () => {
@@ -279,5 +297,21 @@ describe("GET /api/me/library/list-coverage", () => {
     // The other user's library is empty so no seeded lists should appear.
     const ourList = body.items.find((i: { listId: number }) => i.listId === listId);
     expect(ourList).toBeUndefined();
+  });
+
+  it("includes a fuzzy entry once confirmed=true is set", async () => {
+    if (!dbAvailable) return;
+    const { body } = await getCoverage(SID);
+
+    const listEntry = body.items.find((i: { listId: number }) => i.listId === listId);
+    expect(listEntry).toBeDefined();
+
+    // Album C has confidence='fuzzy' but confirmed=true — it must appear exactly once.
+    const albumCEntries = listEntry.albums.filter(
+      (a: { releaseGroupMbid: string }) => a.releaseGroupMbid === RG_ALBUM_C,
+    );
+    expect(albumCEntries).toHaveLength(1);
+    expect(albumCEntries[0].rank).toBe(3);
+    expect(albumCEntries[0].releaseGroupMbid).toBe(RG_ALBUM_C);
   });
 });
