@@ -7,17 +7,19 @@ import { useLatestImportJob } from "../lib/meHooks";
 const DONE_TTL_MS = 45_000;
 
 function phaseLabel(job: ImportJobStatus): string {
-  if (job.resumedFrom != null && job.phase !== "fetching") {
-    return "Resuming from previous session…";
-  }
   const isManual = job.service === "manual";
   switch (job.phase) {
     case "fetching": return "Reading your Spotify library…";
     case "spine":    return isManual ? "Preparing track list…" : "Building track index…";
     case "cache":    return "Loading cached matches…";
-    case "resolve":  return "Matching against your library…";
+    case "resolve":  return "Matching tracks…";
     default:         return isManual ? "Preparing track list…" : "Reading your Spotify library…";
   }
+}
+
+/** True when this job is a continuation of a previous run (e.g. after a server reboot). */
+function isResumed(job: ImportJobStatus): boolean {
+  return job.resumedFrom != null;
 }
 
 /**
@@ -105,10 +107,31 @@ export function ImportStrip() {
         style={{ color: "hsl(var(--primary))" }}
         aria-hidden="true"
       />
-      <p className="flex-1 font-mono text-[11px] text-muted-foreground">
-          {phaseLabel(job)} · {job.resolved.toLocaleString()} /{" "}
-        {job.total.toLocaleString()} tracks resolved — matches update as we go
-      </p>
+      <div className="flex flex-1 flex-col gap-0.5 min-w-0">
+        <div className="flex items-center gap-2">
+          {isResumed(job) && (
+            <span
+              className="shrink-0 rounded-sm px-1 font-mono text-[10px] font-medium leading-[1.6]"
+              style={{
+                background: "hsl(var(--primary) / 0.12)",
+                color: "hsl(var(--primary))",
+              }}
+              data-testid="import-resuming-badge"
+            >
+              Resuming
+            </span>
+          )}
+          <p className="font-mono text-[11px] text-muted-foreground truncate">
+            {phaseLabel(job)} · {job.resolved.toLocaleString()} /{" "}
+            {job.total.toLocaleString()} tracks resolved — matches update as we go
+          </p>
+        </div>
+        {isResumed(job) && (
+          <p className="font-mono text-[10px]" style={{ color: "hsl(var(--faint))" }}>
+            Picked up where it left off — no tracks lost
+          </p>
+        )}
+      </div>
       <div
         className="shrink-0 overflow-hidden rounded-sm"
         style={{ width: 80, height: 3, background: "hsl(var(--border))" }}
