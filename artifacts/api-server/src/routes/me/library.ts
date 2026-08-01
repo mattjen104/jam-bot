@@ -73,6 +73,10 @@ const PHASE3_RETRY_MAX_JOB_AGE_MS = 7 * 24 * 60 * 60_000; // 7 days
  *  Prevents un-resolvable tracks from spawning a new retry job every night
  *  when MusicBrainz is persistently degraded. */
 const PHASE3_MAX_RETRY_ATTEMPTS = 3;
+/** If the remaining window at the start of a retry pass is below this
+ *  threshold (ms), a warning is logged so clock drift is visible in logs
+ *  without causing a crash. */
+const PHASE3_RETRY_MIN_WINDOW_WARN_MS = 60_000; // 60 s
 
 const SPOTIFY_TRACK_API = "https://api.spotify.com/v1/tracks";
 /** Endpoint for checking whether tracks are saved in the user's Spotify library. */
@@ -1015,6 +1019,19 @@ export async function runPhase3RetryPass(deadline?: Date): Promise<void> {
 
   if (dedupedCandidates.length === 0) return;
 
+  // Warn early if clock drift has already eaten most of the window so ops
+  // teams can see it in logs without needing to wait for a crash.
+  if (deadline) {
+    const windowRemainingMs = Math.max(0, deadline.getTime() - Date.now());
+    if (windowRemainingMs < PHASE3_RETRY_MIN_WINDOW_WARN_MS) {
+      console.warn(
+        `[me/import/retry] clock drift warning: only ${windowRemainingMs}ms remaining ` +
+        `at pass start (expected ≥ ${PHASE3_RETRY_MIN_WINDOW_WARN_MS}ms) — ` +
+        `candidates may be skipped due to a narrowed window`,
+      );
+    }
+  }
+
   console.log(
     `[me/import/retry] off-peak pass: ${dedupedCandidates.length} candidate job(s) to check`,
   );
@@ -1061,7 +1078,7 @@ export async function runPhase3RetryPass(deadline?: Date): Promise<void> {
     // nominal inter-request delay would overrun the remaining window, skip
     // this candidate entirely rather than burning the budget and failing.
     if (deadline) {
-      const remainingMs = deadline.getTime() - Date.now();
+      const remainingMs = Math.max(0, deadline.getTime() - Date.now());
       const estimatedMs = uncachedEntries.length * IMPORT_RESOLVE_DELAY_MS;
       if (estimatedMs > remainingMs) {
         console.warn(
