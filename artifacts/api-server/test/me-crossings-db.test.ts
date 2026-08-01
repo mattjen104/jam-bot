@@ -48,6 +48,7 @@ const SID_SOFT     = `test-cross-soft-${run}`;     // soft artist fallback user
 const SID_EMPTY    = `test-cross-empty-${run}`;    // empty library (baseline)
 const SID_LIFETIME     = `test-cross-lifetime-${run}`;     // lifetime-only crossing (spin > 24h old)
 const SID_LIFETIME_ART = `test-cross-lt-art-${run}`;    // lifetime artist-crossing (spin > 24h old, no exact-MBID match)
+const SID_SORT     = `test-cross-sort-${run}`;     // two-station sort comparison user
 
 // ── Recordings ────────────────────────────────────────────────────────────────
 // Scenario 1 — release-group widening
@@ -76,8 +77,22 @@ const ARTIST_MBID_LT          = `tc-artist-lt-${run}`;     // shared artist MBID
 const MBID_SPIN_LIFETIME_ART  = `tc-spin-lt-art-${run}`;   // aired 25h ago (not in library)
 const MBID_LIB_LIFETIME_ART   = `tc-lib-lt-art-${run}`;    // in library (same artistMbid)
 
+// Scenario 6 — two-station sort by lifetimeArtistCrossings
+// Station A plays 3 distinct tracks by ARTIST_MBID_SORT (all >24h ago, not in library).
+// Station B plays 1 distinct track by the same artist (>24h ago, not in library).
+// The user's library holds a different track by ARTIST_MBID_SORT → artist crossings only.
+// Expected: station A lifetimeArtistCrossings=3, station B lifetimeArtistCrossings=1; A > B.
+const ARTIST_MBID_SORT        = `tc-artist-sort-${run}`;
+const MBID_SORT_A1            = `tc-sort-a1-${run}`;
+const MBID_SORT_A2            = `tc-sort-a2-${run}`;
+const MBID_SORT_A3            = `tc-sort-a3-${run}`;
+const MBID_SORT_B1            = `tc-sort-b1-${run}`;
+const MBID_LIB_SORT           = `tc-lib-sort-${run}`;      // library track (same artist, never aired)
+
 // ── Station ───────────────────────────────────────────────────────────────────
-const STATION_SLUG = `test-cross-sta-${run}`;
+const STATION_SLUG      = `test-cross-sta-${run}`;
+const STATION_SLUG_SORT_A = `test-cross-sort-a-${run}`;
+const STATION_SLUG_SORT_B = `test-cross-sort-b-${run}`;
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let dbAvailable = false;
@@ -86,12 +101,15 @@ let server: Server | undefined;
 let baseUrl = "";
 
 let stationId: number | null = null;
+let stationSortAId: number | null = null;
+let stationSortBId: number | null = null;
 let userRgId: number | null = null;
 let userArtId: number | null = null;
 let userSoftId: number | null = null;
 let userEmptyId: number | null = null;
 let userLifetimeId: number | null = null;
 let userLifetimeArtId: number | null = null;
+let userSortId: number | null = null;
 
 // ── HTTP helper ───────────────────────────────────────────────────────────────
 async function get(path: string, sid?: string) {
@@ -111,7 +129,7 @@ beforeAll(async () => {
   }
 
   // Legacy spotify_connections (FK required by lore_users)
-  for (const sid of [SID_RG, SID_ART, SID_SOFT, SID_EMPTY, SID_LIFETIME, SID_LIFETIME_ART]) {
+  for (const sid of [SID_RG, SID_ART, SID_SOFT, SID_EMPTY, SID_LIFETIME, SID_LIFETIME_ART, SID_SORT]) {
     await db.insert(spotifyConnectionsTable).values({
       sid,
       accessToken: "t",
@@ -157,6 +175,12 @@ beforeAll(async () => {
     .returning({ id: loreUsersTable.id });
   userLifetimeArtId = uLifetimeArt!.id;
 
+  const [uSort] = await db
+    .insert(loreUsersTable)
+    .values({ spotifyUserId: `cross-sort-${run}`, spotifyConnectionId: SID_SORT, deviceKey: SID_SORT })
+    .returning({ id: loreUsersTable.id });
+  userSortId = uSort!.id;
+
   // ── Recordings ───────────────────────────────────────────────────────────────
   await db.insert(recordingsTable).values([
     // Scenario 1
@@ -172,6 +196,12 @@ beforeAll(async () => {
     // Scenario 5 — lifetime artist crossing (spin NOT in library, but artist is)
     { mbid: MBID_SPIN_LIFETIME_ART,    title: "Spin Track Lifetime Art",    artist: `LT Art Artist ${run}`, artistMbid: ARTIST_MBID_LT },
     { mbid: MBID_LIB_LIFETIME_ART,     title: "Lib Track Lifetime Art",     artist: `LT Art Artist ${run}`, artistMbid: ARTIST_MBID_LT },
+    // Scenario 6 — sort: 3 distinct tracks on station A, 1 on station B (all >24h, not in library)
+    { mbid: MBID_SORT_A1,              title: "Sort Track A1",              artist: `Sort Artist ${run}`, artistMbid: ARTIST_MBID_SORT },
+    { mbid: MBID_SORT_A2,              title: "Sort Track A2",              artist: `Sort Artist ${run}`, artistMbid: ARTIST_MBID_SORT },
+    { mbid: MBID_SORT_A3,              title: "Sort Track A3",              artist: `Sort Artist ${run}`, artistMbid: ARTIST_MBID_SORT },
+    { mbid: MBID_SORT_B1,              title: "Sort Track B1",              artist: `Sort Artist ${run}`, artistMbid: ARTIST_MBID_SORT },
+    { mbid: MBID_LIB_SORT,             title: "Sort Lib Track",             artist: `Sort Artist ${run}`, artistMbid: ARTIST_MBID_SORT },
   ]);
 
   // Release-group bridge rows (both recordings share the same primary RG)
@@ -256,6 +286,47 @@ beforeAll(async () => {
     { userId: userLifetimeArtId!, mbid: MBID_LIB_LIFETIME_ART, provenance: { kind: "keep" }, addedAt: new Date() },
   ]);
 
+  // ── Scenario 6 — two-station sort ────────────────────────────────────────────
+  const [stationSortA] = await db
+    .insert(stationsTable)
+    .values({
+      slug: STATION_SLUG_SORT_A,
+      name: `Test Sort Station A ${run}`,
+      streamUrl: "http://example.invalid/sort-a",
+      stationClass: "community",
+    })
+    .returning({ id: stationsTable.id });
+  stationSortAId = stationSortA!.id;
+
+  const [stationSortB] = await db
+    .insert(stationsTable)
+    .values({
+      slug: STATION_SLUG_SORT_B,
+      name: `Test Sort Station B ${run}`,
+      streamUrl: "http://example.invalid/sort-b",
+      stationClass: "community",
+    })
+    .returning({ id: stationsTable.id });
+  stationSortBId = stationSortB!.id;
+
+  // All sort spins are 25h old (outside the 24h window) so they count only
+  // toward lifetimeArtistCrossings, not the rolling artistCrossings.
+  const ago25hSort = new Date(now.getTime() - 25 * 60 * 60 * 1000);
+  await db.insert(spinsTable).values([
+    // Station A — 3 distinct tracks by ARTIST_MBID_SORT
+    { stationId: stationSortAId!, mbid: MBID_SORT_A1, confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: ago25hSort },
+    { stationId: stationSortAId!, mbid: MBID_SORT_A2, confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: new Date(ago25hSort.getTime() - 60_000) },
+    { stationId: stationSortAId!, mbid: MBID_SORT_A3, confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: new Date(ago25hSort.getTime() - 120_000) },
+    // Station B — 1 distinct track by ARTIST_MBID_SORT
+    { stationId: stationSortBId!, mbid: MBID_SORT_B1, confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: ago25hSort },
+  ]);
+
+  // User SORT: library has MBID_LIB_SORT (same artist MBID_SORT, but never aired)
+  // → all station A / B spins are artist crossings only (not library hits).
+  await db.insert(libraryItemsTable).values([
+    { userId: userSortId!, mbid: MBID_LIB_SORT, provenance: { kind: "keep" }, addedAt: new Date() },
+  ]);
+
   // ── Server ───────────────────────────────────────────────────────────────────
   server = app.listen(0);
   await new Promise<void>((resolve) => server!.once("listening", resolve));
@@ -276,16 +347,24 @@ afterAll(async () => {
   }
 
   // Library items
-  for (const userId of [userRgId, userArtId, userSoftId, userEmptyId, userLifetimeId, userLifetimeArtId]) {
+  for (const userId of [userRgId, userArtId, userSoftId, userEmptyId, userLifetimeId, userLifetimeArtId, userSortId]) {
     if (userId != null) {
       await db.delete(libraryItemsTable).where(eq(libraryItemsTable.userId, userId));
     }
   }
 
-  // Spins + station
+  // Spins + stations
   if (stationId != null) {
     await db.delete(spinsTable).where(eq(spinsTable.stationId, stationId));
     await db.delete(stationsTable).where(eq(stationsTable.id, stationId));
+  }
+  if (stationSortAId != null) {
+    await db.delete(spinsTable).where(eq(spinsTable.stationId, stationSortAId));
+    await db.delete(stationsTable).where(eq(stationsTable.id, stationSortAId));
+  }
+  if (stationSortBId != null) {
+    await db.delete(spinsTable).where(eq(spinsTable.stationId, stationSortBId));
+    await db.delete(stationsTable).where(eq(stationsTable.id, stationSortBId));
   }
 
   // Release-group bridge rows + recordings (cascade deletes rrg rows automatically,
@@ -296,6 +375,7 @@ afterAll(async () => {
     MBID_SPIN_SOFT,
     MBID_SPIN_LIFETIME,
     MBID_SPIN_LIFETIME_ART, MBID_LIB_LIFETIME_ART,
+    MBID_SORT_A1, MBID_SORT_A2, MBID_SORT_A3, MBID_SORT_B1, MBID_LIB_SORT,
   ]) {
     await db
       .delete(recordingReleaseGroupsTable)
@@ -304,14 +384,14 @@ afterAll(async () => {
   }
 
   // Lore users
-  for (const userId of [userRgId, userArtId, userSoftId, userEmptyId, userLifetimeId, userLifetimeArtId]) {
+  for (const userId of [userRgId, userArtId, userSoftId, userEmptyId, userLifetimeId, userLifetimeArtId, userSortId]) {
     if (userId != null) {
       await db.delete(loreUsersTable).where(eq(loreUsersTable.id, userId));
     }
   }
 
   // Legacy spotify connections
-  for (const sid of [SID_RG, SID_ART, SID_SOFT, SID_EMPTY, SID_LIFETIME, SID_LIFETIME_ART]) {
+  for (const sid of [SID_RG, SID_ART, SID_SOFT, SID_EMPTY, SID_LIFETIME, SID_LIFETIME_ART, SID_SORT]) {
     await db.delete(spotifyConnectionsTable).where(eq(spotifyConnectionsTable.sid, sid));
   }
 });
@@ -454,6 +534,56 @@ describe("GET /api/me/crossings — lifetime artist crossing (spin outside 24h w
     expect(row!.artistCrossings).toBe(0);                  // nothing within 24h
     expect(row!.lifetimeCrossings).toBe(0);                // aired track not in library
     expect(row!.lifetimeArtistCrossings).toBe(1);          // two spins of one distinct recording
+  }, TEST_TIMEOUT);
+});
+
+describe("GET /api/me/crossings — two-station sort by lifetimeArtistCrossings", () => {
+  it("station with 3 distinct artist tracks scores higher than station with 1", async () => {
+    if (!dbAvailable) return;
+
+    _testOnly_clearCrossingsCache(userSortId!);
+
+    const { status, body } = await get("/api/me/crossings", SID_SORT);
+    expect(status).toBe(200);
+
+    type CrossingItem = {
+      stationSlug: string;
+      crossings: number;
+      artistCrossings: number;
+      lifetimeCrossings: number;
+      lifetimeArtistCrossings: number;
+    };
+    const items = body.items as CrossingItem[];
+
+    const rowA = items.find((r) => r.stationSlug === STATION_SLUG_SORT_A);
+    const rowB = items.find((r) => r.stationSlug === STATION_SLUG_SORT_B);
+
+    // Both stations must appear — each has at least one lifetime artist crossing.
+    expect(rowA).toBeDefined();
+    expect(rowB).toBeDefined();
+
+    // Station A aired 3 distinct tracks by ARTIST_MBID_SORT (all >24h ago, not in library).
+    expect(rowA!.lifetimeArtistCrossings).toBe(3);
+
+    // Station B aired 1 distinct track by the same artist (>24h ago, not in library).
+    expect(rowB!.lifetimeArtistCrossings).toBe(1);
+
+    // Station A must rank above station B when sorted descending by lifetimeArtistCrossings.
+    expect(rowA!.lifetimeArtistCrossings).toBeGreaterThan(rowB!.lifetimeArtistCrossings);
+
+    // Rolling-window counts must both be 0 (spins are outside the 24h window).
+    expect(rowA!.crossings).toBe(0);
+    expect(rowA!.artistCrossings).toBe(0);
+    expect(rowB!.crossings).toBe(0);
+    expect(rowB!.artistCrossings).toBe(0);
+
+    // Confirm client-side descending sort places A before B.
+    const sortedByLifetimeArtist = [...items].sort(
+      (x, y) => y.lifetimeArtistCrossings - x.lifetimeArtistCrossings,
+    );
+    const idxA = sortedByLifetimeArtist.findIndex((r) => r.stationSlug === STATION_SLUG_SORT_A);
+    const idxB = sortedByLifetimeArtist.findIndex((r) => r.stationSlug === STATION_SLUG_SORT_B);
+    expect(idxA).toBeLessThan(idxB);
   }, TEST_TIMEOUT);
 });
 
