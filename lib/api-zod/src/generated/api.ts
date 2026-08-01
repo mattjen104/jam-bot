@@ -291,12 +291,11 @@ export const ListStationsResponse = zod.object({
           .union([
             zod.literal("automated"),
             zod.literal("human"),
-            zod.literal("mixed"),
             zod.literal(null),
           ])
           .nullish()
           .describe(
-            'Broad classification of how a station\'s programming is produced. \"automated\" = algorithmic\/jukebox rotation, no human curation; \"human\" = live or pre-recorded human-selected programming; \"mixed\" = both (e.g. overnight automation + daytime shows). Null when not yet classified.',
+            'Broad classification of how a station\'s programming is produced. \"automated\" = algorithmic\/jukebox rotation, no human curation; \"human\" = live or pre-recorded human-selected programming. Stations that mix both are resolved to \"human\" or \"automated\" at query time and never returned as \"mixed\". Null when not yet classified.',
           ),
       })
       .describe("A curated radio station in the public directory."),
@@ -622,12 +621,11 @@ export const GetStationNowPlayingResponse = zod.object({
         .union([
           zod.literal("automated"),
           zod.literal("human"),
-          zod.literal("mixed"),
           zod.literal(null),
         ])
         .nullish()
         .describe(
-          'Broad classification of how a station\'s programming is produced. \"automated\" = algorithmic\/jukebox rotation, no human curation; \"human\" = live or pre-recorded human-selected programming; \"mixed\" = both (e.g. overnight automation + daytime shows). Null when not yet classified.',
+          'Broad classification of how a station\'s programming is produced. \"automated\" = algorithmic\/jukebox rotation, no human curation; \"human\" = live or pre-recorded human-selected programming. Stations that mix both are resolved to \"human\" or \"automated\" at query time and never returned as \"mixed\". Null when not yet classified.',
         ),
     })
     .describe("A curated radio station in the public directory."),
@@ -1370,12 +1368,11 @@ export const GetStationArchiveResponse = zod.object({
         .union([
           zod.literal("automated"),
           zod.literal("human"),
-          zod.literal("mixed"),
           zod.literal(null),
         ])
         .nullish()
         .describe(
-          'Broad classification of how a station\'s programming is produced. \"automated\" = algorithmic\/jukebox rotation, no human curation; \"human\" = live or pre-recorded human-selected programming; \"mixed\" = both (e.g. overnight automation + daytime shows). Null when not yet classified.',
+          'Broad classification of how a station\'s programming is produced. \"automated\" = algorithmic\/jukebox rotation, no human curation; \"human\" = live or pre-recorded human-selected programming. Stations that mix both are resolved to \"human\" or \"automated\" at query time and never returned as \"mixed\". Null when not yet classified.',
         ),
     })
     .describe("A curated radio station in the public directory."),

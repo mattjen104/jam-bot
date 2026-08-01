@@ -7,7 +7,7 @@
  */
 
 /**
- * Broad classification of how a station's programming is produced. "automated" = algorithmic/jukebox rotation, no human curation; "human" = live or pre-recorded human-selected programming; "mixed" = both (e.g. overnight automation + daytime shows). Null when not yet classified.
+ * Broad classification of how a station's programming is produced. "automated" = algorithmic/jukebox rotation, no human curation; "human" = live or pre-recorded human-selected programming. Stations that mix both are resolved to "human" or "automated" at query time and never returned as "mixed". Null when not yet classified.
  * @nullable
  */
 export type StationAutomationClass =
@@ -17,5 +17,4 @@ export type StationAutomationClass =
 export const StationAutomationClass = {
   automated: "automated",
   human: "human",
-  mixed: "mixed",
 } as const;

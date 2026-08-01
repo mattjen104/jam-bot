@@ -2782,13 +2782,14 @@ components:
             until the nightly quality recompute job has run at least once.
         automationClass:
           type: ["string", "null"]
-          enum: ["automated", "human", "mixed", null]
+          enum: ["automated", "human", null]
           description: >-
             Broad classification of how a station's programming is produced.
             "automated" = algorithmic/jukebox rotation, no human curation;
-            "human" = live or pre-recorded human-selected programming;
-            "mixed" = both (e.g. overnight automation + daytime shows).
-            Null when not yet classified.
+            "human" = live or pre-recorded human-selected programming.
+            Stations that mix both are resolved to "human" or "automated" at
+            query time and never returned as "mixed". Null when not yet
+            classified.
       required:
         - id
         - slug

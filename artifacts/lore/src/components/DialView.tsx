@@ -271,8 +271,8 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onE
   // Tier 2: DJ name. Non-human stations (i.e. automationClass === 'automated')
   // have no reliable human host — suppress the fallback slot so an automated
   // period doesn't surface a stale DJ name implying a DJ is still on air.
-  // The server resolves 'mixed' stations to 'human' or 'automated' at query
-  // time, so this guard never receives the raw 'mixed' value.
+  // The schema only allows 'human' | 'automated' | null; 'mixed' is resolved
+  // server-side and never appears in API responses.
   const isNonHumanStation = ds.station.automationClass != null && ds.station.automationClass !== "human";
   const liveDjName = show?.djName ?? null;
   // When the station is live but no schedule run has attached yet (run creation
