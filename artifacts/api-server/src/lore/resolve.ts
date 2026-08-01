@@ -594,8 +594,13 @@ spinEvents.setMaxListeners(1000);
  * show handoffs (e.g. NTS briefly serving the previous show): even if the most
  * recent logged spin is a different show, we skip writing when the same sig
  * was already logged within this window to avoid a false A→B→A→B bounce.
+ *
+ * Set to 120 s (2 minutes) because ICY pollers can observe a natural A→B→A
+ * handoff cycle of up to ~90 s: the outgoing track lingers in the stream
+ * metadata for a full poll interval after the next track starts. 30 s was too
+ * narrow to catch those real-world re-surfaces.
  */
-const DEDUP_WINDOW_MS = 30_000;
+const DEDUP_WINDOW_MS = 120_000;
 
 /**
  * Change-detection path for sources that only expose "the current track" with
@@ -643,20 +648,32 @@ export async function logSpinIfChanged(
 
     // Recency dedup: the same sig was already written within DEDUP_WINDOW_MS,
     // even if a different spin landed in between (stale-data bounce guard).
+    //
+    // We fetch raw fields for all recent spins and compare via sig() in
+    // application code rather than using exact-string equality in SQL.
+    // Exact eq() misses near-duplicates such as an en-dash vs hyphen in the
+    // artist name ("Fleetwood Mac\u2013Nicks" vs "Fleetwood Mac-Nicks"), which
+    // sig()/normalizeKey() both collapse to the same normalised key.
     const windowStart = new Date(Date.now() - DEDUP_WINDOW_MS);
-    const recentMatch = await db
-      .select({ id: spinsTable.id })
+    const recentSpins = await db
+      .select({
+        rawArtist: spinsTable.rawArtist,
+        rawTitle: spinsTable.rawTitle,
+      })
       .from(spinsTable)
       .where(
         and(
           eq(spinsTable.stationId, station.id),
-          eq(spinsTable.rawArtist, np.rawArtist),
-          eq(spinsTable.rawTitle, np.rawTitle),
           gte(spinsTable.playedAt, windowStart),
         ),
-      )
-      .limit(1);
-    if (recentMatch.length > 0) {
+      );
+    const recentMatch = recentSpins.some(
+      (row) =>
+        row.rawArtist &&
+        row.rawTitle &&
+        sig(row.rawArtist, row.rawTitle) === candidateSig,
+    );
+    if (recentMatch) {
       return false;
     }
 
