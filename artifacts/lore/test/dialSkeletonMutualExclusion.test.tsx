@@ -307,6 +307,55 @@ describe("background refresh transition — crossingsLoading true → false", ()
   });
 });
 
+describe("instant resolution — loading flips false within the grace window", () => {
+  it("no .fdrow-skeleton ever appears when crossingsLoading resolves before the grace timer fires", () => {
+    // Start in the loading state but do NOT advance the fake timer past 150ms.
+    // useDelayedBoolean returns `value && delayed`; since `delayed` is still
+    // false (the setTimeout hasn't fired yet), showSkeleton is false from the
+    // very first render.
+    mockDialData(true, [makeZone1Station("wfmu"), makeZone3Station("kcrw")]);
+    const { rerender } = render(<DialView />);
+
+    // Sanity: immediately after the first render (0ms elapsed) no skeletons.
+    expect(document.querySelectorAll(".fdrow-skeleton").length).toBe(0);
+
+    // Flip crossingsLoading false before the 150ms timer ever fires.
+    mockDialData(false, [makeZone1Station("wfmu"), makeZone3Station("kcrw")]);
+    act(() => { rerender(<DialView />); });
+
+    // Skeletons must still be absent — the timer was cancelled before it fired.
+    expect(document.querySelectorAll(".fdrow-skeleton").length).toBe(0);
+  });
+
+  it("real .fdrow rows are present after the instant flip without skeleton flash", () => {
+    mockDialData(true, [makeZone1Station("wfmu"), makeZone3Station("kcrw")]);
+    const { rerender } = render(<DialView />);
+
+    // Resolve before the grace timer fires.
+    mockDialData(false, [makeZone1Station("wfmu"), makeZone3Station("kcrw")]);
+    act(() => { rerender(<DialView />); });
+
+    // Real rows must be present and skeletons absent.
+    expect(document.querySelectorAll(".fdrow").length).toBeGreaterThan(0);
+    expect(document.querySelectorAll(".fdrow-skeleton").length).toBe(0);
+  });
+
+  it("advancing time after the instant flip does not resurrect skeleton rows", () => {
+    mockDialData(true, [makeZone1Station("wfmu")]);
+    const { rerender } = render(<DialView />);
+
+    // Flip false before grace period, then advance well past it.
+    mockDialData(false, [makeZone1Station("wfmu")]);
+    act(() => {
+      rerender(<DialView />);
+      vi.advanceTimersByTime(300);
+    });
+
+    expect(document.querySelectorAll(".fdrow-skeleton").length).toBe(0);
+    expect(document.querySelectorAll(".fdrow").length).toBeGreaterThan(0);
+  });
+});
+
 describe("mutual exclusion invariant — never both at once", () => {
   it("loading state: skeletons > 0 AND fdrows = 0 (never coexist)", () => {
     mockDialData(true, [makeZone1Station("wfmu"), makeZone3Station("kcrw")]);
