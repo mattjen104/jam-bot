@@ -32,7 +32,7 @@ import {
 const { mockResolveByText, mockResolveByIsrc, mockCheckSpotifyLibraryContains } = vi.hoisted(() => ({
   mockResolveByText: vi.fn<[string, string, (AbortSignal | undefined)?], Promise<string | null>>(),
   mockResolveByIsrc: vi.fn<[string, (AbortSignal | undefined)?], Promise<string | null>>(),
-  mockCheckSpotifyLibraryContains: vi.fn<[unknown, string[]], Promise<Set<string> | null>>(),
+  mockCheckSpotifyLibraryContains: vi.fn<[unknown, string[]], Promise<{ ok: true; savedIds: Set<string> } | { ok: false; reason: "token" | "api_error" | "network" }>>(),
 }));
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
@@ -207,7 +207,7 @@ describe("runPhase3RetryPass — no newer snapshot: live Spotify check prevents 
       mockResolveByText.mockResolvedValue(MBID);
       // Seam returns an empty Set — track is not saved in the user's Spotify
       // library, so the retry pass must filter it out and skip re-insertion.
-      mockCheckSpotifyLibraryContains.mockResolvedValue(new Set<string>());
+      mockCheckSpotifyLibraryContains.mockResolvedValue({ ok: true, savedIds: new Set<string>() });
 
       // Completed import job with one unresolved track.  No newer job exists for
       // this user, so the no-snapshot live-check path activates.

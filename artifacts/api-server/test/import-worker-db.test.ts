@@ -34,7 +34,7 @@ const { mockImportLibrary, mockResolveByText, mockResolveByIsrc, mockCheckSpotif
   mockImportLibrary: vi.fn(),
   mockResolveByText: vi.fn<[string, string, (AbortSignal | undefined)?], Promise<string | null>>(),
   mockResolveByIsrc: vi.fn<[string, (AbortSignal | undefined)?], Promise<string | null>>(),
-  mockCheckSpotifyLibraryContains: vi.fn<[unknown, string[]], Promise<Set<string> | null>>(),
+  mockCheckSpotifyLibraryContains: vi.fn<[unknown, string[]], Promise<{ ok: true; savedIds: Set<string> } | { ok: false; reason: "token" | "api_error" | "network" }>>(),
 }));
 
 // ── Module mocks (vi.mock is hoisted before any import) ─────────────────────
@@ -1399,7 +1399,7 @@ describe("Phase 3 off-peak retry — soft-row removed after retry promotion", ()
       // so the retry proceeds instead of being skipped.
       mockResolveByText.mockClear();
       mockResolveByText.mockResolvedValue(MBID_RETRY_SOFT);
-      mockCheckSpotifyLibraryContains.mockResolvedValue(new Set([RETRY_EXT_ID]));
+      mockCheckSpotifyLibraryContains.mockResolvedValue({ ok: true, savedIds: new Set([RETRY_EXT_ID]) });
 
       await runPhase3RetryPass();
 
@@ -2271,8 +2271,8 @@ describe("Phase 3 retry — seam returns null: candidate skipped, library_items 
       mockResolveByText.mockClear();
       mockResolveByIsrc.mockClear();
       mockCheckSpotifyLibraryContains.mockClear();
-      // null → fail-safe skip
-      mockCheckSpotifyLibraryContains.mockResolvedValue(null);
+      // token failure → fail-safe skip
+      mockCheckSpotifyLibraryContains.mockResolvedValue({ ok: false, reason: "token" });
 
       // Pre-seed a soft row for the track so we can confirm it survives.
       await db
@@ -2366,7 +2366,7 @@ describe("Phase 3 retry — seam returns Set missing the candidate externalId: e
       mockResolveByIsrc.mockClear();
       mockCheckSpotifyLibraryContains.mockClear();
       // Non-null empty Set → track not present in Spotify library.
-      mockCheckSpotifyLibraryContains.mockResolvedValue(new Set<string>());
+      mockCheckSpotifyLibraryContains.mockResolvedValue({ ok: true, savedIds: new Set<string>() });
 
       // Source job — no newer snapshot, live-check path activates.
       const [sourceJobRow] = await db

@@ -15,29 +15,37 @@ const SPOTIFY_CONTAINS_BATCH_SIZE = 50;
 /** Timeout for each /me/tracks/contains HTTP request. */
 const SPOTIFY_CONTAINS_TIMEOUT_MS = 20_000;
 
+/** Discriminated result from {@link checkSpotifyLibraryContains}. */
+export type SpotifyContainsResult =
+  | { ok: true; savedIds: Set<string> }
+  | { ok: false; reason: "token" | "api_error" | "network" };
+
 /**
  * Checks whether the given Spotify track IDs are saved in the authenticated
  * user's Spotify library.
  *
- * Returns a `Set<string>` of externalIds that are saved, or `null` on any
- * failure (token refresh failed, non-OK API response, network error, timeout).
+ * Returns a discriminated result:
+ *   - `{ ok: true, savedIds }` — set of externalIds confirmed saved in Spotify.
+ *   - `{ ok: false, reason: 'token' }` — token refresh failed (auth problem).
+ *   - `{ ok: false, reason: 'api_error' }` — Spotify returned a non-OK status (e.g. 429).
+ *   - `{ ok: false, reason: 'network' }` — network error or timeout.
  *
- * An empty externalIds array returns an empty Set immediately without hitting
- * the network.
+ * An empty externalIds array returns `{ ok: true, savedIds: emptySet }` without
+ * hitting the network.
  *
- * Production callers must treat `null` as "cannot verify — skip candidate" to
- * avoid ghost-restoring a deliberate removal.
+ * Production callers must treat `ok: false` as "cannot verify — skip candidate"
+ * to avoid ghost-restoring a deliberate removal.
  */
 export async function checkSpotifyLibraryContains(
   conn: typeof serviceConnectionsTable.$inferSelect,
   externalIds: string[],
-): Promise<Set<string> | null> {
-  if (externalIds.length === 0) return new Set();
+): Promise<SpotifyContainsResult> {
+  if (externalIds.length === 0) return { ok: true, savedIds: new Set() };
 
   const accessToken = await getFreshToken(conn);
   if (!accessToken) {
     console.warn("[spotify/contains] token refresh failed");
-    return null;
+    return { ok: false, reason: "token" };
   }
 
   const savedIds = new Set<string>();
@@ -59,15 +67,15 @@ export async function checkSpotifyLibraryContains(
         }
       } else {
         console.warn(`[spotify/contains] API returned ${res.status}`);
-        return null;
+        return { ok: false, reason: "api_error" };
       }
     } catch {
       console.warn("[spotify/contains] network error or timeout");
-      return null;
+      return { ok: false, reason: "network" };
     } finally {
       clearTimeout(timer);
     }
   }
 
-  return savedIds;
+  return { ok: true, savedIds };
 }

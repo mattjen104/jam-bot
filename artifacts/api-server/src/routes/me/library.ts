@@ -1147,19 +1147,20 @@ export async function runPhase3RetryPass(deadline?: Date): Promise<void> {
             continue;
           }
 
-          const savedIds = await checkSpotifyLibraryContains(
+          const checkResult = await checkSpotifyLibraryContains(
             conn,
             realIdEntries.map((t) => t.externalId),
           );
 
-          if (savedIds === null) {
+          if (!checkResult.ok) {
             console.warn(
               `[me/import/retry] job=${candidate.id} user=${candidate.userId} — ` +
-              `Spotify contains check failed; skipping candidate`,
+              `Spotify contains check failed (reason: ${checkResult.reason}); skipping candidate`,
             );
             continue;
           }
 
+          const savedIds = checkResult.savedIds;
           // Confirmed entries: real IDs still saved in Spotify + synthetic-key
           // entries (no checkable Spotify ID — passed through unchanged).
           const before = entriesToRetry.length;
