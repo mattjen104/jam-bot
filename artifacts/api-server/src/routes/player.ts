@@ -18,6 +18,7 @@ import {
 import { eq, and, desc, asc, sql, inArray, isNotNull, gte } from "drizzle-orm";
 import { getUserFromSession } from "../lore/userSession.js";
 import { toStation, isPickerOptedOut } from "./lore/shared.js";
+import { resolveAutomationClass } from "../lore/scraped-shows-sync.js";
 import { h } from "../middlewares/asyncHandler.js";
 
 /**
@@ -127,13 +128,20 @@ router.get("/player/onair", h(async (req, res) => {
   }
 
   const cutoff = Date.now() - ON_AIR_WINDOW_MS;
-  const items = stations
-    .map((s) => {
+  const now = new Date();
+  const itemsRaw = await Promise.all(
+    stations.map(async (s) => {
       const spin = latestByStation.get(s.id);
       if (!spin || spin.playedAt.getTime() < cutoff) return null;
       const earlier = (earlierByStation.get(s.id) ?? []).slice(1);
+      const resolvedClass = await resolveAutomationClass(
+        s.id,
+        s.ianaTimezone,
+        s.automationClass ?? null,
+        now,
+      );
       return {
-        station: toStation(s),
+        station: toStation(s, undefined, resolvedClass),
         show:
           spin.showName != null
             ? { name: spin.showName, djName: spin.showDj ?? null }
@@ -149,8 +157,9 @@ router.get("/player/onair", h(async (req, res) => {
         earlier,
         matchCount: user ? matchByStation.get(s.id) ?? 0 : null,
       };
-    })
-    .filter((x): x is NonNullable<typeof x> => x !== null)
+    }),
+  );
+  const items = itemsRaw.filter((x): x is NonNullable<typeof x> => x !== null)
     .sort(
       (a, b) =>
         (b.matchCount ?? -1) - (a.matchCount ?? -1) ||

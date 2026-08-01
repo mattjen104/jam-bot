@@ -39,6 +39,7 @@ import { stationArchiveUrl } from "../../lore/adapters.js";
 import { inferTimezone } from "../../lore/timezone.js";
 import { h } from "../../middlewares/asyncHandler.js";
 import { toStation, toNowPlaying, toArchiveRecording, spinDayExpr, pickerNotOptedOut } from "./shared.js";
+import { resolveAutomationClass } from "../../lore/scraped-shows-sync.js";
 import { getUserFromSession } from "../../lore/userSession.js";
 import { buildLibraryHitContext, checkLibraryHit, EMPTY_HIT_CONTEXT } from "../../lore/library-hits.js";
 import { spinRunIdExpr } from "../../lore/runs.js";
@@ -91,9 +92,19 @@ router.get("/stations", h(async (_req, res) => {
     .where(and(eq(stationsTable.active, true), eq(stationsTable.hidden, false)))
     .orderBy(asc(stationsTable.sortOrder), asc(stationsTable.name));
 
-  return res.json(ListStationsResponse.parse({
-    stations: rows.map((r) => toStation(r.station, r.qualityTier)),
-  }));
+  const now = new Date();
+  const stations = await Promise.all(
+    rows.map(async (r) => {
+      const resolvedClass = await resolveAutomationClass(
+        r.station.id,
+        r.station.ianaTimezone,
+        r.station.automationClass ?? null,
+        now,
+      );
+      return toStation(r.station, r.qualityTier, resolvedClass);
+    }),
+  );
+  return res.json(ListStationsResponse.parse({ stations }));
 }));
 
 // GET /api/stations/now-playing — latest spin per station (the dial pulse).
@@ -394,9 +405,14 @@ router.get("/stations/:slug/now-playing", h(async (req, res) => {
     isFirstSpin = seenRows.rows.length === 0;
   }
 
+  const resolvedClass = await resolveAutomationClass(
+    station.id,
+    station.ianaTimezone,
+    station.automationClass ?? null,
+  );
   return res.json(
     GetStationNowPlayingResponse.parse({
-      station: toStation(station),
+      station: toStation(station, undefined, resolvedClass),
       nowPlaying: row ? toNowPlaying({ ...row, isFirstSpin }) : null,
     }),
   );
@@ -551,9 +567,14 @@ router.get("/stations/:slug/archive", h(async (req, res) => {
     .orderBy(sql`max(${spinsTable.playedAt}) desc`)
     .limit(120);
 
+  const resolvedClass = await resolveAutomationClass(
+    station.id,
+    station.ianaTimezone,
+    station.automationClass ?? null,
+  );
   return res.json(
     GetStationArchiveResponse.parse({
-      station: toStation(station),
+      station: toStation(station, undefined, resolvedClass),
       runs: runs.map((r) => ({
         runId: r.runId,
         date: r.date,

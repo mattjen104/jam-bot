@@ -270,6 +270,35 @@ export async function syncScrapedShows(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 /**
+ * Resolve a `'mixed'` station's automation class at query time by checking
+ * whether a scraped_shows slot is currently active.
+ *
+ * - Returns `'human'`    when a scraped show slot covers `now`.
+ * - Returns `'automated'` when no slot covers `now` (overnight fill or
+ *   missing schedule data).
+ * - Returns the input value unchanged for any class other than `'mixed'`
+ *   (including `null`).
+ *
+ * Designed for use in the station DTO serialisation path so callers receive
+ * the per-slot truth rather than the static `'mixed'` flag.  Defaults to
+ * `'automated'` on any error so the pessimistic behaviour is preserved.
+ */
+export async function resolveAutomationClass(
+  stationId: number,
+  ianaTimezone: string | null | undefined,
+  automationClass: string | null,
+  now: Date = new Date(),
+): Promise<string | null> {
+  if (automationClass !== "mixed") return automationClass;
+  // Without a timezone we cannot map UTC→local DOW/time, so fall back to the
+  // pessimistic value rather than incorrectly implying a human is on air.
+  if (!ianaTimezone) return "automated";
+
+  const showId = await lookupScrapedShowId(stationId, ianaTimezone, now);
+  return showId != null ? "human" : "automated";
+}
+
+/**
  * Given a station with a known IANA timezone, look up which shows row (derived
  * from the scraped schedule) was airing at `playedAt`. Returns the show id or
  * null if none matches (overnight automation gap, or no schedule data).

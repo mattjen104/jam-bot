@@ -42,10 +42,14 @@ export async function isPickerOptedOut(pickerId: number): Promise<boolean> {
 
 /** Shape a DB station row into the public Station payload.
  *  `qualityTier` comes from a LEFT JOIN on station_quality and is null until
- *  the first nightly recompute has run. */
+ *  the first nightly recompute has run.
+ *  `resolvedAutomationClass` is the per-slot resolved value for `'mixed'`
+ *  stations (either `'human'` or `'automated'`); when provided it replaces
+ *  the stored `automationClass` so callers never see the raw `'mixed'` flag. */
 export function toStation(
   s: Station,
   qualityTier?: string | null,
+  resolvedAutomationClass?: string | null,
 ) {
   return {
     id: s.id,
@@ -71,7 +75,9 @@ export function toStation(
     upcomingShowCount: s.upcomingShowCount ?? 0,
     tier: s.tier ?? null,
     qualityTier: qualityTier ?? null,
-    automationClass: s.automationClass ?? null,
+    automationClass: resolvedAutomationClass !== undefined
+      ? resolvedAutomationClass
+      : (s.automationClass ?? null),
   };
 }
 

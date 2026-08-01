@@ -268,10 +268,11 @@ interface FrontDoorRowProps {
 export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onEarlier }: FrontDoorRowProps) {
   const rz = reason(show, ds.crossings, ds.artistCrossings);
 
-  // Tier 2: DJ name. Non-human stations (automated or mixed) have no reliable
-  // human host — suppress the fallback slot so an automated period on a mixed
-  // station doesn't surface a stale DJ name implying they're still on air.
-  // Only pure "human" stations (or unclassified, null) get the fallback logic.
+  // Tier 2: DJ name. Non-human stations (i.e. automationClass === 'automated')
+  // have no reliable human host — suppress the fallback slot so an automated
+  // period doesn't surface a stale DJ name implying a DJ is still on air.
+  // The server resolves 'mixed' stations to 'human' or 'automated' at query
+  // time, so this guard never receives the raw 'mixed' value.
   const isNonHumanStation = ds.station.automationClass != null && ds.station.automationClass !== "human";
   const liveDjName = show?.djName ?? null;
   // When the station is live but no schedule run has attached yet (run creation
@@ -1037,7 +1038,8 @@ export function DialView() {
         const show = ds.shows.find((sh) => sh.state === "live") ?? null;
         const rz = reason(show, ds.crossings, ds.artistCrossings);
         // Mirror the fallback-DJ logic from FrontDoorRow so the sort key matches
-        // what the row actually displays (Task #774 + #780).
+        // what the row actually displays. The server resolves 'mixed' to
+        // 'human'/'automated' at query time, so 'mixed' is never received here.
         const isNonHuman = ds.station.automationClass != null && ds.station.automationClass !== "human";
         const liveDjName = show?.djName ?? null;
         const fallbackDjName = !isNonHuman && liveDjName === null
