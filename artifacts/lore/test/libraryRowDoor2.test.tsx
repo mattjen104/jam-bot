@@ -31,9 +31,10 @@ vi.mock("wouter", () => ({
   useLocation: () => ["/", vi.fn()],
 }));
 
-vi.mock("../src/player/PlayerProvider", () => ({
-  usePlayer: vi.fn(),
-}));
+vi.mock("../src/player/PlayerProvider", async (importOriginal) => {
+  const { makePlayerProviderMock } = await import("./helpers/playerProviderMock");
+  return makePlayerProviderMock(importOriginal);
+});
 
 vi.mock("@workspace/api-client-react", async (importOriginal) => {
   const { makeApiClientMock } = await import("./helpers/apiClientMock");

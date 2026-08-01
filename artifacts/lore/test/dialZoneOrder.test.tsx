@@ -48,21 +48,24 @@ vi.mock("../src/lib/meHooks", async (importOriginal) => {
   });
 });
 
-vi.mock("../src/player/PlayerProvider", () => ({
-  usePlayer: vi.fn(() => ({
-    radio: {
-      status: "idle",
-      station: null,
-      scanning: false,
-      preview: vi.fn(),
-      toggle: vi.fn(),
-      stop: vi.fn(),
-    },
-    ride: { active: false },
-    spotify: { connected: false, premium: false },
-    scan: { active: false },
-  })),
-}));
+vi.mock("../src/player/PlayerProvider", async (importOriginal) => {
+  const { makePlayerProviderMock } = await import("./helpers/playerProviderMock");
+  return makePlayerProviderMock(importOriginal, {
+    usePlayer: vi.fn(() => ({
+      radio: {
+        status: "idle",
+        station: null,
+        scanning: false,
+        preview: vi.fn(),
+        toggle: vi.fn(),
+        stop: vi.fn(),
+      },
+      ride: { active: false },
+      spotify: { connected: false, premium: false },
+      scan: { active: false },
+    })),
+  });
+});
 
 vi.mock("../src/components/StationLane", () => ({
   StationLane: () => <div data-testid="station-lane" />,

@@ -30,12 +30,15 @@ vi.mock("wouter", () => ({
   useSearch: vi.fn(() => ""),
 }));
 
-vi.mock("../src/player/PlayerProvider", () => ({
-  usePlayer: vi.fn(() => ({
-    ride: { active: false },
-    radio: { station: null },
-  })),
-}));
+vi.mock("../src/player/PlayerProvider", async (importOriginal) => {
+  const { makePlayerProviderMock } = await import("./helpers/playerProviderMock");
+  return makePlayerProviderMock(importOriginal, {
+    usePlayer: vi.fn(() => ({
+      ride: { active: false },
+      radio: { station: null },
+    })),
+  });
+});
 
 vi.mock("@workspace/api-client-react", async (importOriginal) => {
   const { makeApiClientMock } = await import("./helpers/apiClientMock");

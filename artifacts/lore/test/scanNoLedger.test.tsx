@@ -80,9 +80,12 @@ vi.mock("../src/lib/meHooks", async (importOriginal) => {
   });
 });
 
-vi.mock("../src/player/PlayerProvider", () => ({
-  usePlayer: mockUsePlayer,
-}));
+vi.mock("../src/player/PlayerProvider", async (importOriginal) => {
+  const { makePlayerProviderMock } = await import("./helpers/playerProviderMock");
+  return makePlayerProviderMock(importOriginal, {
+    usePlayer: mockUsePlayer,
+  });
+});
 
 vi.mock("@workspace/api-client-react", async (importOriginal) => {
   const { makeApiClientMock } = await import("./helpers/apiClientMock");

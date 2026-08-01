@@ -23,9 +23,10 @@ import { WpCast } from "../src/webplayer/WpCast";
 import { usePlayer } from "../src/player/PlayerProvider";
 import type { SpotifyDevice } from "../src/player/useSpotifyConnect";
 
-vi.mock("../src/player/PlayerProvider", () => ({
-  usePlayer: vi.fn(),
-}));
+vi.mock("../src/player/PlayerProvider", async (importOriginal) => {
+  const { makePlayerProviderMock } = await import("./helpers/playerProviderMock");
+  return makePlayerProviderMock(importOriginal);
+});
 
 afterEach(() => {
   cleanup();

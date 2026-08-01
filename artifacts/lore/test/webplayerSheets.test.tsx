@@ -21,9 +21,8 @@ import { RunDrawerSheet } from "../src/webplayer/RunDrawerSheet";
 import { useWpRun, useWpLoreCounts } from "../src/webplayer/hooks";
 
 vi.mock("../src/webplayer/hooks", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../src/webplayer/hooks")>();
-  return {
-    ...actual,
+  const { makeWebplayerHooksMock } = await import("./helpers/webplayerHooksMock");
+  return makeWebplayerHooksMock(importOriginal, {
     useWpRun: vi.fn(() => ({
       data: undefined,
       isLoading: true,
@@ -31,7 +30,7 @@ vi.mock("../src/webplayer/hooks", async (importOriginal) => {
       refetch: vi.fn(),
     })),
     useWpLoreCounts: vi.fn(() => ({ data: undefined })),
-  };
+  });
 });
 
 vi.mock("../src/lib/meHooks", async (importOriginal) => {
@@ -49,16 +48,15 @@ vi.mock("../src/lib/meHooks", async (importOriginal) => {
 });
 
 vi.mock("../src/player/PlayerProvider", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../src/player/PlayerProvider")>();
-  return {
-    ...actual,
+  const { makePlayerProviderMock } = await import("./helpers/playerProviderMock");
+  return makePlayerProviderMock(importOriginal, {
     usePlayer: vi.fn(() => ({
       radio: { station: null, status: "idle", toggle: vi.fn() },
       ride: { active: false },
       spotify: { connected: false },
       scan: {},
     })),
-  };
+  });
 });
 
 vi.mock("../src/lib/local", () => ({

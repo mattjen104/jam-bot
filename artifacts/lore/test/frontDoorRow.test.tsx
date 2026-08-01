@@ -55,9 +55,12 @@ vi.mock("../src/components/SearchOverlay", () => ({
   SearchOverlay: () => <div />,
 }));
 
-vi.mock("../src/player/PlayerProvider", () => ({
-  usePlayer: vi.fn(() => ({ ride: {}, spotify: {}, scan: {}, radio: {} })),
-}));
+vi.mock("../src/player/PlayerProvider", async (importOriginal) => {
+  const { makePlayerProviderMock } = await import("./helpers/playerProviderMock");
+  return makePlayerProviderMock(importOriginal, {
+    usePlayer: vi.fn(() => ({ ride: {}, spotify: {}, scan: {}, radio: {} })),
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Import after mocks

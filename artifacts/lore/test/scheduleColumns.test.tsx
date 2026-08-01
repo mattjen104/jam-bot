@@ -13,9 +13,8 @@ import { memoryLocation } from "wouter/memory-location";
 // PlayerProvider (rendered inside ScheduleCalendar's subtree) uses useWpOnAir
 // (React Query). Stub it so tests don't need a real QueryClientProvider.
 vi.mock("../src/webplayer/hooks", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../src/webplayer/hooks")>();
-  return {
-    ...actual,
+  const { makeWebplayerHooksMock } = await import("./helpers/webplayerHooksMock");
+  return makeWebplayerHooksMock(importOriginal, {
     useWpOnAir: vi.fn(() => ({ data: undefined, isLoading: false, dataUpdatedAt: 0 })),
     useWpLoreCounts: vi.fn(() => ({ data: undefined })),
     useWpRecordingSpins: vi.fn(() => ({
@@ -24,7 +23,7 @@ vi.mock("../src/webplayer/hooks", async (importOriginal) => {
       isError: false,
       refetch: vi.fn(),
     })),
-  };
+  });
 });
 
 vi.mock("@workspace/api-client-react", async (importOriginal) => {

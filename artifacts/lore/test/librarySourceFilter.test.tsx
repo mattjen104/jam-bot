@@ -72,12 +72,15 @@ vi.mock("wouter", () => ({
   useSearch: mockUseSearch,
 }));
 
-vi.mock("../src/player/PlayerProvider", () => ({
-  usePlayer: vi.fn(() => ({
-    ride: { active: false },
-    radio: { station: null },
-  })),
-}));
+vi.mock("../src/player/PlayerProvider", async (importOriginal) => {
+  const { makePlayerProviderMock } = await import("./helpers/playerProviderMock");
+  return makePlayerProviderMock(importOriginal, {
+    usePlayer: vi.fn(() => ({
+      ride: { active: false },
+      radio: { station: null },
+    })),
+  });
+});
 
 vi.mock("../src/lib/meHooks", async (importOriginal) => {
   const { makeMeHooksMock } = await import("./helpers/meHooksMock");

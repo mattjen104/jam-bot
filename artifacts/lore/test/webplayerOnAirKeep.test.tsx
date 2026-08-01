@@ -30,9 +30,8 @@ import {
 } from "../src/lib/meHooks";
 
 vi.mock("../src/webplayer/hooks", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../src/webplayer/hooks")>();
-  return {
-    ...actual,
+  const { makeWebplayerHooksMock } = await import("./helpers/webplayerHooksMock");
+  return makeWebplayerHooksMock(importOriginal, {
     useWpOnAir: vi.fn(() => ({ data: undefined, isLoading: true, dataUpdatedAt: 0 })),
     useWpLoreCounts: vi.fn(() => ({ data: undefined })),
     useWpRecordingSpins: vi.fn(() => ({
@@ -41,7 +40,7 @@ vi.mock("../src/webplayer/hooks", async (importOriginal) => {
       isError: false,
       refetch: vi.fn(),
     })),
-  };
+  });
 });
 
 vi.mock("../src/lib/meHooks", async (importOriginal) => {
@@ -66,14 +65,17 @@ vi.mock("../src/lib/meHooks", async (importOriginal) => {
   });
 });
 
-vi.mock("../src/player/PlayerProvider", () => ({
-  usePlayer: vi.fn(() => ({
-    radio: { station: null, status: "idle", toggle: vi.fn() },
-    scan: { active: false },
-    ride: { active: false },
-    spotify: { connected: false },
-  })),
-}));
+vi.mock("../src/player/PlayerProvider", async (importOriginal) => {
+  const { makePlayerProviderMock } = await import("./helpers/playerProviderMock");
+  return makePlayerProviderMock(importOriginal, {
+    usePlayer: vi.fn(() => ({
+      radio: { station: null, status: "idle", toggle: vi.fn() },
+      scan: { active: false },
+      ride: { active: false },
+      spotify: { connected: false },
+    })),
+  });
+});
 
 // jsdom has no IntersectionObserver (LibraryTab's auto-load sentinel).
 class NoopObserver {

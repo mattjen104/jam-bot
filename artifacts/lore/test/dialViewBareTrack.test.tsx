@@ -40,19 +40,22 @@ vi.mock("../src/lib/meHooks", async (importOriginal) => {
   });
 });
 
-vi.mock("../src/player/PlayerProvider", () => ({
-  usePlayer: vi.fn(() => ({
-    radio: {
-      preview: vi.fn(),
-      tuneIn: vi.fn(),
-      stop: vi.fn(),
-      active: null,
-    },
-    ride: { active: false },
-    spotify: { configured: false, connected: false },
-    scan: {},
-  })),
-}));
+vi.mock("../src/player/PlayerProvider", async (importOriginal) => {
+  const { makePlayerProviderMock } = await import("./helpers/playerProviderMock");
+  return makePlayerProviderMock(importOriginal, {
+    usePlayer: vi.fn(() => ({
+      radio: {
+        preview: vi.fn(),
+        tuneIn: vi.fn(),
+        stop: vi.fn(),
+        active: null,
+      },
+      ride: { active: false },
+      spotify: { configured: false, connected: false },
+      scan: {},
+    })),
+  });
+});
 
 // Stub out heavy sub-components that are not under test.
 vi.mock("../src/components/StationLane", () => ({
