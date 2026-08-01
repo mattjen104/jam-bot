@@ -1859,8 +1859,12 @@ router.get("/me/library", h(async (req, res) => {
   // can gate the "Not in MusicBrainz" button on the real current count rather
   // than the stale import-job totals (retry passes resolve more tracks later).
   let softCount: number | undefined;
+  // criticCount: live count of library items whose album appears in at least one
+  // confirmed list entry — always counted regardless of the active source/q filter
+  // so the hero stat is stable even when a different filter is active.
+  let criticCount: number | undefined;
   if (!cursor) {
-    const [resolvedCount, rawSoftCount, rawKeepCount] = await Promise.all([
+    const [resolvedCount, rawSoftCount, rawKeepCount, rawCriticCount] = await Promise.all([
       includeResolved
         ? db
             .select({ count: sql<number>`count(*)::int` })
@@ -1900,10 +1904,29 @@ router.get("/me/library", h(async (req, res) => {
           ),
         )
         .then((r) => r[0]?.count ?? 0),
+      // Critic picks — library items whose album has at least one confirmed list
+      // entry; always counted regardless of active source/q filter.
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(libraryItemsTable)
+        .where(
+          and(
+            eq(libraryItemsTable.userId, user.id),
+            sql`EXISTS (
+              SELECT 1
+              FROM recording_release_groups rrg
+              JOIN list_entries le ON le.release_group_mbid = rrg.release_group_mbid
+              WHERE rrg.recording_mbid = ${libraryItemsTable.mbid}
+                AND (le.confidence = 'exact' OR le.confirmed = true)
+            )`,
+          ),
+        )
+        .then((r) => r[0]?.count ?? 0),
     ]);
     softCount = rawSoftCount;
     total = resolvedCount + softCount;
     keepCount = rawKeepCount;
+    criticCount = rawCriticCount;
   }
 
   // Sort key expression for resolved rows (name sorts).
@@ -2115,6 +2138,7 @@ router.get("/me/library", h(async (req, res) => {
     ...(total !== undefined ? { total } : {}),
     ...(keepCount !== undefined ? { keepCount } : {}),
     ...(softCount !== undefined ? { softCount } : {}),
+    ...(criticCount !== undefined ? { criticCount } : {}),
   });
 }));
 

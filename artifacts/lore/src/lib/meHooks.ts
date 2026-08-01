@@ -453,7 +453,7 @@ export function useMyLibraryInfinite(opts: LibraryQueryOptions = {}, limit = 50)
       if (q) params.set("q", q);
       if (sort !== "added") params.set("sort", sort);
       if (source) params.set("source", source);
-      return fetchOrNull<{ items: LibraryItem[]; nextCursor: string | null; total?: number; keepCount?: number; softCount?: number }>(
+      return fetchOrNull<{ items: LibraryItem[]; nextCursor: string | null; total?: number; keepCount?: number; softCount?: number; criticCount?: number }>(
         `/api/me/library?${params}`,
       ).then((d) => d ?? { items: [], nextCursor: null });
     },

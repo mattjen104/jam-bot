@@ -766,6 +766,7 @@ export default function Library() {
   // a client-side count from loaded items so the stat is available immediately
   // before the first fetch resolves (typically 0, updates once data arrives).
   const keepCount: number = keptData?.pages[0]?.keepCount ?? 0;
+  const criticCount: number = keptData?.pages[0]?.criticCount ?? 0;
   const selectorCount = useMemo(() => {
     const handles = new Set<string>();
     for (const item of keptItems) {
@@ -877,6 +878,17 @@ export default function Library() {
                 </button>
               ) : null;
             })()}
+            {criticCount > 0 && (
+              <button
+                type="button"
+                className={`lib-hero__stat${sourceFilter === "critic" ? " lib-hero__stat--warm" : " lib-hero__stat--dim"}`}
+                style={{ cursor: "pointer", border: "none" }}
+                onClick={() => setSourceFilter(sourceFilter === "critic" ? "" : "critic")}
+                title="Filter to tracks from critically listed albums"
+              >
+                <b>{criticCount}</b> critics' pick{criticCount === 1 ? "" : "s"}
+              </button>
+            )}
             {selectorCount > 0 && (
               <Link href="/selectors" className="lib-hero__stat lib-hero__stat--warm">
                 <b>{selectorCount}</b> selector{selectorCount === 1 ? "" : "s"} fed it
