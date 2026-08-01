@@ -1102,6 +1102,151 @@ describe("Mixed all-3 phases — large re-import short-circuit", () => {
   });
 });
 
+// ── Cross-user soft-row exclusion ────────────────────────────────────────────
+//
+// When two different users import the same unresolved track:
+//   • User 1's import falls through to Phase 3 (no cache entry yet) and writes
+//     a resolution_cache entry once MB resolves it.
+//   • User 2's import arrives after user 1's Phase 3 run and hits Phase 2
+//     (resolution_cache already populated).
+// Both users' spotify_library_items must remain empty for their respective
+// externalIds — the cross-user cache-hit path must not seed a soft row.
+
+describe("Cross-user soft-row exclusion — Phase 3 for user 1 populates cache; user 2 hits Phase 2", () => {
+  const CROSS_EXT_ID_U1 = `sp-cross-u1-${run}`;
+  const CROSS_EXT_ID_U2 = `sp-cross-u2-${run}`;
+  // Unique title so it has no resolution_cache entry from any earlier test.
+  const CROSS_TITLE = `CrossUser ${run} Track`;
+
+  let userId2: number;
+  let connRow2: typeof serviceConnectionsTable.$inferSelect;
+
+  beforeAll(async () => {
+    if (!dbAvailable) return;
+
+    // Second lore_users row.
+    const [u2] = await db
+      .insert(loreUsersTable)
+      .values({ spotifyUserId: `test-iw-cross-${run}`, deviceKey: randomUUID() })
+      .returning({ id: loreUsersTable.id });
+    userId2 = u2!.id;
+
+    // Second service_connections row.
+    const [c2] = await db
+      .insert(serviceConnectionsTable)
+      .values({
+        userId: userId2,
+        service: "spotify",
+        accessToken: "fake-access-token-2",
+        refreshToken: "fake-refresh-token-2",
+        expiresAt: new Date(Date.now() + 3_600_000),
+        scopes: "user-library-read",
+        canWrite: false,
+      })
+      .returning();
+    connRow2 = c2!;
+  }, 30_000);
+
+  afterAll(async () => {
+    if (!dbAvailable) return;
+    // Clean up user 2's rows in FK-safe order.
+    await db
+      .delete(spotifyLibraryItemsTable)
+      .where(eq(spotifyLibraryItemsTable.userId, userId2));
+    await db
+      .delete(libraryItemsTable)
+      .where(eq(libraryItemsTable.userId, userId2));
+    await db
+      .delete(libraryImportJobsTable)
+      .where(eq(libraryImportJobsTable.userId, userId2));
+    await db
+      .delete(serviceConnectionsTable)
+      .where(eq(serviceConnectionsTable.id, connRow2.id));
+    // Remove the resolution_cache entry written by user 1's Phase 3 run.
+    const { normalizeKey } = resolveModule;
+    await db
+      .delete(resolutionCacheTable)
+      .where(eq(resolutionCacheTable.key, normalizeKey(ARTIST, CROSS_TITLE)));
+    await db
+      .delete(loreUsersTable)
+      .where(eq(loreUsersTable.id, userId2));
+  }, 30_000);
+
+  it(
+    "user 1 resolves via Phase 3; user 2 resolves via Phase 2 (cache hit); neither appears in spotify_library_items",
+    async () => {
+      if (!dbAvailable) return;
+
+      mockResolveByText.mockClear();
+      mockResolveByIsrc.mockClear();
+
+      // ── User 1: CROSS_TITLE has no ISRC and no cache entry → Phase 3 ──────
+      // resolveByText returns MBID_P3A (already in the recordings spine).
+      mockResolveByText.mockResolvedValue(MBID_P3A);
+
+      setupConnector([
+        { artist: ARTIST, title: CROSS_TITLE, externalId: CROSS_EXT_ID_U1 },
+      ]);
+
+      const [j1Row] = await db
+        .insert(libraryImportJobsTable)
+        .values({ userId, service: "spotify", status: "pending", total: 0, resolved: 0, startedAt: new Date() })
+        .returning({ id: libraryImportJobsTable.id });
+      await runImportWorker(j1Row!.id, userId, "spotify", connRow);
+
+      // Phase 3 must have been reached for user 1.
+      expect(mockResolveByText).toHaveBeenCalledTimes(1);
+
+      // User 1's soft table must be empty for this externalId.
+      const softU1 = await db
+        .select({ spotifyId: spotifyLibraryItemsTable.spotifyId })
+        .from(spotifyLibraryItemsTable)
+        .where(eq(spotifyLibraryItemsTable.userId, userId));
+      expect(softU1.map((r) => r.spotifyId)).not.toContain(CROSS_EXT_ID_U1);
+
+      // User 1 must be resolved and done.
+      const [job1] = await db
+        .select({ status: libraryImportJobsTable.status, resolved: libraryImportJobsTable.resolved })
+        .from(libraryImportJobsTable)
+        .where(eq(libraryImportJobsTable.id, j1Row!.id));
+      expect(job1!.status).toBe("done");
+      expect(job1!.resolved).toBe(1);
+
+      // ── User 2: same track — resolution_cache now populated → Phase 2 hit ──
+      mockResolveByText.mockClear();
+
+      setupConnector([
+        { artist: ARTIST, title: CROSS_TITLE, externalId: CROSS_EXT_ID_U2 },
+      ]);
+
+      const [j2Row] = await db
+        .insert(libraryImportJobsTable)
+        .values({ userId: userId2, service: "spotify", status: "pending", total: 0, resolved: 0, startedAt: new Date() })
+        .returning({ id: libraryImportJobsTable.id });
+      await runImportWorker(j2Row!.id, userId2, "spotify", connRow2);
+
+      // Phase 3 must NOT have been reached for user 2 (cache hit in Phase 2).
+      expect(mockResolveByText).not.toHaveBeenCalled();
+
+      // User 2's soft table must be empty for this externalId.
+      const softU2 = await db
+        .select({ spotifyId: spotifyLibraryItemsTable.spotifyId })
+        .from(spotifyLibraryItemsTable)
+        .where(eq(spotifyLibraryItemsTable.userId, userId2));
+      expect(softU2.map((r) => r.spotifyId)).not.toContain(CROSS_EXT_ID_U2);
+
+      // User 2 must be resolved and done.
+      const [job2] = await db
+        .select({ status: libraryImportJobsTable.status, resolved: libraryImportJobsTable.resolved })
+        .from(libraryImportJobsTable)
+        .where(eq(libraryImportJobsTable.id, j2Row!.id));
+      expect(job2!.status).toBe("done");
+      expect(job2!.resolved).toBe(1);
+    },
+    15_000,
+  );
+});
+
 // ── Re-import preservation: tracks absent from Spotify are not deleted ────────
 //
 // When a user removes a track from Spotify (or Spotify revokes it due to
