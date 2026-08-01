@@ -15,7 +15,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
-import { sql, eq, inArray } from "drizzle-orm";
+import { sql, eq, and, inArray } from "drizzle-orm";
 import {
   db,
   loreUsersTable,
@@ -96,8 +96,8 @@ vi.mock("../src/lore/for-you.js", () => ({
 
 // Import the mocked resolve module so we can call vi.mocked() on resolveToMbid.
 import * as resolveModule from "../src/lore/resolve.js";
-// Import the worker function under test.
-import { runImportWorker } from "../src/routes/me/index.js";
+// Import the worker functions under test.
+import { runImportWorker, runPhase3RetryPass } from "../src/routes/me/index.js";
 
 // ── Test-run-scoped unique IDs ───────────────────────────────────────────────
 
@@ -118,7 +118,14 @@ const MBID_FK2 = `test-iw-fk2-${run}`;
 // MBID, then library_items insert is injected with a 23503 to confirm Phase 3
 // has the same resilience as Phase 1 and 2.
 const MBID_FK3 = `test-iw-fk3-${run}`;
-const MBIDS_ALL = [MBID_P1, MBID_P2, MBID_P3A, MBID_P3B, MBID_FK, MBID_FK2, MBID_FK3];
+// Off-peak retry soft-row exclusion test: the retry pass seeds this recording
+// itself (no need to pre-seed), but we need the MBID in MBIDS_ALL so afterAll
+// can clean it up in the correct FK-safe order.
+const MBID_RETRY_SOFT = `test-iw-rt-${run}`;
+// 22-char alphanumeric externalId → uses the simple spotifyId deletion path
+// in the retry promotion code (isRealSpotifyId branch).
+const RETRY_EXT_ID = `SPRetry${run.toUpperCase()}0000000`.slice(0, 22);
+const MBIDS_ALL = [MBID_P1, MBID_P2, MBID_P3A, MBID_P3B, MBID_FK, MBID_FK2, MBID_FK3, MBID_RETRY_SOFT];
 
 // ISRC for the Phase 1 track (must be ≤ 12 chars and unique).
 const ISRC_P1 = `TS${run.toUpperCase()}01`.slice(0, 12);
@@ -212,6 +219,8 @@ afterAll(async () => {
         normalizeKey(ARTIST, "FK2 Fail Track"),
         // Written by Phase 3 during the soft-row exclusion test.
         normalizeKey(ARTIST, "Phase3Soft Track"),
+        // Written (then deleted) during the off-peak retry soft-row test.
+        normalizeKey(ARTIST, "Phase3Retry Track"),
       ]),
     );
   await db
@@ -1243,6 +1252,111 @@ describe("Cross-user soft-row exclusion — Phase 3 for user 1 populates cache; 
       expect(job2!.status).toBe("done");
       expect(job2!.resolved).toBe(1);
     },
+    15_000,
+  );
+});
+
+// ── Off-peak retry soft-row exclusion ────────────────────────────────────────
+//
+// Verifies that when the off-peak retry pass (runPhase3RetryPass) resolves a
+// track that was previously unresolved (and therefore written as a soft row in
+// spotify_library_items), the pass:
+//   • promotes the track into library_items
+//   • removes the soft row from spotify_library_items
+//
+// Setup:
+//   1. A first runImportWorker call with resolveByText returning null seeds the
+//      soft row and writes a negative resolution_cache entry.
+//   2. The negative cache entry is deleted so the retry pass treats the track
+//      as un-cached and retries it.
+//   3. runPhase3RetryPass is called with resolveByText now returning MBID_RETRY_SOFT.
+//   4. Assertions confirm the soft row is gone and library_items contains the track.
+
+describe("Phase 3 off-peak retry — soft-row removed after retry promotion", () => {
+  it(
+    "first run: soft row seeded; retry run: soft row deleted, track in library_items",
+    async () => {
+      if (!dbAvailable) return;
+
+      mockResolveByText.mockClear();
+      mockResolveByIsrc.mockClear();
+
+      // ── First run: resolveByText returns null ──────────────────────────────
+      // The track has no ISRC and no resolution_cache entry, so it falls through
+      // to Phase 3.  resolveByText returns null — unresolvable on this attempt.
+      // The worker writes a negative cache entry and seeds the soft row.
+      mockResolveByText.mockResolvedValue(null);
+
+      setupConnector([
+        { artist: ARTIST, title: "Phase3Retry Track", externalId: RETRY_EXT_ID },
+      ]);
+
+      const jid1 = await createJob();
+      await runImportWorker(jid1, userId, "spotify", connRow);
+
+      // Confirm the job shows total=1, resolved=0.
+      const [job1] = await db
+        .select({ status: libraryImportJobsTable.status, total: libraryImportJobsTable.total, resolved: libraryImportJobsTable.resolved })
+        .from(libraryImportJobsTable)
+        .where(eq(libraryImportJobsTable.id, jid1));
+      expect(job1!.status).toBe("done");
+      expect(job1!.total).toBe(1);
+      expect(job1!.resolved).toBe(0);
+
+      // Confirm the soft row was seeded.
+      const softAfterRun1 = await db
+        .select({ spotifyId: spotifyLibraryItemsTable.spotifyId })
+        .from(spotifyLibraryItemsTable)
+        .where(
+          and(
+            eq(spotifyLibraryItemsTable.userId, userId),
+            eq(spotifyLibraryItemsTable.spotifyId, RETRY_EXT_ID),
+          ),
+        );
+      expect(softAfterRun1.map((r) => r.spotifyId)).toContain(RETRY_EXT_ID);
+
+      // ── Bridge: clear the negative cache entry ────────────────────────────
+      // resolveByText returned null so the worker wrote a negative cache entry.
+      // The retry pass (runPhase3RetryPass) only retries tracks with NO entry
+      // in resolution_cache.  Deleting it simulates the cache being cleared or
+      // expiring so the retry pass treats the track as un-cached.
+      const { normalizeKey: nk } = resolveModule;
+      await db
+        .delete(resolutionCacheTable)
+        .where(eq(resolutionCacheTable.key, nk(ARTIST, "Phase3Retry Track")));
+
+      // ── Retry run: resolveByText returns MBID_RETRY_SOFT ──────────────────
+      // The retry pass finds jid1 as an eligible source job (status=done,
+      // total > resolved, bufferJson present) and retries the un-cached track.
+      // resolveByText now returns an MBID, so the pass should:
+      //   • seed the recordings spine row
+      //   • insert into library_items
+      //   • delete the soft row from spotify_library_items
+      mockResolveByText.mockClear();
+      mockResolveByText.mockResolvedValue(MBID_RETRY_SOFT);
+
+      await runPhase3RetryPass();
+
+      // The track must now appear in library_items.
+      const libRows = await db
+        .select({ mbid: libraryItemsTable.mbid })
+        .from(libraryItemsTable)
+        .where(eq(libraryItemsTable.userId, userId));
+      expect(libRows.map((r) => r.mbid)).toContain(MBID_RETRY_SOFT);
+
+      // The soft row must have been removed after promotion.
+      const softAfterRetry = await db
+        .select({ spotifyId: spotifyLibraryItemsTable.spotifyId })
+        .from(spotifyLibraryItemsTable)
+        .where(
+          and(
+            eq(spotifyLibraryItemsTable.userId, userId),
+            eq(spotifyLibraryItemsTable.spotifyId, RETRY_EXT_ID),
+          ),
+        );
+      expect(softAfterRetry.map((r) => r.spotifyId)).not.toContain(RETRY_EXT_ID);
+    },
+    // Allow up to 15 s: 1.1 s real sleep + DB round-trips in both runs.
     15_000,
   );
 });
