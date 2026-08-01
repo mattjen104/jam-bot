@@ -296,6 +296,85 @@ describe("runPhase3RetryPass — pre-flight window estimate", () => {
     expect(mockResolveByText).not.toHaveBeenCalled();
   });
 
+  it("processes first 3 of 10 uncached entries when window fits exactly 3", async () => {
+    // 10 entries × 1 100 ms = 11 000 ms, but window = 3 × 1 100 + 50 = 3 350 ms.
+    // maxFit = Math.floor(3350 / 1100) = 3  →  exactly 3 resolution attempts.
+    const buffer = makeLargeBuffer(10);
+    const candidate = {
+      id: 51,
+      userId: "user-vwx",
+      service: "spotify",
+      total: 10,
+      resolved: 0,
+      bufferJson: buffer,
+      retryAttempts: 0,
+    };
+
+    setupSelectsForCandidates([candidate]);
+
+    const deadline = new Date(Date.now() + 3 * IMPORT_RESOLVE_DELAY_MS + 50);
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await runPhase3RetryPass(deadline);
+
+    // Exactly 3 resolution attempts (one resolveByText per entry; no isrcs).
+    expect(mockResolveByText).toHaveBeenCalledTimes(3);
+
+    // The truncation warn log must mention both the slice count and total count.
+    const allWarnArgs = warnSpy.mock.calls.flat().join(" ");
+    expect(allWarnArgs).toMatch(/slicing to 3/);
+    expect(allWarnArgs).toMatch(/10 valid entries/);
+
+    warnSpy.mockRestore();
+  });
+
+  it("does not increment retry exhaustion counter when a truncated pass resolves at least one track", async () => {
+    // Window fits 2 of 10 entries; the first resolves successfully.
+    // retryResolved > 0 → exhaustion counter must be reset, not incremented.
+    mockResolveByText.mockResolvedValueOnce("a1b2c3d4-e5f6-7890-1234-567890abcdef");
+
+    const localSetMock = vi.fn().mockReturnValue({
+      where: vi.fn().mockResolvedValue([]),
+    });
+    mockDbUpdate.mockReturnValue({ set: localSetMock });
+
+    const buffer = makeLargeBuffer(10);
+    const candidate = {
+      id: 52,
+      userId: "user-yz1",
+      service: "spotify",
+      total: 10,
+      resolved: 0,
+      bufferJson: buffer,
+      retryAttempts: 0,
+    };
+
+    setupSelectsForCandidates([candidate]);
+
+    // Window fits 2 entries — truncated pass, but first entry resolves.
+    const deadline = new Date(Date.now() + 2 * IMPORT_RESOLVE_DELAY_MS + 50);
+
+    await runPhase3RetryPass(deadline);
+
+    // No set() call should have incremented retryAttempts.
+    const hadExhaustionIncrement = localSetMock.mock.calls.some(
+      ([args]) =>
+        args != null &&
+        typeof (args as Record<string, unknown>).retryAttempts === "number" &&
+        (args as Record<string, unknown>).retryAttempts > 0,
+    );
+    expect(hadExhaustionIncrement).toBe(false);
+
+    // The productive-pass reset (retryAttempts: 0) should have been called.
+    const hadReset = localSetMock.mock.calls.some(
+      ([args]) =>
+        args != null &&
+        (args as Record<string, unknown>).retryAttempts === 0,
+    );
+    expect(hadReset).toBe(true);
+  });
+
   it("processes the candidate normally when no deadline is given", async () => {
     const buffer = makeLargeBuffer(1);
     const candidate = {
