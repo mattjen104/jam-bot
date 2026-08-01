@@ -8,12 +8,20 @@ const DONE_TTL_MS = 45_000;
 
 function phaseLabel(job: ImportJobStatus): string {
   const isManual = job.service === "manual";
+  const isLB = job.service === "listenbrainz";
   switch (job.phase) {
-    case "fetching": return "Reading your Spotify library…";
-    case "spine":    return isManual ? "Preparing track list…" : "Building track index…";
+    case "fetching":
+      if (isManual) return "Preparing track list…";
+      if (isLB) return "Importing from ListenBrainz…";
+      return "Reading your Spotify library…";
+    case "spine":
+      return isManual ? "Preparing track list…" : "Building track index…";
     case "cache":    return "Loading cached matches…";
     case "resolve":  return "Matching tracks…";
-    default:         return isManual ? "Preparing track list…" : "Reading your Spotify library…";
+    default:
+      if (isManual) return "Preparing track list…";
+      if (isLB) return "Importing from ListenBrainz…";
+      return "Reading your Spotify library…";
   }
 }
 

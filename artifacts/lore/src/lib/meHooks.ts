@@ -185,6 +185,21 @@ export async function postStartManualImport(
   );
 }
 
+/**
+ * Start a ListenBrainz loved-recordings import.
+ * Validates the username against the LB API before creating a job (returns 400
+ * with a clear message if the user doesn't exist).
+ * No service connection required — the LB API is public.
+ */
+export async function postStartListenBrainzImport(
+  username: string,
+): Promise<{ jobId: number; status: string }> {
+  return apiFetch<{ jobId: number; status: string }>(
+    "/api/me/library/import/listenbrainz",
+    { method: "POST", body: JSON.stringify({ username }), headers: { "Content-Type": "application/json" } },
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Sync (push Lore library → Spotify)
 // ---------------------------------------------------------------------------

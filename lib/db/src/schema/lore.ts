@@ -1186,6 +1186,34 @@ export interface ImportBufferEntry {
   externalId: string;
 }
 
+/**
+ * Normalized intermediate type produced by every import adapter (Spotify,
+ * ListenBrainz, Last.fm, CSV, …).  The import worker consumes this type
+ * internally; `ImportBufferEntry` remains the DB-serialised shape stored in
+ * `bufferJson`.
+ *
+ * Resolution tiers:
+ *   Tier 1 — `recordingMbid` present → direct spine write, no MB search.
+ *   Tier 2 — `isrc` present → single-hop ISRC lookup in `recordings` + cache.
+ *   Tier 3 — artist+title text search via MusicBrainz.
+ */
+export interface ImportItem {
+  /** Tier 1: MusicBrainz Recording ID supplied by the source (e.g. ListenBrainz). */
+  recordingMbid?: string;
+  /** Tier 2: ISRC from the source, used for a fast spine lookup. */
+  isrc?: string;
+  artist: string;
+  title: string;
+  /** Album/release name — improves Tier 3 MB text-search confidence when present. */
+  release?: string;
+  /** Identifies which adapter produced this item. */
+  sourceId: "listenbrainz" | "lastfm" | "applemusic" | "csv" | "spotify-byo";
+  /** Native ID in the source system — used for deduplication. */
+  sourceRef?: string;
+  /** ISO-8601 timestamp when the user added/loved the track in the source system. */
+  addedAt?: string;
+}
+
 export const libraryImportJobsTable = pgTable("library_import_jobs", {
   id: serial("id").primaryKey(),
   userId: integer("user_id")
