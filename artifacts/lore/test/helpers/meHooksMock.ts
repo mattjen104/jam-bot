@@ -40,5 +40,16 @@ export async function makeMeHooksMock(
     }
   }
 
+  // Warn about override keys that don't exist in the real module — these are
+  // likely typos or stale references that would silently have no effect.
+  for (const key of Object.keys(overrides)) {
+    if (!(key in actual)) {
+      console.warn(
+        `[makeMeHooksMock] Override key "${key}" is not exported by the real meHooks module. ` +
+          `This stub will have no effect — check for a typo or stale override.`,
+      );
+    }
+  }
+
   return { ...mocked, ...overrides };
 }
