@@ -269,6 +269,33 @@ export async function syncScrapedShows(): Promise<void> {
 // Forward-looking: show lookup for live ingest
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Per-station automation-class cache
+// ---------------------------------------------------------------------------
+
+/**
+ * One cached entry: the resolved value plus the wall-clock expiry timestamp.
+ */
+interface AutomationClassEntry {
+  value: string | null;
+  expiresAt: number; // Date.now() ms
+}
+
+/**
+ * In-memory cache keyed by stationId.
+ * Entries are evicted lazily on the next read once their TTL has elapsed.
+ *
+ * Show slots are ~1 hour long, so 5-minute staleness is acceptable and
+ * prevents redundant DB round-trips during high-frequency dial refreshes.
+ */
+const automationClassCache = new Map<number, AutomationClassEntry>();
+
+/**
+ * Default TTL for resolved automation-class values (5 minutes in ms).
+ * Exported so tests can override it without touching production constants.
+ */
+export const AUTOMATION_CLASS_CACHE_TTL_MS = 5 * 60 * 1000;
+
 /**
  * Resolve a `'mixed'` station's automation class at query time by checking
  * whether a scraped_shows slot is currently active.
@@ -279,6 +306,10 @@ export async function syncScrapedShows(): Promise<void> {
  * - Returns the input value unchanged for any class other than `'mixed'`
  *   (including `null`).
  *
+ * Results for `'mixed'` stations are cached per stationId for
+ * `AUTOMATION_CLASS_CACHE_TTL_MS` (default 5 min) to avoid a DB round-trip
+ * on every dial refresh. Pass `ttlMs` to override in tests.
+ *
  * Designed for use in the station DTO serialisation path so callers receive
  * the per-slot truth rather than the static `'mixed'` flag.  Defaults to
  * `'automated'` on any error so the pessimistic behaviour is preserved.
@@ -288,14 +319,28 @@ export async function resolveAutomationClass(
   ianaTimezone: string | null | undefined,
   automationClass: string | null,
   now: Date = new Date(),
+  ttlMs: number = AUTOMATION_CLASS_CACHE_TTL_MS,
 ): Promise<string | null> {
   if (automationClass !== "mixed") return automationClass;
   // Without a timezone we cannot map UTC→local DOW/time, so fall back to the
   // pessimistic value rather than incorrectly implying a human is on air.
   if (!ianaTimezone) return "automated";
 
+  const nowMs = now.getTime();
+  const cached = automationClassCache.get(stationId);
+  if (cached !== undefined && nowMs < cached.expiresAt) {
+    return cached.value;
+  }
+
   const showId = await lookupScrapedShowId(stationId, ianaTimezone, now);
-  return showId != null ? "human" : "automated";
+  const resolved = showId != null ? "human" : "automated";
+
+  automationClassCache.set(stationId, {
+    value: resolved,
+    expiresAt: nowMs + ttlMs,
+  });
+
+  return resolved;
 }
 
 /**
