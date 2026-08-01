@@ -24,6 +24,7 @@ export {
   markOrphanedImportJobsAsError,
   markOrphanedSyncJobsAsError,
   runImportWorker,
+  runManualImportWorker,
   runPhase3RetryPass,
   seedSpotifySoftRows,
 } from "./library.js";

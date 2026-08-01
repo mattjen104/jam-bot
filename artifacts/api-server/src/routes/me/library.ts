@@ -2686,7 +2686,7 @@ export async function markOrphanedSyncJobsAsError(): Promise<void> {
   }
 }
 
-export async function markOrphanedImportJobsAsError(): Promise<void> {
+export async function markOrphanedImportJobsAsError(_testUserIds?: number[]): Promise<void> {
   try {
     const stuck = await db
       .select({
@@ -2696,7 +2696,14 @@ export async function markOrphanedImportJobsAsError(): Promise<void> {
         bufferJson: libraryImportJobsTable.bufferJson,
       })
       .from(libraryImportJobsTable)
-      .where(inArray(libraryImportJobsTable.status, ["running", "pending"]));
+      .where(
+        and(
+          inArray(libraryImportJobsTable.status, ["running", "pending"]),
+          ...(_testUserIds && _testUserIds.length > 0
+            ? [inArray(libraryImportJobsTable.userId, _testUserIds)]
+            : []),
+        ),
+      );
 
     if (stuck.length === 0) return;
 

@@ -1,12 +1,15 @@
 // @vitest-environment jsdom
 /**
  * Unit tests for ImportStrip — the site-wide in-progress banner that appears
- * while a Spotify library import is running or pending.
+ * while a Spotify library import is running or pending, and the dismissable
+ * done-state strip shown after a job finishes.
  *
  * Confirms:
  *  - Strip renders nothing when there is no active job.
+ *  - When job status is 'done', a dismissable done-state strip is rendered
+ *    (data-testid="import-strip-done") rather than nothing.
  *  - When resumedFrom is non-null AND phase !== "fetching", the strip shows
- *    "Resuming from previous session…" and NOT "Reading your Spotify library…".
+ *    "Picked up where it left off" and NOT "Reading your Spotify library…".
  *  - When resumedFrom is null (normal import), the strip shows
  *    "Reading your Spotify library…".
  *  - When resumedFrom is non-null but phase === "fetching" (still re-fetching
@@ -77,10 +80,10 @@ describe("ImportStrip — visibility", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("renders nothing when job status is 'done'", () => {
-    mockJob({ status: "done" });
-    const { container } = render(<ImportStrip />);
-    expect(container.firstChild).toBeNull();
+  it("renders a dismissable done-state strip when job status is 'done'", () => {
+    mockJob({ status: "done", total: 500, resolved: 200 });
+    render(<ImportStrip />);
+    expect(screen.getByTestId("import-strip-done")).toBeTruthy();
   });
 
   it("renders nothing when job status is 'error'", () => {
@@ -104,14 +107,14 @@ describe("ImportStrip — visibility", () => {
 
 // ---------------------------------------------------------------------------
 // Copy branch: resumedFrom non-null + phase !== "fetching"
-// → "Resuming from previous session…"
+// → "Picked up where it left off"
 // ---------------------------------------------------------------------------
 
-describe("ImportStrip — 'Resuming from previous session' label", () => {
-  it("shows 'Resuming from previous session' when resumedFrom is set and phase='spine'", () => {
+describe("ImportStrip — resume label when job picks up from a stored buffer", () => {
+  it("shows 'Picked up where it left off' when resumedFrom is set and phase='spine'", () => {
     mockJob({ resumedFrom: 42, phase: "spine" });
     render(<ImportStrip />);
-    expect(screen.getByText(/resuming from previous session/i)).toBeTruthy();
+    expect(screen.getByText(/picked up where it left off/i)).toBeTruthy();
   });
 
   it("does NOT show 'Reading your Spotify library' when resumedFrom is set and phase='spine'", () => {
@@ -120,16 +123,16 @@ describe("ImportStrip — 'Resuming from previous session' label", () => {
     expect(screen.queryByText(/reading your spotify library/i)).toBeNull();
   });
 
-  it("shows 'Resuming from previous session' when resumedFrom is set and phase='cache'", () => {
+  it("shows 'Picked up where it left off' when resumedFrom is set and phase='cache'", () => {
     mockJob({ resumedFrom: 7, phase: "cache" });
     render(<ImportStrip />);
-    expect(screen.getByText(/resuming from previous session/i)).toBeTruthy();
+    expect(screen.getByText(/picked up where it left off/i)).toBeTruthy();
   });
 
-  it("shows 'Resuming from previous session' when resumedFrom is set and phase='resolve'", () => {
+  it("shows 'Picked up where it left off' when resumedFrom is set and phase='resolve'", () => {
     mockJob({ resumedFrom: 7, phase: "resolve" });
     render(<ImportStrip />);
-    expect(screen.getByText(/resuming from previous session/i)).toBeTruthy();
+    expect(screen.getByText(/picked up where it left off/i)).toBeTruthy();
   });
 });
 
