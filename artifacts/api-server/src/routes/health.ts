@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { HealthCheckResponse } from "@workspace/api-zod";
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
-import { getMigrationFailures } from "../lore/boot-migrations.js";
+import { getMigrationFailures, getMigrationCompletions } from "../lore/boot-migrations.js";
 
 const router: IRouter = Router();
 
@@ -23,12 +23,13 @@ router.get("/health", async (_req, res) => {
   }
 });
 
-router.get("/health/migrations", (_req, res) => {
+router.get("/health/migrations", async (_req, res) => {
   const failures = getMigrationFailures();
+  const completions = await getMigrationCompletions();
   const ok = failures.length === 0;
   res
     .status(ok ? 200 : 503)
-    .json({ ok, failures });
+    .json({ ok, failures, completions });
 });
 
 export default router;

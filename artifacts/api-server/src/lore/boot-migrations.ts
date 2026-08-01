@@ -15,12 +15,22 @@
  *
  *   getMigrationFailures()
  *     Returns a snapshot of every failed migration for the health route.
+ *
+ *   getMigrationCompletions()
+ *     Reads the persistent `migration_completions` ledger from the DB and
+ *     returns every completed migration row.  Returns an empty array if the
+ *     table does not yet exist (i.e. before the ledger migration has run).
  */
 
 export interface MigrationFailure {
   name: string;
   error: string;
   failedAt: string; // ISO-8601
+}
+
+export interface MigrationCompletion {
+  name: string;
+  completedAt: string; // ISO-8601
 }
 
 const _failures: MigrationFailure[] = [];
@@ -57,4 +67,29 @@ export async function runMigration(
 /** Snapshot of all migrations that failed during this boot. */
 export function getMigrationFailures(): readonly MigrationFailure[] {
   return [..._failures];
+}
+
+/**
+ * Read the persistent `migration_completions` ledger from the database.
+ *
+ * Returns every row that has been committed by a one-shot boot migration.
+ * If the ledger table does not yet exist (i.e. the DDL migration itself has
+ * not run), returns an empty array so callers degrade gracefully.
+ */
+export async function getMigrationCompletions(): Promise<MigrationCompletion[]> {
+  // Import lazily to keep the module free of side-effects at load time.
+  const { db } = await import("@workspace/db");
+  const { sql } = await import("drizzle-orm");
+  try {
+    const rows = await db.execute<{ name: string; completed_at: string }>(sql`
+      SELECT name, completed_at FROM migration_completions ORDER BY completed_at
+    `);
+    return rows.rows.map((r) => ({
+      name: r.name,
+      completedAt: new Date(r.completed_at).toISOString(),
+    }));
+  } catch {
+    // Most likely the table does not exist yet.
+    return [];
+  }
 }
