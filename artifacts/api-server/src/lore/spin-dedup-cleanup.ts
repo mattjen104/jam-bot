@@ -27,6 +27,14 @@ import { sql } from "drizzle-orm";
  * B is a dup of A, C is a dup of B (but not directly within 120 s of A) —
  * because the most-recent root ≤ C is still A, and A is never itself a dup.
  *
+ * ### Source restriction
+ * Only live-polling sources participate in the dedup candidate set.  Rows with
+ * `source IN ('manual', 'backfill')` are excluded: manual rows carry a
+ * `citation` field for historical reconstruction, and archive imports may use
+ * coarse or rounded timestamps that can put legitimately distinct plays inside
+ * the 120 s window.  Removing those rows would permanently destroy cited
+ * provenance — a core project invariant.
+ *
  * ### FK safety (all inside one transaction / one connection)
  * - `pending_keeps.spin_id`  NOT NULL, ON DELETE CASCADE — remapped to the
  *   keeper spin first (preserving user save intent).  Uses INSERT … ON
@@ -37,13 +45,26 @@ import { sql } from "drizzle-orm";
  * - `segue_edges`            joins on MBID + station + playedAt, no spin_id
  *                            FK — unaffected.
  *
- * ## Idempotency
- * The migration runs inside a single transaction.  The temp table is always
- * DROPped before being (re-)created so a prior aborted session that left it
- * behind is not a problem.  When the table is empty (all dups already removed)
- * every DML statement is a no-op.
+ * ## Idempotency / completion ledger
+ * On the first successful run the migration inserts a row into
+ * `migration_completions` (inside the same transaction as the cleanup work),
+ * so the gate is atomic.  On every subsequent boot the function reads that row
+ * and returns immediately without touching `spins`.
+ *
+ * `applyMigrationCompletionsMigration` must have run first (it is registered
+ * before this migration in `index.ts`).
  */
 export async function applySpinDedupCleanup(): Promise<void> {
+  // ── Completion-ledger gate ─────────────────────────────────────────────────
+  // One SELECT — the common path on every boot after the first.
+  const completionCheck = await db.execute(
+    sql`SELECT 1 FROM migration_completions WHERE name = 'applySpinDedupCleanup' LIMIT 1`,
+  );
+  if ((completionCheck.rows?.length ?? 0) > 0) {
+    console.info("[migration] spin dedup cleanup: already complete, skipping");
+    return;
+  }
+
   await db.transaction(async (tx) => {
     // ── Step 1: build the dup → keeper map ─────────────────────────────────
     //
@@ -54,7 +75,12 @@ export async function applySpinDedupCleanup(): Promise<void> {
     //
     // Root = a spin with no earlier same-sig spin within 120 s at the same
     // station.  Dup = every non-root.  Keeper for each dup = the most-recent
-    // root whose (played_at, id) precedes the dup — safe across chains.
+    // root before it — safe across chains.
+    //
+    // Source restriction: only live-polling sources are candidates.
+    // 'manual' rows carry citation provenance that must never be destroyed.
+    // 'backfill' rows come from archive imports whose timestamps may be
+    // rounded and could falsely collapse distinct plays.
     //
     // DROP first so an aborted prior run's leftover table is never reused.
     await tx.execute(sql`DROP TABLE IF EXISTS _spin_dup_map`);
@@ -73,6 +99,7 @@ export async function applySpinDedupCleanup(): Promise<void> {
         FROM spins
         WHERE raw_artist IS NOT NULL
           AND raw_title   IS NOT NULL
+          AND source NOT IN ('manual', 'backfill')
       ),
       roots AS (
         -- A spin is a root if nothing earlier with the same sig sits within
@@ -171,5 +198,14 @@ export async function applySpinDedupCleanup(): Promise<void> {
     console.info(
       `[migration] spin dedup cleanup: removed ${dupCount} duplicate spin(s)`,
     );
+
+    // ── Step 5: mark complete in the persistent ledger ───────────────────
+    // Inserted inside this transaction so the completion flag is atomic with
+    // the cleanup work.  A crash or rollback will not leave a completion row.
+    await tx.execute(sql`
+      INSERT INTO migration_completions (name)
+      VALUES ('applySpinDedupCleanup')
+      ON CONFLICT (name) DO NOTHING
+    `);
   });
 }

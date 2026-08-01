@@ -1976,3 +1976,26 @@ export const crossingsCacheTable = pgTable("crossings_cache", {
   /** When the data was last computed (used for TTL checks). */
   builtAt: timestamp("built_at").notNull(),
 });
+
+/**
+ * Persistent completion ledger for one-shot boot migrations.
+ *
+ * Each row marks a named migration as durably complete. Boot migrations that
+ * are expensive or destructive (e.g. applySpinDedupCleanup) check this table
+ * first and return immediately when their name is already present, turning
+ * every subsequent boot into a near-instant no-op.
+ *
+ * The row is always inserted *inside the same transaction* as the migration
+ * work, so the completion flag is atomic with the data change — a crashed
+ * or rolled-back migration never leaves a spurious completion row.
+ */
+export const migrationCompletionsTable = pgTable("migration_completions", {
+  /** Stable, human-readable migration name (matches the function name). */
+  name: text("name").primaryKey(),
+  completedAt: timestamp("completed_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+export type MigrationCompletion = typeof migrationCompletionsTable.$inferSelect;
+export type InsertMigrationCompletion = typeof migrationCompletionsTable.$inferInsert;
