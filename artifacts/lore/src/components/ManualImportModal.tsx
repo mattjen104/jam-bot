@@ -185,10 +185,21 @@ function saveLastService(id: ServiceId) {
   }
 }
 
+function clearLastService() {
+  try {
+    localStorage.removeItem(LAST_SERVICE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 interface Props { onClose(): void }
 
 export function ManualImportModal({ onClose }: Props) {
   const [service, setService] = useState<ServiceId | null>(() => readLastService());
+  // Track whether a service was saved when the modal opened so we can offer
+  // a "Forget saved service" action on the picker screen.
+  const [hasSavedService, setHasSavedService] = useState<boolean>(() => readLastService() !== null);
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -227,6 +238,13 @@ export function ManualImportModal({ onClose }: Props) {
   const handleBack = () => {
     setService(null);
     setError(null);
+    // Re-read storage so the "Forget" button shows correctly after navigating back.
+    setHasSavedService(readLastService() !== null);
+  };
+
+  const handleForgetService = () => {
+    clearLastService();
+    setHasSavedService(false);
   };
 
   return (
@@ -287,20 +305,34 @@ export function ManualImportModal({ onClose }: Props) {
 
         {/* ── Service picker ── */}
         {!service && (
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {SERVICES.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => setService(s.id)}
-                className="flex flex-col items-center gap-1.5 rounded-xl border border-border px-3 py-4 font-mono text-[11px] text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
-                style={{ background: "hsl(var(--muted)/0.2)" }}
-              >
-                <span className="text-xl leading-none">{s.emoji}</span>
-                <span className="font-semibold tracking-wide uppercase text-[10px]">{s.label}</span>
-              </button>
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {SERVICES.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setService(s.id)}
+                  className="flex flex-col items-center gap-1.5 rounded-xl border border-border px-3 py-4 font-mono text-[11px] text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+                  style={{ background: "hsl(var(--muted)/0.2)" }}
+                >
+                  <span className="text-xl leading-none">{s.emoji}</span>
+                  <span className="font-semibold tracking-wide uppercase text-[10px]">{s.label}</span>
+                </button>
+              ))}
+            </div>
+            {hasSavedService && (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleForgetService}
+                  className="font-mono text-[10px] text-muted-foreground/60 underline underline-offset-2 hover:text-muted-foreground"
+                  data-testid="forget-saved-service"
+                >
+                  Forget saved service
+                </button>
+              </div>
+            )}
+          </>
         )}
 
         {/* ── Per-service instruction pane ── */}
