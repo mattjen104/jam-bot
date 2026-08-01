@@ -234,3 +234,60 @@ describe("resolveAutomationClass — TTL cache", () => {
     expect(second).toBe("automated");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Admin clear-and-invalidate flow
+// ---------------------------------------------------------------------------
+
+describe("resolveAutomationClass — admin schedule clear", () => {
+  // Each test gets a clean cache slate.
+  beforeEach(() => {
+    clearAutomationClassCache();
+  });
+
+  it("returns 'automated' immediately after an admin removes all scraped shows and clears the cache", async () => {
+    if (!dbAvailable || stationId == null) return;
+
+    // Step 1 — prime the cache: slot is present → 'human'.
+    // Use a generous TTL so the entry would NOT naturally expire during this test.
+    const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+    const before = await resolveAutomationClass(
+      stationId,
+      TZ,
+      "mixed",
+      INSIDE_SLOT,
+      TWO_HOURS_MS,
+    );
+    expect(before).toBe("human");
+
+    // Step 2 — simulate admin wiping the station's scraped schedule.
+    await db
+      .delete(scrapedShowsTable)
+      .where(eq(scrapedShowsTable.stationId, stationId));
+
+    // Step 3 — admin calls clearAutomationClassCache() to evict the stale entry.
+    clearAutomationClassCache([stationId]);
+
+    // Step 4 — next dial refresh must re-query and reflect the empty schedule.
+    // Even though `now` is still inside what was the old slot, no slot exists
+    // any more → the resolver must return 'automated'.
+    const after = await resolveAutomationClass(
+      stationId,
+      TZ,
+      "mixed",
+      INSIDE_SLOT,
+      TWO_HOURS_MS,
+    );
+    expect(after).toBe("automated");
+
+    // Restore the scraped_shows row so other tests in this file are unaffected.
+    await db.insert(scrapedShowsTable).values({
+      stationId: stationId,
+      showName: SHOW_NAME,
+      dayOfWeek: SLOT_DOW,
+      startTime: SLOT_START,
+      endTime: SLOT_END,
+      djName: "DJ Test",
+    });
+  });
+});
