@@ -17,8 +17,8 @@
  */
 
 import React from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, render, screen } from "@testing-library/react";
 
 // ---------------------------------------------------------------------------
 // Module mocks — must precede imports of the subjects.
@@ -132,7 +132,12 @@ function renderDial() {
 // Teardown
 // ---------------------------------------------------------------------------
 
+beforeEach(() => {
+  vi.useFakeTimers();
+});
+
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
   vi.clearAllMocks();
 });
@@ -145,6 +150,10 @@ describe("Dial front-door zone order — crossingsLoading=true", () => {
   it("renders all three ZoneLabel headings while crossings are loading", () => {
     mockDialDataLoading();
     renderDial();
+    // The skeleton gate uses a 150 ms delay (useDelayedBoolean) so that fast
+    // loads never flash shimmer rows. Advance past the threshold to let the
+    // zone headings appear.
+    act(() => { vi.advanceTimersByTime(150); });
 
     for (const label of ZONE_LABELS) {
       expect(
@@ -157,6 +166,7 @@ describe("Dial front-door zone order — crossingsLoading=true", () => {
   it("renders the three zone headings in canonical order (Zone 1 → Zone 2 → Zone 3)", () => {
     mockDialDataLoading();
     renderDial();
+    act(() => { vi.advanceTimersByTime(150); });
 
     const labelEls = Array.from(getZoneLabelElements());
     // Filter to just the three front-door zone labels (exclude any schedule labels)
@@ -182,6 +192,7 @@ describe("Dial front-door zone order — crossingsLoading=true", () => {
   it("Zone 3 heading appears after Zone 1 and Zone 2 in the DOM while loading", () => {
     mockDialDataLoading();
     renderDial();
+    act(() => { vi.advanceTimersByTime(150); });
 
     const zone1El = screen.getByText("On air, with a reason", {
       selector: ".fdzone-lbl__text",

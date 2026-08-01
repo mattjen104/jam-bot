@@ -27,6 +27,13 @@ import { usePlayer } from "../player/PlayerProvider";
  *
  * Usage: avoids a jarring flash of skeleton rows on fast connections where
  * the loading state resolves in under ~150 ms.
+ *
+ * The return expression is `value && delayed` (not just `delayed`) to close a
+ * subtle race: `useEffect` runs after the render, so when `value` flips false
+ * there is one render where the state variable `delayed` is still `true`.
+ * Without the `value &&` guard that render would emit `showSkeleton=true` while
+ * `!crossingsLoading` is already `true`, causing skeleton rows and real zone
+ * rows to coexist for one frame.
  */
 function useDelayedBoolean(value: boolean, delayMs = 150): boolean {
   const [delayed, setDelayed] = useState(false);
@@ -38,7 +45,10 @@ function useDelayedBoolean(value: boolean, delayMs = 150): boolean {
     const id = setTimeout(() => setDelayed(true), delayMs);
     return () => clearTimeout(id);
   }, [value, delayMs]);
-  return delayed;
+  // Short-circuit: when value is false, always return false regardless of the
+  // pending effect clearing `delayed`.  This prevents a one-frame coexistence
+  // of skeleton rows and real content when crossingsLoading flips false.
+  return value && delayed;
 }
 
 function todayStr() {

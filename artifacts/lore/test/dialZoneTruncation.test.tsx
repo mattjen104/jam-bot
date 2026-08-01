@@ -332,8 +332,11 @@ describe("Zone 1 — click See all → expand; click See less → collapse", () 
     act(() => { fireEvent.click(btn); });
 
     expect(fdrowCount()).toBe(9);
-    const lessBtn = screen.getByRole("button", { name: "See less" });
-    expect(lessBtn.getAttribute("aria-expanded")).toBe("true");
+    // Task #921 added a second inline "See less" in the zone header; both
+    // should carry aria-expanded=true when expanded.
+    const lessBtns = screen.getAllByRole("button", { name: "See less" });
+    expect(lessBtns.length).toBeGreaterThanOrEqual(1);
+    expect(lessBtns.every((b) => b.getAttribute("aria-expanded") === "true")).toBe(true);
   });
 });
 
@@ -633,7 +636,7 @@ describe("Expansion state reset behaviour", () => {
 
     // Should remain expanded.
     expect(fdrowCount()).toBe(9);
-    expect(screen.getByRole("button", { name: "See less" })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "See less" }).length).toBeGreaterThanOrEqual(1);
   });
 
   it("does NOT reset when same slugs arrive in a different order (live rerank)", () => {
@@ -654,7 +657,7 @@ describe("Expansion state reset behaviour", () => {
 
     // Same membership → should remain expanded.
     expect(fdrowCount()).toBe(9);
-    expect(screen.getByRole("button", { name: "See less" })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "See less" }).length).toBeGreaterThanOrEqual(1);
   });
 
   /**
