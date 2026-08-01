@@ -2688,18 +2688,50 @@ export async function markOrphanedSyncJobsAsError(): Promise<void> {
 
 export async function markOrphanedImportJobsAsError(): Promise<void> {
   try {
-    const orphaned = await db
-      .update(libraryImportJobsTable)
-      .set({
-        status: "error",
-        error: "Server restarted while job was running — please start a new import",
-        finishedAt: new Date(),
+    const stuck = await db
+      .select({
+        id: libraryImportJobsTable.id,
+        userId: libraryImportJobsTable.userId,
+        service: libraryImportJobsTable.service,
+        bufferJson: libraryImportJobsTable.bufferJson,
       })
-      .where(inArray(libraryImportJobsTable.status, ["running", "pending"]))
-      .returning({ id: libraryImportJobsTable.id });
+      .from(libraryImportJobsTable)
+      .where(inArray(libraryImportJobsTable.status, ["running", "pending"]));
 
-    if (orphaned.length > 0) {
-      console.log(`[me] marked ${orphaned.length} orphaned import job(s) as error:`, orphaned.map((j) => j.id));
+    if (stuck.length === 0) return;
+
+    // Manual import jobs that stored their buffer can be resumed transparently —
+    // Phase 2 re-checks the resolution cache (fast), so already-resolved tracks
+    // cost nothing; Phase 3 only re-runs on tracks not yet in the cache.
+    const resumable = stuck.filter(
+      (j) => j.service === "manual" && Array.isArray(j.bufferJson) && j.bufferJson.length > 0,
+    );
+    const dead = stuck.filter((j) => !resumable.includes(j));
+
+    if (dead.length > 0) {
+      await db
+        .update(libraryImportJobsTable)
+        .set({
+          status: "error",
+          error: "Server restarted while job was running — please start a new import",
+          finishedAt: new Date(),
+        })
+        .where(inArray(libraryImportJobsTable.id, dead.map((j) => j.id)));
+      console.log(`[me] marked ${dead.length} orphaned import job(s) as error:`, dead.map((j) => j.id));
+    }
+
+    for (const job of resumable) {
+      console.log(
+        `[me] resuming manual import job=${job.id} from stored buffer (${job.bufferJson!.length} tracks)`,
+      );
+      // Reset to running so the worker's own status updates are coherent.
+      // Also reset startedAt so the POST zombie guard (30-min threshold) doesn't
+      // kill this job if the user opens the import modal shortly after reboot.
+      await db
+        .update(libraryImportJobsTable)
+        .set({ status: "running", error: null, startedAt: new Date() })
+        .where(eq(libraryImportJobsTable.id, job.id));
+      setImmediate(() => runManualImportWorker(job.id, job.userId, job.bufferJson!));
     }
   } catch (err) {
     console.error("[me] failed to clear orphaned import jobs", err);
