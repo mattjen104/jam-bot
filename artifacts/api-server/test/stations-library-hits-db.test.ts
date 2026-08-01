@@ -29,6 +29,11 @@ import {
 } from "@workspace/db";
 import app from "../src/app.js";
 import { spinEvents } from "../src/lore/resolve.js";
+import {
+  buildLibraryHitContext,
+  _testOnly_clearLibraryHitCache,
+  _testOnly_getLibraryHitCache,
+} from "../src/lore/library-hits.js";
 
 const run = randomUUID().slice(0, 8);
 
@@ -286,7 +291,7 @@ describe("GET /api/stations/now-playing — exact MBID library hit", () => {
   it("marks isLibraryHit=true when the now-playing MBID is in the listener's library", async () => {
     if (!dbAvailable) return;
 
-    const { status, body } = await get("/api/stations/now-playing", SID_A);
+    const { status, body } = await get(`/api/stations/recent-spins?date=${today}`, SID_A);
     expect(status).toBe(200);
 
     type Item = { slug: string; nowPlaying: { isLibraryHit: boolean; isArtistHit: boolean } | null };
@@ -391,8 +396,35 @@ describe("Cross-user isolation — hit flags are not shared between listeners", 
     const itemA = (resA.body.items as Item[]).find((i) => i.slug === STATION_SLUG);
     const itemB = (resB.body.items as Item[]).find((i) => i.slug === STATION_SLUG);
 
+
     expect(itemA?.nowPlaying?.isLibraryHit).toBe(true);
     expect(itemB?.nowPlaying?.isLibraryHit).toBe(false);
     expect(itemB?.nowPlaying?.isArtistHit).toBe(false);
+  }, TEST_TIMEOUT);
+});
+
+describe("buildLibraryHitContext — 5-minute TTL cache", () => {
+  it("returns the same builtAt on a second call within the TTL (zero extra DB queries)", async () => {
+    if (!dbAvailable) return;
+
+    const userId = userAId!;
+
+    // Evict any entry left by earlier tests so we get a known-fresh build.
+    _testOnly_clearLibraryHitCache(userId);
+
+    // First call — populates the cache.
+    await buildLibraryHitContext(userId);
+    const entry1 = _testOnly_getLibraryHitCache(userId);
+    expect(entry1).toBeDefined();
+    const builtAt1 = entry1!.builtAt;
+
+    // Second call — must return the cached entry (same builtAt timestamp).
+    await buildLibraryHitContext(userId);
+    const entry2 = _testOnly_getLibraryHitCache(userId);
+    expect(entry2).toBeDefined();
+    expect(entry2!.builtAt).toBe(builtAt1);
+
+    // Returned context must still contain the expected library MBIDs.
+    expect(entry2!.ctx.libMbids.has(MBID_EXACT)).toBe(true);
   }, TEST_TIMEOUT);
 });

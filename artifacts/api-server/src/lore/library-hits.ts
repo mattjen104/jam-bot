@@ -51,17 +51,45 @@ export const EMPTY_HIT_CONTEXT: LibraryHitContext = {
 };
 
 // ---------------------------------------------------------------------------
+// Module-level TTL cache (5 min) — same pattern as crossings.ts
+// ---------------------------------------------------------------------------
+
+const LIBRARY_HIT_CACHE_TTL_MS = 5 * 60 * 1_000;
+
+const libraryHitCache = new Map<number, { builtAt: number; ctx: LibraryHitContext }>();
+
+/** Evict a user's cached entry — call before a test that needs a fresh DB hit. */
+export function _testOnly_clearLibraryHitCache(userId: number): void {
+  libraryHitCache.delete(userId);
+}
+
+/** Return the raw cached entry for a user — lets tests verify cache hits without spying on db. */
+export function _testOnly_getLibraryHitCache(
+  userId: number,
+): { builtAt: number; ctx: LibraryHitContext } | undefined {
+  return libraryHitCache.get(userId);
+}
+
+// ---------------------------------------------------------------------------
 // Context builder (runs DB queries)
 // ---------------------------------------------------------------------------
 
 /**
  * Fetch the four membership sets for a user in parallel.
  *
+ * Results are cached per user for 5 minutes so that the O(4N) per-request
+ * DB cost does not scale with the number of connected listeners.
+ *
  * If the spotify_library_items table does not exist in this environment the
  * soft-artist query is silently skipped — softArtistNames will be empty and
  * the artist-hit rung degrades to MBID-only matching.
  */
 export async function buildLibraryHitContext(userId: number): Promise<LibraryHitContext> {
+  const cached = libraryHitCache.get(userId);
+  if (cached && Date.now() - cached.builtAt < LIBRARY_HIT_CACHE_TTL_MS) {
+    return cached.ctx;
+  }
+
   const [mbidRows, rgRows, artistRows, softRows] = await Promise.all([
     // 1. Exact recording MBIDs in library
     db
@@ -112,12 +140,14 @@ export async function buildLibraryHitContext(userId: number): Promise<LibraryHit
       .catch((): { artistLower: string }[] => []),
   ]);
 
-  return {
+  const ctx: LibraryHitContext = {
     libMbids: new Set(mbidRows.map((r) => r.mbid)),
     libRgMbids: new Set(rgRows.map((r) => r.rg)),
     libArtistMbids: new Set(artistRows.map((r) => r.artistMbid!)),
     softArtistNames: new Set(softRows.map((r) => r.artistLower)),
   };
+  libraryHitCache.set(userId, { builtAt: Date.now(), ctx });
+  return ctx;
 }
 
 // ---------------------------------------------------------------------------
