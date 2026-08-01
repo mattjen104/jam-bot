@@ -7,6 +7,7 @@ import {
   spinsTable,
   stationsTable,
   spotifyLibraryItemsTable,
+  crossingsCacheTable,
 } from "@workspace/db";
 import { eq, and, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { h } from "../../middlewares/asyncHandler.js";
@@ -15,21 +16,28 @@ import { type AuthedRequest } from "./auth.js";
 const router: IRouter = Router();
 
 // ---------------------------------------------------------------------------
-// Per-user TTL cache (5 min)
+// Two-layer TTL cache (5 min)
 //
-// The lifetime aggregate scans the full spins table on every call, which grows
-// with the archive.  A 5-minute stale window is harmless for sort purposes —
-// a new spin that tips a station's lifetime count rarely changes relative order
-// on the dial within that window.  Key: userId (number).
+// Layer 1 — in-process Map (crossingsCache below).  Zero-latency within a
+//   single server instance for the duration of the process lifetime.
 //
-// ⚠ Deployment constraint: this is a plain in-process Map, so it is local to
-// the running server instance.  With more than one instance (horizontal
-// scaling / load balancing) each instance holds an independent 5-minute
-// window, meaning two requests for the same user routed to different instances
-// can return results computed from data up to 5 minutes apart.  This is
-// acceptable today (single-instance deploy) but must be addressed before
-// scaling out.  Before adding a second instance, replace this Map with a
-// shared store — a Postgres materialised row or Redis — keyed on userId.
+// Layer 2 — Postgres `crossings_cache` table (one row per user).  Survives
+//   server restarts and is shared across instances, so a cold-start or a new
+//   instance reading the same user's row avoids the expensive full-table scan.
+//   Written on every fresh compute alongside the L1 write.
+//
+// Read path:  L1 hit → return immediately.
+//             L1 miss → try L2 (Postgres); if fresh, repopulate L1 and return.
+//             Both miss → run the full DB query, write L2 then L1, return.
+//
+// TTL is enforced in application code via `builtAt`.  The same 5-minute window
+// is used for both layers so they stay in sync.
+//
+// ⚠ Deployment note: with this L2 layer in place the implementation is safe
+// for horizontal scaling — two instances computing for the same user
+// independently write to the same Postgres row (upsert) and the first fresh
+// result wins.  The remaining per-instance L1 staleness (up to 5 min) is
+// unchanged from the previous single-layer behaviour.
 // ---------------------------------------------------------------------------
 
 const CROSSINGS_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -61,6 +69,49 @@ export function _testOnly_getCrossingsCache(userId: number): { builtAt: number; 
 }
 
 // ---------------------------------------------------------------------------
+// L2 helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Try to read a fresh entry from the Postgres L2 cache.
+ * Returns the data rows on a hit, null on a miss or any read error.
+ */
+async function readL2Cache(userId: number): Promise<CrossingsRow[] | null> {
+  try {
+    const rows = await db
+      .select()
+      .from(crossingsCacheTable)
+      .where(eq(crossingsCacheTable.userId, userId))
+      .limit(1);
+    if (rows.length === 0) return null;
+    const row = rows[0]!;
+    if (Date.now() - row.builtAt.getTime() >= CROSSINGS_CACHE_TTL_MS) return null;
+    return row.data as CrossingsRow[];
+  } catch {
+    // L2 read errors are non-fatal: fall through to full compute.
+    return null;
+  }
+}
+
+/**
+ * Persist a fresh result to the Postgres L2 cache (upsert).
+ * Fire-and-forget — errors are logged but never surface to the caller.
+ */
+async function writeL2Cache(userId: number, data: CrossingsRow[], builtAt: Date): Promise<void> {
+  try {
+    await db
+      .insert(crossingsCacheTable)
+      .values({ userId, data, builtAt })
+      .onConflictDoUpdate({
+        target: crossingsCacheTable.userId,
+        set: { data, builtAt },
+      });
+  } catch (err) {
+    console.error("[crossings] L2 cache write failed", err);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Crossings endpoint
 // ---------------------------------------------------------------------------
 
@@ -83,12 +134,21 @@ export function _testOnly_getCrossingsCache(userId: number): { builtAt: number; 
 router.get("/me/crossings", h(async (req, res) => {
   const user = (req as AuthedRequest).loreUser;
 
-  // Serve from cache if still fresh.
+  // ── L1: in-process Map ────────────────────────────────────────────────────
   const cached = crossingsCache.get(user.id);
   if (cached && Date.now() - cached.builtAt < CROSSINGS_CACHE_TTL_MS) {
     return res.json({ items: cached.data });
   }
 
+  // ── L2: Postgres persistent cache ─────────────────────────────────────────
+  const l2data = await readL2Cache(user.id);
+  if (l2data !== null) {
+    // Repopulate L1 so subsequent same-instance requests skip Postgres entirely.
+    crossingsCache.set(user.id, { builtAt: Date.now(), data: l2data });
+    return res.json({ items: l2data });
+  }
+
+  // ── Full compute ──────────────────────────────────────────────────────────
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
   // Subquery: recording MBIDs in user's library.
@@ -221,7 +281,14 @@ router.get("/me/crossings", h(async (req, res) => {
     lifetimeArtistCrossings: r.lifetimeArtistCrossings,
   }));
 
-  crossingsCache.set(user.id, { builtAt: Date.now(), data: items });
+  const builtAt = new Date();
+
+  // Write L2 (Postgres) first so that a concurrent request on a different
+  // instance can benefit from the fresh result immediately.
+  void writeL2Cache(user.id, items, builtAt);
+
+  // Then populate L1.
+  crossingsCache.set(user.id, { builtAt: builtAt.getTime(), data: items });
 
   return res.json({ items });
 }));

@@ -1944,3 +1944,35 @@ export const spotifyLibraryItemsTable = pgTable(
 
 export type SpotifyLibraryItem = typeof spotifyLibraryItemsTable.$inferSelect;
 export type InsertSpotifyLibraryItem = typeof spotifyLibraryItemsTable.$inferInsert;
+
+/**
+ * Shared persistent cache for per-user crossing results.
+ *
+ * Keyed on `user_id` (one row per user).  A server restart reads from here
+ * so the first-request full-table scan only happens once per TTL window
+ * across all instances, not once per instance per restart.
+ *
+ * TTL is enforced in application code (same 5-minute window as the in-process
+ * Map).  The `built_at` column is the authoritative freshness timestamp.
+ * The in-process Map in `crossings.ts` acts as an L1 layer on top of this
+ * L2 Postgres row — it is filled on the first request after a restart and
+ * stays hot for the duration of the process.
+ */
+export const crossingsCacheTable = pgTable("crossings_cache", {
+  userId: integer("user_id")
+    .primaryKey()
+    .references(() => loreUsersTable.id, { onDelete: "cascade" }),
+  /**
+   * Serialised CrossingsRow[] — the same shape returned by GET /api/me/crossings.
+   * Stored as jsonb so Postgres can store/retrieve it cheaply without a scan.
+   */
+  data: jsonb("data").notNull().$type<Array<{
+    stationSlug: string;
+    crossings: number;
+    artistCrossings: number;
+    lifetimeCrossings: number;
+    lifetimeArtistCrossings: number;
+  }>>(),
+  /** When the data was last computed (used for TTL checks). */
+  builtAt: timestamp("built_at").notNull(),
+});
