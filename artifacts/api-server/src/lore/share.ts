@@ -20,6 +20,7 @@ import type { RecordingLink } from "@workspace/db";
 import { buildSearchLinks, fetchRecordingLinks } from "@workspace/song-enrichment";
 import { resolveToMbid, type MbidResolution } from "./resolve.js";
 import { getReplayManifest } from "./replay.js";
+import { validScheduleShowAttribution } from "../routes/lore/shared.js";
 
 /**
  * Share layer: server-rendered Open Graph pages + dynamic preview cards for
@@ -929,11 +930,17 @@ export async function getStationRunShare(
   if (anchor.showId != null) {
     const [show] = await db
       .select()
-      .from(showsTable)
-      .where(eq(showsTable.id, anchor.showId))
+      .from(spinsTable)
+      .leftJoin(
+        showsTable,
+        and(eq(spinsTable.showId, showsTable.id), validScheduleShowAttribution()),
+      )
+      .where(eq(spinsTable.id, runId))
       .limit(1);
-    if (show) {
-      showLine = show.djName ? `${show.name} · ${show.djName}` : show.name;
+    if (show?.shows) {
+      showLine = show.shows.djName
+        ? `${show.shows.name} · ${show.shows.djName}`
+        : show.shows.name;
     }
   }
 

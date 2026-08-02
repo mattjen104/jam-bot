@@ -34,11 +34,18 @@ import {
   scrapedShowsTable,
   stationQualityTable,
 } from "@workspace/db";
-import { eq, ne, and, asc, desc, isNotNull, inArray, sql } from "drizzle-orm";
+import { eq, ne, and, asc, desc, isNull, isNotNull, inArray, sql } from "drizzle-orm";
 import { stationArchiveUrl } from "../../lore/adapters.js";
 import { inferTimezone } from "../../lore/timezone.js";
 import { h } from "../../middlewares/asyncHandler.js";
-import { toStation, toNowPlaying, toArchiveRecording, spinDayExpr, pickerNotOptedOut } from "./shared.js";
+import {
+  toStation,
+  toNowPlaying,
+  toArchiveRecording,
+  spinDayExpr,
+  pickerNotOptedOut,
+  validScheduleShowAttribution,
+} from "./shared.js";
 import { resolveAutomationClass } from "../../lore/scraped-shows-sync.js";
 import { getUserFromSession } from "../../lore/userSession.js";
 import { buildLibraryHitContext, checkLibraryHit, EMPTY_HIT_CONTEXT } from "../../lore/library-hits.js";
@@ -149,7 +156,10 @@ router.get("/stations/now-playing", h(async (req, res) => {
     })
     .from(spinsTable)
     .leftJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
-    .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id))
+    .leftJoin(
+      showsTable,
+      and(eq(spinsTable.showId, showsTable.id), validScheduleShowAttribution()),
+    )
     .where(
       dateFilter
         ? and(isNotNull(spinsTable.stationId), sql`${spinsTable.playedAt}::date = ${dateFilter}::date`)
@@ -345,7 +355,10 @@ router.get("/stations/at/:date/now-playing", h(async (req, res) => {
     })
     .from(spinsTable)
     .leftJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
-    .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id))
+    .leftJoin(
+      showsTable,
+      and(eq(spinsTable.showId, showsTable.id), validScheduleShowAttribution()),
+    )
     .where(
       and(isNotNull(spinsTable.stationId), sql`${spinsTable.playedAt}::date = ${dateFilter}::date`),
     )
@@ -416,7 +429,10 @@ router.get("/stations/:slug/now-playing", h(async (req, res) => {
     })
     .from(spinsTable)
     .leftJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
-    .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id))
+    .leftJoin(
+      showsTable,
+      and(eq(spinsTable.showId, showsTable.id), validScheduleShowAttribution()),
+    )
     .where(eq(spinsTable.stationId, station.id))
     .orderBy(desc(spinsTable.playedAt))
     .limit(1);
@@ -589,7 +605,10 @@ router.get("/stations/:slug/archive", h(async (req, res) => {
       djName: showsTable.djName,
     })
     .from(spinsTable)
-    .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id))
+    .leftJoin(
+      showsTable,
+      and(eq(spinsTable.showId, showsTable.id), validScheduleShowAttribution()),
+    )
     .where(eq(spinsTable.stationId, station.id))
     .groupBy(spinDayExpr, spinsTable.showId, showsTable.name, showsTable.djName)
     .orderBy(sql`max(${spinsTable.playedAt}) desc`)
@@ -1019,7 +1038,10 @@ router.get("/stations/schedule", h(async (req, res) => {
     })
     .from(spinsTable)
     .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
-    .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id))
+    .leftJoin(
+      showsTable,
+      and(eq(spinsTable.showId, showsTable.id), validScheduleShowAttribution()),
+    )
     .where(
       and(
         isNotNull(spinsTable.stationId),
@@ -1153,7 +1175,11 @@ router.get("/djs/:name", h(async (req, res) => {
     .from(scrapedShowsTable)
     .innerJoin(stationsTable, eq(scrapedShowsTable.stationId, stationsTable.id))
     .where(
-      and(eq(scrapedShowsTable.djName, djName), eq(stationsTable.hidden, false)),
+      and(
+        eq(scrapedShowsTable.djName, djName),
+        eq(stationsTable.hidden, false),
+        isNull(scrapedShowsTable.voidedAt),
+      ),
     )
     .orderBy(asc(stationsTable.name), asc(scrapedShowsTable.dayOfWeek), asc(scrapedShowsTable.startTime));
 
@@ -1221,7 +1247,12 @@ router.get("/stations/:slug/upcoming-schedule", h(async (req, res) => {
       extraction: scrapedShowsTable.extraction,
     })
     .from(scrapedShowsTable)
-    .where(eq(scrapedShowsTable.stationId, station[0]!.id))
+    .where(
+      and(
+        eq(scrapedShowsTable.stationId, station[0]!.id),
+        isNull(scrapedShowsTable.voidedAt),
+      ),
+    )
     .orderBy(asc(dayRank), asc(scrapedShowsTable.startTime));
 
   // Freshness comes from stationsTable.scheduleScrapedAt (set on every

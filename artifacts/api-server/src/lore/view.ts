@@ -52,7 +52,63 @@ export async function ensurePicksUnifiedView(): Promise<void> {
           COALESCE(pk.trust_tier, 3)          AS trust_tier
         FROM spins s
         JOIN stations st ON st.id = s.station_id AND st.hidden = false
-        LEFT JOIN shows sh ON sh.id = s.show_id
+        LEFT JOIN shows sh
+          ON sh.id = s.show_id
+          AND (
+            EXISTS (
+              SELECT 1
+              FROM pickers direct_picker
+              WHERE direct_picker.id = sh.picker_id
+                AND direct_picker.handle NOT LIKE 'show-dj-%'
+            )
+            OR EXISTS (
+              SELECT 1
+              FROM scraped_shows schedule_valid
+              JOIN stations schedule_station ON schedule_station.id = s.station_id
+              WHERE schedule_valid.station_id = s.station_id
+                AND schedule_valid.show_name = sh.name
+                AND schedule_valid.voided_at IS NULL
+                AND (
+                  (
+                    schedule_valid.day_of_week = TO_CHAR(
+                      s.played_at AT TIME ZONE schedule_station.iana_timezone, 'Dy'
+                    )
+                    AND (
+                      (
+                        schedule_valid.end_time > schedule_valid.start_time
+                        AND TO_CHAR(
+                          s.played_at AT TIME ZONE schedule_station.iana_timezone,
+                          'HH24:MI'
+                        ) >= schedule_valid.start_time
+                        AND TO_CHAR(
+                          s.played_at AT TIME ZONE schedule_station.iana_timezone,
+                          'HH24:MI'
+                        ) < schedule_valid.end_time
+                      )
+                      OR (
+                        schedule_valid.end_time < schedule_valid.start_time
+                        AND TO_CHAR(
+                          s.played_at AT TIME ZONE schedule_station.iana_timezone,
+                          'HH24:MI'
+                        ) >= schedule_valid.start_time
+                      )
+                    )
+                  )
+                  OR (
+                    schedule_valid.end_time < schedule_valid.start_time
+                    AND schedule_valid.day_of_week = TO_CHAR(
+                      (s.played_at - interval '1 day')
+                        AT TIME ZONE schedule_station.iana_timezone,
+                      'Dy'
+                    )
+                    AND TO_CHAR(
+                      s.played_at AT TIME ZONE schedule_station.iana_timezone,
+                      'HH24:MI'
+                    ) < schedule_valid.end_time
+                  )
+                )
+            )
+          )
         LEFT JOIN pickers pk ON pk.id = sh.picker_id
         LEFT JOIN recordings r ON r.mbid = s.mbid
     `);

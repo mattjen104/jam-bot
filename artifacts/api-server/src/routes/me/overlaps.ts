@@ -12,7 +12,7 @@ import {
 import { eq, and, ne, isNotNull, inArray, asc, sql } from "drizzle-orm";
 import { spinDayExpr } from "../../lore/runs.js";
 import { h } from "../../middlewares/asyncHandler.js";
-import { pickerNotOptedOut } from "../lore/shared.js";
+import { pickerNotOptedOut, validScheduleShowAttribution } from "../lore/shared.js";
 import { getForYouStations, getForYouBlogs } from "../../lore/for-you.js";
 import { type AuthedRequest } from "./auth.js";
 
@@ -457,7 +457,10 @@ router.get("/me/overlaps/runs", h(async (req, res) => {
     })
     .from(spinsTable)
     .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
-    .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id))
+    .leftJoin(
+      showsTable,
+      and(eq(spinsTable.showId, showsTable.id), validScheduleShowAttribution()),
+    )
     .where(and(isNotNull(spinsTable.mbid), eq(stationsTable.hidden, false)))
     .groupBy(
       spinDayExpr,

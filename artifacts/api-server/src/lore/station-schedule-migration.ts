@@ -41,6 +41,8 @@ export async function applyStationScheduleMigration(): Promise<void> {
       source_url    text,
       scraped_at    timestamptz NOT NULL DEFAULT now(),
       extraction    text,
+      voided_at     timestamptz,
+      void_reason   text,
       created_at    timestamptz NOT NULL DEFAULT now()
     )
   `);
@@ -92,6 +94,12 @@ export async function applyStationScheduleMigration(): Promise<void> {
   `);
   await db.execute(sql`
     ALTER TABLE scraped_shows ADD COLUMN IF NOT EXISTS extraction text
+  `);
+  await db.execute(sql`
+    ALTER TABLE scraped_shows ADD COLUMN IF NOT EXISTS voided_at timestamptz
+  `);
+  await db.execute(sql`
+    ALTER TABLE scraped_shows ADD COLUMN IF NOT EXISTS void_reason text
   `);
   await db.execute(sql`
     ALTER TABLE list_entries ADD COLUMN IF NOT EXISTS source_url text

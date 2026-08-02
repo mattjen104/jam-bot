@@ -73,3 +73,4 @@
 - [Crossings soft-artist array bottleneck](crossings-soft-artist-query.md) — passing ~1500 unresolved artist names as a SQL literal array to ANY() caused 20s+ query; replace with a SQL subquery so Postgres plans a hash-join.
 - [Library API total count](library-total-count.md) — GET /api/me/library omits total on pages 2+; run COUNT(*) only on first page (cursor IS NULL) and spread into response; client reads keptData.pages[0].total.
 - [Lore crossing row hierarchy](lore-crossing-row-hierarchy.md) — crossing artist leads; station is a stable byline; suppress titles only for crossing-driven rows, not ordinary now-playing rows.
+- [Schedule attribution withdrawals](schedule-attribution-voids.md) — void schedule evidence in place; exclude only schedule-derived bylines while preserving curated and overlapping valid attribution.

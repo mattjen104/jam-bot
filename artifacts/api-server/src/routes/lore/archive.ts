@@ -27,7 +27,14 @@ import { eq, and, or, asc, isNull, isNotNull, inArray, sql } from "drizzle-orm";
 import { stationArchiveUrl, supportsBackfill } from "../../lore/adapters.js";
 import { getPickerByHandle } from "../../lore/picks.js";
 import { h } from "../../middlewares/asyncHandler.js";
-import { toArchiveRecording, toPicker, spinDayExpr, isPickerOptedOut, pickerNotOptedOut } from "./shared.js";
+import {
+  toArchiveRecording,
+  toPicker,
+  spinDayExpr,
+  isPickerOptedOut,
+  pickerNotOptedOut,
+  validScheduleShowAttribution,
+} from "./shared.js";
 import { computeGenreBreakdown, computeDiscoveryScore } from "../../lore/genre-insights.js";
 
 const router: IRouter = Router();
@@ -80,7 +87,10 @@ router.get("/archive/station-runs/:runId", h(async (req, res) => {
     })
     .from(spinsTable)
     .leftJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
-    .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id))
+    .leftJoin(
+      showsTable,
+      and(eq(spinsTable.showId, showsTable.id), validScheduleShowAttribution()),
+    )
     .where(
       and(
         eq(spinsTable.stationId, anchor.stationId),
@@ -415,7 +425,10 @@ router.get("/archive/recent-runs", h(async (req, res) => {
       djName: showsTable.djName,
     })
     .from(spinsTable)
-    .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id))
+    .leftJoin(
+      showsTable,
+      and(eq(spinsTable.showId, showsTable.id), validScheduleShowAttribution()),
+    )
     .groupBy(
       spinsTable.stationId,
       spinDayExpr,
@@ -574,7 +587,10 @@ router.get("/archive/artist-runs", h(async (req, res) => {
         djName: showsTable.djName,
       })
       .from(spinsTable)
-      .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id))
+      .leftJoin(
+        showsTable,
+        and(eq(spinsTable.showId, showsTable.id), validScheduleShowAttribution()),
+      )
       .where(groupFilter)
       .groupBy(
         spinsTable.stationId,

@@ -2111,6 +2111,65 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /admin/scraped-shows/{id}/void:
+    patch:
+      operationId: voidScrapedShow
+      tags: [admin]
+      summary: Withdraw one scraped schedule block
+      description: >
+        Records an administrative withdrawal for one scraped schedule block.
+        The source evidence is retained with voidedAt and voidReason, but the
+        block is excluded from schedule-derived show and spin attribution.
+        Guarded by the x-admin-token header.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - name: x-admin-token
+          in: header
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VoidScrapedShowRequest"
+      responses:
+        "200":
+          description: The retained schedule block and recorded withdrawal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoidScrapedShowResponse"
+        "400":
+          description: Invalid id or missing reason
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Schedule block not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Admin entry not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /admin/stations/recompute-quality:
     post:
       operationId: recomputeStationQuality
@@ -3749,6 +3808,34 @@ components:
         - sourceUrl
         - scrapedAt
         - extraction
+    VoidScrapedShowRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          description: Required explanation for withdrawing the schedule evidence.
+      required:
+        - reason
+    VoidScrapedShowResponse:
+      allOf:
+        - $ref: "#/components/schemas/ScrapedShow"
+        - type: object
+          properties:
+            id:
+              type: integer
+            stationId:
+              type: integer
+            voidedAt:
+              type: ["string", "null"]
+              format: date-time
+            voidReason:
+              type: ["string", "null"]
+          required:
+            - id
+            - stationId
+            - voidedAt
+            - voidReason
     StationUpcomingSchedule:
       type: object
       description: >-

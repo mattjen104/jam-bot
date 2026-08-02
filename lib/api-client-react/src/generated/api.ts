@@ -110,6 +110,8 @@ import type {
   TracklistRequest,
   TracklistResult,
   UpsertPickerRequest,
+  VoidScrapedShowRequest,
+  VoidScrapedShowResponse,
   WikipediaDraftClaim,
   WikipediaDraftList,
 } from "./api.schemas";
@@ -5984,6 +5986,95 @@ export function useListAdminStations<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Records an administrative withdrawal for one scraped schedule block. The source evidence is retained with voidedAt and voidReason, but the block is excluded from schedule-derived show and spin attribution. Guarded by the x-admin-token header.
+
+ * @summary Withdraw one scraped schedule block
+ */
+export const getVoidScrapedShowUrl = (id: number) => {
+  return `/api/admin/scraped-shows/${id}/void`;
+};
+
+export const voidScrapedShow = async (
+  id: number,
+  voidScrapedShowRequest: VoidScrapedShowRequest,
+  options?: RequestInit,
+): Promise<VoidScrapedShowResponse> => {
+  return customFetch<VoidScrapedShowResponse>(getVoidScrapedShowUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(voidScrapedShowRequest),
+  });
+};
+
+export const getVoidScrapedShowMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof voidScrapedShow>>,
+    TError,
+    { id: number; data: BodyType<VoidScrapedShowRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof voidScrapedShow>>,
+  TError,
+  { id: number; data: BodyType<VoidScrapedShowRequest> },
+  TContext
+> => {
+  const mutationKey = ["voidScrapedShow"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof voidScrapedShow>>,
+    { id: number; data: BodyType<VoidScrapedShowRequest> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return voidScrapedShow(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type VoidScrapedShowMutationResult = NonNullable<
+  Awaited<ReturnType<typeof voidScrapedShow>>
+>;
+export type VoidScrapedShowMutationBody = BodyType<VoidScrapedShowRequest>;
+export type VoidScrapedShowMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Withdraw one scraped schedule block
+ */
+export const useVoidScrapedShow = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof voidScrapedShow>>,
+    TError,
+    { id: number; data: BodyType<VoidScrapedShowRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof voidScrapedShow>>,
+  TError,
+  { id: number; data: BodyType<VoidScrapedShowRequest> },
+  TContext
+> => {
+  return useMutation(getVoidScrapedShowMutationOptions(options));
+};
 
 /**
  * Triggers an immediate full recompute of quality scores for all active stations — the same job the nightly scheduler runs. Returns a flat tier count summary (keys = tier names, values = station counts). Token-guarded.

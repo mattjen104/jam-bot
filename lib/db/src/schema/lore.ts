@@ -410,6 +410,10 @@ export const scrapedShowsTable = pgTable(
     scrapedAt: timestamp("scraped_at").defaultNow().notNull(),
     /** "llm" | "api" | "manual". */
     extraction: text("extraction").notNull(),
+    /** Admin audit marker for schedule evidence that must not drive attribution. */
+    voidedAt: timestamp("voided_at"),
+    /** Required explanation recorded with an administrative withdrawal. */
+    voidReason: text("void_reason"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => [

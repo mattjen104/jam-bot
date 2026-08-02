@@ -11,6 +11,7 @@ import {
 } from "@workspace/db";
 import { eq, asc, desc, and, isNotNull, inArray } from "drizzle-orm";
 import { resolveSpinRunAnchors, spinDayExpr } from "./runs.js";
+import { validScheduleShowAttribution } from "../routes/lore/shared.js";
 
 /**
  * Segue edges — the "song A was followed by song B on this station/show" graph
@@ -518,7 +519,10 @@ export async function spinsForRecording(
       })
       .from(spinsTable)
       .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
-      .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id))
+      .leftJoin(
+        showsTable,
+        and(eq(spinsTable.showId, showsTable.id), validScheduleShowAttribution()),
+      )
       .where(eq(spinsTable.mbid, mbid))
       .orderBy(desc(spinsTable.playedAt))
       .limit(limit);

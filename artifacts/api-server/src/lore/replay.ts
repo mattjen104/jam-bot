@@ -8,7 +8,11 @@ import {
 } from "@workspace/db";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { spinDayExpr } from "./runs.js";
-import { isPickerOptedOut, toArchiveRecording } from "../routes/lore/shared.js";
+import {
+  isPickerOptedOut,
+  toArchiveRecording,
+  validScheduleShowAttribution,
+} from "../routes/lore/shared.js";
 
 /**
  * Ghost Replay is a read model over the spin archive. It deliberately has no
@@ -132,7 +136,10 @@ export async function getReplayManifest(id: number): Promise<ReplayManifest | nu
     })
     .from(spinsTable)
     .leftJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
-    .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id))
+    .leftJoin(
+      showsTable,
+      and(eq(spinsTable.showId, showsTable.id), validScheduleShowAttribution()),
+    )
     .leftJoin(pickersTable, eq(showsTable.pickerId, pickersTable.id))
     .where(
       and(

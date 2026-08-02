@@ -56,6 +56,7 @@ async function syncShowRows(): Promise<number> {
       show_name,
       dj_name
     FROM scraped_shows
+    WHERE voided_at IS NULL
     ORDER BY station_id, show_name, dj_name NULLS LAST
   `);
 
@@ -111,6 +112,7 @@ async function syncDjPickers(): Promise<number> {
     FROM scraped_shows ss
     JOIN stations st ON st.id = ss.station_id
     WHERE ss.dj_name IS NOT NULL AND ss.dj_name <> ''
+      AND ss.voided_at IS NULL
     ORDER BY ss.station_id, ss.dj_name
   `);
 
@@ -198,6 +200,7 @@ export async function stampSpinShowIds(): Promise<number> {
         ON  sh.station_id = sp.station_id
         AND sh.name       = ss.show_name
       WHERE sp.show_id      IS NULL
+        AND ss.voided_at IS NULL
         AND st.iana_timezone IS NOT NULL
         -- Overnight-aware slot matching (mirrors the crossing scorer's
         -- currently_airing CTE): a wrap slot (end <= start, e.g. 22:00-02:00)
@@ -387,6 +390,7 @@ export async function lookupScrapedShowId(
         ON  ss.station_id = sh.station_id
         AND ss.show_name  = sh.name
       WHERE sh.station_id = ${stationId}
+        AND ss.voided_at IS NULL
         AND (
           (
             ss.day_of_week = TO_CHAR(

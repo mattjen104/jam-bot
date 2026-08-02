@@ -3777,6 +3777,53 @@ export const ListAdminStationsResponse = zod.object({
 });
 
 /**
+ * Records an administrative withdrawal for one scraped schedule block. The source evidence is retained with voidedAt and voidReason, but the block is excluded from schedule-derived show and spin attribution. Guarded by the x-admin-token header.
+
+ * @summary Withdraw one scraped schedule block
+ */
+
+export const VoidScrapedShowParams = zod.object({
+  id: zod.coerce.number().min(1),
+});
+
+export const VoidScrapedShowHeader = zod.object({
+  "x-admin-token": zod.string().optional(),
+});
+
+export const VoidScrapedShowBody = zod.object({
+  reason: zod
+    .string()
+    .min(1)
+    .describe("Required explanation for withdrawing the schedule evidence."),
+});
+
+export const VoidScrapedShowResponse = zod
+  .object({
+    showName: zod.string(),
+    dayOfWeek: zod.enum(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]),
+    startTime: zod.string().describe('24h \"HH:MM\"'),
+    endTime: zod.string().describe('24h \"HH:MM\"'),
+    djName: zod.string().nullable(),
+    sourceUrl: zod
+      .string()
+      .url()
+      .describe("URL of the station schedule page that produced this row."),
+    scrapedAt: zod.date().describe("When this schedule row was extracted."),
+    extraction: zod.enum(["llm", "api", "manual"]),
+  })
+  .describe(
+    "One entry in a station's own published weekly programming grid. Times are the station's own local wall-clock times as published (timezone not modeled), describing a recurring weekly slot rather than a specific calendar date.",
+  )
+  .and(
+    zod.object({
+      id: zod.number(),
+      stationId: zod.number(),
+      voidedAt: zod.date().nullable(),
+      voidReason: zod.string().nullable(),
+    }),
+  );
+
+/**
  * Triggers an immediate full recompute of quality scores for all active stations — the same job the nightly scheduler runs. Returns a flat tier count summary (keys = tier names, values = station counts). Token-guarded.
 
  * @summary Admin-only on-demand station quality recompute

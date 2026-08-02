@@ -219,6 +219,8 @@ export * from "./tracklistRequestSource";
 export * from "./tracklistResult";
 export * from "./upsertPickerRequest";
 export * from "./upsertPickerRequestPickerType";
+export * from "./voidScrapedShowRequest";
+export * from "./voidScrapedShowResponse";
 export * from "./wikipediaDraftClaim";
 export * from "./wikipediaDraftClaimStatus";
 export * from "./wikipediaDraftList";

@@ -17,7 +17,7 @@ import {
 } from "@workspace/db";
 import { eq, and, desc, asc, sql, inArray, isNotNull, gte } from "drizzle-orm";
 import { getUserFromSession } from "../lore/userSession.js";
-import { toStation, isPickerOptedOut } from "./lore/shared.js";
+import { toStation, isPickerOptedOut, validScheduleShowAttribution } from "./lore/shared.js";
 import { resolveAutomationClass } from "../lore/scraped-shows-sync.js";
 import { h } from "../middlewares/asyncHandler.js";
 
@@ -70,7 +70,10 @@ router.get("/player/onair", h(async (req, res) => {
     })
     .from(spinsTable)
     .leftJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
-    .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id))
+    .leftJoin(
+      showsTable,
+      and(eq(spinsTable.showId, showsTable.id), validScheduleShowAttribution()),
+    )
     .where(isNotNull(spinsTable.stationId))
     .orderBy(asc(spinsTable.stationId), desc(spinsTable.playedAt));
 
@@ -199,7 +202,10 @@ router.get("/player/run/:slug", h(async (req, res) => {
       showDj: showsTable.djName,
     })
     .from(spinsTable)
-    .leftJoin(showsTable, eq(spinsTable.showId, showsTable.id));
+    .leftJoin(
+      showsTable,
+      and(eq(spinsTable.showId, showsTable.id), validScheduleShowAttribution()),
+    );
 
   const [anchor] =
     runId != null
@@ -384,7 +390,14 @@ router.get("/player/for-you", h(async (req, res) => {
       )::int                                                AS overlap_pct
     FROM   spins s
     JOIN   stations st ON s.station_id = st.id AND st.hidden = false
-    LEFT JOIN shows sh ON s.show_id    = sh.id
+    LEFT JOIN shows sh
+      ON s.show_id = sh.id
+      AND ${validScheduleShowAttribution(
+        sql`s.station_id`,
+        sql`s.played_at`,
+        sql`sh.name`,
+        sql`sh.picker_id`,
+      )}
     WHERE  s.station_id IS NOT NULL
       AND  s.played_at  >= NOW() - INTERVAL '90 days'
     GROUP BY
@@ -526,6 +539,11 @@ const PLAYER_AGG_TTL_MS = 60_000;
 let _selectorsCache: { builtAt: number; body: unknown } | null = null;
 let _scheduleCache: { builtAt: number; body: unknown } | null = null;
 
+/** Evict the schedule read-model after an admin changes schedule evidence. */
+export function clearPlayerScheduleCache(): void {
+  _scheduleCache = null;
+}
+
 router.get("/player/selectors", h(async (_req, res) => {
   if (_selectorsCache && Date.now() - _selectorsCache.builtAt < PLAYER_AGG_TTL_MS) {
     return res.json(_selectorsCache.body);
@@ -552,9 +570,28 @@ router.get("/player/selectors", h(async (_req, res) => {
                                              AS "recentSpinCount",
       MAX(sp.played_at)                      AS "lastPlayedAt"
     FROM pickers p
-    JOIN shows sh   ON sh.picker_id = p.id
+    JOIN shows sh
+      ON sh.picker_id = p.id
+      AND EXISTS (
+        SELECT 1
+        FROM spins sp_valid
+        WHERE sp_valid.show_id = sh.id
+          AND ${validScheduleShowAttribution(
+            sql`sp_valid.station_id`,
+            sql`sp_valid.played_at`,
+            sql`sh.name`,
+            sql`sh.picker_id`,
+          )}
+      )
     JOIN stations st ON st.id = sh.station_id AND st.hidden = false
-    LEFT JOIN spins sp ON sp.show_id = sh.id
+    LEFT JOIN spins sp
+      ON sp.show_id = sh.id
+      AND ${validScheduleShowAttribution(
+        sql`sp.station_id`,
+        sql`sp.played_at`,
+        sql`sh.name`,
+        sql`sh.picker_id`,
+      )}
     WHERE p.active = true
       AND p.picker_type = 'dj'
       AND NOT EXISTS (SELECT 1 FROM selector_claims sc WHERE sc.picker_id = p.id AND sc.opted_out = true)
@@ -614,7 +651,14 @@ router.get("/player/selectors/:handle/runs", h(async (req, res) => {
       st.slug                                        AS "stationSlug",
       st.name                                        AS "stationName"
     FROM spins sp
-    JOIN shows sh    ON sh.id = sp.show_id
+    JOIN shows sh
+      ON sh.id = sp.show_id
+      AND ${validScheduleShowAttribution(
+        sql`sp.station_id`,
+        sql`sp.played_at`,
+        sql`sh.name`,
+        sql`sh.picker_id`,
+      )}
     JOIN stations st ON st.id = sh.station_id
     WHERE sh.picker_id = ${picker.id}
     GROUP BY sh.id, sh.name, sh.dj_name, st.slug, st.name,
@@ -687,6 +731,7 @@ router.get("/player/schedule", h(async (_req, res) => {
     WHERE st.hidden = false
       AND st.active = true
       AND st.iana_timezone IS NOT NULL
+      AND ss.voided_at IS NULL
       AND (
         -- live now (any DOW form above) …
         (ss.day_of_week = TO_CHAR(NOW() AT TIME ZONE st.iana_timezone, 'Dy')

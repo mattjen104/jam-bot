@@ -918,6 +918,23 @@ export interface ScrapedShow {
   extraction: ScrapedShowExtraction;
 }
 
+export interface VoidScrapedShowRequest {
+  /**
+   * Required explanation for withdrawing the schedule evidence.
+   * @minLength 1
+   */
+  reason: string;
+}
+
+export type VoidScrapedShowResponse = ScrapedShow & {
+  id: number;
+  stationId: number;
+  /** @nullable */
+  voidedAt: string | null;
+  /** @nullable */
+  voidReason: string | null;
+};
+
 /**
  * A station's scraped upcoming schedule. `shows` is empty (never fabricated) when the station's page had no parseable schedule.
  */

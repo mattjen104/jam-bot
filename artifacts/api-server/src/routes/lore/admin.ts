@@ -44,6 +44,9 @@ import {
   ConfirmListEntryBody,
   RecomputeStationQualityResponse,
   ListAdminStationsResponse,
+  VoidScrapedShowParams,
+  VoidScrapedShowBody,
+  VoidScrapedShowResponse,
 } from "@workspace/api-zod";
 import {
   db,
@@ -62,6 +65,7 @@ import {
   stationQualityTable,
   blogListCandidatesTable,
   criCandidatesTable,
+  scrapedShowsTable,
 } from "@workspace/db";
 import { eq, and, asc, desc, sql, count, isNull, gt } from "drizzle-orm";
 import { runAnonCleanup } from "../../lore/anonCleanup.js";
@@ -91,6 +95,8 @@ import { addSongExploderClaim } from "../../lore/song-exploder.js";
 import { publishGeniusDraft, rejectGeniusDraft } from "../../lore/genius-annotations.js";
 import { h, HttpError } from "../../middlewares/asyncHandler.js";
 import { stampSpinShowIds } from "../../lore/scraped-shows-sync.js";
+import { clearAutomationClassCache } from "../../lore/scraped-shows-sync.js";
+import { clearPlayerScheduleCache } from "../player.js";
 import { toPicker } from "./shared.js";
 
 const router: IRouter = Router();
@@ -1041,6 +1047,73 @@ router.get("/admin/stations/coverage", h(async (_req, res) => {
   const counts: Record<string, number> = {};
   for (const s of stations) counts[s.coverage] = (counts[s.coverage] ?? 0) + 1;
   return res.json({ stations, counts });
+}));
+
+// PATCH /api/admin/scraped-shows/:id/void — withdraw one schedule evidence row
+// without deleting it. The receipt remains queryable for audit, while all
+// schedule-derived attribution paths ignore it.
+router.patch("/admin/scraped-shows/:id/void", h(async (req, res) => {
+  const params = VoidScrapedShowParams.safeParse(req.params);
+  if (!params.success) {
+    return res.status(400).json({ error: "Invalid schedule block id" });
+  }
+  const parsed = VoidScrapedShowBody.safeParse(
+    typeof req.body?.reason === "string"
+      ? { ...req.body, reason: req.body.reason.trim() }
+      : req.body,
+  );
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: "A non-empty void reason is required",
+      details: parsed.error.flatten(),
+    });
+  }
+
+  const now = new Date();
+  const updated = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(scrapedShowsTable)
+      .set({ voidedAt: now, voidReason: parsed.data.reason })
+      .where(eq(scrapedShowsTable.id, params.data.id))
+      .returning();
+    if (!row) return null;
+
+    // Keep the station's denormalized schedule count honest after withdrawal.
+    await tx.execute(sql`
+      UPDATE stations
+      SET upcoming_show_count = (
+        SELECT count(*)::int
+        FROM scraped_shows
+        WHERE station_id = ${row.stationId}
+          AND voided_at IS NULL
+      )
+      WHERE id = ${row.stationId}
+    `);
+    return row;
+  });
+
+  if (!updated) {
+    return res.status(404).json({ error: "Schedule block not found" });
+  }
+
+  clearAutomationClassCache([updated.stationId]);
+  clearPlayerScheduleCache();
+  return res.json(
+    VoidScrapedShowResponse.parse({
+      id: updated.id,
+      stationId: updated.stationId,
+      showName: updated.showName,
+      dayOfWeek: updated.dayOfWeek,
+      startTime: updated.startTime,
+      endTime: updated.endTime,
+      djName: updated.djName,
+      sourceUrl: updated.sourceUrl,
+      scrapedAt: updated.scrapedAt,
+      extraction: updated.extraction,
+      voidedAt: updated.voidedAt,
+      voidReason: updated.voidReason,
+    }),
+  );
 }));
 
 // POST /api/admin/radio-browser/stations/:id/reenroll — reset a suspended ICY
