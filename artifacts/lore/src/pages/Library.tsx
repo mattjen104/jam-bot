@@ -44,6 +44,7 @@ import {
   Upload,
   XCircle,
 } from "lucide-react";
+import { ManualImportModal } from "../components/ManualImportModal";
 
 // ---------------------------------------------------------------------------
 // Ledger consent helpers
@@ -771,6 +772,8 @@ export default function Library() {
     } finally { setImportingFile(false); }
   };
 
+  const [importModalOpen, setImportModalOpen] = useState(false);
+
   const libLoading = keptLoading;
   const isEmpty = !libLoading && keptItems.length === 0;
   void radio; // suppress unused lint
@@ -800,6 +803,9 @@ export default function Library() {
 
   return (
     <div className="dial-root">
+      {importModalOpen && (
+        <ManualImportModal onClose={() => setImportModalOpen(false)} />
+      )}
       {searchOpen && (
         <SearchOverlay
           dialStations={[]}
@@ -1330,68 +1336,166 @@ export default function Library() {
           </div>
         ) : isEmpty ? (
           <div style={{ padding: "28px 15px", textAlign: "center" }}>
-            <div
-              style={{
-                fontFamily: "var(--app-font-reading)",
-                fontSize: 16,
-                color: "hsl(var(--muted-foreground))",
-                marginBottom: 12,
-              }}
-            >
-              {sourceFilter === "keep"
-                ? "Nothing saved from radio yet."
-                : sourceFilter === "import"
-                ? "No imported tracks yet."
-                : sourceFilter === "soft"
-                ? "No unresolved tracks — everything matched MusicBrainz."
-                : sourceFilter === "critic"
-                ? "None of your kept tracks are from critically listed albums yet."
-                : "Keep songs from the radio to build your library."}
-            </div>
             {sourceFilter ? (
-              <button
-                type="button"
-                onClick={() => setSourceFilter("")}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  fontFamily: "var(--app-font-display)",
-                  fontSize: 10,
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.07em",
-                  color: "hsl(var(--library))",
-                  background: "none",
-                  border: "1px solid rgba(232,106,78,.35)",
-                  borderRadius: 3,
-                  padding: "6px 12px",
-                  cursor: "pointer",
-                }}
-              >
-                Show all
-              </button>
+              <>
+                <div
+                  style={{
+                    fontFamily: "var(--app-font-reading)",
+                    fontSize: 16,
+                    color: "hsl(var(--muted-foreground))",
+                    marginBottom: 12,
+                  }}
+                >
+                  {sourceFilter === "keep"
+                    ? "Nothing saved from radio yet."
+                    : sourceFilter === "import"
+                    ? "No imported tracks yet."
+                    : sourceFilter === "soft"
+                    ? "No unresolved tracks — everything matched MusicBrainz."
+                    : "None of your kept tracks are from critically listed albums yet."}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSourceFilter("")}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontFamily: "var(--app-font-display)",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.07em",
+                    color: "hsl(var(--library))",
+                    background: "none",
+                    border: "1px solid rgba(232,106,78,.35)",
+                    borderRadius: 3,
+                    padding: "6px 12px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Show all
+                </button>
+              </>
             ) : (
-              <Link
-                href="/"
+              <div
                 style={{
-                  display: "inline-flex",
+                  maxWidth: 320,
+                  margin: "0 auto",
+                  display: "flex",
+                  flexDirection: "column",
                   alignItems: "center",
-                  gap: 6,
-                  fontFamily: "var(--app-font-display)",
-                  fontSize: 10,
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.07em",
-                  color: "hsl(var(--library))",
-                  textDecoration: "none",
-                  border: "1px solid rgba(232,106,78,.35)",
-                  borderRadius: 3,
-                  padding: "6px 12px",
+                  gap: 16,
+                  paddingTop: 8,
                 }}
+                data-testid="library-onboarding"
               >
-                <Radio style={{ width: 10, height: 10 }} /> Open the dial
-              </Link>
+                {/* Headline */}
+                <div>
+                  <div
+                    style={{
+                      fontFamily: "var(--app-font-display)",
+                      fontSize: 18,
+                      fontWeight: 700,
+                      color: "hsl(var(--foreground))",
+                      marginBottom: 8,
+                    }}
+                  >
+                    Your music, on the radio
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: "var(--app-font-reading)",
+                      fontSize: 13,
+                      lineHeight: 1.55,
+                      color: "hsl(var(--muted-foreground))",
+                    }}
+                  >
+                    Import your saved tracks and Lore will light up every time a
+                    song from your library hits the air — across all the stations
+                    it follows.
+                  </div>
+                </div>
+
+                {/* Service labels */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    justifyContent: "center",
+                    gap: "6px 8px",
+                  }}
+                >
+                  {[
+                    { label: "Spotify", emoji: "🟢" },
+                    { label: "Apple Music", emoji: "🎵" },
+                    { label: "ListenBrainz", emoji: "🎧" },
+                    { label: "Last.fm", emoji: "🔴" },
+                    { label: "CSV / paste", emoji: "📋" },
+                  ].map(({ label, emoji }) => (
+                    <span
+                      key={label}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                        fontFamily: "var(--app-font-mono)",
+                        fontSize: 10,
+                        color: "hsl(var(--dim))",
+                        background: "hsl(var(--secondary))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: 4,
+                        padding: "3px 8px",
+                      }}
+                    >
+                      <span aria-hidden="true">{emoji}</span>
+                      {label}
+                    </span>
+                  ))}
+                </div>
+
+                {/* CTA */}
+                <button
+                  type="button"
+                  onClick={() => setImportModalOpen(true)}
+                  data-testid="library-import-cta"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontFamily: "var(--app-font-display)",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.07em",
+                    color: "hsl(var(--keep-foreground))",
+                    background: "hsl(var(--keep))",
+                    border: "none",
+                    borderRadius: 4,
+                    padding: "9px 18px",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Music2 style={{ width: 11, height: 11 }} />
+                  Import your library
+                </button>
+
+                {/* Radio link */}
+                <Link
+                  href="/"
+                  style={{
+                    fontFamily: "var(--app-font-mono)",
+                    fontSize: 10,
+                    color: "hsl(var(--faint))",
+                    textDecoration: "none",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                  }}
+                >
+                  <Radio style={{ width: 10, height: 10 }} /> Or just open the dial
+                </Link>
+              </div>
             )}
           </div>
         ) : (
