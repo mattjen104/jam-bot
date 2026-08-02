@@ -3616,7 +3616,7 @@ export const GetWikipediaDraftsResponse = zod.object({
 });
 
 /**
- * Returns all Genius annotation drafts in 'draft' status for a given recording MBID. Each draft carries the lyric fragment, projected timestamp anchor (when a matching LRCLIB line was found), Genius deep link, verified flag, and vote count. Admin reviews these and calls `/admin/genius-drafts/{id}/review` to publish or reject. Token-guarded.
+ * Returns all Genius annotation drafts in 'draft' status for a given recording MBID. Each draft carries a normalized-fragment SHA-256 receipt and character length, a projected timestamp anchor (when a matching LRCLIB line was found), and a Genius deep link. Raw third-party lyric text is never returned. Admin reviews these and calls `/admin/genius-drafts/{id}/review` to publish or reject. Token-guarded.
 
  * @summary Admin-only list of pending Genius annotation drafts for a recording
  */
@@ -3629,6 +3629,8 @@ export const ListGeniusDraftsHeader = zod.object({
   "x-admin-token": zod.string().optional(),
 });
 
+export const listGeniusDraftsResponseDraftsItemFragmentLenMin = 0;
+
 export const ListGeniusDraftsResponse = zod.object({
   mbid: zod.string(),
   drafts: zod.array(
@@ -3638,9 +3640,13 @@ export const ListGeniusDraftsResponse = zod.object({
         mbid: zod.string(),
         geniusSongId: zod.number(),
         geniusAnnotationId: zod.number(),
-        fragment: zod
+        fragmentHash: zod
           .string()
-          .describe("The lyric fragment the annotation is anchored to."),
+          .describe("SHA-256 receipt of the normalized lyric fragment."),
+        fragmentLen: zod
+          .number()
+          .min(listGeniusDraftsResponseDraftsItemFragmentLenMin)
+          .describe("Character length of the normalized lyric fragment."),
         anchorType: zod.enum(["timestamp", "none"]),
         offsetMs: zod.union([zod.number(), zod.null()]).optional(),
         geniusUrl: zod.string(),
@@ -3649,7 +3655,7 @@ export const ListGeniusDraftsResponse = zod.object({
         status: zod.enum(["draft", "published", "rejected"]),
       })
       .describe(
-        "A pending Genius annotation draft awaiting admin review. The lyric fragment is stored for context (never surfaced verbatim as a claim). `anchorType = 'timestamp'` means `offsetMs` is set and the claim will be anchored to the matching lyric line on publish.\n",
+        "A pending Genius annotation draft awaiting admin review. Only a normalized-fragment SHA-256 receipt and character length are retained; raw third-party lyric text is never stored or surfaced. `anchorType = 'timestamp'` means `offsetMs` is set and the claim will be anchored to the matching lyric line on publish.\n",
       ),
   ),
 });

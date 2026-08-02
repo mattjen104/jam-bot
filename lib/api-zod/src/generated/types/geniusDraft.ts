@@ -9,7 +9,7 @@ import type { GeniusDraftAnchorType } from "./geniusDraftAnchorType";
 import type { GeniusDraftStatus } from "./geniusDraftStatus";
 
 /**
- * A pending Genius annotation draft awaiting admin review. The lyric fragment is stored for context (never surfaced verbatim as a claim). `anchorType = 'timestamp'` means `offsetMs` is set and the claim will be anchored to the matching lyric line on publish.
+ * A pending Genius annotation draft awaiting admin review. Only a normalized-fragment SHA-256 receipt and character length are retained; raw third-party lyric text is never stored or surfaced. `anchorType = 'timestamp'` means `offsetMs` is set and the claim will be anchored to the matching lyric line on publish.
 
  */
 export interface GeniusDraft {
@@ -17,8 +17,13 @@ export interface GeniusDraft {
   mbid: string;
   geniusSongId: number;
   geniusAnnotationId: number;
-  /** The lyric fragment the annotation is anchored to. */
-  fragment: string;
+  /** SHA-256 receipt of the normalized lyric fragment. */
+  fragmentHash: string;
+  /**
+   * Character length of the normalized lyric fragment.
+   * @minimum 0
+   */
+  fragmentLen: number;
   anchorType: GeniusDraftAnchorType;
   offsetMs?: number | null;
   geniusUrl: string;

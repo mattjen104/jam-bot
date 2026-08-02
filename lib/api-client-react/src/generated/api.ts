@@ -5634,7 +5634,7 @@ export function useGetWikipediaDrafts<
 }
 
 /**
- * Returns all Genius annotation drafts in 'draft' status for a given recording MBID. Each draft carries the lyric fragment, projected timestamp anchor (when a matching LRCLIB line was found), Genius deep link, verified flag, and vote count. Admin reviews these and calls `/admin/genius-drafts/{id}/review` to publish or reject. Token-guarded.
+ * Returns all Genius annotation drafts in 'draft' status for a given recording MBID. Each draft carries a normalized-fragment SHA-256 receipt and character length, a projected timestamp anchor (when a matching LRCLIB line was found), and a Genius deep link. Raw third-party lyric text is never returned. Admin reviews these and calls `/admin/genius-drafts/{id}/review` to publish or reject. Token-guarded.
 
  * @summary Admin-only list of pending Genius annotation drafts for a recording
  */

@@ -6,6 +6,7 @@ import {
   geniusAnnotationDraftsTable,
 } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
+import { createHash } from "node:crypto";
 import { fetchGeniusSongId, fetchGeniusReferents, geniusEnabled } from "@workspace/song-enrichment";
 
 /**
@@ -20,7 +21,7 @@ import { fetchGeniusSongId, fetchGeniusReferents, geniusEnabled } from "@workspa
  *  4. Stores draft rows in `genius_annotation_drafts` for admin review.
  *
  * Policy:
- *  - Never store the verbatim annotation text — only the fragment.
+ *  - Never store the verbatim annotation text — only a normalized receipt.
  *  - All drafts start as status='draft'; publishing is admin-gated.
  *  - Idempotent: rows are deduplicated by geniusAnnotationId (unique index).
  *  - Fails safely: any network error degrades silently; the lyrics pipeline
@@ -28,7 +29,7 @@ import { fetchGeniusSongId, fetchGeniusReferents, geniusEnabled } from "@workspa
  */
 
 /** Normalise a string for fuzzy comparison: lowercase, strip non-alphanumeric. */
-function norm(s: string): string {
+export function normalizeGeniusFragment(s: string): string {
   return s
     .toLowerCase()
     .normalize("NFD")
@@ -36,6 +37,18 @@ function norm(s: string): string {
     .replace(/[^a-z0-9 ]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/** Return the stable SHA-256 receipt and normalized character count. */
+export function geniusFragmentReceipt(fragment: string): {
+  hash: string;
+  len: number;
+} {
+  const normalized = normalizeGeniusFragment(fragment);
+  return {
+    hash: createHash("sha256").update(normalized, "utf8").digest("hex"),
+    len: normalized.length,
+  };
 }
 
 /**
@@ -72,7 +85,7 @@ export function projectFragment(
 
   const subFragments = fragment
     .split(/[\n;]/)
-    .map((f) => norm(f))
+    .map((f) => normalizeGeniusFragment(f))
     .filter((f) => f.length >= 4);
 
   if (!subFragments.length) return null;
@@ -82,7 +95,7 @@ export function projectFragment(
 
   for (const sub of subFragments) {
     for (const line of lines) {
-      const normLine = norm(line.text);
+      const normLine = normalizeGeniusFragment(line.text);
       if (!normLine) continue;
 
       let score = jaccardSimilarity(sub, normLine);
@@ -107,7 +120,7 @@ export function projectFragment(
  * - Looks up the Genius song id (title + artist search).
  * - Fetches qualifying referents (votes >= 5 || verified).
  * - Projects each fragment against the stored lyric lines.
- * - Upserts draft rows (idempotent via `onConflictDoNothing`).
+ * - Upserts pointer-only draft rows (idempotent via `onConflictDoNothing`).
  *
  * Returns the number of drafts inserted (0 = nothing new or not configured).
  * Never throws — all errors are caught and logged.
@@ -146,6 +159,7 @@ export async function ingestGeniusAnnotations(mbid: string): Promise<number> {
     for (const ref of referents) {
       const offsetMs = projectFragment(ref.fragment, lines);
       const anchorType = offsetMs !== null ? "timestamp" : "none";
+      const receipt = geniusFragmentReceipt(ref.fragment);
 
       const result = await db
         .insert(geniusAnnotationDraftsTable)
@@ -153,7 +167,8 @@ export async function ingestGeniusAnnotations(mbid: string): Promise<number> {
           mbid,
           geniusSongId: songId,
           geniusAnnotationId: ref.geniusAnnotationId,
-          fragment: ref.fragment,
+          fragmentHash: receipt.hash,
+          fragmentLen: receipt.len,
           anchorType,
           offsetMs: offsetMs ?? null,
           geniusUrl: ref.geniusUrl,

@@ -993,9 +993,9 @@ export type InsertSongExploderEpisode =
  * the LRCLIB lyric_lines for the same recording to produce a timestamp anchor.
  *
  * Policy:
- *  - We never store the verbatim Genius annotation text. Only the `fragment`
- *    (the lyric snippet the annotation is anchored to) is kept so the admin can
- *    find the matching lyric line; the full annotation is always read on Genius.
+ *  - We never store the verbatim Genius annotation text. The normalized
+ *    fragment's SHA-256 receipt and character length are retained only to make
+ *    an ingest auditable; the full annotation is always read on Genius.
  *  - On publish the admin supplies a paraphrase which is stored in track_claims.
  *  - Only annotations with voteCount >= 5 OR verified=true are ingested.
  *  - `anchorType = 'timestamp'` when the fragment matched a LRCLIB line;
@@ -1012,12 +1012,10 @@ export const geniusAnnotationDraftsTable = pgTable(
     geniusSongId: integer("genius_song_id").notNull(),
     /** Genius internal referent/annotation id — dedup key. */
     geniusAnnotationId: integer("genius_annotation_id").notNull(),
-    /**
-     * The lyric fragment text from Genius (the highlighted snippet the
-     * annotation is attached to). Stored for admin review context only;
-     * never surfaced verbatim as a claim.
-     */
-    fragment: text("fragment").notNull(),
+    /** SHA-256 receipt of the normalized Genius lyric fragment. */
+    fragmentHash: text("fragment_hash").notNull(),
+    /** Character length of the normalized Genius lyric fragment. */
+    fragmentLen: integer("fragment_len").notNull(),
     /**
      * How the draft is anchored:
      * 'timestamp' — the fragment matched a LRCLIB line; offsetMs is set.

@@ -62,6 +62,7 @@ import { applyAttendanceMigration } from "./lore/attendance-migration.js";
 import { applyTasteSeedsMigration } from "./lore/taste-seeds-migration.js";
 import { applyBottlesMigration } from "./lore/bottles-migration.js";
 import { applyLibraryProvenanceBackfill } from "./lore/library-provenance-backfill.js";
+import { applyGeniusFragmentPointerMigration } from "./lore/genius-fragment-migration.js";
 import { startSessionExpiryWorker } from "./routes/me/attendance.js";
 import { scheduleAnonCleanup } from "./lore/anonCleanup.js";
 
@@ -117,6 +118,7 @@ async function bootLore(): Promise<void> {
     await runMigration("applyAttendanceMigration", applyAttendanceMigration);
     await runMigration("applyTasteSeedsMigration", applyTasteSeedsMigration);
     await runMigration("applyBottlesMigration", applyBottlesMigration);
+    await runMigration("applyGeniusFragmentPointerMigration", applyGeniusFragmentPointerMigration);
     await ensurePicksUnifiedView();
     await seedStations();
     try {
