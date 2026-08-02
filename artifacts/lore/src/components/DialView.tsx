@@ -135,7 +135,7 @@ function reason(
   if (show.currentTrack?.isLibraryHit) {
     return {
       r: 1, cls: "w1",
-      node: <>◆ playing <b>{show.currentTrack.title}</b> — in your library</>,
+      node: <>playing <b>{show.currentTrack.title}</b> — in your library</>,
     };
   }
 
@@ -292,12 +292,21 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onE
         {djName && (
           <div className="fdrow__t2">
             {djName}
-            {ov > 0 && <span className="fdrow__t2-ov">{ov}</span>}
           </div>
         )}
 
         {/* Tier 3: show · station — small identity label */}
         <div className="fdrow__t3">{tier3Node}</div>
+
+        {/* Zone 3 lifetime overlap caption: shown when the reason sentence carries no
+            taste signal (r=0: no data; r=5: attributed show but no crossings yet) but
+            we do have a nonzero lifetime artist-overlap count.  Gives every row a
+            human explanation of why it surfaced instead of just a name and a number. */}
+        {(rz.r === 0 || rz.r === 5) && ov > 0 && (
+          <div className="fdrow__ov-caption">
+            <b>{ov} artists</b> you know play here
+          </div>
+        )}
 
         {/* Bare track: Zone 3 rows only — a legible plain fact, not a caption */}
         {showBareTrack && (

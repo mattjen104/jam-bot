@@ -2943,6 +2943,15 @@
 /* ◈ first-ever-spin mark */
 .fdrow__bare-track__new { color: hsl(var(--library) / 0.8); font-style: normal; }
 
+/* Zone 3 lifetime overlap caption — "N artists you know play here" */
+.fdrow__ov-caption {
+  font-family: var(--app-font-display);
+  font-size: 11px;
+  color: hsl(var(--muted-foreground) / 0.75);
+  margin-bottom: 4px;
+}
+.fdrow__ov-caption b { font-weight: 600; color: hsl(var(--foreground) / 0.6); font-style: normal; }
+
 /* ↩ earlier */
 .fdrow__foot { display: flex; }
 .fdrow__back {
