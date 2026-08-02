@@ -5,6 +5,7 @@ import {
   GetPickerRunParams,
   GetPickerRunResponse,
   GetArchiveRecentRunsResponse,
+  GetArchiveRecentRunsQueryParams,
   GetArchiveCoverageResponse,
   GetStationRunInsightsParams,
   GetStationRunInsightsResponse,
@@ -322,8 +323,84 @@ router.get("/archive/picker-runs/:runId/insights", h(async (req, res) => {
 
 // GET /api/archive/recent-runs — newest documented runs across every station.
 // Ranking favors recency AND resolution quality.
-router.get("/archive/recent-runs", h(async (_req, res) => {
-  const runs = await db
+// Supports cursor-based pagination via ?before=<opaque_cursor>.
+const RECENT_RUNS_PAGE_SIZE = 50;
+
+// The sort order is (date DESC, ratio DESC, maxPlayedAt DESC, runId DESC).
+// The cursor encodes all four sort-key fields so the HAVING clause can do a
+// correct lexicographic comparison that matches the ORDER BY exactly.
+type RecentRunsCursor = {
+  date: string;       // "YYYY-MM-DD"
+  ratio: number;      // resolvedCount / spinCount
+  maxPlayedAt: string; // ISO-8601 timestamp of the last spin
+  runId: number;      // min(spins.id) — deterministic tiebreaker
+};
+
+function encodeRecentRunsCursor(c: RecentRunsCursor): string {
+  return Buffer.from(JSON.stringify(c)).toString("base64url");
+}
+
+function decodeRecentRunsCursor(token: string): RecentRunsCursor | null {
+  try {
+    const obj = JSON.parse(Buffer.from(token, "base64url").toString("utf8")) as unknown;
+    if (
+      typeof obj === "object" &&
+      obj !== null &&
+      typeof (obj as Record<string, unknown>).date === "string" &&
+      typeof (obj as Record<string, unknown>).ratio === "number" &&
+      typeof (obj as Record<string, unknown>).maxPlayedAt === "string" &&
+      typeof (obj as Record<string, unknown>).runId === "number"
+    ) {
+      return obj as RecentRunsCursor;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+router.get("/archive/recent-runs", h(async (req, res) => {
+  // Parse and validate the opaque cursor.
+  const rawBefore = req.query.before;
+  let cursor: RecentRunsCursor | null = null;
+  if (rawBefore !== undefined) {
+    if (typeof rawBefore !== "string" || rawBefore.length === 0) {
+      return res.status(400).json({ error: "Invalid cursor" });
+    }
+    cursor = decodeRecentRunsCursor(rawBefore);
+    if (!cursor) {
+      return res.status(400).json({ error: "Invalid cursor" });
+    }
+  }
+
+  // Keyset condition matching ORDER BY (date DESC, ratio DESC, maxPlayedAt DESC, runId DESC).
+  // Lexicographic "less than" across all four sort fields:
+  //   Row is "after" the cursor position when any earlier field is strictly
+  //   smaller (DESC ⟹ smaller = further in the list) or all earlier fields
+  //   are equal and the current field is strictly smaller.
+  const ratioExpr = sql`(count(*) filter (where ${spinsTable.mbid} is not null))::float / nullif(count(*), 0)`;
+  const havingClause = cursor
+    ? sql`(
+        ${spinDayExpr} < ${cursor.date}
+        OR (
+          ${spinDayExpr} = ${cursor.date}
+          AND ${ratioExpr} < ${cursor.ratio}
+        )
+        OR (
+          ${spinDayExpr} = ${cursor.date}
+          AND ${ratioExpr} = ${cursor.ratio}
+          AND max(${spinsTable.playedAt}) < ${cursor.maxPlayedAt}::timestamptz
+        )
+        OR (
+          ${spinDayExpr} = ${cursor.date}
+          AND ${ratioExpr} = ${cursor.ratio}
+          AND max(${spinsTable.playedAt}) = ${cursor.maxPlayedAt}::timestamptz
+          AND min(${spinsTable.id}) < ${cursor.runId}
+        )
+      )`
+    : sql`1=1`;
+
+  const rows = await db
     .select({
       runId: sql<number>`min(${spinsTable.id})`,
       date: spinDayExpr,
@@ -346,16 +423,35 @@ router.get("/archive/recent-runs", h(async (_req, res) => {
       showsTable.name,
       showsTable.djName,
     )
+    .having(havingClause)
     .orderBy(
       sql`${spinDayExpr} desc`,
-      sql`(count(*) filter (where ${spinsTable.mbid} is not null))::float / count(*) desc`,
+      sql`(count(*) filter (where ${spinsTable.mbid} is not null))::float / nullif(count(*), 0) desc`,
       sql`max(${spinsTable.playedAt}) desc`,
+      sql`min(${spinsTable.id}) desc`, // deterministic tiebreaker
     )
-    // 200 gives comfortable headroom when the full test suite runs with many
-    // concurrent files all seeding future-dated spins (LIMIT 40 caused flakes).
-    .limit(200);
+    // Fetch one extra row to detect whether there is a next page.
+    .limit(RECENT_RUNS_PAGE_SIZE + 1);
 
-  const stationIds = [...new Set(runs.map((r) => r.stationId))];
+  const hasMore = rows.length > RECENT_RUNS_PAGE_SIZE;
+  const pageRows = hasMore ? rows.slice(0, RECENT_RUNS_PAGE_SIZE) : rows;
+
+  // Build the next-page cursor from the last item on this page.
+  const lastRow = pageRows[pageRows.length - 1];
+  const nextCursor =
+    hasMore && lastRow
+      ? encodeRecentRunsCursor({
+          date: lastRow.date,
+          ratio:
+            lastRow.spinCount > 0
+              ? lastRow.resolvedCount / lastRow.spinCount
+              : 0,
+          maxPlayedAt: new Date(lastRow.endedAt).toISOString(),
+          runId: lastRow.runId,
+        })
+      : null;
+
+  const stationIds = [...new Set(pageRows.map((r) => r.stationId))];
   const stations = stationIds.length
     ? await db
         .select()
@@ -366,7 +462,7 @@ router.get("/archive/recent-runs", h(async (_req, res) => {
 
   return res.json(
     GetArchiveRecentRunsResponse.parse({
-      items: runs.flatMap((r) => {
+      items: pageRows.flatMap((r) => {
         const station = stationById.get(r.stationId);
         if (!station) return [];
         return [
@@ -394,6 +490,7 @@ router.get("/archive/recent-runs", h(async (_req, res) => {
           },
         ];
       }),
+      nextCursor,
     }),
   );
 }));

@@ -2070,6 +2070,10 @@ export const GetArchiveCoverageResponse = zod.object({
   ),
 });
 
+export const GetArchiveRecentRunsQueryParams = zod.object({
+  before: zod.string().min(1).optional(),
+});
+
 /**
  * The newest documented runs from all stations in one list — each a real show's plays on one UTC broadcast day. Ranked by recency and quality: newest broadcast day first, best-resolved runs first within a day, so replayable runs lead. Powers the home screen's Ghost Radio mode.
 
@@ -2126,6 +2130,13 @@ export const GetArchiveRecentRunsResponse = zod.object({
         "One recent documented run with its station attribution, for the cross-station ghost radio browse surface.",
       ),
   ),
+  nextCursor: zod
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      "Opaque cursor for the next page: pass as ?before=<nextCursor> to fetch older runs. Null or absent when there are no more results.",
+    ),
 });
 
 /**

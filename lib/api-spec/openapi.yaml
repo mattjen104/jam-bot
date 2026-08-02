@@ -888,6 +888,18 @@ paths:
         show's plays on one UTC broadcast day. Ranked by recency and quality:
         newest broadcast day first, best-resolved runs first within a day, so
         replayable runs lead. Powers the home screen's Ghost Radio mode.
+        Supports cursor-based pagination via `before` (the runId of the last
+        item on the previous page). When omitted, returns the first page.
+      parameters:
+        - name: before
+          in: query
+          required: false
+          schema:
+            type: string
+          description: >
+            Opaque pagination cursor. Omit for the first page; pass the
+            `nextCursor` value from the previous response to fetch the next
+            page. An invalid value returns 400.
       responses:
         "200":
           description: Recent runs across all stations, newest first
@@ -4021,6 +4033,13 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/RecentStationRun"
+        nextCursor:
+          type: string
+          nullable: true
+          description: >
+            Opaque cursor for the next page: pass as `?before=<nextCursor>`
+            to fetch older runs. Null (or absent) when there are no more
+            results.
       required:
         - items
     ArtistStationRunMatch:

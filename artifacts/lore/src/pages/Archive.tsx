@@ -4,6 +4,7 @@ import {
   useListStations,
   useListPickers,
   useGetArchiveCoverage,
+  useInfiniteGetArchiveRecentRuns,
   useSearchArtistRuns,
   getSearchArtistRunsQueryKey,
 } from "@workspace/api-client-react";
@@ -26,6 +27,13 @@ export default function Archive() {
   const { data: stationsData, isLoading: stationsLoading } = useListStations();
   const { data: pickersData, isLoading: pickersLoading } = useListPickers();
   const { data: coverage } = useGetArchiveCoverage();
+  const {
+    data: recentRunsData,
+    isLoading: recentRunsLoading,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+  } = useInfiniteGetArchiveRecentRuns();
   const [artistQuery, setArtistQuery] = useState("");
   const debouncedQuery = useDebouncedValue(artistQuery.trim(), 350);
   const searchEnabled = debouncedQuery.length >= 2;
@@ -41,6 +49,7 @@ export default function Archive() {
 
   const stations = stationsData?.stations ?? [];
   const pickers = (pickersData?.pickers ?? []).filter((p) => p.active);
+  const recentRuns = recentRunsData?.pages.flatMap((p) => p.items) ?? [];
   const dockPadding = ride.active || radio.station ? "pb-32" : "pb-16";
 
   return (
@@ -213,6 +222,65 @@ export default function Archive() {
             </ul>
           </section>
         ) : null}
+
+        <section className="mb-10">
+          <h2 className="mb-4 flex items-center gap-2 font-serif text-xl font-semibold text-foreground">
+            <Ghost className="h-4 w-4 text-primary" />
+            Recent runs
+          </h2>
+          {recentRunsLoading ? (
+            <ListSkeleton />
+          ) : recentRuns.length === 0 ? (
+            <p className="rounded-xl border border-card-border bg-card p-4 font-mono text-xs text-muted-foreground">
+              No documented runs yet.
+            </p>
+          ) : (
+            <>
+              <ul className="flex flex-col gap-2" data-testid="archive-recent-runs">
+                {recentRuns.map((item) => (
+                  <li key={`${item.station.slug}-${item.run.runId}`}>
+                    <Link
+                      href={`/archive/station-runs/${item.run.runId}`}
+                      className="hover-elevate flex items-center justify-between gap-3 rounded-xl border border-card-border bg-card p-4"
+                      data-testid={`recent-run-${item.run.runId}`}
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-serif text-base font-semibold text-foreground">
+                          {item.station.name}
+                          {item.run.show ? ` · ${item.run.show.name}` : ""}
+                        </p>
+                        <p className="truncate font-mono text-[11px] text-muted-foreground">
+                          {runDate(item.run.startedAt)} · {item.run.spinCount}{" "}
+                          track{item.run.spinCount === 1 ? "" : "s"} ·{" "}
+                          <span
+                            className={
+                              item.run.resolvedCount > 0 ? "text-primary" : ""
+                            }
+                          >
+                            {item.run.resolvedCount}/{item.run.spinCount} resolved
+                          </span>
+                        </p>
+                      </div>
+                      <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              {hasNextPage && (
+                <div className="mt-4 flex justify-center">
+                  <button
+                    onClick={() => void fetchNextPage()}
+                    disabled={isFetchingNextPage}
+                    className="rounded-full border border-card-border bg-card px-5 py-2 font-mono text-xs uppercase tracking-wide text-muted-foreground hover:text-foreground disabled:opacity-50"
+                    data-testid="load-more-recent-runs"
+                  >
+                    {isFetchingNextPage ? "Loading…" : "Load older runs"}
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </section>
 
         <section className="mb-10">
           <h2 className="mb-4 flex items-center gap-2 font-serif text-xl font-semibold text-foreground">

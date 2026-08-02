@@ -5,13 +5,16 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import type {
+  InfiniteData,
   MutationFunction,
   QueryFunction,
   QueryKey,
   UseMutationOptions,
   UseMutationResult,
+  UseInfiniteQueryOptions,
+  UseInfiniteQueryResult,
   UseQueryOptions,
   UseQueryResult,
 } from "@tanstack/react-query";
@@ -2812,41 +2815,49 @@ export function useGetArchiveCoverage<
 
  * @summary Recent documented runs across every station (ghost radio browse)
  */
-export const getGetArchiveRecentRunsUrl = () => {
-  return `/api/archive/recent-runs`;
+export const getGetArchiveRecentRunsUrl = (params?: { before?: string }) => {
+  const search =
+    params?.before != null
+      ? `?before=${encodeURIComponent(params.before)}`
+      : "";
+  return `/api/archive/recent-runs${search}`;
 };
 
 export const getArchiveRecentRuns = async (
+  params?: { before?: string },
   options?: RequestInit,
 ): Promise<ArchiveRecentRuns> => {
-  return customFetch<ArchiveRecentRuns>(getGetArchiveRecentRunsUrl(), {
+  return customFetch<ArchiveRecentRuns>(getGetArchiveRecentRunsUrl(params), {
     ...options,
     method: "GET",
   });
 };
 
-export const getGetArchiveRecentRunsQueryKey = () => {
-  return [`/api/archive/recent-runs`] as const;
+export const getGetArchiveRecentRunsQueryKey = (params?: { before?: string }) => {
+  return [`/api/archive/recent-runs`, ...(params ? [params] : [])] as const;
 };
 
 export const getGetArchiveRecentRunsQueryOptions = <
   TData = Awaited<ReturnType<typeof getArchiveRecentRuns>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof getArchiveRecentRuns>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
+>(
+  params?: { before?: string },
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getArchiveRecentRuns>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
-  const queryKey = queryOptions?.queryKey ?? getGetArchiveRecentRunsQueryKey();
+  const queryKey = queryOptions?.queryKey ?? getGetArchiveRecentRunsQueryKey(params);
 
   const queryFn: QueryFunction<
     Awaited<ReturnType<typeof getArchiveRecentRuns>>
-  > = ({ signal }) => getArchiveRecentRuns({ signal, ...requestOptions });
+  > = ({ signal }) => getArchiveRecentRuns(params, { signal, ...requestOptions });
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof getArchiveRecentRuns>>,
@@ -2867,21 +2878,58 @@ export type GetArchiveRecentRunsQueryError = ErrorType<unknown>;
 export function useGetArchiveRecentRuns<
   TData = Awaited<ReturnType<typeof getArchiveRecentRuns>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof getArchiveRecentRuns>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetArchiveRecentRunsQueryOptions(options);
+>(
+  params?: { before?: string },
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getArchiveRecentRuns>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetArchiveRecentRunsQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
   };
 
   return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Infinite-scroll variant of useGetArchiveRecentRuns. Each page's `nextCursor`
+ * is passed as `before` to fetch the next page.
+ *
+ * @summary Recent documented runs — infinite query
+ */
+export function useInfiniteGetArchiveRecentRuns(options?: {
+  request?: SecondParameter<typeof customFetch>;
+}): UseInfiniteQueryResult<
+  InfiniteData<Awaited<ReturnType<typeof getArchiveRecentRuns>>>,
+  ErrorType<unknown>
+> & { queryKey: QueryKey } {
+  const { request: requestOptions } = options ?? {};
+
+  const queryKey = getGetArchiveRecentRunsQueryKey();
+
+  const result = useInfiniteQuery({
+    queryKey,
+    queryFn: ({ signal, pageParam }: { signal?: AbortSignal; pageParam: string | undefined }) =>
+      getArchiveRecentRuns(
+        pageParam != null ? { before: pageParam } : undefined,
+        { signal, ...requestOptions },
+      ),
+    getNextPageParam: (lastPage: Awaited<ReturnType<typeof getArchiveRecentRuns>>) =>
+      lastPage.nextCursor ?? undefined,
+    initialPageParam: undefined as string | undefined,
+  }) as UseInfiniteQueryResult<
+    InfiniteData<Awaited<ReturnType<typeof getArchiveRecentRuns>>>,
+    ErrorType<unknown>
+  >;
+
+  return { ...result, queryKey };
 }
 
 /**
