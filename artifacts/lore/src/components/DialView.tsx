@@ -7,6 +7,7 @@
  * chrome above the scroll body.
  */
 import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
+import { Search } from "lucide-react";
 import { useLocation } from "wouter";
 import { useDialData, normalizeDjName, type DialStation, type DialShow, type DialSpin } from "../hooks/useDialData";
 import { useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, type GhostStation } from "../lib/meHooks";
@@ -1258,7 +1259,7 @@ export function DialView() {
             aria-label="Search stations, selectors, shows"
             title="Search"
           >
-            🔍
+            <Search size={14} />
           </button>
         </div>
       );
