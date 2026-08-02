@@ -11,6 +11,7 @@ import Album from "@/pages/Album";
 import Archive from "@/pages/Archive";
 import StationArchive from "@/pages/StationArchive";
 import StationRun from "@/pages/StationRun";
+import Replay from "@/pages/Replay";
 import SelectorArchive from "@/pages/SelectorArchive";
 import SelectorRun from "@/pages/SelectorRun";
 import Selectors from "@/pages/Selectors";
@@ -85,6 +86,7 @@ function Router() {
         <Route path="/archive" component={Archive} />
         <Route path="/archive/stations/:slug" component={StationArchive} />
         <Route path="/archive/station-runs/:runId" component={StationRun} />
+        <Route path="/replay/:id" component={Replay} />
         {/* Canonical selector routes */}
         <Route path="/selectors" component={Selectors} />
         <Route path="/archive/selectors/:handle" component={SelectorArchive} />

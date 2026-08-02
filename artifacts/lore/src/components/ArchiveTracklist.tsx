@@ -5,6 +5,7 @@ import type { TimeOrientation } from "../player/playbackSession";
 import { CONFIDENCE_LABEL } from "../lib/format";
 import { clockTime } from "../lib/format";
 import { ExternalLink, Ghost, Play } from "lucide-react";
+import { KeepButton } from "./KeepButton";
 
 const BANDCAMP_HOST_RE = /bandcamp\.com/i;
 
@@ -27,11 +28,13 @@ export function ArchiveTracklist({
   replayLabel,
   timeOrientation = "past",
   runSourceUrl,
+  provenance,
 }: {
-  tracks: ArchiveTrack[];
+  tracks: Array<ArchiveTrack & { spinId?: number }>;
   replayLabel: string;
   timeOrientation?: TimeOrientation;
   runSourceUrl?: string | null;
+  provenance?: Parameters<typeof KeepButton>[0]["provenance"];
 }) {
   const { ride } = usePlayer();
 
@@ -135,6 +138,25 @@ export function ArchiveTracklist({
                 </p>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-0.5">
+                {rec?.links?.some((link) => link.kind === "exact") ? (
+                  <div className="flex flex-wrap justify-end gap-1">
+                    {rec.links
+                      .filter((link) => link.kind === "exact")
+                      .slice(0, 2)
+                      .map((link) => (
+                        <a
+                          key={link.url}
+                          href={link.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-wide text-primary hover:underline"
+                        >
+                          <ExternalLink className="h-2.5 w-2.5" />
+                          {link.name}
+                        </a>
+                      ))}
+                  </div>
+                ) : null}
                 {!rec && isBandcampRun && runSourceUrl ? (
                   <a
                     href={runSourceUrl}
@@ -153,6 +175,14 @@ export function ArchiveTracklist({
                 <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground/70">
                   {CONFIDENCE_LABEL[t.confidence] ?? t.confidence}
                 </span>
+                {t.spinId != null ? (
+                  <KeepButton
+                    mbid={rec?.mbid ?? null}
+                    spinId={t.spinId}
+                    provenance={provenance}
+                    compact
+                  />
+                ) : null}
               </div>
             </li>
           );

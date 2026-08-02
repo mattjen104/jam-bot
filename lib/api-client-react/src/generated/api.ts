@@ -5,16 +5,13 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
-  InfiniteData,
   MutationFunction,
   QueryFunction,
   QueryKey,
   UseMutationOptions,
   UseMutationResult,
-  UseInfiniteQueryOptions,
-  UseInfiniteQueryResult,
   UseQueryOptions,
   UseQueryResult,
 } from "@tanstack/react-query";
@@ -36,6 +33,7 @@ import type {
   GeniusDraftList,
   GeniusDraftReviewRequest,
   GeniusDraftReviewResponse,
+  GetArchiveRecentRunsParams,
   GetOembedParams,
   GetRecordingsAvailabilityParams,
   GetSpotifySavedParams,
@@ -76,6 +74,7 @@ import type {
   RecordingPreview,
   RecordingSpins,
   RecordingsAvailabilityResult,
+  ReplayManifest,
   ResolveSongParams,
   ResolvedSong,
   RymListRequest,
@@ -2283,6 +2282,95 @@ export function useGetStationRun<
 }
 
 /**
+ * Returns the server-derived reconstruction of one archived station run. The replay id is the smallest spin id in the station/show/UTC-day partition. Every spin remains in broadcast order, including unresolved rows whose recording is null; source spin ids and timestamps are preserved for honest replay and Keep provenance.
+
+ * @summary Resolve a canonical Ghost Replay manifest
+ */
+export const getGetReplayManifestUrl = (id: number) => {
+  return `/api/replay/${id}`;
+};
+
+export const getReplayManifest = async (
+  id: number,
+  options?: RequestInit,
+): Promise<ReplayManifest> => {
+  return customFetch<ReplayManifest>(getGetReplayManifestUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetReplayManifestQueryKey = (id: number) => {
+  return [`/api/replay/${id}`] as const;
+};
+
+export const getGetReplayManifestQueryOptions = <
+  TData = Awaited<ReturnType<typeof getReplayManifest>>,
+  TError = ErrorType<ApiError>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getReplayManifest>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetReplayManifestQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getReplayManifest>>
+  > = ({ signal }) => getReplayManifest(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getReplayManifest>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetReplayManifestQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getReplayManifest>>
+>;
+export type GetReplayManifestQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Resolve a canonical Ghost Replay manifest
+ */
+
+export function useGetReplayManifest<
+  TData = Awaited<ReturnType<typeof getReplayManifest>>,
+  TError = ErrorType<ApiError>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getReplayManifest>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetReplayManifestQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * Aggregated genre tags and a discovery score across a single archived station run's tracklist. Computed on read from already-enriched recording data. Degrades to unknown/null fields when there isn't enough enriched data yet.
 
  * @summary Genre breakdown + discovery score for one station run (show)
@@ -2811,20 +2899,30 @@ export function useGetArchiveCoverage<
 }
 
 /**
- * The newest documented runs from all stations in one list — each a real show's plays on one UTC broadcast day. Ranked by recency and quality: newest broadcast day first, best-resolved runs first within a day, so replayable runs lead. Powers the home screen's Ghost Radio mode.
+ * The newest documented runs from all stations in one list — each a real show's plays on one UTC broadcast day. Ranked by recency and quality: newest broadcast day first, best-resolved runs first within a day, so replayable runs lead. Powers the home screen's Ghost Radio mode. Supports cursor-based pagination via `before` (the runId of the last item on the previous page). When omitted, returns the first page.
 
  * @summary Recent documented runs across every station (ghost radio browse)
  */
-export const getGetArchiveRecentRunsUrl = (params?: { before?: string }) => {
-  const search =
-    params?.before != null
-      ? `?before=${encodeURIComponent(params.before)}`
-      : "";
-  return `/api/archive/recent-runs${search}`;
+export const getGetArchiveRecentRunsUrl = (
+  params?: GetArchiveRecentRunsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/archive/recent-runs?${stringifiedParams}`
+    : `/api/archive/recent-runs`;
 };
 
 export const getArchiveRecentRuns = async (
-  params?: { before?: string },
+  params?: GetArchiveRecentRunsParams,
   options?: RequestInit,
 ): Promise<ArchiveRecentRuns> => {
   return customFetch<ArchiveRecentRuns>(getGetArchiveRecentRunsUrl(params), {
@@ -2833,7 +2931,9 @@ export const getArchiveRecentRuns = async (
   });
 };
 
-export const getGetArchiveRecentRunsQueryKey = (params?: { before?: string }) => {
+export const getGetArchiveRecentRunsQueryKey = (
+  params?: GetArchiveRecentRunsParams,
+) => {
   return [`/api/archive/recent-runs`, ...(params ? [params] : [])] as const;
 };
 
@@ -2841,7 +2941,7 @@ export const getGetArchiveRecentRunsQueryOptions = <
   TData = Awaited<ReturnType<typeof getArchiveRecentRuns>>,
   TError = ErrorType<unknown>,
 >(
-  params?: { before?: string },
+  params?: GetArchiveRecentRunsParams,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof getArchiveRecentRuns>>,
@@ -2853,11 +2953,13 @@ export const getGetArchiveRecentRunsQueryOptions = <
 ) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
-  const queryKey = queryOptions?.queryKey ?? getGetArchiveRecentRunsQueryKey(params);
+  const queryKey =
+    queryOptions?.queryKey ?? getGetArchiveRecentRunsQueryKey(params);
 
   const queryFn: QueryFunction<
     Awaited<ReturnType<typeof getArchiveRecentRuns>>
-  > = ({ signal }) => getArchiveRecentRuns(params, { signal, ...requestOptions });
+  > = ({ signal }) =>
+    getArchiveRecentRuns(params, { signal, ...requestOptions });
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof getArchiveRecentRuns>>,
@@ -2879,7 +2981,7 @@ export function useGetArchiveRecentRuns<
   TData = Awaited<ReturnType<typeof getArchiveRecentRuns>>,
   TError = ErrorType<unknown>,
 >(
-  params?: { before?: string },
+  params?: GetArchiveRecentRunsParams,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof getArchiveRecentRuns>>,
@@ -2896,40 +2998,6 @@ export function useGetArchiveRecentRuns<
   };
 
   return { ...query, queryKey: queryOptions.queryKey };
-}
-
-/**
- * Infinite-scroll variant of useGetArchiveRecentRuns. Each page's `nextCursor`
- * is passed as `before` to fetch the next page.
- *
- * @summary Recent documented runs — infinite query
- */
-export function useInfiniteGetArchiveRecentRuns(options?: {
-  request?: SecondParameter<typeof customFetch>;
-}): UseInfiniteQueryResult<
-  InfiniteData<Awaited<ReturnType<typeof getArchiveRecentRuns>>>,
-  ErrorType<unknown>
-> & { queryKey: QueryKey } {
-  const { request: requestOptions } = options ?? {};
-
-  const queryKey = getGetArchiveRecentRunsQueryKey();
-
-  const result = useInfiniteQuery({
-    queryKey,
-    queryFn: ({ signal, pageParam }: { signal?: AbortSignal; pageParam: string | undefined }) =>
-      getArchiveRecentRuns(
-        pageParam != null ? { before: pageParam } : undefined,
-        { signal, ...requestOptions },
-      ),
-    getNextPageParam: (lastPage: Awaited<ReturnType<typeof getArchiveRecentRuns>>) =>
-      lastPage.nextCursor ?? undefined,
-    initialPageParam: undefined as string | undefined,
-  }) as UseInfiniteQueryResult<
-    InfiniteData<Awaited<ReturnType<typeof getArchiveRecentRuns>>>,
-    ErrorType<unknown>
-  >;
-
-  return { ...result, queryKey };
 }
 
 /**

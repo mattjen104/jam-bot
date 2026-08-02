@@ -988,6 +988,71 @@ export interface StationRunDetail {
 }
 
 /**
+ * Public picker/DJ attribution joined from the originating show.
+ */
+export interface ReplayPicker {
+  name: string;
+  handle: string;
+  pickerType: string;
+  trustTier: number;
+}
+
+export type ReplayEntryConfidence =
+  (typeof ReplayEntryConfidence)[keyof typeof ReplayEntryConfidence];
+
+export const ReplayEntryConfidence = {
+  recording_id: "recording_id",
+  isrc: "isrc",
+  text: "text",
+  unresolved: "unresolved",
+  spotify: "spotify",
+} as const;
+
+/**
+ * One archived spin, including unresolved source metadata.
+ */
+export interface ReplayEntry {
+  position: number;
+  /** Source spins primary key used for Keep provenance. */
+  spinId: number;
+  playedAt: string;
+  /** @nullable */
+  source: string | null;
+  /** @nullable */
+  citation: string | null;
+  rawArtist: string;
+  rawTitle: string;
+  confidence: ReplayEntryConfidence;
+  recording: NowPlayingRecording | null;
+}
+
+export type ReplayManifestBounds = {
+  date: string;
+  startedAt: string;
+  endedAt: string;
+};
+
+export type ReplayManifestCoverage = {
+  total: number;
+  resolved: number;
+  unresolved: number;
+};
+
+/**
+ * Stable, server-derived Ghost Replay view over one station broadcast partition. Coverage counts are explicit so clients do not infer missing entries from the resolved subset.
+
+ */
+export interface ReplayManifest {
+  replayId: number;
+  station: StationRef;
+  show: ShowRef | null;
+  picker: ReplayPicker | null;
+  bounds: ReplayManifestBounds;
+  coverage: ReplayManifestCoverage;
+  entries: ReplayEntry[];
+}
+
+/**
  * One documented picker run — all picks sharing one source URL (an NTS episode page, a list, a post), replayed in documented order.
  */
 export interface PickerRunSummary {
@@ -1147,7 +1212,8 @@ export interface RecentStationRun {
 
 export interface ArchiveRecentRuns {
   items: RecentStationRun[];
-  /** Opaque cursor for the next page: pass as ?before=<nextCursor> to fetch older runs. Null or absent when there are no more results. */
+  /** Opaque cursor for the next page: pass as `?before=<nextCursor>` to fetch older runs. Null (or absent) when there are no more results.
+   */
   nextCursor?: string | null;
 }
 
@@ -2242,6 +2308,14 @@ export type GetStationSpinsParams = {
    * Max spins to return (default 50, max 200).
    */
   limit?: number;
+};
+
+export type GetArchiveRecentRunsParams = {
+  /**
+ * Opaque pagination cursor. Omit for the first page; pass the `nextCursor` value from the previous response to fetch the next page. An invalid value returns 400.
+
+ */
+  before?: string;
 };
 
 export type SearchArtistRunsParams = {

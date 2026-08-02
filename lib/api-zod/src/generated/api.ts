@@ -1671,6 +1671,116 @@ export const GetStationRunResponse = zod.object({
 });
 
 /**
+ * Returns the server-derived reconstruction of one archived station run. The replay id is the smallest spin id in the station/show/UTC-day partition. Every spin remains in broadcast order, including unresolved rows whose recording is null; source spin ids and timestamps are preserved for honest replay and Keep provenance.
+
+ * @summary Resolve a canonical Ghost Replay manifest
+ */
+
+export const GetReplayManifestParams = zod.object({
+  id: zod.coerce.number().min(1),
+});
+
+export const GetReplayManifestResponse = zod
+  .object({
+    replayId: zod.number(),
+    station: zod
+      .object({
+        slug: zod.string(),
+        name: zod.string(),
+        stationClass: zod.string(),
+      })
+      .describe("A station reference used in spin\/segue attribution."),
+    show: zod.union([
+      zod
+        .object({
+          name: zod.string(),
+          djName: zod.string().nullish(),
+        })
+        .describe(
+          "Show + DJ attribution for a spin, when the source exposes it.",
+        ),
+      zod.null(),
+    ]),
+    picker: zod.union([
+      zod
+        .object({
+          name: zod.string(),
+          handle: zod.string(),
+          pickerType: zod.string(),
+          trustTier: zod.number(),
+        })
+        .describe(
+          "Public picker\/DJ attribution joined from the originating show.",
+        ),
+      zod.null(),
+    ]),
+    bounds: zod.object({
+      date: zod.string(),
+      startedAt: zod.string(),
+      endedAt: zod.string(),
+    }),
+    coverage: zod.object({
+      total: zod.number(),
+      resolved: zod.number(),
+      unresolved: zod.number(),
+    }),
+    entries: zod.array(
+      zod
+        .object({
+          position: zod.number(),
+          spinId: zod
+            .number()
+            .describe("Source spins primary key used for Keep provenance."),
+          playedAt: zod.string(),
+          source: zod.string().nullable(),
+          citation: zod.string().nullable(),
+          rawArtist: zod.string(),
+          rawTitle: zod.string(),
+          confidence: zod.enum([
+            "recording_id",
+            "isrc",
+            "text",
+            "unresolved",
+            "spotify",
+          ]),
+          recording: zod.union([
+            zod
+              .object({
+                mbid: zod.string(),
+                title: zod.string(),
+                artist: zod.string(),
+                artistMbid: zod.string().nullish(),
+                artworkUrl: zod.string().nullish(),
+                links: zod.array(
+                  zod
+                    .object({
+                      name: zod.string(),
+                      url: zod.string(),
+                      kind: zod.enum(["exact", "search"]),
+                    })
+                    .describe(
+                      'A cross-service deep link. kind=\"exact\" points at the precise recording (resolved via Odesli); kind=\"search\" is a best-effort artist+title search on that service.',
+                    ),
+                ),
+                genres: zod
+                  .array(zod.string())
+                  .nullish()
+                  .describe(
+                    "MusicBrainz-sourced genre tags for the recording, most-relevant first. Null when the recording has not been enriched yet.",
+                  ),
+              })
+              .describe("The MBID-keyed recording a spin resolved to."),
+            zod.null(),
+          ]),
+        })
+        .describe("One archived spin, including unresolved source metadata."),
+    ),
+  })
+  .describe(
+    "Stable, server-derived Ghost Replay view over one station broadcast partition. Coverage counts are explicit so clients do not infer missing entries from the resolved subset.\n",
+  );
+
+/**
  * Aggregated genre tags and a discovery score across a single archived station run's tracklist. Computed on read from already-enriched recording data. Degrades to unknown/null fields when there isn't enough enriched data yet.
 
  * @summary Genre breakdown + discovery score for one station run (show)
@@ -2070,15 +2180,20 @@ export const GetArchiveCoverageResponse = zod.object({
   ),
 });
 
-export const GetArchiveRecentRunsQueryParams = zod.object({
-  before: zod.string().min(1).optional(),
-});
-
 /**
- * The newest documented runs from all stations in one list — each a real show's plays on one UTC broadcast day. Ranked by recency and quality: newest broadcast day first, best-resolved runs first within a day, so replayable runs lead. Powers the home screen's Ghost Radio mode.
+ * The newest documented runs from all stations in one list — each a real show's plays on one UTC broadcast day. Ranked by recency and quality: newest broadcast day first, best-resolved runs first within a day, so replayable runs lead. Powers the home screen's Ghost Radio mode. Supports cursor-based pagination via `before` (the runId of the last item on the previous page). When omitted, returns the first page.
 
  * @summary Recent documented runs across every station (ghost radio browse)
  */
+export const GetArchiveRecentRunsQueryParams = zod.object({
+  before: zod.coerce
+    .string()
+    .optional()
+    .describe(
+      "Opaque pagination cursor. Omit for the first page; pass the `nextCursor` value from the previous response to fetch the next page. An invalid value returns 400.\n",
+    ),
+});
+
 export const GetArchiveRecentRunsResponse = zod.object({
   items: zod.array(
     zod
@@ -2132,10 +2247,9 @@ export const GetArchiveRecentRunsResponse = zod.object({
   ),
   nextCursor: zod
     .string()
-    .nullable()
-    .optional()
+    .nullish()
     .describe(
-      "Opaque cursor for the next page: pass as ?before=<nextCursor> to fetch older runs. Null or absent when there are no more results.",
+      "Opaque cursor for the next page: pass as `?before=<nextCursor>` to fetch older runs. Null (or absent) when there are no more results.\n",
     ),
 });
 

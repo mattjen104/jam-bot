@@ -19,6 +19,7 @@ import { eq, and, isNull, sql, gt, desc } from "drizzle-orm";
 import type { RecordingLink } from "@workspace/db";
 import { buildSearchLinks, fetchRecordingLinks } from "@workspace/song-enrichment";
 import { resolveToMbid, type MbidResolution } from "./resolve.js";
+import { getReplayManifest } from "./replay.js";
 
 /**
  * Share layer: server-rendered Open Graph pages + dynamic preview cards for
@@ -964,6 +965,29 @@ export async function getStationRunShare(
       subtitle: anchor.day,
       footer: `${total} tracks · ${resolved} identified`,
       artworkUrl: station.logoUrl,
+    },
+  };
+}
+
+/** Share payload for the canonical Ghost Replay surface. */
+export async function getReplayShare(id: number): Promise<SharePayload | null> {
+  const manifest = await getReplayManifest(id);
+  if (!manifest) return null;
+
+  const showLine = manifest.show
+    ? manifest.show.djName
+      ? `${manifest.show.name} · ${manifest.show.djName}`
+      : manifest.show.name
+    : manifest.station.name;
+  return {
+    title: `${showLine} — ${manifest.bounds.date} · Lore`,
+    description: `Ghost Replay of ${manifest.coverage.total} tracks as they aired on ${manifest.station.name}: ${manifest.coverage.resolved} identified and ${manifest.coverage.unresolved} still unresolved.`,
+    redirectPath: `${loreBasePath()}/replay/${manifest.replayId}`,
+    card: {
+      kicker: `Ghost Replay — ${manifest.station.name}`,
+      title: showLine,
+      subtitle: manifest.bounds.date,
+      footer: `${manifest.coverage.total} tracks · ${manifest.coverage.resolved} identified`,
     },
   };
 }

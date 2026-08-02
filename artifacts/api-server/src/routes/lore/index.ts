@@ -7,6 +7,7 @@ import archiveRouter from "./archive.js";
 import artistRouter from "./artist.js";
 import albumRouter from "./album.js";
 import adminRouter from "./admin.js";
+import replayRouter from "./replay.js";
 
 const router: IRouter = Router();
 
@@ -17,6 +18,7 @@ router.use(selectorsRouter);
 router.use(archiveRouter);
 router.use(artistRouter);
 router.use(albumRouter);
+router.use(replayRouter);
 router.use((req, res, next) => {
   if (req.path === "/admin" || req.path.startsWith("/admin/")) {
     return adminRouter(req, res, next);

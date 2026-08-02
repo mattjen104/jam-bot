@@ -4,6 +4,7 @@ import {
   resolveSongShareOrLinks,
   getStationShare,
   getStationRunShare,
+  getReplayShare,
   getPickerShare,
   getPickerRunShare,
   renderShareHtml,
@@ -238,6 +239,27 @@ router.get(
 );
 
 // ---- Pickers ---------------------------------------------------------------
+
+// ---- Ghost Replay ----------------------------------------------------------
+
+for (const replaySharePath of ["replay", "replays"]) {
+  router.get(
+    `/share/${replaySharePath}/:id`,
+    handle(async (req, res) => {
+      const id = parseId(param(req, "id"));
+      const payload = id == null ? null : await getReplayShare(id);
+      sendShareHtml(req, res, payload, `${replaySharePath}/${param(req, "id")}`);
+    }),
+  );
+
+  router.get(
+    `/share/${replaySharePath}/:id/card.png`,
+    handle(async (req, res) => {
+      const id = parseId(param(req, "id"));
+      await sendShareCard(res, id == null ? null : await getReplayShare(id));
+    }),
+  );
+}
 
 router.get(
   "/share/pickers/:handle",

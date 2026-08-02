@@ -713,6 +713,37 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /replay/{id}:
+    get:
+      operationId: getReplayManifest
+      tags: [archive]
+      summary: Resolve a canonical Ghost Replay manifest
+      description: >
+        Returns the server-derived reconstruction of one archived station run.
+        The replay id is the smallest spin id in the station/show/UTC-day
+        partition. Every spin remains in broadcast order, including unresolved
+        rows whose recording is null; source spin ids and timestamps are
+        preserved for honest replay and Keep provenance.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Canonical Ghost Replay manifest
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplayManifest"
+        "404":
+          description: Replay not found, hidden, or empty
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /archive/station-runs/{runId}/insights:
     get:
       operationId: getStationRunInsights
@@ -3826,6 +3857,110 @@ components:
         - station
         - run
         - tracks
+    ReplayPicker:
+      type: object
+      description: Public picker/DJ attribution joined from the originating show.
+      properties:
+        name:
+          type: string
+        handle:
+          type: string
+        pickerType:
+          type: string
+        trustTier:
+          type: integer
+      required:
+        - name
+        - handle
+        - pickerType
+        - trustTier
+    ReplayEntry:
+      type: object
+      description: One archived spin, including unresolved source metadata.
+      properties:
+        position:
+          type: integer
+        spinId:
+          type: integer
+          description: Source spins primary key used for Keep provenance.
+        playedAt:
+          type: string
+        source:
+          type: ["string", "null"]
+        citation:
+          type: ["string", "null"]
+        rawArtist:
+          type: string
+        rawTitle:
+          type: string
+        confidence:
+          type: string
+          enum: [recording_id, isrc, text, unresolved, spotify]
+        recording:
+          anyOf:
+            - $ref: "#/components/schemas/NowPlayingRecording"
+            - type: "null"
+      required:
+        - position
+        - spinId
+        - playedAt
+        - source
+        - citation
+        - rawArtist
+        - rawTitle
+        - confidence
+        - recording
+    ReplayManifest:
+      type: object
+      description: >
+        Stable, server-derived Ghost Replay view over one station broadcast
+        partition. Coverage counts are explicit so clients do not infer
+        missing entries from the resolved subset.
+      properties:
+        replayId:
+          type: integer
+        station:
+          $ref: "#/components/schemas/StationRef"
+        show:
+          anyOf:
+            - $ref: "#/components/schemas/ShowRef"
+            - type: "null"
+        picker:
+          anyOf:
+            - $ref: "#/components/schemas/ReplayPicker"
+            - type: "null"
+        bounds:
+          type: object
+          properties:
+            date:
+              type: string
+            startedAt:
+              type: string
+            endedAt:
+              type: string
+          required: [date, startedAt, endedAt]
+        coverage:
+          type: object
+          properties:
+            total:
+              type: integer
+            resolved:
+              type: integer
+            unresolved:
+              type: integer
+          required: [total, resolved, unresolved]
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReplayEntry"
+      required:
+        - replayId
+        - station
+        - show
+        - picker
+        - bounds
+        - coverage
+        - entries
     PickerRunSummary:
       type: object
       description: >-

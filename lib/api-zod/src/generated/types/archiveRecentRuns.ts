@@ -9,4 +9,7 @@ import type { RecentStationRun } from "./recentStationRun";
 
 export interface ArchiveRecentRuns {
   items: RecentStationRun[];
+  /** Opaque cursor for the next page: pass as `?before=<nextCursor>` to fetch older runs. Null (or absent) when there are no more results.
+   */
+  nextCursor?: string | null;
 }
