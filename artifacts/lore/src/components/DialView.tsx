@@ -1440,10 +1440,8 @@ export function DialView() {
                   accent="library"
                 />
                 <Zone1Placeholder
+                  isSpotifyConnected={isSpotifyConnected}
                   hasLibrary={hasLibrary}
-                  seeds={seedArtists}
-                  onAddSeed={addSeed}
-                  onRemoveSeed={removeSeed}
                 />
                 {/* Zone 2 heading + skeleton rows — no pre-load signal for ghost stations */}
                 <ZoneLabel label="Missed while you were away" accent="picker" />
@@ -1490,16 +1488,6 @@ export function DialView() {
                 </div>
                 {!zone1Collapsed && (
                   <>
-                    {/* Seed bar — compact chip strip shown when the user has seeded
-                        artists but hasn't imported a full library yet. Lets them
-                        manage seeds inline without leaving Zone 1. */}
-                    {!hasLibrary && seedArtists.length > 0 && (
-                      <SeedBar
-                        seeds={seedArtists}
-                        onAddSeed={addSeed}
-                        onRemoveSeed={removeSeed}
-                      />
-                    )}
                     {/* Map over the FULL array so isSampling index is always the
                         unsliced position; rows beyond zone1Visible are null until
                         zone1Expanded is true. */}

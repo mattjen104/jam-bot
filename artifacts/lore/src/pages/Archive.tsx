@@ -4,7 +4,7 @@ import {
   useListStations,
   useListPickers,
   useGetArchiveCoverage,
-  useInfiniteGetArchiveRecentRuns,
+  useGetArchiveRecentRuns,
   useSearchArtistRuns,
   getSearchArtistRunsQueryKey,
 } from "@workspace/api-client-react";
@@ -30,10 +30,7 @@ export default function Archive() {
   const {
     data: recentRunsData,
     isLoading: recentRunsLoading,
-    isFetchingNextPage,
-    hasNextPage,
-    fetchNextPage,
-  } = useInfiniteGetArchiveRecentRuns();
+  } = useGetArchiveRecentRuns();
   const [artistQuery, setArtistQuery] = useState("");
   const debouncedQuery = useDebouncedValue(artistQuery.trim(), 350);
   const searchEnabled = debouncedQuery.length >= 2;
@@ -49,7 +46,7 @@ export default function Archive() {
 
   const stations = stationsData?.stations ?? [];
   const pickers = (pickersData?.pickers ?? []).filter((p) => p.active);
-  const recentRuns = recentRunsData?.pages.flatMap((p) => p.items) ?? [];
+  const recentRuns = recentRunsData?.items ?? [];
   const dockPadding = ride.active || radio.station ? "pb-32" : "pb-16";
 
   return (
@@ -266,18 +263,6 @@ export default function Archive() {
                   </li>
                 ))}
               </ul>
-              {hasNextPage && (
-                <div className="mt-4 flex justify-center">
-                  <button
-                    onClick={() => void fetchNextPage()}
-                    disabled={isFetchingNextPage}
-                    className="rounded-full border border-card-border bg-card px-5 py-2 font-mono text-xs uppercase tracking-wide text-muted-foreground hover:text-foreground disabled:opacity-50"
-                    data-testid="load-more-recent-runs"
-                  >
-                    {isFetchingNextPage ? "Loading…" : "Load older runs"}
-                  </button>
-                </div>
-              )}
             </>
           )}
         </section>
