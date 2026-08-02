@@ -30,7 +30,9 @@
     "@types/node": "catalog:",
     "@types/spotify-api": "^0.0.25",
     "@types/spotify-web-api-node": "^5.0.11",
+    "@types/supertest": "^7.2.1",
     "esbuild": "^0.27.3",
+    "supertest": "^7.2.2",
     "tsx": "catalog:",
     "vitest": "^4.1.5"
   }
