@@ -63,6 +63,29 @@ function renderModal(onClose: () => void = noop) {
   );
 }
 
+/**
+ * Enter tracks mode via the fallback detect path.
+ *
+ * handleDetect reads rawInput from its React closure. In React 18 automatic
+ * batching, state updates from fireEvent.change are not committed until the
+ * current task ends. We must flush the change first (separate act), then
+ * fire the click so handleDetect sees the updated rawInput.
+ *
+ * Note: the value is NOT carried into the textarea automatically when detect
+ * fires with stale rawInput=""; callers that need textarea content must set
+ * it explicitly after calling enterTracksMode().
+ */
+async function enterTracksMode() {
+  const input = screen.getByPlaceholderText(/username or paste tracks here/i);
+  const detectBtn = input.nextElementSibling as HTMLButtonElement;
+  // 1. Set a space-containing value so handleDetect falls through to tracks mode.
+  await act(async () => { fireEvent.change(input, { target: { value: "Fleetwood Mac – Go Your Own Way" } }); });
+  // 2. Click detect — handleDetect now reads the committed rawInput.
+  await act(async () => { fireEvent.click(detectBtn); });
+  // 3. Guarantee we are in tracks mode before returning.
+  await screen.findByRole("textbox");
+}
+
 // ---------------------------------------------------------------------------
 // Setup / teardown
 // ---------------------------------------------------------------------------
@@ -189,28 +212,6 @@ describe("ManualImportModal — Last.fm hint", () => {
 // treated as a username, so it falls through to setMode("tracks").
 // ---------------------------------------------------------------------------
 
-/** Enter tracks mode via the fallback detect path.
- *
- *  handleDetect reads rawInput from its React closure.  In React 18 automatic
- *  batching, state updates from fireEvent.change are not committed until the
- *  current task ends.  We must flush the change first (separate act), then
- *  fire the click so handleDetect sees the updated rawInput.
- *
- *  Note: the value is NOT carried into the textarea automatically when detect
- *  fires with stale rawInput=""; callers that need textarea content must set
- *  it explicitly after calling enterTracksMode().
- */
-async function enterTracksMode() {
-  const input = screen.getByPlaceholderText(/username or paste tracks here/i);
-  const detectBtn = input.nextElementSibling as HTMLButtonElement;
-  // 1. Set a space-containing value so handleDetect falls through to tracks mode.
-  await act(async () => { fireEvent.change(input, { target: { value: "Fleetwood Mac – Go Your Own Way" } }); });
-  // 2. Click detect — handleDetect now reads the committed rawInput.
-  await act(async () => { fireEvent.click(detectBtn); });
-  // 3. Guarantee we are in tracks mode before returning.
-  await screen.findByRole("textbox");
-}
-
 describe("ManualImportModal — tracks mode", () => {
   it("switches to tracks mode when a space-containing value is submitted", async () => {
     renderModal();
@@ -228,9 +229,7 @@ describe("ManualImportModal — tracks mode", () => {
       target: { value: "Fleetwood Mac – Go Your Own Way" },
     });
 
-    // "Import 1 tracks" button appears when exactly 1 track is parsed — use
-    // this as a proxy for the parse-count display since the span/text-node
-    // split prevents a plain findByText match.
+    // "Import 1 tracks" button appears when exactly 1 track is parsed.
     expect(await screen.findByRole("button", { name: /import 1 tracks/i })).toBeTruthy();
   });
 

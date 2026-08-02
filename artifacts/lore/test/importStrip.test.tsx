@@ -83,18 +83,6 @@ describe("ImportStrip — visibility", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("renders a dismissable done-state strip when job status is 'done'", () => {
-    mockJob({ status: "done", total: 500, resolved: 200 });
-    render(<ImportStrip />);
-    expect(screen.getByTestId("import-strip-done")).toBeTruthy();
-  });
-
-  it("renders nothing when job status is 'error'", () => {
-    mockJob({ status: "error" });
-    const { container } = render(<ImportStrip />);
-    expect(container.firstChild).toBeNull();
-  });
-
   it("renders the strip when job status is 'running'", () => {
     mockJob({ status: "running", resumedFrom: null });
     render(<ImportStrip />);
@@ -166,6 +154,71 @@ describe("ImportStrip — 'Reading your Spotify library' label", () => {
     render(<ImportStrip />);
     expect(screen.getByText(/reading your spotify library/i)).toBeTruthy();
     expect(screen.queryByText(/resuming from previous session/i)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Done-state summary text — resolved / total / unresolved counts
+// ---------------------------------------------------------------------------
+
+describe("ImportStrip — done-state summary text", () => {
+  it("shows 'X of Y tracks matched' with the resolved and total counts", () => {
+    mockJob({ status: "done", total: 500, resolved: 200 });
+    render(<ImportStrip />);
+    expect(screen.getByTestId("import-strip-done").textContent).toMatch(/200.*of.*500.*track/i);
+  });
+
+  it("shows 'Z resolving overnight' when unresolved > 0", () => {
+    mockJob({ status: "done", total: 500, resolved: 200 });
+    render(<ImportStrip />);
+    // unresolved = 500 - 200 = 300
+    expect(screen.getByTestId("import-strip-done").textContent).toMatch(/300.*resolving overnight/i);
+  });
+
+  it("does NOT show 'resolving overnight' when all tracks are resolved", () => {
+    mockJob({ status: "done", total: 120, resolved: 120 });
+    render(<ImportStrip />);
+    expect(screen.getByTestId("import-strip-done").textContent).not.toMatch(/resolving overnight/i);
+  });
+
+  it("uses singular 'track' when total is 1", () => {
+    mockJob({ status: "done", total: 1, resolved: 1 });
+    render(<ImportStrip />);
+    expect(screen.getByTestId("import-strip-done").textContent).toMatch(/1 track matched/i);
+    expect(screen.getByTestId("import-strip-done").textContent).not.toMatch(/1 tracks matched/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Auto-dismiss: strip disappears after DONE_TTL_MS (45 s)
+// ---------------------------------------------------------------------------
+
+describe("ImportStrip — auto-dismiss after TTL", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("done strip is still visible before the TTL elapses", async () => {
+    mockJob({ status: "done", total: 120, resolved: 120 });
+    render(<ImportStrip />);
+    await act(async () => {
+      vi.advanceTimersByTime(44_999);
+    });
+    expect(screen.getByTestId("import-strip-done")).toBeTruthy();
+  });
+
+  it("done strip disappears once the 45 s TTL fires", async () => {
+    mockJob({ status: "done", total: 120, resolved: 120 });
+    const { container } = render(<ImportStrip />);
+    expect(screen.getByTestId("import-strip-done")).toBeTruthy();
+    await act(async () => {
+      vi.advanceTimersByTime(45_001);
+    });
+    expect(container.firstChild).toBeNull();
   });
 });
 

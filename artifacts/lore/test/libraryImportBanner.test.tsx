@@ -12,8 +12,8 @@
  *  - "pending" state with no phase shows "Connecting to Spotify…" (correct default)
  *
  * Timer tests (Library page):
- *  - Banner is still visible when < 8 s have elapsed since "done"
- *  - Banner auto-dismisses after the 8 s setTimeout fires
+ *  - Banner is still visible when < 60 s have elapsed since "done"
+ *  - Banner auto-dismisses after the 60 s setTimeout fires
  */
 import React from "react";
 import { describe, expect, it, vi, afterEach, beforeEach } from "vitest";
@@ -162,6 +162,40 @@ describe("LibraryImportBanner — done state (fast-path re-import)", () => {
     expect(screen.getByText(/1 track matched/i)).toBeTruthy();
     expect(screen.queryByText(/1 tracks matched/i)).toBeNull();
   });
+
+  it("shows 'Z resolving overnight' when unresolved > 0", () => {
+    render(
+      <LibraryImportBanner
+        job={{ status: "done", phase: null, total: 500, resolved: 200, error: null }}
+        onDismiss={noop}
+      />,
+    );
+    // unresolved = 500 - 200 = 300
+    const banner = screen.getByTestId("library-import-banner");
+    expect(banner.textContent).toMatch(/300.*resolving overnight/i);
+  });
+
+  it("shows the full 'X of Y tracks matched · Z resolving overnight' string", () => {
+    render(
+      <LibraryImportBanner
+        job={{ status: "done", phase: null, total: 500, resolved: 200, error: null }}
+        onDismiss={noop}
+      />,
+    );
+    const banner = screen.getByTestId("library-import-banner");
+    expect(banner.textContent).toMatch(/200.*of.*500.*tracks matched/i);
+    expect(banner.textContent).toMatch(/300.*resolving overnight/i);
+  });
+
+  it("does NOT show 'resolving overnight' when all tracks resolved", () => {
+    render(
+      <LibraryImportBanner
+        job={{ status: "done", phase: null, total: 120, resolved: 120, error: null }}
+        onDismiss={noop}
+      />,
+    );
+    expect(screen.queryByText(/resolving overnight/i)).toBeNull();
+  });
 });
 
 describe("LibraryImportBanner — running phase labels", () => {
@@ -223,7 +257,7 @@ describe("LibraryImportBanner — running phase labels", () => {
 //
 // These render the full Library page with mocked hooks so we can exercise the
 // two useEffect blocks that (a) clear bannerDismissed when a job starts and
-// (b) set a 8 000 ms auto-dismiss timer when status reaches "done".
+// (b) set a 60 000 ms auto-dismiss timer when status reaches "done".
 // ---------------------------------------------------------------------------
 
 describe("Library page — import banner auto-dismiss timer", () => {
@@ -251,23 +285,23 @@ describe("Library page — import banner auto-dismiss timer", () => {
     vi.useRealTimers();
   });
 
-  it("shows the banner before 8 s have elapsed", async () => {
+  it("shows the banner before 60 s have elapsed", async () => {
     renderLibraryPage();
 
     await act(async () => {
-      vi.advanceTimersByTime(7_999);
+      vi.advanceTimersByTime(59_999);
     });
 
     expect(screen.getByTestId("library-import-banner")).toBeTruthy();
   });
 
-  it("auto-dismisses the banner once 8 s have elapsed", async () => {
+  it("auto-dismisses the banner once 60 s have elapsed", async () => {
     renderLibraryPage();
 
     expect(screen.getByTestId("library-import-banner")).toBeTruthy();
 
     await act(async () => {
-      vi.advanceTimersByTime(8_001);
+      vi.advanceTimersByTime(60_001);
     });
 
     expect(screen.queryByTestId("library-import-banner")).toBeNull();
