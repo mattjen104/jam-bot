@@ -132,12 +132,27 @@ export function parseTildeStreamTitle(s: string): ParsedStreamTitle | null {
 }
 
 /**
+ * Strip leading dash/em-dash/en-dash delimiter debris from a raw ICY artist
+ * field.  Some streams emit "- Nina Simone" rather than "Nina Simone" because
+ * the source software prefixes the standard "Artist - Title" separator.  We
+ * strip the leading punctuation, keeping the rest of the string intact.
+ * Returns null when stripping leaves nothing.
+ */
+export function stripLeadingDelimiter(raw: string): string | null {
+  const stripped = raw.replace(/^[-–—]+\s*/, "").trim();
+  return stripped || null;
+}
+
+/**
  * Split an ICY `StreamTitle` value into artist and title.
  *
  * Tries the tilde-structured format first (used by a cluster of stations that
  * embed a MusicBrainz UUID). Falls back to the standard `Artist - Title`
  * heuristic. When the delimiter is absent the whole string is treated as the
  * title with rawArtist undefined.
+ *
+ * Leading delimiter debris (e.g. "- Nina Simone") is stripped from the artist
+ * field so the resolution path sees a clean artist name.
  */
 export function parseStreamTitle(streamTitle: string): ParsedStreamTitle | null {
   const trimmed = streamTitle.trim();
@@ -152,7 +167,11 @@ export function parseStreamTitle(streamTitle: string): ParsedStreamTitle | null 
   if (sep > 0) {
     const rawArtist = trimmed.slice(0, sep).trim();
     const rawTitle = trimmed.slice(sep + 3).trim();
-    if (rawTitle) return { rawArtist: rawArtist || undefined, rawTitle };
+    if (rawTitle) {
+      // Strip leading dash/em-dash/en-dash artifact from the artist field.
+      const cleanedArtist = rawArtist ? stripLeadingDelimiter(rawArtist) : null;
+      return { rawArtist: cleanedArtist ?? undefined, rawTitle };
+    }
   }
   return { rawTitle: trimmed };
 }
@@ -187,6 +206,47 @@ const AUDIO_EXT_RE = /\.\s*(?:mp3|wav|ogg|flac|aac|m4a|opus|wma|aiff?)\s*$/i;
 
 /** At least one Unicode letter is required in the artist field. */
 const HAS_LETTER_RE = /\p{L}/u;
+
+/** Matches an explicit protocol prefix — a clear sign of a URL in a metadata field. */
+const URL_PROTOCOL_RE = /^https?:\/\//i;
+
+/**
+ * Common country-code and generic TLDs that appear in domain-name artist values
+ * (e.g. "wellsfargo.com", "sponsor.fm").  Only used after a dot is confirmed so
+ * the list doesn't need to be exhaustive — it just needs to cover the cases that
+ * actually appear in ICY metadata from ad-injection systems.
+ */
+const DOMAIN_TLD_RE =
+  /\.(com|net|org|edu|gov|io|fm|co|info|biz|music|radio|ca|uk|au|de|fr|es|it|nl|se|no|dk|fi|pl|ru|cz|at|ch|be|pt|nz|mx|br|ar|za|in|sg|hk|jp|us)\b/i;
+
+/**
+ * Return true when a string looks like a URL or a bare domain name. Requires
+ * either an explicit protocol or a dot followed by a known TLD.  The value must
+ * also look like a hostname (only alphanumerics, dots, and hyphens — no spaces,
+ * slashes in the TLD portion, or other word-boundary separators that would
+ * indicate a normal sentence containing a country abbreviation).
+ */
+function isDomainLike(s: string): boolean {
+  const t = s.trim();
+  if (!t) return false;
+  // Explicit protocol — unambiguous.
+  if (URL_PROTOCOL_RE.test(t)) return true;
+  // Bare hostname: only hostname-safe characters AND ends with a known TLD.
+  if (!t.includes(".")) return false;
+  if (!/^[a-z0-9][a-z0-9.\-]*$/i.test(t)) return false;
+  return DOMAIN_TLD_RE.test(t);
+}
+
+/**
+ * Count occurrences of a specific character in a string without allocation.
+ */
+function countChar(s: string, ch: string): number {
+  let n = 0;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === ch) n++;
+  }
+  return n;
+}
 
 /**
  * Return true when a raw artist/title pair is clearly not a song — an ad slot,
@@ -253,6 +313,26 @@ export function isJunkMetadata(rawArtist: string, rawTitle: string): boolean {
   // Audio filenames in either field — "jingle_01.mp3", "news_break.ogg",
   // "track 01.wav".  No real artist or track title ends with an audio extension.
   if (AUDIO_EXT_RE.test(rawArtist) || AUDIO_EXT_RE.test(rawTitle)) return true;
+
+  // URL or domain-name artist values — ad-injection systems often drop a
+  // sponsor URL into the artist field (e.g. "wellsfargo.com").  No real artist
+  // name is a bare domain or a URL.  We check both fields: a URL in the title
+  // field is equally indicative of an ad or tracker slot.
+  if (isDomainLike(rawArtist) || isDomainLike(rawTitle)) return true;
+
+  // High replacement-character (U+FFFD) ratio — severe encoding artifact
+  // (mojibake) that would never be a real artist or title.  We require the
+  // string to be at least 4 characters long to avoid penalising very short
+  // values where a single bad byte happens to appear.  A threshold of 50 %
+  // is conservative: legitimate names with one or two replacement chars (rare
+  // partial decoding issues) still pass through for human review.
+  const REPLACEMENT_CHAR = "\uFFFD";
+  if (rawArtist.length >= 4 && countChar(rawArtist, REPLACEMENT_CHAR) / rawArtist.length >= 0.5) {
+    return true;
+  }
+  if (rawTitle.length >= 4 && countChar(rawTitle, REPLACEMENT_CHAR) / rawTitle.length >= 0.5) {
+    return true;
+  }
 
   return false;
 }

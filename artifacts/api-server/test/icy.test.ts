@@ -4,6 +4,7 @@ import {
   parseTildeStreamTitle,
   parseStreamTitle,
   isJunkMetadata,
+  stripLeadingDelimiter,
 } from "../src/lore/icy.js";
 
 // ---- parseIcyStreamTitle -------------------------------------------------
@@ -328,5 +329,138 @@ describe("isJunkMetadata", () => {
     expect(isJunkMetadata("Radiohead", "2 + 2 = 5")).toBe(false);
     expect(isJunkMetadata("Interpol", "NYC.")).toBe(false);
     expect(isJunkMetadata("Four Tet", "128 Harrowgate Rd.")).toBe(false);
+  });
+
+  // ── URL / domain-name artist or title values ──────────────────────────────
+
+  it("flags URL protocol prefixes in artist or title", () => {
+    expect(isJunkMetadata("https://wellsfargo.com", "Some Song")).toBe(true);
+    expect(isJunkMetadata("http://sponsor.example.com", "Some Song")).toBe(true);
+    expect(isJunkMetadata("Beck", "https://track.example.com")).toBe(true);
+  });
+
+  it("flags bare domain-name artist values (known TLDs)", () => {
+    expect(isJunkMetadata("wellsfargo.com", "Some Song")).toBe(true);
+    expect(isJunkMetadata("sponsor.fm", "Some Song")).toBe(true);
+    expect(isJunkMetadata("radio.io", "Some Song")).toBe(true);
+    expect(isJunkMetadata("advertiser.net", "Some Song")).toBe(true);
+  });
+
+  it("flags domain names in the title field", () => {
+    expect(isJunkMetadata("Some Artist", "example.com")).toBe(true);
+    expect(isJunkMetadata("Some Artist", "tracker.net")).toBe(true);
+  });
+
+  it("does NOT flag real track titles or artists with a dot that are not domains", () => {
+    // Has spaces — not a valid hostname
+    expect(isJunkMetadata("J.S. Bach", "Goldberg Variations")).toBe(false);
+    expect(isJunkMetadata("Nina Simone", "Don't Let Me Be Misunderstood")).toBe(false);
+    // Single dot at end, no TLD
+    expect(isJunkMetadata("Interpol", "NYC.")).toBe(false);
+  });
+
+  // ── Mojibake / high replacement-character ratio ───────────────────────────
+
+  it("flags artist values that are mostly replacement characters", () => {
+    // 4 replacement chars out of 5 total chars = 80 % — above the 50 % threshold
+    const junk = "\uFFFD\uFFFD\uFFFD\uFFFDx";
+    expect(isJunkMetadata(junk, "Some Song")).toBe(true);
+  });
+
+  it("flags title values that are mostly replacement characters", () => {
+    // All replacement characters, length 5
+    const junk = "\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD";
+    expect(isJunkMetadata("Some Artist", junk)).toBe(true);
+  });
+
+  it("does NOT flag a string with a single replacement character (partial decode issue)", () => {
+    // "J\uFFFDrgen" — 1 replacement char out of 8 chars — not mojibake
+    expect(isJunkMetadata("J\uFFFDrgen Drews", "Some Song")).toBe(false);
+  });
+
+  it("does NOT flag strings shorter than 4 chars that have replacement chars", () => {
+    // "\uFFFDxx" is length 3 — below the minimum-length gate
+    expect(isJunkMetadata("\uFFFDxx", "Some Song")).toBe(false);
+  });
+
+  // ── Valid Cyrillic / non-Latin artists (must NOT be flagged) ─────────────
+
+  it("does NOT flag valid Cyrillic artists or titles", () => {
+    expect(isJunkMetadata("Кино", "Группа крови")).toBe(false);
+    expect(isJunkMetadata("Земфира", "Хочешь")).toBe(false);
+    expect(isJunkMetadata("Ария", "Улица роз")).toBe(false);
+  });
+
+  it("does NOT flag Arabic, Japanese, Korean, or Chinese names", () => {
+    expect(isJunkMetadata("فيروز", "بحبك يا لبنان")).toBe(false);
+    expect(isJunkMetadata("坂本龍一", "Merry Christmas Mr. Lawrence")).toBe(false);
+    expect(isJunkMetadata("방탄소년단", "Dynamite")).toBe(false);
+  });
+});
+
+// ---- stripLeadingDelimiter -----------------------------------------------
+
+describe("stripLeadingDelimiter", () => {
+  it("strips a leading ASCII dash", () => {
+    expect(stripLeadingDelimiter("- Nina Simone")).toBe("Nina Simone");
+  });
+
+  it("strips a leading en-dash", () => {
+    expect(stripLeadingDelimiter("– Nina Simone")).toBe("Nina Simone");
+  });
+
+  it("strips a leading em-dash", () => {
+    expect(stripLeadingDelimiter("— Nina Simone")).toBe("Nina Simone");
+  });
+
+  it("strips multiple leading dashes and trailing whitespace", () => {
+    expect(stripLeadingDelimiter("--- Artist Name")).toBe("Artist Name");
+  });
+
+  it("returns null when stripping leaves an empty string", () => {
+    expect(stripLeadingDelimiter("-")).toBeNull();
+    expect(stripLeadingDelimiter("- ")).toBeNull();
+  });
+
+  it("returns the original value unchanged when there is no leading dash", () => {
+    expect(stripLeadingDelimiter("Beck")).toBe("Beck");
+    expect(stripLeadingDelimiter("Lloyd Cole and the Commotions")).toBe(
+      "Lloyd Cole and the Commotions",
+    );
+  });
+});
+
+// ---- parseStreamTitle — leading-delimiter integration ─────────────────────
+
+describe("parseStreamTitle — leading delimiter stripping", () => {
+  it("strips a leading ASCII dash from the artist field", () => {
+    const result = parseStreamTitle("- Nina Simone - Strange Fruit");
+    expect(result?.rawArtist).toBe("Nina Simone");
+    expect(result?.rawTitle).toBe("Strange Fruit");
+  });
+
+  it("strips a leading en-dash from the artist field", () => {
+    const result = parseStreamTitle("– The Beatles - Let It Be");
+    expect(result?.rawArtist).toBe("The Beatles");
+    expect(result?.rawTitle).toBe("Let It Be");
+  });
+
+  it("leaves a clean artist field unchanged", () => {
+    const result = parseStreamTitle("Paul Simon - You Can Call Me Al");
+    expect(result?.rawArtist).toBe("Paul Simon");
+    expect(result?.rawTitle).toBe("You Can Call Me Al");
+  });
+
+  it("returns rawArtist=undefined when stripping the leading dash leaves the artist empty", () => {
+    // "- " before the separator " - " → rawArtist = "-" → stripped = "" → undefined
+    const result = parseStreamTitle("- - Strange Fruit");
+    expect(result?.rawArtist).toBeUndefined();
+    expect(result?.rawTitle).toBe("Strange Fruit");
+  });
+
+  it("does NOT strip a dash that is only in the title field", () => {
+    const result = parseStreamTitle("Beck - -Loser");
+    expect(result?.rawArtist).toBe("Beck");
+    expect(result?.rawTitle).toBe("-Loser");
   });
 });
