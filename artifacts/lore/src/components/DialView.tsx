@@ -1101,6 +1101,20 @@ export function DialView() {
   // Zone 3: r=0 or r>=5 — attributed-only or dark (dimmed).
   const withReason = useMemo(() => sortedRows.filter((row) => row.rz.r >= 1 && row.rz.r <= 4), [sortedRows]);
   const alsoOnAir = useMemo(() => sortedRows.filter((row) => row.rz.r === 0 || row.rz.r >= 5), [sortedRows]);
+
+  // Zone 3 slot reservation: promote the first attributed row (effectiveDjName
+  // != null) to index 0 so it always occupies the first collapsed visible slot,
+  // even when higher-crossing unattributed stations sort ahead of it.
+  // The full expanded view uses the same ordered array so index 0 is stable.
+  // If no attributed row exists the array is returned unchanged.
+  const alsoOnAirOrdered = useMemo(() => {
+    const idx = alsoOnAir.findIndex((row) => row.effectiveDjName != null);
+    if (idx <= 0) return alsoOnAir; // nothing to promote (none found, or already first)
+    const result = [...alsoOnAir];
+    const [promoted] = result.splice(idx, 1);
+    result.unshift(promoted);
+    return result;
+  }, [alsoOnAir]);
   // Ghost zone: stations that played library artists but user hasn't tuned into
   const { data: ghostStations = [] } = useMyGhostMissed();
   // Exclude any ghost station already appearing in Zone 1 or Zone 3 (live sets)
@@ -1562,11 +1576,11 @@ export function DialView() {
 
             {/* Zone 3: Also on air — gated on crossingsLoading like Zones 1 & 2
                 so it never jumps ahead while scores are still in-flight */}
-            {!crossingsLoading && alsoOnAir.length > 0 && (
+            {!crossingsLoading && alsoOnAirOrdered.length > 0 && (
               <>
                 <ZoneLabel
                   label="Also on air"
-                  n={alsoOnAir.length}
+                  n={alsoOnAirOrdered.length}
                   hint="nothing Lore can point to yet"
                   accent="live"
                   collapsed={zone3Collapsed}
@@ -1575,7 +1589,7 @@ export function DialView() {
                 {!zone3Collapsed && (
                   <>
                     <div id="zone3-rows">
-                      {alsoOnAir.slice(0, zone3Expanded ? alsoOnAir.length : ZONE3_VISIBLE).map((row) => (
+                      {alsoOnAirOrdered.slice(0, zone3Expanded ? alsoOnAirOrdered.length : ZONE3_VISIBLE).map((row) => (
                         <FrontDoorRow
                           key={row.ds.station.slug}
                           ds={row.ds}
@@ -1588,14 +1602,14 @@ export function DialView() {
                         />
                       ))}
                     </div>
-                    {alsoOnAir.length > ZONE3_VISIBLE && (
+                    {alsoOnAirOrdered.length > ZONE3_VISIBLE && (
                       <button
                         className="dial-show-more"
                         aria-expanded={zone3Expanded}
                         aria-controls="zone3-rows"
                         onClick={() => { if (!zone3Expanded) zone3ExpandAnchor.current = zone3SlugKey; else zone3ExpandAnchor.current = null; setZone3Expanded((e) => !e); }}
                       >
-                        {zone3Expanded ? "See less" : `See all ${alsoOnAir.length}`}
+                        {zone3Expanded ? "See less" : `See all ${alsoOnAirOrdered.length}`}
                       </button>
                     )}
                   </>

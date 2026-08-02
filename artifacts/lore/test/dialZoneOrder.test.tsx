@@ -77,12 +77,29 @@ vi.mock("../src/components/SearchOverlay", () => ({
   SearchOverlay: () => null,
 }));
 
+vi.mock("../src/hooks/useFrontDoorScan", () => ({
+  useFrontDoorScan: vi.fn(() => ({
+    scanning: false,
+    samplingIdx: null,
+    dwellMs: 7000,
+    progress: 0,
+    toggle: vi.fn(),
+    back: vi.fn(),
+    next: vi.fn(),
+    land: vi.fn(),
+    adjustDwell: vi.fn(),
+    stop: vi.fn(),
+  })),
+}));
+
 // ---------------------------------------------------------------------------
 // Imports (after vi.mock calls)
 // ---------------------------------------------------------------------------
 
 import { useDialData } from "../src/hooks/useDialData";
+import { useMyGhostMissed } from "../src/lib/meHooks";
 import { DialView } from "../src/components/DialView";
+import type { DialStation, DialShow } from "../src/hooks/useDialData";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -231,5 +248,141 @@ describe("Dial front-door zone order — crossingsLoading=false (loaded state)",
     // We only assert no .fdrow exists for an empty station list.
     const rows = document.querySelectorAll(".fdrow");
     expect(rows.length).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Zone 3 DJ slot reservation
+// ---------------------------------------------------------------------------
+
+function makeShow(overrides: Partial<DialShow> = {}): DialShow {
+  return {
+    runId: 1,
+    showName: "Test Show",
+    djName: null,
+    startedAt: new Date(Date.now() - 60 * 60_000).toISOString(),
+    endedAt: new Date(Date.now() + 60 * 60_000).toISOString(),
+    state: "live",
+    spins: [],
+    crossings: 0,
+    artistCrossings: 0,
+    topArtists: [],
+    topArtistNames: [],
+    currentTrack: null,
+    isPickerShow: false,
+    pickerId: null,
+    ...overrides,
+  };
+}
+
+/** Zone 3 attributed station (r=5): live show with djName but no crossings. */
+function makeAttributedZone3Station(slug: string, djName = "DJ Attributed"): DialStation {
+  return {
+    station: { slug, name: `Station ${slug}`, automationClass: null, streamUrl: null, websiteUrl: null, hidden: false, favorite: false } as DialStation["station"],
+    isLive: true,
+    shows: [makeShow({ djName, crossings: 0, artistCrossings: 0 })],
+    crossings: 0,
+    artistCrossings: 0,
+    lifetimeCrossings: 0,
+    lifetimeArtistCrossings: 0,
+  };
+}
+
+/**
+ * Zone 3 unattributed station (r=0): live but no shows.
+ * High lifetimeCrossings so sortedRows places it before the attributed row.
+ */
+function makeUnattributedZone3Station(slug: string, lifetimeCrossings = 100): DialStation {
+  return {
+    station: { slug, name: `Station ${slug}`, automationClass: null, streamUrl: null, websiteUrl: null, hidden: false, favorite: false } as DialStation["station"],
+    isLive: true,
+    shows: [],
+    crossings: 0,
+    artistCrossings: 0,
+    lifetimeCrossings,
+    lifetimeArtistCrossings: 0,
+  };
+}
+
+function mockDialDataWithStations(stations: DialStation[]) {
+  (useDialData as ReturnType<typeof vi.fn>).mockReturnValue({
+    stations,
+    isLoading: false,
+    isCoreLoading: false,
+    liveLoading: false,
+    crossingsLoading: false,
+    hasLibrary: true,
+    overlapByPickerId: new Map<number, number>(),
+    pickerNameToId: new Map<string, number>(),
+  });
+}
+
+function mockGhosts(ghosts: unknown[] = []) {
+  (useMyGhostMissed as ReturnType<typeof vi.fn>).mockReturnValue({ data: ghosts });
+}
+
+describe("Zone 3 DJ slot reservation", () => {
+  it("promotes the attributed row to index 0 when it would otherwise appear at index 3+", () => {
+    // Three unattributed stations with high lifetime crossings sort before the
+    // attributed one in sortedRows. Without reservation the attributed row
+    // would be hidden at index 3 in the default 3-row collapsed view.
+    const stations: DialStation[] = [
+      makeUnattributedZone3Station("ua0", 300),
+      makeUnattributedZone3Station("ua1", 200),
+      makeUnattributedZone3Station("ua2", 150),
+      makeAttributedZone3Station("attr0", "DJ Featured"),
+    ];
+    mockDialDataWithStations(stations);
+    mockGhosts([]);
+
+    render(<DialView />);
+
+    const rows = document.querySelectorAll(".fdrow");
+    // Zone 3 is truncated to ZONE3_VISIBLE = 3 by default.
+    expect(rows.length).toBe(3);
+
+    // The first row must be the attributed station, not one of the unattributed ones.
+    expect(rows[0].textContent).toContain("DJ Featured");
+  });
+
+  it("preserves original order when no attributed row exists in Zone 3", () => {
+    // All unattributed; sort order is by lifetimeCrossings descending.
+    const stations: DialStation[] = [
+      makeUnattributedZone3Station("ua0", 300),
+      makeUnattributedZone3Station("ua1", 200),
+      makeUnattributedZone3Station("ua2", 150),
+      makeUnattributedZone3Station("ua3", 100),
+    ];
+    mockDialDataWithStations(stations);
+    mockGhosts([]);
+
+    render(<DialView />);
+
+    const rows = document.querySelectorAll(".fdrow");
+    expect(rows.length).toBe(3);
+
+    // First row should be the highest-crossing station (ua0), not any other.
+    expect(rows[0].textContent).toContain("ua0");
+    expect(rows[1].textContent).toContain("ua1");
+    expect(rows[2].textContent).toContain("ua2");
+  });
+
+  it("does not add an empty reserved slot when Zone 3 is all attributed", () => {
+    // All attributed; attributed row is already at index 0 — no promotion needed.
+    const stations: DialStation[] = [
+      makeAttributedZone3Station("attr0", "DJ Alpha"),
+      makeAttributedZone3Station("attr1", "DJ Beta"),
+    ];
+    mockDialDataWithStations(stations);
+    mockGhosts([]);
+
+    render(<DialView />);
+
+    const rows = document.querySelectorAll(".fdrow");
+    // Both rows render (total 2 < ZONE3_VISIBLE = 3, so no truncation).
+    expect(rows.length).toBe(2);
+    // No empty/ghost slots.
+    expect(rows[0].textContent).toBeTruthy();
+    expect(rows[1].textContent).toBeTruthy();
   });
 });
