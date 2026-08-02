@@ -417,6 +417,113 @@ function makePastShow(djName: string): DialShow {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Lifetime overlap caption (fdrow__ov-caption)
+//
+// The caption "{N} artists you know play here" is gated on:
+//   - ov > 0, AND
+//   - r === 0 OR r === 5
+//
+// It must NEVER appear on Zone 1 rows (r=1–4) where the reason sentence
+// already carries the taste signal, and must not appear when ov is zero.
+// ---------------------------------------------------------------------------
+
+describe("ov-caption — gating on r and ov", () => {
+  // Helpers that produce specific r-values:
+
+  function rowR0(): [DialStation, DialShow | null] {
+    // r=0: show=null — no now-playing data
+    return [makeDialStation(), null];
+  }
+
+  function rowR5(): [DialStation, DialShow | null] {
+    // r=5: show has djName but no crossings/artistCrossings
+    return [makeDialStation(), makeShow({ djName: "DJ Cosmos", crossings: 0, artistCrossings: 0 })];
+  }
+
+  function rowR1(): [DialStation, DialShow | null] {
+    // r=1: exact library track playing now
+    const spin = makeSpin({ title: "Everywhere", isLibraryHit: true });
+    return [makeDialStation(), makeShow({ currentTrack: spin })];
+  }
+
+  function rowR2(): [DialStation, DialShow | null] {
+    // r=2: library artist playing now (not an exact track match)
+    const spin = makeSpin({ artist: "Fleetwood Mac", isArtistHit: true });
+    return [makeDialStation(), makeShow({ currentTrack: spin })];
+  }
+
+  function rowR3(): [DialStation, DialShow | null] {
+    // r=3: exact library tracks already aired
+    return [makeDialStation(), makeShow({ crossings: 2, topArtists: ["Radiohead"] })];
+  }
+
+  function rowR4(): [DialStation, DialShow | null] {
+    // r=4: library artists aired, no exact track match
+    return [makeDialStation(), makeShow({ crossings: 0, artistCrossings: 3, topArtistNames: ["The National"] })];
+  }
+
+  it("r=0 + ov>0 → caption renders", () => {
+    const [ds, show] = rowR0();
+    const { container } = renderRow(ds, show, 7);
+    const caption = container.querySelector(".fdrow__ov-caption");
+    expect(caption).not.toBeNull();
+    expect(caption!.textContent).toContain("7 artists");
+    expect(caption!.textContent).toContain("you know play here");
+  });
+
+  it("r=5 + ov>0 → caption renders", () => {
+    const [ds, show] = rowR5();
+    const { container } = renderRow(ds, show, 12);
+    const caption = container.querySelector(".fdrow__ov-caption");
+    expect(caption).not.toBeNull();
+    expect(caption!.textContent).toContain("12 artists");
+    expect(caption!.textContent).toContain("you know play here");
+  });
+
+  it("r=1 + ov>0 → caption absent", () => {
+    const [ds, show] = rowR1();
+    const { container } = renderRow(ds, show, 5);
+    expect(container.querySelector(".fdrow__ov-caption")).toBeNull();
+  });
+
+  it("r=2 + ov>0 → caption absent", () => {
+    const [ds, show] = rowR2();
+    const { container } = renderRow(ds, show, 5);
+    expect(container.querySelector(".fdrow__ov-caption")).toBeNull();
+  });
+
+  it("r=3 + ov>0 → caption absent", () => {
+    const [ds, show] = rowR3();
+    const { container } = renderRow(ds, show, 5);
+    expect(container.querySelector(".fdrow__ov-caption")).toBeNull();
+  });
+
+  it("r=4 + ov>0 → caption absent", () => {
+    const [ds, show] = rowR4();
+    const { container } = renderRow(ds, show, 5);
+    expect(container.querySelector(".fdrow__ov-caption")).toBeNull();
+  });
+
+  it("r=0 + ov=0 → caption absent", () => {
+    const [ds, show] = rowR0();
+    const { container } = renderRow(ds, show, 0);
+    expect(container.querySelector(".fdrow__ov-caption")).toBeNull();
+  });
+
+  it("r=5 + ov=0 → caption absent", () => {
+    const [ds, show] = rowR5();
+    const { container } = renderRow(ds, show, 0);
+    expect(container.querySelector(".fdrow__ov-caption")).toBeNull();
+  });
+
+  it("r=1 + ov=0 → caption absent", () => {
+    const [ds, show] = rowR1();
+    const { container } = renderRow(ds, show, 0);
+    expect(container.querySelector(".fdrow__ov-caption")).toBeNull();
+  });
+});
+
 describe("automated stations — phantom DJ fallback suppressed", () => {
   it("does not render fdrow__t2 when automationClass='automated' and the live show has no djName, even if a recent past show does", () => {
     const past = makePastShow("AutoBot");

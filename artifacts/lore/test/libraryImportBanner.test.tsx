@@ -255,55 +255,9 @@ describe("LibraryImportBanner — running phase labels", () => {
 // ---------------------------------------------------------------------------
 // Timer tests — Library page component
 //
-// These render the full Library page with mocked hooks so we can exercise the
-// two useEffect blocks that (a) clear bannerDismissed when a job starts and
-// (b) set a 60 000 ms auto-dismiss timer when status reaches "done".
+// The LibraryImportBanner was moved from Library.tsx to the global ImportStrip
+// in AppLayout (task: Consolidate import entry point and deduplicate progress
+// banner).  The Library page no longer renders a library-import-banner element,
+// so these tests have been removed.  Auto-dismiss behaviour is now covered by
+// ImportStrip's own test suite.
 // ---------------------------------------------------------------------------
-
-describe("Library page — import banner auto-dismiss timer", () => {
-  const FIXED_NOW = new Date("2026-01-01T12:00:00.000Z");
-  const FINISHED_AT = new Date(FIXED_NOW.getTime() - 30_000).toISOString();
-
-  const doneJob = {
-    status: "done" as const,
-    phase: null,
-    total: 120,
-    resolved: 120,
-    error: null,
-    finishedAt: FINISHED_AT,
-  };
-
-  beforeEach(async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(FIXED_NOW);
-
-    const { useLatestImportJob } = await import("../src/lib/meHooks");
-    vi.mocked(useLatestImportJob).mockReturnValue({ data: doneJob } as ReturnType<typeof useLatestImportJob>);
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it("shows the banner before 60 s have elapsed", async () => {
-    renderLibraryPage();
-
-    await act(async () => {
-      vi.advanceTimersByTime(59_999);
-    });
-
-    expect(screen.getByTestId("library-import-banner")).toBeTruthy();
-  });
-
-  it("auto-dismisses the banner once 60 s have elapsed", async () => {
-    renderLibraryPage();
-
-    expect(screen.getByTestId("library-import-banner")).toBeTruthy();
-
-    await act(async () => {
-      vi.advanceTimersByTime(60_001);
-    });
-
-    expect(screen.queryByTestId("library-import-banner")).toBeNull();
-  });
-});

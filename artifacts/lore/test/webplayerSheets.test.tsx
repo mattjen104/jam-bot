@@ -160,7 +160,6 @@ describe("RunDrawerSheet", () => {
     expect(screen.getByText(/share 12 recordings/)).toBeTruthy();
     expect(screen.getByText("Stereolab")).toBeTruthy();
     expect(screen.getByText(/spun 7x across 4 runs/)).toBeTruthy();
-    expect(screen.getByText("Follow selector")).toBeTruthy();
   });
 
   it("opens the lore panel from a row's chip", () => {

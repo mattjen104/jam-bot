@@ -200,3 +200,28 @@ export function useJournal(): JournalEntry[] {
   return useSyncExternalStore(journalStore.subscribe, journalStore.read);
 }
 
+// ---------------------------------------------------------------------------
+// DJ follow IDs — a stable compound key for a (station, DJ name) pair stored
+// in the local follows list.  Uses the double-colon separator so the DJ name
+// can contain a single colon (e.g. "DJ :: Weirdo") without ambiguity.
+// ---------------------------------------------------------------------------
+
+const DJ_FOLLOW_SEP = "::";
+
+/** Encode a (stationSlug, djName) pair into a stable string key. */
+export function djFollowId(stationSlug: string, djName: string): string {
+  return `${stationSlug}${DJ_FOLLOW_SEP}${djName}`;
+}
+
+/** Decode a follow-id string.  Returns null for any malformed value. */
+export function parseDjFollowId(
+  id: string,
+): { stationSlug: string; djName: string } | null {
+  const idx = id.indexOf(DJ_FOLLOW_SEP);
+  if (idx <= 0) return null;                     // missing or leading separator
+  const stationSlug = id.slice(0, idx);
+  const djName = id.slice(idx + DJ_FOLLOW_SEP.length);
+  if (!djName) return null;                       // trailing separator
+  return { stationSlug, djName };
+}
+

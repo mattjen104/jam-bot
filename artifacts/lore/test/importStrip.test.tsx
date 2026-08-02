@@ -132,11 +132,11 @@ describe("ImportStrip — resume label when job picks up from a stored buffer", 
 // → "Reading your Spotify library…"
 // ---------------------------------------------------------------------------
 
-describe("ImportStrip — 'Reading your Spotify library' label", () => {
-  it("shows 'Reading your Spotify library' when resumedFrom is null", () => {
+describe("ImportStrip — fetching-phase label (service-neutral)", () => {
+  it("shows 'Importing your library…' when resumedFrom is null and phase='fetching'", () => {
     mockJob({ resumedFrom: null, phase: "fetching" });
     render(<ImportStrip />);
-    expect(screen.getByText(/reading your spotify library/i)).toBeTruthy();
+    expect(screen.getByText(/importing your library/i)).toBeTruthy();
   });
 
   it("does NOT show 'Resuming from previous session' when resumedFrom is null", () => {
@@ -145,14 +145,14 @@ describe("ImportStrip — 'Reading your Spotify library' label", () => {
     expect(screen.queryByText(/resuming from previous session/i)).toBeNull();
   });
 
-  it("shows 'Reading your Spotify library' even when resumedFrom is set but phase='fetching'", () => {
+  it("shows 'Importing your library…' even when resumedFrom is set but phase='fetching'", () => {
     // resumedFrom is only set on the complete-buffer path (which skips Spotify
     // fetch) so phase should never be "fetching" with resumedFrom set in
     // practice — but the UI guard is explicitly "phase !== fetching", so we
     // verify the boundary.
     mockJob({ resumedFrom: 99, phase: "fetching" });
     render(<ImportStrip />);
-    expect(screen.getByText(/reading your spotify library/i)).toBeTruthy();
+    expect(screen.getByText(/importing your library/i)).toBeTruthy();
     expect(screen.queryByText(/resuming from previous session/i)).toBeNull();
   });
 });
