@@ -61,6 +61,7 @@ import { applyImportItemsMigration } from "./lore/import-items-migration.js";
 import { applyAttendanceMigration } from "./lore/attendance-migration.js";
 import { applyTasteSeedsMigration } from "./lore/taste-seeds-migration.js";
 import { startSessionExpiryWorker } from "./routes/me/attendance.js";
+import { scheduleAnonCleanup } from "./lore/anonCleanup.js";
 
 const rawPort = process.env["PORT"];
 
@@ -172,6 +173,7 @@ async function bootLore(): Promise<void> {
     startQualityRecomputeJob();
     startPhase3RetryScheduler();
     startSessionExpiryWorker();
+    scheduleAnonCleanup();
   } catch (err) {
     console.error("[lore] boot failed", err);
   }

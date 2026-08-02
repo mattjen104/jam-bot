@@ -64,6 +64,7 @@ import {
   criCandidatesTable,
 } from "@workspace/db";
 import { eq, and, asc, desc, sql, count, isNull, gt } from "drizzle-orm";
+import { runAnonCleanup } from "../../lore/anonCleanup.js";
 import { wireListExtractor } from "../../lore/list-wire.js";
 import { processListCandidate, writeCandidateOutcome, runListCandidateBatch } from "../../lore/list-candidates.js";
 import { scrapeAndPopulateList, enrichRecordingReleaseGroups } from "../../lore/list-scraper.js";
@@ -2156,6 +2157,16 @@ router.post("/admin/rym-lists", h(async (req, res) => {
     return res.status(400).json({ error: "Could not create RYM picker" });
   }
   return res.status(201).json(toPicker(picker));
+}));
+
+// POST /api/admin/maintenance/anon-cleanup — on-demand trigger for the
+// anonymous session expiry job. Runs the same deletion query that the
+// background scheduler uses and returns the row count so the effect is
+// immediately observable without waiting for the nightly run.
+router.post("/admin/maintenance/anon-cleanup", h(async (_req, res) => {
+  const deleted = await runAnonCleanup();
+  console.info(`[anonCleanup] admin-triggered run deleted ${deleted} row(s)`);
+  return res.json({ deleted });
 }));
 
 export default router;

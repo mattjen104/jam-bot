@@ -1442,10 +1442,8 @@ export function DialView() {
                   accent="library"
                 />
                 <Zone1Placeholder
+                  isSpotifyConnected={isSpotifyConnected}
                   hasLibrary={hasLibrary}
-                  seeds={seedArtists}
-                  onAddSeed={addSeed}
-                  onRemoveSeed={removeSeed}
                 />
                 {/* Zone 2 heading + skeleton rows — no pre-load signal for ghost stations */}
                 <ZoneLabel label="Missed while you were away" accent="picker" />
@@ -1853,15 +1851,14 @@ function SeedBar({
 }
 
 function Zone1Placeholder({
-  hasLibrary,
   isSpotifyConnected,
+  hasLibrary,
 }: {
-  hasLibrary: boolean;
   isSpotifyConnected: boolean;
+  hasLibrary: boolean;
 }) {
   if (hasLibrary || isSpotifyConnected) {
-    // Library exists (or Spotify connected and building) — show a "working on
-    // it" status line + skeleton rows while crossings resolve.
+    // Library imported or Spotify connected — crossings are being computed.
     return (
       <div className="z1-placeholder z1-placeholder--loading">
         <div className="z1-placeholder__status">
@@ -1874,13 +1871,12 @@ function Zone1Placeholder({
     );
   }
 
-  // New user — connect Spotify prompt.
+  // New user — prompt to connect library.
   return (
     <div className="z1-placeholder z1-placeholder--seed">
       <div className="z1-placeholder__body">
         <p className="z1-placeholder__pitch">
-          Connect Spotify and Lore will find stations playing your music live,
-          right now.
+          Connect your Spotify library to see which stations are playing your music live, right now.
         </p>
         <div className="z1-placeholder__secondary">
           <button
@@ -1888,8 +1884,13 @@ function Zone1Placeholder({
             className="dial-ctabtn"
             onClick={() => void startSpotifyLibraryConnect()}
           >
-            Connect Spotify for your library
+            Connect Spotify library
           </button>
+        </div>
+        <div className="z1-placeholder__secondary">
+          <a className="dial-ctabtn" href="/lore/library">
+            Or import a listening history →
+          </a>
         </div>
       </div>
     </div>
