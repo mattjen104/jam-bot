@@ -281,7 +281,7 @@ router.get("/me/attendance/counts", h(async (req, res) => {
         sql`
           ${attendanceTable.dwellSeconds} >= CASE
             WHEN ${attendanceTable.spinDurationSeconds} IS NOT NULL
-              THEN LEAST(${attendanceTable.spinDurationSeconds} * ${DWELL_GATE_FRACTION}, ${DWELL_GATE_ABSOLUTE_S})
+              THEN LEAST(${attendanceTable.spinDurationSeconds}::numeric * ${DWELL_GATE_FRACTION}, ${DWELL_GATE_ABSOLUTE_S})
             ELSE ${DWELL_GATE_ABSOLUTE_S}
           END
         `,

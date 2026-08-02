@@ -28,6 +28,11 @@ export async function setup(): Promise<void> {
       "../src/lore/spotify-library-items-migration.js"
     );
     await applySpotifyLibraryItemsMigration();
+
+    const { applyAttendanceMigration } = await import(
+      "../src/lore/attendance-migration.js"
+    );
+    await applyAttendanceMigration();
   } catch {
     // No real DB available — pure-unit environment.  Workers that need the
     // tables will skip their tests gracefully via their own dbAvailable guards.
