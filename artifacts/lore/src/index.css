@@ -948,7 +948,8 @@
 }
 .z1-placeholder__lbl { }
 .z1-placeholder--connect,
-.z1-placeholder--import {
+.z1-placeholder--import,
+.z1-placeholder--seed {
   background: hsl(var(--card) / 0.5);
   border-radius: 6px;
   margin: 6px 10px;
@@ -969,6 +970,177 @@
   font-style: normal;
   color: hsl(var(--foreground));
 }
+
+/* ── Seeded state (chips + skeleton) ── */
+.z1-placeholder--seeded {
+  padding: 0;
+  border-bottom: none;
+}
+.z1-placeholder__seed-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 15px 10px;
+}
+.z1-placeholder__upgrade {
+  padding: 10px 15px 14px;
+  border-top: 1px solid hsl(var(--border) / 0.25);
+}
+.z1-placeholder__secondary {
+  padding-top: 2px;
+}
+
+/* ── Seed input row ── */
+.seed-input-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.seed-input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  background: hsl(var(--input));
+  border: 1px solid hsl(var(--border) / 0.6);
+  border-radius: 6px;
+  color: hsl(var(--foreground));
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.seed-input:focus {
+  border-color: hsl(var(--library) / 0.7);
+}
+.seed-input::placeholder { color: hsl(var(--muted-foreground) / 0.55); }
+.seed-add-btn {
+  height: 34px;
+  padding: 0 13px;
+  background: hsl(var(--library) / 0.18);
+  border: 1px solid hsl(var(--library) / 0.35);
+  border-radius: 6px;
+  color: hsl(var(--library));
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, opacity 0.15s;
+}
+.seed-add-btn:hover:not(:disabled) { background: hsl(var(--library) / 0.28); }
+.seed-add-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* ── Suggestion chips ── */
+.seed-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.seed-suggestion {
+  padding: 4px 10px;
+  background: hsl(var(--muted) / 0.6);
+  border: 1px solid hsl(var(--border) / 0.4);
+  border-radius: 20px;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.seed-suggestion:hover {
+  background: hsl(var(--library) / 0.15);
+  color: hsl(var(--library));
+  border-color: hsl(var(--library) / 0.3);
+}
+
+/* ── Seed chip (added artist) ── */
+.seed-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px 4px 10px;
+  background: hsl(var(--library) / 0.15);
+  border: 1px solid hsl(var(--library) / 0.3);
+  border-radius: 20px;
+  color: hsl(var(--library));
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.seed-chip--sm {
+  font-size: 11px;
+  padding: 3px 7px 3px 9px;
+}
+.seed-chip__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  background: none;
+  border: none;
+  border-radius: 50%;
+  color: hsl(var(--library) / 0.7);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.12s, background 0.12s;
+}
+.seed-chip__remove:hover {
+  color: hsl(var(--library));
+  background: hsl(var(--library) / 0.15);
+}
+
+/* ── Seed bar (compact strip above Zone 1 rows) ── */
+.seed-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 15px 8px;
+  background: hsl(var(--library) / 0.07);
+  border-bottom: 1px solid hsl(var(--library) / 0.15);
+  flex-wrap: wrap;
+}
+.seed-bar__label {
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: hsl(var(--library) / 0.6);
+  flex-shrink: 0;
+}
+.seed-bar__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+/* In the bar, the seed-input-row is compact */
+.seed-bar .seed-input-row { gap: 4px; }
+.seed-bar .seed-input {
+  height: 26px;
+  font-size: 11px;
+  padding: 0 8px;
+  min-width: 80px;
+  max-width: 120px;
+}
+.seed-bar .seed-add-btn {
+  height: 26px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+.seed-bar__upgrade {
+  font-size: 11px;
+  color: hsl(var(--muted-foreground) / 0.7);
+  text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: color 0.12s;
+}
+.seed-bar__upgrade:hover { color: hsl(var(--library)); }
 
 /* ── Tier header ── */
 .dial-tier-hd {

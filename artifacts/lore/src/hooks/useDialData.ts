@@ -189,6 +189,8 @@ export function useDialData(): {
   liveLoading: boolean;
   crossingsLoading: boolean;
   hasLibrary: boolean;
+  /** True when the user has entered at least one taste-seed artist. */
+  hasSeeds: boolean;
   /** pickerId → overlap count from the server-computed full-library RG-widened endpoint. */
   overlapByPickerId: Map<number, number>;
   /** Normalised picker display name → pickerId — bridge for shows lacking a linked pickerId. */
@@ -578,5 +580,10 @@ export function useDialData(): {
   // Sourced from GET /api/me/picker-names so no MBID list download is needed.
   const hasLibrary = pickerNamesData?.hasLibrary ?? false;
 
-  return { stations, isLoading, isCoreLoading, liveLoading, crossingsLoading, hasLibrary, overlapByPickerId, pickerNameToId };
+  // hasSeeds: true when the user has entered at least one taste-seed artist.
+  // Allows Zone1Placeholder to show the seeded-matching state instead of the
+  // full onboarding prompt even before the library is imported.
+  const hasSeeds = pickerNamesData?.hasSeeds ?? false;
+
+  return { stations, isLoading, isCoreLoading, liveLoading, crossingsLoading, hasLibrary, hasSeeds, overlapByPickerId, pickerNameToId };
 }

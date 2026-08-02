@@ -2182,3 +2182,39 @@ export const attendanceTable = pgTable(
 
 export type Attendance = typeof attendanceTable.$inferSelect;
 export type InsertAttendance = typeof attendanceTable.$inferInsert;
+
+// ---- Taste seeds (zero-friction onboarding) --------------------------------
+
+/**
+ * Artist name seeds entered directly by a listener before they have connected
+ * any music service.  These flow through the crossing-score pipeline exactly
+ * like unresolved soft-artist rows from Spotify imports — stations playing a
+ * seeded artist appear in Zone 1 immediately.
+ *
+ * Tied to the device-identity session (lore_users row auto-provisioned on
+ * first visit) so seeds survive page refreshes without an account.  A PUT
+ * to /api/me/taste-seeds replaces the full set atomically and busts both
+ * the crossings and library-hit caches so Zone 1 reflects the new artists
+ * on the very next poll.
+ */
+export const tasteSeedsTable = pgTable(
+  "taste_seeds",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => loreUsersTable.id, { onDelete: "cascade" }),
+    /** Display form of the artist name (trimmed, original case). */
+    artistName: text("artist_name").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("taste_seeds_user_idx").on(t.userId),
+    // Unique per (user, normalised name) — duplicate handling is done in the
+    // route (lowercase+trim before insert), so the DB index uses the raw column.
+    uniqueIndex("taste_seeds_user_artist_uq").on(t.userId, t.artistName),
+  ],
+);
+
+export type TasteSeed = typeof tasteSeedsTable.$inferSelect;
+export type InsertTasteSeed = typeof tasteSeedsTable.$inferInsert;

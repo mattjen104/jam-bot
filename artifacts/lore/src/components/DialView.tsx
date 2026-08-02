@@ -10,7 +10,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } fro
 import { Search } from "lucide-react";
 import { useLocation } from "wouter";
 import { useDialData, normalizeDjName, type DialStation, type DialShow, type DialSpin } from "../hooks/useDialData";
-import { useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, type GhostStation } from "../lib/meHooks";
+import { useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, useMyTasteSeeds, useSetTasteSeeds, type GhostStation } from "../lib/meHooks";
 import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
 import { StationLane } from "./StationLane";
 import { ContextRail } from "./ContextRail";
@@ -998,7 +998,24 @@ export function DialView() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
 
-  const { stations, isLoading, isCoreLoading, liveLoading, crossingsLoading, hasLibrary, overlapByPickerId, pickerNameToId } = useDialData();
+  const { stations, isLoading, isCoreLoading, liveLoading, crossingsLoading, hasLibrary, hasSeeds, overlapByPickerId, pickerNameToId } = useDialData();
+
+  // ── Taste seeds — zero-friction artist onboarding ───────────────────────
+  const { data: seedArtists = [] } = useMyTasteSeeds();
+  const setSeedsMutation = useSetTasteSeeds();
+
+  const addSeed = useCallback((artist: string) => {
+    const trimmed = artist.trim();
+    if (!trimmed) return;
+    const lower = trimmed.toLowerCase();
+    if (seedArtists.some((s) => s.toLowerCase() === lower)) return;
+    void setSeedsMutation.mutateAsync([...seedArtists, trimmed]);
+  }, [seedArtists, setSeedsMutation]);
+
+  const removeSeed = useCallback((artist: string) => {
+    const lower = artist.toLowerCase();
+    void setSeedsMutation.mutateAsync(seedArtists.filter((s) => s.toLowerCase() !== lower));
+  }, [seedArtists, setSeedsMutation]);
   // Delay skeleton visibility so fast loads (< 150 ms) never flash shimmer rows.
   // The delayed flag only flips true after crossingsLoading has been true for
   // 150 ms; it resets to false immediately when crossingsLoading clears so that
@@ -1423,8 +1440,10 @@ export function DialView() {
                   accent="library"
                 />
                 <Zone1Placeholder
-                  isSpotifyConnected={isSpotifyConnected}
                   hasLibrary={hasLibrary}
+                  seeds={seedArtists}
+                  onAddSeed={addSeed}
+                  onRemoveSeed={removeSeed}
                 />
                 {/* Zone 2 heading + skeleton rows — no pre-load signal for ghost stations */}
                 <ZoneLabel label="Missed while you were away" accent="picker" />
@@ -1471,6 +1490,16 @@ export function DialView() {
                 </div>
                 {!zone1Collapsed && (
                   <>
+                    {/* Seed bar — compact chip strip shown when the user has seeded
+                        artists but hasn't imported a full library yet. Lets them
+                        manage seeds inline without leaving Zone 1. */}
+                    {!hasLibrary && seedArtists.length > 0 && (
+                      <SeedBar
+                        seeds={seedArtists}
+                        onAddSeed={addSeed}
+                        onRemoveSeed={removeSeed}
+                      />
+                    )}
                     {/* Map over the FULL array so isSampling index is always the
                         unsliced position; rows beyond zone1Visible are null until
                         zone1Expanded is true. */}
@@ -1717,60 +1746,187 @@ function DialRowSkeleton({ delay = 0 }: { delay?: 0 | 1 | 2 }) {
   );
 }
 
-function Zone1Placeholder({
-  isSpotifyConnected,
-  hasLibrary,
+// ---------------------------------------------------------------------------
+// Seed prompt sub-components
+// ---------------------------------------------------------------------------
+
+const SEED_SUGGESTIONS = [
+  "Radiohead", "Portishead", "Khruangbin",
+  "Bon Iver", "Caribou", "Four Tet",
+  "Erykah Badu", "Sigur Rós",
+];
+
+function SeedInput({
+  seeds,
+  onAdd,
+  placeholder = "e.g. Radiohead",
 }: {
-  isSpotifyConnected: boolean;
-  hasLibrary: boolean;
+  seeds: string[];
+  onAdd: (artist: string) => void;
+  placeholder?: string;
 }) {
-  if (!isSpotifyConnected) {
-    // New user — explain Lore and invite them to connect.
+  const [value, setValue] = useState("");
+
+  const submit = () => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    onAdd(trimmed);
+    setValue("");
+  };
+
+  return (
+    <div className="seed-input-row">
+      <input
+        className="seed-input"
+        type="text"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } }}
+        maxLength={100}
+        autoComplete="off"
+        autoCorrect="off"
+        spellCheck={false}
+        aria-label="Artist name"
+      />
+      <button
+        type="button"
+        className="seed-add-btn"
+        onClick={submit}
+        disabled={!value.trim() || seeds.length >= 10}
+      >
+        Add
+      </button>
+    </div>
+  );
+}
+
+function SeedBar({
+  seeds,
+  onAddSeed,
+  onRemoveSeed,
+}: {
+  seeds: string[];
+  onAddSeed: (artist: string) => void;
+  onRemoveSeed: (artist: string) => void;
+}) {
+  return (
+    <div className="seed-bar">
+      <span className="seed-bar__label">Tuned for</span>
+      <div className="seed-bar__chips">
+        {seeds.map((s) => (
+          <span key={s} className="seed-chip seed-chip--sm">
+            {s}
+            <button
+              type="button"
+              className="seed-chip__remove"
+              aria-label={`Remove ${s}`}
+              onClick={() => onRemoveSeed(s)}
+            >×</button>
+          </span>
+        ))}
+        {seeds.length < 10 && (
+          <SeedInput seeds={seeds} onAdd={onAddSeed} placeholder="+ artist" />
+        )}
+      </div>
+      <a className="seed-bar__upgrade" href="/lore/library">
+        Import library →
+      </a>
+    </div>
+  );
+}
+
+function Zone1Placeholder({
+  hasLibrary,
+  seeds,
+  onAddSeed,
+  onRemoveSeed,
+}: {
+  hasLibrary: boolean;
+  seeds: string[];
+  onAddSeed: (artist: string) => void;
+  onRemoveSeed: (artist: string) => void;
+}) {
+  if (hasLibrary) {
+    // Library exists — show a "working on it" status line + skeleton rows.
     return (
-      <div className="z1-placeholder z1-placeholder--connect">
-        <div className="z1-placeholder__body">
-          <p className="z1-placeholder__pitch">
-            Lore finds the stations playing <em>your</em> music — right now,
-            live, ranked by how much of your library they've touched.
-          </p>
-          <button
-            type="button"
-            className="dial-ctabtn dial-ctabtn--keep"
-            onClick={() => void startSpotifyLibraryConnect()}
-          >
-            Connect Spotify to see what's playing your music
-          </button>
+      <div className="z1-placeholder z1-placeholder--loading">
+        <div className="z1-placeholder__status">
+          <span className="dial-live-skeleton__pip" />
+          <span className="z1-placeholder__lbl">Finding which stations are playing your music…</span>
         </div>
+        <DialRowSkeleton delay={0} />
+        <DialRowSkeleton delay={1} />
       </div>
     );
   }
 
-  if (!hasLibrary) {
-    // Connected but library empty — prompt an import.
+  if (seeds.length > 0) {
+    // Seeds entered, waiting for crossings to resolve.
     return (
-      <div className="z1-placeholder z1-placeholder--import">
-        <div className="z1-placeholder__body">
-          <p className="z1-placeholder__pitch">
-            Import your Spotify library so Lore can match it against what's
-            on air right now.
-          </p>
+      <div className="z1-placeholder z1-placeholder--seeded">
+        <div className="z1-placeholder__seed-chips">
+          {seeds.map((s) => (
+            <span key={s} className="seed-chip">
+              {s}
+              <button
+                type="button"
+                className="seed-chip__remove"
+                aria-label={`Remove ${s}`}
+                onClick={() => onRemoveSeed(s)}
+              >×</button>
+            </span>
+          ))}
+          {seeds.length < 10 && (
+            <SeedInput seeds={seeds} onAdd={onAddSeed} placeholder="+ artist" />
+          )}
+        </div>
+        <div className="z1-placeholder__status">
+          <span className="dial-live-skeleton__pip" />
+          <span className="z1-placeholder__lbl">Finding stations playing your artists…</span>
+        </div>
+        <DialRowSkeleton delay={0} />
+        <DialRowSkeleton delay={1} />
+        <div className="z1-placeholder__upgrade">
           <a className="dial-ctabtn dial-ctabtn--keep" href="/lore/library">
-            Go to Library → Import
+            Import your full library for more matches →
           </a>
         </div>
       </div>
     );
   }
 
-  // Library exists — show a "working on it" status line + skeleton rows.
+  // New user — full seed prompt.
   return (
-    <div className="z1-placeholder z1-placeholder--loading">
-      <div className="z1-placeholder__status">
-        <span className="dial-live-skeleton__pip" />
-        <span className="z1-placeholder__lbl">Finding which stations are playing your music…</span>
+    <div className="z1-placeholder z1-placeholder--seed">
+      <div className="z1-placeholder__body">
+        <p className="z1-placeholder__pitch">
+          Name an artist you love — Lore will find stations playing them live,
+          right now.
+        </p>
+        <SeedInput seeds={seeds} onAdd={onAddSeed} />
+        <div className="seed-suggestions">
+          {SEED_SUGGESTIONS.map((s) => (
+            <button
+              key={s}
+              type="button"
+              className="seed-suggestion"
+              onClick={() => onAddSeed(s)}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+        <div className="z1-placeholder__secondary">
+          <button
+            type="button"
+            className="dial-ctabtn"
+            onClick={() => void startSpotifyLibraryConnect()}
+          >
+            Or connect Spotify for your full library
+          </button>
+        </div>
       </div>
-      <DialRowSkeleton delay={0} />
-      <DialRowSkeleton delay={1} />
     </div>
   );
 }

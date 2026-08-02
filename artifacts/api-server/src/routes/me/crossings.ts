@@ -8,6 +8,7 @@ import {
   stationsTable,
   spotifyLibraryItemsTable,
   crossingsCacheTable,
+  tasteSeedsTable,
 } from "@workspace/db";
 import { eq, and, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { h } from "../../middlewares/asyncHandler.js";
@@ -52,9 +53,21 @@ type CrossingsRow = {
 
 const crossingsCache = new Map<number, { builtAt: number; data: CrossingsRow[] }>();
 
+/**
+ * Evict a user's crossings from both in-process (L1) and Postgres (L2) cache.
+ * Called by taste-seeds PUT and tests so the next poll reflects the new data.
+ */
+export function bustCrossingsCache(userId: number): void {
+  crossingsCache.delete(userId);
+  void db
+    .delete(crossingsCacheTable)
+    .where(eq(crossingsCacheTable.userId, userId))
+    .catch(() => {});
+}
+
 /** Evict a user's cached entry — call before a test that needs a fresh DB hit. */
 export function _testOnly_clearCrossingsCache(userId: number): void {
-  crossingsCache.delete(userId);
+  bustCrossingsCache(userId);
 }
 
 /** Returns true when a fresh cache entry exists for the user — used in tests only. */
@@ -223,10 +236,20 @@ router.get("/me/crossings", h(async (req, res) => {
       ),
     );
 
-  // Artist match: MBID-based lookup + soft name subquery fallback.
+  // Taste-seed soft names: artist names entered directly by the user before
+  // they have connected any music service.  Treated identically to unresolved
+  // Spotify soft rows — matched by lowercased artist name.
+  const userSeedArtists = db
+    .selectDistinct({ artistLower: sql<string>`lower(trim(${tasteSeedsTable.artistName}))` })
+    .from(tasteSeedsTable)
+    .where(eq(tasteSeedsTable.userId, user.id));
+
+  // Artist match: MBID-based lookup + soft name fallback (Spotify imports and
+  // taste seeds share the same matching path).
   const artistMatch = sql`(
     ${recordingsTable.artistMbid} in (${userLibArtists})
     or lower(trim(${recordingsTable.artist})) in (${userSoftArtists})
+    or lower(trim(${recordingsTable.artist})) in (${userSeedArtists})
   )`;
 
   // ── Windowed predicates (24-hour rolling window) ─────────────────────────

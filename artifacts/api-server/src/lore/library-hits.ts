@@ -19,6 +19,7 @@ import {
   recordingReleaseGroupsTable,
   recordingsTable,
   spotifyLibraryItemsTable,
+  tasteSeedsTable,
 } from "@workspace/db";
 import { eq, and, isNotNull, isNull, ne, sql } from "drizzle-orm";
 
@@ -58,6 +59,14 @@ const LIBRARY_HIT_CACHE_TTL_MS = 5 * 60 * 1_000;
 
 const libraryHitCache = new Map<number, { builtAt: number; ctx: LibraryHitContext }>();
 
+/**
+ * Evict a user's context from the in-process cache.
+ * Called by taste-seeds PUT so the next SSE connection reflects new seeds.
+ */
+export function bustLibraryHitCache(userId: number): void {
+  libraryHitCache.delete(userId);
+}
+
 /** Evict a user's cached entry — call before a test that needs a fresh DB hit. */
 export function _testOnly_clearLibraryHitCache(userId: number): void {
   libraryHitCache.delete(userId);
@@ -90,7 +99,7 @@ export async function buildLibraryHitContext(userId: number): Promise<LibraryHit
     return cached.ctx;
   }
 
-  const [mbidRows, rgRows, artistRows, softRows] = await Promise.all([
+  const [mbidRows, rgRows, artistRows, softRows, seedRows] = await Promise.all([
     // 1. Exact recording MBIDs in library
     db
       .select({ mbid: libraryItemsTable.mbid })
@@ -138,13 +147,26 @@ export async function buildLibraryHitContext(userId: number): Promise<LibraryHit
         ),
       )
       .catch((): { artistLower: string }[] => []),
+
+    // 5. Taste-seed artist names (entered directly by the user, no service required)
+    db
+      .selectDistinct({
+        artistLower: sql<string>`lower(trim(${tasteSeedsTable.artistName}))`,
+      })
+      .from(tasteSeedsTable)
+      .where(eq(tasteSeedsTable.userId, userId))
+      .catch((): { artistLower: string }[] => []),
   ]);
 
   const ctx: LibraryHitContext = {
     libMbids: new Set(mbidRows.map((r) => r.mbid)),
     libRgMbids: new Set(rgRows.map((r) => r.rg)),
     libArtistMbids: new Set(artistRows.map((r) => r.artistMbid!)),
-    softArtistNames: new Set(softRows.map((r) => r.artistLower)),
+    // Soft names: unresolved Spotify imports + taste seeds use the same matching path.
+    softArtistNames: new Set([
+      ...softRows.map((r) => r.artistLower),
+      ...seedRows.map((r) => r.artistLower),
+    ]),
   };
   libraryHitCache.set(userId, { builtAt: Date.now(), ctx });
   return ctx;

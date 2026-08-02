@@ -18,6 +18,7 @@ import {
   libraryItemsTable,
   picksTable,
   pickersTable,
+  tasteSeedsTable,
 } from "@workspace/db";
 import { eq, and, ne, isNotNull, inArray } from "drizzle-orm";
 import { h } from "../../middlewares/asyncHandler.js";
@@ -33,27 +34,37 @@ const router: IRouter = Router();
  *   {
  *     names: string[];       // display names of matching non-DJ pickers
  *     hasLibrary: boolean;   // true when the listener has ≥ 1 resolved MBID
+ *     hasSeeds: boolean;     // true when the listener has ≥ 1 taste seed
  *   }
  *
- * Returns `{ names: [], hasLibrary: false }` when the user has no session or
- * no resolved library items so callers never need to branch on auth state.
+ * Returns `{ names: [], hasLibrary: false, hasSeeds: false }` when the user
+ * has no session or no resolved library items so callers never need to branch
+ * on auth state.
  */
 router.get("/me/picker-names", h(async (req, res) => {
   const user = (req as AuthedRequest).loreUser;
   if (!user) {
-    return res.json({ names: [], hasLibrary: false });
+    return res.json({ names: [], hasLibrary: false, hasSeeds: false });
   }
 
-  // Check whether the library has any resolved rows at all. A single-row
-  // query is cheap and gives us the hasLibrary flag without fetching everything.
-  const firstRow = await db
-    .select({ mbid: libraryItemsTable.mbid })
-    .from(libraryItemsTable)
-    .where(and(eq(libraryItemsTable.userId, user.id), isNotNull(libraryItemsTable.mbid)))
-    .limit(1);
+  // Check library and seeds in parallel — cheap single-row probes.
+  const [firstRow, firstSeed] = await Promise.all([
+    db
+      .select({ mbid: libraryItemsTable.mbid })
+      .from(libraryItemsTable)
+      .where(and(eq(libraryItemsTable.userId, user.id), isNotNull(libraryItemsTable.mbid)))
+      .limit(1),
+    db
+      .select({ id: tasteSeedsTable.id })
+      .from(tasteSeedsTable)
+      .where(eq(tasteSeedsTable.userId, user.id))
+      .limit(1),
+  ]);
+
+  const hasSeeds = firstSeed.length > 0;
 
   if (firstRow.length === 0) {
-    return res.json({ names: [], hasLibrary: false });
+    return res.json({ names: [], hasLibrary: false, hasSeeds });
   }
 
   // Subquery: all resolved MBIDs in the user's library.
@@ -83,6 +94,7 @@ router.get("/me/picker-names", h(async (req, res) => {
   return res.json({
     names: rows.map((r) => r.name),
     hasLibrary: true,
+    hasSeeds,
   });
 }));
 

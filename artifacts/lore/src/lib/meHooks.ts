@@ -377,6 +377,7 @@ export const ME_LIBRARY_MBIDS_KEY = ["me", "library", "mbids"] as const;
 export const ME_PICKER_NAMES_KEY = ["me", "picker-names"] as const;
 export const ME_DIAL_CROSSINGS_KEY = (date: string) =>
   ["me", "crossings", date] as const;
+export const ME_TASTE_SEEDS_KEY = ["me", "taste-seeds"] as const;
 
 export interface DialCrossing {
   stationSlug: string;
@@ -389,17 +390,60 @@ export interface DialCrossing {
 /**
  * Picker display names whose curated tracks overlap the listener's library.
  * Used by the Dial to mark picker shows without downloading the full MBID list.
- * Returns `{ names: [], hasLibrary: false }` when unauthenticated or library is empty.
+ * Returns `{ names: [], hasLibrary: false, hasSeeds: false }` when unauthenticated
+ * or library is empty.
  */
 export function useMyPickerNames() {
   return useQuery({
     queryKey: ME_PICKER_NAMES_KEY,
     queryFn: () =>
-      fetchOrNull<{ names: string[]; hasLibrary: boolean }>(
+      fetchOrNull<{ names: string[]; hasLibrary: boolean; hasSeeds: boolean }>(
         "/api/me/picker-names",
-      ).then((d) => d ?? { names: [], hasLibrary: false }),
+      ).then((d) => d ?? { names: [], hasLibrary: false, hasSeeds: false }),
     staleTime: 5 * 60_000,
     retry: false,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Taste seeds — zero-friction artist-name onboarding
+// ---------------------------------------------------------------------------
+
+/**
+ * Read the current taste seeds for this session.
+ * Returns an empty array if the user has no seeds yet.
+ */
+export function useMyTasteSeeds() {
+  return useQuery({
+    queryKey: ME_TASTE_SEEDS_KEY,
+    queryFn: () =>
+      fetchOrNull<{ artists: string[] }>("/api/me/taste-seeds").then(
+        (d) => d?.artists ?? [],
+      ),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+/**
+ * Replace the full seed list.  After a successful write the seeds query is
+ * updated in place and the crossings query is invalidated so Zone 1 refreshes
+ * without a page reload.
+ */
+export function useSetTasteSeeds() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (artists: string[]) =>
+      apiFetch<{ artists: string[] }>("/api/me/taste-seeds", {
+        method: "PUT",
+        body: JSON.stringify({ artists }),
+      }),
+    onSuccess: (data) => {
+      queryClient.setQueryData(ME_TASTE_SEEDS_KEY, data.artists);
+      const today = new Date().toISOString().slice(0, 10);
+      void queryClient.invalidateQueries({ queryKey: ME_DIAL_CROSSINGS_KEY(today) });
+      void queryClient.invalidateQueries({ queryKey: ME_PICKER_NAMES_KEY });
+    },
   });
 }
 /**
