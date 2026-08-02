@@ -109,6 +109,75 @@ function nameNodes(artists: string[]): ReactNode {
 
 interface ReasonResult { r: number; cls: string; node: ReactNode }
 
+const MISSING_LIVE_VALUES = new Set([
+  "unknown",
+  "unknown show",
+  "n/a",
+  "na",
+  "none",
+  "null",
+  "undefined",
+]);
+
+function cleanLiveValue(value: string | null | undefined): string | null {
+  const cleaned = value?.replace(/\s+/g, " ").trim() ?? "";
+  return cleaned && !MISSING_LIVE_VALUES.has(cleaned.toLowerCase()) ? cleaned : null;
+}
+
+function sameLiveValue(a: string | null, b: string | null): boolean {
+  return a != null && b != null && a.localeCompare(b, undefined, { sensitivity: "accent" }) === 0;
+}
+
+/**
+ * The front door is a tune-in affordance, so live context is deliberately one
+ * sentence rather than a stack of independently clickable identities.  Prefer
+ * the current DJ and exact now-playing values; never use a recently-ended DJ
+ * as if they were currently on air.
+ */
+function liveSentence(
+  stationName: string,
+  show: DialShow | null,
+): { node: ReactNode; hasTrack: boolean } | null {
+  const station = cleanLiveValue(stationName);
+  if (!station || !show) return null;
+
+  const dj = cleanLiveValue(show?.djName);
+  const track = cleanLiveValue(show?.currentTrack?.title);
+  const artist = cleanLiveValue(show?.currentTrack?.artist);
+  const usableArtist = sameLiveValue(artist, station) ? null : artist;
+  const usableTrack = sameLiveValue(track, usableArtist) ? null : track;
+
+  if (dj) {
+    if (usableTrack && usableArtist) {
+      return {
+        node: <>{dj} is playing <b>{usableTrack}</b> by <b>{usableArtist}</b> on {station}</>,
+        hasTrack: true,
+      };
+    }
+    if (usableArtist) {
+      return { node: <>{dj} is playing <b>{usableArtist}</b> on {station}</>, hasTrack: true };
+    }
+    if (usableTrack) {
+      return { node: <>{dj} is playing <b>{usableTrack}</b> on {station}</>, hasTrack: true };
+    }
+    return { node: <>{dj} is on {station}</>, hasTrack: false };
+  }
+
+  if (usableArtist && usableTrack) {
+    return { node: <><b>{usableArtist}</b> is playing <b>{usableTrack}</b> on {station}</>, hasTrack: true };
+  }
+  if (usableArtist) {
+    return { node: <><b>{usableArtist}</b> is playing on {station}</>, hasTrack: true };
+  }
+  if (usableTrack) {
+    return { node: <><b>{usableTrack}</b> is playing on {station}</>, hasTrack: true };
+  }
+
+  // Without current attribution, preserve the established weak-match reason
+  // instead of manufacturing a generic sentence.
+  return null;
+}
+
 /** One sentence per rung; returns the strongest rung that applies (spec §3).
  *
  * r values are consecutive integers — no gaps, no shared values:
@@ -217,55 +286,15 @@ interface FrontDoorRowProps {
 export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onEarlier }: FrontDoorRowProps) {
   const rz = reason(show, ds.crossings, ds.artistCrossings);
 
-  // Tier 2: DJ name. Non-human stations (i.e. automationClass === 'automated')
-  // have no reliable human host — suppress the fallback slot so an automated
-  // period doesn't surface a stale DJ name implying a DJ is still on air.
-  // The schema only allows 'human' | 'automated' | null; 'mixed' is resolved
-  // server-side and never appears in API responses.
-  const isNonHumanStation = ds.station.automationClass != null && ds.station.automationClass !== "human";
-  const liveDjName = show?.djName ?? null;
-  // When the station is live but no schedule run has attached yet (run creation
-  // lags the first logged spin by up to a few minutes), fall back to the most
-  // recently-ended show's DJ name so the slot doesn't silently disappear.
-  // A 4-hour cutoff prevents surfacing a stale name from a prior day's show.
-  const fallbackDjName = !isNonHumanStation && liveDjName === null
-    ? (() => {
-        const CUTOFF_MS = 4 * 60 * 60 * 1000;
-        const now = Date.now();
-        return ds.shows
-          .filter(sh => sh.djName != null && sh.state !== "future" && (now - new Date(sh.endedAt).getTime()) < CUTOFF_MS)
-          .sort((a, b) => new Date(b.endedAt).getTime() - new Date(a.endedAt).getTime())[0]
-          ?.djName ?? null;
-      })()
+  const live = liveSentence(ds.station.name, show);
+  const rawShow = cleanLiveValue(show?.showName);
+  const dj = cleanLiveValue(show?.djName);
+  // A show is a quiet cue only when it adds context beyond the person in the
+  // sentence. Unknown schedule values are missing data, not a show identity.
+  const showContext = rawShow && !sameLiveValue(rawShow, dj) && !sameLiveValue(rawShow, cleanLiveValue(ds.station.name))
+    ? rawShow
     : null;
-  const djName = liveDjName ?? fallbackDjName;
-
-  // Tier 3: [showName ·] station.name — destination label only.
-  // Collapse showName when null or any "unknown show" variant.
-  const rawShow = show?.showName ?? null;
-  const showName = rawShow && rawShow.toLowerCase() !== "unknown show" ? rawShow : null;
-
-  const currentTrack = show?.currentTrack ?? null;
-
-  // T3 carries the ♪ track note only for Zone 1 crossing rows (r=3/r=4) where
-  // the reason mentions artist names — not the current track title. All other
-  // rungs either already have the title in the reason (r=1) or get a more
-  // prominent bare-fact slot below (Zone 3: r=0/r≥5).
-  const showTrackInT3 = (rz.r === 3 || rz.r === 4) && currentTrack !== null;
-  // Zone 3 rows get a standalone bare-fact track line, more legible than T3.
-  const showBareTrack = (rz.r === 0 || rz.r >= 5) && currentTrack !== null;
-
-  const tier3Text = [showName, ds.station.name].filter(Boolean).join(" · ");
-  const tier3Node = showTrackInT3 ? (
-    <>
-      {tier3Text}
-      {" · "}
-      <span className="fdrow__t3-live">♪</span>
-      {` ${currentTrack!.title}`}
-    </>
-  ) : (
-    <>{tier3Text}</>
-  );
+  const isExplicitlyContinuous = ds.station.automationClass === "automated" && !showContext;
 
   const rowCls = [
     "fdrow",
@@ -286,17 +315,19 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onE
     >
       <div className="fdrow__c">
         {/* Tier 1: reason sentence — leads at full display weight */}
-        <div className={`fdrow__t1 ${rz.cls}`}>{rz.node}</div>
+        <div className={`fdrow__t1 ${live ? "fdrow__live-sentence" : rz.cls}`}>
+          {live?.node ?? rz.node}
+        </div>
 
-        {/* Tier 2: human DJ name when known. Never rendered for automated stations. */}
-        {djName && (
-          <div className="fdrow__t2">
-            {djName}
+        {/* Show identity belongs to Schedule; keep only a quiet cue here. */}
+        {(showContext || isExplicitlyContinuous) && (
+          <div className="fdrow__t3 fdrow__context">
+            {showContext ?? "Continuous"}
           </div>
         )}
-
-        {/* Tier 3: show · station — small identity label */}
-        <div className="fdrow__t3">{tier3Node}</div>
+        {!live && !showContext && !isExplicitlyContinuous && (
+          <div className="fdrow__t3">{ds.station.name}</div>
+        )}
 
         {/* Zone 3 lifetime overlap caption: shown when the reason sentence carries no
             taste signal (r=0: no data; r=5: attributed show but no crossings yet) but
@@ -308,15 +339,7 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onE
           </div>
         )}
 
-        {/* Bare track: Zone 3 rows only — a legible plain fact, not a caption */}
-        {showBareTrack && (
-          <div className="fdrow__bare-track">
-            {currentTrack!.isFirstSpin && <span className="fdrow__bare-track__new" title="First time in the archive">◈ </span>}
-            {currentTrack!.title}
-          </div>
-        )}
-
-        {/* Footer: station is always in Tier 3, so we never need to repeat it */}
+        {/* Footer: the sentence carries the station destination for live rows. */}
         <div className="fdrow__foot">
           <button
             type="button"
@@ -936,7 +959,7 @@ function OfflineRow({
   } else if (lastSpin) {
     t1Node = (
       <>
-        {lastSpin.isFirstSpin && <span className="fdrow__bare-track__new">◈ </span>}
+        {lastSpin.isFirstSpin && <span className="fdrow__first-spin">◈ </span>}
         {lastSpin.title}
       </>
     );
@@ -1059,26 +1082,15 @@ export function DialView() {
   // --- attribution-ladder sort (spec §4) ---
   // One live entry per stream (show and station are 1:1 at any instant — §5)
   const sortedRows = useMemo(() => {
-    const FALLBACK_CUTOFF_MS = 4 * 60 * 60 * 1000;
-    const now = Date.now();
     const pins = readPins();
     return [...stations]
       .filter((ds) => ds.isLive)
       .map((ds) => {
         const show = ds.shows.find((sh) => sh.state === "live") ?? null;
         const rz = reason(show, ds.crossings, ds.artistCrossings);
-        // Mirror the fallback-DJ logic from FrontDoorRow so the sort key matches
-        // what the row actually displays. The server resolves 'mixed' to
-        // 'human'/'automated' at query time, so 'mixed' is never received here.
-        const isNonHuman = ds.station.automationClass != null && ds.station.automationClass !== "human";
-        const liveDjName = show?.djName ?? null;
-        const fallbackDjName = !isNonHuman && liveDjName === null
-          ? ds.shows
-              .filter((sh) => sh.djName != null && sh.state !== "future" && (now - new Date(sh.endedAt).getTime()) < FALLBACK_CUTOFF_MS)
-              .sort((a, b) => new Date(b.endedAt).getTime() - new Date(a.endedAt).getTime())[0]
-              ?.djName ?? null
-          : null;
-        const effectiveDjName = liveDjName ?? fallbackDjName;
+        // Only the current run may establish live attribution. A recently
+        // ended DJ must not affect either the sentence or its ordering.
+        const effectiveDjName = cleanLiveValue(show?.djName);
         const isPinned = pins.has(ds.station.slug);
         return { ds, show, rz, effectiveDjName, isPinned };
       })

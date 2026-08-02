@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
  * Regression tests for:
- *   1. Zone 3 FrontDoorRow bare-fact track line — title only, no artist suffix,
- *      no em-dash.
+ *   1. Zone 3 FrontDoorRow's complete live sentence, rather than a separate
+ *      bare-fact track line.
  *   2. "Unknown" text suppression — the string "Unknown" must never appear when
  *      show.djName is null and show.showName is a variant of "unknown show".
  *   3. OfflineRow show-name / track-title rendering — showName suppressed for
@@ -163,9 +163,8 @@ afterEach(() => {
 // 1. Zone 3 FrontDoorRow — bare-fact track line
 // ---------------------------------------------------------------------------
 
-describe("FrontDoorRow Zone 3 — bare-fact track line", () => {
-  it("renders the track title without an em-dash or artist suffix (r=5: djName set, no crossings)", () => {
-    // r=5: show has djName but no crossings → Zone 3 bare-fact row
+describe("FrontDoorRow Zone 3 — consolidated live sentence", () => {
+  it("includes title and artist in the leading sentence (r=5: DJ, no crossings)", () => {
     const track = makeSpin({ title: "Gravity Falls", artist: "Pixies" });
     const show = makeShow({
       djName: "DJ Tester",
@@ -178,25 +177,12 @@ describe("FrontDoorRow Zone 3 — bare-fact track line", () => {
     mockDialData([station]);
     renderDial();
 
-    // The bare-fact div should contain the title
-    const bareTrackEls = document.querySelectorAll(".fdrow__bare-track");
-    expect(bareTrackEls.length).toBeGreaterThan(0);
-    const bareText = bareTrackEls[0].textContent ?? "";
-    expect(bareText).toContain("Gravity Falls");
-
-    // Must NOT contain artist name with an em-dash or plain concatenation
-    expect(bareText).not.toMatch(/Pixies\s*[—–-]/);
-    expect(bareText).not.toMatch(/[—–-]\s*Pixies/);
-    expect(bareText).not.toContain("Pixies");
+    const sentence = document.querySelector(".fdrow__t1")?.textContent ?? "";
+    expect(sentence).toBe("DJ Tester is playing Gravity Falls by Pixies on Test Radio");
+    expect(document.querySelector(".fdrow__bare-track")).toBeNull();
   });
 
-  it("renders the track title without artist when r=0 (no show data, no crossings)", () => {
-    // r=0: station has no live show at all
-    const station = makeStation({ isLive: true, shows: [] });
-    // Manually inject a now-playing track via station data that forces r=0 path:
-    // FrontDoorRow is called with show=null in r=0 — currentTrack comes from show.
-    // In this case show is null so showBareTrack will be false; simulate r=0 by
-    // giving station a show with no djName and no crossings.
+  it("uses a track-led sentence when no DJ is attached", () => {
     const track = makeSpin({ title: "Dark Star", artist: "Grateful Dead" });
     const show0 = makeShow({
       djName: null,
@@ -209,13 +195,9 @@ describe("FrontDoorRow Zone 3 — bare-fact track line", () => {
     mockDialData([stationR0]);
     renderDial();
 
-    const bareTrackEls = document.querySelectorAll(".fdrow__bare-track");
-    expect(bareTrackEls.length).toBeGreaterThan(0);
-    const bareText = bareTrackEls[0].textContent ?? "";
-    expect(bareText).toContain("Dark Star");
-    // No artist name, no dash
-    expect(bareText).not.toMatch(/Grateful Dead/);
-    expect(bareText).not.toMatch(/[—–]/);
+    const sentence = document.querySelector(".fdrow__t1")?.textContent ?? "";
+    expect(sentence).toBe("Grateful Dead is playing Dark Star on Test Radio");
+    expect(document.querySelector(".fdrow__bare-track")).toBeNull();
   });
 
   it("does NOT render bare-fact track for Zone 1 rows (r=1: isLibraryHit)", () => {
