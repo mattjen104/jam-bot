@@ -2,7 +2,6 @@ import { Check, Ghost, X } from "lucide-react";
 import { useWpRun, useWpLoreCounts, type WpRunSpin } from "./hooks";
 import { LoreChip } from "./LoreChip";
 import { WpKeep } from "./WpKeep";
-import { useFollows, isFollowed, toggleFollow, djFollowId } from "../lib/local";
 import { usePlayer } from "../player/PlayerProvider";
 
 function fmtTime(iso: string): string {
@@ -76,7 +75,6 @@ export function RunDrawerSheet({
   context?: string;
 }) {
   const { data: run, isLoading, isError, refetch } = useWpRun(slug, runId);
-  const follows = useFollows();
   const { ride } = usePlayer();
 
   const allMbids = [
@@ -86,10 +84,6 @@ export function RunDrawerSheet({
     .map((s) => s.mbid)
     .filter((m): m is string => m != null);
   const { data: loreCounts } = useWpLoreCounts(allMbids);
-
-  const selectorName = run?.show?.djName ?? run?.show?.name ?? null;
-  const followId = selectorName && run ? djFollowId(run.station.slug, selectorName) : null;
-  const following = followId != null && isFollowed(follows, "dj", followId);
 
   // Build replay seeds from all resolved spins (fromLibrary first, then newToYou).
   const replaySeeds = run
@@ -311,15 +305,6 @@ export function RunDrawerSheet({
                 {run.trove.deepCuts.length > 0 &&
                   " Deeper in their stacks, past runs you haven't heard:"}
               </p>
-              {selectorName && followId && (
-                <button
-                  type="button"
-                  style={{ fontSize: 13, whiteSpace: "nowrap" }}
-                  onClick={() => toggleFollow("dj", followId, selectorName)}
-                >
-                  {following ? "Following ✓" : "Follow selector"}
-                </button>
-              )}
             </div>
             {run.trove.deepCuts.length > 0 && (
               <div

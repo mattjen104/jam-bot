@@ -13,7 +13,6 @@ import {
   getGetStationUpcomingScheduleQueryKey,
 } from "@workspace/api-client-react";
 import { QualityBadge } from "./QualityBadge";
-import { FollowButton } from "./FollowButton";
 import { BadgeCheck, BookOpen, ExternalLink, Info, Mic, Mic2, Music2, Pause, Play, Radio, Volume2 } from "lucide-react";
 import type { PlayerStatus } from "../hooks/useRadioPlayer";
 import { safeHttpUrl } from "../lib/utils";
@@ -464,13 +463,12 @@ export function StationList({
                   )}
                 </div>
 
-                {/* Col 5: Right rail — follow + quality badge (stacked, items-end) */}
+                {/* Col 5: Right rail — quality badge (stacked, items-end) */}
                 <div
                   className="flex shrink-0 flex-col items-end gap-1.5 pt-0.5"
                   onClick={(e) => e.stopPropagation()}
                   onKeyDown={(e) => e.stopPropagation()}
                 >
-                  <FollowButton kind="station" id={station.slug} name={station.name} />
                   <QualityBadge quality={station.streamQuality} format={station.streamFormat} />
                   {(station.qualityTier === "silent" || station.qualityTier === "unscored") && (
                     <span

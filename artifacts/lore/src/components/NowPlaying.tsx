@@ -15,10 +15,8 @@ import { cn, safeHttpUrl } from "../lib/utils";
 import { LikeButton } from "./LikeButton";
 import { KeepButton } from "./KeepButton";
 import { ShareButton } from "./ShareButton";
-import { FollowButton } from "./FollowButton";
 import { LyricView } from "./LyricView";
 import { usePlayer } from "../player/PlayerProvider";
-import { djFollowId } from "../lib/local";
 import {
   ArrowUpRight,
   Disc3,
@@ -207,24 +205,15 @@ export function NowPlaying({ data, isLoading, fallbackStation, clientNowPlaying 
                   <Mic className="mr-1.5 inline h-3 w-3 text-primary" />
                   On air
                 </p>
-                <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    {np.show.djName && (
-                      <p className="truncate font-serif text-base font-semibold text-foreground">
-                        {np.show.djName}
-                      </p>
-                    )}
-                    <p className="truncate text-xs text-muted-foreground">
-                      {np.show.name}
-                    </p>
-                  </div>
+                <div className="mt-1.5 min-w-0">
                   {np.show.djName && (
-                    <FollowButton
-                      kind="dj"
-                      id={djFollowId(station.slug, np.show.djName)}
-                      name={`${np.show.djName} (${station.name})`}
-                    />
+                    <p className="truncate font-serif text-base font-semibold text-foreground">
+                      {np.show.djName}
+                    </p>
                   )}
+                  <p className="truncate text-xs text-muted-foreground">
+                    {np.show.name}
+                  </p>
                 </div>
               </div>
             )}

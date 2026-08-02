@@ -7,7 +7,6 @@ import {
   useGetStationUpcomingSchedule,
 } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
-import { FollowButton } from "../components/FollowButton";
 import { ShareButton } from "../components/ShareButton";
 import { StationScrubTimeline } from "../components/StationScrubTimeline";
 import { GenreDiscoveryPanel } from "../components/GenreDiscoveryPanel";
@@ -61,11 +60,6 @@ export default function StationArchive() {
                 <h1 className="font-serif text-3xl font-semibold text-foreground">
                   {data.station.name}
                 </h1>
-                <FollowButton
-                  kind="station"
-                  id={data.station.slug}
-                  name={data.station.name}
-                />
                 <ShareButton
                   sharePath={`stations/${data.station.slug}`}
                   kind="station"

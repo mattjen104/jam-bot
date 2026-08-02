@@ -26,33 +26,7 @@ export interface JournalEntry {
   context?: string;
 }
 
-export interface FollowEntry {
-  kind: "station" | "picker" | "selector" | "dj";
-  /**
-   * Station slug, picker handle, or — for a DJ — `<stationSlug>::<djName>`
-   * (DJs have no standalone identity yet; they're followed as "this person on
-   * this station", and their feed is that station's runs filtered to them).
-   */
-  id: string;
-  name: string;
-  followedAt: string;
-}
-
-/** Compose/parse the device-local DJ follow id (`<stationSlug>::<djName>`). */
-export function djFollowId(stationSlug: string, djName: string): string {
-  return `${stationSlug}::${djName}`;
-}
-
-export function parseDjFollowId(
-  id: string,
-): { stationSlug: string; djName: string } | null {
-  const sep = id.indexOf("::");
-  if (sep <= 0 || sep + 2 >= id.length) return null;
-  return { stationSlug: id.slice(0, sep), djName: id.slice(sep + 2) };
-}
-
 const JOURNAL_KEY = "lore:journal:v1";
-const FOLLOWS_KEY = "lore:follows:v1";
 const JOURNAL_CAP = 500;
 /** The same track heard again within this window is one listen, not two. */
 const DEDUP_WINDOW_MS = 30 * 60 * 1000;
@@ -101,7 +75,6 @@ function createStore<T>(key: string, fallback: T) {
 }
 
 const journalStore = createStore<JournalEntry[]>(JOURNAL_KEY, []);
-const followsStore = createStore<FollowEntry[]>(FOLLOWS_KEY, []);
 
 function sameIdentity(a: JournalEntry, b: JournalEntry): boolean {
   if (a.mbid && b.mbid) return a.mbid === b.mbid;
@@ -227,30 +200,3 @@ export function useJournal(): JournalEntry[] {
   return useSyncExternalStore(journalStore.subscribe, journalStore.read);
 }
 
-export function useFollows(): FollowEntry[] {
-  return useSyncExternalStore(followsStore.subscribe, followsStore.read);
-}
-
-export function isFollowed(
-  follows: FollowEntry[],
-  kind: FollowEntry["kind"],
-  id: string,
-): boolean {
-  return follows.some((f) => f.kind === kind && f.id === id);
-}
-
-export function toggleFollow(
-  kind: FollowEntry["kind"],
-  id: string,
-  name: string,
-): void {
-  const follows = followsStore.read();
-  if (isFollowed(follows, kind, id)) {
-    followsStore.write(follows.filter((f) => !(f.kind === kind && f.id === id)));
-  } else {
-    followsStore.write([
-      { kind, id, name, followedAt: new Date().toISOString() },
-      ...follows,
-    ]);
-  }
-}

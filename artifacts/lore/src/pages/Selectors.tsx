@@ -12,7 +12,6 @@ import {
 import type { PickerDialItem, SelectorSummary } from "@workspace/api-client-react";
 import { useMyLibrary, useMyOverlapSelectors } from "../lib/meHooks";
 import { usePlayer } from "../player/PlayerProvider";
-import { useFollows, isFollowed, toggleFollow } from "../lib/local";
 import { Search } from "lucide-react";
 
 const ON_AIR_MS = 2 * 60 * 60 * 1000;
@@ -122,10 +121,6 @@ function SelectorCard({
   onPlay?: (e: React.MouseEvent) => void;
   playLoading?: boolean;
 }) {
-  const follows = useFollows();
-  const followKind = sel.kind === "dj" ? "selector" : "picker";
-  const following = isFollowed(follows, followKind, sel.handle);
-
   const cardClass = [
     "sel-card",
     sel.overlapPct >= 20 ? "sel-card--warm" : "",
@@ -242,19 +237,6 @@ function SelectorCard({
           </button>
         )}
 
-        {/* Follow */}
-        <button
-          type="button"
-          className={`sel-card__follow${following ? " sel-card__follow--on" : ""}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            toggleFollow(followKind, sel.handle, sel.name);
-          }}
-          data-testid={`follow-${followKind}-${sel.handle}`}
-        >
-          {following ? "✓" : "+"}
-        </button>
       </div>
     </div>
   );
@@ -446,14 +428,6 @@ export default function Selectors() {
         Date.now() - new Date(s.lastPlayedAt).getTime() < ON_AIR_MS,
     ).length;
 
-  const follows = useFollows();
-  const followedCount = useMemo(() => {
-    let n = 0;
-    for (const p of sortedPickers) if (isFollowed(follows, "picker", p.handle)) n++;
-    for (const s of kexpSelectors) if (isFollowed(follows, "selector", s.handle)) n++;
-    return n;
-  }, [follows, sortedPickers, kexpSelectors]);
-
   const overlapCount = useMemo(() => {
     let n = 0;
     for (const p of sortedPickers) if ((overlap?.overlapByHandle.get(p.handle) ?? 0) > 0) n++;
@@ -507,11 +481,6 @@ export default function Selectors() {
             {liveCount > 0 && (
               <span className="sel-hero__stat sel-hero__stat--cool">
                 <b>{liveCount}</b> on air
-              </span>
-            )}
-            {followedCount > 0 && (
-              <span className="sel-hero__stat sel-hero__stat--warm">
-                <b>{followedCount}</b> followed
               </span>
             )}
             {stations.length > 0 && (

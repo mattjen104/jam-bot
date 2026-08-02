@@ -8,7 +8,6 @@ import {
   type SelectorRunSummary,
 } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
-import { FollowButton } from "../components/FollowButton";
 import { ShareButton } from "../components/ShareButton";
 import { GenreDiscoveryPanel } from "../components/GenreDiscoveryPanel";
 import { runDate } from "../lib/format";
@@ -72,11 +71,6 @@ export default function SelectorArchive() {
                 <h1 className="font-serif text-3xl font-semibold text-foreground">
                   {data.picker.name}
                 </h1>
-                <FollowButton
-                  kind={isDj ? "selector" : "picker"}
-                  id={data.picker.handle}
-                  name={data.picker.name}
-                />
                 <ShareButton
                   sharePath={`pickers/${data.picker.handle}`}
                   kind="picker"

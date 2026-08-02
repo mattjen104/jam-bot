@@ -1,12 +1,9 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { useQueries } from "@tanstack/react-query";
-import { getPickerArchive, getPickerRun } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import {
   useJournal,
   clearJournal,
-  useFollows,
   type JournalEntry,
 } from "../lib/local";
 import { clockTime } from "../lib/format";
@@ -19,7 +16,6 @@ import {
   Music2,
   Radio,
   Trash2,
-  UserCheck,
   Waypoints,
 } from "lucide-react";
 
@@ -98,9 +94,6 @@ export default function Journal() {
             )}
           </div>
         )}
-
-        {/* Inflow strip — new runs from followed pickers */}
-        <InflowRow />
 
         {entries.length === 0 ? (
           <div className="rounded-xl border border-card-border bg-card p-8 text-center">
@@ -248,134 +241,6 @@ function ServiceBadge({ mbid }: { mbid: string }) {
   void mbid; // mbid available for future per-track saved-state checks
 }
 
-/**
- * Horizontal-scroll inflow strip sourced from followed pickers.
- * Two-level query: archive → run detail → first resolved track per picker.
- * Each card: artwork, picker name in violet, track title in Fraunces,
- * artist in --dim, lime KeepButton. Only renders when following pickers.
- */
-function InflowRow() {
-  const follows = useFollows();
-  const pickerFollows = follows.filter((f) => f.kind === "picker");
-
-  // Level 1: latest run from each followed picker
-  const archiveQueries = useQueries({
-    queries: pickerFollows.map((f) => ({
-      queryKey: ["following", "picker", f.id],
-      queryFn: () => getPickerArchive(f.id),
-      staleTime: 60_000,
-    })),
-  });
-
-  // Level 2: run detail (tracks) for each picker's most recent run
-  const runDetailQueries = useQueries({
-    queries: archiveQueries.map((aq) => {
-      const runId = aq.data?.runs[0]?.runId ?? null;
-      return {
-        queryKey: ["picker-run", runId],
-        queryFn: () => getPickerRun(runId!),
-        staleTime: 300_000,
-        enabled: !!runId,
-      };
-    }),
-  });
-
-  if (pickerFollows.length === 0) return null;
-
-  interface InflowCard {
-    key: string;
-    runHref: string;
-    songHref: string;
-    pickerName: string;
-    mbid: string;
-    title: string;
-    artist: string;
-    artworkUrl: string | null;
-  }
-
-  const cards = runDetailQueries
-    .map((rq, i): InflowCard | null => {
-      if (!rq.data) return null;
-      const archiveData = archiveQueries[i]?.data;
-      const runId = archiveData?.runs[0]?.runId;
-      if (!archiveData || !runId) return null;
-      const pickerName = archiveData.picker.name;
-      const track = rq.data.tracks.find((t) => t.recording != null);
-      if (!track?.recording) return null;
-      return {
-        key: `picker-${i}-${track.recording.mbid}`,
-        runHref: `/archive/selector-runs/${runId}`,
-        songHref: `/song/${track.recording.mbid}`,
-        pickerName,
-        mbid: track.recording.mbid,
-        title: track.recording.title,
-        artist: track.recording.artist,
-        artworkUrl: track.recording.artworkUrl ?? null,
-      };
-    })
-    .filter((c): c is InflowCard => c !== null);
-
-  if (cards.length === 0) return null;
-
-  return (
-    <section className="mb-8">
-      <div className="mb-3 flex items-baseline justify-between">
-        <h2 className="inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
-          <UserCheck className="h-3.5 w-3.5" />
-          New from your selectors
-        </h2>
-        <Link
-          href="/archive"
-          className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground hover:text-primary"
-        >
-          See all →
-        </Link>
-      </div>
-      <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
-        {cards.map((card) => (
-          <div
-            key={card.key}
-            className="flex w-[160px] shrink-0 flex-col gap-2 rounded-xl border border-card-border bg-card p-3"
-          >
-            {/* Artwork swatch with gradient fallback */}
-            <Link href={card.songHref}>
-              <div
-                className="h-[100px] w-full overflow-hidden rounded-lg"
-                style={{
-                  background: card.artworkUrl
-                    ? undefined
-                    : "linear-gradient(135deg, hsl(var(--secondary)), hsl(var(--muted)))",
-                }}
-              >
-                {card.artworkUrl ? (
-                  <img src={card.artworkUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center">
-                    <Disc3 className="h-8 w-8 text-muted-foreground/30" />
-                  </div>
-                )}
-              </div>
-            </Link>
-            {/* Picker name in violet IBM Plex Mono */}
-            <Link href={card.runHref} className="truncate font-mono text-[10px] uppercase tracking-wide text-primary hover:opacity-80">
-              {card.pickerName}
-            </Link>
-            {/* Track title in Fraunces */}
-            <Link href={card.songHref} className="line-clamp-2 font-serif text-sm font-semibold leading-tight text-foreground hover:text-primary">
-              {card.title}
-            </Link>
-            {/* Artist in --dim */}
-            <p className="truncate font-mono text-[10px]" style={{ color: "hsl(var(--dim))" }}>
-              {card.artist}
-            </p>
-            {/* Lime Keep button */}
-            <KeepButton mbid={card.mbid} />
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
 
 function SourceIcon({ kind }: { kind: JournalEntry["kind"] }) {
   if (kind === "radio") return <Radio className="h-3 w-3 shrink-0 text-primary" />;
