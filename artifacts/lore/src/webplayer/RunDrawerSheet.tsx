@@ -332,6 +332,21 @@ export function RunDrawerSheet({
                 ))}
               </div>
             )}
+            <button
+              type="button"
+              style={{
+                marginTop: 10,
+                fontSize: 12,
+                color: "var(--wp-text-accent)",
+                background: "none",
+                border: "0.5px solid var(--wp-border)",
+                borderRadius: "var(--wp-radius)",
+                padding: "5px 12px",
+                cursor: "pointer",
+              }}
+            >
+              Follow selector
+            </button>
           </div>
         )}
       </div>

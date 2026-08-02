@@ -593,6 +593,8 @@ export default function Library() {
   /** Stores the jobId the user dismissed the unresolved-review section for. */
   const [reviewDismissedJobId, setReviewDismissedJobId] = useState<number | null>(null);
   const [reviewExpanded, setReviewExpanded] = useState(false);
+  /** Controls visibility of the import banner; dismissed manually or auto after 60s. */
+  const [bannerDismissed, setBannerDismissed] = useState(false);
   useEffect(() => {
     if (jobData?.status !== "done") return;
     // Refresh overlap data after import
@@ -600,7 +602,21 @@ export default function Library() {
     void queryClient.invalidateQueries({ queryKey: ME_OVERLAP_STATIONS_KEY });
     void queryClient.invalidateQueries({ queryKey: ME_OVERLAP_RUNS_KEY });
     void queryClient.invalidateQueries({ queryKey: ME_LIBRARY_COVERAGE_KEY });
+    // Auto-dismiss banner after 60s
+    setBannerDismissed(false);
+    const t = setTimeout(() => setBannerDismissed(true), 60_000);
+    return () => clearTimeout(t);
   }, [jobData?.status]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Clear banner dismissed state when a new job starts
+  useEffect(() => {
+    if (jobData?.status === "pending" || jobData?.status === "running") {
+      setBannerDismissed(false);
+    }
+  }, [jobData?.status]);
+  const showImportBanner =
+    !bannerDismissed &&
+    jobData != null &&
+    (jobData.status === "pending" || jobData.status === "running" || jobData.status === "done");
   const isImportActive = jobData?.status === "pending" || jobData?.status === "running";
   const showReviewSection =
     jobData?.status === "done" &&
@@ -735,6 +751,14 @@ export default function Library() {
           <Search size={14} />
         </button>
       </div>
+
+      {/* Import banner — shown while import is running and for 60s after done */}
+      {showImportBanner && jobData && (
+        <LibraryImportBanner
+          job={jobData}
+          onDismiss={() => setBannerDismissed(true)}
+        />
+      )}
 
       {/* Unresolved review section — shown after import when some tracks couldn't be matched */}
       {showReviewSection && jobData && (

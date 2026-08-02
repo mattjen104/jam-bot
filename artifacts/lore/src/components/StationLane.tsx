@@ -23,6 +23,54 @@ function fmtHM(iso: string): string {
   return `${h === 0 ? 12 : h > 12 ? h - 12 : h}:${m}${ampm}`;
 }
 
+/** Compact reason phrase for the lane header — mirrors the reason() rung logic
+ *  from DialView but returns plain strings sized for a small inline badge. */
+function laneReason(
+  shows: DialShow[],
+  stationCrossings: number,
+  stationArtistCrossings: number,
+): { text: string; warm: boolean; zero: boolean } {
+  const liveShow = shows.find((s) => s.state === "live") ?? null;
+
+  if (liveShow) {
+    // r=1: exact library track playing right now
+    if (liveShow.currentTrack?.isLibraryHit) {
+      return { text: "playing yours", warm: true, zero: false };
+    }
+    // r=2: library artist playing right now
+    if (liveShow.currentTrack?.isArtistHit) {
+      const a = liveShow.currentTrack.artist;
+      return { text: `playing ${a.length > 16 ? a.slice(0, 15) + "…" : a}`, warm: true, zero: false };
+    }
+    // r=3: exact library tracks already aired this show
+    if (liveShow.crossings > 0) {
+      const first = liveShow.topArtists[0];
+      const label = first
+        ? first.length > 18 ? first.slice(0, 17) + "…" : first
+        : `${liveShow.crossings} of yours this set`;
+      return { text: label, warm: true, zero: false };
+    }
+    // r=4: library artists aired this show, no exact match
+    if (liveShow.artistCrossings > 0) {
+      const first = liveShow.topArtistNames[0];
+      const label = first
+        ? first.length > 18 ? first.slice(0, 17) + "…" : first
+        : `${liveShow.artistCrossings} artist matches`;
+      return { text: label, warm: true, zero: false };
+    }
+  }
+
+  // No live crossing evidence — fall back to station-level 24h counts
+  if (stationCrossings > 0) {
+    return { text: `${stationCrossings} of yours today`, warm: false, zero: false };
+  }
+  if (stationArtistCrossings > 0) {
+    return { text: `${stationArtistCrossings} artist matches`, warm: false, zero: false };
+  }
+
+  return { text: "—", warm: false, zero: true };
+}
+
 function blockClasses(show: DialShow): string {
   const parts = ["dial-blk"];
   parts.push(`dial-blk--${show.state}`);
@@ -97,7 +145,7 @@ interface StationLaneProps {
 }
 
 export function StationLane({ dialStation, isPinned, onStationClick, onShowClick, onPinToggle, onPlay, isActive }: StationLaneProps) {
-  const { station, isLive, shows, crossings } = dialStation;
+  const { station, isLive, shows, crossings, artistCrossings } = dialStation;
   const rowRef = useRef<HTMLDivElement>(null);
 
   // Scroll so the live (or most-recent) block's left edge lands at LIVE_TARGET_LEFT
@@ -120,9 +168,14 @@ export function StationLane({ dialStation, isPinned, onStationClick, onShowClick
         <span className={`dial-lane__name${isActive ? " dial-lane__name--tuned" : ""}`}>
           {station.name}
         </span>
-        <span className={`dial-lane__cross${crossings === 0 ? " dial-lane__cross--zero" : ""}`}>
-          {crossings > 0 ? `◆ ${crossings}` : "—"}
-        </span>
+        {(() => {
+          const lr = laneReason(shows, crossings, artistCrossings);
+          return (
+            <span className={`dial-lane__cross${lr.zero ? " dial-lane__cross--zero" : ""}${lr.warm ? " dial-lane__cross--warm" : ""}`}>
+              {lr.text}
+            </span>
+          );
+        })()}
         <button
           type="button"
           className={`dial-lane__play${isActive ? " dial-lane__play--on" : ""}`}
