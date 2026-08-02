@@ -98,6 +98,18 @@ export interface DialStation {
   lifetimeCrossings: number;
   /** lifetime artist-level crossings — all-time equivalent of artistCrossings */
   lifetimeArtistCrossings: number;
+  /** Current track from the live pulse, even when schedule data is unavailable. */
+  liveTrack?: DialSpin | null;
+}
+
+export interface LiveArtistSuggestion {
+  /** Artist name as it appears in the current now-playing record. */
+  artist: string;
+  stationSlug: string;
+  stationName: string | null;
+  /** Best-effort context from the live show and track. */
+  trackTitle: string | null;
+  showName: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -162,6 +174,69 @@ function topArtistsFromSpins(spins: DialSpin[], max = 3, hitField: "isLibraryHit
   return out;
 }
 
+const MISSING_LIVE_ARTIST_VALUES = new Set([
+  "unknown",
+  "unknown artist",
+  "artist unknown",
+  "no artist",
+  "unknown show",
+  "unknown station",
+  "unknown channel",
+  "no metadata",
+  "various artists",
+  "n/a",
+  "na",
+  "none",
+  "null",
+  "undefined",
+  "continuous",
+]);
+
+function normalizeLiveArtist(value: string | null | undefined): string | null {
+  const artist = value?.replace(/\s+/g, " ").trim() ?? "";
+  return artist && !MISSING_LIVE_ARTIST_VALUES.has(artist.toLowerCase()) ? artist : null;
+}
+
+function normalizeLiveContext(value: string | null | undefined): string | null {
+  const context = value?.replace(/\s+/g, " ").trim() ?? "";
+  return context && !MISSING_LIVE_ARTIST_VALUES.has(context.toLowerCase()) ? context : null;
+}
+
+/**
+ * Build the small live-artist set used by no-library onboarding.
+ *
+ * This intentionally accepts assembled DialStations rather than schedule data:
+ * an artist is suggested only when the station is live and has a current
+ * now-playing track.  The first station wins for duplicate artist names so the
+ * card remains stable while multiple stations play the same artist.
+ */
+export function extractLiveArtistSuggestions(
+  stations: DialStation[],
+  max = 6,
+): LiveArtistSuggestion[] {
+  const seen = new Set<string>();
+  const suggestions: LiveArtistSuggestion[] = [];
+  for (const dialStation of stations) {
+    if (!dialStation.isLive) continue;
+    const show = dialStation.shows.find((candidate) => candidate.state === "live") ?? null;
+    const track = dialStation.liveTrack ?? show?.currentTrack;
+    const artist = normalizeLiveArtist(track?.artist);
+    if (!artist) continue;
+    const key = artist.toLocaleLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    suggestions.push({
+      artist,
+      stationSlug: dialStation.station.slug,
+      stationName: normalizeLiveContext(dialStation.station.name),
+      trackTitle: normalizeLiveContext(track?.title),
+      showName: normalizeLiveContext(show?.showName),
+    });
+    if (suggestions.length >= max) break;
+  }
+  return suggestions;
+}
+
 // ---------------------------------------------------------------------------
 // SSE spin-changed event type (mirrors SpinChangedEvent on the server)
 // ---------------------------------------------------------------------------
@@ -191,6 +266,8 @@ export function useDialData(): {
   hasLibrary: boolean;
   /** True when the user has entered at least one taste-seed artist. */
   hasSeeds: boolean;
+  /** Current artists on live stations, for the no-library onboarding picker. */
+  liveArtistSuggestions: LiveArtistSuggestion[];
   /** pickerId → overlap count from the server-computed full-library RG-widened endpoint. */
   overlapByPickerId: Map<number, number>;
   /** Normalised picker display name → pickerId — bridge for shows lacking a linked pickerId. */
@@ -549,7 +626,16 @@ export function useDialData(): {
           ? serverCx.lifetimeArtistCrossings
           : artistCrossings;
 
-      return { station, isLive, shows, crossings, artistCrossings, lifetimeCrossings, lifetimeArtistCrossings };
+      return {
+        station,
+        isLive,
+        shows,
+        crossings,
+        artistCrossings,
+        lifetimeCrossings,
+        lifetimeArtistCrossings,
+        liveTrack: isLive ? (nowPlayingBySlug.get(station.slug) ?? null) : null,
+      };
     })
     // Determine which stations to surface in the Dial:
     //   1. Any station that is currently live (has a now-playing signal)
@@ -585,5 +671,21 @@ export function useDialData(): {
   // full onboarding prompt even before the library is imported.
   const hasSeeds = pickerNamesData?.hasSeeds ?? false;
 
-  return { stations, isLoading, isCoreLoading, liveLoading, crossingsLoading, hasLibrary, hasSeeds, overlapByPickerId, pickerNameToId };
+  const liveArtistSuggestions = useMemo(
+    () => extractLiveArtistSuggestions(stations),
+    [stations],
+  );
+
+  return {
+    stations,
+    isLoading,
+    isCoreLoading,
+    liveLoading,
+    crossingsLoading,
+    hasLibrary,
+    hasSeeds,
+    liveArtistSuggestions,
+    overlapByPickerId,
+    pickerNameToId,
+  };
 }

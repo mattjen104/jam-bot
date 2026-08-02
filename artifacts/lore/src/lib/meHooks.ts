@@ -1,5 +1,5 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ApiError } from "@workspace/api-client-react";
+import { ApiError, getListStationsNowPlayingQueryKey } from "@workspace/api-client-react";
 import { toast } from "../hooks/use-toast";
 
 // ---------------------------------------------------------------------------
@@ -443,6 +443,10 @@ export function useSetTasteSeeds() {
       const today = new Date().toISOString().slice(0, 10);
       void queryClient.invalidateQueries({ queryKey: ME_DIAL_CROSSINGS_KEY(today) });
       void queryClient.invalidateQueries({ queryKey: ME_PICKER_NAMES_KEY });
+      // The authenticated now-playing response carries per-listener artist-hit
+      // flags. Refresh it with crossings so a newly selected seed is visible
+      // on the live dial without waiting for the 30s poll.
+      void queryClient.invalidateQueries({ queryKey: getListStationsNowPlayingQueryKey() });
     },
   });
 }

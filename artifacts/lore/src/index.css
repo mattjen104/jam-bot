@@ -999,6 +999,131 @@
 .z1-placeholder__secondary {
   padding-top: 2px;
 }
+.z1-placeholder__manual {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.z1-placeholder__manual-label {
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: hsl(var(--faint));
+}
+
+/* ── Live artist onboarding picker ── */
+.live-artist-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 2px;
+}
+.live-artist-picker__heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+.live-artist-picker__pip {
+  width: 7px;
+  height: 7px;
+  margin-top: 5px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  background: hsl(var(--live));
+  box-shadow: 0 0 0 3px hsl(var(--live) / 0.12);
+}
+.live-artist-picker h2 {
+  margin: 0;
+  font-family: var(--app-font-display);
+  font-size: 15px;
+  line-height: 1.15;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+.live-artist-picker__heading p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: hsl(var(--muted-foreground));
+}
+.live-artist-picker__options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+.live-artist-picker__option {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 10px;
+  border: 1px solid hsl(var(--border) / 0.75);
+  border-radius: 6px;
+  background: hsl(var(--secondary) / 0.45);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+.live-artist-picker__option:hover:not(:disabled),
+.live-artist-picker__option:focus-visible {
+  border-color: hsl(var(--live) / 0.7);
+  background: hsl(var(--live) / 0.1);
+}
+.live-artist-picker__option:active:not(:disabled) { transform: translateY(1px); }
+.live-artist-picker__option--selected {
+  border-color: hsl(var(--library) / 0.65);
+  background: hsl(var(--library) / 0.1);
+}
+.live-artist-picker__option:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.live-artist-picker__artist {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--app-font-display);
+  font-size: 14px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+.live-artist-picker__context {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: hsl(var(--muted-foreground) / 0.75);
+}
+.live-artist-picker__action {
+  margin-top: 3px;
+  font-family: var(--app-font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: hsl(var(--live));
+}
+.live-artist-picker__option--selected .live-artist-picker__action {
+  color: hsl(var(--library));
+}
+.live-artist-picker__state {
+  padding: 9px 10px;
+  border: 1px dashed hsl(var(--border));
+  border-radius: 5px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: hsl(var(--muted-foreground));
+}
+
+@media (max-width: 420px) {
+  .live-artist-picker__options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 
 /* ── Seed input row ── */
 .seed-input-row {

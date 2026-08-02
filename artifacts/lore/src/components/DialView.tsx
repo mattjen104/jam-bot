@@ -21,7 +21,7 @@ import { useSocialMode } from "../lib/social";
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-import { useDialData, readPins, normalizeDjName, type DialStation, type DialShow, type DialSpin } from "../hooks/useDialData";
+import { useDialData, readPins, normalizeDjName, type DialStation, type DialShow, type DialSpin, type LiveArtistSuggestion } from "../hooks/useDialData";
 
 /**
  * Returns a version of `value` that only flips to `true` after it has been
@@ -1106,23 +1106,50 @@ export function DialView() {
   const [currentDjName, setCurrentDjName] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
 
-  const { stations, isLoading, isCoreLoading, liveLoading, crossingsLoading, hasLibrary, hasSeeds, overlapByPickerId, pickerNameToId } = useDialData();
+  const {
+    stations,
+    isLoading,
+    isCoreLoading,
+    liveLoading,
+    crossingsLoading,
+    hasLibrary,
+    hasSeeds,
+    liveArtistSuggestions,
+    overlapByPickerId,
+    pickerNameToId,
+  } = useDialData();
 
   // ── Taste seeds — zero-friction artist onboarding ───────────────────────
   const { data: seedArtists = [] } = useMyTasteSeeds();
   const setSeedsMutation = useSetTasteSeeds();
+  const seedWriteRef = useRef<Promise<string[]> | null>(null);
 
   const addSeed = useCallback((artist: string) => {
     const trimmed = artist.trim();
     if (!trimmed) return;
-    const lower = trimmed.toLowerCase();
-    if (seedArtists.some((s) => s.toLowerCase() === lower)) return;
-    void setSeedsMutation.mutateAsync([...seedArtists, trimmed]);
+    // Serialize rapid picker clicks. Without this, two clicks in the same
+    // render both read the old query result and the later PUT can overwrite
+    // the first selected artist.
+    const pending = seedWriteRef.current;
+    const base = pending ? pending.catch(() => seedArtists) : Promise.resolve(seedArtists);
+    seedWriteRef.current = base.then(async (current) => {
+      const lower = trimmed.toLowerCase();
+      if (current.some((s) => s.toLowerCase() === lower) || current.length >= 10) return current;
+      const result = await setSeedsMutation.mutateAsync([...current, trimmed]);
+      return result.artists;
+    });
   }, [seedArtists, setSeedsMutation]);
 
   const removeSeed = useCallback((artist: string) => {
-    const lower = artist.toLowerCase();
-    void setSeedsMutation.mutateAsync(seedArtists.filter((s) => s.toLowerCase() !== lower));
+    const pending = seedWriteRef.current;
+    const base = pending ? pending.catch(() => seedArtists) : Promise.resolve(seedArtists);
+    seedWriteRef.current = base.then(async (current) => {
+      const lower = artist.toLowerCase();
+      const next = current.filter((s) => s.toLowerCase() !== lower);
+      if (next.length === current.length) return current;
+      const result = await setSeedsMutation.mutateAsync(next);
+      return result.artists;
+    });
   }, [seedArtists, setSeedsMutation]);
   // Delay skeleton visibility so fast loads (< 150 ms) never flash shimmer rows.
   // The delayed flag only flips true after crossingsLoading has been true for
@@ -1561,6 +1588,13 @@ export function DialView() {
                 <Zone1Placeholder
                   isSpotifyConnected={isSpotifyConnected}
                   hasLibrary={hasLibrary}
+                  hasSeeds={hasSeeds || seedArtists.length > 0}
+                  seeds={seedArtists}
+                  liveArtistSuggestions={liveArtistSuggestions ?? []}
+                  liveLoading={liveLoading}
+                  showLivePicker={false}
+                  onAddSeed={addSeed}
+                  onRemoveSeed={removeSeed}
                 />
                 {/* Zone 2 heading + skeleton rows — no pre-load signal for ghost stations */}
                 <ZoneLabel label="Missed while you were away" accent="picker" />
@@ -1607,6 +1641,13 @@ export function DialView() {
                 </div>
                 {!zone1Collapsed && (
                   <>
+                    {(hasSeeds || seedArtists.length > 0) && (
+                      <SeedBar
+                        seeds={seedArtists}
+                        onAddSeed={addSeed}
+                        onRemoveSeed={removeSeed}
+                      />
+                    )}
                     {/* Map over the FULL array so isSampling index is always the
                         unsliced position; rows beyond zone1Visible are null until
                         zone1Expanded is true. */}
@@ -1638,6 +1679,30 @@ export function DialView() {
                     )}
                   </>
                 )}
+              </>
+            )}
+
+            {/* No crossing rows yet: keep the existing Zone 1 onboarding surface
+                visible rather than leaving a blank section.  This is also the
+                settled state for listeners without a library or taste seeds. */}
+            {!crossingsLoading &&
+              withReason.length === 0 &&
+              !isCoreLoading &&
+              !hasLibrary &&
+              !isSpotifyConnected && (
+              <>
+                <ZoneLabel label="On air, with a reason" accent="library" />
+                <Zone1Placeholder
+                  isSpotifyConnected={isSpotifyConnected}
+                  hasLibrary={hasLibrary}
+                  hasSeeds={hasSeeds || seedArtists.length > 0}
+                  seeds={seedArtists}
+                  liveArtistSuggestions={liveArtistSuggestions ?? []}
+                  liveLoading={liveLoading}
+                  showLivePicker
+                  onAddSeed={addSeed}
+                  onRemoveSeed={removeSeed}
+                />
               </>
             )}
 
@@ -1910,12 +1975,6 @@ function DialRowSkeleton({ delay = 0 }: { delay?: 0 | 1 | 2 }) {
 // Seed prompt sub-components
 // ---------------------------------------------------------------------------
 
-const SEED_SUGGESTIONS = [
-  "Radiohead", "Portishead", "Khruangbin",
-  "Bon Iver", "Caribou", "Four Tet",
-  "Erykah Badu", "Sigur Rós",
-];
-
 function SeedInput({
   seeds,
   onAdd,
@@ -1999,9 +2058,23 @@ function SeedBar({
 function Zone1Placeholder({
   isSpotifyConnected,
   hasLibrary,
+  hasSeeds,
+  seeds,
+  liveArtistSuggestions,
+  liveLoading,
+  showLivePicker,
+  onAddSeed,
+  onRemoveSeed,
 }: {
   isSpotifyConnected: boolean;
   hasLibrary: boolean;
+  hasSeeds: boolean;
+  seeds: string[];
+  liveArtistSuggestions: LiveArtistSuggestion[];
+  liveLoading: boolean;
+  showLivePicker: boolean;
+  onAddSeed: (artist: string) => void;
+  onRemoveSeed: (artist: string) => void;
 }) {
   if (hasLibrary || isSpotifyConnected) {
     // Library imported or Spotify connected — crossings are being computed.
@@ -2017,13 +2090,42 @@ function Zone1Placeholder({
     );
   }
 
+  if (hasSeeds) {
+    return (
+      <div className="z1-placeholder z1-placeholder--seeded">
+        <SeedBar
+          seeds={seeds}
+          onAddSeed={onAddSeed}
+          onRemoveSeed={onRemoveSeed}
+        />
+        <div className="z1-placeholder__status">
+          <span className="dial-live-skeleton__pip" />
+          <span className="z1-placeholder__lbl">Finding live matches for your artists…</span>
+        </div>
+        <DialRowSkeleton delay={0} />
+      </div>
+    );
+  }
+
   // New user — prompt to connect library.
   return (
     <div className="z1-placeholder z1-placeholder--seed">
       <div className="z1-placeholder__body">
+        {showLivePicker && (
+          <LiveArtistPicker
+            suggestions={liveArtistSuggestions}
+            loading={liveLoading}
+            seeds={seeds}
+            onAddSeed={onAddSeed}
+          />
+        )}
         <p className="z1-placeholder__pitch">
           Connect your Spotify library to see which stations are playing your music live, right now.
         </p>
+        <div className="z1-placeholder__manual">
+          <span className="z1-placeholder__manual-label">Or start with an artist you love</span>
+          <SeedInput seeds={seeds} onAdd={onAddSeed} placeholder="e.g. Radiohead" />
+        </div>
         <div className="z1-placeholder__secondary">
           <button
             type="button"
@@ -2040,6 +2142,62 @@ function Zone1Placeholder({
         </div>
       </div>
     </div>
+  );
+}
+
+function LiveArtistPicker({
+  suggestions,
+  loading,
+  seeds,
+  onAddSeed,
+}: {
+  suggestions: LiveArtistSuggestion[];
+  loading: boolean;
+  seeds: string[];
+  onAddSeed: (artist: string) => void;
+}) {
+  const selected = new Set(seeds.map((seed) => seed.toLocaleLowerCase()));
+  return (
+    <section className="live-artist-picker" aria-labelledby="live-artist-picker-label">
+      <div className="live-artist-picker__heading">
+        <span className="live-artist-picker__pip" aria-hidden="true" />
+        <div>
+          <h2 id="live-artist-picker-label">Artists playing live now</h2>
+          <p>Pick one to tune your dial without importing a library.</p>
+        </div>
+      </div>
+      {loading && suggestions.length === 0 ? (
+        <div className="live-artist-picker__state" role="status">Listening for artists on air…</div>
+      ) : suggestions.length > 0 ? (
+        <div className="live-artist-picker__options">
+          {suggestions.map((suggestion) => {
+            const isSelected = selected.has(suggestion.artist.toLocaleLowerCase());
+            const isAtLimit = seeds.length >= 10 && !isSelected;
+            return (
+              <button
+                key={suggestion.artist.toLocaleLowerCase()}
+                type="button"
+                className={`live-artist-picker__option${isSelected ? " live-artist-picker__option--selected" : ""}`}
+                aria-pressed={isSelected}
+                aria-label={`${isSelected ? "Selected" : "Choose"} ${suggestion.artist}`}
+                disabled={isAtLimit}
+                onClick={() => onAddSeed(suggestion.artist)}
+              >
+                <span className="live-artist-picker__artist">{suggestion.artist}</span>
+                <span className="live-artist-picker__context">
+                  {[suggestion.trackTitle, suggestion.showName, suggestion.stationName]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+                <span className="live-artist-picker__action">{isSelected ? "Selected" : "Choose"}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="live-artist-picker__state">No artist names are available right now. You can add one below.</div>
+      )}
+    </section>
   );
 }
 
