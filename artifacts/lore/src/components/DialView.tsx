@@ -97,13 +97,14 @@ function intoSet(startedAt: string): string {
 /** Renders a list of artist names with each name in its own {@code <b>}
  *  so the CSS amber colour applies only to the names, not the separators. */
 function nameNodes(artists: string[]): ReactNode {
-  if (artists.length === 0) return null;
-  const shown = artists.slice(0, 3);
-  const rest  = artists.length - shown.length;
+  const usable = artists.map((artist) => cleanLiveValue(artist)).filter((artist): artist is string => artist != null);
+  if (usable.length === 0) return null;
+  const shown = usable.slice(0, 3);
+  const rest = usable.length - shown.length;
   const nodes: ReactNode[] = [];
   shown.forEach((name, i) => {
     if (i > 0) nodes.push(i === shown.length - 1 && rest === 0 ? " and " : ", ");
-    nodes.push(<b key={i}>{name}</b>);
+    nodes.push(<b className="fdrow__artist" key={i}>{name}</b>);
   });
   if (rest > 0) nodes.push(` and ${rest} more`);
   return <>{nodes}</>;
@@ -119,6 +120,7 @@ const MISSING_LIVE_VALUES = new Set([
   "none",
   "null",
   "undefined",
+  "continuous",
 ]);
 
 function cleanLiveValue(value: string | null | undefined): string | null {
@@ -140,10 +142,11 @@ function liveSentence(
   stationName: string,
   show: DialShow | null,
 ): { node: ReactNode; hasTrack: boolean } | null {
-  if (!show) return null;
-
   const station = cleanLiveValue(stationName);
-  const dj = cleanLiveValue(show?.djName);
+  if (!station || !show) return null;
+
+  const rawDj = cleanLiveValue(show.djName);
+  const dj = sameLiveValue(rawDj, station) ? null : rawDj;
   const track = cleanLiveValue(show?.currentTrack?.title);
   const artist = cleanLiveValue(show?.currentTrack?.artist);
   const usableArtist = sameLiveValue(artist, station) ? null : artist;
@@ -165,85 +168,72 @@ function liveSentence(
     return { node: <>{dj} is on air</>, hasTrack: false };
   }
 
-  if (usableTrack && usableArtist) {
-    return { node: <>Now playing: <b>{usableTrack}</b> by <b>{usableArtist}</b></>, hasTrack: true };
+  if (usableArtist && usableTrack) {
+    return { node: <><b>{usableArtist}</b> is playing <b>{usableTrack}</b></>, hasTrack: true };
   }
   if (usableArtist) {
-    return { node: <>Now playing: <b>{usableArtist}</b></>, hasTrack: true };
+    return { node: <><b>{usableArtist}</b> is playing</>, hasTrack: true };
   }
   if (usableTrack) {
-    return { node: <>Now playing: <b>{usableTrack}</b></>, hasTrack: true };
+    return { node: <><b>{usableTrack}</b> is playing</>, hasTrack: true };
   }
 
-  // Without current track attribution, preserve the established weak-match
+  // Without current attribution, preserve the established weak-match
   // reason instead of manufacturing a generic sentence.
   return null;
 }
 
-function uniqueArtistNames(names: string[]): string[] {
-  const seen = new Set<string>();
-  return names.filter((name) => {
-    const cleaned = cleanLiveValue(name);
-    if (!cleaned) return false;
-    const key = cleaned.toLocaleLowerCase();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  }).map((name) => cleanLiveValue(name)!).slice(0, 3);
-}
-
 /**
- * Crossing rows answer "why this station?" rather than "what exact song is
- * playing?" The station is deliberately omitted here because it is always
- * present in the byline below.
+ * Crossing rows explain the match, rather than repeating the full now-playing
+ * metadata. The artist is the discriminating signal; the title remains
+ * available after tune-in and belongs on ordinary live rows only.
  */
 function crossingSentence(
+  stationName: string,
   show: DialShow | null,
-  stationCrossings: number,
-  stationArtistCrossings: number,
-): ReactNode | null {
+): { node: ReactNode; hasTrack: boolean } | null {
   if (!show) return null;
 
+  const station = cleanLiveValue(stationName);
   const current = show.currentTrack;
-  const isCurrentCrossing = Boolean(current?.isLibraryHit || current?.isArtistHit);
-  const currentArtist = isCurrentCrossing ? cleanLiveValue(current?.artist) : null;
-  const aggregateArtists = show.crossings > 0
-    ? show.topArtists
-    : show.topArtistNames;
-  const artists = uniqueArtistNames(
-    currentArtist ? [currentArtist] : aggregateArtists,
-  );
-  const artistList = nameNodes(artists);
-  const dj = cleanLiveValue(show.djName);
+  const hasExactCrossing = current?.isLibraryHit === true || show.crossings > 0;
+  const hasArtistCrossing = current?.isArtistHit === true || show.artistCrossings > 0;
+  if (!hasExactCrossing && !hasArtistCrossing) return null;
 
-  if (artistList) {
-    return dj
-      ? <>{dj} is playing {artistList}.</>
-      : <>Now playing: {artistList}.</>;
+  const currentArtist = cleanLiveValue(current?.artist);
+  const sourceArtists = hasExactCrossing ? show.topArtists : show.topArtistNames;
+  const candidateArtists = currentArtist && (
+    current?.isLibraryHit || (!hasExactCrossing && current?.isArtistHit)
+  ) ? [currentArtist] : sourceArtists;
+  const artists = candidateArtists
+    .map((artist) => cleanLiveValue(artist))
+    .filter((artist): artist is string => artist != null)
+    .filter((artist) => !sameLiveValue(artist, station))
+    .filter((artist, index, all) => all.findIndex((other) => sameLiveValue(other, artist)) === index);
+  const artistNodes = nameNodes(artists);
+  const count = hasExactCrossing
+    ? Math.max(show.crossings, current?.isLibraryHit ? 1 : 0)
+    : Math.max(show.artistCrossings, current?.isArtistHit ? 1 : 0);
+
+  if (artistNodes) {
+    const rawDj = cleanLiveValue(show.djName);
+    const dj = sameLiveValue(rawDj, station) ? null : rawDj;
+    return {
+      node: dj
+        ? <>{dj} is playing {artistNodes}.</>
+        : <>Now playing: {artistNodes}.</>,
+      hasTrack: true,
+    };
   }
 
-  const exactCount = show.crossings || stationCrossings;
-  if (exactCount > 0) {
-    return <>{exactCount} {exactCount === 1 ? "track" : "tracks"} from your library have aired.</>;
-  }
-
-  const artistCount = show.artistCrossings || stationArtistCrossings;
-  if (artistCount > 0) {
-    return <>{artistCount} {artistCount === 1 ? "track" : "tracks"} by artists you like have aired.</>;
+  if (count > 0) {
+    return {
+      node: <>{count} track{count === 1 ? "" : "s"} from your library {count === 1 ? "has" : "have"} aired.</>,
+      hasTrack: true,
+    };
   }
 
   return null;
-}
-
-function hasCrossingEvidence(show: DialShow | null): boolean {
-  return Boolean(
-    show && (
-      show.currentTrack?.isLibraryHit ||
-      show.currentTrack?.isArtistHit ||
-      show.crossings > 0 ||
-      show.artistCrossings > 0
-    ),
-  );
 }
 
 /** One sentence per rung; returns the strongest rung that applies (spec §3).
@@ -355,17 +345,21 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onE
   const rz = reason(show, ds.crossings, ds.artistCrossings);
   const { enabled: socialEnabled } = useSocialMode();
 
-  const crossing = crossingSentence(show, ds.crossings, ds.artistCrossings);
-  const live = liveSentence(ds.station.name, show);
-  const hasCrossing = crossing != null;
+  const crossing = crossingSentence(ds.station.name, show);
+  const live = crossing ? null : liveSentence(ds.station.name, show);
   const rawShow = cleanLiveValue(show?.showName);
   const dj = cleanLiveValue(show?.djName);
   // A show is a quiet cue only when it adds context beyond the person in the
   // sentence. Unknown schedule values are missing data, not a show identity.
-  const showContext = rawShow && !sameLiveValue(rawShow, dj) && !sameLiveValue(rawShow, cleanLiveValue(ds.station.name))
+  const showContext = rawShow
+    && rawShow.toLowerCase() !== "continuous"
+    && !sameLiveValue(rawShow, dj)
+    && !sameLiveValue(rawShow, cleanLiveValue(ds.station.name))
     ? rawShow
     : null;
   const isExplicitlyContinuous = ds.station.automationClass === "automated" && !showContext;
+  const stationLabel = cleanLiveValue(ds.station.name) ?? ds.station.name;
+  const bylineContext = showContext ?? (isExplicitlyContinuous ? "Continuous" : null);
 
   const currentTrack = show?.currentTrack ?? null;
 
@@ -387,23 +381,15 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onE
       onKeyDown={(e) => e.key === "Enter" && onTuneIn()}
     >
       <div className="fdrow__c">
-        {/* Tier 1: crossing artist/reason leads; ordinary live rows retain
-            their full title-inclusive now-playing sentence. */}
-        <div className={`fdrow__t1 ${hasCrossing ? rz.cls : live ? "fdrow__live-sentence" : rz.cls}`}>
-          {crossing ?? live?.node ?? rz.node}
+        {/* Tier 1: reason sentence — leads at full display weight */}
+        <div className={`fdrow__t1 ${crossing ? rz.cls : live ? "fdrow__live-sentence" : rz.cls}`}>
+          {crossing?.node ?? live?.node ?? rz.node}
         </div>
 
-        {/* The station is a stable destination label. Pair it with a valid
-            show, but never repeat DJ/station or expose placeholder metadata. */}
-        {(showContext || isExplicitlyContinuous || ds.station.name) && (
-          <div className="fdrow__t3 fdrow__context">
-            {showContext
-              ? <>{showContext} <span aria-hidden="true">·</span> {ds.station.name}</>
-              : isExplicitlyContinuous
-                ? <>Continuous <span aria-hidden="true">·</span> {ds.station.name}</>
-                : ds.station.name}
-          </div>
-        )}
+        {/* Stable source label: show context when valid, station always. */}
+        <div className={`fdrow__t3 ${bylineContext ? "fdrow__context" : ""}`}>
+          {bylineContext ? `${bylineContext} · ${stationLabel}` : stationLabel}
+        </div>
 
         {/* Zone 3 lifetime overlap caption: shown when the reason sentence carries no
             taste signal (r=0: no data; r=5: attributed show but no crossings yet) but

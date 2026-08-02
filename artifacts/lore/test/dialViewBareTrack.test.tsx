@@ -197,7 +197,7 @@ describe("FrontDoorRow Zone 3 — consolidated live sentence", () => {
     renderDial();
 
     const sentence = document.querySelector(".fdrow__t1")?.textContent ?? "";
-    expect(sentence).toBe("Now playing: Dark Star by Grateful Dead");
+    expect(sentence).toBe("Grateful Dead is playing Dark Star");
     expect(document.querySelector(".fdrow__context")?.textContent).toBe("Morning Show · Test Radio");
     expect(document.querySelector(".fdrow__bare-track")).toBeNull();
   });

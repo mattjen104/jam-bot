@@ -81,55 +81,63 @@ function leadingSentence(container: HTMLElement) {
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 describe("live sentence", () => {
-  it("combines the DJ, title, artist, and station into one sentence", () => {
+  it("keeps ordinary live rows title-inclusive while the station stays in the byline", () => {
     const { container } = renderRow(makeDialStation(), makeShow({
       djName: "Diane Kamikaze",
-      currentTrack: makeSpin({ title: "Change", artist: "Deftones", isLibraryHit: true }),
+      currentTrack: makeSpin({ title: "Change", artist: "Deftones" }),
     }));
     const sentence = leadingSentence(container);
-    expect(sentence.textContent).toBe("Diane Kamikaze is playing Deftones.");
-    expect(container.querySelector(".fdrow__context")?.textContent).toBe("Morning Mix · Test FM");
+    expect(sentence.textContent).toBe("Diane Kamikaze is playing Change by Deftones");
+    expect(container.querySelector(".fdrow__t3")?.textContent).toBe("Morning Mix · Test FM");
     expect(sentence.textContent).not.toMatch(/library/i);
   });
 
-  it("keeps the sentence primary even when the current song is a library match", () => {
+  it("restores artist emphasis for an exact crossing and suppresses its title", () => {
     const { container } = renderRow(makeDialStation(), makeShow({
       djName: "Diane Kamikaze",
       currentTrack: makeSpin({ title: "Change", artist: "Deftones", isLibraryHit: true }),
     }));
     expect(leadingSentence(container).textContent).toBe("Diane Kamikaze is playing Deftones.");
+    expect(leadingSentence(container).querySelectorAll("b")).toHaveLength(1);
+    expect(leadingSentence(container).querySelector("b")?.textContent).toBe("Deftones");
+    expect(leadingSentence(container).querySelector("b")?.className).toBe("fdrow__artist");
+    expect(leadingSentence(container).textContent).not.toContain("Change");
     expect(container.querySelector(".fdrow")?.classList.contains("fdrow--t1")).toBe(true);
   });
 
-  it("retains crossing-driven zone styling when live track metadata is absent", () => {
+  it("highlights each artist in a multi-artist crossing and keeps punctuation neutral", () => {
     const { container } = renderRow(makeDialStation(), makeShow({
-      crossings: 2, topArtists: ["Deftones"], currentTrack: null,
+      djName: "Diane Kamikaze", crossings: 2, topArtists: ["Deftones", "Portishead"], currentTrack: null,
     }));
-    expect(leadingSentence(container).textContent).toBe("Now playing: Deftones.");
+    expect(leadingSentence(container).textContent).toBe("Diane Kamikaze is playing Deftones and Portishead.");
+    expect(leadingSentence(container).querySelectorAll("b")).toHaveLength(2);
+    expect(leadingSentence(container).textContent).not.toContain("Test Track");
     expect(container.querySelector(".fdrow")?.classList.contains("fdrow--z1")).toBe(true);
   });
 
-  it("uses artist-only grammar when the title is unavailable", () => {
+  it("uses the deliberate artist-only label when a crossing has no DJ", () => {
     const { container } = renderRow(makeDialStation(), makeShow({
-      djName: "Diane Kamikaze", currentTrack: makeSpin({ title: " ", artist: "Deftones" }),
+      djName: null, currentTrack: makeSpin({ title: "Change", artist: "Deftones", isArtistHit: true }),
     }));
-    expect(leadingSentence(container).textContent).toBe("Diane Kamikaze is playing Deftones");
+    expect(leadingSentence(container).textContent).toBe("Now playing: Deftones.");
+    expect(leadingSentence(container).querySelector("b")?.textContent).toBe("Deftones");
   });
 
-  it("uses a track-led sentence when no current DJ is attached", () => {
+  it("uses a complete count fallback when crossing artist metadata is unavailable", () => {
     const { container } = renderRow(makeDialStation(), makeShow({
-      djName: null, currentTrack: makeSpin({ title: "My Own Summer", artist: "Deftones" }),
+      djName: null, crossings: 3, currentTrack: null,
     }));
-    expect(leadingSentence(container).textContent).toBe("Now playing: My Own Summer by Deftones");
+    expect(leadingSentence(container).textContent).toBe("3 tracks from your library have aired.");
   });
 
-  it("removes repeated and placeholder values before building the sentence", () => {
+  it("removes repeated and placeholder values from the byline", () => {
     const { container } = renderRow(makeDialStation(), makeShow({
       djName: "Test FM",
       currentTrack: makeSpin({ title: "Deftones", artist: "Test FM" }),
       showName: "Unknown show",
     }));
-    expect(leadingSentence(container).textContent).toBe("Test FM is playing Deftones");
+    expect(leadingSentence(container).textContent).toBe("Deftones is playing");
+    expect(container.querySelector(".fdrow__t3")?.textContent).toBe("Test FM");
     expect(container.textContent).not.toMatch(/unknown show/i);
   });
 });
@@ -148,7 +156,7 @@ describe("show context and missing attribution", () => {
     const { container } = renderRow(makeDialStation(), makeShow({
       djName: null, showName: " Unknown Show ", currentTrack: makeSpin(),
     }));
-    expect(container.querySelector(".fdrow__context")?.textContent).toBe("Test FM");
+    expect(container.querySelector(".fdrow__t3")?.textContent).toBe("Test FM");
     expect(container.textContent).not.toMatch(/unknown show|continuous/i);
   });
 
@@ -176,7 +184,7 @@ describe("fallback and interaction", () => {
   it("keeps the useful weak-match reason and station label when no live show exists", () => {
     const { container } = renderRow(makeDialStation(), null);
     expect(leadingSentence(container).textContent).toContain("Lore can't see who's playing");
-    expect(container.querySelector(".fdrow__context")?.textContent).toBe("Test FM");
+    expect(container.querySelector(".fdrow__t3")?.textContent).toBe("Test FM");
   });
 
   it("has one row-level tune-in target, no nested entity links, and an earlier control", () => {

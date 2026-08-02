@@ -2908,6 +2908,7 @@
 .fdrow__t1.w6 { color: hsl(var(--muted-foreground)); }
 .fdrow__t1.w7 { color: hsl(var(--muted-foreground)); }
 .fdrow__t1.w0 { color: hsl(var(--muted-foreground) / 0.5); }
+.fdrow__t1 .fdrow__artist { color: hsl(var(--library)); }
 
 /* Quiet schedule/show context beneath the live sentence. */
 .fdrow__t3 {
@@ -2928,7 +2929,6 @@
 
 @media (max-width: 420px) {
   .fdrow__t1 { font-size: 15px; }
-  .fdrow__context { display: block; }
 }
 
 /* Zone 3 lifetime overlap caption — "N artists you know play here" */
