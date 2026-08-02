@@ -34,6 +34,7 @@ import {
   loreUsersTable,
   libraryImportJobsTable,
   libraryItemsTable,
+  importItemsTable,
   recordingsTable,
   resolutionCacheTable,
 } from "@workspace/db";
@@ -54,6 +55,10 @@ const { mockResolveByText, mockResolveByIsrc, mockCreateMbResolver } = vi.hoiste
   const mockCreateMbResolver = vi.fn(() => ({
     resolveByIsrc: mockResolveByIsrc,
     resolveByText: mockResolveByText,
+    resolveByTextWithScore: async (artist: string, title: string, signal?: AbortSignal) => {
+      const mbid = await mockResolveByText(artist, title, signal);
+      return mbid ? { mbid, score: 95 } : null;
+    },
   }));
   return { mockResolveByText, mockResolveByIsrc, mockCreateMbResolver };
 });
@@ -244,8 +249,11 @@ afterAll(async () => {
   // library_items first (FK to recordings).
   await db.delete(libraryItemsTable).where(inArray(libraryItemsTable.mbid, ALL_MBIDS));
 
-  // Import jobs (FK to lore_users).
+  // Import audit rows then jobs (FK chain: import_items → library_import_jobs → lore_users).
   if (userIds.length > 0) {
+    await db
+      .delete(importItemsTable)
+      .where(inArray(importItemsTable.userId, userIds));
     await db
       .delete(libraryImportJobsTable)
       .where(inArray(libraryImportJobsTable.userId, userIds));
@@ -411,6 +419,10 @@ describe("runPhase3RetryPass — hard MB error: does not increment retryAttempts
     mockCreateMbResolver.mockImplementation(() => ({
       resolveByIsrc: mockResolveByIsrc,
       resolveByText: mockResolveByText,
+      resolveByTextWithScore: async (artist: string, title: string, signal?: AbortSignal) => {
+        const mbid = await mockResolveByText(artist, title, signal);
+        return mbid ? { mbid, score: 95 } : null;
+      },
     }));
   });
 

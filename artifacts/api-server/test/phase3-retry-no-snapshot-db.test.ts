@@ -23,6 +23,7 @@ import {
   serviceConnectionsTable,
   libraryImportJobsTable,
   libraryItemsTable,
+  importItemsTable,
   recordingsTable,
   resolutionCacheTable,
 } from "@workspace/db";
@@ -60,6 +61,10 @@ vi.mock("@workspace/song-enrichment", async (importOriginal) => {
     createMbResolver: vi.fn().mockReturnValue({
       resolveByIsrc: mockResolveByIsrc,
       resolveByText: mockResolveByText,
+      resolveByTextWithScore: vi.fn(async (artist: string, title: string, signal?: AbortSignal) => {
+        const mbid = await mockResolveByText(artist, title, signal);
+        return mbid ? { mbid, score: 95 } : null;
+      }),
     }),
   };
 });
@@ -165,6 +170,10 @@ afterAll(async () => {
     .where(inArray(libraryItemsTable.mbid, [MBID]))
     .catch(() => {});
 
+  await db
+    .delete(importItemsTable)
+    .where(eq(importItemsTable.userId, userId))
+    .catch(() => {});
   await db
     .delete(libraryImportJobsTable)
     .where(eq(libraryImportJobsTable.userId, userId))

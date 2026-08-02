@@ -33,6 +33,7 @@ import {
   serviceConnectionsTable,
   libraryImportJobsTable,
   libraryItemsTable,
+  importItemsTable,
   recordingsTable,
   resolutionCacheTable,
   spotifyLibraryItemsTable,
@@ -71,6 +72,10 @@ vi.mock("@workspace/song-enrichment", async (importOriginal) => {
     createMbResolver: vi.fn().mockReturnValue({
       resolveByIsrc: mockResolveByIsrc,
       resolveByText: mockResolveByText,
+      resolveByTextWithScore: vi.fn(async (artist: string, title: string, signal?: AbortSignal) => {
+        const mbid = await mockResolveByText(artist, title, signal);
+        return mbid ? { mbid, score: 95 } : null;
+      }),
     }),
   };
 });
@@ -210,7 +215,11 @@ afterAll(async () => {
     .where(inArray(libraryItemsTable.mbid, [MBID]))
     .catch(() => {});
 
-  // Remove all import jobs for this user.
+  // Remove import audit rows then jobs (FK: import_items → library_import_jobs).
+  await db
+    .delete(importItemsTable)
+    .where(eq(importItemsTable.userId, userId))
+    .catch(() => {});
   await db
     .delete(libraryImportJobsTable)
     .where(eq(libraryImportJobsTable.userId, userId))

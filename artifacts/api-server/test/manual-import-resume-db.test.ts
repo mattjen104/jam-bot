@@ -65,6 +65,10 @@ vi.mock("@workspace/song-enrichment", async (importOriginal) => {
     createMbResolver: vi.fn().mockReturnValue({
       resolveByIsrc: mockResolveByIsrc,
       resolveByText: mockResolveByText,
+      resolveByTextWithScore: vi.fn(async (artist: string, title: string, signal?: AbortSignal) => {
+        const mbid = await mockResolveByText(artist, title, signal);
+        return mbid ? { mbid, score: 95 } : null;
+      }),
     }),
   };
 });

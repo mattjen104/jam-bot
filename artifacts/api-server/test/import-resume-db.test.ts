@@ -26,6 +26,7 @@ import {
   serviceConnectionsTable,
   libraryImportJobsTable,
   libraryItemsTable,
+  importItemsTable,
   recordingsTable,
   type ImportBufferEntry,
 } from "@workspace/db";
@@ -63,6 +64,10 @@ vi.mock("@workspace/song-enrichment", async (importOriginal) => {
     createMbResolver: vi.fn().mockReturnValue({
       resolveByIsrc: mockResolveByIsrc,
       resolveByText: mockResolveByText,
+      resolveByTextWithScore: vi.fn(async (artist: string, title: string, signal?: AbortSignal) => {
+        const mbid = await mockResolveByText(artist, title, signal);
+        return mbid ? { mbid, score: 95 } : null;
+      }),
     }),
   };
 });
@@ -142,6 +147,7 @@ beforeAll(async () => {
 afterAll(async () => {
   if (!dbAvailable) return;
   await db.delete(libraryItemsTable).where(eq(libraryItemsTable.userId, userId));
+  await db.delete(importItemsTable).where(eq(importItemsTable.userId, userId));
   await db.delete(libraryImportJobsTable).where(eq(libraryImportJobsTable.userId, userId));
   await db.delete(serviceConnectionsTable).where(eq(serviceConnectionsTable.id, connRow.id));
   await db.delete(recordingsTable).where(inArray(recordingsTable.mbid, [MBID_BUF]));
@@ -153,6 +159,7 @@ afterAll(async () => {
 beforeEach(async () => {
   if (!dbAvailable) return;
   await db.delete(libraryItemsTable).where(eq(libraryItemsTable.userId, userId));
+  await db.delete(importItemsTable).where(eq(importItemsTable.userId, userId));
   await db.delete(libraryImportJobsTable).where(eq(libraryImportJobsTable.userId, userId));
 });
 
