@@ -1419,12 +1419,13 @@ export function DialView() {
                 <DialRowSkeleton delay={1} />
                 <DialRowSkeleton delay={2} />
                 {/* Zone 3 heading + skeleton rows.
-                    Estimated count from stations with no crossing evidence yet. */}
+                    No estimated count shown: the pre-load alsoOnAir count can
+                    differ from the post-score count, producing a visible number
+                    jump. Omitting it here means the count appears for the first
+                    time only once crossing scores have fully resolved. */}
                 <ZoneLabel
                   label="Also on air"
                   accent="live"
-                  n={alsoOnAir.length > 0 ? alsoOnAir.length : undefined}
-                  estimated={alsoOnAir.length > 0}
                 />
                 <DialRowSkeleton delay={0} />
                 <DialRowSkeleton delay={1} />

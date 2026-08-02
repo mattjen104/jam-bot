@@ -494,6 +494,91 @@ describe("Zone 2 collapse toggle — skeleton guard during live refresh", () => 
 });
 
 // ---------------------------------------------------------------------------
+// Zone 2 and Zone 3 estimated-count stability during crossingsLoading transition
+//
+// When crossingsLoading is true, neither Zone 2 nor Zone 3 should show a
+// numeric count in their headings.  This prevents a visible number-jump when
+// the pre-load estimate differs from the post-score real count.
+// ---------------------------------------------------------------------------
+
+describe("Zone heading count stability during crossingsLoading transition", () => {
+  it("Zone 3 heading shows no count element while crossingsLoading is true", () => {
+    // Three Zone-3 stations so a pre-load estimate (if rendered) would be 3.
+    mockDialData(true, [
+      makeZone3Station("kcrw"),
+      makeZone3Station("kexp"),
+      makeZone3Station("wfmu"),
+    ]);
+    render(<DialView />);
+    act(() => { vi.advanceTimersByTime(150); });
+
+    // The skeleton phase is active — skeleton rows should be visible.
+    expect(document.querySelectorAll(".fdrow-skeleton").length).toBeGreaterThan(0);
+
+    // No .fdzone-lbl__n element must be present for Zone 3 during loading.
+    // (Zone 2 also has no count in skeleton mode, so this query covers both.)
+    const countEls = document.querySelectorAll(".fdzone-lbl__n");
+    expect(countEls.length).toBe(0);
+  });
+
+  it("Zone 2 heading shows no count element while crossingsLoading is true", () => {
+    mockDialData(true, [makeZone3Station("kcrw")]);
+    (useMyGhostMissed as ReturnType<typeof vi.fn>).mockReturnValue({
+      data: [makeGhostStation("ghost1"), makeGhostStation("ghost2")],
+    });
+    render(<DialView />);
+    act(() => { vi.advanceTimersByTime(150); });
+
+    expect(document.querySelectorAll(".fdrow-skeleton").length).toBeGreaterThan(0);
+    expect(document.querySelectorAll(".fdzone-lbl__n").length).toBe(0);
+  });
+
+  it("Zone 3 count does not change value across the crossingsLoading true→false flip", () => {
+    // During loading: 3 Zone-3 stations (potential pre-load estimate = 3).
+    mockDialData(true, [
+      makeZone3Station("kcrw"),
+      makeZone3Station("kexp"),
+      makeZone3Station("wfmu"),
+    ]);
+    const { rerender } = render(<DialView />);
+    act(() => { vi.advanceTimersByTime(150); });
+
+    // No count shown during the skeleton phase.
+    const countDuringLoad = document.querySelector(".fdzone-lbl__n");
+    expect(countDuringLoad).toBeNull();
+
+    // Crossing scores resolve — real count may differ (here we use only 1 station).
+    mockDialData(false, [makeZone3Station("kcrw")]);
+    act(() => { rerender(<DialView />); });
+
+    // The count now appears for the first time (value = "1").
+    const countAfterLoad = document.querySelector(".fdzone-lbl__n");
+    expect(countAfterLoad).not.toBeNull();
+    expect(countAfterLoad!.textContent).toBe("1");
+
+    // Crucially: it did NOT go from "3" to "1" — it went from absent to "1".
+  });
+
+  it("Zone 3 count is absent while loading even when the estimate would match the real count", () => {
+    // Identical stations in both phases — even a "stable" estimate must be hidden
+    // to prevent the fdzone-lbl__n--est style (tilde prefix) from flickering away.
+    mockDialData(true, [makeZone3Station("kcrw")]);
+    const { rerender } = render(<DialView />);
+    act(() => { vi.advanceTimersByTime(150); });
+
+    expect(document.querySelector(".fdzone-lbl__n")).toBeNull();
+
+    mockDialData(false, [makeZone3Station("kcrw")]);
+    act(() => { rerender(<DialView />); });
+
+    // After load, the count appears without the --est modifier.
+    const countEl = document.querySelector(".fdzone-lbl__n");
+    expect(countEl).not.toBeNull();
+    expect(countEl!.classList.contains("fdzone-lbl__n--est")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Zone 3 collapse/expand toggle — skeleton guard during a live refresh
 //
 // Zone 3 ("Also on air") appears only when !crossingsLoading and at least one
