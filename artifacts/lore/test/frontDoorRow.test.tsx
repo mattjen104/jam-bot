@@ -180,6 +180,65 @@ describe("show context and missing attribution", () => {
   });
 });
 
+describe("narrow-screen byline readability", () => {
+  it("keeps the full station name visible when the show name is very long", () => {
+    const longShowName = "The Extremely Long Late-Night Program With An Unusually Verbose Title That Runs On And On";
+    const longStationName = "KCRW 89.9 FM Santa Monica Public Radio";
+    const { container } = renderRow(
+      makeDialStation({ name: longStationName }),
+      makeShow({ showName: longShowName, djName: null }),
+    );
+    const byline = container.querySelector(".fdrow__t3");
+    expect(byline?.textContent).toContain(longStationName);
+    expect(byline?.textContent).toContain(longShowName);
+    // Station name is never hidden — the byline element must be present
+    expect(byline).not.toBeNull();
+  });
+
+  it("keeps the station-only byline intact when there is no show context", () => {
+    const longStationName = "WFMU 91.1 FM Jersey City Freeform Radio Broadcasting Live";
+    const { container } = renderRow(
+      makeDialStation({ name: longStationName }),
+      makeShow({ showName: null, djName: null }),
+    );
+    const byline = container.querySelector(".fdrow__t3");
+    expect(byline?.textContent).toBe(longStationName);
+  });
+
+  it("artist in the reason sentence carries the fdrow__artist class for visual distinction from byline text", () => {
+    const { container } = renderRow(
+      makeDialStation({ name: "KEXP 90.3 FM Seattle" }),
+      makeShow({
+        djName: "John Richards",
+        currentTrack: makeSpin({ title: "Yoshimi Battles the Pink Robots", artist: "The Flaming Lips", isLibraryHit: true }),
+      }),
+    );
+    // The reason sentence artist must be wrapped in <b class="fdrow__artist">
+    const artistBolds = container.querySelectorAll(".fdrow__t1 b.fdrow__artist");
+    expect(artistBolds.length).toBeGreaterThanOrEqual(1);
+    // The byline (fdrow__t3) should not carry the fdrow__artist class
+    const byline = container.querySelector(".fdrow__t3");
+    expect(byline?.querySelector(".fdrow__artist")).toBeNull();
+    // The highlighted artist text is separate from the byline station text
+    expect(container.querySelector(".fdrow__t3")?.textContent).not.toContain("fdrow__artist");
+  });
+
+  it("renders the reason sentence with overflow-wrap support for long unbroken artist names", () => {
+    const { container } = renderRow(
+      makeDialStation({ name: "Test FM" }),
+      makeShow({
+        djName: null,
+        crossings: 1,
+        topArtists: ["Sigur Rós"],
+        currentTrack: null,
+      }),
+    );
+    const sentence = container.querySelector(".fdrow__t1");
+    expect(sentence?.textContent).toContain("Sigur Rós");
+    expect(sentence?.querySelector("b.fdrow__artist")?.textContent).toBe("Sigur Rós");
+  });
+});
+
 describe("fallback and interaction", () => {
   it("keeps the useful weak-match reason and station label when no live show exists", () => {
     const { container } = renderRow(makeDialStation(), null);

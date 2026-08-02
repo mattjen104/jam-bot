@@ -3041,6 +3041,8 @@
   font-size: 9px;
   color: hsl(var(--muted-foreground) / 0.7);
   margin-bottom: 5px;
+  /* Allow long station/show names to wrap rather than overflow on narrow screens */
+  overflow-wrap: anywhere;
 }
 .fdrow__context {
   color: hsl(var(--muted-foreground) / 0.65);
