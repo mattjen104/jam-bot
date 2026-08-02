@@ -1,0 +1,24 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   Lore — shared typography tokens
+   Consumed by both index.css (classic UI) and wp.css (WebPlayer).
+
+   Three semantic roles:
+     body     Inter / system-ui sans — flowing prose, UI copy, descriptions
+     display  Archivo Narrow / system-ui — labels, chips, station names, callouts
+     mono     IBM Plex Mono / Menlo — metadata, timestamps, counts, technical strings
+
+   Editorial serif (Newsreader) is NOT loaded globally. Scope it by wrapping
+   a container with the `.reading-context` class when a genuine long-form or
+   editorial reading surface is needed.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --lore-font-body:    'Inter', system-ui, sans-serif;
+  --lore-font-display: 'Archivo Narrow', system-ui, sans-serif;
+  --lore-font-mono:    'IBM Plex Mono', Menlo, 'Courier New', monospace;
+}
+
+/* Editorial face — only active inside an explicit reading surface. */
+.reading-context {
+  --lore-font-editorial: 'Newsreader', Georgia, serif;
+}

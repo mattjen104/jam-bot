@@ -1,7 +1,39 @@
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle2, RefreshCw, X } from "lucide-react";
+import { CheckCircle2, X } from "lucide-react";
 import type { ImportJobStatus } from "../lib/meHooks";
 import { useLatestImportJob } from "../lib/meHooks";
+
+/** Animated EQ bars — music-indexed loading indicator.
+ *  Uses the lore-eq-bar CSS animation defined in index.css so the
+ *  import strip feels distinct from the generic skeleton pulse. */
+function ImportEqBars() {
+  const bars = [
+    { delay: "0ms",    height: 10 },
+    { delay: "160ms",  height: 14 },
+    { delay: "320ms",  height: 8  },
+    { delay: "80ms",   height: 12 },
+  ];
+  return (
+    <span
+      aria-hidden="true"
+      className="flex shrink-0 items-end gap-px"
+      style={{ height: 14, width: 16 }}
+    >
+      {bars.map((b, i) => (
+        <span
+          key={i}
+          className="lore-eq-bar inline-block rounded-sm"
+          style={{
+            width: 3,
+            height: b.height,
+            background: "hsl(var(--primary))",
+            animationDelay: b.delay,
+          }}
+        />
+      ))}
+    </span>
+  );
+}
 
 /** How long (ms) to keep the done-state strip visible before it self-dismisses. */
 const DONE_TTL_MS = 45_000;
@@ -145,12 +177,7 @@ export function ImportStrip() {
       style={{ background: "hsl(var(--card))" }}
       data-testid="import-strip"
     >
-      <RefreshCw
-        size={14}
-        className="animate-spin shrink-0"
-        style={{ color: "hsl(var(--primary))" }}
-        aria-hidden="true"
-      />
+      <ImportEqBars />
       <div className="flex flex-1 flex-col gap-0.5 min-w-0">
         <div className="flex items-center gap-2">
           {isResumed(job) && (

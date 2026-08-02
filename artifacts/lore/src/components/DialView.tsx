@@ -1854,17 +1854,14 @@ function SeedBar({
 
 function Zone1Placeholder({
   hasLibrary,
-  seeds,
-  onAddSeed,
-  onRemoveSeed,
+  isSpotifyConnected,
 }: {
   hasLibrary: boolean;
-  seeds: string[];
-  onAddSeed: (artist: string) => void;
-  onRemoveSeed: (artist: string) => void;
+  isSpotifyConnected: boolean;
 }) {
-  if (hasLibrary) {
-    // Library exists — show a "working on it" status line + skeleton rows.
+  if (hasLibrary || isSpotifyConnected) {
+    // Library exists (or Spotify connected and building) — show a "working on
+    // it" status line + skeleton rows while crossings resolve.
     return (
       <div className="z1-placeholder z1-placeholder--loading">
         <div className="z1-placeholder__status">
@@ -1877,69 +1874,21 @@ function Zone1Placeholder({
     );
   }
 
-  if (seeds.length > 0) {
-    // Seeds entered, waiting for crossings to resolve.
-    return (
-      <div className="z1-placeholder z1-placeholder--seeded">
-        <div className="z1-placeholder__seed-chips">
-          {seeds.map((s) => (
-            <span key={s} className="seed-chip">
-              {s}
-              <button
-                type="button"
-                className="seed-chip__remove"
-                aria-label={`Remove ${s}`}
-                onClick={() => onRemoveSeed(s)}
-              >×</button>
-            </span>
-          ))}
-          {seeds.length < 10 && (
-            <SeedInput seeds={seeds} onAdd={onAddSeed} placeholder="+ artist" />
-          )}
-        </div>
-        <div className="z1-placeholder__status">
-          <span className="dial-live-skeleton__pip" />
-          <span className="z1-placeholder__lbl">Finding stations playing your artists…</span>
-        </div>
-        <DialRowSkeleton delay={0} />
-        <DialRowSkeleton delay={1} />
-        <div className="z1-placeholder__upgrade">
-          <a className="dial-ctabtn dial-ctabtn--keep" href="/lore/library">
-            Import your full library for more matches →
-          </a>
-        </div>
-      </div>
-    );
-  }
-
-  // New user — full seed prompt.
+  // New user — connect Spotify prompt.
   return (
     <div className="z1-placeholder z1-placeholder--seed">
       <div className="z1-placeholder__body">
         <p className="z1-placeholder__pitch">
-          Name an artist you love — Lore will find stations playing them live,
+          Connect Spotify and Lore will find stations playing your music live,
           right now.
         </p>
-        <SeedInput seeds={seeds} onAdd={onAddSeed} />
-        <div className="seed-suggestions">
-          {SEED_SUGGESTIONS.map((s) => (
-            <button
-              key={s}
-              type="button"
-              className="seed-suggestion"
-              onClick={() => onAddSeed(s)}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
         <div className="z1-placeholder__secondary">
           <button
             type="button"
             className="dial-ctabtn"
             onClick={() => void startSpotifyLibraryConnect()}
           >
-            Or connect Spotify for your full library
+            Connect Spotify for your library
           </button>
         </div>
       </div>

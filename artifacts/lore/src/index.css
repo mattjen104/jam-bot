@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "./tokens/typography.css";
 @plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
@@ -75,11 +76,13 @@
   /* --faint: barely-there label (inactive tabs, secondary hints) */
   --color-faint: hsl(var(--faint));
 
-  --font-sans: var(--app-font-sans);
-  --font-serif: var(--app-font-serif);
-  --font-mono: var(--app-font-mono);
-  --font-display: var(--app-font-display);
-  --font-reading: var(--app-font-reading);
+  /* Three canonical roles — components use these Tailwind utilities */
+  --font-body:    var(--lore-font-body);
+  --font-display: var(--lore-font-display);
+  --font-mono:    var(--lore-font-mono);
+  /* Backward-compat aliases so existing font-sans / font-serif classes keep working */
+  --font-sans:    var(--lore-font-body);
+  --font-serif:   var(--lore-font-display);
 
   --text-xs: 0.75rem;
   --text-xs--line-height: calc(1 / 0.75);
@@ -201,11 +204,17 @@
   --chart-4: 40 46% 60%;
   --chart-5: 300 30% 55%;
 
-  --app-font-sans: 'Inter', system-ui, sans-serif;
-  --app-font-serif: 'Fraunces', Georgia, serif;
-  --app-font-mono: 'IBM Plex Mono', Menlo, monospace;
-  --app-font-display: 'Archivo Narrow', system-ui, sans-serif;
-  --app-font-reading: 'Newsreader', Georgia, serif;
+  /* App-font aliases — point to the canonical shared tokens in tokens/typography.css.
+     Use --lore-font-* in new code; these aliases keep legacy CSS classes working. */
+  --app-font-sans:    var(--lore-font-body);
+  --app-font-display: var(--lore-font-display);
+  --app-font-mono:    var(--lore-font-mono);
+  /* Fraunces → display role (Archivo Narrow). Headings and titles use --lore-font-display. */
+  --app-font-serif:   var(--lore-font-display);
+  /* Newsreader → body role outside .reading-context. Scope with .reading-context for editorial. */
+  --app-font-reading: var(--lore-font-body);
+  /* Label — same as display for small caps/UI chips */
+  --app-font-label:   var(--lore-font-display);
   --radius: .625rem;
 
   --shadow-2xs: 0px 1px 2px 0px hsl(38 15% 2% / 0.50);
