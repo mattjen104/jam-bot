@@ -2,7 +2,7 @@
 /** Component tests for the dial's single-sentence live context. */
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 vi.mock("wouter", () => ({ useLocation: () => ["/", vi.fn()] }));
 vi.mock("../src/hooks/useDialData", () => ({ useDialData: vi.fn() }));
@@ -200,5 +200,27 @@ describe("fallback and interaction", () => {
   it("continues to show the lifetime overlap caption for weak-match rows", () => {
     const { container } = renderRow(makeDialStation(), null, 7);
     expect(container.querySelector(".fdrow__ov-caption")?.textContent).toContain("7 artists you know play here");
+  });
+
+  it("keeps the solo-mode re-enable control on the same resolved dial row", () => {
+    const { rerender } = renderRow(makeDialStation(), makeShow({ currentTrack: makeSpin() }));
+    fireEvent.click(screen.getByTestId("bottle-solo-toggle"));
+    rerender(
+      <FrontDoorRow
+        ds={makeDialStation()}
+        show={makeShow({ currentTrack: makeSpin() })}
+        ov={0}
+        isActive={false}
+        isSampling={false}
+        onTuneIn={vi.fn()}
+        onEarlier={vi.fn()}
+      />,
+    );
+
+    const toggle = screen.getByTestId("bottle-solo-toggle");
+    expect(toggle).toBeTruthy();
+    expect(toggle.getAttribute("aria-label")).toBe("Re-enable bottle notes (solo mode is on)");
+    fireEvent.click(toggle);
+    expect(localStorage.getItem("lore:social:enabled")).toBe("true");
   });
 });

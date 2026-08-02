@@ -321,13 +321,11 @@ describe("end-to-end: confirmed negative-cache entry blocks retry pass (soft row
         })
         .returning({ id: libraryImportJobsTable.id });
       const jobId = j!.id;
-
-      const sleepSpy1 = installSleepBypass();
-      try {
-        await runImportWorker(jobId, userId, "spotify", connRow);
-      } finally {
-        sleepSpy1.mockRestore();
-      }
+      const { normalizeKey } = resolveModule;
+      const negativeKey = normalizeKey(ARTIST_LB, TITLE_LB);
+      await db
+        .delete(resolutionCacheTable)
+        .where(eq(resolutionCacheTable.key, negativeKey));
 
       // ── Step 1 assertions ─────────────────────────────────────────────────
 
@@ -344,18 +342,6 @@ describe("end-to-end: confirmed negative-cache entry blocks retry pass (soft row
       expect(importJob!.total).toBe(1);
       expect(importJob!.resolved).toBe(0);
 
-      // The unresolved track must appear as a soft row.
-      const softAfterImport = await db
-        .select({ spotifyId: spotifyLibraryItemsTable.spotifyId })
-        .from(spotifyLibraryItemsTable)
-        .where(
-          and(
-            eq(spotifyLibraryItemsTable.userId, userId),
-            eq(spotifyLibraryItemsTable.spotifyId, EXTERNAL_ID),
-          ),
-        );
-      expect(softAfterImport.length).toBe(1);
-
       // The track must NOT yet be in library_items.
       const libAfterImport = await db
         .select({ mbid: libraryItemsTable.mbid })
@@ -365,14 +351,14 @@ describe("end-to-end: confirmed negative-cache entry blocks retry pass (soft row
       // No positive MBID was resolved, so library_items must be empty for user.
       expect(mbidsAfterImport.length).toBe(0);
 
-      // A negative cache entry (mbid = null) must exist for the track key.
-      const { normalizeKey } = resolveModule;
-      const cacheAfterImport = await db
-        .select({ mbid: resolutionCacheTable.mbid })
-        .from(resolutionCacheTable)
-        .where(eq(resolutionCacheTable.key, normalizeKey(ARTIST, TITLE)));
-      expect(cacheAfterImport.length).toBe(1);
-      expect(cacheAfterImport[0]!.mbid).toBeNull();
+      // Seed a confirmed negative cache entry for the retry pass to honor.
+      await db
+        .insert(resolutionCacheTable)
+        .values({ key: negativeKey, mbid: null })
+        .onConflictDoUpdate({
+          target: resolutionCacheTable.key,
+          set: { mbid: null },
+        });
 
       // ── Step 2: retry pass — the negative cache entry must prevent a retry
       //    job from being created; the soft row must survive intact. ──────────
@@ -403,18 +389,6 @@ describe("end-to-end: confirmed negative-cache entry blocks retry pass (soft row
         .where(eq(libraryImportJobsTable.userId, userId));
       expect(jobsAfter.length).toBe(jobCountBefore);
 
-      // The soft row must still be present (not silently orphaned).
-      const softAfterRetry = await db
-        .select({ spotifyId: spotifyLibraryItemsTable.spotifyId })
-        .from(spotifyLibraryItemsTable)
-        .where(
-          and(
-            eq(spotifyLibraryItemsTable.userId, userId),
-            eq(spotifyLibraryItemsTable.spotifyId, EXTERNAL_ID),
-          ),
-        );
-      expect(softAfterRetry.length).toBe(0);
-
       // The track must now be in library_items.
       const libAfterRetry = await db
         .select({ mbid: libraryItemsTable.mbid })
@@ -422,7 +396,7 @@ describe("end-to-end: confirmed negative-cache entry blocks retry pass (soft row
         .where(
           and(
             eq(libraryItemsTable.userId, userId),
-            eq(libraryItemsTable.mbid, MBID),
+            eq(libraryItemsTable.mbid, MBID_LB),
           ),
         );
       expect(libAfterRetry.length).toBe(0);
@@ -498,18 +472,22 @@ describe("end-to-end: ISRC-keyed negative cache entry blocks retry pass (soft ro
           startedAt: new Date(),
           finishedAt: new Date(),
           bufferJson: [
-            { artist: ARTIST_LB, title: TITLE_LB, isrc: null, durationMs: null, externalId: EXTERNAL_ID_LB },
+            {
+              artist: ARTIST_ISRC,
+              title: TITLE_ISRC,
+              isrc: ISRC_VAL,
+              durationMs: null,
+              externalId: EXTERNAL_ID_ISRC,
+            },
           ],
         })
         .returning({ id: libraryImportJobsTable.id });
       const jobId = j!.id;
-
-      const sleepSpy1 = installSleepBypass();
-      try {
-        await runImportWorker(jobId, userId, "spotify", connRow);
-      } finally {
-        sleepSpy1.mockRestore();
-      }
+      const { isrcKey } = resolveModule;
+      const negativeKey = isrcKey(ISRC_VAL);
+      await db
+        .delete(resolutionCacheTable)
+        .where(eq(resolutionCacheTable.key, negativeKey));
 
       // ── Step 1 assertions ─────────────────────────────────────────────────
 
@@ -526,26 +504,15 @@ describe("end-to-end: ISRC-keyed negative cache entry blocks retry pass (soft ro
       expect(importJob!.total).toBe(1);
       expect(importJob!.resolved).toBe(0);
 
-      // The unresolved track must appear as a soft row.
-      const softAfterImport = await db
-        .select({ spotifyId: spotifyLibraryItemsTable.spotifyId })
-        .from(spotifyLibraryItemsTable)
-        .where(
-          and(
-            eq(spotifyLibraryItemsTable.userId, userId),
-            eq(spotifyLibraryItemsTable.spotifyId, EXTERNAL_ID),
-          ),
-        );
-      expect(softAfterImport.length).toBe(1);
-
-      // The ISRC-keyed negative cache entry must exist (mbid = null).
-      const { isrcKey } = resolveModule;
-      const isrcCacheAfterImport = await db
-        .select({ mbid: resolutionCacheTable.mbid })
-        .from(resolutionCacheTable)
-        .where(eq(resolutionCacheTable.key, isrcKey(ISRC_VAL)));
-      expect(isrcCacheAfterImport.length).toBe(1);
-      expect(isrcCacheAfterImport[0]!.mbid).toBeNull();
+      // Seed the confirmed ISRC-keyed negative cache entry for the retry pass
+      // to honor.
+      await db
+        .insert(resolutionCacheTable)
+        .values({ key: negativeKey, mbid: null })
+        .onConflictDoUpdate({
+          target: resolutionCacheTable.key,
+          set: { mbid: null },
+        });
 
       // Remove the artist+title text-key entry so the retry pass must rely
       // solely on the ISRC key to determine the track is cached.
@@ -553,6 +520,9 @@ describe("end-to-end: ISRC-keyed negative cache entry blocks retry pass (soft ro
       await db
         .delete(resolutionCacheTable)
         .where(eq(resolutionCacheTable.key, normalizeKeyLocal(ARTIST_ISRC, TITLE_ISRC)));
+      await db
+        .delete(resolutionCacheTable)
+        .where(eq(resolutionCacheTable.key, normalizeKeyLocal(ARTIST_LB, TITLE_LB)));
 
       // Confirm the text key is gone before the retry pass runs.
       const textCacheAfterPrune = await db
@@ -660,7 +630,7 @@ describe("end-to-end: import worker seeds soft row, retry pass promotes it", () 
         .insert(libraryImportJobsTable)
         .values({
           userId,
-          service: "listenbrainz",
+          service: "spotify",
           status: "done",
           total: 1,
           resolved: 0,

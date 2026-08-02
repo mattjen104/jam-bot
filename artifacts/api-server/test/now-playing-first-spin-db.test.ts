@@ -2,7 +2,13 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import type { Server } from "node:http";
 import { inArray, sql } from "drizzle-orm";
-import { db, stationsTable, recordingsTable, spinsTable } from "@workspace/db";
+import {
+  db,
+  stationsTable,
+  recordingsTable,
+  spinsTable,
+  stationQualityTable,
+} from "@workspace/db";
 import app from "../src/app.js";
 
 /**
@@ -120,6 +126,7 @@ afterAll(async () => {
   if (stationIdA || stationIdB) {
     const ids = [stationIdA, stationIdB].filter((x): x is number => x != null);
     await db.delete(spinsTable).where(inArray(spinsTable.stationId, ids));
+    await db.delete(stationQualityTable).where(inArray(stationQualityTable.stationId, ids));
     await db.delete(stationsTable).where(inArray(stationsTable.id, ids));
   }
   await db.delete(recordingsTable).where(inArray(recordingsTable.mbid, [FRESH_MBID, OLD_MBID]));

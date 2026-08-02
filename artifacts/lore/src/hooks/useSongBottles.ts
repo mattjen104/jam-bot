@@ -37,8 +37,7 @@ interface UseSongBottlesResult {
   error: string | null;
 }
 
-const BASE = import.meta.env.BASE_URL ?? "/";
-const API = `${BASE.replace(/\/$/, "")}/api`;
+const API = "/api";
 
 function apiUrl(path: string): string {
   return `${API}${path}`;

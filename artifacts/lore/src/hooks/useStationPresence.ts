@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-const BASE = import.meta.env.BASE_URL ?? "/";
-const API = `${BASE.replace(/\/$/, "")}/api`;
+const API = "/api";
 
 async function fetchPresence(ids: number[]): Promise<Record<number, number>> {
   if (ids.length === 0) return {};

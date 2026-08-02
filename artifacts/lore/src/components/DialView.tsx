@@ -343,7 +343,6 @@ interface FrontDoorRowProps {
 
 export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onEarlier }: FrontDoorRowProps) {
   const rz = reason(show, ds.crossings, ds.artistCrossings);
-  const { enabled: socialEnabled } = useSocialMode();
 
   const crossing = crossingSentence(ds.station.name, show);
   const live = crossing ? null : liveSentence(ds.station.name, show);
@@ -385,6 +384,7 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onE
         <div className={`fdrow__t1 ${crossing ? rz.cls : live ? "fdrow__live-sentence" : rz.cls}`}>
           {crossing?.node ?? live?.node ?? rz.node}
         </div>
+        <span className="sr-only">{ds.station.slug}</span>
 
         {/* Stable source label: show context when valid, station always. */}
         <div className={`fdrow__t3 ${bylineContext ? "fdrow__context" : ""}`}>
@@ -401,10 +401,10 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onE
           </div>
         )}
 
-        {/* Bottle panel — same visual tier as SE/lyrics badges.
-            Only rendered when a recording is resolved and social mode is on.
-            Click propagation is stopped so the row's tune-in handler doesn't fire. */}
-        {socialEnabled && currentTrack?.mbid && (
+        {/* BottlePanel owns its solo-mode fallback, so it must remain mounted
+            whenever a recording is resolved. Click propagation is stopped so
+            the row's tune-in handler doesn't fire. */}
+        {currentTrack?.mbid && (
           <div
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => e.stopPropagation()}
