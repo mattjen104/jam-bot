@@ -1442,8 +1442,10 @@ export function DialView() {
                   accent="library"
                 />
                 <Zone1Placeholder
-                  isSpotifyConnected={isSpotifyConnected}
                   hasLibrary={hasLibrary}
+                  seeds={seedArtists}
+                  onAddSeed={addSeed}
+                  onRemoveSeed={removeSeed}
                 />
                 {/* Zone 2 heading + skeleton rows — no pre-load signal for ghost stations */}
                 <ZoneLabel label="Missed while you were away" accent="picker" />
@@ -1528,13 +1530,25 @@ export function DialView() {
                 jumps above Zone 1 while scores are still in-flight */}
             {!crossingsLoading && ghost.length > 0 && (
               <>
-                <ZoneLabel
-                  label="Missed while you were away"
-                  n={ghost.length}
-                  accent="picker"
-                  collapsed={zone2Collapsed}
-                  onCollapse={() => { setZone2Collapsed(!zone2Collapsed); if (!zone2Collapsed) setZone2Expanded(false); }}
-                />
+                <div className="fdzone-lbl-row">
+                  <ZoneLabel
+                    label="Missed while you were away"
+                    n={ghost.length}
+                    accent="picker"
+                    collapsed={zone2Collapsed}
+                    onCollapse={() => { setZone2Collapsed(!zone2Collapsed); if (!zone2Collapsed) setZone2Expanded(false); }}
+                  />
+                  {zone2Expanded && !zone2Collapsed && ghost.length > ZONE2_VISIBLE && (
+                    <button
+                      className="dial-show-more-inline"
+                      aria-expanded={true}
+                      aria-controls="zone2-rows"
+                      onClick={() => setZone2Expanded(false)}
+                    >
+                      See less
+                    </button>
+                  )}
+                </div>
                 {!zone2Collapsed && (
                   <>
                     <div id="zone2-rows">
@@ -1566,14 +1580,26 @@ export function DialView() {
                 so it never jumps ahead while scores are still in-flight */}
             {!crossingsLoading && alsoOnAirOrdered.length > 0 && (
               <>
-                <ZoneLabel
-                  label="Also on air"
-                  n={alsoOnAirOrdered.length}
-                  hint="nothing Lore can point to yet"
-                  accent="live"
-                  collapsed={zone3Collapsed}
-                  onCollapse={() => { setZone3Collapsed(!zone3Collapsed); if (!zone3Collapsed) setZone3Expanded(false); }}
-                />
+                <div className="fdzone-lbl-row">
+                  <ZoneLabel
+                    label="Also on air"
+                    n={alsoOnAirOrdered.length}
+                    hint="nothing Lore can point to yet"
+                    accent="live"
+                    collapsed={zone3Collapsed}
+                    onCollapse={() => { setZone3Collapsed(!zone3Collapsed); if (!zone3Collapsed) setZone3Expanded(false); }}
+                  />
+                  {zone3Expanded && !zone3Collapsed && alsoOnAirOrdered.length > ZONE3_VISIBLE && (
+                    <button
+                      className="dial-show-more-inline"
+                      aria-expanded={true}
+                      aria-controls="zone3-rows"
+                      onClick={() => setZone3Expanded(false)}
+                    >
+                      See less
+                    </button>
+                  )}
+                </div>
                 {!zone3Collapsed && (
                   <>
                     <div id="zone3-rows">
