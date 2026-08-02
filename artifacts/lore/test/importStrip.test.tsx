@@ -129,7 +129,7 @@ describe("ImportStrip — resume label when job picks up from a stored buffer", 
 
 // ---------------------------------------------------------------------------
 // Copy branch: resumedFrom null (normal import)
-// → "Reading your Spotify library…"
+// → "Importing your library…"
 // ---------------------------------------------------------------------------
 
 describe("ImportStrip — fetching-phase label (service-neutral)", () => {
