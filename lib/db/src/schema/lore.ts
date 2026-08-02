@@ -2157,6 +2157,19 @@ export const attendanceTable = pgTable(
      * or null when the recording was unresolved / duration unknown at write time.
      */
     spinDurationSeconds: integer("spin_duration_seconds"),
+    /**
+     * High-water mark: the latest heartbeat window-end that has been credited
+     * into this row's dwell_seconds total.  Used to make the upsert idempotent
+     * against replays — a conflict update only accumulates dwell when the
+     * incoming credited_through is strictly greater than the stored value, so
+     * toggling ATTENDANCE_DEDUP_CONFIRMED off and on can never double-count a
+     * window that was already credited.
+     *
+     * NULL on legacy rows written before this column was added; those rows are
+     * treated conservatively — the upsert will NOT accumulate further dwell
+     * until a fresh credited_through value is stored.
+     */
+    creditedThrough: timestamp("credited_through", { withTimezone: true }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => [

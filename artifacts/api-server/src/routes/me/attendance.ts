@@ -197,6 +197,20 @@ router.post("/me/attendance/heartbeat", h(async (req, res) => {
       // Always upsert positive overlap — no per-slice gate.  The dwell gate is
       // applied at READ time in GET /api/me/attendance/counts so incremental
       // slices accumulate correctly across heartbeats.
+      //
+      // Idempotency guard: `credited_through` is the high-water mark of the
+      // latest window-end that has been credited into this row.  On conflict we
+      // only accumulate dwell when the incoming credited_through is strictly
+      // greater than what is already stored, preventing double-counting if
+      // ATTENDANCE_DEDUP_CONFIRMED is toggled off and on again.
+      //
+      // Legacy rows (credited_through IS NULL, written before this column was
+      // added): we accept the first conflict write normally — this seeds the
+      // high-water mark and brings the row under idempotency protection.
+      // Subsequent replays of the same or earlier window are then no-ops.
+      //
+      // NOTE: Postgres GREATEST(NULL, x) returns NULL, so we must use
+      // COALESCE(GREATEST(a, b), b) to guarantee the mark advances from NULL.
       await db
         .insert(attendanceTable)
         .values({
@@ -205,12 +219,27 @@ router.post("/me/attendance/heartbeat", h(async (req, res) => {
           sessionId,
           dwellSeconds,
           spinDurationSeconds,
+          creditedThrough: now,
         })
         .onConflictDoUpdate({
           target: [attendanceTable.userId, attendanceTable.spinId],
           set: {
-            // Accumulate each incremental slice into the running total.
-            dwellSeconds: sql`attendance.dwell_seconds + excluded.dwell_seconds`,
+            // Accumulate dwell when:
+            //   a) the stored high-water mark is NULL (legacy row — seed it), OR
+            //   b) the incoming window-end extends beyond the stored mark.
+            // Replaying the same or an earlier window-end adds 0 seconds.
+            dwellSeconds: sql`attendance.dwell_seconds + CASE
+              WHEN attendance.credited_through IS NULL
+                OR excluded.credited_through > attendance.credited_through
+              THEN excluded.dwell_seconds
+              ELSE 0
+            END`,
+            // Advance the high-water mark; COALESCE handles the NULL→value
+            // transition because GREATEST(NULL, x) = NULL in Postgres.
+            creditedThrough: sql`COALESCE(
+              GREATEST(attendance.credited_through, excluded.credited_through),
+              excluded.credited_through
+            )`,
             sessionId,
             spinDurationSeconds: sql`COALESCE(attendance.spin_duration_seconds, excluded.spin_duration_seconds)`,
           },

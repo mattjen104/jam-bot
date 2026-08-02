@@ -90,6 +90,19 @@ export async function applyAttendanceMigration(): Promise<void> {
     stepErrors.push({ step: "attendance_session_idx", err });
   }
 
+  // credited_through column — added to make attendance upserts idempotent
+  // against ATTENDANCE_DEDUP_CONFIRMED toggle replays.  Safe to run on an
+  // existing table (ADD COLUMN IF NOT EXISTS).  Legacy rows keep NULL, which
+  // is handled conservatively by the upsert guard in attendance.ts.
+  try {
+    await db.execute(sql`
+      ALTER TABLE attendance
+        ADD COLUMN IF NOT EXISTS credited_through timestamptz
+    `);
+  } catch (err) {
+    stepErrors.push({ step: "attendance_add_credited_through", err });
+  }
+
   if (stepErrors.length > 0) {
     const detail = stepErrors
       .map(({ step, err }) => `${step}: ${err instanceof Error ? err.message : String(err)}`)
