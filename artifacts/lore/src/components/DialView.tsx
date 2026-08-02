@@ -15,6 +15,8 @@ import { StationLane } from "./StationLane";
 import { ContextRail } from "./ContextRail";
 import { SearchOverlay } from "./SearchOverlay";
 import { usePlayer } from "../player/PlayerProvider";
+import { BottlePanel } from "./BottlePanel";
+import { useSocialMode } from "../lib/social";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -285,6 +287,7 @@ interface FrontDoorRowProps {
 
 export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onEarlier }: FrontDoorRowProps) {
   const rz = reason(show, ds.crossings, ds.artistCrossings);
+  const { enabled: socialEnabled } = useSocialMode();
 
   const live = liveSentence(ds.station.name, show);
   const rawShow = cleanLiveValue(show?.showName);
@@ -295,6 +298,8 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onE
     ? rawShow
     : null;
   const isExplicitlyContinuous = ds.station.automationClass === "automated" && !showContext;
+
+  const currentTrack = show?.currentTrack ?? null;
 
   const rowCls = [
     "fdrow",
@@ -336,6 +341,23 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onE
         {(rz.r === 0 || rz.r === 5) && ov > 0 && (
           <div className="fdrow__ov-caption">
             <b>{ov} artists</b> you know play here
+          </div>
+        )}
+
+        {/* Bottle panel — same visual tier as SE/lyrics badges.
+            Only rendered when a recording is resolved and social mode is on.
+            Click propagation is stopped so the row's tune-in handler doesn't fire. */}
+        {socialEnabled && currentTrack?.mbid && (
+          <div
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            <BottlePanel
+              mbid={currentTrack.mbid}
+              stationId={ds.station.id}
+              stationName={ds.station.name}
+              trackTitle={currentTrack.title}
+            />
           </div>
         )}
 
