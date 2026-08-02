@@ -9,15 +9,12 @@ import {
   useMyConnections,
   useLatestImportJob,
   useLatestSyncJob,
-  startSpotifyLibraryConnect,
   startSpotifyLibraryReconnect,
-  postStartImport,
   postStartSync,
   postImportLibraryFile,
   useMyPreferences,
   patchPreferences,
   ME_PREFERENCES_KEY,
-  ME_LATEST_IMPORT_JOB_KEY,
   ME_LATEST_SYNC_JOB_KEY,
   ME_OVERLAP_PICKERS_KEY,
   ME_OVERLAP_STATIONS_KEY,
@@ -593,47 +590,22 @@ export default function Library() {
 
   // Import job
   const { data: jobData } = useLatestImportJob();
-  const [bannerDismissed, setBannerDismissed] = useState(false);
   /** Stores the jobId the user dismissed the unresolved-review section for. */
   const [reviewDismissedJobId, setReviewDismissedJobId] = useState<number | null>(null);
   const [reviewExpanded, setReviewExpanded] = useState(false);
   useEffect(() => {
-    if (jobData?.status === "pending" || jobData?.status === "running") setBannerDismissed(false);
-  }, [jobData?.status]);
-  useEffect(() => {
     if (jobData?.status !== "done") return;
-    const t = setTimeout(() => setBannerDismissed(true), 60_000);
     // Refresh overlap data after import
     void queryClient.invalidateQueries({ queryKey: ME_OVERLAP_PICKERS_KEY });
     void queryClient.invalidateQueries({ queryKey: ME_OVERLAP_STATIONS_KEY });
     void queryClient.invalidateQueries({ queryKey: ME_OVERLAP_RUNS_KEY });
     void queryClient.invalidateQueries({ queryKey: ME_LIBRARY_COVERAGE_KEY });
-    return () => clearTimeout(t);
   }, [jobData?.status]); // eslint-disable-line react-hooks/exhaustive-deps
   const isImportActive = jobData?.status === "pending" || jobData?.status === "running";
-  const isRecentlyFinished = (() => {
-    if (!jobData?.finishedAt) return false;
-    return Date.now() - new Date(jobData.finishedAt).getTime() < 10 * 60_000;
-  })();
-  const showImportBanner = !bannerDismissed && jobData != null && (isImportActive || isRecentlyFinished);
   const showReviewSection =
     jobData?.status === "done" &&
     (jobData.unresolvedCount ?? 0) > 0 &&
     reviewDismissedJobId !== jobData.jobId;
-
-  const [connectBusy, setConnectBusy] = useState(false);
-  const [importBusy, setImportBusy] = useState(false);
-  const handleConnect = async () => {
-    setConnectBusy(true);
-    try { await startSpotifyLibraryConnect(); } finally { setConnectBusy(false); }
-  };
-  const handleImport = async () => {
-    setImportBusy(true);
-    try { await postStartImport("spotify"); } catch { /* 409 or transient */ } finally {
-      void queryClient.invalidateQueries({ queryKey: ME_LATEST_IMPORT_JOB_KEY });
-      setImportBusy(false);
-    }
-  };
 
   // Sync
   const { data: syncJobData } = useLatestSyncJob();
@@ -763,11 +735,6 @@ export default function Library() {
           <Search size={14} />
         </button>
       </div>
-
-      {/* Import banner (sticky — only while active/recent) */}
-      {showImportBanner && jobData && (
-        <LibraryImportBanner job={jobData} onDismiss={() => setBannerDismissed(true)} />
-      )}
 
       {/* Unresolved review section — shown after import when some tracks couldn't be matched */}
       {showReviewSection && jobData && (
@@ -963,44 +930,17 @@ export default function Library() {
                 <b>{selectorCount}</b> selector{selectorCount === 1 ? "" : "s"} fed it
               </Link>
             )}
-            {/* Connect / Import action */}
-            {!connLoading && !isAuthenticated && (
+            {/* Import action */}
+            {!isImportActive && (
               <button
                 type="button"
-                disabled={connectBusy}
-                onClick={() => void handleConnect()}
+                onClick={() => setImportModalOpen(true)}
                 className="lib-hero__stat lib-hero__stat--warm"
                 style={{ cursor: "pointer", border: "none" }}
-                data-testid="library-connect-spotify"
+                data-testid="library-import-open"
               >
                 <Music2 style={{ width: 10, height: 10 }} />
-                {connectBusy ? "Connecting…" : "Connect Spotify"}
-              </button>
-            )}
-            {isAuthenticated && !hasSpotify && isEmpty && (
-              <button
-                type="button"
-                disabled={connectBusy}
-                onClick={() => void handleConnect()}
-                className="lib-hero__stat lib-hero__stat--warm"
-                style={{ cursor: "pointer", border: "none" }}
-                data-testid="library-connect-spotify"
-              >
-                <Music2 style={{ width: 10, height: 10 }} />
-                {connectBusy ? "Connecting…" : "Connect Spotify"}
-              </button>
-            )}
-            {isAuthenticated && hasSpotify && !isImportActive && (
-              <button
-                type="button"
-                disabled={importBusy}
-                onClick={() => void handleImport()}
-                className="lib-hero__stat"
-                style={{ cursor: "pointer", border: "none" }}
-                data-testid="library-import-spotify"
-              >
-                <Music2 style={{ width: 10, height: 10 }} />
-                {importBusy ? "Importing…" : isEmpty ? "Import from Spotify" : "Re-import"}
+                {isEmpty ? "Add music" : "Import your library"}
               </button>
             )}
           </div>
@@ -1030,17 +970,17 @@ export default function Library() {
                 marginBottom: 10,
               }}
             >
-              Had a library here before? Reconnecting Spotify restores your keeps instantly.
+              Want to add more tracks or import from another service?
             </div>
             <button
               type="button"
-              disabled={connectBusy}
-              onClick={() => void handleConnect()}
+              onClick={() => setImportModalOpen(true)}
               className="dial-ctabtn dial-ctabtn--keep"
-              data-testid="library-connect-spotify"
+              data-testid="library-import-open"
               style={{ fontSize: 11, padding: "8px 14px" }}
             >
-              {connectBusy ? "…" : <><Music2 style={{ display: "inline", width: 11, height: 11, marginRight: 5, verticalAlign: "middle" }} />Reconnect Spotify</>}
+              <Music2 style={{ display: "inline", width: 11, height: 11, marginRight: 5, verticalAlign: "middle" }} />
+              Import your library
             </button>
           </div>
         )}

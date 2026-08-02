@@ -1,9 +1,11 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { useLocation } from "wouter";
 import { X, Upload, FileText, ArrowLeft, ChevronRight } from "lucide-react";
 import {
   postStartManualImport,
   postStartListenBrainzImport,
+  postStartImport,
+  startSpotifyLibraryConnect,
+  useMyConnections,
   ME_LATEST_IMPORT_JOB_KEY,
 } from "../lib/meHooks";
 import { useQueryClient } from "@tanstack/react-query";
@@ -98,7 +100,7 @@ function isMultilineContent(value: string): boolean {
 // Service picker data
 // ---------------------------------------------------------------------------
 
-export type ServiceId = "exportify" | "applemusiccsv" | "listenbrainz" | "lastfm" | "other";
+export type ServiceId = "spotify" | "exportify" | "applemusiccsv" | "listenbrainz" | "lastfm" | "other";
 
 export interface ServiceDef {
   id: ServiceId;
@@ -110,6 +112,11 @@ export interface ServiceDef {
 }
 
 export const IMPORT_SERVICES: ServiceDef[] = [
+  {
+    id: "spotify",
+    label: "Spotify (direct)",
+    hint: "Pull your saved tracks directly — Spotify connection required",
+  },
   {
     id: "exportify",
     label: "Spotify / Exportify",
@@ -168,7 +175,6 @@ type Mode = "service-picker" | "service-steps" | "input" | "username" | "tracks"
 interface Props { onClose(): void }
 
 export function ManualImportModal({ onClose }: Props) {
-  const [, navigate] = useLocation();
   const [mode, setMode] = useState<Mode>("service-picker");
   const [selectedService, setSelectedService] = useState<ServiceId | null>(null);
   const [rawInput, setRawInput] = useState("");
@@ -181,6 +187,8 @@ export function ManualImportModal({ onClose }: Props) {
   const singleInputRef = useRef<HTMLInputElement>(null);
 
   const qc = useQueryClient();
+  const { data: connections } = useMyConnections();
+  const hasSpotify = Array.isArray(connections) && connections.some((c) => c.service === "spotify");
 
   // Derived
   const tracks = mode === "tracks" ? parseTracks(rawInput) : [];
@@ -202,8 +210,33 @@ export function ManualImportModal({ onClose }: Props) {
 
   // ── Handlers ────────────────────────────────────────────────────────────
 
+  const handleSpotifyDirectImport = async () => {
+    if (hasSpotify) {
+      setSubmitting(true);
+      try {
+        await postStartImport("spotify");
+        await qc.invalidateQueries({ queryKey: ME_LATEST_IMPORT_JOB_KEY });
+        onClose();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Import failed — try again.");
+        setSubmitting(false);
+      }
+    } else {
+      try {
+        await startSpotifyLibraryConnect();
+        onClose();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not connect to Spotify.");
+      }
+    }
+  };
+
   const handleServiceSelect = (svc: ServiceDef) => {
     setError(null);
+    if (svc.id === "spotify") {
+      void handleSpotifyDirectImport();
+      return;
+    }
     if (svc.id === "other") {
       setSelectedService("other");
       setMode("tracks");
@@ -785,19 +818,6 @@ export function ManualImportModal({ onClose }: Props) {
           </>
         )}
 
-        {/* ── Spotify advanced link (all modes except lfm-hint) ─────────── */}
-        {mode !== "lfm-hint" && (
-          <p className="font-mono text-[10px] text-muted-foreground/50 border-t border-border/50 pt-3 -mb-1">
-            Advanced:{" "}
-            <a
-              href="/library"
-              className="underline underline-offset-2 hover:text-muted-foreground"
-              onClick={(e) => { e.preventDefault(); onClose(); navigate("/library"); }}
-            >
-              use your own Spotify credentials
-            </a>
-          </p>
-        )}
       </div>
     </div>
   );

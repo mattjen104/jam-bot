@@ -65,7 +65,7 @@ function phaseLabel(job: ImportJobStatus): string {
     case "fetching":
       if (isManual) return "Preparing track list…";
       if (isLB) return "Importing from ListenBrainz…";
-      return "Reading your Spotify library…";
+      return "Importing your library…";
     case "spine":
       return isManual ? "Preparing track list…" : "Building track index…";
     case "cache":    return "Loading cached matches…";
@@ -73,7 +73,7 @@ function phaseLabel(job: ImportJobStatus): string {
     default:
       if (isManual) return "Preparing track list…";
       if (isLB) return "Importing from ListenBrainz…";
-      return "Reading your Spotify library…";
+      return "Importing your library…";
   }
 }
 
