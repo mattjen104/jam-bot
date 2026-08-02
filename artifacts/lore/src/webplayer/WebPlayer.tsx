@@ -9,6 +9,9 @@ import {
   useIsAuthenticated,
   useMutationKeep,
 } from "../lib/meHooks";
+import { BottlePanel } from "../components/BottlePanel";
+import { useStationPresence } from "../hooks/useStationPresence";
+import { useSocialMode } from "../lib/social";
 import { useWpOnAir, useWpLoreCounts, type WpOnAirItem } from "./hooks";
 import { LoreChip } from "./LoreChip";
 import { WpKeep } from "./WpKeep";
@@ -249,7 +252,41 @@ function NowPlayingCard({
       <div style={{ flexBasis: "100%", minWidth: 0 }}>
         <WpCast />
       </div>
+      {/* Bottle panel — message-in-a-bottle annotations anchored to the resolved MBID.
+          Hidden during preview scans (no fixed station) and when MBID is unresolved. */}
+      {nowMbid && !scanHop && item && (
+        <BottlePanelWrapper
+          mbid={nowMbid}
+          stationId={item.station.id}
+          stationName={item.station.name}
+          trackTitle={item.now.title}
+        />
+      )}
     </div>
+  );
+}
+
+/** Thin wrapper so BottlePanel (which uses hooks) can be conditionally mounted
+ *  from JSX without violating the Rules of Hooks. Social-mode gating happens
+ *  inside BottlePanel itself so the re-enable toggle is always reachable. */
+function BottlePanelWrapper({
+  mbid,
+  stationId,
+  stationName,
+  trackTitle,
+}: {
+  mbid: string;
+  stationId: number;
+  stationName: string;
+  trackTitle: string;
+}) {
+  return (
+    <BottlePanel
+      mbid={mbid}
+      stationId={stationId}
+      stationName={stationName}
+      trackTitle={trackTitle}
+    />
   );
 }
 
@@ -378,14 +415,18 @@ function OnAirRow({
   item,
   authenticated,
   nowInLibrary,
+  presenceCount,
   onOpenRun,
 }: {
   item: WpOnAirItem;
   authenticated: boolean;
   nowInLibrary: boolean;
+  /** Active listener count for this station from the presence endpoint. */
+  presenceCount?: number;
   onOpenRun: (slug: string) => void;
 }) {
   const { radio, scan } = usePlayer();
+  const { enabled: socialEnabled } = useSocialMode();
   const isPlaying = radio.station?.slug === item.station.slug && radio.status !== "idle";
   const title = item.show?.name ?? item.station.name;
   // When a show name is the title, keep the station as context; otherwise the
@@ -462,6 +503,14 @@ function OnAirRow({
         {item.now.resolved ? (
           <p style={{ margin: "1px 0 0", fontSize: 12, color: nowInLibrary ? "var(--wp-text-success)" : "var(--wp-text-secondary)", ...oneLine }}>
             {item.now.artist}
+            {socialEnabled && presenceCount != null && presenceCount > 1 && (
+              <span
+                style={{ fontSize: 10, color: "var(--wp-text-muted)", marginLeft: 5, opacity: 0.7 }}
+                title={`${presenceCount} listeners here now`}
+              >
+                · {presenceCount} here
+              </span>
+            )}
           </p>
         ) : (
           <p style={{ margin: "1px 0 0", fontSize: 12, color: "var(--wp-text-muted)", ...oneLine }}>
@@ -576,6 +625,10 @@ export default function WebPlayer() {
   const items = onAir?.items ?? [];
   const onAirMbids = items.map((i) => i.now.mbid).filter((m): m is string => m != null);
   const { data: onAirLore } = useWpLoreCounts(onAirMbids);
+
+  // Station presence — `· N here` label on chips when > 1 listener is active.
+  const onAirStationIds = items.map((i) => i.station.id);
+  const presenceCounts = useStationPresence(onAirStationIds);
 
   // Attendance heartbeat — records that this listener was tuned while a spin
   // aired.  Only fires when audio is actually playing and the tab is visible.
@@ -721,6 +774,7 @@ export default function WebPlayer() {
                   item.now.mbid != null &&
                   (onAirLore?.get(item.now.mbid)?.keptSince ?? null) != null
                 }
+                presenceCount={presenceCounts.get(item.station.id)}
                 onOpenRun={(slug) => setRunRef({ slug, runId: null })}
               />
             ))}

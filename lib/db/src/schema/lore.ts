@@ -1076,6 +1076,11 @@ export const loreUsersTable = pgTable("lore_users", {
    * PATCH /me/preferences.
    */
   ledgerEnabled: boolean("ledger_enabled").notNull().default(false),
+  /**
+   * Listener's chosen Halloween emoji avatar for song-bottle annotations.
+   * Null until the listener picks one. Stored as the raw emoji character.
+   */
+  avatar: text("avatar"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -2218,3 +2223,66 @@ export const tasteSeedsTable = pgTable(
 
 export type TasteSeed = typeof tasteSeedsTable.$inferSelect;
 export type InsertTasteSeed = typeof tasteSeedsTable.$inferInsert;
+
+/**
+ * Song Bottles — message-in-a-bottle annotations anchored to a recording MBID.
+ *
+ * A bottle is a short note (≤280 chars) left by a listener while a specific
+ * recording is playing.  It travels with the MBID: any station that plays that
+ * track delivers it to the next listeners.  `plays_remaining` starts at 3 and
+ * decrements each time the MBID fires a new spin event; at 0 the body is
+ * nulled and `body_archived_at` is set (the count row is kept for resonance
+ * metrics).
+ *
+ * `handle` and `avatar` are snapshotted at write time so they survive even if
+ * the listener's preferences change later.
+ */
+export const songBottlesTable = pgTable(
+  "song_bottles",
+  {
+    id: serial("id").primaryKey(),
+    /** FK to the recording this bottle is anchored to. */
+    mbid: text("mbid")
+      .notNull()
+      .references(() => recordingsTable.mbid),
+    /** Station the listener was on when they wrote the note. */
+    stationId: integer("station_id")
+      .notNull()
+      .references(() => stationsTable.id),
+    /** The listener who wrote it. */
+    userId: integer("user_id")
+      .notNull()
+      .references(() => loreUsersTable.id),
+    /** Deterministic handle derived from the listener's device key. */
+    handle: text("handle").notNull(),
+    /** Halloween emoji avatar char (snapshotted at write time). */
+    avatar: text("avatar").notNull(),
+    /**
+     * The note body (≤280 chars).  Nulled when plays_remaining reaches 0
+     * and body_archived_at is set.  Null rows are archived — the row stays
+     * for resonance count purposes.
+     */
+    body: text("body"),
+    /** Approximate playhead offset when the note was written (ms from start). */
+    progressMs: integer("progress_ms"),
+    /**
+     * Decremented by 1 on each spin event for this MBID.  Starts at 3.
+     * At 0, body is nulled and body_archived_at is set.
+     */
+    playsRemaining: integer("plays_remaining").notNull().default(3),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    /** Set (along with body←null) when plays_remaining hits 0. */
+    bodyArchivedAt: timestamp("body_archived_at"),
+  },
+  (t) => [
+    index("song_bottles_mbid_remaining_idx").on(
+      t.mbid,
+      t.playsRemaining,
+      t.createdAt,
+    ),
+    index("song_bottles_user_mbid_idx").on(t.userId, t.mbid),
+  ],
+);
+
+export type SongBottle = typeof songBottlesTable.$inferSelect;
+export type InsertSongBottle = typeof songBottlesTable.$inferInsert;

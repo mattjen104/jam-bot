@@ -60,6 +60,7 @@ import { applyCrossingsCacheMigration } from "./lore/crossings-cache-migration.j
 import { applyImportItemsMigration } from "./lore/import-items-migration.js";
 import { applyAttendanceMigration } from "./lore/attendance-migration.js";
 import { applyTasteSeedsMigration } from "./lore/taste-seeds-migration.js";
+import { applyBottlesMigration } from "./lore/bottles-migration.js";
 import { startSessionExpiryWorker } from "./routes/me/attendance.js";
 import { scheduleAnonCleanup } from "./lore/anonCleanup.js";
 
@@ -111,6 +112,7 @@ async function bootLore(): Promise<void> {
     await runMigration("applyImportItemsMigration", applyImportItemsMigration);
     await runMigration("applyAttendanceMigration", applyAttendanceMigration);
     await runMigration("applyTasteSeedsMigration", applyTasteSeedsMigration);
+    await runMigration("applyBottlesMigration", applyBottlesMigration);
     await ensurePicksUnifiedView();
     await seedStations();
     try {

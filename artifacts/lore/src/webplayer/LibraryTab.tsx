@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { Disc3, Radio, Loader2, Search, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "@workspace/api-client-react";
@@ -528,6 +528,28 @@ function HearInRuns({
   );
 }
 
+/** Private note hook — localStorage only, never sent to the server. */
+function usePrivateNote(mbid: string | null): [string, (v: string) => void] {
+  const key = mbid ? `lore:note:${mbid}` : null;
+  const [note, setNoteState] = useState<string>(() => {
+    if (!key) return "";
+    try { return localStorage.getItem(key) ?? ""; } catch { return ""; }
+  });
+  useEffect(() => {
+    if (!key) return;
+    try { setNoteState(localStorage.getItem(key) ?? ""); } catch { /* noop */ }
+  }, [key]);
+  const setNote = useCallback((v: string) => {
+    setNoteState(v);
+    if (!key) return;
+    try {
+      if (v) localStorage.setItem(key, v);
+      else localStorage.removeItem(key);
+    } catch { /* noop */ }
+  }, [key]);
+  return [note, setNote];
+}
+
 function LibraryRow({
   item,
   loreCounts,
@@ -540,6 +562,8 @@ function LibraryRow({
   onOpenRun: (slug: string, runId: number | null) => void;
 }) {
   const rec = item.recording;
+  const [note, setNote] = usePrivateNote(item.mbid ?? null);
+  const [noteExpanded, setNoteExpanded] = useState(false);
 
   return (
     <div
@@ -599,6 +623,59 @@ function LibraryRow({
           </>
         )}
       </div>
+      {/* Private note — localStorage only, never sent to the server */}
+      {item.mbid && (
+        <div style={{ marginTop: 4 }}>
+          <button
+            type="button"
+            onClick={() => setNoteExpanded((v) => !v)}
+            aria-expanded={noteExpanded}
+            aria-label={noteExpanded ? "Hide private note" : "Add private note"}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: "2px 0",
+              fontSize: 11,
+              color: note
+                ? "var(--wp-text-secondary)"
+                : "var(--wp-text-muted)",
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              opacity: note || noteExpanded ? 1 : 0.5,
+            }}
+            data-testid={`library-note-toggle-${item.mbid}`}
+          >
+            🔒 {note ? "private note" : "add private note"}
+          </button>
+          {noteExpanded && (
+            <textarea
+              rows={2}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="a private thought about this track…"
+              data-testid={`library-note-input-${item.mbid}`}
+              style={{
+                width: "100%",
+                marginTop: 4,
+                resize: "none",
+                background: "var(--wp-surface-2)",
+                border: "0.5px solid var(--wp-border)",
+                borderRadius: 8,
+                padding: "6px 8px",
+                fontSize: 13,
+                fontStyle: "italic",
+                color: "var(--wp-text-secondary)",
+                fontFamily: "inherit",
+                lineHeight: 1.6,
+                outline: "none",
+                boxSizing: "border-box",
+              }}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }

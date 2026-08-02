@@ -33,6 +33,11 @@ export async function setup(): Promise<void> {
       "../src/lore/attendance-migration.js"
     );
     await applyAttendanceMigration();
+
+    const { applyBottlesMigration } = await import(
+      "../src/lore/bottles-migration.js"
+    );
+    await applyBottlesMigration();
   } catch {
     // No real DB available — pure-unit environment.  Workers that need the
     // tables will skip their tests gracefully via their own dbAvailable guards.
