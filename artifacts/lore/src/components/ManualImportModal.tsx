@@ -11,10 +11,10 @@ import { useQueryClient } from "@tanstack/react-query";
 interface Track { artist: string; title: string }
 
 // ---------------------------------------------------------------------------
-// Parsers (unchanged from previous implementation)
+// Parsers — exported so they can be unit-tested independently
 // ---------------------------------------------------------------------------
 
-function parseCsv(text: string): Track[] {
+export function parseCsv(text: string): Track[] {
   const lines = text.split(/\r?\n/).filter((l) => l.trim());
   if (lines.length < 2) return [];
 
@@ -40,7 +40,7 @@ function parseCsv(text: string): Track[] {
   return tracks;
 }
 
-function splitCsvLine(line: string): string[] {
+export function splitCsvLine(line: string): string[] {
   const cols: string[] = [];
   let cur = "";
   let inQuote = false;
@@ -53,7 +53,7 @@ function splitCsvLine(line: string): string[] {
   return cols;
 }
 
-function parsePlainText(text: string): Track[] {
+export function parsePlainText(text: string): Track[] {
   return text
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -68,7 +68,7 @@ function parsePlainText(text: string): Track[] {
     });
 }
 
-function parseTracks(text: string): Track[] {
+export function parseTracks(text: string): Track[] {
   const trimmed = text.trim();
   if (!trimmed) return [];
   const firstLine = trimmed.split(/\r?\n/)[0] ?? "";
@@ -95,22 +95,82 @@ function isMultilineContent(value: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Service picker data
+// ---------------------------------------------------------------------------
+
+export type ServiceId = "exportify" | "applemusiccsv" | "listenbrainz" | "lastfm" | "other";
+
+export interface ServiceDef {
+  id: ServiceId;
+  label: string;
+  hint: string;
+  steps?: Array<{ text: string; linkHref?: string; linkLabel?: string }>;
+  externalHref?: string;
+  externalLabel?: string;
+}
+
+export const IMPORT_SERVICES: ServiceDef[] = [
+  {
+    id: "exportify",
+    label: "Spotify / Exportify",
+    hint: "Export any Spotify playlist as a CSV",
+    externalHref: "https://exportify.net",
+    externalLabel: "Open Exportify",
+    steps: [
+      { text: "Go to Exportify and log in with your Spotify account.", linkHref: "https://exportify.net", linkLabel: "exportify.net" },
+      { text: "Click Export next to the playlist you want to import." },
+      { text: "Drop the downloaded CSV below, or paste its contents." },
+    ],
+  },
+  {
+    id: "applemusiccsv",
+    label: "Apple Music / TuneMyMusic",
+    hint: "Export your Apple Music library via TuneMyMusic",
+    externalHref: "https://www.tunemymusic.com/transfer",
+    externalLabel: "Open TuneMyMusic",
+    steps: [
+      { text: "Go to TuneMyMusic and choose Apple Music as the source.", linkHref: "https://www.tunemymusic.com/transfer", linkLabel: "tunemymusic.com" },
+      { text: "Export your library — choose 'To File' and download the CSV." },
+      { text: "Drop the downloaded CSV below, or paste its contents." },
+    ],
+  },
+  {
+    id: "listenbrainz",
+    label: "ListenBrainz",
+    hint: "Import loved recordings by username",
+  },
+  {
+    id: "lastfm",
+    label: "Last.fm",
+    hint: "Export loved tracks then drop the CSV here",
+  },
+  {
+    id: "other",
+    label: "Other / paste",
+    hint: "Paste tracks or drop any CSV file",
+  },
+];
+
+// ---------------------------------------------------------------------------
 // Mode types
 // ---------------------------------------------------------------------------
 
 /**
- * input     — initial state: combined text input + file drop zone
- * username  — single token submitted; showing LB / Last.fm disambiguation
- * tracks    — multiline content detected; textarea + parse count
- * lfm-hint  — user tapped Last.fm from disambiguation; showing export hint
+ * service-picker — initial mode: grid of service tiles
+ * service-steps  — per-service instruction pane (selectedService is set)
+ * input          — legacy combined text/file mode (kept as internal fallback)
+ * username       — single token submitted; showing LB / Last.fm disambiguation
+ * tracks         — multiline content detected; textarea + parse count
+ * lfm-hint       — user tapped Last.fm from disambiguation; showing export hint
  */
-type Mode = "input" | "username" | "tracks" | "lfm-hint";
+type Mode = "service-picker" | "service-steps" | "input" | "username" | "tracks" | "lfm-hint";
 
 interface Props { onClose(): void }
 
 export function ManualImportModal({ onClose }: Props) {
   const [, navigate] = useLocation();
-  const [mode, setMode] = useState<Mode>("input");
+  const [mode, setMode] = useState<Mode>("service-picker");
+  const [selectedService, setSelectedService] = useState<ServiceId | null>(null);
   const [rawInput, setRawInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -141,6 +201,28 @@ export function ManualImportModal({ onClose }: Props) {
   }, [mode]);
 
   // ── Handlers ────────────────────────────────────────────────────────────
+
+  const handleServiceSelect = (svc: ServiceDef) => {
+    setError(null);
+    if (svc.id === "other") {
+      setSelectedService("other");
+      setMode("tracks");
+      return;
+    }
+    if (svc.id === "listenbrainz") {
+      setSelectedService("listenbrainz");
+      setMode("input");
+      return;
+    }
+    if (svc.id === "lastfm") {
+      setSelectedService("lastfm");
+      setMode("lfm-hint");
+      return;
+    }
+    // exportify / applemusiccsv — show per-service steps
+    setSelectedService(svc.id);
+    setMode("service-steps");
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setRawInput(e.target.value);
@@ -236,15 +318,19 @@ export function ManualImportModal({ onClose }: Props) {
   };
 
   const handleBack = () => {
-    setMode("input");
+    // Always return to the service picker from any downstream mode
+    setMode("service-picker");
     setError(null);
-    // Keep rawInput so the user doesn't lose what they typed
-    requestAnimationFrame(() => singleInputRef.current?.focus());
+    setSelectedService(null);
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  const showBack = mode !== "input";
+  const showBack = mode !== "service-picker";
+
+  const currentServiceDef = selectedService
+    ? IMPORT_SERVICES.find((s) => s.id === selectedService) ?? null
+    : null;
 
   return (
     <div
@@ -274,13 +360,15 @@ export function ManualImportModal({ onClose }: Props) {
             )}
             <div>
               <h2 className="font-mono text-sm font-semibold text-foreground">
-                {mode === "username" ? "Import your tracks" :
+                {mode === "service-picker" ? "Import your tracks" :
+                 mode === "service-steps" && currentServiceDef ? currentServiceDef.label :
+                 mode === "username" ? "Import your tracks" :
                  mode === "lfm-hint" ? "Import from Last.fm" :
                  "Import your tracks"}
               </h2>
-              {mode === "input" && (
+              {mode === "service-picker" && (
                 <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
-                  Enter a username, paste tracks, or drop a file.
+                  Choose where your tracks are coming from.
                 </p>
               )}
               {mode === "username" && (
@@ -300,7 +388,105 @@ export function ManualImportModal({ onClose }: Props) {
           </button>
         </div>
 
-        {/* ── Input mode ─────────────────────────────────────────────── */}
+        {/* ── Service picker ─────────────────────────────────────────── */}
+        {mode === "service-picker" && (
+          <div className="flex flex-col gap-2" data-testid="service-picker">
+            {IMPORT_SERVICES.map((svc) => (
+              <button
+                key={svc.id}
+                type="button"
+                data-testid={`service-tile-${svc.id}`}
+                onClick={() => handleServiceSelect(svc)}
+                className="flex w-full items-center justify-between rounded-xl border border-border px-4 py-3 text-left transition-colors hover:border-primary"
+                style={{ background: "hsl(var(--muted)/0.2)" }}
+              >
+                <div>
+                  <p className="font-mono text-[12px] font-semibold text-foreground">{svc.label}</p>
+                  <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">{svc.hint}</p>
+                </div>
+                <ChevronRight size={14} className="shrink-0 text-muted-foreground" aria-hidden />
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* ── Service steps ──────────────────────────────────────────── */}
+        {mode === "service-steps" && currentServiceDef && (
+          <>
+            <div
+              className="rounded-lg border border-border px-3 py-3 font-mono text-[11px] text-muted-foreground space-y-2"
+              style={{ background: "hsl(var(--muted)/0.3)" }}
+              data-testid="service-steps-panel"
+            >
+              <p className="font-semibold text-foreground">{currentServiceDef.label}</p>
+              {currentServiceDef.steps && (
+                <ol className="space-y-1.5 list-none">
+                  {currentServiceDef.steps.map((step, i) => (
+                    <li key={i} className="flex gap-2">
+                      <span
+                        className="shrink-0 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold"
+                        style={{ background: "hsl(var(--primary)/0.15)", color: "hsl(var(--primary))" }}
+                        aria-hidden
+                      >
+                        {i + 1}
+                      </span>
+                      <span>
+                        {step.linkHref ? (
+                          <>
+                            {step.text.split(step.linkLabel ?? step.linkHref)[0]}
+                            <a
+                              href={step.linkHref}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary underline underline-offset-2"
+                            >
+                              {step.linkLabel ?? step.linkHref}
+                            </a>
+                            {step.text.split(step.linkLabel ?? step.linkHref)[1]}
+                          </>
+                        ) : step.text}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+              {currentServiceDef.externalHref && (
+                <a
+                  href={currentServiceDef.externalHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-primary underline underline-offset-2"
+                  data-testid="service-external-link"
+                >
+                  {currentServiceDef.externalLabel ?? currentServiceDef.externalHref}
+                </a>
+              )}
+            </div>
+
+            {/* Upload zone */}
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={() => fileRef.current?.click()}
+              role="button"
+              tabIndex={0}
+              aria-label="Upload or drop a CSV file"
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileRef.current?.click(); }}
+              className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-4 font-mono text-[11px] text-muted-foreground transition-colors"
+              style={{
+                borderColor: isDragging ? "hsl(var(--primary))" : "hsl(var(--border))",
+                background: isDragging ? "hsl(var(--primary)/0.06)" : "hsl(var(--muted)/0.15)",
+              }}
+            >
+              <Upload size={14} aria-hidden />
+              <span>{isDragging ? "Drop to import" : "Drop CSV or click to browse"}</span>
+              <input ref={fileRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFileInput} />
+            </div>
+          </>
+        )}
+
+        {/* ── Input mode (ListenBrainz path) ─────────────────────────── */}
         {mode === "input" && (
           <>
             {/* Single-line text input */}
@@ -311,7 +497,7 @@ export function ManualImportModal({ onClose }: Props) {
                 value={rawInput}
                 onChange={handleInputChange}
                 onKeyDown={handleInputKeyDown}
-                placeholder="Username or paste tracks here…"
+                placeholder="Enter your ListenBrainz username…"
                 autoFocus
                 className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 font-mono text-[11px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                 spellCheck={false}
@@ -351,7 +537,7 @@ export function ManualImportModal({ onClose }: Props) {
 
             {/* Hint */}
             <p className="font-mono text-[10px] text-muted-foreground/60">
-              Accepts ListenBrainz / Last.fm usernames, Spotify Exportify CSV, or lines of Artist – Title.
+              Accepts ListenBrainz usernames, or paste tracks directly.
             </p>
           </>
         )}
@@ -499,15 +685,20 @@ export function ManualImportModal({ onClose }: Props) {
               ref={textareaRef}
               value={rawInput}
               onChange={handleTextareaChange}
-              placeholder={"Artist – Title\nArtist – Title\n…"}
+              placeholder={
+                selectedService === "other"
+                  ? "Artist – Title\nArtist – Title\n…\n\nOr paste any CSV with artist and title columns."
+                  : "Artist – Title\nArtist – Title\n…"
+              }
               rows={8}
               className="w-full resize-y rounded-lg border border-border bg-background px-3 py-2 font-mono text-[11px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               spellCheck={false}
+              data-testid="tracks-textarea"
             />
 
             {/* Parse preview */}
             {rawInput.trim() && (
-              <p className="font-mono text-[11px] text-muted-foreground">
+              <p className="font-mono text-[11px] text-muted-foreground" data-testid="track-count">
                 {tracks.length > 0
                   ? <><span className="text-foreground">{tracks.length.toLocaleString()}</span> tracks found</>
                   : <span className="text-destructive">No tracks recognised — check the format above.</span>}
@@ -540,7 +731,9 @@ export function ManualImportModal({ onClose }: Props) {
             {/* Inline tip */}
             <p className="font-mono text-[10px] text-muted-foreground/60">
               <FileText size={10} className="inline mr-1 -mt-px" aria-hidden />
-              Accepts Spotify Exportify CSV, Apple Music CSV, or lines of Artist – Title.
+              {selectedService === "other"
+                ? "Accepts any CSV with artist and title columns, or lines of Artist – Title."
+                : "Accepts Spotify Exportify CSV, Apple Music CSV, or lines of Artist – Title."}
             </p>
           </>
         )}

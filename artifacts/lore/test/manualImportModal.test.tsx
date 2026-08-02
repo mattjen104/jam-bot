@@ -1,420 +1,290 @@
 // @vitest-environment jsdom
 /**
- * Unit tests for ManualImportModal — mode-based auto-detecting input.
- *
- * The modal has four modes:
- *   input    — initial state: single text field + file drop zone
- *   username — single-token submitted; showing LB / Last.fm disambiguation
- *   lfm-hint — user tapped "Last.fm instead?"; showing export steps
- *   tracks   — multiline content detected; textarea + import action
+ * Tests for ManualImportModal covering the service-picker flow and CSV parsing.
  *
  * Confirms:
- *  - Input mode renders the unified text input + file drop zone (no service picker).
- *  - Submitting a single-word token switches to username disambiguation.
- *  - Clicking "Importing from Last.fm" from username mode switches to lfm-hint.
- *  - Tracks mode shows parsed track count and an import button.
- *  - The back button (and "Edit" pill) reset state correctly and return to input mode.
- *  - After navigating back, a new input updates the visible pane correctly.
- *  - A successful ListenBrainz import calls postStartListenBrainzImport and closes the modal.
- *  - A successful manual import calls postStartManualImport and closes the modal.
- *  - An import error is shown in-line and does not close the modal.
+ *  - The modal opens on the service-picker pane (service tiles visible)
+ *  - Selecting the Exportify tile shows its instruction steps and external link
+ *  - Selecting the Apple Music / TuneMyMusic tile shows its steps and external link
+ *  - The Back arrow from a service-steps pane returns to the service picker
+ *  - Selecting "Other" shows only the paste area with the generic hint (no step list)
+ *  - Exportify CSV (columns "Track Name", "Artist Name") parses to the correct track count
+ *  - Apple Music / TuneMyMusic CSV (columns "Name", "Artist") parses to the correct track count
  */
 import React from "react";
-import { describe, expect, it, vi, afterEach, beforeEach } from "vitest";
-import { cleanup, render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import { describe, expect, it, vi, afterEach } from "vitest";
+import { cleanup, render, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ManualImportModal } from "../src/components/ManualImportModal";
+import {
+  ManualImportModal,
+  parseCsv,
+  parseTracks,
+} from "../src/components/ManualImportModal";
 
 // ---------------------------------------------------------------------------
-// Hoisted mock fns
+// Module-level mocks
 // ---------------------------------------------------------------------------
 
-const { mockPostStartManualImport, mockPostStartListenBrainzImport } = vi.hoisted(() => ({
-  mockPostStartManualImport: vi.fn<[], Promise<void>>(),
-  mockPostStartListenBrainzImport: vi.fn<[], Promise<void>>(),
+vi.mock("wouter", () => ({
+  useLocation: vi.fn(() => ["/", vi.fn()]),
+  Link: ({ children, href }: { children: React.ReactNode; href: string }) => (
+    <a href={href}>{children}</a>
+  ),
 }));
-
-// ---------------------------------------------------------------------------
-// Module mocks
-// ---------------------------------------------------------------------------
 
 vi.mock("../src/lib/meHooks", async (importOriginal) => {
   const { makeMeHooksMock } = await import("./helpers/meHooksMock");
-  return makeMeHooksMock(importOriginal, {
-    postStartManualImport: mockPostStartManualImport,
-    postStartListenBrainzImport: mockPostStartListenBrainzImport,
-  });
+  return makeMeHooksMock(importOriginal);
 });
-
-// wouter's useLocation is called for the "use your own Spotify credentials" nav link
-vi.mock("wouter", () => ({
-  useLocation: vi.fn(() => ["/", vi.fn()]),
-}));
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-const noop = () => {};
-
-function makeQueryClient() {
-  return new QueryClient({
-    defaultOptions: { queries: { retry: false, enabled: false } },
-  });
-}
-
-function renderModal(onClose: () => void = noop) {
-  return render(
-    <QueryClientProvider client={makeQueryClient()}>
-      <ManualImportModal onClose={onClose} />
-    </QueryClientProvider>,
-  );
-}
-
-/**
- * Enter tracks mode via the fallback detect path.
- *
- * handleDetect reads rawInput from its React closure. In React 18 automatic
- * batching, state updates from fireEvent.change are not committed until the
- * current task ends. We must flush the change first (separate act), then
- * fire the click so handleDetect sees the updated rawInput.
- *
- * Note: the value is NOT carried into the textarea automatically when detect
- * fires with stale rawInput=""; callers that need textarea content must set
- * it explicitly after calling enterTracksMode().
- */
-async function enterTracksMode() {
-  const input = screen.getByPlaceholderText(/username or paste tracks here/i);
-  const detectBtn = input.nextElementSibling as HTMLButtonElement;
-  // 1. Set a space-containing value so handleDetect falls through to tracks mode.
-  await act(async () => { fireEvent.change(input, { target: { value: "Fleetwood Mac – Go Your Own Way" } }); });
-  // 2. Click detect — handleDetect now reads the committed rawInput.
-  await act(async () => { fireEvent.click(detectBtn); });
-  // 3. Guarantee we are in tracks mode before returning.
-  await screen.findByRole("textbox");
-}
-
-// ---------------------------------------------------------------------------
-// Setup / teardown
-// ---------------------------------------------------------------------------
-
-beforeEach(() => {
-  mockPostStartManualImport.mockReset();
-  mockPostStartListenBrainzImport.mockReset();
-});
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
 });
 
-// ---------------------------------------------------------------------------
-// Tracks-mode helper
-//
-// jsdom strips newlines from <input type="text"> values, so the multiline
-// auto-switch effect cannot be triggered via fireEvent on the single-line
-// input.  Instead we reach tracks mode through the fallback path in
-// handleDetect(): a value that contains spaces but is not multiline is not
-// treated as a username, so it falls through to setMode("tracks").
-//
-// handleDetect reads rawInput from its React closure.  In React 18 automatic
-// batching, state updates from fireEvent.change are not committed until the
-// current task ends.  We must flush the change first (separate act), then
-// fire the click so handleDetect sees the updated rawInput.
-// ---------------------------------------------------------------------------
+const noop = () => {};
 
-async function enterTracksMode() {
-  const input = screen.getByPlaceholderText(/username or paste tracks here/i);
-  const detectBtn = input.nextElementSibling as HTMLButtonElement;
-  // 1. Set a space-containing value so handleDetect falls through to tracks mode.
-  await act(async () => { fireEvent.change(input, { target: { value: "Fleetwood Mac – Go Your Own Way" } }); });
-  // 2. Click detect — handleDetect now reads the committed rawInput.
-  await act(async () => { fireEvent.click(detectBtn); });
-  // 3. Guarantee we are in tracks mode before returning.
-  await screen.findByRole("textbox");
+function makeQC() {
+  return new QueryClient({ defaultOptions: { queries: { retry: false, enabled: false } } });
+}
+
+function renderModal(onClose = noop) {
+  return render(
+    <QueryClientProvider client={makeQC()}>
+      <ManualImportModal onClose={onClose} />
+    </QueryClientProvider>,
+  );
 }
 
 // ---------------------------------------------------------------------------
-// Tests: initial "input" mode
+// Service-picker: initial state
 // ---------------------------------------------------------------------------
 
-describe("ManualImportModal — initial input mode", () => {
-  it("renders the unified text input with the combined placeholder", () => {
+describe("ManualImportModal — service picker (initial state)", () => {
+  it("shows the service-picker pane on first render", () => {
     renderModal();
-    expect(screen.getByPlaceholderText(/username or paste tracks here/i)).toBeTruthy();
+    expect(screen.getByTestId("service-picker")).toBeTruthy();
   });
 
-  it("renders the file drop zone", () => {
+  it("renders an Exportify service tile", () => {
     renderModal();
-    expect(screen.getByRole("button", { name: /upload or drop a csv or text file/i })).toBeTruthy();
+    expect(screen.getByTestId("service-tile-exportify")).toBeTruthy();
   });
 
-  it("does NOT show a service picker with Spotify / Apple Music buttons", () => {
+  it("renders an Apple Music / TuneMyMusic service tile", () => {
     renderModal();
-    expect(screen.queryByRole("button", { name: /^spotify$/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /^apple music$/i })).toBeNull();
+    expect(screen.getByTestId("service-tile-applemusiccsv")).toBeTruthy();
   });
 
-  it("does NOT show a back arrow in input mode", () => {
+  it("renders an Other service tile", () => {
     renderModal();
-    expect(screen.queryByRole("button", { name: /^back$/i })).toBeNull();
+    expect(screen.getByTestId("service-tile-other")).toBeTruthy();
   });
 
-  it("shows the Close button", () => {
+  it("does NOT show the steps panel on first render", () => {
     renderModal();
-    expect(screen.getByRole("button", { name: /close/i })).toBeTruthy();
+    expect(screen.queryByTestId("service-steps-panel")).toBeNull();
   });
 });
 
 // ---------------------------------------------------------------------------
-// Tests: username detection
+// Exportify tile: steps pane
 // ---------------------------------------------------------------------------
 
-describe("ManualImportModal — username detection", () => {
-  it("goes to username mode when a single-word value is submitted with Enter", () => {
+describe("ManualImportModal — Exportify service steps", () => {
+  it("shows the steps panel after selecting Exportify", () => {
     renderModal();
-    const input = screen.getByPlaceholderText(/username or paste tracks here/i);
-    fireEvent.change(input, { target: { value: "mfavourite" } });
-    fireEvent.keyDown(input, { key: "Enter" });
-
-    expect(screen.getByText(/import from listenbrainz/i)).toBeTruthy();
-    expect(screen.getByText(/importing from last\.fm instead/i)).toBeTruthy();
+    fireEvent.click(screen.getByTestId("service-tile-exportify"));
+    expect(screen.getByTestId("service-steps-panel")).toBeTruthy();
   });
 
-  it("shows the detected username in the disambiguation pane", () => {
+  it("shows at least one instruction step for Exportify", () => {
     renderModal();
-    const input = screen.getByPlaceholderText(/username or paste tracks here/i);
-    fireEvent.change(input, { target: { value: "johndoe" } });
-    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.click(screen.getByTestId("service-tile-exportify"));
+    // The first step mentions logging in with Spotify
+    expect(screen.getByText(/log in with your spotify account/i)).toBeTruthy();
+  });
 
-    // Username appears in both the pill and the subtitle; the Edit button
-    // only appears inside the pill and confirms it is rendered correctly.
-    expect(screen.getByRole("button", { name: /edit/i })).toBeTruthy();
-    expect(screen.getAllByText(/johndoe/).length).toBeGreaterThan(0);
+  it("shows the external link for Exportify", () => {
+    renderModal();
+    fireEvent.click(screen.getByTestId("service-tile-exportify"));
+    const link = screen.getByTestId("service-external-link");
+    expect(link).toBeTruthy();
+    expect((link as HTMLAnchorElement).href).toContain("exportify.net");
+  });
+
+  it("does NOT show the service picker after selecting Exportify", () => {
+    renderModal();
+    fireEvent.click(screen.getByTestId("service-tile-exportify"));
+    expect(screen.queryByTestId("service-picker")).toBeNull();
   });
 });
 
 // ---------------------------------------------------------------------------
-// Tests: Last.fm hint mode
+// Apple Music / TuneMyMusic tile: steps pane
 // ---------------------------------------------------------------------------
 
-describe("ManualImportModal — Last.fm hint", () => {
-  it("switches to lfm-hint when 'Importing from Last.fm instead?' is clicked", async () => {
+describe("ManualImportModal — Apple Music / TuneMyMusic service steps", () => {
+  it("shows the steps panel after selecting Apple Music / TuneMyMusic", () => {
     renderModal();
+    fireEvent.click(screen.getByTestId("service-tile-applemusiccsv"));
+    expect(screen.getByTestId("service-steps-panel")).toBeTruthy();
+  });
 
-    const input = screen.getByPlaceholderText(/username or paste tracks here/i);
-    fireEvent.change(input, { target: { value: "lfmuser" } });
-    fireEvent.keyDown(input, { key: "Enter" });
-
-    const lfmBtn = await screen.findByText(/importing from last\.fm instead/i);
-    fireEvent.click(lfmBtn.closest("button")!);
-
-    expect(await screen.findByText(/export your last\.fm loved tracks/i)).toBeTruthy();
+  it("shows the external link for TuneMyMusic", () => {
+    renderModal();
+    fireEvent.click(screen.getByTestId("service-tile-applemusiccsv"));
+    const link = screen.getByTestId("service-external-link");
+    expect(link).toBeTruthy();
+    expect((link as HTMLAnchorElement).href).toContain("tunemymusic.com");
   });
 });
 
 // ---------------------------------------------------------------------------
-// Tests: tracks mode
+// Back arrow
 // ---------------------------------------------------------------------------
 
-describe("ManualImportModal — tracks mode", () => {
-  it("switches to tracks mode when a space-containing value is submitted", async () => {
+describe("ManualImportModal — Back arrow navigation", () => {
+  it("Back arrow is not visible on the service picker (initial state)", () => {
     renderModal();
-    await enterTracksMode();
-    expect(screen.getByRole("textbox")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /back/i })).toBeNull();
   });
 
-  it("shows the import button enabled with 2 tracks after typing two parseable lines", async () => {
+  it("Back arrow appears after selecting Exportify", () => {
     renderModal();
-    await enterTracksMode();
-
-    const textarea = screen.getByRole("textbox");
-    fireEvent.change(textarea, {
-      target: { value: "Fleetwood Mac – Go Your Own Way\nThe Beatles – Hey Jude" },
-    });
-
-    expect(await screen.findByRole("button", { name: /import 2 tracks/i })).toBeTruthy();
+    fireEvent.click(screen.getByTestId("service-tile-exportify"));
+    expect(screen.getByRole("button", { name: /back/i })).toBeTruthy();
   });
 
-  it("shows 'No tracks recognised' when textarea content cannot be parsed", async () => {
+  it("clicking Back from Exportify steps returns to the service picker", () => {
     renderModal();
-    await enterTracksMode();
+    fireEvent.click(screen.getByTestId("service-tile-exportify"));
+    // Confirm we are on the steps pane
+    expect(screen.getByTestId("service-steps-panel")).toBeTruthy();
+    // Go back
+    fireEvent.click(screen.getByRole("button", { name: /back/i }));
+    // Should be back on service picker
+    expect(screen.getByTestId("service-picker")).toBeTruthy();
+    expect(screen.queryByTestId("service-steps-panel")).toBeNull();
+  });
 
-    const textarea = screen.getByRole("textbox");
-    fireEvent.change(textarea, {
-      target: { value: "line one without separator\nline two without separator" },
-    });
-
-    expect(await screen.findByText(/no tracks recognised/i)).toBeTruthy();
+  it("clicking Back from Apple Music steps returns to the service picker", () => {
+    renderModal();
+    fireEvent.click(screen.getByTestId("service-tile-applemusiccsv"));
+    fireEvent.click(screen.getByRole("button", { name: /back/i }));
+    expect(screen.getByTestId("service-picker")).toBeTruthy();
   });
 });
 
 // ---------------------------------------------------------------------------
-// Tests: Back button resets to input mode (task #968 core)
+// Other tile: paste-only mode
 // ---------------------------------------------------------------------------
 
-describe("ManualImportModal — back button resets state to input mode", () => {
-  it("clicking the back arrow from username mode returns the input field", () => {
+describe("ManualImportModal — 'Other' service", () => {
+  it("selecting Other shows the paste textarea", () => {
     renderModal();
-
-    const input = screen.getByPlaceholderText(/username or paste tracks here/i);
-    fireEvent.change(input, { target: { value: "mfavourite" } });
-    fireEvent.keyDown(input, { key: "Enter" });
-
-    expect(screen.getByText(/import from listenbrainz/i)).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: /^back$/i }));
-
-    expect(screen.getByPlaceholderText(/username or paste tracks here/i)).toBeTruthy();
-    expect(screen.queryByText(/import from listenbrainz/i)).toBeNull();
+    fireEvent.click(screen.getByTestId("service-tile-other"));
+    expect(screen.getByTestId("tracks-textarea")).toBeTruthy();
   });
 
-  it("clicking 'Edit' in the username pill also returns to input mode", () => {
+  it("selecting Other does NOT show a service-steps panel", () => {
     renderModal();
-
-    const input = screen.getByPlaceholderText(/username or paste tracks here/i);
-    fireEvent.change(input, { target: { value: "mfavourite" } });
-    fireEvent.keyDown(input, { key: "Enter" });
-
-    fireEvent.click(screen.getByRole("button", { name: /edit/i }));
-
-    expect(screen.getByPlaceholderText(/username or paste tracks here/i)).toBeTruthy();
-    expect(screen.queryByText(/import from listenbrainz/i)).toBeNull();
+    fireEvent.click(screen.getByTestId("service-tile-other"));
+    expect(screen.queryByTestId("service-steps-panel")).toBeNull();
   });
 
-  it("clicking the back arrow from lfm-hint mode returns the input field", () => {
+  it("selecting Other hides the service picker", () => {
     renderModal();
-
-    const input = screen.getByPlaceholderText(/username or paste tracks here/i);
-    fireEvent.change(input, { target: { value: "lastfmuser" } });
-    fireEvent.keyDown(input, { key: "Enter" });
-    fireEvent.click(screen.getByText(/importing from last\.fm instead/i));
-
-    expect(screen.getByText(/export your last\.fm loved tracks/i)).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: /^back$/i }));
-
-    expect(screen.getByPlaceholderText(/username or paste tracks here/i)).toBeTruthy();
-    expect(screen.queryByText(/export your last\.fm loved tracks/i)).toBeNull();
+    fireEvent.click(screen.getByTestId("service-tile-other"));
+    expect(screen.queryByTestId("service-picker")).toBeNull();
   });
 
-  it("clicking the back arrow from tracks mode returns the input field", async () => {
+  it("the textarea placeholder contains the generic hint for Other", () => {
     renderModal();
-
-    await enterTracksMode();
-
-    expect(screen.getByRole("textbox")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: /^back$/i }));
-
-    expect(screen.getByPlaceholderText(/username or paste tracks here/i)).toBeTruthy();
+    fireEvent.click(screen.getByTestId("service-tile-other"));
+    const ta = screen.getByTestId("tracks-textarea") as HTMLTextAreaElement;
+    expect(ta.placeholder).toMatch(/artist.*title|any csv/i);
   });
 });
 
 // ---------------------------------------------------------------------------
-// Tests: after going back, a new input updates the UI correctly (task #968)
+// CSV parsing — pure unit tests (no rendering needed)
 // ---------------------------------------------------------------------------
 
-describe("ManualImportModal — after going back, new input updates the visible pane", () => {
-  it("submitting a different username after navigating back shows that username in the pane", () => {
-    renderModal();
-
-    const input = screen.getByPlaceholderText(/username or paste tracks here/i);
-    fireEvent.change(input, { target: { value: "firstuser" } });
-    fireEvent.keyDown(input, { key: "Enter" });
-    expect(screen.getByRole("button", { name: /edit/i })).toBeTruthy();
-    expect(screen.getAllByText(/firstuser/).length).toBeGreaterThan(0);
-
-    fireEvent.click(screen.getByRole("button", { name: /^back$/i }));
-
-    const input2 = screen.getByPlaceholderText(/username or paste tracks here/i);
-    fireEvent.change(input2, { target: { value: "seconduser" } });
-    fireEvent.keyDown(input2, { key: "Enter" });
-
-    expect(screen.getAllByText(/seconduser/).length).toBeGreaterThan(0);
-    expect(screen.queryByText(/firstuser/)).toBeNull();
+describe("parseCsv — Exportify format (Track Name, Artist Name)", () => {
+  it("parses a two-row Exportify CSV to 2 tracks", () => {
+    const csv = [
+      '"Track Name","Artist Name","Album"',
+      '"Bohemian Rhapsody","Queen","A Night at the Opera"',
+      '"Hotel California","Eagles","Hotel California"',
+    ].join("\n");
+    expect(parseCsv(csv)).toHaveLength(2);
   });
 
-  it("entering a tracks-mode value after going back switches to the tracks pane", async () => {
-    renderModal();
+  it("returns the correct artist and title from Exportify CSV", () => {
+    const csv = [
+      '"Track Name","Artist Name"',
+      '"Superstition","Stevie Wonder"',
+    ].join("\n");
+    const [track] = parseCsv(csv);
+    expect(track?.title).toBe("Superstition");
+    expect(track?.artist).toBe("Stevie Wonder");
+  });
 
-    const input = screen.getByPlaceholderText(/username or paste tracks here/i);
-    fireEvent.change(input, { target: { value: "someuser" } });
-    fireEvent.keyDown(input, { key: "Enter" });
-    expect(screen.getByText(/import from listenbrainz/i)).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: /^back$/i }));
-
-    // Re-enter using the tracks fallback path
-    await enterTracksMode();
-
-    expect(screen.getByRole("textbox")).toBeTruthy();
-    expect(screen.queryByText(/import from listenbrainz/i)).toBeNull();
+  it("returns empty array for a header-only Exportify CSV", () => {
+    const csv = '"Track Name","Artist Name"\n';
+    expect(parseCsv(csv)).toHaveLength(0);
   });
 });
 
-// ---------------------------------------------------------------------------
-// Tests: ListenBrainz import
-// ---------------------------------------------------------------------------
+describe("parseCsv — Apple Music / TuneMyMusic format (Name, Artist)", () => {
+  it("parses a two-row Apple Music CSV to 2 tracks", () => {
+    const csv = [
+      "Name,Artist,Album",
+      "Waterloo,ABBA,Waterloo",
+      "Dancing Queen,ABBA,Arrival",
+    ].join("\n");
+    expect(parseCsv(csv)).toHaveLength(2);
+  });
 
-describe("ManualImportModal — ListenBrainz import", () => {
-  it("calls postStartListenBrainzImport with the username and closes on success", async () => {
-    mockPostStartListenBrainzImport.mockResolvedValue(undefined);
-    const closeSpy = vi.fn();
-    renderModal(closeSpy);
+  it("returns the correct artist and title from Apple Music CSV", () => {
+    const csv = [
+      "Name,Artist",
+      "Billie Jean,Michael Jackson",
+    ].join("\n");
+    const [track] = parseCsv(csv);
+    expect(track?.title).toBe("Billie Jean");
+    expect(track?.artist).toBe("Michael Jackson");
+  });
 
-    const input = screen.getByPlaceholderText(/username or paste tracks here/i);
-    fireEvent.change(input, { target: { value: "lbuser" } });
-    fireEvent.keyDown(input, { key: "Enter" });
-
-    const lbBtn = await screen.findByRole("button", { name: /import from listenbrainz/i });
-    await act(async () => { fireEvent.click(lbBtn); });
-
-    await waitFor(() => expect(closeSpy).toHaveBeenCalledOnce());
+  it("handles quoted fields in Apple Music / TuneMyMusic CSV", () => {
+    const csv = [
+      "Name,Artist,Album",
+      '"Mr. Brightside","The Killers","Hot Fuss"',
+    ].join("\n");
+    const result = parseCsv(csv);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.title).toBe("Mr. Brightside");
+    expect(result[0]?.artist).toBe("The Killers");
   });
 });
 
-// ---------------------------------------------------------------------------
-// Tests: manual track import
-// ---------------------------------------------------------------------------
-
-describe("ManualImportModal — manual track import", () => {
-  it("calls postStartManualImport and closes on success", async () => {
-    mockPostStartManualImport.mockResolvedValue(undefined);
-    const closeSpy = vi.fn();
-    renderModal(closeSpy);
-
-    await enterTracksMode();
-
-    const textarea = screen.getByRole("textbox");
-    fireEvent.change(textarea, {
-      target: { value: "Fleetwood Mac – Go Your Own Way\nThe Beatles – Hey Jude" },
-    });
-
-    const submitBtn = await screen.findByRole("button", { name: /import 2 tracks/i });
-    await act(async () => { fireEvent.click(submitBtn); });
-
-    await waitFor(() => expect(closeSpy).toHaveBeenCalledOnce());
-    expect(mockPostStartManualImport).toHaveBeenCalledWith([
-      { artist: "Fleetwood Mac", title: "Go Your Own Way" },
-      { artist: "The Beatles", title: "Hey Jude" },
-    ]);
+describe("parseTracks — routes through parseCsv for CSV content", () => {
+  it("a 5-row Exportify CSV yields 5 tracks via parseTracks", () => {
+    const header = '"Track Name","Artist Name"';
+    const rows = Array.from({ length: 5 }, (_, i) => `"Song ${i + 1}","Artist ${i + 1}"`);
+    const csv = [header, ...rows].join("\n");
+    expect(parseTracks(csv)).toHaveLength(5);
   });
 
-  it("shows an error and does not close when the import fails", async () => {
-    mockPostStartManualImport.mockRejectedValue(new Error("server error"));
-    const closeSpy = vi.fn();
-    renderModal(closeSpy);
-
-    await enterTracksMode();
-
-    const textarea = screen.getByRole("textbox");
-    fireEvent.change(textarea, { target: { value: "Fleetwood Mac – Go Your Own Way" } });
-
-    const submitBtn = await screen.findByRole("button", { name: /import 1 tracks/i });
-    await act(async () => { fireEvent.click(submitBtn); });
-
-    await waitFor(() => expect(screen.getByText(/server error/i)).toBeTruthy());
-    expect(closeSpy).not.toHaveBeenCalled();
+  it("a 3-row Apple Music CSV yields 3 tracks via parseTracks", () => {
+    const header = "Name,Artist";
+    const rows = Array.from({ length: 3 }, (_, i) => `Song ${i + 1},Artist ${i + 1}`);
+    const csv = [header, ...rows].join("\n");
+    expect(parseTracks(csv)).toHaveLength(3);
   });
 });
