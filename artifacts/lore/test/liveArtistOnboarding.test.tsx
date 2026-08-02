@@ -73,7 +73,7 @@ vi.mock("../src/hooks/useFrontDoorScan", () => ({
   })),
 }));
 
-import { useDialData, extractLiveArtistSuggestions, type DialStation } from "../src/hooks/useDialData";
+import { useDialData, extractLiveArtistSuggestions, splitIcyCombinedField, type DialStation } from "../src/hooks/useDialData";
 import { DialView } from "../src/components/DialView";
 import { ME_DIAL_CROSSINGS_KEY, ME_PICKER_NAMES_KEY } from "../src/lib/meHooks";
 
@@ -271,6 +271,47 @@ describe("extractLiveArtistSuggestions", () => {
       const result = extractLiveArtistSuggestions([stationWithArtist(artist)]);
       expect(result).toHaveLength(1);
       expect(result[0].artist).toBe(artist);
+    });
+  });
+
+  describe("combined 'Artist - Title' ICY metadata splitting", () => {
+    function stationWithArtistAndTitle(artist: string, title = "", slug = "s1"): DialStation {
+      return makeStation({
+        station: { ...makeStation().station, slug, name: "Test FM" },
+        liveTrack: { ...makeStation().liveTrack!, artist, title },
+      });
+    }
+
+    it("splits 'Radiohead - Creep' and uses only the artist half", () => {
+      const result = extractLiveArtistSuggestions([stationWithArtistAndTitle("Radiohead - Creep")]);
+      expect(result).toHaveLength(1);
+      expect(result[0].artist).toBe("Radiohead");
+    });
+
+    it("backfills the track title from the split when the title field is empty", () => {
+      const result = extractLiveArtistSuggestions([stationWithArtistAndTitle("Radiohead - Creep", "")]);
+      expect(result).toHaveLength(1);
+      expect(result[0].artist).toBe("Radiohead");
+      expect(result[0].trackTitle).toBe("Creep");
+    });
+
+    it("does not overwrite a real title with the split title", () => {
+      const result = extractLiveArtistSuggestions([stationWithArtistAndTitle("Radiohead - Creep", "Karma Police")]);
+      expect(result).toHaveLength(1);
+      expect(result[0].trackTitle).toBe("Karma Police");
+    });
+
+    it("does not split a legit hyphenated name with no spaces around the dash", () => {
+      const result = extractLiveArtistSuggestions([stationWithArtistAndTitle("Jean-Michel Jarre", "")]);
+      expect(result).toHaveLength(1);
+      expect(result[0].artist).toBe("Jean-Michel Jarre");
+    });
+
+    it("handles multi-dash titles correctly — only splits on the first ' - '", () => {
+      const result = extractLiveArtistSuggestions([stationWithArtistAndTitle("LCD Soundsystem - All My Friends - Live", "")]);
+      expect(result).toHaveLength(1);
+      expect(result[0].artist).toBe("LCD Soundsystem");
+      expect(result[0].trackTitle).toBe("All My Friends - Live");
     });
   });
 

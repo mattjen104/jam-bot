@@ -238,6 +238,25 @@ const MISSING_LIVE_ARTIST_VALUES = new Set([
 const AUDIO_FILENAME_RE = /\.\s*(mp3|wav|ogg|flac|aac|m4a|opus|wma|aiff?)\s*$/i;
 /** At least one Unicode letter is required — rejects pure-punctuation / pure-digit strings. */
 const HAS_LETTER_RE = /\p{L}/u;
+/**
+ * Combined "Artist - Title" ICY pattern.  Requires a space on both sides of the
+ * dash so that legitimate hyphenated names like "Jean-Michel Jarre" are NOT split.
+ * Captures everything before the first " - " as the artist and everything after as
+ * the title.
+ */
+const ICY_COMBINED_RE = /^(.+?) - (.+)$/;
+
+/**
+ * If `artist` looks like a combined "Artist - Title" ICY field, return the split
+ * parts; otherwise return null (no split needed).
+ */
+export function splitIcyCombinedField(
+  artist: string,
+): { artist: string; title: string } | null {
+  const m = ICY_COMBINED_RE.exec(artist);
+  if (!m) return null;
+  return { artist: m[1].trim(), title: m[2].trim() };
+}
 
 function normalizeLiveArtist(value: string | null | undefined): string | null {
   const artist = value?.replace(/\s+/g, " ").trim() ?? "";
@@ -273,16 +292,22 @@ export function extractLiveArtistSuggestions(
     if (!dialStation.isLive) continue;
     const show = dialStation.shows.find((candidate) => candidate.state === "live") ?? null;
     const track = dialStation.liveTrack ?? show?.currentTrack;
-    const artist = normalizeLiveArtist(track?.artist);
+    const rawArtist = track?.artist ?? null;
+    // Detect combined "Artist - Title" ICY metadata (spaces required around the dash).
+    const split = rawArtist ? splitIcyCombinedField(rawArtist) : null;
+    const artistValue = split ? split.artist : rawArtist;
+    const artist = normalizeLiveArtist(artistValue);
     if (!artist) continue;
     const key = artist.toLocaleLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
+    // Backfill title from the split when the track's own title field is empty.
+    const resolvedTitle = normalizeLiveContext(track?.title) ?? (split ? normalizeLiveContext(split.title) : null);
     suggestions.push({
       artist,
       stationSlug: dialStation.station.slug,
       stationName: normalizeLiveContext(dialStation.station.name),
-      trackTitle: normalizeLiveContext(track?.title),
+      trackTitle: resolvedTitle,
       showName: normalizeLiveContext(show?.showName),
     });
     if (suggestions.length >= max) break;
