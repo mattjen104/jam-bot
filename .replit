@@ -33,6 +33,7 @@ channel = "stable-25_05"
 [userenv.shared]
 MUSICBRAINZ_CONTACT = "Lore Radio Library (https://replit.com; +radio now-playing resolver)"
 LORE_BACKFILL_FLOOR = "2012-01-01T00:00:00Z"
+ATTENDANCE_DEDUP_CONFIRMED = "1"
 
 [userenv.development]
 
