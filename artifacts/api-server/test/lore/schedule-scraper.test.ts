@@ -387,6 +387,18 @@ describe("normalizeDayOfWeek", () => {
 // ---------------------------------------------------------------------------
 
 describe("parseExtractedSchedule", () => {
+  it("keeps real schedule hosts but drops generic and show-title DJ labels", () => {
+    const result = parseExtractedSchedule(JSON.stringify([
+      { showName: "Morning Mix", dayOfWeek: "Mon", startTime: "08:00", endTime: "09:00", djName: "Diane Kamikaze" },
+      { showName: "Evening Sounds", dayOfWeek: "Mon", startTime: "09:00", endTime: "10:00", djName: "EVENING—SOUNDS" },
+      { showName: "Night Shift", dayOfWeek: "Mon", startTime: "10:00", endTime: "11:00", djName: "Automation" },
+    ]));
+    expect(result).toEqual([
+      expect.objectContaining({ showName: "Morning Mix", djName: "Diane Kamikaze" }),
+      expect.objectContaining({ showName: "Evening Sounds", djName: null }),
+      expect.objectContaining({ showName: "Night Shift", djName: null }),
+    ]);
+  });
   it("accepts abbreviated day names and returns well-formed shows", () => {
     const raw = JSON.stringify([
       { showName: "Morning Mix", dayOfWeek: "Mon", startTime: "09:00", endTime: "11:00", djName: "DJ A" },

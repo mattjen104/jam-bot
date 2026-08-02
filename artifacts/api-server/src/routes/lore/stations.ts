@@ -54,6 +54,7 @@ import { logSpinIfChanged, spinEvents, type SpinChangedEvent } from "../../lore/
 import { fingerprintStream, fingerprintAvailable } from "../../lore/stream-fingerprint.js";
 import { computeGenreBreakdown, computeDiscoveryScore, labelFromScore } from "../../lore/genre-insights.js";
 import { acquire as sseAcquire, release as sseRelease } from "../../lore/sseConnectionTracker.js";
+import { eligibleDjName } from "@workspace/lore-attribution";
 
 const router: IRouter = Router();
 
@@ -139,6 +140,7 @@ router.get("/stations/now-playing", h(async (req, res) => {
     .selectDistinctOn([spinsTable.stationId], {
       spinId: spinsTable.id,
       stationId: spinsTable.stationId,
+      stationName: stationsTable.name,
       rawArtist: spinsTable.rawArtist,
       rawTitle: spinsTable.rawTitle,
       source: spinsTable.source,
@@ -155,6 +157,7 @@ router.get("/stations/now-playing", h(async (req, res) => {
       showDj: showsTable.djName,
     })
     .from(spinsTable)
+    .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
     .leftJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
     .leftJoin(
       showsTable,
@@ -625,7 +628,15 @@ router.get("/stations/:slug/archive", h(async (req, res) => {
       runs: runs.map((r) => ({
         runId: r.runId,
         date: r.date,
-        show: r.showName ? { name: r.showName, djName: r.djName ?? null } : null,
+        show: r.showName
+          ? {
+              name: r.showName,
+              djName: eligibleDjName(r.djName, {
+                showTitle: r.showName,
+                stationName: station.name,
+              }),
+            }
+          : null,
         spinCount: r.spinCount,
         resolvedCount: r.resolvedCount,
         sourceUrl:
@@ -1027,6 +1038,7 @@ router.get("/stations/schedule", h(async (req, res) => {
   const rows = await db
     .select({
       stationSlug: stationsTable.slug,
+      stationName: stationsTable.name,
       runId: spinRunIdExpr,
       spinCount: sql<number>`count(*)::int`,
       resolvedCount: sql<number>`count(*) filter (where ${spinsTable.mbid} is not null)::int`,
@@ -1051,6 +1063,7 @@ router.get("/stations/schedule", h(async (req, res) => {
     )
     .groupBy(
       stationsTable.slug,
+      stationsTable.name,
       spinDayExpr,
       spinsTable.showId,
       showsTable.name,
@@ -1071,7 +1084,16 @@ router.get("/stations/schedule", h(async (req, res) => {
     stationSlug,
     runs: stationRuns.map((r) => ({
       runId: r.runId,
-      show: r.showName ? { name: r.showName, djName: r.djName ?? null, pickerId: r.pickerId ?? null } : null,
+      show: r.showName
+        ? {
+            name: r.showName,
+            djName: eligibleDjName(r.djName, {
+              showTitle: r.showName,
+              stationName: r.stationName,
+            }),
+            pickerId: r.pickerId ?? null,
+          }
+        : null,
       spinCount: r.spinCount,
       resolvedCount: r.resolvedCount,
       startedAt: new Date(r.startedAt).toISOString(),

@@ -14,6 +14,7 @@
     "@workspace/api-zod": "workspace:*",
     "@workspace/db": "workspace:*",
     "@workspace/integrations-anthropic-ai": "workspace:*",
+    "@workspace/lore-attribution": "workspace:*",
     "@workspace/song-enrichment": "workspace:*",
     "cookie-parser": "^1.4.7",
     "cors": "^2",

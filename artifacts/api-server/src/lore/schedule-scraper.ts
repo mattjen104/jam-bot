@@ -4,6 +4,7 @@ import { isCrawlBlocked } from "./blog-crossref.js";
 import { extractScheduleRaw } from "./schedule-llm.js";
 import { inferTimezone } from "./timezone.js";
 import { sanitizeScheduleName } from "./schedule-name-sanitizer.js";
+import { eligibleDjName } from "@workspace/lore-attribution";
 
 /**
  * Weekly-schedule scraper — a second, slower-paced sibling to
@@ -387,7 +388,10 @@ export function parseExtractedSchedule(raw: string): ExtractedShow[] | null {
     const startTime = typeof e["startTime"] === "string" ? e["startTime"].trim() : "";
     const endTime = typeof e["endTime"] === "string" ? e["endTime"].trim() : "";
     const djNameRaw = typeof e["djName"] === "string" ? sanitizeName(e["djName"]) : "";
-    const djName = djNameRaw ? djNameRaw : null;
+    // A schedule can identify a show host, but it cannot prove that a value
+    // equal to the show title is a person. Keep the source-backed show and
+    // drop only unusable attribution; sync applies the same rule again.
+    const djName = eligibleDjName(djNameRaw, { showTitle: showName }) ?? null;
 
     if (!showName || showName.length > 200) continue;
     if (!DAY_TOKENS.has(dayOfWeek)) continue;

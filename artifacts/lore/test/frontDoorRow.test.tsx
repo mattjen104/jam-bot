@@ -140,6 +140,15 @@ describe("live sentence", () => {
     expect(container.querySelector(".fdrow__t3")?.textContent).toBe("Test FM");
     expect(container.textContent).not.toMatch(/unknown show/i);
   });
+
+  it("falls back to ordinary on-air rendering when the live artist is presented as the DJ", () => {
+    const { container } = renderRow(makeDialStation(), makeShow({
+      djName: "THE—FLAMING LIPS",
+      currentTrack: makeSpin({ title: "Do You Realize??", artist: "The Flaming Lips" }),
+    }));
+    expect(leadingSentence(container).textContent).toBe("The Flaming Lips is playing Do You Realize??");
+    expect(leadingSentence(container).textContent).not.toContain("THE—FLAMING LIPS is playing");
+  });
 });
 
 describe("show context and missing attribution", () => {

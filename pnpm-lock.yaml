@@ -178,6 +178,9 @@ importers:
       '@workspace/integrations-anthropic-ai':
         specifier: workspace:*
         version: link:../../lib/integrations-anthropic-ai
+      '@workspace/lore-attribution':
+        specifier: workspace:*
+        version: link:../../lib/lore-attribution
       '@workspace/song-enrichment':
         specifier: workspace:*
         version: link:../../lib/song-enrichment
@@ -415,6 +418,9 @@ importers:
       '@workspace/api-client-react':
         specifier: workspace:*
         version: link:../../lib/api-client-react
+      '@workspace/lore-attribution':
+        specifier: workspace:*
+        version: link:../../lib/lore-attribution
       class-variance-authority:
         specifier: 'catalog:'
         version: 0.7.1
@@ -934,6 +940,12 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 25.3.5
+
+  lib/lore-attribution:
+    devDependencies:
+      vitest:
+        specifier: ^4.1.5
+        version: 4.1.5(@types/node@25.3.5)(jiti@2.6.1)(jsdom@29.1.1(@noble/hashes@1.8.0))(lightningcss@1.31.1)(tsx@4.21.0)(yaml@2.8.2)
 
   lib/song-enrichment:
     dependencies:

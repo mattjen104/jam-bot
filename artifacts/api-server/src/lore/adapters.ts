@@ -5,6 +5,7 @@ import type {
   RawSpin,
   ShowAttribution,
 } from "./types.js";
+import { usableShowAttribution } from "@workspace/lore-attribution";
 
 /**
  * Per-source adapter registry. Two families, both reading a station's OWN
@@ -164,7 +165,8 @@ export function parseKexpPlays(
     const showId = typeof play.show === "number" ? play.show : undefined;
     if (showId != null) {
       const show = showMap.get(showId);
-      if (show) spin.show = show;
+       const usable = usableShowAttribution(show, { artist: rawArtist, title: rawTitle });
+       if (usable) spin.show = usable;
     }
     out.push(spin);
   }
@@ -256,7 +258,8 @@ export function parseSpinitronSpins(
       typeof item.playlist_id === "number" ? item.playlist_id : undefined;
     if (playlistId != null) {
       const show = playlistMap.get(playlistId);
-      if (show) spin.show = show;
+       const usable = usableShowAttribution(show, { artist: rawArtist, title: rawTitle });
+       if (usable) spin.show = usable;
     }
     out.push(spin);
   }
@@ -432,7 +435,8 @@ export function parseKcrwTrack(body: unknown, feed: string): RawSpin[] {
     const show: ShowAttribution = { name: showName };
     const djName = str(t.host);
     if (djName) show.djName = djName;
-    spin.show = show;
+    const usable = usableShowAttribution(show, { artist: rawArtist, title: rawTitle });
+    if (usable) spin.show = usable;
   }
   return [spin];
 }
@@ -491,6 +495,10 @@ export function parseNtsLive(
   if (broadcastTitle) {
     out.show = { name: broadcastTitle };
     if (hostName) out.show.djName = hostName;
+    // NTS's live endpoint is show-level rather than track-level: `rawArtist`
+    // is the host and `rawTitle` is the broadcast title by design, so neither
+    // is evidence that the host is bad DJ metadata.
+    out.show = usableShowAttribution(out.show, { showTitle: broadcastTitle }) ?? out.show;
   }
   return out;
 }

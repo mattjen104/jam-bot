@@ -7,6 +7,7 @@ import {
   spinsTable,
 } from "@workspace/db";
 import { eq, and, isNull, isNotNull, sql } from "drizzle-orm";
+import { eligibleDjName } from "@workspace/lore-attribution";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -17,9 +18,8 @@ import { eq, and, isNull, isNotNull, sql } from "drizzle-orm";
  * and no comma — the comma case is a multi-host listing like "Alice, Bob").
  * Excludes single-word usernames/handles like "wizzy", "rduffy", "TK".
  */
-function looksLikeRealSingleName(name: string): boolean {
-  const t = name.trim();
-  return t.includes(" ") && !t.includes(",");
+function usableScrapedDj(name: string | null, showName?: string): string | null {
+  return eligibleDjName(name, { showTitle: showName });
 }
 
 /**
@@ -80,7 +80,7 @@ async function syncShowRows(): Promise<number> {
       .values({
         stationId: row.station_id,
         name: row.show_name,
-        djName: row.dj_name ?? null,
+        djName: usableScrapedDj(row.dj_name, row.show_name),
       })
       .onConflictDoNothing();
     created++;
@@ -118,9 +118,10 @@ async function syncDjPickers(): Promise<number> {
 
   let linked = 0;
   for (const row of rows.rows) {
-    if (!looksLikeRealSingleName(row.dj_name)) continue;
+    const djName = usableScrapedDj(row.dj_name);
+    if (!djName) continue;
 
-    const djSlug = slugifyDjName(row.dj_name);
+    const djSlug = slugifyDjName(djName);
     const handle = `show-dj-${row.station_slug}-${djSlug}`;
 
     // Upsert picker
@@ -138,9 +139,9 @@ async function syncDjPickers(): Promise<number> {
         .insert(pickersTable)
         .values({
           pickerType: "dj",
-          name: row.dj_name,
+          name: djName,
           handle,
-          sourceRef: { stationSlug: row.station_slug, djName: row.dj_name },
+          sourceRef: { stationSlug: row.station_slug, djName },
           trustTier: 2,
           active: true,
         })
@@ -157,7 +158,7 @@ async function syncDjPickers(): Promise<number> {
       .where(
         and(
           eq(showsTable.stationId, row.station_id),
-          eq(showsTable.djName, row.dj_name),
+          eq(showsTable.djName, djName),
           isNull(showsTable.pickerId),
         ),
       );

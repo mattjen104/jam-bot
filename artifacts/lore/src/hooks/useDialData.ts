@@ -30,6 +30,7 @@ import {
   type StationRecentSpin,
 } from "@workspace/api-client-react";
 import { useMyPickerNames, useMyDialCrossings, useMyPickerOverlap } from "../lib/meHooks";
+import { eligibleDjName } from "@workspace/lore-attribution";
 
 // ---------------------------------------------------------------------------
 // Shared name normaliser — strips zero-width chars, trims, collapses spaces.
@@ -658,15 +659,21 @@ export function useDialData(): {
           state === "live"
             ? (nowPlayingBySlug.get(station.slug) ?? (runSpins.length > 0 ? runSpins[runSpins.length - 1] : null))
             : null;
-        // isPickerShow: derived from pickerId presence on the show row — no name
-        // set membership, no library dependency.  Name-bridge is a sort-only aid.
+        const usableDjName = eligibleDjName(run.show?.djName, {
+          artist: currentTrack?.artist,
+          title: currentTrack?.title,
+          showTitle: run.show?.name,
+          stationName: station.name,
+        });
+        // isPickerShow: derived from pickerId presence on the show row, but
+        // never keep a linked picker alive for rejected live attribution.
         const pickerId = run.show?.pickerId ?? null;
-        const isPickerShow = pickerId != null;
+        const isPickerShow = pickerId != null && usableDjName != null;
 
         return {
           runId: run.runId,
           showName: run.show?.name ?? "Unknown show",
-          djName: run.show?.djName ?? null,
+          djName: usableDjName,
           pickerId,
           startedAt: run.startedAt,
           endedAt: run.endedAt,

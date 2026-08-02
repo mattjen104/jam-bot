@@ -22,6 +22,7 @@ import { recordAdSignal } from "./ads.js";
 import { isJunkMetadata } from "./icy.js";
 import { lookupScrapedShowId } from "./scraped-shows-sync.js";
 import type { NowPlayingRaw, RawSpin, ShowAttribution } from "./types.js";
+import { eligibleDjName } from "@workspace/lore-attribution";
 
 /** Outcome of trying to place a now-playing track on the MusicBrainz spine. */
 export interface MbidResolution {
@@ -490,10 +491,14 @@ async function upsertRecording(
 async function upsertShow(
   stationId: number,
   show: ShowAttribution,
+  context: { artist?: string | null; title?: string | null } = {},
 ): Promise<number | null> {
   const name = show.name.trim();
   if (!name) return null;
-  const djName = show.djName?.trim() || null;
+  const djName = eligibleDjName(show.djName, {
+    ...context,
+    showTitle: name,
+  });
   try {
     const [existing] = await db
       .select({ id: showsTable.id, djName: showsTable.djName })
@@ -688,7 +693,7 @@ export async function logSpinIfChanged(
     });
 
     const showId = np.show
-      ? await upsertShow(station.id, np.show)
+      ? await upsertShow(station.id, np.show, { artist: np.rawArtist, title: np.rawTitle })
       : station.ianaTimezone
         ? await lookupScrapedShowId(station.id, station.ianaTimezone, new Date())
         : null;
@@ -827,7 +832,9 @@ export async function ingestRawSpins(
         ...(raw.recordingId ? { recordingId: raw.recordingId } : {}),
         ...(raw.isrc ? { isrc: raw.isrc } : {}),
       });
-      const showId = raw.show ? await upsertShow(station.id, raw.show) : null;
+      const showId = raw.show
+        ? await upsertShow(station.id, raw.show, { artist: raw.rawArtist, title: raw.rawTitle })
+        : null;
       const wrote = await persistSpin({
         station,
         resolution: r,

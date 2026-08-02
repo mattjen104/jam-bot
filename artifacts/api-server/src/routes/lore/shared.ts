@@ -6,6 +6,7 @@ import {
   spinsTable,
 } from "@workspace/db";
 import { eq, and, sql, type SQLWrapper } from "drizzle-orm";
+import { eligibleDjName } from "@workspace/lore-attribution";
 // Re-export from the lore layer so route files have one import site.
 export { spinDayExpr } from "../../lore/runs.js";
 
@@ -249,6 +250,7 @@ export function toNowPlaying(row: {
   genres?: string[] | null;
   showName: string | null;
   showDj: string | null;
+  stationName?: string | null;
   isFirstSpin?: boolean;
   /** Server-computed library hit flags for the authenticated listener. */
   isLibraryHit?: boolean;
@@ -274,7 +276,15 @@ export function toNowPlaying(row: {
         }
       : null,
     show: row.showName
-      ? { name: row.showName, djName: row.showDj ?? null }
+      ? {
+          name: row.showName,
+          djName: eligibleDjName(row.showDj, {
+            artist: row.artist ?? row.rawArtist,
+            title: row.title ?? row.rawTitle,
+            showTitle: row.showName,
+            stationName: row.stationName,
+          }),
+        }
       : null,
     isFirstSpin: row.isFirstSpin ?? false,
     isLibraryHit: row.isLibraryHit ?? false,

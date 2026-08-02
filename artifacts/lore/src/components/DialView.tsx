@@ -17,6 +17,7 @@ import { SearchOverlay } from "./SearchOverlay";
 import { usePlayer } from "../player/PlayerProvider";
 import { BottlePanel } from "./BottlePanel";
 import { useSocialMode } from "../lib/social";
+import { eligibleDjName } from "@workspace/lore-attribution";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -145,8 +146,13 @@ function liveSentence(
   const station = cleanLiveValue(stationName);
   if (!station || !show) return null;
 
-  const rawDj = cleanLiveValue(show.djName);
-  const dj = sameLiveValue(rawDj, station) ? null : rawDj;
+  const rawDj = eligibleDjName(show.djName, {
+    artist: show.currentTrack?.artist,
+    title: show.currentTrack?.title,
+    showTitle: show.showName,
+    stationName: station,
+  });
+  const dj = rawDj;
   const track = cleanLiveValue(show?.currentTrack?.title);
   const artist = cleanLiveValue(show?.currentTrack?.artist);
   const usableArtist = sameLiveValue(artist, station) ? null : artist;
@@ -216,8 +222,12 @@ function crossingSentence(
     : Math.max(show.artistCrossings, current?.isArtistHit ? 1 : 0);
 
   if (artistNodes) {
-    const rawDj = cleanLiveValue(show.djName);
-    const dj = sameLiveValue(rawDj, station) ? null : rawDj;
+    const dj = eligibleDjName(show.djName, {
+      artist: current?.artist,
+      title: current?.title,
+      showTitle: show.showName,
+      stationName,
+    });
     return {
       node: dj
         ? <>{dj} is playing {artistNodes}.</>
@@ -342,12 +352,21 @@ interface FrontDoorRowProps {
 }
 
 export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onEarlier }: FrontDoorRowProps) {
-  const rz = reason(show, ds.crossings, ds.artistCrossings);
+  const usableDj = eligibleDjName(show?.djName, {
+    artist: show?.currentTrack?.artist,
+    title: show?.currentTrack?.title,
+    showTitle: show?.showName,
+    stationName: ds.station.name,
+  });
+  const safeShow = show && usableDj !== show.djName
+    ? { ...show, djName: usableDj }
+    : show;
+  const rz = reason(safeShow, ds.crossings, ds.artistCrossings);
 
-  const crossing = crossingSentence(ds.station.name, show);
-  const live = crossing ? null : liveSentence(ds.station.name, show);
-  const rawShow = cleanLiveValue(show?.showName);
-  const dj = cleanLiveValue(show?.djName);
+  const crossing = crossingSentence(ds.station.name, safeShow);
+  const live = crossing ? null : liveSentence(ds.station.name, safeShow);
+  const rawShow = cleanLiveValue(safeShow?.showName);
+  const dj = usableDj;
   // A show is a quiet cue only when it adds context beyond the person in the
   // sentence. Unknown schedule values are missing data, not a show identity.
   const showContext = rawShow
@@ -360,7 +379,7 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onE
   const stationLabel = cleanLiveValue(ds.station.name) ?? ds.station.name;
   const bylineContext = showContext ?? (isExplicitlyContinuous ? "Continuous" : null);
 
-  const currentTrack = show?.currentTrack ?? null;
+  const currentTrack = safeShow?.currentTrack ?? null;
 
   const rowCls = [
     "fdrow",
@@ -1193,12 +1212,20 @@ export function DialView() {
       .filter((ds) => ds.isLive)
       .map((ds) => {
         const show = ds.shows.find((sh) => sh.state === "live") ?? null;
-        const rz = reason(show, ds.crossings, ds.artistCrossings);
         // Only the current run may establish live attribution. A recently
         // ended DJ must not affect either the sentence or its ordering.
-        const effectiveDjName = cleanLiveValue(show?.djName);
+        const effectiveDjName = eligibleDjName(show?.djName, {
+          artist: show?.currentTrack?.artist,
+          title: show?.currentTrack?.title,
+          showTitle: show?.showName,
+          stationName: ds.station.name,
+        });
+        const attributionSafeShow = show && effectiveDjName !== show.djName
+          ? { ...show, djName: effectiveDjName }
+          : show;
+        const rz = reason(attributionSafeShow, ds.crossings, ds.artistCrossings);
         const isPinned = pins.has(ds.station.slug);
-        return { ds, show, rz, effectiveDjName, isPinned };
+        return { ds, show: attributionSafeShow, rz, effectiveDjName, isPinned };
       })
       .sort((a, b) => {
         // 1. Live crossing (rung 1) floats to the very top

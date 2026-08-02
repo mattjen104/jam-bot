@@ -74,3 +74,4 @@
 - [Library API total count](library-total-count.md) — GET /api/me/library omits total on pages 2+; run COUNT(*) only on first page (cursor IS NULL) and spread into response; client reads keptData.pages[0].total.
 - [Lore crossing row hierarchy](lore-crossing-row-hierarchy.md) — crossing artist leads; station is a stable byline; suppress titles only for crossing-driven rows, not ordinary now-playing rows.
 - [Schedule attribution withdrawals](schedule-attribution-voids.md) — void schedule evidence in place; exclude only schedule-derived bylines while preserving curated and overlapping valid attribution.
+- [Live DJ attribution eligibility](live-dj-attribution-eligibility.md) — one pure normalized rule gates generic/colliding DJ values across ingestion, APIs, picker linkage, and Dial rendering.

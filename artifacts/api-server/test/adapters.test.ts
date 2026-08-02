@@ -102,6 +102,14 @@ describe("parseKexpPlays", () => {
     const spins = parseKexpPlays(body);
     expect(spins[0]!.show).toBeUndefined();
   });
+
+  it("does not turn the current artist into a DJ when source metadata collides", () => {
+    const spins = parseKexpPlays(
+      { results: [{ id: 1, artist: "Björk", song: "Jóga", show: 7 }] },
+      new Map([[7, { name: "Evening Radio", djName: "bjork!" }]]),
+    );
+    expect(spins[0]!.show).toEqual({ name: "Evening Radio" });
+  });
 });
 
 describe("parseSpinitronSpins", () => {
@@ -137,6 +145,22 @@ describe("parseSpinitronSpins", () => {
   it("skips items missing artist or title", () => {
     const body = { items: [{ id: 1, artist: "A" }, { id: 2, song: "B" }] };
     expect(parseSpinitronSpins(body)).toHaveLength(0);
+  });
+});
+
+describe("show attribution guards", () => {
+  it("keeps a one-word alias while removing title-shaped source attribution", () => {
+    const alias = parseSpinitronSpins(
+      { items: [{ id: 1, artist: "Sault", song: "Wildfires", playlist_id: 1 }] },
+      new Map([[1, { name: "Night Shift", djName: "Wizzy" }]]),
+    );
+    expect(alias[0]!.show).toEqual({ name: "Night Shift", djName: "Wizzy" });
+
+    const titleCollision = parseSpinitronSpins(
+      { items: [{ id: 2, artist: "Sault", song: "Wildfires", playlist_id: 2 }] },
+      new Map([[2, { name: "Night Shift", djName: "WILDFIRES" }]]),
+    );
+    expect(titleCollision[0]!.show).toEqual({ name: "Night Shift" });
   });
 });
 

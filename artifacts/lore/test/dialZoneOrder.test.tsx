@@ -419,4 +419,20 @@ describe("Zone 3 DJ band split", () => {
     expect(rows.length).toBe(1);
     expect(rows[0].textContent).toContain("DJ Picker");
   });
+
+  it("does not place an artist-valued DJ in the 'DJs on air' band", () => {
+    const artistCollision = makeAttributedZone3Station("artist-meta", "The Flaming Lips");
+    artistCollision.shows[0]!.currentTrack = {
+      mbid: null, artistMbid: null, title: "Do You Realize??", artist: "the flaming lips",
+      playedAt: new Date().toISOString(), isLibraryHit: false, isArtistHit: false, isFirstSpin: false,
+    };
+    mockDialDataWithStations([artistCollision]);
+    mockGhosts([]);
+
+    render(<DialView />);
+
+    expect(screen.queryByText("DJs on air", { selector: ".fdzone-lbl__text" })).toBeNull();
+    expect(document.querySelectorAll(".fdrow")).toHaveLength(1);
+    expect(document.querySelector(".fdrow")?.textContent?.toLowerCase()).toContain("the flaming lips is playing");
+  });
 });

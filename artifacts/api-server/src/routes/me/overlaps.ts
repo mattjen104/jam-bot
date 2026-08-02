@@ -13,6 +13,7 @@ import { eq, and, ne, isNotNull, inArray, asc, sql } from "drizzle-orm";
 import { spinDayExpr } from "../../lore/runs.js";
 import { h } from "../../middlewares/asyncHandler.js";
 import { pickerNotOptedOut, validScheduleShowAttribution } from "../lore/shared.js";
+import { eligibleDjName } from "@workspace/lore-attribution";
 import { getForYouStations, getForYouBlogs } from "../../lore/for-you.js";
 import { type AuthedRequest } from "./auth.js";
 
@@ -488,7 +489,15 @@ router.get("/me/overlaps/runs", h(async (req, res) => {
         name: r.stationName,
         stationClass: r.stationClass,
       },
-      show: r.showName ? { name: r.showName, djName: r.djName ?? null } : null,
+      show: r.showName
+        ? {
+            name: r.showName,
+            djName: eligibleDjName(r.djName, {
+              showTitle: r.showName,
+              stationName: r.stationName,
+            }),
+          }
+        : null,
       owned: r.owned,
       discover: r.discover,
     })),
