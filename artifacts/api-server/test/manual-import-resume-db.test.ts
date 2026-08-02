@@ -22,7 +22,7 @@
 
 import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
-import { sql, eq, and, inArray, count } from "drizzle-orm";
+import { sql, eq, and, inArray, count, isNull } from "drizzle-orm";
 import {
   db,
   loreUsersTable,
@@ -89,6 +89,7 @@ vi.mock("../src/lore/for-you.js", () => ({
 import {
   markOrphanedImportJobsAsError,
   runManualImportWorker,
+  NULL_CACHE_MISS_MAX_AGE_MS,
 } from "../src/routes/me/index.js";
 
 // normalizeKey is pure and its real implementation is preserved by the mock
@@ -105,6 +106,9 @@ const MBID_A = `test-mr-a-${run}`;
 const MBID_B = `test-mr-b-${run}`;
 // A third track with no cache entry — MB returns null (unresolvable).
 const TRACK_C_TITLE = `Unresolvable ${run}`;
+// A fourth track used for the stale-null-miss test: MB now returns a real MBID.
+const MBID_D = `test-mr-d-${run}`;
+const TRACK_D_TITLE = `StaleNull ${run}`;
 
 // ── DB state ─────────────────────────────────────────────────────────────────
 
@@ -130,6 +134,7 @@ beforeAll(async () => {
   await db.insert(recordingsTable).values([
     { mbid: MBID_A, title: `Track A ${run}`, artist: ARTIST },
     { mbid: MBID_B, title: `Track B ${run}`, artist: ARTIST },
+    { mbid: MBID_D, title: TRACK_D_TITLE, artist: ARTIST },
   ]);
 });
 
@@ -140,9 +145,21 @@ afterAll(async () => {
   await db
     .delete(resolutionCacheTable)
     .where(
-      inArray(resolutionCacheTable.mbid, [MBID_A, MBID_B]),
+      inArray(resolutionCacheTable.mbid, [MBID_A, MBID_B, MBID_D]),
     );
-  await db.delete(recordingsTable).where(inArray(recordingsTable.mbid, [MBID_A, MBID_B]));
+  // Also clean up any null-mbid cache entries written for TRACK_C / TRACK_D by key.
+  await db
+    .delete(resolutionCacheTable)
+    .where(
+      and(
+        inArray(resolutionCacheTable.key, [
+          normalizeKey(ARTIST, TRACK_C_TITLE),
+          normalizeKey(ARTIST, TRACK_D_TITLE),
+        ]),
+        isNull(resolutionCacheTable.mbid),
+      ),
+    );
+  await db.delete(recordingsTable).where(inArray(recordingsTable.mbid, [MBID_A, MBID_B, MBID_D]));
   await db.delete(loreUsersTable).where(eq(loreUsersTable.id, userId));
 });
 
@@ -151,7 +168,19 @@ beforeEach(async () => {
   if (!dbAvailable) return;
   await db.delete(libraryItemsTable).where(eq(libraryItemsTable.userId, userId));
   await db.delete(libraryImportJobsTable).where(eq(libraryImportJobsTable.userId, userId));
-  await db.delete(resolutionCacheTable).where(inArray(resolutionCacheTable.mbid, [MBID_A, MBID_B]));
+  await db.delete(resolutionCacheTable).where(inArray(resolutionCacheTable.mbid, [MBID_A, MBID_B, MBID_D]));
+  // Also wipe null-mbid cache entries for TRACK_C and TRACK_D (keyed by artist+title).
+  await db
+    .delete(resolutionCacheTable)
+    .where(
+      and(
+        inArray(resolutionCacheTable.key, [
+          normalizeKey(ARTIST, TRACK_C_TITLE),
+          normalizeKey(ARTIST, TRACK_D_TITLE),
+        ]),
+        isNull(resolutionCacheTable.mbid),
+      ),
+    );
   mockResolveByText.mockReset();
   mockResolveByIsrc.mockReset();
 });
@@ -549,5 +578,87 @@ describe("unresolvable track — worker still completes as done", () => {
       .from(libraryItemsTable)
       .where(eq(libraryItemsTable.userId, userId));
     expect(items.map((r) => r.mbid).sort()).toEqual([MBID_A, MBID_B].sort());
+  });
+});
+
+// ── Test 7: stale null-miss cache entry — Phase 3 re-resolves the track ───────
+//
+// If a null-mbid resolution cache entry is older than NULL_CACHE_MISS_MAX_AGE_MS
+// (MusicBrainz may have indexed the track since the miss was written), Phase 2
+// must treat it as expired and NOT add it to matchedIdx.  Phase 3 then gets a
+// fresh attempt and — if MB now returns a real MBID — saves the track.
+
+describe("stale null-miss cache — Phase 3 re-resolves an aged-out null entry", () => {
+  it("re-resolves a track whose null cache entry is older than the max-age threshold", async () => {
+    if (!dbAvailable) return;
+
+    const staleCacheKey = normalizeKey(ARTIST, TRACK_D_TITLE);
+
+    // Insert a null-mbid cache entry with updated_at in the past (8 days ago —
+    // beyond the 7-day NULL_CACHE_MISS_MAX_AGE_MS threshold).
+    const staleAge = NULL_CACHE_MISS_MAX_AGE_MS + 24 * 60 * 60_000; // 8 days in ms
+    await db.execute(sql`
+      INSERT INTO resolution_cache (key, mbid, confidence, created_at, updated_at)
+      VALUES (
+        ${staleCacheKey},
+        NULL,
+        'unresolved',
+        NOW() - (${staleAge.toString()} || ' milliseconds')::interval,
+        NOW() - (${staleAge.toString()} || ' milliseconds')::interval
+      )
+      ON CONFLICT (key) DO UPDATE
+        SET mbid = NULL,
+            confidence = 'unresolved',
+            updated_at = NOW() - (${staleAge.toString()} || ' milliseconds')::interval
+    `);
+
+    // MB now returns a real MBID for this track (it was indexed since the miss).
+    mockResolveByText.mockResolvedValue(MBID_D);
+
+    const buffer: ImportBufferEntry[] = [
+      { artist: ARTIST, title: TRACK_D_TITLE, isrc: null, durationMs: null, externalId: `mr-stale-d-${run}` },
+    ];
+
+    const [job] = await db
+      .insert(libraryImportJobsTable)
+      .values({
+        userId,
+        service: "manual",
+        status: "running",
+        phase: "resolve",
+        total: buffer.length,
+        resolved: 0,
+        bufferJson: buffer,
+        startedAt: new Date(),
+      })
+      .returning({ id: libraryImportJobsTable.id });
+    const jobId = job!.id;
+
+    await runManualImportWorker(jobId, userId, buffer);
+
+    const [row] = await db
+      .select({
+        status: libraryImportJobsTable.status,
+        resolved: libraryImportJobsTable.resolved,
+        total: libraryImportJobsTable.total,
+      })
+      .from(libraryImportJobsTable)
+      .where(eq(libraryImportJobsTable.id, jobId))
+      .limit(1);
+
+    expect(row!.status).toBe("done");
+    expect(row!.resolved).toBe(1);
+    expect(row!.total).toBe(1);
+
+    // The track must appear in library_items — Phase 3 resolved it.
+    const items = await db
+      .select({ mbid: libraryItemsTable.mbid })
+      .from(libraryItemsTable)
+      .where(and(eq(libraryItemsTable.userId, userId), eq(libraryItemsTable.mbid, MBID_D)));
+    expect(items).toHaveLength(1);
+
+    // MB resolver was called exactly once (Phase 3 ran for this track).
+    expect(mockResolveByText).toHaveBeenCalledTimes(1);
+    expect(mockResolveByText).toHaveBeenCalledWith(ARTIST, TRACK_D_TITLE, expect.anything());
   });
 });

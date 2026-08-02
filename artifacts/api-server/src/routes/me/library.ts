@@ -77,6 +77,10 @@ const PHASE3_RETRY_MAX_JOB_AGE_MS = 7 * 24 * 60 * 60_000; // 7 days
  *  Prevents un-resolvable tracks from spawning a new retry job every night
  *  when MusicBrainz is persistently degraded. */
 const PHASE3_MAX_RETRY_ATTEMPTS = 3;
+/** Max age of a null-mbid (cached-miss) resolution cache entry before it is
+ *  treated as expired and re-queued for Phase 3.  MusicBrainz may have indexed
+ *  the track since the miss was written, so stale nulls get a fresh attempt. */
+export const NULL_CACHE_MISS_MAX_AGE_MS = 7 * 24 * 60 * 60_000; // 7 days
 /** If the remaining window at the start of a retry pass is below this
  *  threshold (ms), a warning is logged so clock drift is visible in logs
  *  without causing a crash. */
@@ -1212,10 +1216,12 @@ export async function runManualImportWorker(
 
     if (keySet.size > 0) {
       const cacheRows = await db
-        .select({ key: resolutionCacheTable.key, mbid: resolutionCacheTable.mbid })
+        .select({ key: resolutionCacheTable.key, mbid: resolutionCacheTable.mbid, updatedAt: resolutionCacheTable.updatedAt })
         .from(resolutionCacheTable)
         .where(inArray(resolutionCacheTable.key, [...keySet]));
-      const cacheMap = new Map(cacheRows.map((r) => [r.key, r.mbid]));
+      const cacheMap = new Map(cacheRows.map((r) => [r.key, { mbid: r.mbid, updatedAt: r.updatedAt }]));
+
+      const nullMissExpiryCutoff = new Date(Date.now() - NULL_CACHE_MISS_MAX_AGE_MS);
 
       const indexToMbid = new Map<number, string>();
       const indexToTier = new Map<number, string>();
@@ -1223,13 +1229,21 @@ export async function runManualImportWorker(
         if (matchedIdx.has(i)) continue;
         const t = buffer[i]!;
         if (t.isrc) {
-          const hit = cacheMap.get(isrcKey(t.isrc));
-          if (hit) { indexToMbid.set(i, hit); indexToTier.set(i, "isrc"); continue; }
-          if (hit === null) { matchedIdx.add(i); continue; }
+          const isrcEntry = cacheMap.get(isrcKey(t.isrc));
+          if (isrcEntry?.mbid) { indexToMbid.set(i, isrcEntry.mbid); indexToTier.set(i, "isrc"); continue; }
+          if (isrcEntry && isrcEntry.mbid === null && isrcEntry.updatedAt >= nullMissExpiryCutoff) {
+            // Fresh ISRC null miss — honour as skip.
+            matchedIdx.add(i); continue;
+          }
+          // No ISRC entry, or stale ISRC null miss — fall through to text lookup.
         }
-        const hit = cacheMap.get(normalizeKey(t.artist, t.title));
-        if (hit) { indexToMbid.set(i, hit); indexToTier.set(i, "text"); continue; }
-        if (hit === null) matchedIdx.add(i);
+        const entry = cacheMap.get(normalizeKey(t.artist, t.title));
+        if (!entry) continue; // no cache entry — falls through to Phase 3
+        if (entry.mbid) { indexToMbid.set(i, entry.mbid); indexToTier.set(i, "text"); continue; }
+        // entry.mbid is null (cached miss) — skip only if it is fresh enough.
+        // A stale null miss is treated as expired so Phase 3 gets a fresh attempt.
+        if (entry.updatedAt >= nullMissExpiryCutoff) matchedIdx.add(i);
+        // else: leave i out of matchedIdx → falls through to Phase 3
       }
 
       for (const [idx, mbid] of indexToMbid) {
