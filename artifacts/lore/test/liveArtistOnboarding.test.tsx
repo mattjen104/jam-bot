@@ -168,6 +168,130 @@ describe("extractLiveArtistSuggestions", () => {
       }),
     ]);
   });
+
+  // ── Real-world station metadata edge cases ──────────────────────────────
+
+  describe("non-musical and malformed artist values are filtered out", () => {
+    function stationWithArtist(artist: string, slug = "s1"): DialStation {
+      return makeStation({
+        station: { ...makeStation().station, slug, name: "Test FM" },
+        liveTrack: { ...makeStation().liveTrack!, artist },
+      });
+    }
+
+    const NON_MUSICAL_CASES: Array<[string, string]> = [
+      // Programming labels
+      ["Commercial", "commercial break segment"],
+      ["commercial break", "commercial break long form"],
+      ["Advertisement", "advertisement label"],
+      ["Ads", "ads short form"],
+      ["Break", "break label"],
+      ["Station Break", "station break"],
+      ["News", "news segment"],
+      ["News Break", "news break"],
+      ["Weather", "weather segment"],
+      ["Traffic", "traffic report"],
+      ["ID", "station id short"],
+      ["Station ID", "station id full"],
+      ["Legal ID", "legal id"],
+      ["Liner", "liner note label"],
+      ["Sweeper", "sweeper segment"],
+      ["Jingle", "jingle label"],
+      ["Bumper", "bumper label"],
+      ["Promo", "promo short"],
+      ["Promotion", "promotion full"],
+      ["Spot", "spot label"],
+      ["Intermission", "intermission"],
+      ["Off Air", "off air"],
+      ["off-air", "off-air hyphenated"],
+      ["Sign Off", "sign off"],
+      ["Automation", "automation label"],
+      ["Music", "generic music filler"],
+      ["Live", "live filler"],
+      ["Now Playing", "now playing filler"],
+      ["Loading", "loading state"],
+      ["TBA", "tba abbreviation"],
+      ["TBD", "tbd abbreviation"],
+      // Generic unknowns (original set, case variations)
+      ["UNKNOWN", "unknown upper"],
+      ["Various Artists", "various artists"],
+      ["N/A", "n/a upper"],
+      ["None", "none title-case"],
+      ["NULL", "null upper"],
+      ["Undefined", "undefined title-case"],
+      ["Continuous", "continuous"],
+      // Pure-punctuation / no-letter strings
+      ["---", "dashes only"],
+      ["...", "dots only"],
+      ["- -", "spaced dashes"],
+      ["***", "asterisks only"],
+      ["????", "question marks only"],
+      // Pure digits
+      ["12345", "numeric only"],
+      ["001", "padded number"],
+      // Audio filenames
+      ["jingle_01.mp3", "mp3 filename"],
+      ["track 01.wav", "wav filename"],
+      ["news_break.ogg", "ogg filename"],
+      ["id.flac", "flac filename"],
+    ];
+
+    it.each(NON_MUSICAL_CASES)("filters %s (%s)", (artist) => {
+      const result = extractLiveArtistSuggestions([stationWithArtist(artist)]);
+      expect(result).toHaveLength(0);
+    });
+  });
+
+  describe("valid artist names remain selectable", () => {
+    function stationWithArtist(artist: string, slug = "s1"): DialStation {
+      return makeStation({
+        station: { ...makeStation().station, slug, name: "Test FM" },
+        liveTrack: { ...makeStation().liveTrack!, artist },
+      });
+    }
+
+    const VALID_CASES: Array<[string, string]> = [
+      ["Radiohead", "normal band name"],
+      ["The National", "band with article"],
+      ["U2", "two-character band name"],
+      ["DJ Shadow", "DJ prefix"],
+      ["Fleetwood Mac", "multi-word"],
+      ["Sigur Rós", "non-ASCII letter"],
+      ["Beyoncé", "accented character"],
+      ["deadmau5", "alphanumeric mix"],
+      ["LCD Soundsystem", "acronym + word"],
+      ["AC/DC", "slash in name"],
+      ["Guns N' Roses", "apostrophe in name"],
+      ["Nick Cave & The Bad Seeds", "ampersand in name"],
+      ["Neutral Milk Hotel", "three words"],
+      ["The xx", "lowercase"],
+    ];
+
+    it.each(VALID_CASES)("keeps '%s' (%s)", (artist) => {
+      const result = extractLiveArtistSuggestions([stationWithArtist(artist)]);
+      expect(result).toHaveLength(1);
+      expect(result[0].artist).toBe(artist);
+    });
+  });
+
+  it("skips non-live stations regardless of artist quality", () => {
+    const offAir = makeStation({
+      isLive: false,
+      liveTrack: { ...makeStation().liveTrack!, artist: "Great Artist" },
+    });
+    expect(extractLiveArtistSuggestions([offAir])).toHaveLength(0);
+  });
+
+  it("caps output at the requested max", () => {
+    const stations = ["Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta"].map(
+      (artist, i) =>
+        makeStation({
+          station: { ...makeStation().station, slug: `s${i}` },
+          liveTrack: { ...makeStation().liveTrack!, artist },
+        }),
+    );
+    expect(extractLiveArtistSuggestions(stations, 4)).toHaveLength(4);
+  });
 });
 
 describe("no-library onboarding live picker", () => {

@@ -175,6 +175,7 @@ function topArtistsFromSpins(spins: DialSpin[], max = 3, hitField: "isLibraryHit
 }
 
 const MISSING_LIVE_ARTIST_VALUES = new Set([
+  // Generic unknowns
   "unknown",
   "unknown artist",
   "artist unknown",
@@ -190,11 +191,63 @@ const MISSING_LIVE_ARTIST_VALUES = new Set([
   "null",
   "undefined",
   "continuous",
+  // Station programming / non-musical segments
+  "commercial",
+  "commercial break",
+  "advertisement",
+  "advertisements",
+  "ads",
+  "ad",
+  "break",
+  "station break",
+  "news",
+  "news break",
+  "weather",
+  "traffic",
+  "sports",
+  "id",
+  "station id",
+  "legal id",
+  "liner",
+  "station liner",
+  "sweeper",
+  "jingle",
+  "bumper",
+  "promo",
+  "promotion",
+  "spot",
+  "intermission",
+  "off air",
+  "off-air",
+  "sign off",
+  "sign-off",
+  "automation",
+  // Filler / placeholder values that appear in the wild
+  "music",
+  "live",
+  "now playing",
+  "loading",
+  "please wait",
+  "tba",
+  "tbd",
+  "to be announced",
+  "to be determined",
 ]);
+
+/** Audio file-extension pattern — catches raw filenames used as artist fields. */
+const AUDIO_FILENAME_RE = /\.\s*(mp3|wav|ogg|flac|aac|m4a|opus|wma|aiff?)\s*$/i;
+/** At least one Unicode letter is required — rejects pure-punctuation / pure-digit strings. */
+const HAS_LETTER_RE = /\p{L}/u;
 
 function normalizeLiveArtist(value: string | null | undefined): string | null {
   const artist = value?.replace(/\s+/g, " ").trim() ?? "";
-  return artist && !MISSING_LIVE_ARTIST_VALUES.has(artist.toLowerCase()) ? artist : null;
+  if (!artist) return null;
+  // Reject strings that contain no letters (e.g. "---", "...", "12345", "- -")
+  if (!HAS_LETTER_RE.test(artist)) return null;
+  // Reject strings that look like audio filenames
+  if (AUDIO_FILENAME_RE.test(artist)) return null;
+  if (MISSING_LIVE_ARTIST_VALUES.has(artist.toLowerCase())) return null;
+  return artist;
 }
 
 function normalizeLiveContext(value: string | null | undefined): string | null {
