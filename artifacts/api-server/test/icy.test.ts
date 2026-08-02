@@ -241,4 +241,92 @@ describe("isJunkMetadata", () => {
     expect(isJunkMetadata("Charli XCX", "Backseat")).toBe(false);
     expect(isJunkMetadata("Fleetwood Mac", "Go Your Own Way (Back to Back)")).toBe(false);
   });
+
+  // ── Programming-label artist values ───────────────────────────────────────
+
+  it("flags commercial / break labels in the artist field (case-insensitive)", () => {
+    expect(isJunkMetadata("Commercial", "Some Song")).toBe(true);
+    expect(isJunkMetadata("commercial break", "Some Song")).toBe(true);
+    expect(isJunkMetadata("Advertisement", "Some Song")).toBe(true);
+    expect(isJunkMetadata("Ads", "Some Song")).toBe(true);
+    expect(isJunkMetadata("Break", "Some Song")).toBe(true);
+    expect(isJunkMetadata("Station Break", "Some Song")).toBe(true);
+    expect(isJunkMetadata("COMMERCIAL", "Some Song")).toBe(true);
+  });
+
+  it("flags station-ID and programming-segment labels", () => {
+    expect(isJunkMetadata("Station ID", "Some Song")).toBe(true);
+    expect(isJunkMetadata("Legal ID", "Some Song")).toBe(true);
+    expect(isJunkMetadata("Sweeper", "Some Song")).toBe(true);
+    expect(isJunkMetadata("Jingle", "Some Song")).toBe(true);
+    expect(isJunkMetadata("Bumper", "Some Song")).toBe(true);
+    expect(isJunkMetadata("Promo", "Some Song")).toBe(true);
+    expect(isJunkMetadata("Liner", "Some Song")).toBe(true);
+  });
+
+  it("flags news, weather, and traffic filler labels", () => {
+    expect(isJunkMetadata("News", "Some Song")).toBe(true);
+    expect(isJunkMetadata("News Break", "Some Song")).toBe(true);
+    expect(isJunkMetadata("Weather", "Some Song")).toBe(true);
+    expect(isJunkMetadata("Traffic", "Some Song")).toBe(true);
+    expect(isJunkMetadata("Sports", "Some Song")).toBe(true);
+  });
+
+  it("flags generic placeholder values in the artist field", () => {
+    expect(isJunkMetadata("Various Artists", "Some Song")).toBe(true);
+    expect(isJunkMetadata("TBA", "Some Song")).toBe(true);
+    expect(isJunkMetadata("TBD", "Some Song")).toBe(true);
+    expect(isJunkMetadata("Loading", "Some Song")).toBe(true);
+    expect(isJunkMetadata("Off Air", "Some Song")).toBe(true);
+    expect(isJunkMetadata("Automation", "Some Song")).toBe(true);
+    expect(isJunkMetadata("Now Playing", "Some Song")).toBe(true);
+    expect(isJunkMetadata("None", "Some Song")).toBe(true);
+    expect(isJunkMetadata("NULL", "Some Song")).toBe(true);
+    expect(isJunkMetadata("Undefined", "Some Song")).toBe(true);
+  });
+
+  it("does NOT flag a programming word that only appears in the title", () => {
+    // A real song could be titled "Commercial", "News", etc.
+    expect(isJunkMetadata("Sonic Youth", "News")).toBe(false);
+    expect(isJunkMetadata("Beck", "Commercial")).toBe(false);
+    expect(isJunkMetadata("Devo", "Jingle")).toBe(false);
+  });
+
+  // ── Pure-punctuation / no-letter artist values ────────────────────────────
+
+  it("flags pure-punctuation artist values (no Unicode letters)", () => {
+    expect(isJunkMetadata("---", "Some Song")).toBe(true);
+    expect(isJunkMetadata("...", "Some Song")).toBe(true);
+    expect(isJunkMetadata("- -", "Some Song")).toBe(true);
+    expect(isJunkMetadata("***", "Some Song")).toBe(true);
+    expect(isJunkMetadata("????", "Some Song")).toBe(true);
+  });
+
+  it("does NOT flag artist names that contain non-ASCII letters", () => {
+    // Accented, CJK, Arabic, Cyrillic — all have Unicode letters.
+    expect(isJunkMetadata("Sigur Rós", "Hoppípolla")).toBe(false);
+    expect(isJunkMetadata("Beyoncé", "Formation")).toBe(false);
+    expect(isJunkMetadata("坂本龍一", "Merry Christmas Mr. Lawrence")).toBe(false);
+  });
+
+  // ── Audio filename detection ───────────────────────────────────────────────
+
+  it("flags audio filenames in the artist field", () => {
+    expect(isJunkMetadata("jingle_01.mp3", "Some Song")).toBe(true);
+    expect(isJunkMetadata("news_break.ogg", "Some Song")).toBe(true);
+    expect(isJunkMetadata("id.flac", "Some Song")).toBe(true);
+    expect(isJunkMetadata("station_id.wav", "Some Song")).toBe(true);
+  });
+
+  it("flags audio filenames in the title field", () => {
+    expect(isJunkMetadata("Some Artist", "track 01.mp3")).toBe(true);
+    expect(isJunkMetadata("Some Artist", "promo.aac")).toBe(true);
+    expect(isJunkMetadata("Some Artist", "liner.m4a")).toBe(true);
+  });
+
+  it("does NOT flag real track titles that contain a dot but no audio extension", () => {
+    expect(isJunkMetadata("Radiohead", "2 + 2 = 5")).toBe(false);
+    expect(isJunkMetadata("Interpol", "NYC.")).toBe(false);
+    expect(isJunkMetadata("Four Tet", "128 Harrowgate Rd.")).toBe(false);
+  });
 });

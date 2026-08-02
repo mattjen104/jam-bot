@@ -158,6 +158,37 @@ export function parseStreamTitle(streamTitle: string): ParsedStreamTitle | null 
 }
 
 /**
+ * Non-musical programming labels that appear in the artist field of ICY and
+ * adapter metadata when stations carry breaks, IDs, or filler content.
+ * Applied to the artist field only — a song could be legitimately titled
+ * "Commercial" or "News", but no real artist is named that.
+ *
+ * Mirrors the client-side `MISSING_LIVE_ARTIST_VALUES` set in useDialData.ts
+ * so both layers enforce the same vocabulary.
+ */
+const PROGRAMMING_ARTIST_LABELS = new Set([
+  // Generic unknowns / placeholders
+  "unknown", "unknown artist", "artist unknown", "no artist",
+  "unknown show", "unknown station", "unknown channel", "no metadata",
+  "various artists", "n/a", "na", "none", "null", "undefined", "continuous",
+  // Station programming / non-musical segments
+  "commercial", "commercial break", "advertisement", "advertisements", "ads", "ad",
+  "break", "station break", "news", "news break", "weather", "traffic", "sports",
+  "id", "station id", "legal id", "liner", "station liner",
+  "sweeper", "jingle", "bumper", "promo", "promotion", "spot", "intermission",
+  "off air", "off-air", "sign off", "sign-off", "automation",
+  // Filler / loading-state values seen in the wild
+  "music", "live", "now playing", "loading", "please wait",
+  "tba", "tbd", "to be announced", "to be determined",
+]);
+
+/** Matches an audio file extension at the end of an artist or title string. */
+const AUDIO_EXT_RE = /\.\s*(?:mp3|wav|ogg|flac|aac|m4a|opus|wma|aiff?)\s*$/i;
+
+/** At least one Unicode letter is required in the artist field. */
+const HAS_LETTER_RE = /\p{L}/u;
+
+/**
  * Return true when a raw artist/title pair is clearly not a song — an ad slot,
  * break announcement, station ID loop, or other junk metadata that should be
  * silently discarded before resolution is attempted.
@@ -206,6 +237,22 @@ export function isJunkMetadata(rawArtist: string, rawTitle: string): boolean {
   // with a parenthetical like "(BACKUP ONLY!)" or "(BACKUP)" in the artist
   // field instead of a real artist name.  No real track has this pattern.
   if (/\(backup\b/i.test(rawArtist) || /\(backup\b/i.test(rawTitle)) return true;
+
+  // Known non-musical programming labels in the artist field — "Commercial",
+  // "Station ID", "TBA", "Various Artists", etc.  The title field is exempt:
+  // a song could genuinely be titled "News" or "Commercial".
+  const artistKey = rawArtist.trim().toLowerCase();
+  if (artistKey && PROGRAMMING_ARTIST_LABELS.has(artistKey)) return true;
+
+  // Pure-punctuation / no-letter artist value — "---", "...", "- -", "***",
+  // "????".  No real artist name contains zero Unicode letters.  The title
+  // field is not checked here because some avant-garde titles contain only
+  // symbols; the artist field is the more reliable signal.
+  if (rawArtist.trim() && !HAS_LETTER_RE.test(rawArtist)) return true;
+
+  // Audio filenames in either field — "jingle_01.mp3", "news_break.ogg",
+  // "track 01.wav".  No real artist or track title ends with an audio extension.
+  if (AUDIO_EXT_RE.test(rawArtist) || AUDIO_EXT_RE.test(rawTitle)) return true;
 
   return false;
 }

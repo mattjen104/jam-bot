@@ -19,6 +19,7 @@ import {
 } from "@workspace/song-enrichment";
 import { searchTrack } from "../spotify/appClient.js";
 import { recordAdSignal } from "./ads.js";
+import { isJunkMetadata } from "./icy.js";
 import { lookupScrapedShowId } from "./scraped-shows-sync.js";
 import type { NowPlayingRaw, RawSpin, ShowAttribution } from "./types.js";
 
@@ -618,6 +619,10 @@ export async function logSpinIfChanged(
   np: NowPlayingRaw,
 ): Promise<boolean> {
   try {
+    // Junk-metadata guard: programming labels, pure-punctuation, audio filenames.
+    // Runs before dedup and resolution so garbage never reaches the spine.
+    if (isJunkMetadata(np.rawArtist, np.rawTitle)) return false;
+
     // Ad detection runs unconditionally (before dedup) so a repeated ad slug
     // still advances the streak instead of being suppressed as "unchanged".
     const isAd = await recordAdSignal(station, np.rawArtist, np.rawTitle);
@@ -808,6 +813,12 @@ export async function ingestRawSpins(
       const cursorValue =
         raw.externalId ?? raw.playedAt?.toISOString() ?? null;
       if (raw.externalId && seen.has(raw.externalId)) {
+        if (cursorValue) newestCursor = cursorValue;
+        continue;
+      }
+
+      // Drop non-musical metadata before touching MusicBrainz or the DB.
+      if (isJunkMetadata(raw.rawArtist, raw.rawTitle)) {
         if (cursorValue) newestCursor = cursorValue;
         continue;
       }
