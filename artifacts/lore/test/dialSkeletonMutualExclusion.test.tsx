@@ -576,6 +576,58 @@ describe("Zone heading count stability during crossingsLoading transition", () =
     expect(countEl).not.toBeNull();
     expect(countEl!.classList.contains("fdzone-lbl__n--est")).toBe(false);
   });
+
+  it("Zone 1 heading shows no count element while crossingsLoading is true", () => {
+    // Two Zone-1 stations so a pre-load estimate (if rendered) would be 2.
+    mockDialData(true, [makeZone1Station("wfmu"), makeZone1Station("kexp")]);
+    render(<DialView />);
+    act(() => { vi.advanceTimersByTime(150); });
+
+    // The skeleton phase is active — skeleton rows should be visible.
+    expect(document.querySelectorAll(".fdrow-skeleton").length).toBeGreaterThan(0);
+
+    // No .fdzone-lbl__n element must be present during loading.
+    expect(document.querySelector(".fdzone-lbl__n")).toBeNull();
+  });
+
+  it("Zone 1 count does not change value across the crossingsLoading true→false flip", () => {
+    // During loading: 2 Zone-1 stations (potential pre-load estimate = 2).
+    mockDialData(true, [makeZone1Station("wfmu"), makeZone1Station("kexp")]);
+    const { rerender } = render(<DialView />);
+    act(() => { vi.advanceTimersByTime(150); });
+
+    // No count shown during the skeleton phase.
+    expect(document.querySelector(".fdzone-lbl__n")).toBeNull();
+
+    // Crossing scores resolve — real count uses only 1 station.
+    mockDialData(false, [makeZone1Station("wfmu")]);
+    act(() => { rerender(<DialView />); });
+
+    // The count now appears for the first time (value = "1").
+    const countAfterLoad = document.querySelector(".fdzone-lbl__n");
+    expect(countAfterLoad).not.toBeNull();
+    expect(countAfterLoad!.textContent).toBe("1");
+
+    // Crucially: it did NOT go from "2" to "1" — it went from absent to "1".
+  });
+
+  it("Zone 1 count is absent while loading even when the estimate would match the real count", () => {
+    // Identical stations in both phases — even a "stable" estimate must be hidden
+    // to prevent the fdzone-lbl__n--est style (tilde prefix) from flickering away.
+    mockDialData(true, [makeZone1Station("wfmu")]);
+    const { rerender } = render(<DialView />);
+    act(() => { vi.advanceTimersByTime(150); });
+
+    expect(document.querySelector(".fdzone-lbl__n")).toBeNull();
+
+    mockDialData(false, [makeZone1Station("wfmu")]);
+    act(() => { rerender(<DialView />); });
+
+    // After load, the count appears without the --est modifier.
+    const countEl = document.querySelector(".fdzone-lbl__n");
+    expect(countEl).not.toBeNull();
+    expect(countEl!.classList.contains("fdzone-lbl__n--est")).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------

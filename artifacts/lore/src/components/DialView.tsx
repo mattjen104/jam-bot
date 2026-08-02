@@ -1401,13 +1401,13 @@ export function DialView() {
             {!isCoreLoading && showSkeleton && (
               <>
                 {/* Zone 1 heading + context-sensitive placeholder.
-                    Show an estimated count (~N) derived from client-side crossings
-                    (server crossings haven't resolved yet, so these are pre-scores). */}
+                    No estimated count shown: the pre-load withReason count can
+                    differ from the post-score count, producing a visible number
+                    jump. Omitting it here means the count appears for the first
+                    time only once crossing scores have fully resolved. */}
                 <ZoneLabel
                   label="On air, with a reason"
                   accent="library"
-                  n={withReason.length > 0 ? withReason.length : undefined}
-                  estimated={withReason.length > 0}
                 />
                 <Zone1Placeholder
                   isSpotifyConnected={isSpotifyConnected}
