@@ -141,6 +141,8 @@ beforeAll(async () => {
 afterAll(async () => {
   if (!dbAvailable) return;
   await db.delete(libraryItemsTable).where(eq(libraryItemsTable.userId, userId));
+  // import_items has a FK to library_import_jobs — delete child rows first.
+  await db.execute(sql`DELETE FROM import_items WHERE user_id = ${userId}`);
   await db.delete(libraryImportJobsTable).where(eq(libraryImportJobsTable.userId, userId));
   await db
     .delete(resolutionCacheTable)
@@ -167,6 +169,8 @@ afterAll(async () => {
 beforeEach(async () => {
   if (!dbAvailable) return;
   await db.delete(libraryItemsTable).where(eq(libraryItemsTable.userId, userId));
+  // import_items has a FK to library_import_jobs — delete child rows first.
+  await db.execute(sql`DELETE FROM import_items WHERE user_id = ${userId}`);
   await db.delete(libraryImportJobsTable).where(eq(libraryImportJobsTable.userId, userId));
   await db.delete(resolutionCacheTable).where(inArray(resolutionCacheTable.mbid, [MBID_A, MBID_B, MBID_D]));
   // Also wipe null-mbid cache entries for TRACK_C and TRACK_D (keyed by artist+title).

@@ -2084,3 +2084,88 @@ export const migrationCompletionsTable = pgTable("migration_completions", {
 
 export type MigrationCompletion = typeof migrationCompletionsTable.$inferSelect;
 export type InsertMigrationCompletion = typeof migrationCompletionsTable.$inferInsert;
+
+// ---- Attendance (heard-it, not kept-it) -----------------------------------
+
+/**
+ * One continuous listening session: the interval during which a specific user
+ * was tuned to a specific station.  Created on the first heartbeat, kept alive
+ * by subsequent heartbeats, and closed either by inactivity (> 4 h gap) or
+ * when the client explicitly stops.
+ *
+ * The session is the join key between a listener and the spins that aired
+ * while they were tuned in.
+ */
+export const listenSessionsTable = pgTable(
+  "listen_sessions",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => loreUsersTable.id, { onDelete: "cascade" }),
+    stationId: integer("station_id")
+      .notNull()
+      .references(() => stationsTable.id),
+    startedAt: timestamp("started_at").defaultNow().notNull(),
+    /** Updated on every heartbeat — the high-water mark of confirmed presence. */
+    lastHeartbeatAt: timestamp("last_heartbeat_at").defaultNow().notNull(),
+    /**
+     * Set when the session is closed — either by the expiry worker
+     * (end_reason='expired') or by a future explicit stop signal.
+     * Null means the session is still active.
+     */
+    endedAt: timestamp("ended_at"),
+    /** 'expired' when closed by the 4-hour inactivity worker. */
+    endReason: text("end_reason"),
+  },
+  (t) => [
+    index("listen_sessions_user_station_idx").on(t.userId, t.stationId),
+    index("listen_sessions_last_heartbeat_idx").on(t.lastHeartbeatAt),
+  ],
+);
+
+export type ListenSession = typeof listenSessionsTable.$inferSelect;
+export type InsertListenSession = typeof listenSessionsTable.$inferInsert;
+
+/**
+ * One confirmed attendance event: the user was tuned for long enough during a
+ * spin to count as having "heard" it.
+ *
+ * Attendance NEVER auto-promotes to a Keep — the wall is unconditional.
+ * Recording identity flows through `spin_id → spins.mbid`, never duplicated here.
+ *
+ * Dwell gate: dwell_seconds ≥ min(spin_duration_seconds × 0.5, 60).
+ * Sub-threshold dwells are discarded, not stored at lower confidence.
+ */
+export const attendanceTable = pgTable(
+  "attendance",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => loreUsersTable.id, { onDelete: "cascade" }),
+    spinId: integer("spin_id")
+      .notNull()
+      .references(() => spinsTable.id),
+    sessionId: integer("session_id")
+      .notNull()
+      .references(() => listenSessionsTable.id),
+    /** How many seconds of confirmed listening overlapped this spin. */
+    dwellSeconds: integer("dwell_seconds").notNull(),
+    /**
+     * Known duration of the spin in seconds (from recordings.duration_ms),
+     * or null when the recording was unresolved / duration unknown at write time.
+     */
+    spinDurationSeconds: integer("spin_duration_seconds"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    // One attendance row per (user, spin) — upsert-safe.
+    uniqueIndex("attendance_user_spin_uq").on(t.userId, t.spinId),
+    index("attendance_user_idx").on(t.userId),
+    index("attendance_session_idx").on(t.sessionId),
+  ],
+);
+
+export type Attendance = typeof attendanceTable.$inferSelect;
+export type InsertAttendance = typeof attendanceTable.$inferInsert;

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { Pause, Play, Check, RefreshCw, ChevronRight, Bookmark, Loader2, ScanLine, AudioLines, LibraryBig, Users, CalendarDays } from "lucide-react";
@@ -501,6 +501,60 @@ function OnAirRow({
  * and the on-air list sorted by library overlap. Run drawer and album lore
  * panel open as bottom sheets.
  */
+// ---------------------------------------------------------------------------
+// Attendance heartbeat — fires every 45 s while audio is playing and the
+// tab is visible.  Stops on pause, station change, or page hide; resumes on
+// un-hide.  Never throws — network errors are silently swallowed so a failed
+// heartbeat never disrupts playback or the UI.
+// ---------------------------------------------------------------------------
+
+const HEARTBEAT_INTERVAL_MS = 45_000;
+
+function useAttendanceHeartbeat(stationId: number | null, isPlaying: boolean) {
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const visibleRef = useRef(document.visibilityState === "visible");
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      visibleRef.current = document.visibilityState === "visible";
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, []);
+
+  useEffect(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
+    if (!stationId || !isPlaying) return;
+
+    const send = () => {
+      if (!visibleRef.current) return;
+      fetch("/api/me/attendance/heartbeat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stationId }),
+        credentials: "include",
+      }).catch(() => {
+        // Silently ignore — a missed heartbeat is recoverable on the next tick.
+      });
+    };
+
+    // Fire once immediately on mount (station start / visibility restore).
+    send();
+    timerRef.current = setInterval(send, HEARTBEAT_INTERVAL_MS);
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [stationId, isPlaying]);
+}
+
 export default function WebPlayer() {
   const { data: onAir, isLoading, dataUpdatedAt, refetch: refetchOnAir, isFetching: onAirFetching } = useWpOnAir();
   // Section is route-driven (/player, /player/library, /player/selectors,
@@ -522,6 +576,13 @@ export default function WebPlayer() {
   const items = onAir?.items ?? [];
   const onAirMbids = items.map((i) => i.now.mbid).filter((m): m is string => m != null);
   const { data: onAirLore } = useWpLoreCounts(onAirMbids);
+
+  // Attendance heartbeat — records that this listener was tuned while a spin
+  // aired.  Only fires when audio is actually playing and the tab is visible.
+  const { radio } = usePlayer();
+  const heartbeatStationId = radio.station?.id ?? null;
+  const heartbeatPlaying = radio.status === "playing";
+  useAttendanceHeartbeat(heartbeatStationId, heartbeatPlaying);
 
   return (
     <div className="wp" data-testid="webplayer">
