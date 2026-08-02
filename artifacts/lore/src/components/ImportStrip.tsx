@@ -5,6 +5,26 @@ import { useLatestImportJob } from "../lib/meHooks";
 
 /** How long (ms) to keep the done-state strip visible before it self-dismisses. */
 const DONE_TTL_MS = 45_000;
+const SESSION_KEY = "importStrip_dismissedJobId";
+
+function getStoredDismissedJobId(): number | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (raw === null) return null;
+    const parsed = parseInt(raw, 10);
+    return isNaN(parsed) ? null : parsed;
+  } catch {
+    return null;
+  }
+}
+
+function storeDismissedJobId(jobId: number): void {
+  try {
+    sessionStorage.setItem(SESSION_KEY, String(jobId));
+  } catch {
+    // sessionStorage unavailable (e.g. private browsing restrictions) — fail silently
+  }
+}
 
 function phaseLabel(job: ImportJobStatus): string {
   const isManual = job.service === "manual";
@@ -37,21 +57,37 @@ function isResumed(job: ImportJobStatus): boolean {
  */
 export function ImportStrip() {
   const { data: job } = useLatestImportJob();
-  const [doneDismissed, setDoneDismissed] = useState(false);
+  // Initialise from sessionStorage so navigating back doesn't re-show a
+  // strip the user already dismissed in this browser session.
+  const [doneDismissed, setDoneDismissed] = useState<boolean>(
+    () => job?.status === "done" && job.jobId === getStoredDismissedJobId(),
+  );
   // Track which job id we last saw as done so we reset dismissal on a new job.
   const doneJobRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (job?.status !== "done") return;
-    // New job finished — reset dismissal.
+    // New job finished — reset dismissal only if it's a genuinely new job.
     if (job.jobId !== doneJobRef.current) {
       doneJobRef.current = job.jobId;
-      setDoneDismissed(false);
+      // Respect a previously stored dismissal for this exact job.
+      const alreadyDismissed = job.jobId === getStoredDismissedJobId();
+      setDoneDismissed(alreadyDismissed);
     }
     // Auto-dismiss after TTL.
-    const t = setTimeout(() => setDoneDismissed(true), DONE_TTL_MS);
+    const t = setTimeout(() => {
+      storeDismissedJobId(job.jobId);
+      setDoneDismissed(true);
+    }, DONE_TTL_MS);
     return () => clearTimeout(t);
   }, [job?.status, job?.jobId]);
+
+  function dismiss() {
+    if (job?.status === "done") {
+      storeDismissedJobId(job.jobId);
+    }
+    setDoneDismissed(true);
+  }
 
   if (!job) return null;
 
@@ -84,7 +120,7 @@ export function ImportStrip() {
         </p>
         <button
           type="button"
-          onClick={() => setDoneDismissed(true)}
+          onClick={dismiss}
           aria-label="Dismiss"
           style={{
             display: "flex",

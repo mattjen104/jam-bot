@@ -17,8 +17,8 @@
  *    because the resume hasn't reached the resolution phase yet.
  */
 import React from "react";
-import { describe, expect, it, vi, afterEach } from "vitest";
-import { cleanup, render, screen, act } from "@testing-library/react";
+import { describe, expect, it, vi, afterEach, beforeEach } from "vitest";
+import { cleanup, render, screen, act, fireEvent } from "@testing-library/react";
 import { ImportStrip } from "../src/components/ImportStrip";
 
 // ---------------------------------------------------------------------------
@@ -34,9 +34,12 @@ vi.mock("../src/lib/meHooks", async (importOriginal) => {
 
 import { useLatestImportJob } from "../src/lib/meHooks";
 
+const SESSION_KEY = "importStrip_dismissedJobId";
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  sessionStorage.removeItem(SESSION_KEY);
 });
 
 // ---------------------------------------------------------------------------
@@ -203,5 +206,60 @@ describe("ImportStrip — 'Resuming' badge vanishes once import finishes", () =>
     expect(screen.queryByText(/picked up where it left off/i)).toBeNull();
     // The running strip must also be gone.
     expect(screen.queryByTestId("import-strip")).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sessionStorage persistence — dismissed jobId survives navigation / remount
+// ---------------------------------------------------------------------------
+
+describe("ImportStrip — sessionStorage dismissal persistence", () => {
+  beforeEach(() => {
+    sessionStorage.removeItem(SESSION_KEY);
+  });
+
+  it("clicking Dismiss writes the jobId to sessionStorage", async () => {
+    mockJob({ jobId: 42, status: "done", total: 100, resolved: 90 });
+    render(<ImportStrip />);
+
+    const btn = screen.getByRole("button", { name: /dismiss/i });
+    await act(async () => {
+      fireEvent.click(btn);
+    });
+
+    expect(sessionStorage.getItem(SESSION_KEY)).toBe("42");
+  });
+
+  it("strip stays hidden on remount when the same done jobId is already in sessionStorage", async () => {
+    // Simulate: user previously dismissed jobId 42 in this session.
+    sessionStorage.setItem(SESSION_KEY, "42");
+
+    mockJob({ jobId: 42, status: "done", total: 100, resolved: 90 });
+    const { container } = render(<ImportStrip />);
+
+    // The done strip must NOT appear.
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("strip re-appears after navigation back when sessionStorage holds a different jobId", async () => {
+    // A different job was dismissed previously.
+    sessionStorage.setItem(SESSION_KEY, "7");
+
+    mockJob({ jobId: 42, status: "done", total: 100, resolved: 90 });
+    render(<ImportStrip />);
+
+    // jobId 42 ≠ stored 7, so the done strip must be visible.
+    expect(screen.getByTestId("import-strip-done")).toBeTruthy();
+  });
+
+  it("a new distinct done job resets dismissal even if the previous one was stored", async () => {
+    // First job dismissed.
+    sessionStorage.setItem(SESSION_KEY, "1");
+
+    // New job (different jobId) arrives.
+    mockJob({ jobId: 2, status: "done", total: 200, resolved: 180 });
+    render(<ImportStrip />);
+
+    expect(screen.getByTestId("import-strip-done")).toBeTruthy();
   });
 });
