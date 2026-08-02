@@ -5,12 +5,15 @@
  *   1. POST bottle → GET /api/songs/:mbid/bottles returns it (plays_remaining=3)
  *   2. After 3 spin-event style decrements → body is nulled, archivedCount increments
  *   3. Presence count reflects active heartbeat sessions
+ *   4. Two back-to-back POSTs with same user + MBID → second returns 409
  *
  * All rows are self-contained (unique slugs/ISRCs per run) and cleaned up in afterAll.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import request from "supertest";
+import app from "../src/app.js";
 import {
   db,
   stationsTable,
@@ -181,5 +184,79 @@ describe("song_bottles: presence endpoint logic", () => {
     `);
     const presRow = presResult.rows[0];
     expect(parseInt(presRow!.n, 10)).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("song_bottles: duplicate POST → 409 on same day", () => {
+  const runDup = randomUUID().slice(0, 8);
+  const DUP_SLUG = `test-bottles-dup-${runDup}`;
+  const DUP_MBID = `test-mbid-dup-${runDup}`;
+  const DUP_DEVICE = `test-device-dup-${runDup}`;
+  let dupStationId: number | undefined;
+  let dupUserId: number | undefined;
+
+  beforeAll(async () => {
+    if (!dbAvailable) return;
+
+    const [station] = await db
+      .insert(stationsTable)
+      .values({
+        slug: DUP_SLUG,
+        name: `Test Bottles Dup ${runDup}`,
+        streamUrl: "http://example.invalid/bottles-dup",
+        stationClass: "community",
+      })
+      .returning({ id: stationsTable.id });
+    dupStationId = station!.id;
+
+    await db.insert(recordingsTable).values({
+      mbid: DUP_MBID,
+      title: `Dup Track ${runDup}`,
+      artist: `Dup Artist ${runDup}`,
+    }).onConflictDoNothing();
+
+    const [user] = await db
+      .insert(loreUsersTable)
+      .values({ deviceKey: DUP_DEVICE })
+      .returning({ id: loreUsersTable.id });
+    dupUserId = user!.id;
+  });
+
+  afterAll(async () => {
+    if (!dbAvailable) return;
+    if (dupUserId) {
+      await db.delete(songBottlesTable).where(eq(songBottlesTable.userId, dupUserId));
+      await db.delete(loreUsersTable).where(eq(loreUsersTable.id, dupUserId));
+    }
+    await db.delete(recordingsTable).where(eq(recordingsTable.mbid, DUP_MBID));
+    if (dupStationId) {
+      await db.delete(stationsTable).where(eq(stationsTable.id, dupStationId));
+    }
+  });
+
+  it("second POST with same deviceKey + MBID on the same day returns 409", async (ctx) => {
+    if (!dbAvailable || !dupStationId || !dupUserId) return ctx.skip();
+
+    const payload = {
+      body: "first note of the session",
+      avatar: "🎵",
+      stationId: dupStationId,
+      progress_ms: 42000,
+    };
+
+    // First POST — should succeed with 201
+    const first = await request(app)
+      .post(`/api/songs/${DUP_MBID}/bottles`)
+      .set("Cookie", `lore_sid=${DUP_DEVICE}`)
+      .send(payload);
+    expect(first.status).toBe(201);
+
+    // Second POST — same device, same MBID, same day → 409
+    const second = await request(app)
+      .post(`/api/songs/${DUP_MBID}/bottles`)
+      .set("Cookie", `lore_sid=${DUP_DEVICE}`)
+      .send({ ...payload, body: "trying to send again" });
+    expect(second.status).toBe(409);
+    expect(second.body.error).toBe("already sealed a bottle for this track today");
   });
 });

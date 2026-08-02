@@ -205,7 +205,12 @@ router.post("/songs/:mbid/bottles", h(async (req, res) => {
   const user = await getUserFromSession(req);
   if (!user) return res.status(401).json({ error: "session required" });
 
-  // Rate limit: one bottle per (user, mbid) with plays_remaining > 0
+  // Rate limit: one bottle per (user, mbid) per calendar day (UTC).
+  // Using a day window rather than plays_remaining so the guard applies even
+  // if a previous bottle has already been archived (played out).
+  const startOfDay = new Date();
+  startOfDay.setUTCHours(0, 0, 0, 0);
+
   const [existing] = await db
     .select({ id: songBottlesTable.id })
     .from(songBottlesTable)
@@ -213,11 +218,11 @@ router.post("/songs/:mbid/bottles", h(async (req, res) => {
       and(
         eq(songBottlesTable.userId, user.id),
         eq(songBottlesTable.mbid, mbid),
-        gt(songBottlesTable.playsRemaining, 0),
+        sql`${songBottlesTable.createdAt} >= ${startOfDay}`,
       ),
     )
     .limit(1);
-  if (existing) return res.status(409).json({ error: "already sealed a bottle for this track" });
+  if (existing) return res.status(409).json({ error: "already sealed a bottle for this track today" });
 
   // Upsert avatar on lore_users if they don't have one yet
   await db
