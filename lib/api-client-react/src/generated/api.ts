@@ -104,6 +104,7 @@ import type {
   StationRunInsights,
   StationSpinsPage,
   StationUpcomingSchedule,
+  StationsArtistFrequencyResult,
   StationsRecentSpinsResult,
   StationsRollingGenresResult,
   StationsScheduleResult,
@@ -551,6 +552,87 @@ export function useListStations<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getListStationsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns a bounded, deterministic list of artists from resolved spins across active, non-hidden Lore stations. Canonical MusicBrainz artist identities are grouped by artist MBID; unresolved artist identities are not included.
+
+ * @summary Most-played artists across Lore stations
+ */
+export const getGetStationsArtistFrequencyUrl = () => {
+  return `/api/stations/artist-frequency`;
+};
+
+export const getStationsArtistFrequency = async (
+  options?: RequestInit,
+): Promise<StationsArtistFrequencyResult> => {
+  return customFetch<StationsArtistFrequencyResult>(
+    getGetStationsArtistFrequencyUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetStationsArtistFrequencyQueryKey = () => {
+  return [`/api/stations/artist-frequency`] as const;
+};
+
+export const getGetStationsArtistFrequencyQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStationsArtistFrequency>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getStationsArtistFrequency>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStationsArtistFrequencyQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStationsArtistFrequency>>
+  > = ({ signal }) => getStationsArtistFrequency({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStationsArtistFrequency>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStationsArtistFrequencyQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStationsArtistFrequency>>
+>;
+export type GetStationsArtistFrequencyQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Most-played artists across Lore stations
+ */
+
+export function useGetStationsArtistFrequency<
+  TData = Awaited<ReturnType<typeof getStationsArtistFrequency>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getStationsArtistFrequency>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStationsArtistFrequencyQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

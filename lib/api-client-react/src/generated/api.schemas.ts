@@ -1978,6 +1978,22 @@ export interface StationsRollingGenresResult {
 }
 
 /**
+ * One artist ranked by resolved Lore spin frequency.
+ */
+export interface StationsArtistFrequencyItem {
+  artist: string;
+  artistMbid: string | null;
+  playCount: number;
+}
+
+/**
+ * Bounded, deterministically ranked Lore-wide artist frequencies.
+ */
+export interface StationsArtistFrequencyResult {
+  artists: StationsArtistFrequencyItem[];
+}
+
+/**
  * One deduped spin chip for a station on a given day.
  */
 export interface StationRecentSpin {

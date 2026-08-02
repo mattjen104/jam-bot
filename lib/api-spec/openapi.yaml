@@ -151,6 +151,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/StationList"
+  /stations/artist-frequency:
+    get:
+      operationId: getStationsArtistFrequency
+      tags: [stations]
+      summary: Most-played artists across Lore stations
+      description: >
+        Returns a bounded, deterministic list of artists from resolved spins
+        across active, non-hidden Lore stations. Canonical MusicBrainz artist
+        identities are grouped by artist MBID, while older recordings without
+        an artist MBID are grouped by normalized display name.
+      responses:
+        "200":
+          description: Ranked Lore-wide artist frequency list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationsArtistFrequencyResult"
   /stations/at/{date}/now-playing:
     get:
       operationId: listStationsAtDate
@@ -5218,6 +5235,27 @@ components:
               $ref: "#/components/schemas/RollingGenreChip"
       required:
         - stations
+    StationsArtistFrequencyItem:
+      type: object
+      description: One artist ranked by resolved Lore spin frequency.
+      properties:
+        artist:
+          type: string
+        artistMbid:
+          type: string
+          nullable: true
+        playCount:
+          type: integer
+      required: [artist, artistMbid, playCount]
+    StationsArtistFrequencyResult:
+      type: object
+      description: Bounded, deterministically ranked Lore-wide artist frequencies.
+      properties:
+        artists:
+          type: array
+          items:
+            $ref: "#/components/schemas/StationsArtistFrequencyItem"
+      required: [artists]
     StationRecentSpin:
       type: object
       description: One deduped spin chip for a station on a given day.

@@ -447,7 +447,7 @@ export function ManualImportModal({ onClose }: Props) {
     try {
       const response = await postExtractLibraryImages(selected.map(({ mediaType, data }) => ({ mediaType, data })));
       const extracted = new Map(response.results.map((result) => [selected[result.index]?.id, result]));
-      const nextImages = images.map((image) => {
+      const nextImages: ScreenshotImage[] = images.map((image): ScreenshotImage => {
         if (!ids.includes(image.id)) return image;
         const result = extracted.get(image.id);
         if (!result || result.status === "error") {

@@ -21,6 +21,7 @@ import {
   GetStationInsightsParams,
   GetStationInsightsResponse,
   GetStationsRollingGenresResponse,
+  GetStationsArtistFrequencyResponse,
 } from "@workspace/api-zod";
 import {
   db,
@@ -1176,6 +1177,56 @@ router.get("/stations/rolling-genres", h(async (_req, res) => {
 
   _rollingGenresCache = { builtAt: now, data: stations };
   return res.json(GetStationsRollingGenresResponse.parse({ stations }));
+}));
+
+// GET /api/stations/artist-frequency
+// Lore-wide onboarding pool: only resolved plays on stations that are visible
+// in the public directory. Canonical artist MBIDs collapse aliases from
+// different recordings; the normalized fallback keeps older recordings without
+// an artist MBID deterministic as well.
+const ONBOARDING_ARTIST_LIMIT = 60;
+
+router.get("/stations/artist-frequency", h(async (_req, res) => {
+  const rows = await db.execute<{
+    artist: string;
+    artist_mbid: string | null;
+    play_count: number;
+  }>(sql`
+    WITH resolved_artists AS (
+      SELECT
+        COALESCE(
+          'mbid:' || r.artist_mbid,
+          'name:' || lower(regexp_replace(r.artist, '[^[:alnum:]]', '', 'g'))
+        ) AS artist_key,
+        r.artist,
+        r.artist_mbid
+      FROM spins sp
+      INNER JOIN stations s
+        ON s.id = sp.station_id
+       AND s.active = true
+       AND s.hidden = false
+      INNER JOIN recordings r ON r.mbid = sp.mbid
+      WHERE sp.mbid IS NOT NULL
+        AND r.artist IS NOT NULL
+        AND length(trim(r.artist)) > 0
+    )
+    SELECT
+      min(artist)::text AS artist,
+      max(artist_mbid)::text AS artist_mbid,
+      count(*)::int AS play_count
+    FROM resolved_artists
+    GROUP BY artist_key
+    ORDER BY play_count DESC, lower(min(artist)), min(artist)
+    LIMIT ${ONBOARDING_ARTIST_LIMIT}
+  `);
+
+  return res.json(GetStationsArtistFrequencyResponse.parse({
+    artists: rows.rows.map((row) => ({
+      artist: row.artist,
+      artistMbid: row.artist_mbid,
+      playCount: Number(row.play_count),
+    })),
+  }));
 }));
 
 // GET /api/djs/:name

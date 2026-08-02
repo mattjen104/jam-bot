@@ -22,7 +22,17 @@ import { eligibleDjName } from "@workspace/lore-attribution";
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-import { useDialData, readPins, normalizeDjName, type DialStation, type DialShow, type DialSpin, type LiveArtistSuggestion } from "../hooks/useDialData";
+import {
+  useDialData,
+  readPins,
+  normalizeDjName,
+  liveIdentityKey,
+  type DialStation,
+  type DialShow,
+  type DialSpin,
+  type LiveArtistSuggestion,
+  type OnboardingArtistSuggestion,
+} from "../hooks/useDialData";
 
 /**
  * Returns a version of `value` that only flips to `true` after it has been
@@ -1134,6 +1144,8 @@ export function DialView() {
     hasLibrary,
     hasSeeds,
     liveArtistSuggestions,
+    onboardingArtists,
+    onboardingArtistsLoading,
     overlapByPickerId,
     pickerNameToId,
   } = useDialData();
@@ -1640,6 +1652,8 @@ export function DialView() {
                   hasSeeds={hasSeeds || visibleSeeds.length > 0}
                   seeds={visibleSeeds}
                   liveArtistSuggestions={liveArtistSuggestions ?? []}
+                  onboardingArtists={onboardingArtists ?? []}
+                  onboardingArtistsLoading={onboardingArtistsLoading}
                   liveLoading={liveLoading}
                   showLivePicker={false}
                   onAddSeed={addSeed}
@@ -1747,6 +1761,8 @@ export function DialView() {
                   hasSeeds={hasSeeds || visibleSeeds.length > 0}
                   seeds={visibleSeeds}
                   liveArtistSuggestions={liveArtistSuggestions ?? []}
+                  onboardingArtists={onboardingArtists ?? []}
+                  onboardingArtistsLoading={onboardingArtistsLoading}
                   liveLoading={liveLoading}
                   showLivePicker
                   onAddSeed={addSeed}
@@ -2110,6 +2126,8 @@ function Zone1Placeholder({
   hasSeeds,
   seeds,
   liveArtistSuggestions,
+  onboardingArtists,
+  onboardingArtistsLoading,
   liveLoading,
   showLivePicker,
   onAddSeed,
@@ -2120,6 +2138,8 @@ function Zone1Placeholder({
   hasSeeds: boolean;
   seeds: string[];
   liveArtistSuggestions: LiveArtistSuggestion[];
+  onboardingArtists: OnboardingArtistSuggestion[];
+  onboardingArtistsLoading: boolean;
   liveLoading: boolean;
   showLivePicker: boolean;
   onAddSeed: (artist: string) => void;
@@ -2163,7 +2183,8 @@ function Zone1Placeholder({
         {showLivePicker && (
           <LiveArtistPicker
             suggestions={liveArtistSuggestions}
-            loading={liveLoading}
+            artists={onboardingArtists}
+            loading={liveLoading || onboardingArtistsLoading}
             seeds={seeds}
             onAddSeed={onAddSeed}
           />
@@ -2196,42 +2217,49 @@ function Zone1Placeholder({
 
 export function LiveArtistPicker({
   suggestions,
+  artists,
   loading,
   seeds,
   onAddSeed,
 }: {
-  suggestions: LiveArtistSuggestion[];
+  suggestions?: LiveArtistSuggestion[];
+  /** Unified historical + live list. Optional for callers that only show live data. */
+  artists?: OnboardingArtistSuggestion[];
   loading: boolean;
   seeds: string[];
   onAddSeed: (artist: string) => void;
 }) {
-  const selected = new Set(seeds.map((seed) => seed.toLocaleLowerCase()));
+  const liveSuggestions = suggestions ?? [];
+  const selected = new Set(seeds.map((seed) => liveIdentityKey(seed)));
+  const rows: OnboardingArtistSuggestion[] = artists?.length
+    ? artists
+    : liveSuggestions.map((suggestion) => ({
+        ...suggestion,
+        live: true,
+        playCount: suggestion.playCount ?? null,
+      }));
   return (
     <section className="live-artist-picker" aria-labelledby="live-artist-picker-label">
       <div className="live-artist-picker__heading">
         <span className="live-artist-picker__pip" aria-hidden="true" />
         <div>
-          <h2 id="live-artist-picker-label">Artists playing live now</h2>
-          <p>Pick one to tune your dial without importing a library.</p>
+          <h2 id="live-artist-picker-label">Artists to start with</h2>
+          <p>Choose one of Lore’s most-played artists, or jump into what is live now.</p>
         </div>
       </div>
-      {loading && suggestions.length === 0 ? (
+      {loading && rows.length === 0 ? (
         <div className="live-artist-picker__state" role="status">Listening for artists on air…</div>
-      ) : suggestions.length > 0 ? (
+      ) : rows.length > 0 ? (
         <>
           <div className="live-artist-picker__options">
-            {suggestions.map((suggestion, index) => {
-            const isSelected = selected.has(suggestion.artist.toLocaleLowerCase());
+            {rows.map((suggestion) => {
+            const isSelected = selected.has(liveIdentityKey(suggestion.artist));
             const isAtLimit = seeds.length >= 10 && !isSelected;
-            // CSS uses w1 as the largest type and w5 as the smallest. Keep
-            // the strongest ranked artists visually strongest as the cloud
-            // flows down through progressively lighter buckets.
-            const weight = Math.min(5, Math.floor(index / 6) + 1);
             return (
               <button
                 key={suggestion.artist.toLocaleLowerCase()}
                 type="button"
-                className={`live-artist-picker__option live-artist-picker__option--w${weight}${isSelected ? " live-artist-picker__option--selected" : ""}`}
+                className={`live-artist-picker__option${isSelected ? " live-artist-picker__option--selected" : ""}${suggestion.live ? " live-artist-picker__option--live" : ""}`}
                 aria-pressed={isSelected}
                 aria-label={`${isSelected ? "Selected" : "Choose"} ${suggestion.artist}`}
                 disabled={isAtLimit}
@@ -2239,11 +2267,21 @@ export function LiveArtistPicker({
               >
                 <span className="live-artist-picker__artist">{suggestion.artist}</span>
                 <span className="live-artist-picker__context">
-                  {[suggestion.trackTitle, suggestion.djName, suggestion.showName, suggestion.stationName]
-                    .filter(Boolean)
-                    .join(" · ")}
+                  {suggestion.live
+                    ? [
+                        suggestion.djName,
+                        suggestion.showName,
+                        suggestion.stationName,
+                        "live now",
+                      ].filter(Boolean).join(" · ")
+                    : suggestion.playCount != null
+                      ? `${suggestion.playCount} plays in Lore`
+                      : "Lore history"}
                 </span>
-                <span className="live-artist-picker__action">{isSelected ? "Selected" : "Choose"}</span>
+                <span className="live-artist-picker__action">
+                  {suggestion.live ? "live now · " : ""}
+                  {isSelected ? "Selected" : "Choose"}
+                </span>
               </button>
             );
             })}

@@ -73,7 +73,13 @@ vi.mock("../src/hooks/useFrontDoorScan", () => ({
   })),
 }));
 
-import { useDialData, extractLiveArtistSuggestions, splitIcyCombinedField, type DialStation } from "../src/hooks/useDialData";
+import {
+  useDialData,
+  extractLiveArtistSuggestions,
+  mergeOnboardingArtists,
+  splitIcyCombinedField,
+  type DialStation,
+} from "../src/hooks/useDialData";
 import { DialView, LiveArtistPicker } from "../src/components/DialView";
 import { ME_DIAL_CROSSINGS_KEY, ME_PICKER_NAMES_KEY } from "../src/lib/meHooks";
 
@@ -118,6 +124,8 @@ function mockDial(stations: DialStation[] = [], suggestions = []) {
     hasLibrary: false,
     hasSeeds: false,
     liveArtistSuggestions: suggestions,
+    onboardingArtists: [],
+    onboardingArtistsLoading: false,
     overlapByPickerId: new Map(),
     pickerNameToId: new Map(),
   });
@@ -386,6 +394,41 @@ describe("extractLiveArtistSuggestions", () => {
 });
 
 describe("no-library onboarding live picker", () => {
+  it("merges historical artists with live context and orders by Lore play count", () => {
+    const rows = mergeOnboardingArtists(
+      [
+        { artist: "Zed", artistMbid: null, playCount: 80 },
+        { artist: "Alpha", artistMbid: "a", playCount: 120 },
+        { artist: "Bravo", artistMbid: "b", playCount: 120 },
+      ],
+      [{
+        artist: "zed",
+        stationSlug: "wfmu",
+        stationName: "WFMU",
+        trackTitle: "A Song",
+        showName: "Morning",
+        djName: "Alex",
+      }],
+    );
+    expect(rows.map((row) => row.artist)).toEqual(["Alpha", "Bravo", "zed"]);
+    expect(rows[2]).toEqual(expect.objectContaining({
+      live: true,
+      playCount: 80,
+      djName: "Alex",
+    }));
+  });
+
+  it("places live-only artists after historical artists with stable alphabetical ties", () => {
+    const rows = mergeOnboardingArtists(
+      [{ artist: "History", artistMbid: null, playCount: 1 }],
+      [
+        { artist: "Zulu", stationSlug: "z", stationName: "Z", trackTitle: null, showName: null, djName: null },
+        { artist: "Alpha", stationSlug: "a", stationName: "A", trackTitle: null, showName: null, djName: null },
+      ],
+    );
+    expect(rows.map((row) => row.artist)).toEqual(["History", "Alpha", "Zulu"]);
+  });
+
   it("renders live choices with a normal manual/import fallback", () => {
     mockDial([], [{
       artist: "Live Artist",
@@ -397,9 +440,9 @@ describe("no-library onboarding live picker", () => {
 
     render(<DialView />);
 
-    expect(screen.getByRole("heading", { name: "Artists playing live now" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Artists to start with" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Choose Live Artist" })).toBeTruthy();
-    expect(screen.getByText("Live Track · Morning Show · WFMU")).toBeTruthy();
+    expect(screen.getByText("Morning Show · WFMU · live now")).toBeTruthy();
     expect(screen.getByPlaceholderText("e.g. Radiohead")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Connect Spotify library" })).toBeTruthy();
   });
@@ -487,7 +530,7 @@ describe("no-library onboarding live picker", () => {
     expect(screen.queryByRole("button", { name: /Choose/ })).toBeNull();
   });
 
-  it("renders a dense expanded cloud and shows the selection limit", () => {
+  it("renders one full-width row per artist and shows the selection limit", () => {
     const suggestions = Array.from({ length: 12 }, (_, i) => ({
       artist: `Artist ${i + 1}`,
       stationSlug: `station-${i}`,
@@ -510,7 +553,7 @@ describe("no-library onboarding live picker", () => {
     expect((screen.getByRole("button", { name: "Choose Artist 1" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("gives higher-ranked artists the larger cloud weight", () => {
+  it("keeps every row at the same visual size", () => {
     const suggestions = Array.from({ length: 13 }, (_, i) => ({
       artist: `Ranked Artist ${i + 1}`,
       stationSlug: `station-${i}`,
@@ -528,12 +571,10 @@ describe("no-library onboarding live picker", () => {
       />,
     );
 
-    const first = screen.getByRole("button", { name: "Choose Ranked Artist 1" });
-    const seventh = screen.getByRole("button", { name: "Choose Ranked Artist 7" });
-    const thirteenth = screen.getByRole("button", { name: "Choose Ranked Artist 13" });
-    expect(first.className).toContain("live-artist-picker__option--w1");
-    expect(seventh.className).toContain("live-artist-picker__option--w2");
-    expect(thirteenth.className).toContain("live-artist-picker__option--w3");
+    const rows = screen.getAllByRole("button", { name: /Choose Ranked Artist/ });
+    expect(new Set(rows.map((row) => row.className))).toEqual(
+      new Set(["live-artist-picker__option live-artist-picker__option--live"]),
+    );
   });
 
   it("keeps selected live artists visibly selected in the cloud", () => {

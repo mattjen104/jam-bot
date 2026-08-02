@@ -303,6 +303,25 @@ export const ListStationsResponse = zod.object({
 });
 
 /**
+ * Returns a bounded, deterministic list of artists from resolved spins across active, non-hidden Lore stations. Canonical MusicBrainz artist identities are grouped by artist MBID; unresolved artist identities are not included.
+
+ * @summary Most-played artists across Lore stations
+ */
+export const GetStationsArtistFrequencyResponse = zod
+  .object({
+    artists: zod.array(
+      zod
+        .object({
+          artist: zod.string(),
+          artistMbid: zod.string().nullable(),
+          playCount: zod.number(),
+        })
+        .describe("One artist ranked by resolved Lore spin frequency."),
+    ),
+  })
+  .describe("Bounded, deterministically ranked Lore-wide artist frequencies.");
+
+/**
  * Same as listStationsNowPlaying but for a historical calendar day. Returns the last logged spin per station on that UTC date. Powers the ghost-dial date sweep on the home page.
 
  * @summary Last spin per station for a specific calendar day (ghost dial)

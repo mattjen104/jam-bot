@@ -195,6 +195,8 @@ export * from "./stationRef";
 export * from "./stationRunDetail";
 export * from "./stationRunInsights";
 export * from "./stationRunSummary";
+export * from "./stationsArtistFrequencyItem";
+export * from "./stationsArtistFrequencyResult";
 export * from "./stationScheduleRun";
 export * from "./stationScheduleRunShow";
 export * from "./stationSpinsBounds";

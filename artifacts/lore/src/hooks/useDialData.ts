@@ -25,9 +25,12 @@ import {
   getGetStationsScheduleQueryKey,
   useGetStationsRecentSpins,
   getGetStationsRecentSpinsQueryKey,
+  useGetStationsArtistFrequency,
+  getGetStationsArtistFrequencyQueryKey,
   type Station,
   type StationScheduleRun,
   type StationRecentSpin,
+  type StationsArtistFrequencyItem,
 } from "@workspace/api-client-react";
 import { useMyPickerNames, useMyDialCrossings, useMyPickerOverlap } from "../lib/meHooks";
 import { eligibleDjName } from "@workspace/lore-attribution";
@@ -113,7 +116,16 @@ export interface LiveArtistSuggestion {
   showName: string | null;
   /** Human selector/host when the current schedule attribution is usable. */
   djName: string | null;
+  /** True for an artist sourced from the current live pulse. */
+  live?: boolean;
+  /** Historical Lore-wide play count, when this artist is in the frequency pool. */
+  playCount?: number | null;
 }
+
+export type OnboardingArtistSuggestion = LiveArtistSuggestion & {
+  live: boolean;
+  playCount: number | null;
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -277,7 +289,7 @@ function normalizeLiveContext(value: string | null | undefined): string | null {
   return context && !MISSING_LIVE_ARTIST_VALUES.has(context.toLowerCase()) ? context : null;
 }
 
-function liveIdentityKey(value: string | null | undefined): string {
+export function liveIdentityKey(value: string | null | undefined): string {
   return (value ?? "")
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -371,7 +383,7 @@ export function extractLiveArtistSuggestions(
   const seen = new Set<string>();
   const suggestions: LiveArtistSuggestion[] = [];
   for (const candidate of candidates) {
-    const key = candidate.artist.toLocaleLowerCase();
+    const key = liveIdentityKey(candidate.artist);
     if (seen.has(key)) continue;
     seen.add(key);
     const { score: _score, sourceIndex: _sourceIndex, ...suggestion } = candidate;
@@ -379,6 +391,69 @@ export function extractLiveArtistSuggestions(
     if (suggestions.length >= max) break;
   }
   return suggestions;
+}
+
+/**
+ * Merge the bounded historical pool with current live suggestions.
+ *
+ * The API already ranks the historical list by frequency. We preserve that
+ * order while building the identity map, then sort the final picker list by
+ * Lore play count. A live candidate wins on display/context for a duplicate,
+ * while its historical play count is retained for ranking and display.
+ */
+export function mergeOnboardingArtists(
+  historical: StationsArtistFrequencyItem[],
+  liveSuggestions: LiveArtistSuggestion[],
+): OnboardingArtistSuggestion[] {
+  const merged = new Map<string, OnboardingArtistSuggestion>();
+
+  for (const item of historical) {
+    const artist = item.artist?.replace(/\s+/g, " ").trim();
+    const key = liveIdentityKey(artist);
+    if (!artist || !key || merged.has(key)) continue;
+    merged.set(key, {
+      artist,
+      stationSlug: "",
+      stationName: null,
+      trackTitle: null,
+      showName: null,
+      djName: null,
+      live: false,
+      playCount: item.playCount,
+    });
+  }
+
+  for (const suggestion of liveSuggestions) {
+    const artist = suggestion.artist.replace(/\s+/g, " ").trim();
+    const key = liveIdentityKey(artist);
+    if (!artist || !key) continue;
+    const existing = merged.get(key);
+    merged.set(key, {
+      ...(existing ?? {
+        artist,
+        stationSlug: suggestion.stationSlug,
+        stationName: suggestion.stationName,
+        trackTitle: suggestion.trackTitle,
+        showName: suggestion.showName,
+        djName: suggestion.djName,
+      }),
+      ...suggestion,
+      artist,
+      live: true,
+      playCount: existing?.playCount ?? suggestion.playCount ?? null,
+    });
+  }
+
+  return [...merged.values()].sort((a, b) => {
+    // Live-only suggestions have no historical count, so they follow the
+    // ranked Lore history while still receiving a deterministic alphabetical
+    // order among themselves.
+    const aCount = a.playCount ?? -1;
+    const bCount = b.playCount ?? -1;
+    return bCount - aCount ||
+      a.artist.localeCompare(b.artist, undefined, { sensitivity: "base" }) ||
+      a.artist.localeCompare(b.artist);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -412,6 +487,9 @@ export function useDialData(): {
   hasSeeds: boolean;
   /** Current artists on live stations, for the no-library onboarding picker. */
   liveArtistSuggestions: LiveArtistSuggestion[];
+  /** Lore-wide historical pool merged with current live artists. */
+  onboardingArtists: OnboardingArtistSuggestion[];
+  onboardingArtistsLoading: boolean;
   /** pickerId → overlap count from the server-computed full-library RG-widened endpoint. */
   overlapByPickerId: Map<number, number>;
   /** Normalised picker display name → pickerId — bridge for shows lacking a linked pickerId. */
@@ -516,6 +594,17 @@ export function useDialData(): {
       },
     },
   );
+
+  // Bounded, all-time Lore history for no-library onboarding. This is public
+  // data and intentionally independent of the listener's library/session.
+  const { data: artistFrequencyData, isLoading: artistFrequencyLoading } =
+    useGetStationsArtistFrequency({
+      query: {
+        queryKey: getGetStationsArtistFrequencyQueryKey(),
+        staleTime: 10 * 60_000,
+        refetchInterval: 10 * 60_000,
+      },
+    });
 
   // ── server-computed crossing scores (rolling 24h, full spin history) ────────
   // These replace the client-side crossing reduction at the station level so
@@ -825,6 +914,10 @@ export function useDialData(): {
     () => extractLiveArtistSuggestions(stations, 24),
     [stations],
   );
+  const onboardingArtists = useMemo(
+    () => mergeOnboardingArtists(artistFrequencyData?.artists ?? [], liveArtistSuggestions),
+    [artistFrequencyData, liveArtistSuggestions],
+  );
 
   return {
     stations,
@@ -835,6 +928,8 @@ export function useDialData(): {
     hasLibrary,
     hasSeeds,
     liveArtistSuggestions,
+    onboardingArtists,
+    onboardingArtistsLoading: artistFrequencyLoading,
     overlapByPickerId,
     pickerNameToId,
   };
