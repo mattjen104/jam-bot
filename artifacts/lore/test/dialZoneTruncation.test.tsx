@@ -75,6 +75,12 @@ vi.mock("../src/components/ContextRail", () => ({
 vi.mock("../src/components/SearchOverlay", () => ({
   SearchOverlay: () => null,
 }));
+vi.mock("../src/components/LibraryChip", () => ({
+  LibraryChip: () => null,
+}));
+vi.mock("../src/components/ManualImportModal", () => ({
+  ManualImportModal: () => null,
+}));
 
 // useFrontDoorScan is extracted so it can be mocked per-test to control
 // scan.samplingIdx without real timers.
@@ -99,7 +105,7 @@ vi.mock("../src/hooks/useFrontDoorScan", () => ({
 // Imports (after vi.mock calls)
 // ---------------------------------------------------------------------------
 
-import { useDialData } from "../src/hooks/useDialData";
+import { useDialData, readPins } from "../src/hooks/useDialData";
 import { useMyGhostMissed } from "../src/lib/meHooks";
 import { usePlayer } from "../src/player/PlayerProvider";
 import { useFrontDoorScan } from "../src/hooks/useFrontDoorScan";
@@ -847,5 +853,127 @@ describe("Zone collapse — localStorage persistence", () => {
 
     // Key matches the expand-time anchor → zone silently re-expands.
     expect(fdrowCount()).toBe(9);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// New sort/band tests (Task #1038)
+// ---------------------------------------------------------------------------
+
+/** Zone 1 station with a named DJ (r=2: artistCrossings > 0 + djName). */
+function makeZone1DjStation(slug: string, lifetimeCrossings = 10): DialStation {
+  return {
+    station: { slug, name: `Station ${slug}`, automationClass: null, streamUrl: null, websiteUrl: null, hidden: false, favorite: false } as DialStation["station"],
+    isLive: true,
+    shows: [makeShow({ djName: "DJ Test", crossings: 0, artistCrossings: 1 })],
+    crossings: 0,
+    artistCrossings: 1,
+    lifetimeCrossings,
+    lifetimeArtistCrossings: 0,
+  };
+}
+
+/** Zone 1 station with NO DJ name (r=2: artistCrossings > 0, automated stream). */
+function makeZone1StreamStation(slug: string, lifetimeCrossings = 500): DialStation {
+  return {
+    station: { slug, name: `Station ${slug}`, automationClass: null, streamUrl: null, websiteUrl: null, hidden: false, favorite: false } as DialStation["station"],
+    isLive: true,
+    shows: [makeShow({ djName: null, crossings: 0, artistCrossings: 1 })],
+    crossings: 0,
+    artistCrossings: 1,
+    lifetimeCrossings,
+    lifetimeArtistCrossings: 0,
+  };
+}
+
+/** Zone 3 r=0 station: live but no shows, no crossings. */
+function makeZone3R0Station(slug: string, lifetimeCrossings = 0): DialStation {
+  return {
+    station: { slug, name: `Station ${slug}`, automationClass: null, streamUrl: null, websiteUrl: null, hidden: false, favorite: false } as DialStation["station"],
+    isLive: true,
+    shows: [],
+    crossings: 0,
+    artistCrossings: 0,
+    lifetimeCrossings,
+    lifetimeArtistCrossings: 0,
+  };
+}
+
+describe("Zone 1 sort — DJ band above stream band (Fix 1)", () => {
+  it("(a) DJ with 10 lifetime crossings outranks automated stream with 500 in Zone 1", () => {
+    // Stream station has 500 lifetime crossings but no DJ; DJ station has only 10.
+    // After the attribution-band fix the DJ must appear at index 0.
+    const djStation = makeZone1DjStation("dj0", 10);
+    const streamStation = makeZone1StreamStation("stream0", 500);
+    mockDialData([streamStation, djStation]);
+    mockGhosts([]);
+    mockScan(null);
+
+    renderDial();
+
+    const rows = document.querySelectorAll(".fdrow");
+    // Both are Zone 1 so 2 rows visible.
+    expect(rows.length).toBe(2);
+    // DJ row must be first regardless of the stream's higher crossing count.
+    expect(rows[0].textContent).toContain("dj0");
+    expect(rows[1].textContent).toContain("stream0");
+  });
+
+  it("r=1 (exact match playing now) still floats above the DJ band", () => {
+    // A rung-1 station (exact library track) must always be first even if a DJ
+    // station has higher picker overlap.
+    const rung1 = makeRung1Station("rung1s");
+    const djStation = makeZone1DjStation("dj0", 999);
+    mockDialData([djStation, rung1]);
+    mockGhosts([]);
+    mockScan(null);
+
+    renderDial();
+
+    const rows = document.querySelectorAll(".fdrow");
+    expect(rows.length).toBe(2);
+    // rung-1 must be first.
+    expect(rows[0].textContent).toContain("rung1s");
+    expect(rows[1].textContent).toContain("dj0");
+  });
+});
+
+describe("Zone 3 restBand — pinned stations float above non-pinned (Fix 3)", () => {
+  it("(c) pinned r=0 row appears before non-pinned r=0 row with higher crossing count", () => {
+    // 'high' has more lifetime crossings but is not pinned.
+    // 'pinned' has zero crossings but is pinned.
+    // Expected: pinned row first.
+    const pinnedStation = makeZone3R0Station("pinned", 0);
+    const highStation = makeZone3R0Station("high", 200);
+
+    (readPins as ReturnType<typeof vi.fn>).mockReturnValue(new Set(["pinned"]));
+    mockDialData([highStation, pinnedStation]);
+    mockGhosts([]);
+    mockScan(null);
+
+    renderDial();
+
+    const rows = document.querySelectorAll(".fdrow");
+    // Both are Zone 3 restBand; ZONE3_VISIBLE=3, so both appear.
+    expect(rows.length).toBe(2);
+    // Pinned row comes first despite zero crossings.
+    expect(rows[0].textContent).toContain("pinned");
+    expect(rows[1].textContent).toContain("high");
+  });
+
+  it("non-pinned restBand rows sort by lifetimeCrossings desc when no pin set", () => {
+    (readPins as ReturnType<typeof vi.fn>).mockReturnValue(new Set<string>());
+    const lo = makeZone3R0Station("lo", 5);
+    const hi = makeZone3R0Station("hi", 100);
+    mockDialData([lo, hi]);
+    mockGhosts([]);
+    mockScan(null);
+
+    renderDial();
+
+    const rows = document.querySelectorAll(".fdrow");
+    expect(rows.length).toBe(2);
+    expect(rows[0].textContent).toContain("hi");
+    expect(rows[1].textContent).toContain("lo");
   });
 });

@@ -9,7 +9,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
 import { Search } from "lucide-react";
 import { useLocation } from "wouter";
-import { useDialData, normalizeDjName, type DialStation, type DialShow, type DialSpin } from "../hooks/useDialData";
 import { useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, useMyTasteSeeds, useSetTasteSeeds, type GhostStation } from "../lib/meHooks";
 import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
 import { StationLane } from "./StationLane";
@@ -20,6 +19,7 @@ import { usePlayer } from "../player/PlayerProvider";
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+import { useDialData, readPins, normalizeDjName, type DialStation, type DialShow, type DialSpin } from "../hooks/useDialData";
 
 /**
  * Returns a version of `value` that only flips to `true` after it has been
@@ -1061,6 +1061,7 @@ export function DialView() {
   const sortedRows = useMemo(() => {
     const FALLBACK_CUTOFF_MS = 4 * 60 * 60 * 1000;
     const now = Date.now();
+    const pins = readPins();
     return [...stations]
       .filter((ds) => ds.isLive)
       .map((ds) => {
@@ -1078,25 +1079,26 @@ export function DialView() {
               ?.djName ?? null
           : null;
         const effectiveDjName = liveDjName ?? fallbackDjName;
-        return { ds, show, rz, effectiveDjName };
+        const isPinned = pins.has(ds.station.slug);
+        return { ds, show, rz, effectiveDjName, isPinned };
       })
       .sort((a, b) => {
         // 1. Live crossing (rung 1) floats to the very top
         const ac = a.rz.r === 1 ? 0 : 1;
         const bc = b.rz.r === 1 ? 0 : 1;
         if (ac !== bc) return ac - bc;
-        // 2. Lifetime overlap desc — attributed rows use pickerId-first overlap
-        //    (falling back to normalised-name bridge when no pickerId is linked);
-        //    unattributed rows use lifetime station crossings so both axes are
-        //    comparable (all-time vs all-time, not lifetime vs 24h). Both values
-        //    are now count(distinct mbid) so the scale is identical to pickerOv().
-        const aOv = a.effectiveDjName != null ? pickerOv(a.show?.pickerId ?? null, a.effectiveDjName) : a.ds.lifetimeCrossings;
-        const bOv = b.effectiveDjName != null ? pickerOv(b.show?.pickerId ?? null, b.effectiveDjName) : b.ds.lifetimeCrossings;
-        if (aOv !== bOv) return bOv - aOv;
-        // 3. Attribution tier as tiebreaker within the same overlap band
+        // 2. Attribution band: DJ rows (effectiveDjName != null) always above
+        //    stream rows regardless of overlap count. A DJ with 10 lifetime
+        //    crossings outranks an automated stream with 500.
         const at = a.effectiveDjName != null ? 0 : 1;
         const bt = b.effectiveDjName != null ? 0 : 1;
         if (at !== bt) return at - bt;
+        // 3. Within each band, overlap desc.
+        //    DJ band: pickerId-first overlap (name bridge fallback).
+        //    Stream band: lifetime station crossings (all-time, same scale).
+        const aOv = a.effectiveDjName != null ? pickerOv(a.show?.pickerId ?? null, a.effectiveDjName) : a.ds.lifetimeCrossings;
+        const bOv = b.effectiveDjName != null ? pickerOv(b.show?.pickerId ?? null, b.effectiveDjName) : b.ds.lifetimeCrossings;
+        if (aOv !== bOv) return bOv - aOv;
         // 4. Rung asc as final tiebreaker
         return a.rz.r - b.rz.r;
       });
@@ -1108,19 +1110,34 @@ export function DialView() {
   const withReason = useMemo(() => sortedRows.filter((row) => row.rz.r >= 1 && row.rz.r <= 4), [sortedRows]);
   const alsoOnAir = useMemo(() => sortedRows.filter((row) => row.rz.r === 0 || row.rz.r >= 5), [sortedRows]);
 
-  // Zone 3 slot reservation: promote the first attributed row (effectiveDjName
-  // != null) to index 0 so it always occupies the first collapsed visible slot,
-  // even when higher-crossing unattributed stations sort ahead of it.
-  // The full expanded view uses the same ordered array so index 0 is stable.
-  // If no attributed row exists the array is returned unchanged.
-  const alsoOnAirOrdered = useMemo(() => {
-    const idx = alsoOnAir.findIndex((row) => row.effectiveDjName != null);
-    if (idx <= 0) return alsoOnAir; // nothing to promote (none found, or already first)
-    const result = [...alsoOnAir];
-    const [promoted] = result.splice(idx, 1);
-    result.unshift(promoted);
-    return result;
-  }, [alsoOnAir]);
+  // Zone 3 band split (replaces slot-0 promotion from Task #1017):
+  //   djBand  — r=5 rows (attributed show on air, no crossing yet).
+  //             Always fully shown. Sorted by picker overlap desc.
+  //             Styled with picker accent ("DJs on air" sub-label).
+  //   restBand — r=0/6/7 rows (unattributed / dark).
+  //             Subject to ZONE3_VISIBLE cap + expand toggle.
+  //             Pinned stations float above non-pinned within restBand.
+  const djBand = useMemo(() =>
+    alsoOnAir
+      .filter((row) => row.rz.r === 5)
+      .sort((a, b) => {
+        const aOv = pickerOv(a.show?.pickerId ?? null, a.effectiveDjName);
+        const bOv = pickerOv(b.show?.pickerId ?? null, b.effectiveDjName);
+        return bOv - aOv;
+      }),
+  // pickerOv closure reads overlapByPickerId/pickerNameToId from outer scope
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [alsoOnAir, overlapByPickerId, pickerNameToId]);
+
+  const restBand = useMemo(() =>
+    alsoOnAir
+      .filter((row) => row.rz.r !== 5)
+      .sort((a, b) => {
+        // Pinned stations float above non-pinned regardless of crossing count.
+        if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+        return b.ds.lifetimeCrossings - a.ds.lifetimeCrossings;
+      }),
+  [alsoOnAir]);
   // Ghost zone: stations that played library artists but user hasn't tuned into
   const { data: ghostStations = [] } = useMyGhostMissed();
   // Exclude any ghost station already appearing in Zone 1 or Zone 3 (live sets)
@@ -1584,19 +1601,22 @@ export function DialView() {
             )}
 
             {/* Zone 3: Also on air — gated on crossingsLoading like Zones 1 & 2
-                so it never jumps ahead while scores are still in-flight */}
-            {!crossingsLoading && alsoOnAirOrdered.length > 0 && (
+                so it never jumps ahead while scores are still in-flight.
+                Rendered as two visual bands:
+                  djBand  — r=5 attributed rows, always fully shown, picker accent
+                  restBand — r≠5 rows, subject to ZONE3_VISIBLE cap */}
+            {!crossingsLoading && alsoOnAir.length > 0 && (
               <>
                 <div className="fdzone-lbl-row">
                   <ZoneLabel
                     label="Also on air"
-                    n={alsoOnAirOrdered.length}
+                    n={alsoOnAir.length}
                     hint="nothing Lore can point to yet"
                     accent="live"
                     collapsed={zone3Collapsed}
                     onCollapse={() => { setZone3Collapsed(!zone3Collapsed); if (!zone3Collapsed) setZone3Expanded(false); }}
                   />
-                  {zone3Expanded && !zone3Collapsed && alsoOnAirOrdered.length > ZONE3_VISIBLE && (
+                  {zone3Expanded && !zone3Collapsed && restBand.length > ZONE3_VISIBLE && (
                     <button
                       className="dial-show-more-inline"
                       aria-expanded={true}
@@ -1609,29 +1629,55 @@ export function DialView() {
                 </div>
                 {!zone3Collapsed && (
                   <>
-                    <div id="zone3-rows">
-                      {alsoOnAirOrdered.slice(0, zone3Expanded ? alsoOnAirOrdered.length : ZONE3_VISIBLE).map((row) => (
-                        <FrontDoorRow
-                          key={row.ds.station.slug}
-                          ds={row.ds}
-                          show={row.show}
-                          ov={row.show?.djName != null ? pickerOv(row.show?.pickerId ?? null, row.show.djName) : row.ds.lifetimeCrossings}
-                          isActive={row.ds.station.slug === radio.station?.slug}
-                          isSampling={false}
-                          onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
-                          onEarlier={() => goStation(row.ds.station.slug)}
-                        />
-                      ))}
-                    </div>
-                    {alsoOnAirOrdered.length > ZONE3_VISIBLE && (
-                      <button
-                        className="dial-show-more"
-                        aria-expanded={zone3Expanded}
-                        aria-controls="zone3-rows"
-                        onClick={() => { if (!zone3Expanded) zone3ExpandAnchor.current = zone3SlugKey; else zone3ExpandAnchor.current = null; setZone3Expanded((e) => !e); }}
-                      >
-                        {zone3Expanded ? "See less" : `See all ${alsoOnAirOrdered.length}`}
-                      </button>
+                    {/* DJ band — attributed shows with no crossing yet.
+                        Always fully shown; no ZONE3_VISIBLE cap. */}
+                    {djBand.length > 0 && (
+                      <>
+                        <ZoneLabel label="DJs on air" accent="picker" />
+                        {djBand.map((row) => (
+                          <FrontDoorRow
+                            key={row.ds.station.slug}
+                            ds={row.ds}
+                            show={row.show}
+                            ov={pickerOv(row.show?.pickerId ?? null, row.effectiveDjName)}
+                            isActive={row.ds.station.slug === radio.station?.slug}
+                            isSampling={false}
+                            onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
+                            onEarlier={() => goStation(row.ds.station.slug)}
+                          />
+                        ))}
+                      </>
+                    )}
+                    {/* Rest band — unattributed / dark rows.
+                        Pinned stations float to the top of this band.
+                        Subject to ZONE3_VISIBLE cap + expand toggle. */}
+                    {restBand.length > 0 && (
+                      <>
+                        <div id="zone3-rows">
+                          {restBand.slice(0, zone3Expanded ? restBand.length : ZONE3_VISIBLE).map((row) => (
+                            <FrontDoorRow
+                              key={row.ds.station.slug}
+                              ds={row.ds}
+                              show={row.show}
+                              ov={row.ds.lifetimeCrossings}
+                              isActive={row.ds.station.slug === radio.station?.slug}
+                              isSampling={false}
+                              onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
+                              onEarlier={() => goStation(row.ds.station.slug)}
+                            />
+                          ))}
+                        </div>
+                        {restBand.length > ZONE3_VISIBLE && (
+                          <button
+                            className="dial-show-more"
+                            aria-expanded={zone3Expanded}
+                            aria-controls="zone3-rows"
+                            onClick={() => { if (!zone3Expanded) zone3ExpandAnchor.current = zone3SlugKey; else zone3ExpandAnchor.current = null; setZone3Expanded((e) => !e); }}
+                          >
+                            {zone3Expanded ? "See less" : `See all ${restBand.length}`}
+                          </button>
+                        )}
+                      </>
                     )}
                   </>
                 )}

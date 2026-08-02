@@ -76,6 +76,12 @@ vi.mock("../src/components/ContextRail", () => ({
 vi.mock("../src/components/SearchOverlay", () => ({
   SearchOverlay: () => null,
 }));
+vi.mock("../src/components/LibraryChip", () => ({
+  LibraryChip: () => null,
+}));
+vi.mock("../src/components/ManualImportModal", () => ({
+  ManualImportModal: () => null,
+}));
 
 vi.mock("../src/hooks/useFrontDoorScan", () => ({
   useFrontDoorScan: vi.fn(() => ({
@@ -321,11 +327,12 @@ function mockGhosts(ghosts: unknown[] = []) {
   (useMyGhostMissed as ReturnType<typeof vi.fn>).mockReturnValue({ data: ghosts });
 }
 
-describe("Zone 3 DJ slot reservation", () => {
-  it("promotes the attributed row to index 0 when it would otherwise appear at index 3+", () => {
-    // Three unattributed stations with high lifetime crossings sort before the
-    // attributed one in sortedRows. Without reservation the attributed row
-    // would be hidden at index 3 in the default 3-row collapsed view.
+describe("Zone 3 DJ band split", () => {
+  it("attributed (r=5) rows appear in the DJ band above all unattributed rows", () => {
+    // Three unattributed stations (r=0) with high lifetime crossings and one
+    // attributed station (r=5). The band split places the attributed row in
+    // djBand (always fully shown) and the three unattributed rows in restBand
+    // (subject to ZONE3_VISIBLE=3 cap).
     const stations: DialStation[] = [
       makeUnattributedZone3Station("ua0", 300),
       makeUnattributedZone3Station("ua1", 200),
@@ -338,15 +345,20 @@ describe("Zone 3 DJ slot reservation", () => {
     render(<DialView />);
 
     const rows = document.querySelectorAll(".fdrow");
-    // Zone 3 is truncated to ZONE3_VISIBLE = 3 by default.
-    expect(rows.length).toBe(3);
+    // djBand: 1 attributed row (always visible).
+    // restBand: 3 rows visible (ZONE3_VISIBLE cap = 3, and there are exactly 3).
+    // Total: 4 rows.
+    expect(rows.length).toBe(4);
 
-    // The first row must be the attributed station, not one of the unattributed ones.
+    // The first row must be the attributed station (djBand comes first).
     expect(rows[0].textContent).toContain("DJ Featured");
+    // No "See all" button — restBand.length === ZONE3_VISIBLE.
+    expect(screen.queryByRole("button", { name: /^See all/ })).toBeNull();
   });
 
-  it("preserves original order when no attributed row exists in Zone 3", () => {
-    // All unattributed; sort order is by lifetimeCrossings descending.
+  it("restBand sorts by lifetimeCrossings desc when no attributed row exists", () => {
+    // All unattributed (r=0); djBand is empty. restBand is sorted by
+    // lifetimeCrossings desc and capped at ZONE3_VISIBLE = 3.
     const stations: DialStation[] = [
       makeUnattributedZone3Station("ua0", 300),
       makeUnattributedZone3Station("ua1", 200),
@@ -361,14 +373,15 @@ describe("Zone 3 DJ slot reservation", () => {
     const rows = document.querySelectorAll(".fdrow");
     expect(rows.length).toBe(3);
 
-    // First row should be the highest-crossing station (ua0), not any other.
+    // First row should be the highest-crossing station (ua0).
     expect(rows[0].textContent).toContain("ua0");
     expect(rows[1].textContent).toContain("ua1");
     expect(rows[2].textContent).toContain("ua2");
   });
 
-  it("does not add an empty reserved slot when Zone 3 is all attributed", () => {
-    // All attributed; attributed row is already at index 0 — no promotion needed.
+  it("all-attributed Zone 3 shows all rows in djBand with no restBand cap", () => {
+    // All attributed (r=5) → djBand has both; restBand empty.
+    // djBand is always fully shown regardless of ZONE3_VISIBLE.
     const stations: DialStation[] = [
       makeAttributedZone3Station("attr0", "DJ Alpha"),
       makeAttributedZone3Station("attr1", "DJ Beta"),
@@ -379,10 +392,31 @@ describe("Zone 3 DJ slot reservation", () => {
     render(<DialView />);
 
     const rows = document.querySelectorAll(".fdrow");
-    // Both rows render (total 2 < ZONE3_VISIBLE = 3, so no truncation).
+    // Both rows render (djBand, no cap).
     expect(rows.length).toBe(2);
     // No empty/ghost slots.
     expect(rows[0].textContent).toBeTruthy();
     expect(rows[1].textContent).toBeTruthy();
+    // No "See all" control.
+    expect(screen.queryByRole("button", { name: /^See all/ })).toBeNull();
+  });
+
+  it("r=5 rows render inside the 'DJs on air' sub-label band with picker accent", () => {
+    const stations: DialStation[] = [
+      makeAttributedZone3Station("attr0", "DJ Picker"),
+    ];
+    mockDialDataWithStations(stations);
+    mockGhosts([]);
+
+    render(<DialView />);
+
+    // The "DJs on air" sub-label must appear.
+    expect(
+      screen.getByText("DJs on air", { selector: ".fdzone-lbl__text" }),
+    ).toBeTruthy();
+    // The attributed row renders.
+    const rows = document.querySelectorAll(".fdrow");
+    expect(rows.length).toBe(1);
+    expect(rows[0].textContent).toContain("DJ Picker");
   });
 });
