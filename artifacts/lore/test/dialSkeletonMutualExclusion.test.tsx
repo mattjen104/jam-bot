@@ -14,7 +14,7 @@
 
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 
 // ---------------------------------------------------------------------------
 // Module mocks — must precede imports of the subjects.
@@ -96,6 +96,7 @@ import { useDialData } from "../src/hooks/useDialData";
 import { useMyGhostMissed } from "../src/lib/meHooks";
 import { DialView } from "../src/components/DialView";
 import type { DialStation, DialShow } from "../src/hooks/useDialData";
+import type { GhostStation } from "../src/lib/meHooks";
 
 // ---------------------------------------------------------------------------
 // Factories
@@ -118,6 +119,20 @@ function makeShow(overrides: Partial<DialShow> = {}): DialShow {
     isPickerShow: false,
     pickerId: null,
     ...overrides,
+  };
+}
+
+/** Ghost station — triggers Zone 2 ("Missed while you were away"). */
+function makeGhostStation(slug: string): GhostStation {
+  return {
+    stationId: Math.abs(slug.split("").reduce((a, c) => a + c.charCodeAt(0), 0)),
+    slug,
+    name: `Ghost ${slug}`,
+    streamUrl: `https://stream.${slug}.com`,
+    streamFormat: "mp3",
+    mode: "live",
+    attribution: true,
+    artistName: "Test Artist",
   };
 }
 
@@ -189,6 +204,8 @@ afterEach(() => {
   vi.useRealTimers();
   cleanup();
   vi.clearAllMocks();
+  // Clear zone-collapse localStorage keys so state doesn't leak between tests.
+  try { localStorage.clear(); } catch { /* ignore */ }
 });
 
 // ---------------------------------------------------------------------------
@@ -378,5 +395,221 @@ describe("mutual exclusion invariant — never both at once", () => {
 
     expect(realRowCount).toBeGreaterThan(0);
     expect(skeletonCount).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Zone 2 collapse/expand toggle — skeleton guard during a live refresh
+//
+// Zone 2 ("Missed while you were away") appears only when !crossingsLoading
+// and ghost stations are present.  Clicking its collapse button must not
+// cause skeleton rows to appear, and the collapsed/expanded state must
+// survive a background refresh cycle (crossingsLoading false→true→false).
+// ---------------------------------------------------------------------------
+
+describe("Zone 2 collapse toggle — skeleton guard during live refresh", () => {
+  /**
+   * Convenience: set up both the dial data mock and ghost stations in one call.
+   * Ghost stations come from useMyGhostMissed, which is mocked at the module level.
+   */
+  function setupZone2(crossingsLoading: boolean, ghosts: GhostStation[]) {
+    // Zone 3 station so the front door has content; Zone 2 supplied separately.
+    mockDialData(crossingsLoading, [makeZone3Station("kcrw")]);
+    (useMyGhostMissed as ReturnType<typeof vi.fn>).mockReturnValue({ data: ghosts });
+  }
+
+  it("no .fdrow-skeleton appears immediately after clicking the Zone 2 collapse button", () => {
+    setupZone2(false, [makeGhostStation("ghost1")]);
+    render(<DialView />);
+
+    // Zone 2 is visible (crossingsLoading=false, ghost present).
+    // Its ZoneLabel renders a "Collapse zone" button while expanded.
+    const collapseBtn = document.querySelector<HTMLButtonElement>('[aria-label="Collapse zone"]');
+    expect(collapseBtn).not.toBeNull();
+
+    act(() => { fireEvent.click(collapseBtn!); });
+
+    // The click must not trigger skeleton rows — it only toggles local state.
+    expect(document.querySelectorAll(".fdrow-skeleton").length).toBe(0);
+  });
+
+  it("Zone 2 collapsed state is preserved when crossingsLoading flips true then false", () => {
+    setupZone2(false, [makeGhostStation("ghost1")]);
+    const { rerender } = render(<DialView />);
+
+    // Collapse Zone 2.
+    const collapseBtn = document.querySelector<HTMLButtonElement>('[aria-label="Collapse zone"]');
+    act(() => { fireEvent.click(collapseBtn!); });
+
+    // Background refresh starts — skeletons eventually replace zone content.
+    setupZone2(true, [makeGhostStation("ghost1")]);
+    act(() => { rerender(<DialView />); });
+    act(() => { vi.advanceTimersByTime(150); });
+
+    // Confirm skeleton phase is active (grace period elapsed).
+    expect(document.querySelectorAll(".fdrow-skeleton").length).toBeGreaterThan(0);
+    // No real fdrow rows while skeletons are shown.
+    expect(document.querySelectorAll(".fdrow").length).toBe(0);
+
+    // Refresh completes.
+    setupZone2(false, [makeGhostStation("ghost1")]);
+    act(() => { rerender(<DialView />); });
+
+    // Skeleton rows are gone.
+    expect(document.querySelectorAll(".fdrow-skeleton").length).toBe(0);
+    // Zone 2 is still collapsed — ghost rows must not be visible.
+    expect(document.querySelectorAll(".ghost-row").length).toBe(0);
+    // The expand button ("Expand zone") should now be present instead.
+    expect(document.querySelector('[aria-label="Expand zone"]')).not.toBeNull();
+  });
+
+  it("Zone 2 expand restores ghost rows once crossingsLoading flips false", () => {
+    // Start collapsed via localStorage pre-seed.
+    try { localStorage.setItem("lore.zone.2.collapsed", "true"); } catch { /* ignore */ }
+    setupZone2(false, [makeGhostStation("ghost1")]);
+    const { rerender } = render(<DialView />);
+
+    // Zone 2 is collapsed; its button shows "Expand zone".
+    const expandBtn = document.querySelector<HTMLButtonElement>('[aria-label="Expand zone"]');
+    expect(expandBtn).not.toBeNull();
+
+    // Click expand.
+    act(() => { fireEvent.click(expandBtn!); });
+
+    // No skeleton rows from the expand click.
+    expect(document.querySelectorAll(".fdrow-skeleton").length).toBe(0);
+
+    // Simulate a background refresh (crossingsLoading true→false).
+    setupZone2(true, [makeGhostStation("ghost1")]);
+    act(() => { rerender(<DialView />); });
+    act(() => { vi.advanceTimersByTime(150); });
+
+    setupZone2(false, [makeGhostStation("ghost1")]);
+    act(() => { rerender(<DialView />); });
+
+    // After refresh, Zone 2 should be expanded — ghost rows visible.
+    expect(document.querySelectorAll(".ghost-row").length).toBeGreaterThan(0);
+    expect(document.querySelectorAll(".fdrow-skeleton").length).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Zone 3 collapse/expand toggle — skeleton guard during a live refresh
+//
+// Zone 3 ("Also on air") appears only when !crossingsLoading and at least one
+// station lands in the alsoOnAir bucket (r=0 or r≥5).  Clicking its collapse
+// button must not cause skeleton rows to appear, and the collapsed/expanded
+// state must survive a background refresh cycle.
+// ---------------------------------------------------------------------------
+
+describe("Zone 3 collapse toggle — skeleton guard during live refresh", () => {
+  /**
+   * Zone 3 needs stations with no crossing evidence (makeZone3Station, r=0).
+   * No ghost stations required; Zone 2 stays absent so its collapse button
+   * does not conflict with Zone 3's selector queries.
+   */
+  function setupZone3(crossingsLoading: boolean, stations: DialStation[] = [makeZone3Station("kcrw")]) {
+    mockDialData(crossingsLoading, stations);
+    (useMyGhostMissed as ReturnType<typeof vi.fn>).mockReturnValue({ data: [] });
+  }
+
+  it("no .fdrow-skeleton appears immediately after clicking the Zone 3 collapse button", () => {
+    setupZone3(false);
+    render(<DialView />);
+
+    // Zone 3 is visible; its label has a "Collapse zone" button.
+    const collapseBtn = document.querySelector<HTMLButtonElement>('[aria-label="Collapse zone"]');
+    expect(collapseBtn).not.toBeNull();
+
+    act(() => { fireEvent.click(collapseBtn!); });
+
+    // The click must not introduce skeleton rows.
+    expect(document.querySelectorAll(".fdrow-skeleton").length).toBe(0);
+  });
+
+  it("Zone 3 collapsed state is preserved when crossingsLoading flips true then false", () => {
+    setupZone3(false);
+    const { rerender } = render(<DialView />);
+
+    // Collapse Zone 3.
+    const collapseBtn = document.querySelector<HTMLButtonElement>('[aria-label="Collapse zone"]');
+    act(() => { fireEvent.click(collapseBtn!); });
+
+    // Background refresh starts.
+    setupZone3(true);
+    act(() => { rerender(<DialView />); });
+    act(() => { vi.advanceTimersByTime(150); });
+
+    // Skeleton phase is active.
+    expect(document.querySelectorAll(".fdrow-skeleton").length).toBeGreaterThan(0);
+    expect(document.querySelectorAll(".fdrow").length).toBe(0);
+
+    // Refresh completes.
+    setupZone3(false);
+    act(() => { rerender(<DialView />); });
+
+    // Skeletons gone, Zone 3 still collapsed (no .fdrow rows from it).
+    expect(document.querySelectorAll(".fdrow-skeleton").length).toBe(0);
+    expect(document.querySelectorAll(".fdrow").length).toBe(0);
+    // The expand button should be present.
+    expect(document.querySelector('[aria-label="Expand zone"]')).not.toBeNull();
+  });
+
+  it("Zone 3 expand restores fdrow rows once crossingsLoading flips false", () => {
+    // Pre-seed Zone 3 as collapsed.
+    try { localStorage.setItem("lore.zone.3.collapsed", "true"); } catch { /* ignore */ }
+    setupZone3(false);
+    const { rerender } = render(<DialView />);
+
+    // Zone 3 is collapsed; expand button is present.
+    const expandBtn = document.querySelector<HTMLButtonElement>('[aria-label="Expand zone"]');
+    expect(expandBtn).not.toBeNull();
+
+    act(() => { fireEvent.click(expandBtn!); });
+
+    // No skeleton rows from the expand click.
+    expect(document.querySelectorAll(".fdrow-skeleton").length).toBe(0);
+
+    // Simulate a background refresh.
+    setupZone3(true);
+    act(() => { rerender(<DialView />); });
+    act(() => { vi.advanceTimersByTime(150); });
+
+    setupZone3(false);
+    act(() => { rerender(<DialView />); });
+
+    // After refresh, Zone 3 rows are visible and no skeleton rows remain.
+    expect(document.querySelectorAll(".fdrow").length).toBeGreaterThan(0);
+    expect(document.querySelectorAll(".fdrow-skeleton").length).toBe(0);
+  });
+
+  it("skeletons and Zone 3 rows are mutually exclusive across the full toggle+refresh cycle", () => {
+    setupZone3(false);
+    const { rerender } = render(<DialView />);
+
+    // Start expanded — real rows visible.
+    expect(document.querySelectorAll(".fdrow").length).toBeGreaterThan(0);
+    expect(document.querySelectorAll(".fdrow-skeleton").length).toBe(0);
+
+    // Collapse Zone 3.
+    act(() => { fireEvent.click(document.querySelector<HTMLButtonElement>('[aria-label="Collapse zone"]')!); });
+    expect(document.querySelectorAll(".fdrow-skeleton").length).toBe(0);
+
+    // Background refresh — skeleton phase.
+    setupZone3(true);
+    act(() => { rerender(<DialView />); });
+    act(() => { vi.advanceTimersByTime(150); });
+
+    const skeletonsDuringRefresh = document.querySelectorAll(".fdrow-skeleton").length;
+    const realRowsDuringRefresh  = document.querySelectorAll(".fdrow").length;
+    expect(skeletonsDuringRefresh === 0 || realRowsDuringRefresh === 0).toBe(true);
+
+    // Refresh resolves.
+    setupZone3(false);
+    act(() => { rerender(<DialView />); });
+
+    // Collapsed state preserved → no real rows, no skeletons.
+    expect(document.querySelectorAll(".fdrow-skeleton").length).toBe(0);
+    expect(document.querySelectorAll(".fdrow").length).toBe(0);
   });
 });
