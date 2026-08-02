@@ -6,6 +6,11 @@ import { loreErrorHandler } from "./middlewares/asyncHandler.js";
 
 const app: Express = express();
 
+// Trust the first proxy hop so req.ip reflects the real client address
+// from X-Forwarded-For (Replit's preview proxy, nginx, etc.) rather than
+// the proxy's own TCP address. Required for per-IP throttling to be meaningful.
+app.set("trust proxy", 1);
+
 app.use(cors());
 app.use(cookieParser());
 // Library file imports can legitimately be multi-MB (50k-item JSON exports);

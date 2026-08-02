@@ -46,6 +46,7 @@ import { spinRunIdExpr } from "../../lore/runs.js";
 import { logSpinIfChanged, spinEvents, type SpinChangedEvent } from "../../lore/resolve.js";
 import { fingerprintStream, fingerprintAvailable } from "../../lore/stream-fingerprint.js";
 import { computeGenreBreakdown, computeDiscoveryScore, labelFromScore } from "../../lore/genre-insights.js";
+import { acquire as sseAcquire, release as sseRelease } from "../../lore/sseConnectionTracker.js";
 
 const router: IRouter = Router();
 
@@ -226,6 +227,30 @@ router.get("/stations/now-playing", h(async (req, res) => {
 // using a context built from the listener's library at connect time. Unauthenticated
 // connections receive both flags as false.
 router.get("/stations/now-playing/stream", h(async (req, res) => {
+  // Per-IP connection cap — reject before any DB work so abusive callers pay
+  // only a map lookup. The limit is configurable via SSE_MAX_CONNECTIONS_PER_IP
+  // (default 10). Excess connections receive 429 with a Retry-After hint.
+  // trust proxy is set in app.ts so req.ip reflects the real client address.
+  const clientIp = req.ip ?? "unknown";
+  if (!sseAcquire(clientIp)) {
+    res.setHeader("Retry-After", "60");
+    res.status(429).json({ error: "Too many SSE connections from this IP" });
+    return;
+  }
+
+  // Register the release handler immediately after acquiring the slot so that
+  // early disconnects during the async session/DB work below never leak a
+  // permanently held slot. A `released` flag makes it idempotent in case the
+  // close event fires more than once.
+  let released = false;
+  const releaseSlot = () => {
+    if (!released) {
+      released = true;
+      sseRelease(clientIp);
+    }
+  };
+  req.on("close", releaseSlot);
+
   // Build the per-listener hit context before opening the stream. Any error
   // here (session lookup, DB query) falls back to the empty context so the
   // stream still opens — hit flags just won't fire for that connection.
@@ -276,7 +301,10 @@ router.get("/stations/now-playing/stream", h(async (req, res) => {
     clearInterval(ping);
     if (hitCtxRefresh !== null) clearInterval(hitCtxRefresh);
     spinEvents.off("spin-changed", onSpin);
+    // Slot is released by the earlier releaseSlot listener; no duplicate call needed.
   });
+
+  return;
 }));
 
 // GET /api/stations/at/:date/now-playing — path-param variant of the above.
