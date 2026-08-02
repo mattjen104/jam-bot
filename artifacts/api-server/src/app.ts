@@ -18,9 +18,12 @@ app.use(cookieParser());
 // before parsing, so the big limit never applies to other routes.
 const defaultJson = express.json();
 const importFileJson = express.json({ limit: "25mb" });
+const imageJson = express.json({ limit: "12mb" });
 app.use((req, res, next) =>
   req.path === "/api/me/library/import/file"
     ? importFileJson(req, res, next)
+    : req.path === "/api/me/library/extract-images"
+      ? imageJson(req, res, next)
     : defaultJson(req, res, next),
 );
 app.use(express.urlencoded({ extended: true }));

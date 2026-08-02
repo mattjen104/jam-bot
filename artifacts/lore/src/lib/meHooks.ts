@@ -203,6 +203,29 @@ export async function postStartManualImport(
   );
 }
 
+export interface LibraryImageTrack {
+  artist: string;
+  title: string;
+  confidence: number;
+}
+
+export interface LibraryImageExtractionResult {
+  index: number;
+  status: "ok" | "error";
+  tracks?: LibraryImageTrack[];
+  error?: string;
+}
+
+/** Extract rows from transient screenshot bytes; image data is never persisted. */
+export async function postExtractLibraryImages(
+  images: Array<{ mediaType: string; data: string }>,
+): Promise<{ results: LibraryImageExtractionResult[] }> {
+  return apiFetch<{ results: LibraryImageExtractionResult[] }>("/api/me/library/extract-images", {
+    method: "POST",
+    body: JSON.stringify({ images }),
+  });
+}
+
 /**
  * Start a ListenBrainz loved-recordings import.
  * Validates the username against the LB API before creating a job (returns 400

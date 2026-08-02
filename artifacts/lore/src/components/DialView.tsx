@@ -1155,31 +1155,43 @@ export function DialView() {
     // render both read the old query result and the later PUT can overwrite
     // the first selected artist.
     const pending = seedWriteRef.current;
-    const base = pending ? pending.catch(() => visibleSeeds) : Promise.resolve(visibleSeeds);
+    const base = pending ? pending.catch(() => seedArtists) : Promise.resolve(visibleSeeds);
     seedWriteRef.current = base.then(async (current) => {
       const lower = trimmed.toLowerCase();
       if (current.some((s) => s.toLowerCase() === lower) || current.length >= 10) return current;
       const next = [...current, trimmed];
       setOptimisticSeeds(next);
-      const result = await setSeedsMutation.mutateAsync(next);
-      setOptimisticSeeds(result.artists);
-      return result.artists;
+      try {
+        const result = await setSeedsMutation.mutateAsync(next);
+        setOptimisticSeeds(result.artists);
+        return result.artists;
+      } catch (error) {
+        setOptimisticSeeds(null);
+        throw error;
+      }
     });
-  }, [setSeedsMutation, visibleSeeds]);
+    void seedWriteRef.current.catch(() => undefined);
+  }, [seedArtists, setSeedsMutation, visibleSeeds]);
 
   const removeSeed = useCallback((artist: string) => {
     const pending = seedWriteRef.current;
-    const base = pending ? pending.catch(() => visibleSeeds) : Promise.resolve(visibleSeeds);
+    const base = pending ? pending.catch(() => seedArtists) : Promise.resolve(visibleSeeds);
     seedWriteRef.current = base.then(async (current) => {
       const lower = artist.toLowerCase();
       const next = current.filter((s) => s.toLowerCase() !== lower);
       if (next.length === current.length) return current;
       setOptimisticSeeds(next);
-      const result = await setSeedsMutation.mutateAsync(next);
-      setOptimisticSeeds(result.artists);
-      return result.artists;
+      try {
+        const result = await setSeedsMutation.mutateAsync(next);
+        setOptimisticSeeds(result.artists);
+        return result.artists;
+      } catch (error) {
+        setOptimisticSeeds(null);
+        throw error;
+      }
     });
-  }, [setSeedsMutation, visibleSeeds]);
+    void seedWriteRef.current.catch(() => undefined);
+  }, [seedArtists, setSeedsMutation, visibleSeeds]);
   // Delay skeleton visibility so fast loads (< 150 ms) never flash shimmer rows.
   // The delayed flag only flips true after crossingsLoading has been true for
   // 150 ms; it resets to false immediately when crossingsLoading clears so that

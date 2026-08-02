@@ -421,6 +421,24 @@ describe("no-library onboarding live picker", () => {
     });
   });
 
+  it("restores server-truth selection when a taste-seed write fails", async () => {
+    mockDial([], [{
+      artist: "Unpersisted Artist",
+      stationSlug: "wfmu",
+      stationName: "WFMU",
+      trackTitle: null,
+      showName: null,
+    }]);
+    mutateAsync.mockRejectedValueOnce(new Error("write failed"));
+
+    render(<DialView />);
+    fireEvent.click(screen.getByRole("button", { name: "Choose Unpersisted Artist" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Choose Unpersisted Artist" })).toBeTruthy();
+    });
+  });
+
   it("keeps multiple quick live choices when each write resolves in order", async () => {
     mockDial([], [
       { artist: "First Artist", stationSlug: "one", stationName: "One FM", trackTitle: null, showName: null },

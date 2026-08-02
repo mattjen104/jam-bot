@@ -51,6 +51,7 @@ import { applySelectorClaimsMigration } from "./lore/selector-claims-migration.j
 import { applySpotifyLibraryItemsMigration } from "./lore/spotify-library-items-migration.js";
 import { syncScrapedShows } from "./lore/scraped-shows-sync.js";
 import { wireScheduleExtractor } from "./lore/schedule-wire.js";
+import { wireImageExtractor } from "./lore/image-wire.js";
 import { startScheduleScraper } from "./lore/schedule-scraper.js";
 import { markOrphanedImportJobsAsError, markOrphanedSyncJobsAsError, startPhase3RetryScheduler } from "./routes/me/index.js";
 import { applyDeviceIdentityMigration } from "./lore/device-identity-migration.js";
@@ -177,6 +178,7 @@ async function bootLore(): Promise<void> {
     if (await wireScheduleExtractor()) {
       startScheduleScraper();
     }
+    await wireImageExtractor();
     startDiscoveryScoreJob();
     startQualityRecomputeJob();
     startPhase3RetryScheduler();

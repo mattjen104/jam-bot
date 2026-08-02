@@ -22,6 +22,7 @@ import { cleanup, render, screen, fireEvent, waitFor, act } from "@testing-libra
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   ManualImportModal,
+  dedupeTracks,
   parseCsv,
   parseTracks,
 } from "../src/components/ManualImportModal";
@@ -30,9 +31,10 @@ import {
 // Hoisted mock fns — created before vi.mock() factory runs.
 // ---------------------------------------------------------------------------
 
-const { mockPostStartManualImport, mockPostStartListenBrainzImport } = vi.hoisted(() => ({
+const { mockPostStartManualImport, mockPostStartListenBrainzImport, mockPostExtractLibraryImages } = vi.hoisted(() => ({
   mockPostStartManualImport: vi.fn<[], Promise<void>>(),
   mockPostStartListenBrainzImport: vi.fn<[string], Promise<void>>(),
+  mockPostExtractLibraryImages: vi.fn(),
 }));
 
 // ---------------------------------------------------------------------------
@@ -51,6 +53,7 @@ vi.mock("../src/lib/meHooks", async (importOriginal) => {
   return makeMeHooksMock(importOriginal, {
     postStartManualImport: mockPostStartManualImport,
     postStartListenBrainzImport: mockPostStartListenBrainzImport,
+    postExtractLibraryImages: mockPostExtractLibraryImages,
   });
 });
 
@@ -81,6 +84,7 @@ function renderModal(onClose: () => void = noop) {
 beforeEach(() => {
   mockPostStartManualImport.mockReset();
   mockPostStartListenBrainzImport.mockReset();
+  mockPostExtractLibraryImages.mockReset();
 });
 
 afterEach(() => {
@@ -126,6 +130,65 @@ describe("ManualImportModal — service picker (initial state)", () => {
   it("Back button is NOT visible on the service picker", () => {
     renderModal();
     expect(screen.queryByRole("button", { name: /^back$/i })).toBeNull();
+  });
+
+  it("offers a clearly labeled library screenshot path", () => {
+    renderModal();
+    expect(screen.getByTestId("service-tile-screenshots")).toBeTruthy();
+    expect(screen.getByText(/paste or upload screenshots/i)).toBeTruthy();
+  });
+
+  it("opens the screenshot capture pane", () => {
+    renderModal();
+    fireEvent.click(screen.getByTestId("service-tile-screenshots"));
+    expect(screen.getByText(/recognize library screenshots/i)).toBeTruthy();
+    expect(screen.getByTestId("screenshot-file-input")).toBeTruthy();
+  });
+
+  it("accepts an image, extracts rows, and opens an editable review", async () => {
+    mockPostExtractLibraryImages.mockResolvedValue({
+      results: [{
+        index: 0,
+        status: "ok",
+        tracks: [{ artist: "Fleetwood Mac", title: "Dreams", confidence: 0.97 }],
+      }],
+    });
+    renderModal();
+    fireEvent.click(screen.getByTestId("service-tile-screenshots"));
+    const file = new File(["png-bytes"], "library.png", { type: "image/png" });
+    fireEvent.change(screen.getByTestId("screenshot-file-input"), { target: { files: [file] } });
+    expect(await screen.findByTestId("image-preview-list")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /read 1 screenshot/i }));
+    expect(await screen.findByTestId("ocr-review-list")).toBeTruthy();
+    expect(screen.getByDisplayValue("Fleetwood Mac")).toBeTruthy();
+    expect(screen.getByDisplayValue("Dreams")).toBeTruthy();
+  });
+
+  it("edits and deletes reviewed rows before sending the existing manual import contract", async () => {
+    mockPostExtractLibraryImages.mockResolvedValue({
+      results: [{
+        index: 0,
+        status: "ok",
+        tracks: [
+          { artist: "Artist A", title: "Song A", confidence: 0.9 },
+          { artist: "Artist B", title: "Song B", confidence: 0.9 },
+        ],
+      }],
+    });
+    mockPostStartManualImport.mockResolvedValue(undefined);
+    const closeSpy = vi.fn();
+    renderModal(closeSpy);
+    fireEvent.click(screen.getByTestId("service-tile-screenshots"));
+    fireEvent.change(screen.getByTestId("screenshot-file-input"), {
+      target: { files: [new File(["png"], "library.png", { type: "image/png" })] },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: /read 1 screenshot/i }));
+    const artist = await screen.findByLabelText("Artist 1");
+    fireEvent.change(artist, { target: { value: "Edited Artist" } });
+    fireEvent.click(screen.getByRole("button", { name: /delete track 2/i }));
+    fireEvent.click(screen.getByRole("button", { name: /import 1 track/i }));
+    await waitFor(() => expect(closeSpy).toHaveBeenCalledOnce());
+    expect(mockPostStartManualImport).toHaveBeenCalledWith([{ artist: "Edited Artist", title: "Song A" }]);
   });
 });
 
@@ -500,6 +563,19 @@ describe("parseTracks — routes through parseCsv for CSV-shaped input", () => {
   it("plain-text Artist – Title lines yield the correct track count", () => {
     const text = "Fleetwood Mac – Go Your Own Way\nThe Beatles – Hey Jude";
     expect(parseTracks(text)).toHaveLength(2);
+  });
+});
+
+describe("OCR review helpers", () => {
+  it("deduplicates recognized rows case-insensitively without changing order", () => {
+    expect(dedupeTracks([
+      { artist: "The Beatles", title: "Hey Jude" },
+      { artist: "the beatles", title: "hey jude" },
+      { artist: "Fleetwood Mac", title: "Dreams" },
+    ])).toEqual([
+      { artist: "The Beatles", title: "Hey Jude" },
+      { artist: "Fleetwood Mac", title: "Dreams" },
+    ]);
   });
 });
 

@@ -1,16 +1,55 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { X, Upload, FileText, ArrowLeft, ChevronRight } from "lucide-react";
+import { X, Upload, FileText, ArrowLeft, ChevronRight, Image as ImageIcon, Loader2, Trash2, RotateCcw, Copy, Download } from "lucide-react";
 import {
   postStartManualImport,
   postStartListenBrainzImport,
   postStartImport,
+  postExtractLibraryImages,
   startSpotifyLibraryConnect,
   useMyConnections,
   ME_LATEST_IMPORT_JOB_KEY,
 } from "../lib/meHooks";
 import { useQueryClient } from "@tanstack/react-query";
 
-interface Track { artist: string; title: string }
+export interface Track { artist: string; title: string }
+
+export interface ScreenshotImage {
+  id: string;
+  name: string;
+  mediaType: string;
+  data: string;
+  status: "ready" | "extracting" | "done" | "error";
+  tracks: Track[];
+  error?: string;
+}
+
+interface ReviewTrack extends Track {
+  sourceId: string;
+}
+
+const IMAGE_MAX_COUNT = 4;
+const IMAGE_MAX_BYTES = 4 * 1024 * 1024;
+const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
+
+export function dedupeTracks(tracks: Track[]): Track[] {
+  const seen = new Set<string>();
+  return tracks.filter((track) => {
+    const key = `${track.artist.trim().toLocaleLowerCase()}\u001f${track.title.trim().toLocaleLowerCase()}`;
+    if (!track.artist.trim() || !track.title.trim() || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function dedupeReviewTracks(tracks: ReviewTrack[]): ReviewTrack[] {
+  const seen = new Set<string>();
+  return tracks.filter((track) => {
+    const key = `${track.artist.trim().toLocaleLowerCase()}\u001f${track.title.trim().toLocaleLowerCase()}`;
+    if (!track.artist.trim() || !track.title.trim() || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Parsers — exported so they can be unit-tested independently
@@ -100,7 +139,7 @@ function isMultilineContent(value: string): boolean {
 // Service picker data
 // ---------------------------------------------------------------------------
 
-export type ServiceId = "spotify" | "exportify" | "applemusiccsv" | "listenbrainz" | "lastfm" | "other";
+export type ServiceId = "spotify" | "exportify" | "applemusiccsv" | "listenbrainz" | "lastfm" | "other" | "screenshots";
 
 export interface ServiceDef {
   id: ServiceId;
@@ -156,6 +195,11 @@ export const IMPORT_SERVICES: ServiceDef[] = [
     label: "Other / paste",
     hint: "Paste tracks or drop any CSV file",
   },
+  {
+    id: "screenshots",
+    label: "Library screenshots",
+    hint: "Paste or upload screenshots — we’ll recognize the visible rows",
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -170,7 +214,7 @@ export const IMPORT_SERVICES: ServiceDef[] = [
  * tracks         — multiline content detected; textarea + parse count
  * lfm-hint       — user tapped Last.fm from disambiguation; showing export hint
  */
-type Mode = "service-picker" | "service-steps" | "input" | "username" | "tracks" | "lfm-hint";
+type Mode = "service-picker" | "service-steps" | "input" | "username" | "tracks" | "lfm-hint" | "images" | "review";
 
 interface Props { onClose(): void }
 
@@ -181,8 +225,12 @@ export function ManualImportModal({ onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [images, setImages] = useState<ScreenshotImage[]>([]);
+  const [reviewTracks, setReviewTracks] = useState<ReviewTrack[]>([]);
+  const [imageBusy, setImageBusy] = useState(false);
 
   const fileRef = useRef<HTMLInputElement>(null);
+  const imageRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const singleInputRef = useRef<HTMLInputElement>(null);
 
@@ -191,8 +239,11 @@ export function ManualImportModal({ onClose }: Props) {
   const hasSpotify = Array.isArray(connections) && connections.some((c) => c.service === "spotify");
 
   // Derived
-  const tracks = mode === "tracks" ? parseTracks(rawInput) : [];
+  const tracks = mode === "tracks" ? parseTracks(rawInput) : reviewTracks;
+  const reviewReadyTracks = dedupeTracks(reviewTracks).map(({ artist, title }) => ({ artist, title }));
   const detectedUsername = mode === "username" ? rawInput.trim() : "";
+  const pendingImageCount = images.filter((image) => image.status === "ready" || image.status === "error").length;
+  const failedImageCount = images.filter((image) => image.status === "error").length;
 
   // Auto-switch to tracks mode when multiline content is pasted
   useEffect(() => {
@@ -240,6 +291,12 @@ export function ManualImportModal({ onClose }: Props) {
     if (svc.id === "other") {
       setSelectedService("other");
       setMode("tracks");
+      return;
+    }
+    if (svc.id === "screenshots") {
+      setSelectedService("screenshots");
+      setMode("images");
+      setError(null);
       return;
     }
     if (svc.id === "listenbrainz") {
@@ -305,6 +362,149 @@ export function ManualImportModal({ onClose }: Props) {
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) handleFile(file);
+    e.target.value = "";
+  };
+
+  const readImage = useCallback((file: File): Promise<ScreenshotImage> => new Promise((resolve, reject) => {
+    if (!IMAGE_TYPES.has(file.type)) {
+      reject(new Error(`${file.name}: use a PNG, JPEG, WebP, or GIF image.`));
+      return;
+    }
+    if (file.size > IMAGE_MAX_BYTES) {
+      reject(new Error(`${file.name}: images must be 4 MB or smaller.`));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error(`${file.name}: could not read this image.`));
+    reader.onload = () => {
+      const data = typeof reader.result === "string" ? reader.result : "";
+      const comma = data.indexOf(",");
+      resolve({
+        id: `${file.name}-${file.size}-${file.lastModified}-${Date.now()}`,
+        name: file.name,
+        mediaType: file.type,
+        data: comma >= 0 ? data.slice(comma + 1) : data,
+        status: "ready",
+        tracks: [],
+      });
+    };
+    reader.readAsDataURL(file);
+  }), []);
+
+  const addImages = useCallback(async (files: File[]) => {
+    if (files.length === 0) return;
+    setError(null);
+    if (images.length + files.length > IMAGE_MAX_COUNT) {
+      setError(`You can add up to ${IMAGE_MAX_COUNT} screenshots at a time.`);
+      return;
+    }
+    try {
+      const added = await Promise.all(files.map((file) => readImage(file)));
+      setImages((current) => [...current, ...added]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not read that image.");
+    }
+  }, [images.length, readImage]);
+
+  const handleImageInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    void addImages(Array.from(e.target.files ?? []));
+    e.target.value = "";
+  };
+
+  const handleImageDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    void addImages(Array.from(e.dataTransfer.files));
+  };
+
+  const handleImagePaste = (e: React.ClipboardEvent) => {
+    const files = Array.from(e.clipboardData.items)
+      .filter((item) => item.kind === "file" && IMAGE_TYPES.has(item.type))
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => file !== null);
+    if (files.length > 0) {
+      e.preventDefault();
+      setSelectedService("screenshots");
+      setMode("images");
+      void addImages(files);
+    }
+  };
+
+  const removeImage = (id: string) => {
+    setImages((current) => current.filter((image) => image.id !== id));
+    setReviewTracks((current) => current.filter((track) => track.sourceId !== id));
+  };
+
+  const extractImages = async (retryIds?: string[]) => {
+    const ids = retryIds ?? images.filter((image) => image.status === "ready" || image.status === "error").map((image) => image.id);
+    const selected = images.filter((image) => ids.includes(image.id));
+    if (selected.length === 0) return;
+    setError(null);
+    setImageBusy(true);
+    setImages((current) => current.map((image) => ids.includes(image.id)
+      ? { ...image, status: "extracting", error: undefined }
+      : image));
+    try {
+      const response = await postExtractLibraryImages(selected.map(({ mediaType, data }) => ({ mediaType, data })));
+      const extracted = new Map(response.results.map((result) => [selected[result.index]?.id, result]));
+      const nextImages = images.map((image) => {
+        if (!ids.includes(image.id)) return image;
+        const result = extracted.get(image.id);
+        if (!result || result.status === "error") {
+          return { ...image, status: "error", error: result?.error ?? "No result returned for this image." };
+        }
+        return {
+          ...image,
+          status: "done",
+          tracks: result.tracks?.map(({ artist, title }) => ({ artist, title })) ?? [],
+          error: undefined,
+        };
+      });
+      setImages(nextImages);
+      const freshRows: ReviewTrack[] = nextImages
+        .filter((image) => image.status === "done")
+        .flatMap((image) => image.tracks.map((track) => ({ ...track, sourceId: image.id })));
+      setReviewTracks((current) => {
+        const unchangedRows = current.filter((track) => !ids.includes(track.sourceId));
+        return dedupeReviewTracks([...unchangedRows, ...freshRows]);
+      });
+      const failed = response.results.filter((result) => result.status === "error");
+      if (failed.length > 0) {
+        setError(`${failed.length} screenshot${failed.length === 1 ? "" : "s"} could not be read. You can retry it or continue with the rows that were recognized.`);
+      }
+      setMode("review");
+    } catch (err) {
+      setImages((current) => current.map((image) => ids.includes(image.id)
+        ? { ...image, status: "error", error: err instanceof Error ? err.message : "Extraction failed." }
+        : image));
+      setError(err instanceof Error ? err.message : "Screenshot extraction failed — try again.");
+    } finally {
+      setImageBusy(false);
+    }
+  };
+
+  const updateReviewTrack = (index: number, field: keyof Track, value: string) => {
+    setReviewTracks((current) => current.map((track, i) => i === index ? { ...track, [field]: value } : track));
+  };
+
+  const deleteReviewTrack = (index: number) => {
+    setReviewTracks((current) => current.filter((_, i) => i !== index));
+  };
+
+  const exportReview = async (format: "text" | "csv") => {
+    const content = format === "csv"
+      ? ["Artist,Title", ...reviewTracks.map(({ artist, title }) => `"${artist.replaceAll('"', '""')}","${title.replaceAll('"', '""')}"`)].join("\n")
+      : reviewTracks.map(({ artist, title }) => `${artist} – ${title}`).join("\n");
+    if (navigator.clipboard && format === "text") {
+      try { await navigator.clipboard.writeText(content); setError("Recognized tracks copied to your clipboard."); return; } catch { /* download fallback */ }
+    }
+    const blob = new Blob([content], { type: format === "csv" ? "text/csv" : "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `lore-recognized-tracks.${format === "csv" ? "csv" : "txt"}`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   // Drag-and-drop
@@ -337,11 +537,12 @@ export function ManualImportModal({ onClose }: Props) {
   };
 
   const handleManualImport = async () => {
-    if (tracks.length === 0) { setError("No tracks found — check the format below."); return; }
+    const importTracks = mode === "review" ? reviewReadyTracks : tracks;
+    if (importTracks.length === 0) { setError("No tracks found — check the format below."); return; }
     setError(null);
     setSubmitting(true);
     try {
-      await postStartManualImport(tracks);
+      await postStartManualImport(importTracks);
       await qc.invalidateQueries({ queryKey: ME_LATEST_IMPORT_JOB_KEY });
       onClose();
     } catch (err) {
@@ -377,6 +578,7 @@ export function ManualImportModal({ onClose }: Props) {
       <div
         className="relative z-10 flex w-full max-w-lg flex-col gap-4 rounded-t-2xl sm:rounded-2xl border border-border p-5"
         style={{ background: "hsl(var(--card))" }}
+        onPaste={handleImagePaste}
       >
         {/* ── Header ─────────────────────────────────────────────────── */}
         <div className="flex items-start justify-between gap-3">
@@ -397,6 +599,8 @@ export function ManualImportModal({ onClose }: Props) {
                  mode === "service-steps" && currentServiceDef ? currentServiceDef.label :
                  mode === "username" ? "Import your tracks" :
                  mode === "lfm-hint" ? "Import from Last.fm" :
+                 mode === "images" ? "Library screenshots" :
+                 mode === "review" ? "Review screenshots" :
                  "Import your tracks"}
               </h2>
               {mode === "service-picker" && (
@@ -691,6 +895,120 @@ export function ManualImportModal({ onClose }: Props) {
                 className="rounded-full border border-border px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
               >
                 Cancel
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ── Screenshot capture ───────────────────────────────────────── */}
+        {mode === "images" && (
+          <>
+            <div
+              className="rounded-lg border border-border px-3 py-3 font-mono text-[11px] text-muted-foreground space-y-1.5"
+              style={{ background: "hsl(var(--muted)/0.3)" }}
+            >
+              <p className="font-semibold text-foreground">Recognize library screenshots</p>
+              <p>Paste a screenshot here, or add up to {IMAGE_MAX_COUNT} images. Clear song rows are kept for your review; menus and album art are ignored.</p>
+            </div>
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleImageDrop}
+              onClick={() => imageRef.current?.click()}
+              role="button"
+              tabIndex={0}
+              aria-label="Upload or drop library screenshots"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  imageRef.current?.click();
+                }
+              }}
+              className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-6 font-mono text-[11px] text-muted-foreground transition-colors"
+              style={{
+                borderColor: isDragging ? "hsl(var(--primary))" : "hsl(var(--border))",
+                background: isDragging ? "hsl(var(--primary)/0.06)" : "hsl(var(--muted)/0.15)",
+              }}
+            >
+              <ImageIcon size={18} aria-hidden className={isDragging ? "text-primary" : "text-muted-foreground/60"} />
+              <span className={isDragging ? "text-primary" : ""}>
+                {isDragging ? "Drop screenshots to add" : "Drop screenshots, click to browse, or paste"}
+              </span>
+              <span className="text-[10px] text-muted-foreground/60">PNG, JPEG, WebP, or GIF · 4 MB each</span>
+              <input ref={imageRef} data-testid="screenshot-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={handleImageInput} />
+            </div>
+            {images.length > 0 && (
+              <div className="grid grid-cols-2 gap-2" data-testid="image-preview-list">
+                {images.map((image) => (
+                  <div key={image.id} className="relative overflow-hidden rounded-lg border border-border" data-testid={`image-preview-${image.id}`}>
+                    <img src={`data:${image.mediaType};base64,${image.data}`} alt={`Screenshot ${image.name}`} className="h-24 w-full object-cover" />
+                    <div className="flex items-center justify-between gap-1 px-2 py-1 font-mono text-[9px] text-muted-foreground">
+                      <span className="truncate">{image.name}</span>
+                      <button type="button" onClick={() => removeImage(image.id)} aria-label={`Remove ${image.name}`} className="shrink-0 hover:text-foreground">
+                        <Trash2 size={11} aria-hidden />
+                      </button>
+                    </div>
+                    {image.status === "extracting" && <div className="absolute inset-0 flex items-center justify-center bg-black/50"><Loader2 size={16} className="animate-spin text-white" aria-label="Extracting" /></div>}
+                    {image.status === "error" && (
+                      <div className="flex items-center justify-between gap-1 border-t border-destructive/40 px-2 py-1">
+                        <span className="truncate font-mono text-[9px] text-destructive">{image.error}</span>
+                        <button type="button" onClick={() => void extractImages([image.id])} aria-label={`Retry ${image.name}`} className="shrink-0 text-destructive hover:text-foreground">
+                          <RotateCcw size={11} aria-hidden />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {error && <p className="font-mono text-[11px] text-destructive" role="alert">{error}</p>}
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={onClose} className="rounded-full border border-border px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">Cancel</button>
+              <button type="button" onClick={() => void extractImages()} disabled={imageBusy || pendingImageCount === 0} className="rounded-full border border-primary bg-primary px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-primary-foreground disabled:opacity-40">
+                {imageBusy ? "Reading…" : `Read ${pendingImageCount} screenshot${pendingImageCount === 1 ? "" : "s"}`}
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ── OCR review ────────────────────────────────────────────────── */}
+        {mode === "review" && (
+          <>
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="font-mono text-[12px] font-semibold text-foreground">Review recognized tracks</p>
+                <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">{reviewTracks.length} track{reviewTracks.length === 1 ? "" : "s"} recognized · edit or remove anything incorrect</p>
+              </div>
+              <button type="button" onClick={() => setMode("images")} className="rounded-full border border-border px-3 py-1 font-mono text-[10px] text-muted-foreground hover:text-foreground">Add screenshots</button>
+            </div>
+            {reviewTracks.length > 0 ? (
+              <div className="max-h-72 space-y-2 overflow-y-auto" data-testid="ocr-review-list">
+                {reviewTracks.map((track, index) => (
+                  <div key={`${index}-${track.artist}-${track.title}`} className="flex items-center gap-1.5">
+                    <span className="w-5 shrink-0 text-right font-mono text-[9px] text-muted-foreground">{index + 1}</span>
+                    <input value={track.artist} onChange={(e) => updateReviewTrack(index, "artist", e.target.value)} aria-label={`Artist ${index + 1}`} className="min-w-0 flex-1 rounded border border-border bg-background px-2 py-1.5 font-mono text-[10px] text-foreground" />
+                    <input value={track.title} onChange={(e) => updateReviewTrack(index, "title", e.target.value)} aria-label={`Title ${index + 1}`} className="min-w-0 flex-1 rounded border border-border bg-background px-2 py-1.5 font-mono text-[10px] text-foreground" />
+                    <button type="button" onClick={() => deleteReviewTrack(index)} aria-label={`Delete track ${index + 1}`} className="shrink-0 text-muted-foreground hover:text-destructive"><Trash2 size={12} aria-hidden /></button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-border px-3 py-5 text-center font-mono text-[11px] text-muted-foreground">No clear song rows found. Try another screenshot or retry an unreadable one.</div>
+            )}
+            {error && <p className="font-mono text-[11px] text-muted-foreground" role="status">{error}</p>}
+            {failedImageCount > 0 && (
+              <p className="font-mono text-[10px] text-destructive" role="alert">
+                {failedImageCount} screenshot{failedImageCount === 1 ? "" : "s"} could not be read. Add or retry them from the screenshot step.
+                <button type="button" onClick={() => setMode("images")} className="ml-1 underline underline-offset-2">Review errors</button>
+              </p>
+            )}
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+              <div className="flex gap-1.5">
+                <button type="button" onClick={() => void exportReview("text")} disabled={reviewTracks.length === 0} className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 font-mono text-[10px] text-muted-foreground disabled:opacity-40"><Copy size={10} aria-hidden /> Copy text</button>
+                <button type="button" onClick={() => void exportReview("csv")} disabled={reviewTracks.length === 0} className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 font-mono text-[10px] text-muted-foreground disabled:opacity-40"><Download size={10} aria-hidden /> CSV</button>
+              </div>
+              <button type="button" onClick={() => void handleManualImport()} disabled={submitting || reviewReadyTracks.length === 0} className="rounded-full border border-primary bg-primary px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-primary-foreground disabled:opacity-40">
+                {submitting ? "Starting…" : `Import ${reviewReadyTracks.length} tracks`}
               </button>
             </div>
           </>

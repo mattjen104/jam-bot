@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { rateLimit } from "express-rate-limit";
 import {
   db,
   serviceConnectionsTable,
@@ -39,6 +40,7 @@ import { runSyncWorker, SYNC_ZOMBIE_AGE_MS } from "../../lore/library-sync.js";
 import { validateListenBrainzUsername, fetchListenBrainzLoved } from "../../lore/listenbrainz.js";
 import { type AuthedRequest, getFreshToken, sleep } from "./auth.js";
 import { checkSpotifyLibraryContains } from "./spotify-library-check.js";
+import { extractImageRaw, normalizeImageRows } from "../../lore/image-llm.js";
 
 const router: IRouter = Router();
 
@@ -97,6 +99,20 @@ const LIB_CURSOR_SEP = "\u001f";
 /** Hard cap on rows in one export file. */
 const EXPORT_MAX_ROWS = 50_000;
 
+const IMAGE_MAX_COUNT = 4;
+const IMAGE_MAX_BYTES = 4 * 1024 * 1024;
+const IMAGE_MAX_TOTAL_BYTES = 8 * 1024 * 1024;
+const IMAGE_OCR_TIMEOUT_MS = 30_000;
+const IMAGE_MEDIA_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
+type ImageMediaType = "image/png" | "image/jpeg" | "image/webp" | "image/gif";
+const imageExtractionLimiter = rateLimit({
+  windowMs: 10 * 60_000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many screenshot extraction attempts — try again later." },
+});
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -106,9 +122,115 @@ function escapeLike(s: string): string {
   return s.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
+function imageDimensions(data: Buffer, mediaType: ImageMediaType): { width: number; height: number } | null {
+  if (
+    mediaType === "image/png" &&
+    data.length >= 24 &&
+    data[0] === 0x89 &&
+    data.toString("ascii", 1, 4) === "PNG"
+  ) {
+    return { width: data.readUInt32BE(16), height: data.readUInt32BE(20) };
+  }
+  if (mediaType === "image/gif" && data.length >= 10 && data.toString("ascii", 0, 3) === "GIF") {
+    return { width: data.readUInt16LE(6), height: data.readUInt16LE(8) };
+  }
+  if (mediaType === "image/webp" && data.length >= 30 && data.toString("ascii", 0, 4) === "RIFF" && data.toString("ascii", 8, 12) === "WEBP") {
+    const kind = data.toString("ascii", 12, 16);
+    if (kind === "VP8X") return { width: 1 + data.readUIntLE(24, 3), height: 1 + data.readUIntLE(27, 3) };
+    if (kind === "VP8 " && data.length >= 30) return { width: data.readUInt16LE(26), height: data.readUInt16LE(28) };
+    if (kind === "VP8L" && data.length >= 25) return { width: 1 + (data[21]! | ((data[22]! & 0x3f) << 8)), height: 1 + (((data[22]! >> 6) | (data[23]! << 2) | ((data[24]! & 0x0f) << 10))) };
+  }
+  if (mediaType === "image/jpeg" && data.length >= 4 && data[0] === 0xff && data[1] === 0xd8) {
+    let offset = 2;
+    while (offset + 9 < data.length) {
+      if (data[offset] !== 0xff) { offset++; continue; }
+      const marker = data[offset + 1]!;
+      offset += 2;
+      if (marker === 0xd8 || marker === 0xd9) continue;
+      if (offset + 2 > data.length) break;
+      const length = data.readUInt16BE(offset);
+      if (length < 2 || offset + length > data.length) break;
+      if ((marker >= 0xc0 && marker <= 0xc3) || (marker >= 0xc5 && marker <= 0xc7) || (marker >= 0xc9 && marker <= 0xcb) || (marker >= 0xcd && marker <= 0xcf)) {
+        return { width: data.readUInt16BE(offset + 5), height: data.readUInt16BE(offset + 3) };
+      }
+      offset += length;
+    }
+  }
+  return null;
+}
+
+export function decodeImage(value: unknown): { data: string; mediaType: ImageMediaType; bytes: number } | { error: string } {
+  if (!value || typeof value !== "object") return { error: "Image must be an object" };
+  const item = value as Record<string, unknown>;
+  const mediaType = typeof item.mediaType === "string" ? item.mediaType : "";
+  if (!IMAGE_MEDIA_TYPES.has(mediaType)) return { error: "Unsupported image type (use PNG, JPEG, WebP, or GIF)" };
+  if (typeof item.data !== "string" || !item.data) return { error: "Image data is required" };
+  const encoded = item.data.replace(/^data:[^;]+;base64,/, "");
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(encoded) || encoded.length % 4 === 1) return { error: "Invalid base64 image data" };
+  const bytes = Buffer.from(encoded, "base64");
+  if (bytes.length === 0) return { error: "Image data is empty" };
+  if (bytes.length > IMAGE_MAX_BYTES) return { error: `Image is too large (max ${IMAGE_MAX_BYTES / 1024 / 1024} MB)` };
+  const dimensions = imageDimensions(bytes, mediaType as ImageMediaType);
+  if (!dimensions || dimensions.width < 1 || dimensions.height < 1) return { error: "Image dimensions could not be read" };
+  if (dimensions.width > 8000 || dimensions.height > 8000 || dimensions.width * dimensions.height > 40_000_000) return { error: "Image dimensions are too large" };
+  return { data: encoded, mediaType: mediaType as ImageMediaType, bytes: bytes.length };
+}
+
+async function extractWithTimeout(image: { data: string; mediaType: ImageMediaType }): Promise<string> {
+  return Promise.race([
+    extractImageRaw(image),
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("OCR provider timed out")), IMAGE_OCR_TIMEOUT_MS)),
+  ]);
+}
+
 // ---------------------------------------------------------------------------
 // Library import
 // ---------------------------------------------------------------------------
+
+/**
+ * POST /api/me/library/extract-images — transient screenshot OCR. Images are
+ * decoded and sent to the provider in memory only; this route never writes
+ * image bytes to the database or filesystem.
+ */
+router.post("/me/library/extract-images", imageExtractionLimiter, h(async (req, res) => {
+  const raw = req.body?.images;
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return res.status(400).json({ error: "images must be a non-empty array" });
+  }
+  if (raw.length > IMAGE_MAX_COUNT) {
+    return res.status(400).json({ error: `Too many images (max ${IMAGE_MAX_COUNT})` });
+  }
+
+  let totalBytes = 0;
+  const results: Array<Record<string, unknown>> = [];
+  for (let index = 0; index < raw.length; index++) {
+    const decoded = decodeImage(raw[index]);
+    if ("error" in decoded) {
+      results.push({ index, status: "error", error: decoded.error });
+      continue;
+    }
+    if (totalBytes + decoded.bytes > IMAGE_MAX_TOTAL_BYTES) {
+      results.push({
+        index,
+        status: "error",
+        error: `Total image size exceeds ${IMAGE_MAX_TOTAL_BYTES / 1024 / 1024} MB`,
+      });
+      continue;
+    }
+    totalBytes += decoded.bytes;
+    try {
+      const tracks = normalizeImageRows(await extractWithTimeout(decoded));
+      results.push({ index, status: "ok", tracks });
+    } catch (err) {
+      results.push({
+        index,
+        status: "error",
+        error: err instanceof Error ? err.message : "Image extraction failed",
+      });
+    }
+  }
+  return res.json({ results });
+}));
 
 /**
  * POST /api/me/library/import?service=spotify — kick off a background import.
