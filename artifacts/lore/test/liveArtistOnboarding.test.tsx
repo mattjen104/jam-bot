@@ -74,7 +74,7 @@ vi.mock("../src/hooks/useFrontDoorScan", () => ({
 }));
 
 import { useDialData, extractLiveArtistSuggestions, splitIcyCombinedField, type DialStation } from "../src/hooks/useDialData";
-import { DialView } from "../src/components/DialView";
+import { DialView, LiveArtistPicker } from "../src/components/DialView";
 import { ME_DIAL_CROSSINGS_KEY, ME_PICKER_NAMES_KEY } from "../src/lib/meHooks";
 
 function makeStation(overrides: Partial<DialStation> = {}): DialStation {
@@ -333,6 +333,56 @@ describe("extractLiveArtistSuggestions", () => {
     );
     expect(extractLiveArtistSuggestions(stations, 4)).toHaveLength(4);
   });
+
+  it("ranks flagship/proven human shows with usable hosts before automated fallback stations", () => {
+    const fallback = makeStation({
+      station: {
+        ...makeStation().station,
+        slug: "fallback",
+        name: "Fallback Radio",
+        tier: "longtail",
+        qualityTier: "raw",
+        automationClass: "automated",
+      },
+      liveTrack: { ...makeStation().liveTrack!, artist: "Fallback Artist" },
+    });
+    const preferred = makeStation({
+      station: {
+        ...makeStation().station,
+        slug: "flagship",
+        name: "Flagship Radio",
+        tier: "flagship",
+        qualityTier: "proven",
+        automationClass: "human",
+      },
+      liveTrack: { ...makeStation().liveTrack!, artist: "Preferred Artist" },
+      shows: [{
+        runId: 1, showName: "Morning Selects", djName: "Alex Host",
+        startedAt: "", endedAt: "", state: "live", spins: [], crossings: 0,
+        artistCrossings: 0, topArtists: [], topArtistNames: [], currentTrack: null,
+        isPickerShow: false, pickerId: null,
+      }],
+    });
+
+    expect(extractLiveArtistSuggestions([fallback, preferred], 2).map((s) => s.artist))
+      .toEqual(["Preferred Artist", "Fallback Artist"]);
+    expect(extractLiveArtistSuggestions([fallback, preferred], 2)[0])
+      .toEqual(expect.objectContaining({ djName: "Alex Host", showName: "Morning Selects" }));
+  });
+
+  it("evaluates all live stations before capping and keeps stable source order for ties", () => {
+    const stations = ["First", "Second", "Third", "Fourth"].map((artist, i) =>
+      makeStation({
+        station: { ...makeStation().station, slug: `tie-${i}`, name: `Tie ${i}` },
+        liveTrack: { ...makeStation().liveTrack!, artist: `${artist} Artist` },
+      }),
+    );
+
+    expect(extractLiveArtistSuggestions(stations, 3).map((s) => s.artist))
+      .toEqual(["First Artist", "Second Artist", "Third Artist"]);
+    expect(extractLiveArtistSuggestions(stations, 24).map((s) => s.artist))
+      .toEqual(["First Artist", "Second Artist", "Third Artist", "Fourth Artist"]);
+  });
 });
 
 describe("no-library onboarding live picker", () => {
@@ -417,5 +467,77 @@ describe("no-library onboarding live picker", () => {
 
     expect(screen.getByText("No artist names are available right now. You can add one below.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Choose/ })).toBeNull();
+  });
+
+  it("renders a dense expanded cloud and shows the selection limit", () => {
+    const suggestions = Array.from({ length: 12 }, (_, i) => ({
+      artist: `Artist ${i + 1}`,
+      stationSlug: `station-${i}`,
+      stationName: `Station ${i + 1}`,
+      trackTitle: null,
+      showName: null,
+      djName: null,
+    }));
+    render(
+      <LiveArtistPicker
+        suggestions={suggestions}
+        loading={false}
+        seeds={Array.from({ length: 10 }, (_, i) => `Seed ${i + 1}`)}
+        onAddSeed={vi.fn()}
+      />,
+    );
+
+    expect(screen.getAllByRole("button", { name: /Choose Artist/ })).toHaveLength(12);
+    expect(screen.getByRole("status").textContent).toContain("Ten artists selected");
+    expect((screen.getByRole("button", { name: "Choose Artist 1" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("gives higher-ranked artists the larger cloud weight", () => {
+    const suggestions = Array.from({ length: 13 }, (_, i) => ({
+      artist: `Ranked Artist ${i + 1}`,
+      stationSlug: `station-${i}`,
+      stationName: `Station ${i + 1}`,
+      trackTitle: null,
+      showName: null,
+      djName: null,
+    }));
+    render(
+      <LiveArtistPicker
+        suggestions={suggestions}
+        loading={false}
+        seeds={[]}
+        onAddSeed={vi.fn()}
+      />,
+    );
+
+    const first = screen.getByRole("button", { name: "Choose Ranked Artist 1" });
+    const seventh = screen.getByRole("button", { name: "Choose Ranked Artist 7" });
+    const thirteenth = screen.getByRole("button", { name: "Choose Ranked Artist 13" });
+    expect(first.className).toContain("live-artist-picker__option--w1");
+    expect(seventh.className).toContain("live-artist-picker__option--w2");
+    expect(thirteenth.className).toContain("live-artist-picker__option--w3");
+  });
+
+  it("keeps selected live artists visibly selected in the cloud", () => {
+    const onAddSeed = vi.fn();
+    render(
+      <LiveArtistPicker
+        suggestions={[{
+          artist: "Selected Artist",
+          stationSlug: "station",
+          stationName: "Station FM",
+          trackTitle: "A Song",
+          showName: "A Show",
+          djName: "A Host",
+        }]}
+        loading={false}
+        seeds={["Selected Artist"]}
+        onAddSeed={onAddSeed}
+      />,
+    );
+
+    const button = screen.getByRole("button", { name: "Selected Selected Artist" });
+    expect(button.getAttribute("aria-pressed")).toBe("true");
+    expect(button.classList.contains("live-artist-picker__option--selected")).toBe(true);
   });
 });

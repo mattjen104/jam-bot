@@ -111,6 +111,8 @@ export interface LiveArtistSuggestion {
   /** Best-effort context from the live show and track. */
   trackTitle: string | null;
   showName: string | null;
+  /** Human selector/host when the current schedule attribution is usable. */
+  djName: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -275,21 +277,57 @@ function normalizeLiveContext(value: string | null | undefined): string | null {
   return context && !MISSING_LIVE_ARTIST_VALUES.has(context.toLowerCase()) ? context : null;
 }
 
+function liveIdentityKey(value: string | null | undefined): string {
+  return (value ?? "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, "")
+    .toLocaleLowerCase();
+}
+
+type LiveArtistCandidate = LiveArtistSuggestion & { score: number; sourceIndex: number };
+
 /**
- * Build the small live-artist set used by no-library onboarding.
+ * Prefer live signals that are most likely to be useful to a new listener.
+ * The values are intentionally explicit and additive: quality/tier establish
+ * the source's floor, while human programming and usable schedule context
+ * break ties within that floor.  The final source index keeps the result
+ * stable when two stations are otherwise equivalent.
+ */
+function liveArtistScore(
+  station: Station,
+  context: { showName: string | null; djName: string | null },
+): number {
+  const stationTier =
+    station.tier === "flagship" ? 420 :
+    station.tier === "longtail" ? 0 : 80;
+  const quality =
+    station.qualityTier === "proven" ? 300 :
+    station.qualityTier === "promising" ? 220 :
+    station.qualityTier === "raw" ? 100 :
+    station.qualityTier === "unscored" ? 30 : 10;
+  const programming =
+    station.automationClass === "human" ? 100 :
+    station.automationClass === "automated" ? -90 : 0;
+  const usableContext = (context.djName ? 65 : 0) + (context.showName ? 30 : 0);
+  return stationTier + quality + programming + usableContext;
+}
+
+/**
+ * Build the live-artist set used by no-library onboarding.
  *
  * This intentionally accepts assembled DialStations rather than schedule data:
  * an artist is suggested only when the station is live and has a current
- * now-playing track.  The first station wins for duplicate artist names so the
- * card remains stable while multiple stations play the same artist.
+ * now-playing track. Candidates are ranked before deduplication so a duplicate
+ * artist is represented by the strongest live source, not whichever station
+ * happened to be first in the station list.
  */
 export function extractLiveArtistSuggestions(
   stations: DialStation[],
-  max = 6,
+  max = 24,
 ): LiveArtistSuggestion[] {
-  const seen = new Set<string>();
-  const suggestions: LiveArtistSuggestion[] = [];
-  for (const dialStation of stations) {
+  const candidates: LiveArtistCandidate[] = [];
+  for (const [sourceIndex, dialStation] of stations.entries()) {
     if (!dialStation.isLive) continue;
     const show = dialStation.shows.find((candidate) => candidate.state === "live") ?? null;
     const track = dialStation.liveTrack ?? show?.currentTrack;
@@ -299,18 +337,45 @@ export function extractLiveArtistSuggestions(
     const artistValue = split ? split.artist : rawArtist;
     const artist = normalizeLiveArtist(artistValue);
     if (!artist) continue;
-    const key = artist.toLocaleLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
+    // A station name/slug in the artist field is an ID or station filler, not
+    // a useful taste seed. Keep this comparison accent/punctuation tolerant.
+    const artistKey = liveIdentityKey(artist);
+    if (
+      artistKey &&
+      [dialStation.station.name, dialStation.station.slug].some(
+        (value) => liveIdentityKey(value) === artistKey,
+      )
+    ) continue;
     // Backfill title from the split when the track's own title field is empty.
     const resolvedTitle = normalizeLiveContext(track?.title) ?? (split ? normalizeLiveContext(split.title) : null);
-    suggestions.push({
+    const showName = normalizeLiveContext(show?.showName);
+    const djName = eligibleDjName(show?.djName, {
+      artist,
+      title: resolvedTitle,
+      showTitle: showName,
+      stationName: dialStation.station.name,
+    });
+    candidates.push({
       artist,
       stationSlug: dialStation.station.slug,
       stationName: normalizeLiveContext(dialStation.station.name),
       trackTitle: resolvedTitle,
-      showName: normalizeLiveContext(show?.showName),
+      showName,
+      djName,
+      score: liveArtistScore(dialStation.station, { showName, djName }),
+      sourceIndex,
     });
+  }
+
+  candidates.sort((a, b) => b.score - a.score || a.sourceIndex - b.sourceIndex);
+  const seen = new Set<string>();
+  const suggestions: LiveArtistSuggestion[] = [];
+  for (const candidate of candidates) {
+    const key = candidate.artist.toLocaleLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const { score: _score, sourceIndex: _sourceIndex, ...suggestion } = candidate;
+    suggestions.push(suggestion);
     if (suggestions.length >= max) break;
   }
   return suggestions;
@@ -757,7 +822,7 @@ export function useDialData(): {
   const hasSeeds = pickerNamesData?.hasSeeds ?? false;
 
   const liveArtistSuggestions = useMemo(
-    () => extractLiveArtistSuggestions(stations),
+    () => extractLiveArtistSuggestions(stations, 24),
     [stations],
   );
 

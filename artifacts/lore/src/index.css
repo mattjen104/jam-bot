@@ -1048,19 +1048,22 @@
   color: hsl(var(--muted-foreground));
 }
 .live-artist-picker__options {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px 6px;
+  padding: 2px 0;
 }
 .live-artist-picker__option {
   min-width: 0;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 3px;
-  padding: 10px;
+  gap: 2px;
+  padding: 8px 10px;
   border: 1px solid hsl(var(--border) / 0.75);
-  border-radius: 6px;
+  border-radius: 999px;
   background: hsl(var(--secondary) / 0.45);
   color: inherit;
   text-align: left;
@@ -1077,12 +1080,21 @@
   border-color: hsl(var(--library) / 0.65);
   background: hsl(var(--library) / 0.1);
 }
+.live-artist-picker__option--w1 {
+  padding-block: 10px;
+  border-color: hsl(var(--live) / 0.5);
+}
+.live-artist-picker__option--w1 .live-artist-picker__artist { font-size: 18px; }
+.live-artist-picker__option--w2 .live-artist-picker__artist { font-size: 16px; }
+.live-artist-picker__option--w3 .live-artist-picker__artist { font-size: 15px; }
+.live-artist-picker__option--w4 .live-artist-picker__artist,
+.live-artist-picker__option--w5 .live-artist-picker__artist { font-size: 13px; }
 .live-artist-picker__option:disabled {
   cursor: default;
   opacity: 0.5;
 }
 .live-artist-picker__artist {
-  width: 100%;
+  max-width: min(100%, 290px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1092,7 +1104,7 @@
   color: hsl(var(--foreground));
 }
 .live-artist-picker__context {
-  width: 100%;
+  max-width: min(100%, 290px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1110,6 +1122,13 @@
 .live-artist-picker__option--selected .live-artist-picker__action {
   color: hsl(var(--library));
 }
+.live-artist-picker__limit {
+  margin-top: 1px;
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: hsl(var(--library));
+}
 .live-artist-picker__state {
   padding: 9px 10px;
   border: 1px dashed hsl(var(--border));
@@ -1121,7 +1140,14 @@
 
 @media (max-width: 420px) {
   .live-artist-picker__options {
-    grid-template-columns: minmax(0, 1fr);
+    gap: 6px 5px;
+  }
+  .live-artist-picker__option {
+    max-width: 100%;
+  }
+  .live-artist-picker__artist,
+  .live-artist-picker__context {
+    max-width: min(100%, 235px);
   }
 }
 

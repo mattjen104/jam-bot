@@ -1142,6 +1142,11 @@ export function DialView() {
   const { data: seedArtists = [] } = useMyTasteSeeds();
   const setSeedsMutation = useSetTasteSeeds();
   const seedWriteRef = useRef<Promise<string[]> | null>(null);
+  // Keep the cloud responsive while the serialized PUT queue is in flight.
+  // The server query remains the source of truth; this optimistic mirror only
+  // prevents a fast click from looking unselected until the round trip ends.
+  const [optimisticSeeds, setOptimisticSeeds] = useState<string[] | null>(null);
+  const visibleSeeds = optimisticSeeds ?? seedArtists;
 
   const addSeed = useCallback((artist: string) => {
     const trimmed = artist.trim();
@@ -1150,26 +1155,31 @@ export function DialView() {
     // render both read the old query result and the later PUT can overwrite
     // the first selected artist.
     const pending = seedWriteRef.current;
-    const base = pending ? pending.catch(() => seedArtists) : Promise.resolve(seedArtists);
+    const base = pending ? pending.catch(() => visibleSeeds) : Promise.resolve(visibleSeeds);
     seedWriteRef.current = base.then(async (current) => {
       const lower = trimmed.toLowerCase();
       if (current.some((s) => s.toLowerCase() === lower) || current.length >= 10) return current;
-      const result = await setSeedsMutation.mutateAsync([...current, trimmed]);
+      const next = [...current, trimmed];
+      setOptimisticSeeds(next);
+      const result = await setSeedsMutation.mutateAsync(next);
+      setOptimisticSeeds(result.artists);
       return result.artists;
     });
-  }, [seedArtists, setSeedsMutation]);
+  }, [setSeedsMutation, visibleSeeds]);
 
   const removeSeed = useCallback((artist: string) => {
     const pending = seedWriteRef.current;
-    const base = pending ? pending.catch(() => seedArtists) : Promise.resolve(seedArtists);
+    const base = pending ? pending.catch(() => visibleSeeds) : Promise.resolve(visibleSeeds);
     seedWriteRef.current = base.then(async (current) => {
       const lower = artist.toLowerCase();
       const next = current.filter((s) => s.toLowerCase() !== lower);
       if (next.length === current.length) return current;
+      setOptimisticSeeds(next);
       const result = await setSeedsMutation.mutateAsync(next);
+      setOptimisticSeeds(result.artists);
       return result.artists;
     });
-  }, [seedArtists, setSeedsMutation]);
+  }, [setSeedsMutation, visibleSeeds]);
   // Delay skeleton visibility so fast loads (< 150 ms) never flash shimmer rows.
   // The delayed flag only flips true after crossingsLoading has been true for
   // 150 ms; it resets to false immediately when crossingsLoading clears so that
@@ -1615,8 +1625,8 @@ export function DialView() {
                 <Zone1Placeholder
                   isSpotifyConnected={isSpotifyConnected}
                   hasLibrary={hasLibrary}
-                  hasSeeds={hasSeeds || seedArtists.length > 0}
-                  seeds={seedArtists}
+                  hasSeeds={hasSeeds || visibleSeeds.length > 0}
+                  seeds={visibleSeeds}
                   liveArtistSuggestions={liveArtistSuggestions ?? []}
                   liveLoading={liveLoading}
                   showLivePicker={false}
@@ -1668,9 +1678,9 @@ export function DialView() {
                 </div>
                 {!zone1Collapsed && (
                   <>
-                    {(hasSeeds || seedArtists.length > 0) && (
+                    {(hasSeeds || visibleSeeds.length > 0) && (
                       <SeedBar
-                        seeds={seedArtists}
+                        seeds={visibleSeeds}
                         onAddSeed={addSeed}
                         onRemoveSeed={removeSeed}
                       />
@@ -1722,8 +1732,8 @@ export function DialView() {
                 <Zone1Placeholder
                   isSpotifyConnected={isSpotifyConnected}
                   hasLibrary={hasLibrary}
-                  hasSeeds={hasSeeds || seedArtists.length > 0}
-                  seeds={seedArtists}
+                  hasSeeds={hasSeeds || visibleSeeds.length > 0}
+                  seeds={visibleSeeds}
                   liveArtistSuggestions={liveArtistSuggestions ?? []}
                   liveLoading={liveLoading}
                   showLivePicker
@@ -2172,7 +2182,7 @@ function Zone1Placeholder({
   );
 }
 
-function LiveArtistPicker({
+export function LiveArtistPicker({
   suggestions,
   loading,
   seeds,
@@ -2196,15 +2206,20 @@ function LiveArtistPicker({
       {loading && suggestions.length === 0 ? (
         <div className="live-artist-picker__state" role="status">Listening for artists on air…</div>
       ) : suggestions.length > 0 ? (
-        <div className="live-artist-picker__options">
-          {suggestions.map((suggestion) => {
+        <>
+          <div className="live-artist-picker__options">
+            {suggestions.map((suggestion, index) => {
             const isSelected = selected.has(suggestion.artist.toLocaleLowerCase());
             const isAtLimit = seeds.length >= 10 && !isSelected;
+            // CSS uses w1 as the largest type and w5 as the smallest. Keep
+            // the strongest ranked artists visually strongest as the cloud
+            // flows down through progressively lighter buckets.
+            const weight = Math.min(5, Math.floor(index / 6) + 1);
             return (
               <button
                 key={suggestion.artist.toLocaleLowerCase()}
                 type="button"
-                className={`live-artist-picker__option${isSelected ? " live-artist-picker__option--selected" : ""}`}
+                className={`live-artist-picker__option live-artist-picker__option--w${weight}${isSelected ? " live-artist-picker__option--selected" : ""}`}
                 aria-pressed={isSelected}
                 aria-label={`${isSelected ? "Selected" : "Choose"} ${suggestion.artist}`}
                 disabled={isAtLimit}
@@ -2212,15 +2227,21 @@ function LiveArtistPicker({
               >
                 <span className="live-artist-picker__artist">{suggestion.artist}</span>
                 <span className="live-artist-picker__context">
-                  {[suggestion.trackTitle, suggestion.showName, suggestion.stationName]
+                  {[suggestion.trackTitle, suggestion.djName, suggestion.showName, suggestion.stationName]
                     .filter(Boolean)
                     .join(" · ")}
                 </span>
                 <span className="live-artist-picker__action">{isSelected ? "Selected" : "Choose"}</span>
               </button>
             );
-          })}
-        </div>
+            })}
+          </div>
+          {seeds.length >= 10 && (
+            <div className="live-artist-picker__limit" role="status">
+              Ten artists selected — remove one below to choose another.
+            </div>
+          )}
+        </>
       ) : (
         <div className="live-artist-picker__state">No artist names are available right now. You can add one below.</div>
       )}
