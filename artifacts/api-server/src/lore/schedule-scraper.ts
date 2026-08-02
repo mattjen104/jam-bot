@@ -88,6 +88,63 @@ export interface ExtractedShow {
   djName: string | null;
 }
 
+/** A receipt is required for every durable extracted fact. */
+export function requireSourceUrl(sourceUrl: string | null | undefined): string {
+  const value = sourceUrl?.trim() ?? "";
+  if (!value) throw new Error("source URL is required for extracted facts");
+  return value;
+}
+
+function minutesSinceMidnight(value: string): number {
+  const [hours, minutes] = value.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+/**
+ * Schedule slots may cross midnight, but a zero-length slot or two slots that
+ * compete for the same station/day cannot be persisted as a weekly grid.
+ * Returns false for a valid, non-overlapping set.
+ */
+export function hasOverlappingScheduleSlots(shows: ExtractedShow[]): boolean {
+  const dayIndex = new Map(
+    ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day, i) => [day, i]),
+  );
+  const intervals: Array<Array<{ start: number; end: number }>> = [];
+  for (const show of shows) {
+    const day = dayIndex.get(show.dayOfWeek);
+    if (day === undefined) return true;
+    const start = day * 24 * 60 + minutesSinceMidnight(show.startTime);
+    const end = day * 24 * 60 + minutesSinceMidnight(show.endTime);
+    if (end === start) return true;
+    if (end > start) {
+      intervals.push([{ start, end }]);
+    } else {
+      const nextDay = (day + 1) * 24 * 60;
+      if (day === 6) {
+        intervals.push([
+          { start, end: 7 * 24 * 60 },
+          { start: 0, end: minutesSinceMidnight(show.endTime) },
+        ]);
+      } else {
+        intervals.push([
+          { start, end: nextDay },
+          { start: nextDay, end: nextDay + minutesSinceMidnight(show.endTime) },
+        ]);
+      }
+    }
+  }
+  for (let i = 0; i < intervals.length; i++) {
+    for (let j = i + 1; j < intervals.length; j++) {
+      for (const a of intervals[i]!) {
+        for (const b of intervals[j]!) {
+          if (a.start < b.end && b.start < a.end) return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
 async function loadStaleTargets(limit: number): Promise<ScrapeTarget[]> {
   const successCutoff = new Date(Date.now() - RESCRAPE_AFTER_MS);
   const attemptCutoff = new Date(Date.now() - ATTEMPT_RETRY_AFTER_MS);
@@ -345,6 +402,12 @@ export function parseExtractedSchedule(raw: string): ExtractedShow[] | null {
     out.push({ showName, dayOfWeek, startTime, endTime, djName });
   }
 
+  // Unlike a malformed individual row, an overlap makes the whole extracted
+  // schedule ambiguous. Returning null preserves the distinction between
+  // extraction failure and a legitimate empty schedule and prevents a partial
+  // replacement transaction from deleting the prior good grid.
+  if (hasOverlappingScheduleSlots(out)) return null;
+
   // An empty-but-valid extraction (page had no schedule) is a legitimate
   // "nothing to store" result, not a parse failure — return it as-is so the
   // caller can distinguish "no schedule" from "extraction failed".
@@ -432,6 +495,7 @@ export async function scrapeStationSchedule(
   // rendered nav menus and other homepage structures that hide the schedule
   // link from a plain HTML anchor scan. Same origin-safety check applies.
   let pageHtml: string | null = null;
+  let sourceUrl: string | null = null;
   if (target.scheduleUrl) {
     let scheduleOrigin: string | null = null;
     try {
@@ -452,6 +516,7 @@ export async function scrapeStationSchedule(
         scheduleStatus = res.status;
         if (res.ok) {
           pageHtml = await res.text();
+          sourceUrl = target.scheduleUrl;
         }
       } catch {
         // Timeout or network error — scheduleStatus stays null (transient).
@@ -539,6 +604,7 @@ export async function scrapeStationSchedule(
         if (typeof linkedResult === "string") {
           pageHtml = linkedResult;
           discoveredScheduleUrl = scheduleLink;
+          sourceUrl = scheduleLink;
         }
       } else {
         console.info(
@@ -555,6 +621,7 @@ export async function scrapeStationSchedule(
         if (typeof probedResult === "string") {
           pageHtml = probedResult;
           discoveredScheduleUrl = probedUrl;
+          sourceUrl = probedUrl;
           console.info(
             `[schedule-scraper] probed schedule URL for ${target.slug}: ${probedUrl}`,
           );
@@ -566,6 +633,7 @@ export async function scrapeStationSchedule(
     if (!pageHtml) {
       if (homepageLooksLikeSchedule(homeHtml)) {
         pageHtml = homeHtml;
+        sourceUrl = target.homepageUrl;
         // No external URL to persist — the homepage itself is the schedule source.
         console.info(
           `[schedule-scraper] using homepage as inline schedule for ${target.slug}`,
@@ -619,6 +687,7 @@ export async function scrapeStationSchedule(
 
   const now = new Date();
   try {
+    const receiptSourceUrl = requireSourceUrl(sourceUrl);
     await db.transaction(async (tx) => {
       await tx.delete(scrapedShowsTable).where(eq(scrapedShowsTable.stationId, target.id));
       if (shows!.length > 0) {
@@ -632,6 +701,9 @@ export async function scrapeStationSchedule(
               startTime: s.startTime,
               endTime: s.endTime,
               djName: s.djName,
+              sourceUrl: receiptSourceUrl,
+              scrapedAt: now,
+              extraction: "llm",
             })),
           )
           // Validation already dedupes on the same key as the unique index,

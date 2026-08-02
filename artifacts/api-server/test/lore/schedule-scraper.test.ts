@@ -17,6 +17,8 @@ import {
   SCHEDULE_PATH_PROBES,
   parseExtractedSchedule,
   normalizeDayOfWeek,
+  hasOverlappingScheduleSlots,
+  requireSourceUrl,
 } from "../../src/lore/schedule-scraper.js";
 
 // ---------------------------------------------------------------------------
@@ -448,6 +450,45 @@ describe("parseExtractedSchedule", () => {
     expect(parseExtractedSchedule("not json at all")).toBeNull();
   });
 
+  it("rejects a zero-length slot as an invalid extraction", () => {
+    expect(
+      parseExtractedSchedule(
+        JSON.stringify([
+          { showName: "Broken", dayOfWeek: "Mon", startTime: "09:00", endTime: "09:00" },
+        ]),
+      ),
+    ).toBeNull();
+  });
+
+  it("rejects overlapping slots on the same day as one invalid extraction", () => {
+    expect(
+      parseExtractedSchedule(
+        JSON.stringify([
+          { showName: "First", dayOfWeek: "Mon", startTime: "09:00", endTime: "11:00" },
+          { showName: "Second", dayOfWeek: "Mon", startTime: "10:30", endTime: "12:00" },
+        ]),
+      ),
+    ).toBeNull();
+  });
+
+  it("rejects a Sunday overnight slot overlapping Monday morning", () => {
+    expect(
+      hasOverlappingScheduleSlots([
+        { showName: "Overnight", dayOfWeek: "Sun", startTime: "23:00", endTime: "01:00", djName: null },
+        { showName: "Breakfast", dayOfWeek: "Mon", startTime: "00:30", endTime: "02:00", djName: null },
+      ]),
+    ).toBe(true);
+  });
+
+  it("keeps legitimate non-overlapping and overnight slots", () => {
+    expect(
+      hasOverlappingScheduleSlots([
+        { showName: "Morning", dayOfWeek: "Mon", startTime: "09:00", endTime: "11:00", djName: null },
+        { showName: "Night", dayOfWeek: "Tue", startTime: "23:00", endTime: "01:00", djName: null },
+      ]),
+    ).toBe(false);
+  });
+
   it("returns null when the top-level value is not an array", () => {
     expect(parseExtractedSchedule('{"showName": "x"}')).toBeNull();
   });
@@ -672,5 +713,15 @@ describe("parseExtractedSchedule", () => {
     expect(result).toHaveLength(7);
     const days = result!.map((s) => s.dayOfWeek);
     expect(days).toEqual(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
+  });
+});
+
+describe("requireSourceUrl", () => {
+  it("trims a source URL and rejects missing source metadata", () => {
+    expect(requireSourceUrl(" https://station.example/schedule ")).toBe(
+      "https://station.example/schedule",
+    );
+    expect(() => requireSourceUrl("  ")).toThrow(/source URL is required/i);
+    expect(() => requireSourceUrl(null)).toThrow(/source URL is required/i);
   });
 });

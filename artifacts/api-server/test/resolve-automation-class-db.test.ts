@@ -80,6 +80,8 @@ beforeAll(async () => {
     startTime: SLOT_START,
     endTime: SLOT_END,
     djName: "DJ Test",
+    sourceUrl: "https://example.invalid/schedule",
+    extraction: "llm",
   });
 
   // lookupScrapedShowId joins shows ← scraped_shows, so we need a shows row too
@@ -288,6 +290,8 @@ describe("resolveAutomationClass — admin schedule clear", () => {
       startTime: SLOT_START,
       endTime: SLOT_END,
       djName: "DJ Test",
+      sourceUrl: "https://example.invalid/schedule",
+      extraction: "llm",
     });
   });
 });

@@ -3449,6 +3449,17 @@ components:
           type: string
         djName:
           type: ["string", "null"]
+        sourceUrl:
+          type: string
+          format: uri
+          description: URL of the station schedule page that produced this row.
+        scrapedAt:
+          type: string
+          format: date-time
+          description: When this schedule row was extracted.
+        extraction:
+          type: string
+          enum: [llm, api, manual]
       required:
         - name
     RecordingSpin:
@@ -3718,12 +3729,26 @@ components:
           description: 24h "HH:MM"
         djName:
           type: ["string", "null"]
+        sourceUrl:
+          type: string
+          format: uri
+          description: URL of the station schedule page that produced this row.
+        scrapedAt:
+          type: string
+          format: date-time
+          description: When this schedule row was extracted.
+        extraction:
+          type: string
+          enum: [llm, api, manual]
       required:
         - showName
         - dayOfWeek
         - startTime
         - endTime
         - djName
+        - sourceUrl
+        - scrapedAt
+        - extraction
     StationUpcomingSchedule:
       type: object
       description: >-

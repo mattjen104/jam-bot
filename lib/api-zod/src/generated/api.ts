@@ -382,6 +382,20 @@ export const ListStationsAtDateResponse = zod.object({
                       .object({
                         name: zod.string(),
                         djName: zod.string().nullish(),
+                        sourceUrl: zod
+                          .string()
+                          .url()
+                          .optional()
+                          .describe(
+                            "URL of the station schedule page that produced this row.",
+                          ),
+                        scrapedAt: zod
+                          .date()
+                          .optional()
+                          .describe("When this schedule row was extracted."),
+                        extraction: zod
+                          .enum(["llm", "api", "manual"])
+                          .optional(),
                       })
                       .describe(
                         "Show + DJ attribution for a spin, when the source exposes it.",
@@ -489,6 +503,20 @@ export const ListStationsNowPlayingResponse = zod.object({
                       .object({
                         name: zod.string(),
                         djName: zod.string().nullish(),
+                        sourceUrl: zod
+                          .string()
+                          .url()
+                          .optional()
+                          .describe(
+                            "URL of the station schedule page that produced this row.",
+                          ),
+                        scrapedAt: zod
+                          .date()
+                          .optional()
+                          .describe("When this schedule row was extracted."),
+                        extraction: zod
+                          .enum(["llm", "api", "manual"])
+                          .optional(),
                       })
                       .describe(
                         "Show + DJ attribution for a spin, when the source exposes it.",
@@ -688,6 +716,18 @@ export const GetStationNowPlayingResponse = zod.object({
                 .object({
                   name: zod.string(),
                   djName: zod.string().nullish(),
+                  sourceUrl: zod
+                    .string()
+                    .url()
+                    .optional()
+                    .describe(
+                      "URL of the station schedule page that produced this row.",
+                    ),
+                  scrapedAt: zod
+                    .date()
+                    .optional()
+                    .describe("When this schedule row was extracted."),
+                  extraction: zod.enum(["llm", "api", "manual"]).optional(),
                 })
                 .describe(
                   "Show + DJ attribution for a spin, when the source exposes it.",
@@ -981,6 +1021,18 @@ export const GetRecordingSpinsResponse = zod.object({
               .object({
                 name: zod.string(),
                 djName: zod.string().nullish(),
+                sourceUrl: zod
+                  .string()
+                  .url()
+                  .optional()
+                  .describe(
+                    "URL of the station schedule page that produced this row.",
+                  ),
+                scrapedAt: zod
+                  .date()
+                  .optional()
+                  .describe("When this schedule row was extracted."),
+                extraction: zod.enum(["llm", "api", "manual"]).optional(),
               })
               .describe(
                 "Show + DJ attribution for a spin, when the source exposes it.",
@@ -1387,6 +1439,18 @@ export const GetStationArchiveResponse = zod.object({
               .object({
                 name: zod.string(),
                 djName: zod.string().nullish(),
+                sourceUrl: zod
+                  .string()
+                  .url()
+                  .optional()
+                  .describe(
+                    "URL of the station schedule page that produced this row.",
+                  ),
+                scrapedAt: zod
+                  .date()
+                  .optional()
+                  .describe("When this schedule row was extracted."),
+                extraction: zod.enum(["llm", "api", "manual"]).optional(),
               })
               .describe(
                 "Show + DJ attribution for a spin, when the source exposes it.",
@@ -1595,6 +1659,18 @@ export const GetStationRunResponse = zod.object({
             .object({
               name: zod.string(),
               djName: zod.string().nullish(),
+              sourceUrl: zod
+                .string()
+                .url()
+                .optional()
+                .describe(
+                  "URL of the station schedule page that produced this row.",
+                ),
+              scrapedAt: zod
+                .date()
+                .optional()
+                .describe("When this schedule row was extracted."),
+              extraction: zod.enum(["llm", "api", "manual"]).optional(),
             })
             .describe(
               "Show + DJ attribution for a spin, when the source exposes it.",
@@ -1695,6 +1771,18 @@ export const GetReplayManifestResponse = zod
         .object({
           name: zod.string(),
           djName: zod.string().nullish(),
+          sourceUrl: zod
+            .string()
+            .url()
+            .optional()
+            .describe(
+              "URL of the station schedule page that produced this row.",
+            ),
+          scrapedAt: zod
+            .date()
+            .optional()
+            .describe("When this schedule row was extracted."),
+          extraction: zod.enum(["llm", "api", "manual"]).optional(),
         })
         .describe(
           "Show + DJ attribution for a spin, when the source exposes it.",
@@ -2215,6 +2303,18 @@ export const GetArchiveRecentRunsResponse = zod.object({
                   .object({
                     name: zod.string(),
                     djName: zod.string().nullish(),
+                    sourceUrl: zod
+                      .string()
+                      .url()
+                      .optional()
+                      .describe(
+                        "URL of the station schedule page that produced this row.",
+                      ),
+                    scrapedAt: zod
+                      .date()
+                      .optional()
+                      .describe("When this schedule row was extracted."),
+                    extraction: zod.enum(["llm", "api", "manual"]).optional(),
                   })
                   .describe(
                     "Show + DJ attribution for a spin, when the source exposes it.",
@@ -2288,6 +2388,18 @@ export const SearchArtistRunsResponse = zod.object({
                   .object({
                     name: zod.string(),
                     djName: zod.string().nullish(),
+                    sourceUrl: zod
+                      .string()
+                      .url()
+                      .optional()
+                      .describe(
+                        "URL of the station schedule page that produced this row.",
+                      ),
+                    scrapedAt: zod
+                      .date()
+                      .optional()
+                      .describe("When this schedule row was extracted."),
+                    extraction: zod.enum(["llm", "api", "manual"]).optional(),
                   })
                   .describe(
                     "Show + DJ attribution for a spin, when the source exposes it.",
@@ -2381,6 +2493,16 @@ export const GetAllScrapedShowsResponse = zod
                 startTime: zod.string().describe('24h \"HH:MM\"'),
                 endTime: zod.string().describe('24h \"HH:MM\"'),
                 djName: zod.string().nullable(),
+                sourceUrl: zod
+                  .string()
+                  .url()
+                  .describe(
+                    "URL of the station schedule page that produced this row.",
+                  ),
+                scrapedAt: zod
+                  .date()
+                  .describe("When this schedule row was extracted."),
+                extraction: zod.enum(["llm", "api", "manual"]),
               })
               .describe(
                 "One entry in a station's own published weekly programming grid. Times are the station's own local wall-clock times as published (timezone not modeled), describing a recurring weekly slot rather than a specific calendar date.",
@@ -2573,6 +2695,16 @@ export const GetStationUpcomingScheduleResponse = zod
           startTime: zod.string().describe('24h \"HH:MM\"'),
           endTime: zod.string().describe('24h \"HH:MM\"'),
           djName: zod.string().nullable(),
+          sourceUrl: zod
+            .string()
+            .url()
+            .describe(
+              "URL of the station schedule page that produced this row.",
+            ),
+          scrapedAt: zod
+            .date()
+            .describe("When this schedule row was extracted."),
+          extraction: zod.enum(["llm", "api", "manual"]),
         })
         .describe(
           "One entry in a station's own published weekly programming grid. Times are the station's own local wall-clock times as published (timezone not modeled), describing a recurring weekly slot rather than a specific calendar date.",

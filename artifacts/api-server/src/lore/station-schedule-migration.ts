@@ -38,7 +38,9 @@ export async function applyStationScheduleMigration(): Promise<void> {
       start_time    text NOT NULL,
       end_time      text NOT NULL,
       dj_name       text,
+      source_url    text,
       scraped_at    timestamptz NOT NULL DEFAULT now(),
+      extraction    text,
       created_at    timestamptz NOT NULL DEFAULT now()
     )
   `);
@@ -80,6 +82,123 @@ export async function applyStationScheduleMigration(): Promise<void> {
   // across all environments regardless of when drizzle-kit push was last run.
   await db.execute(sql`
     ALTER TABLE stations ADD COLUMN IF NOT EXISTS iana_timezone text
+  `);
+
+  // Receipt columns were added after scraped_shows had already been deployed.
+  // Add them nullable first so legacy rows can be backfilled transactionally
+  // below, then enforce the invariant after the backfill.
+  await db.execute(sql`
+    ALTER TABLE scraped_shows ADD COLUMN IF NOT EXISTS source_url text
+  `);
+  await db.execute(sql`
+    ALTER TABLE scraped_shows ADD COLUMN IF NOT EXISTS extraction text
+  `);
+  await db.execute(sql`
+    ALTER TABLE list_entries ADD COLUMN IF NOT EXISTS source_url text
+  `);
+  await db.execute(sql`
+    ALTER TABLE list_entries ADD COLUMN IF NOT EXISTS scraped_at timestamptz
+  `);
+  await db.execute(sql`
+    ALTER TABLE list_entries ALTER COLUMN scraped_at SET DEFAULT now()
+  `);
+  await db.execute(sql`
+    ALTER TABLE list_entries ADD COLUMN IF NOT EXISTS extraction text
+  `);
+
+  // This receipt backfill has its own ledger key: the older schedule migration
+  // may already be marked complete in a deployed database.
+  const receiptCompletionCheck = await db.execute(
+    sql`SELECT 1 FROM migration_completions WHERE name = 'applyExtractionReceiptMigration' LIMIT 1`,
+  );
+  if ((receiptCompletionCheck.rows?.length ?? 0) === 0) {
+    await db.transaction(async (tx) => {
+      // The schedule scraper was the only historical writer for this table,
+      // so old rows are honestly marked as LLM output. A station URL is the
+      // strongest source pointer available for those legacy rows.
+      await tx.execute(sql`
+        UPDATE scraped_shows ss
+        SET source_url = COALESCE(
+          NULLIF(st.schedule_url, ''),
+          NULLIF(st.homepage_url, '')
+        ),
+        extraction = 'llm'
+        FROM stations st
+        WHERE st.id = ss.station_id
+          AND (ss.source_url IS NULL OR btrim(ss.source_url) = '' OR ss.extraction IS NULL)
+      `);
+
+      // A legacy schedule row with no source URL cannot be audited honestly;
+      // remove it rather than inventing a citation or retaining a partial fact.
+      const removedUncited = await tx.execute(sql`
+        DELETE FROM scraped_shows
+        WHERE source_url IS NULL OR btrim(source_url) = ''
+      `);
+      if ((removedUncited.rowCount ?? 0) > 0) {
+        console.warn(
+          `[migration] removed ${removedUncited.rowCount} uncited legacy scraped_shows row(s)`,
+        );
+      }
+
+      await tx.execute(sql`
+        UPDATE list_entries le
+        SET source_url = l.url,
+            scraped_at = COALESCE(le.scraped_at, l.retrieved_at, now()),
+            extraction = COALESCE(le.extraction, 'llm')
+        FROM lists l
+        WHERE l.id = le.list_id
+          AND (le.source_url IS NULL OR le.scraped_at IS NULL OR le.extraction IS NULL)
+      `);
+      const removedUncitedLists = await tx.execute(sql`
+        DELETE FROM list_entries
+        WHERE source_url IS NULL OR btrim(source_url) = ''
+      `);
+      if ((removedUncitedLists.rowCount ?? 0) > 0) {
+        console.warn(
+          `[migration] removed ${removedUncitedLists.rowCount} uncited legacy list_entries row(s)`,
+        );
+      }
+
+      await tx.execute(sql`
+        INSERT INTO migration_completions (name)
+        VALUES ('applyExtractionReceiptMigration')
+        ON CONFLICT (name) DO NOTHING
+      `);
+    });
+  }
+
+  // Keep these constraints enforced even when the receipt DML ledger already
+  // exists (for example after a restart during a schema rollout).
+  await db.execute(sql`
+    ALTER TABLE scraped_shows ALTER COLUMN source_url SET NOT NULL
+  `);
+  await db.execute(sql`
+    ALTER TABLE scraped_shows ALTER COLUMN extraction SET NOT NULL
+  `);
+  await db.execute(sql`
+    ALTER TABLE list_entries ALTER COLUMN source_url SET NOT NULL
+  `);
+  await db.execute(sql`
+    ALTER TABLE list_entries ALTER COLUMN scraped_at SET NOT NULL
+  `);
+  await db.execute(sql`
+    ALTER TABLE list_entries ALTER COLUMN extraction SET NOT NULL
+  `);
+  await db.execute(sql`
+    DO $$ BEGIN
+      ALTER TABLE scraped_shows
+        ADD CONSTRAINT scraped_shows_extraction_ck
+        CHECK (extraction IN ('llm', 'api', 'manual') AND btrim(source_url) <> '');
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$
+  `);
+  await db.execute(sql`
+    DO $$ BEGIN
+      ALTER TABLE list_entries
+        ADD CONSTRAINT list_entries_extraction_ck
+        CHECK (extraction IN ('llm', 'api', 'manual') AND btrim(source_url) <> '');
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$
   `);
   console.info("[migration] scraped_shows table: OK");
 

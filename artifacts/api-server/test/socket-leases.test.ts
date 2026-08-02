@@ -376,6 +376,8 @@ beforeAll(async () => {
       startTime: "00:00",
       endTime: "23:59",
       djName: "DJ Integration",
+      sourceUrl: `https://example.invalid/schedules/${run}`,
+      extraction: "manual",
     })
     .onConflictDoNothing();
 
@@ -458,6 +460,8 @@ beforeAll(async () => {
       startTime: "00:00",
       endTime: "23:59",
       djName: "DJ Zero Window",
+      sourceUrl: `https://example.invalid/schedules/${run}`,
+      extraction: "manual",
     })
     .onConflictDoNothing();
 
@@ -526,6 +530,8 @@ beforeAll(async () => {
       startTime: wt.start_time,
       endTime: wt.end_time,
       djName: "DJ Midnight",
+      sourceUrl: `https://example.invalid/schedules/${run}`,
+      extraction: "manual",
     })
     .onConflictDoNothing();
 

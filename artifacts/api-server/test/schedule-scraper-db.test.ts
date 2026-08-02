@@ -218,6 +218,11 @@ describe("scrapeStationSchedule — scheduleUrl direct-fetch path", () => {
       "Afternoon Blues",
       "Morning Jazz",
     ]);
+    for (const show of shows) {
+      expect(show.sourceUrl).toBe(SCHEDULE_URL);
+      expect(show.scrapedAt).toBeInstanceOf(Date);
+      expect(show.extraction).toBe("llm");
+    }
 
     const station = await fetchStationRow();
     expect(station?.scheduleScrapedAt).toBeInstanceOf(Date);

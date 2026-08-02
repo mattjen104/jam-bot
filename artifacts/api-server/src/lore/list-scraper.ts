@@ -19,6 +19,7 @@ import {
   recordingReleaseGroupsTable,
 } from "@workspace/db";
 import { extractListRaw } from "./list-llm.js";
+import { requireSourceUrl } from "./schedule-scraper.js";
 
 const MB_BASE = "https://musicbrainz.org/ws/2";
 const MB_MIN_INTERVAL_MS = 1100;
@@ -335,9 +336,18 @@ export async function scrapeAndPopulateList(
   url: string,
   contact: string,
 ): Promise<ScrapeResult> {
+  let sourceUrl: string;
+  try {
+    sourceUrl = requireSourceUrl(url);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { total: 0, resolved: 0, fuzzy: 0, unresolved: 0, entries: [], error: msg };
+  }
+  const scrapedAt = new Date();
+
   let html: string;
   try {
-    const res = await fetch(url, {
+    const res = await fetch(sourceUrl, {
       headers: {
         "User-Agent": contact,
         Accept: "text/html,application/xhtml+xml,*/*",
@@ -420,6 +430,9 @@ export async function scrapeAndPopulateList(
         rawAlbum: entry.album,
         confidence,
         confirmed: confidence === "exact",
+        sourceUrl,
+        scrapedAt,
+        extraction: "llm",
       })
       .onConflictDoNothing();
   }

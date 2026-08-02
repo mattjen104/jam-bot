@@ -167,6 +167,8 @@ beforeAll(async () => {
       confirmed: false,
       rawAlbum: `Album A ${run}`,
       rawArtist: `Artist ${run}`,
+      sourceUrl: `https://example.invalid/lists/${run}`,
+      extraction: "manual",
     },
     {
       listId: listId!,
@@ -176,6 +178,8 @@ beforeAll(async () => {
       confirmed: false,
       rawAlbum: `Album B ${run}`,
       rawArtist: `Artist ${run}`,
+      sourceUrl: `https://example.invalid/lists/${run}`,
+      extraction: "manual",
     },
     {
       listId: listId!,
@@ -185,6 +189,8 @@ beforeAll(async () => {
       confirmed: true,
       rawAlbum: `Album C ${run}`,
       rawArtist: `Artist ${run}`,
+      sourceUrl: `https://example.invalid/lists/${run}`,
+      extraction: "manual",
     },
   ]);
 
@@ -417,6 +423,8 @@ beforeAll(async () => {
       confirmed: false,
       rawAlbum: `Listed Album ${run2}`,
       rawArtist: `Artist ${run2}`,
+      sourceUrl: `https://example.invalid/lists/multi-${run2}`,
+      extraction: "manual",
     },
   ]);
 

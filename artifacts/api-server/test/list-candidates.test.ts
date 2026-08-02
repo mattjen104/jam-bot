@@ -256,6 +256,9 @@ describe("processListCandidate", () => {
     const exact = entries.find((e) => e.rawArtist === "Alpha Band")!;
     expect(exact.confidence).toBe("exact");
     expect(exact.confirmed).toBe(true);
+    expect(exact.sourceUrl).toBe(candidate.url);
+    expect(exact.scrapedAt).toBeInstanceOf(Date);
+    expect(exact.extraction).toBe("llm");
     const weak = entries.find((e) => e.rawArtist === "Beta Group")!;
     expect(weak.confidence).toBe("unresolved");
     expect(weak.confirmed).toBe(false);

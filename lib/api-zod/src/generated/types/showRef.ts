@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ShowRefExtraction } from "./showRefExtraction";
 
 /**
  * Show + DJ attribution for a spin, when the source exposes it.
@@ -13,4 +14,9 @@ export interface ShowRef {
   name: string;
   /** @nullable */
   djName?: string | null;
+  /** URL of the station schedule page that produced this row. */
+  sourceUrl?: string;
+  /** When this schedule row was extracted. */
+  scrapedAt?: Date;
+  extraction?: ShowRefExtraction;
 }

@@ -10,7 +10,9 @@ import {
   jsonb,
   index,
   uniqueIndex,
+  check,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 /**
  * Lore play-history spine.
@@ -402,8 +404,12 @@ export const scrapedShowsTable = pgTable(
     startTime: text("start_time").notNull(),
     endTime: text("end_time").notNull(),
     djName: text("dj_name"),
+    /** URL of the station schedule page (or homepage when the grid is inline). */
+    sourceUrl: text("source_url").notNull(),
     /** When this row was (re)written by the schedule scraper. */
     scrapedAt: timestamp("scraped_at").defaultNow().notNull(),
+    /** "llm" | "api" | "manual". */
+    extraction: text("extraction").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => [
@@ -414,6 +420,10 @@ export const scrapedShowsTable = pgTable(
       t.showName,
     ),
     index("scraped_shows_station_idx").on(t.stationId),
+    check(
+      "scraped_shows_extraction_ck",
+      sql`${t.extraction} in ('llm', 'api', 'manual')`,
+    ),
   ],
 );
 
@@ -1627,10 +1637,20 @@ export const listEntriesTable = pgTable(
     /** "exact" | "fuzzy" | "unresolved" */
     confidence: text("confidence").notNull().default("exact"),
     confirmed: boolean("confirmed").notNull().default(false),
+    /** Pointer to the published list page that produced this entry. */
+    sourceUrl: text("source_url").notNull(),
+    /** When this entry was extracted from the source page. */
+    scrapedAt: timestamp("scraped_at").defaultNow().notNull(),
+    /** "llm" | "api" | "manual". */
+    extraction: text("extraction").notNull(),
   },
   (t) => [
     uniqueIndex("list_entries_list_rg_idx").on(t.listId, t.releaseGroupMbid),
     index("list_entries_rg_idx").on(t.releaseGroupMbid),
+    check(
+      "list_entries_extraction_ck",
+      sql`${t.extraction} in ('llm', 'api', 'manual')`,
+    ),
   ],
 );
 

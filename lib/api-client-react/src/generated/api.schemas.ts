@@ -362,6 +362,15 @@ export const NowPlayingConfidence = {
   spotify: "spotify",
 } as const;
 
+export type ShowRefExtraction =
+  (typeof ShowRefExtraction)[keyof typeof ShowRefExtraction];
+
+export const ShowRefExtraction = {
+  llm: "llm",
+  api: "api",
+  manual: "manual",
+} as const;
+
 /**
  * Show + DJ attribution for a spin, when the source exposes it.
  */
@@ -369,6 +378,11 @@ export interface ShowRef {
   name: string;
   /** @nullable */
   djName?: string | null;
+  /** URL of the station schedule page that produced this row. */
+  sourceUrl?: string;
+  /** When this schedule row was extracted. */
+  scrapedAt?: string;
+  extraction?: ShowRefExtraction;
 }
 
 /**
@@ -876,6 +890,15 @@ export const ScrapedShowDayOfWeek = {
   Sun: "Sun",
 } as const;
 
+export type ScrapedShowExtraction =
+  (typeof ScrapedShowExtraction)[keyof typeof ScrapedShowExtraction];
+
+export const ScrapedShowExtraction = {
+  llm: "llm",
+  api: "api",
+  manual: "manual",
+} as const;
+
 /**
  * One entry in a station's own published weekly programming grid. Times are the station's own local wall-clock times as published (timezone not modeled), describing a recurring weekly slot rather than a specific calendar date.
  */
@@ -888,6 +911,11 @@ export interface ScrapedShow {
   endTime: string;
   /** @nullable */
   djName: string | null;
+  /** URL of the station schedule page that produced this row. */
+  sourceUrl: string;
+  /** When this schedule row was extracted. */
+  scrapedAt: string;
+  extraction: ScrapedShowExtraction;
 }
 
 /**

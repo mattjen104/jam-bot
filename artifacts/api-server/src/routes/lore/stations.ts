@@ -1216,6 +1216,9 @@ router.get("/stations/:slug/upcoming-schedule", h(async (req, res) => {
       startTime: scrapedShowsTable.startTime,
       endTime: scrapedShowsTable.endTime,
       djName: scrapedShowsTable.djName,
+      sourceUrl: scrapedShowsTable.sourceUrl,
+      scrapedAt: scrapedShowsTable.scrapedAt,
+      extraction: scrapedShowsTable.extraction,
     })
     .from(scrapedShowsTable)
     .where(eq(scrapedShowsTable.stationId, station[0]!.id))
@@ -1242,6 +1245,9 @@ router.get("/stations/:slug/upcoming-schedule", h(async (req, res) => {
         startTime: r.startTime,
         endTime: r.endTime,
         djName: r.djName ?? null,
+        sourceUrl: r.sourceUrl,
+        scrapedAt: r.scrapedAt,
+        extraction: r.extraction,
       })),
       lastScrapedAt,
       timezoneHint,
@@ -1403,6 +1409,9 @@ router.get("/scraped-shows", h(async (_req, res) => {
       startTime: scrapedShowsTable.startTime,
       endTime: scrapedShowsTable.endTime,
       djName: scrapedShowsTable.djName,
+      sourceUrl: scrapedShowsTable.sourceUrl,
+      scrapedAt: scrapedShowsTable.scrapedAt,
+      extraction: scrapedShowsTable.extraction,
     })
     .from(scrapedShowsTable)
     .innerJoin(stationsTable, eq(scrapedShowsTable.stationId, stationsTable.id))
@@ -1466,6 +1475,9 @@ router.get("/scraped-shows", h(async (_req, res) => {
           startTime: r.startTime,
           endTime: r.endTime ?? null,
           djName: r.djName ?? null,
+          sourceUrl: r.sourceUrl,
+          scrapedAt: r.scrapedAt,
+          extraction: r.extraction,
           genres: insight?.genres ?? [],
           discoveryScore: insight?.discoveryScore ?? null,
           discoveryLabel: insight?.discoveryLabel ?? null,

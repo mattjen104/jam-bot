@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ScrapedShowDayOfWeek } from "./scrapedShowDayOfWeek";
+import type { ScrapedShowExtraction } from "./scrapedShowExtraction";
 
 /**
  * One entry in a station's own published weekly programming grid. Times are the station's own local wall-clock times as published (timezone not modeled), describing a recurring weekly slot rather than a specific calendar date.
@@ -19,4 +20,9 @@ export interface ScrapedShow {
   endTime: string;
   /** @nullable */
   djName: string | null;
+  /** URL of the station schedule page that produced this row. */
+  sourceUrl: string;
+  /** When this schedule row was extracted. */
+  scrapedAt: Date;
+  extraction: ScrapedShowExtraction;
 }

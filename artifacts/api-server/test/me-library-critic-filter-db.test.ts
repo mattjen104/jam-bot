@@ -183,6 +183,8 @@ beforeAll(async () => {
       confirmed: false,
       rawAlbum: `Album Exact ${run}`,
       rawArtist: `Band ${run}`,
+      sourceUrl: `https://example.invalid/lists/${run}`,
+      extraction: "manual",
     },
     {
       listId: listId!,
@@ -192,6 +194,8 @@ beforeAll(async () => {
       confirmed: true,
       rawAlbum: `Album Confirmed ${run}`,
       rawArtist: `Band ${run}`,
+      sourceUrl: `https://example.invalid/lists/${run}`,
+      extraction: "manual",
     },
     {
       listId: listId!,
@@ -201,6 +205,8 @@ beforeAll(async () => {
       confirmed: false,
       rawAlbum: `Album Fuzzy ${run}`,
       rawArtist: `Band ${run}`,
+      sourceUrl: `https://example.invalid/lists/${run}`,
+      extraction: "manual",
     },
   ]);
 

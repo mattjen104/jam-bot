@@ -32,6 +32,7 @@ import { applyMigrationCompletionsMigration } from "../src/lore/migration-comple
 const run = randomUUID().slice(0, 8);
 const SLUG = `test-sched-dml-${run}`;
 const LEDGER_KEY = "applyStationScheduleMigration";
+const RECEIPT_LEDGER_KEY = "applyExtractionReceiptMigration";
 
 let dbAvailable = false;
 let stationId: number | undefined;
@@ -65,6 +66,7 @@ afterAll(async () => {
   await db.execute(sql`DELETE FROM scraped_shows WHERE station_id = ${stationId}`);
   await db.execute(sql`DELETE FROM stations WHERE id = ${stationId}`);
   await db.execute(sql`DELETE FROM migration_completions WHERE name = ${LEDGER_KEY}`);
+  await db.execute(sql`DELETE FROM migration_completions WHERE name = ${RECEIPT_LEDGER_KEY}`);
 }, 30_000);
 
 beforeEach(async () => {
@@ -75,14 +77,15 @@ beforeEach(async () => {
     sql`UPDATE stations SET upcoming_show_count = 0 WHERE id = ${stationId}`,
   );
   await db.execute(sql`DELETE FROM migration_completions WHERE name = ${LEDGER_KEY}`);
+  await db.execute(sql`DELETE FROM migration_completions WHERE name = ${RECEIPT_LEDGER_KEY}`);
 }, 10_000);
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 async function insertScrapedShow(showName: string, djName?: string): Promise<number> {
   const rows = await db.execute(
-    sql`INSERT INTO scraped_shows (station_id, show_name, day_of_week, start_time, end_time, dj_name)
-        VALUES (${stationId}, ${showName}, 'Mon', '09:00', '11:00', ${djName ?? null})
+    sql`INSERT INTO scraped_shows (station_id, show_name, day_of_week, start_time, end_time, dj_name, source_url, extraction)
+        VALUES (${stationId}, ${showName}, 'Mon', '09:00', '11:00', ${djName ?? null}, 'https://example.invalid/schedule', 'llm')
         RETURNING id`,
   );
   return (rows.rows[0] as { id: number }).id;
@@ -202,6 +205,55 @@ describe("applyStationScheduleMigration — DML ledger gate", () => {
       // The dirty row must remain unchanged because the cleanup did not run.
       expect(await showExists(showId)).toBe(true);
       expect(await getShowName(showId)).toBe(dirtyName);
+    },
+  );
+});
+
+describe("applyStationScheduleMigration — extraction receipt migration", () => {
+  it(
+    "backfills schedule receipts from the station source and stays idempotent",
+    { timeout: 30_000 },
+    async (ctx) => {
+      if (!dbAvailable || !stationId) return ctx.skip();
+
+      await db.execute(sql`
+        ALTER TABLE scraped_shows ALTER COLUMN source_url DROP NOT NULL;
+        ALTER TABLE scraped_shows ALTER COLUMN extraction DROP NOT NULL;
+      `);
+      await db.execute(sql`
+        ALTER TABLE scraped_shows DROP CONSTRAINT IF EXISTS scraped_shows_extraction_ck
+      `);
+      const rows = await db.execute(sql`
+        INSERT INTO scraped_shows
+          (station_id, show_name, day_of_week, start_time, end_time, source_url, extraction)
+        VALUES (${stationId}, ${`Legacy receipt ${run}`}, 'Tue', '12:00', '13:00', NULL, NULL)
+        RETURNING id
+      `);
+      const rowId = (rows.rows[0] as { id: number }).id;
+      await db.execute(sql`
+        UPDATE stations
+        SET homepage_url = 'https://example.invalid/legacy-schedule'
+        WHERE id = ${stationId}
+      `);
+
+      await applyStationScheduleMigration();
+
+      const receipt = await db.execute(sql`
+        SELECT source_url, scraped_at, extraction
+        FROM scraped_shows WHERE id = ${rowId}
+      `);
+      expect(receipt.rows).toHaveLength(1);
+      expect(receipt.rows[0]).toMatchObject({
+        source_url: "https://example.invalid/legacy-schedule",
+        extraction: "llm",
+      });
+      expect((receipt.rows[0] as { scraped_at: Date | null }).scraped_at).not.toBeNull();
+
+      await applyStationScheduleMigration();
+      const ledger = await db.execute(
+        sql`SELECT name FROM migration_completions WHERE name = ${RECEIPT_LEDGER_KEY}`,
+      );
+      expect(ledger.rows).toHaveLength(1);
     },
   );
 });
