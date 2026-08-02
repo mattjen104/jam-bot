@@ -87,7 +87,8 @@ describe("live sentence", () => {
       currentTrack: makeSpin({ title: "Change", artist: "Deftones", isLibraryHit: true }),
     }));
     const sentence = leadingSentence(container);
-    expect(sentence.textContent).toBe("Diane Kamikaze is playing Change by Deftones on Test FM");
+    expect(sentence.textContent).toBe("Diane Kamikaze is playing Deftones.");
+    expect(container.querySelector(".fdrow__context")?.textContent).toBe("Morning Mix · Test FM");
     expect(sentence.textContent).not.toMatch(/library/i);
   });
 
@@ -96,7 +97,7 @@ describe("live sentence", () => {
       djName: "Diane Kamikaze",
       currentTrack: makeSpin({ title: "Change", artist: "Deftones", isLibraryHit: true }),
     }));
-    expect(leadingSentence(container).textContent).toBe("Diane Kamikaze is playing Change by Deftones on Test FM");
+    expect(leadingSentence(container).textContent).toBe("Diane Kamikaze is playing Deftones.");
     expect(container.querySelector(".fdrow")?.classList.contains("fdrow--t1")).toBe(true);
   });
 
@@ -104,7 +105,7 @@ describe("live sentence", () => {
     const { container } = renderRow(makeDialStation(), makeShow({
       crossings: 2, topArtists: ["Deftones"], currentTrack: null,
     }));
-    expect(leadingSentence(container).textContent).toContain("already this set");
+    expect(leadingSentence(container).textContent).toBe("Now playing: Deftones.");
     expect(container.querySelector(".fdrow")?.classList.contains("fdrow--z1")).toBe(true);
   });
 
@@ -112,14 +113,14 @@ describe("live sentence", () => {
     const { container } = renderRow(makeDialStation(), makeShow({
       djName: "Diane Kamikaze", currentTrack: makeSpin({ title: " ", artist: "Deftones" }),
     }));
-    expect(leadingSentence(container).textContent).toBe("Diane Kamikaze is playing Deftones on Test FM");
+    expect(leadingSentence(container).textContent).toBe("Diane Kamikaze is playing Deftones");
   });
 
   it("uses a track-led sentence when no current DJ is attached", () => {
     const { container } = renderRow(makeDialStation(), makeShow({
       djName: null, currentTrack: makeSpin({ title: "My Own Summer", artist: "Deftones" }),
     }));
-    expect(leadingSentence(container).textContent).toBe("Deftones is playing My Own Summer on Test FM");
+    expect(leadingSentence(container).textContent).toBe("Now playing: My Own Summer by Deftones");
   });
 
   it("removes repeated and placeholder values before building the sentence", () => {
@@ -128,7 +129,7 @@ describe("live sentence", () => {
       currentTrack: makeSpin({ title: "Deftones", artist: "Test FM" }),
       showName: "Unknown show",
     }));
-    expect(leadingSentence(container).textContent).toBe("Test FM is playing Deftones on Test FM");
+    expect(leadingSentence(container).textContent).toBe("Test FM is playing Deftones");
     expect(container.textContent).not.toMatch(/unknown show/i);
   });
 });
@@ -138,7 +139,7 @@ describe("show context and missing attribution", () => {
     const { container } = renderRow(makeDialStation(), makeShow({
       djName: "DJ Cosmos", currentTrack: makeSpin(),
     }));
-    expect(container.querySelector(".fdrow__context")?.textContent).toBe("Morning Mix");
+    expect(container.querySelector(".fdrow__context")?.textContent).toBe("Morning Mix · Test FM");
     expect(container.querySelector(".fdrow__t2")).toBeNull();
     expect(container.querySelector(".fdrow__bare-track")).toBeNull();
   });
@@ -147,7 +148,7 @@ describe("show context and missing attribution", () => {
     const { container } = renderRow(makeDialStation(), makeShow({
       djName: null, showName: " Unknown Show ", currentTrack: makeSpin(),
     }));
-    expect(container.querySelector(".fdrow__context")).toBeNull();
+    expect(container.querySelector(".fdrow__context")?.textContent).toBe("Test FM");
     expect(container.textContent).not.toMatch(/unknown show|continuous/i);
   });
 
@@ -155,7 +156,7 @@ describe("show context and missing attribution", () => {
     const { container } = renderRow(makeDialStation({ automationClass: "automated" }), makeShow({
       djName: null, showName: "Unknown show", currentTrack: makeSpin(),
     }));
-    expect(container.querySelector(".fdrow__context")?.textContent).toBe("Continuous");
+    expect(container.querySelector(".fdrow__context")?.textContent).toBe("Continuous · Test FM");
   });
 
   it("does not reuse a recently-ended DJ as if they were current", () => {
@@ -175,7 +176,7 @@ describe("fallback and interaction", () => {
   it("keeps the useful weak-match reason and station label when no live show exists", () => {
     const { container } = renderRow(makeDialStation(), null);
     expect(leadingSentence(container).textContent).toContain("Lore can't see who's playing");
-    expect(container.querySelector(".fdrow__t3")?.textContent).toBe("Test FM");
+    expect(container.querySelector(".fdrow__context")?.textContent).toBe("Test FM");
   });
 
   it("has one row-level tune-in target, no nested entity links, and an earlier control", () => {

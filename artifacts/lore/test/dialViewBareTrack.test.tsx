@@ -178,7 +178,8 @@ describe("FrontDoorRow Zone 3 — consolidated live sentence", () => {
     renderDial();
 
     const sentence = document.querySelector(".fdrow__t1")?.textContent ?? "";
-    expect(sentence).toBe("DJ Tester is playing Gravity Falls by Pixies on Test Radio");
+    expect(sentence).toBe("DJ Tester is playing Gravity Falls by Pixies");
+    expect(document.querySelector(".fdrow__context")?.textContent).toBe("Morning Show · Test Radio");
     expect(document.querySelector(".fdrow__bare-track")).toBeNull();
   });
 
@@ -196,7 +197,8 @@ describe("FrontDoorRow Zone 3 — consolidated live sentence", () => {
     renderDial();
 
     const sentence = document.querySelector(".fdrow__t1")?.textContent ?? "";
-    expect(sentence).toBe("Grateful Dead is playing Dark Star on Test Radio");
+    expect(sentence).toBe("Now playing: Dark Star by Grateful Dead");
+    expect(document.querySelector(".fdrow__context")?.textContent).toBe("Morning Show · Test Radio");
     expect(document.querySelector(".fdrow__bare-track")).toBeNull();
   });
 

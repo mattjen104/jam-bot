@@ -2916,12 +2916,19 @@
   color: hsl(var(--muted-foreground) / 0.7);
   margin-bottom: 5px;
 }
-.fdrow__context { color: hsl(var(--muted-foreground) / 0.65); }
+.fdrow__context {
+  color: hsl(var(--muted-foreground) / 0.65);
+  letter-spacing: 0.02em;
+}
+.fdrow__context span {
+  color: hsl(var(--muted-foreground) / 0.35);
+  padding: 0 3px;
+}
 .fdrow__first-spin { color: hsl(var(--library) / 0.8); font-style: normal; }
 
 @media (max-width: 420px) {
   .fdrow__t1 { font-size: 15px; }
-  .fdrow__context { display: none; }
+  .fdrow__context { display: block; }
 }
 
 /* Zone 3 lifetime overlap caption — "N artists you know play here" */

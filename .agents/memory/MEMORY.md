@@ -72,3 +72,4 @@
 - [Dial crossing computation — three gaps](dial-crossing-gaps.md) — (1) recent-spins API capped at 8/station (raise to 80, chip strip already slices client-side); (2) artistCrossings excluded from station-level sum; (3) live artist-hit not checked in reason() rung 1 (add rung 1.5 for currentTrack.isArtistHit).
 - [Crossings soft-artist array bottleneck](crossings-soft-artist-query.md) — passing ~1500 unresolved artist names as a SQL literal array to ANY() caused 20s+ query; replace with a SQL subquery so Postgres plans a hash-join.
 - [Library API total count](library-total-count.md) — GET /api/me/library omits total on pages 2+; run COUNT(*) only on first page (cursor IS NULL) and spread into response; client reads keptData.pages[0].total.
+- [Lore crossing row hierarchy](lore-crossing-row-hierarchy.md) — crossing artist leads; station is a stable byline; suppress titles only for crossing-driven rows, not ordinary now-playing rows.

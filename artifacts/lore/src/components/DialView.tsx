@@ -140,9 +140,9 @@ function liveSentence(
   stationName: string,
   show: DialShow | null,
 ): { node: ReactNode; hasTrack: boolean } | null {
-  const station = cleanLiveValue(stationName);
-  if (!station || !show) return null;
+  if (!show) return null;
 
+  const station = cleanLiveValue(stationName);
   const dj = cleanLiveValue(show?.djName);
   const track = cleanLiveValue(show?.currentTrack?.title);
   const artist = cleanLiveValue(show?.currentTrack?.artist);
@@ -152,32 +152,98 @@ function liveSentence(
   if (dj) {
     if (usableTrack && usableArtist) {
       return {
-        node: <>{dj} is playing <b>{usableTrack}</b> by <b>{usableArtist}</b> on {station}</>,
+        node: <>{dj} is playing <b>{usableTrack}</b> by <b>{usableArtist}</b></>,
         hasTrack: true,
       };
     }
     if (usableArtist) {
-      return { node: <>{dj} is playing <b>{usableArtist}</b> on {station}</>, hasTrack: true };
+      return { node: <>{dj} is playing <b>{usableArtist}</b></>, hasTrack: true };
     }
     if (usableTrack) {
-      return { node: <>{dj} is playing <b>{usableTrack}</b> on {station}</>, hasTrack: true };
+      return { node: <>{dj} is playing <b>{usableTrack}</b></>, hasTrack: true };
     }
-    return { node: <>{dj} is on {station}</>, hasTrack: false };
+    return { node: <>{dj} is on air</>, hasTrack: false };
   }
 
-  if (usableArtist && usableTrack) {
-    return { node: <><b>{usableArtist}</b> is playing <b>{usableTrack}</b> on {station}</>, hasTrack: true };
+  if (usableTrack && usableArtist) {
+    return { node: <>Now playing: <b>{usableTrack}</b> by <b>{usableArtist}</b></>, hasTrack: true };
   }
   if (usableArtist) {
-    return { node: <><b>{usableArtist}</b> is playing on {station}</>, hasTrack: true };
+    return { node: <>Now playing: <b>{usableArtist}</b></>, hasTrack: true };
   }
   if (usableTrack) {
-    return { node: <><b>{usableTrack}</b> is playing on {station}</>, hasTrack: true };
+    return { node: <>Now playing: <b>{usableTrack}</b></>, hasTrack: true };
   }
 
-  // Without current attribution, preserve the established weak-match reason
-  // instead of manufacturing a generic sentence.
+  // Without current track attribution, preserve the established weak-match
+  // reason instead of manufacturing a generic sentence.
   return null;
+}
+
+function uniqueArtistNames(names: string[]): string[] {
+  const seen = new Set<string>();
+  return names.filter((name) => {
+    const cleaned = cleanLiveValue(name);
+    if (!cleaned) return false;
+    const key = cleaned.toLocaleLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).map((name) => cleanLiveValue(name)!).slice(0, 3);
+}
+
+/**
+ * Crossing rows answer "why this station?" rather than "what exact song is
+ * playing?" The station is deliberately omitted here because it is always
+ * present in the byline below.
+ */
+function crossingSentence(
+  show: DialShow | null,
+  stationCrossings: number,
+  stationArtistCrossings: number,
+): ReactNode | null {
+  if (!show) return null;
+
+  const current = show.currentTrack;
+  const isCurrentCrossing = Boolean(current?.isLibraryHit || current?.isArtistHit);
+  const currentArtist = isCurrentCrossing ? cleanLiveValue(current?.artist) : null;
+  const aggregateArtists = show.crossings > 0
+    ? show.topArtists
+    : show.topArtistNames;
+  const artists = uniqueArtistNames(
+    currentArtist ? [currentArtist] : aggregateArtists,
+  );
+  const artistList = nameNodes(artists);
+  const dj = cleanLiveValue(show.djName);
+
+  if (artistList) {
+    return dj
+      ? <>{dj} is playing {artistList}.</>
+      : <>Now playing: {artistList}.</>;
+  }
+
+  const exactCount = show.crossings || stationCrossings;
+  if (exactCount > 0) {
+    return <>{exactCount} {exactCount === 1 ? "track" : "tracks"} from your library have aired.</>;
+  }
+
+  const artistCount = show.artistCrossings || stationArtistCrossings;
+  if (artistCount > 0) {
+    return <>{artistCount} {artistCount === 1 ? "track" : "tracks"} by artists you like have aired.</>;
+  }
+
+  return null;
+}
+
+function hasCrossingEvidence(show: DialShow | null): boolean {
+  return Boolean(
+    show && (
+      show.currentTrack?.isLibraryHit ||
+      show.currentTrack?.isArtistHit ||
+      show.crossings > 0 ||
+      show.artistCrossings > 0
+    ),
+  );
 }
 
 /** One sentence per rung; returns the strongest rung that applies (spec §3).
@@ -289,7 +355,9 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onE
   const rz = reason(show, ds.crossings, ds.artistCrossings);
   const { enabled: socialEnabled } = useSocialMode();
 
+  const crossing = crossingSentence(show, ds.crossings, ds.artistCrossings);
   const live = liveSentence(ds.station.name, show);
+  const hasCrossing = crossing != null;
   const rawShow = cleanLiveValue(show?.showName);
   const dj = cleanLiveValue(show?.djName);
   // A show is a quiet cue only when it adds context beyond the person in the
@@ -319,19 +387,22 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onE
       onKeyDown={(e) => e.key === "Enter" && onTuneIn()}
     >
       <div className="fdrow__c">
-        {/* Tier 1: reason sentence — leads at full display weight */}
-        <div className={`fdrow__t1 ${live ? "fdrow__live-sentence" : rz.cls}`}>
-          {live?.node ?? rz.node}
+        {/* Tier 1: crossing artist/reason leads; ordinary live rows retain
+            their full title-inclusive now-playing sentence. */}
+        <div className={`fdrow__t1 ${hasCrossing ? rz.cls : live ? "fdrow__live-sentence" : rz.cls}`}>
+          {crossing ?? live?.node ?? rz.node}
         </div>
 
-        {/* Show identity belongs to Schedule; keep only a quiet cue here. */}
-        {(showContext || isExplicitlyContinuous) && (
+        {/* The station is a stable destination label. Pair it with a valid
+            show, but never repeat DJ/station or expose placeholder metadata. */}
+        {(showContext || isExplicitlyContinuous || ds.station.name) && (
           <div className="fdrow__t3 fdrow__context">
-            {showContext ?? "Continuous"}
+            {showContext
+              ? <>{showContext} <span aria-hidden="true">·</span> {ds.station.name}</>
+              : isExplicitlyContinuous
+                ? <>Continuous <span aria-hidden="true">·</span> {ds.station.name}</>
+                : ds.station.name}
           </div>
-        )}
-        {!live && !showContext && !isExplicitlyContinuous && (
-          <div className="fdrow__t3">{ds.station.name}</div>
         )}
 
         {/* Zone 3 lifetime overlap caption: shown when the reason sentence carries no
