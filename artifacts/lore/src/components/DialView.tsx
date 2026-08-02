@@ -15,6 +15,8 @@ import { StationLane } from "./StationLane";
 import { ContextRail } from "./ContextRail";
 import { SearchOverlay } from "./SearchOverlay";
 import { usePlayer } from "../player/PlayerProvider";
+import { LibraryChip } from "./LibraryChip";
+import { ManualImportModal } from "./ManualImportModal";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -993,6 +995,7 @@ export function DialView() {
   const [currentShow, setCurrentShow] = useState<DialShow | null>(null);
   const [currentDjName, setCurrentDjName] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
 
   const { stations, isLoading, isCoreLoading, liveLoading, crossingsLoading, hasLibrary, overlapByPickerId, pickerNameToId } = useDialData();
   // Delay skeleton visibility so fast loads (< 150 ms) never flash shimmer rows.
@@ -1247,6 +1250,7 @@ export function DialView() {
       return (
         <div className="dial-topbar">
           <span className="dial-topbar__wordmark">Lore</span>
+          <LibraryChip onOpen={() => setImportModalOpen(true)} />
           <button
             type="button"
             className="dial-topbar__search"
@@ -1265,6 +1269,7 @@ export function DialView() {
           <button type="button" className="dial-topbar__crumb" onClick={goAll}>Radio</button>
           <span className="dial-topbar__sep">›</span>
           <span className="dial-topbar__title dial-topbar__title--active">{currentStation.station.name}</span>
+          <LibraryChip onOpen={() => setImportModalOpen(true)} />
           <button type="button" className="dial-topbar__back" onClick={goAll}>↑ Back</button>
         </div>
       );
@@ -1281,6 +1286,7 @@ export function DialView() {
           <span className="dial-topbar__title dial-topbar__title--active" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
             {currentShow.showName}
           </span>
+          <LibraryChip onOpen={() => setImportModalOpen(true)} />
           <button type="button" className="dial-topbar__back" onClick={() => goStation(currentStation.station.slug)}>↑ Back</button>
         </div>
       );
@@ -1291,6 +1297,7 @@ export function DialView() {
           <button type="button" className="dial-topbar__crumb" onClick={goAll}>Radio</button>
           <span className="dial-topbar__sep">›</span>
           <span className="dial-topbar__title dial-topbar__title--active">{currentDjName}</span>
+          <LibraryChip onOpen={() => setImportModalOpen(true)} />
           <button type="button" className="dial-topbar__back" onClick={goAll}>↑ Back</button>
         </div>
       );
@@ -1314,6 +1321,11 @@ export function DialView() {
           onStationDrill={(slug) => { goStation(slug); setSearchOpen(false); }}
           onShowDrill={(show, station) => { goShow(show, station); setSearchOpen(false); }}
         />
+      )}
+
+      {/* Library import modal — triggered by LibraryChip */}
+      {importModalOpen && (
+        <ManualImportModal onClose={() => setImportModalOpen(false)} />
       )}
 
       {/* Topbar */}

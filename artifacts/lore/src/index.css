@@ -548,6 +548,63 @@
 .srch-row__badge--sel { border-color: rgba(200,169,107,.35); color: hsl(var(--picker)); background: rgba(200,169,107,.10); }
 .srch-spin { animation: lore-spin 1s linear infinite; display: inline-block; }
 
+/* ── Library chip — compact pill in the DialView topbar ── */
+.dial-topbar__library-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px 3px 7px;
+  border-radius: 999px;
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+  line-height: 1;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 110px;
+  overflow: hidden;
+  flex-shrink: 1;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+/* empty — muted nudge */
+.dial-topbar__library-chip--empty {
+  background: hsl(var(--card));
+  color: hsl(var(--faint));
+  border: 1px solid hsl(var(--border));
+}
+.dial-topbar__library-chip--empty:hover {
+  color: hsl(var(--dim));
+  border-color: hsl(var(--foreground) / 0.25);
+}
+/* running — accent tint, spinner */
+.dial-topbar__library-chip--running {
+  background: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary));
+  border: 1px solid hsl(var(--primary) / 0.3);
+}
+.dial-topbar__library-chip--running:hover {
+  background: hsl(var(--primary) / 0.16);
+}
+/* done — library tint */
+.dial-topbar__library-chip--done {
+  background: hsl(var(--keep) / 0.1);
+  color: hsl(var(--keep));
+  border: 1px solid hsl(var(--keep) / 0.3);
+}
+.dial-topbar__library-chip--done:hover {
+  background: hsl(var(--keep) / 0.18);
+}
+/* spinning icon for running state */
+.dial-chip__spin {
+  display: inline-block;
+  animation: lore-spin 1s linear infinite;
+  font-style: normal;
+}
+/* muted plus glyph in done state */
+.dial-chip__plus {
+  opacity: 0.5;
+}
+
 /* ── Search icon in topbar ── */
 .dial-topbar__search {
   background: none;

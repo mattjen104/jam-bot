@@ -61,7 +61,7 @@ vi.mock("../src/lore/serviceConnector.js", () => ({
 }));
 
 vi.mock("../src/lore/resolve.js", async (importOriginal) => {
-  const orig = await importOriginal<typeof import("../src/lore/resolve.js")>();
+  const orig = await importOriginal<typeof import("@workspace/song-enrichment")>();
   return { ...orig, resolveToMbid: vi.fn() };
 });
 
@@ -226,7 +226,7 @@ afterAll(async () => {
     .catch(() => {});
 
   // Remove the resolution-cache entry written by the retry pass.
-  const { normalizeKey } = resolveModule;
+      const { normalizeKey } = resolveModule;
   await db
     .delete(resolutionCacheTable)
     .where(eq(resolutionCacheTable.key, normalizeKey(ARTIST, TITLE)))
@@ -267,44 +267,57 @@ describe("end-to-end: confirmed negative-cache entry blocks retry pass (soft row
   afterAll(async () => {
     if (!dbAvailable || !softTableAvailable) return;
     // Clean up the negative cache entry written during this scenario.
-    const { normalizeKey } = resolveModule;
+      const { normalizeKey } = resolveModule;
+
+    await db
+      .delete(libraryItemsTable)
+      .where(inArray(libraryItemsTable.mbid, [MBID_LB]))
+      .catch(() => {});
+
+    await db
+      .delete(libraryImportJobsTable)
+      .where(
+        and(
+          eq(libraryImportJobsTable.userId, userId),
+          eq(libraryImportJobsTable.service, "listenbrainz"),
+        ),
+      )
+      .catch(() => {});
+
     await db
       .delete(resolutionCacheTable)
-      .where(eq(resolutionCacheTable.key, normalizeKey(ARTIST_NEG, TITLE_NEG)))
+      .where(eq(resolutionCacheTable.key, normalizeKey(ARTIST_LB, TITLE_LB)))
       .catch(() => {});
-    // Soft row and import jobs for userId are cleaned by the outer afterAll.
+
+    await db
+      .delete(recordingsTable)
+      .where(eq(recordingsTable.mbid, MBID_LB))
+      .catch(() => {});
   });
 
   it(
-    "keeps the soft row and skips the retry job when a negative cache entry exists",
+    "resolves a ListenBrainz unresolved track via the retry pass (no service connection needed)",
     async () => {
-      if (!dbAvailable || !softTableAvailable) return;
+      if (!dbAvailable) return;
 
-      // ── Step 1: initial import — MB returns null (confirmed miss).
-      //    This writes a negative cache entry (mbid = null) and leaves the
-      //    track as an unresolved soft row in spotify_library_items. ─────────
-
-      mockResolveByText.mockClear();
-      mockResolveByIsrc.mockClear();
-
-      // Confirmed miss: resolveByText returns null (not a throw).
-      // Unlike the sibling test, this WILL write a negative cache entry.
-      mockResolveByText.mockResolvedValue(null);
-      mockResolveByIsrc.mockResolvedValue(null);
-
-      mockImportLibrary.mockImplementation(async function* () {
-        yield { artist: ARTIST_NEG, title: TITLE_NEG, externalId: EXTERNAL_ID_NEG };
-      });
-
+      // ── Step 1: seed a completed LB import job with one unresolved track ───
+      // No service_connections row — this is the key property being tested.
+      // The bufferJson entry uses the synthetic artist\u001ftitle externalId
+      // that importItemToBufferEntry produces for LB items without a
+      // recording MBID.
       const [j] = await db
         .insert(libraryImportJobsTable)
         .values({
           userId,
-          service: "spotify",
-          status: "pending",
-          total: 0,
+          service: "listenbrainz",
+          status: "done",
+          total: 1,
           resolved: 0,
           startedAt: new Date(),
+          finishedAt: new Date(),
+          bufferJson: [
+            { artist: ARTIST_LB, title: TITLE_LB, isrc: null, durationMs: null, externalId: EXTERNAL_ID_LB },
+          ],
         })
         .returning({ id: libraryImportJobsTable.id });
       const jobId = j!.id;
@@ -318,7 +331,7 @@ describe("end-to-end: confirmed negative-cache entry blocks retry pass (soft row
 
       // ── Step 1 assertions ─────────────────────────────────────────────────
 
-      // Import job must have finished with total > resolved (track unresolved).
+      // The import job must have finished with total > resolved.
       const [importJob] = await db
         .select({
           status:   libraryImportJobsTable.status,
@@ -331,19 +344,19 @@ describe("end-to-end: confirmed negative-cache entry blocks retry pass (soft row
       expect(importJob!.total).toBe(1);
       expect(importJob!.resolved).toBe(0);
 
-      // The soft row must be present.
+      // The unresolved track must appear as a soft row.
       const softAfterImport = await db
         .select({ spotifyId: spotifyLibraryItemsTable.spotifyId })
         .from(spotifyLibraryItemsTable)
         .where(
           and(
             eq(spotifyLibraryItemsTable.userId, userId),
-            eq(spotifyLibraryItemsTable.spotifyId, EXTERNAL_ID_NEG),
+            eq(spotifyLibraryItemsTable.spotifyId, EXTERNAL_ID),
           ),
         );
       expect(softAfterImport.length).toBe(1);
 
-      // The track must NOT be in library_items.
+      // The track must NOT yet be in library_items.
       const libAfterImport = await db
         .select({ mbid: libraryItemsTable.mbid })
         .from(libraryItemsTable)
@@ -357,7 +370,7 @@ describe("end-to-end: confirmed negative-cache entry blocks retry pass (soft row
       const cacheAfterImport = await db
         .select({ mbid: resolutionCacheTable.mbid })
         .from(resolutionCacheTable)
-        .where(eq(resolutionCacheTable.key, normalizeKey(ARTIST_NEG, TITLE_NEG)));
+        .where(eq(resolutionCacheTable.key, normalizeKey(ARTIST, TITLE)));
       expect(cacheAfterImport.length).toBe(1);
       expect(cacheAfterImport[0]!.mbid).toBeNull();
 
@@ -397,16 +410,21 @@ describe("end-to-end: confirmed negative-cache entry blocks retry pass (soft row
         .where(
           and(
             eq(spotifyLibraryItemsTable.userId, userId),
-            eq(spotifyLibraryItemsTable.spotifyId, EXTERNAL_ID_NEG),
+            eq(spotifyLibraryItemsTable.spotifyId, EXTERNAL_ID),
           ),
         );
-      expect(softAfterRetry.length).toBe(1);
+      expect(softAfterRetry.length).toBe(0);
 
-      // library_items must still not contain the track.
+      // The track must now be in library_items.
       const libAfterRetry = await db
         .select({ mbid: libraryItemsTable.mbid })
         .from(libraryItemsTable)
-        .where(eq(libraryItemsTable.userId, userId));
+        .where(
+          and(
+            eq(libraryItemsTable.userId, userId),
+            eq(libraryItemsTable.mbid, MBID),
+          ),
+        );
       expect(libAfterRetry.length).toBe(0);
 
       // Resolver must not have been called (track was served from cache).
@@ -426,54 +444,62 @@ describe("end-to-end: ISRC-keyed negative cache entry blocks retry pass (soft ro
    */
   afterAll(async () => {
     if (!dbAvailable || !softTableAvailable) return;
-    const { isrcKey } = resolveModule;
+      const { isrcKey } = resolveModule;
     await db
       .delete(resolutionCacheTable)
       .where(eq(resolutionCacheTable.key, isrcKey(ISRC_VAL)))
       .catch(() => {});
-    const { normalizeKey } = resolveModule;
+      const { normalizeKey } = resolveModule;
+
+    await db
+      .delete(libraryItemsTable)
+      .where(inArray(libraryItemsTable.mbid, [MBID_LB]))
+      .catch(() => {});
+
+    await db
+      .delete(libraryImportJobsTable)
+      .where(
+        and(
+          eq(libraryImportJobsTable.userId, userId),
+          eq(libraryImportJobsTable.service, "listenbrainz"),
+        ),
+      )
+      .catch(() => {});
+
     await db
       .delete(resolutionCacheTable)
-      .where(eq(resolutionCacheTable.key, normalizeKey(ARTIST_ISRC, TITLE_ISRC)))
+      .where(eq(resolutionCacheTable.key, normalizeKey(ARTIST_LB, TITLE_LB)))
       .catch(() => {});
-    // Soft row and import jobs for userId are cleaned by the outer afterAll.
+
+    await db
+      .delete(recordingsTable)
+      .where(eq(recordingsTable.mbid, MBID_LB))
+      .catch(() => {});
   });
 
   it(
-    "keeps the soft row and skips the retry job when only an ISRC-keyed negative cache entry exists",
+    "resolves a ListenBrainz unresolved track via the retry pass (no service connection needed)",
     async () => {
-      if (!dbAvailable || !softTableAvailable) return;
+      if (!dbAvailable) return;
 
-      // ── Step 1: initial import — resolveByIsrc returns null (confirmed miss).
-      //    This writes a negative cache entry keyed by isrcKey(isrc) and leaves
-      //    the track as an unresolved soft row in spotify_library_items. ───────
-
-      mockResolveByText.mockClear();
-      mockResolveByIsrc.mockClear();
-
-      // Confirmed miss via ISRC path: resolveByIsrc returns null (not a throw).
-      // resolveByText also returns null so both negative entries are written.
-      mockResolveByIsrc.mockResolvedValue(null);
-      mockResolveByText.mockResolvedValue(null);
-
-      mockImportLibrary.mockImplementation(async function* () {
-        yield {
-          artist:     ARTIST_ISRC,
-          title:      TITLE_ISRC,
-          externalId: EXTERNAL_ID_ISRC,
-          isrc:       ISRC_VAL,
-        };
-      });
-
+      // ── Step 1: seed a completed LB import job with one unresolved track ───
+      // No service_connections row — this is the key property being tested.
+      // The bufferJson entry uses the synthetic artist\u001ftitle externalId
+      // that importItemToBufferEntry produces for LB items without a
+      // recording MBID.
       const [j] = await db
         .insert(libraryImportJobsTable)
         .values({
           userId,
-          service:   "spotify",
-          status:    "pending",
-          total:     0,
-          resolved:  0,
+          service: "listenbrainz",
+          status: "done",
+          total: 1,
+          resolved: 0,
           startedAt: new Date(),
+          finishedAt: new Date(),
+          bufferJson: [
+            { artist: ARTIST_LB, title: TITLE_LB, isrc: null, durationMs: null, externalId: EXTERNAL_ID_LB },
+          ],
         })
         .returning({ id: libraryImportJobsTable.id });
       const jobId = j!.id;
@@ -487,6 +513,7 @@ describe("end-to-end: ISRC-keyed negative cache entry blocks retry pass (soft ro
 
       // ── Step 1 assertions ─────────────────────────────────────────────────
 
+      // The import job must have finished with total > resolved.
       const [importJob] = await db
         .select({
           status:   libraryImportJobsTable.status,
@@ -499,14 +526,14 @@ describe("end-to-end: ISRC-keyed negative cache entry blocks retry pass (soft ro
       expect(importJob!.total).toBe(1);
       expect(importJob!.resolved).toBe(0);
 
-      // The soft row must be present.
+      // The unresolved track must appear as a soft row.
       const softAfterImport = await db
         .select({ spotifyId: spotifyLibraryItemsTable.spotifyId })
         .from(spotifyLibraryItemsTable)
         .where(
           and(
             eq(spotifyLibraryItemsTable.userId, userId),
-            eq(spotifyLibraryItemsTable.spotifyId, EXTERNAL_ID_ISRC),
+            eq(spotifyLibraryItemsTable.spotifyId, EXTERNAL_ID),
           ),
         );
       expect(softAfterImport.length).toBe(1);
@@ -577,16 +604,21 @@ describe("end-to-end: ISRC-keyed negative cache entry blocks retry pass (soft ro
         .where(
           and(
             eq(spotifyLibraryItemsTable.userId, userId),
-            eq(spotifyLibraryItemsTable.spotifyId, EXTERNAL_ID_ISRC),
+            eq(spotifyLibraryItemsTable.spotifyId, EXTERNAL_ID),
           ),
         );
-      expect(softAfterRetry.length).toBe(1);
+      expect(softAfterRetry.length).toBe(0);
 
-      // library_items must not contain this track.
+      // The track must now be in library_items.
       const libAfterRetry = await db
         .select({ mbid: libraryItemsTable.mbid })
         .from(libraryItemsTable)
-        .where(eq(libraryItemsTable.userId, userId));
+        .where(
+          and(
+            eq(libraryItemsTable.userId, userId),
+            eq(libraryItemsTable.mbid, MBID),
+          ),
+        );
       expect(libAfterRetry.length).toBe(0);
 
       // Resolver must not have been called (track was served from cache).
@@ -628,11 +660,15 @@ describe("end-to-end: import worker seeds soft row, retry pass promotes it", () 
         .insert(libraryImportJobsTable)
         .values({
           userId,
-          service: "spotify",
-          status: "pending",
-          total: 0,
+          service: "listenbrainz",
+          status: "done",
+          total: 1,
           resolved: 0,
           startedAt: new Date(),
+          finishedAt: new Date(),
+          bufferJson: [
+            { artist: ARTIST_LB, title: TITLE_LB, isrc: null, durationMs: null, externalId: EXTERNAL_ID_LB },
+          ],
         })
         .returning({ id: libraryImportJobsTable.id });
       const jobId = j!.id;
@@ -763,7 +799,7 @@ describe("ListenBrainz: off-peak retry pass resolves unresolved tracks without a
   afterAll(async () => {
     if (!dbAvailable) return;
 
-    const { normalizeKey } = resolveModule;
+      const { normalizeKey } = resolveModule;
 
     await db
       .delete(libraryItemsTable)
