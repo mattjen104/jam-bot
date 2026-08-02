@@ -24,7 +24,7 @@ export function parseCsv(text: string): Track[] {
     h === "track name" || h === "name" || h === "title" || h === "song",
   );
   const artistIdx = headers.findIndex((h) =>
-    h === "artist name" || h === "artist" || h === "artist(s)" || h === "artists",
+    h === "artist name" || h === "artist" || h === "artist(s)" || h === "artists" || h === "artist name(s)",
   );
 
   const tIdx = titleIdx >= 0 ? titleIdx : 0;
@@ -666,6 +666,22 @@ export function ManualImportModal({ onClose }: Props) {
         {/* ── Tracks mode ────────────────────────────────────────────────── */}
         {mode === "tracks" && (
           <>
+            {/* Collapsed instructions summary (shown after arriving from a service with steps) */}
+            {(selectedService === "exportify" || selectedService === "applemusiccsv") && (
+              <div
+                className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 font-mono text-[10px] text-muted-foreground"
+                style={{ background: "hsl(var(--muted)/0.15)" }}
+                data-testid="service-summary-banner"
+              >
+                <FileText size={10} aria-hidden className="shrink-0" />
+                <span>
+                  {selectedService === "exportify"
+                    ? "Imported from exportify.net"
+                    : "Imported from TuneMyMusic"}
+                </span>
+              </div>
+            )}
+
             {/* File upload button */}
             <div className="flex items-center gap-2">
               <button
@@ -696,12 +712,43 @@ export function ManualImportModal({ onClose }: Props) {
               data-testid="tracks-textarea"
             />
 
-            {/* Parse preview */}
-            {rawInput.trim() && (
-              <p className="font-mono text-[11px] text-muted-foreground" data-testid="track-count">
-                {tracks.length > 0
-                  ? <><span className="text-foreground">{tracks.length.toLocaleString()}</span> tracks found</>
-                  : <span className="text-destructive">No tracks recognised — check the format above.</span>}
+            {/* Parse preview — track list or error */}
+            {rawInput.trim() && tracks.length > 0 && (
+              <div
+                className="rounded-lg border border-border overflow-hidden"
+                style={{ background: "hsl(var(--muted)/0.15)" }}
+                data-testid="track-preview"
+              >
+                <div className="px-3 py-1.5 border-b border-border/50 font-mono text-[10px] text-muted-foreground">
+                  <span className="text-foreground">{tracks.length.toLocaleString()}</span> tracks found
+                </div>
+                <div className="overflow-y-auto" style={{ maxHeight: "250px" }} data-testid="track-preview-list">
+                  <ul>
+                    {tracks.slice(0, 50).map((track, i) => (
+                      <li
+                        key={i}
+                        className="px-3 py-1 font-mono text-[11px] text-foreground border-b border-border/20 last:border-0"
+                      >
+                        <span className="text-muted-foreground">{track.artist}</span>
+                        <span className="mx-1 text-muted-foreground/50">–</span>
+                        {track.title}
+                      </li>
+                    ))}
+                    {tracks.length > 50 && (
+                      <li className="px-3 py-1.5 font-mono text-[10px] text-muted-foreground/60">
+                        …and {(tracks.length - 50).toLocaleString()} more
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            {rawInput.trim() && tracks.length === 0 && (
+              <p className="font-mono text-[11px] text-destructive" data-testid="track-count">
+                {rawInput.includes(",")
+                  ? "Couldn\u2019t find \u2018Track Name\u2019 or \u2018Artist Name(s)\u2019 columns \u2014 try re-exporting from exportify.net"
+                  : "No tracks recognised \u2014 use one track per line: Artist \u2013 Title"}
               </p>
             )}
 
@@ -724,7 +771,7 @@ export function ManualImportModal({ onClose }: Props) {
                 disabled={submitting || tracks.length === 0}
                 className="rounded-full border border-primary bg-primary px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-primary-foreground transition-opacity disabled:opacity-40"
               >
-                {submitting ? "Starting…" : `Import ${tracks.length > 0 ? tracks.length.toLocaleString() + " " : ""}tracks`}
+                {submitting ? "Starting…" : `Import ${tracks.length} tracks`}
               </button>
             </div>
 

@@ -502,3 +502,212 @@ describe("parseTracks — routes through parseCsv for CSV-shaped input", () => {
     expect(parseTracks(text)).toHaveLength(2);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Pure unit tests: parseCsv — Exportify "Artist Name(s)" plural header
+// ---------------------------------------------------------------------------
+
+describe("parseCsv — Exportify plural 'Artist Name(s)' header", () => {
+  const exportifyPluralHeader = '"Track Name","Artist Name(s)"';
+  const exportifyPluralRows = [
+    '"Billie Jean","Michael Jackson"',
+    '"Mr. Brightside","The Killers"',
+    '"Africa","Toto"',
+  ];
+
+  it("parses a real Exportify-format header row with 'Artist Name(s)' to 3 tracks", () => {
+    const csv = [exportifyPluralHeader, ...exportifyPluralRows].join("\n");
+    expect(parseCsv(csv)).toHaveLength(3);
+  });
+
+  it("extracts the correct artist using the 'Artist Name(s)' column", () => {
+    const csv = [exportifyPluralHeader, ...exportifyPluralRows].join("\n");
+    const [first] = parseCsv(csv);
+    expect(first?.artist).toBe("Michael Jackson");
+    expect(first?.title).toBe("Billie Jean");
+  });
+
+  it("extracts the artist for the third track correctly", () => {
+    const csv = [exportifyPluralHeader, ...exportifyPluralRows].join("\n");
+    const tracks = parseCsv(csv);
+    expect(tracks[2]?.artist).toBe("Toto");
+    expect(tracks[2]?.title).toBe("Africa");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: tracks mode — preview list
+// ---------------------------------------------------------------------------
+
+describe("ManualImportModal — tracks mode preview list", () => {
+  it("shows a track preview list after pasting tracks", async () => {
+    renderModal();
+    fireEvent.click(screen.getByTestId("service-tile-other"));
+    const textarea = screen.getByTestId("tracks-textarea");
+
+    await act(async () => {
+      fireEvent.change(textarea, {
+        target: { value: "Fleetwood Mac – Go Your Own Way\nThe Beatles – Hey Jude" },
+      });
+    });
+
+    expect(await screen.findByTestId("track-preview-list")).toBeTruthy();
+  });
+
+  it("shows each track as Artist – Title in the preview list", async () => {
+    renderModal();
+    fireEvent.click(screen.getByTestId("service-tile-other"));
+    const textarea = screen.getByTestId("tracks-textarea");
+
+    await act(async () => {
+      fireEvent.change(textarea, {
+        target: { value: "Fleetwood Mac – Go Your Own Way\nThe Beatles – Hey Jude" },
+      });
+    });
+
+    await screen.findByTestId("track-preview-list");
+    expect(screen.getByText("Fleetwood Mac")).toBeTruthy();
+    expect(screen.getByText("The Beatles")).toBeTruthy();
+  });
+
+  it("shows '…and N more' when more than 50 tracks are parsed", async () => {
+    renderModal();
+    fireEvent.click(screen.getByTestId("service-tile-other"));
+    const textarea = screen.getByTestId("tracks-textarea");
+
+    const lines = Array.from({ length: 60 }, (_, i) => `Artist ${i + 1} – Song ${i + 1}`).join("\n");
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: lines } });
+    });
+
+    await screen.findByTestId("track-preview-list");
+    expect(screen.getByText(/…and 10 more/i)).toBeTruthy();
+  });
+
+  it("does NOT show '…and N more' when 50 or fewer tracks are parsed", async () => {
+    renderModal();
+    fireEvent.click(screen.getByTestId("service-tile-other"));
+    const textarea = screen.getByTestId("tracks-textarea");
+
+    const lines = Array.from({ length: 50 }, (_, i) => `Artist ${i + 1} – Song ${i + 1}`).join("\n");
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: lines } });
+    });
+
+    await screen.findByTestId("track-preview-list");
+    expect(screen.queryByText(/…and/i)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: collapsed instructions banner in tracks mode
+// ---------------------------------------------------------------------------
+
+describe("ManualImportModal — collapsed instructions banner after file drop (Exportify)", () => {
+  it("shows the service summary banner after navigating from Exportify steps to tracks mode", async () => {
+    renderModal();
+    fireEvent.click(screen.getByTestId("service-tile-exportify"));
+
+    // The upload zone renders a file input; grab it from the document
+    const fileInput = document.querySelector<HTMLInputElement>('input[type="file"]');
+    if (!fileInput) throw new Error("file input not found");
+
+    const content = '"Track Name","Artist Name(s)"\n"Billie Jean","Michael Jackson"';
+    const file = new File([content], "playlist.csv", { type: "text/csv" });
+
+    await act(async () => {
+      // FileReader is async; fire the change so handleFile runs, then let
+      // the FileReader onload settle
+      fireEvent.change(fileInput, { target: { files: [file] } });
+      await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    });
+
+    // After file load, mode switches to tracks; banner should appear
+    expect(await screen.findByTestId("service-summary-banner")).toBeTruthy();
+  });
+
+  it("the summary banner mentions exportify.net", async () => {
+    renderModal();
+    fireEvent.click(screen.getByTestId("service-tile-exportify"));
+
+    const fileInput = document.querySelector<HTMLInputElement>('input[type="file"]');
+    if (!fileInput) throw new Error("file input not found");
+
+    const content = '"Track Name","Artist Name(s)"\n"Billie Jean","Michael Jackson"';
+    const file = new File([content], "playlist.csv", { type: "text/csv" });
+
+    await act(async () => {
+      fireEvent.change(fileInput, { target: { files: [file] } });
+      await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    });
+
+    await screen.findByTestId("service-summary-banner");
+    expect(screen.getByText(/exportify\.net/i)).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: improved empty-parse error messages
+// ---------------------------------------------------------------------------
+
+describe("ManualImportModal — empty-parse error messages", () => {
+  it("shows a CSV-specific hint when the input has commas but no data rows", async () => {
+    renderModal();
+    fireEvent.click(screen.getByTestId("service-tile-other"));
+    const textarea = screen.getByTestId("tracks-textarea");
+
+    // A header-only CSV: has commas, parseCsv returns [] (no data rows), parsePlainText also returns []
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: "Spotify URI,Track Name,Artist Name(s),Album Name" } });
+    });
+
+    const errEl = await screen.findByTestId("track-count");
+    expect(errEl.textContent).toMatch(/Track Name/i);
+    expect(errEl.textContent).toMatch(/Artist Name/i);
+    expect(errEl.textContent).toMatch(/exportify/i);
+  });
+
+  it("shows a plain-text hint when the input has no commas and no dashes", async () => {
+    renderModal();
+    fireEvent.click(screen.getByTestId("service-tile-other"));
+    const textarea = screen.getByTestId("tracks-textarea");
+
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: "just some words without any dashes" } });
+    });
+
+    // Use testId to avoid matching the inline tip which also contains "Artist" and "Title"
+    const errEl = await screen.findByTestId("track-count");
+    expect(errEl.textContent).toMatch(/Artist/i);
+    expect(errEl.textContent).toMatch(/Title/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: Import button always shows count
+// ---------------------------------------------------------------------------
+
+describe("ManualImportModal — Import button label", () => {
+  it("shows 'Import 0 tracks' when no tracks are parsed yet", async () => {
+    renderModal();
+    fireEvent.click(screen.getByTestId("service-tile-other"));
+    // Button should show count even when 0
+    expect(screen.getByRole("button", { name: /import 0 tracks/i })).toBeTruthy();
+  });
+
+  it("shows 'Import 3 tracks' after pasting 3 tracks", async () => {
+    renderModal();
+    fireEvent.click(screen.getByTestId("service-tile-other"));
+    const textarea = screen.getByTestId("tracks-textarea");
+
+    await act(async () => {
+      fireEvent.change(textarea, {
+        target: {
+          value: "Artist A – Song A\nArtist B – Song B\nArtist C – Song C",
+        },
+      });
+    });
+
+    expect(await screen.findByRole("button", { name: /import 3 tracks/i })).toBeTruthy();
+  });
+});
