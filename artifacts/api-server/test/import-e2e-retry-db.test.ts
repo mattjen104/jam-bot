@@ -117,6 +117,14 @@ const ARTIST_ISRC      = `E2EIsrcArtist ${run}`;
 const TITLE_ISRC       = `E2EIsrcTrack ${run}`;
 const ISRC_VAL         = `TST${run.toUpperCase().slice(0, 9)}`;
 
+// Constants for the ListenBrainz retry scenario (last describe block).
+// externalId uses the artist\u001ftitle synthetic key format that
+// importItemToBufferEntry produces for LB items without a recording MBID.
+const ARTIST_LB = `LBArtist ${run}`;
+const TITLE_LB  = `LBTrack ${run}`;
+const MBID_LB   = `lb-mbid-${run}`;
+const EXTERNAL_ID_LB = `${ARTIST_LB}\u001f${TITLE_LB}`;
+
 let dbAvailable        = false;
 let softTableAvailable = false;
 
@@ -718,6 +726,154 @@ describe("end-to-end: import worker seeds soft row, retry pass promotes it", () 
         .where(eq(resolutionCacheTable.key, normalizeKey(ARTIST, TITLE)));
       expect(cacheAfterRetry.length).toBeGreaterThanOrEqual(1);
       expect(cacheAfterRetry[0]!.mbid).toBe(MBID);
+    },
+    TEST_TIMEOUT,
+  );
+});
+
+// ── ListenBrainz retry scenario ───────────────────────────────────────────────
+
+describe("ListenBrainz: off-peak retry pass resolves unresolved tracks without a service connection", () => {
+  /**
+   * Confirms that runPhase3RetryPass treats service='listenbrainz' as a
+   * public-API source that requires no service_connections row:
+   *
+   *   1. A completed LB import job with total=1, resolved=0 and a bufferJson
+   *      entry (artist+title synthetic externalId) is seeded directly — no
+   *      service connection row is created.
+   *
+   *   2. runPhase3RetryPass, given a resolver that now succeeds, creates a
+   *      retry job and promotes the track to library_items.
+   *
+   *   3. Final state: library_items contains the resolved track; no
+   *      spotify_library_items row was created (LB has no soft-row layer).
+   */
+
+  let lbJobId: number;
+
+  afterAll(async () => {
+    if (!dbAvailable) return;
+
+    const { normalizeKey } = resolveModule;
+
+    await db
+      .delete(libraryItemsTable)
+      .where(inArray(libraryItemsTable.mbid, [MBID_LB]))
+      .catch(() => {});
+
+    await db
+      .delete(libraryImportJobsTable)
+      .where(
+        and(
+          eq(libraryImportJobsTable.userId, userId),
+          eq(libraryImportJobsTable.service, "listenbrainz"),
+        ),
+      )
+      .catch(() => {});
+
+    await db
+      .delete(resolutionCacheTable)
+      .where(eq(resolutionCacheTable.key, normalizeKey(ARTIST_LB, TITLE_LB)))
+      .catch(() => {});
+
+    await db
+      .delete(recordingsTable)
+      .where(eq(recordingsTable.mbid, MBID_LB))
+      .catch(() => {});
+  });
+
+  it(
+    "resolves a ListenBrainz unresolved track via the retry pass (no service connection needed)",
+    async () => {
+      if (!dbAvailable) return;
+
+      // ── Step 1: seed a completed LB import job with one unresolved track ───
+      // No service_connections row — this is the key property being tested.
+      // The bufferJson entry uses the synthetic artist\u001ftitle externalId
+      // that importItemToBufferEntry produces for LB items without a
+      // recording MBID.
+      const [j] = await db
+        .insert(libraryImportJobsTable)
+        .values({
+          userId,
+          service: "listenbrainz",
+          status: "done",
+          total: 1,
+          resolved: 0,
+          startedAt: new Date(),
+          finishedAt: new Date(),
+          bufferJson: [
+            { artist: ARTIST_LB, title: TITLE_LB, isrc: null, durationMs: null, externalId: EXTERNAL_ID_LB },
+          ],
+        })
+        .returning({ id: libraryImportJobsTable.id });
+      lbJobId = j!.id;
+
+      // No library_items entry yet.
+      const libBefore = await db
+        .select({ mbid: libraryItemsTable.mbid })
+        .from(libraryItemsTable)
+        .where(and(eq(libraryItemsTable.userId, userId), eq(libraryItemsTable.mbid, MBID_LB)));
+      expect(libBefore.length).toBe(0);
+
+      // ── Step 2: retry pass — MB resolver now succeeds ─────────────────────
+      mockResolveByText.mockClear();
+      mockResolveByIsrc.mockClear();
+      mockResolveByText.mockResolvedValue(MBID_LB);
+      mockResolveByIsrc.mockResolvedValue(null);
+
+      const sleepSpy = installSleepBypass();
+      try {
+        await runPhase3RetryPass(undefined, [userId]);
+      } finally {
+        sleepSpy.mockRestore();
+      }
+
+      // ── Step 3: assertions ────────────────────────────────────────────────
+
+      // The retry pass must have created a retry job for this user+service.
+      const retryJobs = await db
+        .select({ id: libraryImportJobsTable.id, status: libraryImportJobsTable.status })
+        .from(libraryImportJobsTable)
+        .where(
+          and(
+            eq(libraryImportJobsTable.userId, userId),
+            eq(libraryImportJobsTable.service, "listenbrainz"),
+            sql`${libraryImportJobsTable.id} > ${lbJobId}`,
+          ),
+        );
+      expect(retryJobs.length).toBeGreaterThanOrEqual(1);
+
+      // The track must now be in library_items.
+      const libAfter = await db
+        .select({ mbid: libraryItemsTable.mbid })
+        .from(libraryItemsTable)
+        .where(and(eq(libraryItemsTable.userId, userId), eq(libraryItemsTable.mbid, MBID_LB)));
+      expect(libAfter.length).toBe(1);
+      expect(libAfter[0]!.mbid).toBe(MBID_LB);
+
+      // No soft row should exist in spotify_library_items (LB has no soft-row layer).
+      if (softTableAvailable) {
+        const softRows = await db
+          .select({ id: spotifyLibraryItemsTable.userId })
+          .from(spotifyLibraryItemsTable)
+          .where(
+            and(
+              eq(spotifyLibraryItemsTable.userId, userId),
+              eq(spotifyLibraryItemsTable.artist, ARTIST_LB),
+            ),
+          );
+        expect(softRows.length).toBe(0);
+      }
+
+      // A positive cache entry must have been written.
+      const { normalizeKey } = resolveModule;
+      const cacheAfter = await db
+        .select({ mbid: resolutionCacheTable.mbid })
+        .from(resolutionCacheTable)
+        .where(eq(resolutionCacheTable.key, normalizeKey(ARTIST_LB, TITLE_LB)));
+      expect(cacheAfter.length).toBeGreaterThanOrEqual(1);
+      expect(cacheAfter[0]!.mbid).toBe(MBID_LB);
     },
     TEST_TIMEOUT,
   );

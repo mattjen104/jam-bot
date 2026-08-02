@@ -1894,6 +1894,10 @@ export async function runPhase3RetryPass(deadline?: Date, _testUserIds?: number[
       // Fail safe: if the connection is missing, the token is stale, or the API
       // errors, skip this candidate entirely rather than risking ghost-restoring
       // a deliberate removal.
+      //
+      // Services that use a public API or a one-time upload (listenbrainz,
+      // manual) require no connection row and need no live verification here —
+      // see the else-if branch below.
       if (candidate.service === "spotify") {
         const spotifyIdPattern = /^[A-Za-z0-9]{22}$/;
         const realIdEntries    = entriesToRetry.filter((t) =>  spotifyIdPattern.test(t.externalId));
@@ -1950,6 +1954,17 @@ export async function runPhase3RetryPass(deadline?: Date, _testUserIds?: number[
             );
           }
         }
+      } else if (candidate.service === "listenbrainz" || candidate.service === "manual") {
+        // ListenBrainz is a public API — no service_connections row is created for it,
+        // so the Spotify connection check above cannot apply.  manual imports come from
+        // a one-time user-supplied upload that cannot change externally.
+        //
+        // For both services entriesToRetry passes through unchanged:
+        //   - listenbrainz: the loved-track list is public and queryable on demand;
+        //     a future re-import will produce a newer snapshot that filters any
+        //     delistings on the next pass — no permanent ghost-restore risk.
+        //   - manual: there is no external source to diff against; all uncached
+        //     entries are treated as still-valid.
       }
     }
 
