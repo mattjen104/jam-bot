@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   db,
+  loreUsersTable,
   recordingsTable,
   replayResolutionJobsTable,
   serviceTrackMapTable,
@@ -86,6 +87,10 @@ afterAll(async () => {
   await db.delete(recordingsTable).where(eq(recordingsTable.mbid, mbid));
 });
 
+// ---------------------------------------------------------------------------
+// Registry
+// ---------------------------------------------------------------------------
+
 describe("Ghost Replay resolution registry", () => {
   it("canonicalizes Odesli platform keys consistently", () => {
     expect(canonicalReplayService("appleMusic")).toBe("apple_music");
@@ -117,6 +122,10 @@ describe("Ghost Replay resolution registry", () => {
     expect(uniqueIndexes).not.toContain("replay_resolution_jobs_active_uq");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Negative-cache (resolveRecording unit)
+// ---------------------------------------------------------------------------
 
 describe("Ghost Replay resolution negative-cache", () => {
   const ncRun = randomUUID().slice(0, 8);
@@ -168,37 +177,36 @@ describe("Ghost Replay resolution negative-cache", () => {
     vi.stubGlobal("fetch", odesliEmpty);
 
     // First call — Odesli returns no platform links → should record a no_links miss.
-    const first = await resolveRecording(networkErrorMbid, {
-      title: "Network Error Track",
-      artist: "Network Error Artist",
-      isrc: "USNE11223344",
+    const first = await resolveRecording(noLinksMbid, {
+      title: "No Links Track",
+      artist: "No Links Artist",
+      isrc: "USNC12345678",
       links: null,
     });
-    expect(first).toBe("network_error");
-    expect(odesliThrows).toHaveBeenCalledTimes(1);
+    expect(first).toBe("missing");
+    expect(odesliEmpty).toHaveBeenCalledTimes(1);
 
-    // A miss row with reason "network_error" must have been written.
+    // A miss row with reason "no_links" must have been written.
     const [missRow] = await db
       .select()
       .from(serviceTrackMapTable)
       .where(
         and(
-          eq(serviceTrackMapTable.recordingMbid, networkErrorMbid),
+          eq(serviceTrackMapTable.recordingMbid, noLinksMbid),
           eq(serviceTrackMapTable.service, "odesli"),
         ),
       )
       .limit(1);
     expect(missRow).toBeDefined();
-    expect(missRow!.missReason).toBe("network_error");
+    expect(missRow!.missReason).toBe("no_links");
     expect(missRow!.missedAt).toBeInstanceOf(Date);
 
-    // The 1-hour TTL must block the second call — Odesli should not be hit again.
-    // (The cached miss short-circuits with "missing" since TTL is still active.)
-    odesliThrows.mockClear();
-    const second = await resolveRecording(networkErrorMbid, {
-      title: "Network Error Track",
-      artist: "Network Error Artist",
-      isrc: "USNE11223344",
+    // The 30-day TTL must block the second call — Odesli should not be hit again.
+    odesliEmpty.mockClear();
+    const second = await resolveRecording(noLinksMbid, {
+      title: "No Links Track",
+      artist: "No Links Artist",
+      isrc: "USNC12345678",
       links: null,
     });
     expect(second).toBe("missing");
@@ -217,11 +225,11 @@ describe("Ghost Replay resolution negative-cache", () => {
     );
     vi.stubGlobal("fetch", odesliSpy);
 
-    const result = await resolveRecording(expiredMbid, {
-      title: "Expired Miss Track",
-      artist: "Expired Miss Artist",
-      isrc: "USXX98765432",
-      links: null,
+    const result = await resolveRecording(noVectorMbid, {
+      title: "No Vector Track",
+      artist: "No Vector Artist",
+      isrc: null,
+      links: [],
     });
     expect(result).toBe("missing");
     // Odesli must never have been contacted — no vector to query with.
@@ -232,7 +240,7 @@ describe("Ghost Replay resolution negative-cache", () => {
       .from(serviceTrackMapTable)
       .where(
         and(
-          eq(serviceTrackMapTable.recordingMbid, networkErrorMbid),
+          eq(serviceTrackMapTable.recordingMbid, noVectorMbid),
           eq(serviceTrackMapTable.service, "odesli"),
         ),
       )
@@ -240,50 +248,6 @@ describe("Ghost Replay resolution negative-cache", () => {
     expect(missRow).toBeDefined();
     expect(missRow!.missReason).toBe("no_vector");
     expect(missRow!.missedAt).toBeInstanceOf(Date);
-
-    vi.unstubAllGlobals();
-  });
-
-  it("deletes the odesli sentinel row once real service links are written", async (ctx) => {
-    if (!dbAvailable) return ctx.skip();
-
-    // Seed a miss sentinel for sentinelDirectMbid.
-    await upsertServiceTrackMapMiss(sentinelDirectMbid, "no_links");
-    const [sentinelRow] = await db
-      .select()
-      .from(serviceTrackMapTable)
-      .where(
-        and(
-          eq(serviceTrackMapTable.recordingMbid, revivedMbid),
-          eq(serviceTrackMapTable.service, "odesli"),
-        ),
-      )
-      .limit(1);
-    expect(sentinelRow).toBeDefined();
-    expect(sentinelRow!.missReason).toBe("no_links");
-
-    // Writing a positive service link must delete the sentinel.
-    await upsertServiceTrackMap({
-      recordingMbid: sentinelDirectMbid,
-      service: "spotify",
-      externalId: "SentinelDirectTrack001",
-      url: "https://open.spotify.com/track/SentinelDirectTrack001",
-      method: "odesli",
-      confidence: "exact",
-      verification: "verified",
-    });
-
-    const [afterSentinel] = await db
-      .select()
-      .from(serviceTrackMapTable)
-      .where(
-        and(
-          eq(serviceTrackMapTable.recordingMbid, sentinelDirectMbid),
-          eq(serviceTrackMapTable.service, "odesli"),
-        ),
-      )
-      .limit(1);
-    expect(afterSentinel).toBeUndefined();
 
     vi.unstubAllGlobals();
   });
@@ -370,7 +334,6 @@ describe("Ghost Replay resolution negative-cache", () => {
 
     // Plant a stale miss row (31 days old) for expiredMbid.
     const staleDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
-
     await upsertServiceTrackMapMiss(expiredMbid, "no_links");
     // Backdate missedAt so it falls outside the 30-day TTL window.
     await db
@@ -479,7 +442,55 @@ describe("Ghost Replay resolution negative-cache", () => {
 
     vi.unstubAllGlobals();
   });
+
+  it("deletes the odesli sentinel row once real service links are written directly", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // Seed a miss sentinel for sentinelDirectMbid.
+    await upsertServiceTrackMapMiss(sentinelDirectMbid, "no_links");
+    const [sentinelRow] = await db
+      .select()
+      .from(serviceTrackMapTable)
+      .where(
+        and(
+          eq(serviceTrackMapTable.recordingMbid, sentinelDirectMbid),
+          eq(serviceTrackMapTable.service, "odesli"),
+        ),
+      )
+      .limit(1);
+    expect(sentinelRow).toBeDefined();
+    expect(sentinelRow!.missReason).toBe("no_links");
+
+    // Writing a positive service link must delete the sentinel.
+    await upsertServiceTrackMap({
+      recordingMbid: sentinelDirectMbid,
+      service: "spotify",
+      externalId: "SentinelDirectTrack001",
+      url: "https://open.spotify.com/track/SentinelDirectTrack001",
+      method: "odesli",
+      confidence: "exact",
+      verification: "verified",
+    });
+
+    const [afterSentinel] = await db
+      .select()
+      .from(serviceTrackMapTable)
+      .where(
+        and(
+          eq(serviceTrackMapTable.recordingMbid, sentinelDirectMbid),
+          eq(serviceTrackMapTable.service, "odesli"),
+        ),
+      )
+      .limit(1);
+    expect(afterSentinel).toBeUndefined();
+
+    vi.unstubAllGlobals();
+  });
 });
+
+// ---------------------------------------------------------------------------
+// Rank guard (upsertServiceTrackMap)
+// ---------------------------------------------------------------------------
 
 describe("Ghost Replay resolution rank-guard", () => {
   const rgRun = randomUUID().slice(0, 8);
@@ -534,7 +545,7 @@ describe("Ghost Replay resolution rank-guard", () => {
       .from(serviceTrackMapTable)
       .where(
         and(
-          eq(serviceTrackMapTable.recordingMbid, weakMbid),
+          eq(serviceTrackMapTable.recordingMbid, strongMbid),
           eq(serviceTrackMapTable.service, "spotify"),
         ),
       )
@@ -588,6 +599,10 @@ describe("Ghost Replay resolution rank-guard", () => {
     expect(row!.confidence).toBe("exact");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Miss-breakdown safety-net (computeMissBreakdownFromMbids)
+// ---------------------------------------------------------------------------
 
 describe("Ghost Replay resolution miss-breakdown safety-net", () => {
   const mbsRun = randomUUID().slice(0, 8);
@@ -650,5 +665,175 @@ describe("Ghost Replay resolution miss-breakdown safety-net", () => {
     expect(breakdown.noLinks).toBe(1);   // only genuineMissMbid
     expect(breakdown.noVector).toBe(0);
     expect(breakdown.noRecording).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Worker — network-error counting
+// ---------------------------------------------------------------------------
+
+describe("Ghost Replay resolution worker — network-error counting", () => {
+  const wRun = randomUUID().slice(0, 8);
+  const wSlug = `test-rr-worker-${wRun}`;
+  const wMbid = `test-rr-worker-mbid-${wRun}`;
+  let wStationId: number | undefined;
+  let wAnchorSpinId: number | undefined;
+  let wUserId: number | undefined;
+
+  beforeAll(async () => {
+    if (!dbAvailable) return;
+
+    // A lore user is required by the FK on replay_resolution_jobs.user_id.
+    const [user] = await db
+      .insert(loreUsersTable)
+      .values({ deviceKey: `test-worker-${wRun}` })
+      .returning({ id: loreUsersTable.id });
+    wUserId = user!.id;
+
+    const [station] = await db
+      .insert(stationsTable)
+      .values({
+        slug: wSlug,
+        name: `Worker Test Station ${wRun}`,
+        streamUrl: `http://example.invalid/worker-${wRun}`,
+        stationClass: "curated",
+      })
+      .returning({ id: stationsTable.id });
+    wStationId = station!.id;
+
+    // Recording with an ISRC so resolveRecording has a vector to call Odesli with.
+    // No service_track_map rows are seeded — the worker must attempt resolution.
+    await db.insert(recordingsTable).values({
+      mbid: wMbid,
+      title: "Worker Test Track",
+      artist: "Worker Test Artist",
+      isrc: "USWT12340001",
+    });
+
+    // Two spins on the same calendar day:
+    //   • Spin 1 (anchor — minimum id): mbid present, ISRC available.
+    //   • Spin 2: mbid=null → always "missing" regardless of Odesli.
+    const [anchor] = await db
+      .insert(spinsTable)
+      .values({
+        stationId: wStationId!,
+        mbid: wMbid,
+        rawArtist: "Worker Test Artist",
+        rawTitle: "Worker Test Track",
+        source: "test",
+        confidence: "text",
+        playedAt: new Date(),
+      })
+      .returning({ id: spinsTable.id });
+    wAnchorSpinId = anchor!.id;
+
+    await db.insert(spinsTable).values({
+      stationId: wStationId!,
+      mbid: null,
+      rawArtist: "Unresolved Worker Track",
+      rawTitle: "Unresolved Worker Title",
+      source: "test",
+      confidence: "unresolved",
+      playedAt: new Date(Date.now() + 60_000),
+    });
+  });
+
+  afterAll(async () => {
+    vi.unstubAllGlobals();
+    if (!dbAvailable || wStationId == null) return;
+    await db
+      .delete(replayResolutionJobsTable)
+      .where(eq(replayResolutionJobsTable.replayId, wAnchorSpinId!));
+    await db
+      .delete(serviceTrackMapTable)
+      .where(eq(serviceTrackMapTable.recordingMbid, wMbid));
+    await db.delete(spinsTable).where(eq(spinsTable.stationId, wStationId));
+    await db
+      .delete(stationQualityTable)
+      .where(eq(stationQualityTable.stationId, wStationId));
+    await db.delete(stationsTable).where(eq(stationsTable.id, wStationId));
+    await db.delete(recordingsTable).where(eq(recordingsTable.mbid, wMbid));
+    await db
+      .delete(loreUsersTable)
+      .where(eq(loreUsersTable.id, wUserId!));
+  });
+
+  it("increments networkErrors (not just missing) when fetch throws during a worker run", async (ctx) => {
+    if (!dbAvailable || wStationId == null || wUserId == null) return ctx.skip();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("fetch failed — Odesli unreachable");
+      }),
+    );
+
+    const [job] = await db
+      .insert(replayResolutionJobsTable)
+      .values({
+        userId: wUserId,
+        replayId: wAnchorSpinId!,
+        total: 2,
+      })
+      .returning();
+
+    await runReplayResolutionWorker(job!.id);
+
+    const [finished] = await db
+      .select()
+      .from(replayResolutionJobsTable)
+      .where(eq(replayResolutionJobsTable.id, job!.id));
+
+    expect(finished?.status).toBe("done");
+    expect(finished?.processed).toBe(2);
+    // The spin with an ISRC must have produced a network_error outcome.
+    expect(finished?.networkErrors).toBeGreaterThanOrEqual(1);
+    // network_error also increments missing for backward compatibility.
+    expect(finished?.missing).toBeGreaterThanOrEqual(1);
+
+    vi.unstubAllGlobals();
+    // Remove the network_error miss row so the next test resolves fresh.
+    await db
+      .delete(serviceTrackMapTable)
+      .where(eq(serviceTrackMapTable.recordingMbid, wMbid));
+  });
+
+  it("keeps networkErrors at 0 when Odesli returns no links (genuine no_links miss)", async (ctx) => {
+    if (!dbAvailable || wStationId == null || wUserId == null) return ctx.skip();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({ linksByPlatform: {}, entitiesByUniqueId: {} }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      ),
+    );
+
+    const [job] = await db
+      .insert(replayResolutionJobsTable)
+      .values({
+        userId: wUserId,
+        replayId: wAnchorSpinId!,
+        total: 2,
+      })
+      .returning();
+
+    await runReplayResolutionWorker(job!.id);
+
+    const [finished] = await db
+      .select()
+      .from(replayResolutionJobsTable)
+      .where(eq(replayResolutionJobsTable.id, job!.id));
+
+    expect(finished?.status).toBe("done");
+    expect(finished?.processed).toBe(2);
+    // Odesli was reachable — no network errors.
+    expect(finished?.networkErrors).toBe(0);
+    // Both spins still miss (one no_links, one null mbid).
+    expect(finished?.missing).toBeGreaterThanOrEqual(1);
+
+    vi.unstubAllGlobals();
   });
 });
