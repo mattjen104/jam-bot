@@ -17,7 +17,7 @@
  * and users are seeded once in beforeAll and torn down in afterAll.
  */
 
-import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import type { Server } from "node:http";
 import { eq, sql } from "drizzle-orm";
@@ -31,6 +31,7 @@ import {
   listenSessionsTable,
   attendanceTable,
   attendanceRollupsTable,
+  attendanceWeeklyRollupsTable,
 } from "@workspace/db";
 import app from "../src/app.js";
 
@@ -50,6 +51,7 @@ const SID_GATE  = `test-att-gate-${run}`;   // dwell gate scenarios
 const MBID_KNOWN  = `ta-known-${run}`;   // durationMs = 300 000 ms (5 min)
 const MBID_NODUR  = `ta-nodur-${run}`;   // durationMs = null
 const MBID_SHORT  = `ta-short-${run}`;   // durationMs =  60 000 ms (60 s)
+const MBID_XWEEK  = `ta-xweek-${run}`;  // durationMs = 900 000 ms (15 min) — cross-week test
 
 const STATION_SLUG = `test-att-sta-${run}`;
 
@@ -126,6 +128,7 @@ beforeAll(async () => {
     { mbid: MBID_KNOWN, title: `Known Dur Track ${run}`, artist: `Artist ${run}`, durationMs: 300_000 },
     { mbid: MBID_NODUR, title: `No Dur Track ${run}`,   artist: `Artist ${run}` },          // null duration
     { mbid: MBID_SHORT, title: `Short Track ${run}`,    artist: `Artist ${run}`, durationMs:  60_000 },
+    { mbid: MBID_XWEEK, title: `XWeek Track ${run}`,   artist: `Artist ${run}`, durationMs: 900_000 }, // 15 min
   ]);
 
   // Station
@@ -154,6 +157,7 @@ afterEach(async () => {
   if (!dbAvailable) return;
   for (const userId of [userMainId, userNodurId, userGateId]) {
     if (userId == null) continue;
+    await db.delete(attendanceWeeklyRollupsTable).where(eq(attendanceWeeklyRollupsTable.userId, userId));
     await db.delete(attendanceRollupsTable).where(eq(attendanceRollupsTable.userId, userId));
     await db.delete(attendanceTable).where(eq(attendanceTable.userId, userId));
     await db.delete(listenSessionsTable).where(eq(listenSessionsTable.userId, userId));
@@ -182,7 +186,7 @@ afterAll(async () => {
   }
 
   // Recordings
-  for (const mbid of [MBID_KNOWN, MBID_NODUR, MBID_SHORT]) {
+  for (const mbid of [MBID_KNOWN, MBID_NODUR, MBID_SHORT, MBID_XWEEK]) {
     await db.delete(recordingsTable).where(eq(recordingsTable.mbid, mbid));
   }
 
@@ -409,6 +413,24 @@ describe("heartbeat → counts — unknown-duration spins", () => {
   );
 });
 
+// ── ISO week helpers (mirrors the implementation, for assertions) ──────────────
+
+function mondayToIsoWeekLabel(monday: Date): string {
+  const thursday = new Date(monday.getTime() + 3 * 86_400_000);
+  const year = thursday.getUTCFullYear();
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const dayOfWeek = jan4.getUTCDay() || 7;
+  const week1Monday = new Date(jan4.getTime() - (dayOfWeek - 1) * 86_400_000);
+  const week = Math.floor((monday.getTime() - week1Monday.getTime()) / (7 * 86_400_000)) + 1;
+  return `${year}-W${String(week).padStart(2, "0")}`;
+}
+
+function dateToIsoWeekLabel(date: Date): string {
+  const utcDay = date.getUTCDay() || 7;
+  const monday = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() - (utcDay - 1)));
+  return mondayToIsoWeekLabel(monday);
+}
+
 describe("heartbeat → counts — dwell gate", () => {
   it(
     "does not count a spin whose dwell falls below the fractional gate threshold",
@@ -598,6 +620,103 @@ describe("heartbeat → counts — dwell gate", () => {
       // ~60 s accumulated dwell ≥ 60 s gate → counted
       expect(entry).toBeDefined();
       expect(entry!.heardCount).toBe(1);
+    },
+    TEST_TIMEOUT,
+  );
+});
+
+// ── Cross-week heartbeat ───────────────────────────────────────────────────────
+//
+// The heartbeat write path uses the spin's played_at (not the heartbeat
+// timestamp) to compute the ISO week for the weekly rollup.  A heartbeat that
+// arrives on Monday morning must still credit Sunday-night spins into the
+// Sunday's week bucket.
+//
+// Scenario (time-frozen with vi.useFakeTimers):
+//   • Spin played_at  = 2026-01-18 23:58 UTC  (Sunday, ISO week 2026-W03)
+//   • Spin durationMs = 900 000 ms (15 min)   → ends 2026-01-19 00:13 UTC
+//   • Fake "now"      = 2026-01-19 00:10 UTC  (Monday, ISO week 2026-W04)
+//   • Window          = [00:08:30, 00:10:00]  (prevHb back-dated 90 s)
+//   • Overlap         = 90 s  ≥  gate (LEAST(900×0.5,60) = 60 s)  → qualifies
+//
+// Expected: weekly rollup row in 2026-W03 with dwellTotal ≥ 90 and spinCount=1.
+//           No row in 2026-W04 for that spin.
+
+describe("heartbeat → weekly rollup — cross-week-boundary heartbeat", () => {
+  // Fixed "Monday 00:10 UTC" — the heartbeat arrives in W04 but the spin is W03.
+  const FAKE_NOW = new Date("2026-01-19T00:10:00.000Z");
+
+  // 2026-01-18 is a Sunday → ISO week 2026-W03
+  const SPIN_PLAYED_AT = new Date("2026-01-18T23:58:00.000Z");
+  const SPIN_WEEK = dateToIsoWeekLabel(SPIN_PLAYED_AT);      // "2026-W03"
+  const HEARTBEAT_WEEK = dateToIsoWeekLabel(FAKE_NOW);       // "2026-W04"
+
+  it(
+    "places a Sunday-night spin in its own ISO week when the heartbeat arrives on Monday",
+    async () => {
+      if (!dbAvailable) return;
+
+      // Freeze Date so the handler's `new Date()` returns FAKE_NOW.
+      // Only fake Date itself — leaving setTimeout/setInterval real keeps the
+      // HTTP server, connection pool, and test timeouts working normally.
+      vi.useFakeTimers({ now: FAKE_NOW, toFake: ["Date"] });
+
+      try {
+        // Seed the spin — played on Sunday at 23:58 UTC.
+        await db.insert(spinsTable).values({
+          stationId: stationId!,
+          mbid: MBID_XWEEK,
+          confidence: "recording_id",
+          rawTitle: "Sunday Night Track",
+          rawArtist: "Artist",
+          playedAt: SPIN_PLAYED_AT,
+        });
+
+        // Heartbeat 1: creates the session (zero-width window, no dwell credited).
+        const hb1 = await post("/api/me/attendance/heartbeat", { stationId: stationId! }, SID_MAIN);
+        expect(hb1.status).toBe(200);
+        const { sessionId } = hb1.body as { sessionId: number };
+        expect(typeof sessionId).toBe("number");
+
+        // Back-date lastHeartbeatAt to 90 s before FAKE_NOW to open a 90-second
+        // window.  The spin ends at 00:13 UTC so it still overlaps [00:08:30, 00:10].
+        // Overlap = 90 s ≥ 60 s gate → qualifies.
+        await db
+          .update(listenSessionsTable)
+          .set({ lastHeartbeatAt: new Date(FAKE_NOW.getTime() - 90_000) })
+          .where(eq(listenSessionsTable.id, sessionId));
+
+        // Heartbeat 2: "Monday morning" heartbeat that should credit the Sunday spin.
+        const hb2 = await post("/api/me/attendance/heartbeat", { stationId: stationId! }, SID_MAIN);
+        expect(hb2.status).toBe(200);
+
+        // ── Assert weekly rollup week bucket ────────────────────────────────
+        // The spin's week (W03) must contain the row; the heartbeat's week (W04)
+        // must not — this is the core property under test.
+
+        const allRows = await db
+          .select({
+            isoWeek: attendanceWeeklyRollupsTable.isoWeek,
+            dwellTotal: attendanceWeeklyRollupsTable.dwellTotal,
+            spinCount: attendanceWeeklyRollupsTable.spinCount,
+          })
+          .from(attendanceWeeklyRollupsTable)
+          .where(
+            eq(attendanceWeeklyRollupsTable.userId, userMainId!),
+          );
+
+        // Spin's week (2026-W03) must have exactly one row for MBID_XWEEK.
+        const spinWeekRow = allRows.find((r) => r.isoWeek === SPIN_WEEK);
+        expect(spinWeekRow).toBeDefined();
+        expect(spinWeekRow!.spinCount).toBe(1);
+        expect(spinWeekRow!.dwellTotal).toBeGreaterThanOrEqual(90);
+
+        // Heartbeat's week (2026-W04) must have no row for this spin.
+        const heartbeatWeekRow = allRows.find((r) => r.isoWeek === HEARTBEAT_WEEK);
+        expect(heartbeatWeekRow).toBeUndefined();
+      } finally {
+        vi.useRealTimers();
+      }
     },
     TEST_TIMEOUT,
   );
