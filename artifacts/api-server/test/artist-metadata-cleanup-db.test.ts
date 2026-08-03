@@ -290,6 +290,100 @@ describe("applyArtistMetadataCleanup", () => {
     },
   );
 
+  // ── Non-Latin script regression tests ──────────────────────────────────────
+  //
+  // The dash-cleanup regex `'^[-–—]+'` targets only ASCII hyphen, en-dash, and
+  // em-dash.  Artists whose names begin with Arabic, Cyrillic, Japanese, or
+  // CJK-punctuation characters that merely *look* like dashes must survive the
+  // migration completely unchanged.
+
+  it(
+    "non-Latin: Arabic artist فيروز is not modified",
+    { timeout: 30_000 },
+    async (ctx) => {
+      if (!dbAvailable || !stationId) return ctx.skip();
+
+      // فيروز (Fairuz) — begins with the Arabic letter ف, nowhere near [-–—]
+      const mbid = await insertRecording("فيروز", "سألتك الرحيل");
+      const spinId = await insertSpin(mbid, "spinitron", "فيروز", "سألتك الرحيل");
+
+      try {
+        const result = await applyArtistMetadataCleanup({ _testMbids: [mbid] });
+        expect(result.leadingDashFixed).toBe(0);
+        expect(await getArtist(mbid)).toBe("فيروز");
+      } finally {
+        await db.execute(sql`DELETE FROM spins WHERE id = ${spinId}`);
+        await deleteTestRecordings([mbid]);
+      }
+    },
+  );
+
+  it(
+    "non-Latin: Cyrillic artist Кино is not modified",
+    { timeout: 30_000 },
+    async (ctx) => {
+      if (!dbAvailable || !stationId) return ctx.skip();
+
+      // Кино — begins with Cyrillic К, unrelated to ASCII/Unicode dashes
+      const mbid = await insertRecording("Кино", "Пачка сигарет");
+      const spinId = await insertSpin(mbid, "spinitron", "Кино", "Пачка сигарет");
+
+      try {
+        const result = await applyArtistMetadataCleanup({ _testMbids: [mbid] });
+        expect(result.leadingDashFixed).toBe(0);
+        expect(await getArtist(mbid)).toBe("Кино");
+      } finally {
+        await db.execute(sql`DELETE FROM spins WHERE id = ${spinId}`);
+        await deleteTestRecordings([mbid]);
+      }
+    },
+  );
+
+  it(
+    "non-Latin: Japanese artist 坂本龍一 is not modified",
+    { timeout: 30_000 },
+    async (ctx) => {
+      if (!dbAvailable || !stationId) return ctx.skip();
+
+      // 坂本龍一 (Ryuichi Sakamoto) — starts with CJK ideograph, not a dash
+      const mbid = await insertRecording("坂本龍一", "Merry Christmas Mr. Lawrence");
+      const spinId = await insertSpin(mbid, "spinitron", "坂本龍一", "Merry Christmas Mr. Lawrence");
+
+      try {
+        const result = await applyArtistMetadataCleanup({ _testMbids: [mbid] });
+        expect(result.leadingDashFixed).toBe(0);
+        expect(await getArtist(mbid)).toBe("坂本龍一");
+      } finally {
+        await db.execute(sql`DELETE FROM spins WHERE id = ${spinId}`);
+        await deleteTestRecordings([mbid]);
+      }
+    },
+  );
+
+  it(
+    "non-Latin: artist starting with CJK fullwidth minus ー is not modified",
+    { timeout: 30_000 },
+    async (ctx) => {
+      if (!dbAvailable || !stationId) return ctx.skip();
+
+      // ー is the Katakana-Hiragana Prolonged Sound Mark (U+30FC) — visually
+      // similar to an em-dash but NOT in the regex set `[-–—]`.
+      // This confirms the pattern boundary is tight and does not over-match
+      // CJK-specific punctuation that merely resembles a Western dash.
+      const mbid = await insertRecording("ーゆず", "栄光の架橋");
+      const spinId = await insertSpin(mbid, "spinitron", "ーゆず", "栄光の架橋");
+
+      try {
+        const result = await applyArtistMetadataCleanup({ _testMbids: [mbid] });
+        expect(result.leadingDashFixed).toBe(0);
+        expect(await getArtist(mbid)).toBe("ーゆず");
+      } finally {
+        await db.execute(sql`DELETE FROM spins WHERE id = ${spinId}`);
+        await deleteTestRecordings([mbid]);
+      }
+    },
+  );
+
   it(
     "purges resolution-cache entries with URL/domain-like keys",
     { timeout: 30_000 },
