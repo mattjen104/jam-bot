@@ -841,6 +841,115 @@ describe("GET /api/replay/materialization-jobs/:jobId", () => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /api/replay/:id/apple-music — Apple MusicKit token + coverage
+// ---------------------------------------------------------------------------
+
+describe("GET /api/replay/:id/apple-music", () => {
+  // A hidden station whose replay must never surface a developer token.
+  let hiddenStationId: number | undefined;
+  let hiddenAnchorSpinId: number | undefined;
+  const hiddenSlug = `test-am-hidden-${run}`;
+
+  beforeAll(async () => {
+    if (!dbAvailable) return;
+
+    const [hiddenStation] = await db
+      .insert(stationsTable)
+      .values({
+        slug: hiddenSlug,
+        name: `Apple Music Hidden Station ${run}`,
+        streamUrl: "http://example.invalid/am-hidden",
+        stationClass: "curated",
+        hidden: true,
+      })
+      .returning({ id: stationsTable.id });
+    hiddenStationId = hiddenStation!.id;
+
+    const [hiddenSpin] = await db
+      .insert(spinsTable)
+      .values({
+        stationId: hiddenStationId!,
+        mbid: null,
+        rawArtist: "Hidden Artist",
+        rawTitle: "Hidden Track",
+        source: "test",
+        confidence: "unresolved",
+        playedAt: new Date(),
+      })
+      .returning({ id: spinsTable.id });
+    hiddenAnchorSpinId = hiddenSpin!.id;
+  });
+
+  afterAll(async () => {
+    if (!dbAvailable || hiddenStationId == null) return;
+    await db.delete(spinsTable).where(eq(spinsTable.stationId, hiddenStationId));
+    await db.delete(stationsTable).where(eq(stationsTable.id, hiddenStationId));
+  });
+
+  it("returns 404 for an unknown replay id", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+    const res = await fetch(`${baseUrl}/api/replay/999999999/apple-music`);
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as Record<string, unknown>;
+    // Must NOT include a developer token in the error response.
+    expect(body.developerToken).toBeUndefined();
+  });
+
+  it("returns 404 for a hidden station's replay id (no token leak)", async (ctx) => {
+    if (!dbAvailable || hiddenAnchorSpinId == null) return ctx.skip();
+    const res = await fetch(
+      `${baseUrl}/api/replay/${hiddenAnchorSpinId}/apple-music`,
+    );
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as Record<string, unknown>;
+    // A developer token must never be returned when the replay is not found.
+    expect(body.developerToken).toBeUndefined();
+  });
+
+  it("returns 200 with an AppleMusicReplayMaterialization shape for a valid replay", async (ctx) => {
+    if (!dbAvailable || anchorSpinId == null) return ctx.skip();
+    const res = await fetch(
+      `${baseUrl}/api/replay/${anchorSpinId}/apple-music`,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+
+    // Top-level fields from AppleMusicReplayMaterialization schema.
+    expect(typeof body.configured).toBe("boolean");
+    expect(body.developerToken === null || typeof body.developerToken === "string").toBe(true);
+    expect(typeof body.appName).toBe("string");
+    expect(typeof body.apiBase).toBe("string");
+    expect(typeof body.storefront).toBe("string");
+    expect(body.replayId).toBe(anchorSpinId);
+    expect(Array.isArray(body.entries)).toBe(true);
+
+    // Coverage object shape.
+    const cov = body.coverage as Record<string, unknown>;
+    expect(typeof cov.total).toBe("number");
+    expect(typeof cov.available).toBe("number");
+    expect(typeof cov.unavailable).toBe("number");
+    expect(typeof cov.unresolved).toBe("number");
+    expect(typeof cov.dead).toBe("number");
+    // Counts must add up to total.
+    expect(cov.available as number + (cov.unavailable as number) + (cov.unresolved as number) + (cov.dead as number)).toBe(cov.total);
+
+    // Every entry must conform to the AppleMusicReplayMaterializationEntry shape.
+    for (const entry of body.entries as Array<Record<string, unknown>>) {
+      expect(typeof entry.position).toBe("number");
+      expect(typeof entry.spinId).toBe("number");
+      expect(entry.recordingMbid === null || typeof entry.recordingMbid === "string").toBe(true);
+      expect(typeof entry.rawArtist).toBe("string");
+      expect(typeof entry.rawTitle).toBe("string");
+      expect(typeof entry.title).toBe("string");
+      expect(typeof entry.artist).toBe("string");
+      expect(entry.appleMusicId === null || typeof entry.appleMusicId === "string").toBe(true);
+      expect(entry.url === null || typeof entry.url === "string").toBe(true);
+      expect(["available", "unavailable", "unresolved", "dead"]).toContain(entry.status);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Cross-identifier swap guard
 // ---------------------------------------------------------------------------
 //
