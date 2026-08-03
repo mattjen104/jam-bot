@@ -635,14 +635,14 @@ export function useDialData(displayMode: DialDisplayMode = "personal"): {
     displayMode === "blended" ? blendedCrossings == null && !blendedError : crossingsLoading;
 
   const serverCrossingsBySlug = useMemo(() => {
-    const m = new Map<string, { crossings: number; artistCrossings: number; lifetimeCrossings: number; lifetimeArtistCrossings: number; topArtistNames?: string[] }>();
+    const m = new Map<string, { crossings: number; artistCrossings: number; lifetimeCrossings: number; lifetimeArtistCrossings: number; topArtistNames: string[] }>();
     for (const cx of selectedCrossings ?? []) {
       m.set(cx.stationSlug, {
         crossings: cx.crossings,
         artistCrossings: cx.artistCrossings,
         lifetimeCrossings: cx.lifetimeCrossings,
         lifetimeArtistCrossings: cx.lifetimeArtistCrossings,
-        topArtistNames: cx.topArtistNames,
+        topArtistNames: cx.topArtistNames ?? [],
       });
     }
     return m;

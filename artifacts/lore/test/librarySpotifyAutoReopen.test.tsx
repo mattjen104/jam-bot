@@ -214,4 +214,52 @@ describe("Library — Spotify auto-import after OAuth connect", () => {
     expect(mockPostStartImport).not.toHaveBeenCalled();
     expect(screen.queryByText("Connect Spotify")).toBeNull();
   });
+
+  it("swallows a 409 silently and still invalidates ME_LATEST_IMPORT_JOB_KEY when an import is already running at reconnect time", async () => {
+    // Arrange: postStartImport rejects with a 409-like error (import already in progress)
+    const conflictError = Object.assign(new Error("Conflict: import already running"), {
+      status: 409,
+    });
+    mockPostStartImport.mockRejectedValueOnce(conflictError);
+
+    // Start with no Spotify connection
+    mockUseMyConnections.mockReturnValue(NO_CONNECTIONS);
+
+    const { rerender, qc } = await renderLibrary();
+
+    // Spy on invalidateQueries after initial render so we don't catch setup calls
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+
+    // Simulate OAuth callback: connections data gains the Spotify entry
+    mockUseMyConnections.mockReturnValue(HAS_SPOTIFY);
+
+    const { default: Library } = await import("../src/pages/Library");
+    await act(async () => {
+      rerender(
+        <QueryClientProvider client={qc}>
+          <Library />
+        </QueryClientProvider>,
+      );
+    });
+
+    // postStartImport must have been called (transition fired)
+    await waitFor(() => {
+      expect(mockPostStartImport).toHaveBeenCalledWith("spotify");
+    });
+
+    // The finally block must have fired — ME_LATEST_IMPORT_JOB_KEY must be invalidated
+    // even though the promise rejected with a 409.
+    await waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: ["me", "import-job", "latest"] }),
+      );
+    });
+
+    // No destructive UI state: no error toast, no modal, no error text
+    expect(screen.queryByTestId("service-picker")).toBeNull();
+    expect(screen.queryByText(/import failed/i)).toBeNull();
+    expect(screen.queryByText("Connect Spotify")).toBeNull();
+    // The import banner should NOT appear (no job data was returned)
+    expect(screen.queryByTestId("library-import-banner")).toBeNull();
+  });
 });
