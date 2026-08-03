@@ -2271,11 +2271,20 @@ function Zone1Placeholder({
   if (hasSeeds) {
     return (
       <div className="z1-placeholder z1-placeholder--seeded">
-        <SeedBar
-          seeds={seeds}
-          onAddSeed={onAddSeed}
-          onRemoveSeed={onRemoveSeed}
-        />
+        <div className="seed-bar-row">
+          <SeedBar
+            seeds={seeds}
+            onAddSeed={onAddSeed}
+            onRemoveSeed={onRemoveSeed}
+          />
+          <button
+            type="button"
+            className="seed-bar__edit-link"
+            onClick={() => window.dispatchEvent(new CustomEvent("lore:open-import-modal", { detail: { mode: "artist-seeds" } }))}
+          >
+            Edit artists →
+          </button>
+        </div>
         <div className="z1-placeholder__status">
           <span className="dial-live-skeleton__pip" />
           <span className="z1-placeholder__lbl">Finding live matches for your artists…</span>

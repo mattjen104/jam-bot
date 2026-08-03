@@ -51,7 +51,6 @@ import {
   X,
   XCircle,
 } from "lucide-react";
-import { ManualImportModal } from "../components/ManualImportModal";
 import { YourWeekCard } from "../components/YourWeekCard";
 import { toast } from "../hooks/use-toast";
 import { writeLibraryFallbackIfAbsent } from "../player/sectionMemory";
@@ -1160,16 +1159,8 @@ export default function Library() {
     } finally { setImportingFile(false); }
   };
 
-  const [importModalOpen, setImportModalOpen] = useState(false);
-  // When truthy, the modal opens directly at this service's guide screen.
-  const [importModalInitialService, setImportModalInitialService] = useState<import("../components/ManualImportModal").ServiceId | undefined>(undefined);
-
-  // Listen for the "Add more +" link in ImportStrip to open this modal
-  useEffect(() => {
-    const handler = () => setImportModalOpen(true);
-    window.addEventListener("lore:open-import-modal", handler);
-    return () => window.removeEventListener("lore:open-import-modal", handler);
-  }, []);
+  /** Dispatch the global open-import-modal event so AppLayout shows the modal. */
+  const openImportModal = () => window.dispatchEvent(new CustomEvent("lore:open-import-modal"));
 
   // Detect a new Spotify connection after OAuth redirect and auto-fire
   // postStartImport("spotify") immediately — no button click required.
@@ -1314,7 +1305,7 @@ export default function Library() {
       if (sessionStorage.getItem("lore:first-run-prompted")) return;
       sessionStorage.setItem("lore:first-run-prompted", "1");
     } catch { return; }
-    setImportModalOpen(true);
+    openImportModal();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keptData, albumAvatar, keepCount, seedArtists.length]);
   const selectorCount = useMemo(() => {
@@ -1335,13 +1326,6 @@ export default function Library() {
 
   return (
     <div className="dial-root">
-      {importModalOpen && (
-        <ManualImportModal
-          initialService={importModalInitialService}
-          onClose={() => { setImportModalOpen(false); setImportModalInitialService(undefined); }}
-          onImportStarted={() => void queryClient.invalidateQueries({ queryKey: ["me", "album-avatar"] })}
-        />
-      )}
       {searchOpen && (
         <SearchOverlay
           dialStations={[]}
@@ -1581,7 +1565,7 @@ export default function Library() {
             {/* Import action — always visible so returning users can add more music */}
             <button
               type="button"
-              onClick={() => setImportModalOpen(true)}
+              onClick={openImportModal}
               className="lib-hero__stat lib-hero__stat--warm"
               style={{ cursor: "pointer", border: "none" }}
               data-testid="library-import-open"
@@ -1656,7 +1640,7 @@ export default function Library() {
             </div>
             <button
               type="button"
-              onClick={() => setImportModalOpen(true)}
+              onClick={openImportModal}
               className="dial-ctabtn dial-ctabtn--keep"
               data-testid="library-import-open"
               style={{ fontSize: 11, padding: "8px 14px" }}
@@ -2235,7 +2219,7 @@ export default function Library() {
                 {/* CTA */}
                 <button
                   type="button"
-                  onClick={() => setImportModalOpen(true)}
+                  onClick={openImportModal}
                   data-testid="library-import-cta"
                   style={{
                     display: "inline-flex",

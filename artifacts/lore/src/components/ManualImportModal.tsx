@@ -12,6 +12,7 @@ import {
   useMyAlbumAvatar,
   useSetAlbumAvatar,
   useSetTasteSeeds,
+  useMyTasteSeeds,
   ME_LATEST_IMPORT_JOB_KEY,
   ME_CONNECTIONS_KEY,
 } from "../lib/meHooks";
@@ -218,6 +219,12 @@ interface Props {
    * a successful OAuth redirect.
    */
   initialService?: ServiceId;
+  /**
+   * When set to "artist-seeds", the modal opens directly at the artist-seeds
+   * chip grid instead of the service picker. Used by the Dial "Edit artists →"
+   * shortcut so returning users don't have to navigate through the picker.
+   */
+  initialMode?: "artist-seeds";
 }
 
 // ---------------------------------------------------------------------------
@@ -328,8 +335,9 @@ function ScreenshotDropZone({
 // Main component
 // ---------------------------------------------------------------------------
 
-export function ManualImportModal({ onClose, onImportStarted, initialService }: Props) {
+export function ManualImportModal({ onClose, onImportStarted, initialService, initialMode }: Props) {
   const [mode, setMode] = useState<Mode>(() => {
+    if (initialMode === "artist-seeds") return "artist-seeds";
     if (!initialService) return "service-picker";
     if (initialService === "listenbrainz") return "listenbrainz";
     if (initialService === "lastfm") return "lfm-hint";
@@ -359,9 +367,26 @@ export function ManualImportModal({ onClose, onImportStarted, initialService }: 
   /** Handle to the OAuth tab so we can detect when it closes. */
   const oauthWindowRef = useRef<Window | null>(null);
 
+  // Existing taste seeds — used to pre-select chips when opening in edit mode
+  const { data: existingSeeds } = useMyTasteSeeds();
+
   // Artist-seeds state
   const [selectedArtists, setSelectedArtists] = useState<Set<string>>(new Set());
   const [seedSaving, setSeedSaving] = useState(false);
+
+  // Pre-populate selectedArtists once existingSeeds resolves, but only on the
+  // first resolution and only when the modal opened in edit mode (initialMode
+  // === "artist-seeds"). A ref guards against re-running if the query refires.
+  const preSeededRef = useRef(false);
+  useEffect(() => {
+    if (initialMode !== "artist-seeds") return;
+    if (preSeededRef.current) return;
+    if (!Array.isArray(existingSeeds)) return;
+    preSeededRef.current = true;
+    if (existingSeeds.length > 0) {
+      setSelectedArtists(new Set(existingSeeds));
+    }
+  }, [initialMode, existingSeeds]);
   // Avatar state
   const [avatarChosen, setAvatarChosen] = useState<string | null>(null);
   const [avatarSaving, setAvatarSaving] = useState(false);
@@ -799,6 +824,12 @@ export function ManualImportModal({ onClose, onImportStarted, initialService }: 
   };
 
   const handleBack = () => {
+    // When opened directly in artist-seeds edit mode (from the Dial shortcut),
+    // "back" has nowhere sensible to go — close the modal instead.
+    if (initialMode === "artist-seeds" && mode === "artist-seeds") {
+      onClose();
+      return;
+    }
     setMode("service-picker");
     setError(null);
     setSelectedService(null);
