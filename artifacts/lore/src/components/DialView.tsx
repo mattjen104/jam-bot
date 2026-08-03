@@ -1719,9 +1719,8 @@ export function DialView() {
                    : "your personal crossings"}
              </span>
            </div>
-          <button type="button" className="dial-act dial-act--listen" onClick={tuneTop} disabled={!topRow}>
-            <span className="dial-act__lbl">▶ Listen</span>
-            <span className="dial-act__dest">{topLabel}</span>
+                    <button type="button" className="dial-act dial-act--listen" onClick={tuneTop} disabled={!topRow}>
+            ▶ Listen{topLabel && <span className="dial-act__suffix"> · {topLabel}</span>}
           </button>
           <button
             type="button"
@@ -1729,8 +1728,7 @@ export function DialView() {
             onClick={scan.toggle}
             disabled={withReason.length === 0}
           >
-            <span className="dial-act__lbl">{scan.scanning ? "■ Stop" : "⇢ Scan"}</span>
-            <span className="dial-act__dest">{scan.scanning ? "sampling" : `all ${withReason.length}`}</span>
+            {scan.scanning ? "■ Stop" : <>↢ Scan<span className="dial-act__suffix"> · {withReason.length}</span></>}
           </button>
         </div>
       )}

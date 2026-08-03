@@ -3276,48 +3276,57 @@
 }
 
 .dial-act {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-  padding: 7px 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 9px;
   border-radius: 6px;
-  border: 1px solid hsl(var(--border) / 0.5);
-  background: hsl(var(--secondary) / 0.3);
+  border: 1px solid transparent;
   cursor: pointer;
-  transition: background 0.1s, border-color 0.1s;
+  transition: background 0.12s, border-color 0.12s, opacity 0.12s;
   flex: none;
-  min-width: 80px;
+  font: 700 10px var(--app-font-label);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
 }
-.dial-act:hover:not(:disabled) { background: hsl(var(--secondary) / 0.6); }
 .dial-act:disabled { opacity: 0.35; cursor: default; }
 
-.dial-act--listen { width: 130px; }
-.dial-act--scan   { width: 90px; }
-
-.dial-act--on {
-  background: hsl(var(--live) / 0.15);
-  border-color: hsl(var(--live) / 0.5);
+/* Listen — warm primary fill */
+.dial-act--listen {
+  background: hsl(var(--primary) / 0.85);
+  color: hsl(var(--primary-foreground));
+  border-color: hsl(var(--primary) / 0.6);
 }
-.dial-act--on .dial-act__lbl { color: hsl(var(--live)); }
-
-.dial-act__lbl {
-  font-family: var(--app-font-label);
-  font-size: 9px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: hsl(var(--foreground) / 0.7);
+.dial-act--listen:hover:not(:disabled) {
+  background: hsl(var(--primary));
 }
-.dial-act__dest {
-  font-family: var(--app-font-display);
-  font-size: 12px;
-  font-weight: 600;
+
+/* Scan — muted secondary, lights up to live when scanning */
+.dial-act--scan {
+  background: hsl(var(--secondary) / 0.45);
+  color: hsl(var(--muted-foreground));
+  border-color: hsl(var(--border) / 0.6);
+}
+.dial-act--scan:hover:not(:disabled) {
+  background: hsl(var(--secondary) / 0.7);
   color: hsl(var(--foreground));
-  white-space: nowrap;
+}
+.dial-act--on {
+  background: hsl(var(--live) / 0.18);
+  border-color: hsl(var(--live) / 0.5);
+  color: hsl(var(--live));
+}
+.dial-act--on:hover:not(:disabled) {
+  background: hsl(var(--live) / 0.28);
+}
+
+/* Inline destination suffix — lighter weight after the action label */
+.dial-act__suffix {
+  font-weight: 500;
+  opacity: 0.7;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
+  max-width: 80px;
 }
 
 /* ── Scan detail band (spec §11) ─────────────────────────────────────────── */
