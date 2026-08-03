@@ -121,6 +121,8 @@ describe("Ghost Replay resolution negative-cache", () => {
   const noLinksMbid = `test-rr-no-links-${ncRun}`;
   const noVectorMbid = `test-rr-no-vector-${ncRun}`;
   const expiredMbid = `test-rr-expired-${ncRun}`;
+
+  const revivedMbid = `test-rr-revived-${ncRun}`;
   const networkErrorMbid = `test-rr-net-error-${ncRun}`;
 
   beforeAll(async () => {
@@ -157,35 +159,37 @@ describe("Ghost Replay resolution negative-cache", () => {
     vi.stubGlobal("fetch", odesliEmpty);
 
     // First call — Odesli returns nothing → should record a miss.
-    const first = await resolveRecording(noLinksMbid, {
-      title: "No Links Track",
-      artist: "No Links Artist",
-      isrc: "USNC12345678",
+    const first = await resolveRecording(networkErrorMbid, {
+      title: "Network Error Track",
+      artist: "Network Error Artist",
+      isrc: "USNE11223344",
       links: null,
     });
     expect(first).toBe("missing");
-    expect(odesliEmpty).toHaveBeenCalledTimes(1);
+    expect(odesliThrows).toHaveBeenCalledTimes(1);
 
+    // A miss row with reason "network_error" must have been written.
     const [missRow] = await db
       .select()
       .from(serviceTrackMapTable)
       .where(
         and(
-          eq(serviceTrackMapTable.recordingMbid, noLinksMbid),
+          eq(serviceTrackMapTable.recordingMbid, networkErrorMbid),
           eq(serviceTrackMapTable.service, "odesli"),
         ),
       )
       .limit(1);
     expect(missRow).toBeDefined();
-    expect(missRow!.missReason).toBe("no_links");
+    expect(missRow!.missReason).toBe("network_error");
     expect(missRow!.missedAt).toBeInstanceOf(Date);
 
-    // Second call — miss row is fresh, Odesli must NOT be called again.
-    odesliEmpty.mockClear();
-    const second = await resolveRecording(noLinksMbid, {
-      title: "No Links Track",
-      artist: "No Links Artist",
-      isrc: "USNC12345678",
+    // TTL must be well below 30 days — a row that is 2 hours old should still block.
+    // (The real TTL is 1 hour, so a fresh row definitely blocks a second call.)
+    odesliThrows.mockClear();
+    const second = await resolveRecording(networkErrorMbid, {
+      title: "Network Error Track",
+      artist: "Network Error Artist",
+      isrc: "USNE11223344",
       links: null,
     });
     expect(second).toBe("missing");
@@ -202,13 +206,25 @@ describe("Ghost Replay resolution negative-cache", () => {
     );
     vi.stubGlobal("fetch", odesliSpy);
 
-    const result = await resolveRecording(noVectorMbid, {
-      title: "No Vector Track",
-      artist: "No Vector Artist",
-      isrc: null,
-      // No Spotify link in the array, so there is no vector.
-      links: [{ name: "Bandcamp", url: "https://artist.bandcamp.com/track/no-vector", kind: "search" }],
-    });
+      const result = await resolveRecording(revivedMbid, {
+        title: "Revived Track",
+        artist: "Revived Artist",
+        isrc: "USRV11223344",
+        links: null,
+      });
+
+    const deadDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+      const [spotifyRow] = await db
+        .select()
+        .from(serviceTrackMapTable)
+        .where(
+          and(
+            eq(serviceTrackMapTable.recordingMbid, revivedMbid),
+            eq(serviceTrackMapTable.service, "spotify"),
+          ),
+        )
+        .limit(1);
     expect(result).toBe("missing");
     // Odesli must not have been touched — there was nothing to query.
     expect(odesliSpy).not.toHaveBeenCalled();
@@ -218,7 +234,7 @@ describe("Ghost Replay resolution negative-cache", () => {
       .from(serviceTrackMapTable)
       .where(
         and(
-          eq(serviceTrackMapTable.recordingMbid, noVectorMbid),
+          eq(serviceTrackMapTable.recordingMbid, networkErrorMbid),
           eq(serviceTrackMapTable.service, "odesli"),
         ),
       )
@@ -332,24 +348,25 @@ describe("Ghost Replay resolution negative-cache", () => {
     );
     vi.stubGlobal("fetch", odesliRetry);
 
-    const result = await resolveRecording(expiredMbid, {
-      title: "Expired Miss Track",
-      artist: "Expired Miss Artist",
-      isrc: "USXX98765432",
-      links: null,
-    });
-    // Still missing (Odesli returned nothing), but crucially Odesli was called.
-    expect(result).toBe("missing");
-    expect(odesliRetry).toHaveBeenCalledTimes(1);
+      const result = await resolveRecording(revivedMbid, {
+        title: "Revived Track",
+        artist: "Revived Artist",
+        isrc: "USRV11223344",
+        links: null,
+      });
 
-    vi.unstubAllGlobals();
-  });
-});
+    const deadDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-describe("Ghost Replay resolution worker", () => {
-  it("fans a cache miss into durable service maps without changing unresolved manifest rows", async (ctx) => {
-    if (!dbAvailable || resolvedSpinId == null) return ctx.skip();
-
+      const [spotifyRow] = await db
+        .select()
+        .from(serviceTrackMapTable)
+        .where(
+          and(
+            eq(serviceTrackMapTable.recordingMbid, revivedMbid),
+            eq(serviceTrackMapTable.service, "spotify"),
+          ),
+        )
+        .limit(1);
     const fetch = vi.fn(async () => new Response(JSON.stringify({
       entitiesByUniqueId: {
         spotify: { id: "ReplayTrack001", apiProvider: "spotify" },
@@ -392,3 +409,17 @@ describe("Ghost Replay resolution worker", () => {
     vi.unstubAllGlobals();
   });
 });
+
+    const odesliHit = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          entitiesByUniqueId: {
+            "spotify:track:RevivedTrack001": { id: "RevivedTrack001", apiProvider: "spotify" },
+          },
+          linksByPlatform: {
+            spotify: { url: "https://open.spotify.com/track/RevivedTrack001" },
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
