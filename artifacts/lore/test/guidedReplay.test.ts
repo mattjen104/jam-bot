@@ -425,6 +425,54 @@ describe("guided Ghost Replay materializer", () => {
     expect(guide.available).toBe(1);
     expect(guide.playable[0]?.source?.service).toBe("tidal_hifi");
   });
+
+  it("a known embed service without embedAutoAdvance produces autoAdvance: false — not true — on its source", () => {
+    // Temporarily register a synthetic known service that has an embedUrlBuilder
+    // but deliberately omits embedAutoAdvance (the default for any new service).
+    const syntheticOption: GuidedServiceOption = {
+      service: "synthstream" as GuidedService,
+      label: "Synth Stream",
+      embedUrlBuilder: (url) =>
+        /^https:\/\/synthstream\.example\/embed\/\d+$/.test(url) ? url : null,
+      // embedAutoAdvance intentionally omitted — this is what a new service author
+      // would write; it must never silently default to true.
+    };
+    (GUIDED_SERVICE_OPTIONS as GuidedServiceOption[]).push(syntheticOption);
+    try {
+      const testEntries = [
+        {
+          position: 0,
+          rawTitle: "Synth Track",
+          rawArtist: "Synth Artist",
+          recording: {
+            mbid: "synth-no-advance",
+            title: "Synth Track",
+            artist: "Synth Artist",
+            links: [
+              {
+                name: "synthstream",
+                url: "https://synthstream.example/embed/42",
+                kind: "exact" as const,
+              },
+            ],
+          },
+          guidedLinks: [],
+        },
+      ];
+
+      const guide = materializeGuidedReplay(testEntries, "synthstream");
+      expect(guide.available).toBe(1);
+      const source = guide.playable[0]?.source;
+      // The URL resolves to an embeddable form, so embedUrl is non-null.
+      expect(source?.embedUrl).not.toBeNull();
+      expect(source?.externalOnly).toBe(false);
+      // The key assertion: omitting embedAutoAdvance must never produce autoAdvance: true.
+      expect(source?.autoAdvance).toBe(false);
+    } finally {
+      const idx = (GUIDED_SERVICE_OPTIONS as GuidedServiceOption[]).indexOf(syntheticOption);
+      if (idx >= 0) (GUIDED_SERVICE_OPTIONS as GuidedServiceOption[]).splice(idx, 1);
+    }
+  });
 });
 
 describe("computeAvailableServices", () => {

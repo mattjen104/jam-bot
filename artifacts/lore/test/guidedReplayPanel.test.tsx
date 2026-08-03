@@ -182,4 +182,39 @@ describe("GuidedReplayPanel — synthetic embed service auto-iframe", () => {
     expect(iframe.getAttribute("src")).toBe("https://synthstream.example/embed/99");
     expect(screen.queryByTestId("guided-external-link")).toBeNull();
   });
+
+  it("shows 'Use Next' hint — not 'advances automatically' — for a synthetic embed service without embedAutoAdvance", () => {
+    render(<GuidedReplayPanel entries={synthEntries} label="Test · Show" />);
+    fireEvent.click(screen.getByTestId("guided-start"));
+
+    // The synthetic service has no embedAutoAdvance, so autoAdvance is false on its source.
+    // The panel must show the "does not report ended" hint, not the YouTube auto-advance copy.
+    expect(screen.getByText(/does not report ended/i)).toBeTruthy();
+    expect(screen.queryByText(/advances automatically/i)).toBeNull();
+  });
+
+  it("does not auto-advance when a YouTube-origin postMessage arrives while the synthetic embed service is active", () => {
+    // The postMessage listener in GuidedReplayPanel is gated on
+    // current.source.service === "youtube". A synthetic service without
+    // embedAutoAdvance must never be wired to that listener, so a YouTube ENDED
+    // message must leave the player exactly where it started.
+    render(<GuidedReplayPanel entries={synthEntries} label="Test · Show" />);
+    fireEvent.click(screen.getByTestId("guided-start"));
+
+    // Single-entry guide: Next button is disabled.
+    expect((screen.getByTestId("guided-next") as HTMLButtonElement).disabled).toBe(true);
+
+    // Simulate the exact postMessage payload YouTube sends when a video ends.
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        origin: "https://www.youtube.com",
+        data: JSON.stringify({ event: "onStateChange", info: 0 }),
+      }),
+    );
+
+    // Next is still disabled — the player did not move.
+    expect((screen.getByTestId("guided-next") as HTMLButtonElement).disabled).toBe(true);
+    // The "Use Next" hint is still visible — the synthetic service did not advance.
+    expect(screen.getByText(/does not report ended/i)).toBeTruthy();
+  });
 });
