@@ -137,7 +137,8 @@ export const stationsTable = pgTable("stations", {
    * parser mapping (source="station_page"), and the per-station Spinitron API
    * key (source="spinitron"). Never contains secrets meant to be public.
    */
-  nowPlayingConfig: jsonb("now_playing_config").$type<Record<string, unknown>>(),
+  nowPlayingConfig:
+    jsonb("now_playing_config").$type<Record<string, unknown>>(),
   /**
    * Station class for Segue-mode weighting. Passthrough/curated + community
    * stations rank above commercial sources; a purely commercial feed would be
@@ -838,7 +839,8 @@ export const spotifyConnectionsTable = pgTable("spotify_connections", {
 });
 
 export type SpotifyConnection = typeof spotifyConnectionsTable.$inferSelect;
-export type InsertSpotifyConnection = typeof spotifyConnectionsTable.$inferInsert;
+export type InsertSpotifyConnection =
+  typeof spotifyConnectionsTable.$inferInsert;
 
 /**
  * A **track claim** — one grounded, citable fact about a recording, extracted
@@ -1168,9 +1170,7 @@ export const libraryItemsTable = pgTable(
     mbid: text("mbid")
       .notNull()
       .references(() => recordingsTable.mbid),
-    provenance: jsonb("provenance")
-      .$type<LibraryItemProvenance>()
-      .notNull(),
+    provenance: jsonb("provenance").$type<LibraryItemProvenance>().notNull(),
     /**
      * The spin this keep came from, when the save happened off a live play
      * (station dial / ride / webplayer). Null for imports and direct keeps.
@@ -1356,9 +1356,7 @@ export const keepTargetsTable = pgTable(
     service: text("service").notNull(),
     enabled: boolean("enabled").notNull().default(true),
   },
-  (t) => [
-    uniqueIndex("keep_targets_user_service_idx").on(t.userId, t.service),
-  ],
+  (t) => [uniqueIndex("keep_targets_user_service_idx").on(t.userId, t.service)],
 );
 
 export type KeepTarget = typeof keepTargetsTable.$inferSelect;
@@ -1600,11 +1598,7 @@ export const listsTable = pgTable(
     retrievedAt: timestamp("retrieved_at").defaultNow().notNull(),
   },
   (t) => [
-    uniqueIndex("lists_source_title_year_idx").on(
-      t.sourceId,
-      t.title,
-      t.year,
-    ),
+    uniqueIndex("lists_source_title_year_idx").on(t.sourceId, t.title, t.year),
   ],
 );
 
@@ -1924,7 +1918,13 @@ export const librarySyncJobsTable = pgTable("library_sync_jobs", {
    * Cleared to null once the matching phase completes.
    */
   matchedJson: jsonb("matched_json").$type<{
-    matched: Array<{ mbid: string; title: string; artist: string; spotifyId: string; confidence: "link" | "isrc" | "search" }>;
+    matched: Array<{
+      mbid: string;
+      title: string;
+      artist: string;
+      spotifyId: string;
+      confidence: "link" | "isrc" | "search";
+    }>;
     unmatched: Array<{ mbid: string; title: string; artist: string }>;
   }>(),
 });
@@ -2102,14 +2102,18 @@ export const spotifyLibraryItemsTable = pgTable(
     mbid: text("mbid").references(() => recordingsTable.mbid),
   },
   (t) => [
-    uniqueIndex("spotify_library_items_user_spotify_idx").on(t.userId, t.spotifyId),
+    uniqueIndex("spotify_library_items_user_spotify_idx").on(
+      t.userId,
+      t.spotifyId,
+    ),
     index("spotify_library_items_user_added_idx").on(t.userId, t.addedAt),
     index("spotify_library_items_isrc_idx").on(t.isrc),
   ],
 );
 
 export type SpotifyLibraryItem = typeof spotifyLibraryItemsTable.$inferSelect;
-export type InsertSpotifyLibraryItem = typeof spotifyLibraryItemsTable.$inferInsert;
+export type InsertSpotifyLibraryItem =
+  typeof spotifyLibraryItemsTable.$inferInsert;
 
 /**
  * Shared persistent cache for per-user crossing results.
@@ -2132,13 +2136,15 @@ export const crossingsCacheTable = pgTable("crossings_cache", {
    * Serialised CrossingsRow[] — the same shape returned by GET /api/me/crossings.
    * Stored as jsonb so Postgres can store/retrieve it cheaply without a scan.
    */
-  data: jsonb("data").notNull().$type<Array<{
-    stationSlug: string;
-    crossings: number;
-    artistCrossings: number;
-    lifetimeCrossings: number;
-    lifetimeArtistCrossings: number;
-  }>>(),
+  data: jsonb("data").notNull().$type<
+    Array<{
+      stationSlug: string;
+      crossings: number;
+      artistCrossings: number;
+      lifetimeCrossings: number;
+      lifetimeArtistCrossings: number;
+    }>
+  >(),
   /** When the data was last computed (used for TTL checks). */
   builtAt: timestamp("built_at").notNull(),
 });
@@ -2164,7 +2170,8 @@ export const migrationCompletionsTable = pgTable("migration_completions", {
 });
 
 export type MigrationCompletion = typeof migrationCompletionsTable.$inferSelect;
-export type InsertMigrationCompletion = typeof migrationCompletionsTable.$inferInsert;
+export type InsertMigrationCompletion =
+  typeof migrationCompletionsTable.$inferInsert;
 
 // ---- Attendance (heard-it, not kept-it) -----------------------------------
 
@@ -2367,8 +2374,10 @@ export const attendanceWeeklyRollupsTable = pgTable(
   ],
 );
 
-export type AttendanceWeeklyRollup = typeof attendanceWeeklyRollupsTable.$inferSelect;
-export type InsertAttendanceWeeklyRollup = typeof attendanceWeeklyRollupsTable.$inferInsert;
+export type AttendanceWeeklyRollup =
+  typeof attendanceWeeklyRollupsTable.$inferSelect;
+export type InsertAttendanceWeeklyRollup =
+  typeof attendanceWeeklyRollupsTable.$inferInsert;
 
 // ---- Taste seeds (zero-friction onboarding) --------------------------------
 
@@ -2469,11 +2478,103 @@ export const songBottlesTable = pgTable(
 export type SongBottle = typeof songBottlesTable.$inferSelect;
 export type InsertSongBottle = typeof songBottlesTable.$inferInsert;
 
-export type InsertReplayResolutionJob = typeof replayResolutionJobsTable.$inferInsert;
+export type InsertReplayResolutionJob =
+  typeof replayResolutionJobsTable.$inferInsert;
 
 export type InsertServiceTrackMap = typeof serviceTrackMapTable.$inferInsert;
 
 export type ServiceTrackMap = typeof serviceTrackMapTable.$inferSelect;
+
+/**
+ * Durable facts about an in-page embed candidate.
+ *
+ * This is intentionally not part of service_track_map.  That table has one
+ * general streaming link per service, while a recording may need Bandcamp for
+ * provenance and YouTube (or another control-capable provider in a later
+ * iteration) for playback control.
+ */
+export const embedLinkTable = pgTable(
+  "embed_link",
+  {
+    id: serial("id").primaryKey(),
+    recordingMbid: text("recording_mbid")
+      .notNull()
+      .references(() => recordingsTable.mbid),
+    /** "bandcamp" | "youtube". */
+    provider: text("provider").notNull(),
+    /** "provenance" | "control". */
+    role: text("role").notNull(),
+    /** Resolution ladder rung: 1–4 playable, 5 link-out, 6 no result. */
+    rung: integer("rung").notNull(),
+    /**
+     * "embedded" | "link_out" | "no_link" | "expired" |
+     * "transient_failure".
+     */
+    outcome: text("outcome").notNull(),
+    /** Chosen MusicBrainz release, when the provider result has one. */
+    releaseMbid: text("release_mbid"),
+    /** Provider-native release/album identifier, when available. */
+    providerReleaseId: text("provider_release_id"),
+    /** Provider-native track/video identifier, when available. */
+    providerTrackId: text("provider_track_id"),
+    /** The already-known provider URL; never fetched page content. */
+    sourceUrl: text("source_url"),
+    /** "mb-url-rel" | "page-extract" | "yt-search" | "cache". */
+    resolvedVia: text("resolved_via").notNull(),
+    /** "exact" | "gated" | "none". */
+    confidence: text("confidence").notNull(),
+    /** Machine-readable explanation of the decision or failure. */
+    reason: text("reason").notNull(),
+    /** Release chosen before a changed choice was recorded. */
+    previousReleaseMbid: text("previous_release_mbid"),
+    /** When a changed release choice was observed. */
+    releaseChangedAt: timestamp("release_changed_at"),
+    /** When this provider/role was last attempted. */
+    fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
+    /** TTL boundary for both positive and negative provider-scoped results. */
+    expiresAt: timestamp("expires_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("embed_link_recording_provider_role_uq").on(
+      t.recordingMbid,
+      t.provider,
+      t.role,
+    ),
+    index("embed_link_recording_idx").on(t.recordingMbid),
+    index("embed_link_provider_role_idx").on(t.provider, t.role),
+    index("embed_link_expiry_idx").on(t.expiresAt),
+    index("embed_link_metrics_idx").on(
+      t.provider,
+      t.role,
+      t.rung,
+      t.outcome,
+      t.fetchedAt,
+    ),
+    check("embed_link_rung_ck", sql`${t.rung} between 1 and 6`),
+    check(
+      "embed_link_provider_ck",
+      sql`${t.provider} in ('bandcamp', 'youtube')`,
+    ),
+    check("embed_link_role_ck", sql`${t.role} in ('provenance', 'control')`),
+    check(
+      "embed_link_outcome_ck",
+      sql`(
+        (${t.outcome} = 'embedded' and ${t.rung} between 1 and 4) or
+        (${t.outcome} = 'link_out' and ${t.rung} = 5) or
+        (${t.outcome} = 'no_link' and ${t.rung} = 6) or
+        (${t.outcome} = 'expired' and ${t.rung} between 1 and 5) or
+        (${t.outcome} = 'transient_failure' and ${t.rung} between 1 and 6)
+      )`,
+    ),
+  ],
+);
+
+/** Alias matching the plural domain wording used by callers. */
+export const embedLinksTable = embedLinkTable;
+export type EmbedLink = typeof embedLinkTable.$inferSelect;
+export type InsertEmbedLink = typeof embedLinkTable.$inferInsert;
 
 export type ReplayResolutionJob = typeof replayResolutionJobsTable.$inferSelect;
 
@@ -2503,7 +2604,9 @@ export const replayMaterializationJobsTable = pgTable(
   "replay_materialization_jobs",
   {
     id: serial("id").primaryKey(),
-    userId: integer("user_id").notNull().references(() => loreUsersTable.id),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => loreUsersTable.id),
     replayId: integer("replay_id").notNull(),
     service: text("service").notNull(),
     status: text("status").notNull().default("pending"),
@@ -2529,8 +2632,10 @@ export const replayMaterializationJobsTable = pgTable(
   ],
 );
 
-export type ReplayMaterializationJob = typeof replayMaterializationJobsTable.$inferSelect;
-export type InsertReplayMaterializationJob = typeof replayMaterializationJobsTable.$inferInsert;
+export type ReplayMaterializationJob =
+  typeof replayMaterializationJobsTable.$inferSelect;
+export type InsertReplayMaterializationJob =
+  typeof replayMaterializationJobsTable.$inferInsert;
 
 /**
  * User-triggered, resumable Ghost Replay resolution.  The replay manifest

@@ -75,6 +75,82 @@ export async function applyReplayResolutionMigration(): Promise<void> {
       ON service_track_map (recording_mbid)
   `);
 
+  // Role-aware in-page embed facts deliberately live beside, not inside,
+  // service_track_map. The latter remains the one-row-per-service source for
+  // general streaming links and playlist materialization.
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS embed_link (
+      id                    serial PRIMARY KEY,
+      recording_mbid        text NOT NULL REFERENCES recordings(mbid),
+      provider              text NOT NULL,
+      role                  text NOT NULL,
+      rung                  integer NOT NULL,
+      outcome               text NOT NULL,
+      release_mbid          text,
+      provider_release_id   text,
+      provider_track_id     text,
+      source_url            text,
+      resolved_via          text NOT NULL,
+      confidence            text NOT NULL,
+      reason                text NOT NULL,
+      previous_release_mbid text,
+      release_changed_at    timestamp,
+      fetched_at            timestamp NOT NULL DEFAULT now(),
+      expires_at            timestamp NOT NULL,
+      created_at            timestamp NOT NULL DEFAULT now(),
+      updated_at            timestamp NOT NULL DEFAULT now(),
+      CONSTRAINT embed_link_recording_provider_role_uq
+        UNIQUE (recording_mbid, provider, role),
+      CONSTRAINT embed_link_rung_ck
+        CHECK (rung BETWEEN 1 AND 6),
+      CONSTRAINT embed_link_provider_ck
+        CHECK (provider IN ('bandcamp', 'youtube')),
+      CONSTRAINT embed_link_role_ck
+        CHECK (role IN ('provenance', 'control')),
+      CONSTRAINT embed_link_outcome_ck
+        CHECK (
+          (outcome = 'embedded' AND rung BETWEEN 1 AND 4) OR
+          (outcome = 'link_out' AND rung = 5) OR
+          (outcome = 'no_link' AND rung = 6) OR
+          (outcome = 'expired' AND rung BETWEEN 1 AND 5) OR
+          (outcome = 'transient_failure' AND rung BETWEEN 1 AND 6)
+        )
+    )
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS embed_link_recording_idx
+      ON embed_link (recording_mbid)
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS embed_link_provider_role_idx
+      ON embed_link (provider, role)
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS embed_link_expiry_idx
+      ON embed_link (expires_at)
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS embed_link_metrics_idx
+      ON embed_link (provider, role, rung, outcome, fetched_at)
+  `);
+  // Refresh the outcome/rung invariant for installations that created the
+  // table during an earlier boot of this additive migration.
+  await db.execute(sql`
+    ALTER TABLE embed_link
+      DROP CONSTRAINT IF EXISTS embed_link_outcome_ck
+  `);
+  await db.execute(sql`
+    ALTER TABLE embed_link
+      ADD CONSTRAINT embed_link_outcome_ck
+      CHECK (
+        (outcome = 'embedded' AND rung BETWEEN 1 AND 4) OR
+        (outcome = 'link_out' AND rung = 5) OR
+        (outcome = 'no_link' AND rung = 6) OR
+        (outcome = 'expired' AND rung BETWEEN 1 AND 5) OR
+        (outcome = 'transient_failure' AND rung BETWEEN 1 AND 6)
+      )
+  `);
+
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS replay_resolution_jobs (
       id                serial PRIMARY KEY,

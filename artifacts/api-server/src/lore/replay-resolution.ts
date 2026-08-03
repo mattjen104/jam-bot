@@ -7,9 +7,46 @@ import {
   type ReplayResolutionFailure,
   type ReplayResolutionJob,
 } from "@workspace/db";
-import { and, asc, eq, gte, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  sql,
+} from "drizzle-orm";
 import { fetchOdesli } from "@workspace/song-enrichment";
 import { getReplayManifest } from "./replay.js";
+
+// The general service-link resolver remains here for replay materialization.
+// Role-aware in-page embeds have their own table and persistence contract.
+export {
+  EMBED_CONFIDENCES,
+  EMBED_OUTCOMES,
+  EMBED_PROVIDERS,
+  EMBED_RESOLUTION_METHODS,
+  EMBED_ROLES,
+  EMBED_TTL_MS,
+  embedExpiresAt,
+  embedIdentity,
+  effectiveEmbedOutcome,
+  getEmbedResolution,
+  isEmbedResolutionExpired,
+  listEmbedResolutions,
+  markEmbedResolutionExpired,
+  upsertEmbedResolution,
+  type EmbedConfidence,
+  type EmbedLink,
+  type EmbedOutcome,
+  type EmbedProvider,
+  type EmbedResolutionInput,
+  type EmbedResolutionMethod,
+  type EmbedResolutionState,
+  type EmbedRole,
+  type EmbedRung,
+} from "./embed-resolution.js";
 
 const ODESLI_JOB_GAP_MS = 1_000;
 const FAILURE_CAP = 100;
@@ -48,12 +85,16 @@ export interface ReplayMaterializer {
 const materializers = new Map<string, ReplayMaterializer>();
 
 /** Registry seam for later Spotify/Apple/Tidal playback materializers. */
-export function registerReplayMaterializer(materializer: ReplayMaterializer): () => void {
+export function registerReplayMaterializer(
+  materializer: ReplayMaterializer,
+): () => void {
   materializers.set(materializer.service, materializer);
   return () => materializers.delete(materializer.service);
 }
 
-export function getReplayMaterializer(service: string): ReplayMaterializer | undefined {
+export function getReplayMaterializer(
+  service: string,
+): ReplayMaterializer | undefined {
   return materializers.get(service);
 }
 
@@ -86,9 +127,10 @@ async function computeMissBreakdown(
   replayId: number,
 ): Promise<ReplayResolutionMissBreakdown> {
   const manifest = await getReplayManifest(replayId);
-  const mbids = manifest?.entries.flatMap((e) =>
-    e.recording?.mbid ? [e.recording.mbid] : [],
-  ) ?? [];
+  const mbids =
+    manifest?.entries.flatMap((e) =>
+      e.recording?.mbid ? [e.recording.mbid] : [],
+    ) ?? [];
   if (!mbids.length) return { noVector: 0, noLinks: 0, noRecording: 0 };
 
   // Exclude any MBID that now has at least one live exact positive mapping —
@@ -107,7 +149,8 @@ async function computeMissBreakdown(
     );
   const resolvedSet = new Set(resolvedRows.map((r) => r.recordingMbid));
   const unresolvedMbids = mbids.filter((m) => !resolvedSet.has(m));
-  if (!unresolvedMbids.length) return { noVector: 0, noLinks: 0, noRecording: 0 };
+  if (!unresolvedMbids.length)
+    return { noVector: 0, noLinks: 0, noRecording: 0 };
 
   const rows = await db
     .select({
@@ -124,11 +167,16 @@ async function computeMissBreakdown(
     )
     .groupBy(serviceTrackMapTable.missReason);
 
-  const breakdown: ReplayResolutionMissBreakdown = { noVector: 0, noLinks: 0, noRecording: 0 };
+  const breakdown: ReplayResolutionMissBreakdown = {
+    noVector: 0,
+    noLinks: 0,
+    noRecording: 0,
+  };
   for (const row of rows) {
     if (row.missReason === "no_vector") breakdown.noVector = row.count;
     else if (row.missReason === "no_links") breakdown.noLinks = row.count;
-    else if (row.missReason === "no_recording") breakdown.noRecording = row.count;
+    else if (row.missReason === "no_recording")
+      breakdown.noRecording = row.count;
   }
   return breakdown;
 }
@@ -218,12 +266,19 @@ const SERVICE_NAMES: Record<string, string> = {
 };
 
 export function canonicalReplayService(key: string): string {
-  return SERVICE_NAMES[key] ?? key.replace(/([a-z])([A-Z])/g, "$1_$2").toLowerCase();
+  return (
+    SERVICE_NAMES[key] ?? key.replace(/([a-z])([A-Z])/g, "$1_$2").toLowerCase()
+  );
 }
 
-function serviceId(url: string, service: string, body: OdesliBody): string | null {
+function serviceId(
+  url: string,
+  service: string,
+  body: OdesliBody,
+): string | null {
   const entity = Object.values(body.entitiesByUniqueId ?? {}).find(
-    (candidate) => canonicalReplayService(candidate.apiProvider ?? "") === service,
+    (candidate) =>
+      canonicalReplayService(candidate.apiProvider ?? "") === service,
   );
   if (entity?.id?.trim()) return entity.id.trim();
   try {
@@ -238,7 +293,9 @@ function serviceId(url: string, service: string, body: OdesliBody): string | nul
 function existingExactOdesliVector(
   links: Array<{ name: string; url: string }> | null,
 ): string | null {
-  const spotify = links?.find((link) => /spotify\.com\/track\//i.test(link.url));
+  const spotify = links?.find((link) =>
+    /spotify\.com\/track\//i.test(link.url),
+  );
   if (spotify) return spotify.url;
   return null;
 }
@@ -284,8 +341,10 @@ export async function upsertServiceTrackMap(input: {
     .limit(1);
   if (
     existing &&
-    mapRank(existing.method, existing.confidence) > mapRank(input.method, input.confidence)
-  ) return;
+    mapRank(existing.method, existing.confidence) >
+      mapRank(input.method, input.confidence)
+  )
+    return;
 
   await db
     .insert(serviceTrackMapTable)
@@ -296,7 +355,10 @@ export async function upsertServiceTrackMap(input: {
       lastVerifiedAt: input.verification === "verified" ? new Date() : null,
     })
     .onConflictDoUpdate({
-      target: [serviceTrackMapTable.recordingMbid, serviceTrackMapTable.service],
+      target: [
+        serviceTrackMapTable.recordingMbid,
+        serviceTrackMapTable.service,
+      ],
       set: {
         externalId: input.externalId,
         url: input.url,
@@ -305,7 +367,10 @@ export async function upsertServiceTrackMap(input: {
         verification: input.verification,
         deadLink: false,
         deadAt: null,
-        lastVerifiedAt: input.verification === "verified" ? new Date() : sql`${serviceTrackMapTable.lastVerifiedAt}`,
+        lastVerifiedAt:
+          input.verification === "verified"
+            ? new Date()
+            : sql`${serviceTrackMapTable.lastVerifiedAt}`,
         // Clear any stale negative-cache fields when a positive hit arrives.
         missReason: null,
         missedAt: null,
@@ -356,7 +421,10 @@ export async function upsertServiceTrackMapMiss(
       missedAt: new Date(),
     })
     .onConflictDoUpdate({
-      target: [serviceTrackMapTable.recordingMbid, serviceTrackMapTable.service],
+      target: [
+        serviceTrackMapTable.recordingMbid,
+        serviceTrackMapTable.service,
+      ],
       set: {
         missReason: reason,
         missedAt: new Date(),
@@ -382,7 +450,16 @@ export async function markServiceTrackMapDead(
 
 export async function resolveRecording(
   mbid: string,
-  recording: { title: string; artist: string; isrc: string | null; links: Array<{ name: string; url: string; kind: "exact" | "search" }> | null },
+  recording: {
+    title: string;
+    artist: string;
+    isrc: string | null;
+    links: Array<{
+      name: string;
+      url: string;
+      kind: "exact" | "search";
+    }> | null;
+  },
 ): Promise<"resolved" | "missing" | "network_error"> {
   // Short-circuit if an exact hit already exists — nothing to do.
   const [existing] = await db
@@ -448,7 +525,10 @@ export async function resolveRecording(
     return "network_error";
   }
   const links = Object.entries(body.linksByPlatform ?? {})
-      .map(([platform, value]) => ({ service: canonicalReplayService(platform), url: value.url?.trim() ?? "" }))
+    .map(([platform, value]) => ({
+      service: canonicalReplayService(platform),
+      url: value.url?.trim() ?? "",
+    }))
     .filter((link) => link.url);
   if (!links.length) {
     // Odesli returned nothing — record the miss so we don't retry for 30 days.
@@ -484,22 +564,33 @@ export async function runReplayResolutionWorker(jobId: number): Promise<void> {
     if (!job || job.status === "done" || job.status === "error") return;
     const manifest = await getReplayManifest(job.replayId);
     if (!manifest) {
-      await db.update(replayResolutionJobsTable)
-        .set({ status: "error", error: "Replay manifest no longer exists", finishedAt: new Date() })
+      await db
+        .update(replayResolutionJobsTable)
+        .set({
+          status: "error",
+          error: "Replay manifest no longer exists",
+          finishedAt: new Date(),
+        })
         .where(eq(replayResolutionJobsTable.id, jobId));
       await emitJob(jobId);
       return;
     }
 
-    await db.update(replayResolutionJobsTable)
+    await db
+      .update(replayResolutionJobsTable)
       .set({ status: "running", total: manifest.entries.length })
       .where(eq(replayResolutionJobsTable.id, jobId));
     await emitJob(jobId);
 
     let current = job;
-    for (let position = job.committedOffset; position < manifest.entries.length; position++) {
+    for (
+      let position = job.committedOffset;
+      position < manifest.entries.length;
+      position++
+    ) {
       const entry = manifest.entries[position]!;
-      let outcome: "resolved" | "missing" | "network_error" | "failed" = "missing";
+      let outcome: "resolved" | "missing" | "network_error" | "failed" =
+        "missing";
       let failure: ReplayResolutionFailure | null = null;
       try {
         const mbid = entry.recording?.mbid;
@@ -536,7 +627,7 @@ export async function runReplayResolutionWorker(jobId: number): Promise<void> {
 
       const failures = failure
         ? [...(current.failures ?? []), failure].slice(-FAILURE_CAP)
-        : current.failures ?? [];
+        : (current.failures ?? []);
       // "network_error" counts as a miss for backward compatibility and also
       // increments networkErrors so operators can distinguish it from a genuine miss.
       const isMiss = outcome === "missing" || outcome === "network_error";
@@ -546,7 +637,8 @@ export async function runReplayResolutionWorker(jobId: number): Promise<void> {
           processed: current.processed + 1,
           resolved: current.resolved + (outcome === "resolved" ? 1 : 0),
           missing: current.missing + (isMiss ? 1 : 0),
-          networkErrors: current.networkErrors + (outcome === "network_error" ? 1 : 0),
+          networkErrors:
+            current.networkErrors + (outcome === "network_error" ? 1 : 0),
           failed: current.failed + (outcome === "failed" ? 1 : 0),
           committedOffset: position + 1,
           failures,
@@ -557,12 +649,14 @@ export async function runReplayResolutionWorker(jobId: number): Promise<void> {
       await emitJob(jobId);
     }
 
-    await db.update(replayResolutionJobsTable)
+    await db
+      .update(replayResolutionJobsTable)
       .set({ status: "done", finishedAt: new Date() })
       .where(eq(replayResolutionJobsTable.id, jobId));
     await emitJob(jobId);
   } catch (err) {
-    await db.update(replayResolutionJobsTable)
+    await db
+      .update(replayResolutionJobsTable)
       .set({
         status: "error",
         error: err instanceof Error ? err.message : String(err),
@@ -582,5 +676,6 @@ export async function resumeReplayResolutionJobs(): Promise<void> {
     .select({ id: replayResolutionJobsTable.id })
     .from(replayResolutionJobsTable)
     .where(inArray(replayResolutionJobsTable.status, ["pending", "running"]));
-  for (const job of jobs) setImmediate(() => void runReplayResolutionWorker(job.id));
+  for (const job of jobs)
+    setImmediate(() => void runReplayResolutionWorker(job.id));
 }
