@@ -7,9 +7,12 @@ import {
   stationsTable,
   spinsTable,
   recordingsTable,
+  resolutionCacheTable,
 } from "@workspace/db";
 import {
   applyArtistMetadataCleanup,
+  applyResolutionCollisionCleanup,
+  applySyntheticUrlArtistCleanup,
   applyUrlArtistRepair,
 } from "../src/lore/artist-metadata-cleanup.js";
 import { applyMigrationCompletionsMigration } from "../src/lore/migration-completions-migration.js";
@@ -55,9 +58,10 @@ beforeAll(async () => {
 afterAll(async () => {
   if (!dbAvailable || !stationId) return;
   await db.delete(spinsTable).where(inArray(spinsTable.stationId, [stationId]));
+  await db.execute(sql`DELETE FROM station_quality WHERE station_id = ${stationId}`);
   await db.delete(stationsTable).where(inArray(stationsTable.id, [stationId]));
   await db.execute(
-    sql`DELETE FROM migration_completions WHERE name IN ('applyArtistMetadataCleanup', 'applyUrlArtistRepair')`,
+    sql`DELETE FROM migration_completions WHERE name IN ('applyArtistMetadataCleanup', 'applyUrlArtistRepair', 'applySyntheticUrlArtistCleanup', 'applyResolutionCollisionCleanup')`,
   );
 }, 30_000);
 
@@ -65,7 +69,7 @@ afterAll(async () => {
 beforeEach(async () => {
   if (!dbAvailable) return;
   await db.execute(
-    sql`DELETE FROM migration_completions WHERE name IN ('applyArtistMetadataCleanup', 'applyUrlArtistRepair')`,
+    sql`DELETE FROM migration_completions WHERE name IN ('applyArtistMetadataCleanup', 'applyUrlArtistRepair', 'applySyntheticUrlArtistCleanup', 'applyResolutionCollisionCleanup')`,
   );
 }, 10_000);
 
@@ -479,7 +483,7 @@ describe("applyUrlArtistRepair", () => {
   );
 
   it(
-    "counts a sp: synthetic MBID with a domain artist as skipped (completion still written)",
+    "sanitizes a sp: synthetic MBID with a domain artist",
     { timeout: 30_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
@@ -494,14 +498,122 @@ describe("applyUrlArtistRepair", () => {
         const result = await applyUrlArtistRepair({ _testMbids: [syntheticMbid] });
         expect(result.urlArtistSkippedSynthetic).toBe(1);
         expect(result.urlArtistFixed).toBe(0);
-        // sp: row left unchanged — manual review needed
-        expect(await getArtist(syntheticMbid)).toBe("wellsfargo.com");
-        // sp: candidates do NOT block completion
+        // The dedicated synthetic cleanup is what repairs a deployment where
+        // URL artist repair already completed before this guard existed.
+        await db.execute(
+          sql`DELETE FROM migration_completions WHERE name = 'applySyntheticUrlArtistCleanup'`,
+        );
+        const cleanup = await applySyntheticUrlArtistCleanup({ _testMbids: [syntheticMbid] });
+        expect(cleanup.recordingsSanitized).toBe(1);
+        expect(await getArtist(syntheticMbid)).toBe("Unknown artist");
+        const [rawSpin] = await db.execute(
+          sql`SELECT raw_artist, raw_title FROM spins WHERE id = ${spinId}`,
+        ).then((result) => result.rows as Array<{ raw_artist: string; raw_title: string }>);
+        expect(rawSpin).toEqual({
+          raw_artist: "wellsfargo.com",
+          raw_title: "Unknown Song",
+        });
+        const secondCleanup = await applySyntheticUrlArtistCleanup({ _testMbids: [syntheticMbid] });
+        expect(secondCleanup.recordingsSanitized).toBe(0);
         expect(await hasUrlRepairCompletion()).toBe(true);
+        const completion = await db.execute(
+          sql`SELECT 1 FROM migration_completions WHERE name = 'applySyntheticUrlArtistCleanup'`,
+        );
+        expect(completion.rows.length).toBe(1);
       } finally {
         await db.execute(sql`DELETE FROM spins WHERE id = ${spinId}`);
         await db.execute(sql`UPDATE spins SET mbid = NULL WHERE mbid = ${syntheticMbid}`);
         await db.execute(sql`DELETE FROM recordings WHERE mbid = ${syntheticMbid}`);
+      }
+    },
+  );
+
+  it(
+    "does not sanitize a valid international artist",
+    { timeout: 30_000 },
+    async (ctx) => {
+      if (!dbAvailable || !stationId) return ctx.skip();
+
+      const mbid = `sp:test-valid-international-${run}`;
+      await insertRecordingWithMbid(mbid, "坂本龍一", "Merry Christmas Mr. Lawrence");
+      const spinId = await insertSpin(mbid, "spinitron", "坂本龍一", "Merry Christmas Mr. Lawrence");
+
+      try {
+        const result = await applySyntheticUrlArtistCleanup({ _testMbids: [mbid] });
+        expect(result.recordingsSanitized).toBe(0);
+        expect(await getArtist(mbid)).toBe("坂本龍一");
+      } finally {
+        await db.execute(sql`DELETE FROM spins WHERE id = ${spinId}`);
+        await db.execute(sql`DELETE FROM recordings WHERE mbid = ${mbid}`);
+      }
+    },
+  );
+
+  it(
+    "detaches only legacy spins mismatched through the non-Latin cache collision",
+    { timeout: 30_000 },
+    async (ctx) => {
+      if (!dbAvailable || !stationId) return ctx.skip();
+
+      const mbid = `test-collision-${run}`;
+      await insertRecordingWithMbid(mbid, "Камелия", "Луда по тебе");
+      const matchingSpinId = await insertSpin(mbid, "spinitron", "Камелия", "Луда по тебе");
+      const mismatchedSpinId = await insertSpin(mbid, "spinitron", "Кино", "Группа крови");
+
+      try {
+        await db.execute(sql`DELETE FROM resolution_cache WHERE key = ${"\u001f"}`);
+        await db.insert(resolutionCacheTable).values({
+          key: "\u001f",
+          mbid,
+          confidence: "text",
+        });
+        const result = await applyResolutionCollisionCleanup({ _testMbids: [mbid] });
+        expect(result.spinsDetached).toBe(1);
+        expect(result.cacheEntriesPurged).toBe(1);
+
+        const rows = await db.execute<{ id: number; mbid: string | null }>(sql`
+          SELECT id, mbid FROM spins WHERE id IN (${matchingSpinId}, ${mismatchedSpinId}) ORDER BY id
+        `);
+        expect(rows.rows).toEqual([
+          { id: matchingSpinId, mbid },
+          { id: mismatchedSpinId, mbid: null },
+        ]);
+        expect((await applyResolutionCollisionCleanup({ _testMbids: [mbid] })).spinsDetached).toBe(0);
+      } finally {
+        await db.execute(sql`DELETE FROM resolution_cache WHERE key = ${"\u001f"}`);
+        await db.execute(sql`DELETE FROM spins WHERE id IN (${matchingSpinId}, ${mismatchedSpinId})`);
+        await db.execute(sql`DELETE FROM recordings WHERE mbid = ${mbid}`);
+      }
+    },
+  );
+
+  it(
+    "recognizes collision-era contamination even after its cache key was purged",
+    { timeout: 30_000 },
+    async (ctx) => {
+      if (!dbAvailable || !stationId) return ctx.skip();
+
+      const mbid = "a7c3b123-1234-4abc-9def-123456789abc";
+      await insertRecordingWithMbid(mbid, "Камелия", "Луда по тебе");
+      const canonicalSpinId = await insertSpin(mbid, "spinitron", "Камелия", "Луда по тебе");
+      const mismatchedIds = await Promise.all(
+        Array.from({ length: 24 }, (_, index) =>
+          insertSpin(mbid, "spinitron", `Артист ${index}`, `Песня ${index}`),
+        ),
+      );
+
+      try {
+        const result = await applyResolutionCollisionCleanup();
+        expect(result.spinsDetached).toBe(24);
+
+        const rows = await db.execute<{ id: number; mbid: string | null }>(sql`
+          SELECT id, mbid FROM spins WHERE id IN (${canonicalSpinId}, ${sql.join(mismatchedIds.map((id) => sql`${id}`), sql`, `)}) ORDER BY id
+        `);
+        expect(rows.rows.filter((row) => row.id === canonicalSpinId)).toEqual([{ id: canonicalSpinId, mbid }]);
+        expect(rows.rows.filter((row) => row.id !== canonicalSpinId).every((row) => row.mbid === null)).toBe(true);
+      } finally {
+        await db.execute(sql`DELETE FROM spins WHERE id IN (${canonicalSpinId}, ${sql.join(mismatchedIds.map((id) => sql`${id}`), sql`, `)})`);
+        await db.execute(sql`DELETE FROM recordings WHERE mbid = ${mbid}`);
       }
     },
   );

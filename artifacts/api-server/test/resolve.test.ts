@@ -26,6 +26,11 @@ describe("normalizeKey", () => {
       normalizeKey("Radiohead", "Karma Police"),
     );
   });
+
+  it("keeps non-Latin artist and title pairs distinct", () => {
+    expect(normalizeKey("Камелия", "Луда по тебе")).not.toBe(normalizeKey("Кино", "Группа крови"));
+    expect(normalizeKey("فيروز", "بحبك يا لبنان")).not.toBe(normalizeKey("坂本龍一", "Merry Christmas Mr. Lawrence"));
+  });
 });
 
 describe("durationMismatch", () => {

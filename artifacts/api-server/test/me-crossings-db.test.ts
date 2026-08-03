@@ -60,6 +60,7 @@ const RG_MBID        = `tc-rg-${run}`;        // shared primary release group
 const ARTIST_MBID    = `tc-artist-${run}`;    // shared artist MBID
 const MBID_SPIN_ART  = `tc-spin-art-${run}`;  // aired track (artist = ARTIST_MBID)
 const MBID_LIB_ART   = `tc-lib-art-${run}`;   // library track (artist = ARTIST_MBID)
+const MBID_JUNK_ART  = `tc-junk-art-${run}`;  // legacy domain artist, same artist MBID
 // MBID_SPIN_ART is intentionally NOT in the library → counts as artistCrossing only.
 
 // Scenario 3 — soft artist name fallback (no artistMbid on the recording)
@@ -189,6 +190,7 @@ beforeAll(async () => {
     // Scenario 2
     { mbid: MBID_SPIN_ART,             title: "Spin Track Art",             artist: `Artist ${run}`, artistMbid: ARTIST_MBID },
     { mbid: MBID_LIB_ART,              title: "Lib Track Art",              artist: `Artist ${run}`, artistMbid: ARTIST_MBID },
+    { mbid: MBID_JUNK_ART,              title: "Legacy Ad Track",            artist: "wellsfargo.com", artistMbid: ARTIST_MBID },
     // Scenario 3
     { mbid: MBID_SPIN_SOFT,            title: "Spin Track Soft",            artist: SOFT_ARTIST },
     // Scenario 4 — lifetime-only (spin is the same MBID that's in the library)
@@ -232,6 +234,7 @@ beforeAll(async () => {
     // into a single artistCrossings unit rather than counting spin events.
     { stationId: stationId!, mbid: MBID_SPIN_ART,      confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: new Date(now.getTime() - 1000) },
     { stationId: stationId!, mbid: MBID_SPIN_ART,      confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: new Date(now.getTime() - 1000 - 3 * 60 * 1000) },
+    { stationId: stationId!, mbid: MBID_JUNK_ART,      confidence: "text", rawTitle: "ad", rawArtist: "wellsfargo.com", playedAt: new Date(now.getTime() - 1500) },
     // Scenario 3 — aired by SOFT_ARTIST (no artistMbid on recording)
     { stationId: stationId!, mbid: MBID_SPIN_SOFT,     confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: new Date(now.getTime() - 2000) },
     // Scenario 4 — aired 25h ago (outside rolling window) — lifetime-only crossing
@@ -356,14 +359,17 @@ afterAll(async () => {
   // Spins + stations
   if (stationId != null) {
     await db.delete(spinsTable).where(eq(spinsTable.stationId, stationId));
+    await db.execute(sql`DELETE FROM station_quality WHERE station_id = ${stationId}`);
     await db.delete(stationsTable).where(eq(stationsTable.id, stationId));
   }
   if (stationSortAId != null) {
     await db.delete(spinsTable).where(eq(spinsTable.stationId, stationSortAId));
+    await db.execute(sql`DELETE FROM station_quality WHERE station_id = ${stationSortAId}`);
     await db.delete(stationsTable).where(eq(stationsTable.id, stationSortAId));
   }
   if (stationSortBId != null) {
     await db.delete(spinsTable).where(eq(spinsTable.stationId, stationSortBId));
+    await db.execute(sql`DELETE FROM station_quality WHERE station_id = ${stationSortBId}`);
     await db.delete(stationsTable).where(eq(stationsTable.id, stationSortBId));
   }
 
@@ -371,7 +377,7 @@ afterAll(async () => {
   // but explicit delete is safe and avoids relying on cascade order)
   for (const mbid of [
     MBID_SPIN_RG, MBID_LIB_RG,
-    MBID_SPIN_ART, MBID_LIB_ART,
+    MBID_SPIN_ART, MBID_LIB_ART, MBID_JUNK_ART,
     MBID_SPIN_SOFT,
     MBID_SPIN_LIFETIME,
     MBID_SPIN_LIFETIME_ART, MBID_LIB_LIFETIME_ART,

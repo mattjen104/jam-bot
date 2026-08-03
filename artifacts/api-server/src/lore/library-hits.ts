@@ -22,6 +22,7 @@ import {
   tasteSeedsTable,
 } from "@workspace/db";
 import { eq, and, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { isJunkArtistValue } from "./icy.js";
 
 // ---------------------------------------------------------------------------
 // Context type
@@ -193,6 +194,13 @@ export function checkLibraryHit(
     artist: string;
   },
 ): { isLibraryHit: boolean; isArtistHit: boolean } {
+  // A stale recording can still have a library MBID or artist MBID even after
+  // ingestion cleanup was deployed. Never let that metadata become a
+  // listener-facing hit.
+  if (isJunkArtistValue(spin.artist)) {
+    return { isLibraryHit: false, isArtistHit: false };
+  }
+
   const exactHit = spin.mbid != null && ctx.libMbids.has(spin.mbid);
   const rgHit =
     !exactHit &&

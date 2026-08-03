@@ -216,7 +216,7 @@ const URL_PROTOCOL_RE = /^https?:\/\//i;
  * the list doesn't need to be exhaustive — it just needs to cover the cases that
  * actually appear in ICY metadata from ad-injection systems.
  */
-const DOMAIN_TLD_RE =
+export const DOMAIN_TLD_RE =
   /\.(com|net|org|edu|gov|io|fm|co|info|biz|music|radio|ca|uk|au|de|fr|es|it|nl|se|no|dk|fi|pl|ru|cz|at|ch|be|pt|nz|mx|br|ar|za|in|sg|hk|jp|us)\b/i;
 
 /**
@@ -335,6 +335,30 @@ export function isJunkMetadata(rawArtist: string, rawTitle: string): boolean {
   }
 
   return false;
+}
+
+/**
+ * Return true when the artist value itself is unusable as a listener-facing
+ * artist.  This is intentionally separate from isJunkMetadata because hit
+ * classification and ranking often only have the artist value available.
+ */
+export function isJunkArtistValue(rawArtist: string): boolean {
+  const artist = rawArtist.trim();
+  if (!artist) return true;
+  const artistKey = artist.toLowerCase();
+
+  if (PROGRAMMING_ARTIST_LABELS.has(artistKey)) return true;
+  if (/^\d+$/.test(artist)) return true;
+  if (/^[A-Z][A-Z0-9_-]+$/.test(artist) && artist.includes("_")) return true;
+  if (/\(backup\b/i.test(artist)) return true;
+  if (!HAS_LETTER_RE.test(artist)) return true;
+  if (AUDIO_EXT_RE.test(artist) || isDomainLike(artist)) return true;
+
+  const REPLACEMENT_CHAR = "\uFFFD";
+  return (
+    artist.length >= 4 &&
+    countChar(artist, REPLACEMENT_CHAR) / artist.length >= 0.5
+  );
 }
 
 export function parseUrl(rawUrl: string): {

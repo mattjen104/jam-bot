@@ -59,10 +59,12 @@ export interface MbidResolution {
  * Normalize an artist+title pair into a stable cache key. Lowercased, accents
  * and punctuation stripped, whitespace collapsed, joined with a Unit Separator
  * (U+001F) so "The Beatles" / "Hey Jude" can never collide with a
- * differently-split pair. A NUL (U+0000) can't be used — Postgres rejects it in
- * a `text` column — but the normalized halves only contain [a-z0-9 ], so any
- * non-alphanumeric separator is collision-safe. Deliberately independent of
- * duration so every edit/pressing of the same artist+title shares one entry.
+ * differently-split pair. Keep Unicode letters and numbers: reducing
+ * non-Latin metadata to ASCII made every Cyrillic/Arabic/CJK pair share the
+ * same `\x1f` cache key and could pin unrelated tracks to one recording.
+ * A NUL (U+0000) can't be used — Postgres rejects it in a `text` column.
+ * Deliberately independent of duration so every edit/pressing of the same
+ * artist+title shares one entry.
  */
 export function normalizeKey(artist: string, title: string): string {
   const norm = (s: string): string =>
@@ -70,7 +72,7 @@ export function normalizeKey(artist: string, title: string): string {
       .normalize("NFKD")
       .replace(/[\u0300-\u036f]/g, "")
       .toLowerCase()
-      .replace(/[^a-z0-9]+/g, " ")
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
       .trim()
       .replace(/\s+/g, " ");
   return `${norm(artist)}\u001f${norm(title)}`;

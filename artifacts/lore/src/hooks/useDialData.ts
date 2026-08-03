@@ -176,13 +176,17 @@ function showState(run: StationScheduleRun, isStationLive: boolean): "live" | "p
   return "past";
 }
 
-function topArtistsFromSpins(spins: DialSpin[], max = 3, hitField: "isLibraryHit" | "isArtistHit" = "isLibraryHit"): string[] {
+export function topArtistsFromSpins(spins: DialSpin[], max = 3, hitField: "isLibraryHit" | "isArtistHit" = "isLibraryHit"): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const sp of spins) {
-    if (sp[hitField] && sp.artist && !seen.has(sp.artist)) {
-      seen.add(sp.artist);
-      out.push(sp.artist);
+    // Defense in depth for old API responses and cached timeline data. Domain
+    // values are radio metadata/ad slots, never artist names.
+    const artist = sp.artist?.trim() ?? "";
+    const domainLike = /^(?:https?:\/\/|[a-z0-9][a-z0-9.-]*\.(?:com|net|org|edu|gov|io|fm|co|info|biz|music|radio|ca|uk|au|de|fr|es|it|nl|se|no|dk|fi|pl|ru|cz|at|ch|be|pt|nz|mx|br|ar|za|in|sg|hk|jp|us)(?:[/?#\s]|$))/i.test(artist);
+    if (sp[hitField] && artist && !domainLike && !seen.has(artist)) {
+      seen.add(artist);
+      out.push(artist);
       if (out.length >= max) break;
     }
   }

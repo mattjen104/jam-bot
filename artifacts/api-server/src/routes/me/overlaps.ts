@@ -19,6 +19,12 @@ import { type AuthedRequest } from "./auth.js";
 
 const router: IRouter = Router();
 
+// Legacy radio metadata can carry a sponsor domain in recordings.artist.
+// Keep it out of listener-facing overlap labels even if an old recording
+// predates ingestion cleanup.
+const JUNK_ARTIST_SQL_RE =
+  String.raw`(^https?://|[.](com|net|org|edu|gov|io|fm|co|info|biz|music|radio|ca|uk|au|de|fr|es|it|nl|se|no|dk|fi|pl|ru|cz|at|ch|be|pt|nz|mx|br|ar|za|in|sg|hk|jp|us)([/?#[:space:]]|$))`;
+
 // ---------------------------------------------------------------------------
 // For-You endpoints
 // ---------------------------------------------------------------------------
@@ -138,6 +144,7 @@ router.get("/me/ghost/missed", h(async (req, res) => {
       JOIN recordings r ON s.mbid = r.mbid
       JOIN lib_artists la ON r.artist_mbid = la.artist_mbid
       WHERE s.played_at >= NOW() - INTERVAL '24 hours'
+        AND r.artist !~* ${JUNK_ARTIST_SQL_RE}
       ORDER BY s.station_id, s.played_at DESC
     )
     SELECT

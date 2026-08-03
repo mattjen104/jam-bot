@@ -4,6 +4,7 @@ import {
   parseTildeStreamTitle,
   parseStreamTitle,
   isJunkMetadata,
+  isJunkArtistValue,
   stripLeadingDelimiter,
 } from "../src/lore/icy.js";
 
@@ -395,6 +396,19 @@ describe("isJunkMetadata", () => {
     expect(isJunkMetadata("فيروز", "بحبك يا لبنان")).toBe(false);
     expect(isJunkMetadata("坂本龍一", "Merry Christmas Mr. Lawrence")).toBe(false);
     expect(isJunkMetadata("방탄소년단", "Dynamite")).toBe(false);
+  });
+});
+
+describe("isJunkArtistValue", () => {
+  it("rejects legacy domain artists without needing a title", () => {
+    expect(isJunkArtistValue("wellsfargo.com")).toBe(true);
+    expect(isJunkArtistValue("https://sponsor.example.com")).toBe(true);
+  });
+
+  it("preserves valid international artist names", () => {
+    expect(isJunkArtistValue("坂本龍一")).toBe(false);
+    expect(isJunkArtistValue("Кино")).toBe(false);
+    expect(isJunkArtistValue("فيروز")).toBe(false);
   });
 });
 

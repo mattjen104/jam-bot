@@ -72,6 +72,12 @@ export interface ArtistMetadataCleanupOptions {
   _testMbEnabled?: boolean;
 }
 
+const RESOLUTION_COLLISION_KEY = "\u001f";
+
+/** Same domain vocabulary as the ingestion guard, expressed for Postgres. */
+const URL_ARTIST_SQL_RE =
+  String.raw`(^https?://|[.](com|net|org|edu|gov|io|fm|co|info|biz|music|radio|ca|uk|au|de|fr|es|it|nl|se|no|dk|fi|pl|ru|cz|at|ch|be|pt|nz|mx|br|ar|za|in|sg|hk|jp|us)([/?#[:space:]]|$))`;
+
 /**
  * True when `mbid` is a well-formed MusicBrainz UUID
  * (`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`).  Synthetic `sp:` IDs and any
@@ -260,8 +266,7 @@ export async function applyUrlArtistRepair(
     SELECT r.mbid, r.artist, r.title
     FROM recordings r
     WHERE (
-      r.artist ~* '^https?://'
-      OR r.artist ~* '[.](com|net|org|edu|gov|io|fm|co|info|biz|music|radio|ca|uk|au|de|fr|es|it|nl|se|no|dk|fi|pl|ru|cz|at|ch|be|pt|nz|mx|br|ar|za|in|sg|hk|jp|us)([/?#[:space:]]|$)'
+      r.artist ~* ${URL_ARTIST_SQL_RE}
     )
     AND (
       EXISTS (
@@ -371,4 +376,158 @@ export async function applyUrlArtistRepair(
   );
 
   return { urlArtistFixed, urlArtistSkippedSynthetic };
+}
+
+/**
+ * Contain synthetic URL/domain recordings left behind by the original repair.
+ *
+ * Synthetic `sp:` IDs cannot be sent to MusicBrainz, and deleting their
+ * recording row would violate the many historical foreign keys that preserve
+ * listener and broadcast provenance. Replace only the listener-facing artist
+ * fields with the existing generic placeholder instead. Raw spin metadata is
+ * intentionally preserved, and the completion ledger makes this idempotent.
+ */
+export async function applySyntheticUrlArtistCleanup(
+  opts?: ArtistMetadataCleanupOptions,
+): Promise<{ recordingsSanitized: number }> {
+  const completionCheck = await db.execute(
+    sql`SELECT 1 FROM migration_completions WHERE name = 'applySyntheticUrlArtistCleanup' LIMIT 1`,
+  );
+  if ((completionCheck.rows?.length ?? 0) > 0) {
+    console.info("[migration] synthetic URL artist cleanup: already complete, skipping");
+    return { recordingsSanitized: 0 };
+  }
+
+  const mbidClause =
+    opts?._testMbids?.length
+      ? sql` AND r.mbid = ANY(ARRAY[${sql.join(
+          opts._testMbids.map((m) => sql`${m}`),
+          sql`, `,
+        )}]::text[])`
+      : sql``;
+
+  const result = await db.execute(sql`
+    UPDATE recordings r
+    SET artist = 'Unknown artist',
+        artist_mbid = NULL,
+        updated_at = now()
+    WHERE r.mbid LIKE 'sp:%'
+      AND r.artist ~* ${URL_ARTIST_SQL_RE}
+      AND (
+        EXISTS (
+          SELECT 1 FROM spins s
+          WHERE s.mbid = r.mbid
+            AND s.source NOT IN ('manual', 'backfill')
+        )
+        OR NOT EXISTS (SELECT 1 FROM spins s WHERE s.mbid = r.mbid)
+      )
+      ${mbidClause}
+  `);
+
+  await db.execute(sql`
+    INSERT INTO migration_completions (name)
+    VALUES ('applySyntheticUrlArtistCleanup')
+    ON CONFLICT (name) DO NOTHING
+  `);
+
+  const recordingsSanitized = Number(result.rowCount ?? 0);
+  console.info(
+    `[migration] synthetic URL artist cleanup: sanitized ${recordingsSanitized} recording(s)`,
+  );
+  return { recordingsSanitized };
+}
+
+/**
+ * Detach legacy spins pinned by the old non-ASCII cache-key collision.
+ *
+ * Earlier normalizeKey versions stripped every non-ASCII character, making all
+ * Cyrillic, Arabic, CJK, and similar pairs share the one key "\x1f". That
+ * cache hit could attach unrelated raw metadata to a single popular recording.
+ * Preserve the raw broadcast fields; only clear incorrect resolved links.
+ */
+export async function applyResolutionCollisionCleanup(
+  opts?: ArtistMetadataCleanupOptions,
+): Promise<{ spinsDetached: number; cacheEntriesPurged: number }> {
+  const completionCheck = await db.execute(
+    sql`SELECT 1 FROM migration_completions WHERE name = 'applyResolutionCollisionCleanup' LIMIT 1`,
+  );
+  if ((completionCheck.rows?.length ?? 0) > 0) {
+    console.info("[migration] resolution collision cleanup: already complete, skipping");
+    return { spinsDetached: 0, cacheEntriesPurged: 0 };
+  }
+
+  const mbidClause =
+    opts?._testMbids?.length
+      ? sql` AND rc.mbid = ANY(ARRAY[${sql.join(
+          opts._testMbids.map((m) => sql`${m}`),
+          sql`, `,
+        )}]::text[])`
+      : sql``;
+  const cacheRows = await db.execute<{ mbid: string }>(sql`
+    SELECT rc.mbid FROM resolution_cache rc
+    WHERE rc.key = ${RESOLUTION_COLLISION_KEY}
+      AND rc.mbid IS NOT NULL
+      ${mbidClause}
+  `);
+  const corruptedMbids = new Set(cacheRows.rows.map((row) => row.mbid));
+
+  // The resolution cache may have been purged by an earlier cleanup before
+  // this migration ships. The historical fingerprint is still unambiguous:
+  // one resolved recording with many distinct non-ASCII raw pairs. Include
+  // only recordings with a canonical raw pair, so a genuinely popular
+  // recording cannot be detached wholesale.
+  if (opts?._testMbids?.length !== 1) {
+    const legacyRows = await db.execute<{ mbid: string }>(sql`
+      SELECT s.mbid
+      FROM spins s
+      INNER JOIN recordings r ON r.mbid = s.mbid
+      WHERE s.mbid IS NOT NULL
+        AND s.mbid ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      GROUP BY s.mbid
+      HAVING count(DISTINCT lower(trim(s.raw_artist)) || E'\\x1f' || lower(trim(s.raw_title))) >= 25
+        AND bool_or(
+          lower(trim(s.raw_artist)) = lower(trim(r.artist))
+          AND lower(trim(s.raw_title)) = lower(trim(r.title))
+        )
+    `);
+    for (const row of legacyRows.rows) corruptedMbids.add(row.mbid);
+  }
+
+  let spinsDetached = 0;
+  for (const mbid of corruptedMbids) {
+    const recordingRows = await db.execute<{ artist: string; title: string }>(sql`
+      SELECT artist, title FROM recordings WHERE mbid = ${mbid}
+    `);
+    const recording = recordingRows.rows[0];
+    if (!recording) continue;
+
+    const result = await db.execute(sql`
+      UPDATE spins
+      SET mbid = NULL
+      WHERE mbid = ${mbid}
+        AND (
+          raw_artist IS NULL OR raw_title IS NULL
+          OR lower(trim(raw_artist)) <> lower(trim(${recording.artist}))
+          OR lower(trim(raw_title)) <> lower(trim(${recording.title}))
+        )
+    `);
+    spinsDetached += Number(result.rowCount ?? 0);
+  }
+
+  const purged = await db.execute(sql`
+    DELETE FROM resolution_cache rc
+    WHERE rc.key = ${RESOLUTION_COLLISION_KEY}
+      ${mbidClause}
+  `);
+  await db.execute(sql`
+    INSERT INTO migration_completions (name)
+    VALUES ('applyResolutionCollisionCleanup')
+    ON CONFLICT (name) DO NOTHING
+  `);
+
+  const cacheEntriesPurged = Number(purged.rowCount ?? 0);
+  console.info(
+    `[migration] resolution collision cleanup: detached ${spinsDetached} spin(s), purged ${cacheEntriesPurged} cache entr${cacheEntriesPurged === 1 ? "y" : "ies"}`,
+  );
+  return { spinsDetached, cacheEntriesPurged };
 }

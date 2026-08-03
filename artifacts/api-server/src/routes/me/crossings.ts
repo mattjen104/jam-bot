@@ -43,6 +43,11 @@ const router: IRouter = Router();
 
 const CROSSINGS_CACHE_TTL_MS = 5 * 60 * 1000;
 
+// Keep historical URL/domain metadata out of listener-facing crossing counts,
+// even when it predates the ingestion guard or a cleanup boot.
+const JUNK_ARTIST_SQL_RE =
+  String.raw`(^https?://|[.](com|net|org|edu|gov|io|fm|co|info|biz|music|radio|ca|uk|au|de|fr|es|it|nl|se|no|dk|fi|pl|ru|cz|at|ch|be|pt|nz|mx|br|ar|za|in|sg|hk|jp|us)([/?#[:space:]]|$))`;
+
 type CrossingsRow = {
   stationSlug: string;
   crossings: number;
@@ -195,10 +200,13 @@ router.get("/me/crossings", h(async (req, res) => {
   // ── Composite SQL predicates ──────────────────────────────────────────────
   // Library hit: exact MBID OR any track from the same primary release group.
   const libHit = sql`(
-    ${spinsTable.mbid} in (${userLibMbids})
-    or (
-      ${recordingReleaseGroupsTable.releaseGroupMbid} is not null
-      and ${recordingReleaseGroupsTable.releaseGroupMbid} in (${userLibRgs})
+    ${recordingsTable.artist} !~* ${JUNK_ARTIST_SQL_RE}
+    and (
+      ${spinsTable.mbid} in (${userLibMbids})
+      or (
+        ${recordingReleaseGroupsTable.releaseGroupMbid} is not null
+        and ${recordingReleaseGroupsTable.releaseGroupMbid} in (${userLibRgs})
+      )
     )
   )`;
 
@@ -247,9 +255,12 @@ router.get("/me/crossings", h(async (req, res) => {
   // Artist match: MBID-based lookup + soft name fallback (Spotify imports and
   // taste seeds share the same matching path).
   const artistMatch = sql`(
-    ${recordingsTable.artistMbid} in (${userLibArtists})
-    or lower(trim(${recordingsTable.artist})) in (${userSoftArtists})
-    or lower(trim(${recordingsTable.artist})) in (${userSeedArtists})
+    ${recordingsTable.artist} !~* ${JUNK_ARTIST_SQL_RE}
+    and (
+      ${recordingsTable.artistMbid} in (${userLibArtists})
+      or lower(trim(${recordingsTable.artist})) in (${userSoftArtists})
+      or lower(trim(${recordingsTable.artist})) in (${userSeedArtists})
+    )
   )`;
 
   // ── Windowed predicates (24-hour rolling window) ─────────────────────────
