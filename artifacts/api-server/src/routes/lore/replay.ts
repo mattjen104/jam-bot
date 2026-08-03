@@ -214,8 +214,7 @@ router.get("/replay/:id/guided-queue", h(async (req, res) => {
         recordingMbid: map.recordingMbid,
         service: map.service,
         externalId: map.externalId,
-        // url is non-null: WHERE isNotNull(url) excludes embed_miss rows.
-        url: map.url!,
+        url: map.url ?? "",
         confidence: map.confidence,
         deadLink: map.deadLink,
       })),
@@ -231,7 +230,7 @@ router.get("/replay/:id/guided-queue", h(async (req, res) => {
           recordingMbid: map.recordingMbid,
           service: map.service,
           externalId: map.externalId,
-          url: map.url!,
+          url: map.url ?? "",
           confidence: map.confidence,
           deadLink: map.deadLink,
         })),
@@ -290,11 +289,7 @@ router.get("/replay/:id/export", h(async (req, res) => {
           confidence: serviceTrackMapTable.confidence,
         })
         .from(serviceTrackMapTable)
-        .where(and(
-          inArray(serviceTrackMapTable.recordingMbid, mbids),
-          // Exclude embed_miss sentinel rows (url IS NULL).
-          isNotNull(serviceTrackMapTable.url),
-        ))
+        .where(inArray(serviceTrackMapTable.recordingMbid, mbids))
     : [];
   const mappingsByMbid = new Map<
     string,
@@ -305,7 +300,7 @@ router.get("/replay/:id/export", h(async (req, res) => {
     const current = mappingsByMbid.get(mapping.recordingMbid) ?? [];
     current.push({
       service: mapping.service,
-      url: mapping.url!, // non-null: WHERE isNotNull(url) above
+      url: mapping.url ?? "",
       deadLink: mapping.deadLink,
       confidence: mapping.confidence,
     });

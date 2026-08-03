@@ -230,9 +230,7 @@ export async function runReplayMaterializationWorker(jobId: number): Promise<voi
         position: entry.position,
         recordingMbid: recording.mbid,
         externalId: map.externalId ?? "",
-        // url is guaranteed non-null: query filters confidence="exact" which
-        // excludes embed_miss sentinel rows (service="odesli", url IS NULL).
-        url: map.url!,
+        url: map.url ?? "",
         title: recording.title,
         artist: recording.artist,
       }] : [];

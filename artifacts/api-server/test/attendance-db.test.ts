@@ -645,6 +645,10 @@ describe("heartbeat → counts — dwell gate", () => {
 describe("heartbeat → weekly rollup — cross-week-boundary heartbeat", () => {
   // Fixed "Monday 00:10 UTC" — the heartbeat arrives in W04 but the spin is W03.
   const FAKE_NOW = new Date("2026-01-19T00:10:00.000Z");
+  // Base fake-now for the sub-gate accumulation test.
+  // 00:12:00 UTC is Monday territory (W04) and still inside the spin window
+  // (spin ends at 00:13:00 UTC), so each 20-second heartbeat window overlaps.
+  const FAKE_NOW_MULTI_BASE = new Date("2026-01-19T00:12:00.000Z");
 
   // 2026-01-18 is a Sunday → ISO week 2026-W03
   const SPIN_PLAYED_AT = new Date("2026-01-18T23:58:00.000Z");
@@ -810,6 +814,127 @@ describe("heartbeat → weekly rollup — cross-week-boundary heartbeat", () => 
 
         // Heartbeat's week (W04) must still have no row.
         const heartbeatWeekRow = rowsAfterReplay.find((r) => r.isoWeek === HEARTBEAT_WEEK);
+        expect(heartbeatWeekRow).toBeUndefined();
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+    TEST_TIMEOUT,
+  );
+
+  it(
+    "accumulates dwell into the spin's week across multiple sub-gate cross-week heartbeats",
+    async () => {
+      if (!dbAvailable) return;
+
+      // Scenario:
+      //   Spin played_at  = 2026-01-18 23:58 UTC  (Sunday, ISO week 2026-W03)
+      //   Spin durationMs = 900 000 ms (15 min)   → ends 2026-01-19 00:13 UTC
+      //   Fake "now"      = 2026-01-19 00:12 UTC  (Monday, ISO week 2026-W04)
+      //
+      //   Gate = LEAST(900 × 0.5, 60) = 60 s.
+      //
+      //   Three heartbeats arrive on Monday, each with a ~20 s window (below the
+      //   60 s gate on their own).  The onConflictDoUpdate accumulator adds each
+      //   slice to the running dwell total:
+      //     after window 1: ~20 s < 60 s gate → not counted yet
+      //     after window 2: ~40 s < 60 s gate → not counted yet
+      //     after window 3: ~60 s ≥ 60 s gate → crosses gate → spinCount=1 in W03
+      //
+      //   The weekly rollup row must land in 2026-W03 (the spin's week), not
+      //   2026-W04 (the heartbeat's week).
+
+      // Spin played on Sunday at 23:58 UTC; ends at 00:13:00 UTC (15 min later).
+      // FAKE_NOW_MULTI_BASE = 00:12:00 UTC is Monday (W04) but still inside the
+      // spin window — each 20-second heartbeat window overlaps the active spin.
+      const SPIN_PLAYED_AT_MULTI = new Date("2026-01-18T23:58:00.000Z");
+      const SPIN_WEEK_MULTI = dateToIsoWeekLabel(SPIN_PLAYED_AT_MULTI);        // "2026-W03"
+      const HEARTBEAT_WEEK_MULTI = dateToIsoWeekLabel(FAKE_NOW_MULTI_BASE);    // "2026-W04"
+
+      // Freeze Date at the base "Monday" instant.
+      vi.useFakeTimers({ now: FAKE_NOW_MULTI_BASE, toFake: ["Date"] });
+
+      try {
+        await db.insert(spinsTable).values({
+          stationId: stationId!,
+          mbid: MBID_XWEEK,
+          confidence: "recording_id",
+          rawTitle: "Sunday Night Track Multi",
+          rawArtist: "Artist",
+          playedAt: SPIN_PLAYED_AT_MULTI,
+        });
+
+        // ── HB1: opens the session ────────────────────────────────────────────
+        // fakeNow = T0.  Session opens with lastHeartbeatAt = T0 → zero-width
+        // window (windowEnd === windowStart) → no dwell credited.
+        const hb1 = await post("/api/me/attendance/heartbeat", { stationId: stationId! }, SID_GATE);
+        expect(hb1.status).toBe(200);
+        const { sessionId } = hb1.body as { sessionId: number };
+        expect(typeof sessionId).toBe("number");
+
+        // ── HB2 — window 1 (~20 s, below gate) ──────────────────────────────
+        // Advance fakeNow by 1 s so this heartbeat's credited_through (T0+1 s)
+        // is strictly greater than the initial value and will be stored.
+        vi.setSystemTime(new Date(FAKE_NOW_MULTI_BASE.getTime() + 1_000));
+        const t1 = new Date(FAKE_NOW_MULTI_BASE.getTime() + 1_000);
+        await db
+          .update(listenSessionsTable)
+          .set({ lastHeartbeatAt: new Date(t1.getTime() - 20_000) })
+          .where(eq(listenSessionsTable.id, sessionId));
+        const hb2 = await post("/api/me/attendance/heartbeat", { stationId: stationId! }, SID_GATE);
+        expect(hb2.status).toBe(200);
+
+        // ── HB3 — window 2 (~20 s, cumulative ~40 s, still below gate) ──────
+        // Advance fakeNow by another second so credited_through (T0+2 s) is
+        // strictly greater than the T0+1 s mark — accumulation proceeds.
+        vi.setSystemTime(new Date(FAKE_NOW_MULTI_BASE.getTime() + 2_000));
+        const t2 = new Date(FAKE_NOW_MULTI_BASE.getTime() + 2_000);
+        await db
+          .update(listenSessionsTable)
+          .set({ lastHeartbeatAt: new Date(t2.getTime() - 20_000) })
+          .where(eq(listenSessionsTable.id, sessionId));
+        const hb3 = await post("/api/me/attendance/heartbeat", { stationId: stationId! }, SID_GATE);
+        expect(hb3.status).toBe(200);
+
+        // Mid-point check: ~40 s total < 60 s gate → spinCount must still be 0.
+        const midRows = await db
+          .select({
+            isoWeek: attendanceWeeklyRollupsTable.isoWeek,
+            spinCount: attendanceWeeklyRollupsTable.spinCount,
+          })
+          .from(attendanceWeeklyRollupsTable)
+          .where(eq(attendanceWeeklyRollupsTable.userId, userGateId!));
+        const midSpinWeekRow = midRows.find((r) => r.isoWeek === SPIN_WEEK_MULTI);
+        expect(midSpinWeekRow == null || midSpinWeekRow.spinCount === 0).toBe(true);
+
+        // ── HB4 — window 3 (~20 s, cumulative ~63 s ≥ 60 s → crosses gate) ──
+        vi.setSystemTime(new Date(FAKE_NOW_MULTI_BASE.getTime() + 3_000));
+        const t3 = new Date(FAKE_NOW_MULTI_BASE.getTime() + 3_000);
+        await db
+          .update(listenSessionsTable)
+          .set({ lastHeartbeatAt: new Date(t3.getTime() - 20_000) })
+          .where(eq(listenSessionsTable.id, sessionId));
+        const hb4 = await post("/api/me/attendance/heartbeat", { stationId: stationId! }, SID_GATE);
+        expect(hb4.status).toBe(200);
+
+        // ── Assert weekly rollup week bucket ──────────────────────────────────
+        const allRows = await db
+          .select({
+            isoWeek: attendanceWeeklyRollupsTable.isoWeek,
+            dwellTotal: attendanceWeeklyRollupsTable.dwellTotal,
+            spinCount: attendanceWeeklyRollupsTable.spinCount,
+          })
+          .from(attendanceWeeklyRollupsTable)
+          .where(eq(attendanceWeeklyRollupsTable.userId, userGateId!));
+
+        // The spin's week (2026-W03) must contain spinCount=1 and dwell ≥ 60 s.
+        const spinWeekRow = allRows.find((r) => r.isoWeek === SPIN_WEEK_MULTI);
+        expect(spinWeekRow).toBeDefined();
+        expect(spinWeekRow!.spinCount).toBe(1);
+        expect(spinWeekRow!.dwellTotal).toBeGreaterThanOrEqual(60);
+
+        // The heartbeat's week (2026-W04) must have no row for this spin.
+        const heartbeatWeekRow = allRows.find((r) => r.isoWeek === HEARTBEAT_WEEK_MULTI);
         expect(heartbeatWeekRow).toBeUndefined();
       } finally {
         vi.useRealTimers();
