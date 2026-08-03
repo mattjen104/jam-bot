@@ -262,4 +262,52 @@ describe("Library — Spotify auto-import after OAuth connect", () => {
     // The import banner should NOT appear (no job data was returned)
     expect(screen.queryByTestId("library-import-banner")).toBeNull();
   });
+
+  it("does NOT re-fire postStartImport when the page remounts while a job is already active", async () => {
+    // --- First mount: transition from no-Spotify to has-Spotify fires the import ---
+    mockUseMyConnections.mockReturnValue(NO_CONNECTIONS);
+
+    const { rerender, unmount, qc } = await renderLibrary();
+
+    expect(mockPostStartImport).not.toHaveBeenCalled();
+
+    // Simulate OAuth completing: connections gain Spotify
+    mockUseMyConnections.mockReturnValue(HAS_SPOTIFY);
+
+    const { default: Library } = await import("../src/pages/Library");
+    await act(async () => {
+      rerender(
+        <QueryClientProvider client={qc}>
+          <Library />
+        </QueryClientProvider>,
+      );
+    });
+
+    await waitFor(() => {
+      expect(mockPostStartImport).toHaveBeenCalledTimes(1);
+    });
+
+    // --- Simulate the server job now running ---
+    mockUseLatestImportJob.mockReturnValue({
+      data: { jobId: 42, status: "running", phase: "fetching", total: 200, resolved: 10, unresolvedCount: 0, error: null },
+    });
+
+    // Unmount (navigate away) and remount (navigate back)
+    unmount();
+
+    // On remount connections still show Spotify (cached) and job is running
+    mockUseMyConnections.mockReturnValue(HAS_SPOTIFY);
+
+    const qc2 = makeQueryClient();
+    await act(async () => {
+      render(
+        <QueryClientProvider client={qc2}>
+          <Library />
+        </QueryClientProvider>,
+      );
+    });
+
+    // Guard must have blocked the duplicate call — still only 1 total
+    expect(mockPostStartImport).toHaveBeenCalledTimes(1);
+  });
 });

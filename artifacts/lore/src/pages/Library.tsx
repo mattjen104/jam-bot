@@ -1176,6 +1176,10 @@ export default function Library() {
     if (prev === null) return;
     // Transition: Spotify was not connected, now is — kick off import
     if (!prev && hasSpotify) {
+      // Skip if a job is already active (e.g. the page remounted after OAuth
+      // while the previous import was still running; the ref resets on unmount
+      // but the server job continues, so we must not fire a duplicate request).
+      if (isImportActive) return;
       void (async () => {
         try {
           await postStartImport("spotify");
@@ -1186,7 +1190,7 @@ export default function Library() {
         }
       })();
     }
-  }, [connLoading, hasSpotify]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [connLoading, hasSpotify, isImportActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Taste seeds — zero-friction artist onboarding (shared with the Dial) ──
   const { data: seedArtists = [] } = useMyTasteSeeds();
