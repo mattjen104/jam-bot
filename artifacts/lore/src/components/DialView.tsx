@@ -9,7 +9,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
 import { SeedInput } from "./SeedInput";
 import { Search } from "lucide-react";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, type GhostStation } from "../lib/meHooks";
 import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
 import { StationLane } from "./StationLane";
@@ -1490,6 +1490,13 @@ export function DialView() {
       return (
         <div className="dial-topbar">
           <span className="dial-topbar__wordmark">Lore</span>
+          <Link
+            href="/weekly-recap"
+            className="dial-topbar__crumb"
+            style={{ marginLeft: 8 }}
+          >
+            Weekly Recap
+          </Link>
           <button
             type="button"
             className="dial-topbar__search"

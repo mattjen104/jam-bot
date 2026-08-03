@@ -77,3 +77,4 @@
 - [Live DJ attribution eligibility](live-dj-attribution-eligibility.md) — one pure normalized rule gates generic/colliding DJ values across ingestion, APIs, picker linkage, and Dial rendering.
 - [Apple MusicKit replay boundary](apple-music-replay.md) — browser-only exact-ID playback; short-lived token/storefront only; preserve gaps and isolate from the live player.
 - [Embed resolution safety model](embed-resolution-safety.md) — provider work stays off-request: MB relationship URLs are the only Bandcamp fetch inputs, and terminal misses remain retry-safe facts.
+- [Weekly recap read model](weekly-recap-read-model.md) — weekly reflections use UTC Sunday-to-Saturday windows and confirmed attendance only; never surface incomplete weeks.

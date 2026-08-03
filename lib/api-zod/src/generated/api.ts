@@ -2013,6 +2013,14 @@ export const GetReplayPlaylistTargetsParams = zod.object({
   id: zod.coerce.number().min(1),
 });
 
+/**
+ * @summary List configured Ghost Replay playlist destinations
+ */
+
+export const GetReplayPlaylistTargetsParams = zod.object({
+  id: zod.coerce.number().min(1),
+});
+
 export const GetReplayPlaylistTargetsResponse = zod.object({
   targets: zod.array(
     zod.object({
@@ -4369,3 +4377,86 @@ export const CopyMattStarterLibraryResponse = zod.object({
   totalCount: zod.number(),
   error: zod.string().optional(),
 });
+
+ */
+export const GetMyWeeklyRecapQueryParams = zod.object({
+  weekStart: zod
+    .date()
+    .optional()
+    .describe(
+      "Optional UTC Sunday start date (YYYY-MM-DD) for a completed week.",
+    ),
+});
+
+export const GetMyWeeklyRecapResponse = zod
+  .object({
+    week: zod.object({
+      startDate: zod.date(),
+      endDate: zod.date(),
+      endDateExclusive: zod.date(),
+      timezone: zod.enum(["UTC"]),
+    }),
+    available: zod.literal(true),
+    stationsAttended: zod.object({
+      count: zod.number(),
+      stations: zod.array(
+        zod.object({
+          slug: zod.string(),
+          name: zod.string(),
+        }),
+      ),
+    }),
+    firstEverHeards: zod.object({
+      count: zod.number(),
+      items: zod.array(
+        zod.object({
+          mbid: zod.string(),
+          title: zod.string(),
+          artist: zod.string(),
+          station: zod.object({
+            slug: zod.string(),
+            name: zod.string(),
+          }),
+          heardAt: zod.date().optional(),
+          ripenedAt: zod.date().optional(),
+        }),
+      ),
+    }),
+    ripenedCrossings: zod.object({
+      count: zod.number(),
+      items: zod.array(
+        zod.object({
+          mbid: zod.string(),
+          title: zod.string(),
+          artist: zod.string(),
+          station: zod.object({
+            slug: zod.string(),
+            name: zod.string(),
+          }),
+          heardAt: zod.date().optional(),
+          ripenedAt: zod.date().optional(),
+        }),
+      ),
+    }),
+    missedGhostReplay: zod.union([
+      zod.object({
+        replayId: zod.number(),
+        date: zod.date(),
+        station: zod.object({
+          slug: zod.string(),
+          name: zod.string(),
+        }),
+        show: zod.union([
+          zod.object({
+            name: zod.string(),
+            djName: zod.string().nullable(),
+          }),
+          zod.null(),
+        ]),
+      }),
+      zod.null(),
+    ]),
+  })
+  .describe(
+    "Counts-only reflection of confirmed attendance for a completed UTC Sunday-to-Saturday window. Empty arrays and a null replay are honest no-data states.\n",
+  );

@@ -2772,6 +2772,38 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MattStarterLibraryResult"
+  /me/weekly-recap:
+    get:
+      operationId: getMyWeeklyRecap
+      tags: [me]
+      summary: Read the latest completed Your Week On Air recap
+      description: >
+        Returns a deterministic, counts-only reflection of confirmed radio
+        attendance for the most recent completed UTC Sunday-to-Saturday week.
+        The date-derived availability remains discoverable on a later visit
+        without outbound notifications or a third-party account. An optional
+        Sunday weekStart may revisit an older completed week.
+      parameters:
+        - name: weekStart
+          in: query
+          required: false
+          description: Optional UTC Sunday start date (YYYY-MM-DD) for a completed week.
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Weekly recap
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WeeklyRecap"
+        "400":
+          description: The requested week is not a completed Sunday-to-Saturday window
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 components:
   schemas:
     HealthStatus:
@@ -6445,3 +6477,119 @@ components:
         error:
           type: string
       required: [available, addedCount, totalCount]
+    WeeklyRecapStation:
+      type: object
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+      required: [slug, name]
+    WeeklyRecapTrack:
+      type: object
+      properties:
+        mbid:
+          type: string
+        title:
+          type: string
+        artist:
+          type: string
+        station:
+          $ref: "#/components/schemas/WeeklyRecapStation"
+        heardAt:
+          type: string
+          format: date-time
+        ripenedAt:
+          type: string
+          format: date-time
+      required: [mbid, title, artist, station]
+    WeeklyRecapShow:
+      type: object
+      properties:
+        name:
+          type: string
+        djName:
+          type: ["string", "null"]
+      required: [name, djName]
+    WeeklyRecapReplay:
+      type: object
+      properties:
+        replayId:
+          type: integer
+        date:
+          type: string
+          format: date
+        station:
+          $ref: "#/components/schemas/WeeklyRecapStation"
+        show:
+          oneOf:
+            - $ref: "#/components/schemas/WeeklyRecapShow"
+            - type: "null"
+      required: [replayId, date, station, show]
+    WeeklyRecap:
+      type: object
+      description: >
+        Counts-only reflection of confirmed attendance for a completed UTC
+        Sunday-to-Saturday window. Empty arrays and a null replay are honest
+        no-data states.
+      properties:
+        week:
+          type: object
+          properties:
+            startDate:
+              type: string
+              format: date
+            endDate:
+              type: string
+              format: date
+            endDateExclusive:
+              type: string
+              format: date
+            timezone:
+              type: string
+              enum: [UTC]
+          required: [startDate, endDate, endDateExclusive, timezone]
+        available:
+          type: boolean
+          enum: [true]
+        stationsAttended:
+          type: object
+          properties:
+            count:
+              type: integer
+            stations:
+              type: array
+              items:
+                $ref: "#/components/schemas/WeeklyRecapStation"
+          required: [count, stations]
+        firstEverHeards:
+          type: object
+          properties:
+            count:
+              type: integer
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/WeeklyRecapTrack"
+          required: [count, items]
+        ripenedCrossings:
+          type: object
+          properties:
+            count:
+              type: integer
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/WeeklyRecapTrack"
+          required: [count, items]
+        missedGhostReplay:
+          oneOf:
+            - $ref: "#/components/schemas/WeeklyRecapReplay"
+            - type: "null"
+      required:
+        - week
+        - available
+        - stationsAttended
+        - firstEverHeards
+        - ripenedCrossings
+        - missedGhostReplay

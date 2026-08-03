@@ -2695,6 +2695,10 @@ export interface MattStarterLibraryResult {
   error?: string;
 }
 
+export interface WeeklyRecapStation {
+  slug: string;
+  name: string;
+}
 export type ResolveSongParams = {
   /**
    * @minLength 1
@@ -2816,3 +2820,74 @@ export type GetSpotifySavedParams = {
    */
   mbid: string;
 };
+
+export type GetMyWeeklyRecapParams = {
+  /**
+   * Optional UTC Sunday start date (YYYY-MM-DD) for a completed week.
+   */
+  weekStart?: string;
+};
+
+export interface WeeklyRecapTrack {
+  mbid: string;
+  title: string;
+  artist: string;
+  station: WeeklyRecapStation;
+  heardAt?: string;
+  ripenedAt?: string;
+}
+
+export type WeeklyRecapFirstEverHeards = {
+  count: number;
+  items: WeeklyRecapTrack[];
+};
+
+export interface WeeklyRecapShow {
+  name: string;
+  /** @nullable */
+  djName: string | null;
+}
+
+export const WeeklyRecapWeekTimezone = {
+  UTC: "UTC",
+} as const;
+
+export type ReplayEmbedFactProvider =
+  (typeof ReplayEmbedFactProvider)[keyof typeof ReplayEmbedFactProvider];
+
+export type WeeklyRecapRipenedCrossings = {
+  count: number;
+  items: WeeklyRecapTrack[];
+};
+
+export type WeeklyRecapWeek = {
+  startDate: string;
+  endDate: string;
+  endDateExclusive: string;
+  timezone: WeeklyRecapWeekTimezone;
+};
+
+export interface WeeklyRecapReplay {
+  replayId: number;
+  date: string;
+  station: WeeklyRecapStation;
+  show: WeeklyRecapShow | null;
+}
+
+export type WeeklyRecapStationsAttended = {
+  count: number;
+  stations: WeeklyRecapStation[];
+};
+
+export type WeeklyRecapWeekTimezone =
+  (typeof WeeklyRecapWeekTimezone)[keyof typeof WeeklyRecapWeekTimezone];
+
+ */
+export interface WeeklyRecap {
+  week: WeeklyRecapWeek;
+  available: boolean;
+  stationsAttended: WeeklyRecapStationsAttended;
+  firstEverHeards: WeeklyRecapFirstEverHeards;
+  ripenedCrossings: WeeklyRecapRipenedCrossings;
+  missedGhostReplay: WeeklyRecapReplay | null;
+}

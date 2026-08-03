@@ -36,6 +36,7 @@ import type {
   GeniusDraftReviewResponse,
   GetArchiveRecentRunsParams,
   GetGuidedReplayQueueParams,
+  GetMyWeeklyRecapParams,
   GetOembedParams,
   GetRecordingsAvailabilityParams,
   GetSpotifySavedParams,
@@ -121,6 +122,7 @@ import type {
   UpsertPickerRequest,
   VoidScrapedShowRequest,
   VoidScrapedShowResponse,
+  WeeklyRecap,
   WikipediaDraftClaim,
   WikipediaDraftList,
 } from "./api.schemas";
@@ -7986,3 +7988,101 @@ export const useCopyMattStarterLibrary = <
 > => {
   return useMutation(getCopyMattStarterLibraryMutationOptions(options));
 };
+
+ */
+export const getGetMyWeeklyRecapUrl = (params?: GetMyWeeklyRecapParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/me/weekly-recap?${stringifiedParams}`
+    : `/api/me/weekly-recap`;
+};
+
+/**
+ * @summary Read the latest completed Your Week On Air recap
+ */
+
+export function useGetMyWeeklyRecap<
+  TData = Awaited<ReturnType<typeof getMyWeeklyRecap>>,
+  TError = ErrorType<ApiError>,
+>(
+  params?: GetMyWeeklyRecapParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyWeeklyRecap>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyWeeklyRecapQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export type GetMyWeeklyRecapQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyWeeklyRecap>>
+>;
+
+export const getMyWeeklyRecap = async (
+  params?: GetMyWeeklyRecapParams,
+  options?: RequestInit,
+): Promise<WeeklyRecap> => {
+  return customFetch<WeeklyRecap>(getGetMyWeeklyRecapUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyWeeklyRecapQueryKey = (
+  params?: GetMyWeeklyRecapParams,
+) => {
+  return [`/api/me/weekly-recap`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetMyWeeklyRecapQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyWeeklyRecap>>,
+  TError = ErrorType<ApiError>,
+>(
+  params?: GetMyWeeklyRecapParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyWeeklyRecap>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetMyWeeklyRecapQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMyWeeklyRecap>>
+  > = ({ signal }) => getMyWeeklyRecap(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyWeeklyRecap>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyWeeklyRecapQueryError = ErrorType<ApiError>;
+
+export type GetReplayPlaylistTargetsQueryError = ErrorType<ApiError>;

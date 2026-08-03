@@ -16,6 +16,7 @@ import SelectorArchive from "@/pages/SelectorArchive";
 import SelectorRun from "@/pages/SelectorRun";
 import Selectors from "@/pages/Selectors";
 import Journal from "@/pages/Journal";
+import WeeklyRecap from "@/pages/WeeklyRecap";
 import Following from "@/pages/Following";
 import Library from "@/pages/Library";
 import AdminClaims from "@/pages/AdminClaims";
@@ -99,6 +100,7 @@ function Router() {
           {(params) => <Redirect to={`/archive/selector-runs/${params.runId}`} />}
         </Route>
         <Route path="/journal" component={Journal} />
+        <Route path="/weekly-recap" component={WeeklyRecap} />
         <Route path="/following" component={Following} />
         <Route path="/library" component={Library} />
         {/* Redirect any deep-linked /taste-map URLs to home */}

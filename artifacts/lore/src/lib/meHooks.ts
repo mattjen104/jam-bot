@@ -1230,6 +1230,46 @@ export function useMyGhostMissed() {
   });
 }
 
+export interface WeeklyRecap {
+  week: {
+    startDate: string;
+    endDate: string;
+    endDateExclusive: string;
+    timezone: "UTC";
+  };
+  available: true;
+  stationsAttended: {
+    count: number;
+    stations: Array<{ slug: string; name: string }>;
+  };
+  firstEverHeards: {
+    count: number;
+    items: Array<{
+      mbid: string;
+      title: string;
+      artist: string;
+      station: { slug: string; name: string };
+      heardAt: string;
+    }>;
+  };
+  ripenedCrossings: {
+    count: number;
+    items: Array<{
+      mbid: string;
+      title: string;
+      artist: string;
+      station: { slug: string; name: string };
+      ripenedAt: string;
+    }>;
+  };
+  missedGhostReplay: {
+    replayId: number;
+    date: string;
+    station: { slug: string; name: string };
+    show: { name: string; djName: string | null } | null;
+  } | null;
+}
+
 export interface ReplayMaterializationJob {
   id: number;
   replayId: number;
@@ -1350,3 +1390,14 @@ export function useReplayMaterializationJob(jobId: number | null) {
     retry: false,
   });
 }
+
+export function useMyWeeklyRecap() {
+  return useQuery({
+    queryKey: ME_WEEKLY_RECAP_KEY,
+    queryFn: () => fetchOrNull<WeeklyRecap>("/api/me/weekly-recap"),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+export const ME_WEEKLY_RECAP_KEY = ["me", "weekly-recap"] as const;
