@@ -122,7 +122,6 @@ describe("Ghost Replay resolution negative-cache", () => {
   const noLinksMbid = `test-rr-no-links-${ncRun}`;
   const noVectorMbid = `test-rr-no-vector-${ncRun}`;
   const expiredMbid = `test-rr-expired-${ncRun}`;
-
   const revivedMbid = `test-rr-revived-${ncRun}`;
   const networkErrorMbid = `test-rr-net-error-${ncRun}`;
 
@@ -214,6 +213,39 @@ describe("Ghost Replay resolution negative-cache", () => {
       isrc: "USRV11223344",
       links: null,
     });
+    expect(result).toBe("missing");
+    // Odesli should have been called again now that the miss is stale.
+    expect(odesliRetry).toHaveBeenCalledTimes(1);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("deletes the odesli sentinel row once real service links are written", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // Seed a miss sentinel for revivedMbid.
+    await upsertServiceTrackMapMiss(revivedMbid, "no_links");
+    const [sentinel] = await db
+      .select()
+      .from(serviceTrackMapTable)
+      .where(
+        and(
+          eq(serviceTrackMapTable.recordingMbid, revivedMbid),
+          eq(serviceTrackMapTable.service, "odesli"),
+        ),
+      )
+      .limit(1);
+
+    const [sentinel] = await db
+      .select()
+      .from(serviceTrackMapTable)
+      .where(
+        and(
+          eq(serviceTrackMapTable.recordingMbid, revivedMbid),
+          eq(serviceTrackMapTable.service, "odesli"),
+        ),
+      )
+      .limit(1);
 
     const [sentinelRow] = await db
       .select()
@@ -226,8 +258,6 @@ describe("Ghost Replay resolution negative-cache", () => {
       )
       .limit(1);
 
-    const deadDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-
     const [spotifyRow] = await db
       .select()
       .from(serviceTrackMapTable)
@@ -238,10 +268,6 @@ describe("Ghost Replay resolution negative-cache", () => {
         ),
       )
       .limit(1);
-    expect(result).toBe("missing");
-    // Odesli must not have been touched — there was nothing to query.
-    expect(odesliSpy).not.toHaveBeenCalled();
-
     const [missRow] = await db
       .select()
       .from(serviceTrackMapTable)
@@ -341,6 +367,20 @@ describe("Ghost Replay resolution negative-cache", () => {
 
     // Plant a stale miss row (31 days old) directly.
     const staleDate = new Date(Date.now() - 2 * 60 * 60 * 1000); // 2 hours ago
+
+    const odesliHit = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          entitiesByUniqueId: {
+            "spotify:track:RevivedTrack001": { id: "RevivedTrack001", apiProvider: "spotify" },
+          },
+          linksByPlatform: {
+            spotify: { url: "https://open.spotify.com/track/RevivedTrack001" },
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
     await upsertServiceTrackMapMiss(expiredMbid, "no_links");
     // Backdate the missedAt so it falls outside the 30-day window.
     await db
@@ -367,6 +407,39 @@ describe("Ghost Replay resolution negative-cache", () => {
       isrc: "USRV11223344",
       links: null,
     });
+    expect(result).toBe("missing");
+    // Odesli should have been called again now that the miss is stale.
+    expect(odesliRetry).toHaveBeenCalledTimes(1);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("deletes the odesli sentinel row once real service links are written", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // Seed a miss sentinel for revivedMbid.
+    await upsertServiceTrackMapMiss(revivedMbid, "no_links");
+    const [sentinel] = await db
+      .select()
+      .from(serviceTrackMapTable)
+      .where(
+        and(
+          eq(serviceTrackMapTable.recordingMbid, revivedMbid),
+          eq(serviceTrackMapTable.service, "odesli"),
+        ),
+      )
+      .limit(1);
+
+    const [sentinel] = await db
+      .select()
+      .from(serviceTrackMapTable)
+      .where(
+        and(
+          eq(serviceTrackMapTable.recordingMbid, revivedMbid),
+          eq(serviceTrackMapTable.service, "odesli"),
+        ),
+      )
+      .limit(1);
 
     const [sentinelRow] = await db
       .select()
@@ -378,8 +451,6 @@ describe("Ghost Replay resolution negative-cache", () => {
         ),
       )
       .limit(1);
-
-    const deadDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
     const [spotifyRow] = await db
       .select()
@@ -541,3 +612,14 @@ describe("upsertServiceTrackMap rank guard", () => {
     expect(row!.confidence).toBe("exact");
   });
 });
+
+    const [afterSentinel] = await db
+      .select()
+      .from(serviceTrackMapTable)
+      .where(
+        and(
+          eq(serviceTrackMapTable.recordingMbid, revivedMbid),
+          eq(serviceTrackMapTable.service, "odesli"),
+        ),
+      )
+      .limit(1);
