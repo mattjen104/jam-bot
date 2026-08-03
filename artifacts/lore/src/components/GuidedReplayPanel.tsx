@@ -38,6 +38,9 @@ function serviceLabel(service: GuidedService): string {
  * embed services) or an external-open link (for all other services) and the
  * manifest cursor. It intentionally does not enter the normal ride/player
  * state machine or fetch audio through Lore.
+ *
+ * Service tabs are data-driven from GUIDED_SERVICE_OPTIONS so every new
+ * service added to the guided replay system automatically appears here.
  */
 export function GuidedReplayPanel({
   entries,

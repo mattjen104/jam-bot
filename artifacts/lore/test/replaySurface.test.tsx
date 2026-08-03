@@ -223,13 +223,14 @@ describe("Ghost Replay surface", () => {
       "https://open.spotify.com/track/exact",
     );
     expect(screen.getAllByTitle(/keep this track/i)).toHaveLength(3);
-    expect(screen.getByTestId("apple-music-replay").textContent).toContain(
-      "Lore does not host, copy, or recreate the original broadcast audio.",
-    );
-    expect(screen.getByTestId("apple-music-coverage").textContent).toContain(
-      "never resolved",
-    );
-    expect(screen.getByTestId("apple-music-start").hasAttribute("disabled")).toBe(true);
+    // Apple Music is now a tab inside GuidedReplayPanel alongside all other services
+    expect(screen.getByTestId("guided-replay")).toBeTruthy();
+    expect(screen.getByTestId("guided-service-appleMusic")).toBeTruthy();
+    // Switch to the Apple Music tab; start is disabled because guidedLinks is empty
+    fireEvent.click(screen.getByTestId("guided-service-appleMusic"));
+    expect(screen.getByTestId("guided-start").hasAttribute("disabled")).toBe(true);
+    // Coverage shows 0 of 2 (no apple music entries in guidedLinks fixture)
+    expect(screen.getByTestId("guided-coverage").textContent).toContain("0 of 2");
   });
 
   it("keeps native-app replay guidance separate and advances only on explicit controls", () => {

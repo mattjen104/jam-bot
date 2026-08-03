@@ -1,5 +1,4 @@
 import { Link, useParams } from "wouter";
-import {
   getGetAppleMusicReplayMaterializationQueryKey,
   useGetAppleMusicReplayMaterialization,
   useGetReplayManifest,
@@ -8,9 +7,9 @@ import { ArrowLeft, Download, Ghost } from "lucide-react";
 import { ArchiveTracklist } from "../components/ArchiveTracklist";
 import { GuidedReplayQueue } from "../components/GuidedReplayQueue";
 import { ShareButton } from "../components/ShareButton";
-import { AppleMusicReplay } from "../components/AppleMusicReplay";
 import { usePlayer } from "../player/PlayerProvider";
 import { runDate } from "../lib/format";
+import { useGetReplayManifest } from "@workspace/api-client-react";
 
 /** The canonical, shareable Ghost Replay reconstruction surface. */
 export default function Replay() {
@@ -19,12 +18,6 @@ export default function Replay() {
   const { ride, radio } = usePlayer();
   const { data, isLoading, isError } = useGetReplayManifest(id, {
     request: { headers: { accept: "application/json" } },
-  });
-  const { data: appleMusic } = useGetAppleMusicReplayMaterialization(id, {
-    query: {
-      queryKey: getGetAppleMusicReplayMaterializationQueryKey(id),
-      enabled: !!data,
-    },
   });
   const dockPadding = ride.active || radio.station ? "pb-32" : "pb-16";
 
