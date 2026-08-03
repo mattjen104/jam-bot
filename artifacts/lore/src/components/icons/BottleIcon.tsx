@@ -6,9 +6,10 @@ interface BottleIconProps extends SVGProps<SVGSVGElement> {
 }
 
 /**
- * Hand-crafted bottle icon on a 24px Lucide grid.
+ * Horizontal bottle icon on a 24px Lucide grid.
+ * Bottle lies on its side: rounded body, short neck on left, cork stopper,
+ * small rolled note visible inside the body.
  * Thin stroke, round linecap/join, currentColor.
- * Shape: bottle body, neck, cork stopper, tiny rectangle = rolled paper inside.
  */
 export function BottleIcon({
   size = 24,
@@ -29,14 +30,23 @@ export function BottleIcon({
       aria-hidden="true"
       {...props}
     >
-      {/* Bottle body — rounded flask shape */}
-      <path d="M9 12.5C8 13.5 7 15 7 17a5 5 0 0 0 10 0c0-2-1-3.5-2-4.5V9h-5v3.5z" />
-      {/* Neck */}
-      <line x1="9" y1="9" x2="15" y2="9" />
-      {/* Cork stopper */}
-      <rect x="10" y="5.5" width="4" height="3.5" rx="1" />
-      {/* Hint of rolled paper inside body */}
-      <rect x="10.5" y="14" width="3" height="4" rx="0.5" opacity="0.6" />
+      {/* Bottle body — rounded rectangle lying horizontal */}
+      <rect x="7" y="8" width="13" height="8" rx="3.5" />
+      {/* Neck — narrow horizontal segment extending left from body */}
+      <path d="M7 10.5H4.5" strokeWidth={strokeWidth} />
+      <path d="M7 13.5H4.5" strokeWidth={strokeWidth} />
+      {/* Cork stopper — small rect plugging the neck tip */}
+      <rect x="2.5" y="10" width="2" height="4" rx="0.75" />
+      {/* Rolled note inside body — small tilted rounded rect */}
+      <rect
+        x="11.5"
+        y="10"
+        width="4"
+        height="4"
+        rx="1"
+        transform="rotate(-8 13.5 12)"
+        opacity="0.55"
+      />
     </svg>
   );
 }

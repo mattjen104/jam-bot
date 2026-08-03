@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { PencilLine } from "lucide-react";
+import { PostItIcon } from "./icons/PostItIcon";
 import { BottleIcon } from "./icons/BottleIcon";
 import { AlbumAvatarPicker } from "./AlbumAvatarPicker";
 import { useSongBottles, type SongBottle } from "../hooks/useSongBottles";
@@ -290,7 +290,7 @@ export function BottlePanel({
           data-testid="bottle-trigger"
         >
           {showPencil ? (
-            <PencilLine
+            <PostItIcon
               size={16}
               style={{ opacity: 0.7 }}
             />

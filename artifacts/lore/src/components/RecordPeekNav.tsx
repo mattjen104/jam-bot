@@ -6,7 +6,7 @@ import {
   useGetPickersDial,
 } from "@workspace/api-client-react";
 import type { RecordingLink } from "@workspace/api-client-react";
-import { Ghost, Library, Radio, X } from "lucide-react";
+import { X } from "lucide-react";
 import { usePlayer } from "../player/PlayerProvider";
 import {
   useSectionMemory,
@@ -34,10 +34,26 @@ function artFor(section: Section, memory: SectionMemory): string | null {
   return memory.library?.album.artworkUrl ?? memory.library?.track.artworkUrl ?? null;
 }
 
-function fallbackMark(section: Section) {
-  if (section === "radio") return <Radio aria-hidden="true" />;
-  if (section === "selectors") return <Ghost aria-hidden="true" />;
-  return <Library aria-hidden="true" />;
+function fallbackMark(_section: Section) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 39 39"
+      fill="none"
+      aria-hidden="true"
+      className="record-peek-tab__sleeve--empty"
+      style={{ width: "100%", height: "100%", position: "absolute", inset: 0, opacity: 0.45 }}
+    >
+      {/* Empty sleeve outline with diagonal stripe on lower-right corner */}
+      <rect x="1" y="1" width="37" height="37" rx="2" stroke="currentColor" strokeWidth="1.5" />
+      {/* Diagonal stripe — bottom-right empty sleeve idiom */}
+      <line x1="26" y1="39" x2="39" y2="26" stroke="currentColor" strokeWidth="1" opacity="0.5" />
+      <line x1="31" y1="39" x2="39" y2="31" stroke="currentColor" strokeWidth="1" opacity="0.3" />
+      {/* Faint disc peeking from top-right corner */}
+      <circle cx="34" cy="5" r="6" stroke="currentColor" strokeWidth="1" opacity="0.35" />
+      <circle cx="34" cy="5" r="2" stroke="currentColor" strokeWidth="0.75" opacity="0.25" />
+    </svg>
+  );
 }
 
 function selectorSeeds(
@@ -60,6 +76,7 @@ export function RecordPeekNav() {
   const { data: dial } = useGetPickersDial();
   const [peek, setPeek] = useState<Section | null>(null);
   const [busy, setBusy] = useState(false);
+  const [holding, setHolding] = useState<Section | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const downPoint = useRef<{ x: number; y: number } | null>(null);
 
@@ -74,13 +91,16 @@ export function RecordPeekNav() {
   const stopHold = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
+    setHolding(null);
   }, []);
 
   const beginHold = useCallback((section: Section, x: number, y: number) => {
     stopHold();
     downPoint.current = { x, y };
+    setHolding(section);
     timer.current = setTimeout(() => {
       setPeek(section);
+      setHolding(null);
       timer.current = null;
     }, HOLD_MS);
   }, [stopHold]);
@@ -171,7 +191,7 @@ export function RecordPeekNav() {
             <button
               key={section}
               type="button"
-              className={`record-peek-tab${active ? " record-peek-tab--active" : ""}`}
+              className={`record-peek-tab${active ? " record-peek-tab--active" : ""}${holding === section ? " record-peek-tab--holding" : ""}`}
               aria-current={active ? "page" : undefined}
               aria-label={label}
               onClick={() => setLocation(section === "radio" ? "/" : `/${section}`)}

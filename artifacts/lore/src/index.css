@@ -86,8 +86,19 @@
 .record-peek__close { width: 28px; height: 28px; display: grid; place-items: center; color: hsl(var(--faint)); }
 .record-peek__close svg { width: 14px; height: 14px; }
 @keyframes record-peek-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Hold-to-peek animation: disc slides further out while the user holds */
+@keyframes record-peek-hold-out {
+  from { transform: translateX(0) translateY(0); }
+  to   { transform: translateX(10px) translateY(-6px); }
+}
+.record-peek-tab--holding .record-peek-tab__record {
+  animation: record-peek-hold-out 520ms linear forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .record-peek, .record-peek-tab__label, .record-peek-tab__sleeve { animation: none; transition: none; }
+  .record-peek-tab--holding .record-peek-tab__record { animation: none; }
 }
 @import "tailwindcss";
 @import "tw-animate-css";
