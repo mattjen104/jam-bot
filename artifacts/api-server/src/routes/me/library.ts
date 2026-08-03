@@ -1,7 +1,8 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Response } from "express";
 import { rateLimit } from "express-rate-limit";
 import {
   db,
+  loreUsersTable,
   serviceConnectionsTable,
   libraryItemsTable,
   libraryImportJobsTable,
@@ -42,6 +43,9 @@ import { validateListenBrainzUsername, fetchListenBrainzLoved } from "../../lore
 import { type AuthedRequest, getFreshToken, sleep } from "./auth.js";
 import { checkSpotifyLibraryContains } from "./spotify-library-check.js";
 import { extractImageRaw, normalizeImageRows } from "../../lore/image-llm.js";
+import { bustCrossingsCache } from "./crossings.js";
+import { bustPickerOverlapCache } from "./overlaps.js";
+import { bustLibraryHitCache } from "../../lore/library-hits.js";
 
 const router: IRouter = Router();
 
@@ -51,6 +55,13 @@ const router: IRouter = Router();
 
 /** Max library page size. */
 const LIBRARY_PAGE_SIZE = 50;
+/**
+ * The operator-owned starter account is configured by its internal Lore user
+ * id, never by a display name or a value supplied by the caller.  Invalid or
+ * missing configuration fails closed and simply makes the starter unavailable.
+ */
+const MATT_STARTER_SOURCE_ENV = "MATT_LIBRARY_SOURCE_USER_ID";
+const MATT_STARTER_SERVICE = "matt-starter";
 /** Delay between resolveToMbid calls in the import worker (1.1 s ≥ MB 1 req/sec). */
 const IMPORT_RESOLVE_DELAY_MS = 1100;
 /** Hard cap per MB resolve call — prevents a single hanging network call from
@@ -113,6 +124,119 @@ const imageExtractionLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "Too many screenshot extraction attempts — try again later." },
 });
+
+function mattStarterSourceUserId(): number | null {
+  const raw = process.env[MATT_STARTER_SOURCE_ENV]?.trim();
+  if (!raw || !/^\d+$/.test(raw)) return null;
+  const id = Number(raw);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+function mattStarterUnavailable(res: Response) {
+  return res.status(503).json({
+    available: false,
+    addedCount: 0,
+    totalCount: 0,
+    error: "Matt’s starter library is not available right now. Try another way to add music.",
+  });
+}
+
+/**
+ * GET /api/me/library/starter — reports whether the operator-owned starter
+ * source is configured and populated. The source identity is server-only.
+ */
+router.get("/me/library/starter", h(async (_req, res) => {
+  const sourceUserId = mattStarterSourceUserId();
+  if (sourceUserId == null) {
+    return res.json({ available: false, addedCount: 0, totalCount: 0 });
+  }
+
+  const [source] = await db
+    .select({ id: loreUsersTable.id })
+    .from(loreUsersTable)
+    .where(eq(loreUsersTable.id, sourceUserId))
+    .limit(1);
+  if (!source) return res.json({ available: false, addedCount: 0, totalCount: 0 });
+
+  const [count] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(libraryItemsTable)
+    .where(eq(libraryItemsTable.userId, sourceUserId));
+  const totalCount = count?.count ?? 0;
+  return res.json({
+    available: totalCount > 0,
+    addedCount: 0,
+    totalCount,
+  });
+}));
+
+/**
+ * POST /api/me/library/starter — copy resolved rows from the configured
+ * operator-owned source into the current listener's library. The source is
+ * intentionally not caller-selectable.
+ */
+router.post("/me/library/starter", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+  const sourceUserId = mattStarterSourceUserId();
+  if (sourceUserId == null) return mattStarterUnavailable(res);
+
+  const result = await db.transaction(async (tx) => {
+    const [source] = await tx
+      .select({ id: loreUsersTable.id })
+      .from(loreUsersTable)
+      .where(eq(loreUsersTable.id, sourceUserId))
+      .limit(1);
+    if (!source) return null;
+
+    const sourceItems = await tx
+      .select({ mbid: libraryItemsTable.mbid })
+      .from(libraryItemsTable)
+      .where(eq(libraryItemsTable.userId, sourceUserId));
+    const totalCount = sourceItems.length;
+    if (totalCount === 0 || sourceUserId === user.id) {
+      return { addedCount: 0, totalCount, available: totalCount > 0 && sourceUserId !== user.id };
+    }
+
+    const inserted = await tx
+      .insert(libraryItemsTable)
+      .values(sourceItems.map(({ mbid }) => ({
+        userId: user.id,
+        mbid,
+        provenance: {
+          kind: "import" as const,
+          service: MATT_STARTER_SERVICE,
+          sourceLabel: "Matt’s starter library",
+        },
+        spinId: null,
+        addedAt: new Date(),
+      })))
+      .onConflictDoNothing({
+        target: [libraryItemsTable.userId, libraryItemsTable.mbid],
+      })
+      .returning({ id: libraryItemsTable.id });
+    return { addedCount: inserted.length, totalCount, available: true };
+  });
+
+  if (!result) {
+    return mattStarterUnavailable(res);
+  }
+  if (!result.available) {
+    return res.json({
+      available: false,
+      addedCount: 0,
+      totalCount: result.totalCount,
+      error: result.totalCount === 0
+        ? "Matt’s starter library is empty right now. Try another way to add music."
+        : "You can’t copy a library into itself. Try another account.",
+    });
+  }
+  if (result.addedCount > 0) {
+    bustCrossingsCache(user.id);
+    bustLibraryHitCache(user.id);
+    bustPickerOverlapCache(user.id);
+  }
+  return res.json(result);
+}));
 
 // ---------------------------------------------------------------------------
 // Helpers

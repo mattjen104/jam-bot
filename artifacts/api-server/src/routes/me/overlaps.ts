@@ -291,9 +291,14 @@ const PICKER_OVERLAP_TTL_MS = 5 * 60 * 1000;
 type PickerOverlapRow = { pickerId: number; pickerName: string; overlapCount: number };
 const pickerOverlapCache = new Map<number, { builtAt: number; data: PickerOverlapRow[] }>();
 
+/** Evict a user's picker-overlap cache after a library write. */
+export function bustPickerOverlapCache(userId: number): void {
+  pickerOverlapCache.delete(userId);
+}
+
 /** Evict a user's cached entry — for tests only. */
 export function _testOnly_clearPickerOverlapCache(userId: number): void {
-  pickerOverlapCache.delete(userId);
+  bustPickerOverlapCache(userId);
 }
 
 /** Return the raw cached entry — lets tests verify cache hits without DB spying. */

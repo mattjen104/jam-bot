@@ -9,7 +9,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
 import { Search } from "lucide-react";
 import { useLocation } from "wouter";
-import { useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, useMyTasteSeeds, useSetTasteSeeds, type GhostStation } from "../lib/meHooks";
+import { useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, type GhostStation } from "../lib/meHooks";
 import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
 import { StationLane } from "./StationLane";
 import { ContextRail } from "./ContextRail";
@@ -1153,12 +1153,17 @@ export function DialView() {
   // ── Taste seeds — zero-friction artist onboarding ───────────────────────
   const { data: seedArtists = [] } = useMyTasteSeeds();
   const setSeedsMutation = useSetTasteSeeds();
+  const { data: mattStarter } = useMattStarterLibrary();
+  const mattStarterMutation = useStartMattLibrary();
   const seedWriteRef = useRef<Promise<string[]> | null>(null);
   // Keep the cloud responsive while the serialized PUT queue is in flight.
   // The server query remains the source of truth; this optimistic mirror only
   // prevents a fast click from looking unselected until the round trip ends.
   const [optimisticSeeds, setOptimisticSeeds] = useState<string[] | null>(null);
   const visibleSeeds = optimisticSeeds ?? seedArtists;
+  const startMattLibrary = useCallback(() => {
+    mattStarterMutation.mutate();
+  }, [mattStarterMutation]);
 
   const addSeed = useCallback((artist: string) => {
     const trimmed = artist.trim();
@@ -1658,6 +1663,10 @@ export function DialView() {
                   showLivePicker={false}
                   onAddSeed={addSeed}
                   onRemoveSeed={removeSeed}
+                  mattStarterAvailable={mattStarter?.available === true}
+                  mattStarterCopying={mattStarterMutation.isPending}
+                  mattStarterError={mattStarterMutation.error ? "We couldn’t add Matt’s library. Try again or choose an artist below." : null}
+                  onStartMattLibrary={startMattLibrary}
                 />
                 {/* Zone 2 heading + skeleton rows — no pre-load signal for ghost stations */}
                 <ZoneLabel label="Missed while you were away" accent="picker" />
@@ -1767,6 +1776,10 @@ export function DialView() {
                   showLivePicker
                   onAddSeed={addSeed}
                   onRemoveSeed={removeSeed}
+                  mattStarterAvailable={mattStarter?.available === true}
+                  mattStarterCopying={mattStarterMutation.isPending}
+                  mattStarterError={mattStarterMutation.error ? "We couldn’t add Matt’s library. Try again or choose an artist below." : null}
+                  onStartMattLibrary={startMattLibrary}
                 />
               </>
             )}
@@ -2132,6 +2145,10 @@ function Zone1Placeholder({
   showLivePicker,
   onAddSeed,
   onRemoveSeed,
+  mattStarterAvailable,
+  mattStarterCopying,
+  mattStarterError,
+  onStartMattLibrary,
 }: {
   isSpotifyConnected: boolean;
   hasLibrary: boolean;
@@ -2144,6 +2161,10 @@ function Zone1Placeholder({
   showLivePicker: boolean;
   onAddSeed: (artist: string) => void;
   onRemoveSeed: (artist: string) => void;
+  mattStarterAvailable: boolean;
+  mattStarterCopying: boolean;
+  mattStarterError: string | null;
+  onStartMattLibrary: () => void;
 }) {
   if (hasLibrary || isSpotifyConnected) {
     // Library imported or Spotify connected — crossings are being computed.
@@ -2187,6 +2208,10 @@ function Zone1Placeholder({
             loading={liveLoading || onboardingArtistsLoading}
             seeds={seeds}
             onAddSeed={onAddSeed}
+            mattStarterAvailable={mattStarterAvailable}
+            mattStarterCopying={mattStarterCopying}
+            mattStarterError={mattStarterError}
+            onStartMattLibrary={onStartMattLibrary}
           />
         )}
         <p className="z1-placeholder__pitch">
@@ -2221,6 +2246,10 @@ export function LiveArtistPicker({
   loading,
   seeds,
   onAddSeed,
+  mattStarterAvailable = false,
+  mattStarterCopying = false,
+  mattStarterError = null,
+  onStartMattLibrary,
 }: {
   suggestions?: LiveArtistSuggestion[];
   /** Unified historical + live list. Optional for callers that only show live data. */
@@ -2228,6 +2257,10 @@ export function LiveArtistPicker({
   loading: boolean;
   seeds: string[];
   onAddSeed: (artist: string) => void;
+  mattStarterAvailable?: boolean;
+  mattStarterCopying?: boolean;
+  mattStarterError?: string | null;
+  onStartMattLibrary?: () => void;
 }) {
   const liveSuggestions = suggestions ?? [];
   const selected = new Set(seeds.map((seed) => liveIdentityKey(seed)));
@@ -2247,6 +2280,28 @@ export function LiveArtistPicker({
           <p>Choose one of Lore’s most-played artists, or jump into what is live now.</p>
         </div>
       </div>
+      {mattStarterAvailable && onStartMattLibrary && (
+        <div className="live-artist-picker__starter">
+          <button
+            type="button"
+            className="live-artist-picker__option live-artist-picker__option--starter"
+            onClick={onStartMattLibrary}
+            disabled={mattStarterCopying}
+            aria-label="Start with Matt’s library"
+          >
+            <span className="live-artist-picker__artist">Start with Matt’s library</span>
+            <span className="live-artist-picker__context">A resolved starter library, ready for Lore crossings</span>
+            <span className="live-artist-picker__action">{mattStarterCopying ? "Adding…" : "Start here"}</span>
+          </button>
+          {mattStarterError && (
+            <div className="live-artist-picker__state" role="alert">
+              {mattStarterError.includes("not available")
+                ? mattStarterError
+                : "We couldn’t add Matt’s library. Try again or choose an artist below."}
+            </div>
+          )}
+        </div>
+      )}
       {loading && rows.length === 0 ? (
         <div className="live-artist-picker__state" role="status">Listening for artists on air…</div>
       ) : rows.length > 0 ? (

@@ -18,9 +18,11 @@ vi.mock("../src/hooks/useDialData", async (importOriginal) => {
   return { ...actual, useDialData: vi.fn() };
 });
 
-const { tasteSeeds, mutateAsync } = vi.hoisted(() => ({
+const { tasteSeeds, mutateAsync, mattStarter, startMattLibrary } = vi.hoisted(() => ({
   tasteSeeds: vi.fn(() => ({ data: [] as string[] })),
   mutateAsync: vi.fn(async (artists: string[]) => ({ artists })),
+  mattStarter: vi.fn(() => ({ data: { available: false, addedCount: 0, totalCount: 0 } })),
+  startMattLibrary: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
 }));
 
 vi.mock("../src/lib/meHooks", async (importOriginal) => {
@@ -30,6 +32,8 @@ vi.mock("../src/lib/meHooks", async (importOriginal) => {
     useSetTasteSeeds: vi.fn(() => ({ mutateAsync })),
     useMyGhostMissed: vi.fn(() => ({ data: [] })),
     useSpotifyLibraryConnected: vi.fn(() => false),
+    useMattStarterLibrary: mattStarter,
+    useStartMattLibrary: startMattLibrary,
   });
 });
 
@@ -136,6 +140,8 @@ afterEach(() => {
   vi.clearAllMocks();
   tasteSeeds.mockReturnValue({ data: [] });
   mutateAsync.mockImplementation(async (artists: string[]) => ({ artists }));
+  mattStarter.mockReturnValue({ data: { available: false, addedCount: 0, totalCount: 0 } });
+  startMattLibrary.mockReturnValue({ mutate: vi.fn(), isPending: false, error: null });
 });
 
 describe("extractLiveArtistSuggestions", () => {
@@ -445,6 +451,35 @@ describe("no-library onboarding live picker", () => {
     expect(screen.getByText("Morning Show · WFMU · live now")).toBeTruthy();
     expect(screen.getByPlaceholderText("e.g. Radiohead")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Connect Spotify library" })).toBeTruthy();
+  });
+
+  it("offers Matt’s starter library only when the server reports it is available", () => {
+    mattStarter.mockReturnValue({ data: { available: true, addedCount: 0, totalCount: 24 } });
+    const mutate = vi.fn();
+    startMattLibrary.mockReturnValue({ mutate, isPending: false, error: null });
+    mockDial([], [{ artist: "Still Available", stationSlug: "wfmu", stationName: "WFMU", trackTitle: null, showName: null }]);
+
+    render(<DialView />);
+    fireEvent.click(screen.getByRole("button", { name: "Start with Matt’s library" }));
+
+    expect(mutate).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("A resolved starter library, ready for Lore crossings")).toBeTruthy();
+  });
+
+  it("keeps artist controls usable while Matt’s library is copying or errors", () => {
+    mattStarter.mockReturnValue({ data: { available: true, addedCount: 0, totalCount: 24 } });
+    startMattLibrary.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: true,
+      error: new Error("starter unavailable"),
+    });
+    mockDial([], [{ artist: "Still Available", stationSlug: "wfmu", stationName: "WFMU", trackTitle: null, showName: null }]);
+
+    render(<DialView />);
+
+    expect(screen.getByRole("button", { name: "Start with Matt’s library" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: "Choose Still Available" })).toBeTruthy();
+    expect(screen.getByRole("alert").textContent).toContain("We couldn’t add Matt’s library. Try again or choose an artist below.");
   });
 
   it("persists a selected live artist through the taste-seed mutation", async () => {

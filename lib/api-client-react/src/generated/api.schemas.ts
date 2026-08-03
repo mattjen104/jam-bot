@@ -2478,6 +2478,13 @@ export interface LibraryCoverageResponse {
   items: LibraryCoverageList[];
 }
 
+export interface MattStarterLibraryResult {
+  available: boolean;
+  addedCount: number;
+  totalCount: number;
+  error?: string;
+}
+
 export type ResolveSongParams = {
   /**
    * @minLength 1

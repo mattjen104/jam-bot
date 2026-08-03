@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import type { Server } from "node:http";
 import { eq, sql } from "drizzle-orm";
@@ -24,10 +24,14 @@ const MBIDS = {
   apple: `test-lib-apple-${run}`,
   mango: `test-lib-mango-${run}`,
   banana: `test-lib-banana-${run}`,
+  starterOne: `test-lib-starter-one-${run}`,
+  starterTwo: `test-lib-starter-two-${run}`,
 };
+const STARTER_ENV = "MATT_LIBRARY_SOURCE_USER_ID";
 
 let dbAvailable = false;
 let userId: number | null = null;
+let sourceUserId: number | null = null;
 let server: Server | undefined;
 let baseUrl = "";
 
@@ -35,6 +39,18 @@ async function getLibrary(params: Record<string, string>) {
   const qs = new URLSearchParams(params).toString();
   const res = await fetch(`${baseUrl}/api/me/library?${qs}`, {
     headers: { cookie: `lore_sid=${SID}` },
+  });
+  return { status: res.status, body: await res.json() };
+}
+
+async function starterRequest(method: "GET" | "POST", body?: unknown) {
+  const res = await fetch(`${baseUrl}/api/me/library/starter`, {
+    method,
+    headers: {
+      cookie: `lore_sid=${SID}`,
+      ...(body ? { "content-type": "application/json" } : {}),
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
   });
   return { status: res.status, body: await res.json() };
 }
@@ -66,6 +82,8 @@ beforeAll(async () => {
     { mbid: MBIDS.apple, title: "Apple Blossom", artist: `Zeta Orchestra ${run}` },
     { mbid: MBIDS.mango, title: "Mango Nights", artist: `Middle Group ${run}` },
     { mbid: MBIDS.banana, title: "Banana Pancakes", artist: `Aardvark Band ${run}` },
+    { mbid: MBIDS.starterOne, title: "Starter One", artist: `Starter Artist ${run}` },
+    { mbid: MBIDS.starterTwo, title: "Starter Two", artist: `Starter Artist ${run}` },
   ]);
 
   const base = Date.now();
@@ -75,6 +93,17 @@ beforeAll(async () => {
     { userId, mbid: MBIDS.apple, provenance: { kind: "import", service: "spotify" }, addedAt: new Date(base - 1000) },
     { userId, mbid: MBIDS.mango, provenance: { kind: "keep" }, addedAt: new Date(base - 2000) },
     { userId, mbid: MBIDS.banana, provenance: { kind: "import", service: "spotify" }, addedAt: new Date(base - 3000) },
+  ]);
+
+  const [source] = await db
+    .insert(loreUsersTable)
+    .values({ spotifyUserId: `test-lib-source-${run}`, deviceKey: `test-lib-source-device-${run}` })
+    .returning({ id: loreUsersTable.id });
+  sourceUserId = source!.id;
+  await db.insert(libraryItemsTable).values([
+    { userId: sourceUserId, mbid: MBIDS.zebra, provenance: { kind: "keep" } },
+    { userId: sourceUserId, mbid: MBIDS.starterOne, provenance: { kind: "import", service: "spotify" } },
+    { userId: sourceUserId, mbid: MBIDS.starterTwo, provenance: { kind: "keep" } },
   ]);
 
   server = app.listen(0);
@@ -90,10 +119,80 @@ afterAll(async () => {
     await db.delete(libraryItemsTable).where(eq(libraryItemsTable.userId, userId));
     await db.delete(loreUsersTable).where(eq(loreUsersTable.id, userId));
   }
+  if (sourceUserId != null) {
+    await db.delete(libraryItemsTable).where(eq(libraryItemsTable.userId, sourceUserId));
+    await db.delete(loreUsersTable).where(eq(loreUsersTable.id, sourceUserId));
+  }
   for (const mbid of Object.values(MBIDS)) {
     await db.delete(recordingsTable).where(eq(recordingsTable.mbid, mbid));
   }
   await db.delete(spotifyConnectionsTable).where(eq(spotifyConnectionsTable.sid, SID));
+});
+
+describe("Matt starter library", () => {
+  afterEach(async () => {
+    if (!dbAvailable || userId == null) return;
+    await db.delete(libraryItemsTable).where(
+      sql`${libraryItemsTable.userId} = ${userId} and ${libraryItemsTable.mbid} in (${MBIDS.starterOne}, ${MBIDS.starterTwo})`,
+    );
+  });
+
+  it("is fail-closed when unconfigured", async () => {
+    if (!dbAvailable) return;
+    const previous = process.env[STARTER_ENV];
+    delete process.env[STARTER_ENV];
+    try {
+      const { status, body } = await starterRequest("GET");
+      expect(status).toBe(200);
+      expect(body).toEqual({ available: false, addedCount: 0, totalCount: 0 });
+    } finally {
+      if (previous === undefined) delete process.env[STARTER_ENV];
+      else process.env[STARTER_ENV] = previous;
+    }
+  });
+
+  it("copies only the configured source, preserves existing rows, and is idempotent", async () => {
+    if (!dbAvailable || sourceUserId == null || userId == null) return;
+    const previous = process.env[STARTER_ENV];
+    process.env[STARTER_ENV] = String(sourceUserId);
+    try {
+      const available = await starterRequest("GET");
+      expect(available.status).toBe(200);
+      expect(available.body).toMatchObject({ available: true, totalCount: 3 });
+
+      // A caller-supplied sourceUserId is ignored; the server-side source wins.
+      const first = await starterRequest("POST", { sourceUserId: 999999999 });
+      expect(first.status).toBe(200);
+      expect(first.body).toMatchObject({ available: true, addedCount: 2, totalCount: 3 });
+
+      const copied = await db
+        .select({
+          mbid: libraryItemsTable.mbid,
+          provenance: libraryItemsTable.provenance,
+          spinId: libraryItemsTable.spinId,
+        })
+        .from(libraryItemsTable)
+        .where(eq(libraryItemsTable.userId, userId));
+      const copiedStarterRows = copied.filter((row) =>
+        row.mbid === MBIDS.starterOne || row.mbid === MBIDS.starterTwo,
+      );
+      expect(copiedStarterRows).toHaveLength(2);
+      expect(copiedStarterRows.every((row) =>
+        row.provenance.kind === "import" &&
+        row.provenance.service === "matt-starter" &&
+        row.provenance.sourceLabel === "Matt’s starter library" &&
+        row.spinId === null,
+      )).toBe(true);
+      expect(copied.some((row) => row.mbid === MBIDS.zebra && row.provenance.kind === "keep")).toBe(true);
+
+      const second = await starterRequest("POST");
+      expect(second.status).toBe(200);
+      expect(second.body).toMatchObject({ available: true, addedCount: 0, totalCount: 3 });
+    } finally {
+      if (previous === undefined) delete process.env[STARTER_ENV];
+      else process.env[STARTER_ENV] = previous;
+    }
+  });
 });
 
 describe("GET /api/me/library search/sort/filter", () => {

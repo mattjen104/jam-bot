@@ -99,6 +99,7 @@ export * from "./lyricLine";
 export * from "./manualSpinRequest";
 export * from "./manualSpinResponse";
 export * from "./manualSpinResponseConfidence";
+export * from "./mattStarterLibraryResult";
 export * from "./mePickerOverlapResult";
 export * from "./nowPlaying";
 export * from "./nowPlayingConfidence";

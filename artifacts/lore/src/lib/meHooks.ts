@@ -401,6 +401,48 @@ export const ME_PICKER_NAMES_KEY = ["me", "picker-names"] as const;
 export const ME_DIAL_CROSSINGS_KEY = (date: string) =>
   ["me", "crossings", date] as const;
 export const ME_TASTE_SEEDS_KEY = ["me", "taste-seeds"] as const;
+export const ME_MATT_STARTER_LIBRARY_KEY = ["me", "library", "matt-starter"] as const;
+
+export interface MattStarterLibraryStatus {
+  available: boolean;
+  addedCount: number;
+  totalCount: number;
+}
+
+export interface MattStarterLibraryCopy extends MattStarterLibraryStatus {
+  error?: string;
+}
+
+export function useMattStarterLibrary() {
+  return useQuery({
+    queryKey: ME_MATT_STARTER_LIBRARY_KEY,
+    queryFn: () => fetchOrNull<MattStarterLibraryStatus>("/api/me/library/starter"),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+export function useStartMattLibrary() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<MattStarterLibraryCopy>("/api/me/library/starter", { method: "POST" }),
+    onSuccess: (data) => {
+      queryClient.setQueryData(ME_MATT_STARTER_LIBRARY_KEY, data);
+      const today = new Date().toISOString().slice(0, 10);
+      void queryClient.invalidateQueries({ queryKey: ["me", "library"] });
+      void queryClient.invalidateQueries({ queryKey: ME_LIBRARY_MBIDS_KEY });
+      void queryClient.invalidateQueries({ queryKey: ME_PICKER_NAMES_KEY });
+      void queryClient.invalidateQueries({ queryKey: ME_DIAL_CROSSINGS_KEY(today) });
+      void queryClient.invalidateQueries({ queryKey: ME_PICKER_OVERLAP_KEY });
+      void queryClient.invalidateQueries({ queryKey: ME_OVERLAP_PICKERS_KEY });
+      void queryClient.invalidateQueries({ queryKey: ME_OVERLAP_STATIONS_KEY });
+      void queryClient.invalidateQueries({ queryKey: ME_OVERLAP_RUNS_KEY });
+      void queryClient.invalidateQueries({ queryKey: ME_GHOST_MISSED_KEY });
+      void queryClient.invalidateQueries({ queryKey: getListStationsNowPlayingQueryKey() });
+    },
+  });
+}
 
 export interface DialCrossing {
   stationSlug: string;

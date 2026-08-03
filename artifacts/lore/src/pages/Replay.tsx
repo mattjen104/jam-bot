@@ -3,6 +3,7 @@ import { useGetReplayManifest } from "@workspace/api-client-react";
 import { ArrowLeft, Download, Ghost } from "lucide-react";
 import { ArchiveTracklist } from "../components/ArchiveTracklist";
 import { GuidedReplayPanel } from "../components/GuidedReplayPanel";
+import { GuidedReplayQueue } from "../components/GuidedReplayQueue";
 import { ShareButton } from "../components/ShareButton";
 import { usePlayer } from "../player/PlayerProvider";
 import { runDate } from "../lib/format";
@@ -102,6 +103,7 @@ export default function Replay() {
               entries={data.entries}
               label={`${data.station.name} · ${data.show?.name ?? "stream"} · ${runDate(data.bounds.date)}`}
             />
+            <GuidedReplayQueue replayId={data.replayId} />
 
             <section
               aria-label="Replay exports"

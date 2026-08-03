@@ -4195,3 +4195,27 @@ export const GetMyLibraryListCoverageResponse = zod.object({
       ),
   ),
 });
+
+/**
+ * Returns only the availability and count of the operator-owned starter library. The source account identity is server-managed and is never accepted from the caller.
+
+ * @summary Check whether the Matt starter library is available
+ */
+export const GetMyMattStarterLibraryResponse = zod.object({
+  available: zod.boolean(),
+  addedCount: zod.number(),
+  totalCount: zod.number(),
+  error: zod.string().optional(),
+});
+
+/**
+ * Adds resolved tracks from the configured operator-owned starter library. Existing listener tracks are left unchanged, making this operation safe to repeat. No Spotify connection is required.
+
+ * @summary Copy the Matt starter library into the listener's library
+ */
+export const CopyMattStarterLibraryResponse = zod.object({
+  available: zod.boolean(),
+  addedCount: zod.number(),
+  totalCount: zod.number(),
+  error: zod.string().optional(),
+});

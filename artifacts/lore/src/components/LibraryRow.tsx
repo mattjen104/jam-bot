@@ -74,6 +74,8 @@ function Byline({ prov, soft }: { prov: LibraryItem["provenance"]; soft?: boolea
             <span style={{ opacity: 0.5, fontSize: "0.85em", marginRight: 3 }}>𝗦</span>
             from Spotify · unmatched
           </>
+        ) : prov.service === "matt-starter" ? (
+          <>from Matt’s starter library</>
         ) : (
           <>imported from {prov.service}</>
         )}

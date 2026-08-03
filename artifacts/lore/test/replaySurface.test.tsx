@@ -178,7 +178,9 @@ describe("Ghost Replay surface", () => {
     expect(screen.getByRole("link", { name: "Spotify" }).getAttribute("href")).toBe(
       "https://open.spotify.com/track/exact",
     );
-    expect(screen.getAllByTitle(/keep this track/i)).toHaveLength(2);
+    // The tracklist contributes two Keep controls and the guided native queue
+    // adds one for its currently selected resolved entry.
+    expect(screen.getAllByTitle(/keep this track/i)).toHaveLength(3);
     // Apple Music is now a tab inside GuidedReplayPanel alongside all other services
     expect(screen.getByTestId("guided-replay")).toBeTruthy();
     expect(screen.getByTestId("guided-service-appleMusic")).toBeTruthy();

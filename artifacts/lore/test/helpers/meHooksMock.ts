@@ -28,8 +28,14 @@ export async function makeMeHooksMock(
   for (const [key, val] of Object.entries(actual)) {
     if (typeof val === "function") {
       if (key.startsWith("use")) {
-        // React hooks — default to a safe query-result shape
-        mocked[key] = vi.fn(() => ({ data: undefined, isLoading: false }));
+        // React hooks — default to a safe query-result shape. Mutation hooks
+        // need mutation methods too because callers can render before a test
+        // overrides the hook.
+        mocked[key] = vi.fn(() =>
+          key.includes("Mutation") || key.includes("Start")
+            ? { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false, error: null }
+            : { data: undefined, isLoading: false },
+        );
       } else {
         // Async helpers: postStartImport, patchPreferences, postListen, …
         mocked[key] = vi.fn();

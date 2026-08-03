@@ -57,6 +57,7 @@ import type {
   LookupPickedMbidsParams,
   ManualSpinRequest,
   ManualSpinResponse,
+  MattStarterLibraryResult,
   MePickerOverlapResult,
   OEmbed,
   PatchClaimRequest,
@@ -7466,3 +7467,168 @@ export function useGetMyLibraryListCoverage<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Returns only the availability and count of the operator-owned starter library. The source account identity is server-managed and is never accepted from the caller.
+
+ * @summary Check whether the Matt starter library is available
+ */
+export const getGetMyMattStarterLibraryUrl = () => {
+  return `/api/me/library/starter`;
+};
+
+export const getMyMattStarterLibrary = async (
+  options?: RequestInit,
+): Promise<MattStarterLibraryResult> => {
+  return customFetch<MattStarterLibraryResult>(
+    getGetMyMattStarterLibraryUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetMyMattStarterLibraryQueryKey = () => {
+  return [`/api/me/library/starter`] as const;
+};
+
+export const getGetMyMattStarterLibraryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyMattStarterLibrary>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyMattStarterLibrary>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetMyMattStarterLibraryQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMyMattStarterLibrary>>
+  > = ({ signal }) => getMyMattStarterLibrary({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyMattStarterLibrary>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyMattStarterLibraryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyMattStarterLibrary>>
+>;
+export type GetMyMattStarterLibraryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Check whether the Matt starter library is available
+ */
+
+export function useGetMyMattStarterLibrary<
+  TData = Awaited<ReturnType<typeof getMyMattStarterLibrary>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyMattStarterLibrary>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyMattStarterLibraryQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Adds resolved tracks from the configured operator-owned starter library. Existing listener tracks are left unchanged, making this operation safe to repeat. No Spotify connection is required.
+
+ * @summary Copy the Matt starter library into the listener's library
+ */
+export const getCopyMattStarterLibraryUrl = () => {
+  return `/api/me/library/starter`;
+};
+
+export const copyMattStarterLibrary = async (
+  options?: RequestInit,
+): Promise<MattStarterLibraryResult> => {
+  return customFetch<MattStarterLibraryResult>(getCopyMattStarterLibraryUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getCopyMattStarterLibraryMutationOptions = <
+  TError = ErrorType<MattStarterLibraryResult>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof copyMattStarterLibrary>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof copyMattStarterLibrary>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["copyMattStarterLibrary"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof copyMattStarterLibrary>>,
+    void
+  > = () => {
+    return copyMattStarterLibrary(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CopyMattStarterLibraryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof copyMattStarterLibrary>>
+>;
+
+export type CopyMattStarterLibraryMutationError =
+  ErrorType<MattStarterLibraryResult>;
+
+/**
+ * @summary Copy the Matt starter library into the listener's library
+ */
+export const useCopyMattStarterLibrary = <
+  TError = ErrorType<MattStarterLibraryResult>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof copyMattStarterLibrary>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof copyMattStarterLibrary>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getCopyMattStarterLibraryMutationOptions(options));
+};

@@ -2646,6 +2646,43 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LibraryCoverageResponse"
+  /me/library/starter:
+    get:
+      operationId: getMyMattStarterLibrary
+      tags: [me]
+      summary: Check whether the Matt starter library is available
+      description: >
+        Returns only the availability and count of the operator-owned starter
+        library. The source account identity is server-managed and is never
+        accepted from the caller.
+      responses:
+        "200":
+          description: Starter library availability
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MattStarterLibraryResult"
+    post:
+      operationId: copyMattStarterLibrary
+      tags: [me]
+      summary: Copy the Matt starter library into the listener's library
+      description: >
+        Adds resolved tracks from the configured operator-owned starter library.
+        Existing listener tracks are left unchanged, making this operation safe
+        to repeat. No Spotify connection is required.
+      responses:
+        "200":
+          description: Copy result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MattStarterLibraryResult"
+        "503":
+          description: Starter library is not configured or unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MattStarterLibraryResult"
 components:
   schemas:
     HealthStatus:
@@ -6089,3 +6126,15 @@ components:
             $ref: "#/components/schemas/LibraryCoverageList"
       required:
         - items
+    MattStarterLibraryResult:
+      type: object
+      properties:
+        available:
+          type: boolean
+        addedCount:
+          type: integer
+        totalCount:
+          type: integer
+        error:
+          type: string
+      required: [available, addedCount, totalCount]
