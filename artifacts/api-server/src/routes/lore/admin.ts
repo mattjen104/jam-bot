@@ -66,8 +66,9 @@ import {
   blogListCandidatesTable,
   criCandidatesTable,
   scrapedShowsTable,
+  serviceTrackMapTable,
 } from "@workspace/db";
-import { eq, and, asc, desc, sql, count, isNull, gt } from "drizzle-orm";
+import { eq, and, asc, desc, sql, count, isNull, isNotNull, gt } from "drizzle-orm";
 import { runAnonCleanup } from "../../lore/anonCleanup.js";
 import { wireListExtractor } from "../../lore/list-wire.js";
 import { processListCandidate, writeCandidateOutcome, runListCandidateBatch } from "../../lore/list-candidates.js";
@@ -2240,6 +2241,53 @@ router.post("/admin/rym-lists", h(async (req, res) => {
 router.post("/admin/maintenance/anon-cleanup", h(async (_req, res) => {
   const deleted = await runAnonCleanup();
   console.info(`[anonCleanup] admin-triggered run deleted ${deleted} row(s)`);
+  return res.json({ deleted });
+}));
+
+// POST /api/admin/maintenance/prune-odesli-sentinels — one-time backfill that
+// removes stale odesli sentinel rows (service="odesli", missReason IS NOT NULL)
+// that were written before the delete-on-resolve fix was deployed.  Only rows
+// whose recordingMbid already has at least one live positive mapping
+// (missReason IS NULL, deadLink = false) are deleted — genuine unresolved
+// negatives are left untouched.  Safe to run multiple times.
+router.post("/admin/maintenance/prune-odesli-sentinels", h(async (_req, res) => {
+  // Find all MBIDs that have at least one live positive mapping.
+  const resolvedRows = await db
+    .selectDistinct({ recordingMbid: serviceTrackMapTable.recordingMbid })
+    .from(serviceTrackMapTable)
+    .where(
+      and(
+        isNull(serviceTrackMapTable.missReason),
+        eq(serviceTrackMapTable.deadLink, false),
+      ),
+    );
+
+  if (resolvedRows.length === 0) {
+    return res.json({ deleted: 0 });
+  }
+
+  const resolvedMbids = resolvedRows.map((r) => r.recordingMbid);
+
+  // Delete odesli sentinel rows for those MBIDs in batches to avoid an
+  // oversized IN clause.
+  const BATCH = 500;
+  let deleted = 0;
+  for (let i = 0; i < resolvedMbids.length; i += BATCH) {
+    const batch = resolvedMbids.slice(i, i + BATCH);
+    const result = await db
+      .delete(serviceTrackMapTable)
+      .where(
+        and(
+          eq(serviceTrackMapTable.service, "odesli"),
+          isNotNull(serviceTrackMapTable.missReason),
+          sql`${serviceTrackMapTable.recordingMbid} = ANY(ARRAY[${sql.join(batch.map((m) => sql`${m}`), sql`, `)}])`,
+        ),
+      )
+      .returning({ id: serviceTrackMapTable.id });
+    deleted += result.length;
+  }
+
+  console.info(`[pruneOdesliSentinels] deleted ${deleted} stale sentinel row(s)`);
   return res.json({ deleted });
 }));
 

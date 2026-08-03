@@ -133,9 +133,10 @@ async function computeMissBreakdown(
     ) ?? [];
   if (!mbids.length) return { noVector: 0, noLinks: 0, noRecording: 0 };
 
-  // Exclude any MBID that now has at least one live exact positive mapping —
-  // the sentinel may still exist on older rows written before the delete-on-
-  // resolve fix landed, so we gate here as a safety net.
+  // Exclude any MBID that now has at least one live exact positive mapping.
+  // Legacy sentinel rows written before the delete-on-resolve fix was deployed
+  // have been pruned via POST /api/admin/maintenance/prune-odesli-sentinels,
+  // but this filter remains as a belt-and-suspenders guard.
   const resolvedRows = await db
     .selectDistinct({ recordingMbid: serviceTrackMapTable.recordingMbid })
     .from(serviceTrackMapTable)
