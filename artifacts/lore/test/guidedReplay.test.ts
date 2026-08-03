@@ -1,9 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   computeAvailableServices,
   GUIDED_SERVICE_OPTIONS,
   guidedMissingLabel,
   materializeGuidedReplay,
+  serviceSupportsEmbed,
+  type GuidedService,
+  type GuidedServiceOption,
 } from "../src/lib/guidedReplay";
 
 const entries = [
@@ -533,5 +536,101 @@ describe("computeAvailableServices", () => {
     const result = computeAvailableServices(entries);
     const extra = result.find((r) => r.service === "amazon_music_unlimited");
     expect(extra?.label).toBe("Amazon Music Unlimited");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Embed contract: a new service added to GUIDED_SERVICE_OPTIONS with an
+// embedUrlBuilder automatically produces iframe-capable sources without any
+// other code change.
+// ---------------------------------------------------------------------------
+describe("new embed service — zero-change contract", () => {
+  const SYNTHETIC_KEY = "acmemusic" as GuidedService;
+
+  const syntheticOption: GuidedServiceOption = {
+    service: SYNTHETIC_KEY,
+    label: "Acme Music",
+    embedUrlBuilder: (url) =>
+      /^https:\/\/acme\.example\/embed\/\d+$/.test(url) ? url : null,
+  };
+
+  beforeEach(() => {
+    (GUIDED_SERVICE_OPTIONS as GuidedServiceOption[]).push(syntheticOption);
+  });
+
+  afterEach(() => {
+    const idx = (GUIDED_SERVICE_OPTIONS as GuidedServiceOption[]).indexOf(syntheticOption);
+    if (idx >= 0) (GUIDED_SERVICE_OPTIONS as GuidedServiceOption[]).splice(idx, 1);
+  });
+
+  it("serviceSupportsEmbed returns true for a service whose entry carries an embedUrlBuilder", () => {
+    expect(serviceSupportsEmbed("acmemusic")).toBe(true);
+  });
+
+  it("serviceSupportsEmbed returns false for a known service without an embedUrlBuilder", () => {
+    expect(serviceSupportsEmbed("appleMusic")).toBe(false);
+    expect(serviceSupportsEmbed("tidal")).toBe(false);
+  });
+
+  it("materializeGuidedReplay produces externalOnly:false and a non-null embedUrl for an embeddable URL", () => {
+    const testEntries = [
+      {
+        position: 0,
+        rawTitle: "Acme Track",
+        rawArtist: "Acme Artist",
+        recording: {
+          mbid: "acme-1",
+          title: "Acme Track",
+          artist: "Acme Artist",
+          links: [
+            {
+              name: "acmemusic",
+              url: "https://acme.example/embed/42",
+              kind: "exact" as const,
+            },
+          ],
+        },
+        guidedLinks: [],
+      },
+    ];
+
+    const guide = materializeGuidedReplay(testEntries, "acmemusic");
+
+    expect(guide.available).toBe(1);
+    const source = guide.playable[0]?.source;
+    expect(source?.externalOnly).toBe(false);
+    expect(source?.embedUrl).not.toBeNull();
+    expect(source?.embedUrl).toBe("https://acme.example/embed/42");
+  });
+
+  it("materializeGuidedReplay falls back to externalOnly:true when the URL is not in embeddable shape", () => {
+    const testEntries = [
+      {
+        position: 0,
+        rawTitle: "Acme Track",
+        rawArtist: "Acme Artist",
+        recording: {
+          mbid: "acme-2",
+          title: "Acme Track",
+          artist: "Acme Artist",
+          links: [
+            {
+              // plain page URL — not in the embed pattern
+              name: "acmemusic",
+              url: "https://acme.example/track/42",
+              kind: "exact" as const,
+            },
+          ],
+        },
+        guidedLinks: [],
+      },
+    ];
+
+    const guide = materializeGuidedReplay(testEntries, "acmemusic");
+
+    expect(guide.available).toBe(1);
+    const source = guide.playable[0]?.source;
+    expect(source?.externalOnly).toBe(true);
+    expect(source?.embedUrl).toBeNull();
   });
 });
