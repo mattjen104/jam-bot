@@ -720,4 +720,101 @@ describe("heartbeat → weekly rollup — cross-week-boundary heartbeat", () => 
     },
     TEST_TIMEOUT,
   );
+
+  it(
+    "does not double-count dwell when the same Sunday-night window is replayed a second time",
+    async () => {
+      if (!dbAvailable) return;
+
+      vi.useFakeTimers({ now: FAKE_NOW, toFake: ["Date"] });
+
+      try {
+        // Seed the Sunday-night spin (same scenario as the cross-week test above).
+        await db.insert(spinsTable).values({
+          stationId: stationId!,
+          mbid: MBID_XWEEK,
+          confidence: "recording_id",
+          rawTitle: "Sunday Night Track Replay",
+          rawArtist: "Artist",
+          playedAt: SPIN_PLAYED_AT,
+        });
+
+        // Heartbeat 1: opens the session (zero-width window, no dwell credited).
+        const hb1 = await post("/api/me/attendance/heartbeat", { stationId: stationId! }, SID_MAIN);
+        expect(hb1.status).toBe(200);
+        const { sessionId } = hb1.body as { sessionId: number };
+        expect(typeof sessionId).toBe("number");
+
+        // Back-date lastHeartbeatAt 90 s before FAKE_NOW so the next heartbeat
+        // sees a 90-second window.  Spin ends at 00:13 UTC → overlaps [00:08:30, 00:10].
+        // Overlap = 90 s ≥ 60 s gate → qualifies.
+        const prevHbTimestamp = new Date(FAKE_NOW.getTime() - 90_000);
+        await db
+          .update(listenSessionsTable)
+          .set({ lastHeartbeatAt: prevHbTimestamp })
+          .where(eq(listenSessionsTable.id, sessionId));
+
+        // Heartbeat 2: first (real) write — credits the 90-second window.
+        const hb2 = await post("/api/me/attendance/heartbeat", { stationId: stationId! }, SID_MAIN);
+        expect(hb2.status).toBe(200);
+
+        // Snapshot the rollup immediately after the first credit.
+        const rowsAfterFirst = await db
+          .select({
+            isoWeek: attendanceWeeklyRollupsTable.isoWeek,
+            dwellTotal: attendanceWeeklyRollupsTable.dwellTotal,
+            spinCount: attendanceWeeklyRollupsTable.spinCount,
+          })
+          .from(attendanceWeeklyRollupsTable)
+          .where(eq(attendanceWeeklyRollupsTable.userId, userMainId!));
+
+        const spinWeekRowFirst = rowsAfterFirst.find((r) => r.isoWeek === SPIN_WEEK);
+        expect(spinWeekRowFirst).toBeDefined();
+        expect(spinWeekRowFirst!.spinCount).toBe(1);
+        expect(spinWeekRowFirst!.dwellTotal).toBeGreaterThanOrEqual(90);
+
+        const dwellAfterFirst = spinWeekRowFirst!.dwellTotal;
+
+        // ── Replay the same window ─────────────────────────────────────────
+        // Reset lastHeartbeatAt back to the same pre-hb2 value.  The handler will
+        // compute the identical [prevHbTimestamp, FAKE_NOW] window and attempt to
+        // credit 90 s again.  The credited_through guard must prevent any addition.
+        await db
+          .update(listenSessionsTable)
+          .set({ lastHeartbeatAt: prevHbTimestamp })
+          .where(eq(listenSessionsTable.id, sessionId));
+
+        // Heartbeat 3: replay — should be a no-op for the rollup.
+        const hb3 = await post("/api/me/attendance/heartbeat", { stationId: stationId! }, SID_MAIN);
+        expect(hb3.status).toBe(200);
+
+        // ── Assert the rollup is unchanged after the replay ────────────────
+        const rowsAfterReplay = await db
+          .select({
+            isoWeek: attendanceWeeklyRollupsTable.isoWeek,
+            dwellTotal: attendanceWeeklyRollupsTable.dwellTotal,
+            spinCount: attendanceWeeklyRollupsTable.spinCount,
+          })
+          .from(attendanceWeeklyRollupsTable)
+          .where(eq(attendanceWeeklyRollupsTable.userId, userMainId!));
+
+        const spinWeekRowReplay = rowsAfterReplay.find((r) => r.isoWeek === SPIN_WEEK);
+        expect(spinWeekRowReplay).toBeDefined();
+
+        // spinCount must stay at 1 — the replay must not increment it.
+        expect(spinWeekRowReplay!.spinCount).toBe(1);
+
+        // dwellTotal must not grow — the idempotency guard (credited_through) must
+        // block re-accumulation of the same window-end timestamp.
+        expect(spinWeekRowReplay!.dwellTotal).toBe(dwellAfterFirst);
+
+        // Heartbeat's week (W04) must still have no row.
+        const heartbeatWeekRow = rowsAfterReplay.find((r) => r.isoWeek === HEARTBEAT_WEEK);
+        expect(heartbeatWeekRow).toBeUndefined();
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+    TEST_TIMEOUT,
+  );
 });

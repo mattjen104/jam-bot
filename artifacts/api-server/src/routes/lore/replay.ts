@@ -115,17 +115,17 @@ router.get("/replay/jobs/:jobId/stream", h(async (req, res) => {
 router.post("/replay/:id/resolve", h(async (req, res) => {
   const userId = await replayUserId(req, res);
   if (!userId) return;
-  const parsed = StartReplayResolutionParams.safeParse(req.params);
-  if (!parsed.success) return res.status(400).json({ error: "Invalid replay id" });
-  const job = await startReplayResolutionJob(userId, parsed.data.id);
-  if (!job) return res.status(404).json({ error: "Replay not found" });
-  return res.status(202).json(ReplayResolutionJobResponse.parse(job));
+  const parsed = GetReplayManifestParams.safeParse(req.params);
+  if (!parsed.success) return res.status(400).json({ error: "Invalid materialization job id" });
+  const job = await getReplayResolutionJob(jobId, userId);
+  if (!job) return res.status(404).json({ error: "Materialization job not found" });
+  return res.json(GetReplayPlaylistMaterializationResponse.parse(job));
 }));
 
-router.get("/replay/:id/playlist-targets", h(async (req, res) => {
+router.get("/replay/jobs/:jobId", h(async (req, res) => {
   const userId = await replayUserId(req, res);
   if (!userId) return;
-  const parsed = GetReplayPlaylistTargetsParams.safeParse(req.params);
+  const parsed = GetReplayManifestParams.safeParse(req.params);
   if (!parsed.success) return res.status(400).json({ error: "Invalid replay id" });
   return res.json(GetReplayPlaylistTargetsResponse.parse({
     targets: await listReplayMaterializationTargets(userId),
@@ -138,21 +138,24 @@ router.post("/replay/:id/materialize", h(async (req, res) => {
   const userId = await replayUserId(req, res);
   if (!userId) return;
   const params = StartReplayPlaylistMaterializationParams.safeParse(req.params);
-  const body = req.body;
+  const body = buildReplayExport(
+    rawFormat as ReplayExportFormat,
+    materializeReplayExport(manifest, mappingsByMbid),
+  );
   if (!params.success || !body || !["apple_music", "tidal"].includes(body.service)) {
     return res.status(400).json({ error: "A supported playlist service is required" });
   }
-  const job = await startReplayMaterializationJob(userId, params.data.id, body.service);
-  if (!job) return res.status(400).json({ error: "That playlist target is unavailable or not configured" });
-  return res.status(202).json(GetReplayPlaylistMaterializationResponse.parse(job));
+  const job = await getReplayResolutionJob(jobId, userId);
+  if (!job) return res.status(404).json({ error: "Materialization job not found" });
+  return res.json(GetReplayPlaylistMaterializationResponse.parse(job));
 }));
 
-router.get("/replay/materialization-jobs/:jobId", h(async (req, res) => {
+router.get("/replay/jobs/:jobId", h(async (req, res) => {
   const userId = await replayUserId(req, res);
   if (!userId) return;
-  const parsed = GetReplayPlaylistMaterializationParams.safeParse(req.params);
+  const parsed = GetReplayManifestParams.safeParse(req.params);
   if (!parsed.success) return res.status(400).json({ error: "Invalid materialization job id" });
-  const job = await getReplayMaterializationJob(parsed.data.jobId, userId);
+  const job = await getReplayResolutionJob(jobId, userId);
   if (!job) return res.status(404).json({ error: "Materialization job not found" });
   return res.json(GetReplayPlaylistMaterializationResponse.parse(job));
 }));
@@ -177,31 +180,28 @@ router.get("/replay/:id/guided-queue", h(async (req, res) => {
   if (!Number.isInteger(id) || id < 1) {
     return res.status(404).json({ error: "Replay not found" });
   }
-  const manifest = await getReplayManifest(id);
+  const manifest = await getReplayManifest(parsed.data.id);
   if (!manifest) return res.status(404).json({ error: "Replay not found" });
 
   const requestedService = typeof req.query.service === "string"
     ? req.query.service.trim().toLowerCase()
     : "";
-  const mbids = manifest.entries.flatMap((entry) =>
-    entry.recording?.mbid ? [entry.recording.mbid] : [],
-  );
+  const mbids = manifest.entries
+    .map((entry) => entry.recording?.mbid)
+    .filter((mbid): mbid is string => !!mbid);
   const maps = mbids.length
     ? await db
-        .select({
-          recordingMbid: serviceTrackMapTable.recordingMbid,
-          service: serviceTrackMapTable.service,
-          externalId: serviceTrackMapTable.externalId,
-          url: serviceTrackMapTable.url,
-          confidence: serviceTrackMapTable.confidence,
-          deadLink: serviceTrackMapTable.deadLink,
-        })
-        .from(serviceTrackMapTable)
-        .where(and(
-          inArray(serviceTrackMapTable.recordingMbid, mbids),
-          // Exclude embed_miss sentinel rows (service="odesli", url IS NULL).
-          isNotNull(serviceTrackMapTable.url),
-        ))
+      .select({
+        recordingMbid: serviceTrackMapTable.recordingMbid,
+        externalId: serviceTrackMapTable.externalId,
+        url: serviceTrackMapTable.url,
+        deadLink: serviceTrackMapTable.deadLink,
+      })
+      .from(serviceTrackMapTable)
+      .where(and(
+        eq(serviceTrackMapTable.service, "apple_music"),
+        inArray(serviceTrackMapTable.recordingMbid, mbids),
+      ))
     : [];
   const services = [...new Set(maps.map((map) => map.service))].sort();
   const service = requestedService || services[0] || "spotify";
@@ -209,7 +209,7 @@ router.get("/replay/:id/guided-queue", h(async (req, res) => {
     manifest,
     service,
     maps: maps
-      .filter((map) => map.recordingMbid)
+      .filter((map): map is typeof map & { url: string } => map.recordingMbid != null && map.url != null)
       .map((map) => ({
         recordingMbid: map.recordingMbid,
         service: map.service,
@@ -226,7 +226,7 @@ router.get("/replay/:id/guided-queue", h(async (req, res) => {
       manifest,
       service: serviceName,
       maps: maps
-        .filter((map) => map.service === serviceName)
+        .filter((map): map is typeof map & { url: string } => map.service === serviceName && map.url != null)
         .map((map) => ({
           recordingMbid: map.recordingMbid,
           service: map.service,
@@ -255,7 +255,6 @@ router.get("/replay/:id/guided-queue", h(async (req, res) => {
 router.get("/replay/:id", h(async (req, res) => {
   const parsed = GetReplayManifestParams.safeParse(req.params);
   if (!parsed.success) return res.status(404).json({ error: "Replay not found" });
-
   const manifest = await getReplayManifest(parsed.data.id);
   if (!manifest) return res.status(404).json({ error: "Replay not found" });
 
@@ -277,19 +276,10 @@ router.get("/replay/:id/export", h(async (req, res) => {
 
   const manifest = await getReplayManifest(parsed.data.id);
   if (!manifest) return res.status(404).json({ error: "Replay not found" });
-  if (manifest.entries.length > REPLAY_EXPORT_MAX_ENTRIES) {
-    return res.status(413).json({
-      error: `Replay is too large to export (maximum ${REPLAY_EXPORT_MAX_ENTRIES} broadcast entries)`,
-    });
-  }
 
-  const mbids = [
-    ...new Set(
-      manifest.entries
-        .map((entry) => entry.recording?.mbid)
-        .filter((mbid): mbid is string => !!mbid),
-    ),
-  ];
+  const mbids = manifest.entries
+    .map((entry) => entry.recording?.mbid)
+    .filter((mbid): mbid is string => !!mbid);
   const mappings = mbids.length
     ? await db
         .select({
@@ -311,6 +301,7 @@ router.get("/replay/:id/export", h(async (req, res) => {
     Array<{ service: string; url: string; deadLink: boolean; confidence: string }>
   >();
   for (const mapping of mappings) {
+    if (mapping.url == null) continue; // embed_miss sentinel — no URL to export
     const current = mappingsByMbid.get(mapping.recordingMbid) ?? [];
     current.push({
       service: mapping.service,

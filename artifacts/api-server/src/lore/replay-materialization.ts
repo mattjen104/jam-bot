@@ -226,7 +226,7 @@ export async function runReplayMaterializationWorker(jobId: number): Promise<voi
     const eligible = manifest.entries.flatMap((entry) => {
       const recording = entry.recording;
       const map = recording ? mapByMbid.get(recording.mbid) : undefined;
-      return map && recording ? [{
+      return map && recording && map.url != null ? [{
         position: entry.position,
         recordingMbid: recording.mbid,
         externalId: map.externalId ?? "",
