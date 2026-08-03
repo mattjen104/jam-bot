@@ -10,6 +10,7 @@ import {
   jsonb,
   index,
   uniqueIndex,
+  primaryKey,
   check,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
@@ -2237,6 +2238,11 @@ export const attendanceTable = pgTable(
      * until a fresh credited_through value is stored.
      */
     creditedThrough: timestamp("credited_through", { withTimezone: true }),
+    /**
+     * True once this row has crossed the dwell gate and contributed one spin
+     * to the maintained per-recording rollup.
+     */
+    rollupCounted: boolean("rollup_counted").notNull().default(false),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => [
@@ -2249,6 +2255,51 @@ export const attendanceTable = pgTable(
 
 export type Attendance = typeof attendanceTable.$inferSelect;
 export type InsertAttendance = typeof attendanceTable.$inferInsert;
+
+/**
+ * Maintained listener/recording attendance read model.
+ *
+ * `attendance` remains the per-spin audit trail.  This table is the compact
+ * source for listener-facing aggregates: dwell is accumulated from each
+ * newly-credited attendance slice, while spinCount increments only when a
+ * distinct spin crosses the existing dwell gate.
+ */
+export const attendanceRollupsTable = pgTable(
+  "attendance_rollups",
+  {
+    userId: integer("user_id")
+      .notNull()
+      .references(() => loreUsersTable.id, { onDelete: "cascade" }),
+    recordingMbid: text("recording_mbid")
+      .notNull()
+      .references(() => recordingsTable.mbid),
+    /** Total credited listening seconds across this listener's spins. */
+    dwellTotal: integer("dwell_total").notNull().default(0),
+    /** Number of distinct spins whose dwell meets the attendance gate. */
+    spinCount: integer("spin_count").notNull().default(0),
+    /** Air time of the first spin that crossed the attendance gate. */
+    firstHeard: timestamp("first_heard", { withTimezone: true }),
+    /** Air time of the most recent spin that crossed the attendance gate. */
+    lastHeard: timestamp("last_heard", { withTimezone: true }),
+  },
+  (t) => [
+    primaryKey({
+      name: "attendance_rollups_user_recording_pk",
+      columns: [t.userId, t.recordingMbid],
+    }),
+    index("attendance_rollups_user_recording_idx").on(
+      t.userId,
+      t.recordingMbid,
+    ),
+    index("attendance_rollups_user_idx").on(t.userId),
+    index("attendance_rollups_recording_idx").on(t.recordingMbid),
+    check("attendance_rollups_dwell_total_ck", sql`${t.dwellTotal} >= 0`),
+    check("attendance_rollups_spin_count_ck", sql`${t.spinCount} >= 0`),
+  ],
+);
+
+export type AttendanceRollup = typeof attendanceRollupsTable.$inferSelect;
+export type InsertAttendanceRollup = typeof attendanceRollupsTable.$inferInsert;
 
 // ---- Taste seeds (zero-friction onboarding) --------------------------------
 

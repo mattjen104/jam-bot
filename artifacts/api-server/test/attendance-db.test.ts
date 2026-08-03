@@ -30,6 +30,7 @@ import {
   recordingsTable,
   listenSessionsTable,
   attendanceTable,
+  attendanceRollupsTable,
 } from "@workspace/db";
 import app from "../src/app.js";
 
@@ -147,12 +148,13 @@ beforeAll(async () => {
 });
 
 // ── Per-test cleanup ───────────────────────────────────────────────────────────
-// Wipe sessions, attendance, and spins between tests so each test starts clean.
+// Wipe sessions, audit rows, rollups, and spins between tests so each starts clean.
 // Recordings and users are stable across all tests.
 afterEach(async () => {
   if (!dbAvailable) return;
   for (const userId of [userMainId, userNodurId, userGateId]) {
     if (userId == null) continue;
+    await db.delete(attendanceRollupsTable).where(eq(attendanceRollupsTable.userId, userId));
     await db.delete(attendanceTable).where(eq(attendanceTable.userId, userId));
     await db.delete(listenSessionsTable).where(eq(listenSessionsTable.userId, userId));
   }

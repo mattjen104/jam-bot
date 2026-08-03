@@ -3,6 +3,7 @@ import {
   db,
   listenSessionsTable,
   attendanceTable,
+  attendanceRollupsTable,
   spinsTable,
   stationsTable,
   recordingsTable,
@@ -82,7 +83,7 @@ router.post("/me/attendance/heartbeat", h(async (req, res) => {
   // from the same user cannot read the same prevHeartbeatAt and double-count
   // the same window.  Only one request holds the row lock at a time; the next
   // waits and then reads the already-bumped timestamp as its own window start.
-  const { sessionId, prevHeartbeatAt } = await db.transaction(async (tx) => {
+  return db.transaction(async (tx) => {
     const [existing] = await tx
       .select({
         id: listenSessionsTable.id,
@@ -101,50 +102,49 @@ router.post("/me/attendance/heartbeat", h(async (req, res) => {
       .limit(1)
       .for("update"); // lock the row — concurrent heartbeat must wait
 
+    let sessionId: number;
+    let prevHeartbeatAt: Date;
     if (existing) {
-      const prev = existing.lastHeartbeatAt;
+      sessionId = existing.id;
+      prevHeartbeatAt = existing.lastHeartbeatAt;
       await tx
         .update(listenSessionsTable)
         .set({ lastHeartbeatAt: now })
         .where(eq(listenSessionsTable.id, existing.id));
-      return { sessionId: existing.id, prevHeartbeatAt: prev };
+    } else {
+      const [created] = await tx
+        .insert(listenSessionsTable)
+        .values({
+          userId: user.id,
+          stationId,
+          startedAt: now,
+          lastHeartbeatAt: now,
+        })
+        .returning({ id: listenSessionsTable.id });
+      if (!created) throw new Error("Failed to create listen session");
+      sessionId = created.id;
+      // Zero-width window on session open — no dwell credited yet.
+      prevHeartbeatAt = now;
     }
 
-    // No active session — start a fresh one.
-    const [created] = await tx
-      .insert(listenSessionsTable)
-      .values({
-        userId: user.id,
-        stationId,
-        startedAt: now,
-        lastHeartbeatAt: now,
-      })
-      .returning({ id: listenSessionsTable.id });
-    if (!created) throw new Error("Failed to create listen session");
-    // Zero-width window on session open — no dwell credited yet.
-    return { sessionId: created.id, prevHeartbeatAt: now };
-  });
-
-  // --- 2. Dwell computation (guarded by feature flag) ---
-  //
-  // Incremental, bounded window: only a recent interval between the previous
-  // confirmed heartbeat and this one counts as verified listening. Pauses, tab
-  // hides, and station switches cannot make an arbitrarily long gap eligible.
-  if (isDedupConfirmed()) {
-    const windowEndMs = now.getTime();
-    // Clamp before querying spins or calculating overlap. The heartbeat
-    // timestamp remains the high-water mark for idempotency.
-    const windowStartMs = Math.max(
-      prevHeartbeatAt.getTime(),
-      windowEndMs - MAX_ATTENDANCE_CREDIT_WINDOW_MS,
-    );
+    // --- 2. Dwell computation (guarded by feature flag) ---
+    //
+    // Incremental, bounded window: only a recent interval between the previous
+    // confirmed heartbeat and this one counts as verified listening. Pauses, tab
+    // hides, and station switches cannot make an arbitrarily long gap eligible.
+    if (isDedupConfirmed()) {
+      const windowEndMs = now.getTime();
+      // Clamp before querying spins or calculating overlap. The heartbeat
+      // timestamp remains the high-water mark for idempotency.
+      const windowStartMs = Math.max(
+        prevHeartbeatAt.getTime(),
+        windowEndMs - MAX_ATTENDANCE_CREDIT_WINDOW_MS,
+      );
 
     // Zero-width window (first heartbeat of a new session) — nothing to credit.
-    if (windowEndMs <= windowStartMs) {
-      return res.json({ sessionId });
-    }
+      if (windowEndMs <= windowStartMs) return { sessionId };
 
-    const windowStart = new Date(windowStartMs);
+      const windowStart = new Date(windowStartMs);
 
     // Fetch spins that could overlap the incremental window:
     //  • Known-duration spins: started before window ends AND ended after window starts
@@ -152,63 +152,57 @@ router.post("/me/attendance/heartbeat", h(async (req, res) => {
     //  • Unknown-duration spins: ONLY when played_at is inside the window
     //    (played_at >= windowStart). We cannot know when they ended, so we
     //    refuse to credit them for windows that began before they started.
-    const spinsInWindow = await db
-      .select({
-        id: spinsTable.id,
-        playedAt: spinsTable.playedAt,
-        durationMs: recordingsTable.durationMs,
-      })
-      .from(spinsTable)
-      .leftJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
-      .where(
-        and(
-          eq(spinsTable.stationId, stationId),
-          sql`${spinsTable.mbid} IS NOT NULL`,
-          // Spin started before this window closed.
-          sql`${spinsTable.playedAt} < ${now}`,
-          // Either:
-          //   a) Known duration and spin end is after window start, OR
-          //   b) Unknown duration and spin started inside this window (safe to credit).
-          sql`(
-            (${recordingsTable.durationMs} IS NOT NULL
-             AND ${spinsTable.playedAt} + (${recordingsTable.durationMs} * interval '1 millisecond') > ${windowStart})
-            OR
-            (${recordingsTable.durationMs} IS NULL
-             AND ${spinsTable.playedAt} >= ${windowStart})
-          )`,
-        ),
-      );
+      const spinsInWindow = await tx
+        .select({
+          id: spinsTable.id,
+          mbid: spinsTable.mbid,
+          playedAt: spinsTable.playedAt,
+          durationMs: recordingsTable.durationMs,
+        })
+        .from(spinsTable)
+        .leftJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
+        .where(
+          and(
+            eq(spinsTable.stationId, stationId),
+            sql`${spinsTable.mbid} IS NOT NULL`,
+            sql`${spinsTable.playedAt} < ${now}`,
+            sql`(
+              (${recordingsTable.durationMs} IS NOT NULL
+               AND ${spinsTable.playedAt} + (${recordingsTable.durationMs} * interval '1 millisecond') > ${windowStart})
+              OR
+              (${recordingsTable.durationMs} IS NULL
+               AND ${spinsTable.playedAt} >= ${windowStart})
+            )`,
+          ),
+        );
 
-    for (const spin of spinsInWindow) {
-      const spinStartMs = spin.playedAt.getTime();
+      for (const spin of spinsInWindow) {
+        const spinStartMs = spin.playedAt.getTime();
 
-      let overlapStart: number;
-      let overlapEnd: number;
+        let overlapStart: number;
+        let overlapEnd: number;
 
-      if (spin.durationMs != null) {
-        // Known duration: clip overlap to both the spin's bounds and the window.
-        const spinEndMs = spinStartMs + spin.durationMs;
-        overlapStart = Math.max(spinStartMs, windowStartMs);
-        overlapEnd = Math.min(spinEndMs, windowEndMs);
-      } else {
-        // Unknown duration: spin started inside this window (enforced by SQL).
-        // Credit from spin start to window end — conservative upper bound.
-        overlapStart = spinStartMs; // always >= windowStart per SQL filter
-        overlapEnd = windowEndMs;
-      }
+        if (spin.durationMs != null) {
+          const spinEndMs = spinStartMs + spin.durationMs;
+          overlapStart = Math.max(spinStartMs, windowStartMs);
+          overlapEnd = Math.min(spinEndMs, windowEndMs);
+        } else {
+          overlapStart = spinStartMs;
+          overlapEnd = windowEndMs;
+        }
 
-      if (overlapEnd <= overlapStart) continue;
+        if (overlapEnd <= overlapStart) continue;
 
-      const dwellSeconds = Math.floor((overlapEnd - overlapStart) / 1000);
-      if (dwellSeconds <= 0) continue;
+        const dwellSeconds = Math.floor((overlapEnd - overlapStart) / 1000);
+        if (dwellSeconds <= 0) continue;
 
-      const spinDurationSeconds = spin.durationMs != null
-        ? Math.floor(spin.durationMs / 1000)
-        : null;
+        const spinDurationSeconds = spin.durationMs != null
+          ? Math.floor(spin.durationMs / 1000)
+          : null;
 
-      // Always upsert positive overlap — no per-slice gate.  The dwell gate is
-      // applied at READ time in GET /api/me/attendance/counts so incremental
-      // slices accumulate correctly across heartbeats.
+        // Always upsert positive overlap — no per-slice gate. The dwell gate is
+        // applied after the rollup update so incremental slices accumulate
+        // correctly across heartbeats.
       //
       // Idempotency guard: `credited_through` is the high-water mark of the
       // latest window-end that has been credited into this row.  On conflict we
@@ -223,7 +217,24 @@ router.post("/me/attendance/heartbeat", h(async (req, res) => {
       //
       // NOTE: Postgres GREATEST(NULL, x) returns NULL, so we must use
       // COALESCE(GREATEST(a, b), b) to guarantee the mark advances from NULL.
-      await db
+        const [previousAttendance] = await tx
+          .select({
+            creditedThrough: attendanceTable.creditedThrough,
+          })
+          .from(attendanceTable)
+          .where(
+            and(
+              eq(attendanceTable.userId, user.id),
+              eq(attendanceTable.spinId, spin.id),
+            ),
+          )
+          .for("update");
+        const shouldAccumulate =
+          !previousAttendance ||
+          previousAttendance.creditedThrough == null ||
+          now > previousAttendance.creditedThrough;
+
+        await tx
         .insert(attendanceTable)
         .values({
           userId: user.id,
@@ -233,7 +244,7 @@ router.post("/me/attendance/heartbeat", h(async (req, res) => {
           spinDurationSeconds,
           creditedThrough: now,
         })
-        .onConflictDoUpdate({
+          .onConflictDoUpdate({
           target: [attendanceTable.userId, attendanceTable.spinId],
           set: {
             // Accumulate dwell when:
@@ -255,11 +266,87 @@ router.post("/me/attendance/heartbeat", h(async (req, res) => {
             sessionId,
             spinDurationSeconds: sql`COALESCE(attendance.spin_duration_seconds, excluded.spin_duration_seconds)`,
           },
-        });
-    }
-  }
+          });
 
-  return res.json({ sessionId });
+        const [updatedAttendance] = await tx
+          .select({
+            dwellSeconds: attendanceTable.dwellSeconds,
+            spinDurationSeconds: attendanceTable.spinDurationSeconds,
+            rollupCounted: attendanceTable.rollupCounted,
+          })
+          .from(attendanceTable)
+          .where(
+            and(
+              eq(attendanceTable.userId, user.id),
+              eq(attendanceTable.spinId, spin.id),
+            ),
+          )
+          .for("update");
+
+        if (!updatedAttendance) {
+          throw new Error("Attendance upsert did not return a row");
+        }
+
+        const gateSeconds = updatedAttendance.spinDurationSeconds != null
+          ? Math.min(updatedAttendance.spinDurationSeconds * DWELL_GATE_FRACTION, DWELL_GATE_ABSOLUTE_S)
+          : DWELL_GATE_ABSOLUTE_S;
+        const crossesGate =
+          !updatedAttendance.rollupCounted &&
+          updatedAttendance.dwellSeconds >= gateSeconds;
+        const dwellDelta = shouldAccumulate ? dwellSeconds : 0;
+
+        // The attendance row is locked and updated in this same transaction as
+        // the rollup. A retry with the same high-water mark has dwellDelta=0,
+        // and rollupCounted prevents a second spin-count increment.
+        if (dwellDelta > 0 || crossesGate) {
+          await tx
+            .insert(attendanceRollupsTable)
+            .values({
+              userId: user.id,
+              recordingMbid: spin.mbid!,
+              dwellTotal: dwellDelta,
+              spinCount: crossesGate ? 1 : 0,
+              firstHeard: crossesGate ? spin.playedAt : undefined,
+              lastHeard: crossesGate ? spin.playedAt : undefined,
+            })
+            .onConflictDoUpdate({
+              target: [
+                attendanceRollupsTable.userId,
+                attendanceRollupsTable.recordingMbid,
+              ],
+              set: {
+                dwellTotal: sql`attendance_rollups.dwell_total + excluded.dwell_total`,
+                spinCount: sql`attendance_rollups.spin_count + excluded.spin_count`,
+                firstHeard: sql`CASE
+                  WHEN excluded.first_heard IS NULL THEN attendance_rollups.first_heard
+                  WHEN attendance_rollups.first_heard IS NULL THEN excluded.first_heard
+                  ELSE LEAST(attendance_rollups.first_heard, excluded.first_heard)
+                END`,
+                lastHeard: sql`CASE
+                  WHEN excluded.last_heard IS NULL THEN attendance_rollups.last_heard
+                  WHEN attendance_rollups.last_heard IS NULL THEN excluded.last_heard
+                  ELSE GREATEST(attendance_rollups.last_heard, excluded.last_heard)
+                END`,
+              },
+            });
+        }
+
+        if (crossesGate) {
+          await tx
+            .update(attendanceTable)
+            .set({ rollupCounted: true })
+            .where(
+              and(
+                eq(attendanceTable.userId, user.id),
+                eq(attendanceTable.spinId, spin.id),
+              ),
+            );
+        }
+      }
+    }
+
+    return { sessionId };
+  }).then(({ sessionId }) => res.json({ sessionId }));
 }));
 
 // ---------------------------------------------------------------------------
@@ -275,36 +362,19 @@ router.post("/me/attendance/heartbeat", h(async (req, res) => {
 router.get("/me/attendance/counts", h(async (req, res) => {
   const user = (req as AuthedRequest).loreUser;
 
-  // Gate applied here at read time — only count rows whose accumulated dwell
-  // meets the threshold: dwell >= min(spin_duration * 0.5, 60s).
-  // When spin_duration is unknown the absolute 60s gate applies.
   const rows = await db
     .select({
-      mbid: spinsTable.mbid,
-      heardCount: sql<number>`count(${attendanceTable.id})::int`,
+      mbid: attendanceRollupsTable.recordingMbid,
+      heardCount: attendanceRollupsTable.spinCount,
     })
-    .from(attendanceTable)
-    .innerJoin(spinsTable, eq(attendanceTable.spinId, spinsTable.id))
+    .from(attendanceRollupsTable)
     .where(
       and(
-        eq(attendanceTable.userId, user.id),
-        sql`${spinsTable.mbid} IS NOT NULL`,
-        // Dwell gate: accumulated dwell must meet the threshold.
-        sql`
-          ${attendanceTable.dwellSeconds} >= CASE
-            WHEN ${attendanceTable.spinDurationSeconds} IS NOT NULL
-              THEN LEAST(${attendanceTable.spinDurationSeconds}::numeric * ${DWELL_GATE_FRACTION}, ${DWELL_GATE_ABSOLUTE_S})
-            ELSE ${DWELL_GATE_ABSOLUTE_S}
-          END
-        `,
+        eq(attendanceRollupsTable.userId, user.id),
+        sql`${attendanceRollupsTable.spinCount} > 0`,
       ),
     )
-    .groupBy(spinsTable.mbid);
-
-  // Filter out null MBIDs at the TypeScript level (SQL guard above covers DB).
-  const counts = rows
-    .filter((r): r is { mbid: string; heardCount: number } => r.mbid != null)
-    .map((r) => ({ mbid: r.mbid, heardCount: r.heardCount }));
+  const counts = rows.map((r) => ({ mbid: r.mbid, heardCount: r.heardCount }));
 
   return res.json(counts);
 }));

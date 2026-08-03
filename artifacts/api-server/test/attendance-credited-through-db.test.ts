@@ -23,6 +23,7 @@ import {
   spinsTable,
   listenSessionsTable,
   attendanceTable,
+  attendanceRollupsTable,
 } from "@workspace/db";
 import { applyAttendanceMigration } from "../src/lore/attendance-migration.js";
 
@@ -104,6 +105,7 @@ beforeAll(async () => {
 afterAll(async () => {
   if (!dbAvailable) return;
   await db.delete(attendanceTable).where(eq(attendanceTable.userId, userId));
+  await db.delete(attendanceRollupsTable).where(eq(attendanceRollupsTable.userId, userId));
   await db.delete(listenSessionsTable).where(eq(listenSessionsTable.id, sessionId));
   await db.delete(spinsTable).where(eq(spinsTable.id, spinId));
   await db.delete(recordingsTable).where(eq(recordingsTable.mbid, MBID));
