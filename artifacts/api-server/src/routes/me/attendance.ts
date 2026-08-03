@@ -46,6 +46,141 @@ function currentIsoWeekMonday(): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - (utcDay - 1)));
 }
 
+// ---------------------------------------------------------------------------
+// Timezone helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Validates an IANA timezone string.
+ * Returns true if valid, false if not.
+ */
+function isValidIanaTz(tz: string): boolean {
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Returns the local calendar date parts (year, month 1-based, day) for a
+ * given UTC instant in the specified IANA timezone.
+ */
+function localDateParts(
+  utc: Date,
+  tz: string,
+): { year: number; month: number; day: number } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(utc);
+  return {
+    year: +(parts.find((p) => p.type === "year")?.value ?? "0"),
+    month: +(parts.find((p) => p.type === "month")?.value ?? "0"),
+    day: +(parts.find((p) => p.type === "day")?.value ?? "0"),
+  };
+}
+
+/**
+ * Returns the UTC Date that corresponds to 00:00:00 on the given local
+ * calendar date (year/month/day, 1-based month) in the specified IANA timezone.
+ *
+ * Uses an iterative correction: start from UTC midnight of that calendar date,
+ * measure how far the resulting local time is from local midnight, and correct.
+ * Converges in at most 2 iterations for every real-world timezone including
+ * DST transitions.
+ */
+function localMidnightToUtc(year: number, month: number, day: number, tz: string): Date {
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+
+  // Start from UTC midnight of that calendar date as an initial guess.
+  let candidate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const parts = fmt.formatToParts(candidate);
+    const lYear = +(parts.find((p) => p.type === "year")?.value ?? "0");
+    const lMonth = +(parts.find((p) => p.type === "month")?.value ?? "0");
+    const lDay = +(parts.find((p) => p.type === "day")?.value ?? "0");
+    const lHour = +(parts.find((p) => p.type === "hour")?.value ?? "0");
+    const lMin = +(parts.find((p) => p.type === "minute")?.value ?? "0");
+    const lSec = +(parts.find((p) => p.type === "second")?.value ?? "0");
+
+    // Distance from the local result to the desired local midnight.
+    const localOffsetMs =
+      Date.UTC(lYear, lMonth - 1, lDay, lHour, lMin, lSec) -
+      Date.UTC(year, month - 1, day, 0, 0, 0);
+
+    if (Math.abs(localOffsetMs) < 1000) break; // within 1 s — good enough
+    candidate = new Date(candidate.getTime() - localOffsetMs);
+  }
+
+  return candidate;
+}
+
+/**
+ * For a given IANA timezone, returns the local calendar date (year/month/day)
+ * and its UTC midnight timestamp for the Monday that starts the current ISO
+ * week as seen in that timezone.
+ *
+ * This is the authoritative source for "what week is it right now for this
+ * listener?" — the returned `localYear/Month/Day` drives the ISO week label,
+ * and `utcMidnight` is the weekStart boundary for timestamp-range queries.
+ */
+function currentLocalIsoWeekMonday(tz: string): {
+  utcMidnight: Date;
+  localYear: number;
+  localMonth: number;
+  localDay: number;
+} {
+  const now = new Date();
+
+  // Resolve current local date + weekday in the given timezone.
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    weekday: "short",
+  }).formatToParts(now);
+
+  const year = +(parts.find((p) => p.type === "year")?.value ?? "0");
+  const month = +(parts.find((p) => p.type === "month")?.value ?? "0");
+  const day = +(parts.find((p) => p.type === "day")?.value ?? "0");
+  const weekdayStr = parts.find((p) => p.type === "weekday")?.value ?? "Mon";
+
+  const shortDayMap: Record<string, number> = {
+    Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7,
+  };
+  const dow = shortDayMap[weekdayStr] ?? 1; // 1=Mon … 7=Sun
+
+  // Compute local Monday by subtracting (dow-1) days.  Use Date.UTC with a
+  // potentially negative day — JS handles month/year wrap-around correctly.
+  const mondayUtcNoon = new Date(Date.UTC(year, month - 1, day - (dow - 1), 12, 0, 0));
+
+  // Re-read the local date at noon on the computed Monday to get canonical
+  // year/month/day after any month/year roll-over.
+  const { year: mYear, month: mMonth, day: mDay } = localDateParts(mondayUtcNoon, tz);
+
+  return {
+    utcMidnight: localMidnightToUtc(mYear, mMonth, mDay, tz),
+    localYear: mYear,
+    localMonth: mMonth,
+    localDay: mDay,
+  };
+}
+
 /**
  * Returns the ISO week label ("YYYY-Www") for any given Date (UTC-based).
  * Used to place a spin's played_at into the correct weekly bucket so tracks
@@ -471,8 +606,12 @@ router.get("/me/attendance/counts", h(async (req, res) => {
 /**
  * Returns the listener's confirmed-hearing summary for a single ISO week.
  *
- * Query param:
+ * Query params:
  *   week  — ISO week label, e.g. "2026-W31". Defaults to the current week.
+ *   tz    — IANA timezone, e.g. "America/Los_Angeles". When provided, week
+ *           boundaries are computed in the listener's local timezone so that
+ *           tracks heard just after their local midnight fall in the correct
+ *           week.  Invalid values return a 400.
  *
  * A track appears in the response only when its attendance row has
  * `rollupCounted = true` (i.e. the dwell gate was met) and the spin's
@@ -481,8 +620,8 @@ router.get("/me/attendance/counts", h(async (req, res) => {
  * Shape:
  *   {
  *     week: "2026-W31",
- *     weekStart: "<ISO>",   // Monday 00:00 UTC
- *     weekEnd:   "<ISO>",   // Sunday 23:59:59.999 UTC (inclusive)
+ *     weekStart: "<ISO>",   // Monday 00:00 in the requested timezone (or UTC)
+ *     weekEnd:   "<ISO>",   // Sunday 23:59:59.999 in the requested timezone (or UTC)
  *     tracks: Array<{
  *       mbid, title, artist, artworkUrl,
  *       spinCount, dwellSeconds,
@@ -498,10 +637,22 @@ router.get("/me/attendance/counts", h(async (req, res) => {
 router.get("/me/attendance/weekly", h(async (req, res) => {
   const user = (req as AuthedRequest).loreUser;
 
+  // --- Parse & validate the tz param ---
+  const tzParam = typeof req.query["tz"] === "string" ? req.query["tz"] : undefined;
+
+  if (tzParam !== undefined && !isValidIanaTz(tzParam)) {
+    return res.status(400).json({
+      error: `Invalid timezone: "${tzParam}". Provide a valid IANA timezone, e.g. "America/Los_Angeles".`,
+    });
+  }
+
   // --- Parse & validate the week param ---
   const weekParam = typeof req.query["week"] === "string" ? req.query["week"] : undefined;
 
-  let weekMonday: Date;
+  // weekStart: UTC instant of local (or UTC) Monday 00:00.
+  // weekLabel: ISO week label ("YYYY-Www") derived from the local Monday date.
+  // weekEndInclusive: weekStart + 7 days − 1 ms.
+  let weekStart: Date;
   let weekLabel: string;
 
   if (weekParam !== undefined) {
@@ -514,59 +665,135 @@ router.get("/me/attendance/weekly", h(async (req, res) => {
     if (isoWeek < 1 || isoWeek > 53) {
       return res.status(400).json({ error: "week number must be between 1 and 53" });
     }
-    weekMonday = isoWeekToMonday(isoYear, isoWeek);
-    // Round-trip through the helper so the label is canonical (guards edge-case
-    // inputs like week 53 in a year that only has 52 — the Monday lands in the
-    // previous year's week 52 space, and we return whatever the canonical label
-    // is for that Monday rather than echoing back a malformed label).
-    weekLabel = mondayToIsoWeekLabel(weekMonday);
+    // UTC Monday for this ISO year+week — defines the calendar date.
+    const utcMonday = isoWeekToMonday(isoYear, isoWeek);
+    // Canonical label (guards edge-case week 53 that maps back to the prior year).
+    weekLabel = mondayToIsoWeekLabel(utcMonday);
+
+    if (tzParam !== undefined) {
+      // The ISO week label fixes the calendar date of the Monday.  When a
+      // timezone is requested, weekStart is midnight on that same calendar date
+      // in the listener's timezone (which may be hours before or after UTC midnight).
+      const { year, month, day } = localDateParts(utcMonday, "UTC");
+      weekStart = localMidnightToUtc(year, month, day, tzParam);
+    } else {
+      weekStart = utcMonday;
+    }
+  } else if (tzParam !== undefined) {
+    // No explicit week: "what week is it right now in this timezone?"
+    // currentLocalIsoWeekMonday returns both the UTC midnight of the local
+    // Monday and the local calendar date for the week label.
+    const { utcMidnight, localYear, localMonth, localDay } =
+      currentLocalIsoWeekMonday(tzParam);
+    weekStart = utcMidnight;
+    // Derive the ISO week label from the local calendar date of the Monday —
+    // treat it as a UTC date for the purpose of the ISO week calculation so
+    // the label accurately reflects the listener's local week rather than the
+    // UTC week that may be one week behind/ahead.
+    weekLabel = mondayToIsoWeekLabel(
+      new Date(Date.UTC(localYear, localMonth - 1, localDay)),
+    );
   } else {
-    weekMonday = currentIsoWeekMonday();
-    weekLabel = mondayToIsoWeekLabel(weekMonday);
+    weekStart = currentIsoWeekMonday();
+    weekLabel = mondayToIsoWeekLabel(weekStart);
   }
 
-  // Inclusive end (last millisecond of Sunday) for the response only.
-  const weekEndInclusive = new Date(weekMonday.getTime() + 7 * 86_400_000 - 1);
+  // Inclusive end: 7 days after weekStart minus 1 ms.
+  const weekEndInclusive = new Date(weekStart.getTime() + 7 * 86_400_000 - 1);
 
-  // --- Read from the maintained weekly rollup (constant-time lookup) ---
+  // --- Query strategy depends on whether a timezone was requested ---
   //
-  // The heartbeat write path upserts into attendance_weekly_rollups whenever
-  // dwell advances or a new spin crosses the gate, so this endpoint never
-  // re-aggregates raw rows. The query is an index scan on (user_id, iso_week)
-  // followed by a lookup join on recordings — O(tracks heard that week).
-  const rows = await db
-    .select({
-      mbid: attendanceWeeklyRollupsTable.recordingMbid,
-      title: recordingsTable.title,
-      artist: recordingsTable.artist,
-      artworkUrl: recordingsTable.artworkUrl,
-      spinCount: attendanceWeeklyRollupsTable.spinCount,
-      dwellSeconds: attendanceWeeklyRollupsTable.dwellTotal,
-      firstHeard: attendanceWeeklyRollupsTable.firstHeard,
-      lastHeard: attendanceWeeklyRollupsTable.lastHeard,
-    })
-    .from(attendanceWeeklyRollupsTable)
-    .innerJoin(
-      recordingsTable,
-      eq(attendanceWeeklyRollupsTable.recordingMbid, recordingsTable.mbid),
-    )
-    .where(
-      and(
-        eq(attendanceWeeklyRollupsTable.userId, user.id),
-        eq(attendanceWeeklyRollupsTable.isoWeek, weekLabel),
-        sql`${attendanceWeeklyRollupsTable.spinCount} > 0`,
-      ),
-    )
-    .orderBy(
-      desc(attendanceWeeklyRollupsTable.spinCount),
-      desc(attendanceWeeklyRollupsTable.lastHeard),
-    );
+  // UTC path (no tz): read from the pre-maintained attendance_weekly_rollups
+  // table keyed by UTC ISO week label — constant-time index lookup.
+  //
+  // Timezone path (tz provided): the rollup buckets use UTC ISO week labels, so
+  // a local week that straddles a UTC week boundary would span two rollup rows.
+  // Instead, re-aggregate directly from attendance → spins, filtering by the
+  // exact local-midnight UTC timestamps.  This is still bounded by the number of
+  // tracks the user heard that week, so it is fast in practice.
+  let rows: Array<{
+    mbid: string | null;
+    title: string | null;
+    artist: string | null;
+    artworkUrl: string | null;
+    spinCount: number;
+    dwellSeconds: number;
+    firstHeard: Date | null;
+    lastHeard: Date | null;
+  }>;
+
+  if (tzParam !== undefined) {
+    // Aggregate per-recording from raw attendance + spins, bounded by the
+    // local-timezone week window.
+    rows = await db
+      .select({
+        mbid: spinsTable.mbid,
+        title: recordingsTable.title,
+        artist: recordingsTable.artist,
+        artworkUrl: recordingsTable.artworkUrl,
+        spinCount: sql<number>`cast(count(*) as int)`,
+        dwellSeconds: sql<number>`cast(coalesce(sum(${attendanceTable.dwellSeconds}), 0) as int)`,
+        firstHeard: sql<Date | null>`min(${spinsTable.playedAt})`,
+        lastHeard: sql<Date | null>`max(${spinsTable.playedAt})`,
+      })
+      .from(attendanceTable)
+      .innerJoin(spinsTable, eq(attendanceTable.spinId, spinsTable.id))
+      .innerJoin(recordingsTable, eq(spinsTable.mbid, recordingsTable.mbid))
+      .where(
+        and(
+          eq(attendanceTable.userId, user.id),
+          sql`${attendanceTable.rollupCounted} = true`,
+          sql`${spinsTable.mbid} IS NOT NULL`,
+          sql`${spinsTable.playedAt} >= ${weekStart}`,
+          sql`${spinsTable.playedAt} <= ${weekEndInclusive}`,
+        ),
+      )
+      .groupBy(
+        spinsTable.mbid,
+        recordingsTable.title,
+        recordingsTable.artist,
+        recordingsTable.artworkUrl,
+      )
+      .orderBy(
+        sql`count(*) DESC`,
+        sql`max(${spinsTable.playedAt}) DESC`,
+      );
+  } else {
+    // Fast rollup path: index scan on (user_id, iso_week) + join on recordings.
+    rows = await db
+      .select({
+        mbid: attendanceWeeklyRollupsTable.recordingMbid,
+        title: recordingsTable.title,
+        artist: recordingsTable.artist,
+        artworkUrl: recordingsTable.artworkUrl,
+        spinCount: attendanceWeeklyRollupsTable.spinCount,
+        dwellSeconds: attendanceWeeklyRollupsTable.dwellTotal,
+        firstHeard: attendanceWeeklyRollupsTable.firstHeard,
+        lastHeard: attendanceWeeklyRollupsTable.lastHeard,
+      })
+      .from(attendanceWeeklyRollupsTable)
+      .innerJoin(
+        recordingsTable,
+        eq(attendanceWeeklyRollupsTable.recordingMbid, recordingsTable.mbid),
+      )
+      .where(
+        and(
+          eq(attendanceWeeklyRollupsTable.userId, user.id),
+          eq(attendanceWeeklyRollupsTable.isoWeek, weekLabel),
+          sql`${attendanceWeeklyRollupsTable.spinCount} > 0`,
+        ),
+      )
+      .orderBy(
+        desc(attendanceWeeklyRollupsTable.spinCount),
+        desc(attendanceWeeklyRollupsTable.lastHeard),
+      );
+  }
 
   const totalDwellSeconds = rows.reduce((acc, r) => acc + r.dwellSeconds, 0);
 
   return res.json({
     week: weekLabel,
-    weekStart: weekMonday.toISOString(),
+    weekStart: weekStart.toISOString(),
     weekEnd: weekEndInclusive.toISOString(),
     tracks: rows.map((r) => ({
       mbid: r.mbid,
