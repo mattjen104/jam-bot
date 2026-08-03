@@ -28,9 +28,14 @@ function sectionFor(location: string): Section {
   return "radio";
 }
 
-function artFor(section: Section, memory: SectionMemory): string | null {
-  if (section === "radio") return memory.radio?.station.logoUrl ?? null;
-  if (section === "selectors") return memory.selectors?.queue[memory.selectors.index]?.artworkUrl ?? null;
+function artFor(
+  section: Section,
+  memory: SectionMemory,
+  liveRadioLogoUrl: string | null | undefined,
+  liveRideArtworkUrl: string | null | undefined,
+): string | null {
+  if (section === "radio") return memory.radio?.station.logoUrl ?? liveRadioLogoUrl ?? null;
+  if (section === "selectors") return memory.selectors?.queue[memory.selectors.index]?.artworkUrl ?? liveRideArtworkUrl ?? null;
   return memory.library?.album.artworkUrl ?? memory.library?.track.artworkUrl ?? null;
 }
 
@@ -185,7 +190,7 @@ export function RecordPeekNav() {
       <nav className="record-peek-nav" aria-label="Primary">
         {(["radio", "selectors", "library"] as Section[]).map((section) => {
           const active = activeSection === section;
-          const artwork = artFor(section, memory);
+          const artwork = artFor(section, memory, radio.station?.logoUrl, ride.current?.artworkUrl);
           const label = section === "radio" ? "Radio" : section === "selectors" ? "Selectors" : "Library";
           return (
             <button
