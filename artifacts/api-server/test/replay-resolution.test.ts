@@ -81,6 +81,7 @@ afterAll(async () => {
 describe("Ghost Replay resolution registry", () => {
   it("canonicalizes Odesli platform keys consistently", () => {
     expect(canonicalReplayService("appleMusic")).toBe("apple_music");
+    expect(canonicalReplayService("bandcamp")).toBe("bandcamp");
     expect(canonicalReplayService("youtubeMusic")).toBe("youtube_music");
     expect(canonicalReplayService("spotify")).toBe("spotify");
     expect(canonicalReplayService("anIndependentService")).toBe("an_independent_service");

@@ -4100,6 +4100,24 @@ components:
           anyOf:
             - $ref: "#/components/schemas/NowPlayingRecording"
             - type: "null"
+        guidedLinks:
+          type: array
+          description: >
+            Durable service mappings for official guided replay embeds. These
+            links are separate from presentation links and retain dead-link
+            state without changing the broadcast manifest.
+          items:
+            type: object
+            properties:
+              service:
+                type: string
+              externalId:
+                type: ["string", "null"]
+              url:
+                type: string
+              deadLink:
+                type: boolean
+            required: [service, externalId, url, deadLink]
       required:
         - position
         - spinId
@@ -4110,6 +4128,7 @@ components:
         - rawTitle
         - confidence
         - recording
+        - guidedLinks
     ReplayManifest:
       type: object
       description: >

@@ -5,6 +5,7 @@ import { ArchiveTracklist } from "../components/ArchiveTracklist";
 import { ShareButton } from "../components/ShareButton";
 import { usePlayer } from "../player/PlayerProvider";
 import { runDate } from "../lib/format";
+import { GuidedReplayPanel } from "../components/GuidedReplayPanel";
 
 /** The canonical, shareable Ghost Replay reconstruction surface. */
 export default function Replay() {
@@ -97,6 +98,67 @@ export default function Replay() {
               </div>
             </section>
 
+            <section
+              aria-label="Replay exports"
+              className="mb-6 rounded-xl border border-card-border bg-card p-4"
+              data-testid="replay-exports"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Take the reconstruction with you
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Ordered broadcast receipt · {data.coverage.resolved} of{" "}
+                    {data.coverage.total} identified · {data.coverage.unresolved}{" "}
+                    honest gap{data.coverage.unresolved === 1 ? "" : "s"}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(["jspf", "xspf", "m3u8", "csv"] as const).map((format) => (
+                    <a
+                      key={format}
+                      href={`/api/replay/${data.replayId}/export?format=${format}`}
+                      download
+                      className="inline-flex items-center gap-1.5 rounded-full border border-card-border px-3 py-2 font-mono text-[10px] uppercase tracking-wide text-foreground hover:border-primary hover:text-primary"
+                      data-testid={`replay-export-${format}`}
+                    >
+                      <Download className="h-3 w-3" />
+                      {format}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            <ArchiveTracklist
+              tracks={data.entries.map((entry) => ({
+                position: entry.position,
+                playedAt: entry.playedAt,
+                rawArtist: entry.rawArtist,
+                rawTitle: entry.rawTitle,
+                confidence: entry.confidence,
+                recording: entry.recording,
+                spinId: entry.spinId,
+              }))}
+              replayLabel={`${data.station.name} · ${
+                data.show?.name ?? "stream"
+              } · ${runDate(data.bounds.date)}`}
+              provenance={{
+                kind: "keep",
+                stationSlug: data.station.slug,
+                stationName: data.station.name,
+                pickerHandle: data.picker?.handle,
+                pickerName: data.picker?.name,
+              }}
+              timeOrientation="past"
+            />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
             <section
               aria-label="Replay exports"
               className="mb-6 rounded-xl border border-card-border bg-card p-4"

@@ -1058,6 +1058,13 @@ export const ReplayEntryConfidence = {
   spotify: "spotify",
 } as const;
 
+export type ReplayEntryGuidedLinksItem = {
+  service: string;
+  /** @nullable */
+  externalId: string | null;
+  url: string;
+  deadLink: boolean;
+};
 /**
  * One archived spin, including unresolved source metadata.
  */
@@ -1074,6 +1081,9 @@ export interface ReplayEntry {
   rawTitle: string;
   confidence: ReplayEntryConfidence;
   recording: NowPlayingRecording | null;
+  /** Durable service mappings for official guided replay embeds. These links are separate from presentation links and retain dead-link state without changing the broadcast manifest.
+   */
+  guidedLinks: ReplayEntryGuidedLinksItem[];
 }
 
 export type ReplayManifestBounds = {

@@ -1879,6 +1879,18 @@ export const GetReplayManifestResponse = zod
               .describe("The MBID-keyed recording a spin resolved to."),
             zod.null(),
           ]),
+          guidedLinks: zod
+            .array(
+              zod.object({
+                service: zod.string(),
+                externalId: zod.string().nullable(),
+                url: zod.string(),
+                deadLink: zod.boolean(),
+              }),
+            )
+            .describe(
+              "Durable service mappings for official guided replay embeds. These links are separate from presentation links and retain dead-link state without changing the broadcast manifest.\n",
+            ),
         })
         .describe("One archived spin, including unresolved source metadata."),
     ),

@@ -5,8 +5,9 @@ import {
   showsTable,
   spinsTable,
   stationsTable,
+  serviceTrackMapTable,
 } from "@workspace/db";
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { spinDayExpr } from "./runs.js";
 import {
   isPickerOptedOut,
@@ -53,6 +54,12 @@ export interface ReplayManifest {
     rawTitle: string;
     confidence: string;
     recording: ReturnType<typeof toArchiveRecording>;
+    guidedLinks: Array<{
+      service: string;
+      externalId: string | null;
+      url: string;
+      deadLink: boolean;
+    }>;
   }>;
 }
 
@@ -154,6 +161,34 @@ export async function getReplayManifest(id: number): Promise<ReplayManifest | nu
   // a deleted/partially migrated archive from becoming a misleading manifest.
   if (rows.length === 0) return null;
 
+  const mbids = rows.flatMap((row) => (row.mbid ? [row.mbid] : []));
+  const guidedLinksByMbid = new Map<
+    string,
+    Array<{ service: string; externalId: string | null; url: string; deadLink: boolean }>
+  >();
+  if (mbids.length) {
+    const maps = await db
+      .select({
+        recordingMbid: serviceTrackMapTable.recordingMbid,
+        service: serviceTrackMapTable.service,
+        externalId: serviceTrackMapTable.externalId,
+        url: serviceTrackMapTable.url,
+        deadLink: serviceTrackMapTable.deadLink,
+      })
+      .from(serviceTrackMapTable)
+      .where(inArray(serviceTrackMapTable.recordingMbid, mbids));
+    for (const map of maps) {
+      const links = guidedLinksByMbid.get(map.recordingMbid) ?? [];
+      links.push({
+        service: map.service,
+        externalId: map.externalId ?? null,
+        url: map.url,
+        deadLink: map.deadLink,
+      });
+      guidedLinksByMbid.set(map.recordingMbid, links);
+    }
+  }
+
   const first = rows[0]!;
   const last = rows[rows.length - 1]!;
   const resolved = rows.filter((row) => row.mbid != null).length;
@@ -204,6 +239,7 @@ export async function getReplayManifest(id: number): Promise<ReplayManifest | nu
       rawTitle: row.rawTitle ?? "",
       confidence: row.confidence,
       recording: toArchiveRecording(row),
+      guidedLinks: row.mbid ? guidedLinksByMbid.get(row.mbid) ?? [] : [],
     })),
   };
 }

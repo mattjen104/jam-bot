@@ -7,6 +7,7 @@
  */
 import type { NowPlayingRecording } from "./nowPlayingRecording";
 import type { ReplayEntryConfidence } from "./replayEntryConfidence";
+import type { ReplayEntryGuidedLinksItem } from "./replayEntryGuidedLinksItem";
 
 /**
  * One archived spin, including unresolved source metadata.
@@ -24,4 +25,7 @@ export interface ReplayEntry {
   rawTitle: string;
   confidence: ReplayEntryConfidence;
   recording: NowPlayingRecording | null;
+  /** Durable service mappings for official guided replay embeds. These links are separate from presentation links and retain dead-link state without changing the broadcast manifest.
+   */
+  guidedLinks: ReplayEntryGuidedLinksItem[];
 }

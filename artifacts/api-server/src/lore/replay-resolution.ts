@@ -144,6 +144,7 @@ type OdesliBody = {
 const SERVICE_NAMES: Record<string, string> = {
   spotify: "spotify",
   appleMusic: "apple_music",
+  bandcamp: "bandcamp",
   youtube: "youtube",
   youtubeMusic: "youtube_music",
   tidal: "tidal",

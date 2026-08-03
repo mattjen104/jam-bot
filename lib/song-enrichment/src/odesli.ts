@@ -41,6 +41,7 @@ export interface TrackLinks {
 /** Platforms we surface, in display order, with friendly labels. */
 const PLATFORM_LABELS: Array<[string, string]> = [
   ["appleMusic", "Apple Music"],
+  ["bandcamp", "Bandcamp"],
   ["youtube", "YouTube"],
   ["youtubeMusic", "YouTube Music"],
   ["tidal", "Tidal"],
@@ -240,6 +241,7 @@ export interface ResolvedSong {
 const UNFURL_PLATFORM_LABELS: Array<[string, string]> = [
   ["spotify", "Spotify"],
   ["appleMusic", "Apple Music"],
+  ["bandcamp", "Bandcamp"],
   ["youtube", "YouTube"],
   ["youtubeMusic", "YouTube Music"],
   ["tidal", "Tidal"],

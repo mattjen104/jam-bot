@@ -132,6 +132,7 @@ export * from "./recordingSpinConfidence";
 export * from "./recordingSpins";
 export * from "./replayEntry";
 export * from "./replayEntryConfidence";
+export * from "./replayEntryGuidedLinksItem";
 export * from "./replayManifest";
 export * from "./replayManifestBounds";
 export * from "./replayManifestCoverage";

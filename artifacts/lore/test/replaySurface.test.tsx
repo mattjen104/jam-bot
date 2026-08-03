@@ -56,6 +56,7 @@ const manifest = {
       rawArtist: "Resolved Artist",
       rawTitle: "Resolved Title",
       confidence: "text",
+      guidedLinks: [],
       recording: {
         mbid: "recording-1",
         title: "Resolved Title",
@@ -81,6 +82,7 @@ const manifest = {
       rawArtist: "Unknown Artist",
       rawTitle: "Unknown Title",
       confidence: "unresolved",
+      guidedLinks: [],
       recording: null,
     },
   ],
