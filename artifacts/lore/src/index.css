@@ -3335,6 +3335,7 @@
   background: hsl(var(--secondary) / 0.2);
   border-bottom: 1px solid hsl(var(--border) / 0.5);
   flex-shrink: 0;
+  overflow: hidden; /* prevent child text from bleeding past narrow viewports */
 }
 
 .dial-sb-top {
