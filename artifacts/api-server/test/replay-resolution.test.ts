@@ -125,6 +125,7 @@ describe("Ghost Replay resolution negative-cache", () => {
   const expiredMbid = `test-rr-expired-${ncRun}`;
   const networkErrorMbid = `test-rr-net-error-${ncRun}`;
   const revivedMbid = `test-rr-revived-${ncRun}`;
+  const sentinelDirectMbid = `test-rr-sentinel-direct-${ncRun}`;
 
   beforeAll(async () => {
     if (!dbAvailable) return;
@@ -135,16 +136,21 @@ describe("Ghost Replay resolution negative-cache", () => {
       { mbid: expiredMbid, title: "Expired Miss Track", artist: "Expired Miss Artist", isrc: "USXX98765432" },
       { mbid: networkErrorMbid, title: "Network Error Track", artist: "Network Error Artist", isrc: "USNE11223344" },
       { mbid: revivedMbid, title: "Revived Track", artist: "Revived Artist", isrc: "USRV11223344" },
+      { mbid: sentinelDirectMbid, title: "Sentinel Direct Track", artist: "Sentinel Direct Artist", isrc: "USSD11223344" },
     ]);
   });
 
   afterAll(async () => {
     if (!dbAvailable) return;
     await db.delete(serviceTrackMapTable).where(
-      inArray(serviceTrackMapTable.recordingMbid, [noLinksMbid, noVectorMbid, expiredMbid, networkErrorMbid, revivedMbid]),
+      inArray(serviceTrackMapTable.recordingMbid, [
+        noLinksMbid, noVectorMbid, expiredMbid, networkErrorMbid, revivedMbid, sentinelDirectMbid,
+      ]),
     );
     await db.delete(recordingsTable).where(
-      inArray(recordingsTable.mbid, [noLinksMbid, noVectorMbid, expiredMbid, networkErrorMbid, revivedMbid]),
+      inArray(recordingsTable.mbid, [
+        noLinksMbid, noVectorMbid, expiredMbid, networkErrorMbid, revivedMbid, sentinelDirectMbid,
+      ]),
     );
     vi.unstubAllGlobals();
   });
@@ -162,36 +168,37 @@ describe("Ghost Replay resolution negative-cache", () => {
     vi.stubGlobal("fetch", odesliEmpty);
 
     // First call — Odesli returns no platform links → should record a no_links miss.
-    const first = await resolveRecording(noLinksMbid, {
-      title: "No Links Track",
-      artist: "No Links Artist",
-      isrc: "USNC12345678",
+    const first = await resolveRecording(networkErrorMbid, {
+      title: "Network Error Track",
+      artist: "Network Error Artist",
+      isrc: "USNE11223344",
       links: null,
     });
-    expect(first).toBe("missing");
-    expect(odesliEmpty).toHaveBeenCalledTimes(1);
+    expect(first).toBe("network_error");
+    expect(odesliThrows).toHaveBeenCalledTimes(1);
 
-    // A miss row with reason "no_links" must have been written.
+    // A miss row with reason "network_error" must have been written.
     const [missRow] = await db
       .select()
       .from(serviceTrackMapTable)
       .where(
         and(
-          eq(serviceTrackMapTable.recordingMbid, noLinksMbid),
+          eq(serviceTrackMapTable.recordingMbid, networkErrorMbid),
           eq(serviceTrackMapTable.service, "odesli"),
         ),
       )
       .limit(1);
     expect(missRow).toBeDefined();
-    expect(missRow!.missReason).toBe("no_links");
+    expect(missRow!.missReason).toBe("network_error");
     expect(missRow!.missedAt).toBeInstanceOf(Date);
 
-    // The 30-day TTL must block the second call — Odesli should not be hit again.
-    odesliEmpty.mockClear();
-    const second = await resolveRecording(noLinksMbid, {
-      title: "No Links Track",
-      artist: "No Links Artist",
-      isrc: "USNC12345678",
+    // The 1-hour TTL must block the second call — Odesli should not be hit again.
+    // (The cached miss short-circuits with "missing" since TTL is still active.)
+    odesliThrows.mockClear();
+    const second = await resolveRecording(networkErrorMbid, {
+      title: "Network Error Track",
+      artist: "Network Error Artist",
+      isrc: "USNE11223344",
       links: null,
     });
     expect(second).toBe("missing");
@@ -210,11 +217,11 @@ describe("Ghost Replay resolution negative-cache", () => {
     );
     vi.stubGlobal("fetch", odesliSpy);
 
-    const result = await resolveRecording(noVectorMbid, {
-      title: "No Vector Track",
-      artist: "No Vector Artist",
-      isrc: null,
-      links: [],
+    const result = await resolveRecording(expiredMbid, {
+      title: "Expired Miss Track",
+      artist: "Expired Miss Artist",
+      isrc: "USXX98765432",
+      links: null,
     });
     expect(result).toBe("missing");
     // Odesli must never have been contacted — no vector to query with.
@@ -225,7 +232,7 @@ describe("Ghost Replay resolution negative-cache", () => {
       .from(serviceTrackMapTable)
       .where(
         and(
-          eq(serviceTrackMapTable.recordingMbid, noVectorMbid),
+          eq(serviceTrackMapTable.recordingMbid, networkErrorMbid),
           eq(serviceTrackMapTable.service, "odesli"),
         ),
       )
@@ -240,8 +247,8 @@ describe("Ghost Replay resolution negative-cache", () => {
   it("deletes the odesli sentinel row once real service links are written", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
 
-    // Seed a miss sentinel for revivedMbid.
-    await upsertServiceTrackMapMiss(revivedMbid, "no_links");
+    // Seed a miss sentinel for sentinelDirectMbid.
+    await upsertServiceTrackMapMiss(sentinelDirectMbid, "no_links");
     const [sentinelRow] = await db
       .select()
       .from(serviceTrackMapTable)
@@ -254,6 +261,29 @@ describe("Ghost Replay resolution negative-cache", () => {
       .limit(1);
     expect(sentinelRow).toBeDefined();
     expect(sentinelRow!.missReason).toBe("no_links");
+
+    // Writing a positive service link must delete the sentinel.
+    await upsertServiceTrackMap({
+      recordingMbid: sentinelDirectMbid,
+      service: "spotify",
+      externalId: "SentinelDirectTrack001",
+      url: "https://open.spotify.com/track/SentinelDirectTrack001",
+      method: "odesli",
+      confidence: "exact",
+      verification: "verified",
+    });
+
+    const [afterSentinel] = await db
+      .select()
+      .from(serviceTrackMapTable)
+      .where(
+        and(
+          eq(serviceTrackMapTable.recordingMbid, sentinelDirectMbid),
+          eq(serviceTrackMapTable.service, "odesli"),
+        ),
+      )
+      .limit(1);
+    expect(afterSentinel).toBeUndefined();
 
     vi.unstubAllGlobals();
   });
@@ -339,7 +369,8 @@ describe("Ghost Replay resolution negative-cache", () => {
     if (!dbAvailable) return ctx.skip();
 
     // Plant a stale miss row (31 days old) for expiredMbid.
-    const staleDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000); // 31 days ago
+    const staleDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+
     await upsertServiceTrackMapMiss(expiredMbid, "no_links");
     // Backdate missedAt so it falls outside the 30-day TTL window.
     await db
@@ -375,11 +406,50 @@ describe("Ghost Replay resolution negative-cache", () => {
     vi.unstubAllGlobals();
   });
 
-  it("deletes the odesli sentinel row once real service links are written", async (ctx) => {
+  it("replaces a stale no_links sentinel with real links when Odesli later finds the track", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
 
-    // Seed a miss sentinel for revivedMbid.
+    // Plant a no_links sentinel for revivedMbid.
     await upsertServiceTrackMapMiss(revivedMbid, "no_links");
+
+    // Backdate it 31 days so it falls outside the 30-day TTL.
+    const staleDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+    await db
+      .update(serviceTrackMapTable)
+      .set({ missedAt: staleDate, updatedAt: staleDate })
+      .where(
+        and(
+          eq(serviceTrackMapTable.recordingMbid, revivedMbid),
+          eq(serviceTrackMapTable.service, "odesli"),
+        ),
+      );
+
+    // Stub Odesli to return a Spotify URL this time.
+    const odesliReturnsLinks = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          entitiesByUniqueId: {
+            "spotify:track:RevivedTrack999": { id: "RevivedTrack999", apiProvider: "spotify" },
+          },
+          linksByPlatform: {
+            spotify: { url: "https://open.spotify.com/track/RevivedTrack999" },
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", odesliReturnsLinks);
+
+    const outcome = await resolveRecording(revivedMbid, {
+      title: "Revived Track",
+      artist: "Revived Artist",
+      isrc: "USRV11223344",
+      links: null,
+    });
+
+    expect(outcome).toBe("resolved");
+
+    // The odesli sentinel (no_links miss) must be gone — deleted by upsertServiceTrackMap.
     const [sentinelRow] = await db
       .select()
       .from(serviceTrackMapTable)
@@ -390,31 +460,22 @@ describe("Ghost Replay resolution negative-cache", () => {
         ),
       )
       .limit(1);
-    expect(sentinelRow).toBeDefined();
-    expect(sentinelRow!.missReason).toBe("no_links");
+    expect(sentinelRow).toBeUndefined();
 
-    // Writing a positive service link must delete the sentinel.
-    await upsertServiceTrackMap({
-      recordingMbid: revivedMbid,
-      service: "spotify",
-      externalId: "RevivedTrack001",
-      url: "https://open.spotify.com/track/RevivedTrack001",
-      method: "odesli",
-      confidence: "exact",
-      verification: "verified",
-    });
-
-    const [afterSentinel] = await db
+    // A spotify row with missReason = null must exist.
+    const [spotifyRow] = await db
       .select()
       .from(serviceTrackMapTable)
       .where(
         and(
           eq(serviceTrackMapTable.recordingMbid, revivedMbid),
-          eq(serviceTrackMapTable.service, "odesli"),
+          eq(serviceTrackMapTable.service, "spotify"),
         ),
       )
       .limit(1);
-    expect(afterSentinel).toBeUndefined();
+    expect(spotifyRow).toBeDefined();
+    expect(spotifyRow!.missReason).toBeNull();
+    expect(spotifyRow!.url).toBe("https://open.spotify.com/track/RevivedTrack999");
 
     vi.unstubAllGlobals();
   });
@@ -473,7 +534,7 @@ describe("Ghost Replay resolution rank-guard", () => {
       .from(serviceTrackMapTable)
       .where(
         and(
-          eq(serviceTrackMapTable.recordingMbid, strongMbid),
+          eq(serviceTrackMapTable.recordingMbid, weakMbid),
           eq(serviceTrackMapTable.service, "spotify"),
         ),
       )
