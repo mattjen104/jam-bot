@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ChevronLeft, ChevronRight, Ghost, Loader2, Play, X } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, ExternalLink, Ghost, Loader2, Play, X } from "lucide-react";
 import type { ReplayManifest } from "@workspace/api-client-react";
 import {
+  EMBED_SERVICES,
+  GUIDED_SERVICE_OPTIONS,
   guidedMissingLabel,
   materializeGuidedReplay,
   type GuidedReplayMaterialization,
@@ -27,9 +29,14 @@ function materialize(entries: ReplayEntry[], service: GuidedService): GuidedRepl
   })), service);
 }
 
+function serviceLabel(service: GuidedService): string {
+  return GUIDED_SERVICE_OPTIONS.find((o) => o.service === service)?.label ?? service;
+}
+
 /**
- * Account-free Ghost Replay guide. This owns only the official iframe and its
- * manifest cursor; it intentionally does not enter the normal ride/player
+ * Account-free Ghost Replay guide. This owns only the official iframe (for
+ * embed services) or an external-open link (for all other services) and the
+ * manifest cursor. It intentionally does not enter the normal ride/player
  * state machine or fetch audio through Lore.
  */
 export function GuidedReplayPanel({
@@ -47,6 +54,7 @@ export function GuidedReplayPanel({
   const youtubePlayerRef = useRef<{ destroy?: () => void } | null>(null);
   const guide = useMemo(() => materialize(entries, service), [entries, service]);
   const current = guide.playable[playableIndex] ?? null;
+  const isEmbed = current?.source != null && !current.source.externalOnly;
 
   useEffect(() => {
     setPlayableIndex(0);
@@ -62,8 +70,9 @@ export function GuidedReplayPanel({
     setEmbedState("loading");
   };
 
+  // YouTube IFrame API: subscribe to state changes and auto-advance on ENDED (info === 0).
   useEffect(() => {
-    if (!active || !current || current.source?.service !== "youtube" || !iframeRef.current) return;
+    if (!active || !isEmbed || current?.source?.service !== "youtube" || !iframeRef.current) return;
     let cancelled = false;
     const iframe = iframeRef.current;
     const subscribeToYouTubeState = () => {
@@ -98,7 +107,7 @@ export function GuidedReplayPanel({
       youtubePlayerRef.current?.destroy?.();
       youtubePlayerRef.current = null;
     };
-  }, [active, current]);
+  }, [active, current, isEmbed]);
 
   useEffect(() => () => {
     youtubePlayerRef.current?.destroy?.();
@@ -120,6 +129,9 @@ export function GuidedReplayPanel({
     if (iframeRef.current) iframeRef.current.src = "about:blank";
   };
 
+  const currentLabel = serviceLabel(service);
+  const isEmbedService = EMBED_SERVICES.has(service);
+
   return (
     <section className="mb-6 rounded-xl border border-primary/30 bg-primary/[0.04] p-4" data-testid="guided-replay">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -129,7 +141,9 @@ export function GuidedReplayPanel({
             Guided Ghost Replay
           </div>
           <p className="mt-1 max-w-xl text-sm leading-relaxed text-muted-foreground">
-            Hear the reconstruction through official {service === "bandcamp" ? "Bandcamp" : "YouTube"} embeds.
+            {isEmbedService
+              ? `Hear the reconstruction through official ${currentLabel} embeds.`
+              : `Step through the reconstruction with official ${currentLabel} links.`}
             {active ? ` ${label}` : " No audio is hosted or stitched by Lore."}
           </p>
         </div>
@@ -159,7 +173,7 @@ export function GuidedReplayPanel({
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">Service</span>
-        {(["bandcamp", "youtube"] as const).map((option) => (
+        {GUIDED_SERVICE_OPTIONS.map(({ service: option, label: optLabel }) => (
           <button
             key={option}
             type="button"
@@ -172,7 +186,7 @@ export function GuidedReplayPanel({
             }`}
             data-testid={`guided-service-${option}`}
           >
-            {option === "bandcamp" ? "Bandcamp first" : "YouTube fallback"}
+            {optLabel}
           </button>
         ))}
         <span className="ml-auto font-mono text-[11px] text-muted-foreground" data-testid="guided-coverage">
@@ -186,42 +200,61 @@ export function GuidedReplayPanel({
             <div className="min-w-0">
               <p className="truncate font-serif text-base font-semibold text-foreground">{current.title}</p>
               <p className="truncate font-mono text-[11px] text-muted-foreground">
-                {current.artist} · manifest position {current.position + 1} · {current.source?.service}
+                {current.artist} · manifest position {current.position + 1} · {serviceLabel(current.source?.service ?? service)}
               </p>
             </div>
             <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
               {playableIndex + 1} of {guide.playable.length}
             </span>
           </div>
-          <div className="overflow-hidden rounded-md bg-black/20">
-            {embedState === "loading" ? (
-              <div className="flex h-20 items-center justify-center gap-2 font-mono text-[11px] text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Loading official embed…
-              </div>
-            ) : null}
-            {embedState === "error" ? (
-              <div
-                role="status"
-                data-testid="guided-embed-error"
-                className="flex min-h-20 items-center justify-center gap-2 px-4 text-center font-mono text-[11px] text-muted-foreground"
+
+          {/* Embed path: Bandcamp EmbeddedPlayer or YouTube iframe */}
+          {isEmbed ? (
+            <div className="overflow-hidden rounded-md bg-black/20">
+              {embedState === "loading" ? (
+                <div className="flex h-20 items-center justify-center gap-2 font-mono text-[11px] text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading official embed…
+                </div>
+              ) : null}
+              {embedState === "error" ? (
+                <div
+                  role="status"
+                  data-testid="guided-embed-error"
+                  className="flex min-h-20 items-center justify-center gap-2 px-4 text-center font-mono text-[11px] text-muted-foreground"
+                >
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-primary" />
+                  This official embed could not load. The manifest row remains in the receipt.
+                </div>
+              ) : null}
+              <iframe
+                ref={iframeRef}
+                key={current.source?.embedUrl}
+                title={`${current.artist} — ${current.title} on ${serviceLabel(current.source?.service ?? service)}`}
+                src={current.source?.embedUrl ?? undefined}
+                allow="autoplay; encrypted-media"
+                className={`h-40 w-full border-0 ${embedState === "error" ? "hidden" : ""}`}
+                onLoad={() => setEmbedState("ready")}
+                onError={() => setEmbedState("error")}
+                data-testid="guided-embed"
+              />
+            </div>
+          ) : (
+            /* External-open path: all non-embed services, or embed services without an embeddable URL */
+            <div className="flex items-center justify-center rounded-md bg-black/20 py-5">
+              <a
+                href={current.source?.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-full border border-primary/50 px-4 py-2 font-mono text-xs text-primary hover:bg-primary/10 transition-colors"
+                data-testid="guided-external-link"
               >
-                <AlertTriangle className="h-4 w-4 shrink-0 text-primary" />
-                This official embed could not load. The manifest row remains in the receipt.
-              </div>
-            ) : null}
-            <iframe
-              ref={iframeRef}
-              key={current.source?.embedUrl}
-              title={`${current.artist} — ${current.title} on ${current.source?.service}`}
-              src={current.source?.embedUrl}
-              allow="autoplay; encrypted-media"
-              className={`h-40 w-full border-0 ${embedState === "error" ? "hidden" : ""}`}
-              onLoad={() => setEmbedState("ready")}
-              onError={() => setEmbedState("error")}
-              data-testid="guided-embed"
-            />
-          </div>
+                <ExternalLink className="h-3.5 w-3.5" />
+                Open on {serviceLabel(current.source?.service ?? service)}
+              </a>
+            </div>
+          )}
+
           <div className="mt-3 flex items-center justify-between gap-2">
             <button
               type="button"
@@ -234,7 +267,11 @@ export function GuidedReplayPanel({
               Previous
             </button>
             <span className="font-mono text-[10px] text-muted-foreground">
-              {current.source?.autoAdvance ? "YouTube can advance when its embed reports ended." : "Use Next; this embed does not report ended."}
+              {current.source?.autoAdvance
+                ? "YouTube advances automatically when the embed reports ended."
+                : isEmbed
+                  ? "Use Next — this embed does not report ended."
+                  : "Use Next to open the following track."}
             </span>
             <button
               type="button"

@@ -54,6 +54,7 @@ export interface GuidedReplayQueue {
 const SERVICE_LABELS: Record<string, string> = {
   spotify: "Spotify",
   apple_music: "Apple Music",
+  bandcamp: "Bandcamp",
   youtube: "YouTube",
   youtube_music: "YouTube Music",
   tidal: "Tidal",
@@ -66,6 +67,7 @@ const SERVICE_LABELS: Record<string, string> = {
 const SERVICE_HOSTS: Record<string, RegExp> = {
   spotify: /(^|\.)open\.spotify\.com$/i,
   apple_music: /(^|\.)music\.apple\.com$/i,
+  bandcamp: /(^|\.)bandcamp\.com$/i,
   youtube: /(^|\.)youtube\.com$|(^|\.)youtu\.be$/i,
   youtube_music: /(^|\.)music\.youtube\.com$/i,
   tidal: /(^|\.)tidal\.com$/i,

@@ -64,26 +64,27 @@ const entries = [
 ] as const;
 
 describe("GuidedReplayPanel", () => {
-  it("starts with Bandcamp, falls back to YouTube, and exposes manual Next", () => {
+  it("starts with Bandcamp, shows only entries with Bandcamp links, and renders the EmbeddedPlayer embed", () => {
     render(<GuidedReplayPanel entries={entries} label="KEXP · Morning" />);
 
-    expect(screen.getByTestId("guided-coverage").textContent).toContain("2 of 2");
+    // Bandcamp mode: only position 0 has an EmbeddedPlayer URL; position 1 is YouTube-only.
+    expect(screen.getByTestId("guided-coverage").textContent).toContain("1 of 2");
     fireEvent.click(screen.getByTestId("guided-start"));
 
+    // Position 0 embeds via the official Bandcamp EmbeddedPlayer iframe.
     expect(screen.getByTestId("guided-embed").getAttribute("src")).toContain(
       "bandcamp.com/EmbeddedPlayer/track=100",
     );
     expect(screen.getByText(/does not report ended/i)).toBeTruthy();
 
-    fireEvent.click(screen.getByTestId("guided-next"));
-    expect(screen.getByTestId("guided-embed").getAttribute("src")).toContain(
-      "youtube.com/embed/two123",
-    );
+    // Only one playable entry — Next is disabled.
+    expect((screen.getByTestId("guided-next") as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("changes service coverage and cleans up when the guide closes", async () => {
     render(<GuidedReplayPanel entries={entries} label="KEXP · Morning" />);
 
+    // YouTube has links for both entries.
     fireEvent.click(screen.getByTestId("guided-service-youtube"));
     expect(screen.getByTestId("guided-coverage").textContent).toContain("2 of 2");
     fireEvent.click(screen.getByTestId("guided-start"));

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   useGetGuidedReplayQueue,
-  type GuidedReplayQueueEntry,
+  type GuidedReplayQueue,
 } from "@workspace/api-client-react";
+
+type GuidedReplayQueueEntry = GuidedReplayQueue["entries"][number];
 import {
   ChevronLeft,
   ChevronRight,
