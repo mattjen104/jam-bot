@@ -39,6 +39,7 @@ import {
   Radio,
   Search,
   Upload,
+  X,
   XCircle,
 } from "lucide-react";
 import { ManualImportModal } from "../components/ManualImportModal";
@@ -557,12 +558,15 @@ function AlbumGroupRow({
   group,
   openDoorMbid,
   setOpenDoorMbid,
+  forceOpen,
 }: {
   group: AlbumGroup;
   openDoorMbid: string | null;
   setOpenDoorMbid: (v: string | null) => void;
+  forceOpen?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const isOpen = forceOpen || open;
   return (
     <div data-testid="library-album-group">
       {/* Group header */}
@@ -578,10 +582,10 @@ function AlbumGroupRow({
           padding: "10px 15px",
           cursor: "pointer",
           borderBottom: "1px solid hsl(var(--border) / 0.5)",
-          background: open ? "hsl(var(--secondary) / 0.6)" : "transparent",
+          background: isOpen ? "hsl(var(--secondary) / 0.6)" : "transparent",
           transition: "background 0.15s",
         }}
-        aria-expanded={open}
+        aria-expanded={isOpen}
       >
         {/* Artwork swatch */}
         <span
@@ -658,7 +662,7 @@ function AlbumGroupRow({
         >
           {group.items.length}
         </span>
-        {open ? (
+        {isOpen ? (
           <ChevronUp style={{ width: 10, height: 10, color: "hsl(var(--faint))", flexShrink: 0 }} />
         ) : (
           <ChevronDown style={{ width: 10, height: 10, color: "hsl(var(--faint))", flexShrink: 0 }} />
@@ -666,7 +670,7 @@ function AlbumGroupRow({
       </div>
 
       {/* Expanded tracks */}
-      {open && (
+      {isOpen && (
         <ul style={{ margin: 0, padding: 0, listStyle: "none" }} data-testid="library-album-tracks">
           {group.items.map((item) => {
             const rowKey = item.mbid ?? `soft:${item.spotifyId ?? item.addedAt}`;
@@ -694,12 +698,15 @@ function ArtistGroupRow({
   group,
   openDoorMbid,
   setOpenDoorMbid,
+  forceOpen,
 }: {
   group: ArtistGroup;
   openDoorMbid: string | null;
   setOpenDoorMbid: (v: string | null) => void;
+  forceOpen?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const isOpen = forceOpen || open;
   return (
     <div data-testid="library-artist-group">
       {/* Artist header */}
@@ -715,10 +722,10 @@ function ArtistGroupRow({
           padding: "9px 15px",
           cursor: "pointer",
           borderBottom: "1px solid hsl(var(--border) / 0.5)",
-          background: open ? "hsl(var(--secondary) / 0.6)" : "transparent",
+          background: isOpen ? "hsl(var(--secondary) / 0.6)" : "transparent",
           transition: "background 0.15s",
         }}
-        aria-expanded={open}
+        aria-expanded={isOpen}
       >
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
@@ -747,7 +754,7 @@ function ArtistGroupRow({
             {group.items.length} track{group.items.length === 1 ? "" : "s"}
           </div>
         </div>
-        {open ? (
+        {isOpen ? (
           <ChevronUp style={{ width: 10, height: 10, color: "hsl(var(--faint))", flexShrink: 0 }} />
         ) : (
           <ChevronDown style={{ width: 10, height: 10, color: "hsl(var(--faint))", flexShrink: 0 }} />
@@ -755,7 +762,7 @@ function ArtistGroupRow({
       </div>
 
       {/* Expanded: albums as sub-rows with tracks */}
-      {open && (
+      {isOpen && (
         <div style={{ borderLeft: "2px solid hsl(var(--library) / 0.2)" }}>
           {group.albums.map((album) => (
             <div key={album.key}>
@@ -1070,6 +1077,37 @@ export default function Library() {
     () => (viewMode === "artist" ? buildArtistGroups(keptItems) : []),
     [viewMode, keptItems],
   );
+
+  // Inline group filter (album / artist views only)
+  const [groupFilter, setGroupFilter] = useState("");
+  // Reset filter when the view mode changes so album-filter doesn't persist into artist view
+  useEffect(() => { setGroupFilter(""); }, [viewMode]);
+  const groupFilterQ = groupFilter.trim().toLowerCase();
+
+  const filteredAlbumGroups = useMemo(() => {
+    if (!groupFilterQ) return albumGroups;
+    return albumGroups.filter((g) =>
+      g.albumTitle.toLowerCase().includes(groupFilterQ) ||
+      g.artist.toLowerCase().includes(groupFilterQ) ||
+      g.items.some(
+        (item) =>
+          (item.recording?.title ?? "").toLowerCase().includes(groupFilterQ) ||
+          (item.recording?.artist ?? "").toLowerCase().includes(groupFilterQ),
+      ),
+    );
+  }, [albumGroups, groupFilterQ]);
+
+  const filteredArtistGroups = useMemo(() => {
+    if (!groupFilterQ) return artistGroups;
+    return artistGroups.filter((g) =>
+      g.artist.toLowerCase().includes(groupFilterQ) ||
+      g.items.some(
+        (item) =>
+          (item.recording?.title ?? "").toLowerCase().includes(groupFilterQ) ||
+          (item.recording?.albumTitle ?? "").toLowerCase().includes(groupFilterQ),
+      ),
+    );
+  }, [artistGroups, groupFilterQ]);
 
   // Hero stats
   // keepCount comes from the server's page-1 COUNT — accurate across the full
@@ -1628,6 +1666,57 @@ export default function Library() {
           ))}
         </div>
 
+        {/* ── Inline group filter (album / artist views) ── */}
+        {(viewMode === "album" || viewMode === "artist") && !libLoading && keptItems.length > 0 && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "7px 15px",
+              borderBottom: "1px solid hsl(var(--border) / 0.5)",
+            }}
+            data-testid="library-group-filter-bar"
+          >
+            <Search style={{ width: 11, height: 11, color: "hsl(var(--faint))", flexShrink: 0 }} aria-hidden="true" />
+            <input
+              type="search"
+              value={groupFilter}
+              onChange={(e) => setGroupFilter(e.target.value)}
+              placeholder={viewMode === "album" ? "Filter albums…" : "Filter artists…"}
+              style={{
+                flex: 1,
+                background: "none",
+                border: "none",
+                outline: "none",
+                fontFamily: "var(--app-font-mono)",
+                fontSize: 11,
+                color: "hsl(var(--foreground))",
+              }}
+              aria-label={viewMode === "album" ? "Filter albums" : "Filter artists"}
+              data-testid="library-group-filter"
+            />
+            {groupFilter && (
+              <button
+                type="button"
+                onClick={() => setGroupFilter("")}
+                aria-label="Clear filter"
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: 0,
+                  display: "flex",
+                  color: "hsl(var(--faint))",
+                  flexShrink: 0,
+                }}
+              >
+                <X style={{ width: 11, height: 11 }} />
+              </button>
+            )}
+          </div>
+        )}
+
         {/* ── Kept tracks ── */}
         <TierHd
           label={
@@ -1644,9 +1733,13 @@ export default function Library() {
           count={keptItems.length > 0 ? `${keptItems.length.toLocaleString()}${hasNextPage ? "+" : ""}` : undefined}
           hint={
             viewMode === "album"
-              ? `${albumGroups.length} album${albumGroups.length === 1 ? "" : "s"}`
+              ? groupFilterQ
+                ? `${filteredAlbumGroups.length} of ${albumGroups.length} album${albumGroups.length === 1 ? "" : "s"}`
+                : `${albumGroups.length} album${albumGroups.length === 1 ? "" : "s"}`
               : viewMode === "artist"
-              ? `${artistGroups.length} artist${artistGroups.length === 1 ? "" : "s"}`
+              ? groupFilterQ
+                ? `${filteredArtistGroups.length} of ${artistGroups.length} artist${artistGroups.length === 1 ? "" : "s"}`
+                : `${artistGroups.length} artist${artistGroups.length === 1 ? "" : "s"}`
               : sortFilter === "artist"
               ? "A → Z by artist"
               : sortFilter === "title"
@@ -1672,14 +1765,30 @@ export default function Library() {
         ) : (viewMode === "album" && albumGroups.length > 0) ? (
           <>
             <div data-testid="library-album-view">
-              {albumGroups.map((group) => (
-                <AlbumGroupRow
-                  key={group.key}
-                  group={group}
-                  openDoorMbid={openDoorMbid}
-                  setOpenDoorMbid={setOpenDoorMbid}
-                />
-              ))}
+              {filteredAlbumGroups.length > 0 ? (
+                filteredAlbumGroups.map((group) => (
+                  <AlbumGroupRow
+                    key={group.key}
+                    group={group}
+                    openDoorMbid={openDoorMbid}
+                    setOpenDoorMbid={setOpenDoorMbid}
+                    forceOpen={!!groupFilterQ}
+                  />
+                ))
+              ) : (
+                <div
+                  style={{
+                    padding: "20px 15px",
+                    textAlign: "center",
+                    fontFamily: "var(--app-font-mono)",
+                    fontSize: 11,
+                    color: "hsl(var(--faint))",
+                  }}
+                  data-testid="library-group-filter-empty"
+                >
+                  No albums match <em>"{groupFilter.trim()}"</em>
+                </div>
+              )}
             </div>
             <div ref={sentinelRef} style={{ height: 1 }} aria-hidden />
             {isFetchingNextPage && (
@@ -1701,21 +1810,39 @@ export default function Library() {
                   color: "hsl(var(--faint))",
                 }}
               >
-                {albumGroups.length} album{albumGroups.length === 1 ? "" : "s"} · {keptItems.length} track{keptItems.length === 1 ? "" : "s"}
+                {groupFilterQ
+                  ? `${filteredAlbumGroups.length} of ${albumGroups.length} album${albumGroups.length === 1 ? "" : "s"}`
+                  : `${albumGroups.length} album${albumGroups.length === 1 ? "" : "s"} · ${keptItems.length} track${keptItems.length === 1 ? "" : "s"}`}
               </div>
             )}
           </>
         ) : (viewMode === "artist" && artistGroups.length > 0) ? (
           <>
             <div data-testid="library-artist-view">
-              {artistGroups.map((group) => (
-                <ArtistGroupRow
-                  key={group.key}
-                  group={group}
-                  openDoorMbid={openDoorMbid}
-                  setOpenDoorMbid={setOpenDoorMbid}
-                />
-              ))}
+              {filteredArtistGroups.length > 0 ? (
+                filteredArtistGroups.map((group) => (
+                  <ArtistGroupRow
+                    key={group.key}
+                    group={group}
+                    openDoorMbid={openDoorMbid}
+                    setOpenDoorMbid={setOpenDoorMbid}
+                    forceOpen={!!groupFilterQ}
+                  />
+                ))
+              ) : (
+                <div
+                  style={{
+                    padding: "20px 15px",
+                    textAlign: "center",
+                    fontFamily: "var(--app-font-mono)",
+                    fontSize: 11,
+                    color: "hsl(var(--faint))",
+                  }}
+                  data-testid="library-group-filter-empty"
+                >
+                  No artists match <em>"{groupFilter.trim()}"</em>
+                </div>
+              )}
             </div>
             <div ref={sentinelRef} style={{ height: 1 }} aria-hidden />
             {isFetchingNextPage && (
@@ -1737,7 +1864,9 @@ export default function Library() {
                   color: "hsl(var(--faint))",
                 }}
               >
-                {artistGroups.length} artist{artistGroups.length === 1 ? "" : "s"} · {keptItems.length} track{keptItems.length === 1 ? "" : "s"}
+                {groupFilterQ
+                  ? `${filteredArtistGroups.length} of ${artistGroups.length} artist${artistGroups.length === 1 ? "" : "s"}`
+                  : `${artistGroups.length} artist${artistGroups.length === 1 ? "" : "s"} · ${keptItems.length} track${keptItems.length === 1 ? "" : "s"}`}
               </div>
             )}
           </>
