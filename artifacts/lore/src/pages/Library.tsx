@@ -23,6 +23,7 @@ import {
   ME_LIBRARY_COVERAGE_KEY,
   type LibraryCoverageList,
   type FileImportSummary,
+  type LibraryItem,
   type SyncJobStatus,
 } from "../lib/meHooks";
 import { ApiError } from "@workspace/api-client-react";
@@ -486,6 +487,359 @@ function artGradient(a: string, b: string): string {
   return `linear-gradient(150deg,hsl(${h},22%,20%),hsl(${(h + 42) % 360},28%,32%))`;
 }
 
+// ---------------------------------------------------------------------------
+// Grouped-view helpers
+// ---------------------------------------------------------------------------
+
+interface AlbumGroup {
+  key: string;
+  albumTitle: string;
+  artist: string;
+  artworkUrl: string | null;
+  items: LibraryItem[];
+}
+
+interface ArtistGroup {
+  key: string;
+  artist: string;
+  items: LibraryItem[];
+  /** Albums nested inside this artist, in encountered order */
+  albums: AlbumGroup[];
+}
+
+function buildAlbumGroups(items: LibraryItem[]): AlbumGroup[] {
+  const map = new Map<string, AlbumGroup>();
+  for (const item of items) {
+    const albumTitle = item.recording?.albumTitle ?? "";
+    const artist = item.recording?.artist ?? "";
+    const key = `${albumTitle}\x1f${artist}`;
+    let group = map.get(key);
+    if (!group) {
+      group = {
+        key,
+        albumTitle: albumTitle || artist || "Unknown album",
+        artist,
+        artworkUrl: null,
+        items: [],
+      };
+      map.set(key, group);
+    }
+    if (!group.artworkUrl && item.recording?.artworkUrl) {
+      group.artworkUrl = item.recording.artworkUrl;
+    }
+    group.items.push(item);
+  }
+  return [...map.values()];
+}
+
+function buildArtistGroups(items: LibraryItem[]): ArtistGroup[] {
+  const artistMap = new Map<string, ArtistGroup>();
+  for (const item of items) {
+    const artist = item.recording?.artist ?? "Unknown artist";
+    let ag = artistMap.get(artist);
+    if (!ag) {
+      ag = { key: artist, artist, items: [], albums: [] };
+      artistMap.set(artist, ag);
+    }
+    ag.items.push(item);
+  }
+  // Build per-artist album sub-groups (preserving track order within each artist)
+  for (const ag of artistMap.values()) {
+    ag.albums = buildAlbumGroups(ag.items);
+  }
+  return [...artistMap.values()];
+}
+
+// ---------------------------------------------------------------------------
+// AlbumGroupRow — collapsible album bucket
+// ---------------------------------------------------------------------------
+function AlbumGroupRow({
+  group,
+  openDoorMbid,
+  setOpenDoorMbid,
+}: {
+  group: AlbumGroup;
+  openDoorMbid: string | null;
+  setOpenDoorMbid: (v: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div data-testid="library-album-group">
+      {/* Group header */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => setOpen((v) => !v)}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setOpen((v) => !v); }}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "10px 15px",
+          cursor: "pointer",
+          borderBottom: "1px solid hsl(var(--border) / 0.5)",
+          background: open ? "hsl(var(--secondary) / 0.6)" : "transparent",
+          transition: "background 0.15s",
+        }}
+        aria-expanded={open}
+      >
+        {/* Artwork swatch */}
+        <span
+          style={{
+            width: 38,
+            height: 38,
+            flexShrink: 0,
+            borderRadius: 3,
+            overflow: "hidden",
+            display: "block",
+          }}
+          aria-hidden="true"
+        >
+          {group.artworkUrl ? (
+            <img
+              src={group.artworkUrl}
+              alt=""
+              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+              loading="lazy"
+            />
+          ) : (
+            <span
+              style={{
+                display: "block",
+                width: "100%",
+                height: "100%",
+                background: artGradient(group.albumTitle, group.artist),
+              }}
+            />
+          )}
+        </span>
+
+        {/* Text */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              fontFamily: "var(--app-font-display)",
+              fontSize: 13,
+              fontWeight: 600,
+              color: "hsl(var(--foreground))",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {group.albumTitle}
+          </div>
+          {group.artist && (
+            <div
+              style={{
+                fontFamily: "var(--app-font-reading)",
+                fontSize: 11,
+                color: "hsl(var(--dim))",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                marginTop: 1,
+              }}
+            >
+              {group.artist}
+            </div>
+          )}
+        </div>
+
+        {/* Count + chevron */}
+        <span
+          style={{
+            fontFamily: "var(--app-font-mono)",
+            fontSize: 9,
+            color: "hsl(var(--faint))",
+            flexShrink: 0,
+            marginRight: 4,
+          }}
+        >
+          {group.items.length}
+        </span>
+        {open ? (
+          <ChevronUp style={{ width: 10, height: 10, color: "hsl(var(--faint))", flexShrink: 0 }} />
+        ) : (
+          <ChevronDown style={{ width: 10, height: 10, color: "hsl(var(--faint))", flexShrink: 0 }} />
+        )}
+      </div>
+
+      {/* Expanded tracks */}
+      {open && (
+        <ul style={{ margin: 0, padding: 0, listStyle: "none" }} data-testid="library-album-tracks">
+          {group.items.map((item) => {
+            const rowKey = item.mbid ?? `soft:${item.spotifyId ?? item.addedAt}`;
+            return (
+              <LibraryRow
+                key={rowKey}
+                item={item}
+                isOpen={item.mbid != null && openDoorMbid === item.mbid}
+                onToggle={item.mbid != null
+                  ? () => setOpenDoorMbid(openDoorMbid === item.mbid ? null : item.mbid)
+                  : undefined}
+              />
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ArtistGroupRow — collapsible artist bucket with album sub-rows
+// ---------------------------------------------------------------------------
+function ArtistGroupRow({
+  group,
+  openDoorMbid,
+  setOpenDoorMbid,
+}: {
+  group: ArtistGroup;
+  openDoorMbid: string | null;
+  setOpenDoorMbid: (v: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div data-testid="library-artist-group">
+      {/* Artist header */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => setOpen((v) => !v)}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setOpen((v) => !v); }}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "9px 15px",
+          cursor: "pointer",
+          borderBottom: "1px solid hsl(var(--border) / 0.5)",
+          background: open ? "hsl(var(--secondary) / 0.6)" : "transparent",
+          transition: "background 0.15s",
+        }}
+        aria-expanded={open}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              fontFamily: "var(--app-font-display)",
+              fontSize: 12,
+              fontWeight: 700,
+              color: "hsl(var(--foreground))",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {group.artist}
+          </div>
+          <div
+            style={{
+              fontFamily: "var(--app-font-mono)",
+              fontSize: 9,
+              color: "hsl(var(--faint))",
+              marginTop: 2,
+            }}
+          >
+            {group.albums.length} album{group.albums.length === 1 ? "" : "s"}
+            {" · "}
+            {group.items.length} track{group.items.length === 1 ? "" : "s"}
+          </div>
+        </div>
+        {open ? (
+          <ChevronUp style={{ width: 10, height: 10, color: "hsl(var(--faint))", flexShrink: 0 }} />
+        ) : (
+          <ChevronDown style={{ width: 10, height: 10, color: "hsl(var(--faint))", flexShrink: 0 }} />
+        )}
+      </div>
+
+      {/* Expanded: albums as sub-rows with tracks */}
+      {open && (
+        <div style={{ borderLeft: "2px solid hsl(var(--library) / 0.2)" }}>
+          {group.albums.map((album) => (
+            <div key={album.key}>
+              {/* Album sub-header */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "6px 15px",
+                  borderBottom: "1px solid hsl(var(--border) / 0.3)",
+                  background: "hsl(var(--card) / 0.5)",
+                }}
+              >
+                {album.artworkUrl ? (
+                  <img
+                    src={album.artworkUrl}
+                    alt=""
+                    style={{ width: 24, height: 24, borderRadius: 2, flexShrink: 0, objectFit: "cover" }}
+                    loading="lazy"
+                  />
+                ) : (
+                  <span
+                    style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: 2,
+                      flexShrink: 0,
+                      background: artGradient(album.albumTitle, album.artist),
+                      display: "block",
+                    }}
+                    aria-hidden="true"
+                  />
+                )}
+                <span
+                  style={{
+                    fontFamily: "var(--app-font-display)",
+                    fontSize: 10,
+                    fontWeight: 600,
+                    color: "hsl(var(--dim))",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    flex: 1,
+                    minWidth: 0,
+                  }}
+                >
+                  {album.albumTitle}
+                </span>
+                <span
+                  style={{
+                    fontFamily: "var(--app-font-mono)",
+                    fontSize: 9,
+                    color: "hsl(var(--faint))",
+                    flexShrink: 0,
+                  }}
+                >
+                  {album.items.length}
+                </span>
+              </div>
+              {/* Tracks */}
+              <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+                {album.items.map((item) => {
+                  const rowKey = item.mbid ?? `soft:${item.spotifyId ?? item.addedAt}`;
+                  return (
+                    <LibraryRow
+                      key={rowKey}
+                      item={item}
+                      isOpen={item.mbid != null && openDoorMbid === item.mbid}
+                      onToggle={item.mbid != null
+                        ? () => setOpenDoorMbid(openDoorMbid === item.mbid ? null : item.mbid)
+                        : undefined}
+                    />
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 // ---------------------------------------------------------------------------
 // Main page
@@ -524,6 +878,21 @@ export default function Library() {
     const p = new URLSearchParams(search);
     if (sort !== "added") p.set("sort", sort);
     else p.delete("sort");
+    const qs = p.toString();
+    setLocation(qs ? `${location.split("?")[0]}?${qs}` : location.split("?")[0]!);
+  };
+
+  // View mode — persisted in URL as ?view=album|artist (default = "track", omitted from URL)
+  const viewMode = useMemo((): "track" | "album" | "artist" => {
+    const v = new URLSearchParams(search).get("view");
+    if (v === "album" || v === "artist") return v;
+    return "track";
+  }, [search]);
+
+  const setViewMode = (mode: "track" | "album" | "artist") => {
+    const p = new URLSearchParams(search);
+    if (mode !== "track") p.set("view", mode);
+    else p.delete("view");
     const qs = p.toString();
     setLocation(qs ? `${location.split("?")[0]}?${qs}` : location.split("?")[0]!);
   };
@@ -691,6 +1060,16 @@ export default function Library() {
   const libLoading = keptLoading;
   const isEmpty = !libLoading && keptItems.length === 0;
   void radio; // suppress unused lint
+
+  // Grouped views — computed only when the relevant view is active
+  const albumGroups = useMemo(
+    () => (viewMode === "album" ? buildAlbumGroups(keptItems) : []),
+    [viewMode, keptItems],
+  );
+  const artistGroups = useMemo(
+    () => (viewMode === "artist" ? buildArtistGroups(keptItems) : []),
+    [viewMode, keptItems],
+  );
 
   // Hero stats
   // keepCount comes from the server's page-1 COUNT — accurate across the full
@@ -1118,7 +1497,7 @@ export default function Library() {
           ))}
         </div>
 
-        {/* ── Sort controls ── */}
+        {/* ── Sort + View controls ── */}
         <div
           style={{
             display: "flex",
@@ -1126,9 +1505,78 @@ export default function Library() {
             padding: "8px 15px",
             borderBottom: "1px solid hsl(var(--border) / 0.5)",
             alignItems: "center",
+            flexWrap: "wrap",
           }}
           data-testid="library-sort-controls"
         >
+          {/* Sort buttons — hidden in grouped views (grouping implies its own order) */}
+          {viewMode === "track" && (
+            <>
+              <span
+                style={{
+                  fontFamily: "var(--app-font-display)",
+                  fontSize: 9,
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.07em",
+                  color: "hsl(var(--dim))",
+                  marginRight: 2,
+                }}
+              >
+                Sort
+              </span>
+              {(
+                [
+                  { value: "added" as const, label: "Added" },
+                  { value: "artist" as const, label: "Artist" },
+                  { value: "title" as const, label: "Title" },
+                ] as const
+              ).map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setSortFilter(value)}
+                  style={{
+                    fontFamily: "var(--app-font-display)",
+                    fontSize: 9,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.07em",
+                    padding: "4px 10px",
+                    borderRadius: 3,
+                    border: sortFilter === value
+                      ? "1px solid hsl(var(--library))"
+                      : "1px solid hsl(var(--border))",
+                    background: sortFilter === value
+                      ? "hsl(var(--library) / 0.12)"
+                      : "transparent",
+                    color: sortFilter === value
+                      ? "hsl(var(--library))"
+                      : "hsl(var(--dim))",
+                    cursor: "pointer",
+                    transition: "color 0.15s, border-color 0.15s, background 0.15s",
+                  }}
+                  data-testid={`library-sort-${value}`}
+                >
+                  {label}
+                </button>
+              ))}
+              {/* Divider */}
+              <span
+                style={{
+                  width: 1,
+                  height: 12,
+                  background: "hsl(var(--border))",
+                  marginLeft: 2,
+                  marginRight: 2,
+                  alignSelf: "center",
+                }}
+                aria-hidden="true"
+              />
+            </>
+          )}
+
+          {/* View mode toggle */}
           <span
             style={{
               fontFamily: "var(--app-font-display)",
@@ -1140,19 +1588,19 @@ export default function Library() {
               marginRight: 2,
             }}
           >
-            Sort
+            View
           </span>
           {(
             [
-              { value: "added" as const, label: "Added" },
-              { value: "artist" as const, label: "Artist" },
-              { value: "title" as const, label: "Title" },
+              { value: "track" as const, label: "By track" },
+              { value: "album" as const, label: "By album" },
+              { value: "artist" as const, label: "By artist" },
             ] as const
           ).map(({ value, label }) => (
             <button
               key={value}
               type="button"
-              onClick={() => setSortFilter(value)}
+              onClick={() => setViewMode(value)}
               style={{
                 fontFamily: "var(--app-font-display)",
                 fontSize: 9,
@@ -1161,19 +1609,19 @@ export default function Library() {
                 letterSpacing: "0.07em",
                 padding: "4px 10px",
                 borderRadius: 3,
-                border: sortFilter === value
+                border: viewMode === value
                   ? "1px solid hsl(var(--library))"
                   : "1px solid hsl(var(--border))",
-                background: sortFilter === value
+                background: viewMode === value
                   ? "hsl(var(--library) / 0.12)"
                   : "transparent",
-                color: sortFilter === value
+                color: viewMode === value
                   ? "hsl(var(--library))"
                   : "hsl(var(--dim))",
                 cursor: "pointer",
                 transition: "color 0.15s, border-color 0.15s, background 0.15s",
               }}
-              data-testid={`library-sort-${value}`}
+              data-testid={`library-view-${value}`}
             >
               {label}
             </button>
@@ -1194,7 +1642,17 @@ export default function Library() {
               : "Kept"
           }
           count={keptItems.length > 0 ? `${keptItems.length.toLocaleString()}${hasNextPage ? "+" : ""}` : undefined}
-          hint={sortFilter === "artist" ? "A → Z by artist" : sortFilter === "title" ? "A → Z by title" : "most recent first"}
+          hint={
+            viewMode === "album"
+              ? `${albumGroups.length} album${albumGroups.length === 1 ? "" : "s"}`
+              : viewMode === "artist"
+              ? `${artistGroups.length} artist${artistGroups.length === 1 ? "" : "s"}`
+              : sortFilter === "artist"
+              ? "A → Z by artist"
+              : sortFilter === "title"
+              ? "A → Z by title"
+              : "most recent first"
+          }
         />
 
         {libLoading ? (
@@ -1211,6 +1669,78 @@ export default function Library() {
               />
             ))}
           </div>
+        ) : (viewMode === "album" && albumGroups.length > 0) ? (
+          <>
+            <div data-testid="library-album-view">
+              {albumGroups.map((group) => (
+                <AlbumGroupRow
+                  key={group.key}
+                  group={group}
+                  openDoorMbid={openDoorMbid}
+                  setOpenDoorMbid={setOpenDoorMbid}
+                />
+              ))}
+            </div>
+            <div ref={sentinelRef} style={{ height: 1 }} aria-hidden />
+            {isFetchingNextPage && (
+              <div style={{ display: "flex", justifyContent: "center", padding: "16px 0" }}>
+                <Loader2
+                  style={{ width: 16, height: 16, animation: "lore-eq 1s linear infinite", color: "hsl(var(--muted-foreground))" }}
+                />
+              </div>
+            )}
+            {!hasNextPage && keptItems.length > 0 && (
+              <div
+                style={{
+                  padding: "14px 0",
+                  textAlign: "center",
+                  fontFamily: "var(--app-font-mono)",
+                  fontSize: 10,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.07em",
+                  color: "hsl(var(--faint))",
+                }}
+              >
+                {albumGroups.length} album{albumGroups.length === 1 ? "" : "s"} · {keptItems.length} track{keptItems.length === 1 ? "" : "s"}
+              </div>
+            )}
+          </>
+        ) : (viewMode === "artist" && artistGroups.length > 0) ? (
+          <>
+            <div data-testid="library-artist-view">
+              {artistGroups.map((group) => (
+                <ArtistGroupRow
+                  key={group.key}
+                  group={group}
+                  openDoorMbid={openDoorMbid}
+                  setOpenDoorMbid={setOpenDoorMbid}
+                />
+              ))}
+            </div>
+            <div ref={sentinelRef} style={{ height: 1 }} aria-hidden />
+            {isFetchingNextPage && (
+              <div style={{ display: "flex", justifyContent: "center", padding: "16px 0" }}>
+                <Loader2
+                  style={{ width: 16, height: 16, animation: "lore-eq 1s linear infinite", color: "hsl(var(--muted-foreground))" }}
+                />
+              </div>
+            )}
+            {!hasNextPage && keptItems.length > 0 && (
+              <div
+                style={{
+                  padding: "14px 0",
+                  textAlign: "center",
+                  fontFamily: "var(--app-font-mono)",
+                  fontSize: 10,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.07em",
+                  color: "hsl(var(--faint))",
+                }}
+              >
+                {artistGroups.length} artist{artistGroups.length === 1 ? "" : "s"} · {keptItems.length} track{keptItems.length === 1 ? "" : "s"}
+              </div>
+            )}
+          </>
         ) : isEmpty ? (
           <div style={{ padding: "28px 15px", textAlign: "center" }}>
             {sourceFilter ? (
