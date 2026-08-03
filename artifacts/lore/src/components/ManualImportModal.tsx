@@ -198,6 +198,12 @@ interface Props {
   onImportStarted?(): void;
   /** @deprecated Spotify is always shown. Kept for callers that still pass it. */
   spotifyImportEnabled?: boolean;
+  /**
+   * When set, the modal opens directly at that service's guide screen instead
+   * of the top-level service picker. Used to reopen at the Spotify guide after
+   * a successful OAuth redirect.
+   */
+  initialService?: ServiceId;
 }
 
 // ---------------------------------------------------------------------------
@@ -308,9 +314,16 @@ function ScreenshotDropZone({
 // Main component
 // ---------------------------------------------------------------------------
 
-export function ManualImportModal({ onClose, onImportStarted }: Props) {
-  const [mode, setMode] = useState<Mode>("service-picker");
-  const [selectedService, setSelectedService] = useState<ServiceId | null>(null);
+export function ManualImportModal({ onClose, onImportStarted, initialService }: Props) {
+  const [mode, setMode] = useState<Mode>(() => {
+    if (!initialService) return "service-picker";
+    if (initialService === "listenbrainz") return "listenbrainz";
+    if (initialService === "lastfm") return "lfm-hint";
+    if (initialService === "typeorpaste") return "tracks";
+    // spotify, applemusic, youtubemusic → service-guide
+    return "service-guide";
+  });
+  const [selectedService, setSelectedService] = useState<ServiceId | null>(initialService ?? null);
   const [rawInput, setRawInput] = useState("");
   const [lbUsername, setLbUsername] = useState("");
   const [error, setError] = useState<string | null>(null);

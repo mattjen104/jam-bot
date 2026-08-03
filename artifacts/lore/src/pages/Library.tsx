@@ -1159,6 +1159,8 @@ export default function Library() {
   };
 
   const [importModalOpen, setImportModalOpen] = useState(false);
+  // When truthy, the modal opens directly at this service's guide screen.
+  const [importModalInitialService, setImportModalInitialService] = useState<import("../components/ManualImportModal").ServiceId | undefined>(undefined);
 
   // Listen for the "Add more +" link in ImportStrip to open this modal
   useEffect(() => {
@@ -1166,6 +1168,24 @@ export default function Library() {
     window.addEventListener("lore:open-import-modal", handler);
     return () => window.removeEventListener("lore:open-import-modal", handler);
   }, []);
+
+  // Detect a new Spotify connection after OAuth redirect and auto-reopen the
+  // modal at the Spotify guide so the user can immediately start importing.
+  // Only fires on a false→true transition (not on initial page load).
+  const prevHasSpotifyRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    // Wait until connections have resolved (skip while loading)
+    if (connLoading) return;
+    const prev = prevHasSpotifyRef.current;
+    prevHasSpotifyRef.current = hasSpotify;
+    // First resolution — record state without triggering
+    if (prev === null) return;
+    // Transition: Spotify was not connected, now is
+    if (!prev && hasSpotify) {
+      setImportModalInitialService("spotify");
+      setImportModalOpen(true);
+    }
+  }, [connLoading, hasSpotify]);
 
   // ── Taste seeds — zero-friction artist onboarding (shared with the Dial) ──
   const { data: seedArtists = [] } = useMyTasteSeeds();
@@ -1288,7 +1308,8 @@ export default function Library() {
     <div className="dial-root">
       {importModalOpen && (
         <ManualImportModal
-          onClose={() => setImportModalOpen(false)}
+          initialService={importModalInitialService}
+          onClose={() => { setImportModalOpen(false); setImportModalInitialService(undefined); }}
           onImportStarted={() => void queryClient.invalidateQueries({ queryKey: ["me", "album-avatar"] })}
         />
       )}
