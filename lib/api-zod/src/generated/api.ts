@@ -303,7 +303,7 @@ export const ListStationsResponse = zod.object({
 });
 
 /**
- * Returns a bounded, deterministic list of artists from resolved spins across active, non-hidden Lore stations. Canonical MusicBrainz artist identities are grouped by artist MBID; unresolved artist identities are not included.
+ * Returns a bounded, deterministic list of artists from resolved spins across active, non-hidden Lore stations. Canonical MusicBrainz artist identities are grouped by artist MBID, while older recordings without an artist MBID are grouped by normalized display name.
 
  * @summary Most-played artists across Lore stations
  */
@@ -1886,6 +1886,20 @@ export const GetReplayManifestResponse = zod
   .describe(
     "Stable, server-derived Ghost Replay view over one station broadcast partition. Coverage counts are explicit so clients do not infer missing entries from the resolved subset.\n",
   );
+
+/**
+ * Downloads the same immutable broadcast receipt as the replay manifest, without requiring an account or service OAuth. Every broadcast slot is preserved, including unresolved entries. Only exact, live service-neutral locations are emitted in location-bearing formats.
+
+ * @summary Download an ordered Ghost Replay reconstruction
+ */
+
+export const ExportReplayParams = zod.object({
+  id: zod.coerce.number().min(1),
+});
+
+export const ExportReplayQueryParams = zod.object({
+  format: zod.enum(["jspf", "xspf", "m3u8", "csv"]),
+});
 
 /**
  * Aggregated genre tags and a discovery score across a single archived station run's tracklist. Computed on read from already-enriched recording data. Degrades to unknown/null fields when there isn't enough enriched data yet.

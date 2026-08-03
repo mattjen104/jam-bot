@@ -202,6 +202,60 @@ describe("GET /api/replay/:id", () => {
     expect((await fetch(`${baseUrl}/api/replay/999999999`)).status).toBe(404);
   });
 
+  it("exports every broadcast slot with stable formats, headers, and filenames", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    const jspfResponse = await fetch(`${baseUrl}/api/replay/${anchorId}/export?format=jspf`);
+    expect(jspfResponse.status).toBe(200);
+    expect(jspfResponse.headers.get("content-type")).toContain("application/jspf+json");
+    expect(jspfResponse.headers.get("content-disposition")).toBe(
+      `attachment; filename="ghost-replay-${slug}-2026-08-03.jspf"`,
+    );
+    expect(jspfResponse.headers.get("x-content-type-options")).toBe("nosniff");
+    const jspf = (await jspfResponse.json()) as {
+      playlist: { track: Array<{ title: string; identifier?: string[] }> };
+    };
+    expect(jspf.playlist.track).toHaveLength(2);
+    expect(jspf.playlist.track.map((track) => track.title)).toEqual([
+      "Resolved Replay Track",
+      "Unresolved Replay Track",
+    ]);
+    expect(jspf.playlist.track[0]!.identifier).toEqual([
+      `https://musicbrainz.org/recording/${mbid}`,
+    ]);
+    expect(jspf.playlist.track[1]!.identifier).toBeUndefined();
+
+    const xspfResponse = await fetch(`${baseUrl}/api/replay/${anchorId}/export?format=xspf`);
+    expect(xspfResponse.status).toBe(200);
+    expect(xspfResponse.headers.get("content-type")).toContain("application/xspf+xml");
+    const xspf = await xspfResponse.text();
+    expect((xspf.match(/<track>/g) ?? []).length).toBe(2);
+    expect(xspf).toContain("Unresolved Replay Track");
+    expect(xspf).not.toContain("<location>https://archive.example/replay</location>");
+
+    const m3u8Response = await fetch(`${baseUrl}/api/replay/${anchorId}/export?format=m3u8`);
+    expect(m3u8Response.status).toBe(200);
+    expect(m3u8Response.headers.get("content-type")).toContain("audio/mpegurl");
+    const m3u8 = await m3u8Response.text();
+    expect(m3u8).toContain("#EXTM3U");
+    expect(m3u8).toContain("#EXT-X-GAP");
+
+    const csvResponse = await fetch(`${baseUrl}/api/replay/${anchorId}/export?format=csv`);
+    expect(csvResponse.status).toBe(200);
+    expect(csvResponse.headers.get("content-type")).toContain("text/csv");
+    const csv = await csvResponse.text();
+    expect(csv.split("\r\n")).toHaveLength(4);
+    expect(csv).toContain(String(anchorId));
+    expect(csv).toContain("Unresolved Replay Track");
+
+    expect(
+      (await fetch(`${baseUrl}/api/replay/${anchorId}/export?format=txt`)).status,
+    ).toBe(400);
+    expect(
+      (await fetch(`${baseUrl}/api/replay/${anchorId}/export`)).status,
+    ).toBe(400);
+  });
+
   it("serves the replay share contract and points humans at the replay surface", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
     const response = await fetch(`${baseUrl}/api/share/replays/${anchorId}`);

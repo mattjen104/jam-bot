@@ -45,6 +45,8 @@ export * from "./entryInvitationSeedSource";
 export * from "./entryPick";
 export * from "./entryResult";
 export * from "./entryResultRung";
+export * from "./exportReplayFormat";
+export * from "./exportReplayParams";
 export * from "./geniusDraft";
 export * from "./geniusDraftAnchorType";
 export * from "./geniusDraftList";

@@ -2376,6 +2376,20 @@ export type GetStationSpinsParams = {
   limit?: number;
 };
 
+export type ExportReplayParams = {
+  format: ExportReplayFormat;
+};
+
+export type ExportReplayFormat =
+  (typeof ExportReplayFormat)[keyof typeof ExportReplayFormat];
+
+export const ExportReplayFormat = {
+  jspf: "jspf",
+  xspf: "xspf",
+  m3u8: "m3u8",
+  csv: "csv",
+} as const;
+
 export type GetArchiveRecentRunsParams = {
   /**
  * Opaque pagination cursor. Omit for the first page; pass the `nextCursor` value from the previous response to fetch the next page. An invalid value returns 400.

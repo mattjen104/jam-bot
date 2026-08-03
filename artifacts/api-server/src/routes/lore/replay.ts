@@ -1,5 +1,10 @@
 import { Router, type IRouter } from "express";
 import {
+  db,
+  serviceTrackMapTable,
+} from "@workspace/db";
+import { inArray } from "drizzle-orm";
+import {
   GetReplayManifestParams,
   GetReplayManifestResponse,
   StartReplayResolutionParams,
@@ -15,8 +20,16 @@ import {
 import { getUserFromSession } from "../../lore/userSession.js";
 import { acquire as sseAcquire, release as sseRelease } from "../../lore/sseConnectionTracker.js";
 import { h } from "../../middlewares/asyncHandler.js";
+import {
+  buildReplayExport,
+  isReplayExportFormat,
+  materializeReplayExport,
+  REPLAY_EXPORT_CONTENT_TYPES,
+  type ReplayExportFormat,
+} from "../../lore/replay-export.js";
 
 const router: IRouter = Router();
+const REPLAY_EXPORT_MAX_ENTRIES = 50_000;
 
 async function replayUserId(req: Parameters<typeof getUserFromSession>[0], res: import("express").Response): Promise<number | null> {
   const user = await getUserFromSession(req);
@@ -115,6 +128,78 @@ router.get("/replay/:id", h(async (req, res) => {
   if (!manifest) return res.status(404).json({ error: "Replay not found" });
 
   return res.json(GetReplayManifestResponse.parse(manifest));
+}));
+
+// GET /api/replay/:id/export?format=jspf|xspf|m3u8|csv — public, account-free
+// download of the same ordered manifest shown on the replay page.
+router.get("/replay/:id/export", h(async (req, res) => {
+  const parsed = GetReplayManifestParams.safeParse(req.params);
+  if (!parsed.success) return res.status(404).json({ error: "Replay not found" });
+
+  const rawFormat = typeof req.query.format === "string" ? req.query.format : "";
+  if (!isReplayExportFormat(rawFormat)) {
+    return res.status(400).json({
+      error: "format must be one of jspf, xspf, m3u8, csv",
+    });
+  }
+
+  const manifest = await getReplayManifest(parsed.data.id);
+  if (!manifest) return res.status(404).json({ error: "Replay not found" });
+  if (manifest.entries.length > REPLAY_EXPORT_MAX_ENTRIES) {
+    return res.status(413).json({
+      error: `Replay is too large to export (maximum ${REPLAY_EXPORT_MAX_ENTRIES} broadcast entries)`,
+    });
+  }
+
+  const mbids = [
+    ...new Set(
+      manifest.entries
+        .map((entry) => entry.recording?.mbid)
+        .filter((mbid): mbid is string => !!mbid),
+    ),
+  ];
+  const mappings = mbids.length
+    ? await db
+        .select({
+          recordingMbid: serviceTrackMapTable.recordingMbid,
+          service: serviceTrackMapTable.service,
+          url: serviceTrackMapTable.url,
+          deadLink: serviceTrackMapTable.deadLink,
+          confidence: serviceTrackMapTable.confidence,
+        })
+        .from(serviceTrackMapTable)
+        .where(inArray(serviceTrackMapTable.recordingMbid, mbids))
+    : [];
+  const mappingsByMbid = new Map<
+    string,
+    Array<{ service: string; url: string; deadLink: boolean; confidence: string }>
+  >();
+  for (const mapping of mappings) {
+    const current = mappingsByMbid.get(mapping.recordingMbid) ?? [];
+    current.push({
+      service: mapping.service,
+      url: mapping.url,
+      deadLink: mapping.deadLink,
+      confidence: mapping.confidence,
+    });
+    mappingsByMbid.set(mapping.recordingMbid, current);
+  }
+
+  const body = buildReplayExport(
+    rawFormat as ReplayExportFormat,
+    materializeReplayExport(manifest, mappingsByMbid),
+  );
+  const safeStation =
+    manifest.station.slug.replace(/[^a-z0-9_-]+/gi, "-").slice(0, 48) || "station";
+  const safeDate = /^\d{4}-\d{2}-\d{2}$/.test(manifest.bounds.date)
+    ? manifest.bounds.date
+    : "replay";
+  const filename = `ghost-replay-${safeStation}-${safeDate}.${rawFormat}`;
+  res.setHeader("Content-Type", REPLAY_EXPORT_CONTENT_TYPES[rawFormat]);
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  return res.send(body);
 }));
 
 export default router;

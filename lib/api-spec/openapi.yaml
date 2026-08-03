@@ -761,6 +761,70 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /replay/{id}/export:
+    get:
+      operationId: exportReplay
+      tags: [archive]
+      summary: Download an ordered Ghost Replay reconstruction
+      description: >
+        Downloads the same immutable broadcast receipt as the replay manifest,
+        without requiring an account or service OAuth. Every broadcast slot is
+        preserved, including unresolved entries. Only exact, live service-neutral
+        locations are emitted in location-bearing formats.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - name: format
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [jspf, xspf, m3u8, csv]
+      responses:
+        "200":
+          description: Replay export file
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+            Cache-Control:
+              schema:
+                type: string
+          content:
+            application/jspf+json:
+              schema:
+                type: string
+            application/xspf+xml:
+              schema:
+                type: string
+            audio/mpegurl:
+              schema:
+                type: string
+            text/csv:
+              schema:
+                type: string
+        "400":
+          description: Unknown export format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Replay not found, hidden, or empty
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "413":
+          description: Replay is too large to export
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /archive/station-runs/{runId}/insights:
     get:
       operationId: getStationRunInsights

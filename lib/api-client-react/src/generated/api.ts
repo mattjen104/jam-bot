@@ -30,6 +30,7 @@ import type {
   DiscogsListRequest,
   DjShows,
   EntryResult,
+  ExportReplayParams,
   GeniusDraftList,
   GeniusDraftReviewRequest,
   GeniusDraftReviewResponse,
@@ -561,7 +562,7 @@ export function useListStations<
 }
 
 /**
- * Returns a bounded, deterministic list of artists from resolved spins across active, non-hidden Lore stations. Canonical MusicBrainz artist identities are grouped by artist MBID; unresolved artist identities are not included.
+ * Returns a bounded, deterministic list of artists from resolved spins across active, non-hidden Lore stations. Canonical MusicBrainz artist identities are grouped by artist MBID, while older recordings without an artist MBID are grouped by normalized display name.
 
  * @summary Most-played artists across Lore stations
  */
@@ -2446,6 +2447,114 @@ export function useGetReplayManifest<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetReplayManifestQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Downloads the same immutable broadcast receipt as the replay manifest, without requiring an account or service OAuth. Every broadcast slot is preserved, including unresolved entries. Only exact, live service-neutral locations are emitted in location-bearing formats.
+
+ * @summary Download an ordered Ghost Replay reconstruction
+ */
+export const getExportReplayUrl = (id: number, params: ExportReplayParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/replay/${id}/export?${stringifiedParams}`
+    : `/api/replay/${id}/export`;
+};
+
+export const exportReplay = async (
+  id: number,
+  params: ExportReplayParams,
+  options?: RequestInit,
+): Promise<string | Blob> => {
+  return customFetch<string | Blob>(getExportReplayUrl(id, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getExportReplayQueryKey = (
+  id: number,
+  params?: ExportReplayParams,
+) => {
+  return [`/api/replay/${id}/export`, ...(params ? [params] : [])] as const;
+};
+
+export const getExportReplayQueryOptions = <
+  TData = Awaited<ReturnType<typeof exportReplay>>,
+  TError = ErrorType<ApiError>,
+>(
+  id: number,
+  params: ExportReplayParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof exportReplay>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getExportReplayQueryKey(id, params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof exportReplay>>> = ({
+    signal,
+  }) => exportReplay(id, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof exportReplay>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ExportReplayQueryResult = NonNullable<
+  Awaited<ReturnType<typeof exportReplay>>
+>;
+export type ExportReplayQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Download an ordered Ghost Replay reconstruction
+ */
+
+export function useExportReplay<
+  TData = Awaited<ReturnType<typeof exportReplay>>,
+  TError = ErrorType<ApiError>,
+>(
+  id: number,
+  params: ExportReplayParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof exportReplay>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getExportReplayQueryOptions(id, params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
