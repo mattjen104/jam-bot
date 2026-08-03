@@ -10,6 +10,32 @@
  */
 import zod from "zod";
 
+/** Ghost Replay resolution stays hand-maintained until its playback UI ships. */
+export const StartReplayResolutionParams = zod.object({
+  id: zod.coerce.number().int().positive(),
+});
+
+export const ReplayResolutionJobResponse = zod.object({
+  id: zod.number().int(),
+  replayId: zod.number().int(),
+  status: zod.enum(["pending", "running", "done", "error"]),
+  total: zod.number().int().nonnegative(),
+  processed: zod.number().int().nonnegative(),
+  resolved: zod.number().int().nonnegative(),
+  missing: zod.number().int().nonnegative(),
+  failed: zod.number().int().nonnegative(),
+  committedOffset: zod.number().int().nonnegative(),
+  error: zod.string().nullable(),
+  finishedAt: zod.string().nullable(),
+  failures: zod.array(
+    zod.object({
+      position: zod.number().int().nonnegative(),
+      spinId: zod.number().int().positive(),
+      error: zod.string(),
+    }),
+  ),
+});
+
 export {
   ReportStationNowPlayingBody as IcecastReportBody,
   ReportStationNowPlayingResponse as IcecastReportResultBody,

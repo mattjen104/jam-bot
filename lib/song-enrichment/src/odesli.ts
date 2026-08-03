@@ -66,7 +66,7 @@ function sleep(ms: number): Promise<void> {
  * — not Spotify-ID-first — so a track resolved from radio can be looked up by
  * whatever platform reference we managed to find for it.
  */
-async function odesliFetch(entityUrl: string): Promise<unknown> {
+export async function fetchOdesli(entityUrl: string): Promise<unknown> {
   const params = new URLSearchParams({
     url: entityUrl,
     userCountry: "US",
@@ -140,7 +140,7 @@ export async function fetchTrackLinks(
 
   let links: TrackLinks;
   try {
-    const body = await odesliFetch(`spotify:track:${spotifyTrackId.trim()}`);
+    const body = await fetchOdesli(`spotify:track:${spotifyTrackId.trim()}`);
     const { platforms, pageUrl } = parseOdesliLinks(body);
     links = { platforms, pageUrl, fetchedAtMs: Date.now() };
   } catch (err) {
@@ -259,7 +259,7 @@ const UNFURL_PLATFORM_LABELS: Array<[string, string]> = [
  */
 export async function resolveAnyUrl(url: string): Promise<ResolvedSong | null> {
   try {
-    const body = await odesliFetch(url);
+    const body = await fetchOdesli(url);
     const b = body as {
       entityUniqueId?: string;
       pageUrl?: string;
@@ -347,7 +347,7 @@ export async function fetchRecordingLinks(args: {
   const spotifyTrackId = args.spotifyTrackId?.trim();
   if (spotifyTrackId && trackLinksEnabled()) {
     try {
-      const body = await odesliFetch(`spotify:track:${spotifyTrackId}`);
+      const body = await fetchOdesli(`spotify:track:${spotifyTrackId}`);
       const parsed = parseOdesliLinks(body);
       exact = parsed.platforms.map((p) => ({ ...p, kind: "exact" as const }));
       pageUrl = parsed.pageUrl;

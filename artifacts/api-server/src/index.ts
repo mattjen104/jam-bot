@@ -67,6 +67,8 @@ import { applyGeniusFragmentPointerMigration } from "./lore/genius-fragment-migr
 import { applyArtistMetadataCleanup } from "./lore/artist-metadata-cleanup.js";
 import { startSessionExpiryWorker } from "./routes/me/attendance.js";
 import { scheduleAnonCleanup } from "./lore/anonCleanup.js";
+import { applyReplayResolutionMigration } from "./lore/replay-resolution-migration.js";
+import { resumeReplayResolutionJobs } from "./lore/replay-resolution.js";
 
 const rawPort = process.env["PORT"];
 
@@ -121,6 +123,7 @@ async function bootLore(): Promise<void> {
     await runMigration("applyTasteSeedsMigration", applyTasteSeedsMigration);
     await runMigration("applyBottlesMigration", applyBottlesMigration);
     await runMigration("applyGeniusFragmentPointerMigration", applyGeniusFragmentPointerMigration);
+    await runMigration("applyReplayResolutionMigration", applyReplayResolutionMigration);
     await runMigration("applyArtistMetadataCleanup", async () => {
       await applyArtistMetadataCleanup();
     });
@@ -186,6 +189,7 @@ async function bootLore(): Promise<void> {
     startDiscoveryScoreJob();
     startQualityRecomputeJob();
     startPhase3RetryScheduler();
+    await resumeReplayResolutionJobs();
     startSessionExpiryWorker();
     scheduleAnonCleanup();
   } catch (err) {

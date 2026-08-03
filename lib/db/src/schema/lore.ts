@@ -1931,6 +1931,46 @@ export const librarySyncJobsTable = pgTable("library_sync_jobs", {
 export type LibrarySyncJob = typeof librarySyncJobsTable.$inferSelect;
 export type InsertLibrarySyncJob = typeof librarySyncJobsTable.$inferInsert;
 
+/**
+ * A durable mapping from a Lore recording to one service's track URL.  This is
+ * deliberately separate from recordings.links: links is the presentation
+ * payload and can contain a mixture of exact and search links, while this
+ * table is the stable asset that replay jobs can re-use and re-verify.
+ */
+export const serviceTrackMapTable = pgTable(
+  "service_track_map",
+  {
+    id: serial("id").primaryKey(),
+    recordingMbid: text("recording_mbid")
+      .notNull()
+      .references(() => recordingsTable.mbid),
+    /** Canonical id such as "spotify", "apple_music", or "youtube". */
+    service: text("service").notNull(),
+    /** Service-native track id when it can be extracted from the URL. */
+    externalId: text("external_id"),
+    url: text("url").notNull(),
+    /** "recording_id" | "isrc" | "odesli" | "title_search". */
+    method: text("method").notNull(),
+    /** "exact" | "search" — retained as text so new resolver tiers are additive. */
+    confidence: text("confidence").notNull().default("search"),
+    /** "verified" for an exact Odesli/service link, otherwise "unverified". */
+    verification: text("verification").notNull().default("unverified"),
+    /** Dead links are retained so a later job can re-verify them. */
+    deadLink: boolean("dead_link").notNull().default(false),
+    deadAt: timestamp("dead_at"),
+    lastVerifiedAt: timestamp("last_verified_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("service_track_map_recording_service_uq").on(
+      t.recordingMbid,
+      t.service,
+    ),
+    index("service_track_map_service_external_idx").on(t.service, t.externalId),
+    index("service_track_map_recording_idx").on(t.recordingMbid),
+  ],
+);
 export type InsertSelectorClaim = typeof selectorClaimsTable.$inferInsert;
 
 export type SelectorClaim = typeof selectorClaimsTable.$inferSelect;
@@ -2308,3 +2348,52 @@ export const songBottlesTable = pgTable(
 
 export type SongBottle = typeof songBottlesTable.$inferSelect;
 export type InsertSongBottle = typeof songBottlesTable.$inferInsert;
+
+export type InsertReplayResolutionJob = typeof replayResolutionJobsTable.$inferInsert;
+
+export type InsertServiceTrackMap = typeof serviceTrackMapTable.$inferInsert;
+
+export type ServiceTrackMap = typeof serviceTrackMapTable.$inferSelect;
+
+export type ReplayResolutionJob = typeof replayResolutionJobsTable.$inferSelect;
+
+export interface ReplayResolutionFailure {
+  position: number;
+  spinId: number;
+  error: string;
+}
+
+/**
+ * User-triggered, resumable Ghost Replay resolution.  The replay manifest
+ * remains a read model over spins; this job only writes service_track_map and
+ * its own progress counters.
+ */
+export const replayResolutionJobsTable = pgTable(
+  "replay_resolution_jobs",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => loreUsersTable.id),
+    /** Canonical replay anchor (the minimum spin id for the run). */
+    replayId: integer("replay_id").notNull(),
+    /** "pending" | "running" | "done" | "error". */
+    status: text("status").notNull().default("pending"),
+    total: integer("total").notNull().default(0),
+    processed: integer("processed").notNull().default(0),
+    resolved: integer("resolved").notNull().default(0),
+    missing: integer("missing").notNull().default(0),
+    failed: integer("failed").notNull().default(0),
+    /** Next manifest position to process; an item is committed after its row. */
+    committedOffset: integer("committed_offset").notNull().default(0),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    startedAt: timestamp("started_at").defaultNow().notNull(),
+    finishedAt: timestamp("finished_at"),
+    error: text("error"),
+    failures: jsonb("failures").$type<ReplayResolutionFailure[]>(),
+  },
+  (t) => [
+    index("replay_resolution_jobs_user_idx").on(t.userId, t.createdAt),
+    index("replay_resolution_jobs_status_idx").on(t.status),
+  ],
+);
