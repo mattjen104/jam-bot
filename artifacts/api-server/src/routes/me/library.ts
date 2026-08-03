@@ -26,6 +26,7 @@ import {
 import { eq, and, or, isNotNull, isNull, inArray, ne, desc, asc, sql, like, gte } from "drizzle-orm";
 import { getConnector } from "../../lore/serviceConnector.js";
 import { normalizeKey, isrcKey } from "../../lore/resolve.js";
+import { isJunkMetadata } from "../../lore/icy.js";
 import { createMbResolver } from "@workspace/song-enrichment";
 import { h } from "../../middlewares/asyncHandler.js";
 import {
@@ -929,6 +930,13 @@ export async function runImportWorker(
 
       let lastFetchStamp = startOffset;
       for await (const raw of connector.importLibrary(accessToken, startOffset)) {
+        if (isJunkMetadata(raw.artist ?? "", raw.title ?? "")) {
+          console.log(
+            `[me/import] job=${jobId} skipping junk track: ` +
+            `artist="${raw.artist}" title="${raw.title}"`,
+          );
+          continue;
+        }
         buffer.push({
           artist: raw.artist,
           title: raw.title,
@@ -1305,8 +1313,20 @@ export async function runManualImportWorker(
   items: ImportItem[],
 ): Promise<void> {
   try {
+    // Filter junk metadata before conversion so URL/domain artists and ad-tag
+    // tracks never reach MusicBrainz resolution.
+    const validItems = items.filter((item) => {
+      if (isJunkMetadata(item.artist ?? "", item.title ?? "")) {
+        console.log(
+          `[me/import:manual] job=${jobId} skipping junk track: ` +
+          `artist="${item.artist}" title="${item.title}"`,
+        );
+        return false;
+      }
+      return true;
+    });
     // Convert to the DB-serialisable buffer format (no recordingMbid field).
-    const buffer: ImportBufferEntry[] = items.map(importItemToBufferEntry);
+    const buffer: ImportBufferEntry[] = validItems.map(importItemToBufferEntry);
 
     console.log(`[me/import:manual] job=${jobId} starting (${buffer.length} tracks)`);
     await db.update(libraryImportJobsTable)
@@ -1605,6 +1625,13 @@ export async function runListenBrainzImportWorker(
     let lastFetchStamp = 0;
 
     for await (const item of fetchListenBrainzLoved(username, sleep)) {
+      if (isJunkMetadata(item.artist ?? "", item.title ?? "")) {
+        console.log(
+          `[me/import:lb] job=${jobId} skipping junk track: ` +
+          `artist="${item.artist}" title="${item.title}"`,
+        );
+        continue;
+      }
       allItems.push(item);
       if (allItems.length - lastFetchStamp >= FETCH_STAMP_INTERVAL) {
         lastFetchStamp = allItems.length;

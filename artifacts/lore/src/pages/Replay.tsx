@@ -6,7 +6,6 @@ import {
 } from "@workspace/api-client-react";
 import { ArrowLeft, Download, Ghost } from "lucide-react";
 import { ArchiveTracklist } from "../components/ArchiveTracklist";
-import { GuidedReplayPanel } from "../components/GuidedReplayPanel";
 import { GuidedReplayQueue } from "../components/GuidedReplayQueue";
 import { ShareButton } from "../components/ShareButton";
 import { AppleMusicReplay } from "../components/AppleMusicReplay";
@@ -110,12 +109,8 @@ export default function Replay() {
               </div>
             </section>
 
-            <GuidedReplayPanel
-              entries={data.entries}
-              label={`${data.station.name} · ${data.show?.name ?? "stream"} · ${runDate(data.bounds.date)}`}
-            />
-
             <AppleMusicReplay materialization={appleMusic} />
+
             <GuidedReplayQueue replayId={data.replayId} />
 
             <section

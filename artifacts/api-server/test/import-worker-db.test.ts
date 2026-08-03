@@ -2493,3 +2493,72 @@ describe("Re-import preservation — tracks absent from Spotify survive re-impor
     expect(job!.status).toBe("done");
   });
 });
+
+// ── Junk metadata guard — mixed batch ────────────────────────────────────────
+//
+// Confirms that URL-artist, domain-name, ad-tag, and programming-label tracks
+// are silently dropped before any resolution phase is attempted, while a
+// legitimately structured track in the same batch still resolves correctly.
+
+describe("Junk metadata guard — mixed batch with valid and junk tracks", () => {
+  it(
+    "inserts only the valid track and never calls resolveByText for junk rows",
+    async () => {
+      if (!dbAvailable) return;
+
+      mockResolveByText.mockClear();
+      mockResolveByIsrc.mockClear();
+
+      // One valid track resolved immediately via Phase 1 (ISRC match).
+      // The remaining tracks carry various junk artist values that
+      // isJunkMetadata() should reject before they enter the buffer.
+      setupConnector([
+        // Valid — ISRC matches MBID_P1 already in the recordings spine.
+        { artist: ARTIST, title: "Phase1 Track", isrc: ISRC_P1, externalId: "sp-junk-valid" },
+        // Junk: URL in artist field.
+        { artist: "https://ads.example.com/track", title: "Some Song", externalId: "sp-junk-url" },
+        // Junk: bare domain name in artist field.
+        { artist: "wellsfargo.com", title: "Buy Now", externalId: "sp-junk-domain" },
+        // Junk: ADWTAG prefix.
+        { artist: "ADWTAG_CAMPAIGN_123", title: "Ad Slot", externalId: "sp-junk-adwtag" },
+        // Junk: known programming label in artist field.
+        { artist: "commercial", title: "Break", externalId: "sp-junk-label" },
+        // Junk: audio filename in artist field.
+        { artist: "jingle_01.mp3", title: "Station ID", externalId: "sp-junk-file" },
+      ]);
+
+      const jid = await createJob();
+      await runImportWorker(jid, userId, "spotify", connRow);
+
+      // Phase 3 must never have been reached — all junk was filtered during
+      // the fetch phase and the valid track was resolved by Phase 1 (ISRC).
+      expect(mockResolveByText).not.toHaveBeenCalled();
+
+      // Only the valid track should appear in library_items.
+      const items = await db
+        .select({ mbid: libraryItemsTable.mbid })
+        .from(libraryItemsTable)
+        .where(eq(libraryItemsTable.userId, userId));
+      const mbids = items.map((r) => r.mbid);
+      expect(mbids).toContain(MBID_P1);
+
+      // Junk tracks must not have created any recordings or library_items rows.
+      // Because they never enter the buffer, there is nothing to check by MBID,
+      // but we can assert the total resolved count reflects only the valid track.
+      const [job] = await db
+        .select({
+          status:   libraryImportJobsTable.status,
+          total:    libraryImportJobsTable.total,
+          resolved: libraryImportJobsTable.resolved,
+        })
+        .from(libraryImportJobsTable)
+        .where(eq(libraryImportJobsTable.id, jid));
+
+      expect(job!.status).toBe("done");
+      // Only the one valid track entered the buffer; the five junk rows were
+      // dropped during the fetch loop, so total must be 1.
+      expect(job!.total).toBe(1);
+      expect(job!.resolved).toBe(1);
+    },
+  );
+});
