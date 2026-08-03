@@ -3458,6 +3458,14 @@
 }
 .fdrow__t1 b { font-style: normal; font-weight: 700; color: inherit; }
 .fdrow__live-sentence { color: hsl(var(--foreground)); }
+/* Blended-mode secondary: live DJ/track attribution below the community aggregate count */
+.fdrow__live-secondary {
+  font-size: 12px;
+  color: hsl(var(--muted-foreground) / 0.8);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+.fdrow__live-secondary b { font-weight: 600; font-style: normal; color: inherit; }
 .fdrow__t1.w1 { color: hsl(var(--library)); }
 .fdrow__t1.w2 { color: hsl(var(--foreground) / 0.9); }
 .fdrow__t1.w3 { color: hsl(var(--foreground) / 0.7); }

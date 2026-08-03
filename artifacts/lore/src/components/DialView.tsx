@@ -36,6 +36,8 @@ import {
   type OnboardingArtistSuggestion,
   type DialDisplayMode,
 } from "../hooks/useDialData";
+import { useStationPresence, type StationPresence } from "../hooks/useStationPresence";
+import { ListenerAvatarStack } from "./ListenerAvatarStack";
 
 /**
  * Returns a version of `value` that only flips to `true` after it has been
@@ -389,9 +391,10 @@ interface FrontDoorRowProps {
   onTuneIn: () => void;
   onEarlier: () => void;
   displayMode?: DialDisplayMode;
+  presence?: StationPresence;
 }
 
-export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onEarlier, displayMode = "personal" }: FrontDoorRowProps) {
+export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onEarlier, displayMode = "personal", presence }: FrontDoorRowProps) {
   const usableDj = eligibleDjName(show?.djName, {
     artist: show?.currentTrack?.artist,
     title: show?.currentTrack?.title,
@@ -404,9 +407,19 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onE
   const rz = reason(safeShow, ds.crossings, ds.artistCrossings, displayMode);
 
   const crossing = crossingSentence(ds.station.name, safeShow, displayMode);
+  // In blended mode: live sentence is a secondary attribution line shown below rz.node
+  // (the community count). It uses only public DJ/track metadata — no personal flags.
+  // In personal mode: live sentence fills in when there is no crossing sentence.
   const live = displayMode === "blended"
-    ? null
+    ? liveSentence(ds.station.name, safeShow)
     : crossing ? null : liveSentence(ds.station.name, safeShow);
+  // Tier 1 always shows the community aggregate sentence in blended mode.
+  const tier1Cls = displayMode === "blended"
+    ? rz.cls
+    : crossing ? rz.cls : live ? "fdrow__live-sentence" : rz.cls;
+  const tier1Node = displayMode === "blended"
+    ? rz.node
+    : crossing?.node ?? live?.node ?? rz.node;
   const rawShow = cleanLiveValue(safeShow?.showName);
   const dj = usableDj;
   // A show is a quiet cue only when it adds context beyond the person in the
@@ -442,9 +455,19 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onE
     >
       <div className="fdrow__c">
         {/* Tier 1: reason sentence — leads at full display weight */}
-        <div className={`fdrow__t1 ${crossing ? rz.cls : live ? "fdrow__live-sentence" : rz.cls}`}>
-          {crossing?.node ?? live?.node ?? rz.node}
+        <div className={`fdrow__t1 ${tier1Cls}`}>
+          {tier1Node}
         </div>
+
+        {/* Blended mode secondary: live DJ/track attribution shown below the
+            community count. Uses only public DJ/track metadata, not personal
+            crossing flags, so it is safe in an anonymised aggregate context. */}
+        {displayMode === "blended" && live && (
+          <div className="fdrow__live-secondary">
+            {live.node}
+          </div>
+        )}
+
         <span className="sr-only">{ds.station.slug}</span>
 
         {/* Stable source label: show context when valid, station always. */}
@@ -459,6 +482,23 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onE
         {(rz.r === 0 || rz.r === 5) && ov > 0 && (
              <div className="fdrow__ov-caption">
             <b>{ov} artists</b> {displayMode === "blended" ? "represented here" : "you know"} play here
+          </div>
+        )}
+
+        {/* Listener avatar stack — community presence below the reason sentence.
+            Visible on every row that has active listeners, regardless of whether
+            the viewer has personal crossings. Click propagation stopped so the
+            tune-in handler doesn't fire. */}
+        {presence && presence.count > 0 && (
+          <div
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            <ListenerAvatarStack
+              avatars={presence.avatars}
+              count={presence.count}
+              isActive={isActive}
+            />
           </div>
         )}
 
@@ -1354,6 +1394,15 @@ export function DialView() {
   const withReason = useMemo(() => sortedRows.filter((row) => row.rz.r >= 1 && row.rz.r <= 4), [sortedRows]);
   const alsoOnAir = useMemo(() => sortedRows.filter((row) => row.rz.r === 0 || row.rz.r >= 5), [sortedRows]);
 
+  // Community presence — poll all live station IDs every 60 s.
+  // Only needed when Listening Party is active; still safe to call in personal
+  // mode since the hook respects staleTime and the UI gates rendering on count.
+  const liveStationIds = useMemo(
+    () => sortedRows.map((row) => row.ds.station.id),
+    [sortedRows],
+  );
+  const presenceMap = useStationPresence(liveStationIds);
+
   // Zone 3 band split (replaces slot-0 promotion from Task #1017):
   //   djBand  — r=5 rows (attributed show on air, no crossing yet).
   //             Always fully shown. Sorted by picker overlap desc.
@@ -1825,6 +1874,7 @@ export function DialView() {
                             onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
                             onEarlier={() => goStation(row.ds.station.slug)}
                             displayMode={crossingSourceMode}
+                            presence={presenceMap.get(row.ds.station.id)}
                           />
                         )
                       )}
@@ -1961,6 +2011,7 @@ export function DialView() {
                             onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
                             onEarlier={() => goStation(row.ds.station.slug)}
                             displayMode={crossingSourceMode}
+                            presence={presenceMap.get(row.ds.station.id)}
                           />
                         ))}
                       </>
@@ -1982,6 +2033,7 @@ export function DialView() {
                               onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
                               onEarlier={() => goStation(row.ds.station.slug)}
                               displayMode={crossingSourceMode}
+                              presence={presenceMap.get(row.ds.station.id)}
                             />
                           ))}
                         </div>

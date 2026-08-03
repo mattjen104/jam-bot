@@ -94,6 +94,45 @@ describe("live sentence", () => {
     expect(leadingSentence(container).textContent).not.toMatch(/your|library|private artist/i);
   });
 
+  it("shows DJ/track attribution as a secondary line alongside the community count in blended mode", () => {
+    const { container } = renderRow(
+      makeDialStation({}, { crossings: 3 }),
+      makeShow({
+        djName: "Diane Kamikaze",
+        currentTrack: makeSpin({ title: "Change", artist: "Deftones", isLibraryHit: true }),
+      }),
+      3,
+      "blended",
+    );
+    // Tier 1 must still be the community count
+    expect(leadingSentence(container).textContent).toBe("3 community matches here in the last 24h");
+    expect(leadingSentence(container).textContent).not.toMatch(/your|library|private/i);
+    // Secondary line shows the live DJ/track attribution
+    const secondary = container.querySelector(".fdrow__live-secondary");
+    expect(secondary).not.toBeNull();
+    expect(secondary!.textContent).toContain("Diane Kamikaze");
+    expect(secondary!.textContent).not.toMatch(/your|library/i);
+  });
+
+  it("shows live station context as secondary line in blended mode with no DJ", () => {
+    const { container } = renderRow(
+      makeDialStation({}, { crossings: 1 }),
+      makeShow({
+        djName: null,
+        currentTrack: makeSpin({ title: "Blue Lines", artist: "Massive Attack", isLibraryHit: false }),
+      }),
+      1,
+      "blended",
+    );
+    // Tier 1 community count preserved
+    expect(leadingSentence(container).textContent).toBe("1 community match here in the last 24h");
+    // Secondary shows now-playing metadata (no personal library language)
+    const secondary = container.querySelector(".fdrow__live-secondary");
+    expect(secondary).not.toBeNull();
+    expect(secondary!.textContent).toMatch(/Massive Attack/);
+    expect(secondary!.textContent).not.toMatch(/your|library/i);
+  });
+
   it("keeps ordinary live rows title-inclusive while the station stays in the byline", () => {
     const { container } = renderRow(makeDialStation(), makeShow({
       djName: "Diane Kamikaze",
