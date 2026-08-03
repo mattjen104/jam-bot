@@ -76,7 +76,9 @@ import {
   embedLinkTable,
   embedResolutionMetricsTable,
   embedResolutionQueueTable,
+  loreSettingsTable,
 } from "@workspace/db";
+import { bustConfigCache } from "../config.js";
 import { eq, and, asc, desc, sql, count, isNull, isNotNull, gt, gte } from "drizzle-orm";
 import { runAnonCleanup } from "../../lore/anonCleanup.js";
 import { wireListExtractor } from "../../lore/list-wire.js";
@@ -2513,6 +2515,63 @@ router.post("/admin/maintenance/prune-odesli-sentinels", h(async (_req, res) => 
 
   console.info(`[pruneOdesliSentinels] deleted ${deleted} stale sentinel row(s)`);
   return res.json({ deleted });
+}));
+
+// ---------------------------------------------------------------------------
+// Runtime settings — read/write boolean feature flags without a server restart
+// ---------------------------------------------------------------------------
+
+/** Allowed setting keys and their env-var fallback defaults. */
+const KNOWN_SETTINGS: Record<string, () => boolean> = {
+  spotifyImportEnabled: () => process.env["SPOTIFY_IMPORT_ENABLED"] === "true",
+};
+
+/**
+ * GET /api/admin/settings — list all runtime boolean settings with their
+ * current values (DB row when present, env-var default otherwise).
+ */
+router.get("/admin/settings", h(async (_req, res) => {
+  const rows = await db.select().from(loreSettingsTable);
+  const dbMap = new Map(rows.map((r) => [r.key, r.value]));
+
+  const settings = Object.entries(KNOWN_SETTINGS).map(([key, fallback]) => ({
+    key,
+    value: dbMap.has(key) ? dbMap.get(key)! : fallback(),
+    source: dbMap.has(key) ? ("db" as const) : ("env" as const),
+    updatedAt: dbMap.has(key) ? rows.find((r) => r.key === key)!.updatedAt.toISOString() : null,
+  }));
+
+  return res.json({ settings });
+}));
+
+/**
+ * PUT /api/admin/settings/:key — set a boolean setting value at runtime.
+ * Body: { value: boolean }
+ * Changes take effect for new requests within ~30 s (config query stale time).
+ */
+router.put("/admin/settings/:key", h(async (req, res) => {
+  const { key } = req.params as { key: string };
+  if (!(key in KNOWN_SETTINGS)) {
+    return res.status(404).json({ error: `Unknown setting key: ${key}` });
+  }
+  const { value } = req.body as { value?: unknown };
+  if (typeof value !== "boolean") {
+    return res.status(400).json({ error: "Body must be { value: boolean }" });
+  }
+
+  await db
+    .insert(loreSettingsTable)
+    .values({ key, value, updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: loreSettingsTable.key,
+      set: { value, updatedAt: new Date() },
+    });
+
+  // Bust the in-process config cache so GET /api/config reflects the new value
+  // immediately rather than waiting up to 30 s for the TTL to expire.
+  bustConfigCache();
+
+  return res.json({ key, value, source: "db" });
 }));
 
 export default router;

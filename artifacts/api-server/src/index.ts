@@ -65,6 +65,7 @@ import { applyTasteSeedsMigration } from "./lore/taste-seeds-migration.js";
 import { applyBottlesMigration } from "./lore/bottles-migration.js";
 import { applyLibraryProvenanceBackfill } from "./lore/library-provenance-backfill.js";
 import { applyGeniusFragmentPointerMigration } from "./lore/genius-fragment-migration.js";
+import { applyLoreSettingsMigration } from "./lore/lore-settings-migration.js";
 import {
   applyArtistMetadataCleanup,
   applyResolutionCollisionCleanup,
@@ -133,6 +134,7 @@ async function bootLore(): Promise<void> {
     await runMigration("applyAttendanceMigration", applyAttendanceMigration);
     await runMigration("applyTasteSeedsMigration", applyTasteSeedsMigration);
     await runMigration("applyBottlesMigration", applyBottlesMigration);
+    await runMigration("applyLoreSettingsMigration", applyLoreSettingsMigration);
     await runMigration("applyGeniusFragmentPointerMigration", applyGeniusFragmentPointerMigration);
     await runMigration("applyReplayResolutionMigration", applyReplayResolutionMigration);
     await runMigration("applySupportHoldsMigration", applySupportHoldsMigration);

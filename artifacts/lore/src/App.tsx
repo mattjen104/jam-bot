@@ -28,6 +28,7 @@ import AdminListCandidates from "@/pages/AdminListCandidates";
 import AdminLists from "@/pages/AdminLists";
 import AdminCriCandidates from "@/pages/AdminCriCandidates";
 import AdminHealth from "@/pages/AdminHealth";
+import AdminSettings from "@/pages/AdminSettings";
 import DjPage from "@/pages/DjPage";
 import ScheduleCalendar from "@/pages/ScheduleCalendar";
 import WebPlayer from "./webplayer/WebPlayer";
@@ -116,6 +117,7 @@ function Router() {
         <Route path="/admin/list-candidates" component={AdminListCandidates} />
         <Route path="/admin/cri" component={AdminCriCandidates} />
         <Route path="/admin/health" component={AdminHealth} />
+        <Route path="/admin/settings" component={AdminSettings} />
         {/* /stations is the Radio sub-nav entry — shows the full station directory */}
         <Route path="/stations" component={Archive} />
         <Route path="/dj/:name" component={DjPage} />

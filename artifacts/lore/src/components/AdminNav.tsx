@@ -14,6 +14,7 @@ const NAV_LINKS: { label: string; href: string }[] = [
   { label: "Candidates", href: "/admin/list-candidates" },
   { label: "CRI", href: "/admin/cri" },
   { label: "Feed health", href: "/admin/health" },
+  { label: "Settings", href: "/admin/settings" },
 ];
 
 // ─── Health check ──────────────────────────────────────────────────────────

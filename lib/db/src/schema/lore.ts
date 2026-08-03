@@ -2862,3 +2862,21 @@ export const replayResolutionJobsTable = pgTable(
     index("replay_resolution_jobs_status_idx").on(t.status),
   ],
 );
+
+/**
+ * Operator-level feature flags and settings that can be changed at runtime
+ * without a server restart.  Each row is a single named boolean flag.
+ * The primary key is the flag name so upserts are idempotent.
+ */
+export const loreSettingsTable = pgTable("lore_settings", {
+  /** Setting name, e.g. "spotifyImportEnabled". */
+  key: text("key").primaryKey(),
+  /** Current value for boolean flags. */
+  value: boolean("value").notNull(),
+  /** Wall-clock time of the last write. */
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type LoreSetting = typeof loreSettingsTable.$inferSelect;
+
+export type InsertLoreSetting = typeof loreSettingsTable.$inferInsert;

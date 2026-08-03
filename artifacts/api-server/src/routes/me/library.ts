@@ -20,6 +20,7 @@ import {
   showsTable,
   listensTable,
   pickersTable,
+  loreSettingsTable,
   type LibraryItemProvenance,
   type ImportBufferEntry,
   type ImportItem,
@@ -367,8 +368,23 @@ router.post("/me/library/import", h(async (req, res) => {
   if (!service) return res.status(400).json({ error: "service query param is required" });
 
   // ── Spotify feature-flag gate ──────────────────────────────────────────────
-  if (service === "spotify" && process.env["SPOTIFY_IMPORT_ENABLED"] !== "true") {
-    return res.status(403).json({ error: "Spotify direct import is not enabled on this server." });
+  if (service === "spotify") {
+    // Read the runtime-toggleable setting from DB; fall back to env var on any
+    // DB error (e.g. cold boot before migration runs) so the gate never throws.
+    let enabled = process.env["SPOTIFY_IMPORT_ENABLED"] === "true";
+    try {
+      const [settingRow] = await db
+        .select()
+        .from(loreSettingsTable)
+        .where(eq(loreSettingsTable.key, "spotifyImportEnabled"))
+        .limit(1);
+      if (settingRow != null) enabled = settingRow.value;
+    } catch {
+      // Table may not exist yet on a brand-new deploy; env-var fallback applies.
+    }
+    if (!enabled) {
+      return res.status(403).json({ error: "Spotify direct import is not enabled on this server." });
+    }
   }
 
   const connector = getConnector(service);
