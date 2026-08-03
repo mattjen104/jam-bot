@@ -1748,6 +1748,40 @@ export default function Library() {
           }
         />
 
+        {/* ── Grouped-view partial-load notice ── */}
+        {(viewMode === "album" || viewMode === "artist") && hasNextPage && (
+          <div
+            data-testid="library-grouped-partial-notice"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "6px 15px",
+              borderBottom: "1px solid hsl(var(--border) / 0.5)",
+              background: "hsl(var(--secondary) / 0.4)",
+            }}
+          >
+            <Loader2
+              style={{
+                width: 9,
+                height: 9,
+                flexShrink: 0,
+                color: "hsl(var(--faint))",
+                animation: "lore-eq 1s linear infinite",
+              }}
+            />
+            <span
+              style={{
+                fontFamily: "var(--app-font-mono)",
+                fontSize: 9,
+                color: "hsl(var(--faint))",
+              }}
+            >
+              Groups based on loaded tracks — scroll to load more
+            </span>
+          </div>
+        )}
+
         {libLoading ? (
           <div style={{ display: "flex", flexDirection: "column" }}>
             {[0, 1, 2, 3, 4].map((i) => (
