@@ -51,6 +51,8 @@ import {
   GetEmbedCoverageResponse,
   GetEmbedResolutionParams,
   GetEmbedResolutionResponse,
+  PostEmbedResolutionRequeueParams,
+  PostEmbedResolutionRequeueResponse,
 } from "@workspace/api-zod";
 import {
   db,
@@ -2381,6 +2383,86 @@ router.get("/admin/embed-resolution/:mbid", h(async (req, res) => {
         lastError: q.lastError ?? null,
         requestedAt: q.requestedAt.toISOString(),
         expiresAt: q.expiresAt?.toISOString() ?? null,
+      })),
+    }),
+  );
+}));
+
+// POST /api/admin/embed-resolution/:mbid/requeue — manually reset a stuck or
+// failed queue job so the worker picks it up again without waiting for the
+// automatic retry backoff. Eligible jobs are:
+//   - status='running' with lockedAt older than 10 minutes (stale lock)
+//   - status='retry' (terminal-retry backoff — operator forces immediate retry)
+// Resets: clears lockedAt, sets status='pending', sets nextAttemptAt=now.
+// Does NOT increment attempts — this is operator intervention, not a new try.
+router.post("/admin/embed-resolution/:mbid/requeue", h(async (req, res) => {
+  const params = PostEmbedResolutionRequeueParams.safeParse(req.params);
+  if (!params.success) {
+    return res.status(400).json({ error: "mbid path parameter is required" });
+  }
+  const { mbid } = params.data;
+
+  const [recording] = await db
+    .select({ mbid: recordingsTable.mbid })
+    .from(recordingsTable)
+    .where(eq(recordingsTable.mbid, mbid))
+    .limit(1);
+  if (!recording) {
+    return res.status(404).json({ error: "Recording not found" });
+  }
+
+  const staleCutoff = new Date(Date.now() - 10 * 60 * 1000);
+  const now = new Date();
+
+  // Find all eligible queue jobs for this recording:
+  //   - status='running' with lockedAt older than 10 minutes
+  //   - status='retry' (stuck in retry backoff)
+  const eligible = await db
+    .select()
+    .from(embedResolutionQueueTable)
+    .where(
+      and(
+        eq(embedResolutionQueueTable.recordingMbid, mbid),
+        sql`(
+          (${embedResolutionQueueTable.status} = 'running' AND ${embedResolutionQueueTable.lockedAt} < ${staleCutoff.toISOString()}::timestamptz)
+          OR ${embedResolutionQueueTable.status} = 'retry'
+        )`,
+      ),
+    );
+
+  if (eligible.length === 0) {
+    return res.status(409).json({
+      error: "No eligible jobs to requeue — jobs must be status='running' (locked >10 minutes) or status='retry'",
+    });
+  }
+
+  const ids = eligible.map((j) => j.id);
+  const updated = await db
+    .update(embedResolutionQueueTable)
+    .set({
+      status: "pending",
+      lockedAt: null,
+      nextAttemptAt: now,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(embedResolutionQueueTable.recordingMbid, mbid),
+        sql`${embedResolutionQueueTable.id} = ANY(ARRAY[${sql.join(ids.map((id) => sql`${id}`), sql`, `)}]::integer[])`,
+      ),
+    )
+    .returning();
+
+  return res.status(200).json(
+    PostEmbedResolutionRequeueResponse.parse({
+      mbid,
+      requeued: updated.map((q) => ({
+        provider: q.provider,
+        role: q.role,
+        status: q.status,
+        attempts: q.attempts,
+        nextAttemptAt: q.nextAttemptAt.toISOString(),
+        requestedAt: q.requestedAt.toISOString(),
       })),
     }),
   );

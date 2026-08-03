@@ -254,6 +254,24 @@ export const GetEmbedResolutionResponse = zod.object({
   ),
 });
 
+export const PostEmbedResolutionRequeueParams = zod.object({
+  mbid: zod.string().min(1),
+});
+
+export const PostEmbedResolutionRequeueResponse = zod.object({
+  mbid: zod.string(),
+  requeued: zod.array(
+    zod.object({
+      provider: zod.string(),
+      role: zod.string(),
+      status: zod.string(),
+      attempts: zod.number().int(),
+      nextAttemptAt: zod.string(),
+      requestedAt: zod.string(),
+    }),
+  ),
+});
+
 export const GetRecordingSongExploderParams = zod.object({
   mbid: zod.string().min(1),
 });
