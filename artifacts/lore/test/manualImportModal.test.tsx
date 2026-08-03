@@ -693,6 +693,34 @@ describe("ManualImportModal — OCR failure isolation", () => {
     expect(screen.getByRole("button", { name: /import 2 tracks/i })).toBeTruthy();
   });
 
+  it("shows the exact provider error string under the failed image thumbnail in the images pane", async () => {
+    mockPostExtractLibraryImages.mockResolvedValueOnce({
+      results: [
+        { index: 0, status: "error", error: "OCR provider timed out" },
+      ],
+    });
+
+    // Set up the modal manually — do NOT use runMixedExtraction because that
+    // helper waits for ocr-review-list, which never appears when all images fail
+    // (there are no recognised tracks to review).
+    renderModal();
+    fireEvent.click(screen.getByTestId("service-tile-screenshots"));
+    fireEvent.change(screen.getByTestId("screenshot-file-input"), {
+      target: { files: [new File(["png"], "screen-a.png", { type: "image/png" })] },
+    });
+    await screen.findByTestId("image-preview-list");
+    fireEvent.click(screen.getByRole("button", { name: /read 1 screenshot/i }));
+
+    // After extraction the modal moves to review mode; with one failed image the
+    // "Review errors" button is rendered there (failedImageCount > 0).
+    const reviewErrorsBtn = await screen.findByRole("button", { name: /review errors/i });
+    fireEvent.click(reviewErrorsBtn);
+
+    // Now back in images mode — the exact error string from the provider must
+    // appear under the failed thumbnail.
+    expect(await screen.findByText("OCR provider timed out")).toBeTruthy();
+  });
+
   it("removing a failed image does not drop rows from the successful image", async () => {
     // First extraction: image A ok (Dreams), image B error
     mockPostExtractLibraryImages
