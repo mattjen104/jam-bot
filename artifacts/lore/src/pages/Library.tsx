@@ -10,6 +10,7 @@ import {
   useLatestImportJob,
   useLatestSyncJob,
   startSpotifyLibraryReconnect,
+  postStartImport,
   postStartSync,
   postImportLibraryFile,
   useMyPreferences,
@@ -18,6 +19,7 @@ import {
   useSetTasteSeeds,
   useAppConfig,
   ME_PREFERENCES_KEY,
+  ME_LATEST_IMPORT_JOB_KEY,
   ME_LATEST_SYNC_JOB_KEY,
   ME_OVERLAP_PICKERS_KEY,
   ME_OVERLAP_STATIONS_KEY,
@@ -1169,9 +1171,10 @@ export default function Library() {
     return () => window.removeEventListener("lore:open-import-modal", handler);
   }, []);
 
-  // Detect a new Spotify connection after OAuth redirect and auto-reopen the
-  // modal at the Spotify guide so the user can immediately start importing.
-  // Only fires on a false→true transition (not on initial page load).
+  // Detect a new Spotify connection after OAuth redirect and auto-fire
+  // postStartImport("spotify") immediately — no button click required.
+  // The ImportStrip banner surfaces progress automatically once the job is
+  // polling.  Only fires on a false→true transition (not on initial page load).
   const prevHasSpotifyRef = useRef<boolean | null>(null);
   useEffect(() => {
     // Wait until connections have resolved (skip while loading)
@@ -1180,12 +1183,19 @@ export default function Library() {
     prevHasSpotifyRef.current = hasSpotify;
     // First resolution — record state without triggering
     if (prev === null) return;
-    // Transition: Spotify was not connected, now is
+    // Transition: Spotify was not connected, now is — kick off import
     if (!prev && hasSpotify) {
-      setImportModalInitialService("spotify");
-      setImportModalOpen(true);
+      void (async () => {
+        try {
+          await postStartImport("spotify");
+        } catch {
+          // 409 = already running; any other error is surfaced by the banner
+        } finally {
+          void queryClient.invalidateQueries({ queryKey: ME_LATEST_IMPORT_JOB_KEY });
+        }
+      })();
     }
-  }, [connLoading, hasSpotify]);
+  }, [connLoading, hasSpotify]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Taste seeds — zero-friction artist onboarding (shared with the Dial) ──
   const { data: seedArtists = [] } = useMyTasteSeeds();

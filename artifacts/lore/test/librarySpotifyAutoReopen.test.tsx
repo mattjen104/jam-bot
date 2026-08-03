@@ -1,15 +1,11 @@
 // @vitest-environment jsdom
 /**
- * Integration tests for the Spotify auto-reopen logic in Library.tsx.
+ * Integration tests for the Spotify auto-import logic in Library.tsx.
  *
  * Confirms that when useMyConnections data transitions from no-Spotify to
  * has-Spotify (the false→true transition that happens after a successful OAuth
- * redirect), the Library page opens the ManualImportModal directly at the
- * Spotify service-guide screen — not the service-picker.
- *
- * Observable signals:
- *   - data-testid="service-picker" is NOT rendered (not the picker screen)
- *   - "Connect Spotify" heading IS rendered (Spotify service-guide screen)
+ * redirect), the Library page calls postStartImport("spotify") automatically
+ * without requiring a button click — and does NOT open a modal.
  */
 
 import React from "react";
@@ -30,6 +26,7 @@ const {
   mockUseMyAlbumsCompleted,
   mockUseMyImportStats,
   mockUseMyLibraryCoverage,
+  mockPostStartImport,
 } = vi.hoisted(() => ({
   mockUseMyConnections: vi.fn(() => ({ data: null, isLoading: false })),
   mockUseMyPreferences: vi.fn(() => ({ data: { ledgerEnabled: true } })),
@@ -45,6 +42,7 @@ const {
   mockUseMyAlbumsCompleted: vi.fn(() => ({ data: undefined })),
   mockUseMyImportStats: vi.fn(() => ({ data: null })),
   mockUseMyLibraryCoverage: vi.fn(() => ({ data: null })),
+  mockPostStartImport: vi.fn(() => Promise.resolve({ jobId: 42, status: "pending" })),
 }));
 
 // ---------------------------------------------------------------------------
@@ -83,7 +81,7 @@ vi.mock("../src/lib/meHooks", async (importOriginal) => {
     patchPreferences: vi.fn(),
     startSpotifyLibraryConnect: vi.fn(),
     startSpotifyLibraryReconnect: vi.fn(),
-    postStartImport: vi.fn(),
+    postStartImport: mockPostStartImport,
     postStartSync: vi.fn(),
     postImportLibraryFile: vi.fn(),
   });
@@ -152,24 +150,28 @@ async function renderLibrary() {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("Library — Spotify auto-reopen after OAuth connect", () => {
-  it("does NOT open the import modal on initial load when Spotify was never connected", async () => {
+describe("Library — Spotify auto-import after OAuth connect", () => {
+  it("does NOT start an import on initial load when Spotify was never connected", async () => {
     mockUseMyConnections.mockReturnValue(NO_CONNECTIONS);
 
     await renderLibrary();
 
-    // Modal should not be present at all
+    expect(mockPostStartImport).not.toHaveBeenCalled();
+    // No modal either
     expect(screen.queryByTestId("service-picker")).toBeNull();
     expect(screen.queryByText("Connect Spotify")).toBeNull();
   });
 
-  it("opens the modal at the Spotify guide when connections transitions from no-Spotify to has-Spotify", async () => {
+  it("calls postStartImport('spotify') automatically when connections transitions from no-Spotify to has-Spotify", async () => {
     // First render: no Spotify connection
     mockUseMyConnections.mockReturnValue(NO_CONNECTIONS);
 
     const { rerender, qc } = await renderLibrary();
 
-    // Now simulate the OAuth callback: connections data gains the Spotify entry
+    // Confirm no import started yet
+    expect(mockPostStartImport).not.toHaveBeenCalled();
+
+    // Simulate the OAuth callback: connections data gains the Spotify entry
     mockUseMyConnections.mockReturnValue(HAS_SPOTIFY);
 
     const { default: Library } = await import("../src/pages/Library");
@@ -181,30 +183,35 @@ describe("Library — Spotify auto-reopen after OAuth connect", () => {
       );
     });
 
-    // The modal must be open at the Spotify service-guide, not the picker
+    // Import must start automatically — no button click needed
     await waitFor(() => {
-      expect(screen.queryByTestId("service-picker")).toBeNull();
-      expect(screen.getByText("Connect Spotify")).toBeTruthy();
+      expect(mockPostStartImport).toHaveBeenCalledWith("spotify");
     });
+
+    // The modal must NOT open (progress is shown via the ImportStrip banner)
+    expect(screen.queryByTestId("service-picker")).toBeNull();
+    expect(screen.queryByText("Connect Spotify")).toBeNull();
   });
 
-  it("does NOT open the modal when Spotify was already connected on first load", async () => {
-    // Spotify present from the very first render — no transition, no reopen
+  it("does NOT start an import when Spotify was already connected on first load", async () => {
+    // Spotify present from the very first render — no transition, no auto-import
     mockUseMyConnections.mockReturnValue(HAS_SPOTIFY);
 
     await renderLibrary();
 
-    // No modal should open (first resolution with Spotify is not a transition)
+    // No auto-import (first resolution with Spotify is not a transition)
+    expect(mockPostStartImport).not.toHaveBeenCalled();
     expect(screen.queryByText("Connect Spotify")).toBeNull();
     expect(screen.queryByTestId("service-picker")).toBeNull();
   });
 
-  it("does NOT open the modal while connections are still loading", async () => {
+  it("does NOT start an import while connections are still loading", async () => {
     // Loading state — effect must be suppressed
     mockUseMyConnections.mockReturnValue({ data: undefined, isLoading: true });
 
     await renderLibrary();
 
+    expect(mockPostStartImport).not.toHaveBeenCalled();
     expect(screen.queryByText("Connect Spotify")).toBeNull();
   });
 });
