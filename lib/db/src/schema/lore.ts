@@ -1092,6 +1092,11 @@ export const loreUsersTable = pgTable("lore_users", {
    */
   ledgerEnabled: boolean("ledger_enabled").notNull().default(false),
   /**
+   * Whether this listener may be included in anonymous active-listener
+   * aggregates. This is independent from the personal library and ledger.
+   */
+  socialParticipation: boolean("social_participation").notNull().default(true),
+  /**
    * Listener's chosen Halloween emoji avatar for song-bottle annotations.
    * Null until the listener picks one. Stored as the raw emoji character.
    */

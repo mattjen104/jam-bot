@@ -3212,6 +3212,36 @@
   flex-shrink: 0;
 }
 
+.dial-mode {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1.5;
+  min-width: 230px;
+  flex-wrap: wrap;
+}
+.dial-mode__button {
+  border: 1px solid hsl(var(--border) / 0.6);
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  padding: 6px 9px;
+  font: 700 10px var(--app-font-label);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+.dial-mode__button:first-child { border-radius: 6px 0 0 6px; }
+.dial-mode__button:nth-child(2) { border-radius: 0 6px 6px 0; }
+.dial-mode__button--active {
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+}
+.dial-mode__hint {
+  flex-basis: 100%;
+  color: hsl(var(--muted-foreground));
+  font: 10px var(--app-font-label);
+  padding: 1px 2px 0;
+}
+
 .dial-act {
   display: flex;
   flex-direction: column;

@@ -2544,6 +2544,18 @@ export interface MePickerOverlapResult {
   items: PickerOverlapItem[];
 }
 
+export interface DialCrossingItem {
+  stationSlug: string;
+  crossings: number;
+  artistCrossings: number;
+  lifetimeCrossings: number;
+  lifetimeArtistCrossings: number;
+}
+
+export interface MeBlendedCrossingsResult {
+  items: DialCrossingItem[];
+}
+
 export type StationsScheduleResultItemsItem = {
   stationSlug: string;
   runs: StationScheduleRun[];

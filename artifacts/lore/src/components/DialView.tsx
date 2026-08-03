@@ -34,6 +34,7 @@ import {
   type DialSpin,
   type LiveArtistSuggestion,
   type OnboardingArtistSuggestion,
+  type DialDisplayMode,
 } from "../hooks/useDialData";
 
 /**
@@ -209,8 +210,10 @@ function liveSentence(
 function crossingSentence(
   stationName: string,
   show: DialShow | null,
+  displayMode: DialDisplayMode = "personal",
 ): { node: ReactNode; hasTrack: boolean } | null {
   if (!show) return null;
+  if (displayMode === "blended") return null;
 
   const station = cleanLiveValue(stationName);
   const current = show.currentTrack;
@@ -277,8 +280,32 @@ function reason(
   show: DialShow | null,
   stationCrossings: number,
   stationArtistCrossings = 0,
+  displayMode: DialDisplayMode = "personal",
 ): ReasonResult {
   if (!show) return { r: 0, cls: "w0", node: "on air · Lore can't see who's playing" };
+
+  if (displayMode === "blended") {
+    if (stationCrossings > 0) {
+      return {
+        r: 1,
+        cls: "w1",
+        node: <><b>{stationCrossings} community match{stationCrossings === 1 ? "" : "es"}</b> here in the last 24h</>,
+      };
+    }
+    if (stationArtistCrossings > 0) {
+      return {
+        r: 2,
+        cls: "w2",
+        node: <><b>{stationArtistCrossings} community artist match{stationArtistCrossings === 1 ? "" : "es"}</b> here in the last 24h</>,
+      };
+    }
+    // Community mode must never fall through to the personal current-track
+    // flags below. With no aggregate signal, retain only public live
+    // attribution (or the intentionally dark row).
+    return show.djName
+      ? { r: 5, cls: "w5", node: `on air · ${intoSet(show.startedAt)} into the set` }
+      : { r: 0, cls: "w0", node: "on air · Lore can't see who's playing" };
+  }
 
   // r=1: exact library track playing right now
   if (show.currentTrack?.isLibraryHit) {
@@ -361,9 +388,10 @@ interface FrontDoorRowProps {
   isSampling: boolean;
   onTuneIn: () => void;
   onEarlier: () => void;
+  displayMode?: DialDisplayMode;
 }
 
-export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onEarlier }: FrontDoorRowProps) {
+export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onEarlier, displayMode = "personal" }: FrontDoorRowProps) {
   const usableDj = eligibleDjName(show?.djName, {
     artist: show?.currentTrack?.artist,
     title: show?.currentTrack?.title,
@@ -373,10 +401,12 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onE
   const safeShow = show && usableDj !== show.djName
     ? { ...show, djName: usableDj }
     : show;
-  const rz = reason(safeShow, ds.crossings, ds.artistCrossings);
+  const rz = reason(safeShow, ds.crossings, ds.artistCrossings, displayMode);
 
-  const crossing = crossingSentence(ds.station.name, safeShow);
-  const live = crossing ? null : liveSentence(ds.station.name, safeShow);
+  const crossing = crossingSentence(ds.station.name, safeShow, displayMode);
+  const live = displayMode === "blended"
+    ? null
+    : crossing ? null : liveSentence(ds.station.name, safeShow);
   const rawShow = cleanLiveValue(safeShow?.showName);
   const dj = usableDj;
   // A show is a quiet cue only when it adds context beyond the person in the
@@ -427,8 +457,8 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onE
             we do have a nonzero lifetime artist-overlap count.  Gives every row a
             human explanation of why it surfaced instead of just a name and a number. */}
         {(rz.r === 0 || rz.r === 5) && ov > 0 && (
-          <div className="fdrow__ov-caption">
-            <b>{ov} artists</b> you know play here
+             <div className="fdrow__ov-caption">
+            <b>{ov} artists</b> {displayMode === "blended" ? "represented here" : "you know"} play here
           </div>
         )}
 
@@ -1030,11 +1060,13 @@ function OfflineRow({
   isActive,
   onStationClick,
   onPlay,
+  displayMode = "personal",
 }: {
   dialStation: DialStation;
   isActive: boolean;
   onStationClick: () => void;
   onPlay: () => void;
+  displayMode?: DialDisplayMode;
 }) {
   const { station, shows, crossings, artistCrossings } = dialStation;
   // Most recent non-future show (shows are sorted oldest→newest)
@@ -1057,14 +1089,14 @@ function OfflineRow({
     const nn = topArtists.length > 0 ? nameNodes(topArtists) : null;
     t1Node = nn
       ? <>{nn} aired here</>
-      : <><b>{crossings} of yours</b> aired here</>;
+       : <><b>{crossings} {displayMode === "blended" ? "community matches" : "of yours"}</b> aired here</>;
     t1Cls = "w3";
   } else if (artistCrossings > 0) {
     const topArtistNames = lastShow?.topArtistNames ?? [];
     const nn = topArtistNames.length > 0 ? nameNodes(topArtistNames) : null;
     t1Node = nn
-      ? <>{nn} — an artist from your library</>
-      : <><b>{artistCrossings}</b> tracks by your artists here</>;
+       ? <>{nn} — {displayMode === "blended" ? "represented in the community" : "an artist from your library"}</>
+       : <><b>{artistCrossings}</b> tracks by {displayMode === "blended" ? "community artists" : "your artists"} here</>;
     t1Cls = "w4";
   } else if (lastSpin) {
     t1Node = (
@@ -1136,7 +1168,14 @@ export function DialView() {
   const [currentShow, setCurrentShow] = useState<DialShow | null>(null);
   const [currentDjName, setCurrentDjName] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
-
+  const [displayMode, setDisplayMode] = useState<DialDisplayMode>(() => {
+    try {
+      return localStorage.getItem("lore:dial:crossing-mode") === "blended" ? "blended" : "personal";
+    } catch {
+      return "personal";
+    }
+  });
+  const { enabled: socialEnabled } = useSocialMode();
   const {
     stations,
     isLoading,
@@ -1150,7 +1189,35 @@ export function DialView() {
     onboardingArtistsLoading,
     overlapByPickerId,
     pickerNameToId,
-  } = useDialData();
+    crossingSourceMode,
+    crossingError,
+  } = useDialData(displayMode);
+
+  useEffect(() => {
+    try { localStorage.setItem("lore:dial:crossing-mode", displayMode); } catch { /* storage optional */ }
+  }, [displayMode]);
+
+  useEffect(() => {
+    const send = () => {
+      if (document.visibilityState !== "visible") return;
+      void Promise.resolve(fetch("/api/me/presence/heartbeat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ socialEnabled }),
+      })).catch(() => undefined);
+    };
+    send();
+    const id = window.setInterval(send, 45_000);
+    return () => window.clearInterval(id);
+  }, [socialEnabled]);
+
+  useEffect(() => {
+    // Keep server-side participation aligned with the existing social switch.
+    void import("../lib/meHooks").then(({ patchPreferences }) =>
+      Promise.resolve(patchPreferences({ socialParticipation: socialEnabled })).catch(() => undefined),
+    );
+  }, [socialEnabled]);
 
   // ── Taste seeds — zero-friction artist onboarding ───────────────────────
   const { data: seedArtists = [] } = useMyTasteSeeds();
@@ -1264,7 +1331,7 @@ export function DialView() {
         const attributionSafeShow = show && effectiveDjName !== show.djName
           ? { ...show, djName: effectiveDjName }
           : show;
-        const rz = reason(attributionSafeShow, ds.crossings, ds.artistCrossings);
+        const rz = reason(attributionSafeShow, ds.crossings, ds.artistCrossings, crossingSourceMode);
         const isPinned = pins.has(ds.station.slug);
         return { ds, show: attributionSafeShow, rz, effectiveDjName, isPinned };
       })
@@ -1288,7 +1355,7 @@ export function DialView() {
         // 4. Rung asc as final tiebreaker
         return a.rz.r - b.rz.r;
       });
-  }, [stations, overlapByPickerId, pickerNameToId]);
+  }, [stations, overlapByPickerId, pickerNameToId, crossingSourceMode]);
 
   // Three zones (spec §6)
   // Zone 1: r=1..4 — has crossing evidence (warm).
@@ -1350,7 +1417,7 @@ export function DialView() {
         const bHas = b.shows.length > 0 ? 1 : 0;
         return bHas - aHas;
       }),
-    [stations],
+    [stations, crossingSourceMode],
   );
 
   // Render cap — start with 40 rows, expand on demand. Prevents mounting
@@ -1572,7 +1639,34 @@ export function DialView() {
 
       {/* Action bar — front door only (spec §10) */}
       {level === "all" && isRadioActive && (
-        <div className="dial-actbar">
+             <div className="dial-actbar">
+           <div className="dial-mode" role="group" aria-label="Dial crossing view">
+             <button
+               type="button"
+               className={`dial-mode__button${crossingSourceMode === "personal" ? " dial-mode__button--active" : ""}`}
+               aria-pressed={crossingSourceMode === "personal"}
+               onClick={() => setDisplayMode("personal")}
+             >
+               Your crossings
+             </button>
+             <button
+               type="button"
+               className={`dial-mode__button${crossingSourceMode === "blended" ? " dial-mode__button--active" : ""}`}
+               aria-pressed={crossingSourceMode === "blended"}
+               onClick={() => setDisplayMode("blended")}
+             >
+               Everyone here
+             </button>
+             <span className="dial-mode__hint">
+               {crossingError
+                 ? "Everyone here is unavailable; showing your crossings"
+                 : crossingSourceMode === "blended"
+                   ? "anonymous active listeners"
+                   : displayMode === "blended"
+                     ? "loading anonymous active listeners"
+                   : "your library"}
+             </span>
+           </div>
           <button type="button" className="dial-act dial-act--listen" onClick={tuneTop} disabled={!topRow}>
             <span className="dial-act__lbl">▶ Listen</span>
             <span className="dial-act__dest">{topLabel}</span>
@@ -1745,6 +1839,7 @@ export function DialView() {
                             isSampling={scan.samplingIdx === i}
                             onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
                             onEarlier={() => goStation(row.ds.station.slug)}
+                            displayMode={crossingSourceMode}
                           />
                         )
                       )}
@@ -1888,6 +1983,7 @@ export function DialView() {
                             isSampling={false}
                             onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
                             onEarlier={() => goStation(row.ds.station.slug)}
+                            displayMode={crossingSourceMode}
                           />
                         ))}
                       </>
@@ -1908,6 +2004,7 @@ export function DialView() {
                               isSampling={false}
                               onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
                               onEarlier={() => goStation(row.ds.station.slug)}
+                              displayMode={crossingSourceMode}
                             />
                           ))}
                         </div>
@@ -1956,6 +2053,7 @@ export function DialView() {
                 isActive={ds.station.slug === radio.station?.slug}
                 onStationClick={() => goStation(ds.station.slug)}
                 onPlay={() => void radio.toggle(ds.station)}
+                displayMode={crossingSourceMode}
               />
             ))}
             {!crossingsLoading && !liveLoading && visibleOfflineCount < offlineStations.length && (

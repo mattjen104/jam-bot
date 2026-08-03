@@ -287,6 +287,7 @@ router.get("/stations/social/presence", h(async (req, res) => {
       and(
         inArray(listenSessionsTable.stationId, ids),
         isNull(listenSessionsTable.endedAt),
+        eq(loreUsersTable.socialParticipation, true),
         sql`${listenSessionsTable.lastHeartbeatAt} >= ${threshold}`,
       ),
     )

@@ -21,23 +21,44 @@ const router: IRouter = Router();
 
 /**
  * PATCH /api/me/preferences — update per-user preferences.
- * Currently accepts: { ledgerEnabled: boolean }
+ * Currently accepts: { ledgerEnabled?: boolean, socialParticipation?: boolean }
  * Extend this object as more preferences are added.
  */
 router.patch("/me/preferences", h(async (req, res) => {
   const user = (req as AuthedRequest).loreUser;
-  const { ledgerEnabled } = req.body as { ledgerEnabled?: unknown };
+  const { ledgerEnabled, socialParticipation } = req.body as {
+    ledgerEnabled?: unknown;
+    socialParticipation?: unknown;
+  };
 
-  if (typeof ledgerEnabled !== "boolean") {
-    return res.status(400).json({ error: "ledgerEnabled must be a boolean" });
+  if (ledgerEnabled === undefined && socialParticipation === undefined) {
+    return res.status(400).json({ error: "a preference is required" });
   }
 
-  await db
-    .update(loreUsersTable)
-    .set({ ledgerEnabled })
-    .where(eq(loreUsersTable.id, user.id));
+  if (ledgerEnabled !== undefined && typeof ledgerEnabled !== "boolean") {
+    return res.status(400).json({ error: "ledgerEnabled must be a boolean" });
+  }
+  if (socialParticipation !== undefined && typeof socialParticipation !== "boolean") {
+    return res.status(400).json({ error: "socialParticipation must be a boolean" });
+  }
 
-  return res.json({ ledgerEnabled });
+  await db.update(loreUsersTable).set({
+    ...(ledgerEnabled === undefined ? {} : { ledgerEnabled }),
+    ...(socialParticipation === undefined ? {} : { socialParticipation }),
+  }).where(eq(loreUsersTable.id, user.id));
+
+  const [row] = await db
+    .select({
+      ledgerEnabled: loreUsersTable.ledgerEnabled,
+      socialParticipation: loreUsersTable.socialParticipation,
+    })
+    .from(loreUsersTable)
+    .where(eq(loreUsersTable.id, user.id))
+    .limit(1);
+  return res.json({
+    ledgerEnabled: row?.ledgerEnabled ?? false,
+    socialParticipation: row?.socialParticipation ?? true,
+  });
 }));
 
 /**
@@ -51,7 +72,15 @@ router.get("/me/preferences", h(async (req, res) => {
     .from(loreUsersTable)
     .where(eq(loreUsersTable.id, user.id))
     .limit(1);
-  return res.json({ ledgerEnabled: row?.ledgerEnabled ?? false });
+  const [socialRow] = await db
+    .select({ socialParticipation: loreUsersTable.socialParticipation })
+    .from(loreUsersTable)
+    .where(eq(loreUsersTable.id, user.id))
+    .limit(1);
+  return res.json({
+    ledgerEnabled: row?.ledgerEnabled ?? false,
+    socialParticipation: socialRow?.socialParticipation ?? true,
+  });
 }));
 
 // ---------------------------------------------------------------------------

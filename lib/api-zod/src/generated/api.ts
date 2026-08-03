@@ -4411,6 +4411,23 @@ export const GetMyPickerOverlapResponse = zod.object({
 });
 
 /**
+ * Returns station-level crossing counts from distinct Lore users who have sent a site-presence heartbeat within the last three minutes and have opted into anonymous social participation. No user IDs, identities, libraries, or per-user breakdowns are returned.
+
+ * @summary Anonymous active-listener crossing aggregate for the Dial
+ */
+export const GetMyBlendedCrossingsResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      stationSlug: zod.string(),
+      crossings: zod.number(),
+      artistCrossings: zod.number(),
+      lifetimeCrossings: zod.number(),
+      lifetimeArtistCrossings: zod.number(),
+    }),
+  ),
+});
+
+/**
  * Returns lists from music publications that feature albums from the listener's library. Grouped by list (publication name + year), each entry includes the matched albums with their rank. Only confirmed or exact-confidence list_entries are returned. Returns an empty array when the library has no list coverage. Requires an active lore session cookie — returns an empty array for unauthenticated requests.
 
  * @summary Publication list coverage for the user's library

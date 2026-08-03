@@ -2745,6 +2745,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MePickerOverlapResult"
+  /me/crossings/blended:
+    get:
+      operationId: getMyBlendedCrossings
+      tags: [me]
+      summary: Anonymous active-listener crossing aggregate for the Dial
+      description: >
+        Returns station-level crossing counts from distinct Lore users who
+        have sent a site-presence heartbeat within the last three minutes and
+        have opted into anonymous social participation. No user IDs, identities,
+        libraries, or per-user breakdowns are returned.
+      responses:
+        "200":
+          description: Station-level aggregate crossing signals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeBlendedCrossingsResult"
   /me/library/list-coverage:
     get:
       operationId: getMyLibraryListCoverage
@@ -6262,6 +6279,28 @@ components:
           items:
             $ref: "#/components/schemas/PickerOverlapItem"
       required: [items]
+    MeBlendedCrossingsResult:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/DialCrossingItem"
+      required: [items]
+    DialCrossingItem:
+      type: object
+      properties:
+        stationSlug:
+          type: string
+        crossings:
+          type: integer
+        artistCrossings:
+          type: integer
+        lifetimeCrossings:
+          type: integer
+        lifetimeArtistCrossings:
+          type: integer
+      required: [stationSlug, crossings, artistCrossings, lifetimeCrossings, lifetimeArtistCrossings]
     StationsScheduleResult:
       type: object
       description: Per-station show-run timeline for a given calendar day.

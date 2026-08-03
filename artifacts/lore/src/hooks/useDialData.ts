@@ -32,7 +32,7 @@ import {
   type StationRecentSpin,
   type StationsArtistFrequencyItem,
 } from "@workspace/api-client-react";
-import { useMyPickerNames, useMyDialCrossings, useMyPickerOverlap } from "../lib/meHooks";
+import { useMyPickerNames, useMyDialCrossings, useMyBlendedCrossings, useMyPickerOverlap, type DialCrossing } from "../lib/meHooks";
 import { eligibleDjName } from "@workspace/lore-attribution";
 
 // ---------------------------------------------------------------------------
@@ -476,11 +476,8 @@ interface SseSpinEntry {
   isArtistHit: boolean;
 }
 
-// ---------------------------------------------------------------------------
-// Main hook
-// ---------------------------------------------------------------------------
-
-export function useDialData(): {
+export type DialDisplayMode = "personal" | "blended";
+export function useDialData(displayMode: DialDisplayMode = "personal"): {
   stations: DialStation[];
   isLoading: boolean;
   isCoreLoading: boolean;
@@ -498,6 +495,8 @@ export function useDialData(): {
   overlapByPickerId: Map<number, number>;
   /** Normalised picker display name → pickerId — bridge for shows lacking a linked pickerId. */
   pickerNameToId: Map<string, number>;
+  crossingSourceMode: DialDisplayMode;
+  crossingError: boolean;
 } {
   const today = todayStr();
   const yesterday = yesterdayStr();
@@ -614,10 +613,23 @@ export function useDialData(): {
   // These replace the client-side crossing reduction at the station level so
   // ranking is consistent across clients and not bounded by the fetch page cap.
   const { data: serverCrossings, isLoading: crossingsLoading } = useMyDialCrossings(today);
+  const {
+    data: blendedCrossings,
+    isLoading: blendedLoading,
+    isError: blendedError,
+  } = useMyBlendedCrossings(displayMode === "blended");
+  const selectedCrossings: DialCrossing[] | undefined =
+    displayMode === "blended"
+      ? blendedCrossings ?? (blendedError ? serverCrossings : undefined)
+      : serverCrossings;
+  const crossingSourceMode: DialDisplayMode =
+    displayMode === "blended" && blendedCrossings == null ? "personal" : displayMode;
+  const selectedCrossingsLoading =
+    displayMode === "blended" ? blendedCrossings == null && !blendedError : crossingsLoading;
 
   const serverCrossingsBySlug = useMemo(() => {
     const m = new Map<string, { crossings: number; artistCrossings: number; lifetimeCrossings: number; lifetimeArtistCrossings: number }>();
-    for (const cx of serverCrossings ?? []) {
+    for (const cx of selectedCrossings ?? []) {
       m.set(cx.stationSlug, {
         crossings: cx.crossings,
         artistCrossings: cx.artistCrossings,
@@ -626,7 +638,7 @@ export function useDialData(): {
       });
     }
     return m;
-  }, [serverCrossings]);
+  }, [selectedCrossings]);
 
   // ── hasLibrary flag — from the picker-names endpoint (no MBID download) ─────
   // GET /api/me/picker-names returns both the picker display names and a
@@ -850,23 +862,32 @@ export function useDialData(): {
       // consistent across clients); fall back to client-computed reduction if
       // the server endpoint hasn't resolved yet.
       const serverCx = serverCrossingsBySlug.get(station.slug);
+      const scoresUnavailable = displayMode === "blended" && blendedCrossings == null && !blendedError;
       const crossings =
         serverCx !== undefined
           ? serverCx.crossings
+          : scoresUnavailable
+            ? 0
           : shows.reduce((sum, sh) => sum + (sh.state !== "future" ? sh.crossings : 0), 0);
       const artistCrossings =
         serverCx !== undefined
           ? serverCx.artistCrossings
+          : scoresUnavailable
+            ? 0
           : shows.reduce((sum, sh) => sum + (sh.state !== "future" ? sh.artistCrossings : 0), 0);
       // Lifetime counts: server always provides these; client-side fallback
       // uses the same show-level sums as a best-effort approximation.
       const lifetimeCrossings =
         serverCx !== undefined
           ? serverCx.lifetimeCrossings
+          : scoresUnavailable
+            ? 0
           : crossings; // fallback: same as 24h sum until server data arrives
       const lifetimeArtistCrossings =
         serverCx !== undefined
           ? serverCx.lifetimeArtistCrossings
+          : scoresUnavailable
+            ? 0
           : artistCrossings;
 
       return {
@@ -896,7 +917,7 @@ export function useDialData(): {
           sh.showName.trim().length > 0,
       );
     });
-  }, [stationsData, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, serverCrossingsBySlug]);
+  }, [stationsData, liveBySlug, nowPlayingBySlug, runsBySlug, spinsBySlug, serverCrossingsBySlug, displayMode, blendedCrossings, blendedError]);
 
   const isLoading = stationsLoading || liveLoading || schedLoading || spinsLoading;
   // isCoreLoading: only block until the station list arrives so the offline
@@ -928,7 +949,7 @@ export function useDialData(): {
     isLoading,
     isCoreLoading,
     liveLoading,
-    crossingsLoading,
+    crossingsLoading: selectedCrossingsLoading,
     hasLibrary,
     hasSeeds,
     liveArtistSuggestions,
@@ -936,5 +957,7 @@ export function useDialData(): {
     onboardingArtistsLoading: artistFrequencyLoading,
     overlapByPickerId,
     pickerNameToId,
+    crossingSourceMode,
+    crossingError: displayMode === "blended" && blendedError && blendedCrossings == null,
   };
 }

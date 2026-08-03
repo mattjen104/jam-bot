@@ -75,6 +75,8 @@ export function makeDialData(
     hasLibrary: boolean;
     overlapByPickerId: Map<number, number>;
     pickerNameToId: Map<string, number>;
+     crossingSourceMode: "personal" | "blended";
+     crossingError: boolean;
   }> = {},
 ) {
   return {
@@ -86,6 +88,8 @@ export function makeDialData(
     hasLibrary: false,
     overlapByPickerId: new Map<number, number>(),
     pickerNameToId: new Map<string, number>(),
+     crossingSourceMode: "personal",
+     crossingError: false,
     ...overrides,
   };
 }

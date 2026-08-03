@@ -65,10 +65,10 @@ function makeShow(overrides: Partial<DialShow> = {}): DialShow {
   };
 }
 
-function renderRow(ds: DialStation, show: DialShow | null, ov = 0) {
+function renderRow(ds: DialStation, show: DialShow | null, ov = 0, displayMode?: "personal" | "blended") {
   return render(
     <FrontDoorRow ds={ds} show={show} ov={ov} isActive={false} isSampling={false}
-      onTuneIn={vi.fn()} onEarlier={vi.fn()} />,
+      onTuneIn={vi.fn()} onEarlier={vi.fn()} displayMode={displayMode} />,
   );
 }
 
@@ -81,6 +81,19 @@ function leadingSentence(container: HTMLElement) {
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 describe("live sentence", () => {
+  it("uses only anonymous aggregate wording in community mode", () => {
+    const { container } = renderRow(
+      makeDialStation({}, { crossings: 2 }),
+      makeShow({
+        currentTrack: makeSpin({ isLibraryHit: true, artist: "Private Artist" }),
+      }),
+      2,
+      "blended",
+    );
+    expect(leadingSentence(container).textContent).toBe("2 community matches here in the last 24h");
+    expect(leadingSentence(container).textContent).not.toMatch(/your|library|private artist/i);
+  });
+
   it("keeps ordinary live rows title-inclusive while the station stays in the byline", () => {
     const { container } = renderRow(makeDialStation(), makeShow({
       djName: "Diane Kamikaze",

@@ -575,6 +575,7 @@ export function useMyDialCrossings(date: string) {
   });
 }
 
+export const ME_BLENDED_CROSSINGS_KEY = ["me", "crossings", "blended"] as const;
 export function useMyLibraryMbids() {
   return useQuery({
     queryKey: ME_LIBRARY_MBIDS_KEY,
@@ -1030,6 +1031,7 @@ export interface GhostStation {
 }
 export interface MyPreferences {
   ledgerEnabled: boolean;
+  socialParticipation: boolean;
 }
 
 export const ME_PREFERENCES_KEY = ["me", "preferences"] as const;
@@ -1039,7 +1041,7 @@ export function useMyPreferences() {
     queryKey: ME_PREFERENCES_KEY,
     queryFn: () =>
       fetchOrNull<MyPreferences>("/api/me/preferences").then(
-        (d) => d ?? { ledgerEnabled: false },
+        (d) => d ?? { ledgerEnabled: false, socialParticipation: true },
       ),
     staleTime: 60_000,
     retry: false,
@@ -1481,4 +1483,17 @@ export interface AlbumAvatarResponse {
 
 export interface AlbumAvatarCurrent extends AlbumAvatarCandidate {
   selectedAt: string | null;
+}
+
+export function useMyBlendedCrossings(enabled = true) {
+  return useQuery({
+    queryKey: ME_BLENDED_CROSSINGS_KEY,
+    queryFn: () =>
+      fetchOrNull<{ items: DialCrossing[] }>("/api/me/crossings/blended")
+        .then((d) => d?.items ?? []),
+    enabled,
+    staleTime: 45_000,
+    refetchInterval: 60_000,
+    retry: false,
+  });
 }

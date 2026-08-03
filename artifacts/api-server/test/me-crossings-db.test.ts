@@ -15,7 +15,7 @@ import {
   spinsTable,
 } from "@workspace/db";
 import app from "../src/app.js";
-import { _testOnly_clearCrossingsCache, _testOnly_getCrossingsCache } from "../src/routes/me/crossings.js";
+import { _testOnly_clearCrossingsCache, _testOnly_getCrossingsCache, SOCIAL_PRESENCE_TTL_MS } from "../src/routes/me/crossings.js";
 
 /**
  * Integration tests for GET /api/me/crossings.
@@ -619,4 +619,142 @@ describe("GET /api/me/crossings — TTL cache", () => {
     // Response content must match.
     expect(second.body).toEqual(first.body);
   }, TEST_TIMEOUT);
+});
+
+// ── Blended crossings — presence TTL and spin window ─────────────────────────
+//
+//   A. Presence TTL: only users with lastSeenAt within SOCIAL_PRESENCE_TTL_MS
+//      contribute. A user last seen > 3 min ago must be excluded.
+//
+//   B. Spin window: crossings/artistCrossings use the same 24-h rolling window
+//      as personal crossings. A spin aired 23 h ago counts; 25 h ago must NOT.
+describe("GET /api/me/crossings/blended — presence TTL and spin window", () => {
+  const brun = randomUUID().slice(0, 8);
+
+  const BSID_ACTIVE = `tc-blend-active-${brun}`;
+  const BSID_STALE  = `tc-blend-stale-${brun}`;
+
+  const BMBID_LIB   = `tc-blend-lib-${brun}`;   // in active user's library; aired 23h ago
+  const BMBID_OLD   = `tc-blend-old-${brun}`;   // in active user's library; aired 25h ago
+
+  const BSLUG = `tc-blend-station-${brun}`;
+
+  let bStationId: number | undefined;
+  let bUserActiveId: number | undefined;
+  let bUserStaleId: number | undefined;
+
+  beforeAll(async () => {
+    if (!dbAvailable) return;
+
+    await db.insert(spotifyConnectionsTable).values([
+      { sid: BSID_ACTIVE, accessToken: "t", refreshToken: "r", expiresAt: new Date(Date.now() + 3_600_000) },
+      { sid: BSID_STALE,  accessToken: "t", refreshToken: "r", expiresAt: new Date(Date.now() + 3_600_000) },
+    ]);
+
+    // Active user: heartbeat just now, socialParticipation = true (default)
+    const [uA] = await db.insert(loreUsersTable).values({
+      spotifyUserId: `blend-active-${brun}`,
+      spotifyConnectionId: BSID_ACTIVE,
+      deviceKey: BSID_ACTIVE,
+      lastSeenAt: new Date(),
+    }).returning({ id: loreUsersTable.id });
+    bUserActiveId = uA!.id;
+
+    // Stale user: heartbeat 10 minutes ago
+    const [uS] = await db.insert(loreUsersTable).values({
+      spotifyUserId: `blend-stale-${brun}`,
+      spotifyConnectionId: BSID_STALE,
+      deviceKey: BSID_STALE,
+      lastSeenAt: new Date(Date.now() - 10 * 60 * 1000),
+    }).returning({ id: loreUsersTable.id });
+    bUserStaleId = uS!.id;
+
+    await db.insert(recordingsTable).values([
+      { mbid: BMBID_LIB, title: "Recent Blend Track", artist: `Blend Artist ${brun}` },
+      { mbid: BMBID_OLD, title: "Old Blend Track",    artist: `Blend Artist ${brun}` },
+    ]);
+
+    const [bSt] = await db.insert(stationsTable).values({
+      slug: BSLUG, name: `Blend Test Station ${brun}`,
+      streamUrl: "http://example.invalid/blend", stationClass: "community",
+    }).returning({ id: stationsTable.id });
+    bStationId = bSt!.id;
+
+    const ago23h = new Date(Date.now() - 23 * 60 * 60 * 1000);
+    const ago25h = new Date(Date.now() - 25 * 60 * 60 * 1000);
+    await db.insert(spinsTable).values([
+      { stationId: bStationId!, mbid: BMBID_LIB, confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: ago23h },
+      { stationId: bStationId!, mbid: BMBID_OLD, confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: ago25h },
+    ]);
+
+    // Active user owns both library items; stale user owns only BMBID_LIB
+    await db.insert(libraryItemsTable).values([
+      { userId: bUserActiveId!, mbid: BMBID_LIB, provenance: { kind: "keep" }, addedAt: new Date() },
+      { userId: bUserActiveId!, mbid: BMBID_OLD, provenance: { kind: "keep" }, addedAt: new Date() },
+      { userId: bUserStaleId!,  mbid: BMBID_LIB, provenance: { kind: "keep" }, addedAt: new Date() },
+    ]);
+  }, TEST_TIMEOUT);
+
+  afterAll(async () => {
+    if (!dbAvailable) return;
+    if (bStationId != null) {
+      await db.delete(spinsTable).where(eq(spinsTable.stationId, bStationId));
+      await db.delete(stationsTable).where(eq(stationsTable.id, bStationId));
+    }
+    for (const uid of [bUserActiveId, bUserStaleId]) {
+      if (uid != null) {
+        await db.delete(libraryItemsTable).where(sql`${libraryItemsTable.userId} = ${uid}`);
+        await db.delete(loreUsersTable).where(eq(loreUsersTable.id, uid));
+      }
+    }
+    for (const mbid of [BMBID_LIB, BMBID_OLD]) {
+      await db.delete(recordingReleaseGroupsTable).where(eq(recordingReleaseGroupsTable.recordingMbid, mbid));
+      await db.delete(recordingsTable).where(eq(recordingsTable.mbid, mbid));
+    }
+    for (const sid of [BSID_ACTIVE, BSID_STALE]) {
+      await db.delete(spotifyConnectionsTable).where(eq(spotifyConnectionsTable.sid, sid));
+    }
+  }, TEST_TIMEOUT);
+
+  it("counts a 23h-old spin in crossings but excludes a 25h-old spin (24h spin window)", async () => {
+    if (!dbAvailable) return;
+    const res = await fetch(`${baseUrl}/api/me/crossings/blended`);
+    expect(res.status).toBe(200);
+    const body = await res.json() as {
+      items: Array<{ stationSlug: string; crossings: number; lifetimeCrossings: number }>;
+    };
+    const row = body.items.find((r) => r.stationSlug === BSLUG);
+    expect(row).toBeDefined();
+    // BMBID_LIB aired 23h ago — inside the 24h spin window → crossings = 1
+    expect(row!.crossings).toBe(1);
+    // BMBID_OLD aired 25h ago — outside window → only lifetimeCrossings
+    expect(row!.lifetimeCrossings).toBeGreaterThanOrEqual(2);
+  }, TEST_TIMEOUT);
+
+  it("excludes a user whose lastSeenAt exceeds SOCIAL_PRESENCE_TTL_MS", async () => {
+    if (!dbAvailable) return;
+    // Make the active user stale temporarily
+    await db.update(loreUsersTable)
+      .set({ lastSeenAt: new Date(Date.now() - 10 * 60 * 1000) })
+      .where(eq(loreUsersTable.id, bUserActiveId!));
+
+    const res = await fetch(`${baseUrl}/api/me/crossings/blended`);
+    expect(res.status).toBe(200);
+    const body = await res.json() as {
+      items: Array<{ stationSlug: string; crossings: number }>;
+    };
+    const row = body.items.find((r) => r.stationSlug === BSLUG);
+    // Both users are now stale → zero crossings or row absent
+    if (row) expect(row.crossings).toBe(0);
+
+    // Restore active user
+    await db.update(loreUsersTable)
+      .set({ lastSeenAt: new Date() })
+      .where(eq(loreUsersTable.id, bUserActiveId!));
+  }, TEST_TIMEOUT);
+
+  it("SOCIAL_PRESENCE_TTL_MS is ≤ 5 minutes so presence stays short-lived", () => {
+    expect(SOCIAL_PRESENCE_TTL_MS).toBeGreaterThan(0);
+    expect(SOCIAL_PRESENCE_TTL_MS).toBeLessThanOrEqual(5 * 60 * 1000);
+  });
 });

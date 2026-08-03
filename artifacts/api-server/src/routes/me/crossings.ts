@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import {
   db,
   libraryItemsTable,
+  loreUsersTable,
   recordingsTable,
   recordingReleaseGroupsTable,
   spinsTable,
@@ -57,6 +58,20 @@ type CrossingsRow = {
 };
 
 const crossingsCache = new Map<number, { builtAt: number; data: CrossingsRow[] }>();
+
+/** Short expiry window for "active now" presence — separate from the 24-h crossing window. */
+export const SOCIAL_PRESENCE_TTL_MS = 3 * 60 * 1000;
+
+/** The only users whose library evidence may enter the anonymous blend. */
+export function activeSocialUsers(cutoff = new Date(Date.now() - SOCIAL_PRESENCE_TTL_MS)) {
+  return db
+    .select({ id: loreUsersTable.id })
+    .from(loreUsersTable)
+    .where(and(
+      eq(loreUsersTable.socialParticipation, true),
+      sql`${loreUsersTable.lastSeenAt} >= ${cutoff}`,
+    ));
+}
 
 /**
  * Evict a user's crossings from both in-process (L1) and Postgres (L2) cache.
@@ -325,6 +340,108 @@ router.get("/me/crossings", h(async (req, res) => {
   crossingsCache.set(user.id, { builtAt: builtAt.getTime(), data: items });
 
   return res.json({ items });
+}));
+
+/**
+ * GET /api/me/crossings/blended — anonymous aggregate crossings from active
+ * opted-in Lore users. Returns only station-level aggregate counts; no user
+ * IDs, library rows, or per-user data cross this boundary.
+ *
+ * Two distinct time windows:
+ *   - presenceCutoff (3 min): selects which users count as "active now"
+ *   - spinCutoff (24 h):      scores crossings over the same rolling window as
+ *                             personal crossings so ranking is comparable
+ */
+router.get("/me/crossings/blended", h(async (_req, res) => {
+  const presenceCutoff = new Date(Date.now() - SOCIAL_PRESENCE_TTL_MS);
+  const spinCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const activeUsers = activeSocialUsers(presenceCutoff);
+
+  const activeLibraryMbids = db
+    .select({ mbid: libraryItemsTable.mbid })
+    .from(libraryItemsTable)
+    .where(sql`${libraryItemsTable.userId} in (${activeUsers})`);
+  const activeLibraryRgs = db
+    .select({ releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid })
+    .from(recordingReleaseGroupsTable)
+    .innerJoin(libraryItemsTable, eq(recordingReleaseGroupsTable.recordingMbid, libraryItemsTable.mbid))
+    .where(sql`${libraryItemsTable.userId} in (${activeUsers})`);
+  const activeLibraryArtists = db
+    .select({ artistMbid: recordingsTable.artistMbid })
+    .from(recordingsTable)
+    .innerJoin(libraryItemsTable, eq(recordingsTable.mbid, libraryItemsTable.mbid))
+    .where(and(
+      sql`${libraryItemsTable.userId} in (${activeUsers})`,
+      isNotNull(recordingsTable.artistMbid),
+    ));
+  const activeSoftArtists = db
+    .selectDistinct({ artistLower: sql<string>`lower(trim(${spotifyLibraryItemsTable.artist}))` })
+    .from(spotifyLibraryItemsTable)
+    .where(and(
+      sql`${spotifyLibraryItemsTable.userId} in (${activeUsers})`,
+      isNull(spotifyLibraryItemsTable.mbid),
+      ne(spotifyLibraryItemsTable.artist, ""),
+    ));
+  const activeSeedArtists = db
+    .selectDistinct({ artistLower: sql<string>`lower(trim(${tasteSeedsTable.artistName}))` })
+    .from(tasteSeedsTable)
+    .where(sql`${tasteSeedsTable.userId} in (${activeUsers})`);
+
+  const aggregateLibHit = sql`(
+    ${spinsTable.mbid} in (${activeLibraryMbids})
+    or (
+      ${recordingReleaseGroupsTable.releaseGroupMbid} is not null
+      and ${recordingReleaseGroupsTable.releaseGroupMbid} in (${activeLibraryRgs})
+    )
+  )`;
+  const aggregateNotLibHit = sql`(
+    ${spinsTable.mbid} not in (${activeLibraryMbids})
+    and (
+      ${recordingReleaseGroupsTable.releaseGroupMbid} is null
+      or ${recordingReleaseGroupsTable.releaseGroupMbid} not in (${activeLibraryRgs})
+    )
+  )`;
+  const aggregateArtistMatch = sql`(
+    ${recordingsTable.artistMbid} in (${activeLibraryArtists})
+    or lower(trim(${recordingsTable.artist})) in (${activeSoftArtists})
+    or lower(trim(${recordingsTable.artist})) in (${activeSeedArtists})
+  )`;
+  const inWindow = sql`${spinsTable.playedAt} >= ${spinCutoff}`;
+
+  const rows = await db
+    .select({
+      stationSlug: stationsTable.slug,
+      crossings:              sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${aggregateLibHit})::int`,
+      artistCrossings:        sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
+      lifetimeCrossings:      sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${aggregateLibHit})::int`,
+      lifetimeArtistCrossings:sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
+    })
+    .from(spinsTable)
+    .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
+    .innerJoin(recordingsTable, eq(recordingsTable.mbid, spinsTable.mbid!))
+    .leftJoin(
+      recordingReleaseGroupsTable,
+      and(
+        eq(recordingReleaseGroupsTable.recordingMbid, recordingsTable.mbid),
+        eq(recordingReleaseGroupsTable.isPrimary, true),
+      ),
+    )
+    .where(and(
+      isNotNull(spinsTable.mbid),
+      eq(stationsTable.hidden, false),
+    ))
+    .groupBy(stationsTable.id, stationsTable.slug)
+    .having(sql`count(*) filter (where ${aggregateLibHit} or (${aggregateNotLibHit} and ${aggregateArtistMatch})) > 0`);
+
+  return res.json({
+    items: rows.map((r) => ({
+      stationSlug: r.stationSlug,
+      crossings: r.crossings,
+      artistCrossings: r.artistCrossings,
+      lifetimeCrossings: r.lifetimeCrossings,
+      lifetimeArtistCrossings: r.lifetimeArtistCrossings,
+    })),
+  });
 }));
 
 export default router;

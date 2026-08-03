@@ -81,6 +81,7 @@ import {
   resumeEmbedResolutionJobs,
   startEmbedResolutionWorker,
 } from "./lore/embed-resolution.js";
+import { applySocialPresenceMigration } from "./lore/social-presence-migration.js";
 
 const rawPort = process.env["PORT"];
 
@@ -138,6 +139,7 @@ async function bootLore(): Promise<void> {
     await runMigration("applyGeniusFragmentPointerMigration", applyGeniusFragmentPointerMigration);
     await runMigration("applyReplayResolutionMigration", applyReplayResolutionMigration);
     await runMigration("applySupportHoldsMigration", applySupportHoldsMigration);
+    await runMigration("applySocialPresenceMigration", applySocialPresenceMigration);
     await runMigration("applyArtistMetadataCleanup", async () => {
       await applyArtistMetadataCleanup();
     });

@@ -62,6 +62,7 @@ import type {
   ManualSpinRequest,
   ManualSpinResponse,
   MattStarterLibraryResult,
+  MeBlendedCrossingsResult,
   MePickerOverlapResult,
   OEmbed,
   PatchClaimRequest,
@@ -7836,6 +7837,83 @@ export function useGetMyPickerOverlap<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetMyPickerOverlapQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns station-level crossing counts from distinct Lore users who have sent a site-presence heartbeat within the last three minutes and have opted into anonymous social participation. No user IDs, identities, libraries, or per-user breakdowns are returned.
+
+ * @summary Anonymous active-listener crossing aggregate for the Dial
+ */
+export const getGetMyBlendedCrossingsUrl = () => {
+  return `/api/me/crossings/blended`;
+};
+
+export const getMyBlendedCrossings = async (
+  options?: RequestInit,
+): Promise<MeBlendedCrossingsResult> => {
+  return customFetch<MeBlendedCrossingsResult>(getGetMyBlendedCrossingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyBlendedCrossingsQueryKey = () => {
+  return [`/api/me/crossings/blended`] as const;
+};
+
+export const getGetMyBlendedCrossingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyBlendedCrossings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyBlendedCrossings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMyBlendedCrossingsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMyBlendedCrossings>>
+  > = ({ signal }) => getMyBlendedCrossings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyBlendedCrossings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyBlendedCrossingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyBlendedCrossings>>
+>;
+export type GetMyBlendedCrossingsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Anonymous active-listener crossing aggregate for the Dial
+ */
+
+export function useGetMyBlendedCrossings<
+  TData = Awaited<ReturnType<typeof getMyBlendedCrossings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyBlendedCrossings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyBlendedCrossingsQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
