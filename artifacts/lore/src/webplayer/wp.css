@@ -200,3 +200,177 @@
     border-bottom: none;
   }
 }
+
+/* Track-sheet support ladder. The ladder is intentionally plain: it should
+   read like a grounded routing list, not a shop or a promotional prompt. */
+.wp-track-provenance {
+  padding: 14px 18px;
+  border-bottom: 0.5px solid var(--wp-border);
+}
+
+.wp-provenance-empty {
+  margin: 0;
+  color: var(--wp-text-muted);
+  font-size: 13px;
+}
+
+.wp-track-keep {
+  padding: 14px 18px;
+  border-bottom: 0.5px solid var(--wp-border);
+}
+
+.wp-keep-follow-up {
+  margin: 8px 0 0;
+  color: var(--wp-text-muted);
+  font-size: 12px;
+}
+
+.wp-support-section {
+  padding: 14px 18px 16px;
+  border-bottom: 0.5px solid var(--wp-border);
+}
+
+.wp-support-heading-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.wp-support-heading-row h2 {
+  margin: 0;
+  color: var(--wp-text-primary);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.wp-support-heading-note {
+  color: var(--wp-text-muted);
+  font-size: 11px;
+}
+
+.wp-support-ladder {
+  border-top: 0.5px solid var(--wp-border);
+}
+
+.wp-support-row {
+  display: flex;
+  align-items: stretch;
+  min-height: 56px;
+  border-bottom: 0.5px solid var(--wp-border);
+}
+
+.wp-support-row:last-child {
+  border-bottom: none;
+}
+
+.wp-support-row.is-secondary {
+  opacity: 0.58;
+}
+
+.wp-support-row[data-emphasis="strong"] .wp-support-title {
+  color: var(--wp-text-accent);
+}
+
+.wp-support-link {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  min-height: 56px;
+  padding: 9px 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.wp-support-link:hover .wp-support-title,
+.wp-support-link:focus-visible .wp-support-title {
+  color: var(--wp-text-accent);
+}
+
+.wp-support-copy {
+  display: block;
+  min-width: 0;
+}
+
+.wp-support-title,
+.wp-support-detail,
+.wp-support-note {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.wp-support-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.wp-support-detail {
+  margin-top: 2px;
+  color: var(--wp-text-secondary);
+  font-size: 12px;
+}
+
+.wp-support-note {
+  margin-top: 3px;
+  color: var(--wp-text-muted);
+  font-size: 11px;
+}
+
+.wp-support-hold {
+  align-self: center;
+  min-height: 44px;
+  margin: 0 0 0 10px;
+  padding: 7px 10px;
+  color: var(--wp-text-secondary);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.wp-support-status {
+  margin: 0;
+  color: var(--wp-text-muted);
+  font-size: 13px;
+}
+
+.wp-support-status button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--wp-text-accent);
+  font-size: inherit;
+  text-decoration: underline;
+}
+
+.wp-support-error {
+  color: var(--wp-text-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wp-support-link,
+  .wp-support-link * {
+    transition: none !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .wp-support-section,
+  .wp-track-provenance,
+  .wp-track-keep {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .wp-support-row {
+    min-height: 60px;
+  }
+
+  .wp-support-hold {
+    margin-left: 6px;
+    padding-left: 7px;
+    padding-right: 7px;
+  }
+}

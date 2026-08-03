@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Disc3,
   ListMusic,
@@ -19,7 +20,11 @@ import {
   useWpRecordingSpins,
   useWpSongExploder,
   useWpLoreCounts,
+  useWpSupport,
+  useWpHoldSupport,
+  useWpUnholdSupport,
 } from "./hooks";
+import { WpKeep } from "./WpKeep";
 
 /** Defensive readers for the loosely-typed knowledge payload. */
 function readPressing(k: Record<string, unknown> | undefined): {
@@ -117,6 +122,239 @@ function GoDeeperRow({
   );
 }
 
+function isSafeSupportHref(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && Boolean(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function supportLabel(kind: string): string {
+  switch (kind) {
+    case "artist":
+      return "Support the artist";
+    case "bandcamp":
+      return "Buy direct on Bandcamp";
+    case "label":
+      return "Support the label";
+    case "station":
+      return "Support the station";
+    case "discogs":
+      return "Find this release on Discogs";
+    default:
+      return "Open support link";
+  }
+}
+
+function paidToLine(paidTo: string): string {
+  switch (paidTo) {
+    case "artist":
+      return "Paid to the artist";
+    case "artist_and_label":
+      return "Paid to the artist and label";
+    case "label":
+      return "Paid to the label";
+    case "station":
+      return "Paid to the station";
+    case "seller":
+      return "Paid to the seller";
+    default:
+      return "";
+  }
+}
+
+function supportNote(link: {
+  kind: string;
+  paidTo: string;
+  note: string | null;
+  attribution: string | null;
+}): string {
+  if (link.kind === "station") return "Because you heard it here.";
+  if (link.kind === "discogs") return "Artist is not paid.";
+  return link.note ?? link.attribution ?? paidToLine(link.paidTo);
+}
+
+function formatFriday(date: string): string {
+  return date;
+}
+
+function SupportRow({
+  link,
+  bandcampFriday,
+  held,
+  onToggleHold,
+  holdPending,
+}: {
+  link: {
+    kind: string;
+    tier: number;
+    paidTo: string;
+    url: string;
+    detail: string;
+    note: string | null;
+    attribution: string | null;
+  };
+  bandcampFriday: { eligible: boolean; date: string };
+  held: boolean;
+  onToggleHold?: () => void;
+  holdPending?: boolean;
+}) {
+  if (!isSafeSupportHref(link.url)) return null;
+  const isDiscogs = link.kind === "discogs";
+  const isDirect = link.kind === "artist" || link.kind === "bandcamp";
+  const fridayNote =
+    link.kind === "bandcamp" && bandcampFriday.eligible
+      ? `fees waived Fri ${formatFriday(bandcampFriday.date)}`
+      : null;
+
+  return (
+    <div
+      className={`wp-support-row${isDiscogs ? " is-secondary" : ""}`}
+      data-emphasis={isDirect ? "strong" : undefined}
+      data-testid={`support-row-${link.kind}`}
+    >
+      <a
+        href={link.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="wp-support-link"
+        aria-label={`${supportLabel(link.kind)}: ${link.detail}`}
+      >
+        <span className="wp-support-copy">
+          <span className="wp-support-title">{supportLabel(link.kind)}</span>
+          <span className="wp-support-detail">{link.detail}</span>
+          <span className="wp-support-note">
+            {fridayNote ?? supportNote(link)}
+          </span>
+        </span>
+      </a>
+      {link.kind === "bandcamp" && bandcampFriday.eligible && onToggleHold && (
+        <button
+          type="button"
+          className="wp-support-hold"
+          aria-pressed={held}
+          disabled={holdPending}
+          onClick={onToggleHold}
+          data-testid="support-hold-button"
+        >
+          {held ? `Held for ${formatFriday(bandcampFriday.date)}` : "Hold"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function SupportSection({
+  mbid,
+  supportQuery,
+}: {
+  mbid: string;
+  supportQuery: ReturnType<typeof useWpSupport>;
+}) {
+  const queryClient = useQueryClient();
+  const holdMutation = useWpHoldSupport();
+  const unholdMutation = useWpUnholdSupport();
+  const [held, setHeld] = useState(false);
+  const [holdError, setHoldError] = useState(false);
+
+  useEffect(() => {
+    if (supportQuery.data) setHeld(supportQuery.data.held);
+  }, [supportQuery.data]);
+
+  const support = supportQuery.data;
+  const links = [...(support?.links ?? [])]
+    .filter((link) => isSafeSupportHref(link.url))
+    .sort((a, b) => a.tier - b.tier || (a.kind === "discogs" ? 1 : 0) - (b.kind === "discogs" ? 1 : 0));
+  const bandcamp = support?.bandcampFriday ?? { eligible: false, date: "" };
+  const bandcampLink = links.find((link) => link.kind === "bandcamp");
+  const holdPending = holdMutation.isPending || unholdMutation.isPending;
+
+  const toggleHold = () => {
+    if (holdPending) return;
+    setHoldError(false);
+    const previous = held;
+    const next = !previous;
+    setHeld(next);
+    const mutation = next ? holdMutation : unholdMutation;
+    mutation.mutate(
+      { mbid },
+      {
+        onSuccess: (result) => {
+          setHeld(result.held);
+          void queryClient.invalidateQueries({
+            queryKey: [`/api/recordings/${mbid}/support`],
+          });
+        },
+        onError: () => {
+          setHeld(previous);
+          setHoldError(true);
+        },
+      },
+    );
+  };
+
+  return (
+    <section
+      className="wp-support-section"
+      aria-labelledby="wp-support-heading"
+      data-testid="track-support"
+    >
+      <div className="wp-support-heading-row">
+        <h2 id="wp-support-heading" className="wp-mono">
+          Support
+        </h2>
+        <span className="wp-support-heading-note">who gets paid</span>
+      </div>
+
+      {supportQuery.isLoading && (
+        <p className="wp-support-status" data-testid="support-loading">
+          Loading support options…
+        </p>
+      )}
+
+      {supportQuery.isError && (
+        <div className="wp-support-status" data-testid="support-error">
+          <span>Support options unavailable right now.</span>{" "}
+          <button type="button" onClick={() => void supportQuery.refetch()}>
+            Try again
+          </button>
+        </div>
+      )}
+
+      {!supportQuery.isLoading && !supportQuery.isError && support && links.length === 0 && (
+        <p className="wp-support-status" data-testid="support-empty">
+          {support.emptyMessage ?? "No linkable release found."}
+        </p>
+      )}
+
+      {!supportQuery.isLoading && !supportQuery.isError && support && links.length > 0 && (
+        <div className="wp-support-ladder">
+          {links.map((link) => (
+            <SupportRow
+              key={`${link.kind}:${link.url}`}
+              link={link}
+              bandcampFriday={bandcamp}
+              held={held}
+              holdPending={holdPending}
+              onToggleHold={
+                link === bandcampLink && bandcamp.eligible ? toggleHold : undefined
+              }
+            />
+          ))}
+        </div>
+      )}
+
+      {holdError && (
+        <p className="wp-support-status wp-support-error" data-testid="support-hold-error">
+          Hold could not be changed. Try again.
+        </p>
+      )}
+    </section>
+  );
+}
+
 /**
  * Album lore panel — bottom sheet with provenance pills and typed GO DEEPER
  * rows, composed from existing recording endpoints. Everything is honest:
@@ -138,6 +376,8 @@ export function AlbumLoreSheet({
   const { data: spins } = useWpRecordingSpins(mbid);
   const { data: se } = useWpSongExploder(mbid);
   const { data: counts } = useWpLoreCounts([mbid]);
+  const supportQuery = useWpSupport(mbid);
+  const [justKept, setJustKept] = useState(false);
 
   const pressing = readPressing(knowledge);
   const claims = readClaims(knowledge);
@@ -180,7 +420,7 @@ export function AlbumLoreSheet({
         className="wp wp-sheet"
         role="dialog"
         aria-modal="true"
-        aria-label="Album lore"
+        aria-label="Track details"
         style={{ padding: 0 }}
         data-testid="album-lore-sheet"
       >
@@ -259,15 +499,20 @@ export function AlbumLoreSheet({
           </button>
         </div>
 
-        {/* Provenance */}
-        {hasProvenance && (
-          <div style={{ padding: "14px 18px", borderBottom: "0.5px solid var(--wp-border)" }}>
+        {/* Provenance — stays above the keep action and support ladder. */}
+        <section
+          className="wp-track-provenance"
+          aria-labelledby="wp-provenance-heading"
+          data-testid="track-provenance"
+        >
             <p
               className="wp-mono"
               style={{ margin: "0 0 10px", fontSize: 12, color: "var(--wp-text-muted)" }}
+              id="wp-provenance-heading"
             >
               PROVENANCE
             </p>
+            {hasProvenance ? (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {listPills.map((l) => (
                 <span
@@ -339,8 +584,26 @@ export function AlbumLoreSheet({
                 </span>
               )}
             </div>
-          </div>
-        )}
+            ) : (
+              <p className="wp-provenance-empty">No broadcast or list provenance recorded.</p>
+            )}
+        </section>
+
+        {/* Keep remains the single existing library action. */}
+        <section className="wp-track-keep" aria-label="Keep this track">
+          <WpKeep
+            mbid={rec?.mbid ?? mbid}
+            provenance={{ kind: "keep", stationName: spinningOn ?? undefined }}
+            onSuccess={() => setJustKept(true)}
+          />
+          {justKept && supportQuery.data?.links.some((link) => link.kind === "artist" || link.kind === "bandcamp") && (
+            <p className="wp-keep-follow-up" data-testid="keep-follow-up">
+              Direct artist support is available below.
+            </p>
+          )}
+        </section>
+
+        <SupportSection mbid={mbid} supportQuery={supportQuery} />
 
         {/* GO DEEPER */}
         <div style={{ padding: "14px 18px 16px" }}>

@@ -22,10 +22,13 @@ export function WpKeep({
   mbid,
   spinId,
   provenance,
+  onSuccess,
 }: {
   mbid?: string | null;
   spinId?: number | null;
   provenance?: Partial<LibraryProvenance>;
+  /** Called only after the keep request succeeds (not on auth/connect). */
+  onSuccess?: () => void;
 }) {
   const { data: connections, isLoading: connLoading } = useMyConnections();
   const isAuthenticated = !connLoading && connections !== null;
@@ -80,8 +83,11 @@ export function WpKeep({
       if (mbid) unkeepMutation.mutate(mbid);
       else if (spinId != null) unkeepSpinMutation.mutate(spinId);
     } else {
-      if (mbid) keepMutation.mutate({ mbid, spinId, provenance });
-      else if (spinId != null) keepSpinMutation.mutate({ spinId, provenance });
+      if (mbid) {
+        keepMutation.mutate({ mbid, spinId, provenance }, { onSuccess });
+      } else if (spinId != null) {
+        keepSpinMutation.mutate({ spinId, provenance }, { onSuccess });
+      }
     }
   };
 

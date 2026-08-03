@@ -1,5 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import { ApiError, type Station } from "@workspace/api-client-react";
+import {
+  ApiError,
+  getGetRecordingSupportQueryKey,
+  type RecordingSupportResponse,
+  type Station,
+  useGetRecordingSupport,
+  useHoldRecordingSupport,
+  useUnholdRecordingSupport,
+} from "@workspace/api-client-react";
 
 // ---------------------------------------------------------------------------
 // Types mirroring /api/player/* response shapes
@@ -343,4 +351,30 @@ export function useWpSongExploder(mbid: string | null) {
     enabled: mbid != null,
     staleTime: 10 * 60_000,
   });
+}
+
+/**
+ * Grounded support links are part of the track sheet, not the on-air surface.
+ * Keep the generated hooks behind this webplayer seam so sheet tests can
+ * provide deterministic support responses without mocking the whole API
+ * client.
+ */
+export function useWpSupport(mbid: string | null) {
+  return useGetRecordingSupport(mbid ?? "", {
+    query: {
+      queryKey: getGetRecordingSupportQueryKey(mbid ?? ""),
+      enabled: mbid != null,
+      staleTime: 5 * 60_000,
+    },
+  });
+}
+
+export type WpSupport = RecordingSupportResponse;
+
+export function useWpHoldSupport() {
+  return useHoldRecordingSupport();
+}
+
+export function useWpUnholdSupport() {
+  return useUnholdRecordingSupport();
 }
