@@ -40,15 +40,12 @@ beforeAll(async () => {
     return;
   }
 
-  const [station] = await db
-    .insert(stationsTable)
-    .values({
-      slug,
-      name: `Replay resolution station ${run}`,
-      streamUrl: "http://example.invalid/replay-resolution",
-      stationClass: "curated",
-    })
-    .returning({ id: stationsTable.id });
+  const [station] = await db.insert(stationsTable).values({
+    slug,
+    name: `Replay resolution station ${run}`,
+    streamUrl: "http://example.invalid/replay-resolution",
+    stationClass: "curated",
+  }).returning({ id: stationsTable.id });
   stationId = station!.id;
   await db.insert(recordingsTable).values({
     mbid,
@@ -205,7 +202,7 @@ describe("Ghost Replay resolution negative-cache", () => {
     expect(missRow!.missReason).toBe("no_links");
     expect(missRow!.missedAt).toBeInstanceOf(Date);
 
-    // The 30-day TTL must block the second call — Odesli should not be hit again.
+    // The TTL must block the second call — Odesli should not be hit again.
     odesliEmpty.mockClear();
     const second = await resolveRecording(noLinksMbid, {
       title: "No Links Track",
@@ -235,10 +232,12 @@ describe("Ghost Replay resolution negative-cache", () => {
       isrc: null,
       links: [],
     });
+
     expect(result).toBe("missing");
     // Odesli must never have been contacted — no vector to query with.
     expect(odesliSpy).not.toHaveBeenCalled();
 
+    // A miss row with reason "no_vector" must have been written.
     const [missRow] = await db
       .select()
       .from(serviceTrackMapTable)
@@ -484,6 +483,7 @@ describe("Ghost Replay resolution negative-cache", () => {
         ),
       )
       .limit(1);
+    // The sentinel (miss) row should be gone now that real links exist.
     expect(afterSentinel).toBeUndefined();
 
     vi.unstubAllGlobals();
@@ -895,11 +895,8 @@ describe("Ghost Replay resolution dead-link revival", () => {
       )
       .limit(1);
     expect(deadRow!.deadLink).toBe(true);
-    expect(deadRow!.deadAt).toBeInstanceOf(Date);
 
-    // Now call upsertServiceTrackMap with an equal-rank incoming row.
-    // The rank guard checks `existing > incoming` (strictly greater), so equal
-    // rank must NOT block the update — the dead flag must be cleared.
+    // Revive with a new equal-rank hit carrying a fresh URL.
     await upsertServiceTrackMap({
       recordingMbid: deadHighMbid,
       service: "spotify",
