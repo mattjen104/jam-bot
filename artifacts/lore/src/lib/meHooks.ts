@@ -489,6 +489,29 @@ export function useMyPickerNames() {
 }
 
 // ---------------------------------------------------------------------------
+// App-level feature flags — no auth required, exposed by GET /api/config
+// ---------------------------------------------------------------------------
+
+export interface AppConfig {
+  spotifyImportEnabled: boolean;
+}
+
+const APP_CONFIG_KEY = ["app", "config"] as const;
+
+export function useAppConfig() {
+  return useQuery<AppConfig>({
+    queryKey: APP_CONFIG_KEY,
+    queryFn: async () => {
+      const res = await fetch("/api/config");
+      if (!res.ok) return { spotifyImportEnabled: false };
+      return res.json() as Promise<AppConfig>;
+    },
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Taste seeds — zero-friction artist-name onboarding
 // ---------------------------------------------------------------------------
 

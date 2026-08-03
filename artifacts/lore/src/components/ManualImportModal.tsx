@@ -219,9 +219,11 @@ type Mode = "service-picker" | "service-steps" | "input" | "username" | "tracks"
 interface Props {
   onClose(): void;
   onImportStarted?(): void;
+  /** When false, the "Spotify (direct)" tab is hidden. Defaults to false. */
+  spotifyImportEnabled?: boolean;
 }
 
-export function ManualImportModal({ onClose, onImportStarted }: Props) {
+export function ManualImportModal({ onClose, onImportStarted, spotifyImportEnabled = false }: Props) {
   const [mode, setMode] = useState<Mode>("service-picker");
   const [selectedService, setSelectedService] = useState<ServiceId | null>(null);
   const [rawInput, setRawInput] = useState("");
@@ -634,7 +636,7 @@ export function ManualImportModal({ onClose, onImportStarted }: Props) {
         {/* ── Service picker ─────────────────────────────────────────── */}
         {mode === "service-picker" && (
           <div className="flex flex-col gap-2" data-testid="service-picker">
-            {IMPORT_SERVICES.map((svc) => (
+            {IMPORT_SERVICES.filter((svc) => svc.id !== "spotify" || spotifyImportEnabled).map((svc) => (
               <button
                 key={svc.id}
                 type="button"

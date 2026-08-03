@@ -16,6 +16,7 @@ import {
   patchPreferences,
   useMyTasteSeeds,
   useSetTasteSeeds,
+  useAppConfig,
   ME_PREFERENCES_KEY,
   ME_LATEST_SYNC_JOB_KEY,
   ME_OVERLAP_PICKERS_KEY,
@@ -958,6 +959,9 @@ export default function Library() {
     setLocation(qs ? `${location.split("?")[0]}?${qs}` : location.split("?")[0]!);
   };
 
+  const { data: appConfig } = useAppConfig();
+  const spotifyImportEnabled = appConfig?.spotifyImportEnabled ?? false;
+
   const { data: connections, isLoading: connLoading } = useMyConnections();
   const isAuthenticated = !connLoading && connections !== null;
   const hasSpotify =
@@ -1241,6 +1245,7 @@ export default function Library() {
         <ManualImportModal
           onClose={() => setImportModalOpen(false)}
           onImportStarted={() => void queryClient.invalidateQueries({ queryKey: ["me", "album-avatar"] })}
+          spotifyImportEnabled={spotifyImportEnabled}
         />
       )}
       {searchOpen && (
@@ -1479,24 +1484,55 @@ export default function Library() {
                 <b>{selectorCount}</b> selector{selectorCount === 1 ? "" : "s"} fed it
               </Link>
             )}
-            {/* Import action */}
-            {!isImportActive && (
-              <button
-                type="button"
-                onClick={() => setImportModalOpen(true)}
-                className="lib-hero__stat lib-hero__stat--warm"
-                style={{ cursor: "pointer", border: "none" }}
-                data-testid="library-import-open"
-              >
-                <Music2 style={{ width: 10, height: 10 }} />
-                {isEmpty ? "Add music" : "Import your library"}
-              </button>
-            )}
+            {/* Import action — always visible so returning users can add more music */}
+            <button
+              type="button"
+              onClick={() => setImportModalOpen(true)}
+              className="lib-hero__stat lib-hero__stat--warm"
+              style={{ cursor: "pointer", border: "none" }}
+              data-testid="library-import-open"
+            >
+              <Music2 style={{ width: 10, height: 10 }} />
+              Add music
+            </button>
           </div>
         </div>
 
         {/* ── Your Week ── */}
         <YourWeekCard />
+
+        {/* ── Seed bar — always visible so returning users can tune crossings at any time ── */}
+        <div
+          style={{
+            padding: "10px 15px",
+            borderBottom: "1px solid hsl(var(--border) / 0.5)",
+          }}
+          data-testid="library-seed-section"
+        >
+          {visibleSeeds.length > 0 ? (
+            <SeedBar
+              seeds={visibleSeeds}
+              onAddSeed={addSeed}
+              onRemoveSeed={removeSeed}
+            />
+          ) : (
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: 6 }}
+              data-testid="library-seed-prompt"
+            >
+              <span
+                style={{
+                  fontFamily: "var(--app-font-mono)",
+                  fontSize: 10,
+                  color: "hsl(var(--faint))",
+                }}
+              >
+                Add an artist or song
+              </span>
+              <SeedInput seeds={visibleSeeds} onAdd={addSeed} />
+            </div>
+          )}
+        </div>
 
         {/* ── Live strip (stub — wired when /me/library/live endpoint ships) ── */}
         {/* TODO: replace false with liveItems.length > 0 */}
@@ -1532,7 +1568,7 @@ export default function Library() {
               style={{ fontSize: 11, padding: "8px 14px" }}
             >
               <Music2 style={{ display: "inline", width: 11, height: 11, marginRight: 5, verticalAlign: "middle" }} />
-              Import your library
+              Add music
             </button>
           </div>
         )}
@@ -2108,7 +2144,7 @@ export default function Library() {
                   }}
                 >
                   {[
-                    { label: "Spotify", emoji: "🟢" },
+                    ...(spotifyImportEnabled ? [{ label: "Spotify", emoji: "🟢" }] : []),
                     { label: "Apple Music", emoji: "🎵" },
                     { label: "ListenBrainz", emoji: "🎧" },
                     { label: "Last.fm", emoji: "🔴" },
@@ -2158,33 +2194,8 @@ export default function Library() {
                   }}
                 >
                   <Music2 style={{ width: 11, height: 11 }} />
-                  Import your library
+                  Add music
                 </button>
-
-                {/* Seed input — zero-friction taste onboarding without an import */}
-                {visibleSeeds.length > 0 ? (
-                  <SeedBar
-                    seeds={visibleSeeds}
-                    onAddSeed={addSeed}
-                    onRemoveSeed={removeSeed}
-                  />
-                ) : (
-                  <div
-                    style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%" }}
-                    data-testid="library-seed-prompt"
-                  >
-                    <span
-                      style={{
-                        fontFamily: "var(--app-font-mono)",
-                        fontSize: 10,
-                        color: "hsl(var(--faint))",
-                      }}
-                    >
-                      Or start with an artist you love
-                    </span>
-                    <SeedInput seeds={visibleSeeds} onAdd={addSeed} />
-                  </div>
-                )}
 
                 {/* Radio link */}
                 <Link

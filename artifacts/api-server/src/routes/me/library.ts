@@ -366,6 +366,11 @@ router.post("/me/library/import", h(async (req, res) => {
   const service = typeof req.query["service"] === "string" ? req.query["service"].trim() : "";
   if (!service) return res.status(400).json({ error: "service query param is required" });
 
+  // ── Spotify feature-flag gate ──────────────────────────────────────────────
+  if (service === "spotify" && process.env["SPOTIFY_IMPORT_ENABLED"] !== "true") {
+    return res.status(403).json({ error: "Spotify direct import is not enabled on this server." });
+  }
+
   const connector = getConnector(service);
   if (!connector) return res.status(400).json({ error: `Unknown service: ${service}` });
 
