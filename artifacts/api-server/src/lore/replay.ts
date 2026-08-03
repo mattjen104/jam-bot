@@ -7,7 +7,7 @@ import {
   stationsTable,
   serviceTrackMapTable,
 } from "@workspace/db";
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { spinDayExpr } from "./runs.js";
 import {
   isPickerOptedOut,
@@ -176,13 +176,20 @@ export async function getReplayManifest(id: number): Promise<ReplayManifest | nu
         deadLink: serviceTrackMapTable.deadLink,
       })
       .from(serviceTrackMapTable)
-      .where(inArray(serviceTrackMapTable.recordingMbid, mbids));
+      .where(
+        and(
+          inArray(serviceTrackMapTable.recordingMbid, mbids),
+          // Exclude negative-cache (embed_miss) sentinel rows that have no URL.
+          isNotNull(serviceTrackMapTable.url),
+        ),
+      );
     for (const map of maps) {
       const links = guidedLinksByMbid.get(map.recordingMbid) ?? [];
       links.push({
         service: map.service,
         externalId: map.externalId ?? null,
-        url: map.url,
+        // url is guaranteed non-null by the WHERE clause above.
+        url: map.url!,
         deadLink: map.deadLink,
       });
       guidedLinksByMbid.set(map.recordingMbid, links);

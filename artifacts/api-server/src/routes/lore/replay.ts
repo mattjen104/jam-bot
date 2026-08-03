@@ -3,7 +3,7 @@ import {
   db,
   serviceTrackMapTable,
 } from "@workspace/db";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import {
   GetReplayManifestParams,
   GetReplayManifestResponse,
@@ -197,7 +197,11 @@ router.get("/replay/:id/guided-queue", h(async (req, res) => {
           deadLink: serviceTrackMapTable.deadLink,
         })
         .from(serviceTrackMapTable)
-        .where(inArray(serviceTrackMapTable.recordingMbid, mbids))
+        .where(and(
+          inArray(serviceTrackMapTable.recordingMbid, mbids),
+          // Exclude embed_miss sentinel rows (service="odesli", url IS NULL).
+          isNotNull(serviceTrackMapTable.url),
+        ))
     : [];
   const services = [...new Set(maps.map((map) => map.service))].sort();
   const service = requestedService || services[0] || "spotify";
@@ -210,7 +214,8 @@ router.get("/replay/:id/guided-queue", h(async (req, res) => {
         recordingMbid: map.recordingMbid,
         service: map.service,
         externalId: map.externalId,
-        url: map.url,
+        // url is non-null: WHERE isNotNull(url) excludes embed_miss rows.
+        url: map.url!,
         confidence: map.confidence,
         deadLink: map.deadLink,
       })),
@@ -226,7 +231,7 @@ router.get("/replay/:id/guided-queue", h(async (req, res) => {
           recordingMbid: map.recordingMbid,
           service: map.service,
           externalId: map.externalId,
-          url: map.url,
+          url: map.url!,
           confidence: map.confidence,
           deadLink: map.deadLink,
         })),
@@ -295,7 +300,11 @@ router.get("/replay/:id/export", h(async (req, res) => {
           confidence: serviceTrackMapTable.confidence,
         })
         .from(serviceTrackMapTable)
-        .where(inArray(serviceTrackMapTable.recordingMbid, mbids))
+        .where(and(
+          inArray(serviceTrackMapTable.recordingMbid, mbids),
+          // Exclude embed_miss sentinel rows (url IS NULL).
+          isNotNull(serviceTrackMapTable.url),
+        ))
     : [];
   const mappingsByMbid = new Map<
     string,
@@ -305,7 +314,7 @@ router.get("/replay/:id/export", h(async (req, res) => {
     const current = mappingsByMbid.get(mapping.recordingMbid) ?? [];
     current.push({
       service: mapping.service,
-      url: mapping.url,
+      url: mapping.url!, // non-null: WHERE isNotNull(url) above
       deadLink: mapping.deadLink,
       confidence: mapping.confidence,
     });

@@ -113,4 +113,26 @@ export async function applyReplayResolutionMigration(): Promise<void> {
     CREATE INDEX IF NOT EXISTS replay_resolution_jobs_status_idx
       ON replay_resolution_jobs (status)
   `);
+
+  // Negative-cache (embed_miss) columns.  url becomes nullable so that a
+  // service="odesli" sentinel row can record "tried and found nothing" without
+  // inventing a fake URL.  miss_reason and missed_at carry the reason and a TTL
+  // anchor so the resolver can skip hopeless MBIDs for 30 days before retrying.
+  await db.execute(sql`
+    ALTER TABLE service_track_map
+      ALTER COLUMN url DROP NOT NULL
+  `);
+  await db.execute(sql`
+    ALTER TABLE service_track_map
+      ADD COLUMN IF NOT EXISTS miss_reason text
+  `);
+  await db.execute(sql`
+    ALTER TABLE service_track_map
+      ADD COLUMN IF NOT EXISTS missed_at timestamptz
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS service_track_map_miss_idx
+      ON service_track_map (recording_mbid, missed_at)
+      WHERE miss_reason IS NOT NULL
+  `);
 }

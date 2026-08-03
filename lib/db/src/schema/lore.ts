@@ -1949,7 +1949,12 @@ export const serviceTrackMapTable = pgTable(
     service: text("service").notNull(),
     /** Service-native track id when it can be extracted from the URL. */
     externalId: text("external_id"),
-    url: text("url").notNull(),
+    /**
+     * Direct link to the track on the service.  Null only for negative-cache
+     * (embed_miss) rows, where service="odesli" records that a lookup was
+     * attempted and found nothing.  Every positive hit row has a non-null url.
+     */
+    url: text("url"),
     /** "recording_id" | "isrc" | "odesli" | "title_search". */
     method: text("method").notNull(),
     /** "exact" | "search" — retained as text so new resolver tiers are additive. */
@@ -1960,6 +1965,14 @@ export const serviceTrackMapTable = pgTable(
     deadLink: boolean("dead_link").notNull().default(false),
     deadAt: timestamp("dead_at"),
     lastVerifiedAt: timestamp("last_verified_at"),
+    /**
+     * Populated on negative-cache rows (service="odesli", url IS NULL).
+     * Values: "no_vector" | "no_links" | "no_recording".
+     * Null on every positive-hit row.
+     */
+    missReason: text("miss_reason"),
+    /** Timestamp of the last miss write; used to enforce the 30-day re-attempt TTL. */
+    missedAt: timestamp("missed_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

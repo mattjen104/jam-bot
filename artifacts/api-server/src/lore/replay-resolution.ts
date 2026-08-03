@@ -7,7 +7,7 @@ import {
   type ReplayResolutionFailure,
   type ReplayResolutionJob,
 } from "@workspace/db";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { fetchOdesli } from "@workspace/song-enrichment";
 import { getReplayManifest } from "./replay.js";
 
@@ -243,6 +243,46 @@ export async function upsertServiceTrackMap(input: {
         deadLink: false,
         deadAt: null,
         lastVerifiedAt: input.verification === "verified" ? new Date() : sql`${serviceTrackMapTable.lastVerifiedAt}`,
+        // Clear any stale negative-cache fields when a positive hit arrives.
+        missReason: null,
+        missedAt: null,
+        updatedAt: sql`now()`,
+      },
+    });
+}
+
+/** 30-day TTL before a hopeless MBID is retried via Odesli. */
+const MISS_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * Write (or refresh) an embed_miss row for a recording that has no resolvable
+ * link on any service.  Uses service="odesli" as a sentinel — it is never a
+ * real playback service so there is no conflict with positive-hit rows.
+ *
+ * reason values: "no_vector" | "no_links" | "no_recording"
+ */
+export async function upsertServiceTrackMapMiss(
+  recordingMbid: string,
+  reason: string,
+): Promise<void> {
+  await db
+    .insert(serviceTrackMapTable)
+    .values({
+      recordingMbid,
+      service: "odesli",
+      url: null,
+      method: "odesli",
+      confidence: "search",
+      verification: "unverified",
+      deadLink: false,
+      missReason: reason,
+      missedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: [serviceTrackMapTable.recordingMbid, serviceTrackMapTable.service],
+      set: {
+        missReason: reason,
+        missedAt: new Date(),
         updatedAt: sql`now()`,
       },
     });
@@ -267,6 +307,7 @@ async function resolveRecording(
   mbid: string,
   recording: { title: string; artist: string; isrc: string | null; links: Array<{ name: string; url: string; kind: "exact" | "search" }> | null },
 ): Promise<"resolved" | "missing"> {
+  // Short-circuit if an exact hit already exists — nothing to do.
   const [existing] = await db
     .select({ id: serviceTrackMapTable.id })
     .from(serviceTrackMapTable)
@@ -275,21 +316,48 @@ async function resolveRecording(
         eq(serviceTrackMapTable.recordingMbid, mbid),
         eq(serviceTrackMapTable.deadLink, false),
         eq(serviceTrackMapTable.confidence, "exact"),
+        isNull(serviceTrackMapTable.missReason),
       ),
     )
     .limit(1);
   if (existing) return "resolved";
 
+  // Short-circuit if a recent negative-cache row exists.  The sentinel row
+  // uses service="odesli" and records the reason and timestamp so the resolver
+  // can skip hopeless MBIDs for 30 days without burning Odesli rate-limit.
+  const missThreshold = new Date(Date.now() - MISS_TTL_MS);
+  const [existingMiss] = await db
+    .select({ id: serviceTrackMapTable.id })
+    .from(serviceTrackMapTable)
+    .where(
+      and(
+        eq(serviceTrackMapTable.recordingMbid, mbid),
+        eq(serviceTrackMapTable.service, "odesli"),
+        isNotNull(serviceTrackMapTable.missReason),
+        gte(serviceTrackMapTable.missedAt, missThreshold),
+      ),
+    )
+    .limit(1);
+  if (existingMiss) return "missing";
+
   const vector = recording.isrc
     ? `isrc:${recording.isrc}`
     : existingExactOdesliVector(recording.links);
-  if (!vector) return "missing";
+  if (!vector) {
+    // Record the fact that there is nothing to query — saves a future Odesli call.
+    await upsertServiceTrackMapMiss(mbid, "no_vector");
+    return "missing";
+  }
 
   const body = (await serializedOdesli(vector)) as OdesliBody;
   const links = Object.entries(body.linksByPlatform ?? {})
       .map(([platform, value]) => ({ service: canonicalReplayService(platform), url: value.url?.trim() ?? "" }))
     .filter((link) => link.url);
-  if (!links.length) return "missing";
+  if (!links.length) {
+    // Odesli returned nothing — record the miss so we don't retry for 30 days.
+    await upsertServiceTrackMapMiss(mbid, "no_links");
+    return "missing";
+  }
 
   await Promise.all(
     links.map((link) =>
@@ -351,7 +419,14 @@ export async function runReplayResolutionWorker(jobId: number): Promise<void> {
             .from(recordingsTable)
             .where(eq(recordingsTable.mbid, mbid))
             .limit(1);
-          outcome = recording ? await resolveRecording(mbid, recording) : "missing";
+          if (recording) {
+            outcome = await resolveRecording(mbid, recording);
+          } else {
+            // MBID is present but not in the recordings table — record the miss
+            // so the resolver does not waste an Odesli call on the same MBID.
+            await upsertServiceTrackMapMiss(mbid, "no_recording");
+            outcome = "missing";
+          }
         }
       } catch (err) {
         outcome = "failed";
