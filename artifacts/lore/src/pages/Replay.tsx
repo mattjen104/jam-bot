@@ -2,6 +2,7 @@ import { Link, useParams } from "wouter";
 import { useGetReplayManifest } from "@workspace/api-client-react";
 import { ArrowLeft, Download, Ghost } from "lucide-react";
 import { ArchiveTracklist } from "../components/ArchiveTracklist";
+import { AppleMusicReplayPanel } from "../components/AppleMusicReplayPanel";
 import { GuidedReplayPanel } from "../components/GuidedReplayPanel";
 import { GuidedReplayQueue } from "../components/GuidedReplayQueue";
 import { ShareButton } from "../components/ShareButton";
@@ -104,6 +105,7 @@ export default function Replay() {
               label={`${data.station.name} · ${data.show?.name ?? "stream"} · ${runDate(data.bounds.date)}`}
             />
             <GuidedReplayQueue replayId={data.replayId} />
+            <AppleMusicReplayPanel replayId={data.replayId} />
 
             <section
               aria-label="Replay exports"
