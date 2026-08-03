@@ -327,12 +327,14 @@ export async function upsertServiceTrackMap(input: {
 /** 30-day TTL before a hopeless MBID is retried via Odesli. */
 const MISS_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
+/** 1-hour TTL for transient network errors — retry sooner than a real miss. */
+const NETWORK_ERROR_MISS_TTL_MS = 1 * 60 * 60 * 1000;
 /**
  * Write (or refresh) an embed_miss row for a recording that has no resolvable
  * link on any service.  Uses service="odesli" as a sentinel — it is never a
  * real playback service so there is no conflict with positive-hit rows.
  *
- * reason values: "no_vector" | "no_links" | "no_recording"
+ * reason values: "no_vector" | "no_links" | "no_recording" | "network_error"
  */
 export async function upsertServiceTrackMapMiss(
   recordingMbid: string,
@@ -397,21 +399,31 @@ export async function resolveRecording(
 
   // Short-circuit if a recent negative-cache row exists.  The sentinel row
   // uses service="odesli" and records the reason and timestamp so the resolver
-  // can skip hopeless MBIDs for 30 days without burning Odesli rate-limit.
-  const missThreshold = new Date(Date.now() - MISS_TTL_MS);
+  // can skip hopeless MBIDs without burning Odesli rate-limit.
+  // TTL varies by reason: network errors use a 1-hour window; all other misses
+  // use the standard 30-day window.
   const [existingMiss] = await db
-    .select({ id: serviceTrackMapTable.id })
+    .select({
+      id: serviceTrackMapTable.id,
+      missReason: serviceTrackMapTable.missReason,
+      missedAt: serviceTrackMapTable.missedAt,
+    })
     .from(serviceTrackMapTable)
     .where(
       and(
         eq(serviceTrackMapTable.recordingMbid, mbid),
         eq(serviceTrackMapTable.service, "odesli"),
         isNotNull(serviceTrackMapTable.missReason),
-        gte(serviceTrackMapTable.missedAt, missThreshold),
       ),
     )
     .limit(1);
-  if (existingMiss) return "missing";
+  if (existingMiss?.missedAt) {
+    const ttl =
+      existingMiss.missReason === "network_error"
+        ? NETWORK_ERROR_MISS_TTL_MS
+        : MISS_TTL_MS;
+    if (existingMiss.missedAt > new Date(Date.now() - ttl)) return "missing";
+  }
 
   const vector = recording.isrc
     ? `isrc:${recording.isrc}`
@@ -422,7 +434,15 @@ export async function resolveRecording(
     return "missing";
   }
 
-  const body = (await serializedOdesli(vector)) as OdesliBody;
+  let body: OdesliBody;
+  try {
+    body = (await serializedOdesli(vector)) as OdesliBody;
+  } catch {
+    // Network error (timeout, DNS failure, etc.) — write a short-lived miss row
+    // so the next run skips this MBID for an hour instead of burning rate-limit.
+    await upsertServiceTrackMapMiss(mbid, "network_error");
+    return "missing";
+  }
   const links = Object.entries(body.linksByPlatform ?? {})
       .map(([platform, value]) => ({ service: canonicalReplayService(platform), url: value.url?.trim() ?? "" }))
     .filter((link) => link.url);

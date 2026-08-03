@@ -121,6 +121,7 @@ describe("Ghost Replay resolution negative-cache", () => {
   const noLinksMbid = `test-rr-no-links-${ncRun}`;
   const noVectorMbid = `test-rr-no-vector-${ncRun}`;
   const expiredMbid = `test-rr-expired-${ncRun}`;
+  const networkErrorMbid = `test-rr-net-error-${ncRun}`;
 
   beforeAll(async () => {
     if (!dbAvailable) return;
@@ -129,16 +130,17 @@ describe("Ghost Replay resolution negative-cache", () => {
       { mbid: noLinksMbid, title: "No Links Track", artist: "No Links Artist", isrc: "USNC12345678" },
       { mbid: noVectorMbid, title: "No Vector Track", artist: "No Vector Artist", isrc: null, links: [] },
       { mbid: expiredMbid, title: "Expired Miss Track", artist: "Expired Miss Artist", isrc: "USXX98765432" },
+      { mbid: networkErrorMbid, title: "Network Error Track", artist: "Network Error Artist", isrc: "USNE11223344" },
     ]);
   });
 
   afterAll(async () => {
     if (!dbAvailable) return;
     await db.delete(serviceTrackMapTable).where(
-      inArray(serviceTrackMapTable.recordingMbid, [noLinksMbid, noVectorMbid, expiredMbid]),
+      inArray(serviceTrackMapTable.recordingMbid, [noLinksMbid, noVectorMbid, expiredMbid, networkErrorMbid]),
     );
     await db.delete(recordingsTable).where(
-      inArray(recordingsTable.mbid, [noLinksMbid, noVectorMbid, expiredMbid]),
+      inArray(recordingsTable.mbid, [noLinksMbid, noVectorMbid, expiredMbid, networkErrorMbid]),
     );
     vi.unstubAllGlobals();
   });
@@ -224,6 +226,83 @@ describe("Ghost Replay resolution negative-cache", () => {
     expect(missRow).toBeDefined();
     expect(missRow!.missReason).toBe("no_vector");
     expect(missRow!.missedAt).toBeInstanceOf(Date);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("treats a network error as missing, writes a short-lived miss row, and skips on the next call", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    const odesliThrows = vi.fn(async () => {
+      throw new TypeError("fetch failed");
+    });
+    vi.stubGlobal("fetch", odesliThrows);
+
+    // First call — fetch throws → resolveRecording should return "missing", not throw.
+    const first = await resolveRecording(networkErrorMbid, {
+      title: "Network Error Track",
+      artist: "Network Error Artist",
+      isrc: "USNE11223344",
+      links: null,
+    });
+    expect(first).toBe("missing");
+    expect(odesliThrows).toHaveBeenCalledTimes(1);
+
+    // A miss row with reason "network_error" must have been written.
+    const [missRow] = await db
+      .select()
+      .from(serviceTrackMapTable)
+      .where(
+        and(
+          eq(serviceTrackMapTable.recordingMbid, networkErrorMbid),
+          eq(serviceTrackMapTable.service, "odesli"),
+        ),
+      )
+      .limit(1);
+    expect(missRow).toBeDefined();
+    expect(missRow!.missReason).toBe("network_error");
+    expect(missRow!.missedAt).toBeInstanceOf(Date);
+
+    // TTL must be well below 30 days — a row that is 2 hours old should still block.
+    // (The real TTL is 1 hour, so a fresh row definitely blocks a second call.)
+    odesliThrows.mockClear();
+    const second = await resolveRecording(networkErrorMbid, {
+      title: "Network Error Track",
+      artist: "Network Error Artist",
+      isrc: "USNE11223344",
+      links: null,
+    });
+    expect(second).toBe("missing");
+    expect(odesliThrows).not.toHaveBeenCalled();
+
+    // Once the network_error row is older than 1 hour, Odesli is retried.
+    const staleNetDate = new Date(Date.now() - 2 * 60 * 60 * 1000); // 2 hours ago
+    await db
+      .update(serviceTrackMapTable)
+      .set({ missedAt: staleNetDate, updatedAt: staleNetDate })
+      .where(
+        and(
+          eq(serviceTrackMapTable.recordingMbid, networkErrorMbid),
+          eq(serviceTrackMapTable.service, "odesli"),
+        ),
+      );
+
+    const odesliEmpty = vi.fn(async () =>
+      new Response(JSON.stringify({ linksByPlatform: {}, entitiesByUniqueId: {} }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", odesliEmpty);
+
+    const third = await resolveRecording(networkErrorMbid, {
+      title: "Network Error Track",
+      artist: "Network Error Artist",
+      isrc: "USNE11223344",
+      links: null,
+    });
+    expect(third).toBe("missing");
+    expect(odesliEmpty).toHaveBeenCalledTimes(1);
 
     vi.unstubAllGlobals();
   });
