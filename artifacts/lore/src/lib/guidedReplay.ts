@@ -11,22 +11,6 @@ export type GuidedService =
   | "soundcloud"
   | "pandora";
 
-/** Services that can render an official iframe embed. All others are external-open only. */
-export const EMBED_SERVICES = new Set<GuidedService>(["bandcamp", "youtube"]);
-
-/** All supported services in display order, with friendly labels. */
-export const GUIDED_SERVICE_OPTIONS: ReadonlyArray<{ service: GuidedService; label: string }> = [
-  { service: "bandcamp", label: "Bandcamp" },
-  { service: "youtube", label: "YouTube" },
-  { service: "appleMusic", label: "Apple Music" },
-  { service: "youtubeMusic", label: "YouTube Music" },
-  { service: "tidal", label: "Tidal" },
-  { service: "amazonMusic", label: "Amazon Music" },
-  { service: "deezer", label: "Deezer" },
-  { service: "soundcloud", label: "SoundCloud" },
-  { service: "pandora", label: "Pandora" },
-];
-
 export type GuidedReplaySource = {
   /**
    * The service key. Known services use a `GuidedService` value; services that
@@ -136,6 +120,45 @@ function bandcampEmbedUrl(url: string): string | null {
   }
 }
 
+export type GuidedServiceOption = {
+  service: GuidedService;
+  label: string;
+  /**
+   * Builds an iframe-safe embed URL from a canonical track URL, or returns
+   * null if the URL is not in an embeddable shape for this service.
+   * Absent means this service is external-open only.
+   */
+  embedUrlBuilder?: (url: string) => string | null;
+  /**
+   * True when the embedded player can report playback end, enabling
+   * auto-advance to the next track. Only meaningful when embedUrlBuilder
+   * is present.
+   */
+  embedAutoAdvance?: boolean;
+};
+
+/** All supported services in display order, with friendly labels. */
+export const GUIDED_SERVICE_OPTIONS: ReadonlyArray<GuidedServiceOption> = [
+  { service: "bandcamp",     label: "Bandcamp",       embedUrlBuilder: bandcampEmbedUrl },
+  { service: "youtube",      label: "YouTube",         embedUrlBuilder: youtubeEmbedUrl, embedAutoAdvance: true },
+  { service: "appleMusic",   label: "Apple Music" },
+  { service: "youtubeMusic", label: "YouTube Music" },
+  { service: "tidal",        label: "Tidal" },
+  { service: "amazonMusic",  label: "Amazon Music" },
+  { service: "deezer",       label: "Deezer" },
+  { service: "soundcloud",   label: "SoundCloud" },
+  { service: "pandora",      label: "Pandora" },
+];
+
+/**
+ * Returns true when `service` is a known service that supports official iframe
+ * embeds (i.e. has an `embedUrlBuilder` on its `GUIDED_SERVICE_OPTIONS` entry).
+ * Unknown services — those not in `GuidedService` — are never embed-capable.
+ */
+export function serviceSupportsEmbed(service: string): boolean {
+  return GUIDED_SERVICE_OPTIONS.some((o) => o.service === service && !!o.embedUrlBuilder);
+}
+
 /**
  * Approved HTTPS host patterns for each service's external links.
  *
@@ -154,27 +177,6 @@ const SERVICE_HOST_RE: Record<GuidedService, RegExp> = {
   soundcloud:   /(^|\.)soundcloud\.com$/i,
   pandora:      /(^|\.)pandora\.com$/i,
 };
-
-/**
- * Returns the URL unchanged if it is HTTPS and (for known services) its
- * hostname is on the approved list; otherwise returns null so the entry is
- * marked unavailable instead of surfacing a dangerous or off-service link.
- *
- * Unknown services — those not yet in `GuidedService` — pass through with an
- * HTTPS-only check. Their URLs come from the server-side `service_track_map`
- * which already applies a `safeWebUrl` guard before storage.
- */
-function safeServiceUrl(service: string, url: string): string | null {
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol !== "https:") return null;
-    const pattern = SERVICE_HOST_RE[service as GuidedService];
-    if (pattern && !pattern.test(parsed.hostname)) return null;
-    return parsed.toString();
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Case-insensitive matchers for each service.
@@ -201,6 +203,27 @@ const SERVICE_FILTERS: Record<GuidedService, (name: string) => boolean> = {
   pandora:      (n) => /^pandora$/i.test(n),
 };
 
+/**
+ * Returns the URL unchanged if it is HTTPS and (for known services) its
+ * hostname is on the approved list; otherwise returns null so the entry is
+ * marked unavailable instead of surfacing a dangerous or off-service link.
+ *
+ * Unknown services — those not yet in `GuidedService` — pass through with an
+ * HTTPS-only check. Their URLs come from the server-side `service_track_map`
+ * which already applies a `safeWebUrl` guard before storage.
+ */
+function safeServiceUrl(service: string, url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return null;
+    const pattern = SERVICE_HOST_RE[service as GuidedService];
+    if (pattern && !pattern.test(parsed.hostname)) return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
 function sourceForLink(
   service: string,
   link: GuidedLink,
@@ -208,16 +231,22 @@ function sourceForLink(
   if (link.kind !== "exact" || link.deadLink) return null;
   if (!link.url) return null;
 
-  if (service === "youtube") {
-    const resolvedUrl = link.url || (link.externalId ? `https://youtu.be/${link.externalId}` : "");
-    const embedUrl = youtubeEmbedUrl(resolvedUrl);
+  const option = GUIDED_SERVICE_OPTIONS.find((o) => o.service === service);
+
+  if (option?.embedUrlBuilder) {
+    // For youtube, the link may carry an externalId we can fall back to.
+    const resolvedUrl =
+      service === "youtube" && !link.url && link.externalId
+        ? `https://youtu.be/${link.externalId}`
+        : link.url;
+
+    const embedUrl = option.embedUrlBuilder(resolvedUrl);
     if (embedUrl !== null) {
       return {
         service,
         url: link.url || resolvedUrl,
         embedUrl,
-        // YouTube's IFrame API can report ENDED, enabling auto-advance only when embedded.
-        autoAdvance: true,
+        autoAdvance: option.embedAutoAdvance ?? false,
         externalOnly: false,
       };
     }
@@ -227,18 +256,7 @@ function sourceForLink(
     return { service, url: safeUrl, embedUrl: null, autoAdvance: false, externalOnly: true };
   }
 
-  if (service === "bandcamp") {
-    const embedUrl = bandcampEmbedUrl(link.url);
-    if (embedUrl !== null) {
-      return { service, url: link.url, embedUrl, autoAdvance: false, externalOnly: false };
-    }
-    // Not an EmbeddedPlayer URL — validate before allowing external open.
-    const safeUrl = safeServiceUrl(service, link.url);
-    if (!safeUrl) return null;
-    return { service, url: safeUrl, embedUrl: null, autoAdvance: false, externalOnly: true };
-  }
-
-  // All other services: external link only — must pass host+HTTPS validation.
+  // All other services (no embedUrlBuilder): external link only.
   const safeUrl = safeServiceUrl(service, link.url);
   if (!safeUrl) return null;
   return { service, url: safeUrl, embedUrl: null, autoAdvance: false, externalOnly: true };
@@ -344,7 +362,9 @@ export function computeAvailableServices(
   }>,
 ): Array<{ service: string; label: string }> {
   // All known services always appear.
-  const result: Array<{ service: string; label: string }> = [...GUIDED_SERVICE_OPTIONS];
+  const result: Array<{ service: string; label: string }> = GUIDED_SERVICE_OPTIONS.map(
+    ({ service, label }) => ({ service, label }),
+  );
 
   // Collect live unknown service keys from guidedLinks only (recording.links
   // only carry known service names in their friendly-label form, so adding

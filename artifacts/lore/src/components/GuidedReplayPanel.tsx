@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ChevronLeft, ChevronRight, ExternalLink, Ghost, Loader2, Play, X } from "lucide-react";
 import type { ReplayManifest } from "@workspace/api-client-react";
 import {
-  EMBED_SERVICES,
   GUIDED_SERVICE_OPTIONS,
   computeAvailableServices,
   guidedMissingLabel,
   materializeGuidedReplay,
+  serviceSupportsEmbed,
   type GuidedReplayMaterialization,
 } from "../lib/guidedReplay";
 
@@ -168,9 +168,9 @@ export function GuidedReplayPanel({
   };
 
   const currentLabel = serviceLabel(service);
-  // `EMBED_SERVICES` is keyed on `GuidedService`; unknown services are never
-  // embed-capable so the cast is safe — unrecognized keys return false.
-  const isEmbedService = EMBED_SERVICES.has(service as Parameters<typeof EMBED_SERVICES.has>[0]);
+  // Unknown services are never embed-capable; serviceSupportsEmbed checks the
+  // embedUrlBuilder field on GUIDED_SERVICE_OPTIONS so the definition stays in one place.
+  const isEmbedService = serviceSupportsEmbed(service);
 
   return (
     <section className="mb-6 rounded-xl border border-primary/30 bg-primary/[0.04] p-4" data-testid="guided-replay">
