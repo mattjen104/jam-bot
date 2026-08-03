@@ -14,7 +14,9 @@ import {
   canonicalReplayService,
   getReplayMaterializer,
   registerReplayMaterializer,
+  resolveRecording,
   runReplayResolutionWorker,
+  upsertServiceTrackMapMiss,
 } from "../src/lore/replay-resolution.js";
 import { applyReplayResolutionMigration } from "../src/lore/replay-resolution-migration.js";
 
@@ -111,6 +113,157 @@ describe("Ghost Replay resolution registry", () => {
       .map((value) => value.config?.name)
       .filter(Boolean);
     expect(uniqueIndexes).not.toContain("replay_resolution_jobs_active_uq");
+  });
+});
+
+describe("Ghost Replay resolution negative-cache", () => {
+  const ncRun = randomUUID().slice(0, 8);
+  const noLinksMbid = `test-rr-no-links-${ncRun}`;
+  const noVectorMbid = `test-rr-no-vector-${ncRun}`;
+  const expiredMbid = `test-rr-expired-${ncRun}`;
+
+  beforeAll(async () => {
+    if (!dbAvailable) return;
+    // Recordings need to exist because serviceTrackMapTable.recordingMbid has a FK.
+    await db.insert(recordingsTable).values([
+      { mbid: noLinksMbid, title: "No Links Track", artist: "No Links Artist", isrc: "USNC12345678" },
+      { mbid: noVectorMbid, title: "No Vector Track", artist: "No Vector Artist", isrc: null, links: [] },
+      { mbid: expiredMbid, title: "Expired Miss Track", artist: "Expired Miss Artist", isrc: "USXX98765432" },
+    ]);
+  });
+
+  afterAll(async () => {
+    if (!dbAvailable) return;
+    await db.delete(serviceTrackMapTable).where(
+      inArray(serviceTrackMapTable.recordingMbid, [noLinksMbid, noVectorMbid, expiredMbid]),
+    );
+    await db.delete(recordingsTable).where(
+      inArray(recordingsTable.mbid, [noLinksMbid, noVectorMbid, expiredMbid]),
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it("writes a no_links miss row and skips Odesli on the second call", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    const odesliEmpty = vi.fn(async () =>
+      new Response(JSON.stringify({ linksByPlatform: {}, entitiesByUniqueId: {} }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", odesliEmpty);
+
+    // First call — Odesli returns nothing → should record a miss.
+    const first = await resolveRecording(noLinksMbid, {
+      title: "No Links Track",
+      artist: "No Links Artist",
+      isrc: "USNC12345678",
+      links: null,
+    });
+    expect(first).toBe("missing");
+    expect(odesliEmpty).toHaveBeenCalledTimes(1);
+
+    const [missRow] = await db
+      .select()
+      .from(serviceTrackMapTable)
+      .where(
+        and(
+          eq(serviceTrackMapTable.recordingMbid, noLinksMbid),
+          eq(serviceTrackMapTable.service, "odesli"),
+        ),
+      )
+      .limit(1);
+    expect(missRow).toBeDefined();
+    expect(missRow!.missReason).toBe("no_links");
+    expect(missRow!.missedAt).toBeInstanceOf(Date);
+
+    // Second call — miss row is fresh, Odesli must NOT be called again.
+    odesliEmpty.mockClear();
+    const second = await resolveRecording(noLinksMbid, {
+      title: "No Links Track",
+      artist: "No Links Artist",
+      isrc: "USNC12345678",
+      links: null,
+    });
+    expect(second).toBe("missing");
+    expect(odesliEmpty).not.toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
+  });
+
+  it("writes a no_vector miss row without ever calling Odesli", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    const odesliSpy = vi.fn(async () =>
+      new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+    vi.stubGlobal("fetch", odesliSpy);
+
+    const result = await resolveRecording(noVectorMbid, {
+      title: "No Vector Track",
+      artist: "No Vector Artist",
+      isrc: null,
+      // No Spotify link in the array, so there is no vector.
+      links: [{ name: "Bandcamp", url: "https://artist.bandcamp.com/track/no-vector", kind: "search" }],
+    });
+    expect(result).toBe("missing");
+    // Odesli must not have been touched — there was nothing to query.
+    expect(odesliSpy).not.toHaveBeenCalled();
+
+    const [missRow] = await db
+      .select()
+      .from(serviceTrackMapTable)
+      .where(
+        and(
+          eq(serviceTrackMapTable.recordingMbid, noVectorMbid),
+          eq(serviceTrackMapTable.service, "odesli"),
+        ),
+      )
+      .limit(1);
+    expect(missRow).toBeDefined();
+    expect(missRow!.missReason).toBe("no_vector");
+    expect(missRow!.missedAt).toBeInstanceOf(Date);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("calls Odesli again once the miss row is older than 30 days", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // Plant a stale miss row (31 days old) directly.
+    const staleDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+    await upsertServiceTrackMapMiss(expiredMbid, "no_links");
+    // Backdate the missedAt so it falls outside the 30-day window.
+    await db
+      .update(serviceTrackMapTable)
+      .set({ missedAt: staleDate, updatedAt: staleDate })
+      .where(
+        and(
+          eq(serviceTrackMapTable.recordingMbid, expiredMbid),
+          eq(serviceTrackMapTable.service, "odesli"),
+        ),
+      );
+
+    const odesliRetry = vi.fn(async () =>
+      new Response(JSON.stringify({ linksByPlatform: {}, entitiesByUniqueId: {} }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", odesliRetry);
+
+    const result = await resolveRecording(expiredMbid, {
+      title: "Expired Miss Track",
+      artist: "Expired Miss Artist",
+      isrc: "USXX98765432",
+      links: null,
+    });
+    // Still missing (Odesli returned nothing), but crucially Odesli was called.
+    expect(result).toBe("missing");
+    expect(odesliRetry).toHaveBeenCalledTimes(1);
+
+    vi.unstubAllGlobals();
   });
 });
 

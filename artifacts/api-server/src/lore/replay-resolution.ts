@@ -303,7 +303,7 @@ export async function markServiceTrackMapDead(
     );
 }
 
-async function resolveRecording(
+export async function resolveRecording(
   mbid: string,
   recording: { title: string; artist: string; isrc: string | null; links: Array<{ name: string; url: string; kind: "exact" | "search" }> | null },
 ): Promise<"resolved" | "missing"> {
