@@ -4,11 +4,58 @@ import {
   listenSessionsTable,
   attendanceTable,
   attendanceRollupsTable,
+  attendanceWeeklyRollupsTable,
   spinsTable,
   stationsTable,
   recordingsTable,
 } from "@workspace/db";
-import { eq, and, isNull, lt, sql } from "drizzle-orm";
+import { eq, and, isNull, lt, desc, sql } from "drizzle-orm";
+
+// ---------------------------------------------------------------------------
+// ISO week helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the Monday 00:00 UTC that begins the given ISO year + week number.
+ * ISO weeks start on Monday; week 1 contains January 4th.
+ */
+function isoWeekToMonday(isoYear: number, isoWeek: number): Date {
+  // Jan 4 is always in ISO week 1
+  const jan4 = new Date(Date.UTC(isoYear, 0, 4));
+  const dayOfWeek = jan4.getUTCDay() || 7; // 1=Mon … 7=Sun
+  const week1Monday = new Date(jan4.getTime() - (dayOfWeek - 1) * 86_400_000);
+  return new Date(week1Monday.getTime() + (isoWeek - 1) * 7 * 86_400_000);
+}
+
+/** Returns the ISO week label (YYYY-Www) for the Monday that starts the week. */
+function mondayToIsoWeekLabel(monday: Date): string {
+  // Thursday of the same week determines the ISO year (it never crosses a year boundary)
+  const thursday = new Date(monday.getTime() + 3 * 86_400_000);
+  const year = thursday.getUTCFullYear();
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const dayOfWeek = jan4.getUTCDay() || 7;
+  const week1Monday = new Date(jan4.getTime() - (dayOfWeek - 1) * 86_400_000);
+  const week = Math.floor((monday.getTime() - week1Monday.getTime()) / (7 * 86_400_000)) + 1;
+  return `${year}-W${String(week).padStart(2, "0")}`;
+}
+
+/** Monday 00:00 UTC for the current ISO week. */
+function currentIsoWeekMonday(): Date {
+  const now = new Date();
+  const utcDay = now.getUTCDay() || 7; // 1=Mon … 7=Sun
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - (utcDay - 1)));
+}
+
+/**
+ * Returns the ISO week label ("YYYY-Www") for any given Date (UTC-based).
+ * Used to place a spin's played_at into the correct weekly bucket so tracks
+ * always belong to the week they aired on, not the week the heartbeat arrived.
+ */
+function dateToIsoWeekLabel(date: Date): string {
+  const utcDay = date.getUTCDay() || 7; // 1=Mon … 7=Sun
+  const monday = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() - (utcDay - 1)));
+  return mondayToIsoWeekLabel(monday);
+}
 import { h } from "../../middlewares/asyncHandler.js";
 import { type AuthedRequest } from "./auth.js";
 
@@ -299,6 +346,7 @@ router.post("/me/attendance/heartbeat", h(async (req, res) => {
         // the rollup. A retry with the same high-water mark has dwellDelta=0,
         // and rollupCounted prevents a second spin-count increment.
         if (dwellDelta > 0 || crossesGate) {
+          // --- Lifetime rollup ---
           await tx
             .insert(attendanceRollupsTable)
             .values({
@@ -326,6 +374,43 @@ router.post("/me/attendance/heartbeat", h(async (req, res) => {
                   WHEN excluded.last_heard IS NULL THEN attendance_rollups.last_heard
                   WHEN attendance_rollups.last_heard IS NULL THEN excluded.last_heard
                   ELSE GREATEST(attendance_rollups.last_heard, excluded.last_heard)
+                END`,
+              },
+            });
+
+          // --- Weekly rollup ---
+          // The ISO week is derived from the spin's played_at so the track is
+          // placed in the week it actually aired, not the heartbeat week.
+          const spinIsoWeek = dateToIsoWeekLabel(spin.playedAt);
+          await tx
+            .insert(attendanceWeeklyRollupsTable)
+            .values({
+              userId: user.id,
+              recordingMbid: spin.mbid!,
+              isoWeek: spinIsoWeek,
+              dwellTotal: dwellDelta,
+              spinCount: crossesGate ? 1 : 0,
+              firstHeard: crossesGate ? spin.playedAt : undefined,
+              lastHeard: crossesGate ? spin.playedAt : undefined,
+            })
+            .onConflictDoUpdate({
+              target: [
+                attendanceWeeklyRollupsTable.userId,
+                attendanceWeeklyRollupsTable.recordingMbid,
+                attendanceWeeklyRollupsTable.isoWeek,
+              ],
+              set: {
+                dwellTotal: sql`attendance_weekly_rollups.dwell_total + excluded.dwell_total`,
+                spinCount: sql`attendance_weekly_rollups.spin_count + excluded.spin_count`,
+                firstHeard: sql`CASE
+                  WHEN excluded.first_heard IS NULL THEN attendance_weekly_rollups.first_heard
+                  WHEN attendance_weekly_rollups.first_heard IS NULL THEN excluded.first_heard
+                  ELSE LEAST(attendance_weekly_rollups.first_heard, excluded.first_heard)
+                END`,
+                lastHeard: sql`CASE
+                  WHEN excluded.last_heard IS NULL THEN attendance_weekly_rollups.last_heard
+                  WHEN attendance_weekly_rollups.last_heard IS NULL THEN excluded.last_heard
+                  ELSE GREATEST(attendance_weekly_rollups.last_heard, excluded.last_heard)
                 END`,
               },
             });
@@ -377,6 +462,125 @@ router.get("/me/attendance/counts", h(async (req, res) => {
   const counts = rows.map((r) => ({ mbid: r.mbid, heardCount: r.heardCount }));
 
   return res.json(counts);
+}));
+
+// ---------------------------------------------------------------------------
+// GET /api/me/attendance/weekly
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the listener's confirmed-hearing summary for a single ISO week.
+ *
+ * Query param:
+ *   week  — ISO week label, e.g. "2026-W31". Defaults to the current week.
+ *
+ * A track appears in the response only when its attendance row has
+ * `rollupCounted = true` (i.e. the dwell gate was met) and the spin's
+ * `played_at` falls inside the requested week.
+ *
+ * Shape:
+ *   {
+ *     week: "2026-W31",
+ *     weekStart: "<ISO>",   // Monday 00:00 UTC
+ *     weekEnd:   "<ISO>",   // Sunday 23:59:59.999 UTC (inclusive)
+ *     tracks: Array<{
+ *       mbid, title, artist, artworkUrl,
+ *       spinCount, dwellSeconds,
+ *       firstHeard, lastHeard   // ISO timestamps of first/last qualifying spin
+ *     }>,
+ *     totalTracks: number,
+ *     totalDwellSeconds: number,
+ *   }
+ *
+ * Weeks with no confirmed listening return an honest empty `tracks` array —
+ * no error, no null.
+ */
+router.get("/me/attendance/weekly", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+
+  // --- Parse & validate the week param ---
+  const weekParam = typeof req.query["week"] === "string" ? req.query["week"] : undefined;
+
+  let weekMonday: Date;
+  let weekLabel: string;
+
+  if (weekParam !== undefined) {
+    const match = /^(\d{4})-W(\d{2})$/.exec(weekParam);
+    if (!match) {
+      return res.status(400).json({ error: "week must be in YYYY-Www format, e.g. 2026-W31" });
+    }
+    const isoYear = parseInt(match[1]!, 10);
+    const isoWeek = parseInt(match[2]!, 10);
+    if (isoWeek < 1 || isoWeek > 53) {
+      return res.status(400).json({ error: "week number must be between 1 and 53" });
+    }
+    weekMonday = isoWeekToMonday(isoYear, isoWeek);
+    // Round-trip through the helper so the label is canonical (guards edge-case
+    // inputs like week 53 in a year that only has 52 — the Monday lands in the
+    // previous year's week 52 space, and we return whatever the canonical label
+    // is for that Monday rather than echoing back a malformed label).
+    weekLabel = mondayToIsoWeekLabel(weekMonday);
+  } else {
+    weekMonday = currentIsoWeekMonday();
+    weekLabel = mondayToIsoWeekLabel(weekMonday);
+  }
+
+  // Inclusive end (last millisecond of Sunday) for the response only.
+  const weekEndInclusive = new Date(weekMonday.getTime() + 7 * 86_400_000 - 1);
+
+  // --- Read from the maintained weekly rollup (constant-time lookup) ---
+  //
+  // The heartbeat write path upserts into attendance_weekly_rollups whenever
+  // dwell advances or a new spin crosses the gate, so this endpoint never
+  // re-aggregates raw rows. The query is an index scan on (user_id, iso_week)
+  // followed by a lookup join on recordings — O(tracks heard that week).
+  const rows = await db
+    .select({
+      mbid: attendanceWeeklyRollupsTable.recordingMbid,
+      title: recordingsTable.title,
+      artist: recordingsTable.artist,
+      artworkUrl: recordingsTable.artworkUrl,
+      spinCount: attendanceWeeklyRollupsTable.spinCount,
+      dwellSeconds: attendanceWeeklyRollupsTable.dwellTotal,
+      firstHeard: attendanceWeeklyRollupsTable.firstHeard,
+      lastHeard: attendanceWeeklyRollupsTable.lastHeard,
+    })
+    .from(attendanceWeeklyRollupsTable)
+    .innerJoin(
+      recordingsTable,
+      eq(attendanceWeeklyRollupsTable.recordingMbid, recordingsTable.mbid),
+    )
+    .where(
+      and(
+        eq(attendanceWeeklyRollupsTable.userId, user.id),
+        eq(attendanceWeeklyRollupsTable.isoWeek, weekLabel),
+        sql`${attendanceWeeklyRollupsTable.spinCount} > 0`,
+      ),
+    )
+    .orderBy(
+      desc(attendanceWeeklyRollupsTable.spinCount),
+      desc(attendanceWeeklyRollupsTable.lastHeard),
+    );
+
+  const totalDwellSeconds = rows.reduce((acc, r) => acc + r.dwellSeconds, 0);
+
+  return res.json({
+    week: weekLabel,
+    weekStart: weekMonday.toISOString(),
+    weekEnd: weekEndInclusive.toISOString(),
+    tracks: rows.map((r) => ({
+      mbid: r.mbid,
+      title: r.title,
+      artist: r.artist,
+      artworkUrl: r.artworkUrl ?? null,
+      spinCount: r.spinCount,
+      dwellSeconds: r.dwellSeconds,
+      firstHeard: r.firstHeard,
+      lastHeard: r.lastHeard,
+    })),
+    totalTracks: rows.length,
+    totalDwellSeconds,
+  });
 }));
 
 // ---------------------------------------------------------------------------

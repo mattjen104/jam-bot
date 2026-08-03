@@ -252,6 +252,126 @@ export async function applyAttendanceMigration(): Promise<void> {
     }
   }
 
+  // ---- attendance_weekly_rollups ------------------------------------------
+  // Per-listener, per-recording, per-ISO-week read model for instant weekly
+  // summaries. Maintained incrementally by the heartbeat write path; this
+  // table is the source the GET /api/me/attendance/weekly endpoint reads from.
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS attendance_weekly_rollups (
+        user_id        integer      NOT NULL REFERENCES lore_users(id) ON DELETE CASCADE,
+        recording_mbid text         NOT NULL REFERENCES recordings(mbid),
+        iso_week       text         NOT NULL,
+        dwell_total    integer      NOT NULL DEFAULT 0 CHECK (dwell_total >= 0),
+        spin_count     integer      NOT NULL DEFAULT 0 CHECK (spin_count >= 0),
+        first_heard    timestamptz,
+        last_heard     timestamptz,
+        PRIMARY KEY (user_id, recording_mbid, iso_week)
+      )
+    `);
+  } catch (err) {
+    stepErrors.push({ step: "create_attendance_weekly_rollups", err });
+  }
+
+  try {
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS attendance_weekly_rollups_user_week_idx
+        ON attendance_weekly_rollups (user_id, iso_week)
+    `);
+  } catch (err) {
+    stepErrors.push({ step: "attendance_weekly_rollups_user_week_idx", err });
+  }
+
+  try {
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS attendance_weekly_rollups_user_idx
+        ON attendance_weekly_rollups (user_id)
+    `);
+  } catch (err) {
+    stepErrors.push({ step: "attendance_weekly_rollups_user_idx", err });
+  }
+
+  // Backfill attendance_weekly_rollups from existing attendance + spins rows.
+  // Uses Postgres's ISO week formatting (to_char(ts, 'IYYY-"W"IW')) so that
+  // a spin placed in week 31 is attributed to that week — consistent with the
+  // UTC-based ISO week label the heartbeat write path now computes in JS.
+  // Idempotent: ON CONFLICT … DO UPDATE replaces totals on a re-run.
+  // Guarded by a completion marker so it only runs once on a fresh DB.
+  let weeklyBackfillComplete = false;
+  try {
+    const completion = await db.execute(sql`
+      SELECT 1
+      FROM migration_completions
+      WHERE name = 'applyAttendanceWeeklyRollupBackfill'
+      LIMIT 1
+    `);
+    weeklyBackfillComplete = (completion.rows?.length ?? 0) > 0;
+  } catch {
+    // Absent completion ledger → run the safe backfill below.
+  }
+
+  if (!weeklyBackfillComplete) {
+    try {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`
+          INSERT INTO attendance_weekly_rollups (
+            user_id,
+            recording_mbid,
+            iso_week,
+            dwell_total,
+            spin_count,
+            first_heard,
+            last_heard
+          )
+          SELECT
+            a.user_id,
+            s.mbid,
+            to_char(s.played_at AT TIME ZONE 'UTC', 'IYYY-"W"IW') AS iso_week,
+            SUM(a.dwell_seconds)::integer,
+            COUNT(*) FILTER (
+              WHERE a.dwell_seconds >= CASE
+                WHEN a.spin_duration_seconds IS NOT NULL
+                  THEN LEAST(a.spin_duration_seconds::numeric * 0.5, 60)
+                ELSE 60
+              END
+            )::integer,
+            MIN(s.played_at) FILTER (
+              WHERE a.dwell_seconds >= CASE
+                WHEN a.spin_duration_seconds IS NOT NULL
+                  THEN LEAST(a.spin_duration_seconds::numeric * 0.5, 60)
+                ELSE 60
+              END
+            ),
+            MAX(s.played_at) FILTER (
+              WHERE a.dwell_seconds >= CASE
+                WHEN a.spin_duration_seconds IS NOT NULL
+                  THEN LEAST(a.spin_duration_seconds::numeric * 0.5, 60)
+                ELSE 60
+              END
+            )
+          FROM attendance a
+          INNER JOIN spins s ON s.id = a.spin_id
+          INNER JOIN recordings r ON r.mbid = s.mbid
+          WHERE s.mbid IS NOT NULL
+          GROUP BY a.user_id, s.mbid, to_char(s.played_at AT TIME ZONE 'UTC', 'IYYY-"W"IW')
+          ON CONFLICT (user_id, recording_mbid, iso_week) DO UPDATE SET
+            dwell_total = excluded.dwell_total,
+            spin_count  = excluded.spin_count,
+            first_heard = excluded.first_heard,
+            last_heard  = excluded.last_heard
+        `);
+
+        await tx.execute(sql`
+          INSERT INTO migration_completions (name)
+          VALUES ('applyAttendanceWeeklyRollupBackfill')
+          ON CONFLICT (name) DO NOTHING
+        `);
+      });
+    } catch (err) {
+      stepErrors.push({ step: "backfill_attendance_weekly_rollups", err });
+    }
+  }
+
   if (stepErrors.length > 0) {
     const detail = stepErrors
       .map(({ step, err }) => `${step}: ${err instanceof Error ? err.message : String(err)}`)

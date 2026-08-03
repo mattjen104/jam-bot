@@ -2301,6 +2301,62 @@ export const attendanceRollupsTable = pgTable(
 export type AttendanceRollup = typeof attendanceRollupsTable.$inferSelect;
 export type InsertAttendanceRollup = typeof attendanceRollupsTable.$inferInsert;
 
+/**
+ * Per-listener, per-recording, per-ISO-week read model for weekly listening
+ * summaries ("Your Week on Air").
+ *
+ * Maintained incrementally from the heartbeat write path at the same time as
+ * `attendance_rollups`, so the weekly endpoint never re-aggregates raw rows —
+ * it performs a constant-time indexed lookup on (user_id, iso_week).
+ *
+ * `isoWeek` uses UTC-based ISO weeks ("YYYY-Www", e.g. "2026-W31") derived
+ * from the spin's `played_at` timestamp, ensuring the track is placed in the
+ * week it was actually on air.
+ *
+ * `spinCount` and `firstHeard`/`lastHeard` mirror the lifetime rollup
+ * semantics: spinCount increments only when a spin crosses the dwell gate;
+ * dwell_total accumulates from every credited heartbeat window.
+ */
+export const attendanceWeeklyRollupsTable = pgTable(
+  "attendance_weekly_rollups",
+  {
+    userId: integer("user_id")
+      .notNull()
+      .references(() => loreUsersTable.id, { onDelete: "cascade" }),
+    recordingMbid: text("recording_mbid")
+      .notNull()
+      .references(() => recordingsTable.mbid),
+    /**
+     * ISO week label (UTC), e.g. "2026-W31".
+     * Derived from the spin's played_at, not the heartbeat timestamp,
+     * so a track always belongs to the week it aired on.
+     */
+    isoWeek: text("iso_week").notNull(),
+    /** Total credited listening seconds for this recording in this week. */
+    dwellTotal: integer("dwell_total").notNull().default(0),
+    /** Number of distinct spins whose dwell meets the attendance gate. */
+    spinCount: integer("spin_count").notNull().default(0),
+    /** played_at of the first qualifying spin in this week. */
+    firstHeard: timestamp("first_heard", { withTimezone: true }),
+    /** played_at of the most recent qualifying spin in this week. */
+    lastHeard: timestamp("last_heard", { withTimezone: true }),
+  },
+  (t) => [
+    primaryKey({
+      name: "attendance_weekly_rollups_pk",
+      columns: [t.userId, t.recordingMbid, t.isoWeek],
+    }),
+    // Primary lookup: all recordings for a user in a given week.
+    index("attendance_weekly_rollups_user_week_idx").on(t.userId, t.isoWeek),
+    index("attendance_weekly_rollups_user_idx").on(t.userId),
+    check("attendance_weekly_rollups_dwell_ck", sql`${t.dwellTotal} >= 0`),
+    check("attendance_weekly_rollups_spin_ck", sql`${t.spinCount} >= 0`),
+  ],
+);
+
+export type AttendanceWeeklyRollup = typeof attendanceWeeklyRollupsTable.$inferSelect;
+export type InsertAttendanceWeeklyRollup = typeof attendanceWeeklyRollupsTable.$inferInsert;
+
 // ---- Taste seeds (zero-friction onboarding) --------------------------------
 
 /**
