@@ -3237,6 +3237,7 @@
 /* ── Front-door action bar (spec §10) ──────────────────────────────────── */
 .dial-actbar {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 8px 12px;
   background: hsl(var(--background));
@@ -3285,13 +3286,14 @@
   background: hsl(var(--secondary) / 0.3);
   cursor: pointer;
   transition: background 0.1s, border-color 0.1s;
-  min-width: 0;
+  flex: none;
+  min-width: 80px;
 }
 .dial-act:hover:not(:disabled) { background: hsl(var(--secondary) / 0.6); }
 .dial-act:disabled { opacity: 0.35; cursor: default; }
 
-.dial-act--listen { flex: 2; }
-.dial-act--scan   { flex: 1; }
+.dial-act--listen { width: 130px; }
+.dial-act--scan   { width: 90px; }
 
 .dial-act--on {
   background: hsl(var(--live) / 0.15);
