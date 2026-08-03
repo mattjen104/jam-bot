@@ -133,7 +133,9 @@ export function BottlePanel({
   const [sentConfirm, setSentConfirm] = useState(false);
   // Persists for the lifetime of this MBID session — drives the icon swap
   const [sealed, setSealed] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const errorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { bottles, archivedCount, hasUnread, markRead, send } = useSongBottles(
     mbid,
@@ -158,12 +160,15 @@ export function BottlePanel({
     setNoteText("");
     setSentConfirm(false);
     setSealed(false);
+    setSendError(null);
+    if (errorTimer.current) clearTimeout(errorTimer.current);
   }, [mbid]);
 
-  // Cleanup confirmation timer
+  // Cleanup timers
   useEffect(() => {
     return () => {
       if (confirmTimer.current) clearTimeout(confirmTimer.current);
+      if (errorTimer.current) clearTimeout(errorTimer.current);
     };
   }, []);
 
@@ -215,12 +220,21 @@ export function BottlePanel({
         stationId,
         progressMs,
       });
-    } catch {
+    } catch (err) {
       // Revert so the user can retry
       if (confirmTimer.current) clearTimeout(confirmTimer.current);
       setNoteText(text);
       setSealed(false);
       setSentConfirm(false);
+      // Show a brief inline error that auto-dismisses
+      const msg = err instanceof Error ? err.message : "";
+      const friendly =
+        msg.includes("409") || msg.toLowerCase().includes("already")
+          ? "Already sent a note for this track today"
+          : "Couldn't send — try again";
+      setSendError(friendly);
+      if (errorTimer.current) clearTimeout(errorTimer.current);
+      errorTimer.current = setTimeout(() => setSendError(null), 3000);
     }
   };
 
@@ -469,7 +483,13 @@ export function BottlePanel({
                     rows={2}
                     maxLength={280}
                     value={noteText}
-                    onChange={(e) => setNoteText(e.target.value)}
+                    onChange={(e) => {
+                      setNoteText(e.target.value);
+                      if (sendError) {
+                        setSendError(null);
+                        if (errorTimer.current) clearTimeout(errorTimer.current);
+                      }
+                    }}
                     placeholder="write to the next listener…"
                     data-testid="bottle-input"
                     style={{
@@ -512,6 +532,19 @@ export function BottlePanel({
                     {sending ? "sealing…" : "seal & send"}
                   </button>
                 </div>
+                {sendError && (
+                  <p
+                    data-testid="bottle-send-error"
+                    style={{
+                      margin: "4px 0 0",
+                      fontSize: 12,
+                      color: "var(--destructive, #e05252)",
+                      textAlign: "right",
+                    }}
+                  >
+                    {sendError}
+                  </p>
+                )}
               </div>
             )}
           </div>
