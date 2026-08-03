@@ -976,8 +976,8 @@ export default function Library() {
     setLocation(qs ? `${location.split("?")[0]}?${qs}` : location.split("?")[0]!);
   };
 
-  const { data: appConfig } = useAppConfig();
-  const spotifyImportEnabled = appConfig?.spotifyImportEnabled ?? false;
+  // appConfig retained for other consumers in this file
+  useAppConfig();
 
   const { data: connections, isLoading: connLoading } = useMyConnections();
   const isAuthenticated = !connLoading && connections !== null;
@@ -1160,6 +1160,13 @@ export default function Library() {
 
   const [importModalOpen, setImportModalOpen] = useState(false);
 
+  // Listen for the "Add more +" link in ImportStrip to open this modal
+  useEffect(() => {
+    const handler = () => setImportModalOpen(true);
+    window.addEventListener("lore:open-import-modal", handler);
+    return () => window.removeEventListener("lore:open-import-modal", handler);
+  }, []);
+
   // ── Taste seeds — zero-friction artist onboarding (shared with the Dial) ──
   const { data: seedArtists = [] } = useMyTasteSeeds();
   const setSeedsMutation = useSetTasteSeeds();
@@ -1283,7 +1290,6 @@ export default function Library() {
         <ManualImportModal
           onClose={() => setImportModalOpen(false)}
           onImportStarted={() => void queryClient.invalidateQueries({ queryKey: ["me", "album-avatar"] })}
-          spotifyImportEnabled={spotifyImportEnabled}
         />
       )}
       {searchOpen && (
@@ -2174,43 +2180,6 @@ export default function Library() {
                     song from your library hits the air — across all the stations
                     it follows.
                   </div>
-                </div>
-
-                {/* Service labels */}
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    justifyContent: "center",
-                    gap: "6px 8px",
-                  }}
-                >
-                  {[
-                    ...(spotifyImportEnabled ? [{ label: "Spotify", emoji: "🟢" }] : []),
-                    { label: "Apple Music", emoji: "🎵" },
-                    { label: "ListenBrainz", emoji: "🎧" },
-                    { label: "Last.fm", emoji: "🔴" },
-                    { label: "CSV / paste", emoji: "📋" },
-                  ].map(({ label, emoji }) => (
-                    <span
-                      key={label}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 4,
-                        fontFamily: "var(--app-font-mono)",
-                        fontSize: 10,
-                        color: "hsl(var(--dim))",
-                        background: "hsl(var(--secondary))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: 4,
-                        padding: "3px 8px",
-                      }}
-                    >
-                      <span aria-hidden="true">{emoji}</span>
-                      {label}
-                    </span>
-                  ))}
                 </div>
 
                 {/* CTA */}

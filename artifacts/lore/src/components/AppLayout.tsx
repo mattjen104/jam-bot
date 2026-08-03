@@ -18,7 +18,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   return (
     <>
       {/* ── Import progress strip — visible while a sync runs ────────── */}
-      <ImportStrip />
+      <ImportStrip onAddMore={() => window.dispatchEvent(new CustomEvent("lore:open-import-modal"))} />
 
 
       {/* ── Main content (padded for bottom nav bar) ────────────── */}

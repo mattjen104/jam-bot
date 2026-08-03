@@ -87,7 +87,7 @@ function isResumed(job: ImportJobStatus): boolean {
  * pending, and briefly after it completes so users get a match summary.
  * Renders nothing otherwise.
  */
-export function ImportStrip() {
+export function ImportStrip({ onAddMore }: { onAddMore?: () => void }) {
   const { data: job } = useLatestImportJob();
   // Initialise from sessionStorage so navigating back doesn't re-show a
   // strip the user already dismissed in this browser session.
@@ -150,6 +150,16 @@ export function ImportStrip() {
             <> · <span style={{ color: "hsl(var(--faint))" }}>{unresolved.toLocaleString()} resolving overnight</span></>
           )}
         </p>
+        {onAddMore && (
+          <button
+            type="button"
+            onClick={onAddMore}
+            className="shrink-0 font-mono text-[10px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            aria-label="Add more music"
+          >
+            Add more +
+          </button>
+        )}
         <button
           type="button"
           onClick={dismiss}

@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { X, Upload, FileText, ArrowLeft, ChevronRight, Image as ImageIcon, Loader2, Trash2, RotateCcw, Copy, Download } from "lucide-react";
+import { X, Upload, FileText, ArrowLeft, ChevronRight, Image as ImageIcon, Loader2, Trash2, RotateCcw, Copy, Download, Clock, CheckCircle2 } from "lucide-react";
 import {
   postStartManualImport,
   postStartListenBrainzImport,
@@ -7,6 +7,7 @@ import {
   postExtractLibraryImages,
   startSpotifyLibraryConnect,
   useMyConnections,
+  useLatestImportJob,
   ME_LATEST_IMPORT_JOB_KEY,
 } from "../lib/meHooks";
 import { useQueryClient } from "@tanstack/react-query";
@@ -136,70 +137,36 @@ function isMultilineContent(value: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Service picker data
+// Service definitions — redesigned service-first picker
 // ---------------------------------------------------------------------------
 
-export type ServiceId = "spotify" | "exportify" | "applemusiccsv" | "listenbrainz" | "lastfm" | "other" | "screenshots";
+export type ServiceId =
+  | "spotify"
+  | "applemusic"
+  | "youtubemusic"
+  | "lastfm"
+  | "listenbrainz"
+  | "typeorpaste"
+  // legacy IDs kept for internal routing
+  | "exportify"
+  | "applemusiccsv"
+  | "other"
+  | "screenshots";
 
-export interface ServiceDef {
+export interface ServiceTile {
   id: ServiceId;
   label: string;
   hint: string;
-  steps?: Array<{ text: string; linkHref?: string; linkLabel?: string }>;
-  externalHref?: string;
-  externalLabel?: string;
 }
 
-export const IMPORT_SERVICES: ServiceDef[] = [
-  {
-    id: "spotify",
-    label: "Spotify (direct)",
-    hint: "Pull your saved tracks directly — Spotify connection required",
-  },
-  {
-    id: "exportify",
-    label: "Spotify / Exportify",
-    hint: "Export any Spotify playlist as a CSV",
-    externalHref: "https://exportify.net",
-    externalLabel: "Open Exportify",
-    steps: [
-      { text: "Go to Exportify and log in with your Spotify account.", linkHref: "https://exportify.net", linkLabel: "exportify.net" },
-      { text: "Click Export next to the playlist you want to import." },
-      { text: "Drop the downloaded CSV below, or paste its contents." },
-    ],
-  },
-  {
-    id: "applemusiccsv",
-    label: "Apple Music / TuneMyMusic",
-    hint: "Export your Apple Music library via TuneMyMusic",
-    externalHref: "https://www.tunemymusic.com/transfer",
-    externalLabel: "Open TuneMyMusic",
-    steps: [
-      { text: "Go to TuneMyMusic and choose Apple Music as the source.", linkHref: "https://www.tunemymusic.com/transfer", linkLabel: "tunemymusic.com" },
-      { text: "Export your library — choose 'To File' and download the CSV." },
-      { text: "Drop the downloaded CSV below, or paste its contents." },
-    ],
-  },
-  {
-    id: "listenbrainz",
-    label: "ListenBrainz",
-    hint: "Import loved recordings by username",
-  },
-  {
-    id: "lastfm",
-    label: "Last.fm",
-    hint: "Export loved tracks then drop the CSV here",
-  },
-  {
-    id: "other",
-    label: "Other / paste",
-    hint: "Paste tracks or drop any CSV file",
-  },
-  {
-    id: "screenshots",
-    label: "Library screenshots",
-    hint: "Paste or upload screenshots — we’ll recognize the visible rows",
-  },
+/** Top-level service tiles shown on the picker screen */
+export const SERVICE_TILES: ServiceTile[] = [
+  { id: "spotify",      label: "Spotify",        hint: "Import your saved tracks" },
+  { id: "applemusic",   label: "Apple Music",    hint: "Import your library" },
+  { id: "youtubemusic", label: "YouTube Music",  hint: "Import your library" },
+  { id: "lastfm",       label: "Last.fm",        hint: "Import your loved tracks" },
+  { id: "listenbrainz", label: "ListenBrainz",   hint: "Import loved recordings by username" },
+  { id: "typeorpaste",  label: "Type or paste",  hint: "Type, paste, or screenshot anything" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -207,26 +174,145 @@ export const IMPORT_SERVICES: ServiceDef[] = [
 // ---------------------------------------------------------------------------
 
 /**
- * service-picker — initial mode: grid of service tiles
- * service-steps  — per-service instruction pane (selectedService is set)
- * input          — legacy combined text/file mode (kept as internal fallback)
- * username       — single token submitted; showing LB / Last.fm disambiguation
- * tracks         — multiline content detected; textarea + parse count
- * lfm-hint       — user tapped Last.fm from disambiguation; showing export hint
+ * service-picker  — initial screen: grid of service tiles
+ * service-guide   — per-service instructions (selectedService is set)
+ * listenbrainz    — username input for ListenBrainz
+ * username        — username disambiguation (LB vs Last.fm)
+ * lfm-hint        — Last.fm export guide
+ * tracks          — text paste / CSV mode
+ * images          — screenshot upload/paste
+ * review          — OCR review
  */
-type Mode = "service-picker" | "service-steps" | "input" | "username" | "tracks" | "lfm-hint" | "images" | "review";
+type Mode =
+  | "service-picker"
+  | "service-guide"
+  | "listenbrainz"
+  | "username"
+  | "tracks"
+  | "lfm-hint"
+  | "images"
+  | "review";
 
 interface Props {
   onClose(): void;
   onImportStarted?(): void;
-  /** When false, the "Spotify (direct)" tab is hidden. Defaults to false. */
+  /** @deprecated Spotify is always shown. Kept for callers that still pass it. */
   spotifyImportEnabled?: boolean;
 }
 
-export function ManualImportModal({ onClose, onImportStarted, spotifyImportEnabled = false }: Props) {
+// ---------------------------------------------------------------------------
+// Import history row (shown at top of picker when a previous import exists)
+// ---------------------------------------------------------------------------
+function ImportHistoryRow({ job, onClose }: { job: NonNullable<ReturnType<typeof useLatestImportJob>["data"]>; onClose(): void }) {
+  const serviceLabel: Record<string, string> = {
+    spotify: "Spotify",
+    manual: "Paste / CSV",
+    listenbrainz: "ListenBrainz",
+  };
+  const label = serviceLabel[job.service] ?? job.service;
+  const isDone = job.status === "done";
+  const isRunning = job.status === "running" || job.status === "pending";
+  const statusText = isRunning
+    ? "In progress…"
+    : isDone
+    ? `${job.resolved.toLocaleString()} of ${job.total.toLocaleString()} tracks matched`
+    : job.status === "error"
+    ? "Import failed"
+    : "";
+
+  return (
+    <div
+      className="flex items-center gap-3 rounded-xl border border-border px-4 py-2.5"
+      style={{ background: "hsl(var(--muted)/0.15)" }}
+      data-testid="import-history-row"
+    >
+      <div className="shrink-0">
+        {isDone ? (
+          <CheckCircle2 size={13} style={{ color: "hsl(var(--keep))" }} aria-hidden />
+        ) : isRunning ? (
+          <Loader2 size={13} className="animate-spin" style={{ color: "hsl(var(--primary))" }} aria-hidden />
+        ) : (
+          <Clock size={13} style={{ color: "hsl(var(--faint))" }} aria-hidden />
+        )}
+      </div>
+      <div className="flex flex-1 flex-col gap-0.5 min-w-0">
+        <p className="font-mono text-[11px] text-foreground">{label}</p>
+        {statusText && (
+          <p className="font-mono text-[10px] text-muted-foreground truncate">{statusText}</p>
+        )}
+      </div>
+      {isRunning && (
+        <button
+          type="button"
+          onClick={onClose}
+          className="shrink-0 font-mono text-[10px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+        >
+          Track progress
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Screenshot drop zone — reusable inline component
+// ---------------------------------------------------------------------------
+function ScreenshotDropZone({
+  isDragging,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  onFilePick,
+  imageRef,
+}: {
+  isDragging: boolean;
+  onDragOver(e: React.DragEvent): void;
+  onDragLeave(): void;
+  onDrop(e: React.DragEvent): void;
+  onFilePick(files: File[]): void;
+  imageRef: React.RefObject<HTMLInputElement | null>;
+}) {
+  return (
+    <div
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+      onClick={() => imageRef.current?.click()}
+      role="button"
+      tabIndex={0}
+      aria-label="Paste or drop a library screenshot"
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); imageRef.current?.click(); } }}
+      className="flex cursor-pointer items-center gap-2 rounded-xl border border-dashed px-4 py-3 font-mono text-[11px] text-muted-foreground transition-colors"
+      style={{
+        borderColor: isDragging ? "hsl(var(--primary))" : "hsl(var(--border))",
+        background: isDragging ? "hsl(var(--primary)/0.06)" : "hsl(var(--muted)/0.08)",
+      }}
+    >
+      <ImageIcon size={13} aria-hidden className={isDragging ? "text-primary" : "text-muted-foreground/60"} />
+      <span className={isDragging ? "text-primary" : "text-muted-foreground/70"}>
+        {isDragging ? "Drop screenshot here" : "Have the library open? Paste or drop a screenshot ↓"}
+      </span>
+      <input
+        ref={imageRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        multiple
+        className="hidden"
+        onChange={(e) => { onFilePick(Array.from(e.target.files ?? [])); e.target.value = ""; }}
+      />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
+export function ManualImportModal({ onClose, onImportStarted }: Props) {
   const [mode, setMode] = useState<Mode>("service-picker");
   const [selectedService, setSelectedService] = useState<ServiceId | null>(null);
   const [rawInput, setRawInput] = useState("");
+  const [lbUsername, setLbUsername] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -236,31 +322,33 @@ export function ManualImportModal({ onClose, onImportStarted, spotifyImportEnabl
 
   const fileRef = useRef<HTMLInputElement>(null);
   const imageRef = useRef<HTMLInputElement>(null);
+  const screenshotInGuideRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const singleInputRef = useRef<HTMLInputElement>(null);
+  const lbInputRef = useRef<HTMLInputElement>(null);
 
   const qc = useQueryClient();
   const { data: connections } = useMyConnections();
+  const { data: latestJob } = useLatestImportJob();
   const hasSpotify = Array.isArray(connections) && connections.some((c) => c.service === "spotify");
+
+  // Whether we should show the history row at the top of the picker
+  const showHistory = latestJob != null && (
+    latestJob.status === "done" || latestJob.status === "running" || latestJob.status === "pending"
+  );
 
   // Derived
   const tracks = mode === "tracks" ? parseTracks(rawInput) : reviewTracks;
   const reviewReadyTracks = dedupeTracks(reviewTracks).map(({ artist, title }) => ({ artist, title }));
-  const detectedUsername = mode === "username" ? rawInput.trim() : "";
   const pendingImageCount = images.filter((image) => image.status === "ready" || image.status === "error").length;
   const failedImageCount = images.filter((image) => image.status === "error").length;
-
-  // Auto-switch to tracks mode when multiline content is pasted
-  useEffect(() => {
-    if (mode === "input" && isMultilineContent(rawInput)) {
-      setMode("tracks");
-    }
-  }, [rawInput, mode]);
 
   // Focus textarea when switching to tracks mode
   useEffect(() => {
     if (mode === "tracks") {
       requestAnimationFrame(() => textareaRef.current?.focus());
+    }
+    if (mode === "listenbrainz") {
+      requestAnimationFrame(() => lbInputRef.current?.focus());
     }
   }, [mode]);
 
@@ -288,70 +376,28 @@ export function ManualImportModal({ onClose, onImportStarted, spotifyImportEnabl
     }
   };
 
-  const handleServiceSelect = (svc: ServiceDef) => {
+  const handleServiceTileClick = (id: ServiceId) => {
     setError(null);
-    if (svc.id === "spotify") {
-      void handleSpotifyDirectImport();
-      return;
-    }
-    if (svc.id === "other") {
-      setSelectedService("other");
+    setSelectedService(id);
+    if (id === "typeorpaste") {
       setMode("tracks");
-      return;
-    }
-    if (svc.id === "screenshots") {
-      setSelectedService("screenshots");
-      setMode("images");
-      setError(null);
-      return;
-    }
-    if (svc.id === "listenbrainz") {
-      setSelectedService("listenbrainz");
-      setMode("input");
-      return;
-    }
-    if (svc.id === "lastfm") {
-      setSelectedService("lastfm");
+    } else if (id === "listenbrainz") {
+      setMode("listenbrainz");
+    } else if (id === "lastfm") {
       setMode("lfm-hint");
-      return;
+    } else {
+      setMode("service-guide");
     }
-    // exportify / applemusiccsv — show per-service steps
-    setSelectedService(svc.id);
-    setMode("service-steps");
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setRawInput(e.target.value);
     setError(null);
-    // If mode was username/lfm-hint but user is editing, go back to input
-    if (mode !== "input" && mode !== "tracks") setMode("input");
   };
 
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setRawInput(e.target.value);
     setError(null);
-  };
-
-  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleDetect();
-    }
-  };
-
-  const handleDetect = () => {
-    const val = rawInput.trim();
-    if (!val) return;
-    if (isMultilineContent(rawInput)) {
-      setMode("tracks");
-      return;
-    }
-    if (isUsername(val)) {
-      setMode("username");
-      return;
-    }
-    // Fallback: treat as tracks
-    setMode("tracks");
   };
 
   const handleFile = useCallback((file: File) => {
@@ -513,11 +559,8 @@ export function ManualImportModal({ onClose, onImportStarted, spotifyImportEnabl
     URL.revokeObjectURL(url);
   };
 
-  // Drag-and-drop
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
+  // Drag-and-drop for CSV
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
   const handleDragLeave = () => setIsDragging(false);
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -529,11 +572,12 @@ export function ManualImportModal({ onClose, onImportStarted, spotifyImportEnabl
   // ── Import actions ───────────────────────────────────────────────────────
 
   const handleListenBrainzImport = async () => {
-    if (!detectedUsername) return;
+    const username = lbUsername.trim();
+    if (!username) return;
     setError(null);
     setSubmitting(true);
     try {
-      await postStartListenBrainzImport(detectedUsername);
+      await postStartListenBrainzImport(username);
       await qc.invalidateQueries({ queryKey: ME_LATEST_IMPORT_JOB_KEY });
       onImportStarted?.();
       onClose();
@@ -560,7 +604,6 @@ export function ManualImportModal({ onClose, onImportStarted, spotifyImportEnabl
   };
 
   const handleBack = () => {
-    // Always return to the service picker from any downstream mode
     setMode("service-picker");
     setError(null);
     setSelectedService(null);
@@ -570,9 +613,19 @@ export function ManualImportModal({ onClose, onImportStarted, spotifyImportEnabl
 
   const showBack = mode !== "service-picker";
 
-  const currentServiceDef = selectedService
-    ? IMPORT_SERVICES.find((s) => s.id === selectedService) ?? null
-    : null;
+  const headerTitle: Partial<Record<Mode, string>> = {
+    "service-picker": "Where is your music?",
+    "service-guide": selectedService === "spotify" ? "Spotify" :
+                     selectedService === "applemusic" ? "Apple Music" :
+                     selectedService === "youtubemusic" ? "YouTube Music" :
+                     "Import",
+    "listenbrainz": "ListenBrainz",
+    "lfm-hint": "Last.fm",
+    "images": "Library screenshots",
+    "review": "Review screenshots",
+    "tracks": selectedService === "typeorpaste" ? "Type or paste" : "Paste or upload",
+    "username": "Import your tracks",
+  };
 
   return (
     <div
@@ -585,7 +638,7 @@ export function ManualImportModal({ onClose, onImportStarted, spotifyImportEnabl
       {/* Panel */}
       <div
         className="relative z-10 flex w-full max-w-lg flex-col gap-4 rounded-t-2xl sm:rounded-2xl border border-border p-5"
-        style={{ background: "hsl(var(--card))" }}
+        style={{ background: "hsl(var(--card))", maxHeight: "90vh", overflowY: "auto" }}
         onPaste={handleImagePaste}
       >
         {/* ── Header ─────────────────────────────────────────────────── */}
@@ -603,22 +656,11 @@ export function ManualImportModal({ onClose, onImportStarted, spotifyImportEnabl
             )}
             <div>
               <h2 className="font-mono text-sm font-semibold text-foreground">
-                {mode === "service-picker" ? "Import your tracks" :
-                 mode === "service-steps" && currentServiceDef ? currentServiceDef.label :
-                 mode === "username" ? "Import your tracks" :
-                 mode === "lfm-hint" ? "Import from Last.fm" :
-                 mode === "images" ? "Library screenshots" :
-                 mode === "review" ? "Review screenshots" :
-                 "Import your tracks"}
+                {headerTitle[mode] ?? "Import your tracks"}
               </h2>
               {mode === "service-picker" && (
                 <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
-                  Choose where your tracks are coming from.
-                </p>
-              )}
-              {mode === "username" && (
-                <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
-                  Where should we look for <span className="text-foreground">{detectedUsername}</span>?
+                  Imports are additive — they never remove anything.
                 </p>
               )}
             </div>
@@ -633,218 +675,217 @@ export function ManualImportModal({ onClose, onImportStarted, spotifyImportEnabl
           </button>
         </div>
 
+        {/* ── Import history row ─────────────────────────────────────── */}
+        {mode === "service-picker" && showHistory && latestJob && (
+          <ImportHistoryRow job={latestJob} onClose={onClose} />
+        )}
+
         {/* ── Service picker ─────────────────────────────────────────── */}
         {mode === "service-picker" && (
-          <div className="flex flex-col gap-2" data-testid="service-picker">
-            {IMPORT_SERVICES.filter((svc) => svc.id !== "spotify" || spotifyImportEnabled).map((svc) => (
-              <button
-                key={svc.id}
-                type="button"
-                data-testid={`service-tile-${svc.id}`}
-                onClick={() => handleServiceSelect(svc)}
-                className="flex w-full items-center justify-between rounded-xl border border-border px-4 py-3 text-left transition-colors hover:border-primary"
-                style={{ background: "hsl(var(--muted)/0.2)" }}
-              >
-                <div>
-                  <p className="font-mono text-[12px] font-semibold text-foreground">{svc.label}</p>
-                  <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">{svc.hint}</p>
-                </div>
-                <ChevronRight size={14} className="shrink-0 text-muted-foreground" aria-hidden />
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* ── Service steps ──────────────────────────────────────────── */}
-        {mode === "service-steps" && currentServiceDef && (
           <>
-            <div
-              className="rounded-lg border border-border px-3 py-3 font-mono text-[11px] text-muted-foreground space-y-2"
-              style={{ background: "hsl(var(--muted)/0.3)" }}
-              data-testid="service-steps-panel"
-            >
-              <p className="font-semibold text-foreground">{currentServiceDef.label}</p>
-              {currentServiceDef.steps && (
-                <ol className="space-y-1.5 list-none">
-                  {currentServiceDef.steps.map((step, i) => (
-                    <li key={i} className="flex gap-2">
-                      <span
-                        className="shrink-0 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold"
-                        style={{ background: "hsl(var(--primary)/0.15)", color: "hsl(var(--primary))" }}
-                        aria-hidden
-                      >
-                        {i + 1}
-                      </span>
-                      <span>
-                        {step.linkHref ? (
-                          <>
-                            {step.text.split(step.linkLabel ?? step.linkHref)[0]}
-                            <a
-                              href={step.linkHref}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-primary underline underline-offset-2"
-                            >
-                              {step.linkLabel ?? step.linkHref}
-                            </a>
-                            {step.text.split(step.linkLabel ?? step.linkHref)[1]}
-                          </>
-                        ) : step.text}
-                      </span>
-                    </li>
-                  ))}
-                </ol>
-              )}
-              {currentServiceDef.externalHref && (
-                <a
-                  href={currentServiceDef.externalHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-primary underline underline-offset-2"
-                  data-testid="service-external-link"
+            <div className="flex flex-col gap-2" data-testid="service-picker">
+              {SERVICE_TILES.map((tile) => (
+                <button
+                  key={tile.id}
+                  type="button"
+                  data-testid={`service-tile-${tile.id}`}
+                  onClick={() => handleServiceTileClick(tile.id)}
+                  className="flex w-full items-center justify-between rounded-xl border border-border px-4 py-3 text-left transition-colors hover:border-primary"
+                  style={{ background: "hsl(var(--muted)/0.2)" }}
                 >
-                  {currentServiceDef.externalLabel ?? currentServiceDef.externalHref}
-                </a>
-              )}
+                  <div>
+                    <p className="font-mono text-[12px] font-semibold text-foreground">{tile.label}</p>
+                    <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">{tile.hint}</p>
+                  </div>
+                  <ChevronRight size={14} className="shrink-0 text-muted-foreground" aria-hidden />
+                </button>
+              ))}
             </div>
 
-            {/* Upload zone */}
-            <div
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onClick={() => fileRef.current?.click()}
-              role="button"
-              tabIndex={0}
-              aria-label="Upload or drop a CSV file"
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileRef.current?.click(); }}
-              className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-4 font-mono text-[11px] text-muted-foreground transition-colors"
-              style={{
-                borderColor: isDragging ? "hsl(var(--primary))" : "hsl(var(--border))",
-                background: isDragging ? "hsl(var(--primary)/0.06)" : "hsl(var(--muted)/0.15)",
-              }}
-            >
-              <Upload size={14} aria-hidden />
-              <span>{isDragging ? "Drop to import" : "Drop CSV or click to browse"}</span>
-              <input ref={fileRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFileInput} />
-            </div>
-          </>
-        )}
-
-        {/* ── Input mode (ListenBrainz path) ─────────────────────────── */}
-        {mode === "input" && (
-          <>
-            {/* Single-line text input */}
-            <div className="flex gap-2">
-              <input
-                ref={singleInputRef}
-                type="text"
-                value={rawInput}
-                onChange={handleInputChange}
-                onKeyDown={handleInputKeyDown}
-                placeholder="Enter your ListenBrainz username…"
-                autoFocus
-                className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 font-mono text-[11px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                spellCheck={false}
-              />
-              <button
-                type="button"
-                onClick={handleDetect}
-                disabled={!rawInput.trim()}
-                className="shrink-0 rounded-lg border border-primary bg-primary px-3 py-2 font-mono text-[10px] uppercase tracking-wide text-primary-foreground transition-opacity disabled:opacity-40"
-              >
-                <ChevronRight size={13} aria-hidden />
-              </button>
-            </div>
-
-            {/* Drag-and-drop / file upload zone */}
-            <div
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onClick={() => fileRef.current?.click()}
-              role="button"
-              tabIndex={0}
-              aria-label="Upload or drop a CSV or text file"
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileRef.current?.click(); }}
-              className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-6 font-mono text-[11px] text-muted-foreground transition-colors"
-              style={{
-                borderColor: isDragging ? "hsl(var(--primary))" : "hsl(var(--border))",
-                background: isDragging ? "hsl(var(--primary)/0.06)" : "hsl(var(--muted)/0.15)",
-              }}
-            >
-              <Upload size={16} aria-hidden className={isDragging ? "text-primary" : "text-muted-foreground/50"} />
-              <span className={isDragging ? "text-primary" : ""}>
-                {isDragging ? "Drop to import" : "Drop a CSV or text file, or click to browse"}
-              </span>
-              <input ref={fileRef} type="file" accept=".csv,.txt,.json" className="hidden" onChange={handleFileInput} />
-            </div>
-
-            {/* Hint */}
-            <p className="font-mono text-[10px] text-muted-foreground/60">
-              Accepts ListenBrainz usernames, or paste tracks directly.
+            {/* "Come back later" callout */}
+            <p className="font-mono text-[10px] text-muted-foreground/60 text-center">
+              Imports run in the background and are always additive — close anytime and the strip at the top will track progress.
             </p>
           </>
         )}
 
-        {/* ── Username disambiguation ─────────────────────────────────── */}
-        {mode === "username" && (
+        {/* ── Spotify service guide ───────────────────────────────────── */}
+        {mode === "service-guide" && selectedService === "spotify" && (
           <>
-            {/* Username pill */}
-            <div className="flex items-center gap-2 rounded-lg border border-border px-3 py-2" style={{ background: "hsl(var(--muted)/0.2)" }}>
-              <span className="flex-1 font-mono text-[12px] text-foreground truncate">{detectedUsername}</span>
-              <button
-                type="button"
-                onClick={handleBack}
-                className="font-mono text-[10px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            <div className="flex flex-col gap-3">
+              {/* Option 1: Direct connect */}
+              <div
+                className="rounded-xl border border-border px-4 py-4 flex flex-col gap-3"
+                style={{ background: "hsl(var(--muted)/0.2)" }}
               >
-                Edit
-              </button>
+                <div>
+                  <p className="font-mono text-[12px] font-semibold text-foreground">Connect Spotify</p>
+                  <p className="mt-1 font-mono text-[11px] text-muted-foreground leading-relaxed">
+                    {hasSpotify
+                      ? "Your Spotify account is already connected. Click below to pull your saved tracks."
+                      : "This will open Spotify and ask permission to read your saved tracks. Lore never sees your password."}
+                  </p>
+                </div>
+                {error && mode === "service-guide" && (
+                  <p className="font-mono text-[11px] text-destructive">{error}</p>
+                )}
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => void handleSpotifyDirectImport()}
+                  className="self-start rounded-full border border-primary bg-primary px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-primary-foreground disabled:opacity-40"
+                >
+                  {submitting ? "Starting…" : hasSpotify ? "Import saved tracks" : "Connect Spotify"}
+                </button>
+              </div>
+
+              {/* Option 2: Exportify CSV */}
+              <div
+                className="rounded-xl border border-border px-4 py-4 flex flex-col gap-2"
+                style={{ background: "hsl(var(--muted)/0.1)" }}
+              >
+                <p className="font-mono text-[12px] font-semibold text-foreground">Export a playlist via Exportify</p>
+                <ol className="space-y-1.5 font-mono text-[11px] text-muted-foreground list-none">
+                  {[
+                    <>Go to <a href="https://exportify.net" target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">exportify.net</a> and log in with Spotify.</>,
+                    <>Click Export next to the playlist you want.</>,
+                    <>Drop the CSV below or paste its contents.</>,
+                  ].map((step, i) => (
+                    <li key={i} className="flex gap-2">
+                      <span className="shrink-0 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold" style={{ background: "hsl(var(--primary)/0.15)", color: "hsl(var(--primary))" }} aria-hidden>{i + 1}</span>
+                      <span>{step}</span>
+                    </li>
+                  ))}
+                </ol>
+                <div
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onClick={() => fileRef.current?.click()}
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Upload or drop a CSV file"
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileRef.current?.click(); }}
+                  className="mt-1 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-3 font-mono text-[11px] text-muted-foreground transition-colors"
+                  style={{
+                    borderColor: isDragging ? "hsl(var(--primary))" : "hsl(var(--border))",
+                    background: isDragging ? "hsl(var(--primary)/0.06)" : "hsl(var(--muted)/0.08)",
+                  }}
+                >
+                  <Upload size={13} aria-hidden />
+                  <span>{isDragging ? "Drop to import" : "Drop CSV or click to browse"}</span>
+                  <input ref={fileRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFileInput} />
+                </div>
+              </div>
+
+              {/* Screenshot hint */}
+              <ScreenshotDropZone
+                isDragging={isDragging}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => { e.preventDefault(); setIsDragging(false); void addImages(Array.from(e.dataTransfer.files)); setMode("images"); }}
+                onFilePick={(files) => { void addImages(files); setMode("images"); }}
+                imageRef={screenshotInGuideRef}
+              />
+              <input ref={screenshotInGuideRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={(e) => { void addImages(Array.from(e.target.files ?? [])); setMode("images"); e.target.value = ""; }} />
+            </div>
+          </>
+        )}
+
+        {/* ── Apple Music service guide ────────────────────────────────── */}
+        {mode === "service-guide" && selectedService === "applemusic" && (
+          <div className="flex flex-col gap-3">
+            {/* Option 1: TuneMyMusic CSV */}
+            <div className="rounded-xl border border-border px-4 py-4 flex flex-col gap-2" style={{ background: "hsl(var(--muted)/0.2)" }}>
+              <p className="font-mono text-[12px] font-semibold text-foreground">Export via TuneMyMusic</p>
+              <ol className="space-y-1.5 font-mono text-[11px] text-muted-foreground list-none">
+                {[
+                  <>Go to <a href="https://www.tunemymusic.com/transfer" target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">tunemymusic.com</a> and choose Apple Music as the source.</>,
+                  <>Choose "To File" and download the CSV.</>,
+                  <>Drop the CSV below or paste its contents.</>,
+                ].map((step, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span className="shrink-0 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold" style={{ background: "hsl(var(--primary)/0.15)", color: "hsl(var(--primary))" }} aria-hidden>{i + 1}</span>
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ol>
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => fileRef.current?.click()}
+                role="button" tabIndex={0}
+                aria-label="Upload or drop a CSV file"
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileRef.current?.click(); }}
+                className="mt-1 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-3 font-mono text-[11px] text-muted-foreground transition-colors"
+                style={{ borderColor: isDragging ? "hsl(var(--primary))" : "hsl(var(--border))", background: isDragging ? "hsl(var(--primary)/0.06)" : "hsl(var(--muted)/0.08)" }}
+              >
+                <Upload size={13} aria-hidden />
+                <span>{isDragging ? "Drop to import" : "Drop CSV or click to browse"}</span>
+                <input ref={fileRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFileInput} />
+              </div>
             </div>
 
-            {/* Primary action: ListenBrainz */}
-            <button
-              type="button"
-              onClick={() => void handleListenBrainzImport()}
-              disabled={submitting}
-              className="flex w-full items-center justify-between rounded-xl border border-border px-4 py-3 text-left transition-colors hover:border-primary"
-              style={{ background: "hsl(var(--muted)/0.2)" }}
-            >
-              <div>
-                <p className="font-mono text-[12px] font-semibold text-foreground">
-                  Import from ListenBrainz
-                </p>
-                <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">
-                  Loved recordings with full MusicBrainz IDs — best match quality.
-                </p>
+            {/* Option 2: Screenshot */}
+            <div className="rounded-xl border border-border px-4 py-3 flex flex-col gap-2" style={{ background: "hsl(var(--muted)/0.1)" }}>
+              <p className="font-mono text-[12px] font-semibold text-foreground">Paste a screenshot</p>
+              <p className="font-mono text-[11px] text-muted-foreground">Open your Apple Music library, take a screenshot, and paste it here — we'll recognize the track rows automatically.</p>
+              <ScreenshotDropZone
+                isDragging={isDragging}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => { e.preventDefault(); setIsDragging(false); void addImages(Array.from(e.dataTransfer.files)); setMode("images"); }}
+                onFilePick={(files) => { void addImages(files); setMode("images"); }}
+                imageRef={screenshotInGuideRef}
+              />
+              <input ref={screenshotInGuideRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={(e) => { void addImages(Array.from(e.target.files ?? [])); setMode("images"); e.target.value = ""; }} />
+            </div>
+          </div>
+        )}
+
+        {/* ── YouTube Music service guide ──────────────────────────────── */}
+        {mode === "service-guide" && selectedService === "youtubemusic" && (
+          <div className="flex flex-col gap-3">
+            {/* Primary: Screenshot */}
+            <div className="rounded-xl border border-border px-4 py-3 flex flex-col gap-2" style={{ background: "hsl(var(--muted)/0.2)" }}>
+              <p className="font-mono text-[12px] font-semibold text-foreground">Paste a screenshot</p>
+              <p className="font-mono text-[11px] text-muted-foreground">Open your YouTube Music library, take a screenshot of your liked songs or playlists, and paste it here — we'll recognize the track rows automatically.</p>
+              <ScreenshotDropZone
+                isDragging={isDragging}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => { e.preventDefault(); setIsDragging(false); void addImages(Array.from(e.dataTransfer.files)); setMode("images"); }}
+                onFilePick={(files) => { void addImages(files); setMode("images"); }}
+                imageRef={screenshotInGuideRef}
+              />
+              <input ref={screenshotInGuideRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={(e) => { void addImages(Array.from(e.target.files ?? [])); setMode("images"); e.target.value = ""; }} />
+            </div>
+
+            {/* Secondary: TuneMyMusic */}
+            <div className="rounded-xl border border-border px-4 py-3 flex flex-col gap-2" style={{ background: "hsl(var(--muted)/0.1)" }}>
+              <p className="font-mono text-[12px] font-semibold text-foreground">Export via TuneMyMusic</p>
+              <p className="font-mono text-[11px] text-muted-foreground">
+                <a href="https://www.tunemymusic.com/transfer" target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">tunemymusic.com</a>
+                {" "}can export a YouTube Music playlist as a CSV — then drop it here.
+              </p>
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => fileRef.current?.click()}
+                role="button" tabIndex={0}
+                aria-label="Upload or drop a CSV file"
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileRef.current?.click(); }}
+                className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-3 font-mono text-[11px] text-muted-foreground transition-colors"
+                style={{ borderColor: isDragging ? "hsl(var(--primary))" : "hsl(var(--border))", background: isDragging ? "hsl(var(--primary)/0.06)" : "hsl(var(--muted)/0.08)" }}
+              >
+                <Upload size={13} aria-hidden />
+                <span>{isDragging ? "Drop to import" : "Drop CSV or click to browse"}</span>
+                <input ref={fileRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFileInput} />
               </div>
-              <ChevronRight size={14} className="shrink-0 text-muted-foreground" aria-hidden />
-            </button>
-
-            {/* Secondary action: Last.fm hint */}
-            <button
-              type="button"
-              onClick={() => { setMode("lfm-hint"); setError(null); }}
-              disabled={submitting}
-              className="flex w-full items-center justify-between rounded-xl border border-border px-4 py-3 text-left transition-colors hover:border-border/80"
-              style={{ background: "transparent" }}
-            >
-              <div>
-                <p className="font-mono text-[12px] text-muted-foreground">
-                  Importing from Last.fm instead?
-                </p>
-              </div>
-              <ChevronRight size={14} className="shrink-0 text-muted-foreground/50" aria-hidden />
-            </button>
-
-            {error && (
-              <p className="font-mono text-[11px] text-destructive">{error}</p>
-            )}
-
-            {submitting && (
-              <p className="font-mono text-[11px] text-muted-foreground">Starting import…</p>
-            )}
-          </>
+            </div>
+          </div>
         )}
 
         {/* ── Last.fm hint ─────────────────────────────────────────────── */}
@@ -862,20 +903,13 @@ export function ManualImportModal({ onClose, onImportStarted, spotifyImportEnabl
                   <>Download the CSV, then drop it on the import zone or paste the contents below.</>,
                 ].map((step, i) => (
                   <li key={i} className="flex gap-2">
-                    <span
-                      className="shrink-0 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold"
-                      style={{ background: "hsl(var(--primary)/0.15)", color: "hsl(var(--primary))" }}
-                      aria-hidden
-                    >
-                      {i + 1}
-                    </span>
+                    <span className="shrink-0 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold" style={{ background: "hsl(var(--primary)/0.15)", color: "hsl(var(--primary))" }} aria-hidden>{i + 1}</span>
                     <span>{step}</span>
                   </li>
                 ))}
               </ol>
             </div>
 
-            {/* Switch to paste/upload zone */}
             <div
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
@@ -896,6 +930,16 @@ export function ManualImportModal({ onClose, onImportStarted, spotifyImportEnabl
               <input ref={fileRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFileInput} />
             </div>
 
+            <ScreenshotDropZone
+              isDragging={isDragging}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => { e.preventDefault(); setIsDragging(false); void addImages(Array.from(e.dataTransfer.files)); setMode("images"); }}
+              onFilePick={(files) => { void addImages(files); setMode("images"); }}
+              imageRef={screenshotInGuideRef}
+            />
+            <input ref={screenshotInGuideRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={(e) => { void addImages(Array.from(e.target.files ?? [])); setMode("images"); e.target.value = ""; }} />
+
             <div className="flex justify-end">
               <button
                 type="button"
@@ -905,6 +949,174 @@ export function ManualImportModal({ onClose, onImportStarted, spotifyImportEnabl
                 Cancel
               </button>
             </div>
+          </>
+        )}
+
+        {/* ── ListenBrainz username input ──────────────────────────────── */}
+        {mode === "listenbrainz" && (
+          <>
+            <div
+              className="rounded-lg border border-border px-3 py-3 font-mono text-[11px] text-muted-foreground"
+              style={{ background: "hsl(var(--muted)/0.3)" }}
+            >
+              <p className="font-semibold text-foreground mb-1">Enter your ListenBrainz username</p>
+              <p>We'll import your loved recordings using the public ListenBrainz API. No account connection needed.</p>
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                ref={lbInputRef}
+                type="text"
+                value={lbUsername}
+                onChange={(e) => { setLbUsername(e.target.value); setError(null); }}
+                onKeyDown={(e) => { if (e.key === "Enter") void handleListenBrainzImport(); }}
+                placeholder="Your ListenBrainz username"
+                autoFocus
+                className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 font-mono text-[11px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                spellCheck={false}
+                data-testid="listenbrainz-username-input"
+              />
+              <button
+                type="button"
+                onClick={() => void handleListenBrainzImport()}
+                disabled={!lbUsername.trim() || submitting}
+                className="shrink-0 rounded-lg border border-primary bg-primary px-3 py-2 font-mono text-[10px] uppercase tracking-wide text-primary-foreground transition-opacity disabled:opacity-40"
+              >
+                {submitting ? "…" : "Import"}
+              </button>
+            </div>
+
+            {error && <p className="font-mono text-[11px] text-destructive">{error}</p>}
+
+            {submitting && (
+              <p className="font-mono text-[11px] text-muted-foreground">Starting import…</p>
+            )}
+          </>
+        )}
+
+        {/* ── "Type or paste" mode / tracks mode ─────────────────────── */}
+        {mode === "tracks" && (
+          <>
+            {/* Service summary banner for CSV services */}
+            {(selectedService === "exportify" || selectedService === "applemusiccsv") && (
+              <div
+                className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 font-mono text-[10px] text-muted-foreground"
+                style={{ background: "hsl(var(--muted)/0.15)" }}
+                data-testid="service-summary-banner"
+              >
+                <FileText size={10} aria-hidden className="shrink-0" />
+                <span>
+                  {selectedService === "exportify"
+                    ? "Importing from Exportify — paste or drop your CSV"
+                    : "Importing from TuneMyMusic — paste or drop your CSV"}
+                </span>
+              </div>
+            )}
+
+            {/* Textarea */}
+            <textarea
+              ref={textareaRef}
+              value={rawInput}
+              onChange={handleTextareaChange}
+              placeholder={
+                selectedService === "typeorpaste" || selectedService === null
+                  ? "David Bowie – Space Oddity\nFrank Ocean – Pyramids\nNina Simone – Feeling Good\n…\n\nPaste an Artist – Title list, a CSV with artist and title columns, or drop a file."
+                  : "Artist – Title\nArtist – Title\n…"
+              }
+              rows={7}
+              className="w-full resize-y rounded-lg border border-border bg-background px-3 py-2 font-mono text-[11px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              spellCheck={false}
+              data-testid="tracks-textarea"
+            />
+
+            {/* File upload + Screenshot inline */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1 font-mono text-[10px] uppercase tracking-wide text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+              >
+                <Upload size={11} aria-hidden />
+                Upload file
+              </button>
+              <button
+                type="button"
+                onClick={() => { setMode("images"); setSelectedService("screenshots"); }}
+                className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1 font-mono text-[10px] uppercase tracking-wide text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+              >
+                <ImageIcon size={11} aria-hidden />
+                Paste screenshot
+              </button>
+              <input ref={fileRef} type="file" accept=".csv,.txt,.json" className="hidden" onChange={handleFileInput} />
+            </div>
+
+            {/* Parse preview */}
+            {rawInput.trim() && tracks.length > 0 && (
+              <div
+                className="rounded-lg border border-border overflow-hidden"
+                style={{ background: "hsl(var(--muted)/0.15)" }}
+                data-testid="track-preview"
+              >
+                <div className="px-3 py-1.5 border-b border-border/50 font-mono text-[10px] text-muted-foreground">
+                  <span className="text-foreground">{tracks.length.toLocaleString()}</span> tracks found
+                </div>
+                <div className="overflow-y-auto" style={{ maxHeight: "200px" }} data-testid="track-preview-list">
+                  <ul>
+                    {tracks.slice(0, 50).map((track, i) => (
+                      <li
+                        key={i}
+                        className="px-3 py-1 font-mono text-[11px] text-foreground border-b border-border/20 last:border-0"
+                      >
+                        <span className="text-muted-foreground">{track.artist}</span>
+                        <span className="mx-1 text-muted-foreground/50">–</span>
+                        {track.title}
+                      </li>
+                    ))}
+                    {tracks.length > 50 && (
+                      <li className="px-3 py-1.5 font-mono text-[10px] text-muted-foreground/60">
+                        …and {(tracks.length - 50).toLocaleString()} more
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            {rawInput.trim() && tracks.length === 0 && (
+              <p className="font-mono text-[11px] text-destructive" data-testid="track-count">
+                {rawInput.includes(",")
+                  ? "Couldn\u2019t find \u2018Track Name\u2019 or \u2018Artist Name(s)\u2019 columns \u2014 try re-exporting your CSV"
+                  : "No tracks recognised \u2014 use one track per line: Artist \u2013 Title"}
+              </p>
+            )}
+
+            {error && (
+              <p className="font-mono text-[11px] text-destructive">{error}</p>
+            )}
+
+            {/* Actions */}
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-full border border-border px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleManualImport()}
+                disabled={submitting || tracks.length === 0}
+                className="rounded-full border border-primary bg-primary px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-primary-foreground transition-opacity disabled:opacity-40"
+              >
+                {submitting ? "Starting…" : `Import ${tracks.length} tracks`}
+              </button>
+            </div>
+
+            <p className="font-mono text-[10px] text-muted-foreground/60">
+              <FileText size={10} className="inline mr-1 -mt-px" aria-hidden />
+              Accepts any CSV with artist and title columns, or lines of Artist – Title.
+            </p>
           </>
         )}
 
@@ -1019,128 +1231,6 @@ export function ManualImportModal({ onClose, onImportStarted, spotifyImportEnabl
                 {submitting ? "Starting…" : `Import ${reviewReadyTracks.length} tracks`}
               </button>
             </div>
-          </>
-        )}
-
-        {/* ── Tracks mode ────────────────────────────────────────────────── */}
-        {mode === "tracks" && (
-          <>
-            {/* Collapsed instructions summary (shown after arriving from a service with steps) */}
-            {(selectedService === "exportify" || selectedService === "applemusiccsv") && (
-              <div
-                className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 font-mono text-[10px] text-muted-foreground"
-                style={{ background: "hsl(var(--muted)/0.15)" }}
-                data-testid="service-summary-banner"
-              >
-                <FileText size={10} aria-hidden className="shrink-0" />
-                <span>
-                  {selectedService === "exportify"
-                    ? "Imported from exportify.net"
-                    : "Imported from TuneMyMusic"}
-                </span>
-              </div>
-            )}
-
-            {/* File upload button */}
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1 font-mono text-[10px] uppercase tracking-wide text-muted-foreground transition-colors hover:border-primary hover:text-primary"
-              >
-                <Upload size={11} aria-hidden />
-                Upload file
-              </button>
-              <span className="font-mono text-[10px] text-muted-foreground">or edit below</span>
-              <input ref={fileRef} type="file" accept=".csv,.txt,.json" className="hidden" onChange={handleFileInput} />
-            </div>
-
-            {/* Textarea */}
-            <textarea
-              ref={textareaRef}
-              value={rawInput}
-              onChange={handleTextareaChange}
-              placeholder={
-                selectedService === "other"
-                  ? "Artist – Title\nArtist – Title\n…\n\nOr paste any CSV with artist and title columns."
-                  : "Artist – Title\nArtist – Title\n…"
-              }
-              rows={8}
-              className="w-full resize-y rounded-lg border border-border bg-background px-3 py-2 font-mono text-[11px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-              spellCheck={false}
-              data-testid="tracks-textarea"
-            />
-
-            {/* Parse preview — track list or error */}
-            {rawInput.trim() && tracks.length > 0 && (
-              <div
-                className="rounded-lg border border-border overflow-hidden"
-                style={{ background: "hsl(var(--muted)/0.15)" }}
-                data-testid="track-preview"
-              >
-                <div className="px-3 py-1.5 border-b border-border/50 font-mono text-[10px] text-muted-foreground">
-                  <span className="text-foreground">{tracks.length.toLocaleString()}</span> tracks found
-                </div>
-                <div className="overflow-y-auto" style={{ maxHeight: "250px" }} data-testid="track-preview-list">
-                  <ul>
-                    {tracks.slice(0, 50).map((track, i) => (
-                      <li
-                        key={i}
-                        className="px-3 py-1 font-mono text-[11px] text-foreground border-b border-border/20 last:border-0"
-                      >
-                        <span className="text-muted-foreground">{track.artist}</span>
-                        <span className="mx-1 text-muted-foreground/50">–</span>
-                        {track.title}
-                      </li>
-                    ))}
-                    {tracks.length > 50 && (
-                      <li className="px-3 py-1.5 font-mono text-[10px] text-muted-foreground/60">
-                        …and {(tracks.length - 50).toLocaleString()} more
-                      </li>
-                    )}
-                  </ul>
-                </div>
-              </div>
-            )}
-
-            {rawInput.trim() && tracks.length === 0 && (
-              <p className="font-mono text-[11px] text-destructive" data-testid="track-count">
-                {rawInput.includes(",")
-                  ? "Couldn\u2019t find \u2018Track Name\u2019 or \u2018Artist Name(s)\u2019 columns \u2014 try re-exporting from exportify.net"
-                  : "No tracks recognised \u2014 use one track per line: Artist \u2013 Title"}
-              </p>
-            )}
-
-            {error && (
-              <p className="font-mono text-[11px] text-destructive">{error}</p>
-            )}
-
-            {/* Actions */}
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-full border border-border px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleManualImport()}
-                disabled={submitting || tracks.length === 0}
-                className="rounded-full border border-primary bg-primary px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-primary-foreground transition-opacity disabled:opacity-40"
-              >
-                {submitting ? "Starting…" : `Import ${tracks.length} tracks`}
-              </button>
-            </div>
-
-            {/* Inline tip */}
-            <p className="font-mono text-[10px] text-muted-foreground/60">
-              <FileText size={10} className="inline mr-1 -mt-px" aria-hidden />
-              {selectedService === "other"
-                ? "Accepts any CSV with artist and title columns, or lines of Artist – Title."
-                : "Accepts Spotify Exportify CSV, Apple Music CSV, or lines of Artist – Title."}
-            </p>
           </>
         )}
 
