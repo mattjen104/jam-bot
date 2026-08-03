@@ -28,7 +28,12 @@ export const GUIDED_SERVICE_OPTIONS: ReadonlyArray<{ service: GuidedService; lab
 ];
 
 export type GuidedReplaySource = {
-  service: GuidedService;
+  /**
+   * The service key. Known services use a `GuidedService` value; services that
+   * are mapped in `service_track_map` but not yet enumerated in `GuidedService`
+   * carry a raw string so their tabs still appear without any frontend change.
+   */
+  service: string;
   /** The canonical page or track URL for this service. Always present. */
   url: string;
   /**
@@ -57,7 +62,8 @@ export type GuidedReplayMaterializedEntry = {
 };
 
 export type GuidedReplayMaterialization = {
-  service: GuidedService;
+  /** Same string passed to `materializeGuidedReplay` — a `GuidedService` for known services, a raw key for new ones. */
+  service: string;
   total: number;
   available: number;
   entries: GuidedReplayMaterializedEntry[];
@@ -150,15 +156,20 @@ const SERVICE_HOST_RE: Record<GuidedService, RegExp> = {
 };
 
 /**
- * Returns the URL unchanged if it is HTTPS and its hostname is on the
- * approved list for `service`; otherwise returns null so the entry is marked
- * unavailable instead of surfacing a dangerous or off-service link.
+ * Returns the URL unchanged if it is HTTPS and (for known services) its
+ * hostname is on the approved list; otherwise returns null so the entry is
+ * marked unavailable instead of surfacing a dangerous or off-service link.
+ *
+ * Unknown services — those not yet in `GuidedService` — pass through with an
+ * HTTPS-only check. Their URLs come from the server-side `service_track_map`
+ * which already applies a `safeWebUrl` guard before storage.
  */
-function safeServiceUrl(service: GuidedService, url: string): string | null {
+function safeServiceUrl(service: string, url: string): string | null {
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== "https:") return null;
-    if (!SERVICE_HOST_RE[service].test(parsed.hostname)) return null;
+    const pattern = SERVICE_HOST_RE[service as GuidedService];
+    if (pattern && !pattern.test(parsed.hostname)) return null;
     return parsed.toString();
   } catch {
     return null;
@@ -191,7 +202,7 @@ const SERVICE_FILTERS: Record<GuidedService, (name: string) => boolean> = {
 };
 
 function sourceForLink(
-  service: GuidedService,
+  service: string,
   link: GuidedLink,
 ): GuidedReplaySource | null {
   if (link.kind !== "exact" || link.deadLink) return null;
@@ -246,9 +257,14 @@ function sourceForLink(
  */
 export function materializeGuidedReplay(
   entries: ReplayMappingEntry[],
-  service: GuidedService,
+  service: string,
 ): GuidedReplayMaterialization {
-  const matchService = SERVICE_FILTERS[service];
+  // Known services use their precise multi-shape filter; unknown services
+  // (not yet in GuidedService) fall back to a case-insensitive exact match
+  // on the raw service key from service_track_map.
+  const matchService: (name: string) => boolean =
+    SERVICE_FILTERS[service as GuidedService] ??
+    ((n) => n.toLowerCase() === service.toLowerCase());
 
   const materialized = entries.map((entry) => {
     if (!entry.recording) {
@@ -306,6 +322,50 @@ export function materializeGuidedReplay(
     playable,
     missing: materialized.filter((entry) => entry.source == null),
   };
+}
+
+/**
+ * Derives which service tabs should appear for a replay manifest.
+ *
+ * All known services (`GUIDED_SERVICE_OPTIONS`) always appear as tabs so
+ * listeners can switch freely; a service with zero coverage simply disables
+ * the "Enter guided mode" button. This matches `materializeGuidedReplay`
+ * behaviour — coverage is computed per-service, not used to gate visibility.
+ *
+ * Additionally, any service key present in `guidedLinks` that does not match
+ * any known service is appended alphabetically with a title-cased label
+ * (e.g. "tidal_hifi" → "Tidal Hifi"). This is the auto-appear path: a new
+ * service added to `service_track_map` gains a tab on replays that have
+ * coverage without any frontend code change.
+ */
+export function computeAvailableServices(
+  entries: ReadonlyArray<{
+    guidedLinks?: ReadonlyArray<{ service: string; deadLink: boolean }> | null;
+  }>,
+): Array<{ service: string; label: string }> {
+  // All known services always appear.
+  const result: Array<{ service: string; label: string }> = [...GUIDED_SERVICE_OPTIONS];
+
+  // Collect live unknown service keys from guidedLinks only (recording.links
+  // only carry known service names in their friendly-label form, so adding
+  // them here would produce duplicate or mislabelled tabs for known services).
+  const liveUnknown = new Set<string>();
+  for (const entry of entries) {
+    for (const link of entry.guidedLinks ?? []) {
+      if (link.deadLink) continue;
+      const matchesKnown = GUIDED_SERVICE_OPTIONS.some(({ service }) =>
+        SERVICE_FILTERS[service](link.service),
+      );
+      if (!matchesKnown) liveUnknown.add(link.service);
+    }
+  }
+
+  for (const svc of [...liveUnknown].sort()) {
+    const label = svc.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    result.push({ service: svc, label });
+  }
+
+  return result;
 }
 
 export function guidedMissingLabel(reason: GuidedReplayMissingReason): string {

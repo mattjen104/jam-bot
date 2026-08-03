@@ -4,15 +4,15 @@ import type { ReplayManifest } from "@workspace/api-client-react";
 import {
   EMBED_SERVICES,
   GUIDED_SERVICE_OPTIONS,
+  computeAvailableServices,
   guidedMissingLabel,
   materializeGuidedReplay,
   type GuidedReplayMaterialization,
-  type GuidedService,
 } from "../lib/guidedReplay";
 
 type ReplayEntry = ReplayManifest["entries"][number];
 
-function materialize(entries: ReplayEntry[], service: GuidedService): GuidedReplayMaterialization {
+function materialize(entries: ReplayEntry[], service: string): GuidedReplayMaterialization {
   return materializeGuidedReplay(entries.map((entry) => ({
     position: entry.position,
     rawTitle: entry.rawTitle,
@@ -29,8 +29,12 @@ function materialize(entries: ReplayEntry[], service: GuidedService): GuidedRepl
   })), service);
 }
 
-function serviceLabel(service: GuidedService): string {
-  return GUIDED_SERVICE_OPTIONS.find((o) => o.service === service)?.label ?? service;
+function serviceLabel(service: string): string {
+  return (
+    GUIDED_SERVICE_OPTIONS.find((o) => o.service === service)?.label ??
+    // Unknown services: title-case the raw DB key (e.g. "tidal_hifi" → "Tidal Hifi")
+    service.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+  );
 }
 
 /**
@@ -39,8 +43,11 @@ function serviceLabel(service: GuidedService): string {
  * manifest cursor. It intentionally does not enter the normal ride/player
  * state machine or fetch audio through Lore.
  *
- * Service tabs are data-driven from GUIDED_SERVICE_OPTIONS so every new
- * service added to the guided replay system automatically appears here.
+ * Service tabs are derived from the manifest's `guidedLinks` via
+ * `computeAvailableServices`, so a new service mapped in `service_track_map`
+ * automatically gains a tab on any replay that has coverage — no frontend
+ * code change required. Iframe embeds (Bandcamp, YouTube) are handled
+ * generically by `sourceForLink`; SDK-based services still require a handler.
  */
 export function GuidedReplayPanel({
   entries,
@@ -49,12 +56,10 @@ export function GuidedReplayPanel({
   entries: ReplayEntry[];
   label: string;
 }) {
-  const [service, setService] = useState<GuidedService>(() => {
+  const [service, setService] = useState<string>(() => {
     try {
       const stored = localStorage.getItem("lore:guided-replay-service");
-      if (stored && GUIDED_SERVICE_OPTIONS.some((o) => o.service === stored)) {
-        return stored as GuidedService;
-      }
+      if (stored && stored.length > 0) return stored;
     } catch {
       // localStorage unavailable (e.g. SSR or private browsing with storage blocked)
     }
@@ -65,10 +70,10 @@ export function GuidedReplayPanel({
   const [embedState, setEmbedState] = useState<"loading" | "ready" | "error">("loading");
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const youtubePlayerRef = useRef<{ destroy?: () => void } | null>(null);
-  const guide = useMemo(() => materialize(entries, service), [entries, service]);
-  const current = guide.playable[playableIndex] ?? null;
-  const isEmbed = current?.source != null && !current.source.externalOnly;
+  /** Services that have at least one live link for this specific manifest. */
+  const availableServices = useMemo(() => computeAvailableServices(entries), [entries]);
 
+  // Persist the selected service so the listener doesn't re-pick it every visit.
   useEffect(() => {
     try {
       localStorage.setItem("lore:guided-replay-service", service);
@@ -76,6 +81,18 @@ export function GuidedReplayPanel({
       // localStorage unavailable
     }
   }, [service]);
+
+  // If the active service has no coverage in this manifest (e.g. a persisted
+  // preference from a different replay), fall back to the first available tab.
+  useEffect(() => {
+    if (availableServices.length > 0 && !availableServices.some((o) => o.service === service)) {
+      setService(availableServices[0].service);
+    }
+  }, [availableServices, service]);
+
+  const guide = useMemo(() => materialize(entries, service), [entries, service]);
+  const current = guide.playable[playableIndex] ?? null;
+  const isEmbed = current?.source != null && !current.source.externalOnly;
 
   useEffect(() => {
     setPlayableIndex(0);
@@ -151,7 +168,9 @@ export function GuidedReplayPanel({
   };
 
   const currentLabel = serviceLabel(service);
-  const isEmbedService = EMBED_SERVICES.has(service);
+  // `EMBED_SERVICES` is keyed on `GuidedService`; unknown services are never
+  // embed-capable so the cast is safe — unrecognized keys return false.
+  const isEmbedService = EMBED_SERVICES.has(service as Parameters<typeof EMBED_SERVICES.has>[0]);
 
   return (
     <section className="mb-6 rounded-xl border border-primary/30 bg-primary/[0.04] p-4" data-testid="guided-replay">
@@ -194,7 +213,7 @@ export function GuidedReplayPanel({
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">Service</span>
-        {GUIDED_SERVICE_OPTIONS.map(({ service: option, label: optLabel }) => (
+        {availableServices.map(({ service: option, label: optLabel }) => (
           <button
             key={option}
             type="button"

@@ -99,9 +99,9 @@ export default function Replay() {
             </section>
 
             <GuidedReplayPanel
-                entries={data.entries}
-                label={`${data.station.name} · ${data.show?.name ?? "stream"} · ${runDate(data.bounds.date)}`}
-              />
+              entries={data.entries}
+              label={`${data.station.name} · ${data.show?.name ?? "stream"} · ${runDate(data.bounds.date)}`}
+            />
 
             <section
               aria-label="Replay exports"
