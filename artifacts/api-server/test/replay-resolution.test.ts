@@ -16,6 +16,7 @@ import {
   registerReplayMaterializer,
   resolveRecording,
   runReplayResolutionWorker,
+  upsertServiceTrackMap,
   upsertServiceTrackMapMiss,
 } from "../src/lore/replay-resolution.js";
 import { applyReplayResolutionMigration } from "../src/lore/replay-resolution-migration.js";
@@ -410,16 +411,110 @@ describe("Ghost Replay resolution negative-cache", () => {
   });
 });
 
-    const odesliHit = vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          entitiesByUniqueId: {
-            "spotify:track:RevivedTrack001": { id: "RevivedTrack001", apiProvider: "spotify" },
-          },
-          linksByPlatform: {
-            spotify: { url: "https://open.spotify.com/track/RevivedTrack001" },
-          },
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
+describe("upsertServiceTrackMap rank guard", () => {
+  const rgRun = randomUUID().slice(0, 8);
+  const strongMbid = `test-rr-rank-strong-${rgRun}`;
+  const weakMbid = `test-rr-rank-weak-${rgRun}`;
+
+  beforeAll(async () => {
+    if (!dbAvailable) return;
+    await db.insert(recordingsTable).values([
+      { mbid: strongMbid, title: "Rank Guard Strong Track", artist: "Rank Guard Artist" },
+      { mbid: weakMbid, title: "Rank Guard Weak Track", artist: "Rank Guard Artist 2" },
+    ]);
+  });
+
+  afterAll(async () => {
+    if (!dbAvailable) return;
+    await db.delete(serviceTrackMapTable).where(
+      inArray(serviceTrackMapTable.recordingMbid, [strongMbid, weakMbid]),
     );
+    await db.delete(recordingsTable).where(
+      inArray(recordingsTable.mbid, [strongMbid, weakMbid]),
+    );
+  });
+
+  it("does not overwrite a high-rank row (recording_id/exact) with a lower-rank one (odesli/search)", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // Seed a strong row: method=recording_id, confidence=exact → rank 40.
+    await upsertServiceTrackMap({
+      recordingMbid: strongMbid,
+      service: "spotify",
+      externalId: "StrongId001",
+      url: "https://open.spotify.com/track/StrongId001",
+      method: "recording_id",
+      confidence: "exact",
+      verification: "verified",
+    });
+
+    // Attempt to overwrite with a weak row: method=odesli, confidence=search → rank 10.
+    await upsertServiceTrackMap({
+      recordingMbid: strongMbid,
+      service: "spotify",
+      externalId: "WeakId999",
+      url: "https://open.spotify.com/track/WeakId999",
+      method: "odesli",
+      confidence: "search",
+      verification: "unverified",
+    });
+
+    const [row] = await db
+      .select()
+      .from(serviceTrackMapTable)
+      .where(
+        and(
+          eq(serviceTrackMapTable.recordingMbid, strongMbid),
+          eq(serviceTrackMapTable.service, "spotify"),
+        ),
+      )
+      .limit(1);
+
+    expect(row).toBeDefined();
+    expect(row!.url).toBe("https://open.spotify.com/track/StrongId001");
+    expect(row!.method).toBe("recording_id");
+    expect(row!.confidence).toBe("exact");
+  });
+
+  it("does overwrite a low-rank row (odesli/search) with an equal-or-higher-rank one (recording_id/exact)", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // Seed a weak row: method=odesli, confidence=search → rank 10.
+    await upsertServiceTrackMap({
+      recordingMbid: weakMbid,
+      service: "spotify",
+      externalId: "WeakFirst999",
+      url: "https://open.spotify.com/track/WeakFirst999",
+      method: "odesli",
+      confidence: "search",
+      verification: "unverified",
+    });
+
+    // Overwrite with a strong row: method=recording_id, confidence=exact → rank 40.
+    await upsertServiceTrackMap({
+      recordingMbid: weakMbid,
+      service: "spotify",
+      externalId: "StrongWinner001",
+      url: "https://open.spotify.com/track/StrongWinner001",
+      method: "recording_id",
+      confidence: "exact",
+      verification: "verified",
+    });
+
+    const [row] = await db
+      .select()
+      .from(serviceTrackMapTable)
+      .where(
+        and(
+          eq(serviceTrackMapTable.recordingMbid, weakMbid),
+          eq(serviceTrackMapTable.service, "spotify"),
+        ),
+      )
+      .limit(1);
+
+    expect(row).toBeDefined();
+    expect(row!.url).toBe("https://open.spotify.com/track/StrongWinner001");
+    expect(row!.method).toBe("recording_id");
+    expect(row!.confidence).toBe("exact");
+  });
+});
