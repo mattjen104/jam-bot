@@ -566,6 +566,181 @@ describe("parseTracks — routes through parseCsv for CSV-shaped input", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Tests: OCR failure isolation — mixed batches, retry, and remove
+// ---------------------------------------------------------------------------
+
+describe("ManualImportModal — OCR failure isolation", () => {
+  /**
+   * Helper: render → pick Screenshots → add files → click Extract.
+   * Returns a promise that resolves once the review pane appears.
+   */
+  async function runMixedExtraction(files: File[]) {
+    renderModal();
+    fireEvent.click(screen.getByTestId("service-tile-screenshots"));
+    fireEvent.change(screen.getByTestId("screenshot-file-input"), {
+      target: { files },
+    });
+    await screen.findByTestId("image-preview-list");
+    fireEvent.click(
+      screen.getByRole("button", { name: new RegExp(`read ${files.length} screenshot`, "i") }),
+    );
+    return screen.findByTestId("ocr-review-list");
+  }
+
+  it("keeps successful rows editable after a mixed-batch extraction", async () => {
+    mockPostExtractLibraryImages.mockResolvedValueOnce({
+      results: [
+        {
+          index: 0,
+          status: "ok",
+          tracks: [{ artist: "Fleetwood Mac", title: "Dreams", confidence: 0.97 }],
+        },
+        { index: 1, status: "error", error: "Could not read this image" },
+      ],
+    });
+
+    await runMixedExtraction([
+      new File(["png"], "screen-a.png", { type: "image/png" }),
+      new File(["png"], "screen-b.png", { type: "image/png" }),
+    ]);
+
+    // Successful tracks are editable
+    expect(screen.getByDisplayValue("Fleetwood Mac")).toBeTruthy();
+    expect(screen.getByDisplayValue("Dreams")).toBeTruthy();
+
+    // Error notice for the failed image is visible
+    expect(screen.getByRole("alert")).toBeTruthy();
+
+    // Import button counts only the recognised tracks — not blocked by the failure
+    expect(screen.getByRole("button", { name: /import 1 track/i })).toBeTruthy();
+  });
+
+  it("importing works immediately with partial success — failed image never blocks the action", async () => {
+    mockPostExtractLibraryImages.mockResolvedValueOnce({
+      results: [
+        {
+          index: 0,
+          status: "ok",
+          tracks: [{ artist: "Fleetwood Mac", title: "Dreams", confidence: 0.97 }],
+        },
+        { index: 1, status: "error", error: "Could not read this image" },
+      ],
+    });
+    mockPostStartManualImport.mockResolvedValue(undefined);
+    const closeSpy = vi.fn();
+
+    renderModal(closeSpy);
+    fireEvent.click(screen.getByTestId("service-tile-screenshots"));
+    fireEvent.change(screen.getByTestId("screenshot-file-input"), {
+      target: {
+        files: [
+          new File(["png"], "screen-a.png", { type: "image/png" }),
+          new File(["png"], "screen-b.png", { type: "image/png" }),
+        ],
+      },
+    });
+    await screen.findByTestId("image-preview-list");
+    fireEvent.click(screen.getByRole("button", { name: /read 2 screenshots/i }));
+    await screen.findByTestId("ocr-review-list");
+
+    // The Import button is enabled and carries only image A's track
+    fireEvent.click(screen.getByRole("button", { name: /import 1 track/i }));
+    await waitFor(() => expect(closeSpy).toHaveBeenCalledOnce());
+    expect(mockPostStartManualImport).toHaveBeenCalledWith([
+      { artist: "Fleetwood Mac", title: "Dreams" },
+    ]);
+  });
+
+  it("retrying a failed image does not drop rows already recognised from a successful image", async () => {
+    // First extraction: image A ok, image B error
+    mockPostExtractLibraryImages
+      .mockResolvedValueOnce({
+        results: [
+          {
+            index: 0,
+            status: "ok",
+            tracks: [{ artist: "Fleetwood Mac", title: "Dreams", confidence: 0.97 }],
+          },
+          { index: 1, status: "error", error: "Could not read this image" },
+        ],
+      })
+      // Retry of image B only — index 0 of the single-image sub-call
+      .mockResolvedValueOnce({
+        results: [
+          {
+            index: 0,
+            status: "ok",
+            tracks: [{ artist: "The Beatles", title: "Hey Jude", confidence: 0.95 }],
+          },
+        ],
+      });
+
+    await runMixedExtraction([
+      new File(["png"], "screen-a.png", { type: "image/png" }),
+      new File(["png"], "screen-b.png", { type: "image/png" }),
+    ]);
+
+    // Go to images mode to access the Retry button
+    fireEvent.click(screen.getByRole("button", { name: /review errors/i }));
+    const retryBtn = await screen.findByRole("button", { name: /retry screen-b\.png/i });
+    fireEvent.click(retryBtn);
+
+    // Review mode returns with both images' tracks present
+    await screen.findByTestId("ocr-review-list");
+    expect(screen.getByDisplayValue("Fleetwood Mac")).toBeTruthy();
+    expect(screen.getByDisplayValue("The Beatles")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /import 2 tracks/i })).toBeTruthy();
+  });
+
+  it("removing a failed image does not drop rows from the successful image", async () => {
+    // First extraction: image A ok (Dreams), image B error
+    mockPostExtractLibraryImages
+      .mockResolvedValueOnce({
+        results: [
+          {
+            index: 0,
+            status: "ok",
+            tracks: [{ artist: "Fleetwood Mac", title: "Dreams", confidence: 0.97 }],
+          },
+          { index: 1, status: "error", error: "Could not read this image" },
+        ],
+      })
+      // Second extraction after adding image C — only C is pending
+      .mockResolvedValueOnce({
+        results: [
+          {
+            index: 0,
+            status: "ok",
+            tracks: [{ artist: "The Beatles", title: "Hey Jude", confidence: 0.95 }],
+          },
+        ],
+      });
+
+    await runMixedExtraction([
+      new File(["png"], "screen-a.png", { type: "image/png" }),
+      new File(["png"], "screen-b.png", { type: "image/png" }),
+    ]);
+
+    // Go to images, remove the failed image B
+    fireEvent.click(screen.getByRole("button", { name: /review errors/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /remove screen-b\.png/i }));
+
+    // Add a new image C and extract it
+    fireEvent.change(screen.getByTestId("screenshot-file-input"), {
+      target: { files: [new File(["png"], "screen-c.png", { type: "image/png" })] },
+    });
+    await screen.findByRole("button", { name: /read 1 screenshot/i });
+    fireEvent.click(screen.getByRole("button", { name: /read 1 screenshot/i }));
+
+    // Review: image A's "Dreams" survived alongside image C's "Hey Jude"
+    await screen.findByTestId("ocr-review-list");
+    expect(screen.getByDisplayValue("Fleetwood Mac")).toBeTruthy();
+    expect(screen.getByDisplayValue("The Beatles")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /import 2 tracks/i })).toBeTruthy();
+  });
+});
+
 describe("OCR review helpers", () => {
   it("deduplicates recognized rows case-insensitively without changing order", () => {
     expect(dedupeTracks([
