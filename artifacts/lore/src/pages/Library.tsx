@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { SearchOverlay } from "../components/SearchOverlay";
 import { useQueryClient } from "@tanstack/react-query";
@@ -14,6 +14,8 @@ import {
   postImportLibraryFile,
   useMyPreferences,
   patchPreferences,
+  useMyTasteSeeds,
+  useSetTasteSeeds,
   ME_PREFERENCES_KEY,
   ME_LATEST_SYNC_JOB_KEY,
   ME_OVERLAP_PICKERS_KEY,
@@ -26,6 +28,7 @@ import {
   type LibraryItem,
   type SyncJobStatus,
 } from "../lib/meHooks";
+import { SeedInput, SeedBar } from "../components/SeedInput";
 import { ApiError } from "@workspace/api-client-react";
 import { KeepButton } from "../components/KeepButton";
 import { LibraryRow } from "../components/LibraryRow";
@@ -1064,6 +1067,55 @@ export default function Library() {
 
   const [importModalOpen, setImportModalOpen] = useState(false);
 
+  // ── Taste seeds — zero-friction artist onboarding (shared with the Dial) ──
+  const { data: seedArtists = [] } = useMyTasteSeeds();
+  const setSeedsMutation = useSetTasteSeeds();
+  const seedWriteRef = useRef<Promise<string[]> | null>(null);
+  const [optimisticSeeds, setOptimisticSeeds] = useState<string[] | null>(null);
+  const visibleSeeds = optimisticSeeds ?? seedArtists;
+
+  const addSeed = useCallback((artist: string) => {
+    const trimmed = artist.trim();
+    if (!trimmed) return;
+    const pending = seedWriteRef.current;
+    const base = pending ? pending.catch(() => seedArtists) : Promise.resolve(visibleSeeds);
+    seedWriteRef.current = base.then(async (current) => {
+      const lower = trimmed.toLowerCase();
+      if (current.some((s) => s.toLowerCase() === lower) || current.length >= 10) return current;
+      const next = [...current, trimmed];
+      setOptimisticSeeds(next);
+      try {
+        const result = await setSeedsMutation.mutateAsync(next);
+        setOptimisticSeeds(result.artists);
+        return result.artists;
+      } catch {
+        setOptimisticSeeds(null);
+        throw new Error("seed write failed");
+      }
+    });
+    void seedWriteRef.current.catch(() => undefined);
+  }, [seedArtists, setSeedsMutation, visibleSeeds]);
+
+  const removeSeed = useCallback((artist: string) => {
+    const pending = seedWriteRef.current;
+    const base = pending ? pending.catch(() => seedArtists) : Promise.resolve(visibleSeeds);
+    seedWriteRef.current = base.then(async (current) => {
+      const lower = artist.toLowerCase();
+      const next = current.filter((s) => s.toLowerCase() !== lower);
+      if (next.length === current.length) return current;
+      setOptimisticSeeds(next);
+      try {
+        const result = await setSeedsMutation.mutateAsync(next);
+        setOptimisticSeeds(result.artists);
+        return result.artists;
+      } catch {
+        setOptimisticSeeds(null);
+        throw new Error("seed write failed");
+      }
+    });
+    void seedWriteRef.current.catch(() => undefined);
+  }, [seedArtists, setSeedsMutation, visibleSeeds]);
+
   const libLoading = keptLoading;
   const isEmpty = !libLoading && keptItems.length === 0;
   void radio; // suppress unused lint
@@ -2049,6 +2101,31 @@ export default function Library() {
                   <Music2 style={{ width: 11, height: 11 }} />
                   Import your library
                 </button>
+
+                {/* Seed input — zero-friction taste onboarding without an import */}
+                {visibleSeeds.length > 0 ? (
+                  <SeedBar
+                    seeds={visibleSeeds}
+                    onAddSeed={addSeed}
+                    onRemoveSeed={removeSeed}
+                  />
+                ) : (
+                  <div
+                    style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%" }}
+                    data-testid="library-seed-prompt"
+                  >
+                    <span
+                      style={{
+                        fontFamily: "var(--app-font-mono)",
+                        fontSize: 10,
+                        color: "hsl(var(--faint))",
+                      }}
+                    >
+                      Or start with an artist you love
+                    </span>
+                    <SeedInput seeds={visibleSeeds} onAdd={addSeed} />
+                  </div>
+                )}
 
                 {/* Radio link */}
                 <Link

@@ -7,6 +7,7 @@
  * chrome above the scroll body.
  */
 import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
+import { SeedInput } from "./SeedInput";
 import { Search } from "lucide-react";
 import { useLocation } from "wouter";
 import { useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, type GhostStation } from "../lib/meHooks";
@@ -2051,52 +2052,9 @@ function DialRowSkeleton({ delay = 0 }: { delay?: 0 | 1 | 2 }) {
 
 // ---------------------------------------------------------------------------
 // Seed prompt sub-components
+// SeedInput is shared (./SeedInput.tsx). SeedBar is local — it wraps the chips
+// and the shared SeedInput and appends the Dial-specific "Import library →" link.
 // ---------------------------------------------------------------------------
-
-function SeedInput({
-  seeds,
-  onAdd,
-  placeholder = "e.g. Radiohead",
-}: {
-  seeds: string[];
-  onAdd: (artist: string) => void;
-  placeholder?: string;
-}) {
-  const [value, setValue] = useState("");
-
-  const submit = () => {
-    const trimmed = value.trim();
-    if (!trimmed) return;
-    onAdd(trimmed);
-    setValue("");
-  };
-
-  return (
-    <div className="seed-input-row">
-      <input
-        className="seed-input"
-        type="text"
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } }}
-        maxLength={100}
-        autoComplete="off"
-        autoCorrect="off"
-        spellCheck={false}
-        aria-label="Artist name"
-      />
-      <button
-        type="button"
-        className="seed-add-btn"
-        onClick={submit}
-        disabled={!value.trim() || seeds.length >= 10}
-      >
-        Add
-      </button>
-    </div>
-  );
-}
 
 function SeedBar({
   seeds,
