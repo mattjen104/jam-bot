@@ -323,4 +323,54 @@ describe("GET /api/me/attendance/weekly", () => {
     expect(track!.spinCount).toBe(2);
     expect(track!.dwellSeconds).toBe(180);
   });
+
+  // ── Midnight boundary: listener straddles Sunday/Monday ───────────────────
+
+  it("a spin played Sunday 23:58 UTC lands in the earlier week's rollup", async () => {
+    if (!dbAvailable) return;
+    // 2026-01-18 is a Sunday; 23:58 UTC is still that Sunday → ISO week 2026-W03
+    // (Monday of that week is 2026-01-12, Thursday is 2026-01-15 → year 2026, week 3)
+    const sundayNight = new Date("2026-01-18T23:58:00.000Z");
+    const expectedWeek = dateToIsoWeekLabel(sundayNight); // "2026-W03"
+
+    await seedWeeklyRollup(MBID_A, sundayNight, 1, 150);
+
+    // The track must appear when querying the earlier (Sunday's) week …
+    const { status: s1, body: b1 } = await get(`/api/me/attendance/weekly?week=${expectedWeek}`);
+    expect(s1).toBe(200);
+    const r1 = b1 as { week: string; tracks: Array<{ mbid: string }> };
+    expect(r1.week).toBe(expectedWeek);
+    expect(r1.tracks.find((t) => t.mbid === MBID_A)).toBeDefined();
+
+    // … and must NOT bleed into the following (Monday's) week
+    const mondayWeek = dateToIsoWeekLabel(new Date("2026-01-19T00:02:00.000Z")); // "2026-W04"
+    const { status: s2, body: b2 } = await get(`/api/me/attendance/weekly?week=${mondayWeek}`);
+    expect(s2).toBe(200);
+    const r2 = b2 as { tracks: Array<{ mbid: string }> };
+    expect(r2.tracks.find((t) => t.mbid === MBID_A)).toBeUndefined();
+  });
+
+  it("a spin played Monday 00:02 UTC lands in the later week's rollup", async () => {
+    if (!dbAvailable) return;
+    // 2026-01-19 is a Monday; 00:02 UTC is already the new week → ISO week 2026-W04
+    // (Monday of that week is 2026-01-19, Thursday is 2026-01-22 → year 2026, week 4)
+    const mondayMorning = new Date("2026-01-19T00:02:00.000Z");
+    const expectedWeek = dateToIsoWeekLabel(mondayMorning); // "2026-W04"
+
+    await seedWeeklyRollup(MBID_B, mondayMorning, 1, 200);
+
+    // The track must appear when querying the later (Monday's) week …
+    const { status: s1, body: b1 } = await get(`/api/me/attendance/weekly?week=${expectedWeek}`);
+    expect(s1).toBe(200);
+    const r1 = b1 as { week: string; tracks: Array<{ mbid: string }> };
+    expect(r1.week).toBe(expectedWeek);
+    expect(r1.tracks.find((t) => t.mbid === MBID_B)).toBeDefined();
+
+    // … and must NOT appear in the preceding (Sunday's) week
+    const sundayWeek = dateToIsoWeekLabel(new Date("2026-01-18T23:58:00.000Z")); // "2026-W03"
+    const { status: s2, body: b2 } = await get(`/api/me/attendance/weekly?week=${sundayWeek}`);
+    expect(s2).toBe(200);
+    const r2 = b2 as { tracks: Array<{ mbid: string }> };
+    expect(r2.tracks.find((t) => t.mbid === MBID_B)).toBeUndefined();
+  });
 });
