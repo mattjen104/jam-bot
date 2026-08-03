@@ -37,6 +37,12 @@ import {
   writeStoredPlaybackMode,
   processDeviceConfirmation,
 } from "./playbackSession";
+import {
+  writeRadioSectionMemory,
+  writeSelectorSectionMemory,
+  writeLibrarySectionMemory,
+  type StoredStation,
+} from "./sectionMemory";
 
 /** How we arrived at a track in the ride — the attribution for this transition. */
 export interface RideAttribution {
@@ -124,6 +130,8 @@ interface RadioApi {
    */
   castRetry: () => void;
   toggle: (station: Station) => void;
+  /** Resume a persisted station without restoring historical track position. */
+  resume: (station: StoredStation) => void;
   /**
    * Play a station's stream as a transient sample — audio plays but NO listen
    * event is written to the local journal or the server ledger. Use for
@@ -487,7 +495,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const stopRadio = radio.stop;
   const pauseRadio = (radio as unknown as { pause: () => void }).pause;
-  const resumeRadio = (radio as unknown as { resume: () => void }).resume;
+  const resumeLiveRadio = (radio as unknown as { resume: () => void }).resume;
 
   const stop = useCallback(() => {
     rideRef.current += 1;
@@ -600,6 +608,18 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setMode("replay");
       setReplayLabel(label);
       setRideListenContext(opts?.context ?? null);
+      if (opts?.context === "library") {
+        const remembered = seeds[Math.max(0, Math.min(opts.startIndex ?? 0, seeds.length - 1))]!;
+        writeLibrarySectionMemory(
+          remembered,
+          {
+            mbid: remembered.mbid,
+            title: label,
+            artworkUrl: remembered.artworkUrl,
+          },
+          remembered.mbid,
+        );
+      }
       // Ghost-radio station runs are 'past'; curated picker runs are 'curated'.
       setTimeOrientation(opts?.timeOrientation ?? "past");
       setQueue(
@@ -620,6 +640,20 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           ? startAt
           : 0,
       );
+      if ((opts?.context ?? null) !== "library") {
+        writeSelectorSectionMemory(
+          seeds.map((seed) => ({
+            mbid: seed.mbid,
+            title: seed.title,
+            artist: seed.artist,
+            artworkUrl: seed.artworkUrl,
+            links: seed.links,
+          })),
+          label,
+          opts?.timeOrientation === "curated" ? "curated" : "past",
+          startAt >= 0 && startAt < seeds.length ? startAt : 0,
+        );
+      }
     },
     [pauseRadio, clearScanTimer, stopScanAudio],
   );
@@ -643,6 +677,24 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     });
     setStatus((s) => (s === "ended" ? s : s));
   }, [queue.length]);
+
+  // Keep the selector resume point useful when the listener moves through a
+  // documented queue. Library rides are tracked separately by LibraryRow.
+  useEffect(() => {
+    if (!active || mode !== "replay" || rideListenContext === "library" || !replayLabel) return;
+    writeSelectorSectionMemory(
+      queue.map((item) => ({
+        mbid: item.mbid,
+        title: item.title,
+        artist: item.artist,
+        artworkUrl: item.artworkUrl,
+        links: item.links,
+      })),
+      replayLabel,
+      timeOrientation === "past" ? "past" : "curated",
+      index,
+    );
+  }, [active, mode, rideListenContext, replayLabel, queue, index, timeOrientation]);
 
   const prev = useCallback(() => {
     setIndex((i) => (i > 0 ? i - 1 : i));
@@ -1170,7 +1222,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             castRef.current.rateLimitedUntil = Date.now() + retryAfterSecs * 1000;
             setCastStatus("fallback");
             setCastFallbackReason("rate_limited");
-            resumeRadio?.();
+            resumeLiveRadio?.();
             // Auto-retry after the back-off — no manual Retry click needed.
             const timer = setTimeout(() => {
               if (cancelled) return;
@@ -1188,7 +1240,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
               ? "not_on_spotify"
               : "spotify_error",
           );
-          resumeRadio?.();
+          resumeLiveRadio?.();
           if (httpStatus === 401 || httpStatus === 403) refreshSpotify();
         })
         .finally(() => {
@@ -1246,7 +1298,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         void spotifyPause().catch(() => {});
         // Give audio back to the broadcast unless a ride took over or the
         // station was stopped (resume is a no-op once the source is cleared).
-        if (!rideActiveRef.current) resumeRadio?.();
+        if (!rideActiveRef.current) resumeLiveRadio?.();
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1313,14 +1365,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (!currentMbid) return;
     if (!spotifyFailedRef.current.has(currentMbid)) return;
     // This track failed on Spotify in a live ride → resume the broadcast.
-    resumeRadio?.();
+    resumeLiveRadio?.();
   }, [
     active,
     playbackMode,
     timeOrientation,
     spotifyModeForCurrent,
     currentMbid,
-    resumeRadio,
+    resumeLiveRadio,
     spotifyFallbackTick,
   ]);
 
@@ -1475,6 +1527,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       // Committing to a station clears the scan-preview flag so the ledger
       // resumes normal tracking from this point forward.
       setIsScanPreview(false);
+      writeRadioSectionMemory(station);
       if (active) stop();
       if (castStatus === "casting" && radio.station?.slug === station.slug) {
         castTogglePause();
@@ -1483,6 +1536,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       radio.toggle(station);
     },
     [active, radio, stop, castStatus, castTogglePause],
+  );
+
+  const resumeRadio = useCallback(
+    (station: StoredStation) => {
+      toggleRadio(station as Station);
+    },
+    [toggleRadio],
   );
 
   /**
@@ -1511,6 +1571,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         castPaused,
         castRetry,
         toggle: toggleRadio,
+        resume: resumeRadio,
         preview: previewRadio,
         scanning: isScanPreview,
         stop: stopRadio,
@@ -1565,6 +1626,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       castPaused,
       castRetry,
       toggleRadio,
+      resumeRadio,
       previewRadio,
       isScanPreview,
       stopRadio,

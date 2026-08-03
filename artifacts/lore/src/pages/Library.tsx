@@ -52,6 +52,7 @@ import {
 import { ManualImportModal } from "../components/ManualImportModal";
 import { YourWeekCard } from "../components/YourWeekCard";
 import { toast } from "../hooks/use-toast";
+import { writeLibraryFallbackIfAbsent } from "../player/sectionMemory";
 
 // ---------------------------------------------------------------------------
 // Ledger consent helpers
@@ -996,6 +997,25 @@ export default function Library() {
     hasNextPage,
   } = useMyLibraryInfinite({ source: sourceFilter || undefined, sort: sortFilter }, 50);
   const keptItems = keptData?.pages.flatMap((p) => p.items) ?? [];
+  useEffect(() => {
+    const latest = keptItems.find((item) => item.mbid && item.recording);
+    if (!latest?.mbid || !latest.recording) return;
+    writeLibraryFallbackIfAbsent(
+      {
+        mbid: latest.mbid,
+        title: latest.recording.title,
+        artist: latest.recording.artist,
+        artworkUrl: latest.recording.artworkUrl,
+        links: [],
+      },
+      {
+        mbid: latest.mbid,
+        title: latest.recording.albumTitle ?? latest.recording.title,
+        artworkUrl: latest.recording.artworkUrl,
+      },
+      latest.mbid,
+    );
+  }, [keptItems]);
   // Total count from the server's first-page COUNT query — reflects the real
   // library size even before all pages are loaded.
   const libraryTotal: number | undefined = keptData?.pages[0]?.total;
