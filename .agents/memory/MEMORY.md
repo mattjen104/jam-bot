@@ -75,3 +75,4 @@
 - [Lore crossing row hierarchy](lore-crossing-row-hierarchy.md) — crossing artist leads; station is a stable byline; suppress titles only for crossing-driven rows, not ordinary now-playing rows.
 - [Schedule attribution withdrawals](schedule-attribution-voids.md) — void schedule evidence in place; exclude only schedule-derived bylines while preserving curated and overlapping valid attribution.
 - [Live DJ attribution eligibility](live-dj-attribution-eligibility.md) — one pure normalized rule gates generic/colliding DJ values across ingestion, APIs, picker linkage, and Dial rendering.
+- [Apple MusicKit replay boundary](apple-music-replay.md) — browser-only exact-ID playback; short-lived token/storefront only; preserve gaps and isolate from the live player.

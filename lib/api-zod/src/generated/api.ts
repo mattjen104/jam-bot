@@ -1998,6 +1998,11 @@ export const GetAppleMusicReplayMaterializationResponse = zod.object({
   developerToken: zod.string().nullable(),
   appName: zod.string(),
   apiBase: zod.string(),
+  storefront: zod
+    .string()
+    .describe(
+      "Public Apple Music storefront used by MusicKit JS (for example us).",
+    ),
   replayId: zod.number(),
   entries: zod.array(
     zod.object({

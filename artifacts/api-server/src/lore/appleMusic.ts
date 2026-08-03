@@ -92,6 +92,7 @@ export function getAppleMusicClientConfig(): {
   developerToken: string | null;
   appName: string;
   apiBase: string;
+  storefront: string;
 } {
   const config = configuredValues();
   return {
@@ -99,5 +100,9 @@ export function getAppleMusicClientConfig(): {
     developerToken: getAppleMusicDeveloperToken(),
     appName: config?.appName ?? "Lore",
     apiBase: APPLE_MUSIC_API_BASE,
+    // Storefront is public configuration. Keep it separate from the signing
+    // credentials so MusicKit can use the same storefront the server uses for
+    // its materialization receipt.
+    storefront: process.env.APPLE_MUSIC_STOREFRONT?.trim() || "us",
   };
 }

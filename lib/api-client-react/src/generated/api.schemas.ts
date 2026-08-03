@@ -1242,6 +1242,8 @@ export interface AppleMusicReplayMaterialization {
   developerToken: string | null;
   appName: string;
   apiBase: string;
+  /** Public Apple Music storefront used by MusicKit JS (for example us). */
+  storefront: string;
   replayId: number;
   entries: AppleMusicReplayMaterializationEntry[];
   coverage: AppleMusicReplayMaterializationCoverage;

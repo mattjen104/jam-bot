@@ -4405,6 +4405,9 @@ components:
           type: string
         apiBase:
           type: string
+        storefront:
+          type: string
+          description: Public Apple Music storefront used by MusicKit JS (for example us).
         replayId:
           type: integer
         entries:
@@ -4425,7 +4428,7 @@ components:
             dead:
               type: integer
           required: [total, available, unavailable, unresolved, dead]
-      required: [configured, developerToken, appName, apiBase, replayId, entries, coverage]
+      required: [configured, developerToken, appName, apiBase, storefront, replayId, entries, coverage]
     PickerRunSummary:
       type: object
       description: >-

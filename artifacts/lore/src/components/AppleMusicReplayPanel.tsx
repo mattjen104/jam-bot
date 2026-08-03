@@ -1,450 +1,287 @@
-/**
- * Apple MusicKit JS inline replay panel.
- *
- * Loads MusicKit JS from Apple's CDN only when the user starts playback —
- * never eagerly. The developer token stays on the server; only the short-lived
- * developer JWT returned by the /apple-music endpoint is sent to the browser.
- * No audio is hosted or stitched by Lore.
- */
-
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Loader2, Pause, Play, RotateCcw, Square } from "lucide-react";
+import type { AppleMusicReplayMaterialization } from "@workspace/api-client-react";
 import {
-  AlertTriangle,
-  ChevronLeft,
-  ChevronRight,
-  ExternalLink,
-  Ghost,
-  Loader2,
-  Music,
-  Pause,
-  Play,
-  X,
-} from "lucide-react";
-import {
-  useGetAppleMusicReplayMaterialization,
-  type AppleMusicReplayMaterializationEntry,
-} from "@workspace/api-client-react";
+  buildAppleMusicQueue,
+  canPlayAppleMusic,
+  describeMusicKitError,
+  eventTrackId,
+  loadMusicKit,
+  musicKitEvent,
+  type MusicKitInstance,
+  type MusicKitPlaybackState,
+} from "../lib/appleMusicReplay";
 
-// ---------------------------------------------------------------------------
-// Minimal MusicKit v3 type declarations
-// ---------------------------------------------------------------------------
+type Props = { materialization: AppleMusicReplayMaterialization };
 
-declare global {
-  interface Window {
-    MusicKit?: {
-      configure(config: {
-        developerToken: string;
-        app: { name: string; build: string };
-      }): MKInstance;
-      getInstance(): MKInstance;
-      PlaybackStates: Record<string, number>;
-    };
-  }
+function entryLabel(entry: AppleMusicReplayMaterialization["entries"][number]): string {
+  return `${entry.artist} — ${entry.title}`;
 }
 
-interface MKInstance {
-  authorize(): Promise<string>;
-  unauthorize(): Promise<void>;
-  setQueue(descriptor: { songs: string[] }): Promise<void>;
-  play(): Promise<void>;
-  pause(): void;
-  skipToNextItem(): Promise<void>;
-  skipToPreviousItem(): Promise<void>;
-  changeToMediaAtIndex(index: number): Promise<void>;
-  readonly nowPlayingItem: { id?: string } | null;
-  readonly nowPlayingItemIndex: number;
-  readonly playbackState: number;
-  addEventListener(event: string, handler: (e?: unknown) => void): void;
-  removeEventListener(event: string, handler: (e?: unknown) => void): void;
-}
+export function AppleMusicReplayPanel({ materialization }: Props) {
+  const queue = useMemo(() => buildAppleMusicQueue(materialization), [materialization]);
+  const [active, setActive] = useState(false);
+  const [state, setState] = useState<MusicKitPlaybackState>("idle");
+  const [currentQueueIndex, setCurrentQueueIndex] = useState(0);
+  const [error, setError] = useState<{ kind: string; message: string } | null>(null);
+  const musicRef = useRef<MusicKitInstance | null>(null);
+  const listenersRef = useRef<Array<[string, (event: unknown) => void]>>([]);
+  const sessionRef = useRef(0);
 
-// MusicKit PlaybackState numeric values
-const MK_STATE_PLAYING = 2;
-const MK_STATE_PAUSED = 3;
-const MK_STATE_ENDED = 5;
-const MK_STATE_STOPPED = 0;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function missingLabel(reason: string | null): string {
-  if (reason === "dead_link" || reason === "dead") return "removed from service";
-  if (reason === "unavailable") return "not on Apple Music";
-  if (reason === "unresolved") return "not identified";
-  return "unavailable";
-}
-
-function statusPill(entry: AppleMusicReplayMaterializationEntry) {
-  if (entry.status === "available") return null;
-  return (
-    <span className="ml-1 font-mono text-[10px] text-muted-foreground">
-      · {missingLabel(entry.reason)}
-    </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Script loader
-// ---------------------------------------------------------------------------
-
-let mkLoadPromise: Promise<void> | null = null;
-
-function loadMusicKit(): Promise<void> {
-  if (mkLoadPromise) return mkLoadPromise;
-  if (window.MusicKit) return (mkLoadPromise = Promise.resolve());
-  mkLoadPromise = new Promise((resolve, reject) => {
-    const existing = document.querySelector(
-      'script[src*="music.apple.com/musickit"]',
-    );
-    if (existing) {
-      existing.addEventListener("load", () => resolve());
-      existing.addEventListener("error", () =>
-        reject(new Error("MusicKit failed to load")),
-      );
+  const cleanup = async (clearQueue = true) => {
+    sessionRef.current += 1;
+    const music = musicRef.current;
+    if (!music) {
+      setActive(false);
+      setState("idle");
       return;
     }
-    const script = document.createElement("script");
-    script.src = "https://js-cdn.music.apple.com/musickit/v3/musickit.js";
-    script.crossOrigin = "anonymous";
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("MusicKit failed to load"));
-    document.head.appendChild(script);
-  });
-  return mkLoadPromise;
-}
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
-type PlayerState = "idle" | "loading" | "authorized" | "playing" | "paused" | "ended";
-
-export function AppleMusicReplayPanel({ replayId }: { replayId: number }) {
-  const { data, isLoading } = useGetAppleMusicReplayMaterialization(replayId);
-  const [playerState, setPlayerState] = useState<PlayerState>("idle");
-  const [authError, setAuthError] = useState<string | null>(null);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const mkRef = useRef<MKInstance | null>(null);
-  const cleanupRef = useRef<(() => void) | null>(null);
-
-  // Cleanup on unmount
-  useEffect(
-    () => () => {
-      cleanupRef.current?.();
-    },
-    [],
-  );
-
-  if (isLoading || !data) return null;
-  if (!data.configured || !data.developerToken) return null;
-
-  const available = data.entries.filter((e) => e.status === "available");
-  const missing = data.entries.filter((e) => e.status !== "available");
-
-  if (available.length === 0) {
-    return (
-      <section
-        className="mb-6 rounded-xl border border-card-border bg-card p-4"
-        data-testid="am-replay"
-      >
-        <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-          <Music className="h-3.5 w-3.5" />
-          Apple Music
-        </div>
-        <p className="mt-2 text-sm text-muted-foreground">
-          None of the identified tracks in this set are available on Apple Music.
-        </p>
-      </section>
-    );
-  }
-
-  const current = available[currentIndex] ?? null;
-  const isActive = playerState === "playing" || playerState === "paused";
-
-  async function startPlayback() {
-    setPlayerState("loading");
-    setAuthError(null);
-
+    for (const [event, listener] of listenersRef.current) {
+      music.removeEventListener(event, listener);
+    }
+    listenersRef.current = [];
     try {
-      await loadMusicKit();
+      await music.pause();
+      if (clearQueue) await music.setQueue({ songs: [] });
     } catch {
-      setAuthError("MusicKit could not be loaded. Check your network connection.");
-      setPlayerState("idle");
-      return;
+      // Teardown is best-effort; leaving replay must never affect Lore's player.
     }
+    musicRef.current = null;
+    setActive(false);
+    setState("idle");
+  };
 
+  useEffect(() => () => {
+    void cleanup();
+  }, []);
+
+  const start = async () => {
+    if (!canPlayAppleMusic(materialization) || !queue.ids.length) return;
+    const session = ++sessionRef.current;
+    setActive(true);
+    setState("loading");
+    setError(null);
     try {
-      window.MusicKit!.configure({
-        developerToken: data!.developerToken!,
-        app: { name: data!.appName, build: "1.0.0" },
+      const global = await loadMusicKit();
+      if (session !== sessionRef.current) return;
+      global.configure({
+        developerToken: materialization.developerToken!,
+        appName: materialization.appName,
+        storefrontId: materialization.storefront,
       });
-    } catch {
-      setAuthError("MusicKit configuration failed.");
-      setPlayerState("idle");
-      return;
-    }
+      const music = global.getInstance();
+      music.storefrontId = materialization.storefront;
+      musicRef.current = music;
+      setState("authorizing");
+      await music.authorize();
+      if (session !== sessionRef.current) return;
+      await music.setQueue({ songs: queue.ids });
+      if (session !== sessionRef.current) return;
 
-    const mk = window.MusicKit!.getInstance();
-    mkRef.current = mk;
-
-    try {
-      await mk.authorize();
-    } catch {
-      setAuthError(
-        "Apple Music authorization was cancelled or your subscription may not support playback.",
-      );
-      setPlayerState("idle");
-      return;
-    }
-
-    const songIds = available.map((e) => e.appleMusicId!);
-
-    try {
-      await mk.setQueue({ songs: songIds });
-    } catch {
-      setAuthError("Could not build the Apple Music queue. Try again.");
-      setPlayerState("idle");
-      return;
-    }
-
-    const onStateChange = () => {
-      const state = mk.playbackState;
-      if (state === MK_STATE_PLAYING) setPlayerState("playing");
-      else if (state === MK_STATE_PAUSED) setPlayerState("paused");
-      else if (state === MK_STATE_ENDED || state === MK_STATE_STOPPED)
-        setPlayerState("ended");
-    };
-
-    const onItemChange = () => {
-      const idx = mk.nowPlayingItemIndex;
-      if (typeof idx === "number" && idx >= 0 && idx < available.length) {
-        setCurrentIndex(idx);
+      const onItemChange = (event: unknown) => {
+        const id = eventTrackId(event);
+        if (id) {
+          const index = queue.ids.indexOf(id);
+          if (index >= 0) setCurrentQueueIndex(index);
+        }
+        setState("playing");
+      };
+      const onStateChange = (event: unknown) => {
+        const value = event as { state?: string; playbackState?: string } | null;
+        const next = String(value?.state ?? value?.playbackState ?? "").toLowerCase();
+        if (next.includes("paused") || next === "0") setState("paused");
+        else if (next.includes("playing") || next === "1") setState("playing");
+        else if (next.includes("ended") || next === "4") {
+          setCurrentQueueIndex((index) => {
+            if (index >= queue.ids.length - 1) setState("complete");
+            return Math.min(index + 1, queue.ids.length - 1);
+          });
+        }
+      };
+      const onError = (event: unknown) => {
+        const detail = event instanceof Error ? event : (event as { detail?: unknown })?.detail;
+        setState("error");
+        setError(describeMusicKitError(detail ?? event));
+      };
+      const events = [
+        [musicKitEvent(music, "mediaItemDidChange"), onItemChange],
+        [musicKitEvent(music, "playbackStateDidChange"), onStateChange],
+        [musicKitEvent(music, "authorizationStatusDidChange"), onStateChange],
+        [musicKitEvent(music, "playbackError"), onError],
+      ] as Array<[string, (event: unknown) => void]>;
+      for (const [event, listener] of events) {
+        music.addEventListener(event, listener);
+        listenersRef.current.push([event, listener]);
       }
-    };
+      await music.play();
+      if (session === sessionRef.current) setState("playing");
+    } catch (cause) {
+      if (session !== sessionRef.current) return;
+      const detail = describeMusicKitError(cause);
+      setState("error");
+      setError(detail);
+    }
+  };
 
-    mk.addEventListener("playbackStateDidChange", onStateChange);
-    mk.addEventListener("mediaItemDidChange", onItemChange);
+  const retry = async () => {
+    await cleanup();
+    await start();
+  };
 
-    cleanupRef.current = () => {
-      mk.removeEventListener("playbackStateDidChange", onStateChange);
-      mk.removeEventListener("mediaItemDidChange", onItemChange);
-      void mk.unauthorize().catch(() => undefined);
-      mkRef.current = null;
-    };
-
+  const togglePause = async () => {
+    const music = musicRef.current;
+    if (!music) return;
     try {
-      await mk.play();
-      setPlayerState("playing");
-    } catch {
-      setAuthError(
-        "Playback failed. Make sure Apple Music is available in your region.",
-      );
-      setPlayerState("idle");
-      cleanupRef.current();
-      cleanupRef.current = null;
+      if (state === "playing") {
+        await music.pause();
+        setState("paused");
+      } else {
+        await music.play();
+        setState("playing");
+      }
+    } catch (cause) {
+      setState("error");
+      setError(describeMusicKitError(cause));
     }
-  }
+  };
 
-  function stopPlayback() {
-    mkRef.current?.pause();
-    cleanupRef.current?.();
-    cleanupRef.current = null;
-    mkRef.current = null;
-    setPlayerState("idle");
-    setCurrentIndex(0);
-    setAuthError(null);
-  }
-
-  async function togglePlay() {
-    if (!mkRef.current) return;
-    if (playerState === "playing") {
-      mkRef.current.pause();
-    } else {
-      await mkRef.current.play();
+  const skip = async (direction: "next" | "previous") => {
+    const music = musicRef.current;
+    if (!music) return;
+    try {
+      if (direction === "next") await music.skipToNextItem?.();
+      else await music.skipToPreviousItem?.();
+    } catch (cause) {
+      setState("error");
+      setError(describeMusicKitError(cause));
     }
-  }
+  };
 
-  async function goToIndex(idx: number) {
-    if (!mkRef.current || idx < 0 || idx >= available.length) return;
-    setCurrentIndex(idx);
-    await mkRef.current.changeToMediaAtIndex(idx);
-    await mkRef.current.play();
-    setPlayerState("playing");
-  }
+  const statusText = state === "authorizing"
+    ? "Authorize Apple Music in the browser…"
+    : state === "loading"
+      ? "Loading Apple MusicKit…"
+      : state === "complete"
+        ? "Replay complete"
+        : state === "paused"
+          ? "Paused"
+          : state === "playing"
+            ? "Playing in Apple Music"
+            : "Ready for Apple Music";
 
   return (
     <section
       className="mb-6 rounded-xl border border-primary/30 bg-primary/[0.04] p-4"
-      data-testid="am-replay"
+      data-testid="apple-music-replay"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
-            <Ghost className="h-3.5 w-3.5" />
-            Apple Music · Ghost Replay
-          </div>
+          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
+            Apple Music playback
+          </p>
           <p className="mt-1 max-w-xl text-sm leading-relaxed text-muted-foreground">
-            {isActive
-              ? `Playing ${current?.artist ?? ""} — ${current?.title ?? ""}`
-              : "Play the reconstruction through your Apple Music subscription. No audio is hosted by Lore."}
+            Play the exact Apple Music matches in broadcast order. Lore never hosts
+            or proxies the audio.
           </p>
         </div>
-
-        {!isActive ? (
+        {!active ? (
           <button
             type="button"
-            onClick={() => void startPlayback()}
-            disabled={playerState === "loading"}
-            className="hover-elevate inline-flex items-center gap-2 rounded-full border border-primary-border bg-primary px-4 py-2 font-mono text-xs uppercase tracking-wide text-primary-foreground disabled:opacity-40"
-            data-testid="am-start"
+            onClick={() => void start()}
+            disabled={!canPlayAppleMusic(materialization)}
+            className="inline-flex items-center gap-2 rounded-full border border-primary-border bg-primary px-4 py-2 font-mono text-xs uppercase tracking-wide text-primary-foreground disabled:opacity-40"
+            data-testid="apple-music-start"
           >
-            {playerState === "loading" ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Music className="h-3.5 w-3.5" />
-            )}
-            {playerState === "loading" ? "Connecting…" : "Play on Apple Music"}
+            <Play className="h-3.5 w-3.5" />
+            Play in Apple Music
           </button>
         ) : (
           <button
             type="button"
-            onClick={stopPlayback}
-            className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide text-muted-foreground hover:text-foreground"
-            data-testid="am-stop"
+            onClick={() => void cleanup()}
+            className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide text-muted-foreground hover:text-foreground"
+            data-testid="apple-music-close"
           >
-            <X className="h-3.5 w-3.5" />
-            Stop
+            <Square className="h-3.5 w-3.5" />
+            Leave Apple Music
           </button>
         )}
       </div>
 
-      {/* Coverage bar */}
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
-        <span data-testid="am-coverage">
-          {data.coverage.available} of {data.coverage.total} on Apple Music
+      <div className="mt-3 flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+        <span data-testid="apple-music-status">{statusText}</span>
+        <span>·</span>
+        <span data-testid="apple-music-coverage">
+          {materialization.coverage.available} of {materialization.coverage.total} exact matches
         </span>
-        {data.coverage.unavailable > 0 && (
-          <span>{data.coverage.unavailable} not on service</span>
-        )}
-        {data.coverage.unresolved > 0 && (
-          <span>{data.coverage.unresolved} not identified</span>
-        )}
       </div>
 
-      {/* Auth / load errors */}
-      {authError && (
-        <div
-          role="alert"
-          className="mt-3 flex items-start gap-2 rounded-lg border border-destructive-border bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground"
-          data-testid="am-error"
-        >
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          {authError}
-        </div>
-      )}
-
-      {/* Active player controls */}
-      {isActive && current && (
-        <div className="mt-4 rounded-lg border border-card-border bg-card p-3">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="min-w-0">
-              <p className="truncate font-serif text-base font-semibold text-foreground">
-                {current.title}
-              </p>
-              <p className="truncate font-mono text-[11px] text-muted-foreground">
-                {current.artist} · position {current.position + 1}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-[10px] text-muted-foreground">
-                {currentIndex + 1} of {available.length}
-              </span>
-              {current.url && (
-                <a
-                  href={current.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 font-mono text-[10px] text-muted-foreground hover:text-primary"
-                  aria-label="Open on Apple Music"
-                >
-                  <ExternalLink className="h-3 w-3" />
-                  Open
-                </a>
-              )}
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between gap-2">
-            <button
-              type="button"
-              onClick={() => void goToIndex(currentIndex - 1)}
-              disabled={currentIndex === 0}
-              className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 font-mono text-[11px] text-muted-foreground disabled:opacity-35"
-              data-testid="am-previous"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-              Previous
-            </button>
-
-            <button
-              type="button"
-              onClick={() => void togglePlay()}
-              className="inline-flex items-center gap-2 rounded-full border border-primary/50 px-4 py-1.5 font-mono text-[11px] text-primary"
-              data-testid="am-toggle"
-            >
-              {playerState === "playing" ? (
-                <Pause className="h-3.5 w-3.5" />
-              ) : (
-                <Play className="h-3.5 w-3.5" />
-              )}
-              {playerState === "playing" ? "Pause" : "Play"}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => void goToIndex(currentIndex + 1)}
-              disabled={currentIndex >= available.length - 1}
-              className="inline-flex items-center gap-1 rounded-full border border-primary/50 px-3 py-1.5 font-mono text-[11px] text-primary disabled:opacity-35"
-              data-testid="am-next"
-            >
-              Next
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Ended state */}
-      {playerState === "ended" && (
-        <div
-          className="mt-3 rounded-lg border border-card-border bg-card px-4 py-3 text-center font-mono text-sm text-muted-foreground"
-          data-testid="am-ended"
-        >
-          Set complete.{" "}
-          <button
-            type="button"
-            onClick={() => void startPlayback()}
-            className="text-primary hover:underline"
-          >
-            Play again
+      {!materialization.configured ? (
+        <p role="status" className="mt-3 text-xs text-muted-foreground" data-testid="apple-music-unconfigured">
+          Inline Apple Music playback is not configured here. The guided Apple Music link remains available below.
+        </p>
+      ) : null}
+      {materialization.configured && !queue.ids.length ? (
+        <p role="status" className="mt-3 text-xs text-muted-foreground">
+          No exact Apple Music tracks are available for this replay. The guided link remains available below.
+        </p>
+      ) : null}
+      {error ? (
+        <div role="alert" className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-destructive-border bg-destructive/10 p-3 text-xs text-destructive-foreground" data-testid="apple-music-error">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span>{error.message}</span>
+          <button type="button" onClick={() => void retry()} className="ml-auto inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 font-mono text-[10px] uppercase">
+            <RotateCcw className="h-3 w-3" /> Retry
           </button>
         </div>
-      )}
+      ) : null}
 
-      {/* Missing entries receipt */}
-      {missing.length > 0 && (
-        <div className="mt-4 flex flex-wrap gap-1.5" data-testid="am-missing">
-          {missing.map((entry) => (
-            <span
-              key={`${entry.position}-${entry.recordingMbid ?? "miss"}`}
-              className="rounded-full border border-border px-2 py-1 font-mono text-[10px] text-muted-foreground"
-            >
-              {entry.position + 1} · {entry.title}{statusPill(entry)}
-            </span>
-          ))}
+      <div className="mt-4 flex flex-wrap gap-1.5" data-testid="apple-music-receipt">
+        {materialization.entries.map((entry) => (
+          <span
+            key={`${entry.position}-${entry.spinId}`}
+            className={`rounded-full border px-2 py-1 font-mono text-[10px] ${
+              entry.status === "available" ? "border-primary/40 text-primary" : "border-border text-muted-foreground"
+            }`}
+            data-testid={`apple-music-entry-${entry.position}`}
+          >
+            {entry.position + 1} · {entry.status === "available" ? "available" : entry.status}
+          </span>
+        ))}
+      </div>
+
+      {active && queue.entries[currentQueueIndex] ? (
+        <div className="mt-4 rounded-lg border border-card-border bg-card p-3">
+          <p className="truncate font-serif text-base font-semibold text-foreground">
+            {entryLabel(queue.entries[currentQueueIndex])}
+          </p>
+          <p className="mt-1 font-mono text-[11px] text-muted-foreground">
+            manifest position {queue.entries[currentQueueIndex].position + 1} · {currentQueueIndex + 1} of {queue.entries.length} exact matches
+          </p>
+          <div className="mt-3 flex items-center justify-center gap-2">
+            <button type="button" onClick={() => void skip("previous")} className="rounded-full border border-border p-2 text-muted-foreground" aria-label="Previous Apple Music track">
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button type="button" onClick={() => void togglePause()} className="rounded-full border border-primary/50 p-2 text-primary" aria-label={state === "playing" ? "Pause Apple Music" : "Play Apple Music"}>
+              {state === "playing" ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+            </button>
+            <button type="button" onClick={() => void skip("next")} className="rounded-full border border-border p-2 text-muted-foreground" aria-label="Next Apple Music track">
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
         </div>
-      )}
+      ) : null}
+      {(state === "loading" || state === "authorizing") ? (
+        <div className="mt-4 flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" /> {statusText}
+        </div>
+      ) : null}
     </section>
+  );
+}
+
+export function AppleMusicReplayUnavailable({ materialization }: Props) {
+  return (
+    <AppleMusicReplayPanel materialization={materialization} />
   );
 }

@@ -1,5 +1,4 @@
 import { Link, useParams } from "wouter";
-import { useGetReplayManifest } from "@workspace/api-client-react";
 import { ArrowLeft, Download, Ghost } from "lucide-react";
 import { ArchiveTracklist } from "../components/ArchiveTracklist";
 import { AppleMusicReplayPanel } from "../components/AppleMusicReplayPanel";
@@ -8,6 +7,10 @@ import { GuidedReplayQueue } from "../components/GuidedReplayQueue";
 import { ShareButton } from "../components/ShareButton";
 import { usePlayer } from "../player/PlayerProvider";
 import { runDate } from "../lib/format";
+import {
+  useGetAppleMusicReplayMaterialization,
+  useGetReplayManifest,
+} from "@workspace/api-client-react";
 
 /** The canonical, shareable Ghost Replay reconstruction surface. */
 export default function Replay() {
@@ -15,6 +18,13 @@ export default function Replay() {
   const id = Number(params.id ?? "");
   const { ride, radio } = usePlayer();
   const { data, isLoading, isError } = useGetReplayManifest(id, {
+    request: { headers: { accept: "application/json" } },
+  });
+  const { data: appleMusic } = useGetAppleMusicReplayMaterialization(id, {
+    query: {
+      enabled: Boolean(data),
+      queryKey: [`/api/replay/${id}/apple-music`],
+    },
     request: { headers: { accept: "application/json" } },
   });
   const dockPadding = ride.active || radio.station ? "pb-32" : "pb-16";
@@ -104,8 +114,8 @@ export default function Replay() {
               entries={data.entries}
               label={`${data.station.name} · ${data.show?.name ?? "stream"} · ${runDate(data.bounds.date)}`}
             />
+            {appleMusic ? <AppleMusicReplayPanel materialization={appleMusic} /> : null}
             <GuidedReplayQueue replayId={data.replayId} />
-            <AppleMusicReplayPanel replayId={data.replayId} />
 
             <section
               aria-label="Replay exports"
