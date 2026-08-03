@@ -70,6 +70,10 @@ import { scheduleAnonCleanup } from "./lore/anonCleanup.js";
 import { applyReplayResolutionMigration } from "./lore/replay-resolution-migration.js";
 import { resumeReplayResolutionJobs } from "./lore/replay-resolution.js";
 import { resumeReplayMaterializationJobs } from "./lore/replay-materialization.js";
+import {
+  resumeEmbedResolutionJobs,
+  startEmbedResolutionWorker,
+} from "./lore/embed-resolution.js";
 
 const rawPort = process.env["PORT"];
 
@@ -195,6 +199,8 @@ async function bootLore(): Promise<void> {
     startPhase3RetryScheduler();
     await resumeReplayResolutionJobs();
     await resumeReplayMaterializationJobs();
+    await resumeEmbedResolutionJobs();
+    startEmbedResolutionWorker();
     startSessionExpiryWorker();
     scheduleAnonCleanup();
   } catch (err) {

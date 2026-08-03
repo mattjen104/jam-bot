@@ -112,6 +112,36 @@ export interface RecordingCredits {
   relationships?: SongRelationship[];
 }
 
+/** A provider URL attached to a recording by MusicBrainz. */
+export interface RecordingUrlRelationship {
+  relationType: string;
+  url: string;
+  /** The release this URL was attached to, when the response included one. */
+  releaseMbid?: string;
+  releaseTitle?: string;
+  releaseDate?: string;
+  trackPosition?: number;
+}
+
+export interface RecordingEmbedRelationships {
+  recordingId: string;
+  title?: string;
+  artist?: string;
+  durationMs?: number;
+  releases: Array<{
+    mbid: string;
+    title?: string;
+    date?: string;
+    status?: string;
+    country?: string;
+    media?: Array<{
+      position?: number;
+      tracks: Array<{ position?: number; recordingId?: string; title?: string }>;
+    }>;
+  }>;
+  urls: RecordingUrlRelationship[];
+}
+
 /** Whether MusicBrainz lookups are configured (a contact UA is required). */
 export function musicbrainzEnabled(): boolean {
   return !!config.MUSICBRAINZ_CONTACT?.trim();
@@ -286,6 +316,110 @@ export function parseRecordingIsrcs(body: unknown): string | null {
 export function parseIsrcRecordingId(body: unknown): string | null {
   const b = body as { recordings?: Array<{ id?: string }> };
   return b?.recordings?.find((r) => !!r?.id)?.id ?? null;
+}
+
+/**
+ * Pure parser for the small MusicBrainz response used by the off-request
+ * embed worker.  Relationship URLs are facts, not search results: callers may
+ * fetch only the provider URLs returned here.
+ */
+export function parseRecordingEmbedRelationships(
+  recordingId: string,
+  body: unknown,
+): RecordingEmbedRelationships {
+  const b = body as {
+    title?: string;
+    length?: number;
+    "artist-credit"?: Array<{ name?: string; artist?: { name?: string } }>;
+    relations?: Array<{
+      type?: string;
+      url?: { resource?: string };
+      release?: { id?: string; title?: string; date?: string; status?: string; country?: string };
+    }>;
+    releases?: Array<{
+      id?: string;
+      title?: string;
+      date?: string;
+      status?: string;
+      country?: string;
+      media?: Array<{
+        position?: number;
+        tracks?: Array<{
+          position?: number;
+          recording?: { id?: string; title?: string };
+        }>;
+      }>;
+    }>;
+  };
+  const artist = b?.["artist-credit"]
+    ?.map((credit) => (credit.name?.trim() || credit.artist?.name?.trim() || ""))
+    .filter(Boolean)
+    .join(", ") || undefined;
+  const urls: RecordingUrlRelationship[] = [];
+  for (const rel of b?.relations ?? []) {
+    const url = rel.url?.resource?.trim();
+    if (!url) continue;
+    urls.push({
+      relationType: rel.type?.trim().toLowerCase() || "",
+      url,
+      ...(rel.release?.id ? { releaseMbid: rel.release.id } : {}),
+      ...(rel.release?.title ? { releaseTitle: rel.release.title } : {}),
+      ...(rel.release?.date ? { releaseDate: rel.release.date } : {}),
+    });
+  }
+  const releases = (b?.releases ?? [])
+    .flatMap((release) => {
+      const mbid = release.id?.trim();
+      if (!mbid) return [];
+      return [{
+        mbid,
+        ...(release.title?.trim() ? { title: release.title.trim() } : {}),
+        ...(release.date?.trim() ? { date: release.date.trim() } : {}),
+        ...(release.status?.trim() ? { status: release.status.trim() } : {}),
+        ...(release.country?.trim() ? { country: release.country.trim() } : {}),
+        media: (release.media ?? []).map((medium) => ({
+          ...(medium.position != null ? { position: medium.position } : {}),
+          tracks: (medium.tracks ?? []).flatMap((track) => {
+            const trackId = track.recording?.id?.trim();
+            const title = track.recording?.title?.trim();
+            if (!trackId && !title) return [];
+            return [{
+              ...(track.position != null ? { position: track.position } : {}),
+              ...(trackId ? { recordingId: trackId } : {}),
+              ...(title ? { title } : {}),
+            }];
+          }),
+        })),
+      }];
+    });
+  return {
+    recordingId,
+    ...(b?.title?.trim() ? { title: b.title.trim() } : {}),
+    ...(artist ? { artist } : {}),
+    ...(typeof b?.length === "number" && b.length > 0 ? { durationMs: b.length } : {}),
+    releases,
+    urls,
+  };
+}
+
+/** Fetch relationship/release facts for embed resolution. Never throws. */
+export async function fetchRecordingEmbedRelationships(
+  recordingId: string,
+): Promise<RecordingEmbedRelationships | null> {
+  if (!musicbrainzEnabled() || !recordingId.trim()) return null;
+  try {
+    const body = await mbFetch(
+      `/recording/${encodeURIComponent(recordingId.trim())}` +
+      `?inc=url-rels+releases+media+recording-level-rels+artist-credits&fmt=json`,
+    );
+    return parseRecordingEmbedRelationships(recordingId.trim(), body);
+  } catch (err) {
+    logger.warn("MusicBrainz embed relationship lookup failed", {
+      recordingId,
+      error: String(err),
+    });
+    return null;
+  }
 }
 
 /** Pure: artist id/name, personnel credits, and linked work ids. */

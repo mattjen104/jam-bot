@@ -36,7 +36,15 @@ export {
   isEmbedResolutionExpired,
   listEmbedResolutions,
   markEmbedResolutionExpired,
+  configureEmbedProviderClients,
+  chooseEmbedRelease,
+  enqueueEmbedResolution,
+  enqueueRecordingEmbeds,
+  gateYouTubeSearch,
   upsertEmbedResolution,
+  resumeEmbedResolutionJobs,
+  startEmbedResolutionWorker,
+  stopEmbedResolutionWorker,
   type EmbedConfidence,
   type EmbedLink,
   type EmbedOutcome,
@@ -46,6 +54,11 @@ export {
   type EmbedResolutionState,
   type EmbedRole,
   type EmbedRung,
+  type BandcampReleasePage,
+  type BandcampTrack,
+  type EmbedResolutionQueueJob,
+  type EmbedProviderClients,
+  type YouTubeVideo,
 } from "./embed-resolution.js";
 
 const ODESLI_JOB_GAP_MS = 1_000;

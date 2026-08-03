@@ -2028,7 +2028,9 @@ export const listensTable = pgTable(
     mbid: text("mbid").references(() => recordingsTable.mbid),
     /** FK to the spin that triggered this listen (absent for library rides). */
     spinId: integer("spin_id").references(() => spinsTable.id),
-    stationId: integer("station_id").references(() => stationsTable.id),
+    stationId: integer("station_id").references(() => stationsTable.id, {
+      onDelete: "set null",
+    }),
     pickerId: integer("picker_id").references(() => pickersTable.id),
     showId: integer("show_id").references(() => showsTable.id),
     /** 'broadcast' | 'ride' | 'replay' | 'library' */
@@ -2575,6 +2577,92 @@ export const embedLinkTable = pgTable(
 export const embedLinksTable = embedLinkTable;
 export type EmbedLink = typeof embedLinkTable.$inferSelect;
 export type InsertEmbedLink = typeof embedLinkTable.$inferInsert;
+
+/**
+ * Off-request provider work.  One row is one recording/provider/role demand;
+ * the unique key makes ingest, first-play, and Keep safe to call repeatedly.
+ */
+export const embedResolutionQueueTable = pgTable(
+  "embed_resolution_queue",
+  {
+    id: serial("id").primaryKey(),
+    recordingMbid: text("recording_mbid")
+      .notNull()
+      .references(() => recordingsTable.mbid, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    role: text("role").notNull(),
+    /** "pending" | "running" | "retry" | "done". */
+    status: text("status").notNull().default("pending"),
+    priority: integer("priority").notNull().default(50),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: timestamp("next_attempt_at").defaultNow().notNull(),
+    lockedAt: timestamp("locked_at"),
+    lastError: text("last_error"),
+    /** Optional facts used only for aggregate coverage metrics. */
+    /**
+     * Normalised aggregate dimensions. Empty values represent unknown, avoiding
+     * PostgreSQL nullable-unique semantics splitting the same bucket.
+     */
+    stationId: integer("station_id").notNull().default(0),
+    genreCluster: text("genre_cluster").notNull().default("unknown"),
+    requestedAt: timestamp("requested_at").defaultNow().notNull(),
+    expiresAt: timestamp("expires_at"),
+    metricRecordedAt: timestamp("metric_recorded_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("embed_resolution_queue_identity_uq").on(
+      t.recordingMbid,
+      t.provider,
+      t.role,
+    ),
+    index("embed_resolution_queue_claim_idx").on(
+      t.status,
+      t.nextAttemptAt,
+      t.priority,
+      t.id,
+    ),
+    index("embed_resolution_queue_recording_idx").on(t.recordingMbid),
+  ],
+);
+
+export type EmbedResolutionQueueJob =
+  typeof embedResolutionQueueTable.$inferSelect;
+export type InsertEmbedResolutionQueueJob =
+  typeof embedResolutionQueueTable.$inferInsert;
+
+/** Aggregate-only embed coverage facts; provider content is never copied here. */
+export const embedResolutionMetricsTable = pgTable(
+  "embed_resolution_metrics",
+  {
+    id: serial("id").primaryKey(),
+    stationId: integer("station_id").references(() => stationsTable.id),
+    genreCluster: text("genre_cluster"),
+    weekStart: timestamp("week_start").notNull(),
+    provider: text("provider").notNull(),
+    role: text("role").notNull(),
+    rung: integer("rung").notNull(),
+    outcome: text("outcome").notNull(),
+    count: integer("count").notNull().default(0),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("embed_resolution_metrics_identity_uq").on(
+      t.stationId,
+      t.genreCluster,
+      t.weekStart,
+      t.provider,
+      t.role,
+      t.rung,
+      t.outcome,
+    ),
+    index("embed_resolution_metrics_week_idx").on(t.weekStart),
+  ],
+);
+
+export type EmbedResolutionMetric =
+  typeof embedResolutionMetricsTable.$inferSelect;
 
 export type ReplayResolutionJob = typeof replayResolutionJobsTable.$inferSelect;
 

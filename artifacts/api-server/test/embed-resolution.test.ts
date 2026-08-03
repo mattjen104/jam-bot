@@ -4,11 +4,16 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { db, embedLinkTable, recordingsTable } from "@workspace/db";
 import {
   EMBED_TTL_MS,
+  chooseEmbedRelease,
   embedExpiresAt,
   embedIdentity,
   effectiveEmbedOutcome,
+  gateYouTubeSearch,
   getEmbedResolution,
   listEmbedResolutions,
+  normalizeEmbedText,
+  parseBandcampReleasePage,
+  parseYouTubeSearch,
   upsertEmbedResolution,
   type EmbedResolutionInput,
 } from "../src/lore/embed-resolution.js";
@@ -283,5 +288,79 @@ describe("role-aware embed resolution", () => {
         expiresAt: new Date(Date.now() + EMBED_TTL_MS.youtube),
       }),
     ).rejects.toThrow();
+  });
+});
+
+describe("off-request provider resolution guards", () => {
+  it("normalizes and extracts only supported Bandcamp metadata", () => {
+    expect(normalizeEmbedText("Björk — JÓGA (Remastered)")).toBe("bjork joga");
+    const page = parseBandcampReleasePage(
+      `<div data-tralbum='{"id":123,"album_title":"Homogenic","trackinfo":[{"track_id":456,"title":"Jóga","track_num":2}]}'></div>`,
+      "https://artist.bandcamp.com/album/homogenic",
+    );
+    expect(page).toEqual({
+      url: "https://artist.bandcamp.com/album/homogenic",
+      albumId: "123",
+      title: "Homogenic",
+      tracks: [{ id: "456", title: "Jóga", position: 2 }],
+    });
+    expect(
+      parseBandcampReleasePage("<html></html>", "https://evil.example/album/nope"),
+    ).toBeNull();
+  });
+
+  it("selects release provenance deterministically with a stable tie-break", () => {
+    const recording = {
+      recordingId: "recording-a",
+      releases: [
+        { mbid: "z-release", status: "Official", date: "2001-01-01", media: [] },
+        { mbid: "a-release", status: "Official", date: "2001-01-01", media: [] },
+        { mbid: "later-release", status: "Official", date: "2002-01-01", media: [] },
+      ],
+      urls: [],
+    };
+    expect(chooseEmbedRelease(recording)?.mbid).toBe("a-release");
+    expect(chooseEmbedRelease(recording, "z-release")?.mbid).toBe("z-release");
+  });
+
+  it("promotes YouTube search only through the Topic or strict duration gates", () => {
+    const videos = parseYouTubeSearch([
+      {
+        id: "topic12345",
+        title: "Artist - The Song",
+        channelTitle: "Artist - Topic",
+        durationMs: 999,
+      },
+      {
+        id: "strict1234",
+        title: "Artist The Song official upload",
+        channelTitle: "Some Channel",
+        durationMs: 180_500,
+      },
+      {
+        id: "wrongdur12",
+        title: "Artist The Song live",
+        channelTitle: "Some Channel",
+        durationMs: 250_000,
+      },
+    ]);
+    expect(
+      gateYouTubeSearch(
+        { title: "The Song", artist: "Artist", durationMs: 180_000 },
+        videos,
+      )?.id,
+    ).toBe("topic12345");
+    expect(
+      gateYouTubeSearch(
+        { title: "The Song", artist: "Artist", durationMs: 180_000 },
+        videos.slice(1),
+      )?.id,
+    ).toBe("strict1234");
+    expect(
+      gateYouTubeSearch(
+        { title: "The Song", artist: "Artist", durationMs: 180_000 },
+        [videos[2]!],
+      ),
+    ).toBeNull();
   });
 });

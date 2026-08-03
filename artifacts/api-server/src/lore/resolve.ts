@@ -23,6 +23,7 @@ import { isJunkMetadata } from "./icy.js";
 import { lookupScrapedShowId } from "./scraped-shows-sync.js";
 import type { NowPlayingRaw, RawSpin, ShowAttribution } from "./types.js";
 import { eligibleDjName } from "@workspace/lore-attribution";
+import { enqueueRecordingEmbeds } from "./embed-resolution.js";
 
 /** Outcome of trying to place a now-playing track on the MusicBrainz spine. */
 export interface MbidResolution {
@@ -542,7 +543,14 @@ async function persistSpin(args: {
 }): Promise<boolean> {
   const { station, resolution: r, raw, showId, source, citation } = args;
 
-  if (r.mbid) await upsertRecording(r, raw.artworkUrl, args.enrichLinks ?? true);
+  if (r.mbid) {
+    await upsertRecording(r, raw.artworkUrl, args.enrichLinks ?? true);
+    // Off-request only: provider resolution must never delay ingest.
+    void enqueueRecordingEmbeds(r.mbid, {
+      stationId: station.id,
+      priority: 40,
+    }).catch((err) => console.warn("[lore] embed enqueue failed", err));
+  }
 
   const inserted = await db
     .insert(spinsTable)

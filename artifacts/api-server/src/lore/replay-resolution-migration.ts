@@ -133,6 +133,85 @@ export async function applyReplayResolutionMigration(): Promise<void> {
     CREATE INDEX IF NOT EXISTS embed_link_metrics_idx
       ON embed_link (provider, role, rung, outcome, fetched_at)
   `);
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS embed_resolution_queue (
+      id                serial PRIMARY KEY,
+      recording_mbid    text NOT NULL REFERENCES recordings(mbid) ON DELETE CASCADE,
+      provider          text NOT NULL,
+      role              text NOT NULL,
+      status            text NOT NULL DEFAULT 'pending',
+      priority          integer NOT NULL DEFAULT 50,
+      attempts          integer NOT NULL DEFAULT 0,
+      next_attempt_at   timestamp NOT NULL DEFAULT now(),
+      locked_at         timestamp,
+      last_error        text,
+      station_id        integer REFERENCES stations(id) ON DELETE SET NULL,
+      genre_cluster     text,
+      requested_at      timestamp NOT NULL DEFAULT now(),
+      expires_at        timestamp,
+      metric_recorded_at timestamp,
+      created_at        timestamp NOT NULL DEFAULT now(),
+      updated_at        timestamp NOT NULL DEFAULT now(),
+      CONSTRAINT embed_resolution_queue_identity_uq
+        UNIQUE (recording_mbid, provider, role)
+    )
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS embed_resolution_queue_claim_idx
+      ON embed_resolution_queue (status, next_attempt_at, priority, id)
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS embed_resolution_queue_recording_idx
+      ON embed_resolution_queue (recording_mbid)
+  `);
+  await db.execute(sql`
+    ALTER TABLE embed_resolution_queue
+      DROP CONSTRAINT IF EXISTS embed_resolution_queue_station_id_fkey
+  `);
+  await db.execute(sql`
+    ALTER TABLE embed_resolution_queue
+      ADD CONSTRAINT embed_resolution_queue_station_id_fkey
+      FOREIGN KEY (station_id) REFERENCES stations(id) ON DELETE SET NULL
+  `);
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS embed_resolution_metrics (
+      id              serial PRIMARY KEY,
+      station_id      integer NOT NULL DEFAULT 0,
+      genre_cluster   text NOT NULL DEFAULT 'unknown',
+      week_start      timestamp NOT NULL,
+      provider        text NOT NULL,
+      role            text NOT NULL,
+      rung            integer NOT NULL,
+      outcome         text NOT NULL,
+      count           integer NOT NULL DEFAULT 0,
+      updated_at      timestamp NOT NULL DEFAULT now(),
+      CONSTRAINT embed_resolution_metrics_identity_uq
+        UNIQUE (station_id, genre_cluster, week_start, provider, role, rung, outcome)
+    )
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS embed_resolution_metrics_week_idx
+      ON embed_resolution_metrics (week_start)
+  `);
+  await db.execute(sql`
+    ALTER TABLE embed_resolution_metrics
+      DROP CONSTRAINT IF EXISTS embed_resolution_metrics_station_id_fkey
+  `);
+  await db.execute(sql`
+    UPDATE embed_resolution_metrics
+      SET station_id = 0 WHERE station_id IS NULL
+  `);
+  await db.execute(sql`
+    UPDATE embed_resolution_metrics
+      SET genre_cluster = 'unknown' WHERE genre_cluster IS NULL
+  `);
+  await db.execute(sql`
+    ALTER TABLE embed_resolution_metrics
+      ALTER COLUMN station_id SET DEFAULT 0,
+      ALTER COLUMN station_id SET NOT NULL,
+      ALTER COLUMN genre_cluster SET DEFAULT 'unknown',
+      ALTER COLUMN genre_cluster SET NOT NULL
+  `);
   // Refresh the outcome/rung invariant for installations that created the
   // table during an earlier boot of this additive migration.
   await db.execute(sql`

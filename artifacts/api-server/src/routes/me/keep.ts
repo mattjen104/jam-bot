@@ -16,6 +16,7 @@ import { eq, and, isNull, inArray, sql } from "drizzle-orm";
 import { getConnector } from "../../lore/serviceConnector.js";
 import { h } from "../../middlewares/asyncHandler.js";
 import { type AuthedRequest, getFreshToken } from "./auth.js";
+import { enqueueRecordingEmbeds } from "../../lore/embed-resolution.js";
 
 const router: IRouter = Router();
 
@@ -241,6 +242,12 @@ router.post(
           ...(keepSpinId != null ? { spinId: keepSpinId } : {}),
         },
       });
+
+    // A listener explicitly kept this recording: lift it ahead of cold-tail
+    // work, but do not make the Keep request wait for any provider network IO.
+    void enqueueRecordingEmbeds(mbid, { priority: 0 }).catch((err) =>
+      console.warn("[lore] keep embed enqueue failed", err),
+    );
 
     // Mirror to enabled service connectors.
     const enabledTargets = await db
