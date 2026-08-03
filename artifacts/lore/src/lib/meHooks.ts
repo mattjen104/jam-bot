@@ -15,6 +15,14 @@ export interface MeConnection {
   lastImportAt: string | null;
 }
 
+export interface ReplayPlaylistTarget {
+  service: "apple_music" | "tidal";
+  displayName: string;
+  connected: boolean;
+  canWrite: boolean;
+  configured: boolean;
+  authRequired: boolean;
+}
 export interface LibraryRecording {
   title: string;
   artist: string;
@@ -1203,6 +1211,82 @@ export function useMyGhostMissed() {
       ),
     staleTime: 5 * 60_000,
     refetchInterval: 5 * 60_000,
+    retry: false,
+  });
+}
+
+export interface ReplayMaterializationJob {
+  id: number;
+  replayId: number;
+  service: string;
+  status: "pending" | "running" | "done" | "error";
+  total: number;
+  processed: number;
+  accepted: number;
+  missing: number;
+  rejected: number;
+  retryable: number;
+  name: string;
+  description: string;
+  playlistId: string | null;
+  playlistUrl: string | null;
+  error: string | null;
+  errorRetryable: boolean;
+  finishedAt: string | null;
+  receipt: ReplayMaterializationReceipt[];
+}
+
+export function useReplayPlaylistTargets(replayId: number) {
+  return useQuery({
+    queryKey: ["replay", replayId, "playlist-targets"] as const,
+    queryFn: () => apiFetch<{ targets: ReplayPlaylistTarget[] }>(`/api/replay/${replayId}/playlist-targets`),
+    enabled: Number.isInteger(replayId) && replayId > 0,
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
+export interface ReplayMaterializationReceipt {
+  position: number;
+  spinId: number;
+  mbid: string | null;
+  title: string;
+  artist: string;
+  status: "accepted" | "missing" | "rejected";
+  retryable: boolean;
+  error?: string;
+}
+
+export async function postReplayMaterialization(
+  replayId: number,
+  service: ReplayPlaylistTarget["service"],
+): Promise<ReplayMaterializationJob> {
+  return apiFetch<ReplayMaterializationJob>(`/api/replay/${replayId}/materialize`, {
+    method: "POST",
+    body: JSON.stringify({ service }),
+  });
+}
+
+export async function startReplayPlaylistConnect(service: ReplayPlaylistTarget["service"]): Promise<void> {
+  const win = window.open("", "_blank");
+  try {
+    const res = await apiFetch<{ url: string }>(`/api/me/connect/${service}/start`, { method: "POST" });
+    if (win) win.location.href = res.url;
+  } catch (err) {
+    if (win) win.close();
+    throw err;
+  }
+}
+
+export function useReplayMaterializationJob(jobId: number | null) {
+  return useQuery({
+    queryKey: ["replay", "materialization-job", jobId ?? 0] as const,
+    queryFn: () => apiFetch<ReplayMaterializationJob>(`/api/replay/materialization-jobs/${jobId}`),
+    enabled: jobId != null,
+    refetchInterval: (query) => {
+      const data = query.state.data as ReplayMaterializationJob | undefined;
+      return data && (data.status === "done" || data.status === "error") ? false : 2_000;
+    },
     retry: false,
   });
 }

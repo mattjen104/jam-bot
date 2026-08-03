@@ -3,6 +3,7 @@ import { Link, useParams, useSearch } from "wouter";
 import { useGetStationRun, useGetStationRunInsights } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import { ArchiveTracklist } from "../components/ArchiveTracklist";
+import { ReplayPlaylistPanel } from "../components/ReplayPlaylistPanel";
 import { ShareButton } from "../components/ShareButton";
 import { GenreDiscoveryPanel } from "../components/GenreDiscoveryPanel";
 import { runDate } from "../lib/format";
@@ -110,6 +111,7 @@ export default function StationRun() {
                 isLoading={insightsLoading}
               />
             </div>
+            <ReplayPlaylistPanel replayId={runId} />
 
             {showFallbackNotice && (
               <div

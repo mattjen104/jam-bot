@@ -1970,17 +1970,76 @@ export const GetGuidedReplayQueueResponse = zod.object({
 });
 
 /**
- * Downloads the same immutable broadcast receipt as the replay manifest, without requiring an account or service OAuth. Every broadcast slot is preserved, including unresolved entries. Only exact, live service-neutral locations are emitted in location-bearing formats.
-
- * @summary Download an ordered Ghost Replay reconstruction
+ * @summary List configured Ghost Replay playlist destinations
  */
 
-export const ExportReplayParams = zod.object({
+export const GetReplayPlaylistTargetsParams = zod.object({
   id: zod.coerce.number().min(1),
 });
 
-export const ExportReplayQueryParams = zod.object({
-  format: zod.enum(["jspf", "xspf", "m3u8", "csv"]),
+export const GetReplayPlaylistTargetsResponse = zod.object({
+  targets: zod.array(
+    zod.object({
+      service: zod.enum(["apple_music", "tidal"]),
+      displayName: zod.string(),
+      configured: zod.boolean(),
+      connected: zod.boolean(),
+      canWrite: zod.boolean(),
+      authRequired: zod.boolean(),
+    }),
+  ),
+});
+
+/**
+ * @summary Create a user-requested Apple Music or Tidal replay playlist
+ */
+
+export const StartReplayPlaylistMaterializationParams = zod.object({
+  id: zod.coerce.number().min(1),
+});
+
+export const StartReplayPlaylistMaterializationBody = zod.object({
+  service: zod.enum(["apple_music", "tidal"]),
+});
+
+/**
+ * @summary Read a persisted replay playlist receipt
+ */
+
+export const GetReplayPlaylistMaterializationParams = zod.object({
+  jobId: zod.coerce.number().min(1),
+});
+
+export const GetReplayPlaylistMaterializationResponse = zod.object({
+  id: zod.number(),
+  replayId: zod.number(),
+  service: zod.enum(["apple_music", "tidal"]),
+  status: zod.enum(["pending", "running", "done", "error"]),
+  total: zod.number(),
+  processed: zod.number(),
+  accepted: zod.number(),
+  missing: zod.number(),
+  rejected: zod.number(),
+  retryable: zod.number(),
+  name: zod.string(),
+  description: zod.string(),
+  playlistId: zod.string().nullable(),
+  playlistUrl: zod.string().nullable(),
+  error: zod.string().nullable(),
+  errorRetryable: zod.boolean(),
+  finishedAt: zod.string().nullable(),
+  receipt: zod.array(
+    zod.object({
+      position: zod.number(),
+      spinId: zod.number(),
+      mbid: zod.string().nullable(),
+      title: zod.string(),
+      artist: zod.string(),
+      status: zod.enum(["accepted", "missing", "rejected"]),
+      retryable: zod.boolean(),
+      error: zod.string().optional(),
+    }),
+  ),
 });
 
 /**

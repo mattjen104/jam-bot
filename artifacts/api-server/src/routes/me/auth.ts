@@ -30,6 +30,7 @@ const router: IRouter = Router();
 
 const STATE_COOKIE = "lore_me_spotify_state";
 const STATE_MAX_AGE_MS = 1000 * 60 * 10; // 10 min
+const PLAYLIST_SERVICES = new Set(["apple_music", "tidal"]);
 /** Base URL to redirect to after OAuth. */
 const APP_RETURN_PATH = process.env.LORE_APP_URL ?? "/lore/";
 
@@ -62,6 +63,15 @@ export function meCallbackUri(): string {
   const domain = process.env.REPLIT_DEV_DOMAIN;
   if (!domain) throw new Error("Cannot derive redirect URI: set SPOTIFY_LIBRARY_REDIRECT_URI");
   return `https://${domain}/api/me/connect/spotify/callback`;
+}
+
+function playlistCallbackUri(service: string): string {
+  const envKey = `${service.toUpperCase()}_REDIRECT_URI`;
+  const explicit = process.env[envKey];
+  if (explicit) return explicit;
+  const domain = process.env.REPLIT_DEV_DOMAIN;
+  if (!domain) throw new Error(`Cannot derive ${service} redirect URI`);
+  return `https://${domain}/api/me/connect/${service}/callback`;
 }
 
 export function sleep(ms: number): Promise<void> {
@@ -243,6 +253,85 @@ router.get("/me/connect/spotify/callback", async (req: Request, res: Response) =
   } catch (err) {
     console.error("[me] library OAuth callback failed", err);
     res.redirect(`${APP_RETURN_PATH}?library=error`);
+  }
+});
+
+/**
+ * Apple Music and Tidal use the same server-side connection record as Spotify,
+ * but have provider-specific OAuth endpoints inside their connectors. Tokens
+ * never leave this API process; the browser only sees the consent redirect.
+ */
+router.post("/me/connect/:service/start", h(async (req, res) => {
+  const service = String(req.params.service);
+  if (!PLAYLIST_SERVICES.has(service)) {
+    return res.status(404).json({ error: "Playlist connector not found" });
+  }
+  const connector = getConnector(service);
+  if (!connector?.isConfigured()) {
+    return res.status(503).json({ error: `${service} connector is not configured` });
+  }
+  const state = randomBytes(16).toString("hex");
+  res.cookie(`lore_me_${service}_state`, state, cookieOpts(STATE_MAX_AGE_MS));
+  return res.json({ url: connector.authStart(state, playlistCallbackUri(service)) });
+}));
+
+router.get("/me/connect/:service/callback", async (req: Request, res: Response) => {
+  const service = String(req.params.service);
+  const connector = PLAYLIST_SERVICES.has(service) ? getConnector(service) : null;
+  const cookies = (req as Request & { cookies?: Record<string, string> }).cookies;
+  const stateCookie = `lore_me_${service}_state`;
+  const expectedState = cookies?.[stateCookie];
+  res.clearCookie(stateCookie, { path: "/" });
+  const { code, state, error } = req.query as Record<string, string | undefined>;
+  if (!connector || !connector.isConfigured()) {
+    res.redirect(`${APP_RETURN_PATH}?library=error`);
+    return;
+  }
+  if (error || !code || !state || !expectedState || state !== expectedState) {
+    res.redirect(`${APP_RETURN_PATH}?library=${error ? "denied" : "error"}`);
+    return;
+  }
+  try {
+    const tokens = await connector.authCallback(code, playlistCallbackUri(service));
+    let user = await getUserFromSession(req);
+    if (!user) {
+      const deviceKey = randomUUID();
+      user = await getOrCreateAnonymousUser(deviceKey);
+      res.cookie(SID_COOKIE, deviceKey, cookieSidOpts());
+    }
+    if (tokens.externalUserId) {
+      const recovered = await recoverUserByServiceId(service, tokens.externalUserId, user.id);
+      if (recovered.recovered) {
+        user = recovered.user;
+        res.cookie(SID_COOKIE, user.deviceKey, cookieSidOpts());
+      }
+    }
+    await db.insert(serviceConnectionsTable).values({
+      userId: user.id,
+      service,
+      externalUserId: tokens.externalUserId ?? null,
+      accessToken: encryptToken(tokens.accessToken),
+      refreshToken: encryptToken(tokens.refreshToken),
+      expiresAt: tokens.expiresAt,
+      scopes: tokens.scopes,
+      canWrite: tokens.canWrite,
+      connectedAt: new Date(),
+    }).onConflictDoUpdate({
+      target: [serviceConnectionsTable.userId, serviceConnectionsTable.service],
+      set: {
+        externalUserId: tokens.externalUserId ?? null,
+        accessToken: encryptToken(tokens.accessToken),
+        refreshToken: encryptToken(tokens.refreshToken),
+        expiresAt: tokens.expiresAt,
+        scopes: tokens.scopes,
+        canWrite: tokens.canWrite,
+        connectedAt: new Date(),
+      },
+    });
+    res.redirect(`${APP_RETURN_PATH}?library=connected&service=${encodeURIComponent(service)}`);
+  } catch (err) {
+    console.error(`[me] ${service} OAuth callback failed`, err);
+    res.redirect(`${APP_RETURN_PATH}?library=error&service=${encodeURIComponent(service)}`);
   }
 });
 

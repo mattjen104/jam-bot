@@ -31,7 +31,6 @@ import type {
   DiscogsListRequest,
   DjShows,
   EntryResult,
-  ExportReplayParams,
   GeniusDraftList,
   GeniusDraftReviewRequest,
   GeniusDraftReviewResponse,
@@ -80,6 +79,9 @@ import type {
   RecordingSpins,
   RecordingsAvailabilityResult,
   ReplayManifest,
+  ReplayMaterializationJob,
+  ReplayMaterializationRequest,
+  ReplayPlaylistTargetsResponse,
   ResolveSongParams,
   ResolvedSong,
   RymListRequest,
@@ -2578,53 +2580,37 @@ export function useGetGuidedReplayQueue<
 }
 
 /**
- * Downloads the same immutable broadcast receipt as the replay manifest, without requiring an account or service OAuth. Every broadcast slot is preserved, including unresolved entries. Only exact, live service-neutral locations are emitted in location-bearing formats.
-
- * @summary Download an ordered Ghost Replay reconstruction
+ * @summary List configured Ghost Replay playlist destinations
  */
-export const getExportReplayUrl = (id: number, params: ExportReplayParams) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? "null" : value.toString());
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0
-    ? `/api/replay/${id}/export?${stringifiedParams}`
-    : `/api/replay/${id}/export`;
+export const getGetReplayPlaylistTargetsUrl = (id: number) => {
+  return `/api/replay/${id}/playlist-targets`;
 };
 
-export const exportReplay = async (
+export const getReplayPlaylistTargets = async (
   id: number,
-  params: ExportReplayParams,
   options?: RequestInit,
-): Promise<string | Blob> => {
-  return customFetch<string | Blob>(getExportReplayUrl(id, params), {
-    ...options,
-    method: "GET",
-  });
+): Promise<ReplayPlaylistTargetsResponse> => {
+  return customFetch<ReplayPlaylistTargetsResponse>(
+    getGetReplayPlaylistTargetsUrl(id),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
 };
 
-export const getExportReplayQueryKey = (
-  id: number,
-  params?: ExportReplayParams,
-) => {
-  return [`/api/replay/${id}/export`, ...(params ? [params] : [])] as const;
+export const getGetReplayPlaylistTargetsQueryKey = (id: number) => {
+  return [`/api/replay/${id}/playlist-targets`] as const;
 };
 
-export const getExportReplayQueryOptions = <
-  TData = Awaited<ReturnType<typeof exportReplay>>,
+export const getGetReplayPlaylistTargetsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getReplayPlaylistTargets>>,
   TError = ErrorType<ApiError>,
 >(
   id: number,
-  params: ExportReplayParams,
   options?: {
     query?: UseQueryOptions<
-      Awaited<ReturnType<typeof exportReplay>>,
+      Awaited<ReturnType<typeof getReplayPlaylistTargets>>,
       TError,
       TData
     >;
@@ -2634,11 +2620,12 @@ export const getExportReplayQueryOptions = <
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
   const queryKey =
-    queryOptions?.queryKey ?? getExportReplayQueryKey(id, params);
+    queryOptions?.queryKey ?? getGetReplayPlaylistTargetsQueryKey(id);
 
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof exportReplay>>> = ({
-    signal,
-  }) => exportReplay(id, params, { signal, ...requestOptions });
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getReplayPlaylistTargets>>
+  > = ({ signal }) =>
+    getReplayPlaylistTargets(id, { signal, ...requestOptions });
 
   return {
     queryKey,
@@ -2646,37 +2633,226 @@ export const getExportReplayQueryOptions = <
     enabled: !!id,
     ...queryOptions,
   } as UseQueryOptions<
-    Awaited<ReturnType<typeof exportReplay>>,
+    Awaited<ReturnType<typeof getReplayPlaylistTargets>>,
     TError,
     TData
   > & { queryKey: QueryKey };
 };
 
-export type ExportReplayQueryResult = NonNullable<
-  Awaited<ReturnType<typeof exportReplay>>
+export type GetReplayPlaylistTargetsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getReplayPlaylistTargets>>
 >;
-export type ExportReplayQueryError = ErrorType<ApiError>;
+export type GetReplayPlaylistTargetsQueryError = ErrorType<ApiError>;
 
 /**
- * @summary Download an ordered Ghost Replay reconstruction
+ * @summary List configured Ghost Replay playlist destinations
  */
 
-export function useExportReplay<
-  TData = Awaited<ReturnType<typeof exportReplay>>,
+export function useGetReplayPlaylistTargets<
+  TData = Awaited<ReturnType<typeof getReplayPlaylistTargets>>,
   TError = ErrorType<ApiError>,
 >(
   id: number,
-  params: ExportReplayParams,
   options?: {
     query?: UseQueryOptions<
-      Awaited<ReturnType<typeof exportReplay>>,
+      Awaited<ReturnType<typeof getReplayPlaylistTargets>>,
       TError,
       TData
     >;
     request?: SecondParameter<typeof customFetch>;
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getExportReplayQueryOptions(id, params, options);
+  const queryOptions = getGetReplayPlaylistTargetsQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a user-requested Apple Music or Tidal replay playlist
+ */
+export const getStartReplayPlaylistMaterializationUrl = (id: number) => {
+  return `/api/replay/${id}/materialize`;
+};
+
+export const startReplayPlaylistMaterialization = async (
+  id: number,
+  replayMaterializationRequest: ReplayMaterializationRequest,
+  options?: RequestInit,
+): Promise<ReplayMaterializationJob> => {
+  return customFetch<ReplayMaterializationJob>(
+    getStartReplayPlaylistMaterializationUrl(id),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(replayMaterializationRequest),
+    },
+  );
+};
+
+export const getStartReplayPlaylistMaterializationMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof startReplayPlaylistMaterialization>>,
+    TError,
+    { id: number; data: BodyType<ReplayMaterializationRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof startReplayPlaylistMaterialization>>,
+  TError,
+  { id: number; data: BodyType<ReplayMaterializationRequest> },
+  TContext
+> => {
+  const mutationKey = ["startReplayPlaylistMaterialization"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof startReplayPlaylistMaterialization>>,
+    { id: number; data: BodyType<ReplayMaterializationRequest> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return startReplayPlaylistMaterialization(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type StartReplayPlaylistMaterializationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof startReplayPlaylistMaterialization>>
+>;
+export type StartReplayPlaylistMaterializationMutationBody =
+  BodyType<ReplayMaterializationRequest>;
+export type StartReplayPlaylistMaterializationMutationError =
+  ErrorType<ApiError>;
+
+/**
+ * @summary Create a user-requested Apple Music or Tidal replay playlist
+ */
+export const useStartReplayPlaylistMaterialization = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof startReplayPlaylistMaterialization>>,
+    TError,
+    { id: number; data: BodyType<ReplayMaterializationRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof startReplayPlaylistMaterialization>>,
+  TError,
+  { id: number; data: BodyType<ReplayMaterializationRequest> },
+  TContext
+> => {
+  return useMutation(
+    getStartReplayPlaylistMaterializationMutationOptions(options),
+  );
+};
+
+/**
+ * @summary Read a persisted replay playlist receipt
+ */
+export const getGetReplayPlaylistMaterializationUrl = (jobId: number) => {
+  return `/api/replay/materialization-jobs/${jobId}`;
+};
+
+export const getReplayPlaylistMaterialization = async (
+  jobId: number,
+  options?: RequestInit,
+): Promise<ReplayMaterializationJob> => {
+  return customFetch<ReplayMaterializationJob>(
+    getGetReplayPlaylistMaterializationUrl(jobId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetReplayPlaylistMaterializationQueryKey = (jobId: number) => {
+  return [`/api/replay/materialization-jobs/${jobId}`] as const;
+};
+
+export const getGetReplayPlaylistMaterializationQueryOptions = <
+  TData = Awaited<ReturnType<typeof getReplayPlaylistMaterialization>>,
+  TError = ErrorType<ApiError>,
+>(
+  jobId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getReplayPlaylistMaterialization>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetReplayPlaylistMaterializationQueryKey(jobId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getReplayPlaylistMaterialization>>
+  > = ({ signal }) =>
+    getReplayPlaylistMaterialization(jobId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!jobId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getReplayPlaylistMaterialization>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetReplayPlaylistMaterializationQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getReplayPlaylistMaterialization>>
+>;
+export type GetReplayPlaylistMaterializationQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Read a persisted replay playlist receipt
+ */
+
+export function useGetReplayPlaylistMaterialization<
+  TData = Awaited<ReturnType<typeof getReplayPlaylistMaterialization>>,
+  TError = ErrorType<ApiError>,
+>(
+  jobId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getReplayPlaylistMaterialization>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetReplayPlaylistMaterializationQueryOptions(
+    jobId,
+    options,
+  );
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

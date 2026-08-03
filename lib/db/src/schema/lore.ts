@@ -2470,6 +2470,55 @@ export interface ReplayResolutionFailure {
   error: string;
 }
 
+export interface ReplayMaterializationReceipt {
+  position: number;
+  spinId: number;
+  mbid: string | null;
+  title: string;
+  artist: string;
+  status: "accepted" | "missing" | "rejected";
+  retryable: boolean;
+  error?: string;
+}
+
+/**
+ * User-triggered Ghost Replay playlist materialization. This is separate from
+ * replay_resolution_jobs: resolution is reusable enrichment, while this row is
+ * the immutable per-service playlist receipt.
+ */
+export const replayMaterializationJobsTable = pgTable(
+  "replay_materialization_jobs",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").notNull().references(() => loreUsersTable.id),
+    replayId: integer("replay_id").notNull(),
+    service: text("service").notNull(),
+    status: text("status").notNull().default("pending"),
+    total: integer("total").notNull().default(0),
+    processed: integer("processed").notNull().default(0),
+    accepted: integer("accepted").notNull().default(0),
+    missing: integer("missing").notNull().default(0),
+    rejected: integer("rejected").notNull().default(0),
+    retryable: integer("retryable").notNull().default(0),
+    name: text("name").notNull(),
+    description: text("description").notNull(),
+    playlistId: text("playlist_id"),
+    playlistUrl: text("playlist_url"),
+    error: text("error"),
+    errorRetryable: boolean("error_retryable").notNull().default(false),
+    finishedAt: timestamp("finished_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    receipt: jsonb("receipt").$type<ReplayMaterializationReceipt[]>(),
+  },
+  (t) => [
+    index("replay_materialization_jobs_user_idx").on(t.userId, t.createdAt),
+    index("replay_materialization_jobs_status_idx").on(t.status),
+  ],
+);
+
+export type ReplayMaterializationJob = typeof replayMaterializationJobsTable.$inferSelect;
+export type InsertReplayMaterializationJob = typeof replayMaterializationJobsTable.$inferInsert;
+
 /**
  * User-triggered, resumable Ghost Replay resolution.  The replay manifest
  * remains a read model over spins; this job only writes service_track_map and

@@ -5,7 +5,8 @@
  * mirroring for one streaming service.  Routes look up connectors by service
  * name via `connectorRegistry`.
  *
- * Only Spotify is implemented in this version.
+ * Spotify library import/mirroring remains the original implementation. Apple
+ * Music and Tidal add the optional playlist surface used by Ghost Replay.
  */
 
 import type { Recording } from "@workspace/db";
@@ -13,6 +14,8 @@ import {
   resolveSpotifyTrack,
   trackIdFromUri,
 } from "./spotifyConnect.js";
+import { AppleMusicConnector } from "./appleMusicConnect.js";
+import { TidalConnector } from "./tidalConnect.js";
 
 const ACCOUNTS_BASE = "https://accounts.spotify.com";
 const API_BASE = "https://api.spotify.com/v1";
@@ -38,6 +41,8 @@ export interface ConnectorTokens {
   expiresAt: Date;
   scopes: string;
   canWrite: boolean;
+  /** Provider account id used by playlist APIs that scope writes by user. */
+  externalUserId?: string | null;
 }
 
 /** Result of mirroring a Keep to a streaming service. */
@@ -47,7 +52,44 @@ export interface MirrorResult {
   linkOut?: string;
 }
 
+export interface PlaylistTrackInput {
+  position: number;
+  recordingMbid: string;
+  externalId: string;
+  url: string;
+  title: string;
+  artist: string;
+}
+
+export interface PlaylistCreateInput {
+  name: string;
+  description: string;
+  /** Some providers need the user's native account id in the create path. */
+  externalUserId?: string | null;
+}
+
+export interface PlaylistCreateResult {
+  ok: boolean;
+  playlistId?: string;
+  playlistUrl?: string;
+  retryable: boolean;
+  error?: string;
+}
+
+export interface PlaylistTrackResult {
+  position: number;
+  status: "accepted" | "missing" | "rejected";
+  retryable: boolean;
+  error?: string;
+}
+
 export interface ServiceConnector {
+  /** Canonical service id used in service_connections and service_track_map. */
+  readonly service: string;
+  /** Human label shown in the replay materialization target picker. */
+  readonly displayName: string;
+  /** Whether this connector can be offered in the current server config. */
+  isConfigured(): boolean;
   /** Builds the OAuth authorization URL (browser redirect).
    *  Pass `options.showDialog = true` to force Spotify's consent screen
    *  (use when reconnecting to add new scopes). */
@@ -85,6 +127,23 @@ export interface ServiceConnector {
    * already-saved indicators in the UI.
    */
   catalogHas(accessToken: string, isrc: string): Promise<boolean>;
+
+  /**
+   * Optional playlist capability. Existing connectors can continue to support
+   * library import/mirroring without implementing Ghost Replay playlists.
+   */
+  createPlaylist?: (
+    accessToken: string,
+    input: PlaylistCreateInput,
+  ) => Promise<PlaylistCreateResult>;
+  addPlaylistTracks?: (
+    accessToken: string,
+    playlistId: string,
+    tracks: PlaylistTrackInput[],
+  ) => Promise<PlaylistTrackResult[]>;
+  refreshToken?: (
+    refreshToken: string,
+  ) => Promise<{ accessToken: string; expiresAt: Date; scopes: string }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -162,6 +221,13 @@ interface SpotifyTracksPage {
 }
 
 export class SpotifyConnector implements ServiceConnector {
+  readonly service = "spotify";
+  readonly displayName = "Spotify";
+
+  isConfigured(): boolean {
+    return Boolean(process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET);
+  }
+
   authStart(state: string, redirectUri: string, options?: { showDialog?: boolean }): string {
     const params = new URLSearchParams({
       client_id: process.env.SPOTIFY_CLIENT_ID ?? "",
@@ -361,10 +427,25 @@ export class SpotifyConnector implements ServiceConnector {
 
 export const connectorRegistry = new Map<string, ServiceConnector>([
   ["spotify", new SpotifyConnector()],
+  ["apple_music", new AppleMusicConnector()],
+  ["tidal", new TidalConnector()],
 ]);
 
 export function getConnector(service: string): ServiceConnector | null {
   return connectorRegistry.get(service) ?? null;
+}
+
+export function getPlaylistConnector(service: string): ServiceConnector | null {
+  const connector = getConnector(service);
+  if (
+    !connector ||
+    !connector.isConfigured() ||
+    !connector.createPlaylist ||
+    !connector.addPlaylistTracks
+  ) {
+    return null;
+  }
+  return connector;
 }
 
 /**
@@ -374,7 +455,13 @@ export function getConnector(service: string): ServiceConnector | null {
  */
 export async function refreshServiceToken(
   refreshToken: string,
+  service = "spotify",
 ): Promise<{ accessToken: string; expiresAt: Date; scopes: string }> {
+  const connector = getConnector(service);
+  if (connector?.refreshToken) return connector.refreshToken(refreshToken);
+  if (service !== "spotify") {
+    throw new Error(`The ${service} connector cannot refresh tokens`);
+  }
   const data = await spotifyTokenRequest(
     new URLSearchParams({
       grant_type: "refresh_token",
@@ -390,6 +477,7 @@ export async function refreshServiceToken(
 
 /** Get a fresh access token for a service_connections row. */
 export async function getFreshServiceToken(conn: {
+  service?: string;
   accessToken: string;
   refreshToken: string;
   expiresAt: Date;
@@ -398,7 +486,7 @@ export async function getFreshServiceToken(conn: {
     return { accessToken: conn.accessToken, expiresAt: conn.expiresAt, scopes: "" };
   }
   try {
-    return await refreshServiceToken(conn.refreshToken);
+    return await refreshServiceToken(conn.refreshToken, conn.service ?? "spotify");
   } catch (err) {
     console.error("[service-connector] token refresh failed", err);
     return null;

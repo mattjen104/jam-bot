@@ -11,6 +11,7 @@ import {
   useGetAppleMusicReplayMaterialization,
   useGetReplayManifest,
 } from "@workspace/api-client-react";
+import { ReplayPlaylistPanel } from "../components/ReplayPlaylistPanel";
 
 /** The canonical, shareable Ghost Replay reconstruction surface. */
 export default function Replay() {
@@ -109,6 +110,8 @@ export default function Replay() {
                 </p>
               </div>
             </section>
+
+            <ReplayPlaylistPanel replayId={data.replayId} />
 
             <GuidedReplayPanel
               entries={data.entries}

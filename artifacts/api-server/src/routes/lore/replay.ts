@@ -8,6 +8,11 @@ import {
   GetReplayManifestParams,
   GetReplayManifestResponse,
   StartReplayResolutionParams,
+  GetReplayPlaylistMaterializationParams,
+  GetReplayPlaylistMaterializationResponse,
+  GetReplayPlaylistTargetsParams,
+  GetReplayPlaylistTargetsResponse,
+  StartReplayPlaylistMaterializationParams,
   ReplayResolutionJobResponse,
 } from "@workspace/api-zod";
 import { getReplayManifest } from "../../lore/replay.js";
@@ -22,6 +27,11 @@ import {
   type ReplayResolutionProgress,
 } from "../../lore/replay-resolution.js";
 import { getAppleMusicClientConfig } from "../../lore/appleMusic.js";
+import {
+  getReplayMaterializationJob,
+  listReplayMaterializationTargets,
+  startReplayMaterializationJob,
+} from "../../lore/replay-materialization.js";
 import { getUserFromSession } from "../../lore/userSession.js";
 import { acquire as sseAcquire, release as sseRelease } from "../../lore/sseConnectionTracker.js";
 import { h } from "../../middlewares/asyncHandler.js";
@@ -110,6 +120,41 @@ router.post("/replay/:id/resolve", h(async (req, res) => {
   const job = await startReplayResolutionJob(userId, parsed.data.id);
   if (!job) return res.status(404).json({ error: "Replay not found" });
   return res.status(202).json(ReplayResolutionJobResponse.parse(job));
+}));
+
+router.get("/replay/:id/playlist-targets", h(async (req, res) => {
+  const userId = await replayUserId(req, res);
+  if (!userId) return;
+  const parsed = GetReplayPlaylistTargetsParams.safeParse(req.params);
+  if (!parsed.success) return res.status(400).json({ error: "Invalid replay id" });
+  return res.json(GetReplayPlaylistTargetsResponse.parse({
+    targets: await listReplayMaterializationTargets(userId),
+  }));
+}));
+
+// Playlist creation is deliberately POST-only and user-triggered. There is no
+// scheduler or replay-page load path that calls this endpoint.
+router.post("/replay/:id/materialize", h(async (req, res) => {
+  const userId = await replayUserId(req, res);
+  if (!userId) return;
+  const params = StartReplayPlaylistMaterializationParams.safeParse(req.params);
+  const body = req.body;
+  if (!params.success || !body || !["apple_music", "tidal"].includes(body.service)) {
+    return res.status(400).json({ error: "A supported playlist service is required" });
+  }
+  const job = await startReplayMaterializationJob(userId, params.data.id, body.service);
+  if (!job) return res.status(400).json({ error: "That playlist target is unavailable or not configured" });
+  return res.status(202).json(GetReplayPlaylistMaterializationResponse.parse(job));
+}));
+
+router.get("/replay/materialization-jobs/:jobId", h(async (req, res) => {
+  const userId = await replayUserId(req, res);
+  if (!userId) return;
+  const parsed = GetReplayPlaylistMaterializationParams.safeParse(req.params);
+  if (!parsed.success) return res.status(400).json({ error: "Invalid materialization job id" });
+  const job = await getReplayMaterializationJob(parsed.data.jobId, userId);
+  if (!job) return res.status(404).json({ error: "Materialization job not found" });
+  return res.json(GetReplayPlaylistMaterializationResponse.parse(job));
 }));
 
 router.get("/replay/jobs/:jobId", h(async (req, res) => {

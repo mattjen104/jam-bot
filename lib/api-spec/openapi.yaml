@@ -796,16 +796,11 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-  /replay/{id}/export:
+  /replay/{id}/playlist-targets:
     get:
-      operationId: exportReplay
+      operationId: getReplayPlaylistTargets
       tags: [archive]
-      summary: Download an ordered Ghost Replay reconstruction
-      description: >
-        Downloads the same immutable broadcast receipt as the replay manifest,
-        without requiring an account or service OAuth. Every broadcast slot is
-        preserved, including unresolved entries. Only exact, live service-neutral
-        locations are emitted in location-bearing formats.
+      summary: List configured Ghost Replay playlist destinations
       parameters:
         - name: id
           in: path
@@ -813,49 +808,71 @@ paths:
           schema:
             type: integer
             minimum: 1
-        - name: format
-          in: query
-          required: true
-          schema:
-            type: string
-            enum: [jspf, xspf, m3u8, csv]
       responses:
         "200":
-          description: Replay export file
-          headers:
-            Content-Disposition:
-              schema:
-                type: string
-            Cache-Control:
-              schema:
-                type: string
+          description: Target capabilities and authorization state
           content:
-            application/jspf+json:
+            application/json:
               schema:
-                type: string
-            application/xspf+xml:
+                $ref: "#/components/schemas/ReplayPlaylistTargetsResponse"
+        "401":
+          description: Listener session required
+          content:
+            application/json:
               schema:
-                type: string
-            audio/mpegurl:
+                $ref: "#/components/schemas/ApiError"
+  /replay/{id}/materialize:
+    post:
+      operationId: startReplayPlaylistMaterialization
+      tags: [archive]
+      summary: Create a user-requested Apple Music or Tidal replay playlist
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReplayMaterializationRequest"
+      responses:
+        "202":
+          description: Playlist materialization job
+          content:
+            application/json:
               schema:
-                type: string
-            text/csv:
-              schema:
-                type: string
+                $ref: "#/components/schemas/ReplayMaterializationJob"
         "400":
-          description: Unknown export format
+          description: Service unavailable, unconfigured, or invalid
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /replay/materialization-jobs/{jobId}:
+    get:
+      operationId: getReplayPlaylistMaterialization
+      tags: [archive]
+      summary: Read a persisted replay playlist receipt
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Playlist materialization progress or terminal receipt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplayMaterializationJob"
         "404":
-          description: Replay not found, hidden, or empty
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "413":
-          description: Replay is too large to export
+          description: Job not found
           content:
             application/json:
               schema:
@@ -4366,6 +4383,103 @@ components:
           items:
             $ref: "#/components/schemas/GuidedReplayQueueEntry"
       required: [replayId, service, serviceLabel, services, coverage, entries]
+    ReplayPlaylistTarget:
+      type: object
+      properties:
+        service:
+          type: string
+          enum: [apple_music, tidal]
+        displayName:
+          type: string
+        configured:
+          type: boolean
+        connected:
+          type: boolean
+        canWrite:
+          type: boolean
+        authRequired:
+          type: boolean
+      required: [service, displayName, configured, connected, canWrite, authRequired]
+    ReplayPlaylistTargetsResponse:
+      type: object
+      properties:
+        targets:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReplayPlaylistTarget"
+      required: [targets]
+    ReplayMaterializationRequest:
+      type: object
+      properties:
+        service:
+          type: string
+          enum: [apple_music, tidal]
+      required: [service]
+    ReplayMaterializationReceipt:
+      type: object
+      properties:
+        position:
+          type: integer
+        spinId:
+          type: integer
+        mbid:
+          type: [string, "null"]
+        title:
+          type: string
+        artist:
+          type: string
+        status:
+          type: string
+          enum: [accepted, missing, rejected]
+        retryable:
+          type: boolean
+        error:
+          type: string
+      required: [position, spinId, mbid, title, artist, status, retryable]
+    ReplayMaterializationJob:
+      type: object
+      properties:
+        id:
+          type: integer
+        replayId:
+          type: integer
+        service:
+          type: string
+          enum: [apple_music, tidal]
+        status:
+          type: string
+          enum: [pending, running, done, error]
+        total:
+          type: integer
+        processed:
+          type: integer
+        accepted:
+          type: integer
+        missing:
+          type: integer
+        rejected:
+          type: integer
+        retryable:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        playlistId:
+          type: [string, "null"]
+        playlistUrl:
+          type: [string, "null"]
+        error:
+          type: [string, "null"]
+        errorRetryable:
+          type: boolean
+        finishedAt:
+          type: [string, "null"]
+        receipt:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReplayMaterializationReceipt"
+      required: [id, replayId, service, status, total, processed, accepted, missing, rejected, retryable, name, description, playlistId, playlistUrl, error, errorRetryable, finishedAt, receipt]
     AppleMusicReplayMaterializationEntry:
       type: object
       properties:

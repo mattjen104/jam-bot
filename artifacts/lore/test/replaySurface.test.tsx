@@ -175,6 +175,9 @@ describe("Ghost Replay surface", () => {
     expect(screen.getByTestId("replay-coverage").textContent).toContain("1");
     expect(screen.getByText("Unknown Title")).toBeTruthy();
     expect(screen.getByTestId("replay-coverage").textContent).toMatch(/unresolved/i);
+    expect(screen.getByTestId("replay-playlist").textContent).toContain(
+      "Keep this broadcast in a playlist",
+    );
     expect(screen.getByRole("link", { name: "Spotify" }).getAttribute("href")).toBe(
       "https://open.spotify.com/track/exact",
     );

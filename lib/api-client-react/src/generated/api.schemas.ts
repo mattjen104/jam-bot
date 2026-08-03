@@ -1186,6 +1186,103 @@ export interface GuidedReplayQueue {
   entries: GuidedReplayQueueEntry[];
 }
 
+export type ReplayPlaylistTargetService =
+  (typeof ReplayPlaylistTargetService)[keyof typeof ReplayPlaylistTargetService];
+
+export const ReplayPlaylistTargetService = {
+  apple_music: "apple_music",
+  tidal: "tidal",
+} as const;
+
+export interface ReplayPlaylistTarget {
+  service: ReplayPlaylistTargetService;
+  displayName: string;
+  configured: boolean;
+  connected: boolean;
+  canWrite: boolean;
+  authRequired: boolean;
+}
+
+export interface ReplayPlaylistTargetsResponse {
+  targets: ReplayPlaylistTarget[];
+}
+
+export type ReplayMaterializationRequestService =
+  (typeof ReplayMaterializationRequestService)[keyof typeof ReplayMaterializationRequestService];
+
+export const ReplayMaterializationRequestService = {
+  apple_music: "apple_music",
+  tidal: "tidal",
+} as const;
+
+export interface ReplayMaterializationRequest {
+  service: ReplayMaterializationRequestService;
+}
+
+export type ReplayMaterializationReceiptStatus =
+  (typeof ReplayMaterializationReceiptStatus)[keyof typeof ReplayMaterializationReceiptStatus];
+
+export const ReplayMaterializationReceiptStatus = {
+  accepted: "accepted",
+  missing: "missing",
+  rejected: "rejected",
+} as const;
+
+export interface ReplayMaterializationReceipt {
+  position: number;
+  spinId: number;
+  /** @nullable */
+  mbid: string | null;
+  title: string;
+  artist: string;
+  status: ReplayMaterializationReceiptStatus;
+  retryable: boolean;
+  error?: string;
+}
+
+export type ReplayMaterializationJobService =
+  (typeof ReplayMaterializationJobService)[keyof typeof ReplayMaterializationJobService];
+
+export const ReplayMaterializationJobService = {
+  apple_music: "apple_music",
+  tidal: "tidal",
+} as const;
+
+export type ReplayMaterializationJobStatus =
+  (typeof ReplayMaterializationJobStatus)[keyof typeof ReplayMaterializationJobStatus];
+
+export const ReplayMaterializationJobStatus = {
+  pending: "pending",
+  running: "running",
+  done: "done",
+  error: "error",
+} as const;
+
+export interface ReplayMaterializationJob {
+  id: number;
+  replayId: number;
+  service: ReplayMaterializationJobService;
+  status: ReplayMaterializationJobStatus;
+  total: number;
+  processed: number;
+  accepted: number;
+  missing: number;
+  rejected: number;
+  retryable: number;
+  name: string;
+  description: string;
+  /** @nullable */
+  playlistId: string | null;
+  /** @nullable */
+  playlistUrl: string | null;
+  /** @nullable */
+  error: string | null;
+  errorRetryable: boolean;
+  /** @nullable */
+  finishedAt: string | null;
+  receipt: ReplayMaterializationReceipt[];
+}
+
 export type AppleMusicReplayMaterializationEntryStatus =
   (typeof AppleMusicReplayMaterializationEntryStatus)[keyof typeof AppleMusicReplayMaterializationEntryStatus];
 
@@ -2536,20 +2633,6 @@ export type GetGuidedReplayQueueParams = {
    */
   service?: string;
 };
-
-export type ExportReplayParams = {
-  format: ExportReplayFormat;
-};
-
-export type ExportReplayFormat =
-  (typeof ExportReplayFormat)[keyof typeof ExportReplayFormat];
-
-export const ExportReplayFormat = {
-  jspf: "jspf",
-  xspf: "xspf",
-  m3u8: "m3u8",
-  csv: "csv",
-} as const;
 
 export type GetArchiveRecentRunsParams = {
   /**

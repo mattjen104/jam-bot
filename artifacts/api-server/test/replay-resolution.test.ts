@@ -16,6 +16,7 @@ import {
   registerReplayMaterializer,
   runReplayResolutionWorker,
 } from "../src/lore/replay-resolution.js";
+import { applyReplayResolutionMigration } from "../src/lore/replay-resolution-migration.js";
 
 const run = randomUUID().slice(0, 8);
 const mbid = `test-replay-resolution-${run}`;
@@ -27,6 +28,7 @@ let dbAvailable = false;
 beforeAll(async () => {
   try {
     await db.execute(sql`select 1`);
+    await applyReplayResolutionMigration();
     dbAvailable = true;
   } catch {
     return;
