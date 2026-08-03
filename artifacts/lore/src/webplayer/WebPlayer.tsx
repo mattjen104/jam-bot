@@ -8,6 +8,7 @@ import {
   useMyKeepStatus,
   useIsAuthenticated,
   useMutationKeep,
+  useMyPreferences,
 } from "../lib/meHooks";
 import { BottlePanel } from "../components/BottlePanel";
 import { useStationPresence } from "../hooks/useStationPresence";
@@ -21,6 +22,7 @@ import { AlbumLoreSheet } from "./AlbumLoreSheet";
 import { LibraryTab } from "./LibraryTab";
 import { rememberPrefersClassic } from "../lib/uiPrefs";
 import { ForYouTab } from "./ForYouTab";
+import { YourWeekTab } from "./YourWeekTab";
 import { SelectorsTab } from "./SelectorsTab";
 import { ScheduleTab } from "./ScheduleTab";
 import "./wp.css";
@@ -614,10 +616,13 @@ export default function WebPlayer() {
     rawTab === "library" || rawTab === "selectors" || rawTab === "schedule"
       ? rawTab
       : "onair";
-  // Within ON AIR, a secondary pill toggles the taste-ranked "For You" view.
-  const [onAirView, setOnAirView] = useState<"onair" | "foryou">("onair");
+  // Within ON AIR, a secondary pill toggles the taste-ranked "For You" or "Your Week" view.
+  const [onAirView, setOnAirView] = useState<"onair" | "foryou" | "yourweek">("onair");
   const tab = section === "onair" ? onAirView : section;
-  const setTab = setOnAirView as (t: "onair" | "library" | "foryou") => void;
+  const setTab = setOnAirView as (t: "onair" | "library" | "foryou" | "yourweek") => void;
+
+  const { data: prefs } = useMyPreferences();
+  const ledgerEnabled = prefs?.ledgerEnabled ?? false;
   const [runRef, setRunRef] = useState<{ slug: string; runId: number | null; context?: string } | null>(null);
   const [lore, setLore] = useState<{ mbid: string; spinningOn: string | null } | null>(null);
 
@@ -685,6 +690,7 @@ export default function WebPlayer() {
               [
                 ["onair", "On the air"],
                 ["foryou", "For You"],
+                ...(ledgerEnabled ? [["yourweek", "Your Week"] as const] : []),
               ] as const
             ).map(([key, label]) => (
               <button
@@ -792,6 +798,7 @@ export default function WebPlayer() {
             onOpenLore={(mbid) => setLore({ mbid, spinningOn: null })}
           />
         )}
+        {tab === "yourweek" && ledgerEnabled && <YourWeekTab />}
         {section === "selectors" && (
           <SelectorsTab onOpenRun={(slug, runId) => setRunRef({ slug, runId })} />
         )}
