@@ -791,10 +791,17 @@ router.get("/me/attendance/weekly", h(async (req, res) => {
 
   const totalDwellSeconds = rows.reduce((acc, r) => acc + r.dwellSeconds, 0);
 
+  // Always include the server's current ISO week so the client can use it as
+  // an authoritative cap for forward navigation, regardless of which week was
+  // requested. This prevents a device clock that is slightly ahead from making
+  // the "next week" chevron active and showing an empty future week.
+  const serverCurrentWeekLabel = mondayToIsoWeekLabel(currentIsoWeekMonday());
+
   return res.json({
     week: weekLabel,
     weekStart: weekStart.toISOString(),
     weekEnd: weekEndInclusive.toISOString(),
+    currentWeek: serverCurrentWeekLabel,
     tracks: rows.map((r) => ({
       mbid: r.mbid,
       title: r.title,

@@ -373,4 +373,35 @@ describe("GET /api/me/attendance/weekly", () => {
     const r2 = b2 as { tracks: Array<{ mbid: string }> };
     expect(r2.tracks.find((t) => t.mbid === MBID_B)).toBeUndefined();
   });
+
+  // ── currentWeek field — server-side clock authority ───────────────────────
+
+  it("response always includes currentWeek matching the server's actual current ISO week", async () => {
+    if (!dbAvailable) return;
+    const expectedCurrentWeek = mondayToIsoWeekLabel(currentIsoWeekMonday());
+
+    // Request the current week (no param) — currentWeek should equal week
+    const { status: s1, body: b1 } = await get("/api/me/attendance/weekly");
+    expect(s1).toBe(200);
+    const r1 = b1 as { week: string; currentWeek: string };
+    expect(r1.currentWeek).toBe(expectedCurrentWeek);
+    expect(r1.currentWeek).toBe(r1.week);
+  });
+
+  it("currentWeek reflects the server's current week even when a past week is requested", async () => {
+    if (!dbAvailable) return;
+    const expectedCurrentWeek = mondayToIsoWeekLabel(currentIsoWeekMonday());
+    const pastWeek = isoWeekOffset(-3); // three weeks ago
+
+    const { status, body } = await get(`/api/me/attendance/weekly?week=${pastWeek}`);
+    expect(status).toBe(200);
+    const result = body as { week: string; currentWeek: string };
+
+    // The requested week label differs from current …
+    expect(result.week).toBe(pastWeek);
+    // … but currentWeek is always today's week, regardless of what was requested.
+    // This is the value the client uses to disable the forward-navigation chevron
+    // so a device clock that is ahead cannot unlock a future week.
+    expect(result.currentWeek).toBe(expectedCurrentWeek);
+  });
 });

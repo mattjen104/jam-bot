@@ -6,6 +6,7 @@ import {
   useMyWeeklySummary,
   useMyWeeklyHistory,
   useIsAuthenticated,
+  useServerCurrentWeek,
   type WeeklyTrack,
 } from "../lib/meHooks";
 
@@ -441,8 +442,6 @@ function WeekPickerDropdown({
 // Main card
 // ---------------------------------------------------------------------------
 
-const CURRENT_WEEK = currentIsoWeekLabel();
-
 /**
  * "Your Week" card — shows the listener's confirmed on-air listening for the
  * selected ISO week.  Only rendered when the user has attendance data or is
@@ -452,9 +451,28 @@ const CURRENT_WEEK = currentIsoWeekLabel();
 export function YourWeekCard() {
   const isAuthenticated = useIsAuthenticated();
   // null → still loading auth; false → not logged in; true → logged in
-  const [selectedWeek, setSelectedWeek] = useState<string>(CURRENT_WEEK);
+
+  // The server is the authority for what the current week is. The client
+  // clock may be ahead, which would let forward navigation reach a future
+  // week. We fall back to a client-side estimate only while the server
+  // response is in flight.
+  const serverCurrentWeek = useServerCurrentWeek();
+  const clientCurrentWeek = currentIsoWeekLabel();
+  const currentWeek = serverCurrentWeek ?? clientCurrentWeek;
+
+  const [selectedWeek, setSelectedWeek] = useState<string>(clientCurrentWeek);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const isCurrentWeek = selectedWeek === CURRENT_WEEK;
+
+  // If the client clock is ahead and selectedWeek points to a future week
+  // that the server hasn't reached yet, snap it back as soon as the server
+  // current week is known.
+  useEffect(() => {
+    if (serverCurrentWeek && selectedWeek > serverCurrentWeek) {
+      setSelectedWeek(serverCurrentWeek);
+    }
+  }, [serverCurrentWeek, selectedWeek]);
+
+  const isCurrentWeek = selectedWeek >= currentWeek;
   const weekLabelRef = useRef<HTMLButtonElement>(null);
 
   const { data: summary, isLoading } = useMyWeeklySummary(selectedWeek);
@@ -601,8 +619,12 @@ export function YourWeekCard() {
           {pickerOpen && (
             <WeekPickerDropdown
               selectedWeek={selectedWeek}
-              currentWeek={CURRENT_WEEK}
-              onSelect={(week) => setSelectedWeek(week)}
+              currentWeek={currentWeek}
+              onSelect={(week) => {
+                // Guard: never navigate to a week beyond the server's current week.
+                if (serverCurrentWeek && week > serverCurrentWeek) return;
+                setSelectedWeek(week);
+              }}
               onClose={() => setPickerOpen(false)}
               anchorRef={weekLabelRef}
             />

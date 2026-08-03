@@ -1141,6 +1141,8 @@ export interface WeeklySummary {
   week: string;
   weekStart: string;
   weekEnd: string;
+  /** Server's current ISO week label — authoritative cap for forward navigation. */
+  currentWeek: string;
   tracks: WeeklyTrack[];
   totalTracks: number;
   totalDwellSeconds: number;
@@ -1164,6 +1166,19 @@ export function useMyWeeklySummary(week: string | null) {
     staleTime: 2 * 60_000,
     retry: false,
   });
+}
+
+/**
+ * Returns the server's canonical current ISO week label (e.g. "2026-W31").
+ * This is the authoritative source for the current week — it must not be
+ * derived from the client clock, which may be ahead of real time.
+ *
+ * Falls back to `null` while loading or when unauthenticated, at which point
+ * callers should fall back to a client-side estimate.
+ */
+export function useServerCurrentWeek(): string | null {
+  const { data } = useMyWeeklySummary(null);
+  return data?.currentWeek ?? null;
 }
 
 // ---------------------------------------------------------------------------
