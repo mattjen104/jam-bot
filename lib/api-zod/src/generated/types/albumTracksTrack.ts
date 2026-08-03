@@ -10,4 +10,6 @@ export interface AlbumTracksTrack {
   mbid: string;
   title: string;
   artist: string;
+  durationMs: number | null;
+  position: number;
 }

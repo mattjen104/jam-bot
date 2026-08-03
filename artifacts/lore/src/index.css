@@ -2919,6 +2919,289 @@
   cursor: not-allowed;
 }
 
+/* ── Library Album Shelf ─────────────────────────────────────────────────── */
+.lrow--shelf-open { background: hsl(var(--secondary) / 0.6); }
+
+.lrow__shelf {
+  grid-column: 1 / -1;
+  border-top: 1px solid hsl(var(--border) / 0.4);
+  background: hsl(var(--secondary) / 0.35);
+}
+
+.lrow__shelf-hd {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px 8px;
+}
+
+.lrow__shelf-art {
+  width: 48px;
+  height: 48px;
+  border-radius: 3px;
+  object-fit: cover;
+  flex-shrink: 0;
+  display: block;
+}
+.lrow__shelf-art--grad {
+  width: 48px;
+  height: 48px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  display: block;
+}
+.lrow__shelf-art--skel {
+  width: 48px;
+  height: 48px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  background: hsl(var(--border));
+  animation: lore-pulse 1.5s ease-in-out infinite;
+}
+
+.lrow__shelf-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.lrow__shelf-album-title {
+  font-family: var(--app-font-display);
+  font-size: 12px;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lrow__shelf-album-sub {
+  font-family: var(--app-font-mono);
+  font-size: 9px;
+  color: hsl(var(--faint));
+  margin-top: 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.lrow__shelf-play-all {
+  font-family: var(--app-font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 5px 9px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 3px;
+  background: hsl(var(--card));
+  color: hsl(var(--dim));
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+  transition: border-color 0.15s, color 0.15s;
+}
+.lrow__shelf-play-all:hover:not(:disabled) {
+  border-color: hsl(var(--library) / 0.5);
+  color: hsl(var(--library));
+}
+.lrow__shelf-play-all:disabled { opacity: 0.35; cursor: default; }
+
+.lrow__shelf-tracks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.lrow__shelf-track {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-top: 1px solid hsl(var(--border) / 0.2);
+}
+.lrow__shelf-track--skel { pointer-events: none; }
+
+.lrow__shelf-track-pos {
+  font-family: var(--app-font-mono);
+  font-size: 9.5px;
+  color: hsl(var(--faint));
+  width: 18px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.lrow__shelf-track-title {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--app-font-reading);
+  font-size: 12.5px;
+  color: hsl(var(--foreground));
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 0.12s;
+}
+.lrow__shelf-track-title:hover { color: hsl(var(--library)); }
+
+.lrow__shelf-track-dur {
+  font-family: var(--app-font-mono);
+  font-size: 9.5px;
+  color: hsl(var(--faint));
+  flex-shrink: 0;
+}
+
+.lrow__shelf-show-all {
+  display: block;
+  width: 100%;
+  padding: 7px 12px;
+  border: none;
+  border-top: 1px solid hsl(var(--border) / 0.25);
+  background: none;
+  font-family: var(--app-font-mono);
+  font-size: 9.5px;
+  color: hsl(var(--dim));
+  cursor: pointer;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: color 0.12s;
+}
+.lrow__shelf-show-all:hover { color: hsl(var(--library)); }
+
+.lrow__shelf-error {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+  color: hsl(var(--faint));
+}
+
+.lrow__shelf-mb-link {
+  color: hsl(var(--dim));
+  text-decoration: none;
+  font-size: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.lrow__shelf-mb-link:hover { color: hsl(var(--library)); }
+
+.lrow__shelf-skel {
+  display: block;
+  background: hsl(var(--border));
+  border-radius: 2px;
+  animation: lore-pulse 1.5s ease-in-out infinite;
+}
+.lrow__shelf-skel--title { height: 11px; width: 55%; }
+.lrow__shelf-skel--year  { height: 9px; width: 28%; margin-top: 4px; }
+.lrow__shelf-skel--track { height: 10px; flex: 1; }
+
+/* Chevron button in the library row rail */
+.lrow__shelf-btn {
+  background: none;
+  border: 1px solid hsl(var(--border));
+  border-radius: 3px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: hsl(var(--faint));
+  flex-shrink: 0;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+.lrow__shelf-btn:hover {
+  color: hsl(var(--library));
+  border-color: hsl(var(--library) / 0.45);
+}
+.lrow__shelf-btn--open {
+  color: hsl(var(--library));
+  border-color: hsl(var(--library) / 0.45);
+  background: hsl(var(--library) / 0.07);
+}
+
+/* ── Artist portal strip ─────────────────────────────────────────────────── */
+.lrow__portal {
+  border-top: 1px solid hsl(var(--border) / 0.3);
+  padding: 8px 0 4px;
+}
+
+.lrow__portal-label {
+  font-family: var(--app-font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: hsl(var(--faint));
+  padding: 0 12px 5px;
+}
+
+.lrow__portal-scroll {
+  display: flex;
+  gap: 7px;
+  padding: 0 12px 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.lrow__portal-scroll::-webkit-scrollbar { display: none; }
+
+.lrow__portal-tile {
+  flex-shrink: 0;
+  width: 56px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: center;
+  transition: opacity 0.12s;
+}
+.lrow__portal-tile:hover { opacity: 0.78; }
+
+.lrow__portal-tile-art {
+  width: 48px;
+  height: 48px;
+  border-radius: 3px;
+  object-fit: cover;
+  display: block;
+  margin: 0 auto;
+  border: 2px solid transparent;
+  transition: border-color 0.12s;
+}
+.lrow__portal-tile--active .lrow__portal-tile-art {
+  border-color: hsl(var(--library) / 0.7);
+}
+
+.lrow__portal-tile-art--grad {
+  width: 48px;
+  height: 48px;
+  border-radius: 3px;
+  display: block;
+  margin: 0 auto;
+  border: 2px solid transparent;
+  transition: border-color 0.12s;
+}
+.lrow__portal-tile--active .lrow__portal-tile-art--grad {
+  border-color: hsl(var(--library) / 0.7);
+}
+
+.lrow__portal-tile-name {
+  font-family: var(--app-font-mono);
+  font-size: 8px;
+  color: hsl(var(--dim));
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 56px;
+}
+
 /* ── Front-door action bar (spec §10) ──────────────────────────────────── */
 .dial-actbar {
   display: flex;

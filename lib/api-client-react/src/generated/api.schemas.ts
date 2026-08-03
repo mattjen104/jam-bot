@@ -2422,12 +2422,38 @@ export interface AlbumTracksTrack {
   mbid: string;
   title: string;
   artist: string;
+  durationMs: number | null;
+  position: number;
 }
 
 export interface AlbumTracksResponse {
   rgMbid: string;
   rgTitle: string | null;
   rgType: string | null;
+  releaseYear: number | null;
+  artworkUrl: string | null;
+  tracks: AlbumTracksTrack[];
+}
+
+export interface ArtistReleaseItem {
+  releaseGroupMbid: string;
+  title: string | null;
+  primaryType: string | null;
+  releaseYear: number | null;
+  artworkUrl: string | null;
+}
+
+export interface RecordingArtistReleasesResponse {
+  artistName: string;
+  releases: ArtistReleaseItem[];
+}
+
+export interface ReleaseGroupTracksResponse {
+  rgMbid: string;
+  rgTitle: string | null;
+  rgType: string | null;
+  releaseYear: number | null;
+  artworkUrl: string | null;
   tracks: AlbumTracksTrack[];
 }
 

@@ -21,6 +21,8 @@ import type {
   AlbumAvatarResponse,
   AlbumResult,
   AlbumTracksResponse,
+  RecordingArtistReleasesResponse,
+  ReleaseGroupTracksResponse,
   AllDraftClaimsList,
   ApiError,
   AppleMusicReplayMaterialization,

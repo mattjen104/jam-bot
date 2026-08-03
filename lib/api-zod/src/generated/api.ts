@@ -1223,11 +1223,53 @@ export const GetRecordingAlbumTracksResponse = zod.object({
   rgMbid: zod.string(),
   rgTitle: zod.string().nullable(),
   rgType: zod.string().nullable(),
+  releaseYear: zod.number().nullable(),
+  artworkUrl: zod.string().nullable(),
   tracks: zod.array(
     zod.object({
       mbid: zod.string(),
       title: zod.string(),
       artist: zod.string(),
+      durationMs: zod.number().nullable(),
+      position: zod.number(),
+    }),
+  ),
+});
+
+export const GetRecordingArtistReleasesParams = zod.object({
+  mbid: zod.coerce.string().min(1),
+});
+
+export const GetRecordingArtistReleasesResponse = zod.object({
+  artistName: zod.string(),
+  releases: zod.array(
+    zod.object({
+      releaseGroupMbid: zod.string(),
+      title: zod.string().nullable(),
+      primaryType: zod.string().nullable(),
+      releaseYear: zod.number().nullable(),
+      artworkUrl: zod.string().nullable(),
+    }),
+  ),
+});
+
+export const GetReleaseGroupTracksParams = zod.object({
+  rgMbid: zod.coerce.string().min(1),
+});
+
+export const GetReleaseGroupTracksResponse = zod.object({
+  rgMbid: zod.string(),
+  rgTitle: zod.string().nullable(),
+  rgType: zod.string().nullable(),
+  releaseYear: zod.number().nullable(),
+  artworkUrl: zod.string().nullable(),
+  tracks: zod.array(
+    zod.object({
+      mbid: zod.string(),
+      title: zod.string(),
+      artist: zod.string(),
+      durationMs: zod.number().nullable(),
+      position: zod.number(),
     }),
   ),
 });

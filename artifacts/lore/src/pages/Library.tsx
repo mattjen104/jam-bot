@@ -567,6 +567,8 @@ export function AlbumGroupRow({
   group,
   openDoorMbid,
   setOpenDoorMbid,
+  openShelfMbid,
+  setOpenShelfMbid,
   forceOpen,
   onMakeAvatar,
   avatarRecordingMbid,
@@ -574,6 +576,8 @@ export function AlbumGroupRow({
   group: AlbumGroup;
   openDoorMbid: string | null;
   setOpenDoorMbid: (v: string | null) => void;
+  openShelfMbid: string | null;
+  setOpenShelfMbid: (v: string | null) => void;
   forceOpen?: boolean;
   onMakeAvatar?: (recordingMbid: string) => void;
   avatarRecordingMbid?: string | null;
@@ -713,6 +717,10 @@ export function AlbumGroupRow({
                 onToggle={item.mbid != null
                   ? () => setOpenDoorMbid(openDoorMbid === item.mbid ? null : item.mbid)
                   : undefined}
+                isShelfOpen={item.mbid != null && openShelfMbid === item.mbid}
+                onShelfToggle={item.mbid != null
+                  ? () => setOpenShelfMbid(openShelfMbid === item.mbid ? null : item.mbid)
+                  : undefined}
               />
             );
           })}
@@ -729,6 +737,8 @@ export function ArtistGroupRow({
   group,
   openDoorMbid,
   setOpenDoorMbid,
+  openShelfMbid,
+  setOpenShelfMbid,
   forceOpen,
   onMakeAvatar,
   avatarRecordingMbid,
@@ -736,6 +746,8 @@ export function ArtistGroupRow({
   group: ArtistGroup;
   openDoorMbid: string | null;
   setOpenDoorMbid: (v: string | null) => void;
+  openShelfMbid: string | null;
+  setOpenShelfMbid: (v: string | null) => void;
   forceOpen?: boolean;
   onMakeAvatar?: (recordingMbid: string) => void;
   avatarRecordingMbid?: string | null;
@@ -884,6 +896,10 @@ export function ArtistGroupRow({
                       onToggle={item.mbid != null
                         ? () => setOpenDoorMbid(openDoorMbid === item.mbid ? null : item.mbid)
                         : undefined}
+                      isShelfOpen={item.mbid != null && openShelfMbid === item.mbid}
+                      onShelfToggle={item.mbid != null
+                        ? () => setOpenShelfMbid(openShelfMbid === item.mbid ? null : item.mbid)
+                        : undefined}
                     />
                   );
                 })}
@@ -1026,6 +1042,8 @@ export default function Library() {
 
   // Single-open door strip: tracks which row has its door strip expanded
   const [openDoorMbid, setOpenDoorMbid] = useState<string | null>(null);
+  // Single-open album shelf: tracks which row has its album shelf expanded
+  const [openShelfMbid, setOpenShelfMbid] = useState<string | null>(null);
 
 
   // Sentinel for IntersectionObserver
@@ -1969,6 +1987,8 @@ export default function Library() {
                     group={group}
                     openDoorMbid={openDoorMbid}
                     setOpenDoorMbid={setOpenDoorMbid}
+                    openShelfMbid={openShelfMbid}
+                    setOpenShelfMbid={setOpenShelfMbid}
                     forceOpen={!!groupFilterQ}
                     onMakeAvatar={chooseAlbumAvatar}
                     avatarRecordingMbid={albumAvatar?.current?.recordingMbid}
@@ -2025,6 +2045,8 @@ export default function Library() {
                     group={group}
                     openDoorMbid={openDoorMbid}
                     setOpenDoorMbid={setOpenDoorMbid}
+                    openShelfMbid={openShelfMbid}
+                    setOpenShelfMbid={setOpenShelfMbid}
                     forceOpen={!!groupFilterQ}
                     onMakeAvatar={chooseAlbumAvatar}
                     avatarRecordingMbid={albumAvatar?.current?.recordingMbid}
@@ -2251,6 +2273,10 @@ export default function Library() {
                     isOpen={item.mbid != null && openDoorMbid === item.mbid}
                     onToggle={item.mbid != null
                       ? () => setOpenDoorMbid((prev) => prev === item.mbid ? null : item.mbid)
+                      : undefined}
+                    isShelfOpen={item.mbid != null && openShelfMbid === item.mbid}
+                    onShelfToggle={item.mbid != null
+                      ? () => setOpenShelfMbid((prev) => prev === item.mbid ? null : item.mbid)
                       : undefined}
                   />
                 );

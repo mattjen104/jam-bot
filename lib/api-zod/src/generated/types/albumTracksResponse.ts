@@ -11,5 +11,7 @@ export interface AlbumTracksResponse {
   rgMbid: string;
   rgTitle: string | null;
   rgType: string | null;
+  releaseYear: number | null;
+  artworkUrl: string | null;
   tracks: AlbumTracksTrack[];
 }

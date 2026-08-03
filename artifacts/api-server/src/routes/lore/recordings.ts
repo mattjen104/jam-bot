@@ -37,7 +37,7 @@ import {
   listsTable,
   listSourcesTable,
 } from "@workspace/db";
-import { eq, and, asc, sql, inArray, gte, isNotNull } from "drizzle-orm";
+import { eq, and, asc, desc, sql, inArray, gte, isNotNull } from "drizzle-orm";
 import { nextRideable, spinsForRecording } from "../../lore/segue.js";
 import { resolvePreview } from "../../lore/preview.js";
 import { resolveEntry } from "../../lore/entry.js";
@@ -662,6 +662,7 @@ router.get("/recordings/:mbid/album-tracks", h(async (req, res) => {
       releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid,
       title: recordingReleaseGroupsTable.title,
       primaryType: recordingReleaseGroupsTable.primaryType,
+      releaseYear: recordingReleaseGroupsTable.releaseYear,
     })
     .from(recordingReleaseGroupsTable)
     .where(and(
@@ -672,27 +673,165 @@ router.get("/recordings/:mbid/album-tracks", h(async (req, res) => {
 
   if (!rgRow[0]) return res.status(404).json({ error: "not_found" });
 
-  const { releaseGroupMbid, title: rgTitle, primaryType } = rgRow[0];
+  const { releaseGroupMbid, title: rgTitle, primaryType, releaseYear } = rgRow[0];
 
   const tracks = await db
     .select({
       mbid: recordingReleaseGroupsTable.recordingMbid,
       title: recordingsTable.title,
       artist: recordingsTable.artist,
+      durationMs: recordingsTable.durationMs,
+      artworkUrl: recordingsTable.artworkUrl,
     })
     .from(recordingReleaseGroupsTable)
     .leftJoin(recordingsTable, eq(recordingReleaseGroupsTable.recordingMbid, recordingsTable.mbid))
     .where(eq(recordingReleaseGroupsTable.releaseGroupMbid, releaseGroupMbid))
     .orderBy(asc(recordingReleaseGroupsTable.id));
 
+  // Album artwork: prefer any recording that has artwork stored
+  const artworkUrl = tracks.find(t => t.artworkUrl)?.artworkUrl ?? null;
+
   return res.json({
     rgMbid: releaseGroupMbid,
     rgTitle: rgTitle ?? null,
     rgType: primaryType ?? null,
-    tracks: tracks.map(t => ({
+    releaseYear: releaseYear ?? null,
+    artworkUrl,
+    tracks: tracks.map((t, idx) => ({
       mbid: t.mbid,
       title: t.title ?? t.mbid,
       artist: t.artist ?? "",
+      durationMs: t.durationMs ?? null,
+      position: idx + 1,
+    })),
+  });
+}));
+
+// GET /api/recordings/:mbid/artist-releases
+// Returns all primary release groups from recordings by the same artist.
+router.get("/recordings/:mbid/artist-releases", h(async (req, res) => {
+  const mbid = req.params.mbid as string;
+  if (!mbid) return res.status(400).json({ error: "mbid required" });
+
+  const rec = await db
+    .select({ artistMbid: recordingsTable.artistMbid, artist: recordingsTable.artist })
+    .from(recordingsTable)
+    .where(eq(recordingsTable.mbid, mbid))
+    .limit(1);
+
+  if (!rec[0]) return res.status(404).json({ error: "not_found" });
+
+  const { artistMbid, artist } = rec[0];
+  if (!artistMbid) {
+    return res.json({ artistName: artist, releases: [] });
+  }
+
+  // Get all recording MBIDs by this artist (cap to avoid excessive IN clause)
+  const artistRecs = await db
+    .select({ mbid: recordingsTable.mbid })
+    .from(recordingsTable)
+    .where(eq(recordingsTable.artistMbid, artistMbid))
+    .limit(500);
+
+  if (artistRecs.length === 0) {
+    return res.json({ artistName: artist, releases: [] });
+  }
+  const artistMbids = artistRecs.map(r => r.mbid);
+
+  // Primary release groups for those recordings
+  const rgRows = await db
+    .select({
+      releaseGroupMbid: recordingReleaseGroupsTable.releaseGroupMbid,
+      title: recordingReleaseGroupsTable.title,
+      primaryType: recordingReleaseGroupsTable.primaryType,
+      releaseYear: recordingReleaseGroupsTable.releaseYear,
+      representativeMbid: recordingReleaseGroupsTable.recordingMbid,
+    })
+    .from(recordingReleaseGroupsTable)
+    .where(and(
+      inArray(recordingReleaseGroupsTable.recordingMbid, artistMbids),
+      eq(recordingReleaseGroupsTable.isPrimary, true),
+    ))
+    .orderBy(desc(recordingReleaseGroupsTable.releaseYear));
+
+  // Deduplicate by releaseGroupMbid, keep first (highest releaseYear wins due to ordering)
+  const seen = new Set<string>();
+  const uniqueRgs: typeof rgRows = [];
+  for (const row of rgRows) {
+    if (!seen.has(row.releaseGroupMbid)) {
+      seen.add(row.releaseGroupMbid);
+      uniqueRgs.push(row);
+    }
+  }
+
+  // Batch-fetch artworkUrl for each representative recording
+  const repMbids = uniqueRgs.map(r => r.representativeMbid);
+  const artworkRows = repMbids.length > 0
+    ? await db
+        .select({ mbid: recordingsTable.mbid, artworkUrl: recordingsTable.artworkUrl })
+        .from(recordingsTable)
+        .where(inArray(recordingsTable.mbid, repMbids))
+    : [];
+  const artworkByMbid = new Map(artworkRows.map(r => [r.mbid, r.artworkUrl]));
+
+  return res.json({
+    artistName: artist,
+    releases: uniqueRgs.map(r => ({
+      releaseGroupMbid: r.releaseGroupMbid,
+      title: r.title ?? null,
+      primaryType: r.primaryType ?? null,
+      releaseYear: r.releaseYear ?? null,
+      artworkUrl: artworkByMbid.get(r.representativeMbid) ?? null,
+    })),
+  });
+}));
+
+// GET /api/release-groups/:rgMbid/tracks
+// Returns all tracks in a release group by its MBID directly.
+router.get("/release-groups/:rgMbid/tracks", h(async (req, res) => {
+  const rgMbid = req.params.rgMbid as string;
+  if (!rgMbid) return res.status(400).json({ error: "rgMbid required" });
+
+  const rgMeta = await db
+    .select({
+      title: recordingReleaseGroupsTable.title,
+      primaryType: recordingReleaseGroupsTable.primaryType,
+      releaseYear: recordingReleaseGroupsTable.releaseYear,
+    })
+    .from(recordingReleaseGroupsTable)
+    .where(eq(recordingReleaseGroupsTable.releaseGroupMbid, rgMbid))
+    .limit(1);
+
+  const tracks = await db
+    .select({
+      mbid: recordingReleaseGroupsTable.recordingMbid,
+      title: recordingsTable.title,
+      artist: recordingsTable.artist,
+      durationMs: recordingsTable.durationMs,
+      artworkUrl: recordingsTable.artworkUrl,
+    })
+    .from(recordingReleaseGroupsTable)
+    .leftJoin(recordingsTable, eq(recordingReleaseGroupsTable.recordingMbid, recordingsTable.mbid))
+    .where(eq(recordingReleaseGroupsTable.releaseGroupMbid, rgMbid))
+    .orderBy(asc(recordingReleaseGroupsTable.id));
+
+  if (tracks.length === 0) return res.status(404).json({ error: "not_found" });
+
+  const artworkUrl = tracks.find(t => t.artworkUrl)?.artworkUrl ?? null;
+  const { title: rgTitle, primaryType, releaseYear } = rgMeta[0] ?? {};
+
+  return res.json({
+    rgMbid,
+    rgTitle: rgTitle ?? null,
+    rgType: primaryType ?? null,
+    releaseYear: releaseYear ?? null,
+    artworkUrl,
+    tracks: tracks.map((t, idx) => ({
+      mbid: t.mbid,
+      title: t.title ?? t.mbid,
+      artist: t.artist ?? "",
+      durationMs: t.durationMs ?? null,
+      position: idx + 1,
     })),
   });
 }));

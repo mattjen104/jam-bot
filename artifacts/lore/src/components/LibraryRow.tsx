@@ -5,6 +5,8 @@ import { usePlayer, type RideSeed } from "../player/PlayerProvider";
 import { getRecordingAlbumTracks, spotifyPlay } from "@workspace/api-client-react";
 import { toast } from "../hooks/use-toast";
 import { useMyAlbumAvatar, useSetAlbumAvatar } from "../lib/meHooks";
+import { AlbumShelf } from "./AlbumShelf";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
 /** Deterministic gradient fallback for artwork */
 function artGradient(a: string, b: string): string {
@@ -22,6 +24,10 @@ interface LibraryRowProps {
   isOpen?: boolean;
   /** Called when the ▶ button is tapped — parent coordinates single-open */
   onToggle?: () => void;
+  /** Whether this row's album shelf is open */
+  isShelfOpen?: boolean;
+  /** Called when the shelf chevron is tapped — parent coordinates single-open */
+  onShelfToggle?: () => void;
 }
 
 /** §7 byline ladder: picked-by+station → picked-by → heard-on → service import → null */
@@ -76,7 +82,7 @@ function Byline({ prov, soft }: { prov: LibraryItem["provenance"]; soft?: boolea
             from Spotify · unmatched
           </>
         ) : prov.service === "matt-starter" ? (
-          <>from Matt’s starter library</>
+          <>from Matt's starter library</>
         ) : (
           <>imported from {prov.service}</>
         )}
@@ -207,7 +213,14 @@ function DoorStrip({ item, onClose }: { item: LibraryItem; onClose: () => void }
 }
 
 /** A single row in the Library "Kept" list. */
-export function LibraryRow({ item, isOnAir = false, isOpen = false, onToggle }: LibraryRowProps) {
+export function LibraryRow({
+  item,
+  isOnAir = false,
+  isOpen = false,
+  onToggle,
+  isShelfOpen = false,
+  onShelfToggle,
+}: LibraryRowProps) {
   const rec = item.recording;
   const title = rec?.title ?? (item.mbid ? item.mbid.slice(0, 8) : "Unknown track");
   const artist = rec?.artist ?? "";
@@ -236,6 +249,7 @@ export function LibraryRow({ item, isOnAir = false, isOpen = false, onToggle }: 
     "lrow",
     isSoft ? "lrow--soft" : isOnAir ? "lrow--onair" : hasProvenance ? "lrow--kept" : "",
     isOpen ? "lrow--open" : "",
+    isShelfOpen ? "lrow--shelf-open" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -310,6 +324,21 @@ export function LibraryRow({ item, isOnAir = false, isOpen = false, onToggle }: 
               {isCurrentAvatar ? "●" : "◎"}
             </button>
           )}
+          {/* Album shelf chevron — browse album + artist discography */}
+          {item.mbid && (
+            <button
+              type="button"
+              className={`lrow__shelf-btn${isShelfOpen ? " lrow__shelf-btn--open" : ""}`}
+              aria-label={isShelfOpen ? "Close album browser" : `Browse album for ${title}`}
+              aria-expanded={isShelfOpen}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onShelfToggle?.(); }}
+              title={isShelfOpen ? "Close album browser" : "Browse album & discography"}
+            >
+              {isShelfOpen
+                ? <ChevronUp style={{ width: 10, height: 10 }} />
+                : <ChevronDown style={{ width: 10, height: 10 }} />}
+            </button>
+          )}
           <button
             type="button"
             className={`lrow__play${isOpen ? " lrow__play--open" : ""}`}
@@ -324,6 +353,11 @@ export function LibraryRow({ item, isOnAir = false, isOpen = false, onToggle }: 
 
       {/* Door strip — only for resolved rows, only when open */}
       {!isSoft && isOpen && <DoorStrip item={item} onClose={() => onToggle?.()} />}
+
+      {/* Album shelf — browse album tracklist + artist discography */}
+      {!isSoft && isShelfOpen && item.mbid && (
+        <AlbumShelf mbid={item.mbid} artistName={artist || title} />
+      )}
     </li>
   );
 }
