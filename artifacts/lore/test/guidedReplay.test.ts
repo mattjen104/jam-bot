@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { guidedMissingLabel, materializeGuidedReplay } from "../src/lib/guidedReplay";
+import {
+  computeAvailableServices,
+  GUIDED_SERVICE_OPTIONS,
+  guidedMissingLabel,
+  materializeGuidedReplay,
+} from "../src/lib/guidedReplay";
 
 const entries = [
   {
@@ -297,5 +302,236 @@ describe("guided Ghost Replay materializer", () => {
     expect(guidedMissingLabel(guide.entries[0]!.missingReason!)).toBe(
       "unavailable on this service",
     );
+  });
+
+  it("unknown service key: resolves a valid HTTPS link via the generic path", () => {
+    const unknownServiceEntries = [
+      {
+        position: 0,
+        rawTitle: "Track On Tidal HiFi",
+        rawArtist: "Artist",
+        recording: {
+          mbid: "tidal-hifi-track",
+          title: "Track On Tidal HiFi",
+          artist: "Artist",
+          links: [],
+        },
+        guidedLinks: [
+          {
+            service: "tidal_hifi",
+            externalId: null,
+            url: "https://tidal.com/browse/track/12345",
+            deadLink: false,
+          },
+        ],
+      },
+    ];
+
+    const guide = materializeGuidedReplay(unknownServiceEntries, "tidal_hifi");
+    expect(guide.service).toBe("tidal_hifi");
+    expect(guide.available).toBe(1);
+    expect(guide.playable[0]?.source).toMatchObject({
+      service: "tidal_hifi",
+      url: "https://tidal.com/browse/track/12345",
+      embedUrl: null,
+      externalOnly: true,
+      autoAdvance: false,
+    });
+  });
+
+  it("unknown service key: rejects an HTTP link (HTTPS-only guard)", () => {
+    const httpEntries = [
+      {
+        position: 0,
+        rawTitle: "Insecure Track",
+        rawArtist: "Artist",
+        recording: {
+          mbid: "insecure",
+          title: "Insecure Track",
+          artist: "Artist",
+          links: [],
+        },
+        guidedLinks: [
+          {
+            service: "tidal_hifi",
+            externalId: null,
+            url: "http://tidal.com/browse/track/99",
+            deadLink: false,
+          },
+        ],
+      },
+    ];
+
+    const guide = materializeGuidedReplay(httpEntries, "tidal_hifi");
+    expect(guide.available).toBe(0);
+    expect(guide.entries[0]?.missingReason).toBe("unavailable");
+  });
+
+  it("unknown service key: dead-link flag suppresses the source and sets reason dead-link", () => {
+    const deadEntries = [
+      {
+        position: 0,
+        rawTitle: "Gone",
+        rawArtist: "Artist",
+        recording: {
+          mbid: "gone",
+          title: "Gone",
+          artist: "Artist",
+          links: [],
+        },
+        guidedLinks: [
+          {
+            service: "tidal_hifi",
+            externalId: null,
+            url: "https://tidal.com/browse/track/dead",
+            deadLink: true,
+          },
+        ],
+      },
+    ];
+
+    const guide = materializeGuidedReplay(deadEntries, "tidal_hifi");
+    expect(guide.available).toBe(0);
+    expect(guide.entries[0]?.missingReason).toBe("dead-link");
+  });
+
+  it("unknown service key: case-insensitive match — 'Tidal_HiFi' matches service 'tidal_hifi'", () => {
+    const mixedCaseEntries = [
+      {
+        position: 0,
+        rawTitle: "Case Mismatch",
+        rawArtist: "Artist",
+        recording: {
+          mbid: "case-mismatch",
+          title: "Case Mismatch",
+          artist: "Artist",
+          links: [],
+        },
+        guidedLinks: [
+          {
+            service: "Tidal_HiFi",
+            externalId: null,
+            url: "https://tidal.com/browse/track/777",
+            deadLink: false,
+          },
+        ],
+      },
+    ];
+
+    const guide = materializeGuidedReplay(mixedCaseEntries, "tidal_hifi");
+    expect(guide.available).toBe(1);
+    expect(guide.playable[0]?.source?.service).toBe("tidal_hifi");
+  });
+});
+
+describe("computeAvailableServices", () => {
+  it("always includes all known services regardless of guidedLinks", () => {
+    const result = computeAvailableServices([]);
+    const knownServices = GUIDED_SERVICE_OPTIONS.map((o) => o.service);
+    for (const svc of knownServices) {
+      expect(result.some((r) => r.service === svc)).toBe(true);
+    }
+    expect(result.length).toBe(GUIDED_SERVICE_OPTIONS.length);
+  });
+
+  it("appends an unknown service key as a title-cased tab", () => {
+    const entries = [
+      {
+        guidedLinks: [
+          { service: "tidal_hifi", deadLink: false },
+        ],
+      },
+    ];
+
+    const result = computeAvailableServices(entries);
+    const extra = result.find((r) => r.service === "tidal_hifi");
+    expect(extra).toBeDefined();
+    expect(extra?.label).toBe("Tidal Hifi");
+    // Total = known services + 1 unknown
+    expect(result.length).toBe(GUIDED_SERVICE_OPTIONS.length + 1);
+  });
+
+  it("appends multiple unknown service keys, sorted alphabetically", () => {
+    const entries = [
+      {
+        guidedLinks: [
+          { service: "zvuk", deadLink: false },
+          { service: "anghami", deadLink: false },
+        ],
+      },
+    ];
+
+    const result = computeAvailableServices(entries);
+    const extras = result.slice(GUIDED_SERVICE_OPTIONS.length);
+    expect(extras.map((r) => r.service)).toEqual(["anghami", "zvuk"]);
+    expect(extras[0]?.label).toBe("Anghami");
+    expect(extras[1]?.label).toBe("Zvuk");
+  });
+
+  it("deduplicates repeated unknown service keys across entries", () => {
+    const entries = [
+      { guidedLinks: [{ service: "tidal_hifi", deadLink: false }] },
+      { guidedLinks: [{ service: "tidal_hifi", deadLink: false }] },
+    ];
+
+    const result = computeAvailableServices(entries);
+    const tidalHifiTabs = result.filter((r) => r.service === "tidal_hifi");
+    expect(tidalHifiTabs.length).toBe(1);
+  });
+
+  it("suppresses an unknown service tab when ALL its links are dead", () => {
+    const entries = [
+      {
+        guidedLinks: [
+          { service: "tidal_hifi", deadLink: true },
+        ],
+      },
+    ];
+
+    const result = computeAvailableServices(entries);
+    expect(result.some((r) => r.service === "tidal_hifi")).toBe(false);
+    expect(result.length).toBe(GUIDED_SERVICE_OPTIONS.length);
+  });
+
+  it("still shows an unknown service when at least one link is live, even if others are dead", () => {
+    const entries = [
+      {
+        guidedLinks: [
+          { service: "tidal_hifi", deadLink: true },
+          { service: "tidal_hifi", deadLink: false },
+        ],
+      },
+    ];
+
+    const result = computeAvailableServices(entries);
+    expect(result.some((r) => r.service === "tidal_hifi")).toBe(true);
+  });
+
+  it("does not add a duplicate tab for known services present in guidedLinks", () => {
+    const entries = [
+      {
+        guidedLinks: [
+          { service: "youtube", deadLink: false },
+          { service: "bandcamp", deadLink: false },
+        ],
+      },
+    ];
+
+    const result = computeAvailableServices(entries);
+    const youtubeTabs = result.filter((r) => r.service === "youtube");
+    const bandcampTabs = result.filter((r) => r.service === "bandcamp");
+    expect(youtubeTabs.length).toBe(1);
+    expect(bandcampTabs.length).toBe(1);
+    expect(result.length).toBe(GUIDED_SERVICE_OPTIONS.length);
+  });
+
+  it("title-cases multi-word snake_case service keys correctly", () => {
+    const entries = [
+      { guidedLinks: [{ service: "amazon_music_unlimited", deadLink: false }] },
+    ];
+
+    const result = computeAvailableServices(entries);
+    const extra = result.find((r) => r.service === "amazon_music_unlimited");
+    expect(extra?.label).toBe("Amazon Music Unlimited");
   });
 });
