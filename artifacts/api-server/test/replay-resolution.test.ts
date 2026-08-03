@@ -15,6 +15,7 @@ import {
   canonicalReplayService,
   computeMissBreakdownFromMbids,
   getReplayMaterializer,
+  markServiceTrackMapDead,
   registerReplayMaterializer,
   resolveRecording,
   runReplayResolutionWorker,
@@ -39,12 +40,15 @@ beforeAll(async () => {
     return;
   }
 
-  const [station] = await db.insert(stationsTable).values({
-    slug,
-    name: `Replay resolution station ${run}`,
-    streamUrl: "http://example.invalid/replay-resolution",
-    stationClass: "curated",
-  }).returning({ id: stationsTable.id });
+  const [station] = await db
+    .insert(stationsTable)
+    .values({
+      slug,
+      name: `Replay resolution station ${run}`,
+      streamUrl: "http://example.invalid/replay-resolution",
+      stationClass: "curated",
+    })
+    .returning({ id: stationsTable.id });
   stationId = station!.id;
   await db.insert(recordingsTable).values({
     mbid,
@@ -286,7 +290,6 @@ describe("Ghost Replay resolution negative-cache", () => {
     expect(missRow!.missedAt).toBeInstanceOf(Date);
 
     // The 1-hour TTL must block the second call — Odesli should not be hit again.
-    // (The cached miss short-circuits with "missing" since TTL is still active.)
     odesliThrows.mockClear();
     const second = await resolveRecording(networkErrorMbid, {
       title: "Network Error Track",
@@ -332,10 +335,9 @@ describe("Ghost Replay resolution negative-cache", () => {
   it("calls Odesli again once the miss row is older than 30 days", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
 
-    // Plant a stale miss row (31 days old) for expiredMbid.
-    const staleDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
     await upsertServiceTrackMapMiss(expiredMbid, "no_links");
-    // Backdate missedAt so it falls outside the 30-day TTL window.
+    // Backdate the missedAt so it falls outside the 30-day window.
+    const staleDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
     await db
       .update(serviceTrackMapTable)
       .set({ missedAt: staleDate, updatedAt: staleDate })
@@ -413,7 +415,7 @@ describe("Ghost Replay resolution negative-cache", () => {
     expect(outcome).toBe("resolved");
 
     // The odesli sentinel (no_links miss) must be gone — deleted by upsertServiceTrackMap.
-    const [sentinelRow] = await db
+    const [sentinelAfter] = await db
       .select()
       .from(serviceTrackMapTable)
       .where(
@@ -423,7 +425,7 @@ describe("Ghost Replay resolution negative-cache", () => {
         ),
       )
       .limit(1);
-    expect(sentinelRow).toBeUndefined();
+    expect(sentinelAfter).toBeUndefined();
 
     // A spotify row with missReason = null must exist.
     const [spotifyRow] = await db
@@ -557,7 +559,7 @@ describe("Ghost Replay resolution rank-guard", () => {
     expect(row!.confidence).toBe("exact");
   });
 
-  it("does overwrite a low-rank row (odesli/search) with an equal-or-higher-rank one (recording_id/exact)", async (ctx) => {
+  it("does overwrite a low-rank row (odesli/search) with a higher-rank one (recording_id/exact)", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
 
     // Seed a weak row: method=odesli, confidence=search → rank 10.
@@ -835,5 +837,153 @@ describe("Ghost Replay resolution worker — network-error counting", () => {
     expect(finished?.missing).toBeGreaterThanOrEqual(1);
 
     vi.unstubAllGlobals();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Dead-link revival
+// ---------------------------------------------------------------------------
+
+describe("Ghost Replay resolution dead-link revival", () => {
+  const dlRun = randomUUID().slice(0, 8);
+  // Two MBIDs: one for the equal-rank revival, one for the higher-rank revival.
+  const deadHighMbid = `test-rr-dead-high-${dlRun}`;
+  const deadLowMbid = `test-rr-dead-low-${dlRun}`;
+
+  beforeAll(async () => {
+    if (!dbAvailable) return;
+    await db.insert(recordingsTable).values([
+      { mbid: deadHighMbid, title: "Dead High Rank Track", artist: "Dead High Artist" },
+      { mbid: deadLowMbid, title: "Dead Low Rank Track", artist: "Dead Low Artist" },
+    ]);
+  });
+
+  afterAll(async () => {
+    if (!dbAvailable) return;
+    await db.delete(serviceTrackMapTable).where(
+      inArray(serviceTrackMapTable.recordingMbid, [deadHighMbid, deadLowMbid]),
+    );
+    await db.delete(recordingsTable).where(
+      inArray(recordingsTable.mbid, [deadHighMbid, deadLowMbid]),
+    );
+  });
+
+  it("revives a dead row when an equal-rank (recording_id/exact) hit arrives and stores the new URL", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // Seed a live row, then mark it dead.
+    await upsertServiceTrackMap({
+      recordingMbid: deadHighMbid,
+      service: "spotify",
+      externalId: "DeadHighOld",
+      url: "https://open.spotify.com/track/DeadHighOld",
+      method: "recording_id",
+      confidence: "exact",
+      verification: "verified",
+    });
+    await markServiceTrackMapDead(deadHighMbid, "spotify");
+
+    // Confirm the row is dead.
+    const [deadRow] = await db
+      .select()
+      .from(serviceTrackMapTable)
+      .where(
+        and(
+          eq(serviceTrackMapTable.recordingMbid, deadHighMbid),
+          eq(serviceTrackMapTable.service, "spotify"),
+        ),
+      )
+      .limit(1);
+    expect(deadRow!.deadLink).toBe(true);
+    expect(deadRow!.deadAt).toBeInstanceOf(Date);
+
+    // Now call upsertServiceTrackMap with an equal-rank incoming row.
+    // The rank guard checks `existing > incoming` (strictly greater), so equal
+    // rank must NOT block the update — the dead flag must be cleared.
+    await upsertServiceTrackMap({
+      recordingMbid: deadHighMbid,
+      service: "spotify",
+      externalId: "DeadHighNew",
+      url: "https://open.spotify.com/track/DeadHighNew",
+      method: "recording_id",
+      confidence: "exact",
+      verification: "verified",
+    });
+
+    const [revivedRow] = await db
+      .select()
+      .from(serviceTrackMapTable)
+      .where(
+        and(
+          eq(serviceTrackMapTable.recordingMbid, deadHighMbid),
+          eq(serviceTrackMapTable.service, "spotify"),
+        ),
+      )
+      .limit(1);
+
+    expect(revivedRow).toBeDefined();
+    expect(revivedRow!.deadLink).toBe(false);
+    expect(revivedRow!.deadAt).toBeNull();
+    expect(revivedRow!.url).toBe("https://open.spotify.com/track/DeadHighNew");
+    expect(revivedRow!.externalId).toBe("DeadHighNew");
+  });
+
+  it("revives a dead low-rank row when a higher-rank (recording_id/exact) hit arrives", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // Seed a low-rank live row (odesli/search → rank 10), then mark it dead.
+    await upsertServiceTrackMap({
+      recordingMbid: deadLowMbid,
+      service: "spotify",
+      externalId: "DeadLowOld",
+      url: "https://open.spotify.com/track/DeadLowOld",
+      method: "odesli",
+      confidence: "search",
+      verification: "unverified",
+    });
+    await markServiceTrackMapDead(deadLowMbid, "spotify");
+
+    // Confirm the row is dead.
+    const [deadRow] = await db
+      .select()
+      .from(serviceTrackMapTable)
+      .where(
+        and(
+          eq(serviceTrackMapTable.recordingMbid, deadLowMbid),
+          eq(serviceTrackMapTable.service, "spotify"),
+        ),
+      )
+      .limit(1);
+    expect(deadRow!.deadLink).toBe(true);
+
+    // Call upsertServiceTrackMap with a higher-rank incoming row
+    // (recording_id/exact → rank 40 > 10).
+    await upsertServiceTrackMap({
+      recordingMbid: deadLowMbid,
+      service: "spotify",
+      externalId: "DeadLowNew",
+      url: "https://open.spotify.com/track/DeadLowNew",
+      method: "recording_id",
+      confidence: "exact",
+      verification: "verified",
+    });
+
+    const [revivedRow] = await db
+      .select()
+      .from(serviceTrackMapTable)
+      .where(
+        and(
+          eq(serviceTrackMapTable.recordingMbid, deadLowMbid),
+          eq(serviceTrackMapTable.service, "spotify"),
+        ),
+      )
+      .limit(1);
+
+    expect(revivedRow).toBeDefined();
+    expect(revivedRow!.deadLink).toBe(false);
+    expect(revivedRow!.deadAt).toBeNull();
+    expect(revivedRow!.url).toBe("https://open.spotify.com/track/DeadLowNew");
+    expect(revivedRow!.method).toBe("recording_id");
+    expect(revivedRow!.confidence).toBe("exact");
   });
 });
