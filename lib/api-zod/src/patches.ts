@@ -34,6 +34,17 @@ export const ReplayResolutionJobResponse = zod.object({
       error: zod.string(),
     }),
   ),
+  /**
+   * Per-reason miss counts for the replay's unresolvable identified tracks.
+   * noVector: MBID present but no ISRC or Spotify URL to query Odesli with.
+   * noLinks: Odesli returned no service links for the track's vector.
+   * noRecording: MBID present but not yet in the recordings table.
+   */
+  missBreakdown: zod.object({
+    noVector: zod.number().int().nonnegative(),
+    noLinks: zod.number().int().nonnegative(),
+    noRecording: zod.number().int().nonnegative(),
+  }),
 });
 
 export {

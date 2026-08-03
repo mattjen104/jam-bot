@@ -12,6 +12,7 @@ import {
   useGetReplayManifest,
 } from "@workspace/api-client-react";
 import { ReplayPlaylistPanel } from "../components/ReplayPlaylistPanel";
+import { ReplayResolutionPanel } from "../components/ReplayResolutionPanel";
 
 /** The canonical, shareable Ghost Replay reconstruction surface. */
 export default function Replay() {
@@ -110,6 +111,8 @@ export default function Replay() {
                 </p>
               </div>
             </section>
+
+            <ReplayResolutionPanel replayId={data.replayId} />
 
             <ReplayPlaylistPanel replayId={data.replayId} />
 

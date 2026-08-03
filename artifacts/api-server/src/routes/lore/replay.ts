@@ -110,7 +110,7 @@ router.get("/replay/jobs/:jobId/stream", h(async (req, res) => {
   return;
 }));
 
-// POST /api/replay/:id/resolve — queue user-initiated materialization. This
+// POST /api/replay/:id/resolve — queue user-initiated Odesli resolution. This
 // does not alter the run's derived manifest, even when a lookup cannot resolve.
 router.post("/replay/:id/resolve", h(async (req, res) => {
   const userId = await replayUserId(req, res);
@@ -209,7 +209,7 @@ router.get("/replay/:id/guided-queue", h(async (req, res) => {
     manifest,
     service,
     maps: maps
-      .filter((map): map is typeof map & { url: string } => map.recordingMbid != null && map.url != null)
+      .filter((map) => map.recordingMbid)
       .map((map) => ({
         recordingMbid: map.recordingMbid,
         service: map.service,
@@ -225,7 +225,7 @@ router.get("/replay/:id/guided-queue", h(async (req, res) => {
       manifest,
       service: serviceName,
       maps: maps
-        .filter((map): map is typeof map & { url: string } => map.service === serviceName && map.url != null)
+        .filter((map) => map.service === serviceName)
         .map((map) => ({
           recordingMbid: map.recordingMbid,
           service: map.service,
@@ -296,7 +296,6 @@ router.get("/replay/:id/export", h(async (req, res) => {
     Array<{ service: string; url: string; deadLink: boolean; confidence: string }>
   >();
   for (const mapping of mappings) {
-    if (mapping.url == null) continue; // embed_miss sentinel — no URL to export
     const current = mappingsByMbid.get(mapping.recordingMbid) ?? [];
     current.push({
       service: mapping.service,

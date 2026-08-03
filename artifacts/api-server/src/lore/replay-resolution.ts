@@ -18,6 +18,11 @@ let odesliJobChain: Promise<unknown> = Promise.resolve();
 
 export const replayResolutionEvents = new EventEmitter();
 
+export type ReplayResolutionMissBreakdown = {
+  noVector: number;
+  noLinks: number;
+  noRecording: number;
+};
 export type ReplayResolutionProgress = {
   id: number;
   replayId: number;
@@ -31,6 +36,7 @@ export type ReplayResolutionProgress = {
   error: string | null;
   finishedAt: string | null;
   failures: ReplayResolutionFailure[];
+  missBreakdown: ReplayResolutionMissBreakdown;
 };
 
 export interface ReplayMaterializer {
@@ -68,9 +74,62 @@ function toProgress(job: ReplayResolutionJob): ReplayResolutionProgress {
     error: job.error,
     finishedAt: job.finishedAt?.toISOString() ?? null,
     failures: job.failures ?? [],
+    // Default zeros; the REST endpoint computes the real breakdown from
+    // serviceTrackMapTable so SSE events (emitJob) keep zero overhead.
+    missBreakdown: { noVector: 0, noLinks: 0, noRecording: 0 },
   };
 }
 
+async function computeMissBreakdown(
+  replayId: number,
+): Promise<ReplayResolutionMissBreakdown> {
+  const manifest = await getReplayManifest(replayId);
+  const mbids = manifest?.entries.flatMap((e) =>
+    e.recording?.mbid ? [e.recording.mbid] : [],
+  ) ?? [];
+  if (!mbids.length) return { noVector: 0, noLinks: 0, noRecording: 0 };
+
+  // Exclude any MBID that now has at least one live exact positive mapping —
+  // the sentinel may still exist on older rows written before the delete-on-
+  // resolve fix landed, so we gate here as a safety net.
+  const resolvedRows = await db
+    .selectDistinct({ recordingMbid: serviceTrackMapTable.recordingMbid })
+    .from(serviceTrackMapTable)
+    .where(
+      and(
+        inArray(serviceTrackMapTable.recordingMbid, mbids),
+        isNotNull(serviceTrackMapTable.url),
+        eq(serviceTrackMapTable.deadLink, false),
+        isNull(serviceTrackMapTable.missReason),
+      ),
+    );
+  const resolvedSet = new Set(resolvedRows.map((r) => r.recordingMbid));
+  const unresolvedMbids = mbids.filter((m) => !resolvedSet.has(m));
+  if (!unresolvedMbids.length) return { noVector: 0, noLinks: 0, noRecording: 0 };
+
+  const rows = await db
+    .select({
+      missReason: serviceTrackMapTable.missReason,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(serviceTrackMapTable)
+    .where(
+      and(
+        inArray(serviceTrackMapTable.recordingMbid, unresolvedMbids),
+        eq(serviceTrackMapTable.service, "odesli"),
+        isNotNull(serviceTrackMapTable.missReason),
+      ),
+    )
+    .groupBy(serviceTrackMapTable.missReason);
+
+  const breakdown: ReplayResolutionMissBreakdown = { noVector: 0, noLinks: 0, noRecording: 0 };
+  for (const row of rows) {
+    if (row.missReason === "no_vector") breakdown.noVector = row.count;
+    else if (row.missReason === "no_links") breakdown.noLinks = row.count;
+    else if (row.missReason === "no_recording") breakdown.noRecording = row.count;
+  }
+  return breakdown;
+}
 async function emitJob(jobId: number): Promise<void> {
   const [job] = await db
     .select()
@@ -94,7 +153,9 @@ export async function getReplayResolutionJob(
       ),
     )
     .limit(1);
-  return job ? toProgress(job) : null;
+  if (!job) return null;
+  const missBreakdown = await computeMissBreakdown(job.replayId);
+  return { ...toProgress(job), missBreakdown };
 }
 
 export async function startReplayResolutionJob(
@@ -249,6 +310,18 @@ export async function upsertServiceTrackMap(input: {
         updatedAt: sql`now()`,
       },
     });
+
+  // A positive service link means the track resolved — delete the odesli
+  // embed-miss sentinel so it no longer appears in missBreakdown.
+  await db
+    .delete(serviceTrackMapTable)
+    .where(
+      and(
+        eq(serviceTrackMapTable.recordingMbid, input.recordingMbid),
+        eq(serviceTrackMapTable.service, "odesli"),
+        isNotNull(serviceTrackMapTable.missReason),
+      ),
+    );
 }
 
 /** 30-day TTL before a hopeless MBID is retried via Odesli. */

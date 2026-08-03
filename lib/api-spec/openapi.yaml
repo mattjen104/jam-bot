@@ -852,6 +852,78 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /replay/{id}/resolve:
+    post:
+      operationId: startReplayResolution
+      tags: [archive]
+      summary: Queue an Odesli resolution job for a Ghost Replay
+      description: >
+        Starts (or resumes) a background job that walks the replay manifest and
+        attempts to resolve each identified track to a streaming-service link via
+        Odesli. Idempotent: if a non-terminal job already exists for the same
+        user and replay, the existing job is returned. Requires a listener session.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "202":
+          description: Job created or resumed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplayResolutionJob"
+        "401":
+          description: Listener session required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Replay not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /replay/jobs/{jobId}:
+    get:
+      operationId: getReplayResolutionJob
+      tags: [archive]
+      summary: Poll a replay resolution job receipt
+      description: >
+        Returns the current state of a resolution job including per-reason miss
+        counts so listeners can see whether gaps are permanent ("not on any
+        streaming service") or temporary ("not yet identified in the archive").
+        Requires a listener session that owns the job.
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Resolution job progress or terminal receipt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplayResolutionJob"
+        "401":
+          description: Listener session required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /replay/materialization-jobs/{jobId}:
     get:
       operationId: getReplayPlaylistMaterialization
@@ -4436,6 +4508,64 @@ components:
         error:
           type: string
       required: [position, spinId, mbid, title, artist, status, retryable]
+    ReplayResolutionMissBreakdown:
+      type: object
+      description: >
+        Per-reason counts for identified tracks that could not be resolved to a
+        streaming-service link. noVector = no ISRC or Spotify URL to query;
+        noLinks = Odesli returned no service links; noRecording = MBID not yet
+        in the recordings table.
+      properties:
+        noVector:
+          type: integer
+        noLinks:
+          type: integer
+        noRecording:
+          type: integer
+      required: [noVector, noLinks, noRecording]
+    ReplayResolutionFailure:
+      type: object
+      properties:
+        position:
+          type: integer
+        spinId:
+          type: integer
+        error:
+          type: string
+      required: [position, spinId, error]
+    ReplayResolutionJob:
+      type: object
+      properties:
+        id:
+          type: integer
+        replayId:
+          type: integer
+        status:
+          type: string
+          enum: [pending, running, done, error]
+        total:
+          type: integer
+        processed:
+          type: integer
+        resolved:
+          type: integer
+        missing:
+          type: integer
+        failed:
+          type: integer
+        committedOffset:
+          type: integer
+        error:
+          type: [string, "null"]
+        finishedAt:
+          type: [string, "null"]
+        failures:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReplayResolutionFailure"
+        missBreakdown:
+          $ref: "#/components/schemas/ReplayResolutionMissBreakdown"
+      required: [id, replayId, status, total, processed, resolved, missing, failed, committedOffset, error, finishedAt, failures, missBreakdown]
     ReplayMaterializationJob:
       type: object
       properties:

@@ -1293,6 +1293,45 @@ export async function startReplayPlaylistConnect(service: ReplayPlaylistTarget["
   }
 }
 
+export interface ReplayResolutionMissBreakdown {
+  noVector: number;
+  noLinks: number;
+  noRecording: number;
+}
+
+export interface ReplayResolutionJob {
+  id: number;
+  replayId: number;
+  status: "pending" | "running" | "done" | "error";
+  total: number;
+  processed: number;
+  resolved: number;
+  missing: number;
+  failed: number;
+  committedOffset: number;
+  error: string | null;
+  finishedAt: string | null;
+  failures: Array<{ position: number; spinId: number; error: string }>;
+  missBreakdown: ReplayResolutionMissBreakdown;
+}
+
+export async function postStartReplayResolution(replayId: number): Promise<ReplayResolutionJob> {
+  return apiFetch<ReplayResolutionJob>(`/api/replay/${replayId}/resolve`, { method: "POST" });
+}
+
+export function useReplayResolutionJob(jobId: number | null) {
+  return useQuery({
+    queryKey: ["replay", "resolution-job", jobId ?? 0] as const,
+    queryFn: () => apiFetch<ReplayResolutionJob>(`/api/replay/jobs/${jobId}`),
+    enabled: jobId != null,
+    refetchInterval: (query) => {
+      const data = query.state.data as ReplayResolutionJob | undefined;
+      return data && (data.status === "done" || data.status === "error") ? false : 2_000;
+    },
+    retry: false,
+  });
+}
+
 export function useReplayMaterializationJob(jobId: number | null) {
   return useQuery({
     queryKey: ["replay", "materialization-job", jobId ?? 0] as const,
