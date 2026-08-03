@@ -240,6 +240,50 @@ describe("heartbeat → counts — happy path (known-duration spin)", () => {
     },
     TEST_TIMEOUT,
   );
+
+  it(
+    "caps a long heartbeat gap at the maximum attendance credit window",
+    async () => {
+      if (!dbAvailable) return;
+
+      const now = new Date();
+
+      // The spin began three minutes ago and is still playing. Without the
+      // bound, a heartbeat after a ten-minute gap would credit ~180 seconds.
+      await db.insert(spinsTable).values({
+        stationId: stationId!,
+        mbid: MBID_KNOWN,
+        confidence: "recording_id",
+        rawTitle: "t",
+        rawArtist: "a",
+        playedAt: new Date(now.getTime() - 180_000),
+      });
+
+      const hb1 = await post("/api/me/attendance/heartbeat", { stationId: stationId! }, SID_MAIN);
+      expect(hb1.status).toBe(200);
+      const { sessionId } = hb1.body as { sessionId: number };
+
+      await db
+        .update(listenSessionsTable)
+        .set({ lastHeartbeatAt: new Date(now.getTime() - 10 * 60_000) })
+        .where(eq(listenSessionsTable.id, sessionId));
+
+      const hb2 = await post("/api/me/attendance/heartbeat", { stationId: stationId! }, SID_MAIN);
+      expect(hb2.status).toBe(200);
+
+      const [row] = await db
+        .select({ dwellSeconds: attendanceTable.dwellSeconds })
+        .from(attendanceTable)
+        .where(eq(attendanceTable.userId, userMainId!));
+
+      // Allow a small amount for request timing, but never permit the old
+      // three-minute overlap to appear.
+      expect(row).toBeDefined();
+      expect(row!.dwellSeconds).toBeGreaterThanOrEqual(118);
+      expect(row!.dwellSeconds).toBeLessThanOrEqual(120);
+    },
+    TEST_TIMEOUT,
+  );
 });
 
 describe("heartbeat → counts — zero-width first heartbeat", () => {
@@ -402,6 +446,46 @@ describe("heartbeat → counts — dwell gate", () => {
         .find((r) => r.mbid === MBID_SHORT);
       // 25 s dwell < 30 s gate → not counted
       expect(entry).toBeUndefined();
+    },
+    TEST_TIMEOUT,
+  );
+
+  it(
+    "does not credit an unknown-duration spin from before the bounded window",
+    async () => {
+      if (!dbAvailable) return;
+
+      const now = new Date();
+
+      // This spin is inside the ten-minute heartbeat gap, but outside the
+      // recent bounded credit window. Unknown-duration spins cannot be
+      // credited unless their start is inside that final window.
+      await db.insert(spinsTable).values({
+        stationId: stationId!,
+        mbid: MBID_NODUR,
+        confidence: "text",
+        rawTitle: "t",
+        rawArtist: "a",
+        playedAt: new Date(now.getTime() - 180_000),
+      });
+
+      const hb1 = await post("/api/me/attendance/heartbeat", { stationId: stationId! }, SID_NODUR);
+      expect(hb1.status).toBe(200);
+      const { sessionId } = hb1.body as { sessionId: number };
+
+      await db
+        .update(listenSessionsTable)
+        .set({ lastHeartbeatAt: new Date(now.getTime() - 10 * 60_000) })
+        .where(eq(listenSessionsTable.id, sessionId));
+
+      const hb2 = await post("/api/me/attendance/heartbeat", { stationId: stationId! }, SID_NODUR);
+      expect(hb2.status).toBe(200);
+
+      const rows = await db
+        .select({ id: attendanceTable.id })
+        .from(attendanceTable)
+        .where(eq(attendanceTable.userId, userNodurId!));
+      expect(rows).toHaveLength(0);
     },
     TEST_TIMEOUT,
   );

@@ -21,6 +21,14 @@ const router: IRouter = Router();
 const SESSION_EXPIRY_MS = 4 * 60 * 60 * 1000; // 4 hours
 
 /**
+ * Maximum amount of time a single heartbeat may credit as continuous
+ * listening. The web player normally heartbeats every 45 seconds, but a
+ * delayed request, paused tab, or stalled playback must not turn the whole
+ * gap into attendance.
+ */
+export const MAX_ATTENDANCE_CREDIT_WINDOW_MS = 2 * 60 * 1000; // 2 minutes
+
+/**
  * Dwell gate: the user must have overlapped a spin for at least this many
  * seconds OR 50% of the spin's duration (whichever is lower) to earn an
  * attendance row.  Sub-threshold overlaps are discarded entirely.
@@ -119,20 +127,24 @@ router.post("/me/attendance/heartbeat", h(async (req, res) => {
 
   // --- 2. Dwell computation (guarded by feature flag) ---
   //
-  // Incremental window [prevHeartbeatAt, now]: only the interval between the
-  // previous confirmed heartbeat and this one counts as verified listening.
-  // Pauses, tab hides, and station switches all create gaps that are simply
-  // never covered by a heartbeat window, so those periods are never credited.
+  // Incremental, bounded window: only a recent interval between the previous
+  // confirmed heartbeat and this one counts as verified listening. Pauses, tab
+  // hides, and station switches cannot make an arbitrarily long gap eligible.
   if (isDedupConfirmed()) {
-    const windowStartMs = prevHeartbeatAt.getTime();
     const windowEndMs = now.getTime();
+    // Clamp before querying spins or calculating overlap. The heartbeat
+    // timestamp remains the high-water mark for idempotency.
+    const windowStartMs = Math.max(
+      prevHeartbeatAt.getTime(),
+      windowEndMs - MAX_ATTENDANCE_CREDIT_WINDOW_MS,
+    );
 
     // Zero-width window (first heartbeat of a new session) — nothing to credit.
     if (windowEndMs <= windowStartMs) {
       return res.json({ sessionId });
     }
 
-    const windowStart = prevHeartbeatAt;
+    const windowStart = new Date(windowStartMs);
 
     // Fetch spins that could overlap the incremental window:
     //  • Known-duration spins: started before window ends AND ended after window starts
