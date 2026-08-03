@@ -49,7 +49,17 @@ export function GuidedReplayPanel({
   entries: ReplayEntry[];
   label: string;
 }) {
-  const [service, setService] = useState<GuidedService>("bandcamp");
+  const [service, setService] = useState<GuidedService>(() => {
+    try {
+      const stored = localStorage.getItem("lore:guided-replay-service");
+      if (stored && GUIDED_SERVICE_OPTIONS.some((o) => o.service === stored)) {
+        return stored as GuidedService;
+      }
+    } catch {
+      // localStorage unavailable (e.g. SSR or private browsing with storage blocked)
+    }
+    return "bandcamp";
+  });
   const [active, setActive] = useState(false);
   const [playableIndex, setPlayableIndex] = useState(0);
   const [embedState, setEmbedState] = useState<"loading" | "ready" | "error">("loading");
@@ -58,6 +68,14 @@ export function GuidedReplayPanel({
   const guide = useMemo(() => materialize(entries, service), [entries, service]);
   const current = guide.playable[playableIndex] ?? null;
   const isEmbed = current?.source != null && !current.source.externalOnly;
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("lore:guided-replay-service", service);
+    } catch {
+      // localStorage unavailable
+    }
+  }, [service]);
 
   useEffect(() => {
     setPlayableIndex(0);
