@@ -262,7 +262,20 @@ describe("GET /api/replay/:id", () => {
     expect(response.status).toBe(200);
     const html = await response.text();
     expect(html).toContain(`Ghost Replay of 2 tracks as they aired on Replay Station ${run}`);
+    expect(html).toContain(`Replay Station ${run}`);
+    expect(html).toContain(`Replay DJ ${run}`);
+    expect(html).toContain("Unresolved Replay Track");
+    expect(html).toContain(base.toISOString().slice(0, 10));
+    expect(html).toContain(`${baseUrl}/api/share/replays/${anchorId}/card.png`);
     expect(html).toContain(`location.replace("/lore/replay/${anchorId}")`);
     expect(html).toContain(`og:image`);
+
+    const cardResponse = await fetch(`${baseUrl}/api/share/replays/${anchorId}/card.png`);
+    expect(cardResponse.status).toBe(200);
+    expect(cardResponse.headers.get("content-type")).toContain("image/png");
+    expect(cardResponse.headers.get("cache-control")).toBe("public, max-age=3600");
+    expect(new Uint8Array(await cardResponse.arrayBuffer()).slice(0, 8)).toEqual(
+      new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    );
   });
 });

@@ -10,6 +10,8 @@ import {
   _odesliArtistMatches,
   _odesliTitleMatches,
   _odesliConfidenceCheck,
+  buildReplayCardTracks,
+  renderShareCardPng,
   type SharePayload,
 } from "../src/lore/share.js";
 
@@ -146,6 +148,121 @@ describe("share HTML", () => {
 
   it("derives the SPA base path from env with default /lore", () => {
     expect(loreBasePath()).toBe("/lore");
+  });
+});
+
+describe("replay share postcard data", () => {
+  it("keeps broadcast order, marks unresolved rows, and bounds long text", () => {
+    const tracks = buildReplayCardTracks([
+      {
+        position: 2,
+        spinId: 3,
+        rawArtist: "ignored",
+        rawTitle: "ignored",
+        recording: { artist: "Resolved Artist", title: "Resolved Title" },
+      },
+      {
+        position: 0,
+        spinId: 1,
+        rawArtist: "Gap Artist",
+        rawTitle: "Gap <Title>",
+        recording: null,
+      },
+      {
+        position: 1,
+        spinId: 2,
+        rawArtist: "",
+        rawTitle: "",
+        recording: null,
+      },
+      {
+        position: 3,
+        spinId: 4,
+        rawArtist: "A".repeat(80),
+        rawTitle: "B".repeat(80),
+        recording: null,
+      },
+      {
+        position: 4,
+        spinId: 5,
+        rawArtist: "Five",
+        rawTitle: "Five",
+        recording: null,
+      },
+      {
+        position: 5,
+        spinId: 6,
+        rawArtist: "Not included",
+        rawTitle: "Not included",
+        recording: null,
+      },
+    ]);
+
+    expect(tracks).toHaveLength(5);
+    expect(tracks.map((track) => track.position)).toEqual([0, 1, 2, 3, 4]);
+    expect(tracks[0]).toMatchObject({
+      artist: "Gap Artist",
+      title: "Gap <Title>",
+      resolved: false,
+    });
+    expect(tracks[1]).toMatchObject({
+      artist: "Unresolved artist",
+      title: "Unresolved broadcast moment",
+      resolved: false,
+    });
+    expect(tracks[2]).toMatchObject({
+      artist: "Resolved Artist",
+      title: "Resolved Title",
+      resolved: true,
+    });
+    expect(tracks[3]!.artist.length).toBeLessThanOrEqual(54);
+    expect(tracks[3]!.title.endsWith("…")).toBe(true);
+  });
+
+  it("does not split non-Latin graphemes when truncating track text", () => {
+    const tracks = buildReplayCardTracks([
+      {
+        position: 0,
+        spinId: 1,
+        rawArtist: "界".repeat(60),
+        rawTitle: "🎵".repeat(60),
+        recording: null,
+      },
+    ]);
+
+    expect([...tracks[0]!.artist]).toHaveLength(54);
+    expect(tracks[0]!.artist.endsWith("…")).toBe(true);
+    expect([...tracks[0]!.title]).toHaveLength(54);
+    expect(tracks[0]!.title.endsWith("…")).toBe(true);
+  });
+
+  it("renders a replay card without artwork, including attribution and honest gaps", async () => {
+    const png = await renderShareCardPng({
+      kicker: "Ghost Replay · Station <One>",
+      title: "Station <One>",
+      subtitle: "hosted by Selector · 2026-08-03",
+      footer: "2 tracks · 1 identified · 1 unresolved",
+      replay: {
+        stationName: "Station <One>",
+        attribution: "hosted by Selector",
+        date: "2026-08-03",
+        tracks: [
+          { position: 0, spinId: 1, artist: "Artist", title: "Track", resolved: true },
+          {
+            position: 1,
+            spinId: 2,
+            artist: "Unknown artist",
+            title: "Unknown moment",
+            resolved: false,
+          },
+        ],
+      },
+    });
+
+    expect(png.subarray(0, 8)).toEqual(
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    );
+    expect(png.length).toBeGreaterThan(1_000);
   });
 });
 

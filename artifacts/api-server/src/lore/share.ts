@@ -81,6 +81,72 @@ export interface ShareCard {
   footer: string;
   /** Best-effort square artwork; card renders fine without it. */
   artworkUrl?: string | null;
+  /** Replay-only postcard content. Generic share cards leave this unset. */
+  replay?: ReplayCardData;
+}
+
+export interface ReplayShareTrack {
+  position: number;
+  spinId: number;
+  artist: string;
+  title: string;
+  resolved: boolean;
+}
+
+export interface ReplayCardData {
+  stationName: string;
+  attribution: string | null;
+  date: string;
+  tracks: ReplayShareTrack[];
+}
+
+export type ReplaySharePayload = SharePayload;
+
+const REPLAY_CARD_TRACK_LIMIT = 5;
+const REPLAY_CARD_TEXT_LIMIT = 54;
+
+function boundedCardText(value: string, max = REPLAY_CARD_TEXT_LIMIT): string {
+  const clean = value.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+  const graphemes = [...clean];
+  if (graphemes.length <= max) return clean;
+  return `${graphemes.slice(0, Math.max(1, max - 1)).join("").trimEnd()}…`;
+}
+
+/**
+ * Build the small, ordered excerpt used by replay shares. This deliberately
+ * uses only manifest data: unresolved rows remain visibly unresolved and are
+ * never matched to a nearby recording.
+ */
+export function buildReplayCardTracks(
+  entries: Array<{
+    position: number;
+    spinId: number;
+    rawArtist: string;
+    rawTitle: string;
+    recording: { artist: string; title: string } | null;
+  }>,
+): ReplayShareTrack[] {
+  return entries
+    .slice()
+    .sort((a, b) => a.position - b.position || a.spinId - b.spinId)
+    .slice(0, REPLAY_CARD_TRACK_LIMIT)
+    .map((entry) => {
+      const resolved = entry.recording != null;
+      const recording = entry.recording;
+      const artist = recording
+        ? recording.artist
+        : entry.rawArtist.trim() || "Unresolved artist";
+      const title = recording
+        ? recording.title
+        : entry.rawTitle.trim() || "Unresolved broadcast moment";
+      return {
+        position: entry.position,
+        spinId: entry.spinId,
+        artist: boundedCardText(artist || "Unresolved artist"),
+        title: boundedCardText(title || "Unresolved broadcast moment"),
+        resolved,
+      };
+    });
 }
 
 const dayExpr = sql<string>`to_char(${spinsTable.playedAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`;
@@ -977,24 +1043,51 @@ export async function getStationRunShare(
 }
 
 /** Share payload for the canonical Ghost Replay surface. */
-export async function getReplayShare(id: number): Promise<SharePayload | null> {
+export async function getReplayShare(id: number): Promise<ReplaySharePayload | null> {
   const manifest = await getReplayManifest(id);
   if (!manifest) return null;
 
-  const showLine = manifest.show
-    ? manifest.show.djName
-      ? `${manifest.show.name} · ${manifest.show.djName}`
-      : manifest.show.name
-    : manifest.station.name;
+  const hostName = manifest.show?.djName ?? null;
+  const selectorName = manifest.picker?.name ?? null;
+  const distinctSelectorName =
+    selectorName && selectorName !== hostName ? selectorName : null;
+  const attribution = [
+    distinctSelectorName ? `selected by ${distinctSelectorName}` : null,
+    hostName ? `hosted by ${hostName}` : null,
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join(" · ") || null;
+  const showLine = manifest.show?.name ?? null;
+  const attributionLine = [
+    showLine,
+    hostName ? `hosted by ${hostName}` : null,
+    distinctSelectorName ? `selected by ${distinctSelectorName}` : null,
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join(" · ");
+  const tracks = buildReplayCardTracks(manifest.entries);
+  const trackExcerpt = tracks
+    .map((track) => `${track.artist} — ${track.title}${track.resolved ? "" : " (unresolved)"}`)
+    .join("; ");
+  const description = boundedCardText(
+    `Ghost Replay of ${manifest.coverage.total} tracks as they aired on ${manifest.station.name}${attributionLine ? `, ${attributionLine}` : ""} on ${manifest.bounds.date}: ${manifest.coverage.resolved} identified and ${manifest.coverage.unresolved} unresolved.${trackExcerpt ? ` Lore excerpt: ${trackExcerpt}` : ""}`,
+    360,
+  );
   return {
-    title: `${showLine} — ${manifest.bounds.date} · Lore`,
-    description: `Ghost Replay of ${manifest.coverage.total} tracks as they aired on ${manifest.station.name}: ${manifest.coverage.resolved} identified and ${manifest.coverage.unresolved} still unresolved.`,
+    title: `Ghost Replay at ${manifest.station.name}${attributionLine ? ` · ${attributionLine}` : ""} — ${manifest.bounds.date} · Lore`,
+    description,
     redirectPath: `${loreBasePath()}/replay/${manifest.replayId}`,
     card: {
-      kicker: `Ghost Replay — ${manifest.station.name}`,
-      title: showLine,
-      subtitle: manifest.bounds.date,
-      footer: `${manifest.coverage.total} tracks · ${manifest.coverage.resolved} identified`,
+      kicker: `Ghost Replay · ${manifest.station.name}`,
+      title: manifest.station.name,
+      subtitle: attributionLine ? `${attributionLine} · ${manifest.bounds.date}` : manifest.bounds.date,
+      footer: `${manifest.coverage.total} tracks · ${manifest.coverage.resolved} identified · ${manifest.coverage.unresolved} unresolved`,
+      replay: {
+        stationName: manifest.station.name,
+        attribution,
+        date: manifest.bounds.date,
+        tracks,
+      },
     },
   };
 }
@@ -1331,36 +1424,129 @@ export async function renderShareCardPng(card: ShareCard): Promise<Buffer> {
       ),
     );
   }
-  middleChildren.push(
-    el(
-      "div",
-      { display: "flex", flexDirection: "column", flex: 1, minWidth: 0 },
-      [
-        el(
-          "div",
-          {
-            fontFamily: "PT Serif",
-            fontSize: titleFontSize(card.title),
-            lineHeight: 1.1,
-            color: INK,
-            maxHeight: 240,
-            overflow: "hidden",
-          },
-          card.title,
-        ),
-        el(
-          "div",
-          {
-            fontFamily: "IBM Plex Mono",
-            fontSize: 28,
-            color: MUTED,
-            marginTop: 24,
-          },
-          card.subtitle,
-        ),
-      ],
-    ),
-  );
+  if (card.replay) {
+    const replayRows = card.replay.tracks.map((track) =>
+      el(
+        "div",
+        {
+          display: "flex",
+          flexDirection: "row",
+          gap: 12,
+          width: "100%",
+          marginBottom: 8,
+          color: track.resolved ? INK : MUTED,
+        },
+        [
+          el(
+            "div",
+            {
+              fontFamily: "IBM Plex Mono",
+              fontSize: 17,
+              color: MUTED,
+              width: 28,
+              flexShrink: 0,
+            },
+            `${track.position + 1}.`,
+          ),
+          el(
+            "div",
+            {
+              display: "flex",
+              flexDirection: "column",
+              flex: 1,
+              minWidth: 0,
+              overflow: "hidden",
+            },
+            [
+              el(
+                "div",
+                { fontFamily: "PT Serif", fontSize: 21, lineHeight: 1.1 },
+                track.title,
+              ),
+              el(
+                "div",
+                { fontFamily: "IBM Plex Mono", fontSize: 14, color: MUTED, marginTop: 2 },
+                `${track.artist}${track.resolved ? "" : " · unresolved"}`,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    middleChildren.push(
+      el(
+        "div",
+        { display: "flex", flexDirection: "column", flex: 1, minWidth: 0 },
+        [
+          el(
+            "div",
+            {
+              fontFamily: "PT Serif",
+              fontSize: titleFontSize(card.title),
+              lineHeight: 1.05,
+              color: INK,
+              maxHeight: 100,
+              overflow: "hidden",
+            },
+            card.title,
+          ),
+          el(
+            "div",
+            {
+              fontFamily: "IBM Plex Mono",
+              fontSize: 18,
+              color: MUTED,
+              marginTop: 8,
+              marginBottom: 14,
+            },
+            `${card.replay.attribution ? `${card.replay.attribution} · ` : ""}${card.replay.date}`,
+          ),
+          replayRows.length
+            ? el(
+                "div",
+                { display: "flex", flexDirection: "column", maxHeight: 190, overflow: "hidden" },
+                replayRows,
+              )
+            : el(
+                "div",
+                { fontFamily: "IBM Plex Mono", fontSize: 17, color: MUTED },
+                "No identified broadcast entries",
+              ),
+        ],
+      ),
+    );
+  } else {
+    middleChildren.push(
+      el(
+        "div",
+        { display: "flex", flexDirection: "column", flex: 1, minWidth: 0 },
+        [
+          el(
+            "div",
+            {
+              fontFamily: "PT Serif",
+              fontSize: titleFontSize(card.title),
+              lineHeight: 1.1,
+              color: INK,
+              maxHeight: 240,
+              overflow: "hidden",
+            },
+            card.title,
+          ),
+          el(
+            "div",
+            {
+              fontFamily: "IBM Plex Mono",
+              fontSize: 28,
+              color: MUTED,
+              marginTop: 24,
+            },
+            card.subtitle,
+          ),
+        ],
+      ),
+    );
+  }
 
   const root = el(
     "div",
