@@ -165,8 +165,11 @@ async function fetchOrNull<T>(url: string, options?: RequestInit): Promise<T | n
  *  both in iframe embeds (canvas preview, Replit) and direct browser visits.
  *  The window must be opened synchronously while the browser still has a
  *  trusted user-gesture context — an async gap before window.open causes
- *  mobile browsers (and most desktop ones) to block the popup silently. */
-export async function startSpotifyLibraryConnect(): Promise<void> {
+ *  mobile browsers (and most desktop ones) to block the popup silently.
+ *
+ *  Returns the opened Window handle so the caller can poll for close/success.
+ *  Returns null if window.open was blocked. */
+export async function startSpotifyLibraryConnect(): Promise<Window | null> {
   // Open a blank tab immediately (synchronous, still within the gesture).
   // NOTE: do NOT pass "noopener" — it causes window.open() to return null,
   // which means we can never navigate the popup to the auth URL.
@@ -176,6 +179,7 @@ export async function startSpotifyLibraryConnect(): Promise<void> {
       method: "POST",
     });
     if (win) win.location.href = res.url;
+    return win;
   } catch (err) {
     // If the fetch fails close the blank tab so the user isn't left with one.
     if (win) win.close();

@@ -10,6 +10,7 @@ import {
   useMyConnections,
   useLatestImportJob,
   ME_LATEST_IMPORT_JOB_KEY,
+  ME_CONNECTIONS_KEY,
 } from "../lib/meHooks";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -334,6 +335,8 @@ export function ManualImportModal({ onClose, onImportStarted, initialService }: 
   const [images, setImages] = useState<ScreenshotImage[]>([]);
   const [reviewTracks, setReviewTracks] = useState<ReviewTrack[]>([]);
   const [imageBusy, setImageBusy] = useState(false);
+  /** True while we're waiting for the Spotify OAuth tab to complete. */
+  const [spotifyOAuthWaiting, setSpotifyOAuthWaiting] = useState(false);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const imageRef = useRef<HTMLInputElement>(null);
@@ -341,6 +344,8 @@ export function ManualImportModal({ onClose, onImportStarted, initialService }: 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lbInputRef = useRef<HTMLInputElement>(null);
   const lfmInputRef = useRef<HTMLInputElement>(null);
+  /** Handle to the OAuth tab so we can detect when it closes. */
+  const oauthWindowRef = useRef<Window | null>(null);
 
   const qc = useQueryClient();
   const { data: connections } = useMyConnections();
@@ -386,14 +391,77 @@ export function ManualImportModal({ onClose, onImportStarted, initialService }: 
         setSubmitting(false);
       }
     } else {
+      setError(null);
       try {
-        await startSpotifyLibraryConnect();
-        onClose();
+        const win = await startSpotifyLibraryConnect();
+        oauthWindowRef.current = win;
+        setSpotifyOAuthWaiting(true);
+        // Modal stays open — polling effect below watches the tab and connections.
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not connect to Spotify.");
       }
     }
   };
+
+  // ── OAuth tab watcher ────────────────────────────────────────────────────
+
+  // Poll while the OAuth tab is open: re-fetch connections every 1.5 s.
+  // When the tab closes (or times out), do a definitive fresh fetch before
+  // deciding success/failure to avoid a stale-cache false negative.
+  useEffect(() => {
+    if (!spotifyOAuthWaiting) return;
+
+    const POLL_INTERVAL_MS = 1500;
+    const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+    const startedAt = Date.now();
+    let stopped = false;
+
+    const tick = async () => {
+      if (stopped) return;
+
+      const win = oauthWindowRef.current;
+      const elapsed = Date.now() - startedAt;
+
+      const timedOut = elapsed > TIMEOUT_MS;
+      const windowClosed = win == null || win.closed;
+
+      if (windowClosed || timedOut) {
+        stopped = true;
+        clearInterval(interval);
+        if (win && !win.closed) win.close();
+        oauthWindowRef.current = null;
+        setSpotifyOAuthWaiting(false);
+
+        // Await a definitive fresh fetch so we don't read a stale pre-connect
+        // snapshot. invalidateQueries is async (fire-and-forget), so calling
+        // getQueryData immediately after would race; refetchQueries awaits the
+        // network response before returning.
+        try {
+          await qc.refetchQueries({ queryKey: ME_CONNECTIONS_KEY });
+        } catch { /* network error during check — treat as unresolved */ }
+
+        const fresh = qc.getQueryData<{ service: string }[] | null>(ME_CONNECTIONS_KEY);
+        const connected = Array.isArray(fresh) && fresh.some((c) => c.service === "spotify");
+        if (!connected) {
+          setError(
+            timedOut
+              ? "The connection request timed out — try again."
+              : "Spotify wasn't connected. Did you approve the request?",
+          );
+        }
+        // If connected, hasSpotify becomes true naturally via the query; the
+        // button label flips to "Import saved tracks" with no extra action needed.
+      } else {
+        // Keep connections fresh so hasSpotify updates automatically during polling.
+        void qc.invalidateQueries({ queryKey: ME_CONNECTIONS_KEY });
+      }
+    };
+
+    const interval = setInterval(() => { void tick(); }, POLL_INTERVAL_MS);
+
+    return () => { stopped = true; clearInterval(interval); };
+  }, [spotifyOAuthWaiting, qc]);
 
   const handleServiceTileClick = (id: ServiceId) => {
     setError(null);
@@ -769,13 +837,19 @@ export function ManualImportModal({ onClose, onImportStarted, initialService }: 
                 {error && mode === "service-guide" && (
                   <p className="font-mono text-[11px] text-destructive">{error}</p>
                 )}
+                {spotifyOAuthWaiting && (
+                  <p className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
+                    <Loader2 size={11} className="animate-spin shrink-0" aria-hidden />
+                    Waiting for Spotify authorization in the other tab…
+                  </p>
+                )}
                 <button
                   type="button"
-                  disabled={submitting}
+                  disabled={submitting || spotifyOAuthWaiting}
                   onClick={() => void handleSpotifyDirectImport()}
                   className="self-start rounded-full border border-primary bg-primary px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-primary-foreground disabled:opacity-40"
                 >
-                  {submitting ? "Starting…" : hasSpotify ? "Import saved tracks" : "Connect Spotify"}
+                  {submitting ? "Starting…" : spotifyOAuthWaiting ? "Waiting for Spotify…" : hasSpotify ? "Import saved tracks" : "Connect Spotify"}
                 </button>
               </div>
 
