@@ -12,6 +12,7 @@ import {
 } from "@workspace/db";
 import {
   canonicalReplayService,
+  computeMissBreakdownFromMbids,
   getReplayMaterializer,
   registerReplayMaterializer,
   resolveRecording,
@@ -123,6 +124,7 @@ describe("Ghost Replay resolution negative-cache", () => {
   const noVectorMbid = `test-rr-no-vector-${ncRun}`;
   const expiredMbid = `test-rr-expired-${ncRun}`;
   const networkErrorMbid = `test-rr-net-error-${ncRun}`;
+  const revivedMbid = `test-rr-revived-${ncRun}`;
 
   beforeAll(async () => {
     if (!dbAvailable) return;
@@ -150,6 +152,7 @@ describe("Ghost Replay resolution negative-cache", () => {
   it("writes a no_links miss row and skips Odesli on the second call", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
 
+    // noLinksMbid has an ISRC so there is a vector; Odesli returns no links.
     const odesliEmpty = vi.fn(async () =>
       new Response(JSON.stringify({ linksByPlatform: {}, entitiesByUniqueId: {} }), {
         status: 200,
@@ -158,38 +161,37 @@ describe("Ghost Replay resolution negative-cache", () => {
     );
     vi.stubGlobal("fetch", odesliEmpty);
 
-    // First call — Odesli returns no links → should record a no_links miss.
-    const first = await resolveRecording(networkErrorMbid, {
-      title: "Network Error Track",
-      artist: "Network Error Artist",
-      isrc: "USNE11223344",
+    // First call — Odesli returns no platform links → should record a no_links miss.
+    const first = await resolveRecording(noLinksMbid, {
+      title: "No Links Track",
+      artist: "No Links Artist",
+      isrc: "USNC12345678",
       links: null,
     });
-    expect(first).toBe("network_error");
-    expect(odesliThrows).toHaveBeenCalledTimes(1);
+    expect(first).toBe("missing");
+    expect(odesliEmpty).toHaveBeenCalledTimes(1);
 
-    // A miss row with reason "network_error" must have been written.
+    // A miss row with reason "no_links" must have been written.
     const [missRow] = await db
       .select()
       .from(serviceTrackMapTable)
       .where(
         and(
-          eq(serviceTrackMapTable.recordingMbid, networkErrorMbid),
+          eq(serviceTrackMapTable.recordingMbid, noLinksMbid),
           eq(serviceTrackMapTable.service, "odesli"),
         ),
       )
       .limit(1);
     expect(missRow).toBeDefined();
-    expect(missRow!.missReason).toBe("network_error");
+    expect(missRow!.missReason).toBe("no_links");
     expect(missRow!.missedAt).toBeInstanceOf(Date);
 
-    // The 1-hour TTL must block the second call — Odesli should not be hit again.
-    // (The cached miss short-circuits with "missing" since TTL is still active.)
-    odesliThrows.mockClear();
-    const second = await resolveRecording(networkErrorMbid, {
-      title: "Network Error Track",
-      artist: "Network Error Artist",
-      isrc: "USNE11223344",
+    // The 30-day TTL must block the second call — Odesli should not be hit again.
+    odesliEmpty.mockClear();
+    const second = await resolveRecording(noLinksMbid, {
+      title: "No Links Track",
+      artist: "No Links Artist",
+      isrc: "USNC12345678",
       links: null,
     });
     expect(second).toBe("missing");
@@ -201,37 +203,36 @@ describe("Ghost Replay resolution negative-cache", () => {
   it("writes a no_vector miss row without ever calling Odesli", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
 
+    // noVectorMbid has isrc=null and links=[] — there is no vector to query
+    // Odesli with, so the resolver must short-circuit and write a no_vector miss.
     const odesliSpy = vi.fn(async () =>
       new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }),
     );
     vi.stubGlobal("fetch", odesliSpy);
 
-    // noVectorMbid has isrc=null and links=[] — nothing to query Odesli with.
-    const result = await resolveRecording(expiredMbid, {
-      title: "Expired Miss Track",
-      artist: "Expired Miss Artist",
-      isrc: "USXX98765432",
-      links: null,
+    const result = await resolveRecording(noVectorMbid, {
+      title: "No Vector Track",
+      artist: "No Vector Artist",
+      isrc: null,
+      links: [],
     });
-
-    const fetchMock = vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          entitiesByUniqueId: {
-            spotify: { id: "ReplayTrack001", apiProvider: "spotify" },
-            apple: { id: "123456", apiProvider: "appleMusic" },
-          },
-          linksByPlatform: {
-            spotify: { url: "https://open.spotify.com/track/ReplayTrack001" },
-            appleMusic: { url: "https://music.apple.com/us/album/replay/123456?i=654321" },
-          },
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
-    );
     expect(result).toBe("missing");
-    // Odesli should have been called again now that the miss is stale.
-    expect(odesliRetry).toHaveBeenCalledTimes(1);
+    // Odesli must never have been contacted — no vector to query with.
+    expect(odesliSpy).not.toHaveBeenCalled();
+
+    const [missRow] = await db
+      .select()
+      .from(serviceTrackMapTable)
+      .where(
+        and(
+          eq(serviceTrackMapTable.recordingMbid, noVectorMbid),
+          eq(serviceTrackMapTable.service, "odesli"),
+        ),
+      )
+      .limit(1);
+    expect(missRow).toBeDefined();
+    expect(missRow!.missReason).toBe("no_vector");
+    expect(missRow!.missedAt).toBeInstanceOf(Date);
 
     vi.unstubAllGlobals();
   });
@@ -241,28 +242,6 @@ describe("Ghost Replay resolution negative-cache", () => {
 
     // Seed a miss sentinel for revivedMbid.
     await upsertServiceTrackMapMiss(revivedMbid, "no_links");
-    const [sentinel] = await db
-      .select()
-      .from(serviceTrackMapTable)
-      .where(
-        and(
-          eq(serviceTrackMapTable.recordingMbid, revivedMbid),
-          eq(serviceTrackMapTable.service, "odesli"),
-        ),
-      )
-      .limit(1);
-
-    const [sentinel] = await db
-      .select()
-      .from(serviceTrackMapTable)
-      .where(
-        and(
-          eq(serviceTrackMapTable.recordingMbid, revivedMbid),
-          eq(serviceTrackMapTable.service, "odesli"),
-        ),
-      )
-      .limit(1);
-
     const [sentinelRow] = await db
       .select()
       .from(serviceTrackMapTable)
@@ -273,20 +252,8 @@ describe("Ghost Replay resolution negative-cache", () => {
         ),
       )
       .limit(1);
-
-    const [missRow] = await db
-      .select()
-      .from(serviceTrackMapTable)
-      .where(
-        and(
-          eq(serviceTrackMapTable.recordingMbid, networkErrorMbid),
-          eq(serviceTrackMapTable.service, "odesli"),
-        ),
-      )
-      .limit(1);
-    expect(missRow).toBeDefined();
-    expect(missRow!.missReason).toBe("no_vector");
-    expect(missRow!.missedAt).toBeInstanceOf(Date);
+    expect(sentinelRow).toBeDefined();
+    expect(sentinelRow!.missReason).toBe("no_links");
 
     vi.unstubAllGlobals();
   });
@@ -371,24 +338,10 @@ describe("Ghost Replay resolution negative-cache", () => {
   it("calls Odesli again once the miss row is older than 30 days", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
 
-    // Plant a stale miss row (31 days old) for expiredMbid directly.
-    const staleDate = new Date(Date.now() - 2 * 60 * 60 * 1000); // 2 hours ago
-
-    const odesliHit = vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          entitiesByUniqueId: {
-            "spotify:track:RevivedTrack001": { id: "RevivedTrack001", apiProvider: "spotify" },
-          },
-          linksByPlatform: {
-            spotify: { url: "https://open.spotify.com/track/RevivedTrack001" },
-          },
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
-    );
+    // Plant a stale miss row (31 days old) for expiredMbid.
+    const staleDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000); // 31 days ago
     await upsertServiceTrackMapMiss(expiredMbid, "no_links");
-    // Backdate the missedAt so it falls outside the 30-day window.
+    // Backdate missedAt so it falls outside the 30-day TTL window.
     await db
       .update(serviceTrackMapTable)
       .set({ missedAt: staleDate, updatedAt: staleDate })
@@ -399,6 +352,8 @@ describe("Ghost Replay resolution negative-cache", () => {
         ),
       );
 
+    // expiredMbid has ISRC "USXX98765432" — there is a vector to query with.
+    // Odesli returns no links this time (still missing, but a new retry was made).
     const odesliRetry = vi.fn(async () =>
       new Response(JSON.stringify({ linksByPlatform: {}, entitiesByUniqueId: {} }), {
         status: 200,
@@ -407,31 +362,14 @@ describe("Ghost Replay resolution negative-cache", () => {
     );
     vi.stubGlobal("fetch", odesliRetry);
 
-    // expiredMbid has ISRC "USXX98765432" — there is a vector to query.
     const result = await resolveRecording(expiredMbid, {
       title: "Expired Miss Track",
       artist: "Expired Miss Artist",
       isrc: "USXX98765432",
       links: null,
     });
-
-    const fetchMock = vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          entitiesByUniqueId: {
-            spotify: { id: "ReplayTrack001", apiProvider: "spotify" },
-            apple: { id: "123456", apiProvider: "appleMusic" },
-          },
-          linksByPlatform: {
-            spotify: { url: "https://open.spotify.com/track/ReplayTrack001" },
-            appleMusic: { url: "https://music.apple.com/us/album/replay/123456?i=654321" },
-          },
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
-    );
     expect(result).toBe("missing");
-    // Odesli should have been called again now that the miss is stale.
+    // Odesli must have been called — the miss row was outside the 30-day window.
     expect(odesliRetry).toHaveBeenCalledTimes(1);
 
     vi.unstubAllGlobals();
@@ -442,28 +380,6 @@ describe("Ghost Replay resolution negative-cache", () => {
 
     // Seed a miss sentinel for revivedMbid.
     await upsertServiceTrackMapMiss(revivedMbid, "no_links");
-    const [sentinel] = await db
-      .select()
-      .from(serviceTrackMapTable)
-      .where(
-        and(
-          eq(serviceTrackMapTable.recordingMbid, revivedMbid),
-          eq(serviceTrackMapTable.service, "odesli"),
-        ),
-      )
-      .limit(1);
-
-    const [sentinel] = await db
-      .select()
-      .from(serviceTrackMapTable)
-      .where(
-        and(
-          eq(serviceTrackMapTable.recordingMbid, revivedMbid),
-          eq(serviceTrackMapTable.service, "odesli"),
-        ),
-      )
-      .limit(1);
-
     const [sentinelRow] = await db
       .select()
       .from(serviceTrackMapTable)
@@ -474,44 +390,37 @@ describe("Ghost Replay resolution negative-cache", () => {
         ),
       )
       .limit(1);
+    expect(sentinelRow).toBeDefined();
+    expect(sentinelRow!.missReason).toBe("no_links");
 
-    const [job] = await db
-      .insert(replayResolutionJobsTable)
-      .values({
-        userId: (
-          await db
-            .select({ id: sql<number>`min(id)` })
-            .from((await import("@workspace/db")).loreUsersTable)
-        )[0]!.id,
-        replayId: resolvedSpinId,
-        total: 2,
-      })
-      .returning();
-    await runReplayResolutionWorker(job!.id);
-
-    const [finished] = await db
-      .select()
-      .from(replayResolutionJobsTable)
-      .where(eq(replayResolutionJobsTable.id, job!.id));
-    // One spin has an mbid (resolved via Odesli), one has mbid=null (missing).
-    // No network errors occurred — networkErrors must be 0.
-    expect(finished).toMatchObject({
-      status: "done",
-      processed: 2,
-      resolved: 1,
-      missing: 1,
-      networkErrors: 0,
+    // Writing a positive service link must delete the sentinel.
+    await upsertServiceTrackMap({
+      recordingMbid: revivedMbid,
+      service: "spotify",
+      externalId: "RevivedTrack001",
+      url: "https://open.spotify.com/track/RevivedTrack001",
+      method: "odesli",
+      confidence: "exact",
+      verification: "verified",
     });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    const maps = await db
+    const [afterSentinel] = await db
       .select()
       .from(serviceTrackMapTable)
-      .where(eq(serviceTrackMapTable.recordingMbid, mbid));
+      .where(
+        and(
+          eq(serviceTrackMapTable.recordingMbid, revivedMbid),
+          eq(serviceTrackMapTable.service, "odesli"),
+        ),
+      )
+      .limit(1);
+    expect(afterSentinel).toBeUndefined();
 
-    const fetchThrows = vi.fn(async () => {
-      throw new TypeError("fetch failed — Odesli unreachable");
-    });
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("Ghost Replay resolution rank-guard", () => {
   const rgRun = randomUUID().slice(0, 8);
   const strongMbid = `test-rr-rank-strong-${rgRun}`;
   const weakMbid = `test-rr-rank-weak-${rgRun}`;
@@ -564,7 +473,7 @@ describe("Ghost Replay resolution negative-cache", () => {
       .from(serviceTrackMapTable)
       .where(
         and(
-          eq(serviceTrackMapTable.recordingMbid, weakMbid),
+          eq(serviceTrackMapTable.recordingMbid, strongMbid),
           eq(serviceTrackMapTable.service, "spotify"),
         ),
       )
@@ -619,13 +528,66 @@ describe("Ghost Replay resolution negative-cache", () => {
   });
 });
 
-    const [afterSentinel] = await db
-      .select()
-      .from(serviceTrackMapTable)
-      .where(
-        and(
-          eq(serviceTrackMapTable.recordingMbid, revivedMbid),
-          eq(serviceTrackMapTable.service, "odesli"),
-        ),
-      )
-      .limit(1);
+describe("Ghost Replay resolution miss-breakdown safety-net", () => {
+  const mbsRun = randomUUID().slice(0, 8);
+  const legacySentinelMbid = `test-rr-sentinel-pos-${mbsRun}`;
+  const genuineMissMbid = `test-rr-genuine-miss-${mbsRun}`;
+
+  beforeAll(async () => {
+    if (!dbAvailable) return;
+    await db.insert(recordingsTable).values([
+      { mbid: legacySentinelMbid, title: "Legacy Sentinel Track", artist: "Legacy Artist" },
+      { mbid: genuineMissMbid, title: "Genuine Miss Track", artist: "Genuine Miss Artist" },
+    ]);
+  });
+
+  afterAll(async () => {
+    if (!dbAvailable) return;
+    await db.delete(serviceTrackMapTable).where(
+      inArray(serviceTrackMapTable.recordingMbid, [legacySentinelMbid, genuineMissMbid]),
+    );
+    await db.delete(recordingsTable).where(
+      inArray(recordingsTable.mbid, [legacySentinelMbid, genuineMissMbid]),
+    );
+  });
+
+  it("excludes an MBID from miss counts when a live positive mapping coexists with a legacy sentinel row", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // Seed a legacy odesli sentinel row for legacySentinelMbid — the kind
+    // written before the delete-on-resolve fix landed, which a race or rollback
+    // might also leave behind.
+    await upsertServiceTrackMapMiss(legacySentinelMbid, "no_links");
+
+    // Seed a live positive service mapping for the same MBID, simulating a
+    // later successful resolution that did not clean up the old sentinel.
+    // Insert directly to bypass upsertServiceTrackMap's delete-sentinel step,
+    // which is exactly the legacy scenario we want to exercise.
+    await db
+      .insert(serviceTrackMapTable)
+      .values({
+        recordingMbid: legacySentinelMbid,
+        service: "spotify",
+        externalId: "LegacySentinelTrack001",
+        url: "https://open.spotify.com/track/LegacySentinelTrack001",
+        method: "odesli",
+        confidence: "exact",
+        verification: "verified",
+        deadLink: false,
+        missReason: null,
+      })
+      .onConflictDoNothing();
+
+    // Seed a genuinely unresolved MBID — only a sentinel row, no positive map.
+    await upsertServiceTrackMapMiss(genuineMissMbid, "no_links");
+
+    // computeMissBreakdownFromMbids receives both MBIDs as if they came from
+    // a replay manifest.  The safety-net must exclude legacySentinelMbid
+    // because a live positive row exists; only genuineMissMbid should count.
+    const breakdown = await computeMissBreakdownFromMbids([legacySentinelMbid, genuineMissMbid]);
+
+    expect(breakdown.noLinks).toBe(1);   // only genuineMissMbid
+    expect(breakdown.noVector).toBe(0);
+    expect(breakdown.noRecording).toBe(0);
+  });
+});

@@ -123,20 +123,21 @@ function toProgress(job: ReplayResolutionJob): ReplayResolutionProgress {
   };
 }
 
-async function computeMissBreakdown(
-  replayId: number,
+/**
+ * Core miss-breakdown query given an explicit list of MBIDs from a replay
+ * manifest.  Exported so it can be called directly in tests without needing
+ * to mock getReplayManifest.
+ *
+ * Safety-net: any MBID that now has at least one live positive mapping
+ * (url IS NOT NULL, deadLink = false, missReason IS NULL) is excluded from
+ * the breakdown even if an old odesli sentinel row still exists alongside it
+ * (legacy rows written before the delete-on-resolve fix landed).
+ */
+export async function computeMissBreakdownFromMbids(
+  mbids: string[],
 ): Promise<ReplayResolutionMissBreakdown> {
-  const manifest = await getReplayManifest(replayId);
-  const mbids =
-    manifest?.entries.flatMap((e) =>
-      e.recording?.mbid ? [e.recording.mbid] : [],
-    ) ?? [];
   if (!mbids.length) return { noVector: 0, noLinks: 0, noRecording: 0 };
 
-  // Exclude any MBID that now has at least one live exact positive mapping.
-  // Legacy sentinel rows written before the delete-on-resolve fix was deployed
-  // have been pruned via POST /api/admin/maintenance/prune-odesli-sentinels,
-  // but this filter remains as a belt-and-suspenders guard.
   const resolvedRows = await db
     .selectDistinct({ recordingMbid: serviceTrackMapTable.recordingMbid })
     .from(serviceTrackMapTable)
@@ -150,8 +151,7 @@ async function computeMissBreakdown(
     );
   const resolvedSet = new Set(resolvedRows.map((r) => r.recordingMbid));
   const unresolvedMbids = mbids.filter((m) => !resolvedSet.has(m));
-  if (!unresolvedMbids.length)
-    return { noVector: 0, noLinks: 0, noRecording: 0 };
+  if (!unresolvedMbids.length) return { noVector: 0, noLinks: 0, noRecording: 0 };
 
   const rows = await db
     .select({
@@ -168,18 +168,22 @@ async function computeMissBreakdown(
     )
     .groupBy(serviceTrackMapTable.missReason);
 
-  const breakdown: ReplayResolutionMissBreakdown = {
-    noVector: 0,
-    noLinks: 0,
-    noRecording: 0,
-  };
+  const breakdown: ReplayResolutionMissBreakdown = { noVector: 0, noLinks: 0, noRecording: 0 };
   for (const row of rows) {
     if (row.missReason === "no_vector") breakdown.noVector = row.count;
     else if (row.missReason === "no_links") breakdown.noLinks = row.count;
-    else if (row.missReason === "no_recording")
-      breakdown.noRecording = row.count;
+    else if (row.missReason === "no_recording") breakdown.noRecording = row.count;
   }
   return breakdown;
+}
+async function computeMissBreakdown(
+  replayId: number,
+): Promise<ReplayResolutionMissBreakdown> {
+  const manifest = await getReplayManifest(replayId);
+  const mbids = manifest?.entries.flatMap((e) =>
+    e.recording?.mbid ? [e.recording.mbid] : [],
+  ) ?? [];
+  return computeMissBreakdownFromMbids(mbids);
 }
 async function emitJob(jobId: number): Promise<void> {
   const [job] = await db
