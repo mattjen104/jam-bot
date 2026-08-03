@@ -10,13 +10,21 @@ import {
   stationsTable,
   showsTable,
   pickersTable,
+  supportHoldsTable,
   type LibraryItemProvenance,
 } from "@workspace/db";
+import {
+  HoldRecordingSupportParams,
+  HoldRecordingSupportResponse,
+  UnholdRecordingSupportParams,
+  UnholdRecordingSupportResponse,
+} from "@workspace/api-zod";
 import { eq, and, isNull, inArray, sql } from "drizzle-orm";
 import { getConnector } from "../../lore/serviceConnector.js";
 import { h } from "../../middlewares/asyncHandler.js";
 import { type AuthedRequest, getFreshToken } from "./auth.js";
 import { enqueueRecordingEmbeds } from "../../lore/embed-resolution.js";
+import { bandcampFridayInfo } from "../../lore/support-ladder.js";
 
 const router: IRouter = Router();
 
@@ -35,6 +43,85 @@ type KeepSpinProvenance = {
   pickerName: string | null;
   playedAt: Date;
 };
+
+/**
+ * POST /api/me/support-holds/:mbid — idempotently hold a recording for the
+ * canonical next/current Bandcamp Friday. It deliberately does not touch
+ * pending_keeps, which only represents unresolved spins.
+ */
+router.post(
+  "/me/support-holds/:mbid",
+  h(async (req, res) => {
+    const user = (req as AuthedRequest).loreUser;
+    const mbid = typeof req.params.mbid === "string" ? req.params.mbid.trim() : "";
+    const parsed = HoldRecordingSupportParams.safeParse(req.params);
+    if (!parsed.success || !mbid) return res.status(400).json({ error: "mbid is required" });
+    const [recording] = await db
+      .select({ mbid: recordingsTable.mbid })
+      .from(recordingsTable)
+      .where(eq(recordingsTable.mbid, mbid))
+      .limit(1);
+    if (!recording) return res.status(404).json({ error: "Recording not found" });
+
+    const friday = bandcampFridayInfo();
+    const [createdHold] = await db
+      .insert(supportHoldsTable)
+      .values({
+        userId: user.id,
+        recordingMbid: recording.mbid,
+        bandcampFridayDate: friday.date,
+      })
+      .onConflictDoNothing()
+      .returning();
+    const [persistedHold] = createdHold
+      ? [createdHold]
+      : await db
+          .select({ heldAt: supportHoldsTable.heldAt })
+          .from(supportHoldsTable)
+          .where(
+            and(
+              eq(supportHoldsTable.userId, user.id),
+              eq(supportHoldsTable.recordingMbid, recording.mbid),
+              eq(supportHoldsTable.bandcampFridayDate, friday.date),
+            ),
+          )
+          .limit(1);
+
+    return res.json(HoldRecordingSupportResponse.parse({
+      mbid: recording.mbid,
+      bandcampFridayDate: friday.date,
+      held: true,
+      heldAt: persistedHold?.heldAt.toISOString() ?? null,
+    }));
+  }),
+);
+
+/** DELETE is idempotent and only removes the canonical Friday hold. */
+router.delete(
+  "/me/support-holds/:mbid",
+  h(async (req, res) => {
+    const user = (req as AuthedRequest).loreUser;
+    const mbid = typeof req.params.mbid === "string" ? req.params.mbid.trim() : "";
+    const parsed = UnholdRecordingSupportParams.safeParse(req.params);
+    if (!parsed.success || !mbid) return res.status(400).json({ error: "mbid is required" });
+    const friday = bandcampFridayInfo();
+    await db
+      .delete(supportHoldsTable)
+      .where(
+        and(
+          eq(supportHoldsTable.userId, user.id),
+          eq(supportHoldsTable.recordingMbid, mbid),
+          eq(supportHoldsTable.bandcampFridayDate, friday.date),
+        ),
+      );
+    return res.json(UnholdRecordingSupportResponse.parse({
+      mbid,
+      bandcampFridayDate: friday.date,
+      held: false,
+      heldAt: null,
+    }));
+  }),
+);
 
 /**
  * Build keep provenance from the only trusted attribution source: the spin

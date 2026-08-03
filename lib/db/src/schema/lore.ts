@@ -2595,6 +2595,92 @@ export type EmbedLink = typeof embedLinkTable.$inferSelect;
 export type InsertEmbedLink = typeof embedLinkTable.$inferInsert;
 
 /**
+ * Curated, durable commerce facts for a recording. These are written by
+ * ingestion/resolution work, never guessed by a request handler.
+ */
+export const recordingSupportFactsTable = pgTable(
+  "recording_support_facts",
+  {
+    id: serial("id").primaryKey(),
+    recordingMbid: text("recording_mbid")
+      .notNull()
+      .references(() => recordingsTable.mbid, { onDelete: "cascade" }),
+    /** "artist_direct" | "label" | "discogs". */
+    kind: text("kind").notNull(),
+    /** "release" | "catalog" | "door". */
+    scope: text("scope").notNull().default("release"),
+    providerId: text("provider_id"),
+    releaseMbid: text("release_mbid"),
+    releaseGroupMbid: text("release_group_mbid"),
+    url: text("url").notNull(),
+    detail: text("detail"),
+    note: text("note"),
+    /** "exact" | "trusted" — only these values are public. */
+    verification: text("verification").notNull().default("trusted"),
+    /** Citation for the fact; Discogs rows require this. */
+    sourceUrl: text("source_url"),
+    fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
+    expiresAt: timestamp("expires_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("recording_support_facts_recording_idx").on(t.recordingMbid),
+    index("recording_support_facts_kind_idx").on(t.kind, t.recordingMbid),
+    check(
+      "recording_support_facts_kind_ck",
+      sql`${t.kind} in ('artist_direct', 'label', 'discogs')`,
+    ),
+    check(
+      "recording_support_facts_scope_ck",
+      sql`${t.scope} in ('release', 'catalog', 'door')`,
+    ),
+    check(
+      "recording_support_facts_verification_ck",
+      sql`${t.verification} in ('exact', 'trusted')`,
+    ),
+  ],
+);
+
+export const supportFactsTable = recordingSupportFactsTable;
+export type RecordingSupportFact = typeof recordingSupportFactsTable.$inferSelect;
+export type InsertRecordingSupportFact =
+  typeof recordingSupportFactsTable.$inferInsert;
+
+/**
+ * Listener intent to hold a recording until a particular Bandcamp Friday.
+ * Separate from pending_keeps, whose lifecycle is unresolved radio spins.
+ */
+export const supportHoldsTable = pgTable(
+  "support_holds",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => loreUsersTable.id, { onDelete: "cascade" }),
+    recordingMbid: text("recording_mbid")
+      .notNull()
+      .references(() => recordingsTable.mbid, { onDelete: "cascade" }),
+    /** Canonical UTC date, YYYY-MM-DD, calculated server-side. */
+    bandcampFridayDate: text("bandcamp_friday_date").notNull(),
+    heldAt: timestamp("held_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("support_holds_user_recording_date_uq").on(
+      t.userId,
+      t.recordingMbid,
+      t.bandcampFridayDate,
+    ),
+    index("support_holds_user_idx").on(t.userId),
+    index("support_holds_recording_idx").on(t.recordingMbid),
+  ],
+);
+
+export const bandcampSupportHoldsTable = supportHoldsTable;
+export type SupportHold = typeof supportHoldsTable.$inferSelect;
+export type InsertSupportHold = typeof supportHoldsTable.$inferInsert;
+
+/**
  * Off-request provider work.  One row is one recording/provider/role demand;
  * the unique key makes ingest, first-play, and Keep safe to call repeatedly.
  */

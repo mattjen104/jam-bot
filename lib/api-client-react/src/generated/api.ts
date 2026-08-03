@@ -80,6 +80,7 @@ import type {
   RecordingPicks,
   RecordingPreview,
   RecordingSpins,
+  RecordingSupportResponse,
   RecordingsAvailabilityResult,
   ReplayManifest,
   ReplayMaterializationJob,
@@ -121,6 +122,7 @@ import type {
   StationsRecentSpinsResult,
   StationsRollingGenresResult,
   StationsScheduleResult,
+  SupportHoldResponse,
   TracklistRequest,
   TracklistResult,
   UpsertPickerRequest,
@@ -1282,6 +1284,99 @@ export function useGetRecordingKnowledge<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetRecordingKnowledgeQueryOptions(mbid, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns only durable, verified provider facts in who-gets-paid order. Missing providers are absent. The empty state is explicit so clients can render "No linkable release found." exactly.
+
+ * @summary Grounded ways to support a recording
+ */
+export const getGetRecordingSupportUrl = (mbid: string) => {
+  return `/api/recordings/${mbid}/support`;
+};
+
+export const getRecordingSupport = async (
+  mbid: string,
+  options?: RequestInit,
+): Promise<RecordingSupportResponse> => {
+  return customFetch<RecordingSupportResponse>(
+    getGetRecordingSupportUrl(mbid),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetRecordingSupportQueryKey = (mbid: string) => {
+  return [`/api/recordings/${mbid}/support`] as const;
+};
+
+export const getGetRecordingSupportQueryOptions = <
+  TData = Awaited<ReturnType<typeof getRecordingSupport>>,
+  TError = ErrorType<ApiError>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecordingSupport>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetRecordingSupportQueryKey(mbid);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getRecordingSupport>>
+  > = ({ signal }) => getRecordingSupport(mbid, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!mbid,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getRecordingSupport>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetRecordingSupportQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getRecordingSupport>>
+>;
+export type GetRecordingSupportQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Grounded ways to support a recording
+ */
+
+export function useGetRecordingSupport<
+  TData = Awaited<ReturnType<typeof getRecordingSupport>>,
+  TError = ErrorType<ApiError>,
+>(
+  mbid: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRecordingSupport>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetRecordingSupportQueryOptions(mbid, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -8091,6 +8186,174 @@ export function useGetMyWeeklyRecap<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Hold a recording until the canonical Bandcamp Friday
+ */
+export const getHoldRecordingSupportUrl = (mbid: string) => {
+  return `/api/me/support-holds/${mbid}`;
+};
+
+export const holdRecordingSupport = async (
+  mbid: string,
+  options?: RequestInit,
+): Promise<SupportHoldResponse> => {
+  return customFetch<SupportHoldResponse>(getHoldRecordingSupportUrl(mbid), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getHoldRecordingSupportMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof holdRecordingSupport>>,
+    TError,
+    { mbid: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof holdRecordingSupport>>,
+  TError,
+  { mbid: string },
+  TContext
+> => {
+  const mutationKey = ["holdRecordingSupport"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof holdRecordingSupport>>,
+    { mbid: string }
+  > = (props) => {
+    const { mbid } = props ?? {};
+
+    return holdRecordingSupport(mbid, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type HoldRecordingSupportMutationResult = NonNullable<
+  Awaited<ReturnType<typeof holdRecordingSupport>>
+>;
+
+export type HoldRecordingSupportMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Hold a recording until the canonical Bandcamp Friday
+ */
+export const useHoldRecordingSupport = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof holdRecordingSupport>>,
+    TError,
+    { mbid: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof holdRecordingSupport>>,
+  TError,
+  { mbid: string },
+  TContext
+> => {
+  return useMutation(getHoldRecordingSupportMutationOptions(options));
+};
+
+/**
+ * @summary Remove the current Bandcamp Friday hold
+ */
+export const getUnholdRecordingSupportUrl = (mbid: string) => {
+  return `/api/me/support-holds/${mbid}`;
+};
+
+export const unholdRecordingSupport = async (
+  mbid: string,
+  options?: RequestInit,
+): Promise<SupportHoldResponse> => {
+  return customFetch<SupportHoldResponse>(getUnholdRecordingSupportUrl(mbid), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getUnholdRecordingSupportMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unholdRecordingSupport>>,
+    TError,
+    { mbid: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof unholdRecordingSupport>>,
+  TError,
+  { mbid: string },
+  TContext
+> => {
+  const mutationKey = ["unholdRecordingSupport"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof unholdRecordingSupport>>,
+    { mbid: string }
+  > = (props) => {
+    const { mbid } = props ?? {};
+
+    return unholdRecordingSupport(mbid, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UnholdRecordingSupportMutationResult = NonNullable<
+  Awaited<ReturnType<typeof unholdRecordingSupport>>
+>;
+
+export type UnholdRecordingSupportMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Remove the current Bandcamp Friday hold
+ */
+export const useUnholdRecordingSupport = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unholdRecordingSupport>>,
+    TError,
+    { mbid: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof unholdRecordingSupport>>,
+  TError,
+  { mbid: string },
+  TContext
+> => {
+  return useMutation(getUnholdRecordingSupportMutationOptions(options));
+};
 
 /**
  * Returns server-validated album-cover candidates plus the current anonymous listener identity. The selected cover is stable for an active visit; candidates never expose another listener's identity.

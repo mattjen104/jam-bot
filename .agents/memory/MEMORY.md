@@ -79,3 +79,4 @@
 - [Embed resolution safety model](embed-resolution-safety.md) — provider work stays off-request: MB relationship URLs are the only Bandcamp fetch inputs, and terminal misses remain retry-safe facts.
 - [Weekly recap read model](weekly-recap-read-model.md) — weekly reflections use UTC Sunday-to-Saturday windows and confirmed attendance only; never surface incomplete weeks.
 - [Album-cover listener identity](album-avatar-identity.md) — anonymous cover identity preserves bottle emojis; covers are privacy-thresholded station tokens.
+- [Support ladder identity grounding](support-ladder-identity-grounding.md) — never infer a release MBID from a recording→release-group bridge; provider facts must carry release identity explicitly.

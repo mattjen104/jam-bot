@@ -1004,6 +1004,72 @@ export const GetRecordingKnowledgeResponse = zod.object({
 });
 
 /**
+ * Returns only durable, verified provider facts in who-gets-paid order. Missing providers are absent. The empty state is explicit so clients can render "No linkable release found." exactly.
+
+ * @summary Grounded ways to support a recording
+ */
+
+export const GetRecordingSupportParams = zod.object({
+  mbid: zod.coerce.string().min(1),
+});
+
+export const getRecordingSupportResponseLinksItemTierMax = 5;
+
+export const GetRecordingSupportResponse = zod.object({
+  mbid: zod.string(),
+  state: zod.enum(["linkable_release", "no_linkable_release"]),
+  emptyMessage: zod
+    .string()
+    .nullable()
+    .describe(
+      'Exactly \"No linkable release found.\" when state is no_linkable_release.',
+    ),
+  links: zod.array(
+    zod
+      .object({
+        kind: zod.enum(["artist", "bandcamp", "label", "station", "discogs"]),
+        tier: zod
+          .number()
+          .min(1)
+          .max(getRecordingSupportResponseLinksItemTierMax),
+        paidTo: zod.enum([
+          "artist",
+          "artist_and_label",
+          "label",
+          "station",
+          "seller",
+        ]),
+        scope: zod.enum(["release", "catalog", "door"]),
+        url: zod.string().url(),
+        releaseMbid: zod.string().nullable(),
+        releaseGroupMbid: zod.string().nullable(),
+        providerId: zod.string().nullable(),
+        detail: zod.string(),
+        note: zod.string().nullable(),
+        verification: zod.enum(["exact", "trusted"]),
+        sourceUrl: zod.string().nullable(),
+        attribution: zod
+          .string()
+          .nullable()
+          .describe(
+            'Discogs rows are always attributed as \"Data provided by Discogs\".',
+          ),
+        fetchedAt: zod.string(),
+        expiresAt: zod.string().nullable(),
+      })
+      .describe(
+        "A durable, validated support link. It is never a guessed search URL.",
+      ),
+  ),
+  bandcampFriday: zod.object({
+    eligible: zod.boolean(),
+    date: zod.string(),
+  }),
+  held: zod.boolean(),
+  heldForDate: zod.string().nullable(),
+});
+
+/**
  * Every logged spin of a recording (newest first), each attributed to the station and — when the source exposes it — the show and DJ. This is the play-history surface for a track page.
 
  * @summary Where a recording has been played, with attribution
@@ -4456,6 +4522,36 @@ export const GetMyWeeklyRecapResponse = zod
   .describe(
     "Counts-only reflection of confirmed attendance for a completed UTC Sunday-to-Saturday window. Empty arrays and a null replay are honest no-data states.\n",
   );
+
+/**
+ * @summary Hold a recording until the canonical Bandcamp Friday
+ */
+
+export const HoldRecordingSupportParams = zod.object({
+  mbid: zod.coerce.string().min(1),
+});
+
+export const HoldRecordingSupportResponse = zod.object({
+  mbid: zod.string(),
+  bandcampFridayDate: zod.string(),
+  held: zod.boolean(),
+  heldAt: zod.string().nullable(),
+});
+
+/**
+ * @summary Remove the current Bandcamp Friday hold
+ */
+
+export const UnholdRecordingSupportParams = zod.object({
+  mbid: zod.coerce.string().min(1),
+});
+
+export const UnholdRecordingSupportResponse = zod.object({
+  mbid: zod.string(),
+  bandcampFridayDate: zod.string(),
+  held: zod.boolean(),
+  heldAt: zod.string().nullable(),
+});
 
 /**
  * Returns server-validated album-cover candidates plus the current anonymous listener identity. The selected cover is stable for an active visit; candidates never expose another listener's identity.

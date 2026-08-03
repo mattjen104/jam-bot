@@ -21,6 +21,8 @@ import {
   GetRecordingsAvailabilityResponse,
   GetRecordingListProvenanceParams,
   GetRecordingListProvenanceResponse,
+  GetRecordingSupportParams,
+  GetRecordingSupportResponse,
 } from "@workspace/api-zod";
 import {
   db,
@@ -47,6 +49,8 @@ import { resolvePickRunAnchors } from "../../lore/runs.js";
 import { pickerNotOptedOut } from "./shared.js";
 import { h } from "../../middlewares/asyncHandler.js";
 import { getTrackById, getAlbumTracks, spotifyAppConfigured } from "../../spotify/appClient.js";
+import { loadSupportLadder } from "../../lore/support-ladder.js";
+import { getUserFromSession } from "../../lore/userSession.js";
 
 wireSongEnrichment();
 
@@ -157,6 +161,20 @@ router.get("/recordings/:mbid", h(async (req, res) => {
       links: rec.links ?? [],
     }),
   );
+}));
+
+// GET /api/recordings/:mbid/support — grounded, provider-scoped support links.
+// This endpoint is intentionally anonymous. Holds are read/written through
+// /me/support-holds, so the public ladder never needs a listener identity.
+router.get("/recordings/:mbid/support", h(async (req, res) => {
+  const parsed = GetRecordingSupportParams.safeParse(req.params);
+  if (!parsed.success) {
+    return res.status(404).json({ error: "Recording not found" });
+  }
+  const user = await getUserFromSession(req).catch(() => null);
+  const support = await loadSupportLadder(parsed.data.mbid, user?.id);
+  if (!support) return res.status(404).json({ error: "Recording not found" });
+  return res.json(GetRecordingSupportResponse.parse(support));
 }));
 
 // GET /api/recordings/:mbid/knowledge — liner-notes credits for the live player.

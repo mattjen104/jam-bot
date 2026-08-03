@@ -367,6 +367,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /recordings/{mbid}/support:
+    get:
+      operationId: getRecordingSupport
+      tags: [recordings]
+      summary: Grounded ways to support a recording
+      description: >
+        Returns only durable, verified provider facts in who-gets-paid order.
+        Missing providers are absent. The empty state is explicit so clients
+        can render "No linkable release found." exactly.
+      parameters:
+        - name: mbid
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Recording support ladder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecordingSupportResponse"
+        "404":
+          description: Recording not on the spine
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /recordings/{mbid}/spins:
     get:
       operationId: getRecordingSpins
@@ -2804,6 +2833,49 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /me/support-holds/{mbid}:
+    post:
+      operationId: holdRecordingSupport
+      tags: [me]
+      summary: Hold a recording until the canonical Bandcamp Friday
+      parameters:
+        - name: mbid
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Hold state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupportHoldResponse"
+        "404":
+          description: Recording not on the spine
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      operationId: unholdRecordingSupport
+      tags: [me]
+      summary: Remove the current Bandcamp Friday hold
+      parameters:
+        - name: mbid
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Hold state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupportHoldResponse"
   /me/avatar:
     get:
       operationId: getMyAlbumAvatar
@@ -3343,6 +3415,106 @@ components:
           type: ["string", "null"]
       required:
         - mbid
+    SupportLink:
+      type: object
+      description: A durable, validated support link. It is never a guessed search URL.
+      properties:
+        kind:
+          type: string
+          enum: [artist, bandcamp, label, station, discogs]
+        tier:
+          type: integer
+          minimum: 1
+          maximum: 5
+        paidTo:
+          type: string
+          enum: [artist, artist_and_label, label, station, seller]
+        scope:
+          type: string
+          enum: [release, catalog, door]
+        url:
+          type: string
+          format: uri
+        releaseMbid:
+          type: ["string", "null"]
+        releaseGroupMbid:
+          type: ["string", "null"]
+        providerId:
+          type: ["string", "null"]
+        detail:
+          type: string
+        note:
+          type: ["string", "null"]
+        verification:
+          type: string
+          enum: [exact, trusted]
+        sourceUrl:
+          type: ["string", "null"]
+        attribution:
+          type: ["string", "null"]
+          description: Discogs rows are always attributed as "Data provided by Discogs".
+        fetchedAt:
+          type: string
+        expiresAt:
+          type: ["string", "null"]
+      required:
+        - kind
+        - tier
+        - paidTo
+        - scope
+        - url
+        - releaseMbid
+        - releaseGroupMbid
+        - providerId
+        - detail
+        - note
+        - verification
+        - sourceUrl
+        - attribution
+        - fetchedAt
+        - expiresAt
+    BandcampFriday:
+      type: object
+      properties:
+        eligible:
+          type: boolean
+        date:
+          type: string
+      required: [eligible, date]
+    RecordingSupportResponse:
+      type: object
+      properties:
+        mbid:
+          type: string
+        state:
+          type: string
+          enum: [linkable_release, no_linkable_release]
+        emptyMessage:
+          type: ["string", "null"]
+          description: Exactly "No linkable release found." when state is no_linkable_release.
+        links:
+          type: array
+          items:
+            $ref: "#/components/schemas/SupportLink"
+        bandcampFriday:
+          $ref: "#/components/schemas/BandcampFriday"
+        held:
+          type: boolean
+        heldForDate:
+          type: ["string", "null"]
+      required: [mbid, state, emptyMessage, links, bandcampFriday, held, heldForDate]
+    SupportHoldResponse:
+      type: object
+      properties:
+        mbid:
+          type: string
+        bandcampFridayDate:
+          type: string
+        held:
+          type: boolean
+        heldAt:
+          type: ["string", "null"]
+      required: [mbid, bandcampFridayDate, held, heldAt]
     NowPlayingRecording:
       type: object
       description: The MBID-keyed recording a spin resolved to.

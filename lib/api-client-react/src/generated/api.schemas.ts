@@ -335,6 +335,116 @@ export interface RecordingPreview {
   source?: string | null;
 }
 
+export type SupportLinkKind =
+  (typeof SupportLinkKind)[keyof typeof SupportLinkKind];
+
+export const SupportLinkKind = {
+  artist: "artist",
+  bandcamp: "bandcamp",
+  label: "label",
+  station: "station",
+  discogs: "discogs",
+} as const;
+
+export type SupportLinkPaidTo =
+  (typeof SupportLinkPaidTo)[keyof typeof SupportLinkPaidTo];
+
+export const SupportLinkPaidTo = {
+  artist: "artist",
+  artist_and_label: "artist_and_label",
+  label: "label",
+  station: "station",
+  seller: "seller",
+} as const;
+
+export type SupportLinkScope =
+  (typeof SupportLinkScope)[keyof typeof SupportLinkScope];
+
+export const SupportLinkScope = {
+  release: "release",
+  catalog: "catalog",
+  door: "door",
+} as const;
+
+export type SupportLinkVerification =
+  (typeof SupportLinkVerification)[keyof typeof SupportLinkVerification];
+
+export const SupportLinkVerification = {
+  exact: "exact",
+  trusted: "trusted",
+} as const;
+
+/**
+ * A durable, validated support link. It is never a guessed search URL.
+ */
+export interface SupportLink {
+  kind: SupportLinkKind;
+  /**
+   * @minimum 1
+   * @maximum 5
+   */
+  tier: number;
+  paidTo: SupportLinkPaidTo;
+  scope: SupportLinkScope;
+  url: string;
+  /** @nullable */
+  releaseMbid: string | null;
+  /** @nullable */
+  releaseGroupMbid: string | null;
+  /** @nullable */
+  providerId: string | null;
+  detail: string;
+  /** @nullable */
+  note: string | null;
+  verification: SupportLinkVerification;
+  /** @nullable */
+  sourceUrl: string | null;
+  /**
+   * Discogs rows are always attributed as "Data provided by Discogs".
+   * @nullable
+   */
+  attribution: string | null;
+  fetchedAt: string;
+  /** @nullable */
+  expiresAt: string | null;
+}
+
+export interface BandcampFriday {
+  eligible: boolean;
+  date: string;
+}
+
+export type RecordingSupportResponseState =
+  (typeof RecordingSupportResponseState)[keyof typeof RecordingSupportResponseState];
+
+export const RecordingSupportResponseState = {
+  linkable_release: "linkable_release",
+  no_linkable_release: "no_linkable_release",
+} as const;
+
+export interface RecordingSupportResponse {
+  mbid: string;
+  state: RecordingSupportResponseState;
+  /**
+   * Exactly "No linkable release found." when state is no_linkable_release.
+   * @nullable
+   */
+  emptyMessage: string | null;
+  links: SupportLink[];
+  bandcampFriday: BandcampFriday;
+  held: boolean;
+  /** @nullable */
+  heldForDate: string | null;
+}
+
+export interface SupportHoldResponse {
+  mbid: string;
+  bandcampFridayDate: string;
+  held: boolean;
+  /** @nullable */
+  heldAt: string | null;
+}
+
 /**
  * The MBID-keyed recording a spin resolved to.
  */

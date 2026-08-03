@@ -37,6 +37,7 @@ import { startIsrcEnrichmentJob } from "./lore/isrc-enrichment.js";
 import { startHomepageScraper } from "./lore/homepage-scraper.js";
 import { startDonateChecker } from "./lore/donate-checker.js";
 import { applyDonateCheckerMigration } from "./lore/donate-checker-migration.js";
+import { applySupportHoldsMigration } from "./lore/support-holds-migration.js";
 import { startDiscoveryScoreJob } from "./lore/discovery-score-job.js";
 import { startQualityRecomputeJob } from "./lore/quality.js";
 import { applyStationScheduleMigration } from "./lore/station-schedule-migration.js";
@@ -129,6 +130,7 @@ async function bootLore(): Promise<void> {
     await runMigration("applyBottlesMigration", applyBottlesMigration);
     await runMigration("applyGeniusFragmentPointerMigration", applyGeniusFragmentPointerMigration);
     await runMigration("applyReplayResolutionMigration", applyReplayResolutionMigration);
+    await runMigration("applySupportHoldsMigration", applySupportHoldsMigration);
     await runMigration("applyArtistMetadataCleanup", async () => {
       await applyArtistMetadataCleanup();
     });
