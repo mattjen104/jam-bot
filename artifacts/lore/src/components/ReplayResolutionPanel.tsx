@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, CheckCircle2, Loader2, Search } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, Search } from "lucide-react";
 import {
   postStartReplayResolution,
   useReplayResolutionJob,
@@ -24,6 +24,21 @@ function missBreakdownSummary(breakdown: ReplayResolutionMissBreakdown): string 
     );
   }
   return parts.length ? parts.join(" · ") : null;
+}
+
+function formatCheckedAt(finishedAt: string | null): string {
+  if (!finishedAt) return "recently";
+  const date = new Date(finishedAt);
+  const diffMs = Date.now() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60_000);
+  if (diffMins < 2) return "just now";
+  if (diffMins < 60) return `${diffMins} minutes ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours === 1) return "1 hour ago";
+  if (diffHours < 24) return `${diffHours} hours ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays === 1) return "yesterday";
+  return `${diffDays} days ago`;
 }
 
 /**
@@ -58,6 +73,12 @@ export function ReplayResolutionPanel({ replayId }: { replayId: number }) {
 
   const breakdownSummary =
     isDone && job.missBreakdown ? missBreakdownSummary(job.missBreakdown) : null;
+
+  // Show the Re-check button when done, Retry on error, Check availability
+  // when no job has run yet (or starting). Hidden while a job is in flight.
+  const showButton = !isRunning;
+  const buttonLabel = isDone ? "Re-check" : isError ? "Retry" : "Check availability";
+  const ButtonIcon = isDone ? RefreshCw : isError || !job ? Search : Search;
 
   return (
     <section
@@ -98,6 +119,9 @@ export function ReplayResolutionPanel({ replayId }: { replayId: number }) {
                   {breakdownSummary}
                 </p>
               ) : null}
+              <p className="mt-1 text-xs text-muted-foreground" data-testid="resolution-checked-at">
+                Last checked {formatCheckedAt(job.finishedAt)}
+              </p>
             </div>
           ) : isError ? (
             <p className="mt-1 flex items-center gap-2 text-sm text-destructive-foreground">
@@ -114,20 +138,20 @@ export function ReplayResolutionPanel({ replayId }: { replayId: number }) {
             </p>
           ) : null}
         </div>
-        {!job || isError ? (
+        {showButton ? (
           <button
             type="button"
             disabled={starting}
             onClick={() => void start()}
             className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-card-border px-3 py-2 font-mono text-[10px] uppercase tracking-wide text-foreground hover:border-primary hover:text-primary disabled:opacity-50"
-            data-testid="resolve-tracks-button"
+            data-testid={isDone ? "recheck-tracks-button" : "resolve-tracks-button"}
           >
             {starting ? (
               <Loader2 className="h-3 w-3 animate-spin" />
             ) : (
-              <Search className="h-3 w-3" />
+              <ButtonIcon className="h-3 w-3" />
             )}
-            {isError ? "Retry" : "Check availability"}
+            {buttonLabel}
           </button>
         ) : null}
       </div>
