@@ -31,6 +31,7 @@ export type ReplayResolutionProgress = {
   processed: number;
   resolved: number;
   missing: number;
+  networkErrors: number;
   failed: number;
   committedOffset: number;
   error: string | null;
@@ -69,6 +70,7 @@ function toProgress(job: ReplayResolutionJob): ReplayResolutionProgress {
     processed: job.processed,
     resolved: job.resolved,
     missing: job.missing,
+    networkErrors: job.networkErrors,
     failed: job.failed,
     committedOffset: job.committedOffset,
     error: job.error,
@@ -381,7 +383,7 @@ export async function markServiceTrackMapDead(
 export async function resolveRecording(
   mbid: string,
   recording: { title: string; artist: string; isrc: string | null; links: Array<{ name: string; url: string; kind: "exact" | "search" }> | null },
-): Promise<"resolved" | "missing"> {
+): Promise<"resolved" | "missing" | "network_error"> {
   // Short-circuit if an exact hit already exists — nothing to do.
   const [existing] = await db
     .select({ id: serviceTrackMapTable.id })
@@ -440,8 +442,10 @@ export async function resolveRecording(
   } catch {
     // Network error (timeout, DNS failure, etc.) — write a short-lived miss row
     // so the next run skips this MBID for an hour instead of burning rate-limit.
+    // Return "network_error" so the worker can count it separately from genuine
+    // misses; callers that only check for "resolved" are unaffected.
     await upsertServiceTrackMapMiss(mbid, "network_error");
-    return "missing";
+    return "network_error";
   }
   const links = Object.entries(body.linksByPlatform ?? {})
       .map(([platform, value]) => ({ service: canonicalReplayService(platform), url: value.url?.trim() ?? "" }))
@@ -495,7 +499,7 @@ export async function runReplayResolutionWorker(jobId: number): Promise<void> {
     let current = job;
     for (let position = job.committedOffset; position < manifest.entries.length; position++) {
       const entry = manifest.entries[position]!;
-      let outcome: "resolved" | "missing" | "failed" = "missing";
+      let outcome: "resolved" | "missing" | "network_error" | "failed" = "missing";
       let failure: ReplayResolutionFailure | null = null;
       try {
         const mbid = entry.recording?.mbid;
@@ -533,12 +537,16 @@ export async function runReplayResolutionWorker(jobId: number): Promise<void> {
       const failures = failure
         ? [...(current.failures ?? []), failure].slice(-FAILURE_CAP)
         : current.failures ?? [];
+      // "network_error" counts as a miss for backward compatibility and also
+      // increments networkErrors so operators can distinguish it from a genuine miss.
+      const isMiss = outcome === "missing" || outcome === "network_error";
       const [updated] = await db
         .update(replayResolutionJobsTable)
         .set({
           processed: current.processed + 1,
           resolved: current.resolved + (outcome === "resolved" ? 1 : 0),
-          missing: current.missing + (outcome === "missing" ? 1 : 0),
+          missing: current.missing + (isMiss ? 1 : 0),
+          networkErrors: current.networkErrors + (outcome === "network_error" ? 1 : 0),
           failed: current.failed + (outcome === "failed" ? 1 : 0),
           committedOffset: position + 1,
           failures,

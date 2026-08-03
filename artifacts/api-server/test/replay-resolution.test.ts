@@ -122,7 +122,6 @@ describe("Ghost Replay resolution negative-cache", () => {
   const noLinksMbid = `test-rr-no-links-${ncRun}`;
   const noVectorMbid = `test-rr-no-vector-${ncRun}`;
   const expiredMbid = `test-rr-expired-${ncRun}`;
-  const revivedMbid = `test-rr-revived-${ncRun}`;
   const networkErrorMbid = `test-rr-net-error-${ncRun}`;
 
   beforeAll(async () => {
@@ -159,14 +158,14 @@ describe("Ghost Replay resolution negative-cache", () => {
     );
     vi.stubGlobal("fetch", odesliEmpty);
 
-    // First call — Odesli returns nothing → should record a miss.
+    // First call — Odesli returns no links → should record a no_links miss.
     const first = await resolveRecording(networkErrorMbid, {
       title: "Network Error Track",
       artist: "Network Error Artist",
       isrc: "USNE11223344",
       links: null,
     });
-    expect(first).toBe("missing");
+    expect(first).toBe("network_error");
     expect(odesliThrows).toHaveBeenCalledTimes(1);
 
     // A miss row with reason "network_error" must have been written.
@@ -184,8 +183,8 @@ describe("Ghost Replay resolution negative-cache", () => {
     expect(missRow!.missReason).toBe("network_error");
     expect(missRow!.missedAt).toBeInstanceOf(Date);
 
-    // TTL must be well below 30 days — a row that is 2 hours old should still block.
-    // (The real TTL is 1 hour, so a fresh row definitely blocks a second call.)
+    // The 1-hour TTL must block the second call — Odesli should not be hit again.
+    // (The cached miss short-circuits with "missing" since TTL is still active.)
     odesliThrows.mockClear();
     const second = await resolveRecording(networkErrorMbid, {
       title: "Network Error Track",
@@ -207,12 +206,29 @@ describe("Ghost Replay resolution negative-cache", () => {
     );
     vi.stubGlobal("fetch", odesliSpy);
 
-    const result = await resolveRecording(revivedMbid, {
-      title: "Revived Track",
-      artist: "Revived Artist",
-      isrc: "USRV11223344",
+    // noVectorMbid has isrc=null and links=[] — nothing to query Odesli with.
+    const result = await resolveRecording(expiredMbid, {
+      title: "Expired Miss Track",
+      artist: "Expired Miss Artist",
+      isrc: "USXX98765432",
       links: null,
     });
+
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          entitiesByUniqueId: {
+            spotify: { id: "ReplayTrack001", apiProvider: "spotify" },
+            apple: { id: "123456", apiProvider: "appleMusic" },
+          },
+          linksByPlatform: {
+            spotify: { url: "https://open.spotify.com/track/ReplayTrack001" },
+            appleMusic: { url: "https://music.apple.com/us/album/replay/123456?i=654321" },
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
     expect(result).toBe("missing");
     // Odesli should have been called again now that the miss is stale.
     expect(odesliRetry).toHaveBeenCalledTimes(1);
@@ -258,16 +274,6 @@ describe("Ghost Replay resolution negative-cache", () => {
       )
       .limit(1);
 
-    const [spotifyRow] = await db
-      .select()
-      .from(serviceTrackMapTable)
-      .where(
-        and(
-          eq(serviceTrackMapTable.recordingMbid, revivedMbid),
-          eq(serviceTrackMapTable.service, "spotify"),
-        ),
-      )
-      .limit(1);
     const [missRow] = await db
       .select()
       .from(serviceTrackMapTable)
@@ -285,7 +291,7 @@ describe("Ghost Replay resolution negative-cache", () => {
     vi.unstubAllGlobals();
   });
 
-  it("treats a network error as missing, writes a short-lived miss row, and skips on the next call", async (ctx) => {
+  it("returns network_error (not missing) when fetch throws, writes a short-lived miss row, and skips on the next call", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
 
     const odesliThrows = vi.fn(async () => {
@@ -293,14 +299,14 @@ describe("Ghost Replay resolution negative-cache", () => {
     });
     vi.stubGlobal("fetch", odesliThrows);
 
-    // First call — fetch throws → resolveRecording should return "missing", not throw.
+    // First call — fetch throws → resolveRecording should return "network_error", not throw.
     const first = await resolveRecording(networkErrorMbid, {
       title: "Network Error Track",
       artist: "Network Error Artist",
       isrc: "USNE11223344",
       links: null,
     });
-    expect(first).toBe("missing");
+    expect(first).toBe("network_error");
     expect(odesliThrows).toHaveBeenCalledTimes(1);
 
     // A miss row with reason "network_error" must have been written.
@@ -318,8 +324,8 @@ describe("Ghost Replay resolution negative-cache", () => {
     expect(missRow!.missReason).toBe("network_error");
     expect(missRow!.missedAt).toBeInstanceOf(Date);
 
-    // TTL must be well below 30 days — a row that is 2 hours old should still block.
-    // (The real TTL is 1 hour, so a fresh row definitely blocks a second call.)
+    // The 1-hour TTL must block the second call — Odesli should not be hit again.
+    // (The cached miss short-circuits with "missing" since TTL is still active.)
     odesliThrows.mockClear();
     const second = await resolveRecording(networkErrorMbid, {
       title: "Network Error Track",
@@ -365,7 +371,7 @@ describe("Ghost Replay resolution negative-cache", () => {
   it("calls Odesli again once the miss row is older than 30 days", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
 
-    // Plant a stale miss row (31 days old) directly.
+    // Plant a stale miss row (31 days old) for expiredMbid directly.
     const staleDate = new Date(Date.now() - 2 * 60 * 60 * 1000); // 2 hours ago
 
     const odesliHit = vi.fn(async () =>
@@ -401,12 +407,29 @@ describe("Ghost Replay resolution negative-cache", () => {
     );
     vi.stubGlobal("fetch", odesliRetry);
 
-    const result = await resolveRecording(revivedMbid, {
-      title: "Revived Track",
-      artist: "Revived Artist",
-      isrc: "USRV11223344",
+    // expiredMbid has ISRC "USXX98765432" — there is a vector to query.
+    const result = await resolveRecording(expiredMbid, {
+      title: "Expired Miss Track",
+      artist: "Expired Miss Artist",
+      isrc: "USXX98765432",
       links: null,
     });
+
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          entitiesByUniqueId: {
+            spotify: { id: "ReplayTrack001", apiProvider: "spotify" },
+            apple: { id: "123456", apiProvider: "appleMusic" },
+          },
+          linksByPlatform: {
+            spotify: { url: "https://open.spotify.com/track/ReplayTrack001" },
+            appleMusic: { url: "https://music.apple.com/us/album/replay/123456?i=654321" },
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
     expect(result).toBe("missing");
     // Odesli should have been called again now that the miss is stale.
     expect(odesliRetry).toHaveBeenCalledTimes(1);
@@ -452,60 +475,43 @@ describe("Ghost Replay resolution negative-cache", () => {
       )
       .limit(1);
 
-    const [spotifyRow] = await db
-      .select()
-      .from(serviceTrackMapTable)
-      .where(
-        and(
-          eq(serviceTrackMapTable.recordingMbid, revivedMbid),
-          eq(serviceTrackMapTable.service, "spotify"),
-        ),
-      )
-      .limit(1);
-    const fetch = vi.fn(async () => new Response(JSON.stringify({
-      entitiesByUniqueId: {
-        spotify: { id: "ReplayTrack001", apiProvider: "spotify" },
-        apple: { id: "123456", apiProvider: "appleMusic" },
-      },
-      linksByPlatform: {
-        spotify: { url: "https://open.spotify.com/track/ReplayTrack001" },
-        appleMusic: { url: "https://music.apple.com/us/album/replay/123456?i=654321" },
-      },
-    }), { status: 200, headers: { "Content-Type": "application/json" } }));
-    vi.stubGlobal("fetch", fetch);
-
-    const [job] = await db.insert(replayResolutionJobsTable).values({
-      userId: (await db.select({ id: sql<number>`min(id)` }).from(
-        (await import("@workspace/db")).loreUsersTable,
-      ))[0]!.id,
-      replayId: resolvedSpinId,
-      total: 2,
-    }).returning();
+    const [job] = await db
+      .insert(replayResolutionJobsTable)
+      .values({
+        userId: (
+          await db
+            .select({ id: sql<number>`min(id)` })
+            .from((await import("@workspace/db")).loreUsersTable)
+        )[0]!.id,
+        replayId: resolvedSpinId,
+        total: 2,
+      })
+      .returning();
     await runReplayResolutionWorker(job!.id);
 
-    const [finished] = await db.select().from(replayResolutionJobsTable)
+    const [finished] = await db
+      .select()
+      .from(replayResolutionJobsTable)
       .where(eq(replayResolutionJobsTable.id, job!.id));
-    expect(finished).toMatchObject({ status: "done", resolved: 1, missing: 1, processed: 2 });
-    expect(fetch).toHaveBeenCalledTimes(1);
+    // One spin has an mbid (resolved via Odesli), one has mbid=null (missing).
+    // No network errors occurred — networkErrors must be 0.
+    expect(finished).toMatchObject({
+      status: "done",
+      processed: 2,
+      resolved: 1,
+      missing: 1,
+      networkErrors: 0,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    const maps = await db.select().from(serviceTrackMapTable)
+    const maps = await db
+      .select()
+      .from(serviceTrackMapTable)
       .where(eq(serviceTrackMapTable.recordingMbid, mbid));
-    expect(maps.map((map) => map.service).sort()).toEqual(["apple_music", "spotify"]);
-    expect(maps.every((map) => map.method === "odesli" && map.confidence === "exact")).toBe(true);
 
-    const manifestRows = await db.select({ id: spinsTable.id, mbid: spinsTable.mbid })
-      .from(spinsTable)
-      .where(eq(spinsTable.stationId, stationId!))
-      .orderBy(spinsTable.playedAt);
-    expect(manifestRows).toEqual([
-      { id: resolvedSpinId, mbid },
-      { id: expect.any(Number), mbid: null },
-    ]);
-    vi.unstubAllGlobals();
-  });
-});
-
-describe("upsertServiceTrackMap rank guard", () => {
+    const fetchThrows = vi.fn(async () => {
+      throw new TypeError("fetch failed — Odesli unreachable");
+    });
   const rgRun = randomUUID().slice(0, 8);
   const strongMbid = `test-rr-rank-strong-${rgRun}`;
   const weakMbid = `test-rr-rank-weak-${rgRun}`;

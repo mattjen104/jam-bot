@@ -23,6 +23,7 @@ export const ReplayResolutionJobResponse = zod.object({
   processed: zod.number().int().nonnegative(),
   resolved: zod.number().int().nonnegative(),
   missing: zod.number().int().nonnegative(),
+  networkErrors: zod.number().int().nonnegative(),
   failed: zod.number().int().nonnegative(),
   committedOffset: zod.number().int().nonnegative(),
   error: zod.string().nullable(),

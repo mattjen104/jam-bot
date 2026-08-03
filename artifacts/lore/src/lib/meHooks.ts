@@ -1307,6 +1307,7 @@ export interface ReplayResolutionJob {
   processed: number;
   resolved: number;
   missing: number;
+  networkErrors: number;
   failed: number;
   committedOffset: number;
   error: string | null;

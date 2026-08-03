@@ -2552,6 +2552,7 @@ export const replayResolutionJobsTable = pgTable(
     processed: integer("processed").notNull().default(0),
     resolved: integer("resolved").notNull().default(0),
     missing: integer("missing").notNull().default(0),
+    networkErrors: integer("network_errors").notNull().default(0),
     failed: integer("failed").notNull().default(0),
     /** Next manifest position to process; an item is committed after its row. */
     committedOffset: integer("committed_offset").notNull().default(0),

@@ -135,4 +135,10 @@ export async function applyReplayResolutionMigration(): Promise<void> {
       ON service_track_map (recording_mbid, missed_at)
       WHERE miss_reason IS NOT NULL
   `);
+  // Surface network errors as a separate counter so operators can distinguish
+  // transient Odesli outages from genuinely unresolvable tracks.
+  await db.execute(sql`
+    ALTER TABLE replay_resolution_jobs
+      ADD COLUMN IF NOT EXISTS network_errors integer NOT NULL DEFAULT 0
+  `);
 }
