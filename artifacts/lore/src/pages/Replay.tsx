@@ -119,6 +119,7 @@ export default function Replay() {
             <GuidedReplayPanel
               entries={data.entries}
               label={`${data.station.name} · ${data.show?.name ?? "stream"} · ${runDate(data.bounds.date)}`}
+              broadcastHref={`/archive/stations/${data.station.slug}`}
             />
             {appleMusic ? <AppleMusicReplayPanel materialization={appleMusic} /> : null}
             <GuidedReplayQueue replayId={data.replayId} />

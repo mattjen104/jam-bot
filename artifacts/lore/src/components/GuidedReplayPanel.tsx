@@ -4,8 +4,10 @@ import type { ReplayManifest } from "@workspace/api-client-react";
 import {
   GUIDED_SERVICE_OPTIONS,
   computeAvailableServices,
+  getOfficialReplayDoors,
   guidedMissingLabel,
   materializeGuidedReplay,
+  officialEmbedStatus,
   serviceSupportsEmbed,
   type GuidedReplayMaterialization,
 } from "../lib/guidedReplay";
@@ -26,6 +28,7 @@ function materialize(entries: ReplayEntry[], service: string): GuidedReplayMater
         }
       : null,
     guidedLinks: entry.guidedLinks,
+    embedFacts: entry.embedFacts,
   })), service);
 }
 
@@ -52,9 +55,11 @@ function serviceLabel(service: string): string {
 export function GuidedReplayPanel({
   entries,
   label,
+  broadcastHref,
 }: {
   entries: ReplayEntry[];
   label: string;
+  broadcastHref?: string;
 }) {
   const [service, setService] = useState<string>(() => {
     try {
@@ -68,8 +73,10 @@ export function GuidedReplayPanel({
   const [active, setActive] = useState(false);
   const [playableIndex, setPlayableIndex] = useState(0);
   const [embedState, setEmbedState] = useState<"loading" | "ready" | "error">("loading");
+  const [officialDoor, setOfficialDoor] = useState<"current" | "album" | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const youtubePlayerRef = useRef<{ destroy?: () => void } | null>(null);
+  const currentEmbedUrlRef = useRef<string | null>(null);
   /** Services that have at least one live link for this specific manifest. */
   const availableServices = useMemo(() => computeAvailableServices(entries), [entries]);
 
@@ -92,11 +99,21 @@ export function GuidedReplayPanel({
 
   const guide = useMemo(() => materialize(entries, service), [entries, service]);
   const current = guide.playable[playableIndex] ?? null;
-  const isEmbed = current?.source != null && !current.source.externalOnly;
+  const firstOfficialEntry = entries.find((entry) => entry.recording != null) ?? null;
+  const officialDoors = useMemo(
+    () => getOfficialReplayDoors(firstOfficialEntry),
+    [firstOfficialEntry],
+  );
+  const officialSource =
+    officialDoor === "album" ? officialDoors.album : officialDoor === "current" ? officialDoors.current : null;
+  const currentEmbedUrl = officialSource?.embedUrl ?? current?.source?.embedUrl ?? null;
+  currentEmbedUrlRef.current = currentEmbedUrl;
+  const isEmbed = currentEmbedUrl != null;
 
   useEffect(() => {
     setPlayableIndex(0);
     setEmbedState("loading");
+    setOfficialDoor(null);
   }, [service]);
 
   const next = () => {
@@ -110,9 +127,11 @@ export function GuidedReplayPanel({
 
   // YouTube IFrame API: subscribe to state changes and auto-advance on ENDED (info === 0).
   useEffect(() => {
-    if (!active || !isEmbed || current?.source?.service !== "youtube" || !iframeRef.current) return;
+    const isYouTube = officialSource?.provider === "youtube" || current?.source?.service === "youtube";
+    if (!active || !isEmbed || !isYouTube || !iframeRef.current || !currentEmbedUrl) return;
     let cancelled = false;
     const iframe = iframeRef.current;
+    const subscribingTo = currentEmbedUrl;
     const subscribeToYouTubeState = () => {
       iframe.contentWindow?.postMessage(
         JSON.stringify({
@@ -129,6 +148,7 @@ export function GuidedReplayPanel({
         event.source !== iframe.contentWindow ||
         cancelled
       ) return;
+      if (currentEmbedUrlRef.current !== subscribingTo) return;
       if (typeof event.data !== "string") return;
       try {
         const payload = JSON.parse(event.data);
@@ -145,7 +165,7 @@ export function GuidedReplayPanel({
       youtubePlayerRef.current?.destroy?.();
       youtubePlayerRef.current = null;
     };
-  }, [active, current, isEmbed]);
+  }, [active, current, currentEmbedUrl, isEmbed, officialSource]);
 
   useEffect(() => () => {
     youtubePlayerRef.current?.destroy?.();
@@ -154,9 +174,10 @@ export function GuidedReplayPanel({
   }, []);
 
   const start = () => {
-    if (!guide.playable.length) return;
+    if (!guide.playable.length && !officialDoors.current) return;
     setPlayableIndex(0);
     setEmbedState("loading");
+    setOfficialDoor(null);
     setActive(true);
   };
   const close = () => {
@@ -191,7 +212,7 @@ export function GuidedReplayPanel({
           <button
             type="button"
             onClick={start}
-            disabled={!guide.available}
+            disabled={!guide.available && !officialDoors.current}
             className="hover-elevate inline-flex items-center gap-2 rounded-full border border-primary-border bg-primary px-4 py-2 font-mono text-xs uppercase tracking-wide text-primary-foreground disabled:opacity-40"
             data-testid="guided-start"
           >
@@ -234,17 +255,74 @@ export function GuidedReplayPanel({
         </span>
       </div>
 
-      {active && current ? (
+      <div
+        className="mt-4 grid gap-2 sm:grid-cols-3"
+        aria-label="Replay doors"
+        data-testid="guided-doors"
+      >
+        <button
+          type="button"
+          disabled={!officialDoors.current}
+          onClick={() => {
+            setOfficialDoor("current");
+            setActive(true);
+            setEmbedState("loading");
+          }}
+          className="rounded-lg border border-border px-3 py-2 text-left disabled:opacity-45"
+          data-testid="guided-door-current"
+        >
+          <span className="block font-mono text-[10px] uppercase tracking-wide text-primary">Current song</span>
+          <span className="mt-1 block text-xs text-muted-foreground">
+            {officialDoors.current
+              ? officialDoors.current.embedUrl ? "Open the verified official embed." : "Open the verified provider link."
+              : officialEmbedStatus(firstOfficialEntry?.embedFacts)}
+          </span>
+        </button>
+        <button
+          type="button"
+          disabled={!officialDoors.album}
+          onClick={() => {
+            setOfficialDoor("album");
+            setActive(true);
+            setEmbedState("loading");
+          }}
+          className="rounded-lg border border-border px-3 py-2 text-left disabled:opacity-45"
+          data-testid="guided-door-album"
+        >
+          <span className="block font-mono text-[10px] uppercase tracking-wide text-primary">Whole album</span>
+          <span className="mt-1 block text-xs text-muted-foreground">
+            {officialDoors.album ? "Known Bandcamp release · begins at track one." : "Only available for a known release."}
+          </span>
+        </button>
+        {broadcastHref ? (
+          <a
+            href={broadcastHref}
+            className="rounded-lg border border-border px-3 py-2 text-left hover:border-primary"
+            data-testid="guided-door-broadcast"
+          >
+            <span className="block font-mono text-[10px] uppercase tracking-wide text-primary">Broadcast context</span>
+            <span className="mt-1 block text-xs text-muted-foreground">Return to Lore’s ordered broadcast receipt.</span>
+          </a>
+        ) : null}
+      </div>
+
+      {active && (current || officialSource) ? (
         <div className="mt-4 rounded-lg border border-card-border bg-card p-3">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0">
-              <p className="truncate font-serif text-base font-semibold text-foreground">{current.title}</p>
+              <p className="truncate font-serif text-base font-semibold text-foreground">
+                {officialDoor === "album" ? "Whole album" : current?.title ?? firstOfficialEntry?.recording?.title ?? "Current song"}
+              </p>
               <p className="truncate font-mono text-[11px] text-muted-foreground">
-                {current.artist} · manifest position {current.position + 1} · {serviceLabel(current.source?.service ?? service)}
+                {officialDoor === "album"
+                  ? "Bandcamp · starts at track one"
+                  : `${current?.artist ?? firstOfficialEntry?.recording?.artist ?? ""} · ${
+                    current ? `manifest position ${current.position + 1} · ` : ""
+                  }${serviceLabel(officialSource?.provider ?? current?.source?.service ?? service)}`}
               </p>
             </div>
             <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
-              {playableIndex + 1} of {guide.playable.length}
+              {officialDoor ? "official result" : `${playableIndex + 1} of ${guide.playable.length}`}
             </span>
           </div>
 
@@ -269,9 +347,9 @@ export function GuidedReplayPanel({
               ) : null}
               <iframe
                 ref={iframeRef}
-                key={current.source?.embedUrl}
-                title={`${current.artist} — ${current.title} on ${serviceLabel(current.source?.service ?? service)}`}
-                src={current.source?.embedUrl ?? undefined}
+                key={currentEmbedUrl}
+                title={`${current?.artist ?? firstOfficialEntry?.recording?.artist ?? ""} — ${current?.title ?? firstOfficialEntry?.recording?.title ?? "official replay"} on ${serviceLabel(officialSource?.provider ?? current?.source?.service ?? service)}`}
+                src={currentEmbedUrl ?? undefined}
                 allow="autoplay; encrypted-media"
                 className={`h-40 w-full border-0 ${embedState === "error" ? "hidden" : ""}`}
                 onLoad={() => setEmbedState("ready")}
@@ -283,14 +361,14 @@ export function GuidedReplayPanel({
             /* External-open path: all non-embed services, or embed services without an embeddable URL */
             <div className="flex items-center justify-center rounded-md bg-black/20 py-5">
               <a
-                href={current.source?.url}
+                href={officialSource?.url ?? current?.source?.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 rounded-full border border-primary/50 px-4 py-2 font-mono text-xs text-primary hover:bg-primary/10 transition-colors"
                 data-testid="guided-external-link"
               >
                 <ExternalLink className="h-3.5 w-3.5" />
-                Open on {serviceLabel(current.source?.service ?? service)}
+                Open on {serviceLabel(officialSource?.provider ?? current?.source?.service ?? service)}
               </a>
             </div>
           )}
@@ -299,7 +377,7 @@ export function GuidedReplayPanel({
             <button
               type="button"
               onClick={previous}
-              disabled={playableIndex === 0}
+              disabled={officialDoor != null || playableIndex === 0}
               className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 font-mono text-[11px] text-muted-foreground disabled:opacity-35"
               data-testid="guided-previous"
             >
@@ -307,16 +385,18 @@ export function GuidedReplayPanel({
               Previous
             </button>
             <span className="font-mono text-[10px] text-muted-foreground">
-              {current.source?.autoAdvance
+              {officialSource?.autoAdvance || current?.source?.autoAdvance
                 ? "YouTube advances automatically when the embed reports ended."
                 : isEmbed
-                  ? "Use Next — this embed does not report ended."
+                  ? officialDoor === "album"
+                    ? "Bandcamp does not report ended; continue manually in the album."
+                    : "Use Next — this embed does not report ended."
                   : "Use Next to open the following track."}
             </span>
             <button
               type="button"
               onClick={next}
-              disabled={playableIndex >= guide.playable.length - 1}
+              disabled={officialDoor != null || playableIndex >= guide.playable.length - 1}
               className="inline-flex items-center gap-1 rounded-full border border-primary/50 px-3 py-1.5 font-mono text-[11px] text-primary disabled:opacity-35"
               data-testid="guided-next"
             >

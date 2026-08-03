@@ -82,6 +82,7 @@ import type {
   ReplayMaterializationJob,
   ReplayMaterializationRequest,
   ReplayPlaylistTargetsResponse,
+  ReplayResolutionJob,
   ResolveSongParams,
   ResolvedSong,
   RymListRequest,
@@ -2764,6 +2765,183 @@ export const useStartReplayPlaylistMaterialization = <
     getStartReplayPlaylistMaterializationMutationOptions(options),
   );
 };
+
+/**
+ * Starts (or resumes) a background job that walks the replay manifest and attempts to resolve each identified track to a streaming-service link via Odesli. Idempotent: if a non-terminal job already exists for the same user and replay, the existing job is returned. Requires a listener session.
+
+ * @summary Queue an Odesli resolution job for a Ghost Replay
+ */
+export const getStartReplayResolutionUrl = (id: number) => {
+  return `/api/replay/${id}/resolve`;
+};
+
+export const startReplayResolution = async (
+  id: number,
+  options?: RequestInit,
+): Promise<ReplayResolutionJob> => {
+  return customFetch<ReplayResolutionJob>(getStartReplayResolutionUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getStartReplayResolutionMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof startReplayResolution>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof startReplayResolution>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["startReplayResolution"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof startReplayResolution>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return startReplayResolution(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type StartReplayResolutionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof startReplayResolution>>
+>;
+
+export type StartReplayResolutionMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Queue an Odesli resolution job for a Ghost Replay
+ */
+export const useStartReplayResolution = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof startReplayResolution>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof startReplayResolution>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getStartReplayResolutionMutationOptions(options));
+};
+
+/**
+ * Returns the current state of a resolution job including per-reason miss counts so listeners can see whether gaps are permanent ("not on any streaming service") or temporary ("not yet identified in the archive"). Requires a listener session that owns the job.
+
+ * @summary Poll a replay resolution job receipt
+ */
+export const getGetReplayResolutionJobUrl = (jobId: number) => {
+  return `/api/replay/jobs/${jobId}`;
+};
+
+export const getReplayResolutionJob = async (
+  jobId: number,
+  options?: RequestInit,
+): Promise<ReplayResolutionJob> => {
+  return customFetch<ReplayResolutionJob>(getGetReplayResolutionJobUrl(jobId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetReplayResolutionJobQueryKey = (jobId: number) => {
+  return [`/api/replay/jobs/${jobId}`] as const;
+};
+
+export const getGetReplayResolutionJobQueryOptions = <
+  TData = Awaited<ReturnType<typeof getReplayResolutionJob>>,
+  TError = ErrorType<ApiError>,
+>(
+  jobId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getReplayResolutionJob>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetReplayResolutionJobQueryKey(jobId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getReplayResolutionJob>>
+  > = ({ signal }) =>
+    getReplayResolutionJob(jobId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!jobId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getReplayResolutionJob>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetReplayResolutionJobQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getReplayResolutionJob>>
+>;
+export type GetReplayResolutionJobQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Poll a replay resolution job receipt
+ */
+
+export function useGetReplayResolutionJob<
+  TData = Awaited<ReturnType<typeof getReplayResolutionJob>>,
+  TError = ErrorType<ApiError>,
+>(
+  jobId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getReplayResolutionJob>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetReplayResolutionJobQueryOptions(jobId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Read a persisted replay playlist receipt

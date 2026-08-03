@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { NowPlayingRecording } from "./nowPlayingRecording";
+import type { ReplayEmbedFact } from "./replayEmbedFact";
 import type { ReplayEntryConfidence } from "./replayEntryConfidence";
 import type { ReplayEntryGuidedLinksItem } from "./replayEntryGuidedLinksItem";
 
@@ -28,4 +29,7 @@ export interface ReplayEntry {
   /** Durable service mappings for official guided replay embeds. These links are separate from presentation links and retain dead-link state without changing the broadcast manifest.
    */
   guidedLinks: ReplayEntryGuidedLinksItem[];
+  /** Role-aware official embed decisions. These facts are separate from general service mappings: a provenance link is not implied to be a playback-control provider. URLs are server-validated HTTPS URLs or null.
+   */
+  embedFacts: ReplayEmbedFact[];
 }

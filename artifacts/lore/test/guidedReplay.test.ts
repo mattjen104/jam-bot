@@ -3,6 +3,8 @@ import {
   computeAvailableServices,
   GUIDED_SERVICE_OPTIONS,
   guidedMissingLabel,
+  getOfficialReplayDoors,
+  officialEmbedStatus,
   materializeGuidedReplay,
   serviceSupportsEmbed,
   type GuidedService,
@@ -87,6 +89,79 @@ const entries = [
 ];
 
 describe("guided Ghost Replay materializer", () => {
+  it("uses role-aware facts for the three official doors without promoting provenance into control", () => {
+    const facts = [
+      {
+        provider: "bandcamp" as const,
+        role: "provenance" as const,
+        rung: 1,
+        outcome: "embedded" as const,
+        confidence: "exact" as const,
+        sourceUrl: "https://artist.bandcamp.com/album/release",
+        embedUrl: "https://bandcamp.com/EmbeddedPlayer/track=123/size=large/",
+        albumEmbedUrl: "https://bandcamp.com/EmbeddedPlayer/album=456/size=large/",
+        releaseMbid: "release-mbid",
+        providerReleaseId: "456",
+        providerTrackId: "123",
+      },
+      {
+        provider: "youtube" as const,
+        role: "control" as const,
+        rung: 3,
+        outcome: "embedded" as const,
+        confidence: "gated" as const,
+        sourceUrl: "https://www.youtube.com/watch?v=video123",
+        embedUrl: "https://www.youtube.com/embed/video123?enablejsapi=1",
+        albumEmbedUrl: null,
+        releaseMbid: null,
+        providerReleaseId: null,
+        providerTrackId: "video123",
+      },
+    ];
+    const doors = getOfficialReplayDoors({ embedFacts: facts });
+
+    expect(doors.current).toMatchObject({ provider: "bandcamp", role: "provenance" });
+    expect(doors.album).toMatchObject({ provider: "bandcamp", embedUrl: facts[0].albumEmbedUrl });
+
+    const controlOnly = getOfficialReplayDoors({
+      embedFacts: facts.filter((fact) => fact.provider === "youtube"),
+    });
+    expect(controlOnly.current).toMatchObject({ provider: "youtube", role: "control", autoAdvance: true });
+    expect(controlOnly.album).toBeNull();
+  });
+
+  it("keeps rung five as link-out and rung six as an honest no-result", () => {
+    const linkOut = getOfficialReplayDoors({
+      embedFacts: [{
+        provider: "bandcamp",
+        role: "provenance",
+        rung: 5,
+        outcome: "link_out",
+        confidence: "exact",
+        sourceUrl: "https://artist.bandcamp.com/album/release",
+        embedUrl: null,
+        albumEmbedUrl: null,
+        releaseMbid: "release",
+        providerReleaseId: null,
+        providerTrackId: null,
+      }],
+    });
+    expect(linkOut.current).toMatchObject({ provider: "bandcamp", embedUrl: null });
+    expect(officialEmbedStatus([{
+      provider: "youtube",
+      role: "control",
+      rung: 6,
+      outcome: "no_link",
+      confidence: "none",
+      sourceUrl: null,
+      embedUrl: null,
+      albumEmbedUrl: null,
+      releaseMbid: null,
+      providerReleaseId: null,
+      providerTrackId: null,
+    }])).toBe("No linkable release found.");
+  });
+
   it("uses a Bandcamp embed for EmbeddedPlayer URLs and an external link for plain Bandcamp pages; no cross-service fallback", () => {
     const guide = materializeGuidedReplay(entries, "bandcamp");
 

@@ -1775,6 +1775,8 @@ export const GetReplayManifestParams = zod.object({
   id: zod.coerce.number().min(1),
 });
 
+export const getReplayManifestResponseEntriesItemEmbedFactsItemRungMax = 6;
+
 export const GetReplayManifestResponse = zod
   .object({
     replayId: zod.number(),
@@ -1891,6 +1893,40 @@ export const GetReplayManifestResponse = zod
             .describe(
               "Durable service mappings for official guided replay embeds. These links are separate from presentation links and retain dead-link state without changing the broadcast manifest.\n",
             ),
+          embedFacts: zod
+            .array(
+              zod
+                .object({
+                  provider: zod.enum(["bandcamp", "youtube"]),
+                  role: zod.enum(["provenance", "control"]),
+                  rung: zod
+                    .number()
+                    .min(1)
+                    .max(
+                      getReplayManifestResponseEntriesItemEmbedFactsItemRungMax,
+                    ),
+                  outcome: zod.enum([
+                    "embedded",
+                    "link_out",
+                    "no_link",
+                    "expired",
+                    "transient_failure",
+                  ]),
+                  confidence: zod.enum(["exact", "gated", "none"]),
+                  sourceUrl: zod.string().url().nullable(),
+                  embedUrl: zod.string().url().nullable(),
+                  albumEmbedUrl: zod.string().url().nullable(),
+                  releaseMbid: zod.string().nullable(),
+                  providerReleaseId: zod.string().nullable(),
+                  providerTrackId: zod.string().nullable(),
+                })
+                .describe(
+                  "Public, role-aware result of official embed resolution. Provider fetch details are intentionally omitted; rung and outcome remain visible so degraded results cannot be mistaken for playable embeds.\n",
+                ),
+            )
+            .describe(
+              "Role-aware official embed decisions. These facts are separate from general service mappings: a provenance link is not implied to be a playback-control provider. URLs are server-validated HTTPS URLs or null.\n",
+            ),
         })
         .describe("One archived spin, including unresolved source metadata."),
     ),
@@ -2000,6 +2036,56 @@ export const StartReplayPlaylistMaterializationParams = zod.object({
 
 export const StartReplayPlaylistMaterializationBody = zod.object({
   service: zod.enum(["apple_music", "tidal"]),
+});
+
+/**
+ * Starts (or resumes) a background job that walks the replay manifest and attempts to resolve each identified track to a streaming-service link via Odesli. Idempotent: if a non-terminal job already exists for the same user and replay, the existing job is returned. Requires a listener session.
+
+ * @summary Queue an Odesli resolution job for a Ghost Replay
+ */
+
+export const StartReplayResolutionParams = zod.object({
+  id: zod.coerce.number().min(1),
+});
+
+/**
+ * Returns the current state of a resolution job including per-reason miss counts so listeners can see whether gaps are permanent ("not on any streaming service") or temporary ("not yet identified in the archive"). Requires a listener session that owns the job.
+
+ * @summary Poll a replay resolution job receipt
+ */
+
+export const GetReplayResolutionJobParams = zod.object({
+  jobId: zod.coerce.number().min(1),
+});
+
+export const GetReplayResolutionJobResponse = zod.object({
+  id: zod.number(),
+  replayId: zod.number(),
+  status: zod.enum(["pending", "running", "done", "error"]),
+  total: zod.number(),
+  processed: zod.number(),
+  resolved: zod.number(),
+  missing: zod.number(),
+  failed: zod.number(),
+  committedOffset: zod.number(),
+  error: zod.string().nullable(),
+  finishedAt: zod.string().nullable(),
+  failures: zod.array(
+    zod.object({
+      position: zod.number(),
+      spinId: zod.number(),
+      error: zod.string(),
+    }),
+  ),
+  missBreakdown: zod
+    .object({
+      noVector: zod.number(),
+      noLinks: zod.number(),
+      noRecording: zod.number(),
+    })
+    .describe(
+      "Per-reason counts for identified tracks that could not be resolved to a streaming-service link. noVector = no ISRC or Spotify URL to query; noLinks = Odesli returned no service links; noRecording = MBID not yet in the recordings table.\n",
+    ),
 });
 
 /**

@@ -6,6 +6,7 @@ import {
   spinsTable,
   stationsTable,
   serviceTrackMapTable,
+  embedLinkTable,
 } from "@workspace/db";
 import { and, asc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { spinDayExpr } from "./runs.js";
@@ -14,6 +15,90 @@ import {
   toArchiveRecording,
   validScheduleShowAttribution,
 } from "../routes/lore/shared.js";
+import { effectiveEmbedOutcome, type EmbedLink } from "./embed-resolution.js";
+
+export interface ReplayEmbedFact {
+  provider: "bandcamp" | "youtube";
+  role: "provenance" | "control";
+  rung: number;
+  outcome: "embedded" | "link_out" | "no_link" | "expired" | "transient_failure";
+  confidence: "exact" | "gated" | "none";
+  sourceUrl: string | null;
+  embedUrl: string | null;
+  albumEmbedUrl: string | null;
+  releaseMbid: string | null;
+  providerReleaseId: string | null;
+  providerTrackId: string | null;
+}
+
+const EMBED_HOSTS = {
+  bandcamp: /(^|\.)bandcamp\.com$/i,
+  youtube: /(^|\.)youtube\.com$|(^|\.)youtu\.be$/i,
+} as const;
+
+function safeEmbedSourceUrl(
+  provider: ReplayEmbedFact["provider"],
+  value: string | null,
+): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && EMBED_HOSTS[provider].test(url.hostname)
+      ? url.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function safeProviderId(
+  provider: ReplayEmbedFact["provider"],
+  value: string | null,
+): string | null {
+  if (!value) return null;
+  if (provider === "bandcamp") return /^\d+$/.test(value) ? value : null;
+  return /^[A-Za-z0-9_-]{6,}$/.test(value) ? value : null;
+}
+
+function publicEmbedFact(row: EmbedLink): ReplayEmbedFact {
+  if (
+    (row.provider !== "bandcamp" && row.provider !== "youtube") ||
+    (row.role !== "provenance" && row.role !== "control")
+  ) {
+    throw new Error(`Invalid persisted replay embed provider or role: ${row.provider}/${row.role}`);
+  }
+  const outcome = effectiveEmbedOutcome(row);
+  const trackId = safeProviderId(row.provider, row.providerTrackId);
+  const releaseId = safeProviderId(row.provider, row.providerReleaseId);
+  const playable = outcome === "embedded" && row.rung >= 1 && row.rung <= 4;
+  const embedUrl =
+    playable && trackId
+      ? row.provider === "bandcamp"
+        ? `https://bandcamp.com/EmbeddedPlayer/track=${encodeURIComponent(trackId)}/size=large/`
+        : `https://www.youtube.com/embed/${encodeURIComponent(trackId)}?enablejsapi=1`
+      : null;
+  const albumEmbedUrl =
+    row.provider === "bandcamp" &&
+    (outcome === "embedded" || outcome === "link_out") &&
+    row.releaseMbid &&
+    releaseId
+      ? `https://bandcamp.com/EmbeddedPlayer/album=${encodeURIComponent(releaseId)}/size=large/`
+      : null;
+
+  return {
+    provider: row.provider,
+    role: row.role,
+    rung: row.rung,
+    outcome,
+    confidence: row.confidence as ReplayEmbedFact["confidence"],
+    sourceUrl: safeEmbedSourceUrl(row.provider, row.sourceUrl),
+    embedUrl,
+    albumEmbedUrl,
+    releaseMbid: row.releaseMbid ?? null,
+    providerReleaseId: row.providerReleaseId ?? null,
+    providerTrackId: row.providerTrackId ?? null,
+  };
+}
 
 /**
  * Ghost Replay is a read model over the spin archive. It deliberately has no
@@ -60,6 +145,7 @@ export interface ReplayManifest {
       url: string;
       deadLink: boolean;
     }>;
+      embedFacts: ReplayEmbedFact[];
   }>;
 }
 
@@ -196,6 +282,19 @@ export async function getReplayManifest(id: number): Promise<ReplayManifest | nu
     }
   }
 
+  const embedFactsByMbid = new Map<string, ReplayEmbedFact[]>();
+  if (mbids.length) {
+    const embedRows = await db
+      .select()
+      .from(embedLinkTable)
+      .where(inArray(embedLinkTable.recordingMbid, mbids));
+    for (const row of embedRows) {
+      const facts = embedFactsByMbid.get(row.recordingMbid) ?? [];
+      facts.push(publicEmbedFact(row));
+      embedFactsByMbid.set(row.recordingMbid, facts);
+    }
+  }
+
   const first = rows[0]!;
   const last = rows[rows.length - 1]!;
   const resolved = rows.filter((row) => row.mbid != null).length;
@@ -247,6 +346,7 @@ export async function getReplayManifest(id: number): Promise<ReplayManifest | nu
       confidence: row.confidence,
       recording: toArchiveRecording(row),
       guidedLinks: row.mbid ? guidedLinksByMbid.get(row.mbid) ?? [] : [],
+      embedFacts: row.mbid ? embedFactsByMbid.get(row.mbid) ?? [] : [],
     })),
   };
 }

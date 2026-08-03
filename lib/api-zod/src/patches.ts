@@ -10,11 +10,6 @@
  */
 import zod from "zod";
 
-/** Ghost Replay resolution stays hand-maintained until its playback UI ships. */
-export const StartReplayResolutionParams = zod.object({
-  id: zod.coerce.number().int().positive(),
-});
-
 export const ReplayResolutionJobResponse = zod.object({
   id: zod.number().int(),
   replayId: zod.number().int(),

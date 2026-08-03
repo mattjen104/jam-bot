@@ -69,6 +69,63 @@ const entries = [
 ] as const;
 
 describe("GuidedReplayPanel", () => {
+  it("shows the three doors, offers a known album at track one, and keeps Bandcamp manual", () => {
+    const officialEntries = [{
+      ...entries[0],
+      embedFacts: [{
+        provider: "bandcamp",
+        role: "provenance",
+        rung: 1,
+        outcome: "embedded",
+        confidence: "exact",
+        sourceUrl: "https://artist.bandcamp.com/album/release",
+        embedUrl: "https://bandcamp.com/EmbeddedPlayer/track=100/size=large/",
+        albumEmbedUrl: "https://bandcamp.com/EmbeddedPlayer/album=200/size=large/",
+        releaseMbid: "release",
+        providerReleaseId: "200",
+        providerTrackId: "100",
+      }],
+    }, entries[1]];
+    render(
+      <GuidedReplayPanel
+        entries={officialEntries}
+        label="KEXP · Morning"
+        broadcastHref="/archive/stations/kexp"
+      />,
+    );
+
+    expect(screen.getByTestId("guided-door-broadcast").getAttribute("href")).toBe("/archive/stations/kexp");
+    fireEvent.click(screen.getByTestId("guided-door-album"));
+    expect(screen.getByTestId("guided-embed").getAttribute("src")).toContain("album=200");
+    expect(screen.getByText(/starts at track one/i)).toBeTruthy();
+    expect(screen.getByText(/does not report ended/i)).toBeTruthy();
+  });
+
+  it("shows an honest no-linkable-release state without a fake player", () => {
+    const noLinkEntries = [{
+      ...entries[0],
+      embedFacts: [{
+        provider: "youtube",
+        role: "control",
+        rung: 6,
+        outcome: "no_link",
+        confidence: "none",
+        sourceUrl: null,
+        embedUrl: null,
+        albumEmbedUrl: null,
+        releaseMbid: null,
+        providerReleaseId: null,
+        providerTrackId: null,
+      }],
+      recording: { ...entries[0].recording, links: [] },
+    }];
+    render(<GuidedReplayPanel entries={noLinkEntries} label="KEXP · Morning" />);
+
+    expect(screen.getByText("No linkable release found.")).toBeTruthy();
+    expect((screen.getByTestId("guided-door-current") as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByTestId("guided-embed")).toBeNull();
+  });
+
   it("starts with Bandcamp, shows only entries with Bandcamp links, and renders the EmbeddedPlayer embed", () => {
     render(<GuidedReplayPanel entries={entries} label="KEXP · Morning" />);
 

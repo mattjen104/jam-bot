@@ -55,6 +55,35 @@ export type GuidedReplayMaterialization = {
   missing: GuidedReplayMaterializedEntry[];
 };
 
+export type OfficialEmbedFact = {
+  provider: "bandcamp" | "youtube";
+  role: "provenance" | "control";
+  rung: number;
+  outcome: "embedded" | "link_out" | "no_link" | "expired" | "transient_failure";
+  confidence: "exact" | "gated" | "none";
+  sourceUrl: string | null;
+  embedUrl: string | null;
+  albumEmbedUrl: string | null;
+  releaseMbid: string | null;
+  providerReleaseId: string | null;
+  providerTrackId: string | null;
+};
+
+export type OfficialReplaySource = {
+  provider: OfficialEmbedFact["provider"];
+  role: OfficialEmbedFact["role"];
+  rung: number;
+  outcome: OfficialEmbedFact["outcome"];
+  url: string;
+  embedUrl: string | null;
+  autoAdvance: boolean;
+};
+
+export type OfficialReplayDoors = {
+  current: OfficialReplaySource | null;
+  album: OfficialReplaySource | null;
+};
+
 type ReplayMappingEntry = {
   position: number;
   rawTitle: string;
@@ -71,6 +100,7 @@ type ReplayMappingEntry = {
     url: string;
     deadLink: boolean;
   }>;
+  embedFacts?: OfficialEmbedFact[] | null;
 };
 
 type GuidedLink = RecordingLink & { deadLink?: boolean; externalId?: string | null };
@@ -224,6 +254,100 @@ function safeServiceUrl(service: string, url: string): string | null {
   }
 }
 
+function safeOfficialUrl(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return null;
+    if (
+      !/(^|\.)bandcamp\.com$/i.test(parsed.hostname) &&
+      !/(^|\.)youtube\.com$/i.test(parsed.hostname) &&
+      !/(^|\.)youtu\.be$/i.test(parsed.hostname)
+    ) return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+function officialSource(
+  fact: OfficialEmbedFact,
+  url: string | null,
+  embedUrl: string | null,
+): OfficialReplaySource | null {
+  const safeUrl = safeOfficialUrl(url);
+  const safeEmbedUrl = safeOfficialUrl(embedUrl);
+  if (!safeUrl && !safeEmbedUrl) return null;
+  return {
+    provider: fact.provider,
+    role: fact.role,
+    rung: fact.rung,
+    outcome: fact.outcome,
+    url: safeUrl ?? safeEmbedUrl!,
+    embedUrl: fact.outcome === "embedded" ? safeEmbedUrl : null,
+    autoAdvance: fact.provider === "youtube" && fact.outcome === "embedded",
+  };
+}
+
+/**
+ * Selects only persisted, role-aware provider facts. General service links are
+ * deliberately not consulted here: a provenance link must never be promoted
+ * into a control-capable player by the client.
+ */
+export function getOfficialReplayDoors(
+  entry: Pick<ReplayMappingEntry, "embedFacts"> | null | undefined,
+): OfficialReplayDoors {
+  const facts = entry?.embedFacts ?? [];
+  const embedded = facts.filter(
+    (fact) => fact.outcome === "embedded" && fact.rung <= 4,
+  );
+  const bandcampTrack = embedded.find(
+    (fact) => fact.provider === "bandcamp" && fact.role === "provenance" && fact.embedUrl,
+  );
+  const controlEmbed = embedded.find(
+    (fact) => fact.role === "control" && fact.embedUrl,
+  );
+  const currentFact =
+    (bandcampTrack ? officialSource(bandcampTrack, bandcampTrack.sourceUrl, bandcampTrack.embedUrl) : null) ??
+    (controlEmbed ? officialSource(controlEmbed, controlEmbed.sourceUrl, controlEmbed.embedUrl) : null) ??
+    facts
+      .filter((fact) => fact.outcome === "link_out" && fact.rung === 5)
+      .map((fact) => officialSource(fact, fact.sourceUrl, null))
+      .find(Boolean) ??
+    null;
+
+  const albumFact = facts.find(
+    (fact) =>
+      fact.provider === "bandcamp" &&
+      fact.role === "provenance" &&
+      !!fact.releaseMbid &&
+      (fact.outcome === "embedded" || fact.outcome === "link_out") &&
+      (fact.albumEmbedUrl || fact.sourceUrl),
+  );
+  const album = albumFact
+    ? officialSource(albumFact, albumFact.sourceUrl, albumFact.albumEmbedUrl)
+    : null;
+
+  return { current: currentFact, album };
+}
+
+export function officialEmbedStatus(
+  facts: OfficialEmbedFact[] | null | undefined,
+): string {
+  if (!facts?.length) return "No official embed result yet.";
+  if (facts.some((fact) => fact.outcome === "embedded" && fact.embedUrl)) {
+    return "Official embed available.";
+  }
+  if (facts.some((fact) => fact.outcome === "link_out" && fact.sourceUrl)) {
+    return "Link-out only.";
+  }
+  if (facts.some((fact) => fact.outcome === "expired")) return "Official link expired.";
+  if (facts.some((fact) => fact.outcome === "transient_failure")) {
+    return "Official embed temporarily unavailable.";
+  }
+  return "No linkable release found.";
+}
+
 function sourceForLink(
   service: string,
   link: GuidedLink,
@@ -260,6 +384,26 @@ function sourceForLink(
   const safeUrl = safeServiceUrl(service, link.url);
   if (!safeUrl) return null;
   return { service, url: safeUrl, embedUrl: null, autoAdvance: false, externalOnly: true };
+}
+
+function sourceForOfficialFact(
+  service: string,
+  fact: OfficialEmbedFact,
+): GuidedReplaySource | null {
+  if (service !== fact.provider || fact.outcome === "expired" || fact.outcome === "transient_failure") {
+    return null;
+  }
+  const url = safeOfficialUrl(fact.sourceUrl) ?? safeOfficialUrl(fact.embedUrl);
+  if (!url) return null;
+  const embedUrl =
+    fact.outcome === "embedded" ? safeOfficialUrl(fact.embedUrl) : null;
+  return {
+    service,
+    url,
+    embedUrl,
+    autoAdvance: service === "youtube" && embedUrl != null && fact.role === "control",
+    externalOnly: embedUrl == null,
+  };
 }
 
 /**
@@ -313,7 +457,12 @@ export function materializeGuidedReplay(
 
     const matching = allLinks.filter((link) => matchService(link.name));
     const dead = matching.some((link) => link.deadLink);
-    const source = matching.map((link) => sourceForLink(service, link)).find(Boolean) ?? null;
+    const official = (entry.embedFacts ?? [])
+      .filter((fact) => fact.provider === service)
+      .sort((a, b) => a.rung - b.rung)
+      .map((fact) => sourceForOfficialFact(service, fact))
+      .find(Boolean) ?? null;
+    const source = official ?? matching.map((link) => sourceForLink(service, link)).find(Boolean) ?? null;
 
     return {
       position: entry.position,

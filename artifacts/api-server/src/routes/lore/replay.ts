@@ -8,12 +8,14 @@ import {
   GetReplayManifestParams,
   GetReplayManifestResponse,
   StartReplayResolutionParams,
+  StartReplayPlaylistMaterializationBody,
   GetReplayPlaylistMaterializationParams,
   GetReplayPlaylistMaterializationResponse,
   GetReplayPlaylistTargetsParams,
   GetReplayPlaylistTargetsResponse,
   StartReplayPlaylistMaterializationParams,
   ReplayResolutionJobResponse,
+  GetReplayResolutionJobParams,
 } from "@workspace/api-zod";
 import { getReplayManifest } from "../../lore/replay.js";
 import {
@@ -115,21 +117,21 @@ router.get("/replay/jobs/:jobId/stream", h(async (req, res) => {
 router.post("/replay/:id/resolve", h(async (req, res) => {
   const userId = await replayUserId(req, res);
   if (!userId) return;
-  const parsed = GetReplayManifestParams.safeParse(req.params);
-  if (!parsed.success) return res.status(400).json({ error: "Invalid materialization job id" });
-  const job = await getReplayResolutionJob(jobId, userId);
-  if (!job) return res.status(404).json({ error: "Materialization job not found" });
-  return res.json(GetReplayPlaylistMaterializationResponse.parse(job));
+  const parsed = StartReplayResolutionParams.safeParse(req.params);
+  if (!parsed.success) return res.status(400).json({ error: "Invalid replay id" });
+  const job = await startReplayResolutionJob(userId, parsed.data.id);
+  if (!job) return res.status(404).json({ error: "Replay not found" });
+  return res.status(202).json(ReplayResolutionJobResponse.parse(job));
 }));
 
 router.get("/replay/jobs/:jobId", h(async (req, res) => {
   const userId = await replayUserId(req, res);
   if (!userId) return;
-  const parsed = GetReplayManifestParams.safeParse(req.params);
-  if (!parsed.success) return res.status(400).json({ error: "Invalid replay id" });
-  return res.json(GetReplayPlaylistTargetsResponse.parse({
-    targets: await listReplayMaterializationTargets(userId),
-  }));
+  const parsed = GetReplayResolutionJobParams.safeParse(req.params);
+  if (!parsed.success) return res.status(400).json({ error: "Invalid resolution job id" });
+  const job = await getReplayResolutionJob(parsed.data.jobId, userId);
+  if (!job) return res.status(404).json({ error: "Resolution job not found" });
+  return res.json(ReplayResolutionJobResponse.parse(job));
 }));
 
 // Playlist creation is deliberately POST-only and user-triggered. There is no
@@ -138,46 +140,43 @@ router.post("/replay/:id/materialize", h(async (req, res) => {
   const userId = await replayUserId(req, res);
   if (!userId) return;
   const params = StartReplayPlaylistMaterializationParams.safeParse(req.params);
-  const body = buildReplayExport(
-    rawFormat as ReplayExportFormat,
-    materializeReplayExport(manifest, mappingsByMbid),
-  );
-  if (!params.success || !body || !["apple_music", "tidal"].includes(body.service)) {
+  const body = StartReplayPlaylistMaterializationBody.safeParse(req.body);
+  if (!params.success || !body.success) {
     return res.status(400).json({ error: "A supported playlist service is required" });
   }
-  const job = await getReplayResolutionJob(jobId, userId);
-  if (!job) return res.status(404).json({ error: "Materialization job not found" });
-  return res.json(GetReplayPlaylistMaterializationResponse.parse(job));
-}));
-
-router.get("/replay/jobs/:jobId", h(async (req, res) => {
-  const userId = await replayUserId(req, res);
-  if (!userId) return;
-  const parsed = GetReplayManifestParams.safeParse(req.params);
-  if (!parsed.success) return res.status(400).json({ error: "Invalid materialization job id" });
-  const job = await getReplayResolutionJob(jobId, userId);
-  if (!job) return res.status(404).json({ error: "Materialization job not found" });
-  return res.json(GetReplayPlaylistMaterializationResponse.parse(job));
-}));
-
-router.get("/replay/jobs/:jobId", h(async (req, res) => {
-  const userId = await replayUserId(req, res);
-  if (!userId) return;
-  const jobId = Number(req.params.jobId);
-  if (!Number.isInteger(jobId) || jobId < 1) {
-    return res.status(400).json({ error: "Invalid resolution job id" });
+  const job = await startReplayMaterializationJob(userId, params.data.id, body.data.service);
+  if (!job) {
+    return res.status(400).json({ error: "The selected playlist service is unavailable" });
   }
-  const job = await getReplayResolutionJob(jobId, userId);
-  if (!job) return res.status(404).json({ error: "Resolution job not found" });
-  return res.json(ReplayResolutionJobResponse.parse(job));
+  return res.status(202).json(GetReplayPlaylistMaterializationResponse.parse(job));
+}));
+
+router.get("/replay/materialization-jobs/:jobId", h(async (req, res) => {
+  const userId = await replayUserId(req, res);
+  if (!userId) return;
+  const parsed = GetReplayPlaylistMaterializationParams.safeParse(req.params);
+  if (!parsed.success) return res.status(400).json({ error: "Invalid materialization job id" });
+  const job = await getReplayMaterializationJob(parsed.data.jobId, userId);
+  if (!job) return res.status(404).json({ error: "Materialization job not found" });
+  return res.json(GetReplayPlaylistMaterializationResponse.parse(job));
+}));
+
+router.get("/replay/:id/playlist-targets", h(async (req, res) => {
+  const userId = await replayUserId(req, res);
+  if (!userId) return;
+  const parsed = GetReplayPlaylistTargetsParams.safeParse(req.params);
+  if (!parsed.success) return res.status(400).json({ error: "Invalid replay id" });
+  return res.json(GetReplayPlaylistTargetsResponse.parse({
+    targets: await listReplayMaterializationTargets(userId),
+  }));
 }));
 
 // GET /api/replay/:id/guided-queue — an ordered, honest link-out queue.
 // This is intentionally separate from PlayerProvider: opening a native app
 // must never claim that Lore is playing or advance the live/player queue.
 router.get("/replay/:id/guided-queue", h(async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id < 1) {
+  const parsed = GetReplayManifestParams.safeParse(req.params);
+  if (!parsed.success) {
     return res.status(404).json({ error: "Replay not found" });
   }
   const manifest = await getReplayManifest(parsed.data.id);
@@ -193,13 +192,14 @@ router.get("/replay/:id/guided-queue", h(async (req, res) => {
     ? await db
       .select({
         recordingMbid: serviceTrackMapTable.recordingMbid,
+        service: serviceTrackMapTable.service,
         externalId: serviceTrackMapTable.externalId,
         url: serviceTrackMapTable.url,
+        confidence: serviceTrackMapTable.confidence,
         deadLink: serviceTrackMapTable.deadLink,
       })
       .from(serviceTrackMapTable)
       .where(and(
-        eq(serviceTrackMapTable.service, "apple_music"),
         inArray(serviceTrackMapTable.recordingMbid, mbids),
       ))
     : [];

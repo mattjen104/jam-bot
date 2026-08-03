@@ -4309,6 +4309,15 @@ components:
               deadLink:
                 type: boolean
             required: [service, externalId, url, deadLink]
+        embedFacts:
+          type: array
+          description: >
+            Role-aware official embed decisions. These facts are separate from
+            general service mappings: a provenance link is not implied to be a
+            playback-control provider. URLs are server-validated HTTPS URLs or
+            null.
+          items:
+            $ref: "#/components/schemas/ReplayEmbedFact"
       required:
         - position
         - spinId
@@ -4320,6 +4329,57 @@ components:
         - confidence
         - recording
         - guidedLinks
+        - embedFacts
+    ReplayEmbedFact:
+      type: object
+      description: >
+        Public, role-aware result of official embed resolution. Provider fetch
+        details are intentionally omitted; rung and outcome remain visible so
+        degraded results cannot be mistaken for playable embeds.
+      properties:
+        provider:
+          type: string
+          enum: [bandcamp, youtube]
+        role:
+          type: string
+          enum: [provenance, control]
+        rung:
+          type: integer
+          minimum: 1
+          maximum: 6
+        outcome:
+          type: string
+          enum: [embedded, link_out, no_link, expired, transient_failure]
+        confidence:
+          type: string
+          enum: [exact, gated, none]
+        sourceUrl:
+          type: ["string", "null"]
+          format: uri
+        embedUrl:
+          type: ["string", "null"]
+          format: uri
+        albumEmbedUrl:
+          type: ["string", "null"]
+          format: uri
+        releaseMbid:
+          type: ["string", "null"]
+        providerReleaseId:
+          type: ["string", "null"]
+        providerTrackId:
+          type: ["string", "null"]
+      required:
+        - provider
+        - role
+        - rung
+        - outcome
+        - confidence
+        - sourceUrl
+        - embedUrl
+        - albumEmbedUrl
+        - releaseMbid
+        - providerReleaseId
+        - providerTrackId
     ReplayManifest:
       type: object
       description: >

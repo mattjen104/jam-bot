@@ -1066,6 +1066,70 @@ export type ReplayEntryGuidedLinksItem = {
   deadLink: boolean;
 };
 
+export type ReplayEmbedFactProvider =
+  (typeof ReplayEmbedFactProvider)[keyof typeof ReplayEmbedFactProvider];
+
+export const ReplayEmbedFactProvider = {
+  bandcamp: "bandcamp",
+  youtube: "youtube",
+} as const;
+
+export type ReplayEmbedFactRole =
+  (typeof ReplayEmbedFactRole)[keyof typeof ReplayEmbedFactRole];
+
+export const ReplayEmbedFactRole = {
+  provenance: "provenance",
+  control: "control",
+} as const;
+
+export type ReplayEmbedFactOutcome =
+  (typeof ReplayEmbedFactOutcome)[keyof typeof ReplayEmbedFactOutcome];
+
+export const ReplayEmbedFactOutcome = {
+  embedded: "embedded",
+  link_out: "link_out",
+  no_link: "no_link",
+  expired: "expired",
+  transient_failure: "transient_failure",
+} as const;
+
+export type ReplayEmbedFactConfidence =
+  (typeof ReplayEmbedFactConfidence)[keyof typeof ReplayEmbedFactConfidence];
+
+export const ReplayEmbedFactConfidence = {
+  exact: "exact",
+  gated: "gated",
+  none: "none",
+} as const;
+
+/**
+ * Public, role-aware result of official embed resolution. Provider fetch details are intentionally omitted; rung and outcome remain visible so degraded results cannot be mistaken for playable embeds.
+
+ */
+export interface ReplayEmbedFact {
+  provider: ReplayEmbedFactProvider;
+  role: ReplayEmbedFactRole;
+  /**
+   * @minimum 1
+   * @maximum 6
+   */
+  rung: number;
+  outcome: ReplayEmbedFactOutcome;
+  confidence: ReplayEmbedFactConfidence;
+  /** @nullable */
+  sourceUrl: string | null;
+  /** @nullable */
+  embedUrl: string | null;
+  /** @nullable */
+  albumEmbedUrl: string | null;
+  /** @nullable */
+  releaseMbid: string | null;
+  /** @nullable */
+  providerReleaseId: string | null;
+  /** @nullable */
+  providerTrackId: string | null;
+}
+
 /**
  * One archived spin, including unresolved source metadata.
  */
@@ -1085,6 +1149,9 @@ export interface ReplayEntry {
   /** Durable service mappings for official guided replay embeds. These links are separate from presentation links and retain dead-link state without changing the broadcast manifest.
    */
   guidedLinks: ReplayEntryGuidedLinksItem[];
+  /** Role-aware official embed decisions. These facts are separate from general service mappings: a provenance link is not implied to be a playback-control provider. URLs are server-validated HTTPS URLs or null.
+   */
+  embedFacts: ReplayEmbedFact[];
 }
 
 export type ReplayManifestBounds = {
@@ -1238,6 +1305,50 @@ export interface ReplayMaterializationReceipt {
   status: ReplayMaterializationReceiptStatus;
   retryable: boolean;
   error?: string;
+}
+
+/**
+ * Per-reason counts for identified tracks that could not be resolved to a streaming-service link. noVector = no ISRC or Spotify URL to query; noLinks = Odesli returned no service links; noRecording = MBID not yet in the recordings table.
+
+ */
+export interface ReplayResolutionMissBreakdown {
+  noVector: number;
+  noLinks: number;
+  noRecording: number;
+}
+
+export interface ReplayResolutionFailure {
+  position: number;
+  spinId: number;
+  error: string;
+}
+
+export type ReplayResolutionJobStatus =
+  (typeof ReplayResolutionJobStatus)[keyof typeof ReplayResolutionJobStatus];
+
+export const ReplayResolutionJobStatus = {
+  pending: "pending",
+  running: "running",
+  done: "done",
+  error: "error",
+} as const;
+
+export interface ReplayResolutionJob {
+  id: number;
+  replayId: number;
+  status: ReplayResolutionJobStatus;
+  total: number;
+  processed: number;
+  resolved: number;
+  missing: number;
+  failed: number;
+  committedOffset: number;
+  /** @nullable */
+  error: string | null;
+  /** @nullable */
+  finishedAt: string | null;
+  failures: ReplayResolutionFailure[];
+  missBreakdown: ReplayResolutionMissBreakdown;
 }
 
 export type ReplayMaterializationJobService =
