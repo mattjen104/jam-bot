@@ -1,9 +1,29 @@
 import { useState, useRef, useEffect } from "react";
+import { PencilLine } from "lucide-react";
 import { BottleIcon } from "./icons/BottleIcon";
-import { AvatarPicker } from "./AvatarPicker";
+import { AlbumAvatarPicker } from "./AlbumAvatarPicker";
 import { useSongBottles, type SongBottle } from "../hooks/useSongBottles";
-import { useSocialMode, getStoredAvatar, storeAvatar } from "../lib/social";
+import { useSocialMode } from "../lib/social";
 import { emojiSvgUrl } from "../lib/twemoji";
+import { useMyAlbumAvatar } from "../lib/meHooks";
+
+// ---------------------------------------------------------------------------
+// Keyframe injection (once per document)
+// ---------------------------------------------------------------------------
+
+const STYLE_ID = "bottle-panel-keyframes";
+if (typeof document !== "undefined" && !document.getElementById(STYLE_ID)) {
+  const style = document.createElement("style");
+  style.id = STYLE_ID;
+  style.textContent = `
+    @keyframes bottle-trigger-seal-in {
+      from { opacity: 0; transform: scale(0.5); }
+      to   { opacity: 1; transform: scale(1);   }
+    }
+    .bottle-trigger-seal-in { animation: bottle-trigger-seal-in 0.22s ease-out forwards; }
+  `;
+  document.head.appendChild(style);
+}
 
 // ---------------------------------------------------------------------------
 // Note display
@@ -23,6 +43,10 @@ interface NoteRowProps {
 
 function NoteRow({ bottle, stationName }: NoteRowProps) {
   if (!bottle.body) return null;
+
+  // Avatar may be an emoji (legacy) or a URL (album cover)
+  const isUrl = bottle.avatar?.startsWith("http");
+
   return (
     <div
       style={{
@@ -32,13 +56,23 @@ function NoteRow({ bottle, stationName }: NoteRowProps) {
         borderBottom: "0.5px solid var(--border, rgba(255,255,255,0.08))",
       }}
     >
-      <img
-        src={emojiSvgUrl(bottle.avatar)}
-        width={24}
-        height={24}
-        alt={bottle.avatar}
-        style={{ flexShrink: 0, marginTop: 2 }}
-      />
+      {isUrl ? (
+        <img
+          src={bottle.avatar}
+          width={24}
+          height={24}
+          alt=""
+          style={{ flexShrink: 0, marginTop: 2, borderRadius: 3, objectFit: "cover" }}
+        />
+      ) : (
+        <img
+          src={emojiSvgUrl(bottle.avatar)}
+          width={24}
+          height={24}
+          alt={bottle.avatar}
+          style={{ flexShrink: 0, marginTop: 2 }}
+        />
+      )}
       <div style={{ minWidth: 0, flex: 1 }}>
         <div
           style={{
@@ -95,15 +129,23 @@ export function BottlePanel({
   const { enabled: socialEnabled } = useSocialMode();
   const [open, setOpen] = useState(false);
   const [noteText, setNoteText] = useState("");
-  const [avatar, setAvatarState] = useState<string | null>(() => getStoredAvatar());
   const [sending, setSending] = useState(false);
   const [sentConfirm, setSentConfirm] = useState(false);
+  // Persists for the lifetime of this MBID session — drives the icon swap
+  const [sealed, setSealed] = useState(false);
   const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { bottles, archivedCount, hasUnread, markRead, send } = useSongBottles(
     mbid,
     stationId,
   );
+
+  const { data: avatarData } = useMyAlbumAvatar();
+  const albumAvatarUrl = avatarData?.current?.artworkUrl ?? null;
+  const albumAvatarTitle = avatarData?.current
+    ? `${avatarData.current.albumTitle} · ${avatarData.current.artist}`
+    : null;
+  const needsAvatarChoice = !albumAvatarUrl && (avatarData?.eligible ?? false);
 
   // Mark as read when panel opens
   useEffect(() => {
@@ -115,6 +157,7 @@ export function BottlePanel({
     setOpen(false);
     setNoteText("");
     setSentConfirm(false);
+    setSealed(false);
   }, [mbid]);
 
   // Cleanup confirmation timer
@@ -131,17 +174,18 @@ export function BottlePanel({
   if (!socialEnabled) return null;
 
   const handleSend = async () => {
-    if (!avatar) return;
+    if (!albumAvatarUrl) return;
     if (!noteText.trim() || !stationId) return;
     setSending(true);
     try {
       await send({
         body: noteText.trim(),
-        avatar,
+        avatar: albumAvatarUrl,
         stationId,
         progressMs,
       });
       setNoteText("");
+      setSealed(true);
       setSentConfirm(true);
       confirmTimer.current = setTimeout(() => setSentConfirm(false), 2000);
     } catch {
@@ -151,11 +195,8 @@ export function BottlePanel({
     }
   };
 
-  const handleSelectAvatar = (emoji: string) => {
-    setAvatarState(emoji);
-    storeAvatar(emoji);
-  };
-
+  // Show pencil when no notes exist and user hasn't written one this session
+  const showPencil = bottles.length === 0 && !sealed;
   const triggerLabel = bottles.length > 0 ? `${bottles.length} note${bottles.length === 1 ? "" : "s"}` : null;
 
   return (
@@ -175,8 +216,15 @@ export function BottlePanel({
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
-          aria-label={open ? "Close bottle notes" : "Open bottle notes"}
+          aria-label={
+            showPencil
+              ? "Write a note"
+              : open
+              ? "Close bottle notes"
+              : "Open bottle notes"
+          }
           aria-expanded={open}
+          title={showPencil ? "Write a note" : undefined}
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -193,14 +241,22 @@ export function BottlePanel({
           }}
           data-testid="bottle-trigger"
         >
-          <BottleIcon
-            size={18}
-            style={{
-              filter: hasUnread
-                ? "drop-shadow(0 0 4px var(--picker, #e67e3a))"
-                : undefined,
-            }}
-          />
+          {showPencil ? (
+            <PencilLine
+              size={16}
+              style={{ opacity: 0.7 }}
+            />
+          ) : (
+            <BottleIcon
+              size={18}
+              className={sealed && !sentConfirm ? "bottle-trigger-seal-in" : undefined}
+              style={{
+                filter: hasUnread
+                  ? "drop-shadow(0 0 4px var(--picker, #e67e3a))"
+                  : undefined,
+              }}
+            />
+          )}
           {triggerLabel && (
             <span style={{ fontSize: 11, fontVariantNumeric: "tabular-nums" }}>
               {triggerLabel}
@@ -301,20 +357,7 @@ export function BottlePanel({
 
           {/* Input area */}
           <div style={{ marginTop: 10, borderTop: "0.5px solid var(--border, rgba(255,255,255,0.08))", paddingTop: 10 }}>
-            {!avatar ? (
-              <>
-                <p
-                  style={{
-                    margin: "0 0 6px",
-                    fontSize: 12,
-                    color: "var(--muted-foreground, #888)",
-                  }}
-                >
-                  choose your avatar to write
-                </p>
-                <AvatarPicker selected={null} onSelect={handleSelectAvatar} />
-              </>
-            ) : sentConfirm ? (
+            {sentConfirm ? (
               <p
                 style={{
                   fontSize: 12,
@@ -327,17 +370,48 @@ export function BottlePanel({
               >
                 sealed · travels with the song
               </p>
+            ) : needsAvatarChoice ? (
+              /* No album avatar set yet — show compact picker inline */
+              <>
+                <p
+                  style={{
+                    margin: "0 0 6px",
+                    fontSize: 12,
+                    color: "var(--muted-foreground, #888)",
+                  }}
+                >
+                  pick your album cover to write a note
+                </p>
+                <AlbumAvatarPicker compact />
+              </>
+            ) : !albumAvatarUrl ? (
+              /* Not eligible (no library) — brief message */
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 12,
+                  color: "var(--muted-foreground, #888)",
+                  opacity: 0.6,
+                  fontStyle: "italic",
+                }}
+              >
+                add some tracks to your library to write notes.
+              </p>
             ) : (
+              /* Has album avatar — show write area */
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <img
-                    src={emojiSvgUrl(avatar)}
-                    width={20}
-                    height={20}
-                    alt={avatar}
-                    style={{ flexShrink: 0, cursor: "pointer" }}
-                    onClick={() => setAvatarState(null)}
-                    title="Change avatar"
+                    src={albumAvatarUrl}
+                    width={28}
+                    height={28}
+                    alt={albumAvatarTitle ?? "your album cover"}
+                    title={albumAvatarTitle ?? undefined}
+                    style={{
+                      flexShrink: 0,
+                      borderRadius: 4,
+                      objectFit: "cover",
+                    }}
                   />
                   <textarea
                     rows={2}
