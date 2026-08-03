@@ -63,6 +63,12 @@ export function useSocialMode(): { enabled: boolean; toggle: () => void } {
   };
 }
 
+/**
+ * Imperatively set social mode — use inside event handlers where the hook
+ * toggle is too coarse (e.g. segment buttons that each set a specific state).
+ */
+export { setSocialEnabled };
+
 // Avatar persistence — single device avatar stored separately from social mode.
 const AVATAR_KEY = "lore:social:avatar";
 

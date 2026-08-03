@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from "react";
-import { Headphones } from "lucide-react";
 import { BottleIcon } from "./icons/BottleIcon";
 import { AvatarPicker } from "./AvatarPicker";
 import { useSongBottles, type SongBottle } from "../hooks/useSongBottles";
@@ -93,7 +92,7 @@ export function BottlePanel({
   trackTitle,
   progressMs,
 }: BottlePanelProps) {
-  const { enabled: socialEnabled, toggle: toggleSocial } = useSocialMode();
+  const { enabled: socialEnabled } = useSocialMode();
   const [open, setOpen] = useState(false);
   const [noteText, setNoteText] = useState("");
   const [avatar, setAvatarState] = useState<string | null>(() => getStoredAvatar());
@@ -128,38 +127,8 @@ export function BottlePanel({
   // Hidden entirely when no MBID is resolved (nothing to anchor to)
   if (!mbid) return null;
 
-  // When solo mode is on: show only the headphones re-enable affordance.
-  // The bottle content is hidden but the toggle is always reachable.
-  if (!socialEnabled) {
-    return (
-      <div data-testid="bottle-panel" style={{ width: "100%" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0" }}>
-          <button
-            type="button"
-            onClick={toggleSocial}
-            title="Solo mode on — click to show bottle notes"
-            aria-label="Re-enable bottle notes (solo mode is on)"
-            data-testid="bottle-solo-toggle"
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              padding: 2,
-              color: "var(--picker, #e67e3a)",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 5,
-            }}
-          >
-            <Headphones size={14} />
-            <span style={{ fontSize: 10, color: "var(--muted-foreground, #888)", opacity: 0.6 }}>
-              solo
-            </span>
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // Hidden in Solo mode — the top-level Solo / Listening Party toggle controls visibility.
+  if (!socialEnabled) return null;
 
   const handleSend = async () => {
     if (!avatar) return;
@@ -237,28 +206,6 @@ export function BottlePanel({
               {triggerLabel}
             </span>
           )}
-        </button>
-
-        {/* Solo mode toggle */}
-        <button
-          type="button"
-          onClick={toggleSocial}
-          title="Solo mode — hide bottles and stop publishing notes"
-          aria-label="Toggle solo mode"
-          data-testid="bottle-solo-toggle"
-          style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            padding: 2,
-            color: socialEnabled
-              ? "var(--muted-foreground, #888)"
-              : "var(--picker, #e67e3a)",
-            opacity: socialEnabled ? 0.4 : 1,
-            transition: "color 0.15s, opacity 0.15s",
-          }}
-        >
-          <Headphones size={14} />
         </button>
       </div>
 

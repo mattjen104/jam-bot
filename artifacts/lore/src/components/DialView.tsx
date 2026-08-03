@@ -18,7 +18,7 @@ import { SearchOverlay } from "./SearchOverlay";
 import { usePlayer } from "../player/PlayerProvider";
 import { BottlePanel } from "./BottlePanel";
 import { AlbumAvatarPicker } from "./AlbumAvatarPicker";
-import { useSocialMode } from "../lib/social";
+import { useSocialMode, setSocialEnabled } from "../lib/social";
 import { eligibleDjName } from "@workspace/lore-attribution";
 
 // ---------------------------------------------------------------------------
@@ -1168,14 +1168,9 @@ export function DialView() {
   const [currentShow, setCurrentShow] = useState<DialShow | null>(null);
   const [currentDjName, setCurrentDjName] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [displayMode, setDisplayMode] = useState<DialDisplayMode>(() => {
-    try {
-      return localStorage.getItem("lore:dial:crossing-mode") === "blended" ? "blended" : "personal";
-    } catch {
-      return "personal";
-    }
-  });
   const { enabled: socialEnabled } = useSocialMode();
+  // displayMode is derived directly from socialEnabled — one toggle drives both.
+  const displayMode: DialDisplayMode = socialEnabled ? "blended" : "personal";
   const {
     stations,
     isLoading,
@@ -1192,10 +1187,6 @@ export function DialView() {
     crossingSourceMode,
     crossingError,
   } = useDialData(displayMode);
-
-  useEffect(() => {
-    try { localStorage.setItem("lore:dial:crossing-mode", displayMode); } catch { /* storage optional */ }
-  }, [displayMode]);
 
   useEffect(() => {
     const send = () => {
@@ -1640,31 +1631,33 @@ export function DialView() {
       {/* Action bar — front door only (spec §10) */}
       {level === "all" && isRadioActive && (
              <div className="dial-actbar">
-           <div className="dial-mode" role="group" aria-label="Dial crossing view">
+           <div className="dial-mode" role="group" aria-label="Listening mode">
              <button
                type="button"
                className={`dial-mode__button${crossingSourceMode === "personal" ? " dial-mode__button--active" : ""}`}
                aria-pressed={crossingSourceMode === "personal"}
-               onClick={() => setDisplayMode("personal")}
+               aria-label="Solo mode"
+               onClick={() => setSocialEnabled(false)}
              >
-               Your crossings
+               Solo
              </button>
              <button
                type="button"
                className={`dial-mode__button${crossingSourceMode === "blended" ? " dial-mode__button--active" : ""}`}
                aria-pressed={crossingSourceMode === "blended"}
-               onClick={() => setDisplayMode("blended")}
+               aria-label="Listening Party"
+               onClick={() => setSocialEnabled(true)}
              >
-               Everyone here
+               Listening Party
              </button>
              <span className="dial-mode__hint">
                {crossingError
-                 ? "Everyone here is unavailable; showing your crossings"
+                 ? "Listening Party is unavailable; showing Solo view"
                  : crossingSourceMode === "blended"
-                   ? "anonymous active listeners"
+                   ? "blended community view"
                    : displayMode === "blended"
-                     ? "loading anonymous active listeners"
-                   : "your library"}
+                     ? "loading community data"
+                   : "your personal crossings"}
              </span>
            </div>
           <button type="button" className="dial-act dial-act--listen" onClick={tuneTop} disabled={!topRow}>
