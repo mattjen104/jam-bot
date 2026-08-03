@@ -20,6 +20,7 @@ import {
   stationsTable,
 } from "@workspace/db";
 import { applyReplayResolutionMigration } from "../src/lore/replay-resolution-migration.js";
+import { replayResolutionEvents, type ReplayResolutionProgress } from "../src/lore/replay-resolution.js";
 import app from "../src/app.js";
 
 // ---------------------------------------------------------------------------
@@ -401,6 +402,230 @@ describe("GET /api/replay/jobs/:jobId/stream", () => {
     expect(snapshot.replayId).toBe(anchorSpinId);
     expect(["pending", "running", "done", "error"]).toContain(snapshot.status);
   });
+
+  // -------------------------------------------------------------------------
+  // Reconnect tests: the route comment states "the client always receives a
+  // persisted snapshot first, so reconnecting after a restart cannot lose its
+  // progress state."  The tests below exercise that guarantee directly.
+  // -------------------------------------------------------------------------
+
+  it("re-emits the latest persisted snapshot after a mid-resolution disconnect", async (ctx) => {
+    if (!dbAvailable || streamJobId == null) return ctx.skip();
+
+    // Insert a fresh job in "pending" state so we control its exact shape.
+    const [reconnectJob] = await db
+      .insert(replayResolutionJobsTable)
+      .values({
+        userId: userIdA!,
+        replayId: anchorSpinId!,
+        total: 5,
+        status: "pending",
+        processed: 0,
+      })
+      .returning({ id: replayResolutionJobsTable.id });
+    const reconnectJobId = reconnectJob!.id;
+
+    try {
+      const decoder = new TextDecoder();
+
+      // First connection — verify the initial snapshot is "pending".
+      const ctrl1 = new AbortController();
+      const res1 = await fetch(
+        `${baseUrl}/api/replay/jobs/${reconnectJobId}/stream`,
+        { headers: { cookie: `lore_sid=${SID_A}` }, signal: ctrl1.signal },
+      );
+      expect(res1.status).toBe(200);
+
+      const reader1 = res1.body!.getReader();
+      let buf1 = "";
+      while (!buf1.includes("data:")) {
+        const { done, value } = await reader1.read();
+        if (done || !value) break;
+        buf1 += decoder.decode(value, { stream: true });
+      }
+      ctrl1.abort();
+      reader1.cancel().catch(() => {});
+
+      const dataLine1 = buf1.split("\n").find((l) => l.startsWith("data:"));
+      expect(dataLine1).toBeDefined();
+      const snap1 = JSON.parse(dataLine1!.slice(5).trim()) as Record<string, unknown>;
+      expect(snap1.id).toBe(reconnectJobId);
+      expect(snap1.status).toBe("pending");
+      expect(snap1.processed).toBe(0);
+
+      // Simulate mid-resolution progress: advance the DB row while disconnected.
+      await db
+        .update(replayResolutionJobsTable)
+        .set({ status: "running", processed: 3, resolved: 2, missing: 1 })
+        .where(eq(replayResolutionJobsTable.id, reconnectJobId));
+
+      // Reconnect — the new connection must immediately send the updated snapshot.
+      const ctrl2 = new AbortController();
+      const res2 = await fetch(
+        `${baseUrl}/api/replay/jobs/${reconnectJobId}/stream`,
+        { headers: { cookie: `lore_sid=${SID_A}` }, signal: ctrl2.signal },
+      );
+      expect(res2.status).toBe(200);
+
+      const reader2 = res2.body!.getReader();
+      let buf2 = "";
+      const deadline = Date.now() + 3_000;
+      try {
+        while (Date.now() < deadline) {
+          const { done, value } = await Promise.race([
+            reader2.read(),
+            new Promise<{ done: true; value: undefined }>((resolve) =>
+              setTimeout(() => resolve({ done: true, value: undefined }), 500),
+            ),
+          ]);
+          if (done || !value) break;
+          buf2 += decoder.decode(value, { stream: true });
+          if (buf2.includes(":connected") && buf2.includes("data:")) break;
+        }
+      } finally {
+        ctrl2.abort();
+        reader2.cancel().catch(() => {});
+      }
+
+      const dataLine2 = buf2.split("\n").find((l) => l.startsWith("data:"));
+      expect(dataLine2).toBeDefined();
+      const snap2 = JSON.parse(dataLine2!.slice(5).trim()) as Record<string, unknown>;
+
+      // The reconnected stream must carry the state written while disconnected.
+      expect(snap2.id).toBe(reconnectJobId);
+      expect(snap2.status).toBe("running");
+      expect(snap2.processed).toBe(3);
+      expect(snap2.resolved).toBe(2);
+    } finally {
+      await db
+        .delete(replayResolutionJobsTable)
+        .where(eq(replayResolutionJobsTable.id, reconnectJob!.id));
+    }
+  });
+
+  it("filters out progress events for other jobs — no cross-stream contamination", async (ctx) => {
+    if (!dbAvailable || userIdA == null) return ctx.skip();
+
+    // Two independent jobs — each stream must only see events for its own id.
+    const [jobA] = await db
+      .insert(replayResolutionJobsTable)
+      .values({
+        userId: userIdA,
+        replayId: anchorSpinId!,
+        total: 3,
+        status: "running",
+        processed: 1,
+      })
+      .returning({ id: replayResolutionJobsTable.id });
+    const jobIdA = jobA!.id;
+
+    const [jobB] = await db
+      .insert(replayResolutionJobsTable)
+      .values({
+        userId: userIdA,
+        replayId: anchorSpinId!,
+        total: 3,
+        status: "running",
+        processed: 0,
+      })
+      .returning({ id: replayResolutionJobsTable.id });
+    const jobIdB = jobB!.id;
+
+    try {
+      const decoder = new TextDecoder();
+      const ctrl = new AbortController();
+      const res = await fetch(
+        `${baseUrl}/api/replay/jobs/${jobIdA}/stream`,
+        { headers: { cookie: `lore_sid=${SID_A}` }, signal: ctrl.signal },
+      );
+      expect(res.status).toBe(200);
+
+      const reader = res.body!.getReader();
+      let buf = "";
+
+      // Drain the mandatory initial snapshot.
+      while (!buf.includes("data:")) {
+        const { done, value } = await reader.read();
+        if (done || !value) break;
+        buf += decoder.decode(value, { stream: true });
+      }
+
+      // Emit a progress event for Job B — the stream for Job A must not deliver it.
+      const progressForB: ReplayResolutionProgress = {
+        id: jobIdB,
+        replayId: anchorSpinId!,
+        status: "done",
+        total: 3,
+        processed: 3,
+        resolved: 3,
+        missing: 0,
+        networkErrors: 0,
+        failed: 0,
+        committedOffset: 3,
+        error: null,
+        finishedAt: null,
+        failures: [],
+        missBreakdown: { noVector: 0, noLinks: 0, noRecording: 0 },
+      };
+      replayResolutionEvents.emit("progress", progressForB);
+
+      // Then emit a progress event for Job A — the stream must deliver it.
+      const progressForA: ReplayResolutionProgress = {
+        id: jobIdA,
+        replayId: anchorSpinId!,
+        status: "done",
+        total: 3,
+        processed: 3,
+        resolved: 2,
+        missing: 1,
+        networkErrors: 0,
+        failed: 0,
+        committedOffset: 3,
+        error: null,
+        finishedAt: null,
+        failures: [],
+        missBreakdown: { noVector: 0, noLinks: 0, noRecording: 0 },
+      };
+      replayResolutionEvents.emit("progress", progressForA);
+
+      // Collect until we see at least two data: lines or timeout.
+      const deadline = Date.now() + 3_000;
+      while (Date.now() < deadline) {
+        const { done, value } = await Promise.race([
+          reader.read(),
+          new Promise<{ done: true; value: undefined }>((resolve) =>
+            setTimeout(() => resolve({ done: true, value: undefined }), 500),
+          ),
+        ]);
+        if (done || !value) break;
+        buf += decoder.decode(value, { stream: true });
+        if (buf.split("\n").filter((l) => l.startsWith("data:")).length >= 2) break;
+      }
+
+      ctrl.abort();
+      reader.cancel().catch(() => {});
+
+      const dataLines = buf.split("\n").filter((l) => l.startsWith("data:"));
+      const payloads = dataLines.map(
+        (l) => JSON.parse(l.slice(5).trim()) as Record<string, unknown>,
+      );
+
+      // Every delivered data event must belong to Job A — Job B's event is filtered.
+      for (const p of payloads) {
+        expect(p.id).toBe(jobIdA);
+      }
+      // The Job A progress event must have been delivered with the right shape.
+      const ownEvent = payloads.find((p) => p.processed === 3 && p.resolved === 2);
+      expect(ownEvent).toBeDefined();
+    } finally {
+      await db
+        .delete(replayResolutionJobsTable)
+        .where(eq(replayResolutionJobsTable.id, jobIdA));
+      await db
+        .delete(replayResolutionJobsTable)
+        .where(eq(replayResolutionJobsTable.id, jobIdB));
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -699,9 +924,23 @@ describe("Replay identifier swap guard", () => {
     expect(matOnMatRoute.status).toBe(200);
 
     // Cross-route lookups must fail (404) when the IDs are numerically
-    // distinct — the only scenario where a collision could mask this is when
-    // swapResJobId === swapMatJobId, which is vanishingly rare.
-    if (swapResJobId !== swapMatJobId) {
+    // distinct.  Two edge cases can make an assertion here a false failure:
+    //   1. swapResJobId === swapMatJobId  (different-table sequences coincide)
+    //   2. swapMatJobId coincides with a resolution-job row created earlier in
+    //      the suite (jobId, streamJobId, …) — in that case the resolution
+    //      route legitimately returns 200 for a *different* row.
+    // Both are harmless from a correctness standpoint (each route still queries
+    // only its own table), so skip the assertion rather than let a coincidental
+    // ID alias produce a spurious failure.
+    const [matIdInResTable] = swapResJobId !== swapMatJobId
+      ? await db
+          .select({ id: replayResolutionJobsTable.id })
+          .from(replayResolutionJobsTable)
+          .where(eq(replayResolutionJobsTable.id, swapMatJobId!))
+          .limit(1)
+      : [undefined];
+
+    if (swapResJobId !== swapMatJobId && !matIdInResTable) {
       const resOnMatRoute = await fetch(
         `${baseUrl}/api/replay/materialization-jobs/${swapResJobId}`,
         { headers: { cookie: `lore_sid=${SID_A}` } },

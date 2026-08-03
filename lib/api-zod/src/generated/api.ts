@@ -2013,14 +2013,6 @@ export const GetReplayPlaylistTargetsParams = zod.object({
   id: zod.coerce.number().min(1),
 });
 
-/**
- * @summary List configured Ghost Replay playlist destinations
- */
-
-export const GetReplayPlaylistTargetsParams = zod.object({
-  id: zod.coerce.number().min(1),
-});
-
 export const GetReplayPlaylistTargetsResponse = zod.object({
   targets: zod.array(
     zod.object({
@@ -4378,7 +4370,6 @@ export const CopyMattStarterLibraryResponse = zod.object({
   error: zod.string().optional(),
 });
 
- */
 export const GetMyWeeklyRecapQueryParams = zod.object({
   weekStart: zod
     .date()
