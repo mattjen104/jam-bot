@@ -7,6 +7,8 @@ export const modules: ModuleMap = {
   "./components/mockups/lore-consolidated-v2/RunDrawer.tsx": () => import("../components/mockups/lore-consolidated-v2/RunDrawer.tsx"),
   "./components/mockups/lore-home/LibraryFirst.tsx": () => import("../components/mockups/lore-home/LibraryFirst.tsx"),
   "./components/mockups/lore-home/NowFirst.tsx": () => import("../components/mockups/lore-home/NowFirst.tsx"),
+  "./components/mockups/lore-shared-room/SharedRoomDesktop.tsx": () => import("../components/mockups/lore-shared-room/SharedRoomDesktop.tsx"),
+  "./components/mockups/lore-shared-room/SharedRoomMobile.tsx": () => import("../components/mockups/lore-shared-room/SharedRoomMobile.tsx"),
   "./components/mockups/lore-slack/AmbientCard.tsx": () => import("../components/mockups/lore-slack/AmbientCard.tsx"),
   "./components/mockups/lore-slack/CommandCard.tsx": () => import("../components/mockups/lore-slack/CommandCard.tsx"),
   "./components/mockups/lore-slack/UnfurlCard.tsx": () => import("../components/mockups/lore-slack/UnfurlCard.tsx"),
@@ -18,7 +20,5 @@ export const modules: ModuleMap = {
   "./components/mockups/playhead/PlayheadDesktop.tsx": () => import("../components/mockups/playhead/PlayheadDesktop.tsx"),
   "./components/mockups/playhead/PlayheadMobile.tsx": () => import("../components/mockups/playhead/PlayheadMobile.tsx"),
   "./components/mockups/playhead-unified/OneSpineDesktop.tsx": () => import("../components/mockups/playhead-unified/OneSpineDesktop.tsx"),
-  "./components/mockups/playhead-unified/OneSpineMobile.tsx": () => import("../components/mockups/playhead-unified/OneSpineMobile.tsx"),
-  "./components/mockups/lore-shared-room/SharedRoomDesktop.tsx": () => import("../components/mockups/lore-shared-room/SharedRoomDesktop.tsx"),
-  "./components/mockups/lore-shared-room/SharedRoomMobile.tsx": () => import("../components/mockups/lore-shared-room/SharedRoomMobile.tsx")
+  "./components/mockups/playhead-unified/OneSpineMobile.tsx": () => import("../components/mockups/playhead-unified/OneSpineMobile.tsx")
 };
