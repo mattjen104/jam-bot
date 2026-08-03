@@ -47,6 +47,10 @@ import {
   VoidScrapedShowParams,
   VoidScrapedShowBody,
   VoidScrapedShowResponse,
+  GetEmbedCoverageQueryParams,
+  GetEmbedCoverageResponse,
+  GetEmbedResolutionParams,
+  GetEmbedResolutionResponse,
 } from "@workspace/api-zod";
 import {
   db,
@@ -67,8 +71,11 @@ import {
   criCandidatesTable,
   scrapedShowsTable,
   serviceTrackMapTable,
+  embedLinkTable,
+  embedResolutionMetricsTable,
+  embedResolutionQueueTable,
 } from "@workspace/db";
-import { eq, and, asc, desc, sql, count, isNull, isNotNull, gt } from "drizzle-orm";
+import { eq, and, asc, desc, sql, count, isNull, isNotNull, gt, gte } from "drizzle-orm";
 import { runAnonCleanup } from "../../lore/anonCleanup.js";
 import { wireListExtractor } from "../../lore/list-wire.js";
 import { processListCandidate, writeCandidateOutcome, runListCandidateBatch } from "../../lore/list-candidates.js";
@@ -2242,6 +2249,141 @@ router.post("/admin/maintenance/anon-cleanup", h(async (_req, res) => {
   const deleted = await runAnonCleanup();
   console.info(`[anonCleanup] admin-triggered run deleted ${deleted} row(s)`);
   return res.json({ deleted });
+}));
+
+// GET /api/admin/embed-coverage — aggregate rung/outcome counts by station,
+// genre cluster, and week. Lets operators distinguish trusted-link coverage,
+// gated search coverage, no-link outcomes, and transient provider failures
+// without accessing any third-party provider page or prose content.
+router.get("/admin/embed-coverage", h(async (req, res) => {
+  const parsed = GetEmbedCoverageQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid query parameters" });
+  }
+  const { stationId, genreCluster, weekStart, limit = 500 } = parsed.data;
+
+  const conditions = [];
+  if (stationId !== undefined) {
+    conditions.push(eq(embedResolutionMetricsTable.stationId, stationId));
+  }
+  if (genreCluster !== undefined) {
+    conditions.push(eq(embedResolutionMetricsTable.genreCluster, genreCluster));
+  }
+  if (weekStart !== undefined) {
+    const d = new Date(weekStart);
+    if (Number.isNaN(d.getTime())) {
+      return res.status(400).json({ error: "weekStart is not a valid date" });
+    }
+    conditions.push(gte(embedResolutionMetricsTable.weekStart, d));
+  }
+
+  const rows = await db
+    .select()
+    .from(embedResolutionMetricsTable)
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(
+      desc(embedResolutionMetricsTable.weekStart),
+      asc(embedResolutionMetricsTable.stationId),
+      asc(embedResolutionMetricsTable.genreCluster),
+      asc(embedResolutionMetricsTable.provider),
+      asc(embedResolutionMetricsTable.role),
+      asc(embedResolutionMetricsTable.rung),
+    )
+    .limit(limit);
+
+  return res.json(
+    GetEmbedCoverageResponse.parse({
+      rows: rows.map((r) => ({
+        stationId: r.stationId ?? 0,
+        genreCluster: r.genreCluster ?? "unknown",
+        weekStart: r.weekStart.toISOString(),
+        provider: r.provider,
+        role: r.role,
+        rung: r.rung,
+        outcome: r.outcome,
+        count: r.count,
+        updatedAt: r.updatedAt.toISOString(),
+      })),
+      total: rows.length,
+    }),
+  );
+}));
+
+// GET /api/admin/embed-resolution/:mbid — recording queue/resolution state and
+// retry timing. Returns stored IDs, URLs, and outcome facts only; no
+// third-party provider prose is stored or returned.
+router.get("/admin/embed-resolution/:mbid", h(async (req, res) => {
+  const params = GetEmbedResolutionParams.safeParse(req.params);
+  if (!params.success) {
+    return res.status(400).json({ error: "mbid path parameter is required" });
+  }
+  const { mbid } = params.data;
+
+  // Confirm the recording exists before querying the embed tables.
+  const [recording] = await db
+    .select({ mbid: recordingsTable.mbid })
+    .from(recordingsTable)
+    .where(eq(recordingsTable.mbid, mbid))
+    .limit(1);
+  if (!recording) {
+    return res.status(404).json({ error: "Recording not found" });
+  }
+
+  const [links, queue] = await Promise.all([
+    db
+      .select()
+      .from(embedLinkTable)
+      .where(eq(embedLinkTable.recordingMbid, mbid))
+      .orderBy(asc(embedLinkTable.provider), asc(embedLinkTable.role)),
+    db
+      .select()
+      .from(embedResolutionQueueTable)
+      .where(eq(embedResolutionQueueTable.recordingMbid, mbid))
+      .orderBy(asc(embedResolutionQueueTable.provider), asc(embedResolutionQueueTable.role)),
+  ]);
+
+  const now = new Date();
+  return res.json(
+    GetEmbedResolutionResponse.parse({
+      mbid,
+      links: links.map((l) => {
+        const effectiveOutcome =
+          (l.outcome === "embedded" || l.outcome === "link_out") &&
+          l.expiresAt.getTime() <= now.getTime()
+            ? "expired"
+            : l.outcome;
+        return {
+          id: l.id,
+          provider: l.provider,
+          role: l.role,
+          rung: l.rung,
+          outcome: l.outcome,
+          effectiveOutcome,
+          confidence: l.confidence,
+          resolvedVia: l.resolvedVia,
+          reason: l.reason,
+          providerTrackId: l.providerTrackId ?? null,
+          providerReleaseId: l.providerReleaseId ?? null,
+          releaseMbid: l.releaseMbid ?? null,
+          sourceUrl: l.sourceUrl ?? null,
+          fetchedAt: l.fetchedAt.toISOString(),
+          expiresAt: l.expiresAt.toISOString(),
+          updatedAt: l.updatedAt.toISOString(),
+        };
+      }),
+      queue: queue.map((q) => ({
+        provider: q.provider,
+        role: q.role,
+        status: q.status,
+        priority: q.priority,
+        attempts: q.attempts,
+        nextAttemptAt: q.nextAttemptAt.toISOString(),
+        lastError: q.lastError ?? null,
+        requestedAt: q.requestedAt.toISOString(),
+        expiresAt: q.expiresAt?.toISOString() ?? null,
+      })),
+    }),
+  );
 }));
 
 // POST /api/admin/maintenance/prune-odesli-sentinels — one-time backfill that

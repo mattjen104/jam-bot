@@ -180,6 +180,80 @@ export const ConfirmListEntryBody = zod.object({
 });
 
 
+// ---- Embed resolution admin schemas ------------------------------------
+
+/**
+ * Query params for the embed coverage aggregate endpoint.
+ * All filters are optional — omitting them returns all stored metric rows.
+ */
+export const GetEmbedCoverageQueryParams = zod.object({
+  stationId: zod.coerce.number().int().nonnegative().optional(),
+  genreCluster: zod.string().min(1).optional(),
+  /** ISO-8601 date string; filters rows where week_start >= this value. */
+  weekStart: zod.string().optional(),
+  /** Maximum rows to return. Defaults to 500; capped at 2000. */
+  limit: zod.coerce.number().int().min(1).max(2000).optional(),
+});
+
+export const GetEmbedCoverageResponse = zod.object({
+  rows: zod.array(
+    zod.object({
+      stationId: zod.number().int(),
+      genreCluster: zod.string(),
+      weekStart: zod.string(),
+      provider: zod.string(),
+      role: zod.string(),
+      rung: zod.number().int(),
+      outcome: zod.string(),
+      count: zod.number().int(),
+      updatedAt: zod.string(),
+    }),
+  ),
+  total: zod.number().int(),
+});
+
+export const GetEmbedResolutionParams = zod.object({
+  mbid: zod.string().min(1),
+});
+
+export const GetEmbedResolutionResponse = zod.object({
+  mbid: zod.string(),
+  links: zod.array(
+    zod.object({
+      id: zod.number().int(),
+      provider: zod.string(),
+      role: zod.string(),
+      rung: zod.number().int(),
+      outcome: zod.string(),
+      /** TTL-applied outcome — may be "expired" even when outcome is "embedded". */
+      effectiveOutcome: zod.string(),
+      confidence: zod.string(),
+      resolvedVia: zod.string(),
+      reason: zod.string(),
+      providerTrackId: zod.string().nullable(),
+      providerReleaseId: zod.string().nullable(),
+      releaseMbid: zod.string().nullable(),
+      sourceUrl: zod.string().nullable(),
+      fetchedAt: zod.string(),
+      expiresAt: zod.string(),
+      updatedAt: zod.string(),
+    }),
+  ),
+  queue: zod.array(
+    zod.object({
+      provider: zod.string(),
+      role: zod.string(),
+      status: zod.string(),
+      priority: zod.number().int(),
+      attempts: zod.number().int(),
+      nextAttemptAt: zod.string(),
+      lastError: zod.string().nullable(),
+      requestedAt: zod.string(),
+      expiresAt: zod.string().nullable(),
+    }),
+  ),
+});
+
 export const GetRecordingSongExploderParams = zod.object({
   mbid: zod.string().min(1),
 });
