@@ -3,6 +3,7 @@ import { X, Upload, FileText, ArrowLeft, ChevronRight, Image as ImageIcon, Loade
 import {
   postStartManualImport,
   postStartListenBrainzImport,
+  postStartLastFmImport,
   postStartImport,
   postExtractLibraryImages,
   startSpotifyLibraryConnect,
@@ -326,6 +327,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService }: 
   const [selectedService, setSelectedService] = useState<ServiceId | null>(initialService ?? null);
   const [rawInput, setRawInput] = useState("");
   const [lbUsername, setLbUsername] = useState("");
+  const [lfmUsername, setLfmUsername] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -338,6 +340,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService }: 
   const screenshotInGuideRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lbInputRef = useRef<HTMLInputElement>(null);
+  const lfmInputRef = useRef<HTMLInputElement>(null);
 
   const qc = useQueryClient();
   const { data: connections } = useMyConnections();
@@ -362,6 +365,9 @@ export function ManualImportModal({ onClose, onImportStarted, initialService }: 
     }
     if (mode === "listenbrainz") {
       requestAnimationFrame(() => lbInputRef.current?.focus());
+    }
+    if (mode === "lfm-hint") {
+      requestAnimationFrame(() => lfmInputRef.current?.focus());
     }
   }, [mode]);
 
@@ -583,6 +589,27 @@ export function ManualImportModal({ onClose, onImportStarted, initialService }: 
   };
 
   // ── Import actions ───────────────────────────────────────────────────────
+
+  const handleLastFmImport = async () => {
+    const username = lfmUsername.trim();
+    if (!username) return;
+    setError(null);
+    setSubmitting(true);
+    try {
+      await postStartLastFmImport(username);
+      await qc.invalidateQueries({ queryKey: ME_LATEST_IMPORT_JOB_KEY });
+      onImportStarted?.();
+      onClose();
+    } catch (err) {
+      const isNotFound = err instanceof Error && err.message.includes("404");
+      setError(
+        isNotFound
+          ? "Direct username import isn't available yet — please use the CSV export above."
+          : (err instanceof Error ? err.message : "Import failed — check the username and try again."),
+      );
+      setSubmitting(false);
+    }
+  };
 
   const handleListenBrainzImport = async () => {
     const username = lbUsername.trim();
@@ -904,16 +931,17 @@ export function ManualImportModal({ onClose, onImportStarted, initialService }: 
         {/* ── Last.fm hint ─────────────────────────────────────────────── */}
         {mode === "lfm-hint" && (
           <>
+            {/* Option 1: CSV export (established path) */}
             <div
-              className="rounded-lg border border-border px-3 py-3 font-mono text-[11px] text-muted-foreground space-y-2"
-              style={{ background: "hsl(var(--muted)/0.3)" }}
+              className="rounded-xl border border-border px-4 py-4 flex flex-col gap-2"
+              style={{ background: "hsl(var(--muted)/0.2)" }}
             >
-              <p className="font-semibold text-foreground">Export your Last.fm loved tracks</p>
-              <ol className="space-y-1.5 list-none">
+              <p className="font-mono text-[12px] font-semibold text-foreground">Export your Last.fm loved tracks</p>
+              <ol className="space-y-1.5 font-mono text-[11px] text-muted-foreground list-none">
                 {[
-                  <>Open <a href="https://benjaminbenben.com/lastfm-to-csv/" target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">Last.fm to CSV</a> (free, no login needed beyond Last.fm).</>,
-                  <>Enter your Last.fm username and export your loved tracks.</>,
-                  <>Download the CSV, then drop it on the import zone or paste the contents below.</>,
+                  <>Open <a href="https://benjaminbenben.com/lastfm-to-csv/" target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">Last.fm to CSV</a> (free, no login beyond Last.fm).</>,
+                  <>Enter your username and export your loved tracks.</>,
+                  <>Download the CSV, then drop it below or paste the contents.</>,
                 ].map((step, i) => (
                   <li key={i} className="flex gap-2">
                     <span className="shrink-0 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold" style={{ background: "hsl(var(--primary)/0.15)", color: "hsl(var(--primary))" }} aria-hidden>{i + 1}</span>
@@ -921,26 +949,63 @@ export function ManualImportModal({ onClose, onImportStarted, initialService }: 
                   </li>
                 ))}
               </ol>
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => fileRef.current?.click()}
+                role="button"
+                tabIndex={0}
+                aria-label="Upload or drop a CSV file"
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileRef.current?.click(); }}
+                className="mt-1 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-3 font-mono text-[11px] text-muted-foreground transition-colors"
+                style={{
+                  borderColor: isDragging ? "hsl(var(--primary))" : "hsl(var(--border))",
+                  background: isDragging ? "hsl(var(--primary)/0.06)" : "hsl(var(--muted)/0.08)",
+                }}
+              >
+                <Upload size={13} aria-hidden />
+                <span>{isDragging ? "Drop to import" : "Drop CSV or click to browse"}</span>
+                <input ref={fileRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFileInput} />
+              </div>
             </div>
 
+            {/* Option 2: Username import */}
             <div
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onClick={() => fileRef.current?.click()}
-              role="button"
-              tabIndex={0}
-              aria-label="Upload or drop a CSV file"
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileRef.current?.click(); }}
-              className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-4 font-mono text-[11px] text-muted-foreground transition-colors"
-              style={{
-                borderColor: isDragging ? "hsl(var(--primary))" : "hsl(var(--border))",
-                background: isDragging ? "hsl(var(--primary)/0.06)" : "hsl(var(--muted)/0.15)",
-              }}
+              className="rounded-xl border border-border px-4 py-4 flex flex-col gap-3"
+              style={{ background: "hsl(var(--muted)/0.1)" }}
             >
-              <Upload size={14} aria-hidden />
-              <span>{isDragging ? "Drop to import" : "Drop CSV or click to browse"}</span>
-              <input ref={fileRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFileInput} />
+              <div>
+                <p className="font-mono text-[12px] font-semibold text-foreground">Or enter your Last.fm username</p>
+                <p className="mt-1 font-mono text-[11px] text-muted-foreground leading-relaxed">
+                  We'll import your loved tracks directly — no CSV export needed. No account connection required.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  ref={lfmInputRef}
+                  type="text"
+                  value={lfmUsername}
+                  onChange={(e) => { setLfmUsername(e.target.value); setError(null); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") void handleLastFmImport(); }}
+                  placeholder="Your Last.fm username"
+                  className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 font-mono text-[11px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  spellCheck={false}
+                  data-testid="lastfm-username-input"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleLastFmImport()}
+                  disabled={!lfmUsername.trim() || submitting}
+                  className="shrink-0 rounded-lg border border-primary bg-primary px-3 py-2 font-mono text-[10px] uppercase tracking-wide text-primary-foreground transition-opacity disabled:opacity-40"
+                >
+                  {submitting ? "…" : "Import"}
+                </button>
+              </div>
+              {error && <p className="font-mono text-[11px] text-destructive">{error}</p>}
+              {submitting && (
+                <p className="font-mono text-[11px] text-muted-foreground">Starting import…</p>
+              )}
             </div>
 
             <ScreenshotDropZone
@@ -952,16 +1017,6 @@ export function ManualImportModal({ onClose, onImportStarted, initialService }: 
               imageRef={screenshotInGuideRef}
             />
             <input ref={screenshotInGuideRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={(e) => { void addImages(Array.from(e.target.files ?? [])); setMode("images"); e.target.value = ""; }} />
-
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-full border border-border px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
-              >
-                Cancel
-              </button>
-            </div>
           </>
         )}
 
