@@ -1,9 +1,10 @@
 // @refresh reset
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Link } from "wouter";
-import { ChevronLeft, ChevronRight, Clock, Headphones } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, Headphones, ChevronDown } from "lucide-react";
 import {
   useMyWeeklySummary,
+  useMyWeeklyHistory,
   useIsAuthenticated,
   type WeeklyTrack,
 } from "../lib/meHooks";
@@ -72,6 +73,17 @@ function formatWeekRange(weekStart: string, weekEnd: string): string {
     return `${fmtMonth(start)} ${fmtDay(start)} – ${fmtMonth(end)} ${fmtDay(end)}, ${fmtYear(start)}`;
   }
   return `${fmtMonth(start)} ${fmtDay(start)}, ${fmtYear(start)} – ${fmtMonth(end)} ${fmtDay(end)}, ${fmtYear(end)}`;
+}
+
+/** Format a week label's Monday date into a compact "Mon D" or "Mon D–D" label. */
+function formatWeekRangeFromLabel(weekLabel: string): string {
+  try {
+    const monday = isoWeekToMonday(weekLabel);
+    const sunday = new Date(monday.getTime() + 6 * 86_400_000);
+    return formatWeekRange(monday.toISOString(), sunday.toISOString());
+  } catch {
+    return weekLabel;
+  }
 }
 
 function formatDwell(seconds: number): string {
@@ -238,6 +250,194 @@ function WeekTrackRow({ track }: { track: WeeklyTrack }) {
 }
 
 // ---------------------------------------------------------------------------
+// Week picker dropdown
+// ---------------------------------------------------------------------------
+
+interface WeekPickerProps {
+  selectedWeek: string;
+  currentWeek: string;
+  onSelect: (week: string) => void;
+  onClose: () => void;
+  anchorRef: React.RefObject<HTMLElement | null>;
+}
+
+function WeekPickerDropdown({
+  selectedWeek,
+  currentWeek,
+  onSelect,
+  onClose,
+  anchorRef,
+}: WeekPickerProps) {
+  const { data: history = [] } = useMyWeeklyHistory(8);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node) &&
+        anchorRef.current &&
+        !anchorRef.current.contains(e.target as Node)
+      ) {
+        onClose();
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [onClose, anchorRef]);
+
+  // Close on Escape
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [onClose]);
+
+  // Build displayed weeks: current week always at top, then history weeks
+  // (dedup current week if it appears in history).
+  const historyWeeks = history.filter((w) => w.week !== currentWeek);
+  // Check if current week has data from history
+  const currentWeekData = history.find((w) => w.week === currentWeek);
+
+  const items: Array<{ week: string; label: string; trackCount: number | null; isCurrent: boolean }> = [
+    {
+      week: currentWeek,
+      label: formatWeekRangeFromLabel(currentWeek),
+      trackCount: currentWeekData?.trackCount ?? null,
+      isCurrent: true,
+    },
+    ...historyWeeks.map((w) => ({
+      week: w.week,
+      label: formatWeekRange(w.weekStart, w.weekEnd),
+      trackCount: w.trackCount,
+      isCurrent: false,
+    })),
+  ];
+
+  return (
+    <div
+      ref={dropdownRef}
+      role="listbox"
+      aria-label="Select a week"
+      style={{
+        position: "absolute",
+        top: "calc(100% + 4px)",
+        right: 0,
+        zIndex: 100,
+        background: "hsl(var(--card))",
+        border: "1px solid hsl(var(--border))",
+        borderRadius: 6,
+        boxShadow: "0 4px 20px hsl(0 0% 0% / 0.35)",
+        minWidth: 220,
+        overflow: "hidden",
+      }}
+    >
+      {/* Header row */}
+      <div
+        style={{
+          padding: "6px 12px",
+          borderBottom: "1px solid hsl(var(--border) / 0.5)",
+          fontFamily: "var(--app-font-mono)",
+          fontSize: 9,
+          fontWeight: 700,
+          textTransform: "uppercase",
+          letterSpacing: "0.1em",
+          color: "hsl(var(--faint))",
+        }}
+      >
+        Jump to week
+      </div>
+
+      {items.map((item) => {
+        const isSelected = item.week === selectedWeek;
+        return (
+          <button
+            key={item.week}
+            type="button"
+            role="option"
+            aria-selected={isSelected}
+            onClick={() => {
+              onSelect(item.week);
+              onClose();
+            }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              width: "100%",
+              padding: "7px 12px",
+              background: isSelected
+                ? "hsl(var(--library) / 0.12)"
+                : "none",
+              border: "none",
+              borderBottom: "1px solid hsl(var(--border) / 0.25)",
+              cursor: "pointer",
+              textAlign: "left",
+            }}
+          >
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <span
+                style={{
+                  display: "block",
+                  fontFamily: "var(--app-font-display)",
+                  fontSize: 12,
+                  fontWeight: isSelected ? 700 : 500,
+                  color: isSelected
+                    ? "hsl(var(--library))"
+                    : "hsl(var(--foreground))",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {item.label}
+              </span>
+              {item.isCurrent && (
+                <span
+                  style={{
+                    fontFamily: "var(--app-font-mono)",
+                    fontSize: 9,
+                    color: "hsl(var(--faint))",
+                  }}
+                >
+                  this week
+                </span>
+              )}
+            </div>
+            {item.trackCount != null && item.trackCount > 0 ? (
+              <span
+                style={{
+                  fontFamily: "var(--app-font-mono)",
+                  fontSize: 9,
+                  color: "hsl(var(--dim))",
+                  flexShrink: 0,
+                }}
+              >
+                {item.trackCount} track{item.trackCount === 1 ? "" : "s"}
+              </span>
+            ) : (
+              <span
+                style={{
+                  fontFamily: "var(--app-font-mono)",
+                  fontSize: 9,
+                  color: "hsl(var(--faint))",
+                  flexShrink: 0,
+                }}
+              >
+                —
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main card
 // ---------------------------------------------------------------------------
 
@@ -253,7 +453,9 @@ export function YourWeekCard() {
   const isAuthenticated = useIsAuthenticated();
   // null → still loading auth; false → not logged in; true → logged in
   const [selectedWeek, setSelectedWeek] = useState<string>(CURRENT_WEEK);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const isCurrentWeek = selectedWeek === CURRENT_WEEK;
+  const weekLabelRef = useRef<HTMLButtonElement>(null);
 
   const { data: summary, isLoading } = useMyWeeklySummary(selectedWeek);
 
@@ -308,6 +510,7 @@ export function YourWeekCard() {
             display: "flex",
             alignItems: "center",
             gap: 4,
+            position: "relative",
           }}
         >
           <button
@@ -329,19 +532,48 @@ export function YourWeekCard() {
             <ChevronLeft style={{ width: 12, height: 12 }} />
           </button>
 
-          <span
+          {/* Clickable week label — opens the picker */}
+          <button
+            ref={weekLabelRef}
+            type="button"
+            onClick={() => setPickerOpen((o) => !o)}
+            aria-haspopup="listbox"
+            aria-expanded={pickerOpen}
+            data-testid="your-week-label-button"
             style={{
-              fontFamily: "var(--app-font-mono)",
-              fontSize: 10,
-              color: "hsl(var(--dim))",
-              whiteSpace: "nowrap",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 3,
+              padding: "2px 4px",
+              borderRadius: 3,
+              color: pickerOpen ? "hsl(var(--foreground))" : "hsl(var(--dim))",
             }}
-            data-testid="your-week-label"
           >
-            {summary
-              ? formatWeekRange(summary.weekStart, summary.weekEnd)
-              : selectedWeek}
-          </span>
+            <span
+              style={{
+                fontFamily: "var(--app-font-mono)",
+                fontSize: 10,
+                whiteSpace: "nowrap",
+              }}
+              data-testid="your-week-label"
+            >
+              {summary
+                ? formatWeekRange(summary.weekStart, summary.weekEnd)
+                : selectedWeek}
+            </span>
+            <ChevronDown
+              style={{
+                width: 10,
+                height: 10,
+                flexShrink: 0,
+                transform: pickerOpen ? "rotate(180deg)" : "none",
+                transition: "transform 0.15s ease",
+              }}
+            />
+          </button>
 
           <button
             type="button"
@@ -364,6 +596,17 @@ export function YourWeekCard() {
           >
             <ChevronRight style={{ width: 12, height: 12 }} />
           </button>
+
+          {/* Picker dropdown */}
+          {pickerOpen && (
+            <WeekPickerDropdown
+              selectedWeek={selectedWeek}
+              currentWeek={CURRENT_WEEK}
+              onSelect={(week) => setSelectedWeek(week)}
+              onClose={() => setPickerOpen(false)}
+              anchorRef={weekLabelRef}
+            />
+          )}
         </div>
       </div>
 

@@ -584,6 +584,67 @@ router.get("/me/attendance/weekly", h(async (req, res) => {
 }));
 
 // ---------------------------------------------------------------------------
+// GET /api/me/attendance/weekly/history
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the most-recent non-empty ISO weeks (up to 8) for the authenticated
+ * user, newest first.  Only weeks that have at least one confirmed spin
+ * (spinCount > 0) are included so empty historical weeks don't clutter the
+ * picker.
+ *
+ * Query param:
+ *   limit  — how many weeks to return (1–26, default 8)
+ *
+ * Shape:
+ *   {
+ *     weeks: Array<{
+ *       week: string,       // e.g. "2026-W31"
+ *       weekStart: string,  // Monday 00:00 UTC (ISO)
+ *       weekEnd:   string,  // Sunday 23:59:59.999 UTC (ISO, inclusive)
+ *       trackCount: number,
+ *     }>
+ *   }
+ */
+router.get("/me/attendance/weekly/history", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+
+  const rawLimit = typeof req.query["limit"] === "string" ? parseInt(req.query["limit"], 10) : 8;
+  const limit = Number.isFinite(rawLimit) && rawLimit >= 1 && rawLimit <= 26 ? rawLimit : 8;
+
+  const rows = await db
+    .select({
+      isoWeek: attendanceWeeklyRollupsTable.isoWeek,
+      trackCount: sql<number>`cast(count(distinct ${attendanceWeeklyRollupsTable.recordingMbid}) as int)`,
+    })
+    .from(attendanceWeeklyRollupsTable)
+    .where(
+      and(
+        eq(attendanceWeeklyRollupsTable.userId, user.id),
+        sql`${attendanceWeeklyRollupsTable.spinCount} > 0`,
+      ),
+    )
+    .groupBy(attendanceWeeklyRollupsTable.isoWeek)
+    .orderBy(desc(attendanceWeeklyRollupsTable.isoWeek))
+    .limit(limit);
+
+  const weeks = rows.map((r) => {
+    const match = /^(\d{4})-W(\d{2})$/.exec(r.isoWeek);
+    if (!match) return null;
+    const monday = isoWeekToMonday(parseInt(match[1]!, 10), parseInt(match[2]!, 10));
+    const weekEnd = new Date(monday.getTime() + 7 * 86_400_000 - 1);
+    return {
+      week: r.isoWeek,
+      weekStart: monday.toISOString(),
+      weekEnd: weekEnd.toISOString(),
+      trackCount: r.trackCount,
+    };
+  }).filter(Boolean);
+
+  return res.json({ weeks });
+}));
+
+// ---------------------------------------------------------------------------
 // Session expiry worker
 // ---------------------------------------------------------------------------
 

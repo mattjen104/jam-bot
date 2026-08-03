@@ -1158,6 +1158,36 @@ export function useMyWeeklySummary(week: string | null) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Weekly history — GET /api/me/attendance/weekly/history
+// ---------------------------------------------------------------------------
+
+export interface WeekHistoryItem {
+  week: string;
+  weekStart: string;
+  weekEnd: string;
+  trackCount: number;
+}
+
+export const ME_WEEKLY_HISTORY_KEY = ["me", "attendance", "weekly", "history"] as const;
+
+/**
+ * Returns the most-recent non-empty ISO weeks (up to `limit`, default 8) for
+ * the authenticated user.  Only weeks with at least one confirmed spin are
+ * included.  Returns an empty array when unauthenticated.
+ */
+export function useMyWeeklyHistory(limit = 8) {
+  return useQuery({
+    queryKey: [...ME_WEEKLY_HISTORY_KEY, limit] as const,
+    queryFn: () =>
+      fetchOrNull<{ weeks: WeekHistoryItem[] }>(
+        `/api/me/attendance/weekly/history?limit=${limit}`,
+      ).then((d) => d?.weeks ?? []),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
 /**
  * Stations that have played the user's library artists in the rolling 24 h
  * window but that the user has never consciously tuned into (no listens row
