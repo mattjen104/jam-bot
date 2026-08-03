@@ -2739,7 +2739,7 @@ export const replayResolutionJobsTable = pgTable(
       .references(() => loreUsersTable.id),
     /** Canonical replay anchor (the minimum spin id for the run). */
     replayId: integer("replay_id").notNull(),
-    /** "pending" | "running" | "done" | "error". */
+    /** "pending" | "running" | "done" | "done_with_errors" | "error". */
     status: text("status").notNull().default("pending"),
     total: integer("total").notNull().default(0),
     processed: integer("processed").notNull().default(0),

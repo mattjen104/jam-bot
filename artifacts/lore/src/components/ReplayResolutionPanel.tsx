@@ -81,10 +81,14 @@ export function ReplayResolutionPanel({
   const isRunning =
     job && (job.status === "pending" || job.status === "running");
   const isDone = job?.status === "done";
+  const isDoneWithErrors = job?.status === "done_with_errors";
+  const isTerminalDone = isDone || isDoneWithErrors;
   const isError = job?.status === "error";
 
   const breakdownSummary =
-    isDone && job.missBreakdown ? missBreakdownSummary(job.missBreakdown) : null;
+    isTerminalDone && job.missBreakdown
+      ? missBreakdownSummary(job.missBreakdown)
+      : null;
 
   // Hide the button (and show a "fully resolved" state) when the manifest
   // already reports all identified tracks as resolved — no Odesli call needed.
@@ -115,11 +119,11 @@ export function ReplayResolutionPanel({
     );
   }
 
-  // Show the Re-check button when done, Retry on error, Check availability
-  // when no job has run yet (or starting). Hidden while a job is in flight.
+  // Show the Re-check button when done (clean or with errors), Retry on error,
+  // Check availability when no job has run yet (or starting). Hidden in-flight.
   const showButton = !isRunning;
-  const buttonLabel = isDone ? "Re-check" : isError ? "Retry" : "Check availability";
-  const ButtonIcon = isDone ? RefreshCw : Search;
+  const buttonLabel = isTerminalDone ? "Re-check" : isError ? "Retry" : "Check availability";
+  const ButtonIcon = isTerminalDone ? RefreshCw : Search;
 
   return (
     <section
@@ -157,6 +161,33 @@ export function ReplayResolutionPanel({
                 </p>
               ) : null}
             </div>
+          ) : isDoneWithErrors ? (
+            <div className="mt-1">
+              <p className="flex items-center gap-2 text-sm text-foreground">
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-primary" />
+                {job.resolved} of {job.total} tracks found on a streaming
+                service
+              </p>
+              <p
+                className="mt-1 flex items-center gap-1.5 text-xs text-amber-400"
+                data-testid="resolution-network-errors"
+                role="alert"
+              >
+                <AlertTriangle className="h-3 w-3 shrink-0" />
+                {job.networkErrors} track{job.networkErrors === 1 ? " couldn't" : "s couldn't"} be checked due to network errors — will retry automatically. Re-check to try now.
+              </p>
+              {breakdownSummary ? (
+                <p
+                  className="mt-1 text-xs text-muted-foreground"
+                  data-testid="resolution-miss-breakdown"
+                >
+                  {breakdownSummary}
+                </p>
+              ) : null}
+              <p className="mt-1 text-xs text-muted-foreground" data-testid="resolution-checked-at">
+                Last checked {formatCheckedAt(job.finishedAt)}
+              </p>
+            </div>
           ) : isDone ? (
             <div className="mt-1">
               <p className="flex items-center gap-2 text-sm text-foreground">
@@ -164,16 +195,6 @@ export function ReplayResolutionPanel({
                 {job.resolved} of {job.total} tracks found on a streaming
                 service
               </p>
-              {job.networkErrors > 0 ? (
-                <p
-                  className="mt-1 flex items-center gap-1.5 text-xs text-amber-400"
-                  data-testid="resolution-network-errors"
-                  role="alert"
-                >
-                  <AlertTriangle className="h-3 w-3 shrink-0" />
-                  {job.networkErrors} miss{job.networkErrors === 1 ? " is" : "es are"} due to a network error (e.g. Odesli outage) — re-check later to retry them
-                </p>
-              ) : null}
               {breakdownSummary ? (
                 <p
                   className="mt-1 text-xs text-muted-foreground"
@@ -207,7 +228,7 @@ export function ReplayResolutionPanel({
             disabled={starting}
             onClick={() => void start()}
             className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-card-border px-3 py-2 font-mono text-[10px] uppercase tracking-wide text-foreground hover:border-primary hover:text-primary disabled:opacity-50"
-            data-testid={isDone ? "recheck-tracks-button" : "resolve-tracks-button"}
+            data-testid={isTerminalDone ? "recheck-tracks-button" : "resolve-tracks-button"}
           >
             {starting ? (
               <Loader2 className="h-3 w-3 animate-spin" />

@@ -579,7 +579,7 @@ export async function runReplayResolutionWorker(jobId: number): Promise<void> {
       .from(replayResolutionJobsTable)
       .where(eq(replayResolutionJobsTable.id, jobId))
       .limit(1);
-    if (!job || job.status === "done" || job.status === "error") return;
+    if (!job || job.status === "done" || job.status === "done_with_errors" || job.status === "error") return;
     const manifest = await getReplayManifest(job.replayId);
     if (!manifest) {
       await db
@@ -667,9 +667,13 @@ export async function runReplayResolutionWorker(jobId: number): Promise<void> {
       await emitJob(jobId);
     }
 
+    // Use "done_with_errors" when any network errors occurred so callers can
+    // distinguish a clean finish from one that has short-TTL retryable misses.
+    const terminalStatus =
+      current.networkErrors > 0 ? "done_with_errors" : "done";
     await db
       .update(replayResolutionJobsTable)
-      .set({ status: "done", finishedAt: new Date() })
+      .set({ status: terminalStatus, finishedAt: new Date() })
       .where(eq(replayResolutionJobsTable.id, jobId));
     await emitJob(jobId);
   } catch (err) {

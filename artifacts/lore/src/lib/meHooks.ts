@@ -1302,7 +1302,7 @@ export interface ReplayResolutionMissBreakdown {
 export interface ReplayResolutionJob {
   id: number;
   replayId: number;
-  status: "pending" | "running" | "done" | "error";
+  status: "pending" | "running" | "done" | "done_with_errors" | "error";
   total: number;
   processed: number;
   resolved: number;
@@ -1327,7 +1327,12 @@ export function useReplayResolutionJob(jobId: number | null) {
     enabled: jobId != null,
     refetchInterval: (query) => {
       const data = query.state.data as ReplayResolutionJob | undefined;
-      return data && (data.status === "done" || data.status === "error") ? false : 2_000;
+      return data &&
+        (data.status === "done" ||
+          data.status === "done_with_errors" ||
+          data.status === "error")
+        ? false
+        : 2_000;
     },
     retry: false,
   });

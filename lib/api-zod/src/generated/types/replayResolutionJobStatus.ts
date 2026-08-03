@@ -13,5 +13,6 @@ export const ReplayResolutionJobStatus = {
   pending: "pending",
   running: "running",
   done: "done",
+  done_with_errors: "done_with_errors",
   error: "error",
 } as const;

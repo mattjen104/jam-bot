@@ -13,7 +13,7 @@ import zod from "zod";
 export const ReplayResolutionJobResponse = zod.object({
   id: zod.number().int(),
   replayId: zod.number().int(),
-  status: zod.enum(["pending", "running", "done", "error"]),
+  status: zod.enum(["pending", "running", "done", "done_with_errors", "error"]),
   total: zod.number().int().nonnegative(),
   processed: zod.number().int().nonnegative(),
   resolved: zod.number().int().nonnegative(),
@@ -279,5 +279,4 @@ export const GetRecordingSongExploderResponse = zod.object({
     }),
   ),
 });
-
 
