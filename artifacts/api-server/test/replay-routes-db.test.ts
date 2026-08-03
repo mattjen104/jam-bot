@@ -303,9 +303,7 @@ afterAll(async () =>
 ;
 
   // service_track_map may have been written by the background resolution
-  // worker
-;
- clear it before removing the recording (FK order).
+  // worker; clear it before removing the recording (FK order).
   await db
     .delete(serviceTrackMapTable)
     .where(eq(serviceTrackMapTable.recordingMbid, mbid))
@@ -2029,6 +2027,18 @@ describe("GET /api/replay/:id/guided-queue", () => {
       }
     }
   });
+
+  it("returns 404 for a replay id that does not exist", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+    const res = await fetch(`${baseUrl}/api/replay/999999999/guided-queue`);
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 for a non-integer replay id", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+    const res = await fetch(`${baseUrl}/api/replay/not-a-number/guided-queue`);
+    expect(res.status).toBe(404);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -2038,9 +2048,7 @@ describe("GET /api/replay/:id/guided-queue", () => {
 // Each route must serve only its own table. We verify this by inserting one
 // job into each table, then confirming each ID works only on the correct
 // route. Serial sequences for the two tables are independent so their IDs
-// can coincide
-;
- the guard condition below skips the cross-route 404 assertion
+// can coincide; the guard condition below skips the cross-route 404 assertion
 // only when the IDs happen to be numerically equal (an extreme rarity that
 // would yield a false pass if both jobs were somehow accessible via both
 // routes, but that can never happen because each handler queries a different
