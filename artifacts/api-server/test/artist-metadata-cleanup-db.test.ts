@@ -10,6 +10,7 @@ import {
 } from "@workspace/db";
 import {
   applyArtistMetadataCleanup,
+  applyUrlArtistRepair,
 } from "../src/lore/artist-metadata-cleanup.js";
 import { applyMigrationCompletionsMigration } from "../src/lore/migration-completions-migration.js";
 
@@ -56,15 +57,15 @@ afterAll(async () => {
   await db.delete(spinsTable).where(inArray(spinsTable.stationId, [stationId]));
   await db.delete(stationsTable).where(inArray(stationsTable.id, [stationId]));
   await db.execute(
-    sql`DELETE FROM migration_completions WHERE name = 'applyArtistMetadataCleanup'`,
+    sql`DELETE FROM migration_completions WHERE name IN ('applyArtistMetadataCleanup', 'applyUrlArtistRepair')`,
   );
 }, 30_000);
 
-/** Remove the completion-ledger row before each test so the migration reruns. */
+/** Remove the completion-ledger rows before each test so the migrations rerun. */
 beforeEach(async () => {
   if (!dbAvailable) return;
   await db.execute(
-    sql`DELETE FROM migration_completions WHERE name = 'applyArtistMetadataCleanup'`,
+    sql`DELETE FROM migration_completions WHERE name IN ('applyArtistMetadataCleanup', 'applyUrlArtistRepair')`,
   );
 }, 10_000);
 
@@ -417,6 +418,262 @@ describe("applyArtistMetadataCleanup", () => {
         await db.execute(
           sql`DELETE FROM migration_completions WHERE name = 'applyArtistMetadataCleanup'`,
         );
+      }
+    },
+  );
+});
+
+// ── applyUrlArtistRepair ───────────────────────────────────────────────────
+
+describe("applyUrlArtistRepair", () => {
+  /**
+   * Helper: read the completion-ledger row for the URL repair migration.
+   * Returns true if the row is present.
+   */
+  async function hasUrlRepairCompletion(): Promise<boolean> {
+    const rows = await db.execute(
+      sql`SELECT 1 FROM migration_completions WHERE name = 'applyUrlArtistRepair' LIMIT 1`,
+    );
+    return (rows.rows?.length ?? 0) > 0;
+  }
+
+  /**
+   * Insert a recording with an explicit MBID (used when UUID shape matters).
+   * Falls back to the shared `insertRecording` helper when no MBID is given.
+   */
+  async function insertRecordingWithMbid(
+    mbid: string,
+    artist: string,
+    title: string,
+  ): Promise<void> {
+    await db.execute(sql`
+      INSERT INTO recordings (mbid, artist, title)
+      VALUES (${mbid}, ${artist}, ${title})
+      ON CONFLICT (mbid) DO NOTHING
+    `);
+  }
+
+  it(
+    "does NOT modify a recording with a clean artist (no URL/domain)",
+    { timeout: 30_000 },
+    async (ctx) => {
+      if (!dbAvailable || !stationId) return ctx.skip();
+
+      // insertRecording uses a non-UUID test MBID — no real-UUID URL candidates
+      // → MB gate never fires → completion IS written deterministically.
+      const mbid = await insertRecording("Radiohead", "Karma Police");
+      const spinId = await insertSpin(mbid, "spinitron", "Radiohead", "Karma Police");
+
+      try {
+        const result = await applyUrlArtistRepair({ _testMbids: [mbid] });
+        expect(result.urlArtistFixed).toBe(0);
+        expect(result.urlArtistSkippedSynthetic).toBe(0);
+        expect(await getArtist(mbid)).toBe("Radiohead");
+        // No real-UUID URL candidates → completion IS written
+        expect(await hasUrlRepairCompletion()).toBe(true);
+      } finally {
+        await db.execute(sql`DELETE FROM spins WHERE id = ${spinId}`);
+        await deleteTestRecordings([mbid]);
+      }
+    },
+  );
+
+  it(
+    "counts a sp: synthetic MBID with a domain artist as skipped (completion still written)",
+    { timeout: 30_000 },
+    async (ctx) => {
+      if (!dbAvailable || !stationId) return ctx.skip();
+
+      // sp: MBIDs are not valid UUIDs — permanently non-repairable via MB.
+      // They must not block the migration from completing.
+      const syntheticMbid = `sp:test-url-repair-${run}`;
+      await insertRecordingWithMbid(syntheticMbid, "wellsfargo.com", "Unknown Song");
+      const spinId = await insertSpin(syntheticMbid, "spinitron", "wellsfargo.com", "Unknown Song");
+
+      try {
+        const result = await applyUrlArtistRepair({ _testMbids: [syntheticMbid] });
+        expect(result.urlArtistSkippedSynthetic).toBe(1);
+        expect(result.urlArtistFixed).toBe(0);
+        // sp: row left unchanged — manual review needed
+        expect(await getArtist(syntheticMbid)).toBe("wellsfargo.com");
+        // sp: candidates do NOT block completion
+        expect(await hasUrlRepairCompletion()).toBe(true);
+      } finally {
+        await db.execute(sql`DELETE FROM spins WHERE id = ${spinId}`);
+        await db.execute(sql`UPDATE spins SET mbid = NULL WHERE mbid = ${syntheticMbid}`);
+        await db.execute(sql`DELETE FROM recordings WHERE mbid = ${syntheticMbid}`);
+      }
+    },
+  );
+
+  it(
+    "defers completion when _testMbEnabled=false and a real-UUID domain-artist candidate exists",
+    { timeout: 30_000 },
+    async (ctx) => {
+      if (!dbAvailable || !stationId) return ctx.skip();
+
+      // Use a real UUID-format MBID so the candidate is classified as
+      // "real UUID" — requires MB to repair.  _testMbEnabled=false simulates
+      // a deploy where MB is not yet configured, deterministically regardless
+      // of whether MUSICBRAINZ_CONTACT is set in this environment.
+      const uuidMbid = randomUUID();
+      await insertRecordingWithMbid(uuidMbid, "sponsor.example.fm", "Ad Break");
+      const spinId = await insertSpin(uuidMbid, "spinitron", "sponsor.example.fm", "Ad Break");
+
+      try {
+        const result = await applyUrlArtistRepair({
+          _testMbids: [uuidMbid],
+          _testMbEnabled: false, // simulate MB not configured
+        });
+        // MB not available → deferred, nothing fixed
+        expect(result.urlArtistFixed).toBe(0);
+        expect(result.urlArtistSkippedSynthetic).toBe(0);
+        // Artist value preserved — migration never blanks a row
+        expect(await getArtist(uuidMbid)).toBe("sponsor.example.fm");
+        // Completion row MUST NOT be written — the next boot must retry
+        expect(await hasUrlRepairCompletion()).toBe(false);
+      } finally {
+        await db.execute(sql`DELETE FROM spins WHERE id = ${spinId}`);
+        await deleteTestRecordings([uuidMbid]);
+      }
+    },
+  );
+
+  it(
+    "defers completion when _testMbEnabled=false and an https:// artist real-UUID candidate exists",
+    { timeout: 30_000 },
+    async (ctx) => {
+      if (!dbAvailable || !stationId) return ctx.skip();
+
+      const uuidMbid = randomUUID();
+      await insertRecordingWithMbid(uuidMbid, "https://ads.example.com", "Promo Clip");
+      const spinId = await insertSpin(uuidMbid, "kexp", "https://ads.example.com", "Promo Clip");
+
+      try {
+        const result = await applyUrlArtistRepair({
+          _testMbids: [uuidMbid],
+          _testMbEnabled: false,
+        });
+        expect(result.urlArtistFixed).toBe(0);
+        expect(result.urlArtistSkippedSynthetic).toBe(0);
+        expect(await getArtist(uuidMbid)).toBe("https://ads.example.com");
+        // Completion row absent — will retry next boot
+        expect(await hasUrlRepairCompletion()).toBe(false);
+      } finally {
+        await db.execute(sql`DELETE FROM spins WHERE id = ${spinId}`);
+        await deleteTestRecordings([uuidMbid]);
+      }
+    },
+  );
+
+  it(
+    "proceeds and writes completion when _testMbEnabled=true even if MB returns no artist (genuine miss)",
+    { timeout: 30_000 },
+    async (ctx) => {
+      if (!dbAvailable || !stationId) return ctx.skip();
+
+      // Real UUID MBID that does not exist in MB.  With MB enabled the
+      // migration tries the lookup, gets null back (404 / not configured), and
+      // leaves the row unchanged.  Completion IS written because the pass
+      // ran to the end — a genuine MB miss should not block future boots.
+      const uuidMbid = randomUUID();
+      await insertRecordingWithMbid(uuidMbid, "sponsor.example.io", "Junk Clip");
+      const spinId = await insertSpin(uuidMbid, "spinitron", "sponsor.example.io", "Junk Clip");
+
+      try {
+        const result = await applyUrlArtistRepair({
+          _testMbids: [uuidMbid],
+          _testMbEnabled: true, // MB "available"; fetchRecordingCredits returns null for unknown UUID
+        });
+        // fetchRecordingCredits returns null for a non-existent recording →
+        // row left unchanged, not counted as fixed
+        expect(result.urlArtistFixed).toBe(0);
+        expect(result.urlArtistSkippedSynthetic).toBe(0);
+        expect(await getArtist(uuidMbid)).toBe("sponsor.example.io");
+        // Completion IS written — MB was enabled and the pass completed
+        expect(await hasUrlRepairCompletion()).toBe(true);
+      } finally {
+        await db.execute(sql`DELETE FROM spins WHERE id = ${spinId}`);
+        await deleteTestRecordings([uuidMbid]);
+      }
+    },
+  );
+
+  it(
+    "does NOT modify a domain-artist recording that only has manual/backfill spins",
+    { timeout: 30_000 },
+    async (ctx) => {
+      if (!dbAvailable || !stationId) return ctx.skip();
+
+      // Source-protected recording — excluded from candidates by the SQL WHERE
+      // clause regardless of MBID shape.
+      const uuidMbid = randomUUID();
+      await insertRecordingWithMbid(uuidMbid, "protected.com", "Protected Track");
+      const spinId = await insertSpin(uuidMbid, "manual", "protected.com", "Protected Track");
+
+      try {
+        const result = await applyUrlArtistRepair({
+          _testMbids: [uuidMbid],
+          _testMbEnabled: true,
+        });
+        // Excluded from candidates → real-UUID list is empty → MB gate does
+        // not fire → completion IS written (nothing to defer)
+        expect(result.urlArtistFixed).toBe(0);
+        expect(result.urlArtistSkippedSynthetic).toBe(0);
+        expect(await getArtist(uuidMbid)).toBe("protected.com");
+        expect(await hasUrlRepairCompletion()).toBe(true);
+      } finally {
+        await db.execute(sql`DELETE FROM spins WHERE id = ${spinId}`);
+        await deleteTestRecordings([uuidMbid]);
+      }
+    },
+  );
+
+  it(
+    "is idempotent: a second call is a no-op once the completion ledger is written",
+    { timeout: 60_000 },
+    async (ctx) => {
+      if (!dbAvailable || !stationId) return ctx.skip();
+
+      // Use a sp: synthetic MBID so completion IS written on the first call
+      // (sp: candidates are non-UUID, never block completion, no MB needed).
+      const syntheticMbid = `sp:test-url-idem-${run}`;
+      await insertRecordingWithMbid(syntheticMbid, "idem-sponsor.com", "Idem Ad");
+      const spinId = await insertSpin(syntheticMbid, "kexp", "idem-sponsor.com", "Idem Ad");
+
+      try {
+        // First call — sp: candidate found, skipped, completion written
+        const first = await applyUrlArtistRepair({ _testMbids: [syntheticMbid] });
+        expect(first.urlArtistSkippedSynthetic).toBe(1);
+        expect(await hasUrlRepairCompletion()).toBe(true);
+
+        // Second call — completion ledger gates it out immediately
+        const second = await applyUrlArtistRepair({ _testMbids: [syntheticMbid] });
+        expect(second.urlArtistFixed).toBe(0);
+        expect(second.urlArtistSkippedSynthetic).toBe(0);
+      } finally {
+        await db.execute(sql`DELETE FROM spins WHERE id = ${spinId}`);
+        await db.execute(sql`UPDATE spins SET mbid = NULL WHERE mbid = ${syntheticMbid}`);
+        await db.execute(sql`DELETE FROM recordings WHERE mbid = ${syntheticMbid}`);
+      }
+    },
+  );
+
+  it(
+    "completion ledger row is written when there are no real-UUID URL-artist candidates",
+    { timeout: 30_000 },
+    async (ctx) => {
+      if (!dbAvailable) return ctx.skip();
+
+      // A recording with a clean artist passes the _testMbids filter but is
+      // not a URL/domain candidate — no real-UUID URL candidates → MB gate
+      // never fires → completion IS written.
+      const safeMbid = await insertRecording("Clean Artist No URL", "Clean Song");
+      try {
+        await applyUrlArtistRepair({ _testMbids: [safeMbid] });
+        expect(await hasUrlRepairCompletion()).toBe(true);
+      } finally {
+        await deleteTestRecordings([safeMbid]);
       }
     },
   );
