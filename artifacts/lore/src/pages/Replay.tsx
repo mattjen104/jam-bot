@@ -112,7 +112,7 @@ export default function Replay() {
               </div>
             </section>
 
-            <ReplayResolutionPanel replayId={data.replayId} />
+            <ReplayResolutionPanel replayId={data.replayId} coverage={data.coverage} />
 
             <ReplayPlaylistPanel replayId={data.replayId} />
 

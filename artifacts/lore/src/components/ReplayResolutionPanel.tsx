@@ -41,12 +41,24 @@ function formatCheckedAt(finishedAt: string | null): string {
   return `${diffDays} days ago`;
 }
 
+interface Coverage {
+  total: number;
+  resolved: number;
+  unresolved: number;
+}
+
 /**
  * User-triggered Odesli resolution panel. Lets listeners kick off the
  * background service-link lookup and see a plain-language breakdown of why
  * some tracks couldn't be added to a streaming playlist.
  */
-export function ReplayResolutionPanel({ replayId }: { replayId: number }) {
+export function ReplayResolutionPanel({
+  replayId,
+  coverage,
+}: {
+  replayId: number;
+  coverage?: Coverage;
+}) {
   const [jobId, setJobId] = useState<number | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
@@ -74,11 +86,40 @@ export function ReplayResolutionPanel({ replayId }: { replayId: number }) {
   const breakdownSummary =
     isDone && job.missBreakdown ? missBreakdownSummary(job.missBreakdown) : null;
 
+  // Hide the button (and show a "fully resolved" state) when the manifest
+  // already reports all identified tracks as resolved — no Odesli call needed.
+  const isFullyResolved =
+    !job &&
+    coverage != null &&
+    coverage.total > 0 &&
+    coverage.resolved === coverage.total;
+
+  if (isFullyResolved) {
+    return (
+      <section
+        aria-label="Resolve streaming links"
+        className="mb-6 rounded-xl border border-card-border bg-card p-4"
+        data-testid="replay-resolution"
+      >
+        <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+          Streaming availability
+        </p>
+        <p
+          className="mt-1 flex items-center gap-2 text-sm text-foreground"
+          data-testid="resolution-fully-resolved"
+        >
+          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-primary" />
+          All {coverage.total} tracks have streaming links
+        </p>
+      </section>
+    );
+  }
+
   // Show the Re-check button when done, Retry on error, Check availability
   // when no job has run yet (or starting). Hidden while a job is in flight.
   const showButton = !isRunning;
   const buttonLabel = isDone ? "Re-check" : isError ? "Retry" : "Check availability";
-  const ButtonIcon = isDone ? RefreshCw : isError || !job ? Search : Search;
+  const ButtonIcon = isDone ? RefreshCw : Search;
 
   return (
     <section
