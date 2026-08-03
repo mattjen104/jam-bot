@@ -492,7 +492,7 @@ function artGradient(a: string, b: string): string {
 // Grouped-view helpers
 // ---------------------------------------------------------------------------
 
-interface AlbumGroup {
+export interface AlbumGroup {
   key: string;
   albumTitle: string;
   artist: string;
@@ -500,7 +500,7 @@ interface AlbumGroup {
   items: LibraryItem[];
 }
 
-interface ArtistGroup {
+export interface ArtistGroup {
   key: string;
   artist: string;
   items: LibraryItem[];
@@ -508,7 +508,7 @@ interface ArtistGroup {
   albums: AlbumGroup[];
 }
 
-function buildAlbumGroups(items: LibraryItem[]): AlbumGroup[] {
+export function buildAlbumGroups(items: LibraryItem[]): AlbumGroup[] {
   const map = new Map<string, AlbumGroup>();
   for (const item of items) {
     const albumTitle = item.recording?.albumTitle ?? "";
@@ -533,7 +533,7 @@ function buildAlbumGroups(items: LibraryItem[]): AlbumGroup[] {
   return [...map.values()];
 }
 
-function buildArtistGroups(items: LibraryItem[]): ArtistGroup[] {
+export function buildArtistGroups(items: LibraryItem[]): ArtistGroup[] {
   const artistMap = new Map<string, ArtistGroup>();
   for (const item of items) {
     const artist = item.recording?.artist ?? "Unknown artist";
@@ -554,7 +554,7 @@ function buildArtistGroups(items: LibraryItem[]): ArtistGroup[] {
 // ---------------------------------------------------------------------------
 // AlbumGroupRow — collapsible album bucket
 // ---------------------------------------------------------------------------
-function AlbumGroupRow({
+export function AlbumGroupRow({
   group,
   openDoorMbid,
   setOpenDoorMbid,
@@ -694,7 +694,7 @@ function AlbumGroupRow({
 // ---------------------------------------------------------------------------
 // ArtistGroupRow — collapsible artist bucket with album sub-rows
 // ---------------------------------------------------------------------------
-function ArtistGroupRow({
+export function ArtistGroupRow({
   group,
   openDoorMbid,
   setOpenDoorMbid,
