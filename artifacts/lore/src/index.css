@@ -3278,6 +3278,7 @@
 .dial-act {
   display: inline-flex;
   align-items: center;
+  align-self: flex-start;   /* don't stretch to match the mode group's hint-text height */
   gap: 5px;
   padding: 6px 9px;
   border-radius: 6px;

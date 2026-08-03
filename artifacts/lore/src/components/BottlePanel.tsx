@@ -200,23 +200,27 @@ export function BottlePanel({
 
   const handleSend = async () => {
     if (!albumAvatarUrl) return;
-    if (!noteText.trim() || !stationId) return;
-    setSending(true);
+    const text = noteText.trim();
+    if (!text || !stationId) return;
+    // Optimistic: seal the UI immediately so it feels instant.
+    // Revert if the server rejects the request.
+    setNoteText("");
+    setSealed(true);
+    setSentConfirm(true);
+    confirmTimer.current = setTimeout(() => setSentConfirm(false), 2000);
     try {
       await send({
-        body: noteText.trim(),
+        body: text,
         avatar: albumAvatarUrl,
         stationId,
         progressMs,
       });
-      setNoteText("");
-      setSealed(true);
-      setSentConfirm(true);
-      confirmTimer.current = setTimeout(() => setSentConfirm(false), 2000);
     } catch {
-      // Send failure — leave input intact so user can retry
-    } finally {
-      setSending(false);
+      // Revert so the user can retry
+      if (confirmTimer.current) clearTimeout(confirmTimer.current);
+      setNoteText(text);
+      setSealed(false);
+      setSentConfirm(false);
     }
   };
 

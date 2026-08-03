@@ -176,27 +176,27 @@ function liveSentence(
   if (dj) {
     if (usableTrack && usableArtist) {
       return {
-        node: <>{dj} is playing <b>{usableTrack}</b> by <b>{usableArtist}</b></>,
+        node: <>{dj} — <b>{usableTrack}</b> · <b>{usableArtist}</b></>,
         hasTrack: true,
       };
     }
     if (usableArtist) {
-      return { node: <>{dj} is playing <b>{usableArtist}</b></>, hasTrack: true };
+      return { node: <>{dj} — <b>{usableArtist}</b></>, hasTrack: true };
     }
     if (usableTrack) {
-      return { node: <>{dj} is playing <b>{usableTrack}</b></>, hasTrack: true };
+      return { node: <>{dj} — <b>{usableTrack}</b></>, hasTrack: true };
     }
     return { node: <>{dj} is on air</>, hasTrack: false };
   }
 
   if (usableArtist && usableTrack) {
-    return { node: <><b>{usableArtist}</b> is playing <b>{usableTrack}</b></>, hasTrack: true };
+    return { node: <><b>{usableTrack}</b> · <b>{usableArtist}</b></>, hasTrack: true };
   }
   if (usableArtist) {
-    return { node: <><b>{usableArtist}</b> is playing</>, hasTrack: true };
+    return { node: <><b>{usableArtist}</b> on air</>, hasTrack: true };
   }
   if (usableTrack) {
-    return { node: <><b>{usableTrack}</b> is playing</>, hasTrack: true };
+    return { node: <><b>{usableTrack}</b> on air</>, hasTrack: true };
   }
 
   // Without current attribution, preserve the established weak-match
@@ -247,8 +247,8 @@ function crossingSentence(
     });
     return {
       node: dj
-        ? <>{dj} is playing {artistNodes}.</>
-        : <>Now playing: {artistNodes}.</>,
+        ? <>{dj} — {artistNodes} on air.</>
+        : <>{artistNodes} on air.</>,
       hasTrack: true,
     };
   }
@@ -1135,7 +1135,7 @@ function OfflineRow({
       ? displayMode === "blended"
         ? <>Your group: {nn}</>
         : <>{nn} aired here</>
-      : <><b>{crossings} {displayMode === "blended" ? "community matches" : "of yours"}</b> aired here</>;
+      : <><b>{crossings}</b> {displayMode === "blended" ? "heard here" : "of yours aired here"}</>;
     t1Cls = "w3";
   } else if (artistCrossings > 0) {
     const names = (displayMode === "blended" && stationTopArtistNames.length > 0)
