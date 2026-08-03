@@ -99,13 +99,42 @@ router.get("/replay/jobs/:jobId/stream", h(async (req, res) => {
   res.write(":connected\n\n");
   write(snapshot);
 
+  const TERMINAL_STATUSES = new Set(["done", "done_with_errors", "error"]);
+
+  // If the snapshot is already terminal, close the stream after a short grace
+  // period so a client that forgets to disconnect doesn't hold the slot open
+  // indefinitely.  The :done comment lets clients distinguish a clean
+  // server-initiated close from a network drop.
+  const TERMINAL_GRACE_MS = 5_000;
+  let terminalTimer: ReturnType<typeof setTimeout> | undefined;
+  if (TERMINAL_STATUSES.has(snapshot.status)) {
+    terminalTimer = setTimeout(() => {
+      if (!res.writableEnded) {
+        res.write(":done\n\n");
+        res.end();
+      }
+    }, TERMINAL_GRACE_MS);
+  }
+
   const onProgress = (progress: ReplayResolutionProgress) => {
-    if (progress.id === jobId && !res.writableEnded) write(progress);
+    if (progress.id === jobId && !res.writableEnded) {
+      write(progress);
+      // Arm the grace-period timer if this event brings the job to a terminal state.
+      if (TERMINAL_STATUSES.has(progress.status) && !terminalTimer) {
+        terminalTimer = setTimeout(() => {
+          if (!res.writableEnded) {
+            res.write(":done\n\n");
+            res.end();
+          }
+        }, TERMINAL_GRACE_MS);
+      }
+    }
   };
   replayResolutionEvents.on("progress", onProgress);
   const ping = setInterval(() => res.write(":ping\n\n"), 30_000);
   req.on("close", () => {
     clearInterval(ping);
+    clearTimeout(terminalTimer);
     replayResolutionEvents.off("progress", onProgress);
     release();
   });

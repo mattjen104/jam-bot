@@ -1306,6 +1306,83 @@ describe("GET /api/replay/jobs/:jobId/stream", () => {
         .where(eq(replayResolutionJobsTable.id, jobIdB));
     }
   });
+
+  it("self-closes with a :done comment after the grace period when the snapshot is already terminal", async (ctx) => {
+    if (!dbAvailable || userIdA == null) return ctx.skip();
+
+    // Insert a job that is already in a terminal state.
+    const [terminalJob] = await db
+      .insert(replayResolutionJobsTable)
+      .values({
+        userId: userIdA,
+        replayId: anchorSpinId!,
+        total: 2,
+        status: "done",
+        processed: 2,
+        resolved: 2,
+        missing: 0,
+        finishedAt: new Date(),
+      })
+      .returning({ id: replayResolutionJobsTable.id });
+    const terminalJobId = terminalJob!.id;
+
+    try {
+      const res = await fetch(
+        `${baseUrl}/api/replay/jobs/${terminalJobId}/stream`,
+        { headers: { cookie: `lore_sid=${SID_A}` } },
+      );
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("text/event-stream");
+
+      // Read the full stream until the server closes it (the reader resolves
+      // with done === true) or a 10-second safety deadline is hit.  The server
+      // should close within TERMINAL_GRACE_MS (5 s) + some processing headroom.
+      //
+      // IMPORTANT: reuse the same pendingRead promise across poll intervals
+      // instead of calling reader.read() on every iteration.  Calling read()
+      // multiple times concurrently leaves zombie reads that silently consume
+      // arriving chunks, causing the caller never to see them.
+      const TIMEOUT_SENTINEL = Symbol("timeout");
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = "";
+      const deadline = Date.now() + 10_000;
+      try {
+        let pendingRead = reader.read();
+        while (Date.now() < deadline) {
+          const result = await Promise.race([
+            pendingRead,
+            new Promise<typeof TIMEOUT_SENTINEL>((resolve) =>
+              setTimeout(() => resolve(TIMEOUT_SENTINEL), 300),
+            ),
+          ]);
+          if (result === TIMEOUT_SENTINEL) continue; // keep same pendingRead
+          if (result.value) accumulated += decoder.decode(result.value, { stream: true });
+          if (result.done) break;
+          pendingRead = reader.read(); // only advance after consuming a chunk
+        }
+      } finally {
+        reader.cancel().catch(() => {});
+      }
+
+      // The stream must have carried the initial snapshot and then the
+      // server-initiated :done comment before closing naturally.
+      expect(accumulated).toContain(":connected");
+      expect(accumulated).toContain("data:");
+      expect(accumulated).toContain(":done");
+
+      // The initial snapshot must report the terminal status we inserted.
+      const dataLine = accumulated.split("\n").find((l) => l.startsWith("data:"));
+      expect(dataLine).toBeDefined();
+      const snap = JSON.parse(dataLine!.slice(5).trim()) as Record<string, unknown>;
+      expect(snap.id).toBe(terminalJobId);
+      expect(snap.status).toBe("done");
+    } finally {
+      await db
+        .delete(replayResolutionJobsTable)
+        .where(eq(replayResolutionJobsTable.id, terminalJobId));
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
