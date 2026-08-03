@@ -9,9 +9,17 @@ import {
   startSpotifyLibraryConnect,
   useMyConnections,
   useLatestImportJob,
+  useMyAlbumAvatar,
+  useSetAlbumAvatar,
+  useSetTasteSeeds,
   ME_LATEST_IMPORT_JOB_KEY,
   ME_CONNECTIONS_KEY,
 } from "../lib/meHooks";
+import {
+  useGetStationsArtistFrequency,
+  getGetStationsArtistFrequencyQueryKey,
+} from "@workspace/api-client-react";
+import { mergeOnboardingArtists, liveIdentityKey } from "../hooks/useDialData";
 import { useQueryClient } from "@tanstack/react-query";
 
 export interface Track { artist: string; title: string }
@@ -184,6 +192,8 @@ export const SERVICE_TILES: ServiceTile[] = [
  * tracks          — text paste / CSV mode
  * images          — screenshot upload/paste
  * review          — OCR review
+ * artist-seeds    — compact chip grid of Lore artists for quick taste seeding
+ * avatar          — album-cover avatar picker shown after any completion path
  */
 type Mode =
   | "service-picker"
@@ -193,7 +203,9 @@ type Mode =
   | "tracks"
   | "lfm-hint"
   | "images"
-  | "review";
+  | "review"
+  | "artist-seeds"
+  | "avatar";
 
 interface Props {
   onClose(): void;
@@ -347,10 +359,41 @@ export function ManualImportModal({ onClose, onImportStarted, initialService }: 
   /** Handle to the OAuth tab so we can detect when it closes. */
   const oauthWindowRef = useRef<Window | null>(null);
 
+  // Artist-seeds state
+  const [selectedArtists, setSelectedArtists] = useState<Set<string>>(new Set());
+  const [seedSaving, setSeedSaving] = useState(false);
+  // Avatar state
+  const [avatarChosen, setAvatarChosen] = useState<string | null>(null);
+  const [avatarSaving, setAvatarSaving] = useState(false);
+
   const qc = useQueryClient();
   const { data: connections } = useMyConnections();
   const { data: latestJob } = useLatestImportJob();
   const hasSpotify = Array.isArray(connections) && connections.some((c) => c.service === "spotify");
+
+  // Onboarding artists for the chip grid
+  const { data: artistFreqData, isLoading: artistFreqLoading } = useGetStationsArtistFrequency({
+    query: { queryKey: getGetStationsArtistFrequencyQueryKey(), staleTime: 10 * 60_000 },
+  });
+  const onboardingArtists = mergeOnboardingArtists(
+    artistFreqData?.artists ?? [],
+    [],
+  );
+
+  // Album avatar data — used to decide whether to show the avatar step
+  const { data: albumAvatarData } = useMyAlbumAvatar();
+  const setTasteSeeds = useSetTasteSeeds();
+  const setAvatarMutation = useSetAlbumAvatar();
+
+  // After any completion path: show avatar if needsChoice, else close
+  const maybeShowAvatar = useCallback(() => {
+    if (albumAvatarData?.needsChoice) {
+      setAvatarChosen(null);
+      setMode("avatar");
+    } else {
+      onClose();
+    }
+  }, [albumAvatarData, onClose]);
 
   // Whether we should show the history row at the top of the picker
   const showHistory = latestJob != null && (
@@ -385,7 +428,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService }: 
         await postStartImport("spotify");
         await qc.invalidateQueries({ queryKey: ME_LATEST_IMPORT_JOB_KEY });
         onImportStarted?.();
-        onClose();
+        maybeShowAvatar();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Import failed — try again.");
         setSubmitting(false);
@@ -667,7 +710,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService }: 
       await postStartLastFmImport(username);
       await qc.invalidateQueries({ queryKey: ME_LATEST_IMPORT_JOB_KEY });
       onImportStarted?.();
-      onClose();
+      maybeShowAvatar();
     } catch (err) {
       const isNotFound = err instanceof Error && err.message.includes("404");
       setError(
@@ -688,7 +731,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService }: 
       await postStartListenBrainzImport(username);
       await qc.invalidateQueries({ queryKey: ME_LATEST_IMPORT_JOB_KEY });
       onImportStarted?.();
-      onClose();
+      maybeShowAvatar();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Import failed — check the username and try again.");
       setSubmitting(false);
@@ -704,10 +747,54 @@ export function ManualImportModal({ onClose, onImportStarted, initialService }: 
       await postStartManualImport(importTracks);
       await qc.invalidateQueries({ queryKey: ME_LATEST_IMPORT_JOB_KEY });
       onImportStarted?.();
-      onClose();
+      maybeShowAvatar();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Import failed — try again.");
       setSubmitting(false);
+    }
+  };
+
+  // Artist-seeds: toggle selection up to 30
+  const toggleArtist = (artist: string) => {
+    setSelectedArtists((prev) => {
+      const next = new Set(prev);
+      if (next.has(artist)) {
+        next.delete(artist);
+      } else if (next.size < 30) {
+        next.add(artist);
+      }
+      return next;
+    });
+  };
+
+  // Artist-seeds "Done": save selected artists as taste seeds, then show avatar if needed
+  const handleArtistSeedsDone = async () => {
+    if (selectedArtists.size === 0) {
+      maybeShowAvatar();
+      return;
+    }
+    setSeedSaving(true);
+    try {
+      await setTasteSeeds.mutateAsync(Array.from(selectedArtists));
+      maybeShowAvatar();
+    } catch {
+      setError("Couldn't save your artists — try again.");
+    } finally {
+      setSeedSaving(false);
+    }
+  };
+
+  // Avatar step: save chosen cover then close
+  const handleAvatarConfirm = async () => {
+    if (!avatarChosen) { onClose(); return; }
+    setAvatarSaving(true);
+    try {
+      await setAvatarMutation.mutateAsync(avatarChosen);
+      onClose();
+    } catch {
+      setError("Couldn't save your cover — try again.");
+    } finally {
+      setAvatarSaving(false);
     }
   };
 
@@ -719,7 +806,8 @@ export function ManualImportModal({ onClose, onImportStarted, initialService }: 
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  const showBack = mode !== "service-picker";
+  // Avatar mode has no back button — it's a terminal step
+  const showBack = mode !== "service-picker" && mode !== "avatar";
 
   const headerTitle: Partial<Record<Mode, string>> = {
     "service-picker": "Where is your music?",
@@ -733,6 +821,8 @@ export function ManualImportModal({ onClose, onImportStarted, initialService }: 
     "review": "Review screenshots",
     "tracks": selectedService === "typeorpaste" ? "Type or paste" : "Paste or upload",
     "username": "Import your tracks",
+    "artist-seeds": "Artists you love",
+    "avatar": "Choose your cover",
   };
 
   return (
@@ -792,6 +882,35 @@ export function ManualImportModal({ onClose, onImportStarted, initialService }: 
         {mode === "service-picker" && (
           <>
             <div className="flex flex-col gap-2" data-testid="service-picker">
+              {/* Quick-start: artist seeds from Lore — always the first option */}
+              <button
+                type="button"
+                data-testid="service-tile-artist-seeds"
+                onClick={() => { setError(null); setMode("artist-seeds"); }}
+                className="flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left transition-colors"
+                style={{
+                  background: "hsl(var(--primary)/0.12)",
+                  borderColor: "hsl(var(--primary)/0.4)",
+                }}
+              >
+                <div>
+                  <p className="font-mono text-[12px] font-semibold" style={{ color: "hsl(var(--primary))" }}>
+                    Start with artists you love
+                  </p>
+                  <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">
+                    Pick from Lore's most-played artists — no account needed
+                  </p>
+                </div>
+                <ChevronRight size={14} className="shrink-0" style={{ color: "hsl(var(--primary))" }} aria-hidden />
+              </button>
+
+              {/* Divider */}
+              <div className="flex items-center gap-2 py-0.5">
+                <div className="flex-1 border-t border-border" />
+                <span className="font-mono text-[10px] text-muted-foreground/50">or import from a service</span>
+                <div className="flex-1 border-t border-border" />
+              </div>
+
               {SERVICE_TILES.map((tile) => (
                 <button
                   key={tile.id}
@@ -1328,6 +1447,141 @@ export function ManualImportModal({ onClose, onImportStarted, initialService }: 
               <button type="button" onClick={onClose} className="rounded-full border border-border px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">Cancel</button>
               <button type="button" onClick={() => void extractImages()} disabled={imageBusy || pendingImageCount === 0} className="rounded-full border border-primary bg-primary px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-primary-foreground disabled:opacity-40">
                 {imageBusy ? "Reading…" : `Read ${pendingImageCount} screenshot${pendingImageCount === 1 ? "" : "s"}`}
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ── Artist seeds — compact chip grid ───────────────────────────── */}
+        {mode === "artist-seeds" && (
+          <>
+            <p className="font-mono text-[11px] text-muted-foreground">
+              Pick the artists you love. Lore will show you live when they're on air.
+            </p>
+
+            {/* Chip grid */}
+            <div className="import-modal-chips" role="group" aria-label="Select artists">
+              {artistFreqLoading && onboardingArtists.length === 0 && (
+                <span className="font-mono text-[11px] text-muted-foreground/60">Loading artists…</span>
+              )}
+              {onboardingArtists.slice(0, 80).map((a) => {
+                const key = liveIdentityKey(a.artist);
+                const selected = selectedArtists.has(a.artist);
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-pressed={selected}
+                    aria-label={`${selected ? "Deselect" : "Select"} ${a.artist}`}
+                    onClick={() => toggleArtist(a.artist)}
+                    className={`import-modal-chip${selected ? " import-modal-chip--selected" : ""}${a.live ? " import-modal-chip--live" : ""}`}
+                  >
+                    {a.live && (
+                      <span className="import-modal-chip__dot" aria-hidden />
+                    )}
+                    {a.artist}
+                  </button>
+                );
+              })}
+              {!artistFreqLoading && onboardingArtists.length === 0 && (
+                <span className="font-mono text-[11px] text-muted-foreground/60">
+                  No artists available right now — come back soon or import a library above.
+                </span>
+              )}
+            </div>
+
+            {selectedArtists.size >= 30 && (
+              <p className="font-mono text-[10px] text-muted-foreground/70" role="status">
+                30 artists selected — deselect one to choose another.
+              </p>
+            )}
+
+            {error && (
+              <p className="font-mono text-[11px] text-destructive" role="alert">{error}</p>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setMode("service-picker"); setError(null); }}
+                className="rounded-full border border-border px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground hover:text-foreground"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleArtistSeedsDone()}
+                disabled={seedSaving}
+                className="rounded-full border border-primary bg-primary px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-primary-foreground disabled:opacity-40"
+              >
+                {seedSaving
+                  ? "Saving…"
+                  : selectedArtists.size > 0
+                  ? `Done — ${selectedArtists.size} artist${selectedArtists.size === 1 ? "" : "s"} selected`
+                  : "Skip"}
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ── Avatar picker ─────────────────────────────────────────────── */}
+        {mode === "avatar" && (
+          <>
+            <p className="font-mono text-[11px] text-muted-foreground">
+              Your listener cover is anonymous — it only appears as "listening here" on a station, never with your name.
+            </p>
+
+            {albumAvatarData?.needsChoice && albumAvatarData.candidates.length > 0 ? (
+              <>
+                <div className="import-modal-avatar-grid" role="group" aria-label="Choose a cover">
+                  {albumAvatarData.candidates.slice(0, 12).map((c) => {
+                    const chosen = avatarChosen === c.recordingMbid;
+                    return (
+                      <button
+                        key={c.recordingMbid}
+                        type="button"
+                        aria-pressed={chosen}
+                        aria-label={`${chosen ? "Selected:" : "Choose"} ${c.albumTitle} by ${c.artist}`}
+                        onClick={() => setAvatarChosen(c.recordingMbid)}
+                        className={`import-modal-avatar-cell${chosen ? " import-modal-avatar-cell--chosen" : ""}`}
+                      >
+                        <img
+                          src={c.artworkUrl}
+                          alt={`${c.albumTitle} by ${c.artist}`}
+                          className="import-modal-avatar-img"
+                          loading="lazy"
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+                {avatarChosen && (() => {
+                  const c = albumAvatarData.candidates.find((x) => x.recordingMbid === avatarChosen);
+                  return c ? (
+                    <p className="font-mono text-[10px] text-muted-foreground text-center">
+                      {c.albumTitle} · {c.artist}
+                    </p>
+                  ) : null;
+                })()}
+              </>
+            ) : (
+              <p className="font-mono text-[11px] text-muted-foreground/60">
+                {albumAvatarData?.needsChoice ? "Loading your covers…" : "You're all set — cover already chosen."}
+              </p>
+            )}
+
+            {error && (
+              <p className="font-mono text-[11px] text-destructive" role="alert">{error}</p>
+            )}
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => void handleAvatarConfirm()}
+                disabled={avatarSaving || (albumAvatarData?.needsChoice === true && !avatarChosen)}
+                className="rounded-full border border-primary bg-primary px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-primary-foreground disabled:opacity-40"
+              >
+                {avatarSaving ? "Saving…" : avatarChosen ? "Use this cover" : "Continue →"}
               </button>
             </div>
           </>

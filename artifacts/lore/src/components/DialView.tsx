@@ -1753,17 +1753,9 @@ export function DialView() {
                   hasLibrary={hasLibrary}
                   hasSeeds={hasSeeds || visibleSeeds.length > 0}
                   seeds={visibleSeeds}
-                  liveArtistSuggestions={liveArtistSuggestions ?? []}
-                  onboardingArtists={onboardingArtists ?? []}
-                  onboardingArtistsLoading={onboardingArtistsLoading}
                   liveLoading={liveLoading}
-                  showLivePicker={false}
                   onAddSeed={addSeed}
                   onRemoveSeed={removeSeed}
-                  mattStarterAvailable={mattStarter?.available === true}
-                  mattStarterCopying={mattStarterMutation.isPending}
-                  mattStarterError={mattStarterMutation.error ? "We couldn’t add Matt’s library. Try again or choose an artist below." : null}
-                  onStartMattLibrary={startMattLibrary}
                 />
                 {/* Zone 2 heading + skeleton rows — no pre-load signal for ghost stations */}
                 <ZoneLabel label="Missed while you were away" accent="picker" />
@@ -1867,17 +1859,9 @@ export function DialView() {
                   hasLibrary={hasLibrary}
                   hasSeeds={hasSeeds || visibleSeeds.length > 0}
                   seeds={visibleSeeds}
-                  liveArtistSuggestions={liveArtistSuggestions ?? []}
-                  onboardingArtists={onboardingArtists ?? []}
-                  onboardingArtistsLoading={onboardingArtistsLoading}
                   liveLoading={liveLoading}
-                  showLivePicker
                   onAddSeed={addSeed}
                   onRemoveSeed={removeSeed}
-                  mattStarterAvailable={mattStarter?.available === true}
-                  mattStarterCopying={mattStarterMutation.isPending}
-                  mattStarterError={mattStarterMutation.error ? "We couldn’t add Matt’s library. Try again or choose an artist below." : null}
-                  onStartMattLibrary={startMattLibrary}
                 />
               </>
             )}
@@ -2196,33 +2180,17 @@ function Zone1Placeholder({
   hasLibrary,
   hasSeeds,
   seeds,
-  liveArtistSuggestions,
-  onboardingArtists,
-  onboardingArtistsLoading,
   liveLoading,
-  showLivePicker,
   onAddSeed,
   onRemoveSeed,
-  mattStarterAvailable,
-  mattStarterCopying,
-  mattStarterError,
-  onStartMattLibrary,
 }: {
   isSpotifyConnected: boolean;
   hasLibrary: boolean;
   hasSeeds: boolean;
   seeds: string[];
-  liveArtistSuggestions: LiveArtistSuggestion[];
-  onboardingArtists: OnboardingArtistSuggestion[];
-  onboardingArtistsLoading: boolean;
   liveLoading: boolean;
-  showLivePicker: boolean;
   onAddSeed: (artist: string) => void;
   onRemoveSeed: (artist: string) => void;
-  mattStarterAvailable: boolean;
-  mattStarterCopying: boolean;
-  mattStarterError: string | null;
-  onStartMattLibrary: () => void;
 }) {
   if (hasLibrary || isSpotifyConnected) {
     // Library imported or Spotify connected — crossings are being computed.
@@ -2255,43 +2223,21 @@ function Zone1Placeholder({
     );
   }
 
-  // New user — prompt to connect library.
+  // New user — open the import modal to seed their taste.
   return (
     <div className="z1-placeholder z1-placeholder--seed">
       <div className="z1-placeholder__body">
-        {showLivePicker && (
-          <LiveArtistPicker
-            suggestions={liveArtistSuggestions}
-            artists={onboardingArtists}
-            loading={liveLoading || onboardingArtistsLoading}
-            seeds={seeds}
-            onAddSeed={onAddSeed}
-            mattStarterAvailable={mattStarterAvailable}
-            mattStarterCopying={mattStarterCopying}
-            mattStarterError={mattStarterError}
-            onStartMattLibrary={onStartMattLibrary}
-          />
-        )}
         <p className="z1-placeholder__pitch">
-          Connect your Spotify library to see which stations are playing your music live, right now.
+          Pick the artists you love — Lore will show you when they're playing live.
         </p>
-        <div className="z1-placeholder__manual">
-          <span className="z1-placeholder__manual-label">Or start with an artist you love</span>
-          <SeedInput seeds={seeds} onAdd={onAddSeed} placeholder="e.g. Radiohead" />
-        </div>
         <div className="z1-placeholder__secondary">
           <button
             type="button"
             className="dial-ctabtn"
-            onClick={() => void startSpotifyLibraryConnect()}
+            onClick={() => window.dispatchEvent(new Event("lore:open-import-modal"))}
           >
-            Connect Spotify library
+            Pick artists you love →
           </button>
-        </div>
-        <div className="z1-placeholder__secondary">
-          <a className="dial-ctabtn" href="/lore/library">
-            Or import a listening history →
-          </a>
         </div>
       </div>
     </div>

@@ -412,8 +412,8 @@ export function mergeOnboardingArtists(
   const merged = new Map<string, OnboardingArtistSuggestion>();
 
   for (const item of historical) {
-    const artist = item.artist?.replace(/\s+/g, " ").trim();
-    const key = liveIdentityKey(artist);
+    const artist = normalizeLiveArtist(item.artist);
+    const key = artist ? liveIdentityKey(artist) : "";
     if (!artist || !key || merged.has(key)) continue;
     merged.set(key, {
       artist,

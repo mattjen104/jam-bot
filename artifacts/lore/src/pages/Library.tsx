@@ -1288,6 +1288,25 @@ export default function Library() {
   // before the first fetch resolves (typically 0, updates once data arrives).
   const keepCount: number = keptData?.pages[0]?.keepCount ?? 0;
   const criticCount: number = keptData?.pages[0]?.criticCount ?? 0;
+
+  // First-run auto-open: prompt new users to seed their taste via the import
+  // modal, but only when they have no library, no seeds, and haven't already
+  // chosen an avatar.  Fires once per browser session via sessionStorage.
+  useEffect(() => {
+    // Wait for library + avatar data to resolve before deciding
+    if (keptData === undefined || albumAvatar === undefined) return;
+    // User already has music or seeds — returning user, skip auto-open
+    if (keepCount > 0 || seedArtists.length > 0) return;
+    // User already has an avatar (needsChoice===false && current set) — skip
+    if (albumAvatar.needsChoice === false && albumAvatar.current != null) return;
+    // Only fire once per browser session
+    try {
+      if (sessionStorage.getItem("lore:first-run-prompted")) return;
+      sessionStorage.setItem("lore:first-run-prompted", "1");
+    } catch { return; }
+    setImportModalOpen(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keptData, albumAvatar, keepCount, seedArtists.length]);
   const selectorCount = useMemo(() => {
     const handles = new Set<string>();
     for (const item of keptItems) {
