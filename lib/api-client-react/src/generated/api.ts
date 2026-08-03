@@ -36,6 +36,7 @@ import type {
   GeniusDraftReviewRequest,
   GeniusDraftReviewResponse,
   GetArchiveRecentRunsParams,
+  GetGuidedReplayQueueParams,
   GetOembedParams,
   GetRecordingsAvailabilityParams,
   GetSpotifySavedParams,
@@ -43,6 +44,7 @@ import type {
   GetStationsRecentSpinsParams,
   GetStationsScheduleParams,
   GetWikipediaDraftsParams,
+  GuidedReplayQueue,
   HealthStatus,
   IcecastReport,
   IcecastReportResult,
@@ -2456,10 +2458,123 @@ export function useGetReplayManifest<
   return { ...query, queryKey: queryOptions.queryKey };
 }
 
+/**
+ * Returns one service's safe native/web targets in the replay manifest's original order. Missing and unresolved rows remain in the response with an explicit reason; this endpoint never changes the manifest or player.
+
+ * @summary Build an ordered native-app link-out queue for a replay
  */
-export const getGetAppleMusicReplayMaterializationUrl = (id: number) => {
-  return `/api/replay/${id}/apple-music`;
+export const getGetGuidedReplayQueueUrl = (
+  id: number,
+  params?: GetGuidedReplayQueueParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/replay/${id}/guided-queue?${stringifiedParams}`
+    : `/api/replay/${id}/guided-queue`;
 };
+
+export const getGuidedReplayQueue = async (
+  id: number,
+  params?: GetGuidedReplayQueueParams,
+  options?: RequestInit,
+): Promise<GuidedReplayQueue> => {
+  return customFetch<GuidedReplayQueue>(
+    getGetGuidedReplayQueueUrl(id, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetGuidedReplayQueueQueryKey = (
+  id: number,
+  params?: GetGuidedReplayQueueParams,
+) => {
+  return [
+    `/api/replay/${id}/guided-queue`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetGuidedReplayQueueQueryOptions = <
+  TData = Awaited<ReturnType<typeof getGuidedReplayQueue>>,
+  TError = ErrorType<ApiError>,
+>(
+  id: number,
+  params?: GetGuidedReplayQueueParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getGuidedReplayQueue>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetGuidedReplayQueueQueryKey(id, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getGuidedReplayQueue>>
+  > = ({ signal }) =>
+    getGuidedReplayQueue(id, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getGuidedReplayQueue>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetGuidedReplayQueueQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getGuidedReplayQueue>>
+>;
+export type GetGuidedReplayQueueQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Build an ordered native-app link-out queue for a replay
+ */
+
+export function useGetGuidedReplayQueue<
+  TData = Awaited<ReturnType<typeof getGuidedReplayQueue>>,
+  TError = ErrorType<ApiError>,
+>(
+  id: number,
+  params?: GetGuidedReplayQueueParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getGuidedReplayQueue>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetGuidedReplayQueueQueryOptions(id, params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * Downloads the same immutable broadcast receipt as the replay manifest, without requiring an account or service OAuth. Every broadcast slot is preserved, including unresolved entries. Only exact, live service-neutral locations are emitted in location-bearing formats.
@@ -2561,6 +2676,103 @@ export function useExportReplay<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getExportReplayQueryOptions(id, params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns a read-only Apple Music materialization receipt in the replay's original broadcast order. The developer token is short-lived and is safe for MusicKit JS to receive; the signing key is never sent to the browser. Unresolved, unavailable, and dead mappings remain explicit.
+
+ * @summary Apple MusicKit configuration and replay coverage
+ */
+export const getGetAppleMusicReplayMaterializationUrl = (id: number) => {
+  return `/api/replay/${id}/apple-music`;
+};
+
+export const getAppleMusicReplayMaterialization = async (
+  id: number,
+  options?: RequestInit,
+): Promise<AppleMusicReplayMaterialization> => {
+  return customFetch<AppleMusicReplayMaterialization>(
+    getGetAppleMusicReplayMaterializationUrl(id),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetAppleMusicReplayMaterializationQueryKey = (id: number) => {
+  return [`/api/replay/${id}/apple-music`] as const;
+};
+
+export const getGetAppleMusicReplayMaterializationQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAppleMusicReplayMaterialization>>,
+  TError = ErrorType<ApiError>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAppleMusicReplayMaterialization>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAppleMusicReplayMaterializationQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAppleMusicReplayMaterialization>>
+  > = ({ signal }) =>
+    getAppleMusicReplayMaterialization(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAppleMusicReplayMaterialization>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAppleMusicReplayMaterializationQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAppleMusicReplayMaterialization>>
+>;
+export type GetAppleMusicReplayMaterializationQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Apple MusicKit configuration and replay coverage
+ */
+
+export function useGetAppleMusicReplayMaterialization<
+  TData = Awaited<ReturnType<typeof getAppleMusicReplayMaterialization>>,
+  TError = ErrorType<ApiError>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAppleMusicReplayMaterialization>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAppleMusicReplayMaterializationQueryOptions(
+    id,
+    options,
+  );
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -7254,92 +7466,3 @@ export function useGetMyLibraryListCoverage<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
-
-/**
- * @summary Apple MusicKit configuration and replay coverage
- */
-
-export function useGetAppleMusicReplayMaterialization<
-  TData = Awaited<ReturnType<typeof getAppleMusicReplayMaterialization>>,
-  TError = ErrorType<ApiError>,
->(
-  id: number,
-  options?: {
-    query?: UseQueryOptions<
-      Awaited<ReturnType<typeof getAppleMusicReplayMaterialization>>,
-      TError,
-      TData
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetAppleMusicReplayMaterializationQueryOptions(
-    id,
-    options,
-  );
-
-  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
-    queryKey: QueryKey;
-  };
-
-  return { ...query, queryKey: queryOptions.queryKey };
-}
-
-export const getGetAppleMusicReplayMaterializationQueryOptions = <
-  TData = Awaited<ReturnType<typeof getAppleMusicReplayMaterialization>>,
-  TError = ErrorType<ApiError>,
->(
-  id: number,
-  options?: {
-    query?: UseQueryOptions<
-      Awaited<ReturnType<typeof getAppleMusicReplayMaterialization>>,
-      TError,
-      TData
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-) => {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-
-  const queryKey =
-    queryOptions?.queryKey ?? getGetAppleMusicReplayMaterializationQueryKey(id);
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof getAppleMusicReplayMaterialization>>
-  > = ({ signal }) =>
-    getAppleMusicReplayMaterialization(id, { signal, ...requestOptions });
-
-  return {
-    queryKey,
-    queryFn,
-    enabled: !!id,
-    ...queryOptions,
-  } as UseQueryOptions<
-    Awaited<ReturnType<typeof getAppleMusicReplayMaterialization>>,
-    TError,
-    TData
-  > & { queryKey: QueryKey };
-};
-
-export const getGetAppleMusicReplayMaterializationQueryKey = (id: number) => {
-  return [`/api/replay/${id}/apple-music`] as const;
-};
-
-export const getAppleMusicReplayMaterialization = async (
-  id: number,
-  options?: RequestInit,
-): Promise<AppleMusicReplayMaterialization> => {
-  return customFetch<AppleMusicReplayMaterialization>(
-    getGetAppleMusicReplayMaterializationUrl(id),
-    {
-      ...options,
-      method: "GET",
-    },
-  );
-};
-
-export type GetAppleMusicReplayMaterializationQueryResult = NonNullable<
-  Awaited<ReturnType<typeof getAppleMusicReplayMaterialization>>
->;
-
-export type GetAppleMusicReplayMaterializationQueryError = ErrorType<ApiError>;

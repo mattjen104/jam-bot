@@ -12,6 +12,10 @@ import {
 } from "@workspace/api-zod";
 import { getReplayManifest } from "../../lore/replay.js";
 import {
+  guidedServiceLabel,
+  materializeGuidedReplayQueue,
+} from "../../lore/guided-replay-queue.js";
+import {
   getReplayResolutionJob,
   replayResolutionEvents,
   startReplayResolutionJob,
@@ -120,7 +124,84 @@ router.get("/replay/jobs/:jobId", h(async (req, res) => {
   return res.json(ReplayResolutionJobResponse.parse(job));
 }));
 
-// GET /api/replay/:id — canonical Ghost Replay manifest.
+// GET /api/replay/:id/guided-queue — an ordered, honest link-out queue.
+// This is intentionally separate from PlayerProvider: opening a native app
+// must never claim that Lore is playing or advance the live/player queue.
+router.get("/replay/:id/guided-queue", h(async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) {
+    return res.status(404).json({ error: "Replay not found" });
+  }
+  const manifest = await getReplayManifest(id);
+  if (!manifest) return res.status(404).json({ error: "Replay not found" });
+
+  const requestedService = typeof req.query.service === "string"
+    ? req.query.service.trim().toLowerCase()
+    : "";
+  const mbids = manifest.entries.flatMap((entry) =>
+    entry.recording?.mbid ? [entry.recording.mbid] : [],
+  );
+  const maps = mbids.length
+    ? await db
+        .select({
+          recordingMbid: serviceTrackMapTable.recordingMbid,
+          service: serviceTrackMapTable.service,
+          externalId: serviceTrackMapTable.externalId,
+          url: serviceTrackMapTable.url,
+          confidence: serviceTrackMapTable.confidence,
+          deadLink: serviceTrackMapTable.deadLink,
+        })
+        .from(serviceTrackMapTable)
+        .where(inArray(serviceTrackMapTable.recordingMbid, mbids))
+    : [];
+  const services = [...new Set(maps.map((map) => map.service))].sort();
+  const service = requestedService || services[0] || "spotify";
+  const queue = materializeGuidedReplayQueue({
+    manifest,
+    service,
+    maps: maps
+      .filter((map) => map.recordingMbid)
+      .map((map) => ({
+        recordingMbid: map.recordingMbid,
+        service: map.service,
+        externalId: map.externalId,
+        url: map.url,
+        confidence: map.confidence,
+        deadLink: map.deadLink,
+      })),
+  });
+
+  const serviceSummaries = services.map((serviceName) => {
+    const serviceQueue = materializeGuidedReplayQueue({
+      manifest,
+      service: serviceName,
+      maps: maps
+        .filter((map) => map.service === serviceName)
+        .map((map) => ({
+          recordingMbid: map.recordingMbid,
+          service: map.service,
+          externalId: map.externalId,
+          url: map.url,
+          confidence: map.confidence,
+          deadLink: map.deadLink,
+        })),
+    });
+    return {
+      service: serviceName,
+      label: guidedServiceLabel(serviceName),
+      available: serviceQueue.coverage.available,
+      total: serviceQueue.coverage.total,
+    };
+  });
+
+  return res.json({
+    ...queue,
+    services: serviceSummaries,
+  });
+}));
+
+// GET /api/replay/:id — canonical Ghost Replay manifest. Keep this generic
+// parameter route after nested replay routes so it cannot shadow them.
 router.get("/replay/:id", h(async (req, res) => {
   const parsed = GetReplayManifestParams.safeParse(req.params);
   if (!parsed.success) return res.status(404).json({ error: "Replay not found" });

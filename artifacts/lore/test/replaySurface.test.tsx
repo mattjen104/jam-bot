@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Route, Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
@@ -10,6 +10,7 @@ vi.mock("@workspace/api-client-react", async (importOriginal) => {
   return makeApiClientMock(importOriginal, {
     useGetReplayManifest: vi.fn(),
     useGetAppleMusicReplayMaterialization: vi.fn(),
+    useGetGuidedReplayQueue: vi.fn(),
     getSpotifyStatus: vi.fn(async () => ({
       configured: false,
       connected: false,
@@ -29,6 +30,7 @@ vi.mock("../src/lib/meHooks", async (importOriginal) => {
 
 import {
   useGetAppleMusicReplayMaterialization,
+  useGetGuidedReplayQueue,
   useGetReplayManifest,
 } from "@workspace/api-client-react";
 import { PlayerProvider } from "../src/player/PlayerProvider";
@@ -128,6 +130,67 @@ const appleMusicMaterialization = {
   ],
   coverage: { total: 2, available: 1, unavailable: 0, unresolved: 1, dead: 0 },
 } as const;
+
+const guidedQueue = {
+  replayId: 17,
+  service: "spotify",
+  serviceLabel: "Spotify",
+  services: [{ service: "spotify", label: "Spotify", available: 1, total: 2 }],
+  coverage: { total: 2, available: 1, missing: 1 },
+  entries: [
+    {
+      position: 0,
+      spinId: 101,
+      playedAt: "2026-07-02T10:00:00Z",
+      recordingMbid: "recording-1",
+      title: "Resolved Title",
+      artist: "Resolved Artist",
+      provenance: { source: "kexp", citation: null },
+      target: {
+        kind: "native",
+        url: "spotify:track:1234567890123456789012",
+        externalId: "1234567890123456789012",
+        fallbackUrl: "https://open.spotify.com/track/1234567890123456789012",
+      },
+      missingReason: null,
+    },
+    {
+      position: 1,
+      spinId: 102,
+      playedAt: "2026-07-02T10:03:00Z",
+      recordingMbid: null,
+      title: "Unknown Title",
+      artist: "Unknown Artist",
+      provenance: { source: "kexp", citation: "https://kexp.org/archive" },
+      target: null,
+      missingReason: "not_mapped",
+    },
+  ],
+} as const;
+
+beforeEach(() => {
+  (useGetReplayManifest as Mock).mockReturnValue({
+    data: manifest,
+    isLoading: false,
+    isError: false,
+  });
+  (useGetAppleMusicReplayMaterialization as Mock).mockReturnValue({
+    data: appleMusicMaterialization,
+    isLoading: false,
+    isError: false,
+  });
+  (useGetGuidedReplayQueue as Mock).mockReturnValue({
+    data: guidedQueue,
+    isLoading: false,
+    isError: false,
+  });
+});
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+
 function renderReplay() {
   const { hook, searchHook } = memoryLocation({
     path: "/replay/17",
@@ -159,7 +222,7 @@ describe("Ghost Replay surface", () => {
     expect(screen.getByRole("link", { name: "Spotify" }).getAttribute("href")).toBe(
       "https://open.spotify.com/track/exact",
     );
-    expect(screen.getAllByTitle(/keep this track/i)).toHaveLength(2);
+    expect(screen.getAllByTitle(/keep this track/i)).toHaveLength(3);
     expect(screen.getByTestId("apple-music-replay").textContent).toContain(
       "Lore does not host, copy, or recreate the original broadcast audio.",
     );
@@ -167,5 +230,19 @@ describe("Ghost Replay surface", () => {
       "never resolved",
     );
     expect(screen.getByTestId("apple-music-start").hasAttribute("disabled")).toBe(true);
+  });
+
+  it("keeps native-app replay guidance separate and advances only on explicit controls", () => {
+    renderReplay();
+
+    expect(screen.getByTestId("guided-queue-coverage").textContent).toContain("1 of 2");
+    expect(screen.getByTestId("guided-queue-open").getAttribute("href")).toBe(
+      "spotify:track:1234567890123456789012",
+    );
+    expect(screen.getByTestId("guided-queue-current").textContent).toContain("Resolved Title");
+    fireEvent.click(screen.getByTestId("guided-queue-next"));
+    expect(screen.getByTestId("guided-queue-current").textContent).toContain("Unknown Title");
+    expect(screen.getByTestId("guided-queue-status").textContent).toMatch(/next broadcast position/i);
+    expect(screen.getByText("No service mapping")).toBeTruthy();
   });
 });

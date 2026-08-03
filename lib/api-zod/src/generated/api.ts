@@ -1899,10 +1899,74 @@ export const GetReplayManifestResponse = zod
     "Stable, server-derived Ghost Replay view over one station broadcast partition. Coverage counts are explicit so clients do not infer missing entries from the resolved subset.\n",
   );
 
+/**
+ * Returns one service's safe native/web targets in the replay manifest's original order. Missing and unresolved rows remain in the response with an explicit reason; this endpoint never changes the manifest or player.
+
+ * @summary Build an ordered native-app link-out queue for a replay
  */
 
-export const GetAppleMusicReplayMaterializationParams = zod.object({
+export const GetGuidedReplayQueueParams = zod.object({
   id: zod.coerce.number().min(1),
+});
+
+export const GetGuidedReplayQueueQueryParams = zod.object({
+  service: zod.coerce
+    .string()
+    .optional()
+    .describe(
+      "Service key, such as spotify or youtube_music. Defaults to the first mapped service.",
+    ),
+});
+
+export const GetGuidedReplayQueueResponse = zod.object({
+  replayId: zod.number(),
+  service: zod.string(),
+  serviceLabel: zod.string(),
+  services: zod.array(
+    zod.object({
+      service: zod.string(),
+      label: zod.string(),
+      available: zod.number(),
+      total: zod.number(),
+    }),
+  ),
+  coverage: zod.object({
+    total: zod.number(),
+    available: zod.number(),
+    missing: zod.number(),
+  }),
+  entries: zod.array(
+    zod.object({
+      position: zod.number(),
+      spinId: zod.number(),
+      playedAt: zod.string(),
+      recordingMbid: zod.string().nullable(),
+      title: zod.string(),
+      artist: zod.string(),
+      provenance: zod.object({
+        source: zod.string().nullable(),
+        citation: zod.string().nullable(),
+      }),
+      target: zod.union([
+        zod.object({
+          kind: zod.enum(["native", "web"]),
+          url: zod.string(),
+          externalId: zod.string().nullable(),
+          fallbackUrl: zod.string().optional(),
+        }),
+        zod.null(),
+      ]),
+      missingReason: zod
+        .union([
+          zod.literal("not_mapped"),
+          zod.literal("dead_mapping"),
+          zod.literal("not_exact"),
+          zod.literal("unusable_mapping"),
+          zod.literal(null),
+        ])
+        .nullable(),
+    }),
+  ),
 });
 
 /**
@@ -1917,6 +1981,54 @@ export const ExportReplayParams = zod.object({
 
 export const ExportReplayQueryParams = zod.object({
   format: zod.enum(["jspf", "xspf", "m3u8", "csv"]),
+});
+
+/**
+ * Returns a read-only Apple Music materialization receipt in the replay's original broadcast order. The developer token is short-lived and is safe for MusicKit JS to receive; the signing key is never sent to the browser. Unresolved, unavailable, and dead mappings remain explicit.
+
+ * @summary Apple MusicKit configuration and replay coverage
+ */
+
+export const GetAppleMusicReplayMaterializationParams = zod.object({
+  id: zod.coerce.number().min(1),
+});
+
+export const GetAppleMusicReplayMaterializationResponse = zod.object({
+  configured: zod.boolean(),
+  developerToken: zod.string().nullable(),
+  appName: zod.string(),
+  apiBase: zod.string(),
+  replayId: zod.number(),
+  entries: zod.array(
+    zod.object({
+      position: zod.number(),
+      spinId: zod.number(),
+      recordingMbid: zod.string().nullable(),
+      rawArtist: zod.string(),
+      rawTitle: zod.string(),
+      title: zod.string(),
+      artist: zod.string(),
+      appleMusicId: zod.string().nullable(),
+      url: zod.string().nullable(),
+      status: zod.enum(["available", "unavailable", "unresolved", "dead"]),
+      reason: zod
+        .union([
+          zod.literal("unavailable"),
+          zod.literal("unresolved"),
+          zod.literal("dead_link"),
+          zod.literal("dead"),
+          zod.literal(null),
+        ])
+        .nullable(),
+    }),
+  ),
+  coverage: zod.object({
+    total: zod.number(),
+    available: zod.number(),
+    unavailable: zod.number(),
+    unresolved: zod.number(),
+    dead: zod.number(),
+  }),
 });
 
 /**
@@ -4082,42 +4194,4 @@ export const GetMyLibraryListCoverageResponse = zod.object({
         "A publication list that contains at least one album from the user's library, with the matched albums included.\n",
       ),
   ),
-});
-
-export const GetAppleMusicReplayMaterializationResponse = zod.object({
-  configured: zod.boolean(),
-  developerToken: zod.string().nullable(),
-  appName: zod.string(),
-  apiBase: zod.string(),
-  replayId: zod.number(),
-  entries: zod.array(
-    zod.object({
-      position: zod.number(),
-      spinId: zod.number(),
-      recordingMbid: zod.string().nullable(),
-      rawArtist: zod.string(),
-      rawTitle: zod.string(),
-      title: zod.string(),
-      artist: zod.string(),
-      appleMusicId: zod.string().nullable(),
-      url: zod.string().nullable(),
-      status: zod.enum(["available", "unavailable", "unresolved", "dead"]),
-      reason: zod
-        .union([
-          zod.literal("unavailable"),
-          zod.literal("unresolved"),
-          zod.literal("dead_link"),
-          zod.literal("dead"),
-          zod.literal(null),
-        ])
-        .nullable(),
-    }),
-  ),
-  coverage: zod.object({
-    total: zod.number(),
-    available: zod.number(),
-    unavailable: zod.number(),
-    unresolved: zod.number(),
-    dead: zod.number(),
-  }),
 });

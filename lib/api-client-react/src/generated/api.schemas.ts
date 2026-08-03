@@ -1065,6 +1065,7 @@ export type ReplayEntryGuidedLinksItem = {
   url: string;
   deadLink: boolean;
 };
+
 /**
  * One archived spin, including unresolved source metadata.
  */
@@ -1112,8 +1113,140 @@ export interface ReplayManifest {
   entries: ReplayEntry[];
 }
 
+export type GuidedReplayQueueTargetKind =
+  (typeof GuidedReplayQueueTargetKind)[keyof typeof GuidedReplayQueueTargetKind];
+
+export const GuidedReplayQueueTargetKind = {
+  native: "native",
+  web: "web",
+} as const;
+
+export interface GuidedReplayQueueTarget {
+  kind: GuidedReplayQueueTargetKind;
+  url: string;
+  /** @nullable */
+  externalId: string | null;
+  fallbackUrl?: string;
+}
+
+export type GuidedReplayQueueEntryProvenance = {
+  /** @nullable */
+  source: string | null;
+  /** @nullable */
+  citation: string | null;
+};
+
+/**
+ * @nullable
+ */
+export type GuidedReplayQueueEntryMissingReason =
+  | (typeof GuidedReplayQueueEntryMissingReason)[keyof typeof GuidedReplayQueueEntryMissingReason]
+  | null;
+
+export const GuidedReplayQueueEntryMissingReason = {
+  not_mapped: "not_mapped",
+  dead_mapping: "dead_mapping",
+  not_exact: "not_exact",
+  unusable_mapping: "unusable_mapping",
+} as const;
+
+export interface GuidedReplayQueueEntry {
+  position: number;
+  spinId: number;
+  playedAt: string;
+  /** @nullable */
+  recordingMbid: string | null;
+  title: string;
+  artist: string;
+  provenance: GuidedReplayQueueEntryProvenance;
+  target: GuidedReplayQueueTarget | null;
+  /** @nullable */
+  missingReason: GuidedReplayQueueEntryMissingReason;
+}
+
+export interface GuidedReplayQueueService {
+  service: string;
+  label: string;
+  available: number;
+  total: number;
+}
+
+export type GuidedReplayQueueCoverage = {
+  total: number;
+  available: number;
+  missing: number;
+};
+
+export interface GuidedReplayQueue {
+  replayId: number;
+  service: string;
+  serviceLabel: string;
+  services: GuidedReplayQueueService[];
+  coverage: GuidedReplayQueueCoverage;
+  entries: GuidedReplayQueueEntry[];
+}
+
 export type AppleMusicReplayMaterializationEntryStatus =
   (typeof AppleMusicReplayMaterializationEntryStatus)[keyof typeof AppleMusicReplayMaterializationEntryStatus];
+
+export const AppleMusicReplayMaterializationEntryStatus = {
+  available: "available",
+  unavailable: "unavailable",
+  unresolved: "unresolved",
+  dead: "dead",
+} as const;
+
+/**
+ * @nullable
+ */
+export type AppleMusicReplayMaterializationEntryReason =
+  | (typeof AppleMusicReplayMaterializationEntryReason)[keyof typeof AppleMusicReplayMaterializationEntryReason]
+  | null;
+
+export const AppleMusicReplayMaterializationEntryReason = {
+  unavailable: "unavailable",
+  unresolved: "unresolved",
+  dead_link: "dead_link",
+  dead: "dead",
+} as const;
+
+export interface AppleMusicReplayMaterializationEntry {
+  position: number;
+  spinId: number;
+  /** @nullable */
+  recordingMbid: string | null;
+  rawArtist: string;
+  rawTitle: string;
+  title: string;
+  artist: string;
+  /** @nullable */
+  appleMusicId: string | null;
+  /** @nullable */
+  url: string | null;
+  status: AppleMusicReplayMaterializationEntryStatus;
+  /** @nullable */
+  reason: AppleMusicReplayMaterializationEntryReason;
+}
+
+export type AppleMusicReplayMaterializationCoverage = {
+  total: number;
+  available: number;
+  unavailable: number;
+  unresolved: number;
+  dead: number;
+};
+
+export interface AppleMusicReplayMaterialization {
+  configured: boolean;
+  /** @nullable */
+  developerToken: string | null;
+  appName: string;
+  apiBase: string;
+  replayId: number;
+  entries: AppleMusicReplayMaterializationEntry[];
+  coverage: AppleMusicReplayMaterializationCoverage;
+}
+
 /**
  * One documented picker run — all picks sharing one source URL (an NTS episode page, a list, a post), replayed in documented order.
  */
@@ -2388,6 +2521,13 @@ export type GetStationSpinsParams = {
   limit?: number;
 };
 
+export type GetGuidedReplayQueueParams = {
+  /**
+   * Service key, such as spotify or youtube_music. Defaults to the first mapped service.
+   */
+  service?: string;
+};
+
 export type ExportReplayParams = {
   format: ExportReplayFormat;
 };
@@ -2472,62 +2612,4 @@ export type GetSpotifySavedParams = {
    * @minLength 1
    */
   mbid: string;
-};
-
-export interface AppleMusicReplayMaterializationEntry {
-  position: number;
-  spinId: number;
-  /** @nullable */
-  recordingMbid: string | null;
-  rawArtist: string;
-  rawTitle: string;
-  title: string;
-  artist: string;
-  /** @nullable */
-  appleMusicId: string | null;
-  /** @nullable */
-  url: string | null;
-  status: AppleMusicReplayMaterializationEntryStatus;
-  /** @nullable */
-  reason: AppleMusicReplayMaterializationEntryReason;
-}
-
-export interface AppleMusicReplayMaterialization {
-  configured: boolean;
-  /** @nullable */
-  developerToken: string | null;
-  appName: string;
-  apiBase: string;
-  replayId: number;
-  entries: AppleMusicReplayMaterializationEntry[];
-  coverage: AppleMusicReplayMaterializationCoverage;
-}
-
-export const AppleMusicReplayMaterializationEntryReason = {
-  unavailable: "unavailable",
-  unresolved: "unresolved",
-  dead_link: "dead_link",
-  dead: "dead",
-} as const;
-
-/**
- * @nullable
- */
-export type AppleMusicReplayMaterializationEntryReason =
-  | (typeof AppleMusicReplayMaterializationEntryReason)[keyof typeof AppleMusicReplayMaterializationEntryReason]
-  | null;
-
-export const AppleMusicReplayMaterializationEntryStatus = {
-  available: "available",
-  unavailable: "unavailable",
-  unresolved: "unresolved",
-  dead: "dead",
-} as const;
-
-export type AppleMusicReplayMaterializationCoverage = {
-  total: number;
-  available: number;
-  unavailable: number;
-  unresolved: number;
-  dead: number;
 };

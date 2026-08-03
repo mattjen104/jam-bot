@@ -761,6 +761,41 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /replay/{id}/guided-queue:
+    get:
+      operationId: getGuidedReplayQueue
+      tags: [archive]
+      summary: Build an ordered native-app link-out queue for a replay
+      description: >
+        Returns one service's safe native/web targets in the replay manifest's
+        original order. Missing and unresolved rows remain in the response with
+        an explicit reason; this endpoint never changes the manifest or player.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - name: service
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Service key, such as spotify or youtube_music. Defaults to the first mapped service.
+      responses:
+        "200":
+          description: Ordered guided queue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GuidedReplayQueue"
+        "404":
+          description: Replay not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /replay/{id}/export:
     get:
       operationId: exportReplay
@@ -4210,6 +4245,90 @@ components:
         - bounds
         - coverage
         - entries
+    GuidedReplayQueueTarget:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [native, web]
+        url:
+          type: string
+        externalId:
+          type: ["string", "null"]
+        fallbackUrl:
+          type: string
+      required: [kind, url, externalId]
+    GuidedReplayQueueEntry:
+      type: object
+      properties:
+        position:
+          type: integer
+        spinId:
+          type: integer
+        playedAt:
+          type: string
+        recordingMbid:
+          type: ["string", "null"]
+        title:
+          type: string
+        artist:
+          type: string
+        provenance:
+          type: object
+          properties:
+            source:
+              type: ["string", "null"]
+            citation:
+              type: ["string", "null"]
+          required: [source, citation]
+        target:
+          anyOf:
+            - $ref: "#/components/schemas/GuidedReplayQueueTarget"
+            - type: "null"
+        missingReason:
+          type: ["string", "null"]
+          enum: [not_mapped, dead_mapping, not_exact, unusable_mapping, null]
+      required: [position, spinId, playedAt, recordingMbid, title, artist, provenance, target, missingReason]
+    GuidedReplayQueueService:
+      type: object
+      properties:
+        service:
+          type: string
+        label:
+          type: string
+        available:
+          type: integer
+        total:
+          type: integer
+      required: [service, label, available, total]
+    GuidedReplayQueue:
+      type: object
+      properties:
+        replayId:
+          type: integer
+        service:
+          type: string
+        serviceLabel:
+          type: string
+        services:
+          type: array
+          items:
+            $ref: "#/components/schemas/GuidedReplayQueueService"
+        coverage:
+          type: object
+          properties:
+            total:
+              type: integer
+            available:
+              type: integer
+            missing:
+              type: integer
+          required: [total, available, missing]
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/GuidedReplayQueueEntry"
+      required: [replayId, service, serviceLabel, services, coverage, entries]
     AppleMusicReplayMaterializationEntry:
       type: object
       properties:
