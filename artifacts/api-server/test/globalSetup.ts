@@ -38,6 +38,11 @@ export async function setup(): Promise<void> {
       "../src/lore/bottles-migration.js"
     );
     await applyBottlesMigration();
+
+    const { applyReplayResolutionMigration } = await import(
+      "../src/lore/replay-resolution-migration.js"
+    );
+    await applyReplayResolutionMigration();
   } catch {
     // No real DB available — pure-unit environment.  Workers that need the
     // tables will skip their tests gracefully via their own dbAvailable guards.

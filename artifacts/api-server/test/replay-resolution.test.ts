@@ -6,6 +6,7 @@ import {
   recordingsTable,
   replayResolutionJobsTable,
   serviceTrackMapTable,
+  stationQualityTable,
   spinsTable,
   stationsTable,
 } from "@workspace/db";
@@ -74,6 +75,7 @@ afterAll(async () => {
     .where(eq(replayResolutionJobsTable.replayId, resolvedSpinId!));
   await db.delete(serviceTrackMapTable).where(eq(serviceTrackMapTable.recordingMbid, mbid));
   await db.delete(spinsTable).where(eq(spinsTable.stationId, stationId));
+  await db.delete(stationQualityTable).where(eq(stationQualityTable.stationId, stationId));
   await db.delete(stationsTable).where(eq(stationsTable.id, stationId));
   await db.delete(recordingsTable).where(eq(recordingsTable.mbid, mbid));
 });

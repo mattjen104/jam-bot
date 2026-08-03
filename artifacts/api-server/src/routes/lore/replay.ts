@@ -3,7 +3,7 @@ import {
   db,
   serviceTrackMapTable,
 } from "@workspace/db";
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   GetReplayManifestParams,
   GetReplayManifestResponse,
@@ -17,6 +17,7 @@ import {
   startReplayResolutionJob,
   type ReplayResolutionProgress,
 } from "../../lore/replay-resolution.js";
+import { getAppleMusicClientConfig } from "../../lore/appleMusic.js";
 import { getUserFromSession } from "../../lore/userSession.js";
 import { acquire as sseAcquire, release as sseRelease } from "../../lore/sseConnectionTracker.js";
 import { h } from "../../middlewares/asyncHandler.js";
@@ -200,6 +201,74 @@ router.get("/replay/:id/export", h(async (req, res) => {
   res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   res.setHeader("X-Content-Type-Options", "nosniff");
   return res.send(body);
+}));
+
+// GET /api/replay/:id/apple-music — Apple MusicKit configuration plus a
+// read-only, manifest-order materialization receipt. The manifest itself is
+// never changed by this lookup.
+router.get("/replay/:id/apple-music", h(async (req, res) => {
+  const parsed = GetReplayManifestParams.safeParse(req.params);
+  if (!parsed.success) return res.status(404).json({ error: "Replay not found" });
+  const manifest = await getReplayManifest(parsed.data.id);
+  if (!manifest) return res.status(404).json({ error: "Replay not found" });
+
+  const mbids = manifest.entries
+    .map((entry) => entry.recording?.mbid)
+    .filter((mbid): mbid is string => !!mbid);
+  const maps = mbids.length
+    ? await db
+      .select({
+        recordingMbid: serviceTrackMapTable.recordingMbid,
+        externalId: serviceTrackMapTable.externalId,
+        url: serviceTrackMapTable.url,
+        deadLink: serviceTrackMapTable.deadLink,
+      })
+      .from(serviceTrackMapTable)
+      .where(and(
+        eq(serviceTrackMapTable.service, "apple_music"),
+        inArray(serviceTrackMapTable.recordingMbid, mbids),
+      ))
+    : [];
+  const byMbid = new Map(maps.map((map) => [map.recordingMbid, map]));
+  const entries = manifest.entries.map((entry) => {
+    const recordingMbid = entry.recording?.mbid ?? null;
+    const map = recordingMbid ? byMbid.get(recordingMbid) : undefined;
+    const status = !recordingMbid
+      ? "unresolved"
+      : !map
+        ? "unavailable"
+        : map.deadLink
+          ? "dead"
+          : map.externalId
+            ? "available"
+            : "unavailable";
+    return {
+      position: entry.position,
+      spinId: entry.spinId,
+      recordingMbid,
+      rawArtist: entry.rawArtist,
+      rawTitle: entry.rawTitle,
+      title: entry.recording?.title ?? entry.rawTitle,
+      artist: entry.recording?.artist ?? entry.rawArtist,
+      appleMusicId: status === "available" ? map?.externalId ?? null : null,
+      url: map?.url ?? null,
+      status,
+      reason: status === "available" ? null : status === "dead" ? "dead_link" : status,
+    };
+  });
+  const config = getAppleMusicClientConfig();
+  return res.json({
+    ...config,
+    replayId: manifest.replayId,
+    entries,
+    coverage: {
+      total: entries.length,
+      available: entries.filter((entry) => entry.status === "available").length,
+      unavailable: entries.filter((entry) => entry.status === "unavailable").length,
+      unresolved: entries.filter((entry) => entry.status === "unresolved").length,
+      dead: entries.filter((entry) => entry.status === "dead").length,
+    },
+  });
 }));
 
 export default router;

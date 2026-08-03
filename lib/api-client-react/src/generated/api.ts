@@ -22,6 +22,7 @@ import type {
   AlbumTracksResponse,
   AllDraftClaimsList,
   ApiError,
+  AppleMusicReplayMaterialization,
   ArchiveCoverage,
   ArchiveRecentRuns,
   ArtistResult,
@@ -2454,6 +2455,11 @@ export function useGetReplayManifest<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+ */
+export const getGetAppleMusicReplayMaterializationUrl = (id: number) => {
+  return `/api/replay/${id}/apple-music`;
+};
 
 /**
  * Downloads the same immutable broadcast receipt as the replay manifest, without requiring an account or service OAuth. Every broadcast slot is preserved, including unresolved entries. Only exact, live service-neutral locations are emitted in location-bearing formats.
@@ -7248,3 +7254,92 @@ export function useGetMyLibraryListCoverage<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Apple MusicKit configuration and replay coverage
+ */
+
+export function useGetAppleMusicReplayMaterialization<
+  TData = Awaited<ReturnType<typeof getAppleMusicReplayMaterialization>>,
+  TError = ErrorType<ApiError>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAppleMusicReplayMaterialization>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAppleMusicReplayMaterializationQueryOptions(
+    id,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getGetAppleMusicReplayMaterializationQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAppleMusicReplayMaterialization>>,
+  TError = ErrorType<ApiError>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAppleMusicReplayMaterialization>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAppleMusicReplayMaterializationQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAppleMusicReplayMaterialization>>
+  > = ({ signal }) =>
+    getAppleMusicReplayMaterialization(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAppleMusicReplayMaterialization>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export const getGetAppleMusicReplayMaterializationQueryKey = (id: number) => {
+  return [`/api/replay/${id}/apple-music`] as const;
+};
+
+export const getAppleMusicReplayMaterialization = async (
+  id: number,
+  options?: RequestInit,
+): Promise<AppleMusicReplayMaterialization> => {
+  return customFetch<AppleMusicReplayMaterialization>(
+    getGetAppleMusicReplayMaterializationUrl(id),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export type GetAppleMusicReplayMaterializationQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAppleMusicReplayMaterialization>>
+>;
+
+export type GetAppleMusicReplayMaterializationQueryError = ErrorType<ApiError>;

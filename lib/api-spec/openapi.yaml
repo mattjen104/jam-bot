@@ -825,6 +825,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /replay/{id}/apple-music:
+    get:
+      operationId: getAppleMusicReplayMaterialization
+      tags: [archive]
+      summary: Apple MusicKit configuration and replay coverage
+      description: >
+        Returns a read-only Apple Music materialization receipt in the replay's
+        original broadcast order. The developer token is short-lived and is
+        safe for MusicKit JS to receive; the signing key is never sent to the
+        browser. Unresolved, unavailable, and dead mappings remain explicit.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Apple Music materialization receipt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppleMusicReplayMaterialization"
+        "404":
+          description: Replay not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /archive/station-runs/{runId}/insights:
     get:
       operationId: getStationRunInsights
@@ -4180,6 +4210,66 @@ components:
         - bounds
         - coverage
         - entries
+    AppleMusicReplayMaterializationEntry:
+      type: object
+      properties:
+        position:
+          type: integer
+        spinId:
+          type: integer
+        recordingMbid:
+          type: ["string", "null"]
+        rawArtist:
+          type: string
+        rawTitle:
+          type: string
+        title:
+          type: string
+        artist:
+          type: string
+        appleMusicId:
+          type: ["string", "null"]
+        url:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [available, unavailable, unresolved, dead]
+        reason:
+          type: ["string", "null"]
+          enum: [unavailable, unresolved, dead_link, dead, null]
+      required: [position, spinId, recordingMbid, rawArtist, rawTitle, title, artist, appleMusicId, url, status, reason]
+    AppleMusicReplayMaterialization:
+      type: object
+      properties:
+        configured:
+          type: boolean
+        developerToken:
+          type: ["string", "null"]
+        appName:
+          type: string
+        apiBase:
+          type: string
+        replayId:
+          type: integer
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/AppleMusicReplayMaterializationEntry"
+        coverage:
+          type: object
+          properties:
+            total:
+              type: integer
+            available:
+              type: integer
+            unavailable:
+              type: integer
+            unresolved:
+              type: integer
+            dead:
+              type: integer
+          required: [total, available, unavailable, unresolved, dead]
+      required: [configured, developerToken, appName, apiBase, replayId, entries, coverage]
     PickerRunSummary:
       type: object
       description: >-

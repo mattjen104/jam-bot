@@ -1,11 +1,12 @@
 import { Link, useParams } from "wouter";
-import { useGetReplayManifest } from "@workspace/api-client-react";
 import { ArrowLeft, Download, Ghost } from "lucide-react";
 import { ArchiveTracklist } from "../components/ArchiveTracklist";
 import { ShareButton } from "../components/ShareButton";
 import { usePlayer } from "../player/PlayerProvider";
 import { runDate } from "../lib/format";
 import { GuidedReplayPanel } from "../components/GuidedReplayPanel";
+import {
+import { AppleMusicReplay } from "../components/AppleMusicReplay";
 
 /** The canonical, shareable Ghost Replay reconstruction surface. */
 export default function Replay() {
@@ -14,6 +15,12 @@ export default function Replay() {
   const { ride, radio } = usePlayer();
   const { data, isLoading, isError } = useGetReplayManifest(id, {
     request: { headers: { accept: "application/json" } },
+  });
+  const { data: appleMusic } = useGetAppleMusicReplayMaterialization(id, {
+    query: {
+      queryKey: getGetAppleMusicReplayMaterializationQueryKey(id),
+      enabled: !!data,
+    },
   });
   const dockPadding = ride.active || radio.station ? "pb-32" : "pb-16";
 
@@ -98,6 +105,8 @@ export default function Replay() {
               </div>
             </section>
 
+            <AppleMusicReplay materialization={appleMusic} />
+
             <section
               aria-label="Replay exports"
               className="mb-6 rounded-xl border border-card-border bg-card p-4"
@@ -130,6 +139,8 @@ export default function Replay() {
                 </div>
               </div>
             </section>
+
+            <AppleMusicReplay materialization={appleMusic} />
 
             <ArchiveTracklist
               tracks={data.entries.map((entry) => ({

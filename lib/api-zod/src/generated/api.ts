@@ -1899,6 +1899,12 @@ export const GetReplayManifestResponse = zod
     "Stable, server-derived Ghost Replay view over one station broadcast partition. Coverage counts are explicit so clients do not infer missing entries from the resolved subset.\n",
   );
 
+ */
+
+export const GetAppleMusicReplayMaterializationParams = zod.object({
+  id: zod.coerce.number().min(1),
+});
+
 /**
  * Downloads the same immutable broadcast receipt as the replay manifest, without requiring an account or service OAuth. Every broadcast slot is preserved, including unresolved entries. Only exact, live service-neutral locations are emitted in location-bearing formats.
 
@@ -4076,4 +4082,42 @@ export const GetMyLibraryListCoverageResponse = zod.object({
         "A publication list that contains at least one album from the user's library, with the matched albums included.\n",
       ),
   ),
+});
+
+export const GetAppleMusicReplayMaterializationResponse = zod.object({
+  configured: zod.boolean(),
+  developerToken: zod.string().nullable(),
+  appName: zod.string(),
+  apiBase: zod.string(),
+  replayId: zod.number(),
+  entries: zod.array(
+    zod.object({
+      position: zod.number(),
+      spinId: zod.number(),
+      recordingMbid: zod.string().nullable(),
+      rawArtist: zod.string(),
+      rawTitle: zod.string(),
+      title: zod.string(),
+      artist: zod.string(),
+      appleMusicId: zod.string().nullable(),
+      url: zod.string().nullable(),
+      status: zod.enum(["available", "unavailable", "unresolved", "dead"]),
+      reason: zod
+        .union([
+          zod.literal("unavailable"),
+          zod.literal("unresolved"),
+          zod.literal("dead_link"),
+          zod.literal("dead"),
+          zod.literal(null),
+        ])
+        .nullable(),
+    }),
+  ),
+  coverage: zod.object({
+    total: zod.number(),
+    available: zod.number(),
+    unavailable: zod.number(),
+    unresolved: zod.number(),
+    dead: zod.number(),
+  }),
 });

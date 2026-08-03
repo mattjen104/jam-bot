@@ -1112,6 +1112,8 @@ export interface ReplayManifest {
   entries: ReplayEntry[];
 }
 
+export type AppleMusicReplayMaterializationEntryStatus =
+  (typeof AppleMusicReplayMaterializationEntryStatus)[keyof typeof AppleMusicReplayMaterializationEntryStatus];
 /**
  * One documented picker run — all picks sharing one source URL (an NTS episode page, a list, a post), replayed in documented order.
  */
@@ -2470,4 +2472,62 @@ export type GetSpotifySavedParams = {
    * @minLength 1
    */
   mbid: string;
+};
+
+export interface AppleMusicReplayMaterializationEntry {
+  position: number;
+  spinId: number;
+  /** @nullable */
+  recordingMbid: string | null;
+  rawArtist: string;
+  rawTitle: string;
+  title: string;
+  artist: string;
+  /** @nullable */
+  appleMusicId: string | null;
+  /** @nullable */
+  url: string | null;
+  status: AppleMusicReplayMaterializationEntryStatus;
+  /** @nullable */
+  reason: AppleMusicReplayMaterializationEntryReason;
+}
+
+export interface AppleMusicReplayMaterialization {
+  configured: boolean;
+  /** @nullable */
+  developerToken: string | null;
+  appName: string;
+  apiBase: string;
+  replayId: number;
+  entries: AppleMusicReplayMaterializationEntry[];
+  coverage: AppleMusicReplayMaterializationCoverage;
+}
+
+export const AppleMusicReplayMaterializationEntryReason = {
+  unavailable: "unavailable",
+  unresolved: "unresolved",
+  dead_link: "dead_link",
+  dead: "dead",
+} as const;
+
+/**
+ * @nullable
+ */
+export type AppleMusicReplayMaterializationEntryReason =
+  | (typeof AppleMusicReplayMaterializationEntryReason)[keyof typeof AppleMusicReplayMaterializationEntryReason]
+  | null;
+
+export const AppleMusicReplayMaterializationEntryStatus = {
+  available: "available",
+  unavailable: "unavailable",
+  unresolved: "unresolved",
+  dead: "dead",
+} as const;
+
+export type AppleMusicReplayMaterializationCoverage = {
+  total: number;
+  available: number;
+  unavailable: number;
+  unresolved: number;
+  dead: number;
 };
