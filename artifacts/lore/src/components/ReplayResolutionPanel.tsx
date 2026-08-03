@@ -138,13 +138,25 @@ export function ReplayResolutionPanel({
               a playlist.
             </p>
           ) : isRunning ? (
-            <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-              Checking{" "}
-              {job.total > 0
-                ? `${job.processed} of ${job.total} tracks…`
-                : "tracks…"}
-            </p>
+            <div className="mt-1">
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                Checking{" "}
+                {job.total > 0
+                  ? `${job.processed} of ${job.total} tracks…`
+                  : "tracks…"}
+              </p>
+              {job.networkErrors > 0 ? (
+                <p
+                  className="mt-1 flex items-center gap-1.5 text-xs text-amber-400"
+                  data-testid="resolution-network-errors"
+                  role="status"
+                >
+                  <AlertTriangle className="h-3 w-3 shrink-0" />
+                  {job.networkErrors} network error{job.networkErrors === 1 ? "" : "s"} so far — misses may be temporary, not permanent
+                </p>
+              ) : null}
+            </div>
           ) : isDone ? (
             <div className="mt-1">
               <p className="flex items-center gap-2 text-sm text-foreground">
@@ -152,6 +164,16 @@ export function ReplayResolutionPanel({
                 {job.resolved} of {job.total} tracks found on a streaming
                 service
               </p>
+              {job.networkErrors > 0 ? (
+                <p
+                  className="mt-1 flex items-center gap-1.5 text-xs text-amber-400"
+                  data-testid="resolution-network-errors"
+                  role="alert"
+                >
+                  <AlertTriangle className="h-3 w-3 shrink-0" />
+                  {job.networkErrors} miss{job.networkErrors === 1 ? " is" : "es are"} due to a network error (e.g. Odesli outage) — re-check later to retry them
+                </p>
+              ) : null}
               {breakdownSummary ? (
                 <p
                   className="mt-1 text-xs text-muted-foreground"
