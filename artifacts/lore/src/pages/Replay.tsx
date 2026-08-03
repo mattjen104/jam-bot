@@ -1,15 +1,11 @@
 import { Link, useParams } from "wouter";
-  getGetAppleMusicReplayMaterializationQueryKey,
-  useGetAppleMusicReplayMaterialization,
-  useGetReplayManifest,
-} from "@workspace/api-client-react";
+import { useGetReplayManifest } from "@workspace/api-client-react";
 import { ArrowLeft, Download, Ghost } from "lucide-react";
 import { ArchiveTracklist } from "../components/ArchiveTracklist";
-import { GuidedReplayQueue } from "../components/GuidedReplayQueue";
+import { GuidedReplayPanel } from "../components/GuidedReplayPanel";
 import { ShareButton } from "../components/ShareButton";
 import { usePlayer } from "../player/PlayerProvider";
 import { runDate } from "../lib/format";
-import { useGetReplayManifest } from "@workspace/api-client-react";
 
 /** The canonical, shareable Ghost Replay reconstruction surface. */
 export default function Replay() {
@@ -102,9 +98,10 @@ export default function Replay() {
               </div>
             </section>
 
-            <AppleMusicReplay materialization={appleMusic} />
-
-            <GuidedReplayQueue replayId={data.replayId} />
+            <GuidedReplayPanel
+                entries={data.entries}
+                label={`${data.station.name} · ${data.show?.name ?? "stream"} · ${runDate(data.bounds.date)}`}
+              />
 
             <section
               aria-label="Replay exports"
