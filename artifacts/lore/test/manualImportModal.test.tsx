@@ -652,6 +652,42 @@ describe("ManualImportModal — OCR failure isolation", () => {
     ]);
   });
 
+  it("shows the empty-state prompt and disables Import when every image in the batch fails", async () => {
+    mockPostExtractLibraryImages.mockResolvedValueOnce({
+      results: [
+        { index: 0, status: "error", error: "Unreadable file" },
+        { index: 1, status: "error", error: "Unreadable file" },
+      ],
+    });
+
+    renderModal();
+    fireEvent.click(screen.getByTestId("service-tile-screenshots"));
+    fireEvent.change(screen.getByTestId("screenshot-file-input"), {
+      target: {
+        files: [
+          new File(["png"], "screen-a.png", { type: "image/png" }),
+          new File(["png"], "screen-b.png", { type: "image/png" }),
+        ],
+      },
+    });
+    await screen.findByTestId("image-preview-list");
+    fireEvent.click(screen.getByRole("button", { name: /read 2 screenshots/i }));
+
+    // Wait for the review pane to appear (empty-state text is the indicator)
+    await screen.findByText(/no clear song rows found/i);
+
+    // Import button is disabled — nothing to import
+    const importBtn = screen.getByRole("button", { name: /import 0 tracks/i });
+    expect(importBtn).toBeTruthy();
+    expect((importBtn as HTMLButtonElement).disabled).toBe(true);
+
+    // Failed-image count alert is visible with the "Review errors" link
+    const alert = screen.getByRole("alert");
+    expect(alert).toBeTruthy();
+    expect(alert.textContent).toMatch(/2 screenshots? could not be read/i);
+    expect(screen.getByRole("button", { name: /review errors/i })).toBeTruthy();
+  });
+
   it("retrying a failed image does not drop rows already recognised from a successful image", async () => {
     // First extraction: image A ok, image B error
     mockPostExtractLibraryImages
