@@ -134,16 +134,17 @@ describe("Ghost Replay resolution negative-cache", () => {
       { mbid: noVectorMbid, title: "No Vector Track", artist: "No Vector Artist", isrc: null, links: [] },
       { mbid: expiredMbid, title: "Expired Miss Track", artist: "Expired Miss Artist", isrc: "USXX98765432" },
       { mbid: networkErrorMbid, title: "Network Error Track", artist: "Network Error Artist", isrc: "USNE11223344" },
+      { mbid: revivedMbid, title: "Revived Track", artist: "Revived Artist", isrc: "USRV11223344" },
     ]);
   });
 
   afterAll(async () => {
     if (!dbAvailable) return;
     await db.delete(serviceTrackMapTable).where(
-      inArray(serviceTrackMapTable.recordingMbid, [noLinksMbid, noVectorMbid, expiredMbid, networkErrorMbid]),
+      inArray(serviceTrackMapTable.recordingMbid, [noLinksMbid, noVectorMbid, expiredMbid, networkErrorMbid, revivedMbid]),
     );
     await db.delete(recordingsTable).where(
-      inArray(recordingsTable.mbid, [noLinksMbid, noVectorMbid, expiredMbid, networkErrorMbid]),
+      inArray(recordingsTable.mbid, [noLinksMbid, noVectorMbid, expiredMbid, networkErrorMbid, revivedMbid]),
     );
     vi.unstubAllGlobals();
   });
@@ -207,25 +208,36 @@ describe("Ghost Replay resolution negative-cache", () => {
     );
     vi.stubGlobal("fetch", odesliSpy);
 
-      const result = await resolveRecording(revivedMbid, {
-        title: "Revived Track",
-        artist: "Revived Artist",
-        isrc: "USRV11223344",
-        links: null,
-      });
+    const result = await resolveRecording(revivedMbid, {
+      title: "Revived Track",
+      artist: "Revived Artist",
+      isrc: "USRV11223344",
+      links: null,
+    });
+
+    const [sentinelRow] = await db
+      .select()
+      .from(serviceTrackMapTable)
+      .where(
+        and(
+          eq(serviceTrackMapTable.recordingMbid, revivedMbid),
+          eq(serviceTrackMapTable.service, "odesli"),
+        ),
+      )
+      .limit(1);
 
     const deadDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-      const [spotifyRow] = await db
-        .select()
-        .from(serviceTrackMapTable)
-        .where(
-          and(
-            eq(serviceTrackMapTable.recordingMbid, revivedMbid),
-            eq(serviceTrackMapTable.service, "spotify"),
-          ),
-        )
-        .limit(1);
+    const [spotifyRow] = await db
+      .select()
+      .from(serviceTrackMapTable)
+      .where(
+        and(
+          eq(serviceTrackMapTable.recordingMbid, revivedMbid),
+          eq(serviceTrackMapTable.service, "spotify"),
+        ),
+      )
+      .limit(1);
     expect(result).toBe("missing");
     // Odesli must not have been touched — there was nothing to query.
     expect(odesliSpy).not.toHaveBeenCalled();
@@ -328,7 +340,7 @@ describe("Ghost Replay resolution negative-cache", () => {
     if (!dbAvailable) return ctx.skip();
 
     // Plant a stale miss row (31 days old) directly.
-    const staleDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+    const staleDate = new Date(Date.now() - 2 * 60 * 60 * 1000); // 2 hours ago
     await upsertServiceTrackMapMiss(expiredMbid, "no_links");
     // Backdate the missedAt so it falls outside the 30-day window.
     await db
@@ -349,25 +361,36 @@ describe("Ghost Replay resolution negative-cache", () => {
     );
     vi.stubGlobal("fetch", odesliRetry);
 
-      const result = await resolveRecording(revivedMbid, {
-        title: "Revived Track",
-        artist: "Revived Artist",
-        isrc: "USRV11223344",
-        links: null,
-      });
+    const result = await resolveRecording(revivedMbid, {
+      title: "Revived Track",
+      artist: "Revived Artist",
+      isrc: "USRV11223344",
+      links: null,
+    });
+
+    const [sentinelRow] = await db
+      .select()
+      .from(serviceTrackMapTable)
+      .where(
+        and(
+          eq(serviceTrackMapTable.recordingMbid, revivedMbid),
+          eq(serviceTrackMapTable.service, "odesli"),
+        ),
+      )
+      .limit(1);
 
     const deadDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-      const [spotifyRow] = await db
-        .select()
-        .from(serviceTrackMapTable)
-        .where(
-          and(
-            eq(serviceTrackMapTable.recordingMbid, revivedMbid),
-            eq(serviceTrackMapTable.service, "spotify"),
-          ),
-        )
-        .limit(1);
+    const [spotifyRow] = await db
+      .select()
+      .from(serviceTrackMapTable)
+      .where(
+        and(
+          eq(serviceTrackMapTable.recordingMbid, revivedMbid),
+          eq(serviceTrackMapTable.service, "spotify"),
+        ),
+      )
+      .limit(1);
     const fetch = vi.fn(async () => new Response(JSON.stringify({
       entitiesByUniqueId: {
         spotify: { id: "ReplayTrack001", apiProvider: "spotify" },
@@ -464,7 +487,7 @@ describe("upsertServiceTrackMap rank guard", () => {
       .from(serviceTrackMapTable)
       .where(
         and(
-          eq(serviceTrackMapTable.recordingMbid, strongMbid),
+          eq(serviceTrackMapTable.recordingMbid, weakMbid),
           eq(serviceTrackMapTable.service, "spotify"),
         ),
       )
