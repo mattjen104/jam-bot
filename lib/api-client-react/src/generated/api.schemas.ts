@@ -1330,6 +1330,7 @@ export const ReplayResolutionJobStatus = {
   pending: "pending",
   running: "running",
   done: "done",
+  done_with_errors: "done_with_errors",
   error: "error",
 } as const;
 
@@ -2695,10 +2696,136 @@ export interface MattStarterLibraryResult {
   error?: string;
 }
 
+export type AlbumAvatarCandidateSource =
+  (typeof AlbumAvatarCandidateSource)[keyof typeof AlbumAvatarCandidateSource];
+
+export const AlbumAvatarCandidateSource = {
+  library: "library",
+  "matt-starter": "matt-starter",
+  "lore-catalogue": "lore-catalogue",
+} as const;
+
+export interface AlbumAvatarCandidate {
+  recordingMbid: string;
+  /** @nullable */
+  releaseGroupMbid: string | null;
+  albumTitle: string;
+  artist: string;
+  artworkUrl: string;
+  source: AlbumAvatarCandidateSource;
+}
+
+export type AlbumAvatarCurrent = AlbumAvatarCandidate & {
+  /** @nullable */
+  selectedAt: string | null;
+};
+
+export type AlbumAvatarResponseRotation = {
+  /** @nullable */
+  visitStartedAt: string | null;
+  stableForVisit: boolean;
+};
+
+export interface AlbumAvatarResponse {
+  current: AlbumAvatarCurrent | null;
+  candidates: AlbumAvatarCandidate[];
+  eligible: boolean;
+  needsChoice: boolean;
+  rotation: AlbumAvatarResponseRotation;
+}
+
+export interface AnonymousAlbumCover {
+  artworkUrl: string;
+  albumTitle: string;
+  artist: string;
+}
+
 export interface WeeklyRecapStation {
   slug: string;
   name: string;
 }
+
+export interface WeeklyRecapTrack {
+  mbid: string;
+  title: string;
+  artist: string;
+  station: WeeklyRecapStation;
+  heardAt?: string;
+  ripenedAt?: string;
+}
+
+export interface WeeklyRecapShow {
+  name: string;
+  /** @nullable */
+  djName: string | null;
+}
+
+export interface WeeklyRecapReplay {
+  replayId: number;
+  date: string;
+  station: WeeklyRecapStation;
+  show: WeeklyRecapShow | null;
+}
+
+export type WeeklyRecapWeekTimezone =
+  (typeof WeeklyRecapWeekTimezone)[keyof typeof WeeklyRecapWeekTimezone];
+
+export const WeeklyRecapWeekTimezone = {
+  UTC: "UTC",
+} as const;
+
+export type WeeklyRecapWeek = {
+  startDate: string;
+  endDate: string;
+  endDateExclusive: string;
+  timezone: WeeklyRecapWeekTimezone;
+};
+
+export type WeeklyRecapStationsAttended = {
+  count: number;
+  stations: WeeklyRecapStation[];
+};
+
+export type WeeklyRecapFirstEverHeards = {
+  count: number;
+  items: WeeklyRecapTrack[];
+};
+
+export type WeeklyRecapRipenedCrossings = {
+  count: number;
+  items: WeeklyRecapTrack[];
+};
+
+/**
+ * Counts-only reflection of confirmed attendance for a completed UTC Sunday-to-Saturday window. Empty arrays and a null replay are honest no-data states.
+
+ */
+export interface WeeklyRecap {
+  week: WeeklyRecapWeek;
+  available: boolean;
+  stationsAttended: WeeklyRecapStationsAttended;
+  firstEverHeards: WeeklyRecapFirstEverHeards;
+  ripenedCrossings: WeeklyRecapRipenedCrossings;
+  missedGhostReplay: WeeklyRecapReplay | null;
+}
+
+export type StationSocialPresenceResponsePresence = { [key: string]: number };
+
+/**
+ * Anonymous cover tokens only for stations with fewer than ten active distinct users. Never includes listener IDs, handles, or mappings.
+
+ */
+export type StationSocialPresenceResponseAvatars = {
+  [key: string]: AnonymousAlbumCover[];
+};
+
+export interface StationSocialPresenceResponse {
+  presence: StationSocialPresenceResponsePresence;
+  /** Anonymous cover tokens only for stations with fewer than ten active distinct users. Never includes listener IDs, handles, or mappings.
+   */
+  avatars: StationSocialPresenceResponseAvatars;
+}
+
 export type ResolveSongParams = {
   /**
    * @minLength 1
@@ -2828,66 +2955,13 @@ export type GetMyWeeklyRecapParams = {
   weekStart?: string;
 };
 
-export interface WeeklyRecapTrack {
-  mbid: string;
-  title: string;
-  artist: string;
-  station: WeeklyRecapStation;
-  heardAt?: string;
-  ripenedAt?: string;
-}
-
-export type WeeklyRecapFirstEverHeards = {
-  count: number;
-  items: WeeklyRecapTrack[];
+export type SetMyAlbumAvatarBody = {
+  recordingMbid: string;
 };
 
-export interface WeeklyRecapShow {
-  name: string;
-  /** @nullable */
-  djName: string | null;
-}
-
-export const WeeklyRecapWeekTimezone = {
-  UTC: "UTC",
-} as const;
-
-export type ReplayEmbedFactProvider =
-  (typeof ReplayEmbedFactProvider)[keyof typeof ReplayEmbedFactProvider];
-
-export type WeeklyRecapRipenedCrossings = {
-  count: number;
-  items: WeeklyRecapTrack[];
+export type GetStationSocialPresenceParams = {
+  /**
+   * Comma-separated station IDs.
+   */
+  ids: string;
 };
-
-export type WeeklyRecapWeek = {
-  startDate: string;
-  endDate: string;
-  endDateExclusive: string;
-  timezone: WeeklyRecapWeekTimezone;
-};
-
-export interface WeeklyRecapReplay {
-  replayId: number;
-  date: string;
-  station: WeeklyRecapStation;
-  show: WeeklyRecapShow | null;
-}
-
-export type WeeklyRecapStationsAttended = {
-  count: number;
-  stations: WeeklyRecapStation[];
-};
-
-export type WeeklyRecapWeekTimezone =
-  (typeof WeeklyRecapWeekTimezone)[keyof typeof WeeklyRecapWeekTimezone];
-
- */
-export interface WeeklyRecap {
-  week: WeeklyRecapWeek;
-  available: boolean;
-  stationsAttended: WeeklyRecapStationsAttended;
-  firstEverHeards: WeeklyRecapFirstEverHeards;
-  ripenedCrossings: WeeklyRecapRipenedCrossings;
-  missedGhostReplay: WeeklyRecapReplay | null;
-}

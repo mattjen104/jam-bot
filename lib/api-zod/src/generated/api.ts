@@ -2061,7 +2061,7 @@ export const GetReplayResolutionJobParams = zod.object({
 export const GetReplayResolutionJobResponse = zod.object({
   id: zod.number(),
   replayId: zod.number(),
-  status: zod.enum(["pending", "running", "done", "error"]),
+  status: zod.enum(["pending", "running", "done", "done_with_errors", "error"]),
   total: zod.number(),
   processed: zod.number(),
   resolved: zod.number(),
@@ -4370,6 +4370,11 @@ export const CopyMattStarterLibraryResponse = zod.object({
   error: zod.string().optional(),
 });
 
+/**
+ * Returns a deterministic, counts-only reflection of confirmed radio attendance for the most recent completed UTC Sunday-to-Saturday week. The date-derived availability remains discoverable on a later visit without outbound notifications or a third-party account. An optional Sunday weekStart may revisit an older completed week.
+
+ * @summary Read the latest completed Your Week On Air recap
+ */
 export const GetMyWeeklyRecapQueryParams = zod.object({
   weekStart: zod
     .date()
@@ -4451,3 +4456,116 @@ export const GetMyWeeklyRecapResponse = zod
   .describe(
     "Counts-only reflection of confirmed attendance for a completed UTC Sunday-to-Saturday window. Empty arrays and a null replay are honest no-data states.\n",
   );
+
+/**
+ * Returns server-validated album-cover candidates plus the current anonymous listener identity. The selected cover is stable for an active visit; candidates never expose another listener's identity.
+
+ * @summary Read the listener's anonymous album-cover identity
+ */
+export const GetMyAlbumAvatarResponse = zod.object({
+  current: zod.union([
+    zod
+      .object({
+        recordingMbid: zod.string(),
+        releaseGroupMbid: zod.string().nullable(),
+        albumTitle: zod.string(),
+        artist: zod.string(),
+        artworkUrl: zod.string().url(),
+        source: zod.enum(["library", "matt-starter", "lore-catalogue"]),
+      })
+      .and(
+        zod.object({
+          selectedAt: zod.date().nullable(),
+        }),
+      ),
+    zod.null(),
+  ]),
+  candidates: zod.array(
+    zod.object({
+      recordingMbid: zod.string(),
+      releaseGroupMbid: zod.string().nullable(),
+      albumTitle: zod.string(),
+      artist: zod.string(),
+      artworkUrl: zod.string().url(),
+      source: zod.enum(["library", "matt-starter", "lore-catalogue"]),
+    }),
+  ),
+  eligible: zod.boolean(),
+  needsChoice: zod.boolean(),
+  rotation: zod.object({
+    visitStartedAt: zod.date().nullable(),
+    stableForVisit: zod.boolean(),
+  }),
+});
+
+/**
+ * @summary Explicitly choose an eligible album cover as listener identity
+ */
+export const SetMyAlbumAvatarBody = zod.object({
+  recordingMbid: zod.string(),
+});
+
+export const SetMyAlbumAvatarResponse = zod.object({
+  current: zod.union([
+    zod
+      .object({
+        recordingMbid: zod.string(),
+        releaseGroupMbid: zod.string().nullable(),
+        albumTitle: zod.string(),
+        artist: zod.string(),
+        artworkUrl: zod.string().url(),
+        source: zod.enum(["library", "matt-starter", "lore-catalogue"]),
+      })
+      .and(
+        zod.object({
+          selectedAt: zod.date().nullable(),
+        }),
+      ),
+    zod.null(),
+  ]),
+  candidates: zod.array(
+    zod.object({
+      recordingMbid: zod.string(),
+      releaseGroupMbid: zod.string().nullable(),
+      albumTitle: zod.string(),
+      artist: zod.string(),
+      artworkUrl: zod.string().url(),
+      source: zod.enum(["library", "matt-starter", "lore-catalogue"]),
+    }),
+  ),
+  eligible: zod.boolean(),
+  needsChoice: zod.boolean(),
+  rotation: zod.object({
+    visitStartedAt: zod.date().nullable(),
+    stableForVisit: zod.boolean(),
+  }),
+});
+
+/**
+ * @summary Read privacy-preserving anonymous listener presence
+ */
+export const GetStationSocialPresenceQueryParams = zod.object({
+  ids: zod.coerce.string().describe("Comma-separated station IDs."),
+});
+
+export const getStationSocialPresenceResponseAvatarsMaxOne = 3;
+
+export const GetStationSocialPresenceResponse = zod.object({
+  presence: zod.record(zod.string(), zod.number().min(1)),
+  avatars: zod
+    .record(
+      zod.string(),
+      zod
+        .array(
+          zod.object({
+            artworkUrl: zod.string().url(),
+            albumTitle: zod.string(),
+            artist: zod.string(),
+          }),
+        )
+        .max(getStationSocialPresenceResponseAvatarsMaxOne),
+    )
+    .describe(
+      "Anonymous cover tokens only for stations with fewer than ten active distinct users. Never includes listener IDs, handles, or mappings.\n",
+    ),
+});

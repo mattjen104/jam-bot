@@ -18,6 +18,7 @@ import type {
 
 import type {
   AdminStationListResponse,
+  AlbumAvatarResponse,
   AlbumResult,
   AlbumTracksResponse,
   AllDraftClaimsList,
@@ -40,6 +41,7 @@ import type {
   GetOembedParams,
   GetRecordingsAvailabilityParams,
   GetSpotifySavedParams,
+  GetStationSocialPresenceParams,
   GetStationSpinsParams,
   GetStationsRecentSpinsParams,
   GetStationsScheduleParams,
@@ -93,6 +95,7 @@ import type {
   SelectorInsights,
   SelectorList,
   SelectorRunsResponse,
+  SetMyAlbumAvatarBody,
   SongContext,
   SongExploderClaimRequest,
   SongExploderClaimResponse,
@@ -111,6 +114,7 @@ import type {
   StationPulseList,
   StationRunDetail,
   StationRunInsights,
+  StationSocialPresenceResponse,
   StationSpinsPage,
   StationUpcomingSchedule,
   StationsArtistFrequencyResult,
@@ -7989,6 +7993,10 @@ export const useCopyMattStarterLibrary = <
   return useMutation(getCopyMattStarterLibraryMutationOptions(options));
 };
 
+/**
+ * Returns a deterministic, counts-only reflection of confirmed radio attendance for the most recent completed UTC Sunday-to-Saturday week. The date-derived availability remains discoverable on a later visit without outbound notifications or a third-party account. An optional Sunday weekStart may revisit an older completed week.
+
+ * @summary Read the latest completed Your Week On Air recap
  */
 export const getGetMyWeeklyRecapUrl = (params?: GetMyWeeklyRecapParams) => {
   const normalizedParams = new URLSearchParams();
@@ -8005,37 +8013,6 @@ export const getGetMyWeeklyRecapUrl = (params?: GetMyWeeklyRecapParams) => {
     ? `/api/me/weekly-recap?${stringifiedParams}`
     : `/api/me/weekly-recap`;
 };
-
-/**
- * @summary Read the latest completed Your Week On Air recap
- */
-
-export function useGetMyWeeklyRecap<
-  TData = Awaited<ReturnType<typeof getMyWeeklyRecap>>,
-  TError = ErrorType<ApiError>,
->(
-  params?: GetMyWeeklyRecapParams,
-  options?: {
-    query?: UseQueryOptions<
-      Awaited<ReturnType<typeof getMyWeeklyRecap>>,
-      TError,
-      TData
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetMyWeeklyRecapQueryOptions(params, options);
-
-  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
-    queryKey: QueryKey;
-  };
-
-  return { ...query, queryKey: queryOptions.queryKey };
-}
-
-export type GetMyWeeklyRecapQueryResult = NonNullable<
-  Awaited<ReturnType<typeof getMyWeeklyRecap>>
->;
 
 export const getMyWeeklyRecap = async (
   params?: GetMyWeeklyRecapParams,
@@ -8083,6 +8060,303 @@ export const getGetMyWeeklyRecapQueryOptions = <
   > & { queryKey: QueryKey };
 };
 
+export type GetMyWeeklyRecapQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyWeeklyRecap>>
+>;
 export type GetMyWeeklyRecapQueryError = ErrorType<ApiError>;
 
-export type GetReplayPlaylistTargetsQueryError = ErrorType<ApiError>;
+/**
+ * @summary Read the latest completed Your Week On Air recap
+ */
+
+export function useGetMyWeeklyRecap<
+  TData = Awaited<ReturnType<typeof getMyWeeklyRecap>>,
+  TError = ErrorType<ApiError>,
+>(
+  params?: GetMyWeeklyRecapParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyWeeklyRecap>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyWeeklyRecapQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns server-validated album-cover candidates plus the current anonymous listener identity. The selected cover is stable for an active visit; candidates never expose another listener's identity.
+
+ * @summary Read the listener's anonymous album-cover identity
+ */
+export const getGetMyAlbumAvatarUrl = () => {
+  return `/api/me/avatar`;
+};
+
+export const getMyAlbumAvatar = async (
+  options?: RequestInit,
+): Promise<AlbumAvatarResponse> => {
+  return customFetch<AlbumAvatarResponse>(getGetMyAlbumAvatarUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyAlbumAvatarQueryKey = () => {
+  return [`/api/me/avatar`] as const;
+};
+
+export const getGetMyAlbumAvatarQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyAlbumAvatar>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyAlbumAvatar>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMyAlbumAvatarQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMyAlbumAvatar>>
+  > = ({ signal }) => getMyAlbumAvatar({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyAlbumAvatar>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyAlbumAvatarQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyAlbumAvatar>>
+>;
+export type GetMyAlbumAvatarQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Read the listener's anonymous album-cover identity
+ */
+
+export function useGetMyAlbumAvatar<
+  TData = Awaited<ReturnType<typeof getMyAlbumAvatar>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyAlbumAvatar>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyAlbumAvatarQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Explicitly choose an eligible album cover as listener identity
+ */
+export const getSetMyAlbumAvatarUrl = () => {
+  return `/api/me/avatar`;
+};
+
+export const setMyAlbumAvatar = async (
+  setMyAlbumAvatarBody: SetMyAlbumAvatarBody,
+  options?: RequestInit,
+): Promise<AlbumAvatarResponse> => {
+  return customFetch<AlbumAvatarResponse>(getSetMyAlbumAvatarUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(setMyAlbumAvatarBody),
+  });
+};
+
+export const getSetMyAlbumAvatarMutationOptions = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setMyAlbumAvatar>>,
+    TError,
+    { data: BodyType<SetMyAlbumAvatarBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setMyAlbumAvatar>>,
+  TError,
+  { data: BodyType<SetMyAlbumAvatarBody> },
+  TContext
+> => {
+  const mutationKey = ["setMyAlbumAvatar"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setMyAlbumAvatar>>,
+    { data: BodyType<SetMyAlbumAvatarBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return setMyAlbumAvatar(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetMyAlbumAvatarMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setMyAlbumAvatar>>
+>;
+export type SetMyAlbumAvatarMutationBody = BodyType<SetMyAlbumAvatarBody>;
+export type SetMyAlbumAvatarMutationError = ErrorType<ApiError>;
+
+/**
+ * @summary Explicitly choose an eligible album cover as listener identity
+ */
+export const useSetMyAlbumAvatar = <
+  TError = ErrorType<ApiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setMyAlbumAvatar>>,
+    TError,
+    { data: BodyType<SetMyAlbumAvatarBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setMyAlbumAvatar>>,
+  TError,
+  { data: BodyType<SetMyAlbumAvatarBody> },
+  TContext
+> => {
+  return useMutation(getSetMyAlbumAvatarMutationOptions(options));
+};
+
+/**
+ * @summary Read privacy-preserving anonymous listener presence
+ */
+export const getGetStationSocialPresenceUrl = (
+  params: GetStationSocialPresenceParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/stations/social/presence?${stringifiedParams}`
+    : `/api/stations/social/presence`;
+};
+
+export const getStationSocialPresence = async (
+  params: GetStationSocialPresenceParams,
+  options?: RequestInit,
+): Promise<StationSocialPresenceResponse> => {
+  return customFetch<StationSocialPresenceResponse>(
+    getGetStationSocialPresenceUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetStationSocialPresenceQueryKey = (
+  params?: GetStationSocialPresenceParams,
+) => {
+  return [
+    `/api/stations/social/presence`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetStationSocialPresenceQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStationSocialPresence>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetStationSocialPresenceParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationSocialPresence>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStationSocialPresenceQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStationSocialPresence>>
+  > = ({ signal }) =>
+    getStationSocialPresence(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStationSocialPresence>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStationSocialPresenceQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStationSocialPresence>>
+>;
+export type GetStationSocialPresenceQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Read privacy-preserving anonymous listener presence
+ */
+
+export function useGetStationSocialPresence<
+  TData = Awaited<ReturnType<typeof getStationSocialPresence>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetStationSocialPresenceParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStationSocialPresence>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStationSocialPresenceQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}

@@ -269,16 +269,20 @@ router.get("/stations/social/presence", h(async (req, res) => {
     .map((s) => parseInt(s.trim(), 10))
     .filter((n) => !isNaN(n) && n > 0);
 
-  if (ids.length === 0) return res.json({ presence: {} });
+  if (ids.length === 0) return res.json({ presence: {}, avatars: {} });
 
   // Sessions with a heartbeat within the last 3 minutes
   const threshold = new Date(Date.now() - 3 * 60_000);
   const rows = await db
     .select({
       stationId: listenSessionsTable.stationId,
-      n: drizzleCount(),
+      userId: listenSessionsTable.userId,
+      artworkUrl: loreUsersTable.avatarArtworkUrl,
+      albumTitle: loreUsersTable.avatarAlbumTitle,
+      artist: loreUsersTable.avatarArtist,
     })
     .from(listenSessionsTable)
+    .leftJoin(loreUsersTable, eq(listenSessionsTable.userId, loreUsersTable.id))
     .where(
       and(
         inArray(listenSessionsTable.stationId, ids),
@@ -286,13 +290,44 @@ router.get("/stations/social/presence", h(async (req, res) => {
         sql`${listenSessionsTable.lastHeartbeatAt} >= ${threshold}`,
       ),
     )
-    .groupBy(listenSessionsTable.stationId);
+    ;
 
-  const presence: Record<number, number> = {};
+  const byStation = new Map<number, Map<number, { artworkUrl: string; albumTitle: string; artist: string }>>();
   for (const row of rows) {
-    presence[row.stationId] = Number(row.n);
+    let users = byStation.get(row.stationId);
+    if (!users) {
+      users = new Map();
+      byStation.set(row.stationId, users);
+    }
+    if (
+      row.artworkUrl &&
+      row.albumTitle &&
+      row.artist &&
+      /^https?:\/\//i.test(row.artworkUrl)
+    ) {
+      users.set(row.userId, {
+        artworkUrl: row.artworkUrl,
+        albumTitle: row.albumTitle,
+        artist: row.artist,
+      });
+    } else if (!users.has(row.userId)) {
+      users.set(row.userId, { artworkUrl: "", albumTitle: "", artist: "" });
+    }
   }
-  return res.json({ presence });
+  const presence: Record<number, number> = {};
+  const avatars: Record<number, Array<{ artworkUrl: string; albumTitle: string; artist: string }>> = {};
+  for (const [stationId, users] of byStation) {
+    const count = users.size;
+    presence[stationId] = count;
+    // Covers are intentionally withheld at the privacy threshold. The
+    // response contains no user ids or handles, only anonymous cover tokens.
+    if (count < 10) {
+      avatars[stationId] = [...users.values()]
+        .filter((avatar) => avatar.artworkUrl)
+        .slice(0, 3);
+    }
+  }
+  return res.json({ presence, avatars });
 }));
 
 // ---------------------------------------------------------------------------

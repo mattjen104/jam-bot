@@ -22,6 +22,8 @@ import {
   ME_OVERLAP_STATIONS_KEY,
   ME_OVERLAP_RUNS_KEY,
   useMyLibraryCoverage,
+  useMyAlbumAvatar,
+  useSetAlbumAvatar,
   ME_LIBRARY_COVERAGE_KEY,
   type LibraryCoverageList,
   type FileImportSummary,
@@ -32,6 +34,7 @@ import { SeedInput, SeedBar } from "../components/SeedInput";
 import { ApiError } from "@workspace/api-client-react";
 import { KeepButton } from "../components/KeepButton";
 import { LibraryRow } from "../components/LibraryRow";
+import { AlbumAvatarPicker } from "../components/AlbumAvatarPicker";
 import {
   CheckCircle2,
   ChevronDown,
@@ -47,6 +50,7 @@ import {
 } from "lucide-react";
 import { ManualImportModal } from "../components/ManualImportModal";
 import { YourWeekCard } from "../components/YourWeekCard";
+import { toast } from "../hooks/use-toast";
 
 // ---------------------------------------------------------------------------
 // Ledger consent helpers
@@ -562,11 +566,15 @@ export function AlbumGroupRow({
   openDoorMbid,
   setOpenDoorMbid,
   forceOpen,
+  onMakeAvatar,
+  avatarRecordingMbid,
 }: {
   group: AlbumGroup;
   openDoorMbid: string | null;
   setOpenDoorMbid: (v: string | null) => void;
   forceOpen?: boolean;
+  onMakeAvatar?: (recordingMbid: string) => void;
+  avatarRecordingMbid?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const isOpen = forceOpen || open;
@@ -654,6 +662,24 @@ export function AlbumGroupRow({
         </div>
 
         {/* Count + chevron */}
+        {group.items.some((item) => item.mbid === avatarRecordingMbid) && (
+          <span style={{ color: "hsl(var(--library))", fontSize: 11 }} title="Current anonymous listener cover">●</span>
+        )}
+        {group.items.find((item) => item.mbid)?.mbid && (
+          <button
+            type="button"
+            title="Make this album my avatar"
+            aria-label={`Make ${group.albumTitle} my avatar`}
+            onClick={(event) => {
+              event.stopPropagation();
+              const mbid = group.items.find((item) => item.mbid)?.mbid;
+              if (mbid) onMakeAvatar?.(mbid);
+            }}
+            style={{ border: "none", background: "none", color: "hsl(var(--faint))", cursor: "pointer", padding: 3 }}
+          >
+            ◎
+          </button>
+        )}
         <span
           style={{
             fontFamily: "var(--app-font-mono)",
@@ -702,11 +728,15 @@ export function ArtistGroupRow({
   openDoorMbid,
   setOpenDoorMbid,
   forceOpen,
+  onMakeAvatar,
+  avatarRecordingMbid,
 }: {
   group: ArtistGroup;
   openDoorMbid: string | null;
   setOpenDoorMbid: (v: string | null) => void;
   forceOpen?: boolean;
+  onMakeAvatar?: (recordingMbid: string) => void;
+  avatarRecordingMbid?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const isOpen = forceOpen || open;
@@ -815,6 +845,20 @@ export function ArtistGroupRow({
                 >
                   {album.albumTitle}
                 </span>
+                {album.items.find((item) => item.mbid)?.mbid && (
+                  <button
+                    type="button"
+                    title="Make this album my avatar"
+                    aria-label={`Make ${album.albumTitle} my avatar`}
+                    onClick={() => {
+                      const mbid = album.items.find((item) => item.mbid)?.mbid;
+                      if (mbid) onMakeAvatar?.(mbid);
+                    }}
+                    style={{ border: "none", background: "none", color: "hsl(var(--faint))", cursor: "pointer", padding: 3 }}
+                  >
+                    {album.items.some((item) => item.mbid === avatarRecordingMbid) ? "●" : "◎"}
+                  </button>
+                )}
                 <span
                   style={{
                     fontFamily: "var(--app-font-mono)",
@@ -860,6 +904,13 @@ export default function Library() {
   const [searchOpen, setSearchOpen] = useState(false);
   const queryClient = useQueryClient();
   const { radio } = usePlayer();
+  const { data: albumAvatar } = useMyAlbumAvatar();
+  const setAlbumAvatar = useSetAlbumAvatar();
+  const chooseAlbumAvatar = useCallback((recordingMbid: string) => {
+    setAlbumAvatar.mutate(recordingMbid, {
+      onSuccess: () => toast({ title: "This album is now your anonymous listener cover" }),
+    });
+  }, [setAlbumAvatar]);
 
   // Source filter — persisted in URL as ?source=keep|import|soft|critic
   const sourceFilter = useMemo((): "" | "keep" | "import" | "soft" | "critic" => {
@@ -1187,7 +1238,10 @@ export default function Library() {
   return (
     <div className="dial-root">
       {importModalOpen && (
-        <ManualImportModal onClose={() => setImportModalOpen(false)} />
+        <ManualImportModal
+          onClose={() => setImportModalOpen(false)}
+          onImportStarted={() => void queryClient.invalidateQueries({ queryKey: ["me", "album-avatar"] })}
+        />
       )}
       {searchOpen && (
         <SearchOverlay
@@ -1221,6 +1275,7 @@ export default function Library() {
           <Search size={14} />
         </button>
       </div>
+      <AlbumAvatarPicker showCurrent />
 
       {/* Import banner — shown while import is running and for 60s after done */}
       {showImportBanner && jobData && (
@@ -1859,6 +1914,8 @@ export default function Library() {
                     openDoorMbid={openDoorMbid}
                     setOpenDoorMbid={setOpenDoorMbid}
                     forceOpen={!!groupFilterQ}
+                    onMakeAvatar={chooseAlbumAvatar}
+                    avatarRecordingMbid={albumAvatar?.current?.recordingMbid}
                   />
                 ))
               ) : (
@@ -1913,6 +1970,8 @@ export default function Library() {
                     openDoorMbid={openDoorMbid}
                     setOpenDoorMbid={setOpenDoorMbid}
                     forceOpen={!!groupFilterQ}
+                    onMakeAvatar={chooseAlbumAvatar}
+                    avatarRecordingMbid={albumAvatar?.current?.recordingMbid}
                   />
                 ))
               ) : (

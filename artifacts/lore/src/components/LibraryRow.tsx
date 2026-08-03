@@ -4,6 +4,7 @@ import type { LibraryItem } from "../lib/meHooks";
 import { usePlayer, type RideSeed } from "../player/PlayerProvider";
 import { getRecordingAlbumTracks, spotifyPlay } from "@workspace/api-client-react";
 import { toast } from "../hooks/use-toast";
+import { useMyAlbumAvatar, useSetAlbumAvatar } from "../lib/meHooks";
 
 /** Deterministic gradient fallback for artwork */
 function artGradient(a: string, b: string): string {
@@ -213,6 +214,19 @@ export function LibraryRow({ item, isOnAir = false, isOpen = false, onToggle }: 
   const artwork = rec?.artworkUrl ?? null;
   const prov = item.provenance;
   const isSoft = item.soft === true;
+  const { data: avatar } = useMyAlbumAvatar();
+  const setAvatar = useSetAlbumAvatar();
+  const isCurrentAvatar = item.mbid != null && avatar?.current?.recordingMbid === item.mbid;
+  const canMakeAvatar = item.mbid != null && avatar?.candidates.some((candidate) => candidate.recordingMbid === item.mbid);
+
+  const makeAvatar = (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!item.mbid || setAvatar.isPending) return;
+    setAvatar.mutate(item.mbid, {
+      onSuccess: () => toast({ title: "This album is now your anonymous listener cover" }),
+    });
+  };
 
   const hasProvenance =
     prov.kind === "keep" &&
@@ -270,11 +284,32 @@ export function LibraryRow({ item, isOnAir = false, isOpen = false, onToggle }: 
           </p>
         )}
         {isOnAir && <p className="lrow__badge">● on air</p>}
+        {isCurrentAvatar && <p className="lrow__badge" data-testid="library-current-avatar">anonymous listener cover</p>}
       </div>
 
       {/* Right rail — soft rows have no playback door (no MBID to queue) */}
       {!isSoft && (
         <div className="lrow__rail">
+          {canMakeAvatar && (
+            <button
+              type="button"
+              onClick={makeAvatar}
+              disabled={setAvatar.isPending || isCurrentAvatar}
+              title={isCurrentAvatar ? "Your current anonymous listener cover" : "Make this album my avatar"}
+              aria-label={isCurrentAvatar ? "Current anonymous listener cover" : "Make this album my avatar"}
+              style={{
+                border: "none",
+                background: "none",
+                color: isCurrentAvatar ? "hsl(var(--library))" : "hsl(var(--faint))",
+                fontSize: 13,
+                padding: "4px",
+                cursor: isCurrentAvatar ? "default" : "pointer",
+              }}
+              data-testid="library-make-avatar"
+            >
+              {isCurrentAvatar ? "●" : "◎"}
+            </button>
+          )}
           <button
             type="button"
             className={`lrow__play${isOpen ? " lrow__play--open" : ""}`}

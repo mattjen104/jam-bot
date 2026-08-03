@@ -1096,6 +1096,22 @@ export const loreUsersTable = pgTable("lore_users", {
    * Null until the listener picks one. Stored as the raw emoji character.
    */
   avatar: text("avatar"),
+  /**
+   * Anonymous listening identity. These fields are server-derived from an
+   * eligible library/catalogue recording; `avatar` remains the historical
+   * bottle-note emoji snapshot source.
+   */
+  avatarRecordingMbid: text("avatar_recording_mbid").references(
+    () => recordingsTable.mbid,
+    { onDelete: "set null" },
+  ),
+  avatarReleaseGroupMbid: text("avatar_release_group_mbid"),
+  avatarAlbumTitle: text("avatar_album_title"),
+  avatarArtist: text("avatar_artist"),
+  avatarArtworkUrl: text("avatar_artwork_url"),
+  avatarSource: text("avatar_source"),
+  avatarVisitStartedAt: timestamp("avatar_visit_started_at"),
+  avatarVisitRecordingMbid: text("avatar_visit_recording_mbid"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

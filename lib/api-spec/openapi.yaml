@@ -2804,6 +2804,68 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /me/avatar:
+    get:
+      operationId: getMyAlbumAvatar
+      tags: [me]
+      summary: Read the listener's anonymous album-cover identity
+      description: >
+        Returns server-validated album-cover candidates plus the current
+        anonymous listener identity. The selected cover is stable for an active
+        visit; candidates never expose another listener's identity.
+      responses:
+        "200":
+          description: Album avatar state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlbumAvatarResponse"
+    put:
+      operationId: setMyAlbumAvatar
+      tags: [me]
+      summary: Explicitly choose an eligible album cover as listener identity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                recordingMbid:
+                  type: string
+              required: [recordingMbid]
+      responses:
+        "200":
+          description: Updated album avatar state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlbumAvatarResponse"
+        "400":
+          description: The requested recording is not an eligible candidate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /stations/social/presence:
+    get:
+      operationId: getStationSocialPresence
+      tags: [lore]
+      summary: Read privacy-preserving anonymous listener presence
+      parameters:
+        - name: ids
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Comma-separated station IDs.
+      responses:
+        "200":
+          description: Aggregate counts and, only below the privacy threshold, anonymous cover tokens
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationSocialPresenceResponse"
 components:
   schemas:
     HealthStatus:
@@ -4634,7 +4696,7 @@ components:
           type: integer
         status:
           type: string
-          enum: [pending, running, done, error]
+          enum: [pending, running, done, done_with_errors, error]
         total:
           type: integer
         processed:
@@ -6477,6 +6539,69 @@ components:
         error:
           type: string
       required: [available, addedCount, totalCount]
+    AlbumAvatarCandidate:
+      type: object
+      properties:
+        recordingMbid:
+          type: string
+        releaseGroupMbid:
+          type: ["string", "null"]
+        albumTitle:
+          type: string
+        artist:
+          type: string
+        artworkUrl:
+          type: string
+          format: uri
+        source:
+          type: string
+          enum: [library, matt-starter, lore-catalogue]
+      required: [recordingMbid, releaseGroupMbid, albumTitle, artist, artworkUrl, source]
+    AlbumAvatarCurrent:
+      allOf:
+        - $ref: "#/components/schemas/AlbumAvatarCandidate"
+        - type: object
+          properties:
+            selectedAt:
+              type: ["string", "null"]
+              format: date-time
+          required: [selectedAt]
+    AlbumAvatarResponse:
+      type: object
+      properties:
+        current:
+          anyOf:
+            - $ref: "#/components/schemas/AlbumAvatarCurrent"
+            - type: "null"
+        candidates:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlbumAvatarCandidate"
+        eligible:
+          type: boolean
+        needsChoice:
+          type: boolean
+        rotation:
+          type: object
+          properties:
+            visitStartedAt:
+              type: ["string", "null"]
+              format: date-time
+            stableForVisit:
+              type: boolean
+          required: [visitStartedAt, stableForVisit]
+      required: [current, candidates, eligible, needsChoice, rotation]
+    AnonymousAlbumCover:
+      type: object
+      properties:
+        artworkUrl:
+          type: string
+          format: uri
+        albumTitle:
+          type: string
+        artist:
+          type: string
+      required: [artworkUrl, albumTitle, artist]
     WeeklyRecapStation:
       type: object
       properties:
@@ -6593,3 +6718,22 @@ components:
         - firstEverHeards
         - ripenedCrossings
         - missedGhostReplay
+    StationSocialPresenceResponse:
+      type: object
+      properties:
+        presence:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 1
+        avatars:
+          type: object
+          description: >
+            Anonymous cover tokens only for stations with fewer than ten active
+            distinct users. Never includes listener IDs, handles, or mappings.
+          additionalProperties:
+            type: array
+            maxItems: 3
+            items:
+              $ref: "#/components/schemas/AnonymousAlbumCover"
+      required: [presence, avatars]

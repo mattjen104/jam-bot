@@ -43,9 +43,9 @@ beforeAll(async () => {
     const [station] = await db
       .insert(stationsTable)
       .values({
-        slug: wSlug,
-        name: `Worker Test Station ${wRun}`,
-        streamUrl: `http://example.invalid/worker-${wRun}`,
+        slug,
+        name: `Replay Resolution Test Station ${run}`,
+        streamUrl: `http://example.invalid/${run}`,
         stationClass: "curated",
       })
       .returning({ id: stationsTable.id });
@@ -141,57 +141,40 @@ describe("Ghost Replay resolution negative-cache", () => {
   const sentinelDirectMbid = `test-rr-sentinel-direct-${ncRun}`;
 
   const ttlOrderNoLinksMbid = `test-rr-ttl-order-nl-${ncRun}`;
-    const odesliEmpty = vi.fn(async () =>
-      new Response(JSON.stringify({ linksByPlatform: {}, entitiesByUniqueId: {} }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
+
+  beforeAll(async () => {
+    if (!dbAvailable) return;
+    // Seed recordings so service_track_map FK constraints are satisfied.
+    await db.insert(recordingsTable).values([
+      { mbid: noVectorMbid,       title: "No Vector Track",          artist: "No Vector Artist" },
+      { mbid: expiredMbid,        title: "Expired Miss Track",        artist: "Expired Miss Artist" },
+      { mbid: networkErrorMbid,   title: "Network Error Track",       artist: "Network Error Artist" },
+      { mbid: revivedMbid,        title: "Revived Track",             artist: "Revived Artist" },
+      { mbid: sentinelDirectMbid, title: "Sentinel Direct Track",     artist: "Sentinel Direct Artist" },
+      { mbid: ttlOrderNoLinksMbid,title: "TTL Order No Links Track",  artist: "TTL Order Artist" },
+    ]).onConflictDoNothing();
+  });
+
+  afterAll(async () => {
+    if (!dbAvailable) return;
+    await db.delete(serviceTrackMapTable).where(
+      inArray(serviceTrackMapTable.recordingMbid, [
+        noVectorMbid, expiredMbid, networkErrorMbid,
+        revivedMbid, sentinelDirectMbid, ttlOrderNoLinksMbid,
+      ]),
     );
-    vi.stubGlobal("fetch", odesliEmpty);
-
-    // First call — Odesli returns no platform links → should record a no_links miss.
-    const first = await resolveRecording(networkErrorMbid, {
-      title: "Network Error Track",
-      artist: "Network Error Artist",
-      isrc: "USNE11223344",
-      links: null,
-    });
-    expect(first).toBe("network_error");
-    expect(odesliThrows).toHaveBeenCalledTimes(1);
-
-    // A miss row with reason "network_error" must have been written.
-    const [missRow] = await db
-      .select()
-      .from(serviceTrackMapTable)
-      .where(
-        and(
-          eq(serviceTrackMapTable.recordingMbid, networkErrorMbid),
-          eq(serviceTrackMapTable.service, "odesli"),
-        ),
-      )
-      .limit(1);
-    expect(missRow).toBeDefined();
-    expect(missRow!.missReason).toBe("network_error");
-    expect(missRow!.missedAt).toBeInstanceOf(Date);
-
-    // The 1-hour TTL must block the second call — Odesli should not be hit again.
-    odesliThrows.mockClear();
-    const second = await resolveRecording(networkErrorMbid, {
-      title: "Network Error Track",
-      artist: "Network Error Artist",
-      isrc: "USNE11223344",
-      links: null,
-    });
-    expect(second).toBe("missing");
-    expect(odesliEmpty).not.toHaveBeenCalled();
-
-    vi.unstubAllGlobals();
+    await db.delete(recordingsTable).where(
+      inArray(recordingsTable.mbid, [
+        noVectorMbid, expiredMbid, networkErrorMbid,
+        revivedMbid, sentinelDirectMbid, ttlOrderNoLinksMbid,
+      ]),
+    );
   });
 
   it("writes a no_vector miss row without ever calling Odesli", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
 
-    // noVectorMbid has isrc=null and links=[] — there is no vector to query
+    // noVectorMbid has no ISRC and no links — there is no vector to query
     // Odesli with, so the resolver must short-circuit and write a no_vector miss.
     const odesliSpy = vi.fn(async () =>
       new Response(JSON.stringify({ linksByPlatform: {}, entitiesByUniqueId: {} }), {
@@ -199,19 +182,12 @@ describe("Ghost Replay resolution negative-cache", () => {
         headers: { "Content-Type": "application/json" },
       }),
     );
-
-    const noLinksResult = await resolveRecording(ttlOrderNoLinksMbid, {
-      title: "TTL Order No Links Track",
-      artist: "TTL Order Artist",
-      isrc: "USTL11223344",
-      links: null,
-    });
     vi.stubGlobal("fetch", odesliSpy);
 
-    const result = await resolveRecording(expiredMbid, {
-      title: "Expired Miss Track",
-      artist: "Expired Miss Artist",
-      isrc: "USXX98765432",
+    const result = await resolveRecording(noVectorMbid, {
+      title: "No Vector Track",
+      artist: "No Vector Artist",
+      isrc: null,
       links: null,
     });
 
@@ -225,7 +201,7 @@ describe("Ghost Replay resolution negative-cache", () => {
       .from(serviceTrackMapTable)
       .where(
         and(
-          eq(serviceTrackMapTable.recordingMbid, networkErrorMbid),
+          eq(serviceTrackMapTable.recordingMbid, noVectorMbid),
           eq(serviceTrackMapTable.service, "odesli"),
         ),
       )
@@ -308,7 +284,6 @@ describe("Ghost Replay resolution negative-cache", () => {
       links: null,
     });
 
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
     const staleDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
     await db
       .update(serviceTrackMapTable)
@@ -520,7 +495,7 @@ describe("Ghost Replay resolution rank-guard", () => {
       .from(serviceTrackMapTable)
       .where(
         and(
-          eq(serviceTrackMapTable.recordingMbid, weakMbid),
+          eq(serviceTrackMapTable.recordingMbid, strongMbid),
           eq(serviceTrackMapTable.service, "spotify"),
         ),
       )
@@ -759,7 +734,7 @@ describe("Ghost Replay resolution worker — network-error counting", () => {
       .from(replayResolutionJobsTable)
       .where(eq(replayResolutionJobsTable.id, job!.id));
 
-    expect(finished?.status).toBe("done");
+    expect(finished?.status).toBe("done_with_errors");
     expect(finished?.processed).toBe(2);
     // The spin with an ISRC must have produced a network_error outcome.
     expect(finished?.networkErrors).toBeGreaterThanOrEqual(1);
@@ -859,26 +834,25 @@ describe("Ghost Replay resolution dead-link revival", () => {
     });
     await markServiceTrackMapDead(deadHighMbid, "spotify");
 
-    // Confirm the row is dead.
+    // Confirm the seeded row is dead.
     const [deadRow] = await db
       .select()
       .from(serviceTrackMapTable)
       .where(
         and(
-          eq(serviceTrackMapTable.recordingMbid, deadNoReviveMbid),
+          eq(serviceTrackMapTable.recordingMbid, deadHighMbid),
           eq(serviceTrackMapTable.service, "spotify"),
         ),
       )
       .limit(1);
     expect(deadRow!.deadLink).toBe(true);
 
-    // Call upsertServiceTrackMap with a higher-rank incoming row
-    // (recording_id/exact → rank 40 > 10).
+    // Revive by upserting the same MBID at equal rank (recording_id/exact → rank 40).
     await upsertServiceTrackMap({
-      recordingMbid: deadLowMbid,
+      recordingMbid: deadHighMbid,
       service: "spotify",
-      externalId: "DeadLowNew",
-      url: "https://open.spotify.com/track/DeadLowNew",
+      externalId: "DeadHighNew",
+      url: "https://open.spotify.com/track/DeadHighNew",
       method: "recording_id",
       confidence: "exact",
       verification: "verified",
@@ -889,7 +863,7 @@ describe("Ghost Replay resolution dead-link revival", () => {
       .from(serviceTrackMapTable)
       .where(
         and(
-          eq(serviceTrackMapTable.recordingMbid, deadLowMbid),
+          eq(serviceTrackMapTable.recordingMbid, deadHighMbid),
           eq(serviceTrackMapTable.service, "spotify"),
         ),
       )
@@ -898,66 +872,7 @@ describe("Ghost Replay resolution dead-link revival", () => {
     expect(revivedRow).toBeDefined();
     expect(revivedRow!.deadLink).toBe(false);
     expect(revivedRow!.deadAt).toBeNull();
-    expect(revivedRow!.url).toBe("https://open.spotify.com/track/DeadLowNew");
-    expect(revivedRow!.method).toBe("recording_id");
-    expect(revivedRow!.confidence).toBe("exact");
-  });
-
-  it("does NOT revive a dead high-rank row (recording_id/exact) when a lower-rank (odesli/search) hit arrives", async (ctx) => {
-    if (!dbAvailable) return ctx.skip();
-
-    // Seed a high-rank live row (recording_id/exact → rank 40), then mark it dead.
-    await upsertServiceTrackMap({
-      recordingMbid: deadNoReviveMbid,
-      service: "spotify",
-      externalId: "DeadNoReviveOld",
-      url: "https://open.spotify.com/track/DeadNoReviveOld",
-      method: "recording_id",
-      confidence: "exact",
-      verification: "verified",
-    });
-    await markServiceTrackMapDead(deadNoReviveMbid, "spotify");
-
-    // Confirm the row is dead before attempting the revival.
-    const [deadRow] = await db
-      .select()
-      .from(serviceTrackMapTable)
-      .where(
-        and(
-          eq(serviceTrackMapTable.recordingMbid, deadNoReviveMbid),
-          eq(serviceTrackMapTable.service, "spotify"),
-        ),
-      )
-      .limit(1);
-    expect(deadRow!.deadLink).toBe(true);
-
-    // Call upsertServiceTrackMap with a higher-rank incoming row
-    // (recording_id/exact → rank 40 > 10).
-    await upsertServiceTrackMap({
-      recordingMbid: deadLowMbid,
-      service: "spotify",
-      externalId: "DeadLowNew",
-      url: "https://open.spotify.com/track/DeadLowNew",
-      method: "recording_id",
-      confidence: "exact",
-      verification: "verified",
-    });
-
-    const [revivedRow] = await db
-      .select()
-      .from(serviceTrackMapTable)
-      .where(
-        and(
-          eq(serviceTrackMapTable.recordingMbid, deadLowMbid),
-          eq(serviceTrackMapTable.service, "spotify"),
-        ),
-      )
-      .limit(1);
-
-    expect(revivedRow).toBeDefined();
-    expect(revivedRow!.deadLink).toBe(false);
-    expect(revivedRow!.deadAt).toBeNull();
-    expect(revivedRow!.url).toBe("https://open.spotify.com/track/DeadLowNew");
+    expect(revivedRow!.url).toBe("https://open.spotify.com/track/DeadHighNew");
     expect(revivedRow!.method).toBe("recording_id");
     expect(revivedRow!.confidence).toBe("exact");
   });
@@ -1021,12 +936,3 @@ describe("Ghost Replay resolution dead-link revival", () => {
     expect(afterRow!.confidence).toBe("exact");
   });
 });
-
-    const netErrResult = await resolveRecording(ttlOrderNetErrMbid, {
-      title: "TTL Order Net Err Track",
-      artist: "TTL Order Artist 2",
-      isrc: "USTO11223344",
-      links: null,
-    });
-
-  const ttlOrderNetErrMbid = `test-rr-ttl-order-ne-${ncRun}`;

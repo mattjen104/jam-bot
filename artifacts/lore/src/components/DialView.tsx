@@ -17,6 +17,7 @@ import { ContextRail } from "./ContextRail";
 import { SearchOverlay } from "./SearchOverlay";
 import { usePlayer } from "../player/PlayerProvider";
 import { BottlePanel } from "./BottlePanel";
+import { AlbumAvatarPicker } from "./AlbumAvatarPicker";
 import { useSocialMode } from "../lib/social";
 import { eligibleDjName } from "@workspace/lore-attribution";
 
@@ -1640,6 +1641,7 @@ export function DialView() {
 
       {/* Main scroll body */}
       <div className="dial-body">
+        <AlbumAvatarPicker compact />
         {/* DIAL view — three-zone front door (spec §6) */}
         {level === "all" && (
           <>

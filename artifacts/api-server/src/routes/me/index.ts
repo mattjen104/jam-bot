@@ -21,6 +21,7 @@ import pickerNamesRouter from "./picker-names.js";
 import attendanceRouter from "./attendance.js";
 import tasteSeedsRouter from "./taste-seeds.js";
 import weeklyRecapRouter from "./weekly-recap.js";
+import avatarRouter from "./avatar.js";
 
 export {
   startPhase3RetryScheduler,
@@ -54,5 +55,6 @@ router.use(pickerNamesRouter);
 router.use(attendanceRouter);
 router.use(tasteSeedsRouter);
 router.use(weeklyRecapRouter);
+router.use(avatarRouter);
 
 export default router;

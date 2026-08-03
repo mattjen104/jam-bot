@@ -66,6 +66,14 @@ export interface LibraryItem {
   fuzzyMatch?: boolean;
 }
 
+export interface AlbumAvatarCandidate {
+  recordingMbid: string;
+  releaseGroupMbid: string | null;
+  albumTitle: string;
+  artist: string;
+  artworkUrl: string;
+  source: "library" | "matt-starter" | "lore-catalogue";
+}
 export interface ImportJobStatus {
   jobId: number;
   service: string;
@@ -411,6 +419,7 @@ export const ME_DIAL_CROSSINGS_KEY = (date: string) =>
 export const ME_TASTE_SEEDS_KEY = ["me", "taste-seeds"] as const;
 export const ME_MATT_STARTER_LIBRARY_KEY = ["me", "library", "matt-starter"] as const;
 
+export const ME_ALBUM_AVATAR_KEY = ["me", "album-avatar"] as const;
 export interface MattStarterLibraryStatus {
   available: boolean;
   addedCount: number;
@@ -448,6 +457,7 @@ export function useStartMattLibrary() {
       void queryClient.invalidateQueries({ queryKey: ME_OVERLAP_RUNS_KEY });
       void queryClient.invalidateQueries({ queryKey: ME_GHOST_MISSED_KEY });
       void queryClient.invalidateQueries({ queryKey: getListStationsNowPlayingQueryKey() });
+      void queryClient.invalidateQueries({ queryKey: ME_ALBUM_AVATAR_KEY });
     },
   });
 }
@@ -520,6 +530,7 @@ export function useSetTasteSeeds() {
       // flags. Refresh it with crossings so a newly selected seed is visible
       // on the live dial without waiting for the 30s poll.
       void queryClient.invalidateQueries({ queryKey: getListStationsNowPlayingQueryKey() });
+      void queryClient.invalidateQueries({ queryKey: ME_ALBUM_AVATAR_KEY });
     },
   });
 }
@@ -1401,3 +1412,50 @@ export function useMyWeeklyRecap() {
 }
 
 export const ME_WEEKLY_RECAP_KEY = ["me", "weekly-recap"] as const;
+
+export function useMyAlbumAvatar() {
+  return useQuery({
+    queryKey: ME_ALBUM_AVATAR_KEY,
+    queryFn: () =>
+      fetchOrNull<AlbumAvatarResponse>("/api/me/avatar").then(
+        (d) => d ?? {
+          current: null,
+          candidates: [],
+          eligible: false,
+          needsChoice: false,
+          rotation: { visitStartedAt: null, stableForVisit: false },
+        },
+      ),
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
+export function useSetAlbumAvatar() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (recordingMbid: string) =>
+      apiFetch<AlbumAvatarResponse>("/api/me/avatar", {
+        method: "PUT",
+        body: JSON.stringify({ recordingMbid }),
+      }),
+    onSuccess: (data) => {
+      queryClient.setQueryData(ME_ALBUM_AVATAR_KEY, data);
+    },
+  });
+}
+
+export interface AlbumAvatarResponse {
+  current: AlbumAvatarCurrent | null;
+  candidates: AlbumAvatarCandidate[];
+  eligible: boolean;
+  needsChoice: boolean;
+  rotation: {
+    visitStartedAt: string | null;
+    stableForVisit: boolean;
+  };
+}
+
+export interface AlbumAvatarCurrent extends AlbumAvatarCandidate {
+  selectedAt: string | null;
+}

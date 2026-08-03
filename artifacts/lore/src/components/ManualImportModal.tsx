@@ -216,9 +216,12 @@ export const IMPORT_SERVICES: ServiceDef[] = [
  */
 type Mode = "service-picker" | "service-steps" | "input" | "username" | "tracks" | "lfm-hint" | "images" | "review";
 
-interface Props { onClose(): void }
+interface Props {
+  onClose(): void;
+  onImportStarted?(): void;
+}
 
-export function ManualImportModal({ onClose }: Props) {
+export function ManualImportModal({ onClose, onImportStarted }: Props) {
   const [mode, setMode] = useState<Mode>("service-picker");
   const [selectedService, setSelectedService] = useState<ServiceId | null>(null);
   const [rawInput, setRawInput] = useState("");
@@ -267,6 +270,7 @@ export function ManualImportModal({ onClose }: Props) {
       try {
         await postStartImport("spotify");
         await qc.invalidateQueries({ queryKey: ME_LATEST_IMPORT_JOB_KEY });
+        onImportStarted?.();
         onClose();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Import failed — try again.");
@@ -529,6 +533,7 @@ export function ManualImportModal({ onClose }: Props) {
     try {
       await postStartListenBrainzImport(detectedUsername);
       await qc.invalidateQueries({ queryKey: ME_LATEST_IMPORT_JOB_KEY });
+      onImportStarted?.();
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Import failed — check the username and try again.");
@@ -544,6 +549,7 @@ export function ManualImportModal({ onClose }: Props) {
     try {
       await postStartManualImport(importTracks);
       await qc.invalidateQueries({ queryKey: ME_LATEST_IMPORT_JOB_KEY });
+      onImportStarted?.();
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Import failed — try again.");

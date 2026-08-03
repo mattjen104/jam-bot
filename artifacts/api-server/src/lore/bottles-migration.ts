@@ -7,6 +7,7 @@ import { sql } from "drizzle-orm";
  * Changes:
  *   song_bottles — one row per listener annotation anchored to an MBID
  *   lore_users.avatar — the listener's chosen Halloween emoji avatar
+ *   lore_users.avatar_* — the anonymous album-cover identity
  *
  * All statements use IF NOT EXISTS / ADD COLUMN IF NOT EXISTS so this is safe
  * to run on every boot and in the global test setup.
@@ -22,6 +23,22 @@ export async function applyBottlesMigration(): Promise<void> {
     `);
   } catch (err) {
     stepErrors.push({ step: "lore_users_add_avatar", err });
+  }
+
+  try {
+    await db.execute(sql`
+      ALTER TABLE lore_users
+        ADD COLUMN IF NOT EXISTS avatar_recording_mbid text,
+        ADD COLUMN IF NOT EXISTS avatar_release_group_mbid text,
+        ADD COLUMN IF NOT EXISTS avatar_album_title text,
+        ADD COLUMN IF NOT EXISTS avatar_artist text,
+        ADD COLUMN IF NOT EXISTS avatar_artwork_url text,
+        ADD COLUMN IF NOT EXISTS avatar_source text,
+        ADD COLUMN IF NOT EXISTS avatar_visit_started_at timestamptz,
+        ADD COLUMN IF NOT EXISTS avatar_visit_recording_mbid text
+    `);
+  } catch (err) {
+    stepErrors.push({ step: "lore_users_add_album_avatar", err });
   }
 
   // song_bottles table — message-in-a-bottle annotations anchored to an MBID.

@@ -11,7 +11,7 @@ import {
   useMyPreferences,
 } from "../lib/meHooks";
 import { BottlePanel } from "../components/BottlePanel";
-import { useStationPresence } from "../hooks/useStationPresence";
+import { useStationPresence, type StationPresence } from "../hooks/useStationPresence";
 import { useSocialMode } from "../lib/social";
 import { useWpOnAir, useWpLoreCounts, type WpOnAirItem } from "./hooks";
 import { LoreChip } from "./LoreChip";
@@ -417,14 +417,14 @@ function OnAirRow({
   item,
   authenticated,
   nowInLibrary,
-  presenceCount,
+  presence,
   onOpenRun,
 }: {
   item: WpOnAirItem;
   authenticated: boolean;
   nowInLibrary: boolean;
-  /** Active listener count for this station from the presence endpoint. */
-  presenceCount?: number;
+  /** Privacy-thresholded anonymous listener presence for this station. */
+  presence?: StationPresence;
   onOpenRun: (slug: string) => void;
 }) {
   const { radio, scan } = usePlayer();
@@ -505,12 +505,33 @@ function OnAirRow({
         {item.now.resolved ? (
           <p style={{ margin: "1px 0 0", fontSize: 12, color: nowInLibrary ? "var(--wp-text-success)" : "var(--wp-text-secondary)", ...oneLine }}>
             {item.now.artist}
-            {socialEnabled && presenceCount != null && presenceCount > 1 && (
+            {socialEnabled && presence != null && presence.count > 1 && (
               <span
-                style={{ fontSize: 10, color: "var(--wp-text-muted)", marginLeft: 5, opacity: 0.7 }}
-                title={`${presenceCount} listeners here now`}
+                style={{ display: "inline-flex", alignItems: "center", fontSize: 10, color: "var(--wp-text-muted)", marginLeft: 5, opacity: 0.8 }}
+                title={`${presence.count} anonymous listeners here now`}
               >
-                · {presenceCount} here
+                {presence.avatars.length > 0 && (
+                  <span aria-hidden="true" style={{ display: "inline-flex", marginRight: 4 }}>
+                    {presence.avatars.map((avatar, index) => (
+                      <img
+                        key={`${avatar.artworkUrl}-${index}`}
+                        src={avatar.artworkUrl}
+                        alt=""
+                        width={15}
+                        height={15}
+                        style={{
+                          width: 15,
+                          height: 15,
+                          objectFit: "cover",
+                          borderRadius: 2,
+                          marginLeft: index === 0 ? 0 : -4,
+                          border: "1px solid var(--wp-card, white)",
+                        }}
+                      />
+                    ))}
+                  </span>
+                )}
+                · {presence.avatars.length > 0 ? "listening here" : `${presence.count} here`}
               </span>
             )}
           </p>
@@ -780,7 +801,7 @@ export default function WebPlayer() {
                   item.now.mbid != null &&
                   (onAirLore?.get(item.now.mbid)?.keptSince ?? null) != null
                 }
-                presenceCount={presenceCounts.get(item.station.id)}
+                presence={presenceCounts.get(item.station.id)}
                 onOpenRun={(slug) => setRunRef({ slug, runId: null })}
               />
             ))}
