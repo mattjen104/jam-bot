@@ -41,6 +41,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { ManualImportModal } from "../components/ManualImportModal";
+import { YourWeekCard } from "../components/YourWeekCard";
 
 // ---------------------------------------------------------------------------
 // Ledger consent helpers
@@ -969,6 +970,9 @@ export default function Library() {
             )}
           </div>
         </div>
+
+        {/* ── Your Week ── */}
+        <YourWeekCard />
 
         {/* ── Live strip (stub — wired when /me/library/live endpoint ships) ── */}
         {/* TODO: replace false with liveItems.length > 0 */}

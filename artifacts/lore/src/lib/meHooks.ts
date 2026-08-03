@@ -1114,6 +1114,50 @@ function maybeShowRecoveryHint(show?: boolean): void {
 
 const RECOVERY_HINT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
+// ---------------------------------------------------------------------------
+// Weekly listening summary — GET /api/me/attendance/weekly
+// ---------------------------------------------------------------------------
+
+export interface WeeklyTrack {
+  mbid: string;
+  title: string | null;
+  artist: string | null;
+  artworkUrl: string | null;
+  spinCount: number;
+  dwellSeconds: number;
+  firstHeard: string | null;
+  lastHeard: string | null;
+}
+
+export interface WeeklySummary {
+  week: string;
+  weekStart: string;
+  weekEnd: string;
+  tracks: WeeklyTrack[];
+  totalTracks: number;
+  totalDwellSeconds: number;
+}
+
+export const ME_WEEKLY_SUMMARY_KEY = (week: string) =>
+  ["me", "attendance", "weekly", week] as const;
+
+/**
+ * Weekly confirmed-hearing summary for the authenticated user.
+ * `week` is an ISO week label like "2026-W31"; defaults to the current week
+ * when omitted.  Returns null when unauthenticated.
+ */
+export function useMyWeeklySummary(week: string | null) {
+  const url = week
+    ? `/api/me/attendance/weekly?week=${encodeURIComponent(week)}`
+    : "/api/me/attendance/weekly";
+  return useQuery({
+    queryKey: ME_WEEKLY_SUMMARY_KEY(week ?? "current"),
+    queryFn: () => fetchOrNull<WeeklySummary>(url),
+    staleTime: 2 * 60_000,
+    retry: false,
+  });
+}
+
 /**
  * Stations that have played the user's library artists in the rolling 24 h
  * window but that the user has never consciously tuned into (no listens row
