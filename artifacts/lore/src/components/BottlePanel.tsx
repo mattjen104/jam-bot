@@ -126,7 +126,7 @@ export function BottlePanel({
   trackTitle,
   progressMs,
 }: BottlePanelProps) {
-  const { enabled: socialEnabled } = useSocialMode();
+  const { enabled: socialEnabled, toggle } = useSocialMode();
   const [open, setOpen] = useState(false);
   const [noteText, setNoteText] = useState("");
   const [sending, setSending] = useState(false);
@@ -170,8 +170,33 @@ export function BottlePanel({
   // Hidden entirely when no MBID is resolved (nothing to anchor to)
   if (!mbid) return null;
 
-  // Hidden in Solo mode — the top-level Solo / Listening Party toggle controls visibility.
-  if (!socialEnabled) return null;
+  // In Solo mode, render only the re-enable control so the listener can get back.
+  if (!socialEnabled) {
+    return (
+      <button
+        type="button"
+        onClick={toggle}
+        data-testid="bottle-solo-toggle"
+        aria-label="Re-enable bottle notes (solo mode is on)"
+        style={{
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+          padding: "2px 4px",
+          borderRadius: 6,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 4,
+          fontSize: 11,
+          color: "var(--muted-foreground, #888)",
+          opacity: 0.5,
+        }}
+      >
+        <BottleIcon size={13} />
+        <span>solo mode</span>
+      </button>
+    );
+  }
 
   const handleSend = async () => {
     if (!albumAvatarUrl) return;
@@ -213,6 +238,29 @@ export function BottlePanel({
           padding: "4px 0",
         }}
       >
+        {/* Solo-mode toggle — always present so the re-enable path is reachable */}
+        <button
+          type="button"
+          onClick={toggle}
+          data-testid="bottle-solo-toggle"
+          aria-label="Switch to solo mode (disable bottle notes)"
+          title="Solo mode"
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: "2px 4px",
+            borderRadius: 6,
+            display: "inline-flex",
+            alignItems: "center",
+            fontSize: 10,
+            color: "var(--muted-foreground, #888)",
+            opacity: 0.35,
+            flexShrink: 0,
+          }}
+        >
+          <BottleIcon size={11} />
+        </button>
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}

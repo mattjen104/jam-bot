@@ -2,11 +2,13 @@
 /**
  * Unit tests for ManualImportModal — service-picker + mode-based UX.
  *
- * Confirms:
- *  - The modal opens on the service-picker (grid of service tiles).
- *  - Selecting Exportify shows the per-service steps pane and external link.
- *  - Selecting Apple Music / TuneMyMusic shows its steps pane and external link.
- *  - Selecting "Other" goes directly to the tracks textarea.
+ * Updated for the redesigned service-picker (spotify / applemusic / youtubemusic /
+ * lastfm / listenbrainz / typeorpaste):
+ *  - The modal opens on the service-picker (grid of 6 service tiles).
+ *  - Selecting Spotify shows the per-service guide pane.
+ *  - Selecting Apple Music shows its guide pane.
+ *  - Selecting "Type or paste" goes directly to the tracks textarea.
+ *  - Screenshots are accessible through "Type or paste" → "Paste screenshot" button.
  *  - Selecting "ListenBrainz" goes to the username input pane.
  *  - Selecting "Last.fm" goes to the lfm-hint pane.
  *  - Back always returns to the service picker from any downstream mode.
@@ -102,14 +104,14 @@ describe("ManualImportModal — service picker (initial state)", () => {
     expect(screen.getByTestId("service-picker")).toBeTruthy();
   });
 
-  it("renders the Exportify service tile", () => {
+  it("renders the Spotify service tile", () => {
     renderModal();
-    expect(screen.getByTestId("service-tile-exportify")).toBeTruthy();
+    expect(screen.getByTestId("service-tile-spotify")).toBeTruthy();
   });
 
-  it("renders the Apple Music / TuneMyMusic service tile", () => {
+  it("renders the Apple Music service tile", () => {
     renderModal();
-    expect(screen.getByTestId("service-tile-applemusiccsv")).toBeTruthy();
+    expect(screen.getByTestId("service-tile-applemusic")).toBeTruthy();
   });
 
   it("renders the ListenBrainz service tile", () => {
@@ -117,9 +119,9 @@ describe("ManualImportModal — service picker (initial state)", () => {
     expect(screen.getByTestId("service-tile-listenbrainz")).toBeTruthy();
   });
 
-  it("renders the Other service tile", () => {
+  it("renders the Type or paste service tile", () => {
     renderModal();
-    expect(screen.getByTestId("service-tile-other")).toBeTruthy();
+    expect(screen.getByTestId("service-tile-typeorpaste")).toBeTruthy();
   });
 
   it("does NOT show the steps panel on first render", () => {
@@ -132,15 +134,16 @@ describe("ManualImportModal — service picker (initial state)", () => {
     expect(screen.queryByRole("button", { name: /^back$/i })).toBeNull();
   });
 
-  it("offers a clearly labeled library screenshot path", () => {
+  it("offers a screenshot import path via the Type or paste tile", () => {
     renderModal();
-    expect(screen.getByTestId("service-tile-screenshots")).toBeTruthy();
-    expect(screen.getByText(/paste or upload screenshots/i)).toBeTruthy();
+    fireEvent.click(screen.getByTestId("service-tile-typeorpaste"));
+    expect(screen.getByRole("button", { name: /paste screenshot/i })).toBeTruthy();
   });
 
-  it("opens the screenshot capture pane", () => {
+  it("opens the screenshot capture pane via Type or paste → Paste screenshot", () => {
     renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-screenshots"));
+    fireEvent.click(screen.getByTestId("service-tile-typeorpaste"));
+    fireEvent.click(screen.getByRole("button", { name: /paste screenshot/i }));
     expect(screen.getByText(/recognize library screenshots/i)).toBeTruthy();
     expect(screen.getByTestId("screenshot-file-input")).toBeTruthy();
   });
@@ -154,7 +157,8 @@ describe("ManualImportModal — service picker (initial state)", () => {
       }],
     });
     renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-screenshots"));
+    fireEvent.click(screen.getByTestId("service-tile-typeorpaste"));
+    fireEvent.click(screen.getByRole("button", { name: /paste screenshot/i }));
     const file = new File(["png-bytes"], "library.png", { type: "image/png" });
     fireEvent.change(screen.getByTestId("screenshot-file-input"), { target: { files: [file] } });
     expect(await screen.findByTestId("image-preview-list")).toBeTruthy();
@@ -178,7 +182,8 @@ describe("ManualImportModal — service picker (initial state)", () => {
     mockPostStartManualImport.mockResolvedValue(undefined);
     const closeSpy = vi.fn();
     renderModal(closeSpy);
-    fireEvent.click(screen.getByTestId("service-tile-screenshots"));
+    fireEvent.click(screen.getByTestId("service-tile-typeorpaste"));
+    fireEvent.click(screen.getByRole("button", { name: /paste screenshot/i }));
     fireEvent.change(screen.getByTestId("screenshot-file-input"), {
       target: { files: [new File(["png"], "library.png", { type: "image/png" })] },
     });
@@ -193,81 +198,83 @@ describe("ManualImportModal — service picker (initial state)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Tests: Exportify service steps
+// Tests: Spotify service guide (was Exportify steps)
 // ---------------------------------------------------------------------------
 
-describe("ManualImportModal — Exportify service steps", () => {
-  it("shows the steps panel after selecting Exportify", () => {
+describe("ManualImportModal — Spotify service guide", () => {
+  it("shows the service guide after selecting Spotify (service picker hides)", () => {
     renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-exportify"));
-    expect(screen.getByTestId("service-steps-panel")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("service-tile-spotify"));
+    expect(screen.queryByTestId("service-picker")).toBeNull();
+    expect(screen.getByRole("button", { name: /^back$/i })).toBeTruthy();
   });
 
-  it("shows a step mentioning logging in with Spotify", () => {
+  it("mentions that Lore never sees your password", () => {
     renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-exportify"));
-    expect(screen.getByText(/log in with your spotify account/i)).toBeTruthy();
+    fireEvent.click(screen.getByTestId("service-tile-spotify"));
+    expect(screen.getByText(/Lore never sees your password/i)).toBeTruthy();
   });
 
-  it("shows the Exportify external link pointing to exportify.net", () => {
+  it("shows the Exportify link pointing to exportify.net", () => {
     renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-exportify"));
-    const link = screen.getByTestId("service-external-link") as HTMLAnchorElement;
+    fireEvent.click(screen.getByTestId("service-tile-spotify"));
+    const link = screen.getByRole("link", { name: /exportify\.net/i }) as HTMLAnchorElement;
     expect(link.href).toContain("exportify.net");
   });
 
-  it("hides the service picker after selecting Exportify", () => {
+  it("hides the service picker after selecting Spotify", () => {
     renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-exportify"));
+    fireEvent.click(screen.getByTestId("service-tile-spotify"));
     expect(screen.queryByTestId("service-picker")).toBeNull();
   });
 
-  it("shows the Back button inside the steps pane", () => {
+  it("shows the Back button inside the Spotify guide", () => {
     renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-exportify"));
+    fireEvent.click(screen.getByTestId("service-tile-spotify"));
     expect(screen.getByRole("button", { name: /^back$/i })).toBeTruthy();
   });
 });
 
 // ---------------------------------------------------------------------------
-// Tests: Apple Music / TuneMyMusic service steps
+// Tests: Apple Music service guide (was Apple Music / TuneMyMusic steps)
 // ---------------------------------------------------------------------------
 
-describe("ManualImportModal — Apple Music service steps", () => {
-  it("shows the steps panel after selecting Apple Music", () => {
+describe("ManualImportModal — Apple Music service guide", () => {
+  it("shows the service guide after selecting Apple Music (service picker hides)", () => {
     renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-applemusiccsv"));
-    expect(screen.getByTestId("service-steps-panel")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("service-tile-applemusic"));
+    expect(screen.queryByTestId("service-picker")).toBeNull();
+    expect(screen.getByRole("button", { name: /^back$/i })).toBeTruthy();
   });
 
-  it("shows the TuneMyMusic external link pointing to tunemymusic.com", () => {
+  it("shows the TuneMyMusic link pointing to tunemymusic.com", () => {
     renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-applemusiccsv"));
-    const link = screen.getByTestId("service-external-link") as HTMLAnchorElement;
+    fireEvent.click(screen.getByTestId("service-tile-applemusic"));
+    const link = screen.getByRole("link", { name: /tunemymusic\.com/i }) as HTMLAnchorElement;
     expect(link.href).toContain("tunemymusic.com");
   });
 });
 
 // ---------------------------------------------------------------------------
-// Tests: Other tile goes straight to tracks mode
+// Tests: Type or paste tile goes straight to tracks mode
 // ---------------------------------------------------------------------------
 
-describe("ManualImportModal — 'Other' tile", () => {
-  it("selecting Other shows the tracks textarea immediately", () => {
+describe("ManualImportModal — 'Type or paste' tile", () => {
+  it("selecting Type or paste shows the tracks textarea immediately", () => {
     renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-other"));
+    fireEvent.click(screen.getByTestId("service-tile-typeorpaste"));
     expect(screen.getByTestId("tracks-textarea")).toBeTruthy();
   });
 
-  it("selecting Other hides the service picker", () => {
+  it("selecting Type or paste hides the service picker", () => {
     renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-other"));
+    fireEvent.click(screen.getByTestId("service-tile-typeorpaste"));
     expect(screen.queryByTestId("service-picker")).toBeNull();
   });
 
-  it("selecting Other does NOT show a service-steps panel", () => {
+  it("selecting Type or paste does NOT show a service-steps panel", () => {
     renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-other"));
+    fireEvent.click(screen.getByTestId("service-tile-typeorpaste"));
     expect(screen.queryByTestId("service-steps-panel")).toBeNull();
   });
 });
@@ -283,22 +290,20 @@ describe("ManualImportModal — ListenBrainz username flow", () => {
     expect(screen.getByPlaceholderText(/listenbrainz username/i)).toBeTruthy();
   });
 
-  it("entering a username and pressing Enter shows the disambiguation pane", async () => {
+  it("shows the Import button when a username is entered", () => {
     renderModal();
     fireEvent.click(screen.getByTestId("service-tile-listenbrainz"));
     const input = screen.getByPlaceholderText(/listenbrainz username/i);
     fireEvent.change(input, { target: { value: "acme_user" } });
-    fireEvent.keyDown(input, { key: "Enter" });
-    expect(await screen.findByText(/import from listenbrainz/i)).toBeTruthy();
+    const btn = screen.getByRole("button", { name: /^import$/i }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(false);
   });
 
-  it("username disambiguation shows the Last.fm alternative", async () => {
+  it("the Import button is disabled when the username field is empty", () => {
     renderModal();
     fireEvent.click(screen.getByTestId("service-tile-listenbrainz"));
-    const input = screen.getByPlaceholderText(/listenbrainz username/i);
-    fireEvent.change(input, { target: { value: "acme_user" } });
-    fireEvent.keyDown(input, { key: "Enter" });
-    expect(await screen.findByText(/importing from last\.fm instead/i)).toBeTruthy();
+    const btn = screen.getByRole("button", { name: /^import$/i }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
   });
 });
 
@@ -325,10 +330,10 @@ describe("ManualImportModal — Last.fm lfm-hint mode", () => {
 // ---------------------------------------------------------------------------
 
 describe("ManualImportModal — Back returns to service picker", () => {
-  it("Back from Exportify steps returns to service picker", () => {
+  it("Back from Spotify guide returns to service picker", () => {
     renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-exportify"));
-    expect(screen.getByTestId("service-steps-panel")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("service-tile-spotify"));
+    expect(screen.getByRole("button", { name: /^back$/i })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /^back$/i }));
 
@@ -336,16 +341,16 @@ describe("ManualImportModal — Back returns to service picker", () => {
     expect(screen.queryByTestId("service-steps-panel")).toBeNull();
   });
 
-  it("Back from Apple Music steps returns to service picker", () => {
+  it("Back from Apple Music guide returns to service picker", () => {
     renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-applemusiccsv"));
+    fireEvent.click(screen.getByTestId("service-tile-applemusic"));
     fireEvent.click(screen.getByRole("button", { name: /^back$/i }));
     expect(screen.getByTestId("service-picker")).toBeTruthy();
   });
 
-  it("Back from tracks mode (Other) returns to service picker", () => {
+  it("Back from tracks mode (Type or paste) returns to service picker", () => {
     renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-other"));
+    fireEvent.click(screen.getByTestId("service-tile-typeorpaste"));
     expect(screen.getByTestId("tracks-textarea")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /^back$/i }));
@@ -367,7 +372,7 @@ describe("ManualImportModal — Back returns to service picker", () => {
     // always goes to "service-picker", so the useEffect (gated on mode==="input")
     // can never fire.
     renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-other"));
+    fireEvent.click(screen.getByTestId("service-tile-typeorpaste"));
     const textarea = screen.getByTestId("tracks-textarea");
 
     await act(async () => {
@@ -391,7 +396,7 @@ describe("ManualImportModal — Back returns to service picker", () => {
 describe("ManualImportModal — tracks mode parse count", () => {
   it("shows the correct Import button count after pasting two tracks", async () => {
     renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-other"));
+    fireEvent.click(screen.getByTestId("service-tile-typeorpaste"));
     const textarea = screen.getByTestId("tracks-textarea");
 
     await act(async () => {
@@ -407,7 +412,7 @@ describe("ManualImportModal — tracks mode parse count", () => {
     // Regression guard: handleBack now always goes to "service-picker", so
     // the multiline useEffect (gated on mode==="input") can never bounce back.
     renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-other"));
+    fireEvent.click(screen.getByTestId("service-tile-typeorpaste"));
     const textarea = screen.getByTestId("tracks-textarea");
 
     await act(async () => {
@@ -437,10 +442,9 @@ describe("ManualImportModal — successful ListenBrainz import", () => {
     fireEvent.click(screen.getByTestId("service-tile-listenbrainz"));
     const input = screen.getByPlaceholderText(/listenbrainz username/i);
     fireEvent.change(input, { target: { value: "acme_user" } });
-    fireEvent.keyDown(input, { key: "Enter" });
 
     await act(async () => {
-      fireEvent.click(await screen.findByText(/import from listenbrainz/i));
+      fireEvent.click(screen.getByRole("button", { name: /^import$/i }));
     });
 
     await waitFor(() => expect(closeSpy).toHaveBeenCalledOnce());
@@ -454,10 +458,9 @@ describe("ManualImportModal — successful ListenBrainz import", () => {
     fireEvent.click(screen.getByTestId("service-tile-listenbrainz"));
     const input = screen.getByPlaceholderText(/listenbrainz username/i);
     fireEvent.change(input, { target: { value: "acme_user" } });
-    fireEvent.keyDown(input, { key: "Enter" });
 
     await act(async () => {
-      fireEvent.click(await screen.findByText(/import from listenbrainz/i));
+      fireEvent.click(screen.getByRole("button", { name: /^import$/i }));
     });
 
     await waitFor(() => expect(screen.getByText(/unknown user/i)).toBeTruthy());
@@ -471,7 +474,7 @@ describe("ManualImportModal — successful manual tracks import", () => {
     const closeSpy = vi.fn();
     renderModal(closeSpy);
 
-    fireEvent.click(screen.getByTestId("service-tile-other"));
+    fireEvent.click(screen.getByTestId("service-tile-typeorpaste"));
     const textarea = screen.getByTestId("tracks-textarea");
     await act(async () => {
       fireEvent.change(textarea, {
@@ -491,7 +494,7 @@ describe("ManualImportModal — successful manual tracks import", () => {
     const closeSpy = vi.fn();
     renderModal(closeSpy);
 
-    fireEvent.click(screen.getByTestId("service-tile-other"));
+    fireEvent.click(screen.getByTestId("service-tile-typeorpaste"));
     const textarea = screen.getByTestId("tracks-textarea");
     await act(async () => {
       fireEvent.change(textarea, {
@@ -572,12 +575,13 @@ describe("parseTracks — routes through parseCsv for CSV-shaped input", () => {
 
 describe("ManualImportModal — OCR failure isolation", () => {
   /**
-   * Helper: render → pick Screenshots → add files → click Extract.
+   * Helper: render → pick Type or paste → Paste screenshot → add files → click Extract.
    * Returns a promise that resolves once the review pane appears.
    */
   async function runMixedExtraction(files: File[]) {
     renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-screenshots"));
+    fireEvent.click(screen.getByTestId("service-tile-typeorpaste"));
+    fireEvent.click(screen.getByRole("button", { name: /paste screenshot/i }));
     fireEvent.change(screen.getByTestId("screenshot-file-input"), {
       target: { files },
     });
@@ -631,7 +635,8 @@ describe("ManualImportModal — OCR failure isolation", () => {
     const closeSpy = vi.fn();
 
     renderModal(closeSpy);
-    fireEvent.click(screen.getByTestId("service-tile-screenshots"));
+    fireEvent.click(screen.getByTestId("service-tile-typeorpaste"));
+    fireEvent.click(screen.getByRole("button", { name: /paste screenshot/i }));
     fireEvent.change(screen.getByTestId("screenshot-file-input"), {
       target: {
         files: [
@@ -661,7 +666,8 @@ describe("ManualImportModal — OCR failure isolation", () => {
     });
 
     renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-screenshots"));
+    fireEvent.click(screen.getByTestId("service-tile-typeorpaste"));
+    fireEvent.click(screen.getByRole("button", { name: /paste screenshot/i }));
     fireEvent.change(screen.getByTestId("screenshot-file-input"), {
       target: {
         files: [
@@ -740,7 +746,8 @@ describe("ManualImportModal — OCR failure isolation", () => {
     // helper waits for ocr-review-list, which never appears when all images fail
     // (there are no recognised tracks to review).
     renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-screenshots"));
+    fireEvent.click(screen.getByTestId("service-tile-typeorpaste"));
+    fireEvent.click(screen.getByRole("button", { name: /paste screenshot/i }));
     fireEvent.change(screen.getByTestId("screenshot-file-input"), {
       target: { files: [new File(["png"], "screen-a.png", { type: "image/png" })] },
     });
@@ -857,7 +864,7 @@ describe("parseCsv — Exportify plural 'Artist Name(s)' header", () => {
 describe("ManualImportModal — tracks mode preview list", () => {
   it("shows a track preview list after pasting tracks", async () => {
     renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-other"));
+    fireEvent.click(screen.getByTestId("service-tile-typeorpaste"));
     const textarea = screen.getByTestId("tracks-textarea");
 
     await act(async () => {
@@ -871,7 +878,7 @@ describe("ManualImportModal — tracks mode preview list", () => {
 
   it("shows each track as Artist – Title in the preview list", async () => {
     renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-other"));
+    fireEvent.click(screen.getByTestId("service-tile-typeorpaste"));
     const textarea = screen.getByTestId("tracks-textarea");
 
     await act(async () => {
@@ -887,7 +894,7 @@ describe("ManualImportModal — tracks mode preview list", () => {
 
   it("shows '…and N more' when more than 50 tracks are parsed", async () => {
     renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-other"));
+    fireEvent.click(screen.getByTestId("service-tile-typeorpaste"));
     const textarea = screen.getByTestId("tracks-textarea");
 
     const lines = Array.from({ length: 60 }, (_, i) => `Artist ${i + 1} – Song ${i + 1}`).join("\n");
@@ -901,7 +908,7 @@ describe("ManualImportModal — tracks mode preview list", () => {
 
   it("does NOT show '…and N more' when 50 or fewer tracks are parsed", async () => {
     renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-other"));
+    fireEvent.click(screen.getByTestId("service-tile-typeorpaste"));
     const textarea = screen.getByTestId("tracks-textarea");
 
     const lines = Array.from({ length: 50 }, (_, i) => `Artist ${i + 1} – Song ${i + 1}`).join("\n");
@@ -915,60 +922,13 @@ describe("ManualImportModal — tracks mode preview list", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Tests: collapsed instructions banner in tracks mode
-// ---------------------------------------------------------------------------
-
-describe("ManualImportModal — collapsed instructions banner after file drop (Exportify)", () => {
-  it("shows the service summary banner after navigating from Exportify steps to tracks mode", async () => {
-    renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-exportify"));
-
-    // The upload zone renders a file input; grab it from the document
-    const fileInput = document.querySelector<HTMLInputElement>('input[type="file"]');
-    if (!fileInput) throw new Error("file input not found");
-
-    const content = '"Track Name","Artist Name(s)"\n"Billie Jean","Michael Jackson"';
-    const file = new File([content], "playlist.csv", { type: "text/csv" });
-
-    await act(async () => {
-      // FileReader is async; fire the change so handleFile runs, then let
-      // the FileReader onload settle
-      fireEvent.change(fileInput, { target: { files: [file] } });
-      await new Promise<void>((resolve) => setTimeout(resolve, 50));
-    });
-
-    // After file load, mode switches to tracks; banner should appear
-    expect(await screen.findByTestId("service-summary-banner")).toBeTruthy();
-  });
-
-  it("the summary banner mentions exportify.net", async () => {
-    renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-exportify"));
-
-    const fileInput = document.querySelector<HTMLInputElement>('input[type="file"]');
-    if (!fileInput) throw new Error("file input not found");
-
-    const content = '"Track Name","Artist Name(s)"\n"Billie Jean","Michael Jackson"';
-    const file = new File([content], "playlist.csv", { type: "text/csv" });
-
-    await act(async () => {
-      fireEvent.change(fileInput, { target: { files: [file] } });
-      await new Promise<void>((resolve) => setTimeout(resolve, 50));
-    });
-
-    await screen.findByTestId("service-summary-banner");
-    expect(screen.getByText(/exportify\.net/i)).toBeTruthy();
-  });
-});
-
-// ---------------------------------------------------------------------------
 // Tests: improved empty-parse error messages
 // ---------------------------------------------------------------------------
 
 describe("ManualImportModal — empty-parse error messages", () => {
   it("shows a CSV-specific hint when the input has commas but no data rows", async () => {
     renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-other"));
+    fireEvent.click(screen.getByTestId("service-tile-typeorpaste"));
     const textarea = screen.getByTestId("tracks-textarea");
 
     // A header-only CSV: has commas, parseCsv returns [] (no data rows), parsePlainText also returns []
@@ -979,12 +939,11 @@ describe("ManualImportModal — empty-parse error messages", () => {
     const errEl = await screen.findByTestId("track-count");
     expect(errEl.textContent).toMatch(/Track Name/i);
     expect(errEl.textContent).toMatch(/Artist Name/i);
-    expect(errEl.textContent).toMatch(/exportify/i);
   });
 
   it("shows a plain-text hint when the input has no commas and no dashes", async () => {
     renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-other"));
+    fireEvent.click(screen.getByTestId("service-tile-typeorpaste"));
     const textarea = screen.getByTestId("tracks-textarea");
 
     await act(async () => {
@@ -1005,14 +964,14 @@ describe("ManualImportModal — empty-parse error messages", () => {
 describe("ManualImportModal — Import button label", () => {
   it("shows 'Import 0 tracks' when no tracks are parsed yet", async () => {
     renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-other"));
+    fireEvent.click(screen.getByTestId("service-tile-typeorpaste"));
     // Button should show count even when 0
     expect(screen.getByRole("button", { name: /import 0 tracks/i })).toBeTruthy();
   });
 
   it("shows 'Import 3 tracks' after pasting 3 tracks", async () => {
     renderModal();
-    fireEvent.click(screen.getByTestId("service-tile-other"));
+    fireEvent.click(screen.getByTestId("service-tile-typeorpaste"));
     const textarea = screen.getByTestId("tracks-textarea");
 
     await act(async () => {
