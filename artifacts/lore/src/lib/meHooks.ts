@@ -487,6 +487,8 @@ export interface DialCrossing {
   artistCrossings: number;
   lifetimeCrossings: number;
   lifetimeArtistCrossings: number;
+  /** Top 5 crossing artist names by frequency. Only populated by the blended endpoint. */
+  topArtistNames?: string[];
 }
 
 /**

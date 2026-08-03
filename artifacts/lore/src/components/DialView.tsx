@@ -313,7 +313,7 @@ function reason(
   if (show.currentTrack?.isLibraryHit) {
     return {
       r: 1, cls: "w1",
-      node: <>playing <b>{show.currentTrack.title}</b> — in your library</>,
+      node: <><b>{show.currentTrack.title}</b> on air — in your library</>,
     };
   }
 
@@ -323,7 +323,7 @@ function reason(
   if (show.currentTrack?.isArtistHit) {
     return {
       r: 2, cls: "w2",
-      node: <>playing <b>{show.currentTrack.artist}</b> — an artist from your library</>,
+      node: <><b>{show.currentTrack.artist}</b> on air — artist from your library</>,
     };
   }
 
@@ -1108,7 +1108,7 @@ function OfflineRow({
   onPlay: () => void;
   displayMode?: DialDisplayMode;
 }) {
-  const { station, shows, crossings, artistCrossings } = dialStation;
+  const { station, shows, crossings, artistCrossings, topArtistNames: stationTopArtistNames } = dialStation;
   // Most recent non-future show (shows are sorted oldest→newest)
   const lastShow = [...shows].reverse().find((sh) => sh.state !== "future") ?? null;
   // Most recent spin in that show
@@ -1125,18 +1125,28 @@ function OfflineRow({
   let t1Node: ReactNode;
   let t1Cls: string;
   if (crossings > 0) {
-    const topArtists = lastShow?.topArtists ?? [];
-    const nn = topArtists.length > 0 ? nameNodes(topArtists) : null;
+    // Blended mode: prefer cumulative station-level names from the group endpoint.
+    // Personal mode: fall back to the most recent show's individual artist names.
+    const names = (displayMode === "blended" && stationTopArtistNames.length > 0)
+      ? stationTopArtistNames
+      : (lastShow?.topArtists ?? []);
+    const nn = names.length > 0 ? nameNodes(names) : null;
     t1Node = nn
-      ? <>{nn} aired here</>
-       : <><b>{crossings} {displayMode === "blended" ? "community matches" : "of yours"}</b> aired here</>;
+      ? displayMode === "blended"
+        ? <>Your group: {nn}</>
+        : <>{nn} aired here</>
+      : <><b>{crossings} {displayMode === "blended" ? "community matches" : "of yours"}</b> aired here</>;
     t1Cls = "w3";
   } else if (artistCrossings > 0) {
-    const topArtistNames = lastShow?.topArtistNames ?? [];
-    const nn = topArtistNames.length > 0 ? nameNodes(topArtistNames) : null;
+    const names = (displayMode === "blended" && stationTopArtistNames.length > 0)
+      ? stationTopArtistNames
+      : (lastShow?.topArtistNames ?? []);
+    const nn = names.length > 0 ? nameNodes(names) : null;
     t1Node = nn
-       ? <>{nn} — {displayMode === "blended" ? "represented in the community" : "an artist from your library"}</>
-       : <><b>{artistCrossings}</b> tracks by {displayMode === "blended" ? "community artists" : "your artists"} here</>;
+      ? displayMode === "blended"
+        ? <>Your group: {nn}</>
+        : <>{nn} — an artist from your library</>
+      : <><b>{artistCrossings}</b> tracks by {displayMode === "blended" ? "community artists" : "your artists"} here</>;
     t1Cls = "w4";
   } else if (lastSpin) {
     t1Node = (

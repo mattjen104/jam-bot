@@ -352,6 +352,20 @@ router.get("/me/crossings", h(async (req, res) => {
  *   - spinCutoff (24 h):      scores crossings over the same rolling window as
  *                             personal crossings so ranking is comparable
  */
+/** Deduplicate and rank artist names from an array_agg result, returning top 5. */
+function blendedTopArtists(raw: string[] | null): string[] {
+  if (!raw?.length) return [];
+  const counts = new Map<string, number>();
+  for (const name of raw) {
+    const k = name?.trim();
+    if (k) counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([name]) => name);
+}
+
 router.get("/me/crossings/blended", h(async (_req, res) => {
   const presenceCutoff = new Date(Date.now() - SOCIAL_PRESENCE_TTL_MS);
   const spinCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -415,6 +429,8 @@ router.get("/me/crossings/blended", h(async (_req, res) => {
       artistCrossings:        sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
       lifetimeCrossings:      sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${aggregateLibHit})::int`,
       lifetimeArtistCrossings:sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
+      // Collect all matching artist names (with repeats) so we can rank by frequency in JS.
+      topArtistNamesRaw:      sql<string[] | null>`array_agg(trim(${recordingsTable.artist})) filter (where ${inWindow} and (${aggregateLibHit} or (${aggregateNotLibHit} and ${aggregateArtistMatch})))`,
     })
     .from(spinsTable)
     .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
@@ -440,6 +456,7 @@ router.get("/me/crossings/blended", h(async (_req, res) => {
       artistCrossings: r.artistCrossings,
       lifetimeCrossings: r.lifetimeCrossings,
       lifetimeArtistCrossings: r.lifetimeArtistCrossings,
+      topArtistNames: blendedTopArtists(r.topArtistNamesRaw),
     })),
   });
 }));

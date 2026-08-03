@@ -35,12 +35,12 @@ function laneReason(
   if (liveShow) {
     // r=1: exact library track playing right now
     if (liveShow.currentTrack?.isLibraryHit) {
-      return { text: "playing yours", warm: true, zero: false };
+      return { text: "yours on air", warm: true, zero: false };
     }
     // r=2: library artist playing right now
     if (liveShow.currentTrack?.isArtistHit) {
       const a = liveShow.currentTrack.artist;
-      return { text: `playing ${a.length > 16 ? a.slice(0, 15) + "…" : a}`, warm: true, zero: false };
+      return { text: `${a.length > 16 ? a.slice(0, 15) + "…" : a} on air`, warm: true, zero: false };
     }
     // r=3: exact library tracks already aired this show
     if (liveShow.crossings > 0) {

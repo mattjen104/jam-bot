@@ -104,6 +104,13 @@ export interface DialStation {
   lifetimeArtistCrossings: number;
   /** Current track from the live pulse, even when schedule data is unavailable. */
   liveTrack?: DialSpin | null;
+  /**
+   * Top 5 crossing artist names for the provenance sentence.
+   * In blended (party) mode these are cumulated across all active listeners
+   * and come from the blended endpoint. In personal mode this is empty —
+   * DialView reads per-show topArtists/topArtistNames instead.
+   */
+  topArtistNames: string[];
 }
 
 export interface LiveArtistSuggestion {
@@ -628,13 +635,14 @@ export function useDialData(displayMode: DialDisplayMode = "personal"): {
     displayMode === "blended" ? blendedCrossings == null && !blendedError : crossingsLoading;
 
   const serverCrossingsBySlug = useMemo(() => {
-    const m = new Map<string, { crossings: number; artistCrossings: number; lifetimeCrossings: number; lifetimeArtistCrossings: number }>();
+    const m = new Map<string, { crossings: number; artistCrossings: number; lifetimeCrossings: number; lifetimeArtistCrossings: number; topArtistNames?: string[] }>();
     for (const cx of selectedCrossings ?? []) {
       m.set(cx.stationSlug, {
         crossings: cx.crossings,
         artistCrossings: cx.artistCrossings,
         lifetimeCrossings: cx.lifetimeCrossings,
         lifetimeArtistCrossings: cx.lifetimeArtistCrossings,
+        topArtistNames: cx.topArtistNames,
       });
     }
     return m;
@@ -890,6 +898,13 @@ export function useDialData(displayMode: DialDisplayMode = "personal"): {
             ? 0
           : artistCrossings;
 
+      // In blended mode the server returns cumulative top artist names across all
+      // active listeners; in personal mode leave empty (DialView reads per-show data).
+      const topArtistNames: string[] =
+        displayMode === "blended" && serverCx?.topArtistNames?.length
+          ? serverCx.topArtistNames
+          : [];
+
       return {
         station,
         isLive,
@@ -898,6 +913,7 @@ export function useDialData(displayMode: DialDisplayMode = "personal"): {
         artistCrossings,
         lifetimeCrossings,
         lifetimeArtistCrossings,
+        topArtistNames,
         liveTrack: isLive ? (nowPlayingBySlug.get(station.slug) ?? null) : null,
       };
     })
