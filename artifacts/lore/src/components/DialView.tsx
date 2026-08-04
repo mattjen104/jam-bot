@@ -1907,6 +1907,24 @@ export function DialView() {
               </>
             )}
 
+            {/* Library/seeds exist but nothing has crossed today — show a helpful
+                nudge instead of a blank Zone 1. */}
+            {!crossingsLoading &&
+              withReason.length === 0 &&
+              !isCoreLoading &&
+              (hasLibrary || hasSeeds || visibleSeeds.length > 0) && (
+              <>
+                <ZoneLabel label="On air, with a reason" accent="library" />
+                <div className="z1-placeholder z1-placeholder--no-cross">
+                  <div className="z1-placeholder__body">
+                    <p className="z1-placeholder__pitch">
+                      None of your artists have played on a live station today. Tune into a station or check back later.
+                    </p>
+                  </div>
+                </div>
+              </>
+            )}
+
             {/* No crossing rows yet: keep the existing Zone 1 onboarding surface
                 visible rather than leaving a blank section.  This is also the
                 settled state for listeners without a library or taste seeds. */}
@@ -1914,6 +1932,8 @@ export function DialView() {
               withReason.length === 0 &&
               !isCoreLoading &&
               !hasLibrary &&
+              !hasSeeds &&
+              visibleSeeds.length === 0 &&
               !isSpotifyConnected && (
               <>
                 <ZoneLabel label="On air, with a reason" accent="library" />
