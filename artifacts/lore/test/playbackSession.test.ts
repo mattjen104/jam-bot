@@ -5,6 +5,9 @@ import {
   isLiveServiceRide,
   readStoredPlaybackMode,
   writeStoredPlaybackMode,
+  availableServices,
+  rankServices,
+  rideFallbackLabel,
   PLAYBACK_MODE_STORAGE_KEY,
   type TimeOrientation,
   type PlaybackMode,
@@ -228,6 +231,180 @@ describe("mode toggle persistence", () => {
       configurable: true,
     });
     expect(readStoredPlaybackMode()).toBe("passthrough");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// availableServices — service option list
+// ---------------------------------------------------------------------------
+describe("availableServices", () => {
+  const base = {
+    appleMusicConfigured: false,
+    appleMusicAuthorized: false,
+    trackHasYouTube: false,
+    trackHasAppleMusic: false,
+  };
+
+  it("always includes YouTube", () => {
+    const svcs = availableServices(base);
+    expect(svcs.some((s) => s.id === "youtube")).toBe(true);
+  });
+
+  it("excludes Apple Music when not configured", () => {
+    const svcs = availableServices(base);
+    expect(svcs.some((s) => s.id === "apple-music")).toBe(false);
+  });
+
+  it("includes Apple Music when configured", () => {
+    const svcs = availableServices({ ...base, appleMusicConfigured: true });
+    expect(svcs.some((s) => s.id === "apple-music")).toBe(true);
+  });
+
+  it("YouTube category is seamless", () => {
+    const svcs = availableServices(base);
+    const yt = svcs.find((s) => s.id === "youtube")!;
+    expect(yt.category).toBe("seamless");
+    expect(yt.requiresConnect).toBe(false);
+  });
+
+  it("Apple Music category is seamless-connected", () => {
+    const svcs = availableServices({ ...base, appleMusicConfigured: true });
+    const am = svcs.find((s) => s.id === "apple-music")!;
+    expect(am.category).toBe("seamless-connected");
+  });
+
+  it("Apple Music requiresConnect=true when not authorized", () => {
+    const svcs = availableServices({ ...base, appleMusicConfigured: true, appleMusicAuthorized: false });
+    const am = svcs.find((s) => s.id === "apple-music")!;
+    expect(am.requiresConnect).toBe(true);
+  });
+
+  it("Apple Music requiresConnect=false when authorized", () => {
+    const svcs = availableServices({ ...base, appleMusicConfigured: true, appleMusicAuthorized: true });
+    const am = svcs.find((s) => s.id === "apple-music")!;
+    expect(am.requiresConnect).toBe(false);
+  });
+
+  it("YouTube trackSupported=true when track has a YouTube link", () => {
+    const svcs = availableServices({ ...base, trackHasYouTube: true });
+    const yt = svcs.find((s) => s.id === "youtube")!;
+    expect(yt.trackSupported).toBe(true);
+  });
+
+  it("YouTube trackSupported=false when track has no YouTube link", () => {
+    const svcs = availableServices(base);
+    const yt = svcs.find((s) => s.id === "youtube")!;
+    expect(yt.trackSupported).toBe(false);
+  });
+
+  it("Apple Music trackSupported reflects track link availability", () => {
+    const withLink = availableServices({ ...base, appleMusicConfigured: true, trackHasAppleMusic: true });
+    const withoutLink = availableServices({ ...base, appleMusicConfigured: true, trackHasAppleMusic: false });
+    expect(withLink.find((s) => s.id === "apple-music")!.trackSupported).toBe(true);
+    expect(withoutLink.find((s) => s.id === "apple-music")!.trackSupported).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// rankServices — ordering guarantee
+// ---------------------------------------------------------------------------
+describe("rankServices", () => {
+  const base = {
+    appleMusicConfigured: false,
+    appleMusicAuthorized: false,
+    trackHasYouTube: false,
+    trackHasAppleMusic: false,
+  };
+
+  it("returns YouTube first (seamless before seamless-connected)", () => {
+    const ranked = rankServices({ ...base, appleMusicConfigured: true });
+    expect(ranked[0]!.id).toBe("youtube");
+  });
+
+  it("puts track-supported YouTube before unsupported YouTube (both seamless)", () => {
+    // Only YouTube is here; both cases are seamless — just check ordering stability
+    const supported = rankServices({ ...base, trackHasYouTube: true });
+    const unsupported = rankServices({ ...base, trackHasYouTube: false });
+    expect(supported[0]!.id).toBe("youtube");
+    expect(unsupported[0]!.id).toBe("youtube");
+    expect(supported[0]!.trackSupported).toBe(true);
+    expect(unsupported[0]!.trackSupported).toBe(false);
+  });
+
+  it("places track-supported YouTube before Apple Music (seamless > seamless-connected)", () => {
+    const ranked = rankServices({
+      ...base,
+      appleMusicConfigured: true,
+      trackHasYouTube: true,
+      trackHasAppleMusic: true,
+    });
+    const ytIdx = ranked.findIndex((s) => s.id === "youtube");
+    const amIdx = ranked.findIndex((s) => s.id === "apple-music");
+    expect(ytIdx).toBeLessThan(amIdx);
+  });
+
+  it("with no YouTube link, YouTube (seamless) still sorts before Apple Music (seamless-connected)", () => {
+    const ranked = rankServices({ ...base, appleMusicConfigured: true });
+    const ytIdx = ranked.findIndex((s) => s.id === "youtube");
+    const amIdx = ranked.findIndex((s) => s.id === "apple-music");
+    expect(ytIdx).toBeLessThan(amIdx);
+  });
+
+  it("returns only YouTube when Apple Music is not configured", () => {
+    const ranked = rankServices(base);
+    expect(ranked).toHaveLength(1);
+    expect(ranked[0]!.id).toBe("youtube");
+  });
+
+  it("returns both services when Apple Music is configured", () => {
+    const ranked = rankServices({ ...base, appleMusicConfigured: true });
+    expect(ranked).toHaveLength(2);
+    expect(ranked.map((s) => s.id)).toContain("youtube");
+    expect(ranked.map((s) => s.id)).toContain("apple-music");
+  });
+
+  it("does not mutate the original availableServices output", () => {
+    const opts = { ...base, appleMusicConfigured: true };
+    const before = availableServices(opts).map((s) => s.id).join(",");
+    rankServices(opts);
+    const after = availableServices(opts).map((s) => s.id).join(",");
+    expect(before).toBe(after);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// rideFallbackLabel — service-aware suffix
+// ---------------------------------------------------------------------------
+describe("rideFallbackLabel (extended)", () => {
+  it("defaults to Spotify prefix for backwards-compatibility (no service arg)", () => {
+    expect(rideFallbackLabel(false, "live")).toContain("Spotify");
+    expect(rideFallbackLabel(true, "live")).toContain("Spotify device lost");
+  });
+
+  it("shows YouTube prefix when service is youtube", () => {
+    const label = rideFallbackLabel(false, "past", "youtube");
+    expect(label).toContain("YouTube");
+    expect(label).not.toContain("Spotify");
+  });
+
+  it("shows Apple Music prefix when service is apple-music", () => {
+    const label = rideFallbackLabel(false, "curated", "apple-music");
+    expect(label).toContain("Apple Music");
+    expect(label).not.toContain("Spotify");
+  });
+
+  it("device-lost prefix only used for Spotify", () => {
+    const spotify = rideFallbackLabel(true, "live", "spotify");
+    const youtube = rideFallbackLabel(true, "live", "youtube");
+    expect(spotify).toBe("Spotify device lost · listening to broadcast");
+    // YouTube has no device-lost concept; shows unavailable prefix instead.
+    expect(youtube).toContain("Unavailable on YouTube");
+  });
+
+  it("live suffix is broadcast, past/curated suffix is preview", () => {
+    expect(rideFallbackLabel(false, "live", "youtube")).toContain("listening to broadcast");
+    expect(rideFallbackLabel(false, "past", "youtube")).toContain("playing preview");
+    expect(rideFallbackLabel(false, "curated", "youtube")).toContain("playing preview");
   });
 });
 

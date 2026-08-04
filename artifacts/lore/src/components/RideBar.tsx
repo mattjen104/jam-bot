@@ -1,9 +1,9 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import { Link } from "wouter";
 import type { RecordingLink } from "@workspace/api-client-react";
 import type { RideApi } from "../player/PlayerProvider";
 import type { SpotifyConnectApi } from "../player/useSpotifyConnect";
-import { rideFallbackLabel } from "../player/playbackSession";
+import { rideFallbackLabel, rankServices } from "../player/playbackSession";
 import { KeepButton } from "./KeepButton";
 import { ShareButton } from "./ShareButton";
 import { DevicePicker } from "./DevicePicker";
@@ -18,7 +18,9 @@ import {
   Radio,
   RefreshCw,
   Route as RouteIcon,
+  ShoppingBag,
   SkipForward,
+  Youtube,
   X,
 } from "lucide-react";
 
@@ -160,20 +162,27 @@ export function SeekBar({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Source + attribution labels
+// ---------------------------------------------------------------------------
+
 /**
  * Human-readable label for which service is carrying the ride audio.
- * Falls back to a generic label for unknown/null sources.
+ * Covers all user-facing modes; Spotify is included for completeness but is
+ * not surfaced in the options panel (developer-only).
  */
 function rideSourceLabel(source: RideApi["source"]): string {
   switch (source) {
-    case "spotify":
-      return "Riding full tracks on your Spotify";
     case "youtube":
-      return "Riding full tracks on your YouTube";
+      return "Riding full tracks on YouTube";
     case "apple-music":
-      return "Riding full tracks on your Apple Music";
+      return "Riding full tracks on Apple Music";
+    case "spotify":
+      return "Riding full tracks on Spotify";
+    case "preview":
+      return "Playing 30s previews";
     default:
-      return "Riding full tracks";
+      return "Hearing the broadcast";
   }
 }
 
@@ -192,6 +201,10 @@ function attributionLine(ride: RideApi): string {
   return "A real transition";
 }
 
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
 export function RideBar({
   ride,
   spotify,
@@ -204,25 +217,53 @@ export function RideBar({
 
   const isPlaying = ride.status === "playing";
   const isLoading = ride.status === "loading" || ride.seeking;
-  const onSpotify = ride.source === "spotify";
-  // Any service driver (Spotify, YouTube, Apple Music) provides full-track
-  // playback — controls stay enabled even when previewUrl is absent.
+  // Any service driver (YouTube, Apple Music, or Spotify for devs) provides
+  // full-track playback — controls stay enabled even when previewUrl is absent.
   const onServiceDriver =
     ride.source === "spotify" ||
     ride.source === "youtube" ||
     ride.source === "apple-music";
   const noPreview = cur.previewUrl === null && !onServiceDriver;
+
   const bestLink =
     cur.links.find((l: RecordingLink) => l.kind === "exact") ??
     cur.links[0] ??
     null;
 
-  // Mode toggle is shown only when the user has a connected Premium Spotify.
-  const canToggleMode = spotify.connected && spotify.premium;
-  const inServiceRide = ride.playbackMode === "resolve_to_service";
+  // Ranked service options for the tiered options panel.
+  const trackHasYouTube = cur.links.some((l) =>
+    l.url.includes("youtube.com") || l.url.includes("youtu.be"),
+  );
+  const trackHasAppleMusic = cur.links.some((l) =>
+    /apple_music|applemusic|apple music|appleMusic/i.test(l.name),
+  );
+  const rankedSvcs = useMemo(
+    () =>
+      rankServices({
+        appleMusicConfigured: ride.appleMusicConfigured,
+        appleMusicAuthorized: ride.appleMusicConnected,
+        trackHasYouTube,
+        trackHasAppleMusic,
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [ride.appleMusicConfigured, ride.appleMusicConnected, trackHasYouTube, trackHasAppleMusic],
+  );
 
-  const handleModeToggle = () => {
-    ride.setPlaybackMode(inServiceRide ? "passthrough" : "resolve_to_service");
+  // Determine which mode / service is currently active for highlighting.
+  const inServiceRide = ride.playbackMode === "resolve_to_service";
+  const activeServiceId = inServiceRide ? (ride.preferredService ?? null) : null;
+
+  const handleServiceClick = (id: "youtube" | "apple-music") => {
+    if (activeServiceId === id) {
+      // Toggle off — return to broadcast.
+      ride.setPlaybackMode("passthrough");
+    } else {
+      ride.setPreferredService(id);
+    }
+  };
+
+  const handleBroadcastClick = () => {
+    ride.setPlaybackMode("passthrough");
   };
 
   return (
@@ -230,8 +271,7 @@ export function RideBar({
       className="fixed z-40 border border-border bg-secondary/95 backdrop-blur-md shadow-lg bottom-[68px] left-4 right-4 rounded-[18px] lg:bottom-[68px] lg:left-4 lg:right-4"
       data-testid="ride-bar"
     >
-      {/* One-shot notice (OAuth return or device availability). Reuses the same
-          banner style as PlayerDock so the pattern is consistent. */}
+      {/* One-shot notice (OAuth return or device availability). */}
       {spotify.notice ? (
         <div className="border-b border-border/60 bg-background/40">
           <div className="flex items-center justify-between gap-3 px-5 py-1.5">
@@ -253,104 +293,135 @@ export function RideBar({
         </div>
       ) : null}
 
-      {/* Connect Spotify prompt — shown when configured but not yet connected. */}
-      {spotify.configured && !spotify.connected ? (
-        <div className="border-b border-border/60 bg-background/40">
-          <div className="flex items-center justify-between gap-3 px-5 py-1.5">
-            <p className="truncate font-mono text-[11px] text-muted-foreground">
-              Rides play 30s previews. Connect Spotify to ride full tracks on
-              your own player.
-            </p>
-            <button
-              type="button"
-              onClick={spotify.connect}
-              data-testid="spotify-connect"
-              className="hover-elevate inline-flex shrink-0 items-center gap-1.5 rounded-full border border-primary-border bg-primary/10 px-3 py-1 font-mono text-[11px] uppercase tracking-wide text-primary"
+      {/* Tiered playback options panel */}
+      <div className="border-b border-border/60 bg-background/40 px-5 py-2">
+        <div className="flex flex-wrap items-center gap-2">
+
+          {/* ── Seamless service options (YouTube, Apple Music) ── */}
+          {rankedSvcs.map((svc) => {
+            const isActive = activeServiceId === svc.id;
+            return (
+              <button
+                key={svc.id}
+                type="button"
+                onClick={() => handleServiceClick(svc.id)}
+                disabled={!svc.trackSupported && !isActive}
+                data-testid={`ride-service-${svc.id}`}
+                title={
+                  svc.requiresConnect
+                    ? `Connect ${svc.label} to ride full tracks`
+                    : !svc.trackSupported
+                    ? `No ${svc.label} link for this track`
+                    : undefined
+                }
+                className={[
+                  "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-[11px] transition-colors",
+                  isActive
+                    ? "border-primary-border bg-primary/10 text-primary"
+                    : svc.trackSupported
+                    ? "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                    : "border-border text-muted-foreground opacity-40 cursor-not-allowed",
+                ].join(" ")}
+              >
+                {svc.id === "youtube" ? (
+                  <Youtube className="h-3.5 w-3.5" />
+                ) : (
+                  <Music2 className="h-3.5 w-3.5" />
+                )}
+                {svc.label}
+                {svc.requiresConnect ? (
+                  <span className="opacity-60 text-[10px]">connect</span>
+                ) : null}
+              </button>
+            );
+          })}
+
+          {/* ── Broadcast (always available) ── */}
+          <button
+            type="button"
+            onClick={handleBroadcastClick}
+            data-testid="ride-broadcast"
+            className={[
+              "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-[11px] transition-colors",
+              !inServiceRide
+                ? "border-primary-border bg-primary/10 text-primary"
+                : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground",
+            ].join(" ")}
+          >
+            <Radio className="h-3.5 w-3.5" />
+            Broadcast
+          </button>
+
+          {/* ── Open in Spotify (secondary action — leaves the app) ── */}
+          {ride.spotifyDeepLink ? (
+            <a
+              href={ride.spotifyDeepLink}
+              data-testid="ride-open-spotify"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-1 font-mono text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+              title="Opens in your Spotify app — won't autoadvance"
             >
-              <Music2 className="h-3.5 w-3.5" />
-              Connect Spotify
-            </button>
-          </div>
-        </div>
-      ) : null}
+              <ExternalLink className="h-3 w-3" />
+              Open in Spotify
+            </a>
+          ) : null}
 
-      {/* Non-premium notice. */}
-      {spotify.connected && !spotify.premium ? (
-        <div className="border-b border-border/60 bg-background/40">
-          <div className="px-5 py-1.5">
-            <p className="truncate font-mono text-[11px] text-muted-foreground">
-              Spotify connected, but full-track control needs Premium — rides
-              stay on 30s previews.
-            </p>
-          </div>
+          {/* ── Buy on Bandcamp (album-scope only) ── */}
+          {ride.bandcampAlbumUrl ? (
+            <a
+              href={ride.bandcampAlbumUrl}
+              target="_blank"
+              rel="noreferrer"
+              data-testid="ride-buy-bandcamp"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-1 font-mono text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ShoppingBag className="h-3 w-3" />
+              Buy on Bandcamp
+            </a>
+          ) : null}
         </div>
-      ) : null}
 
-      {/* Mode toggle + fallback indicator — only when Spotify Premium is ready. */}
-      {canToggleMode ? (
-        <div className="border-b border-border/60 bg-background/40">
-          <div className="flex items-center justify-between gap-3 px-5 py-1.5">
-            <div className="flex items-center gap-2">
-              {ride.fallbackUsed ? (
-                <span
-                  className="inline-flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground"
-                  data-testid="ride-fallback-indicator"
-                >
-                  <AlertTriangle className="h-3.5 w-3.5" />
-                  {rideFallbackLabel(ride.deviceLost, ride.timeOrientation)}
-                  <button
-                    type="button"
-                    onClick={ride.retrySpotify}
-                    data-testid="ride-retry-spotify"
-                    className="hover-elevate inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-primary transition-opacity hover:bg-primary/20"
-                    title="Retry playing this track on your Spotify"
-                  >
-                    <RefreshCw className="h-2.5 w-2.5" />
-                    Retry
-                  </button>
-                </span>
-              ) : (
-                <span className="font-mono text-[11px] text-muted-foreground">
-                  {inServiceRide
-                    ? rideSourceLabel(ride.source)
-                    : "Hearing the broadcast"}
-                </span>
+        {/* ── Fallback / status line ── */}
+        {ride.fallbackUsed ? (
+          <div className="mt-1.5 flex items-center gap-2">
+            <span
+              className="inline-flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground"
+              data-testid="ride-fallback-indicator"
+            >
+              <AlertTriangle className="h-3.5 w-3.5" />
+              {rideFallbackLabel(
+                ride.deviceLost,
+                ride.timeOrientation,
+                // When the user explicitly chose a service, name it in the
+                // fallback copy. Defaults to "spotify" for the connect path.
+                ride.preferredService ?? "spotify",
               )}
-            </div>
-
-            <div className="flex items-center gap-2">
-              {/* Device picker — shown when riding in Spotify only */}
-              {inServiceRide && ride.source === "spotify" ? (
-                <DevicePicker spotify={spotify} />
-              ) : null}
-
               <button
                 type="button"
-                onClick={handleModeToggle}
-                data-testid="ride-mode-toggle"
-                className="hover-elevate inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-1 font-mono text-[11px] text-foreground"
-                title={
-                  inServiceRide
-                    ? "Switch to hearing the broadcast stream"
-                    : "Switch to riding full tracks on your Spotify"
-                }
+                onClick={ride.retrySpotify}
+                data-testid="ride-retry-spotify"
+                className="hover-elevate inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-primary transition-opacity hover:bg-primary/20"
+                title="Retry playing this track on your connected service"
               >
-                {inServiceRide ? (
-                  <>
-                    <Radio className="h-3.5 w-3.5" />
-                    Hear the broadcast
-                  </>
-                ) : (
-                  <>
-                    <Music2 className="h-3.5 w-3.5" />
-                    Ride in Spotify
-                  </>
-                )}
+                <RefreshCw className="h-2.5 w-2.5" />
+                Retry
               </button>
-            </div>
+            </span>
           </div>
-        </div>
-      ) : null}
+        ) : inServiceRide && ride.source && ride.source !== "preview" ? (
+          <div className="mt-1">
+            <span className="font-mono text-[10px] text-muted-foreground">
+              {rideSourceLabel(ride.source)}
+            </span>
+          </div>
+        ) : null}
+
+        {/* Device picker — shown only when Spotify (dev mode) is actively playing */}
+        {inServiceRide && ride.source === "spotify" ? (
+          <div className="mt-1.5 flex justify-end">
+            <DevicePicker spotify={spotify} />
+          </div>
+        ) : null}
+      </div>
 
       {/* Seek bar — interactive for full-track drivers that support seeking */}
       {(ride.source === "youtube" || ride.source === "apple-music") && (
@@ -422,7 +493,9 @@ export function RideBar({
             {noPreview
               ? "No preview — open externally"
               : attributionLine(ride)}
-            {onServiceDriver ? ` · Full track on your ${rideSourceLabel(ride.source).split(" on your ")[1] ?? "player"}` : ""}
+            {onServiceDriver && ride.source !== null && ride.source !== "preview"
+              ? ` · ${ride.source === "youtube" ? "YouTube" : ride.source === "apple-music" ? "Apple Music" : ""}`
+              : ""}
             {ride.status === "ended" ? " · trail ends here" : ""}
           </p>
           {/* Hinge hint row — shortcut links to lean-in detail */}

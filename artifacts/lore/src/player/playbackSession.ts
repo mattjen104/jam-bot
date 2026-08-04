@@ -129,20 +129,32 @@ export function tickNoDevicePoll(noDevicePolls: number): NoDevicePollResult {
 /**
  * Human-readable label shown in the RideBar fallback indicator.
  *
- * - deviceLost=true  → "Spotify device lost · …"
- * - deviceLost=false → "Unavailable on Spotify · …"
+ * - deviceLost=true (Spotify only) → "Spotify device lost · …"
+ * - deviceLost=false              → "Unavailable on <service> · …"
  *
  * The suffix distinguishes live (broadcast) from past/curated (preview) so
  * the listener knows which fallback audio is playing.
  *
  * Pure — extracted from the inline JSX ternary in RideBar so it can be
  * unit-tested and kept consistent between the component and any future toast.
+ *
+ * @param service  defaults to "spotify" for backwards-compatibility
  */
 export function rideFallbackLabel(
   deviceLost: boolean,
   timeOrientation: TimeOrientation,
+  service: ConnectedService = "spotify",
 ): string {
-  const prefix = deviceLost ? "Spotify device lost" : "Unavailable on Spotify";
+  const serviceName =
+    service === "youtube"
+      ? "YouTube"
+      : service === "apple-music"
+        ? "Apple Music"
+        : "Spotify";
+  const prefix =
+    deviceLost && service === "spotify"
+      ? "Spotify device lost"
+      : `Unavailable on ${serviceName}`;
   const suffix =
     timeOrientation === "live"
       ? "listening to broadcast"
@@ -207,6 +219,99 @@ export function isLiveServiceRide(
   timeOrientation: TimeOrientation,
 ): boolean {
   return mode === "resolve_to_service" && timeOrientation === "live";
+}
+
+// ---------------------------------------------------------------------------
+// Service tiering — pure helpers for the options panel
+// ---------------------------------------------------------------------------
+
+/**
+ * A user-accessible playback service option shown in the RideBar options panel.
+ * Spotify Connect is intentionally excluded — it is a developer-only feature,
+ * not a general listener option.
+ */
+export interface ServiceOption {
+  id: "youtube" | "apple-music";
+  /** Human-readable label for the service. */
+  label: string;
+  /**
+   * "seamless"           — full tracks, autoadvancing, no account required
+   * "seamless-connected" — full tracks, autoadvancing, requires user authorization
+   */
+  category: "seamless" | "seamless-connected";
+  /** True when the service is configured but the user hasn't yet authorized. */
+  requiresConnect: boolean;
+  /** True when the current track has a resolvable link for this service. */
+  trackSupported: boolean;
+}
+
+/** Inputs for `availableServices` / `rankServices`. */
+export interface ServiceAvailabilityOpts {
+  /** Apple Music developer token is configured (server-side). */
+  appleMusicConfigured: boolean;
+  /** User has successfully authorized Apple Music at least once this session. */
+  appleMusicAuthorized: boolean;
+  /** Current track has a YouTube link. */
+  trackHasYouTube: boolean;
+  /** Current track has an Apple Music link. */
+  trackHasAppleMusic: boolean;
+}
+
+/**
+ * Returns all user-accessible service options given what is configured and
+ * what links the current track has.
+ *
+ * Spotify Connect is excluded — it requires a developer quota slot and is
+ * not a general user option.
+ *
+ * Pure — deterministic, no side-effects.
+ */
+export function availableServices(opts: ServiceAvailabilityOpts): ServiceOption[] {
+  const services: ServiceOption[] = [];
+
+  // YouTube: always present — no account required.
+  // Per-track availability depends on whether a YouTube link was resolved.
+  services.push({
+    id: "youtube",
+    label: "YouTube",
+    category: "seamless",
+    requiresConnect: false,
+    trackSupported: opts.trackHasYouTube,
+  });
+
+  // Apple Music: shown only when a developer token is configured.
+  if (opts.appleMusicConfigured) {
+    services.push({
+      id: "apple-music",
+      label: "Apple Music",
+      category: "seamless-connected",
+      requiresConnect: !opts.appleMusicAuthorized,
+      trackSupported: opts.trackHasAppleMusic,
+    });
+  }
+
+  return services;
+}
+
+/**
+ * Returns service options in display order for the options panel:
+ *
+ *   1. Seamless + track-supported services first (best experience, no extra steps).
+ *   2. Seamless + track-unsupported services next (present but grayed out).
+ *   3. Seamless-connected services last (require an authorization step).
+ *
+ * Pure — deterministic, no side-effects.
+ */
+export function rankServices(opts: ServiceAvailabilityOpts): ServiceOption[] {
+  return [...availableServices(opts)].sort((a, b) => {
+    // Primary: seamless before seamless-connected
+    if (a.category === "seamless" && b.category !== "seamless") return -1;
+    if (a.category !== "seamless" && b.category === "seamless") return 1;
+    // Secondary: track-supported before unsupported
+    if (a.trackSupported && !b.trackSupported) return -1;
+    if (!a.trackSupported && b.trackSupported) return 1;
+    return 0;
+  });
 }
 
 // ---------------------------------------------------------------------------

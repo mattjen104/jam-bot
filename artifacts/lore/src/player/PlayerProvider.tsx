@@ -13,6 +13,7 @@ import {
   getRecording,
   getRecordingSegues,
   getRecordingPreview,
+  getRecordingSupport,
   getStationNowPlaying,
   spotifyPlay,
   spotifyPause,
@@ -35,6 +36,33 @@ import {
   readStoredPlaybackMode,
   writeStoredPlaybackMode,
 } from "./playbackSession";
+
+// ---------------------------------------------------------------------------
+// Spotify deep-link helper — pure, lives outside the component
+// ---------------------------------------------------------------------------
+
+/**
+ * Extracts a `spotify:track/<id>` URI from the recording's links array.
+ * Returns null when no Spotify link is present.  Falls back gracefully when
+ * the URL is malformed.
+ */
+function extractSpotifyDeepLink(links: RecordingLink[]): string | null {
+  for (const link of links) {
+    if (!link.url.includes("spotify.com/track/")) continue;
+    try {
+      const parsed = new URL(link.url);
+      const parts = parsed.pathname.split("/").filter(Boolean);
+      const trackIdx = parts.indexOf("track");
+      if (trackIdx >= 0 && trackIdx + 1 < parts.length) {
+        const id = parts[trackIdx + 1];
+        if (id) return `spotify:track/${id}`;
+      }
+    } catch {
+      // malformed URL — ignore
+    }
+  }
+  return null;
+}
 import { useSpotifyDriver } from "./useSpotifyDriver";
 import { useYouTubeDriver } from "./useYouTubeDriver";
 import { useAppleMusicDriver } from "./useAppleMusicDriver";
@@ -232,6 +260,50 @@ export interface RideApi {
    * implement the optional `seek()` method.  No-op for other sources.
    */
   seek: (ms: number) => void;
+
+  // ---- Options panel fields -----------------------------------------------
+
+  /**
+   * `spotify:track/<id>` deep-link URI for the current track, derived from
+   * the track's links array.  Falls back to the HTTPS Spotify URL on desktop.
+   * Null when no Spotify ID is available for the current track.
+   */
+  spotifyDeepLink: string | null;
+
+  /**
+   * Album-level Bandcamp buy URL for the current track's release.
+   * Only set when a Bandcamp embed link scoped to the release (not the track)
+   * is available.  Track-level Bandcamp links are excluded.
+   * Null when not available or while loading.
+   */
+  bandcampAlbumUrl: string | null;
+
+  /**
+   * True when Apple Music is configured server-side (a developer token
+   * exists).  Used to decide whether to show the Apple Music option in the
+   * panel even before the user has authorized.
+   */
+  appleMusicConfigured: boolean;
+
+  /**
+   * True once the user has successfully authorized Apple Music in this
+   * session (Apple Music driver fired "playing" at least once).  Drives the
+   * "connect" CTA in the options panel.
+   */
+  appleMusicConnected: boolean;
+
+  /**
+   * Explicitly selected playback service.  When set, the driver cascade
+   * starts from this service, bypassing Spotify.  Null = default cascade.
+   */
+  preferredService: "youtube" | "apple-music" | null;
+
+  /**
+   * Explicitly select a service to drive playback.  Sets playback mode to
+   * resolve_to_service and stops any currently-active driver.  Null clears
+   * the preference (keeps the last playback mode).
+   */
+  setPreferredService: (svc: "youtube" | "apple-music" | null) => void;
 }
 
 /** One scan hop — the preview currently sounding during a preview-mode scan. */
@@ -431,6 +503,17 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     readStoredPlaybackMode,
   );
 
+  // Options-panel state: explicit service preference + derived async fields.
+  const [preferredService, setPreferredServiceState] = useState<"youtube" | "apple-music" | null>(null);
+  const [bandcampAlbumUrl, setBandcampAlbumUrl] = useState<string | null>(null);
+  // True once Apple Music has successfully played a track this session.
+  const [appleMusicConnected, setAppleMusicConnected] = useState(false);
+  // True when every alt driver (Apple Music AND YouTube) has been exhausted
+  // for the current track. Used alongside Spotify's `fallbackUsed` to gate
+  // live broadcast resume when the user explicitly selected a service that
+  // then failed — ensuring audio never goes silent on a live ride.
+  const [altDriversAllFailed, setAltDriversAllFailed] = useState(false);
+
   // Guards so async resolves don't stack up or race a stopped ride.
   const rideRef = useRef(0); // bumped on every start/stop to invalidate stale async work
   const fetchingNextRef = useRef(false);
@@ -515,6 +598,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setRideListenContext(null);
     setTimeOrientation("curated");
     setDurationMs(null);
+    // Reset options-panel state on ride end.
+    setPreferredServiceState(null);
+    setAppleMusicConnected(false);
+    setAltDriversAllFailed(false);
   }, []);
 
   const start = useCallback(
@@ -720,6 +807,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         sourceRef.current = null;
         setSource(null);
       }
+      // Clear explicit service preference when returning to broadcast.
+      setPreferredServiceState(null);
     }
     // Switching to service-ride: silence the preview element so a driver can
     // take over.
@@ -802,6 +891,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     audioRef,
     pauseRadio,
     spotify,
+    preferredService,
   });
 
   // Apple Music developer token — fetched from /api/config (no auth required).
@@ -856,7 +946,49 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // Convenience aliases from the Spotify driver extras.
   const { spotifyModeForCurrent, fallbackUsed, deviceLost, retryCurrentTrack } =
     spotifyDriver;
-  const retrySpotify = retryCurrentTrack;
+
+  // Service-agnostic fallback flag: Spotify failed OR all alt drivers exhausted.
+  // Used wherever the old `fallbackUsed` gated live broadcast resume / preview
+  // skip — so that a preferredService failure also triggers broadcast recovery.
+  const effectiveFallbackUsed = fallbackUsed || altDriversAllFailed;
+
+  /**
+   * Retry the active ride service.  When the user explicitly selected an alt
+   * service (YouTube/Apple Music) and all drivers failed, clears the failure
+   * state and **directly calls `tryAltDriverRef.current`** for the current
+   * track.  We do not rely on the preferred-service trigger effect re-firing
+   * because after a failure both `altDriverActiveMbid` and `driverActive` are
+   * already null/false — the effect deps would be unchanged and the effect
+   * would not re-run.  Direct invocation is deterministic.
+   * Falls back to the Spotify driver retry for the default (Spotify) path.
+   */
+  const retryService = useCallback(() => {
+    if (altDriversAllFailed && currentMbid && currentItem) {
+      // Clear per-track failures so the cascade can attempt each driver again.
+      altDriverFailedRef.current.delete(`yt:${currentMbid}`);
+      altDriverFailedRef.current.delete(`am:${currentMbid}`);
+      setAltDriversAllFailed(false);
+      setAltDriverActiveMbid(null);
+      // Directly invoke the cascade — skipApple only when the user
+      // explicitly chose YouTube; otherwise try Apple Music first.
+      const skipApple = preferredService === "youtube";
+      tryAltDriverRef.current(currentMbid, currentItem, skipApple);
+    } else {
+      retryCurrentTrack();
+    }
+  }, [altDriversAllFailed, currentMbid, currentItem, preferredService, retryCurrentTrack]);
+
+  const retrySpotify = retryService;
+
+  // Apple Music configuration flag — derived from app config (server token).
+  const appleMusicConfigured = Boolean(appConfig?.appleMusic?.developerToken ?? null);
+
+  // Spotify deep-link for the current track — pure derivation, no API call.
+  const spotifyDeepLink = useMemo(
+    () => (currentItem ? extractSpotifyDeepLink(currentItem.links) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [currentItem?.links],
+  );
 
   // ---- Alt-driver state (YouTube / Apple Music as Spotify fallback) --------
   // When Spotify fails for a track, PlayerProvider tries Apple Music (if
@@ -867,6 +999,39 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [altDriverActiveMbid, setAltDriverActiveMbid] = useState<string | null>(null);
   // Per-driver failure keys: "am:<mbid>" for Apple Music, "yt:<mbid>" for YouTube.
   const altDriverFailedRef = useRef<Set<string>>(new Set());
+
+  // ---- Explicit service selection ------------------------------------------
+
+  /**
+   * Let the listener pick YouTube or Apple Music from the options panel.
+   * Stops any active driver and re-triggers the correct cascade so the
+   * selected service takes over the current track immediately.
+   */
+  const setPreferredService = useCallback(
+    (svc: "youtube" | "apple-music" | null) => {
+      setPreferredServiceState(svc);
+      if (svc) {
+        // Ensure service-ride mode is active.
+        writeStoredPlaybackMode("resolve_to_service");
+        setPlaybackModeState("resolve_to_service");
+        // Stop all drivers so the preferred service can start fresh.
+        activeDriverStopRef.current();
+        sourceRef.current = null;
+        setSource(null);
+        setAltDriverActiveMbid(null);
+        altDriverFailedRef.current.clear();
+        setAltDriversAllFailed(false);
+        // Silence the preview audio element.
+        const el = audioRef.current;
+        if (el) {
+          el.pause();
+          el.removeAttribute("src");
+          playingUrlRef.current = null;
+        }
+      }
+    },
+    [],
+  );
 
   // On every track change: stop any alt driver still playing from the previous
   // track so audio-exclusivity is enforced across queue advances, prev/next,
@@ -882,6 +1047,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
     setAltDriverActiveMbid(null);
     altDriverFailedRef.current.clear();
+    setAltDriversAllFailed(false);
     // Clear stale duration when the track changes.
     setDurationMs(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -890,6 +1056,33 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // True when any driver (Spotify or alt) is actively carrying this track
   // (including while loading — prevents premature broadcast resumption).
   const driverActive = spotifyModeForCurrent || altDriverActiveMbid === currentMbid;
+
+  // ---- Bandcamp album URL — async fetch on track change --------------------
+  useEffect(() => {
+    setBandcampAlbumUrl(null);
+    if (!currentMbid) return;
+    let cancelled = false;
+    const run = async () => {
+      try {
+        // `await` handles a mocked/absent function returning undefined gracefully.
+        const support = await getRecordingSupport(currentMbid);
+        if (cancelled) return;
+        // Album-scope Bandcamp links have detail "Bandcamp release".
+        // Track-scope links have detail "Exact Bandcamp track" and are excluded.
+        const bcLink = support?.links?.find(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (l: any) => l.kind === "bandcamp" && l.detail === "Bandcamp release",
+        );
+        setBandcampAlbumUrl(bcLink?.url ?? null);
+      } catch {
+        if (!cancelled) setBandcampAlbumUrl(null);
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentMbid]);
 
   // Try the next alt driver in the cascade (Apple Music → YouTube).  Called
   // after Spotify fails, and again when Apple Music fails so YouTube gets a
@@ -920,15 +1113,35 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         void youtubeDriver.play(item).catch(() => {
           altDriverFailedRef.current.add(`yt:${mbid}`);
           setAltDriverActiveMbid(null);
+          // YouTube is always the last driver in the cascade — every option
+          // is now exhausted. Set the flag immediately so the live fallback
+          // effect fires and resumes the broadcast without waiting for a
+          // second tryAltDriverRef call.
+          setAltDriversAllFailed(true);
         });
         return;
       }
-      // All alt drivers exhausted — clear the active marker so the live fallback
-      // and preview effects know no driver is attempting any more.
+      // All alt drivers were already failed when tryAltDriverRef was entered
+      // (e.g. a retry that found both keys still in the set). Safety net.
       setAltDriverActiveMbid(null);
+      setAltDriversAllFailed(true);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appleMusicDriver, youtubeDriver, pauseRadio]);
+
+  // ---- Preferred service trigger: start the user's chosen driver ----------
+  // Fires when the user explicitly picks YouTube or Apple Music from the
+  // options panel.  The cascade is adjusted: skipApple=true sends us straight
+  // to YouTube; skipApple=false tries Apple Music first then falls to YouTube.
+  useEffect(() => {
+    if (!active || !preferredService || !currentMbid || !currentItem) return;
+    if (playbackMode !== "resolve_to_service") return;
+    if (altDriverActiveMbid === currentMbid) return; // already driving this track
+    if (driverActive) return; // Spotify or an alt driver is already carrying audio
+    const skipApple = preferredService === "youtube";
+    tryAltDriverRef.current(currentMbid, currentItem, skipApple);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, preferredService, currentMbid, currentItem, playbackMode, altDriverActiveMbid, driverActive]);
 
   // Subscribe to Spotify driver status updates — mirror source/status state.
   useEffect(() => {
@@ -1018,6 +1231,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         if (mbid) altDriverFailedRef.current.add(`yt:${mbid}`);
         setAltDriverActiveMbid(null);
         if (sourceRef.current === "youtube") { sourceRef.current = null; setSource(null); }
+        // YouTube is the last driver in the cascade. An asynchronous failure
+        // (driver emits "unavailable" or "error" AFTER play() resolved) also
+        // exhausts all options — resume the broadcast on live rides.
+        setAltDriversAllFailed(true);
       }
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1045,6 +1262,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         sourceRef.current = "apple-music";
         setSource("apple-music");
         setStatus("playing");
+        // Mark Apple Music as authorized once playback succeeds — clears the
+        // "connect" CTA in the options panel for the rest of the session.
+        setAppleMusicConnected(true);
       } else if (s.state === "paused") {
         setStatus("paused");
       } else if (s.state === "ended") {
@@ -1368,7 +1588,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (timeOrientation !== "live") return;
     if (driverActive) return; // a driver is carrying or loading this track
     if (!currentMbid) return;
-    if (!fallbackUsed) return; // Spotify hasn't tried or hasn't failed yet
+    // Gate on either Spotify having failed (fallbackUsed) OR all alt drivers
+    // having been exhausted (altDriversAllFailed). This covers the
+    // preferredService path where Spotify is never attempted.
+    if (!effectiveFallbackUsed) return;
     // All drivers failed for this live track → resume the broadcast.
     resumeLiveRadio?.();
   }, [
@@ -1377,7 +1600,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     timeOrientation,
     driverActive,
     currentMbid,
-    fallbackUsed,
+    effectiveFallbackUsed,
     resumeLiveRadio,
     altDriverActiveMbid,
   ]);
@@ -1387,11 +1610,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (!active) return undefined;
     if (driverActive) return undefined; // a service driver carries this track
     // For live fallback, the broadcast carries the audio — no preview needed.
+    // Guard on effectiveFallbackUsed so the preferredService path (where
+    // Spotify is never attempted) also skips preview after all drivers fail.
     if (
       playbackMode === "resolve_to_service" &&
       timeOrientation === "live" &&
       currentMbid &&
-      fallbackUsed
+      effectiveFallbackUsed
     ) {
       return undefined;
     }
@@ -1602,7 +1827,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         listenContext: rideListenContext,
         timeOrientation,
         playbackMode,
-        fallbackUsed,
+        fallbackUsed: effectiveFallbackUsed,
         deviceLost,
         start,
         startReplay,
@@ -1613,6 +1838,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         setPlaybackMode,
         retrySpotify,
         seek,
+        spotifyDeepLink,
+        bandcampAlbumUrl,
+        appleMusicConfigured,
+        appleMusicConnected,
+        preferredService,
+        setPreferredService,
       },
       spotify,
       scan: {
@@ -1652,7 +1883,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       rideListenContext,
       timeOrientation,
       playbackMode,
-      fallbackUsed,
+      effectiveFallbackUsed,
       deviceLost,
       start,
       startReplay,
@@ -1663,6 +1894,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setPlaybackMode,
       retrySpotify,
       seek,
+      spotifyDeepLink,
+      bandcampAlbumUrl,
+      appleMusicConfigured,
+      appleMusicConnected,
+      preferredService,
+      setPreferredService,
       spotify,
       scanActive,
       toggleScan,

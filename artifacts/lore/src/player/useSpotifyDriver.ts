@@ -67,6 +67,13 @@ export interface SpotifyDriverOpts {
   audioRef: MutableRefObject<HTMLAudioElement | null>;
   pauseRadio?: () => void;
   spotify: SpotifyConnectApi;
+  /**
+   * Explicit service the listener selected from the options panel.
+   * When set to "youtube" or "apple-music", the Spotify driver is skipped so
+   * the chosen alt driver takes over immediately.  Spotify Connect itself is
+   * intentionally excluded from the user-facing options panel.
+   */
+  preferredService?: "youtube" | "apple-music" | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -132,6 +139,7 @@ export function useSpotifyDriver(opts: SpotifyDriverOpts): {
 
   const spotifyEligible = spotify.connected && spotify.premium;
   const refreshSpotify = spotify.refresh;
+  const { preferredService } = opts;
 
   // ---- Status-change subscribers -------------------------------------------
 
@@ -148,6 +156,9 @@ export function useSpotifyDriver(opts: SpotifyDriverOpts): {
     playbackMode === "resolve_to_service" &&
     spotifyEligible &&
     !!currentMbid &&
+    // Skip when the listener explicitly selected an alt service from the
+    // options panel — Spotify Connect is developer-only, not user-facing.
+    !preferredService &&
     spotifyFallbackTick >= 0 &&
     !spotifyFailedRef.current.has(currentMbid);
 
