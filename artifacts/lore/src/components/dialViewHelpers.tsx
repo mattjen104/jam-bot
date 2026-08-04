@@ -40,7 +40,7 @@ export function sameLiveValue(a: string | null, b: string | null): boolean {
 
 /**
  * Renders a list of artist names with each name in its own <b> element so the
- * CSS amber colour applies only to the names, not the separators.
+ * CSS colour applies only to the names, not the separators.
  *
  * Up to 6 names are shown in full; any overflow is collapsed to "… and N more".
  */
@@ -59,13 +59,120 @@ export function nameNodes(artists: string[]): ReactNode {
 }
 
 // ---------------------------------------------------------------------------
+// Show-name sanitisation
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the show name when it adds meaningful context — suppresses values
+ * that duplicate the DJ name, match "Continuous", or are otherwise junk.
+ */
+export function usableShowName(show: DialShow | null): string | null {
+  if (!show) return null;
+  const raw = cleanLiveValue(show.showName);
+  if (!raw) return null;
+  if (raw.toLowerCase() === "continuous") return null;
+  if (show.djName && sameLiveValue(raw, show.djName)) return null;
+  return raw;
+}
+
+// ---------------------------------------------------------------------------
+// Sentence assembly
+// ---------------------------------------------------------------------------
+
+/**
+ * Builds the attributed sentence using the full language hierarchy:
+ *
+ *   DJ known            → "[DJ] selected [artists] on [Show]"
+ *   No DJ, show known   → "[artists] on [Show] {timing}"
+ *   Neither             → "[artists] {timing}"
+ *
+ * When no artistNodes are available, falls back to a count-based phrase.
+ * Song titles are never included — the player handles that.
+ */
+export function buildAttributedSentence(
+  artistNodes: ReactNode | null,
+  count: number,
+  countLabel: string,
+  djName: string | null | undefined,
+  showName: string | null,
+  timing: string,
+): ReactNode {
+  if (artistNodes) {
+    if (djName && showName) {
+      return (
+        <>
+          <b className="fdrow__dj">{djName}</b>
+          {" selected "}
+          {artistNodes}
+          {" on "}
+          <span className="fdrow__show">{showName}</span>
+        </>
+      );
+    }
+    if (djName) {
+      return (
+        <>
+          <b className="fdrow__dj">{djName}</b>
+          {" selected "}
+          {artistNodes}
+        </>
+      );
+    }
+    if (showName) {
+      return (
+        <>
+          {artistNodes}
+          {" on "}
+          <span className="fdrow__show">{showName}</span>
+          {timing ? ` ${timing}` : ""}
+        </>
+      );
+    }
+    return <>{artistNodes}{timing ? ` ${timing}` : ""}</>;
+  }
+
+  // Count-only fallback (no artist names resolved yet)
+  const countNode = <b>{count} {countLabel}</b>;
+  if (djName && showName) {
+    return (
+      <>
+        <b className="fdrow__dj">{djName}</b>
+        {" · "}
+        {countNode}
+        {" on "}
+        <span className="fdrow__show">{showName}</span>
+      </>
+    );
+  }
+  if (djName) {
+    return (
+      <>
+        <b className="fdrow__dj">{djName}</b>
+        {" · "}
+        {countNode}
+      </>
+    );
+  }
+  if (showName) {
+    return (
+      <>
+        {countNode}
+        {" on "}
+        <span className="fdrow__show">{showName}</span>
+        {timing ? ` ${timing}` : ""}
+      </>
+    );
+  }
+  return <>{countNode}{timing ? ` ${timing}` : ""}</>;
+}
+
+// ---------------------------------------------------------------------------
 // Crossing sentence
 // ---------------------------------------------------------------------------
 
 /**
- * Crossing rows explain the match, rather than repeating the full now-playing
- * metadata. The artist is the discriminating signal; the title remains
- * available after tune-in and belongs on ordinary live rows only.
+ * Crossing rows explain the music match.  The artist is the discriminating
+ * signal; song titles are never shown here (the player handles that).
  */
 export function crossingSentence(
   stationName: string,
@@ -96,32 +203,35 @@ export function crossingSentence(
     ? Math.max(show.crossings, current?.isLibraryHit ? 1 : 0)
     : Math.max(show.artistCrossings, current?.isArtistHit ? 1 : 0);
 
+  const dj = eligibleDjName(show.djName, {
+    artist: current?.artist,
+    title: current?.title,
+    showTitle: show.showName,
+    stationName,
+  });
+  const showName = usableShowName(show);
+
+  // Live (single artist currently on air) vs. "this set" (multiple/historical)
+  const isLive = !!(current?.isLibraryHit || current?.isArtistHit);
+  const timing = isLive ? "now" : "this set";
+
   if (artistNodes) {
-    const dj = eligibleDjName(show.djName, {
-      artist: current?.artist,
-      title: current?.title,
-      showTitle: show.showName,
-      stationName,
-    });
-    if (artists.length === 1) {
-      return {
-        node: dj
-          ? <>{dj} — {artistNodes} on air.</>
-          : <>{artistNodes} on air.</>,
-        hasTrack: true,
-      };
-    }
     return {
-      node: dj
-        ? <>{dj} — {artistNodes} this set</>
-        : <>{artistNodes} this set</>,
+      node: buildAttributedSentence(artistNodes, count, "of yours", dj, showName, timing),
       hasTrack: true,
     };
   }
 
   if (count > 0) {
     return {
-      node: <>{count} track{count === 1 ? "" : "s"} from your library {count === 1 ? "has" : "have"} aired.</>,
+      node: buildAttributedSentence(
+        null,
+        count,
+        count === 1 ? "track of yours" : "tracks of yours",
+        dj,
+        showName,
+        timing,
+      ),
       hasTrack: true,
     };
   }
@@ -145,7 +255,7 @@ export function intoSet(startedAt: string): string {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
-/** One sentence per rung; returns the strongest rung that applies (spec §3).
+/** One sentence per rung; returns the strongest rung that applies.
  *
  * r values are consecutive integers — no gaps, no shared values:
  *   r=1 — exact library track playing right now             (Zone 1, warm)
@@ -159,6 +269,12 @@ export function intoSet(startedAt: string): string {
  *
  * Zone boundary: r >= 1 && r <= 4, or r === 6/7 → Zone 1 ("with a reason").
  *                r === 0 || r === 5 → Zone 3 ("also on air", dimmed).
+ *
+ * Sentence language hierarchy (personal mode):
+ *   DJ known              → "[DJ] selected [Artist] on [Show]"
+ *   No DJ, show known     → "[Artist] on [Show] now / this set"
+ *   Neither               → "[Artist] on now / this set"
+ * Song titles are never shown — the player handles that.
  */
 export function reason(
   show: DialShow | null,
@@ -184,29 +300,38 @@ export function reason(
         node: <><b>{stationArtistCrossings} community artist match{stationArtistCrossings === 1 ? "" : "es"}</b> here in the last 24h</>,
       };
     }
-    // Community mode must never fall through to the personal current-track
-    // flags below. With no aggregate signal, retain only public live
-    // attribution (or the intentionally dark row).
-    return show.djName
-      ? { r: 5, cls: "w5", node: `on air · ${intoSet(show.startedAt)} into the set` }
-      : { r: 0, cls: "w0", node: "on air · Lore can't see who's playing" };
+    // Community mode: retain only public live attribution or go dark.
+    const blendedDj = show.djName;
+    const blendedShow = usableShowName(show);
+    if (blendedDj && blendedShow) {
+      return { r: 5, cls: "w5", node: <><b className="fdrow__dj">{blendedDj}</b> · <span className="fdrow__show">{blendedShow}</span> · {intoSet(show.startedAt)} in</> };
+    }
+    if (blendedDj) {
+      return { r: 5, cls: "w5", node: <><b className="fdrow__dj">{blendedDj}</b> · {intoSet(show.startedAt)} in</> };
+    }
+    return { r: 0, cls: "w0", node: "on air · Lore can't see who's playing" };
   }
 
-  // r=1: exact library track playing right now
+  const dj = show.djName; // already sanitised via safeShow in FrontDoorRow
+  const showName = usableShowName(show);
+
+  // r=1: exact library track playing right now — show artist, not title
   if (show.currentTrack?.isLibraryHit) {
+    const artist = cleanLiveValue(show.currentTrack.artist);
+    const artistNode = artist ? <b className="fdrow__artist">{artist}</b> : null;
     return {
       r: 1, cls: "w1",
-      node: <><b>{show.currentTrack.title}</b><span className="fdrow__t1-sfx"> on air — in your library</span></>,
+      node: buildAttributedSentence(artistNode, 1, "track of yours", dj, showName, "now"),
     };
   }
 
   // r=2: library artist playing right now (not an exact track match).
-  // The live track hasn't been logged into spins yet (SSE lag), so
-  // show.artistCrossings won't include it — check currentTrack directly.
   if (show.currentTrack?.isArtistHit) {
+    const artist = cleanLiveValue(show.currentTrack.artist);
+    const artistNode = artist ? <b className="fdrow__artist">{artist}</b> : null;
     return {
       r: 2, cls: "w2",
-      node: <><b className="fdrow__artist">{show.currentTrack.artist}</b><span className="fdrow__t1-sfx"> on air — artist from your library</span></>,
+      node: buildAttributedSentence(artistNode, 1, "artist of yours", dj, showName, "now"),
     };
   }
 
@@ -215,9 +340,7 @@ export function reason(
     const nn = show.topArtists.length > 0 ? nameNodes(show.topArtists) : null;
     return {
       r: 3, cls: "w3",
-      node: nn
-        ? <>{nn} this set</>
-        : <><b>{show.crossings} of yours</b> this set</>,
+      node: buildAttributedSentence(nn, show.crossings, "of yours", dj, showName, "this set"),
     };
   }
 
@@ -226,15 +349,21 @@ export function reason(
     const nn = show.topArtistNames.length > 0 ? nameNodes(show.topArtistNames) : null;
     return {
       r: 4, cls: "w4",
-      node: nn
-        ? <>{nn} this set</>
-        : <><b>{show.artistCrossings}</b> tracks by artists from your library</>,
+      node: buildAttributedSentence(nn, show.artistCrossings, "artists of yours", dj, showName, "this set"),
     };
   }
 
-  // r=5: attributed show on air, no crossing evidence yet
-  if (show.djName) {
-    return { r: 5, cls: "w5", node: `on air · ${intoSet(show.startedAt)} into the set` };
+  // r=5: attributed show or DJ on air, no crossing evidence yet.
+  // Expanded to fire when either djName or showName is known (previously
+  // only djName triggered r=5, leaving shows-without-DJ-name as r=0 dark).
+  if (dj || showName) {
+    if (dj && showName) {
+      return { r: 5, cls: "w5", node: <><b className="fdrow__dj">{dj}</b> · <span className="fdrow__show">{showName}</span> · {intoSet(show.startedAt)} in</> };
+    }
+    if (dj) {
+      return { r: 5, cls: "w5", node: <><b className="fdrow__dj">{dj}</b> · {intoSet(show.startedAt)} in</> };
+    }
+    return { r: 5, cls: "w5", node: <><span className="fdrow__show">{showName}</span> · {intoSet(show.startedAt)} in</> };
   }
 
   // r=6: 24h station exact crossings (no selector listed)
@@ -242,9 +371,7 @@ export function reason(
     const nn = stationTopArtistNames.length > 0 ? nameNodes(stationTopArtistNames) : null;
     return {
       r: 6, cls: "w6",
-      node: nn
-        ? <>{nn} in the last 24 hours</>
-        : <><b>{stationCrossings} of yours</b> here in the last 24h</>,
+      node: buildAttributedSentence(nn, stationCrossings, "of yours", null, null, "in the last 24 hours"),
     };
   }
 
@@ -253,9 +380,7 @@ export function reason(
     const nn = stationTopArtistNames.length > 0 ? nameNodes(stationTopArtistNames) : null;
     return {
       r: 7, cls: "w7",
-      node: nn
-        ? <>{nn} in the last 24 hours</>
-        : <><b>{stationArtistCrossings}</b> tracks by your artists here in the last 24h</>,
+      node: buildAttributedSentence(nn, stationArtistCrossings, "artists of yours", null, null, "in the last 24 hours"),
     };
   }
 

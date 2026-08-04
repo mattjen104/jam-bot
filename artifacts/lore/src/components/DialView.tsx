@@ -116,42 +116,53 @@ function liveSentence(
   const station = cleanLiveValue(stationName);
   if (!station || !show) return null;
 
-  const rawDj = eligibleDjName(show.djName, {
+  const dj = eligibleDjName(show.djName, {
     artist: show.currentTrack?.artist,
     title: show.currentTrack?.title,
     showTitle: show.showName,
     stationName: station,
   });
-  const dj = rawDj;
-  const track = cleanLiveValue(show?.currentTrack?.title);
   const artist = cleanLiveValue(show?.currentTrack?.artist);
   const usableArtist = sameLiveValue(artist, station) ? null : artist;
-  const usableTrack = sameLiveValue(track, usableArtist) ? null : track;
 
-  if (dj) {
-    if (usableTrack && usableArtist) {
-      return {
-        node: <>{dj} — <b>{usableTrack}</b> · <b>{usableArtist}</b></>,
-        hasTrack: true,
-      };
-    }
-    if (usableArtist) {
-      return { node: <>{dj} — <b>{usableArtist}</b></>, hasTrack: true };
-    }
-    if (usableTrack) {
-      return { node: <>{dj} — <b>{usableTrack}</b></>, hasTrack: true };
-    }
-    return { node: <>{dj} is on air</>, hasTrack: false };
+  // Show name: suppress if it duplicates the DJ name, station, or "Continuous"
+  const rawShow = cleanLiveValue(show?.showName);
+  const showName = rawShow
+    && rawShow.toLowerCase() !== "continuous"
+    && !sameLiveValue(rawShow, dj)
+    && !sameLiveValue(rawShow, station)
+    ? rawShow : null;
+
+  // Language hierarchy — song titles are never shown; the player handles that.
+  if (dj && usableArtist && showName) {
+    return {
+      node: <><b className="fdrow__dj">{dj}</b>{" selected "}<b className="fdrow__artist">{usableArtist}</b>{" on "}<span className="fdrow__show">{showName}</span></>,
+      hasTrack: true,
+    };
   }
-
-  if (usableArtist && usableTrack) {
-    return { node: <><b>{usableTrack}</b> · <b>{usableArtist}</b></>, hasTrack: true };
+  if (dj && usableArtist) {
+    return {
+      node: <><b className="fdrow__dj">{dj}</b>{" selected "}<b className="fdrow__artist">{usableArtist}</b></>,
+      hasTrack: true,
+    };
+  }
+  if (dj && showName) {
+    return {
+      node: <><b className="fdrow__dj">{dj}</b>{" · "}<span className="fdrow__show">{showName}</span></>,
+      hasTrack: false,
+    };
+  }
+  if (dj) {
+    return { node: <><b className="fdrow__dj">{dj}</b>{" is on air"}</>, hasTrack: false };
+  }
+  if (usableArtist && showName) {
+    return {
+      node: <><b className="fdrow__artist">{usableArtist}</b>{" on "}<span className="fdrow__show">{showName}</span>{" now"}</>,
+      hasTrack: true,
+    };
   }
   if (usableArtist) {
-    return { node: <><b>{usableArtist}</b> on air</>, hasTrack: true };
-  }
-  if (usableTrack) {
-    return { node: <><b>{usableTrack}</b> on air</>, hasTrack: true };
+    return { node: <><b className="fdrow__artist">{usableArtist}</b>{" on now"}</>, hasTrack: true };
   }
 
   // Without current attribution, preserve the established weak-match
@@ -196,19 +207,13 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onE
   const tier1Node = displayMode === "blended"
     ? rz.node
     : crossing?.node ?? live?.node ?? rz.node;
-  const rawShow = cleanLiveValue(safeShow?.showName);
   const dj = usableDj;
-  // A show is a quiet cue only when it adds context beyond the person in the
-  // sentence. Unknown schedule values are missing data, not a show identity.
-  const showContext = rawShow
-    && rawShow.toLowerCase() !== "continuous"
-    && !sameLiveValue(rawShow, dj)
-    && !sameLiveValue(rawShow, cleanLiveValue(ds.station.name))
-    ? rawShow
-    : null;
-  const isExplicitlyContinuous = ds.station.automationClass === "automated" && !showContext;
+  // Show name is now in the sentence itself — the byline only carries the
+  // station name. "Continuous" is appended for automated streams with no show.
+  const isExplicitlyContinuous = ds.station.automationClass === "automated"
+    && !cleanLiveValue(safeShow?.showName);
   const stationLabel = cleanLiveValue(ds.station.name) ?? ds.station.name;
-  const bylineContext = showContext ?? (isExplicitlyContinuous ? "Continuous" : null);
+  const bylineContext = isExplicitlyContinuous ? "Continuous" : null;
 
   const currentTrack = safeShow?.currentTrack ?? null;
 
@@ -2320,9 +2325,10 @@ function GhostRow({ station, isActive, onTuneIn }: GhostRowProps) {
       onKeyDown={(e) => e.key === "Enter" && onTuneIn()}
     >
       <div className="ghost-row__c">
-        <div className="ghost-row__name">{station.name}</div>
         <div className="ghost-row__reason">
-          played <b>{station.artistName}</b> — an artist from your library
+          <b className="fdrow__artist">{station.artistName}</b>
+          {" on "}
+          <span className="fdrow__station">{station.name}</span>
         </div>
       </div>
     </div>
