@@ -42,7 +42,12 @@ const router: IRouter = Router();
 // unchanged from the previous single-layer behaviour.
 // ---------------------------------------------------------------------------
 
-const CROSSINGS_CACHE_TTL_MS = 30 * 1000;
+// 2-minute TTL. The query scans every spin ever recorded to compute lifetime
+// counts (no time bound in WHERE), so running it more than ~30×/hour per user
+// is expensive. Import completion and taste-seed changes call bustCrossingsCache()
+// directly, so the dial updates immediately after a library change without
+// needing a short poll interval.
+const CROSSINGS_CACHE_TTL_MS = 2 * 60 * 1000;
 
 // Keep historical URL/domain metadata out of listener-facing crossing counts,
 // even when it predates the ingestion guard or a cleanup boot.

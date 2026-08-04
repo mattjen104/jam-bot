@@ -580,8 +580,10 @@ export function useSetTasteSeeds() {
 }
 /**
  * Server-computed station crossing scores for the rolling 24-hour window.
- * Results are cacheable for 5 minutes; two clients always agree on the same
- * ranking instead of diverging based on fetch timing.
+ * 2-minute client cache mirrors the server TTL. Import completion and
+ * taste-seed changes call bustCrossingsCache() server-side and invalidate
+ * ME_DIAL_CROSSINGS_KEY client-side so the dial refreshes immediately after
+ * a library change — no need for a short poll interval here.
  */
 export function useMyDialCrossings(date: string) {
   return useQuery({
@@ -590,8 +592,8 @@ export function useMyDialCrossings(date: string) {
       fetchOrNull<{ items: DialCrossing[] }>(
         `/api/me/crossings?date=${encodeURIComponent(date)}`,
       ).then((d) => d?.items ?? []),
-    staleTime: 30_000,
-    refetchInterval: 30_000,
+    staleTime: 2 * 60_000,
+    refetchInterval: 2 * 60_000,
     retry: false,
   });
 }
