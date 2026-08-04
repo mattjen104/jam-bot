@@ -279,9 +279,8 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onE
           </div>
         )}
 
-        {/* BottlePanel owns its solo-mode fallback, so it must remain mounted
-            whenever a recording is resolved. Click propagation is stopped so
-            the row's tune-in handler doesn't fire. */}
+        {/* BottlePanel gates itself on social mode; click propagation is stopped
+            so the row's tune-in handler doesn't fire. */}
         {currentTrack?.mbid && (
           <div
             onClick={(e) => e.stopPropagation()}

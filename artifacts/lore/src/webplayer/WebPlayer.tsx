@@ -269,8 +269,7 @@ function NowPlayingCard({
 }
 
 /** Thin wrapper so BottlePanel (which uses hooks) can be conditionally mounted
- *  from JSX without violating the Rules of Hooks. Social-mode gating happens
- *  inside BottlePanel itself so the re-enable toggle is always reachable. */
+ *  from JSX without violating the Rules of Hooks. */
 function BottlePanelWrapper({
   mbid,
   stationId,

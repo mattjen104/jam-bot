@@ -5,6 +5,7 @@ import { AlbumAvatarPicker } from "./AlbumAvatarPicker";
 import { useSongBottles, type SongBottle } from "../hooks/useSongBottles";
 import { emojiSvgUrl } from "../lib/twemoji";
 import { useMyAlbumAvatar } from "../lib/meHooks";
+import { useSocialMode } from "../lib/social";
 
 // ---------------------------------------------------------------------------
 // Keyframe injection (once per document)
@@ -135,6 +136,8 @@ export function BottlePanel({
   const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const errorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const { enabled: socialEnabled } = useSocialMode();
+
   const { bottles, archivedCount, hasUnread, markRead, send } = useSongBottles(
     mbid,
     stationId,
@@ -169,6 +172,9 @@ export function BottlePanel({
       if (errorTimer.current) clearTimeout(errorTimer.current);
     };
   }, []);
+
+  // Hidden entirely in solo mode — no cross-listener notes without social enabled
+  if (!socialEnabled) return null;
 
   // Hidden entirely when no MBID is resolved (nothing to anchor to)
   if (!mbid) return null;
