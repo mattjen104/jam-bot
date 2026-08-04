@@ -81,8 +81,10 @@ function ProgressBar({
  * Interactive seek bar shown for YouTube and Apple Music sources.
  * Uses a hidden range input overlaid on a visual track so the drag handle
  * matches the design system.
+ *
+ * Exported for unit tests.
  */
-function SeekBar({
+export function SeekBar({
   progressMs,
   durationMs,
   onSeek,
