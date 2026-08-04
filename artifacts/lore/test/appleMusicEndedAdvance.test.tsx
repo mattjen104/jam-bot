@@ -10,6 +10,7 @@
  *   2. Last track ends       → ride status becomes "ended" (no phantom advance).
  *   3. Ended always clears   → altDriverActiveMbid is null regardless of queue position.
  *   4. Live+service-ride     → ended skips queue advance (station poll drives it).
+ *   5. Stale ended signal    → late-arriving "ended" from the previous track is ignored.
  *
  * useAppleMusicDriver is replaced by a controllable stub whose `fireAmStatus()`
  * helper lets tests trigger the ended signal without requiring a real MusicKit
@@ -433,6 +434,41 @@ describe("Apple Music ended → queue advance", () => {
     // Index must NOT have advanced — the guard `mbid !== currentMbid` rejects it.
     expect(latest!.ride.index).toBe(0);
     expect(latest!.ride.status).not.toBe("ended");
+  });
+
+  it("ignores a stale 'ended' event carrying the previous track's MBID", async () => {
+    renderPlayer();
+    await flush();
+
+    // Start a two-track ride.
+    act(() => {
+      latest!.ride.startReplay([TRACK_A, TRACK_B], "Test Ride Stale");
+    });
+    await flush();
+
+    // Advance to track B by firing a valid ended event for track A.
+    act(() => {
+      fireAmStatus({ state: "ended", trackId: TRACK_A.mbid });
+    });
+    await flush();
+
+    // Confirm we are now on track B (index 1).
+    expect(latest!.ride.index).toBe(1);
+    expect(latest!.ride.current?.mbid).toBe(TRACK_B.mbid);
+
+    // Now fire a late-arriving "ended" event that still carries track A's MBID.
+    // This simulates an out-of-order / stale signal from the previous track.
+    act(() => {
+      fireAmStatus({ state: "ended", trackId: TRACK_A.mbid });
+    });
+    await flush();
+
+    // The MBID guard must have rejected the stale signal:
+    // index must remain at 1 (not advance past the end of the queue).
+    expect(latest!.ride.index).toBe(1);
+    // The ride must still be active — status must not become "ended".
+    expect(latest!.ride.status).not.toBe("ended");
+    expect(latest!.ride.active).toBe(true);
   });
 });
 
