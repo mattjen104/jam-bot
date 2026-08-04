@@ -1087,6 +1087,7 @@
   line-height: 1;
   opacity: 0.6;
   transition: opacity 0.12s;
+  flex-shrink: 0;
 }
 .dial-topbar__search:hover { opacity: 1; }
 
@@ -1094,9 +1095,20 @@
 .dial-topbar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 15px 10px;
+  gap: 8px;
+  padding: 10px 12px 8px;
   flex-shrink: 0;
+}
+
+/* "All" level topbar has more items — allow wrapping on very narrow screens */
+.dial-topbar--all {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+/* In the all-level topbar the dial-mode spacer fills available width; search
+   sits naturally to its right with no margin trick needed. */
+.dial-topbar--all .dial-topbar__search {
+  margin-left: 0;
 }
 .dial-topbar__wordmark {
   font-family: var(--app-font-serif);

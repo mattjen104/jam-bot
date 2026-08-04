@@ -10,7 +10,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } fro
 import { SeedInput } from "./SeedInput";
 import { Search } from "lucide-react";
 import { useLocation, Link } from "wouter";
-import { useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, type GhostStation } from "../lib/meHooks";
+import { useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, type GhostStation } from "../lib/meHooks";
 import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
 import { StationLane } from "./StationLane";
 import { ContextRail } from "./ContextRail";
@@ -384,29 +384,6 @@ function ZoneLabel({ label, n, hint, accent, estimated, collapsed, onCollapse }:
 const ZONE1_VISIBLE = 5;
 const ZONE2_VISIBLE = 3;
 const ZONE3_VISIBLE = 3;
-
-// ---------------------------------------------------------------------------
-// Zone collapse localStorage persistence
-// Keys are stable identifiers — not tied to station slugs — so the preference
-// survives even when zone membership changes between sessions.
-// ---------------------------------------------------------------------------
-const LS_ZONE1_COLLAPSED = "lore.zone.1.collapsed";
-const LS_ZONE2_COLLAPSED = "lore.zone.2.collapsed";
-const LS_ZONE3_COLLAPSED = "lore.zone.3.collapsed";
-
-function readLSBool(key: string): boolean {
-  try { return localStorage.getItem(key) === "true"; } catch { return false; }
-}
-
-function writeLSBool(key: string, value: boolean): void {
-  try {
-    if (value) {
-      localStorage.setItem(key, "true");
-    } else {
-      localStorage.removeItem(key);
-    }
-  } catch { /* storage unavailable — silently ignore */ }
-}
 
 // ---------------------------------------------------------------------------
 // Stations list view
@@ -1126,6 +1103,12 @@ export function DialView() {
   const zone1Settled = !crossingsLoading && !isCoreLoading;
   const isSpotifyConnected = useSpotifyLibraryConnected();
   const { radio } = usePlayer();
+  const { data: weeklyRecapData } = useMyWeeklyRecap();
+  const hasWeeklyRecap = weeklyRecapData != null && (
+    weeklyRecapData.stationsAttended.stations.length > 0 ||
+    weeklyRecapData.firstEverHeards.items.length > 0 ||
+    weeklyRecapData.ripenedCrossings.items.length > 0
+  );
 
   // Picker overlap lookup — pickerId-first, normalised-name bridge fallback.
   // Both maps come from useDialData (same fetch, no double network call).
@@ -1311,18 +1294,6 @@ export function DialView() {
   // Active tab — resets to primary on each page load (not persisted).
   const [activeTab, setActiveTab] = useState<"library" | "also-on-air" | "recently-aired">("library");
 
-  // Collapsed state — persisted to localStorage so the layout survives a reload.
-  // A collapsed zone shows only the ZoneLabel header (no rows, no see-more
-  // button).  Distinct from expanded: collapsed=true hides even the default
-  // N-row truncated view.
-  const [zone1Collapsed, setZone1CollapsedState] = useState(() => readLSBool(LS_ZONE1_COLLAPSED));
-  const [zone2Collapsed, setZone2CollapsedState] = useState(() => readLSBool(LS_ZONE2_COLLAPSED));
-  const [zone3Collapsed, setZone3CollapsedState] = useState(() => readLSBool(LS_ZONE3_COLLAPSED));
-
-  const setZone1Collapsed = useCallback((v: boolean) => { writeLSBool(LS_ZONE1_COLLAPSED, v); setZone1CollapsedState(v); }, []);
-  const setZone2Collapsed = useCallback((v: boolean) => { writeLSBool(LS_ZONE2_COLLAPSED, v); setZone2CollapsedState(v); }, []);
-  const setZone3Collapsed = useCallback((v: boolean) => { writeLSBool(LS_ZONE3_COLLAPSED, v); setZone3CollapsedState(v); }, []);
-
   // Slug-key strings — order-insensitive (sorted) so a live reorder of the same
   // stations does NOT reset expansion; only a real membership change does.
   const zone1SlugKey = useMemo(() => withReason.map((r) => r.ds.station.slug).sort().join(","), [withReason]);
@@ -1330,8 +1301,7 @@ export function DialView() {
   const zone3SlugKey = useMemo(() => alsoOnAir.map((r) => r.ds.station.slug).sort().join(","), [alsoOnAir]);
 
   // Track previous slug keys so the reset effect only fires on genuine membership
-  // changes and NOT on the initial mount.  Without this guard, the effect would
-  // run after first render and overwrite the localStorage-read collapsed state.
+  // changes and NOT on the initial mount.
   const prevZone1SlugKey = useRef<string | null>(null);
   const prevZone2SlugKey = useRef<string | null>(null);
   const prevZone3SlugKey = useRef<string | null>(null);
@@ -1343,15 +1313,15 @@ export function DialView() {
   const zone2ExpandAnchor = useRef<string | null>(null);
   const zone3ExpandAnchor = useRef<string | null>(null);
 
-  // Reset expansion AND collapse when zone membership genuinely changes.
+  // Reset expansion when zone membership genuinely changes.
   // If the new key matches the expand-time anchor the user set, re-expand
-  // silently instead of collapsing (transient-shrink recovery).
+  // silently instead of resetting (transient-shrink recovery).
   useEffect(() => {
     if (prevZone1SlugKey.current === null) { prevZone1SlugKey.current = zone1SlugKey; return; }
     if (prevZone1SlugKey.current === zone1SlugKey) return;
     prevZone1SlugKey.current = zone1SlugKey;
     if (zone1ExpandAnchor.current === zone1SlugKey) { setZone1Expanded(true); return; }
-    setZone1Expanded(false); setZone1Collapsed(false);
+    setZone1Expanded(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zone1SlugKey]);
   useEffect(() => {
@@ -1359,7 +1329,7 @@ export function DialView() {
     if (prevZone2SlugKey.current === zone2SlugKey) return;
     prevZone2SlugKey.current = zone2SlugKey;
     if (zone2ExpandAnchor.current === zone2SlugKey) { setZone2Expanded(true); return; }
-    setZone2Expanded(false); setZone2Collapsed(false);
+    setZone2Expanded(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zone2SlugKey]);
   useEffect(() => {
@@ -1367,7 +1337,7 @@ export function DialView() {
     if (prevZone3SlugKey.current === zone3SlugKey) return;
     prevZone3SlugKey.current = zone3SlugKey;
     if (zone3ExpandAnchor.current === zone3SlugKey) { setZone3Expanded(true); return; }
-    setZone3Expanded(false); setZone3Collapsed(false);
+    setZone3Expanded(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zone3SlugKey]);
 
@@ -1389,15 +1359,10 @@ export function DialView() {
   // Auto-expand Zone 1 when the scan cursor advances into a hidden row so the
   // highlighted station is always visible.  setZone1Expanded(true) when already
   // true is a React no-op (no re-render), so the dependency on zone1Visible alone
-  // is safe.  Also un-collapse so the scanning station is never hidden — this
-  // applies even when samplingIdx is within the default budget, because a
-  // collapsed zone hides rows independently of the truncation budget.
+  // is safe.
   useEffect(() => {
-    if (scan.samplingIdx != null) {
-      setZone1Collapsed(false);
-      if (scan.samplingIdx >= zone1Visible) {
-        setZone1Expanded(true);
-      }
+    if (scan.samplingIdx != null && scan.samplingIdx >= zone1Visible) {
+      setZone1Expanded(true);
     }
   }, [scan.samplingIdx, zone1Visible]);
 
@@ -1427,17 +1392,54 @@ export function DialView() {
   // --- topbar ---
   function renderTopbar() {
     if (level === "all") {
-      // Minimal header — action bar carries the primary actions (§10)
       return (
-        <div className="dial-topbar">
+        <div className="dial-topbar dial-topbar--all">
           <span className="dial-topbar__wordmark">Lore</span>
-          <Link
-            href="/weekly-recap"
-            className="dial-topbar__crumb"
-            style={{ marginLeft: 8 }}
+          <div className="dial-actpair">
+            <button type="button" className="dial-act dial-act--listen" onClick={tuneTop} disabled={!topRow}>
+              ▶ Listen{topLabel && <span className="dial-act__suffix"> · {topLabel}</span>}
+            </button>
+            <button
+              type="button"
+              className={`dial-act dial-act--scan${scan.scanning ? " dial-act--on" : ""}`}
+              onClick={scan.toggle}
+              disabled={withReason.length === 0}
+            >
+              {scan.scanning ? "■ Stop" : <><span className="dial-act__icon">↢</span> Scan<span className="dial-act__suffix"> · {withReason.length}</span></>}
+            </button>
+          </div>
+          <button
+            type="button"
+            className="dial-act"
+            onClick={() => window.dispatchEvent(new CustomEvent("lore:open-import-modal", { detail: { mode: "artist-seeds" } }))}
           >
-            Weekly Recap
-          </Link>
+            ＋ Add artists
+          </button>
+          <div className="dial-mode" role="group" aria-label="Listening mode">
+            <button
+              type="button"
+              className={`dial-mode__button${crossingSourceMode === "personal" ? " dial-mode__button--active" : ""}`}
+              aria-pressed={crossingSourceMode === "personal"}
+              aria-label="Solo mode"
+              onClick={() => setSocialEnabled(false)}
+            >
+              Solo
+            </button>
+            <button
+              type="button"
+              className={`dial-mode__button${crossingSourceMode === "blended" ? " dial-mode__button--active" : ""}`}
+              aria-pressed={crossingSourceMode === "blended"}
+              aria-label="Listening Party"
+              onClick={() => setSocialEnabled(true)}
+            >
+              Listening Party
+            </button>
+          </div>
+          {hasWeeklyRecap && (
+            <Link href="/weekly-recap" className="dial-topbar__crumb">
+              Weekly Recap
+            </Link>
+          )}
           <button
             type="button"
             className="dial-topbar__search"
@@ -1510,44 +1512,6 @@ export function DialView() {
       {/* Topbar */}
       {renderTopbar()}
 
-      {/* Action bar — front door only (spec §10) */}
-      {level === "all" && isRadioActive && (
-             <div className="dial-actbar">
-                    <div className="dial-actpair">
-            <button type="button" className="dial-act dial-act--listen" onClick={tuneTop} disabled={!topRow}>
-              ▶ Listen{topLabel && <span className="dial-act__suffix"> · {topLabel}</span>}
-            </button>
-            <button
-              type="button"
-              className={`dial-act dial-act--scan${scan.scanning ? " dial-act--on" : ""}`}
-              onClick={scan.toggle}
-              disabled={withReason.length === 0}
-            >
-              {scan.scanning ? "■ Stop" : <><span className="dial-act__icon">↢</span> Scan<span className="dial-act__suffix"> · {withReason.length}</span></>}
-            </button>
-          </div>
-           <div className="dial-mode" role="group" aria-label="Listening mode">
-             <button
-               type="button"
-               className={`dial-mode__button${crossingSourceMode === "personal" ? " dial-mode__button--active" : ""}`}
-               aria-pressed={crossingSourceMode === "personal"}
-               aria-label="Solo mode"
-               onClick={() => setSocialEnabled(false)}
-             >
-               Solo
-             </button>
-             <button
-               type="button"
-               className={`dial-mode__button${crossingSourceMode === "blended" ? " dial-mode__button--active" : ""}`}
-               aria-pressed={crossingSourceMode === "blended"}
-               aria-label="Listening Party"
-               onClick={() => setSocialEnabled(true)}
-             >
-               Listening Party
-             </button>
-           </div>
-        </div>
-      )}
 
       {/* Scan detail band — visible while scanning (spec §11) */}
       {level === "all" && isRadioActive && scan.scanning && (
@@ -1611,15 +1575,6 @@ export function DialView() {
                 they never appear above the live crossing rows. */}
             {!isCoreLoading && showSkeleton && (
               <>
-                {/* Zone 1 heading + context-sensitive placeholder.
-                    No estimated count shown: the pre-load withReason count can
-                    differ from the post-score count, producing a visible number
-                    jump. Omitting it here means the count appears for the first
-                    time only once crossing scores have fully resolved. */}
-                <ZoneLabel
-                  label="On the Air × Your Music Library"
-                  accent="library"
-                />
                 <Zone1Placeholder
                   isSpotifyConnected={isSpotifyConnected}
                   hasLibrary={hasLibrary}
@@ -1678,15 +1633,7 @@ export function DialView() {
                 {withReason.length > 0 && (
                   <>
                     <div className="fdzone-lbl-row">
-                      <ZoneLabel
-                        label="On the Air × Your Music Library"
-                        n={withReason.length}
-                        hint="best first · scan walks this list"
-                        accent="library"
-                        collapsed={zone1Collapsed}
-                        onCollapse={() => { setZone1Collapsed(!zone1Collapsed); if (!zone1Collapsed) setZone1Expanded(false); }}
-                      />
-                      {zone1Expanded && !zone1Collapsed && withReason.length > zone1Visible && (
+                      {zone1Expanded && withReason.length > zone1Visible && (
                         <button
                           className="dial-show-more-inline"
                           aria-expanded={true}
@@ -1697,9 +1644,8 @@ export function DialView() {
                         </button>
                       )}
                     </div>
-                    {!zone1Collapsed && (
-                      <>
-                        {(hasSeeds || visibleSeeds.length > 0) && (
+                    <>
+                      {(hasSeeds || visibleSeeds.length > 0) && (
                           <SeedBar
                             seeds={visibleSeeds}
                             onAddSeed={addSeed}
@@ -1727,16 +1673,6 @@ export function DialView() {
                             )
                           )}
                         </div>
-                        {/* Always-visible "Add artists" CTA — compact secondary link
-                            shown below the rows so listeners can expand their taste
-                            even when crossings are already showing. */}
-                        <button
-                          type="button"
-                          className="dial-ctabtn--ghost"
-                          onClick={() => window.dispatchEvent(new CustomEvent("lore:open-import-modal", { detail: { mode: "artist-seeds" } }))}
-                        >
-                          ＋ Add artists you love →
-                        </button>
                         {withReason.length > zone1Visible && (
                           <button
                             className="dial-show-more"
@@ -1747,31 +1683,19 @@ export function DialView() {
                             {zone1Expanded ? "See less" : `See all ${withReason.length}`}
                           </button>
                         )}
-                      </>
-                    )}
+                    </>
                   </>
                 )}
 
                 {/* Library/seeds exist but nothing has crossed today — helpful nudge. */}
                 {withReason.length === 0 && (hasLibrary || hasSeeds || visibleSeeds.length > 0) && (
-                  <>
-                    <ZoneLabel label="On the Air × Your Music Library" accent="library" />
-                    <div className="z1-placeholder z1-placeholder--no-cross">
-                      <div className="z1-placeholder__body">
-                        <p className="z1-placeholder__pitch">
-                          None of your artists have played on a live station today. Tune into a station or check back later.
-                        </p>
-                      </div>
+                  <div className="z1-placeholder z1-placeholder--no-cross">
+                    <div className="z1-placeholder__body">
+                      <p className="z1-placeholder__pitch">
+                        None of your artists have played on a live station today. Tune into a station or check back later.
+                      </p>
                     </div>
-                    {/* Always-visible CTA even in the no-cross state */}
-                    <button
-                      type="button"
-                      className="dial-ctabtn--ghost"
-                      onClick={() => window.dispatchEvent(new CustomEvent("lore:open-import-modal", { detail: { mode: "artist-seeds" } }))}
-                    >
-                      ＋ Add artists you love →
-                    </button>
-                  </>
+                  </div>
                 )}
 
                 {/* No crossing rows, no library or seeds — full onboarding placeholder.
@@ -1782,7 +1706,6 @@ export function DialView() {
                   visibleSeeds.length === 0 &&
                   !isSpotifyConnected && (
                   <>
-                    <ZoneLabel label="On the Air × Your Music Library" accent="library" />
                     <Zone1Placeholder
                       isSpotifyConnected={isSpotifyConnected}
                       hasLibrary={hasLibrary}
@@ -1800,14 +1723,7 @@ export function DialView() {
                 {ghost.length > 0 && (
                   <>
                     <div className="fdzone-lbl-row">
-                      <ZoneLabel
-                        label="Missed while you were away"
-                        n={ghost.length}
-                        accent="picker"
-                        collapsed={zone2Collapsed}
-                        onCollapse={() => { setZone2Collapsed(!zone2Collapsed); if (!zone2Collapsed) setZone2Expanded(false); }}
-                      />
-                      {zone2Expanded && !zone2Collapsed && ghost.length > ZONE2_VISIBLE && (
+                      {zone2Expanded && ghost.length > ZONE2_VISIBLE && (
                         <button
                           className="dial-show-more-inline"
                           aria-expanded={true}
@@ -1818,9 +1734,8 @@ export function DialView() {
                         </button>
                       )}
                     </div>
-                    {!zone2Collapsed && (
-                      <>
-                        <div id="zone2-rows">
+                    <>
+                      <div id="zone2-rows">
                           {ghost.slice(0, zone2Expanded ? ghost.length : ZONE2_VISIBLE).map((g) => (
                             <GhostRow
                               key={g.slug}
@@ -1840,8 +1755,7 @@ export function DialView() {
                             {zone2Expanded ? "See less" : `See all ${ghost.length}`}
                           </button>
                         )}
-                      </>
-                    )}
+                    </>
                   </>
                 )}
 
@@ -1864,15 +1778,7 @@ export function DialView() {
                 {alsoOnAir.length > 0 ? (
                   <>
                     <div className="fdzone-lbl-row">
-                      <ZoneLabel
-                        label="Also on air"
-                        n={alsoOnAir.length}
-                        hint="nothing Lore can point to yet"
-                        accent="live"
-                        collapsed={zone3Collapsed}
-                        onCollapse={() => { setZone3Collapsed(!zone3Collapsed); if (!zone3Collapsed) setZone3Expanded(false); }}
-                      />
-                      {zone3Expanded && !zone3Collapsed && restBand.length > ZONE3_VISIBLE && (
+                      {zone3Expanded && restBand.length > ZONE3_VISIBLE && (
                         <button
                           className="dial-show-more-inline"
                           aria-expanded={true}
@@ -1883,9 +1789,8 @@ export function DialView() {
                         </button>
                       )}
                     </div>
-                    {!zone3Collapsed && (
-                      <>
-                        {/* DJ band — attributed shows with no crossing yet.
+                    <>
+                      {/* DJ band — attributed shows with no crossing yet.
                             Always fully shown; no ZONE3_VISIBLE cap. */}
                         {djBand.length > 0 && (
                           <>
@@ -1939,8 +1844,7 @@ export function DialView() {
                             )}
                           </>
                         )}
-                      </>
-                    )}
+                    </>
                   </>
                 ) : (
                   <div style={{ padding: "20px 15px", opacity: 0.4, fontFamily: "var(--app-font-display)", fontSize: 12 }}>
@@ -1959,7 +1863,6 @@ export function DialView() {
               <>
                 {offlineStations.length > 0 ? (
                   <>
-                    <ZoneLabel label="While you were away" n={offlineStations.length} />
                     {visibleOffline.map((ds) => (
                       <OfflineRow
                         key={ds.station.slug}
@@ -2121,9 +2024,6 @@ function SeedBar({
           <SeedInput seeds={seeds} onAdd={onAddSeed} placeholder="+ artist" />
         )}
       </div>
-      <a className="seed-bar__upgrade" href="/lore/library">
-        Import library →
-      </a>
     </div>
   );
 }
@@ -2192,15 +2092,6 @@ function Zone1Placeholder({
         <p className="z1-placeholder__pitch">
           Pick the artists you love — Lore will show you when they're playing live.
         </p>
-        <div className="z1-placeholder__secondary">
-          <button
-            type="button"
-            className="dial-ctabtn"
-            onClick={() => window.dispatchEvent(new Event("lore:open-import-modal"))}
-          >
-            Pick artists you love →
-          </button>
-        </div>
       </div>
     </div>
   );
