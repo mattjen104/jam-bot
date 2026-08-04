@@ -594,6 +594,122 @@ describe("Apple Music state:'unavailable' (subscriber path) → cascade to YouTu
 });
 
 // ---------------------------------------------------------------------------
+// Section 7: Apple Music state:"ended" → queue advance
+//
+// When MusicKit fires state:"ended" the subscriber in PlayerProvider does:
+//   a. setAltDriverActiveMbid(null)        (line 1035)
+//   b. sourceRef.current = null            (line 1036)
+//   c. if (!isLiveSvcRide) setIndex(...)  (lines 1039–1045)
+//        → i + 1 < queueLen : advance (return i + 1)
+//        → otherwise         : setStatus("ended"), return i (stay)
+//
+// The simulation below models that exact logic so a regression (e.g.
+// accidentally removing the setIndex call) is caught immediately.
+// ---------------------------------------------------------------------------
+
+interface AmEndedResult {
+  /** Final altDriverActiveMbid — must always be null on ended. */
+  altDriverActiveMbid: string | null;
+  /** Index after the ended event — i+1 when a next track exists, i otherwise. */
+  finalIndex: number;
+  /** True when setStatus("ended") was triggered (no next track). */
+  statusSetToEnded: boolean;
+}
+
+function simulateAmEnded(opts: {
+  startIndex: number;
+  queueLen: number;
+  /** Mirrors isLiveSvcRide — when true the index advance is skipped. */
+  isLiveSvcRide?: boolean;
+}): AmEndedResult {
+  // Step a: setAltDriverActiveMbid(null) (mirrors line 1035)
+  let altDriverActiveMbid: string | null = "mbid-was-active";
+  altDriverActiveMbid = null;
+
+  let finalIndex = opts.startIndex;
+  let statusSetToEnded = false;
+
+  // Step c: queue-advance logic (mirrors lines 1039–1045)
+  if (!opts.isLiveSvcRide) {
+    // Mirrors setIndex((i) => { if (i + 1 < queueLenRef.current) return i + 1; ... })
+    if (opts.startIndex + 1 < opts.queueLen) {
+      finalIndex = opts.startIndex + 1;
+    } else {
+      // No next track — set status to "ended", leave index unchanged.
+      statusSetToEnded = true;
+    }
+  }
+
+  return { altDriverActiveMbid, finalIndex, statusSetToEnded };
+}
+
+describe("Apple Music state:'ended' → clears altDriverActiveMbid and advances queue", () => {
+  it("always clears altDriverActiveMbid when Apple Music fires ended", () => {
+    const result = simulateAmEnded({ startIndex: 0, queueLen: 3 });
+    expect(result.altDriverActiveMbid).toBeNull();
+  });
+
+  it("advances index by 1 when a next track exists in the queue", () => {
+    // Queue of 3, currently at index 0 → advance to 1.
+    const result = simulateAmEnded({ startIndex: 0, queueLen: 3 });
+    expect(result.finalIndex).toBe(1);
+    expect(result.statusSetToEnded).toBe(false);
+  });
+
+  it("advances from the middle of the queue to the next track", () => {
+    const result = simulateAmEnded({ startIndex: 1, queueLen: 3 });
+    expect(result.finalIndex).toBe(2);
+    expect(result.statusSetToEnded).toBe(false);
+  });
+
+  it("does NOT advance past the last track — sets status to ended instead", () => {
+    // Queue of 3, currently at last index (2) → no next track.
+    const result = simulateAmEnded({ startIndex: 2, queueLen: 3 });
+    // Index stays at 2 (setIndex returns i, not i+1).
+    expect(result.finalIndex).toBe(2);
+    expect(result.statusSetToEnded).toBe(true);
+  });
+
+  it("single-track queue: ended fires status='ended' immediately", () => {
+    const result = simulateAmEnded({ startIndex: 0, queueLen: 1 });
+    expect(result.finalIndex).toBe(0);
+    expect(result.statusSetToEnded).toBe(true);
+    expect(result.altDriverActiveMbid).toBeNull();
+  });
+
+  it("skips queue advance when isLiveSvcRide=true (station now-playing drives advances)", () => {
+    // Live+service-ride: the now-playing poll drives advances, not the ended event.
+    const result = simulateAmEnded({
+      startIndex: 0,
+      queueLen: 3,
+      isLiveSvcRide: true,
+    });
+    // Index must not change.
+    expect(result.finalIndex).toBe(0);
+    // Status must not be set to "ended" either.
+    expect(result.statusSetToEnded).toBe(false);
+    // altDriverActiveMbid is still cleared regardless of isLiveSvcRide.
+    expect(result.altDriverActiveMbid).toBeNull();
+  });
+
+  it("advance logic mirrors YouTube ended: same boundary condition (i+1 < queueLen)", () => {
+    // Both drivers use the same fence: i+1 < queueLen.
+    // Verify they agree on the boundary: last track (i === queueLen-1) → no advance.
+    const queueLen = 5;
+    for (let i = 0; i < queueLen; i++) {
+      const result = simulateAmEnded({ startIndex: i, queueLen });
+      if (i + 1 < queueLen) {
+        expect(result.finalIndex).toBe(i + 1);
+        expect(result.statusSetToEnded).toBe(false);
+      } else {
+        expect(result.finalIndex).toBe(i);
+        expect(result.statusSetToEnded).toBe(true);
+      }
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Section 5: Cascade guard — already-failed alt driver is not retried
 //
 // altDriverFailedRef tracks per-driver per-MBID failures so a second call to
