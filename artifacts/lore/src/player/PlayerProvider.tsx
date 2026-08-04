@@ -17,7 +17,6 @@ import {
   spotifyPlay,
   spotifyPause,
   spotifyResume,
-  getSpotifyPlayer,
   useListStations,
   type RecordingLink,
   type SegueNext,
@@ -35,8 +34,10 @@ import {
   isLiveServiceRide,
   readStoredPlaybackMode,
   writeStoredPlaybackMode,
-  processDeviceConfirmation,
 } from "./playbackSession";
+import { useSpotifyDriver } from "./useSpotifyDriver";
+import { useYouTubeDriver } from "./useYouTubeDriver";
+import { useAppleMusicDriver } from "./useAppleMusicDriver";
 import {
   writeRadioSectionMemory,
   writeSelectorSectionMemory,
@@ -162,9 +163,10 @@ export interface RideApi {
    * Null when not playing or when position is unknown.
    */
   progressMs: number | null;
-  /** What is sounding right now: the listener's own Spotify (full track) or
-   * the 30s preview element. Null before playback begins. */
-  source: "spotify" | "preview" | null;
+  /** What is sounding right now: the listener's connected service (Spotify,
+   * YouTube, Apple Music) or the 30s preview element. Null before playback
+   * begins. */
+  source: "spotify" | "youtube" | "apple-music" | "preview" | null;
   /** "trail" follows live segues hop by hop; "replay" plays a fixed,
    * documented run in its original order (ghost radio). */
   mode: "trail" | "replay";
@@ -403,7 +405,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [index, setIndex] = useState(0);
   const [seeking, setSeeking] = useState(false);
   const [atTrailEnd, setAtTrailEnd] = useState(false);
-  const [source, setSource] = useState<"spotify" | "preview" | null>(null);
+  const [source, setSource] = useState<"spotify" | "youtube" | "apple-music" | "preview" | null>(null);
   const [mode, setMode] = useState<"trail" | "replay">("trail");
   const [replayLabel, setReplayLabel] = useState<string | null>(null);
   const [rideListenContext, setRideListenContext] = useState<string | null>(null);
@@ -439,36 +441,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     return () => el.removeEventListener("timeupdate", onTimeUpdate);
   }, []); // audioRef.current is a singleton created during render — stable
 
-  // --- Spotify full-track path (remote-controls the listener's own app) ----
-  // What the ride commanded Spotify to play, so polls can tell "our track
-  // ended" from "listener is playing something else".
-  const spotifyNowRef = useRef<{
-    mbid: string;
-    uri: string;
-    sawPlaying: boolean;
-    /** Consecutive polls that looked like "track over" — advance needs 2 so a
-     * single blip (Spotify's own gapless transition, flaky snapshot) never
-     * skips a track early. */
-    endedPolls: number;
-    /** Consecutive polls where the device never confirmed playing (sawPlaying
-     * still false). After the threshold we treat the device as lost and fall
-     * back rather than stalling in "loading" indefinitely. */
-    noDevicePolls: number;
-  } | null>(null);
-  // MBIDs where the fallback was triggered by a lost device (not a missing
-  // track) — used to show a distinct "device lost" message in the UI.
-  const spotifyDeviceLostRef = useRef<Set<string>>(new Set());
-  // MBID currently being commanded, so effect re-runs never double-play.
-  const spotifyCommandingRef = useRef<string | null>(null);
-  // Tracks that failed on Spotify this ride — they fall back to previews.
-  const spotifyFailedRef = useRef<Set<string>>(new Set());
-  // Bumped when a track falls back so mode recomputes (refs don't re-render).
-  const [spotifyFallbackTick, setSpotifyFallbackTick] = useState(0);
-  // Pause commanded by us (or observed from the Spotify app) — the poll must
-  // not mistake it for track-ended.
-  const spotifyPausedRef = useRef(false);
   // Mirror of `source` readable inside stable callbacks.
-  const sourceRef = useRef<"spotify" | "preview" | null>(null);
+  const sourceRef = useRef<"spotify" | "youtube" | "apple-music" | "preview" | null>(null);
   // Queue length readable inside the poll interval without re-arming it.
   const queueLenRef = useRef(0);
   queueLenRef.current = queue.length;
@@ -477,25 +451,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   playbackModeRef.current = playbackMode;
   const timeOrientationRef = useRef<TimeOrientation>(timeOrientation);
   timeOrientationRef.current = timeOrientation;
-  // Pinned device id — kept in a ref so the spotifyPlay effect can read the
-  // latest value without being re-armed on every device change.
-  const pinnedDeviceIdRef = useRef<string | null>(null);
-  pinnedDeviceIdRef.current = spotify.pinnedDevice?.id ?? null;
-  // Stable ref so device-lost path can clear the pin without being in deps.
-  const unpinDeviceRef = useRef(spotify.unpinDevice);
-  unpinDeviceRef.current = spotify.unpinDevice;
-  // Stable refs so the periodic device-check interval can call the latest
-  // versions without being re-armed when they are recreated.
-  const showNoticeRef = useRef(spotify.showNotice);
-  showNoticeRef.current = spotify.showNotice;
-  const fetchDevicesRef = useRef(spotify.fetchDevices);
-  fetchDevicesRef.current = spotify.fetchDevices;
-
-  const spotifyEligible = spotify.connected && spotify.premium;
 
   const stopRadio = radio.stop;
   const pauseRadio = (radio as unknown as { pause: () => void }).pause;
   const resumeLiveRadio = (radio as unknown as { resume: () => void }).resume;
+
+  // Stable refs so stop()/togglePause() can call driver methods even though the
+  // driver hooks are instantiated later in the component body.
+  const activeDriverStopRef = useRef<() => void>(() => {});
+  const activeDriverPauseRef = useRef<() => Promise<void>>(async () => {});
+  const activeDriverResumeRef = useRef<() => Promise<void>>(async () => {});
 
   const stop = useCallback(() => {
     rideRef.current += 1;
@@ -507,15 +472,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       el.pause();
       el.removeAttribute("src");
     }
-    // Leave the listener's Spotify quiet when the ride commanded it.
-    if (sourceRef.current === "spotify") {
-      void spotifyPause().catch(() => {});
-    }
-    spotifyNowRef.current = null;
-    spotifyCommandingRef.current = null;
-    spotifyPausedRef.current = false;
-    spotifyFailedRef.current.clear();
-    spotifyDeviceLostRef.current.clear();
+    // Stop whichever driver was active — each driver silences itself.
+    activeDriverStopRef.current();
     sourceRef.current = null;
     setSource(null);
     setActive(false);
@@ -542,11 +500,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       // sources never play at once — enqueue-never-cut, but audio is exclusive.
       pauseRadio?.();
       rideRef.current += 1;
-      spotifyNowRef.current = null;
-      spotifyCommandingRef.current = null;
-      spotifyPausedRef.current = false;
-      spotifyFailedRef.current.clear();
-      spotifyDeviceLostRef.current.clear();
+      activeDriverStopRef.current();
       sourceRef.current = null;
       liveStationSlugRef.current = opts?.stationSlug ?? null;
       setSource(null);
@@ -593,11 +547,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       rideRef.current += 1;
       previewFetchingRef.current.clear();
       playingUrlRef.current = null;
-      spotifyNowRef.current = null;
-      spotifyCommandingRef.current = null;
-      spotifyPausedRef.current = false;
-      spotifyFailedRef.current.clear();
-      spotifyDeviceLostRef.current.clear();
+      activeDriverStopRef.current();
       sourceRef.current = null;
       liveStationSlugRef.current = null;
       setSource(null);
@@ -701,24 +651,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const togglePause = useCallback(() => {
-    // Full-track path: command the listener's own Spotify, not the <audio> el.
-    // The paused flag only flips after the API confirms, so a failed command
-    // never leaves our idea of the player out of sync with reality.
-    if (sourceRef.current === "spotify") {
-      if (spotifyPausedRef.current) {
-        void spotifyResume()
-          .then(() => {
-            spotifyPausedRef.current = false;
-            setStatus("playing");
-          })
-          .catch(() => setStatus("error"));
+    // Full-track path: delegate to whichever driver is carrying the audio.
+    // Each driver tracks its own paused state, so pause()/resume() are always
+    // idempotent — a failed command never de-syncs us.
+    if (sourceRef.current !== null && sourceRef.current !== "preview") {
+      if (status === "paused") {
+        void activeDriverResumeRef.current().catch(() => setStatus("error"));
       } else {
-        void spotifyPause()
-          .then(() => {
-            spotifyPausedRef.current = true;
-            setStatus("paused");
-          })
-          .catch(() => setStatus("error"));
+        void activeDriverPauseRef.current().catch(() => setStatus("error"));
       }
       return;
     }
@@ -729,30 +669,25 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     } else {
       el.pause();
     }
-  }, []);
+  }, [status]);
 
   /** Persist the user's mode choice and switch immediately. */
   const setPlaybackMode = useCallback((newMode: PlaybackMode) => {
     writeStoredPlaybackMode(newMode);
     setPlaybackModeState(newMode);
-    // Switching away from service-ride mid-session: clear any Spotify state
-    // so the preview ladder takes over cleanly for the current track.
+    // Switching away from service-ride mid-session: stop all drivers so the
+    // preview ladder takes over cleanly for the current track.
     if (newMode === "passthrough") {
-      spotifyNowRef.current = null;
-      spotifyCommandingRef.current = null;
-      spotifyPausedRef.current = false;
-      if (sourceRef.current === "spotify") {
-        void spotifyPause().catch(() => {});
+      if (sourceRef.current !== null && sourceRef.current !== "preview") {
+        void activeDriverPauseRef.current().catch(() => {});
+        activeDriverStopRef.current();
         sourceRef.current = null;
         setSource(null);
       }
     }
-    // Switching to service-ride: clear failed set so tracks get a fresh attempt.
+    // Switching to service-ride: silence the preview element so a driver can
+    // take over.
     if (newMode === "resolve_to_service") {
-      spotifyFailedRef.current.clear();
-      spotifyDeviceLostRef.current.clear();
-      setSpotifyFallbackTick(0);
-      // Ensure audio element is silenced so Spotify can take over.
       const el = audioRef.current;
       if (el) {
         el.pause();
@@ -809,268 +744,275 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const currentNeedsLinks = !!currentItem && currentItem.links.length === 0;
   const hasNextHop = index + 1 < queue.length;
 
-  /**
-   * Clear the current track from the Spotify failed/device-lost sets and retry
-   * the service-ride command for it. Bumps spotifyFallbackTick so the derived
-   * `spotifyModeForCurrent` recomputes and the command effect re-fires.
-   */
-  const retrySpotify = useCallback(() => {
-    if (!currentMbid) return;
-    spotifyFailedRef.current.delete(currentMbid);
-    spotifyDeviceLostRef.current.delete(currentMbid);
-    // Reset the commanding guard so the effect is allowed to re-issue the play.
-    spotifyCommandingRef.current = null;
-    spotifyNowRef.current = null;
-    setSpotifyFallbackTick((t) => t + 1);
-  }, [currentMbid]);
-
-  // Whether THIS track rides the listener's Spotify (full track) or the
-  // preview ladder. Requires an explicit opt-in (playbackMode) in addition to
-  // the service being eligible. A Spotify failure marks the track and bumps
-  // the tick so this recomputes and the fallback path takes over.
-  const spotifyModeForCurrent =
-    active &&
-    playbackMode === "resolve_to_service" &&
-    spotifyEligible &&
-    !!currentMbid &&
-    spotifyFallbackTick >= 0 &&
-    !spotifyFailedRef.current.has(currentMbid);
-
-  // Whether the current track fell back (Spotify failed, using broadcast/preview).
-  const fallbackUsed =
-    playbackMode === "resolve_to_service" &&
-    !!currentMbid &&
-    spotifyFailedRef.current.has(currentMbid);
-
-  // Whether the fallback was triggered by a lost device (vs. track missing on Spotify).
-  const deviceLost =
-    playbackMode === "resolve_to_service" &&
-    !!currentMbid &&
-    spotifyDeviceLostRef.current.has(currentMbid);
-
   // For live+service-ride, advances come from the station now-playing poll, not
-  // Spotify's playback-end signal. Read in the Spotify poll interval via ref.
+  // driver end-of-track events.
   const isLiveSvcRide = isLiveServiceRide(playbackMode, timeOrientation);
 
-  // Command the listener's own Spotify to play the current track (full).
-  const refreshSpotify = spotify.refresh;
+  // ---- Playback drivers ---------------------------------------------------
+  // Three drivers are instantiated each session. PlayerProvider selects the
+  // first available one (Spotify → Apple Music → YouTube) as `activeDriver`
+  // and delegates play/pause/resume through the shared handle interface.
+  // When the selected driver fails for a specific track, PlayerProvider tries
+  // the next available driver before falling back to preview/broadcast.
+
+  const spotifyDriver = useSpotifyDriver({
+    active,
+    playbackMode,
+    timeOrientation,
+    currentItem,
+    isLiveSvcRide,
+    queueLenRef,
+    rideRef,
+    audioRef,
+    pauseRadio,
+    spotify,
+  });
+
+  // Apple Music requires a developer token — not yet fetched for the main
+  // player; driver gracefully stays `available: false` until wired.
+  const appleMusicDriver = useAppleMusicDriver();
+  const youtubeDriver = useYouTubeDriver();
+
+  // Preference order: Spotify → Apple Music → YouTube.
+  // `activeDriver` is the first service-level driver with `available === true`.
+  const activeDriver =
+    spotifyDriver.handle.available
+      ? spotifyDriver.handle
+      : appleMusicDriver.available
+        ? appleMusicDriver
+        : youtubeDriver;
+
+  // Keep the driver control refs in sync so stop()/togglePause() can call them
+  // without capturing the driver instances in their stable callbacks.
+  activeDriverStopRef.current = () => {
+    spotifyDriver.handle.stop();
+    youtubeDriver.stop();
+    appleMusicDriver.stop();
+  };
+  // Route pause/resume to whichever driver is currently sounding, not the
+  // statically-preferred one — Spotify may be preferred but YouTube/Apple
+  // could be carrying the audio after a per-track fallback.
+  activeDriverPauseRef.current = async () => {
+    const src = sourceRef.current;
+    if (src === "youtube") return youtubeDriver.pause();
+    if (src === "apple-music") return appleMusicDriver.pause();
+    return spotifyDriver.handle.pause();
+  };
+  activeDriverResumeRef.current = async () => {
+    const src = sourceRef.current;
+    if (src === "youtube") return youtubeDriver.resume();
+    if (src === "apple-music") return appleMusicDriver.resume();
+    return spotifyDriver.handle.resume();
+  };
+
+  // Convenience aliases from the Spotify driver extras.
+  const { spotifyModeForCurrent, fallbackUsed, deviceLost, retryCurrentTrack } =
+    spotifyDriver;
+  const retrySpotify = retryCurrentTrack;
+
+  // ---- Alt-driver state (YouTube / Apple Music as Spotify fallback) --------
+  // When Spotify fails for a track, PlayerProvider tries Apple Music (if
+  // available), then YouTube, before dropping to broadcast/preview.
+  // `altDriverActiveMbid` is set whenever an alt driver is loading OR playing
+  // a track — it gates the preview effect and the live-broadcast fallback so we
+  // don't resume the broadcast while an alt driver is still attempting.
+  const [altDriverActiveMbid, setAltDriverActiveMbid] = useState<string | null>(null);
+  // Per-driver failure keys: "am:<mbid>" for Apple Music, "yt:<mbid>" for YouTube.
+  const altDriverFailedRef = useRef<Set<string>>(new Set());
+
+  // On every track change: stop any alt driver still playing from the previous
+  // track so audio-exclusivity is enforced across queue advances, prev/next,
+  // and live now-playing advances.  Spotify handles its own continuity via its
+  // internal poll + command effect; only YouTube and Apple Music need explicit
+  // teardown here.
   useEffect(() => {
-    if (!spotifyModeForCurrent || !currentMbid) return;
-    if (spotifyNowRef.current?.mbid === currentMbid) return;
-    if (spotifyCommandingRef.current === currentMbid) return;
-
-    const token = rideRef.current;
-    const targetMbid = currentMbid;
-    spotifyCommandingRef.current = targetMbid;
-    spotifyPausedRef.current = false;
-    sourceRef.current = "spotify";
-    setSource("spotify");
-    setStatus("loading");
-    // Audio is exclusive: silence both the preview element and the radio
-    // broadcast while Spotify plays.
-    const el = audioRef.current;
-    if (el) {
-      el.pause();
-      el.removeAttribute("src");
-      playingUrlRef.current = null;
+    youtubeDriver.stop();
+    appleMusicDriver.stop();
+    if (sourceRef.current === "youtube" || sourceRef.current === "apple-music") {
+      sourceRef.current = null;
+      setSource(null);
     }
-    // Also silence the broadcast if it was resumed as a fallback.
-    pauseRadio?.();
+    setAltDriverActiveMbid(null);
+    altDriverFailedRef.current.clear();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentMbid]);
 
-    void spotifyPlay({
-      mbid: targetMbid,
-      deviceId: pinnedDeviceIdRef.current ?? undefined,
-    })
-      .then((res) => {
-        if (token !== rideRef.current) return;
-        spotifyNowRef.current = {
-          mbid: targetMbid,
-          uri: res.trackUri,
-          sawPlaying: false,
-          endedPolls: 0,
-          noDevicePolls: 0,
-        };
+  // True when any driver (Spotify or alt) is actively carrying this track
+  // (including while loading — prevents premature broadcast resumption).
+  const driverActive = spotifyModeForCurrent || altDriverActiveMbid === currentMbid;
+
+  // Try the next alt driver in the cascade (Apple Music → YouTube).  Called
+  // after Spotify fails, and again when Apple Music fails so YouTube gets a
+  // chance before we drop to preview/broadcast.
+  const tryAltDriverRef = useRef<(mbid: string, item: RideItem, skipApple: boolean) => void>(
+    () => {},
+  );
+  // Defined after the subscriptions below so the closures can call it recursively.
+  // The ref indirection avoids a dependency cycle.
+  useEffect(() => {
+    tryAltDriverRef.current = (mbid: string, item: RideItem, skipApple: boolean) => {
+      const failedAm = altDriverFailedRef.current.has(`am:${mbid}`);
+      if (!skipApple && appleMusicDriver.available && !failedAm) {
+        // Enforce audio exclusivity before handing off to Apple Music.
+        pauseRadio?.();
+        setAltDriverActiveMbid(mbid);
+        void appleMusicDriver.play(item).catch(() => {
+          // play() itself threw (no token, etc.) — cascade to YouTube.
+          altDriverFailedRef.current.add(`am:${mbid}`);
+          tryAltDriverRef.current(mbid, item, true);
+        });
+        return;
+      }
+      const failedYt = altDriverFailedRef.current.has(`yt:${mbid}`);
+      if (!failedYt) {
+        pauseRadio?.();
+        setAltDriverActiveMbid(mbid);
+        void youtubeDriver.play(item).catch(() => {
+          altDriverFailedRef.current.add(`yt:${mbid}`);
+          setAltDriverActiveMbid(null);
+        });
+        return;
+      }
+      // All alt drivers exhausted — clear the active marker so the live fallback
+      // and preview effects know no driver is attempting any more.
+      setAltDriverActiveMbid(null);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appleMusicDriver, youtubeDriver, pauseRadio]);
+
+  // Subscribe to Spotify driver status updates — mirror source/status state.
+  useEffect(() => {
+    return spotifyDriver.handle.onStatusChange((s) => {
+      const mbid = s.trackId ?? null;
+      if (mbid && mbid !== currentMbid) return; // stale
+      if (s.state === "loading") {
+        // Spotify is taking over — stop any alt driver that might still be
+        // running for this track (e.g. a YouTube fallback that started while
+        // Spotify was connecting).
+        youtubeDriver.stop();
+        appleMusicDriver.stop();
+        setAltDriverActiveMbid(null);
+        sourceRef.current = "spotify";
+        setSource("spotify");
+        setStatus("loading");
+      } else if (s.state === "playing") {
+        youtubeDriver.stop();
+        appleMusicDriver.stop();
+        setAltDriverActiveMbid(null);
+        sourceRef.current = "spotify";
+        setSource("spotify");
         setStatus("playing");
-      })
-      .catch((err: unknown) => {
-        if (token !== rideRef.current) return;
-        // This track can't ride Spotify (not found, no device, revoked...):
-        // fall back for this track only.
-        spotifyFailedRef.current.add(targetMbid);
-        spotifyNowRef.current = null;
+        if (s.progressMs !== undefined) setProgressMs(s.progressMs ?? null);
+      } else if (s.state === "paused") {
+        setStatus("paused");
+        if (s.progressMs !== undefined) setProgressMs(s.progressMs ?? null);
+      } else if (s.state === "ended" && !isLiveSvcRide) {
+        setIndex((i) => {
+          if (i + 1 < queueLenRef.current) return i + 1;
+          setStatus("ended");
+          return i;
+        });
+      } else if (s.state === "ride-ended") {
+        // Unpinned listener took the wheel in Spotify — end the ride without
+        // advancing the queue (restores the pre-driver-abstraction behaviour).
+        setStatus("ended");
+      } else if (s.state === "unavailable" || s.state === "device-lost") {
+        // Spotify failed — cascade through alt drivers (Apple → YouTube).
         sourceRef.current = null;
         setSource(null);
-        setSpotifyFallbackTick((t) => t + 1);
-        const httpStatus = (err as { status?: number }).status;
-        if (httpStatus === 401 || httpStatus === 403) {
-          // Connection is gone or not Premium — re-sync the status chip.
-          refreshSpotify();
+        if (currentItem && mbid) {
+          tryAltDriverRef.current(mbid, currentItem, false);
         }
-      })
-      .finally(() => {
-        if (spotifyCommandingRef.current === targetMbid) {
-          spotifyCommandingRef.current = null;
-        }
-      });
-  }, [spotifyModeForCurrent, currentMbid, refreshSpotify, pauseRadio]);
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spotifyDriver.handle, currentMbid, currentItem, isLiveSvcRide]);
 
-  // Poll the listener's player while Spotify carries the ride: mirror pauses,
-  // and advance the ride when the track runs out. If the listener starts
-  // playing something else in Spotify, the ride yields (never fights them).
-  // For live+service-ride, the now-playing poll (below) drives advances instead.
+  // Subscribe to YouTube driver status changes.
   useEffect(() => {
-    if (!spotifyModeForCurrent || !currentMbid) return undefined;
-    const token = rideRef.current;
-    const id = setInterval(() => {
-      const now = spotifyNowRef.current;
-      if (!now || now.mbid !== currentMbid) return;
-      // Note: we keep polling even while paused — the live snapshot is the
-      // authority, so a resume made directly in the Spotify app is picked up.
-      void getSpotifyPlayer()
-        .then((st) => {
-          if (token !== rideRef.current) return;
-          const cur = spotifyNowRef.current;
-          if (!cur || cur.mbid !== currentMbid) return;
-          const ours = st.trackUri === cur.uri;
-
-          {
-            // Decide the device-confirmation outcome for this poll tick.
-            // Pure helper — extracted to playbackSession.ts so the reconnect
-            // and device-lost paths are unit-testable without React or timers.
-            const confirmation = processDeviceConfirmation(cur, { ours, isPlaying: st.isPlaying });
-            if (confirmation.type === "confirmed") {
-              // Our track is sounding — also covers a resume made in the app.
-              cur.sawPlaying = true;
-              cur.endedPolls = 0;
-              spotifyPausedRef.current = false;
-              setProgressMs(st.progressMs ?? null);
-              setStatus("playing");
-              return;
-            }
-            if (confirmation.type === "device-lost") {
-              // Device hasn't confirmed after ~15 s: treat as lost and fall back
-              // so the ride isn't silently stuck in "loading".
-              spotifyFailedRef.current.add(currentMbid);
-              spotifyDeviceLostRef.current.add(currentMbid);
-              spotifyNowRef.current = null;
-              sourceRef.current = null;
-              setSource(null);
-              setSpotifyFallbackTick((t) => t + 1);
-              // Clear the pinned device — it's gone offline.
-              unpinDeviceRef.current();
-              return;
-            }
-            if (confirmation.type === "wait") {
-              cur.noDevicePolls = confirmation.noDevicePolls;
-              return;
-            }
-            // confirmation.type === "already-confirmed": fall through to the
-            // paused / other-device / track-end branches below.
-          }
-
-          if (!ours && st.active && st.isPlaying) {
-            // If a device is pinned, the listener skipped in Spotify — advance
-            // Lore's queue and let the next command effect send the next track.
-            // Without a pinned device, the listener took the wheel manually and
-            // we yield immediately without fighting their device.
-            if (pinnedDeviceIdRef.current) {
-              spotifyNowRef.current = null;
-              spotifyPausedRef.current = false;
-              setIndex((i) => {
-                if (i + 1 < queueLenRef.current) return i + 1;
-                setStatus("ended");
-                return i;
-              });
-            } else {
-              spotifyNowRef.current = null;
-              spotifyPausedRef.current = false;
-              setStatus("ended");
-            }
-            return;
-          }
-
-          if (
-            ours &&
-            !st.isPlaying &&
-            (spotifyPausedRef.current || (st.progressMs ?? 0) > 0)
-          ) {
-            // Paused — either by us (trust our command even at progress 0) or
-            // from the Spotify app itself (progress retained). Mirror it.
-            cur.endedPolls = 0;
-            spotifyPausedRef.current = true;
-            setProgressMs(st.progressMs ?? null);
-            setStatus("paused");
-            return;
-          }
-
-          // For live+service-ride, the now-playing poll drives advances; do not
-          // advance here on track-end to avoid a double-skip.
-          if (playbackModeRef.current === "resolve_to_service" &&
-              timeOrientationRef.current === "live") {
-            return;
-          }
-
-          // Looks like the track ran out (inactive player, or ours stopped at
-          // progress 0). Require two consecutive such polls so a transient
-          // blip never skips a track early.
-          cur.endedPolls += 1;
-          if (cur.endedPolls < 2) return;
-          spotifyNowRef.current = null;
-          spotifyPausedRef.current = false;
+    return youtubeDriver.onStatusChange((s) => {
+      const mbid = s.trackId ?? null;
+      if (mbid && mbid !== currentMbid) return;
+      if (s.state === "loading") {
+        // Audio exclusivity: silence the broadcast while YouTube loads.
+        pauseRadio?.();
+        setAltDriverActiveMbid(mbid);
+        sourceRef.current = "youtube";
+        setSource("youtube");
+        setStatus("loading");
+      } else if (s.state === "playing") {
+        pauseRadio?.();
+        setAltDriverActiveMbid(mbid);
+        sourceRef.current = "youtube";
+        setSource("youtube");
+        setStatus("playing");
+      } else if (s.state === "paused") {
+        setStatus("paused");
+      } else if (s.state === "ended") {
+        setAltDriverActiveMbid(null);
+        sourceRef.current = null;
+        setSource(null);
+        // Live+service-ride: station now-playing poll drives advances — skip.
+        if (!isLiveSvcRide) {
           setIndex((i) => {
             if (i + 1 < queueLenRef.current) return i + 1;
             setStatus("ended");
             return i;
           });
-        })
-        .catch(() => {
-          // Transient poll failure — keep riding; the next tick retries.
-        });
-    }, 3000);
-    return () => clearInterval(id);
-  }, [spotifyModeForCurrent, currentMbid]);
+        }
+      } else if (s.state === "unavailable" || s.state === "error") {
+        if (mbid) altDriverFailedRef.current.add(`yt:${mbid}`);
+        setAltDriverActiveMbid(null);
+        if (sourceRef.current === "youtube") { sourceRef.current = null; setSource(null); }
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [youtubeDriver, currentMbid, isLiveSvcRide, pauseRadio]);
 
-  // Periodic device availability check: once per minute while riding in
-  // service-ride mode with a pinned device, confirm the device is still in the
-  // Spotify device list. If it's gone, clear the pin and surface a notice so
-  // the user isn't silently sending commands to a vanished device.
-  // Race guard: skip any check while a play command is in-flight.
-  // Gated on the mode + active state (not spotifyModeForCurrent) so the check
-  // keeps running even when the current track is in fallback.
-  const hasPinnedDevice = !!spotify.pinnedDevice;
+  // Subscribe to Apple Music driver status changes.
   useEffect(() => {
-    if (!active) return undefined;
-    if (playbackMode !== "resolve_to_service") return undefined;
-    if (!hasPinnedDevice) return undefined;
-
-    const id = setInterval(() => {
-      // Don't act while a command is in-flight — the device might reappear
-      // as soon as Spotify activates it.
-      if (spotifyCommandingRef.current !== null) return;
-
-      const pinnedId = pinnedDeviceIdRef.current;
-      if (!pinnedId) return; // pin already cleared between ticks
-
-      void fetchDevicesRef.current()
-        .then((devices) => {
-          // Re-check the race guard after the async fetch.
-          if (spotifyCommandingRef.current !== null) return;
-          // Also bail if the pin changed while we were fetching.
-          if (pinnedDeviceIdRef.current !== pinnedId) return;
-
-          const stillPresent = devices.some((d) => d.id === pinnedId);
-          if (!stillPresent) {
-            unpinDeviceRef.current();
-            showNoticeRef.current("Device no longer reachable");
-          }
-        })
-        .catch(() => {
-          // Best-effort — a poll failure just skips this tick.
-        });
-    }, 60_000);
-
-    return () => clearInterval(id);
-  }, [active, playbackMode, hasPinnedDevice]);
+    return appleMusicDriver.onStatusChange((s) => {
+      const mbid = s.trackId ?? null;
+      if (mbid && mbid !== currentMbid) return;
+      if (s.state === "loading") {
+        // Audio exclusivity: silence the broadcast while Apple Music loads.
+        pauseRadio?.();
+        setAltDriverActiveMbid(mbid);
+        sourceRef.current = "apple-music";
+        setSource("apple-music");
+        setStatus("loading");
+      } else if (s.state === "playing") {
+        pauseRadio?.();
+        setAltDriverActiveMbid(mbid);
+        sourceRef.current = "apple-music";
+        setSource("apple-music");
+        setStatus("playing");
+      } else if (s.state === "paused") {
+        setStatus("paused");
+      } else if (s.state === "ended") {
+        setAltDriverActiveMbid(null);
+        sourceRef.current = null;
+        setSource(null);
+        // Live+service-ride: station now-playing poll drives advances — skip.
+        if (!isLiveSvcRide) {
+          setIndex((i) => {
+            if (i + 1 < queueLenRef.current) return i + 1;
+            setStatus("ended");
+            return i;
+          });
+        }
+      } else if (s.state === "unavailable" || s.state === "error") {
+        // Apple Music failed — cascade to YouTube.
+        if (mbid) altDriverFailedRef.current.add(`am:${mbid}`);
+        setAltDriverActiveMbid(null);
+        if (sourceRef.current === "apple-music") { sourceRef.current = null; setSource(null); }
+        if (currentItem && mbid) {
+          tryAltDriverRef.current(mbid, currentItem, true); // skipApple=true
+        }
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appleMusicDriver, currentMbid, currentItem, isLiveSvcRide, pauseRadio]);
 
   // Push-channel trigger hooks: the SSE effect below calls these to fire an
   // immediate now-playing re-check when the server pushes a spin change for
@@ -1175,7 +1117,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const radioSlug = radio.station?.slug ?? null;
   const radioIdle = radio.status === "idle" || radio.status === "error";
   const castEligible =
-    !active && spotifyEligible && !!spotify.pinnedDevice && !!radioSlug && !radioIdle;
+    !active &&
+    spotify.connected &&
+    spotify.premium &&
+    !!spotify.pinnedDevice &&
+    !!radioSlug &&
+    !radioIdle;
 
   useEffect(() => {
     if (!castEligible || !radioSlug) return undefined;
@@ -1194,7 +1141,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       castRef.current.inFlight = true;
       void spotifyPlay({
         mbid,
-        deviceId: pinnedDeviceIdRef.current ?? undefined,
+        deviceId: spotify.pinnedDevice?.id ?? undefined,
       })
         .then(() => {
           if (cancelled) return;
@@ -1241,7 +1188,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
               : "spotify_error",
           );
           resumeLiveRadio?.();
-          if (httpStatus === 401 || httpStatus === 403) refreshSpotify();
+          if (httpStatus === 401 || httpStatus === 403) spotify.refresh();
         })
         .finally(() => {
           castRef.current.inFlight = false;
@@ -1354,38 +1301,39 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     castRetryRef.current?.();
   }, []);
 
-  // Live fallback: when in live+service-ride and Spotify fails for a track,
+  // Live fallback: when in live+service-ride and all drivers fail for a track,
   // resume the broadcast so the listener always hears audio. The now-playing
   // poll above drives the advance to the next track.
   useEffect(() => {
     if (!active) return;
     if (playbackMode !== "resolve_to_service") return;
     if (timeOrientation !== "live") return;
-    if (spotifyModeForCurrent) return; // Spotify is carrying this track
+    if (driverActive) return; // a driver is carrying or loading this track
     if (!currentMbid) return;
-    if (!spotifyFailedRef.current.has(currentMbid)) return;
-    // This track failed on Spotify in a live ride → resume the broadcast.
+    if (!fallbackUsed) return; // Spotify hasn't tried or hasn't failed yet
+    // All drivers failed for this live track → resume the broadcast.
     resumeLiveRadio?.();
   }, [
     active,
     playbackMode,
     timeOrientation,
-    spotifyModeForCurrent,
+    driverActive,
     currentMbid,
+    fallbackUsed,
     resumeLiveRadio,
-    spotifyFallbackTick,
+    altDriverActiveMbid,
   ]);
 
   // Drive playback of the current item: resolve its preview, then play it.
   useEffect(() => {
     if (!active) return undefined;
-    if (spotifyModeForCurrent) return undefined; // Spotify carries this track
+    if (driverActive) return undefined; // a service driver carries this track
     // For live fallback, the broadcast carries the audio — no preview needed.
     if (
       playbackMode === "resolve_to_service" &&
       timeOrientation === "live" &&
       currentMbid &&
-      spotifyFailedRef.current.has(currentMbid)
+      fallbackUsed
     ) {
       return undefined;
     }
@@ -1475,10 +1423,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     currentPreview,
     currentNeedsLinks,
     hasNextHop,
-    spotifyModeForCurrent,
+    driverActive,
     playbackMode,
     timeOrientation,
-    spotifyFallbackTick,
+    fallbackUsed,
   ]);
 
   // Audio element lifecycle — status wiring + auto-advance on clip end.
@@ -1662,7 +1610,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>
+    <PlayerContext.Provider value={value}>
+      {children}
+      {/* Hidden iframe the YouTube driver uses — must be in the DOM at all
+          times so the driver can postMessage into it. */}
+      {youtubeDriver.surface}
+    </PlayerContext.Provider>
   );
 }
 

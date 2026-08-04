@@ -19,8 +19,8 @@ export type TimeOrientation = "live" | "past" | "curated";
  */
 export type PlaybackMode = "passthrough" | "resolve_to_service";
 
-/** Connected remote-control service. Only Spotify is currently wired. */
-export type ConnectedService = "spotify";
+/** Connected remote-control service. */
+export type ConnectedService = "spotify" | "youtube" | "apple-music";
 
 /**
  * One playback session — "tuned into this content, in this mode".

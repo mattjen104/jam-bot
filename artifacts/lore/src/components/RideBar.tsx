@@ -21,6 +21,23 @@ import {
   X,
 } from "lucide-react";
 
+/**
+ * Human-readable label for which service is carrying the ride audio.
+ * Falls back to a generic label for unknown/null sources.
+ */
+function rideSourceLabel(source: RideApi["source"]): string {
+  switch (source) {
+    case "spotify":
+      return "Riding full tracks on your Spotify";
+    case "youtube":
+      return "Riding full tracks on your YouTube";
+    case "apple-music":
+      return "Riding full tracks on your Apple Music";
+    default:
+      return "Riding full tracks";
+  }
+}
+
 /** Friendly label for how we arrived at the current ride track. */
 function attributionLine(ride: RideApi): string {
   const cur = ride.current;
@@ -49,7 +66,13 @@ export function RideBar({
   const isPlaying = ride.status === "playing";
   const isLoading = ride.status === "loading" || ride.seeking;
   const onSpotify = ride.source === "spotify";
-  const noPreview = cur.previewUrl === null && !onSpotify;
+  // Any service driver (Spotify, YouTube, Apple Music) provides full-track
+  // playback — controls stay enabled even when previewUrl is absent.
+  const onServiceDriver =
+    ride.source === "spotify" ||
+    ride.source === "youtube" ||
+    ride.source === "apple-music";
+  const noPreview = cur.previewUrl === null && !onServiceDriver;
   const bestLink =
     cur.links.find((l: RecordingLink) => l.kind === "exact") ??
     cur.links[0] ??
@@ -150,15 +173,15 @@ export function RideBar({
               ) : (
                 <span className="font-mono text-[11px] text-muted-foreground">
                   {inServiceRide
-                    ? "Riding full tracks on your Spotify"
+                    ? rideSourceLabel(ride.source)
                     : "Hearing the broadcast"}
                 </span>
               )}
             </div>
 
             <div className="flex items-center gap-2">
-              {/* Device picker — shown when riding in Spotify */}
-              {inServiceRide ? (
+              {/* Device picker — shown when riding in Spotify only */}
+              {inServiceRide && ride.source === "spotify" ? (
                 <DevicePicker spotify={spotify} />
               ) : null}
 
@@ -208,7 +231,7 @@ export function RideBar({
         <button
           type="button"
           onClick={ride.togglePause}
-          disabled={noPreview && ride.source !== "spotify"}
+          disabled={noPreview}
           aria-label={isPlaying ? "Pause ride" : "Play ride"}
           data-testid="ride-toggle"
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-primary-border bg-primary text-primary-foreground shadow-sm transition-transform active:scale-95 disabled:opacity-40"
@@ -241,10 +264,10 @@ export function RideBar({
           <p className="truncate font-mono text-[11px] text-muted-foreground">
             {cur.artist}
             {" · "}
-            {noPreview && !onSpotify
+            {noPreview
               ? "No preview — open externally"
               : attributionLine(ride)}
-            {onSpotify ? " · Full track on your Spotify" : ""}
+            {onServiceDriver ? ` · Full track on your ${rideSourceLabel(ride.source).split(" on your ")[1] ?? "player"}` : ""}
             {ride.status === "ended" ? " · trail ends here" : ""}
           </p>
           {/* Hinge hint row — shortcut links to lean-in detail */}
