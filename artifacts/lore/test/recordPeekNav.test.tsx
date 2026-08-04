@@ -3,12 +3,20 @@ import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-const { mockResume, mockStartReplay, mockAlbumTracks, mockPickerRun, setLocation } = vi.hoisted(() => ({
+const {
+  mockResume,
+  mockStartReplay,
+  mockAlbumTracks,
+  mockPickerRun,
+  setLocation,
+  mockUseGetRecordingKnowledge,
+} = vi.hoisted(() => ({
   mockResume: vi.fn(),
   mockStartReplay: vi.fn(),
   mockAlbumTracks: vi.fn(),
   mockPickerRun: vi.fn(),
   setLocation: vi.fn(),
+  mockUseGetRecordingKnowledge: vi.fn(),
 }));
 
 vi.mock("wouter", () => ({ useLocation: () => ["/", setLocation] }));
@@ -19,6 +27,8 @@ vi.mock("@workspace/api-client-react", async (importOriginal) => {
     getRecordingAlbumTracks: mockAlbumTracks,
     getPickerRun: mockPickerRun,
     useGetPickersDial: () => ({ data: { items: [] } }),
+    useGetRecordingKnowledge: mockUseGetRecordingKnowledge,
+    getGetRecordingKnowledgeQueryKey: (mbid: string) => ["recording-knowledge", mbid],
   };
 });
 vi.mock("../src/player/PlayerProvider", () => ({
@@ -26,6 +36,10 @@ vi.mock("../src/player/PlayerProvider", () => ({
     radio: { resume: mockResume },
     ride: { startReplay: mockStartReplay },
   }),
+}));
+vi.mock("../src/lib/meHooks", () => ({
+  useMyAlbumAvatar: () => ({ data: undefined }),
+  useMyLibraryInfinite: () => ({ data: undefined }),
 }));
 
 import { RecordPeekNav } from "../src/components/RecordPeekNav";
@@ -50,6 +64,8 @@ describe("RecordPeekNav", () => {
     localStorage.clear();
     vi.clearAllMocks();
     mockAlbumTracks.mockResolvedValue({ rgTitle: "Album", tracks: [] });
+    // Default: query settled with no knowledge data
+    mockUseGetRecordingKnowledge.mockReturnValue({ data: undefined, isLoading: false });
   });
   afterEach(cleanup);
 
@@ -92,8 +108,57 @@ describe("RecordPeekNav", () => {
     expect(mockStartReplay).toHaveBeenCalledWith(
       [seed(), seed("track-2")],
       "Documented Run",
-      expect.objectContaining({ timeOrientation: "past", startIndex: 1 }),
+      expect.objectContaining({ timeOrientation: "past", startIndex: 0 }),
     );
+  });
+
+  it("renders album art as a plain span while the knowledge query is still loading", async () => {
+    mockUseGetRecordingKnowledge.mockReturnValue({ data: undefined, isLoading: true });
+    stored({
+      radio: {
+        kind: "radio",
+        station: { id: 1, slug: "kexp", name: "KEXP", streamUrl: "https://stream.example/live", streamFormat: "mp3", logoUrl: null },
+        lastTrack: { mbid: "abc-123", title: "Song", artist: "Artist", artworkUrl: "https://art.example/cover.jpg" },
+      },
+    });
+    render(<RecordPeekNav />);
+    fireEvent.keyDown(screen.getByRole("button", { name: "Radio" }), { key: "Enter" });
+
+    // Peek section should be visible
+    await screen.findByRole("region", { name: /radio resume/i });
+
+    // Art must be a span, not a button, while knowledge is still loading
+    const artEl = screen.getByRole("region", { name: /radio resume/i })
+      .querySelector(".record-peek__art");
+    expect(artEl?.tagName.toLowerCase()).toBe("span");
+    expect(screen.queryByRole("button", { name: "Open liner notes" })).toBeNull();
+  });
+
+  it("promotes album art to a tappable button once the knowledge query resolves with data", async () => {
+    mockUseGetRecordingKnowledge.mockReturnValue({
+      data: {
+        knowledge: {
+          personnel: [{ role: "Producer", name: "Someone" }],
+          pressing: null,
+          relationships: [],
+        },
+        claims: [],
+      },
+      isLoading: false,
+    });
+    stored({
+      radio: {
+        kind: "radio",
+        station: { id: 1, slug: "kexp", name: "KEXP", streamUrl: "https://stream.example/live", streamFormat: "mp3", logoUrl: null },
+        lastTrack: { mbid: "abc-123", title: "Song", artist: "Artist", artworkUrl: "https://art.example/cover.jpg" },
+      },
+    });
+    render(<RecordPeekNav />);
+    fireEvent.keyDown(screen.getByRole("button", { name: "Radio" }), { key: "Enter" });
+
+    // Art must be an accessible button once knowledge has loaded
+    const artBtn = await screen.findByRole("button", { name: "Open liner notes" });
+    expect(artBtn.tagName.toLowerCase()).toBe("button");
   });
 
   it("opens the remembered Library album from track one", async () => {
