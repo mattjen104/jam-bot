@@ -271,12 +271,12 @@ function crossingSentence(
  *   r=3 — exact library tracks already aired this show      (Zone 1, warm)
  *   r=4 — library artists aired this show, no exact match   (Zone 1, warm)
  *   r=5 — attributed show on air, no crossing evidence yet  (Zone 3, dim)
- *   r=6 — 24h station exact crossings, no selector listed   (Zone 3, dim)
- *   r=7 — 24h station artist crossings, no exact hits       (Zone 3, dim)
+ *   r=6 — 24h station exact crossings, no selector listed   (Zone 1, dim)
+ *   r=7 — 24h station artist crossings, no exact hits       (Zone 1, dim)
  *   r=0 — dark: Lore has no now-playing data                (Zone 3, dim)
  *
- * Zone boundary: r >= 1 && r <= 4 → Zone 1 ("with a reason").
- *                r === 0 || r >= 5 → Zone 3 ("also on air", dimmed).
+ * Zone boundary: r >= 1 && r <= 4, or r === 6/7 → Zone 1 ("with a reason").
+ *                r === 0 || r === 5 → Zone 3 ("also on air", dimmed).
  */
 function reason(
   show: DialShow | null,
