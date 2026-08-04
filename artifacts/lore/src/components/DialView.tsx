@@ -1517,15 +1517,6 @@ export function DialView() {
              >
                Listening Party
              </button>
-             <span className="dial-mode__hint">
-               {crossingError
-                 ? "Listening Party is unavailable; showing Solo view"
-                 : crossingSourceMode === "blended"
-                   ? "blended community view"
-                   : displayMode === "blended"
-                     ? "loading community data"
-                   : "your personal crossings"}
-             </span>
            </div>
                     <div className="dial-actpair">
             <button type="button" className="dial-act dial-act--listen" onClick={tuneTop} disabled={!topRow}>
