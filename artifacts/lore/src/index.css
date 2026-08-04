@@ -3912,9 +3912,9 @@
 .fdrow__t1.w7 { color: hsl(var(--muted-foreground)); }
 .fdrow__t1.w0 { color: hsl(var(--muted-foreground) / 0.5); }
 .fdrow__t1 .fdrow__artist { color: hsl(var(--library)); }
-/* Entity-type colours for the attribution sentence */
-.fdrow__t1 .fdrow__dj      { color: hsl(var(--picker)); }
-.fdrow__t1 .fdrow__show    { color: hsl(var(--picker) / 0.75); font-weight: 500; font-style: normal; }
+/* Entity-type colours for the attribution sentence — blue selector palette */
+.fdrow__t1 .fdrow__dj      { color: hsl(var(--live)); }
+.fdrow__t1 .fdrow__show    { color: hsl(var(--live) / 0.75); font-weight: 500; font-style: normal; }
 .fdrow__t1 .fdrow__station { color: hsl(var(--foreground) / 0.45); font-weight: 400; font-style: normal; }
 /* Same tokens for ghost-row sentences */
 .ghost-row__reason .fdrow__artist  { color: hsl(var(--library)); }
