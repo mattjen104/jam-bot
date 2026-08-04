@@ -1393,16 +1393,19 @@ export function DialView() {
         const aOv = a.effectiveDjName != null ? pickerOv(a.show?.pickerId ?? null, a.effectiveDjName) : a.ds.lifetimeCrossings;
         const bOv = b.effectiveDjName != null ? pickerOv(b.show?.pickerId ?? null, b.effectiveDjName) : b.ds.lifetimeCrossings;
         if (aOv !== bOv) return bOv - aOv;
-        // 4. Rung asc as final tiebreaker
-        return a.rz.r - b.rz.r;
+        // 4. Rung asc as final tiebreaker; r=0 ("no data") sorts last of all.
+        const sortR = (r: number) => r === 0 ? 99 : r;
+        return sortR(a.rz.r) - sortR(b.rz.r);
       });
   }, [stations, overlapByPickerId, pickerNameToId, crossingSourceMode]);
 
   // Three zones (spec §6)
-  // Zone 1: r=1..4 — has crossing evidence (warm).
-  // Zone 3: r=0 or r>=5 — attributed-only or dark (dimmed).
-  const withReason = useMemo(() => sortedRows.filter((row) => row.rz.r >= 1 && row.rz.r <= 4), [sortedRows]);
-  const alsoOnAir = useMemo(() => sortedRows.filter((row) => row.rz.r === 0 || row.rz.r >= 5), [sortedRows]);
+  // Zone 1: r=1..4 (show-level evidence) + r=6/r=7 (24h station-level crossings).
+  //   r=6/r=7 belong here because the station HAS played the listener's music in
+  //   the last 24h — that IS a reason, even without a current attributed show.
+  // Zone 3: r=0 (no now-playing data at all) or r=5 (DJ on air, no library overlap).
+  const withReason = useMemo(() => sortedRows.filter((row) => (row.rz.r >= 1 && row.rz.r <= 4) || row.rz.r === 6 || row.rz.r === 7), [sortedRows]);
+  const alsoOnAir = useMemo(() => sortedRows.filter((row) => row.rz.r === 0 || row.rz.r === 5), [sortedRows]);
 
   // Community presence — poll all live station IDs every 60 s.
   // Only needed when Listening Party is active; still safe to call in personal

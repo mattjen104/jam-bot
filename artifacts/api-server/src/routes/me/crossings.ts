@@ -42,7 +42,7 @@ const router: IRouter = Router();
 // unchanged from the previous single-layer behaviour.
 // ---------------------------------------------------------------------------
 
-const CROSSINGS_CACHE_TTL_MS = 5 * 60 * 1000;
+const CROSSINGS_CACHE_TTL_MS = 30 * 1000;
 
 // Keep historical URL/domain metadata out of listener-facing crossing counts,
 // even when it predates the ingestion guard or a cleanup boot.

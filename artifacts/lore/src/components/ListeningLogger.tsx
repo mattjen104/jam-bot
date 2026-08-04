@@ -13,6 +13,10 @@ import {
   useMyPreferences,
   postListen,
   patchListen,
+  ME_DIAL_CROSSINGS_KEY,
+  ME_LIBRARY_MBIDS_KEY,
+  ME_PICKER_NAMES_KEY,
+  ME_PICKER_OVERLAP_KEY,
 } from "../lib/meHooks";
 import { writeRadioLastTrack } from "../player/sectionMemory";
 
@@ -40,6 +44,24 @@ export function ListeningLogger() {
   // both use the same access token and competing requests trigger 429s.
   const { data: importJob } = useLatestImportJob();
   const importActive = importJob?.status === "pending" || importJob?.status === "running";
+
+  // When an import job completes (transitions to "done"), immediately invalidate
+  // crossings and related caches so the dial reflects the new library without
+  // waiting for the 30-second staleTime window.
+  const prevImportStatus = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    const prev = prevImportStatus.current;
+    const curr = importJob?.status;
+    prevImportStatus.current = curr;
+    if (curr === "done" && prev !== "done" && prev !== undefined) {
+      const today = new Date().toISOString().slice(0, 10);
+      void queryClient.invalidateQueries({ queryKey: ME_DIAL_CROSSINGS_KEY(today) });
+      void queryClient.invalidateQueries({ queryKey: ME_LIBRARY_MBIDS_KEY });
+      void queryClient.invalidateQueries({ queryKey: ME_PICKER_NAMES_KEY });
+      void queryClient.invalidateQueries({ queryKey: ME_PICKER_OVERLAP_KEY });
+      void queryClient.invalidateQueries({ queryKey: ["me", "library"] });
+    }
+  }, [importJob?.status, queryClient]);
   useSpotifyHistorySync(spotify.connected, importActive);
 
   // Whether the listener opted into ledger recording.

@@ -12,12 +12,11 @@
   border-top: 1px solid hsl(var(--border) / 0.45);
   background: hsl(var(--background) / 0.96);
   backdrop-filter: blur(20px);
-  /* Prevent long-press text selection on every child */
   user-select: none;
   -webkit-user-select: none;
 }
 
-/* Each tab fills the nav height and clips the overflowing art at the bottom */
+/* Each tab fills the nav height and clips overflowing art at the bottom */
 .record-peek-tab {
   appearance: none;
   position: relative;
@@ -33,14 +32,40 @@
   letter-spacing: .11em;
   text-transform: uppercase;
   border-radius: 4px;
-  /* Prevent iOS callout + blue flash on tap */
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
 .record-peek-tab:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: -3px; }
 
-/* Sleeve: full tab-width square starting just below the label.
-   overflow:hidden keeps the growing disc inside the album-art frame. */
+/* Section-colour underline strip — 3 px bar across the top edge on active */
+.record-peek-tab::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  border-radius: 0 0 2px 2px;
+  background: transparent;
+  transition: background .2s ease;
+  z-index: 2;
+}
+.record-peek-tab--active[data-section="radio"]::before     { background: hsl(var(--accent)); }
+.record-peek-tab--active[data-section="selectors"]::before { background: hsl(var(--picker)); }
+.record-peek-tab--active[data-section="library"]::before   { background: hsl(var(--library)); }
+
+/* Label */
+.record-peek-tab__label {
+  position: absolute;
+  top: 7px;
+  left: 0; right: 0;
+  text-align: center;
+  transition: color .2s ease;
+  z-index: 2;
+}
+.record-peek-tab--active[data-section="radio"]     .record-peek-tab__label { color: hsl(var(--accent)); }
+.record-peek-tab--active[data-section="selectors"] .record-peek-tab__label { color: hsl(var(--picker)); }
+.record-peek-tab--active[data-section="library"]   .record-peek-tab__label { color: hsl(var(--library)); }
+
+/* Sleeve: full tab-width square starting just below the label */
 .record-peek-tab__sleeve {
   position: absolute;
   top: 22px;
@@ -63,7 +88,6 @@
   pointer-events: none;
   -webkit-touch-callout: none;
   user-select: none;
-  draggable: false;
 }
 /* Empty-sleeve fallback icon */
 .record-peek-tab__sleeve > svg.record-peek-tab__sleeve--empty {
@@ -73,34 +97,15 @@
   transform: translateX(-50%);
 }
 
-/* Vinyl disc — SVG, sits in the top-right corner of the sleeve.
-   On hold it grows and slides to the sleeve center. */
-.record-peek-tab__record {
-  position: absolute;
-  z-index: 4;
-  width: 28px; height: 28px;
-  top: 4px; right: 4px;
-  border-radius: 50%;
-  opacity: 0;
-  transition: opacity .18s ease;
-  overflow: visible;
-}
-.record-peek-tab__record circle,
-.record-peek-tab__record path,
-.record-peek-tab__record ellipse { vector-effect: non-scaling-stroke; }
-
-/* Active: full-opacity art, disc visible, sleeve slightly bigger */
-.record-peek-tab--active .record-peek-arc__ch {
-  color: #fff;
-  text-shadow: 0 1px 4px rgba(0,0,0,.8), 0 0 10px rgba(0,0,0,.45);
-}
+/* Active: art at full opacity, sleeve slightly lifted */
 .record-peek-tab--active .record-peek-tab__sleeve {
   opacity: 1;
   border-color: hsl(var(--foreground) / .25);
   transform: scale(1.07);
   transform-origin: top center;
 }
-.record-peek-tab--active .record-peek-tab__record { opacity: 1; }
+
+/* ── Resume-peek card ─────────────────────────────────────────────────────── */
 .record-peek {
   position: fixed;
   z-index: 45;
@@ -127,80 +132,9 @@
 .record-peek__close svg { width: 14px; height: 14px; }
 @keyframes record-peek-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
-/* ── Hold animation: disc grows inside the sleeve from corner to center ──── */
-/* Disc starts at top-right corner (right:4, top:4 in sleeve).
-   Center = (sleeve_w - 18, 18). Target = (sleeve_w/2, sleeve_w/2).
-   ΔX ≈ 18 - sleeve_w/2 ≈ -38px; ΔY ≈ sleeve_w/2 - 18 ≈ 38px for ~112px sleeve.
-   Scale: disc 28px → 80% of sleeve ≈ 90px → scale ≈ 3.2 */
-@keyframes record-peek-hold-out {
-  from { transform: translate(0, 0) scale(1); opacity: 0.7; }
-  to   { transform: translate(-38px, 38px) scale(3.2); opacity: 1; }
-}
-.record-peek-tab--holding .record-peek-tab__record {
-  animation: record-peek-hold-out 480ms cubic-bezier(.22, 1, .36, 1) forwards;
-  z-index: 8;
-}
-
-/* ── Arc label: letters transition from flat line → arc around the disc ──── */
-/* Anchor sits at the sleeve centre in tab coords.
-   sleeve_centre_y = 22px (sleeve top) + sleeve_width/2.
-   sleeve_width ≈ (100vw − 22px) / 3  (3 equal columns, 22px total h-padding+gap).
-   So: top = 22px + (100vw − 22px) / 6                                       */
-.record-peek-arc {
-  position: absolute;
-  left: 50%;
-  top: calc(22px + (100vw - 22px) / 6);
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-  z-index: 11;
-  width: 0; height: 0;
-}
-
-/* Each letter is absolutely positioned from the arc anchor.
-   Flat state: chars in a horizontal line at the label height.
-   label_centre_y ≈ 11px from tab top → offset from anchor = -(anchor_y - 11px)
-                                       = -(22 + (100vw−22)/6 − 11)
-                                       = -(11 + (100vw−22)/6)                */
-.record-peek-arc__ch {
-  position: absolute;
-  left: var(--flat-x);
-  top: calc(-11px - (100vw - 22px) / 6);   /* flat: at label height */
-  transform: translate(-50%, -50%) rotate(0deg);
-  font-size: 10px;
-  font-family: var(--app-font-mono);
-  letter-spacing: 0;
-  text-transform: uppercase;
-  color: hsl(var(--faint));
-  white-space: nowrap;
-  transition:
-    left  420ms cubic-bezier(.22, 1, .36, 1),
-    top   420ms cubic-bezier(.22, 1, .36, 1),
-    transform 420ms cubic-bezier(.22, 1, .36, 1),
-    color 300ms ease,
-    text-shadow 300ms ease;
-}
-
-/* Active tab: white label */
-.record-peek-tab--active .record-peek-arc__ch {
-  color: #fff;
-  text-shadow: 0 1px 4px rgba(0,0,0,.8), 0 0 10px rgba(0,0,0,.45);
-}
-
-/* Holding: letters fan out to arc positions around the grown disc.
-   Arc radius 44px clears the grown disc edge (scale 3.2 × 14px = 45px). */
-.record-peek-tab--holding .record-peek-arc__ch {
-  --r: 46px;
-  left: calc(var(--r) * sin(var(--a)));
-  top:  calc(-1 * var(--r) * cos(var(--a)));
-  transform: translate(-50%, -50%) rotate(var(--a));
-  color: hsl(var(--accent));
-  text-shadow: 0 1px 8px rgba(0,0,0,1), 0 0 14px rgba(0,0,0,.8);
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .record-peek, .record-peek-tab__sleeve { animation: none; transition: none; }
-  .record-peek-tab--holding .record-peek-tab__record { animation: none; }
-  .record-peek-arc__ch { transition: none; }
+  .record-peek { animation: none; }
+  .record-peek-tab__sleeve { transition: none; }
 }
 @import "tailwindcss";
 @import "tw-animate-css";
@@ -3403,15 +3337,17 @@
   background: hsl(var(--primary));
 }
 
-/* Scan — same solid fill as the active Listening Party button */
+/* Scan — inverse of the active Listening Party button:
+   LP active = foreground bg + background text
+   Scan      = background bg + foreground text (dark fill, bright label) */
 .dial-act--scan {
-  background: hsl(var(--foreground));
-  color: hsl(var(--background));
-  border-color: hsl(var(--foreground));
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--border));
 }
 .dial-act--scan:hover:not(:disabled) {
-  background: hsl(var(--foreground) / 0.88);
-  border-color: hsl(var(--foreground) / 0.88);
+  background: hsl(var(--secondary));
+  border-color: hsl(var(--border));
 }
 /* Scan icon glyph — Lore lime (same token as Spotify-onboarding Keep button) */
 .dial-act--scan .dial-act__icon {

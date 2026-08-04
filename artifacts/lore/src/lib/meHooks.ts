@@ -590,8 +590,8 @@ export function useMyDialCrossings(date: string) {
       fetchOrNull<{ items: DialCrossing[] }>(
         `/api/me/crossings?date=${encodeURIComponent(date)}`,
       ).then((d) => d?.items ?? []),
-    staleTime: 5 * 60_000,
-    refetchInterval: 5 * 60_000,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
     retry: false,
   });
 }
