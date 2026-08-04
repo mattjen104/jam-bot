@@ -18,6 +18,7 @@ import {
   nameNodes,
   crossingSentence,
   reason,
+  usableShowName,
 } from "../src/components/dialViewHelpers";
 import type { DialShow, DialSpin } from "../src/hooks/useDialData";
 
@@ -491,5 +492,274 @@ describe("nameNodes — text formatting", () => {
 
   it("collapses 8 to 6 shown + '2 more'", () => {
     expect(text(nameNodes(["A", "B", "C", "D", "E", "F", "G", "H"]))).toBe("A, B, C, D, E, F and 2 more");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Multi-DJ attribution cascade
+// ---------------------------------------------------------------------------
+
+describe("usableShowName — multi-DJ ambiguity forces show name", () => {
+  it("returns the show name normally for a single-DJ show", () => {
+    const show = makeShow({ djName: "Tom Schnabel", showName: "Morning Mix" });
+    expect(usableShowName(show)).toBe("Morning Mix");
+  });
+
+  it("suppresses show name when it equals the single DJ name (existing rule)", () => {
+    const show = makeShow({ djName: "Morning Mix", showName: "Morning Mix" });
+    expect(usableShowName(show)).toBeNull();
+  });
+
+  it("does NOT suppress show name when two distinct eligible DJs make attribution ambiguous", () => {
+    const show = makeShow({
+      djName: null,
+      djNames: ["Alice", "Bob"],
+      showName: "Alice", // would be suppressed for a single DJ named Alice
+    });
+    expect(usableShowName(show)).toBe("Alice");
+  });
+
+  it("returns show name for two different DJs even when show name looks like a DJ name", () => {
+    const show = makeShow({ djNames: ["Alice", "Bob"], showName: "Morning Mix" });
+    expect(usableShowName(show)).toBe("Morning Mix");
+  });
+});
+
+describe("crossingSentence — single DJ via djNames (unchanged attribution)", () => {
+  it("credits the single DJ when djNames has exactly one eligible entry", () => {
+    const show = makeShow({
+      djName: null,
+      djNames: ["Tom Schnabel"],
+      showName: "Morning Mix",
+      crossings: 1,
+      topArtists: ["Portishead"],
+    });
+    const result = crossingSentence("KCRW", show);
+    expect(result).not.toBeNull();
+    const t = text(result!.node);
+    // Single DJ → credited in sentence
+    expect(t).toContain("Tom Schnabel");
+  });
+
+  it("deduplicates identical DJ names and credits the single name", () => {
+    const show = makeShow({
+      djName: null,
+      djNames: ["Alice", "Alice"],
+      showName: "Late Show",
+      crossings: 1,
+      topArtists: ["Massive Attack"],
+    });
+    const result = crossingSentence("KCRW", show);
+    expect(result).not.toBeNull();
+    const t = text(result!.node);
+    // Two identical names → deduplicated → one DJ credited
+    expect(t).toContain("Alice");
+  });
+});
+
+describe("crossingSentence — two different DJs collapse attribution to show level", () => {
+  it("suppresses both DJ names and leads with the show name when two distinct DJs are present", () => {
+    const show = makeShow({
+      djName: null,
+      djNames: ["Alice", "Bob"],
+      showName: "Co-Hosted Show",
+      crossings: 1,
+      topArtists: ["Portishead"],
+    });
+    const result = crossingSentence("KCRW", show);
+    expect(result).not.toBeNull();
+    const t = text(result!.node);
+    // Neither DJ credited — show name leads
+    expect(t).not.toContain("Alice");
+    expect(t).not.toContain("Bob");
+    expect(t).toContain("Co-Hosted Show");
+  });
+
+  it("show name is mandatory (not null) even if it would normally be suppressed by a single-DJ rule", () => {
+    // djNames: ["Alice", "Bob"] — two DJs → show name forced regardless
+    const show = makeShow({
+      djName: null,
+      djNames: ["Alice", "Bob"],
+      showName: "Morning Mix",
+      crossings: 1,
+      topArtists: ["Portishead"],
+    });
+    const result = crossingSentence("KCRW", show);
+    expect(text(result!.node)).toContain("Morning Mix");
+  });
+});
+
+describe("crossingSentence — no DJ + show (show leads)", () => {
+  it("leads with the show name when no DJ is present", () => {
+    const show = makeShow({
+      djName: null,
+      showName: "Evening Program",
+      crossings: 1,
+      topArtists: ["Portishead"],
+    });
+    const result = crossingSentence("KCRW", show);
+    expect(result).not.toBeNull();
+    expect(text(result!.node)).toContain("Evening Program");
+  });
+});
+
+describe("crossingSentence — no DJ + no show (station-level only)", () => {
+  it("falls back to artist nodes only (no DJ, no show in sentence) when neither is present", () => {
+    const show = makeShow({
+      djName: null,
+      showName: "",
+      crossings: 1,
+      topArtists: ["Portishead"],
+    });
+    const result = crossingSentence("KCRW", show);
+    expect(result).not.toBeNull();
+    const t = text(result!.node);
+    // No DJ and no show name in the output
+    expect(t).toContain("Portishead");
+    expect(t).not.toMatch(/\bon\b.*\bShow\b/);
+  });
+});
+
+describe("reason — multi-DJ cascade", () => {
+  it("r=1: suppresses DJ and shows show name when two distinct DJs are present", () => {
+    const spin = makeSpin({ artist: "Portishead", isLibraryHit: true });
+    const show = makeShow({
+      djName: null,
+      djNames: ["Alice", "Bob"],
+      showName: "Co-Hosted Show",
+      currentTrack: spin,
+    });
+    const rz = reason(show, 0);
+    expect(rz.r).toBe(1);
+    const t = text(rz.node);
+    expect(t).not.toContain("Alice");
+    expect(t).not.toContain("Bob");
+    expect(t).toContain("Co-Hosted Show");
+  });
+
+  it("r=5: shows show name when DJs are ambiguous and a show name is available", () => {
+    const show = makeShow({
+      djName: null,
+      djNames: ["Alice", "Bob"],
+      showName: "Co-Hosted Show",
+    });
+    const rz = reason(show, 0);
+    expect(rz.r).toBe(5);
+    const t = text(rz.node);
+    expect(t).toContain("Co-Hosted Show");
+    expect(t).not.toContain("Alice");
+    expect(t).not.toContain("Bob");
+  });
+
+  it("r=0: goes dark when DJs are ambiguous and there is no show name", () => {
+    const show = makeShow({
+      djName: null,
+      djNames: ["Alice", "Bob"],
+      showName: "",
+    });
+    const rz = reason(show, 0);
+    // No DJ, no show → dark
+    expect(rz.r).toBe(0);
+  });
+});
+
+describe("reason — blended-mode multi-DJ cascade", () => {
+  it("returns r=5 with show name (not individual DJs) when DJs are ambiguous in blended mode", () => {
+    const show = makeShow({
+      djName: null,
+      djNames: ["Alice", "Bob"],
+      showName: "Co-Hosted Show",
+    });
+    const rz = reason(show, 0, 0, "blended");
+    expect(rz.r).toBe(5);
+    const t = text(rz.node);
+    expect(t).toContain("Co-Hosted Show");
+    expect(t).not.toContain("Alice");
+    expect(t).not.toContain("Bob");
+  });
+
+  it("returns r=0 in blended mode when DJs are ambiguous and no show name is available", () => {
+    const show = makeShow({
+      djName: null,
+      djNames: ["Alice", "Bob"],
+      showName: "",
+    });
+    const rz = reason(show, 0, 0, "blended");
+    expect(rz.r).toBe(0);
+  });
+
+  it("stays r=0 in blended mode when no DJ is listed at all (show name alone is not enough community context)", () => {
+    // No DJ conflict — just an un-hosted show. Blended mode needs a DJ to surface r=5.
+    const show = makeShow({ djName: null, showName: "Overnight Automation" });
+    const rz = reason(show, 0, 0, "blended");
+    expect(rz.r).toBe(0);
+  });
+});
+
+describe("usableShowName — single-DJ-via-djNames suppression", () => {
+  it("suppresses show name when it matches the single DJ provided only via djNames", () => {
+    // djName is null, djNames has one name that equals the show name — should suppress
+    const show = makeShow({
+      djName: null,
+      djNames: ["Morning Mix"],
+      showName: "Morning Mix",
+    });
+    expect(usableShowName(show)).toBeNull();
+  });
+
+  it("does NOT suppress show name when single djNames entry differs from show name", () => {
+    const show = makeShow({
+      djName: null,
+      djNames: ["Alice"],
+      showName: "Morning Mix",
+    });
+    expect(usableShowName(show)).toBe("Morning Mix");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Single-DJ-via-djNames: reason() / live-sentence / sorting paths
+// These cover the paths in DialView.tsx (liveSentence, FrontDoorRow, sortedRows)
+// and useDialData (usableDjName / isPickerShow) that previously read show.djName
+// directly and now go through eligibleDjNames.
+// ---------------------------------------------------------------------------
+
+describe("reason — single DJ via djNames (djName=null): DJ is credited", () => {
+  it("r=5 and credits the DJ when djName is null but djNames has exactly one eligible entry", () => {
+    const show = makeShow({
+      djName: null,
+      djNames: ["Tom Schnabel"],
+      showName: "Morning Mix",
+    });
+    const rz = reason(show, 0);
+    expect(rz.r).toBe(5);
+    const t = text(rz.node);
+    expect(t).toContain("Tom Schnabel");
+    expect(t).toContain("Morning Mix");
+  });
+
+  it("r=5 with DJ only (no show name) when djName=null and djNames has one entry", () => {
+    const show = makeShow({
+      djName: null,
+      djNames: ["Alice"],
+      showName: "",
+    });
+    const rz = reason(show, 0);
+    expect(rz.r).toBe(5);
+    expect(text(rz.node)).toContain("Alice");
+  });
+
+  it("ambiguous multi-DJ suppresses individual names even when djName is null for both", () => {
+    const show = makeShow({
+      djName: null,
+      djNames: ["Alice", "Bob"],
+      showName: "Co-Hosted Show",
+    });
+    const rz = reason(show, 0);
+    expect(rz.r).toBe(5);
+    const t = text(rz.node);
+    expect(t).not.toContain("Alice");
+    expect(t).not.toContain("Bob");
+    expect(t).toContain("Co-Hosted Show");
   });
 });

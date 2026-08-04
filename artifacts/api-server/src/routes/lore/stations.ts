@@ -1047,6 +1047,7 @@ router.get("/stations/schedule", h(async (req, res) => {
       endedAt: sql<string>`max(${spinsTable.playedAt})`,
       showName: showsTable.name,
       djName: showsTable.djName,
+      djNames: showsTable.djNames,
       pickerId: showsTable.pickerId,
     })
     .from(spinsTable)
@@ -1069,6 +1070,7 @@ router.get("/stations/schedule", h(async (req, res) => {
       spinsTable.showId,
       showsTable.name,
       showsTable.djName,
+      showsTable.djNames,
       showsTable.pickerId,
     )
     .orderBy(stationsTable.slug, sql`min(${spinsTable.playedAt})`);
@@ -1092,6 +1094,10 @@ router.get("/stations/schedule", h(async (req, res) => {
               showTitle: r.showName,
               stationName: r.stationName,
             }),
+            // Multi-DJ: pass through the array when the show has multiple credited
+            // selectors. The attribution cascade in Dial uses this to suppress
+            // individual DJ names and fall back to the show-level sentence.
+            djNames: r.djNames && r.djNames.length > 0 ? r.djNames : undefined,
             pickerId: r.pickerId ?? null,
           }
         : null,

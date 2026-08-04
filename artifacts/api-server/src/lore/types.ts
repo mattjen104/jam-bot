@@ -22,6 +22,13 @@ export interface NowPlayingRaw {
 export interface ShowAttribution {
   name: string;
   djName?: string;
+  /**
+   * Multiple DJ / co-host names when the source exposes them.  When present,
+   * takes precedence over the single `djName` for attribution logic.
+   * Single-string sources that populate only `djName` remain valid — the
+   * attribution helpers normalise both forms transparently.
+   */
+  djNames?: string[];
 }
 
 /**

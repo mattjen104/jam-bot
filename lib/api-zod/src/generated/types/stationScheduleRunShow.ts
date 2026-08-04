@@ -9,5 +9,11 @@
 export interface StationScheduleRunShow {
   name: string;
   djName: string | null;
+  /**
+   * Co-host / multi-DJ names when the source provides more than one.
+   * When present, takes precedence over djName in attribution helpers.
+   * Absent for single-DJ or unattributed shows.
+   */
+  djNames?: string[] | null;
   pickerId: number | null;
 }

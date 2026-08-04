@@ -6218,6 +6218,15 @@ components:
         djName:
           type: string
           nullable: true
+        djNames:
+          type: array
+          items:
+            type: string
+          nullable: true
+          description: >
+            Co-host / multi-DJ names when the source provides more than one.
+            When present, takes precedence over djName in attribution helpers.
+            Absent for single-DJ or unattributed shows.
         pickerId:
           type: integer
           nullable: true

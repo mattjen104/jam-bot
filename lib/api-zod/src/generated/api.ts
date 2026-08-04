@@ -3306,6 +3306,7 @@ export const GetStationsScheduleResponse = zod
                 zod.object({
                   name: zod.string(),
                   djName: zod.string().nullable(),
+                  djNames: zod.array(zod.string()).nullish(),
                   pickerId: zod.number().nullable(),
                 }),
                 zod.null(),

@@ -349,6 +349,14 @@ export const showsTable = pgTable("shows", {
     .references(() => stationsTable.id),
   name: text("name").notNull(),
   djName: text("dj_name"),
+  /**
+   * Co-host / multi-DJ names for shows with more than one credited selector.
+   * When populated, the attribution cascade suppresses individual DJ names and
+   * falls back to the show name instead.  Null for all single-DJ shows and any
+   * show whose source doesn't expose a DJ list — the single `djName` field
+   * remains the legacy path for those.
+   */
+  djNames: text("dj_names").array(),
   scheduleNote: text("schedule_note"),
   /**
    * Links this show to a picker (selector). Set by the KEXP shows harvester

@@ -7,8 +7,25 @@
  * directly — it imports the functions it needs directly from this file.
  */
 import { type ReactNode } from "react";
-import { eligibleDjName } from "@workspace/lore-attribution";
+import { eligibleDjName, eligibleDjNames, type ShowAttributionLike } from "@workspace/lore-attribution";
 import { type DialShow, type DialDisplayMode } from "../hooks/useDialData";
+
+// ---------------------------------------------------------------------------
+// Adapter: DialShow → ShowAttributionLike
+// ---------------------------------------------------------------------------
+
+/**
+ * Maps a DialShow into the ShowAttributionLike shape expected by
+ * lore-attribution helpers.  DialShow uses `showName` (not `name`), and
+ * carries djName as `string | null` (library uses `string | undefined`).
+ */
+function dialShowAsAttribution(show: DialShow): ShowAttributionLike {
+  return {
+    name: show.showName,
+    djName: show.djName ?? undefined,
+    djNames: show.djNames,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // String cleaning
@@ -65,13 +82,30 @@ export function nameNodes(artists: string[]): ReactNode {
 /**
  * Returns the show name when it adds meaningful context — suppresses values
  * that duplicate the DJ name, match "Continuous", or are otherwise junk.
+ *
+ * Multi-DJ rule: when the show has two or more distinct eligible DJ names the
+ * individual DJs are ambiguous and no single name can be credited.  In that
+ * case the show name becomes mandatory (suppression is skipped) so attribution
+ * never collapses to nothing.
  */
 export function usableShowName(show: DialShow | null): string | null {
   if (!show) return null;
   const raw = cleanLiveValue(show.showName);
+  // cleanLiveValue already rejects MISSING_LIVE_VALUES ("unknown show", etc.);
+  // the explicit check below is belt-and-suspenders for the placeholder default
+  // written by useDialData when no show is linked ("Unknown show").
   if (!raw) return null;
-  if (raw.toLowerCase() === "continuous") return null;
-  if (show.djName && sameLiveValue(raw, show.djName)) return null;
+  if (MISSING_LIVE_VALUES.has(raw.toLowerCase())) return null;
+  // Resolve effective DJ list — covers both legacy djName and new djNames array.
+  const djList = eligibleDjNames(dialShowAsAttribution(show));
+  // Multi-DJ: when DJs are ambiguous the show name must surface — skip the
+  // djName-equality suppression so attribution falls back to the show level.
+  if (djList.length > 1) return raw;
+  // Single-DJ suppression: hide the show name when it merely echoes the DJ name.
+  // Compare against the effective resolved name (works whether it came from
+  // djName or from djNames) so single-entry djNames arrays are handled correctly.
+  const effectiveDj = djList.length === 1 ? djList[0] : (show.djName ?? null);
+  if (effectiveDj && sameLiveValue(raw, effectiveDj)) return null;
   return raw;
 }
 
@@ -203,12 +237,14 @@ export function crossingSentence(
     ? Math.max(show.crossings, current?.isLibraryHit ? 1 : 0)
     : Math.max(show.artistCrossings, current?.isArtistHit ? 1 : 0);
 
-  const dj = eligibleDjName(show.djName, {
+  const djList = eligibleDjNames(dialShowAsAttribution(show), {
     artist: current?.artist,
     title: current?.title,
     showTitle: show.showName,
     stationName,
   });
+  // Ambiguous multi-DJ: suppress the individual name and fall back to show level.
+  const dj = djList.length === 1 ? djList[0] : null;
   const showName = usableShowName(show);
 
   // Live (single artist currently on air) vs. "this set" (multiple/historical)
@@ -301,7 +337,9 @@ export function reason(
       };
     }
     // Community mode: retain only public live attribution or go dark.
-    const blendedDj = show.djName;
+    // Use eligibleDjNames so multi-DJ ambiguity suppresses individual names.
+    const blendedDjList = eligibleDjNames(dialShowAsAttribution(show));
+    const blendedDj = blendedDjList.length === 1 ? blendedDjList[0] : null;
     const blendedShow = usableShowName(show);
     if (blendedDj && blendedShow) {
       return { r: 5, cls: "w5", node: <><b className="fdrow__dj">{blendedDj}</b> · <span className="fdrow__show">{blendedShow}</span> · {intoSet(show.startedAt)} in</> };
@@ -309,10 +347,20 @@ export function reason(
     if (blendedDj) {
       return { r: 5, cls: "w5", node: <><b className="fdrow__dj">{blendedDj}</b> · {intoSet(show.startedAt)} in</> };
     }
+    // Ambiguous multi-DJ only: suppress individual names and show the show name.
+    // When no DJ is listed at all (not a multi-DJ conflict), stay dark in
+    // blended mode — a show name alone is not enough community context.
+    if (blendedDjList.length > 1 && blendedShow) {
+      return { r: 5, cls: "w5", node: <><span className="fdrow__show">{blendedShow}</span> · {intoSet(show.startedAt)} in</> };
+    }
     return { r: 0, cls: "w0", node: "on air · Lore can't see who's playing" };
   }
 
-  const dj = show.djName; // already sanitised via safeShow in FrontDoorRow
+  // Resolve the effective single DJ name — null when ambiguous (2+ distinct eligible names).
+  // DialView's safeShow already ran the single eligibleDjName guard; we re-run
+  // eligibleDjNames here so the multi-DJ collapse path is always honoured.
+  const djList = eligibleDjNames(dialShowAsAttribution(show));
+  const dj = djList.length === 1 ? djList[0] : null;
   const showName = usableShowName(show);
 
   // r=1: exact library track playing right now — show artist, not title

@@ -31,6 +31,7 @@ import {
 import { startStreamHealthWorker } from "./lore/stream-health.js";
 import { applyStationDiscoveryMigration } from "./lore/station-migration.js";
 import { applyPickerDiscoveryMigration } from "./lore/picker-migration.js";
+import { applyShowDjNamesMigration } from "./lore/show-djnames-migration.js";
 import { runMigration } from "./lore/boot-migrations.js";
 import { startGenreBackfillJob } from "./lore/genre-backfill.js";
 import { startIsrcEnrichmentJob } from "./lore/isrc-enrichment.js";
@@ -140,6 +141,7 @@ async function bootLore(): Promise<void> {
     await runMigration("applyReplayResolutionMigration", applyReplayResolutionMigration);
     await runMigration("applySupportHoldsMigration", applySupportHoldsMigration);
     await runMigration("applySocialPresenceMigration", applySocialPresenceMigration);
+    await runMigration("applyShowDjNamesMigration", applyShowDjNamesMigration);
     await runMigration("applyArtistMetadataCleanup", async () => {
       await applyArtistMetadataCleanup();
     });

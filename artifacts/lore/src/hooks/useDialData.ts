@@ -33,7 +33,7 @@ import {
   type StationsArtistFrequencyItem,
 } from "@workspace/api-client-react";
 import { useMyPickerNames, useMyDialCrossings, useMyBlendedCrossings, useMyPickerOverlap, type DialCrossing } from "../lib/meHooks";
-import { eligibleDjName } from "@workspace/lore-attribution";
+import { eligibleDjName, eligibleDjNames } from "@workspace/lore-attribution";
 
 // ---------------------------------------------------------------------------
 // Shared name normaliser — strips zero-width chars, trims, collapses spaces.
@@ -69,6 +69,12 @@ export interface DialShow {
   runId: number | string | null;
   showName: string;
   djName: string | null;
+  /**
+   * Co-host / multi-DJ names when the source provides them.  When present,
+   * takes precedence over `djName` in attribution helpers.  Old single-DJ
+   * sources that set only `djName` continue to work unchanged.
+   */
+  djNames?: string[];
   startedAt: string;
   endedAt: string;
   /** visual state of the block */
@@ -837,21 +843,26 @@ export function useDialData(displayMode: DialDisplayMode = "personal"): {
           state === "live"
             ? (nowPlayingBySlug.get(station.slug) ?? (runSpins.length > 0 ? runSpins[runSpins.length - 1] : null))
             : null;
-        const usableDjName = eligibleDjName(run.show?.djName, {
-          artist: currentTrack?.artist,
-          title: currentTrack?.title,
-          showTitle: run.show?.name,
-          stationName: station.name,
-        });
+        // Use eligibleDjNames so a single DJ provided only via djNames (djName=null)
+        // is still credited, and two distinct DJs collapse to null (ambiguous).
+        const usableDjList = eligibleDjNames(
+          { name: run.show?.name ?? "", djName: run.show?.djName ?? undefined, djNames: run.show?.djNames ?? undefined },
+          { artist: currentTrack?.artist, title: currentTrack?.title, showTitle: run.show?.name, stationName: station.name },
+        );
+        const usableDjName = usableDjList.length === 1 ? usableDjList[0] : null;
         // isPickerShow: derived from pickerId presence on the show row, but
-        // never keep a linked picker alive for rejected live attribution.
+        // never keep a linked picker alive for rejected live attribution or
+        // for ambiguous multi-DJ shows (no single selector to credit).
         const pickerId = run.show?.pickerId ?? null;
-        const isPickerShow = pickerId != null && usableDjName != null;
+        const isPickerShow = pickerId != null && usableDjList.length === 1;
 
         return {
           runId: run.runId,
           showName: run.show?.name ?? "Unknown show",
           djName: usableDjName,
+          // Pass through the multi-DJ list when the source provides it so the
+          // attribution cascade can suppress individual DJ names when ambiguous.
+          djNames: run.show?.djNames ?? undefined,
           pickerId,
           startedAt: run.startedAt,
           endedAt: run.endedAt,

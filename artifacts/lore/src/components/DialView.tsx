@@ -19,7 +19,7 @@ import { usePlayer } from "../player/PlayerProvider";
 import { BottlePanel } from "./BottlePanel";
 import { AlbumAvatarPicker } from "./AlbumAvatarPicker";
 import { useSocialMode, setSocialEnabled } from "../lib/social";
-import { eligibleDjName } from "@workspace/lore-attribution";
+import { eligibleDjName, eligibleDjNames } from "@workspace/lore-attribution";
 import {
   cleanLiveValue,
   sameLiveValue,
@@ -116,12 +116,13 @@ function liveSentence(
   const station = cleanLiveValue(stationName);
   if (!station || !show) return null;
 
-  const dj = eligibleDjName(show.djName, {
-    artist: show.currentTrack?.artist,
-    title: show.currentTrack?.title,
-    showTitle: show.showName,
-    stationName: station,
-  });
+  // Use eligibleDjNames so a single DJ provided only via djNames (djName=null)
+  // still gets credited, and two distinct DJs collapse to null (no credit).
+  const djList = eligibleDjNames(
+    { name: show.showName ?? "", djName: show.djName ?? undefined, djNames: show.djNames },
+    { artist: show.currentTrack?.artist, title: show.currentTrack?.title, showTitle: show.showName, stationName: station },
+  );
+  const dj = djList.length === 1 ? djList[0] : null;
   const artist = cleanLiveValue(show?.currentTrack?.artist);
   const usableArtist = sameLiveValue(artist, station) ? null : artist;
 
@@ -182,12 +183,11 @@ interface FrontDoorRowProps {
 }
 
 export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onEarlier, displayMode = "personal", presence }: FrontDoorRowProps) {
-  const usableDj = eligibleDjName(show?.djName, {
-    artist: show?.currentTrack?.artist,
-    title: show?.currentTrack?.title,
-    showTitle: show?.showName,
-    stationName: ds.station.name,
-  });
+  const usableDjList = eligibleDjNames(
+    { name: show?.showName ?? "", djName: show?.djName ?? undefined, djNames: show?.djNames },
+    { artist: show?.currentTrack?.artist, title: show?.currentTrack?.title, showTitle: show?.showName, stationName: ds.station.name },
+  );
+  const usableDj = usableDjList.length === 1 ? usableDjList[0] : null;
   const safeShow = show && usableDj !== show.djName
     ? { ...show, djName: usableDj }
     : show;
@@ -1147,12 +1147,11 @@ export function DialView() {
         const show = ds.shows.find((sh) => sh.state === "live") ?? null;
         // Only the current run may establish live attribution. A recently
         // ended DJ must not affect either the sentence or its ordering.
-        const effectiveDjName = eligibleDjName(show?.djName, {
-          artist: show?.currentTrack?.artist,
-          title: show?.currentTrack?.title,
-          showTitle: show?.showName,
-          stationName: ds.station.name,
-        });
+        const djNameList = eligibleDjNames(
+          { name: show?.showName ?? "", djName: show?.djName ?? undefined, djNames: show?.djNames },
+          { artist: show?.currentTrack?.artist, title: show?.currentTrack?.title, showTitle: show?.showName, stationName: ds.station.name },
+        );
+        const effectiveDjName = djNameList.length === 1 ? djNameList[0] : null;
         const attributionSafeShow = show && effectiveDjName !== show.djName
           ? { ...show, djName: effectiveDjName }
           : show;
