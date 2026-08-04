@@ -1016,6 +1016,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       const mbid = s.trackId ?? null;
       if (mbid && mbid !== currentMbid) return;
       if (s.durationMs !== undefined) setDurationMs(s.durationMs ?? null);
+      if (s.progressMs !== undefined && sourceRef.current === "apple-music") {
+        setProgressMs(s.progressMs ?? null);
+      }
       if (s.state === "loading") {
         // Audio exclusivity: silence the broadcast while Apple Music loads.
         pauseRadio?.();

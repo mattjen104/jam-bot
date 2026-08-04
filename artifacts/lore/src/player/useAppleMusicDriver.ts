@@ -87,6 +87,7 @@ export function useAppleMusicDriver(opts: AppleMusicDriverOpts = {}): PlaybackDr
   const subscribersRef = useRef<Set<(s: DriverPlaybackStatus) => void>>(new Set());
   const pausedRef = useRef(false);
   const playingRef = useRef(false);
+  const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Whether the user has already authorized this session (avoid re-prompting).
   const [authorized, setAuthorized] = useState(false);
@@ -95,9 +96,34 @@ export function useAppleMusicDriver(opts: AppleMusicDriverOpts = {}): PlaybackDr
     subscribersRef.current.forEach((cb) => cb(status));
   }, []);
 
+  const clearProgressInterval = useCallback(() => {
+    if (progressIntervalRef.current !== null) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
+  }, []);
+
+  const startProgressInterval = useCallback(() => {
+    clearProgressInterval();
+    progressIntervalRef.current = setInterval(() => {
+      const music = musicRef.current;
+      if (!music || !playingRef.current) return;
+      const progressMs =
+        typeof music.currentPlaybackTime === "number"
+          ? Math.round(music.currentPlaybackTime * 1000)
+          : null;
+      const durationMs =
+        typeof music.currentPlaybackDuration === "number"
+          ? Math.round(music.currentPlaybackDuration * 1000)
+          : null;
+      notify({ state: "playing", progressMs, durationMs, trackId: currentTrackIdRef.current });
+    }, 250);
+  }, [clearProgressInterval, notify]);
+
   // Teardown: remove MusicKit event listeners and clear the instance ref.
   const teardown = useCallback(async () => {
     const music = musicRef.current;
+    clearProgressInterval();
     if (!music) return;
     for (const [event, listener] of listenersRef.current) {
       music.removeEventListener(event, listener);
@@ -107,7 +133,7 @@ export function useAppleMusicDriver(opts: AppleMusicDriverOpts = {}): PlaybackDr
     musicRef.current = null;
     playingRef.current = false;
     pausedRef.current = false;
-  }, []);
+  }, [clearProgressInterval]);
 
   // Cleanup on unmount.
   useEffect(() => () => { void teardown(); }, [teardown]);
@@ -175,13 +201,16 @@ export function useAppleMusicDriver(opts: AppleMusicDriverOpts = {}): PlaybackDr
             if (next.includes("paused") || next === "0") {
               pausedRef.current = true;
               playingRef.current = false;
+              clearProgressInterval();
               notify({ state: "paused", durationMs, trackId: currentTrackIdRef.current });
             } else if (next.includes("playing") || next === "1") {
               playingRef.current = true;
               pausedRef.current = false;
+              startProgressInterval();
               notify({ state: "playing", durationMs, trackId: currentTrackIdRef.current });
             } else if (next.includes("ended") || next.includes("complete") || next === "4") {
               playingRef.current = false;
+              clearProgressInterval();
               notify({ state: "ended", trackId: currentTrackIdRef.current });
             }
           };
@@ -231,6 +260,7 @@ export function useAppleMusicDriver(opts: AppleMusicDriverOpts = {}): PlaybackDr
         pausedRef.current = false;
         await music.play();
         playingRef.current = true;
+        startProgressInterval();
         notify({ state: "playing", trackId: item.mbid });
       },
 
@@ -246,6 +276,7 @@ export function useAppleMusicDriver(opts: AppleMusicDriverOpts = {}): PlaybackDr
         await music.pause();
         pausedRef.current = true;
         playingRef.current = false;
+        clearProgressInterval();
         const durationMs =
           typeof music.currentPlaybackDuration === "number"
             ? Math.round(music.currentPlaybackDuration * 1000)
@@ -259,6 +290,7 @@ export function useAppleMusicDriver(opts: AppleMusicDriverOpts = {}): PlaybackDr
         await music.play();
         pausedRef.current = false;
         playingRef.current = true;
+        startProgressInterval();
         notify({ state: "playing", trackId: currentTrackIdRef.current });
       },
 
@@ -274,6 +306,6 @@ export function useAppleMusicDriver(opts: AppleMusicDriverOpts = {}): PlaybackDr
     }),
     // Re-create when the token or authorization state changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [available, developerToken, appName, storefront, authorized, notify, teardown],
+    [available, developerToken, appName, storefront, authorized, notify, teardown, startProgressInterval, clearProgressInterval],
   );
 }
