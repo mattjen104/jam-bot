@@ -440,7 +440,8 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onE
     "fdrow",
     rz.r === 1 ? "fdrow--t1" : "",
     rz.r >= 2 && rz.r <= 4 ? "fdrow--z1" : "",
-    rz.r === 0 || rz.r >= 5 ? "fdrow--dim" : "",
+    rz.r === 6 || rz.r === 7 ? "fdrow--hist" : "",
+    rz.r === 0 || rz.r === 5 ? "fdrow--dim" : "",
     isSampling ? "fdrow--sampling" : "",
     isActive ? "fdrow--playing" : "",
   ].filter(Boolean).join(" ");
