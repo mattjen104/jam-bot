@@ -1,4 +1,97 @@
-import type { Credit, TrackKnowledge } from "@workspace/api-client-react";
+import type { Credit, TrackKnowledge, TrackClaim } from "@workspace/api-client-react";
+
+/** A single fact row inside a liner-notes group. */
+export interface LinerRow {
+  id: string;
+  /** Role label for credit rows (e.g. "Produced by"). */
+  label?: string;
+  /** The main display text (names, claim sentence, pressing line, rel title). */
+  text: string;
+  /** Short source chip label shown next to the text. */
+  sourceLabel?: string;
+  /** External URL to open — renders an ExternalLink icon when present. */
+  sourceUrl?: string;
+}
+
+/** A named section of liner-notes rows (PRESSING / CREDITS / RELATIONSHIPS / CLAIMS). */
+export interface LinerGroup {
+  label: string;
+  rows: LinerRow[];
+}
+
+/**
+ * Build grouped liner-notes rows from knowledge + published claims.
+ * Returns an empty array when there is nothing to show.
+ */
+export function buildLinerGroups(
+  knowledge: TrackKnowledge | null,
+  claims: TrackClaim[],
+): LinerGroup[] {
+  const groups: LinerGroup[] = [];
+
+  if (knowledge) {
+    // ── PRESSING ────────────────────────────────────────────────────────────
+    const pressing = pressingLine(knowledge);
+    if (pressing) {
+      groups.push({
+        label: "PRESSING",
+        rows: [
+          {
+            id: "pressing",
+            text: pressing,
+            sourceLabel: "Discogs",
+          },
+        ],
+      });
+    }
+
+    // ── CREDITS ─────────────────────────────────────────────────────────────
+    const creditRows = groupCredits(knowledge.personnel);
+    if (creditRows.length > 0) {
+      groups.push({
+        label: "CREDITS",
+        rows: creditRows.map((row) => ({
+          id: `credit-${row.label}`,
+          label: row.label,
+          text: row.names,
+        })),
+      });
+    }
+
+    // ── RELATIONSHIPS ────────────────────────────────────────────────────────
+    const rels = knowledge.relationships ?? [];
+    if (rels.length > 0) {
+      groups.push({
+        label: "RELATIONSHIPS",
+        rows: rels.map((rel) => ({
+          id: `rel-${rel.kind}-${rel.targetId}`,
+          text: rel.title
+            ? `${rel.label} — ${rel.title}${rel.artist ? ` (${rel.artist})` : ""}`
+            : rel.label,
+          sourceUrl: rel.mbUrl,
+        })),
+      });
+    }
+  }
+
+  // ── CLAIMS ────────────────────────────────────────────────────────────────
+  const publishedClaims = claims.filter(
+    (c) => !c.status || c.status === "published",
+  );
+  if (publishedClaims.length > 0) {
+    groups.push({
+      label: "CLAIMS",
+      rows: publishedClaims.map((claim, i) => ({
+        id: `claim-${i}-${claim.sourceHandle}`,
+        text: claim.text,
+        sourceLabel: claim.sourceLabel,
+        sourceUrl: claim.sourceUrl || undefined,
+      })),
+    });
+  }
+
+  return groups;
+}
 
 /** Group raw credits into reader-friendly buckets, mirroring the Slack card. */
 export function groupCredits(personnel: Credit[]): Array<{

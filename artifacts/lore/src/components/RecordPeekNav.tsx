@@ -4,6 +4,8 @@ import {
   getPickerRun,
   getRecordingAlbumTracks,
   useGetPickersDial,
+  useGetRecordingKnowledge,
+  getGetRecordingKnowledgeQueryKey,
 } from "@workspace/api-client-react";
 import type { RecordingLink } from "@workspace/api-client-react";
 import { X } from "lucide-react";
@@ -14,6 +16,7 @@ import {
   type StoredRideSeed,
 } from "../player/sectionMemory";
 import { useMyAlbumAvatar, useMyLibraryInfinite } from "../lib/meHooks";
+import { LinerNotesSheet } from "./LinerNotesSheet";
 
 type Section = "radio" | "selectors" | "library";
 const HOLD_MS = 480;
@@ -101,6 +104,14 @@ export function RecordPeekNav() {
   // even if the first few are hard rows that haven't been enriched yet.
   const { data: libData } = useMyLibraryInfinite({}, 20);
   const [peek, setPeek] = useState<Section | null>(null);
+  // Snapshotted track for the liner sheet — stored before peek is cleared so
+  // the sheet still has identity to render against after peek becomes null.
+  const [linerTrack, setLinerTrack] = useState<{
+    mbid: string;
+    title: string;
+    artist: string;
+    artworkUrl: string | null;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const downPoint = useRef<{ x: number; y: number } | null>(null);
@@ -216,6 +227,57 @@ export function RecordPeekNav() {
   const hasMemory = (section: Section) =>
     section === "radio" ? !!radioMemory : section === "selectors" ? !!selectorMemory || !!fallbackRun : !!libraryMemory;
 
+  // Derive the current track identity for the active peek card.
+  const peekTrackMbid: string = peek === "radio"
+    ? (radioMemory?.lastTrack?.mbid ?? "")
+    : peek === "selectors"
+      ? (selectorMemory?.queue[selectorMemory.index]?.mbid ?? "")
+      : peek === "library"
+        ? (libraryMemory?.track.mbid ?? "")
+        : "";
+
+  const peekTrackTitle: string = peek === "radio"
+    ? (radioMemory?.lastTrack?.title ?? "")
+    : peek === "selectors"
+      ? (selectorMemory?.queue[selectorMemory.index]?.title ?? "")
+      : peek === "library"
+        ? (libraryMemory?.track.title ?? "")
+        : "";
+
+  const peekTrackArtist: string = peek === "radio"
+    ? (radioMemory?.lastTrack?.artist ?? "")
+    : peek === "selectors"
+      ? (selectorMemory?.queue[selectorMemory.index]?.artist ?? "")
+      : peek === "library"
+        ? (libraryMemory?.track.artist ?? "")
+        : "";
+
+  const peekTrackArt: string | null = peek === "radio"
+    ? (radioMemory?.lastTrack?.artworkUrl ?? null)
+    : peek === "selectors"
+      ? (selectorMemory?.queue[selectorMemory.index]?.artworkUrl ?? null)
+      : peek === "library"
+        ? (libraryMemory?.track.artworkUrl ?? libraryMemory?.album.artworkUrl ?? null)
+        : null;
+
+  // Knowledge query — enabled only when peek track has a valid mbid.
+  const { data: peekKnowledge } = useGetRecordingKnowledge(peekTrackMbid, {
+    query: {
+      queryKey: getGetRecordingKnowledgeQueryKey(peekTrackMbid),
+      staleTime: 10 * 60_000,
+      enabled: peekTrackMbid.length > 0,
+    },
+  });
+
+  const hasKnowledge =
+    peekTrackMbid.length > 0 &&
+    (
+      (peekKnowledge?.knowledge?.personnel?.length ?? 0) > 0 ||
+      Boolean(peekKnowledge?.knowledge?.pressing) ||
+      (peekKnowledge?.knowledge?.relationships?.length ?? 0) > 0 ||
+      (peekKnowledge?.claims?.length ?? 0) > 0
+    );
+
   return (
     <>
       <nav className="record-peek-nav" aria-label="Primary">
@@ -256,8 +318,33 @@ export function RecordPeekNav() {
           );
         })}
       </nav>
-      {peek && hasMemory(peek) && (
+      {peek && hasMemory(peek) && !linerTrack && (
         <section className="record-peek" aria-live="polite" aria-label={`${peek} resume`}>
+          {/* Album art thumbnail — tappable when track has knowledge */}
+          {hasKnowledge ? (
+            <button
+              type="button"
+              className="record-peek__art record-peek__art--tappable"
+              aria-label="Open liner notes"
+              onClick={() => {
+                // Snapshot identity BEFORE clearing peek, so the sheet can
+                // render even after peek becomes null.
+                setLinerTrack({
+                  mbid: peekTrackMbid,
+                  title: peekTrackTitle,
+                  artist: peekTrackArtist,
+                  artworkUrl: peekTrackArt,
+                });
+                setPeek(null);
+              }}
+            >
+              {peekTrackArt && <img src={peekTrackArt} alt="" draggable={false} />}
+            </button>
+          ) : peekTrackArt ? (
+            <span className="record-peek__art">
+              <img src={peekTrackArt} alt="" draggable={false} />
+            </span>
+          ) : null}
           <div className="record-peek__copy">
             <strong>
               {peek === "radio" ? radioMemory?.station.name :
@@ -277,6 +364,20 @@ export function RecordPeekNav() {
             <X aria-hidden="true" />
           </button>
         </section>
+      )}
+      {linerTrack && (
+        <LinerNotesSheet
+          mbid={linerTrack.mbid}
+          title={linerTrack.title}
+          artist={linerTrack.artist}
+          artworkUrl={linerTrack.artworkUrl}
+          radioArt={artFor("radio", memory, radio.station?.logoUrl, ride.current?.artworkUrl, fallbackSelectorArt, fallbackLibraryArt)}
+          selectorArt={artFor("selectors", memory, radio.station?.logoUrl, ride.current?.artworkUrl, fallbackSelectorArt, fallbackLibraryArt)}
+          libraryArt={artFor("library", memory, radio.station?.logoUrl, ride.current?.artworkUrl, fallbackSelectorArt, fallbackLibraryArt)}
+          onResume={(section) => void resume(section)}
+          onDismiss={() => setLinerTrack(null)}
+          busy={busy}
+        />
       )}
     </>
   );

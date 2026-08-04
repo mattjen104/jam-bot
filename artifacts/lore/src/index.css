@@ -132,9 +132,329 @@
 .record-peek__close svg { width: 14px; height: 14px; }
 @keyframes record-peek-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
+/* ── Album-art tappable affordance inside the peek card ──────────────────── */
+.record-peek__art {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: none;
+  padding: 0;
+  background: hsl(var(--secondary));
+  cursor: default;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.record-peek__art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+/* Tappable state (when track has resolved mbid + knowledge) */
+.record-peek__art--tappable {
+  cursor: pointer;
+  outline: none;
+  transition: box-shadow .15s ease, transform .1s ease;
+}
+.record-peek__art--tappable:hover {
+  box-shadow: 0 0 0 2px hsl(var(--primary) / .55);
+}
+.record-peek__art--tappable:active {
+  transform: scale(0.97);
+}
+.record-peek__art--tappable:focus-visible {
+  box-shadow: 0 0 0 2px hsl(var(--primary));
+}
+
+/* ── Liner-notes slide-up sheet ──────────────────────────────────────────── */
+@keyframes liner-sheet-in {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.liner-sheet__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 58;
+  background: hsl(var(--background) / .72);
+  backdrop-filter: blur(4px);
+  animation: liner-sheet-in .22s ease-out;
+}
+
+.liner-sheet {
+  position: fixed;
+  z-index: 59;
+  left: 0; right: 0; bottom: 0;
+  max-height: 82dvh;
+  display: flex;
+  flex-direction: column;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-bottom: none;
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -12px 40px hsl(var(--background) / .65);
+  animation: liner-sheet-in .22s ease-out;
+  will-change: transform;
+  overscroll-behavior: contain;
+}
+
+/* Drag handle — swipe zone; touch-action: none so pointer capture works */
+.liner-sheet__handle {
+  flex-shrink: 0;
+  width: 36px;
+  height: 4px;
+  margin: 10px auto 0;
+  border-radius: 2px;
+  background: hsl(var(--border));
+  /* Extend the tap/swipe target without growing visually */
+  padding: 12px 40px;
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: content-box;
+  touch-action: none;
+  cursor: grab;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Header */
+.liner-sheet__header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px 12px;
+  border-bottom: 1px solid hsl(var(--border) / .5);
+}
+.liner-sheet__header-art {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: hsl(var(--secondary));
+}
+.liner-sheet__header-art--empty {
+  display: block;
+  background: hsl(var(--secondary));
+}
+.liner-sheet__header-copy {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 3px;
+}
+.liner-sheet__header-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--app-font-display);
+  font-size: 15px;
+  color: hsl(var(--foreground));
+}
+.liner-sheet__header-artist {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+  letter-spacing: .08em;
+  color: hsl(var(--dim));
+}
+.liner-sheet__close {
+  flex-shrink: 0;
+  width: 30px; height: 30px;
+  display: grid; place-items: center;
+  border: 1px solid hsl(var(--border));
+  border-radius: 50%;
+  background: transparent;
+  color: hsl(var(--faint));
+  cursor: pointer;
+  padding: 0;
+}
+.liner-sheet__close svg { width: 14px; height: 14px; }
+.liner-sheet__close:hover { color: hsl(var(--foreground)); border-color: hsl(var(--foreground) / .25); }
+
+/* Body — scrollable */
+.liner-sheet__body {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 14px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  scrollbar-width: none;
+}
+.liner-sheet__body::-webkit-scrollbar { display: none; }
+
+/* Section */
+.liner-sheet__section {}
+.liner-sheet__section-label {
+  font-family: var(--app-font-mono);
+  font-size: 9px;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  color: hsl(var(--faint));
+  margin-bottom: 7px;
+}
+.liner-sheet__row-list {
+  list-style: none;
+  margin: 0; padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.liner-sheet__row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.liner-sheet__row-label {
+  flex-shrink: 0;
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+  letter-spacing: .05em;
+  color: hsl(var(--dim));
+  white-space: nowrap;
+}
+.liner-sheet__row-label::after { content: " "; }
+.liner-sheet__row-text {
+  flex: 1;
+  color: hsl(var(--foreground));
+  font-family: var(--app-font-body, var(--app-font-sans));
+  min-width: 0;
+}
+.liner-sheet__row-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.liner-sheet__source-chip {
+  display: inline-block;
+  font-family: var(--app-font-mono);
+  font-size: 8px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: hsl(var(--faint));
+  border: 1px solid hsl(var(--border));
+  border-radius: 3px;
+  padding: 1px 4px;
+  line-height: 1.4;
+}
+.liner-sheet__source-link {
+  display: inline-flex;
+  align-items: center;
+  color: hsl(var(--dim));
+  transition: color .15s;
+}
+.liner-sheet__source-link:hover { color: hsl(var(--foreground)); }
+.liner-sheet__source-link svg { width: 11px; height: 11px; }
+
+/* Skeleton rows */
+.liner-sheet__skeleton-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 0;
+}
+.liner-sheet__skeleton-row {
+  height: 14px;
+  border-radius: 4px;
+  background: hsl(var(--secondary));
+  animation: liner-skeleton-pulse 1.4s ease-in-out infinite;
+}
+.liner-sheet__skeleton-row:nth-child(2) { width: 75%; animation-delay: .15s; }
+.liner-sheet__skeleton-row:nth-child(3) { width: 55%; animation-delay: .3s; }
+@keyframes liner-skeleton-pulse {
+  0%, 100% { opacity: .4; }
+  50%       { opacity: .75; }
+}
+
+/* Empty state */
+.liner-sheet__empty {
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+  letter-spacing: .08em;
+  color: hsl(var(--faint));
+  text-align: center;
+  padding: 20px 0 8px;
+}
+
+/* Footer */
+.liner-sheet__footer {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 10px 10px max(env(safe-area-inset-bottom), 10px);
+  border-top: 1px solid hsl(var(--border) / .5);
+}
+.liner-sheet__footer-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 6px;
+  border: 1px solid hsl(var(--border) / .5);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: background .15s, border-color .15s;
+}
+.liner-sheet__footer-btn:hover {
+  background: hsl(var(--secondary) / .6);
+  border-color: var(--section-accent, hsl(var(--border)));
+}
+.liner-sheet__footer-btn:active { opacity: .75; }
+.liner-sheet__footer-btn:disabled { opacity: .55; cursor: wait; }
+.liner-sheet__footer-art {
+  width: 32px;
+  height: 32px;
+  border-radius: 5px;
+  overflow: hidden;
+  background: hsl(var(--secondary));
+  flex-shrink: 0;
+}
+.liner-sheet__footer-art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  user-select: none;
+}
+.liner-sheet__footer-art--empty {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: hsl(var(--secondary));
+}
+.liner-sheet__footer-label {
+  font-family: var(--app-font-mono);
+  font-size: 9px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--section-accent, hsl(var(--dim)));
+  line-height: 1;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .record-peek { animation: none; }
   .record-peek-tab__sleeve { transition: none; }
+  .liner-sheet__backdrop { animation: none; }
+  .liner-sheet { animation: none; }
+  .liner-sheet__skeleton-row { animation: none; }
 }
 @import "tailwindcss";
 @import "tw-animate-css";
