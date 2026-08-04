@@ -272,6 +272,41 @@ describe("YouTube ended → queue advance", () => {
     expect(latest!.ride.active).toBe(true);
   });
 
+  it("ignores a stale 'ended' event carrying the previous track's MBID", async () => {
+    renderPlayer();
+    await flush();
+
+    // Start a two-track ride.
+    act(() => {
+      latest!.ride.startReplay([TRACK_A, TRACK_B], "Test Ride Stale");
+    });
+    await flush();
+
+    // Advance to track B by firing a valid ended event for track A.
+    act(() => {
+      fireYtStatus({ state: "ended", trackId: TRACK_A.mbid });
+    });
+    await flush();
+
+    // Confirm we are now on track B (index 1).
+    expect(latest!.ride.index).toBe(1);
+    expect(latest!.ride.current?.mbid).toBe(TRACK_B.mbid);
+
+    // Now fire a late-arriving "ended" event that still carries track A's MBID.
+    // This simulates an out-of-order / stale signal from the previous track.
+    act(() => {
+      fireYtStatus({ state: "ended", trackId: TRACK_A.mbid });
+    });
+    await flush();
+
+    // The guard must have rejected the stale signal:
+    // index must remain at 1 (not advance past the end of the queue).
+    expect(latest!.ride.index).toBe(1);
+    // The ride must still be active — status must not become "ended".
+    expect(latest!.ride.status).not.toBe("ended");
+    expect(latest!.ride.active).toBe(true);
+  });
+
   it("sets ride status to 'ended' when the ended track is the last in the queue", async () => {
     renderPlayer();
     await flush();
