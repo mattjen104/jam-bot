@@ -358,7 +358,7 @@ function reason(
   if (stationCrossings > 0) {
     return {
       r: 6, cls: "w6",
-      node: <><b>{stationCrossings} of yours</b> here in the last 24h — no selector listed</>,
+      node: <><b>{stationCrossings} of yours</b> here in the last 24h</>,
     };
   }
 
