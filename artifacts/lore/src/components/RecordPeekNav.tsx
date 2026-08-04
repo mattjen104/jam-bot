@@ -261,7 +261,7 @@ export function RecordPeekNav() {
         : null;
 
   // Knowledge query — enabled only when peek track has a valid mbid.
-  const { data: peekKnowledge } = useGetRecordingKnowledge(peekTrackMbid, {
+  const { data: peekKnowledge, isLoading: knowledgeLoading } = useGetRecordingKnowledge(peekTrackMbid, {
     query: {
       queryKey: getGetRecordingKnowledgeQueryKey(peekTrackMbid),
       staleTime: 10 * 60_000,
@@ -269,7 +269,10 @@ export function RecordPeekNav() {
     },
   });
 
+  // Only expose knowledge after the query has settled — prevents a flicker from
+  // "plain image" to "tappable button" while the first fetch is in flight.
   const hasKnowledge =
+    !knowledgeLoading &&
     peekTrackMbid.length > 0 &&
     (
       (peekKnowledge?.knowledge?.personnel?.length ?? 0) > 0 ||
