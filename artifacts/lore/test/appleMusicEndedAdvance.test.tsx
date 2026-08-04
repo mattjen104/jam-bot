@@ -472,6 +472,49 @@ describe("Apple Music ended → queue advance", () => {
   });
 });
 
+describe("Apple Music paused → stale signal rejected by MBID guard", () => {
+  it("does not set ride status to 'paused' when the paused event carries the previous track's MBID", async () => {
+    renderPlayer();
+    await flush();
+
+    // Start a two-track ride.
+    act(() => {
+      latest!.ride.startReplay([TRACK_A, TRACK_B], "Stale Paused Test");
+    });
+    await flush();
+
+    expect(latest!.ride.index).toBe(0);
+    expect(latest!.ride.current?.mbid).toBe(TRACK_A.mbid);
+
+    // Advance to track B via a valid ended signal for track A.
+    act(() => {
+      fireAmStatus({ state: "ended", trackId: TRACK_A.mbid });
+    });
+    await flush();
+
+    expect(latest!.ride.index).toBe(1);
+    expect(latest!.ride.current?.mbid).toBe(TRACK_B.mbid);
+
+    // Capture the current status before the stale signal.
+    const statusBeforeStale = latest!.ride.status;
+
+    // Now fire a late-arriving "paused" event that still carries track A's MBID.
+    // The MBID staleness guard (mbid && mbid !== currentMbid) must reject it.
+    act(() => {
+      fireAmStatus({ state: "paused", trackId: TRACK_A.mbid });
+    });
+    await flush();
+
+    // Guard must have rejected the stale signal — ride status must NOT be "paused".
+    expect(latest!.ride.status).not.toBe("paused");
+    // Status must be unchanged from before the stale signal arrived.
+    expect(latest!.ride.status).toBe(statusBeforeStale);
+    // Ride must still be on track B.
+    expect(latest!.ride.index).toBe(1);
+    expect(latest!.ride.current?.mbid).toBe(TRACK_B.mbid);
+  });
+});
+
 describe("Apple Music ended → live+service-ride skips queue advance", () => {
   it("does not advance the index when isLiveSvcRide is active", async () => {
     // Set playbackMode to resolve_to_service via localStorage before mount so
