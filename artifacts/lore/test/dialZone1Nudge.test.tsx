@@ -296,3 +296,35 @@ describe("Zone 1 nudge — absent in non-nudge states", () => {
     expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
   });
 });
+
+describe("Zone 1 nudge — seed-change transitions mid-session (no page reload)", () => {
+  it("appears when hasSeeds flips true mid-session with no crossings", () => {
+    // Start: no library, no seeds → nudge must NOT be visible.
+    mockDialData({ hasLibrary: false, hasSeeds: false, stations: [] });
+    const { rerender } = render(<DialView />);
+    expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
+
+    // Mid-session: user adds a taste seed → hasSeeds becomes true, still no crossings.
+    (useDialData as ReturnType<typeof vi.fn>).mockReturnValue(
+      baseDialData({ hasLibrary: false, hasSeeds: true, stations: [] }),
+    );
+    act(() => { rerender(<DialView />); });
+
+    expect(screen.getByText(NUDGE_TEXT, { exact: false })).toBeTruthy();
+  });
+
+  it("hides when all seeds are removed even with no crossings", () => {
+    // Start: seeds present, no crossings → nudge visible.
+    mockDialData({ hasLibrary: false, hasSeeds: true, stations: [] });
+    const { rerender } = render(<DialView />);
+    expect(screen.getByText(NUDGE_TEXT, { exact: false })).toBeTruthy();
+
+    // Mid-session: user removes all seeds → hasSeeds flips false, still no crossings.
+    (useDialData as ReturnType<typeof vi.fn>).mockReturnValue(
+      baseDialData({ hasLibrary: false, hasSeeds: false, stations: [] }),
+    );
+    act(() => { rerender(<DialView />); });
+
+    expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
+  });
+});
