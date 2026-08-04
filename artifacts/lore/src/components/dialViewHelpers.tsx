@@ -206,7 +206,7 @@ export function reason(
   if (show.currentTrack?.isArtistHit) {
     return {
       r: 2, cls: "w2",
-      node: <><b>{show.currentTrack.artist}</b><span className="fdrow__t1-sfx"> on air — artist from your library</span></>,
+      node: <><b className="fdrow__artist">{show.currentTrack.artist}</b><span className="fdrow__t1-sfx"> on air — artist from your library</span></>,
     };
   }
 

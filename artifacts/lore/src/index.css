@@ -3893,7 +3893,7 @@
 }
 .fdrow__live-secondary b { font-weight: 600; font-style: normal; color: inherit; }
 .fdrow__t1-sfx { color: hsl(var(--muted-foreground) / 0.75); font-weight: 400; }
-.fdrow__t1.w1 { color: hsl(var(--library)); }
+.fdrow__t1.w1 { color: hsl(var(--foreground) / 0.9); }
 .fdrow__t1.w2 { color: hsl(var(--foreground) / 0.9); }
 .fdrow__t1.w3 { color: hsl(var(--foreground) / 0.7); }
 .fdrow__t1.w4 { color: hsl(var(--foreground) / 0.7); }
