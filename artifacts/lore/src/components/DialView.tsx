@@ -322,7 +322,7 @@ function reason(
   if (show.currentTrack?.isLibraryHit) {
     return {
       r: 1, cls: "w1",
-      node: <><b>{show.currentTrack.title}</b> on air — in your library</>,
+      node: <><b>{show.currentTrack.title}</b><span className="fdrow__t1-sfx"> on air — in your library</span></>,
     };
   }
 
@@ -332,7 +332,7 @@ function reason(
   if (show.currentTrack?.isArtistHit) {
     return {
       r: 2, cls: "w2",
-      node: <><b>{show.currentTrack.artist}</b> on air — artist from your library</>,
+      node: <><b>{show.currentTrack.artist}</b><span className="fdrow__t1-sfx"> on air — artist from your library</span></>,
     };
   }
 
