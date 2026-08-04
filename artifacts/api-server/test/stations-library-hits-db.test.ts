@@ -291,7 +291,7 @@ describe("GET /api/stations/now-playing — exact MBID library hit", () => {
   it("marks isLibraryHit=true when the now-playing MBID is in the listener's library", async () => {
     if (!dbAvailable) return;
 
-    const { status, body } = await get(`/api/stations/recent-spins?date=${today}`, SID_A);
+    const { status, body } = await get("/api/stations/now-playing", SID_A);
     expect(status).toBe(200);
 
     type Item = { slug: string; nowPlaying: { isLibraryHit: boolean; isArtistHit: boolean } | null };
@@ -299,7 +299,8 @@ describe("GET /api/stations/now-playing — exact MBID library hit", () => {
 
     expect(item).toBeDefined();
     expect(item!.nowPlaying).not.toBeNull();
-    // MBID_EXACT is the most recent spin and is directly in user A's library.
+    // MBID_EXACT is the most recent spin (inserted with the latest playedAt) and
+    // is directly in user A's library → must fire isLibraryHit=true.
     expect(item!.nowPlaying!.isLibraryHit).toBe(true);
     expect(item!.nowPlaying!.isArtistHit).toBe(false);
   }, TEST_TIMEOUT);
