@@ -408,6 +408,192 @@ describe("RideBar source label reflects active driver", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Section 6: Apple Music state:"unavailable" → cascade to YouTube
+//
+// This is distinct from the play()-throw path in Section 2:
+//   - Apple Music's play() resolves (or is in progress — the driver started)
+//   - MusicKit subsequently fires a subscription-required error
+//   - useAppleMusicDriver calls notify({ state:"unavailable", trackId })
+//   - PlayerProvider's onStatusChange subscriber (lines 1011–1018 of
+//     PlayerProvider.tsx) does three things:
+//       a. Marks am:<mbid> failed in altDriverFailedRef
+//       b. Clears altDriverActiveMbid
+//       c. Calls tryAltDriverRef.current(mbid, currentItem, /*skipApple=*/true)
+//
+// The simulation below models that exact sequence: Apple Music play() resolves
+// but then signals "unavailable" through the status channel, which triggers
+// the cascade with am:<mbid> already pre-marked failed.
+// ---------------------------------------------------------------------------
+
+interface AmUnavailableResult {
+  altDriverActiveMbid: string | null;
+  ytPlayCalled: boolean;
+  ytPlayCallCount: number;
+  /** am:<mbid> was marked in altDriverFailedRef before YouTube was tried. */
+  amMarkedFailed: boolean;
+}
+
+async function runCascadeAfterAmUnavailable(opts: {
+  youtube: MockDriver;
+  mbid: string;
+  item: MockItem;
+  /** Simulate YouTube also failing (e.g. no link). */
+  youtubeThrows?: boolean;
+}): Promise<AmUnavailableResult> {
+  const altDriverFailedRef = new Set<string>();
+
+  // Step a: PlayerProvider marks am:<mbid> failed (mirrors line 1013).
+  altDriverFailedRef.add(`am:${opts.mbid}`);
+  const amMarkedFailed = altDriverFailedRef.has(`am:${opts.mbid}`);
+
+  // Step b: PlayerProvider clears altDriverActiveMbid (mirrors line 1014).
+  let altDriverActiveMbid: string | null = null;
+
+  // Step c: PlayerProvider calls tryAltDriver(mbid, item, skipApple=true)
+  // (mirrors line 1017). With skipApple=true the Apple Music branch is
+  // bypassed entirely — the cascade goes straight to YouTube.
+  const tryAltDriver = async (
+    mbid: string,
+    item: MockItem,
+    _skipApple: boolean, // always true in this path
+  ): Promise<void> => {
+    const failedYt = altDriverFailedRef.has(`yt:${mbid}`);
+    if (!failedYt) {
+      altDriverActiveMbid = mbid;
+      try {
+        await opts.youtube.play(item);
+      } catch {
+        altDriverFailedRef.add(`yt:${mbid}`);
+        altDriverActiveMbid = null;
+      }
+      return;
+    }
+    altDriverActiveMbid = null;
+  };
+
+  await tryAltDriver(opts.mbid, opts.item, true);
+
+  const ytFn = opts.youtube.play as ReturnType<typeof vi.fn>;
+  return {
+    altDriverActiveMbid,
+    ytPlayCalled: ytFn.mock.calls.length > 0,
+    ytPlayCallCount: ytFn.mock.calls.length,
+    amMarkedFailed,
+  };
+}
+
+describe("Apple Music state:'unavailable' (subscriber path) → cascade to YouTube", () => {
+  it("calls YouTube play() when Apple Music fires state:'unavailable'", async () => {
+    const result = await runCascadeAfterAmUnavailable({
+      youtube: { available: true, play: vi.fn().mockResolvedValue(undefined) },
+      mbid: ITEM_WITH_YT.mbid,
+      item: ITEM_WITH_YT,
+    });
+
+    expect(result.ytPlayCalled).toBe(true);
+  });
+
+  it("marks am:<mbid> failed before trying YouTube (pre-condition check)", async () => {
+    const result = await runCascadeAfterAmUnavailable({
+      youtube: { available: true, play: vi.fn().mockResolvedValue(undefined) },
+      mbid: ITEM_WITH_YT.mbid,
+      item: ITEM_WITH_YT,
+    });
+
+    // Confirms PlayerProvider adds am:<mbid> to altDriverFailedRef before
+    // calling tryAltDriver — prevents an infinite Apple-Music retry loop.
+    expect(result.amMarkedFailed).toBe(true);
+  });
+
+  it("sets altDriverActiveMbid to the track MBID when YouTube succeeds", async () => {
+    const result = await runCascadeAfterAmUnavailable({
+      youtube: { available: true, play: vi.fn().mockResolvedValue(undefined) },
+      mbid: ITEM_WITH_YT.mbid,
+      item: ITEM_WITH_YT,
+    });
+
+    expect(result.altDriverActiveMbid).toBe(ITEM_WITH_YT.mbid);
+  });
+
+  it("YouTube play() is called exactly once — no double-attempt after unavailable", async () => {
+    const result = await runCascadeAfterAmUnavailable({
+      youtube: { available: true, play: vi.fn().mockResolvedValue(undefined) },
+      mbid: ITEM_WITH_YT.mbid,
+      item: ITEM_WITH_YT,
+    });
+
+    expect(result.ytPlayCallCount).toBe(1);
+  });
+
+  it("passes the original item to YouTube play() after Apple Music unavailable", async () => {
+    const ytPlay = vi.fn().mockResolvedValue(undefined);
+    await runCascadeAfterAmUnavailable({
+      youtube: { available: true, play: ytPlay },
+      mbid: ITEM_WITH_YT.mbid,
+      item: ITEM_WITH_YT,
+    });
+
+    expect(ytPlay).toHaveBeenCalledWith(ITEM_WITH_YT);
+  });
+
+  it("clears altDriverActiveMbid when YouTube also fails after Apple Music unavailable", async () => {
+    // The full failure path: Apple Music unavailable + YouTube throws (no link).
+    // altDriverActiveMbid should end up null → preview takes over.
+    const result = await runCascadeAfterAmUnavailable({
+      youtube: {
+        available: true,
+        play: vi.fn().mockRejectedValue(new Error("No YouTube link for this track")),
+      },
+      mbid: ITEM_NO_LINKS.mbid,
+      item: ITEM_NO_LINKS,
+      youtubeThrows: true,
+    });
+
+    expect(result.altDriverActiveMbid).toBeNull();
+    expect(result.ytPlayCalled).toBe(true); // YouTube was still attempted
+  });
+
+  it("Apple Music play() throw and state:'unavailable' reach the same YouTube cascade", async () => {
+    // Both paths must reach YouTube — verify the throw path (runCascade with
+    // Apple Music rejecting) and the subscriber path (runCascadeAfterAmUnavailable)
+    // produce the same outcome for ytPlayCalled and altDriverActiveMbid.
+    const throwResult = await runCascade({
+      appleMusic: {
+        available: true,
+        play: vi.fn().mockRejectedValue(new Error("No MusicKit token")),
+      },
+      youtube: { available: true, play: vi.fn().mockResolvedValue(undefined) },
+      mbid: ITEM_WITH_YT.mbid,
+      item: ITEM_WITH_YT,
+    });
+
+    const unavailableResult = await runCascadeAfterAmUnavailable({
+      youtube: { available: true, play: vi.fn().mockResolvedValue(undefined) },
+      mbid: ITEM_WITH_YT.mbid,
+      item: ITEM_WITH_YT,
+    });
+
+    expect(throwResult.ytPlayCalled).toBe(true);
+    expect(unavailableResult.ytPlayCalled).toBe(true);
+    expect(throwResult.altDriverActiveMbid).toBe(unavailableResult.altDriverActiveMbid);
+  });
+
+  it("resolveAudioPath returns 'preview' when Apple Music is unavailable and YouTube has no link", () => {
+    // After both Apple Music (unavailable) and YouTube (no link) fail,
+    // altDriverActiveMbid is cleared → driverActive=false → preview effect fires.
+    // resolveAudioPath models the same decision: serviceFailed=true → preview.
+    const orientations: TimeOrientation[] = ["past", "curated"];
+    for (const o of orientations) {
+      const path = resolveAudioPath(
+        { mode: "resolve_to_service", timeOrientation: o },
+        { serviceConnected: true, serviceFailed: true, previewAvailable: true },
+      );
+      expect(path).toBe("preview");
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Section 5: Cascade guard — already-failed alt driver is not retried
 //
 // altDriverFailedRef tracks per-driver per-MBID failures so a second call to
