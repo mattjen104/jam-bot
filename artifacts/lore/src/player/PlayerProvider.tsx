@@ -443,6 +443,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const liveStationSlugRef = useRef<string | null>(null);
 
   // Track preview playhead for lyric sync (fires ~4×/s from the audio element).
+  // Also capture the clip duration so the progress bar has a total to fill against.
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
@@ -451,8 +452,20 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         setProgressMs(Math.round(el.currentTime * 1000));
       }
     };
+    const onDurationChange = () => {
+      if (sourceRef.current === "preview") {
+        const d = el.duration;
+        setDurationMs(Number.isFinite(d) && d > 0 ? Math.round(d * 1000) : null);
+      }
+    };
     el.addEventListener("timeupdate", onTimeUpdate);
-    return () => el.removeEventListener("timeupdate", onTimeUpdate);
+    el.addEventListener("durationchange", onDurationChange);
+    el.addEventListener("loadedmetadata", onDurationChange);
+    return () => {
+      el.removeEventListener("timeupdate", onTimeUpdate);
+      el.removeEventListener("durationchange", onDurationChange);
+      el.removeEventListener("loadedmetadata", onDurationChange);
+    };
   }, []); // audioRef.current is a singleton created during render — stable
 
   // Mirror of `source` readable inside stable callbacks.

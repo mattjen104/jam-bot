@@ -34,6 +34,50 @@ function formatTime(ms: number): string {
 }
 
 /**
+ * Read-only progress bar shown for Spotify and preview sources.
+ * Visually identical to SeekBar's track, but has no interactive range input —
+ * seeking is not supported for these sources.
+ */
+function ProgressBar({
+  progressMs,
+  durationMs,
+}: {
+  progressMs: number | null;
+  durationMs: number | null;
+}) {
+  const duration = durationMs ?? 0;
+  const progress = progressMs ?? 0;
+  const pct = duration > 0 ? Math.min(100, (progress / duration) * 100) : 0;
+
+  return (
+    <div className="px-5 pb-2">
+      <div className="relative flex items-center gap-2">
+        <span className="w-8 shrink-0 text-right font-mono text-[10px] text-muted-foreground">
+          {formatTime(progress)}
+        </span>
+        {/* Visual track — no interactive overlay */}
+        <div
+          className="relative h-1 flex-1 overflow-hidden rounded-full bg-border"
+          role="progressbar"
+          aria-valuenow={progress}
+          aria-valuemin={0}
+          aria-valuemax={duration > 0 ? duration : 100}
+          aria-label="Playback progress"
+        >
+          <div
+            className="absolute inset-y-0 left-0 rounded-full bg-primary transition-none"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <span className="w-8 shrink-0 font-mono text-[10px] text-muted-foreground">
+          {duration > 0 ? formatTime(duration) : "--:--"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Interactive seek bar shown for YouTube and Apple Music sources.
  * Uses a hidden range input overlaid on a visual track so the drag handle
  * matches the design system.
@@ -306,12 +350,19 @@ export function RideBar({
         </div>
       ) : null}
 
-      {/* Seek bar — shown for full-track drivers that support seeking */}
+      {/* Seek bar — interactive for full-track drivers that support seeking */}
       {(ride.source === "youtube" || ride.source === "apple-music") && (
         <SeekBar
           progressMs={ride.progressMs}
           durationMs={ride.durationMs}
           onSeek={ride.seek}
+        />
+      )}
+      {/* Progress bar — read-only for Spotify and preview sources */}
+      {(ride.source === "spotify" || ride.source === "preview") && (
+        <ProgressBar
+          progressMs={ride.progressMs}
+          durationMs={ride.durationMs}
         />
       )}
 
