@@ -515,6 +515,12 @@ export function useMyPickerNames() {
 
 export interface AppConfig {
   spotifyImportEnabled: boolean;
+  appleMusic?: {
+    configured: boolean;
+    developerToken: string | null;
+    appName: string;
+    storefront: string;
+  };
 }
 
 const APP_CONFIG_KEY = ["app", "config"] as const;

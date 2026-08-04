@@ -44,6 +44,7 @@ import {
   writeLibrarySectionMemory,
   type StoredStation,
 } from "./sectionMemory";
+import { useAppConfig } from "../lib/meHooks";
 
 /** How we arrived at a track in the ride — the attribution for this transition. */
 export interface RideAttribution {
@@ -768,9 +769,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     spotify,
   });
 
-  // Apple Music requires a developer token — not yet fetched for the main
-  // player; driver gracefully stays `available: false` until wired.
-  const appleMusicDriver = useAppleMusicDriver();
+  // Apple Music developer token — fetched from /api/config (no auth required).
+  // When unconfigured or the fetch fails, `developerToken` stays null/undefined
+  // and the driver stays `available: false` so the fallback ladder skips it.
+  const { data: appConfig } = useAppConfig();
+  const appleMusicDriver = useAppleMusicDriver({
+    developerToken: appConfig?.appleMusic?.developerToken ?? null,
+    appName: appConfig?.appleMusic?.appName,
+    storefront: appConfig?.appleMusic?.storefront,
+  });
   const youtubeDriver = useYouTubeDriver();
 
   // Preference order: Spotify → Apple Music → YouTube.

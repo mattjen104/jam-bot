@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, loreSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { getAppleMusicClientConfig } from "../lore/appleMusic.js";
 
 /**
  * GET /api/config — lightweight feature-flag config that does NOT require auth.
@@ -38,12 +39,13 @@ export function bustConfigCache() {
 }
 
 router.get("/config", async (_req, res) => {
+  const appleMusic = getAppleMusicClientConfig();
   try {
     const spotifyImportEnabled = await readSpotifyImportEnabled();
-    res.json({ spotifyImportEnabled });
+    res.json({ spotifyImportEnabled, appleMusic });
   } catch {
     // Fail open with env var fallback so a DB hiccup doesn't break page load.
-    res.json({ spotifyImportEnabled: process.env["SPOTIFY_IMPORT_ENABLED"] === "true" });
+    res.json({ spotifyImportEnabled: process.env["SPOTIFY_IMPORT_ENABLED"] === "true", appleMusic });
   }
 });
 
