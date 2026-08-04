@@ -3934,17 +3934,19 @@
 /* Entity-type colours for the attribution sentence — blue selector palette */
 .fdrow__t1 .fdrow__dj      { color: hsl(var(--selector-dj)); }
 .fdrow__t1 .fdrow__show    { color: hsl(var(--selector-show)); font-weight: 500; font-style: normal; }
-.fdrow__t1 .fdrow__station { color: hsl(var(--foreground) / 0.45); font-weight: 400; font-style: normal; }
+.fdrow__t1 .fdrow__station { color: hsl(var(--library)); font-weight: 400; font-style: normal; }
 /* Same tokens for ghost-row sentences */
 .ghost-row__reason .fdrow__artist  { color: hsl(var(--library)); }
-.ghost-row__reason .fdrow__station { color: hsl(var(--foreground) / 0.45); font-weight: 400; }
+.ghost-row__reason .fdrow__station { color: hsl(var(--library)); font-weight: 400; }
 
 /* Quiet context label (e.g. "Continuous") — station name removed from inline text */
 .fdrow__t3 {
   font-family: var(--app-font-mono);
   font-size: 9px;
-  color: hsl(var(--muted-foreground) / 0.7);
+  color: hsl(var(--library) / 0.75);
   margin-bottom: 5px;
+  pointer-events: none;
+  cursor: default;
 }
 
 /* Station chip — right-side pill; tappable affordance to the station page */
@@ -3975,11 +3977,11 @@
   color: hsl(var(--selector-show));
 }
 .fdrow__context {
-  color: hsl(var(--muted-foreground) / 0.65);
+  color: hsl(var(--library) / 0.65);
   letter-spacing: 0.02em;
 }
 .fdrow__context span {
-  color: hsl(var(--muted-foreground) / 0.35);
+  color: hsl(var(--library) / 0.35);
   padding: 0 3px;
 }
 .fdrow__first-spin { color: hsl(var(--library) / 0.8); font-style: normal; }
