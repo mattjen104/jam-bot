@@ -5,10 +5,10 @@ const SOCIAL_MODE_KEY = "lore:social:enabled";
 function readSocialEnabled(): boolean {
   try {
     const raw = localStorage.getItem(SOCIAL_MODE_KEY);
-    // Default true — social mode is on unless the listener explicitly disabled it.
-    return raw === null || raw === "true";
+    // Default false — solo mode is on unless the listener explicitly enables Listening Party.
+    return raw !== null && raw === "true";
   } catch {
-    return true;
+    return false;
   }
 }
 
@@ -53,7 +53,7 @@ function subscribeSocial(listener: () => void): () => void {
 /**
  * Social (bottle) mode toggle.
  * When disabled: bottle icon is hidden, notes are not published.
- * Stored in localStorage, default: enabled.
+ * Stored in localStorage, default: disabled (solo mode).
  */
 export function useSocialMode(): { enabled: boolean; toggle: () => void } {
   const enabled = useSyncExternalStore(subscribeSocial, getSocialEnabled);

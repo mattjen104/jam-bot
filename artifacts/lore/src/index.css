@@ -2738,6 +2738,23 @@
 }
 .dial-ctabtn--keep:hover { opacity: 0.9; color: hsl(var(--keep-foreground)); }
 
+/* Ghost CTA — compact secondary link, always visible below Zone 1 rows */
+.dial-ctabtn--ghost {
+  font-family: var(--app-font-display);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  background: transparent;
+  border: none;
+  color: hsl(var(--muted-foreground));
+  padding: 6px 14px 4px;
+  cursor: pointer;
+  display: block;
+  text-align: left;
+  transition: color 0.15s;
+}
+.dial-ctabtn--ghost:hover { color: hsl(var(--foreground)); }
+
 
 /* ─────────────────────────────────────────────────────────
    Library hero
@@ -3951,6 +3968,58 @@
   transition: color 0.1s;
 }
 .fdrow__back:hover { color: hsl(var(--foreground) / 0.7); }
+
+/* ─────────────────────────────────────────────────────────
+   Dial zone tabs
+   Strip that replaces the three-zone vertical layout once
+   Zone 1 has settled. Three buttons, primary always selected.
+───────────────────────────────────────────────────────── */
+.dial-tabs {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid hsl(var(--border) / 0.5);
+  margin: 2px 0 0;
+  flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.dial-tabs::-webkit-scrollbar { display: none; }
+
+.dial-tab {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 12px;
+  font: 600 10px var(--app-font-display);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.12s, border-color 0.12s;
+}
+.dial-tab:hover { color: hsl(var(--foreground)); }
+.dial-tab--active {
+  color: hsl(var(--foreground));
+  border-bottom-color: hsl(var(--library));
+}
+
+/* Count badge inside a tab button */
+.dial-tab__n {
+  font-size: 9px;
+  font-weight: 700;
+  opacity: 0.55;
+  background: hsl(var(--secondary));
+  border-radius: 8px;
+  padding: 1px 5px;
+  line-height: 1.4;
+}
+.dial-tab--active .dial-tab__n { opacity: 0.8; }
 
 /* ── Zone section labels (spec §6) ──────────────────────────────────────── */
 .fdzone-lbl {

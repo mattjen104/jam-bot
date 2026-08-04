@@ -1100,6 +1100,9 @@ export function DialView() {
   // 150 ms; it resets to false immediately when crossingsLoading clears so that
   // real content replaces skeletons without any extra lag.
   const showSkeleton = useDelayedBoolean(crossingsLoading, 150);
+  // Zone 1 has settled when both crossing scores and the core station pulse have
+  // resolved. At that point we know what's in Zone 1 and can show the tab strip.
+  const zone1Settled = !crossingsLoading && !isCoreLoading;
   const isSpotifyConnected = useSpotifyLibraryConnected();
   const { radio } = usePlayer();
 
@@ -1243,7 +1246,7 @@ export function DialView() {
   };
 
   // Offline stations (recently aired):
-  //   1. Crossings desc — library matches first
+  //   1. Combined crossings desc — library matches first
   //   2. Stations with a named DJ or show above stations with no attribution
   //   3. Stations with any show history above stations with no data ever
   //   4. Stable within each tier
@@ -1284,6 +1287,9 @@ export function DialView() {
   const [zone1Expanded, setZone1Expanded] = useState(false);
   const [zone2Expanded, setZone2Expanded] = useState(false);
   const [zone3Expanded, setZone3Expanded] = useState(false);
+
+  // Active tab — resets to primary on each page load (not persisted).
+  const [activeTab, setActiveTab] = useState<"library" | "also-on-air" | "recently-aired">("library");
 
   // Collapsed state — persisted to localStorage so the layout survives a reload.
   // A collapsed zone shows only the ZoneLabel header (no rows, no see-more
@@ -1588,11 +1594,10 @@ export function DialView() {
         {/* DIAL view — three-zone front door (spec §6) */}
         {level === "all" && (
           <>
-            {/* While crossing scores are in-flight, render all three zone headings
-                immediately in their canonical order so no section can jump ahead
-                of another. Each heading is accompanied by a loading indicator
-                until real content is ready. Zone 1 keeps its context-sensitive
-                placeholder; Zones 2 and 3 show a pulsing dot. */}
+            {/* While crossing scores are in-flight, render only the Zone 1 heading
+                and its context-sensitive placeholder.  Zones 2/3 and "Recently
+                aired" are intentionally suppressed until Zone 1 has settled so
+                they never appear above the live crossing rows. */}
             {!isCoreLoading && showSkeleton && (
               <>
                 {/* Zone 1 heading + context-sensitive placeholder.
@@ -1613,320 +1618,370 @@ export function DialView() {
                   onAddSeed={addSeed}
                   onRemoveSeed={removeSeed}
                 />
-                {/* Zone 2 heading + skeleton rows — no pre-load signal for ghost stations */}
-                <ZoneLabel label="Missed while you were away" accent="picker" />
-                <DialRowSkeleton delay={0} />
-                <DialRowSkeleton delay={1} />
-                <DialRowSkeleton delay={2} />
-                {/* Zone 3 heading + skeleton rows.
-                    No estimated count shown: the pre-load alsoOnAir count can
-                    differ from the post-score count, producing a visible number
-                    jump. Omitting it here means the count appears for the first
-                    time only once crossing scores have fully resolved. */}
-                <ZoneLabel
-                  label="Also on air"
-                  accent="live"
-                />
-                <DialRowSkeleton delay={0} />
-                <DialRowSkeleton delay={1} />
-                <DialRowSkeleton delay={2} />
               </>
             )}
 
-            {/* Zone 1: On the Air × Your Music Library — only once crossing scores are ready */}
-            {!crossingsLoading && withReason.length > 0 && (
+            {/* Tab strip — appears once Zone 1 has settled (crossings + live resolved).
+                Tabs replace the vertical-scroll three-zone layout. */}
+            {zone1Settled && (
+              <div className="dial-tabs" role="tablist" aria-label="Radio sections">
+                <button
+                  type="button"
+                  role="tab"
+                  className={`dial-tab${activeTab === "library" ? " dial-tab--active" : ""}`}
+                  aria-selected={activeTab === "library"}
+                  onClick={() => setActiveTab("library")}
+                >
+                  On the Air × Your Music Library
+                  {withReason.length > 0 && <span className="dial-tab__n">{withReason.length}</span>}
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  className={`dial-tab${activeTab === "also-on-air" ? " dial-tab--active" : ""}`}
+                  aria-selected={activeTab === "also-on-air"}
+                  onClick={() => setActiveTab("also-on-air")}
+                >
+                  Also on air
+                  {alsoOnAir.length > 0 && <span className="dial-tab__n">{alsoOnAir.length}</span>}
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  className={`dial-tab${activeTab === "recently-aired" ? " dial-tab--active" : ""}`}
+                  aria-selected={activeTab === "recently-aired"}
+                  onClick={() => setActiveTab("recently-aired")}
+                >
+                  Recently aired
+                  {offlineStations.length > 0 && <span className="dial-tab__n">{offlineStations.length}</span>}
+                </button>
+              </div>
+            )}
+
+            {/* ── Primary tab: "On the Air × Your Music Library" ─────────────────
+                Contains Zone 1 crossing rows + Zone 2 ghost stations as a
+                subsection below. */}
+            {zone1Settled && activeTab === "library" && (
               <>
-                <div className="fdzone-lbl-row">
-                  <ZoneLabel
-                    label="On the Air × Your Music Library"
-                    n={withReason.length}
-                    hint="best first · scan walks this list"
-                    accent="library"
-                    collapsed={zone1Collapsed}
-                    onCollapse={() => { setZone1Collapsed(!zone1Collapsed); if (!zone1Collapsed) setZone1Expanded(false); }}
-                  />
-                  {zone1Expanded && !zone1Collapsed && withReason.length > zone1Visible && (
-                    <button
-                      className="dial-show-more-inline"
-                      aria-expanded={true}
-                      aria-controls="zone1-rows"
-                      onClick={() => setZone1Expanded(false)}
-                    >
-                      See less
-                    </button>
-                  )}
-                </div>
-                {!zone1Collapsed && (
+                {/* Zone 1: crossing rows */}
+                {withReason.length > 0 && (
                   <>
-                    {(hasSeeds || visibleSeeds.length > 0) && (
-                      <SeedBar
-                        seeds={visibleSeeds}
-                        onAddSeed={addSeed}
-                        onRemoveSeed={removeSeed}
+                    <div className="fdzone-lbl-row">
+                      <ZoneLabel
+                        label="On the Air × Your Music Library"
+                        n={withReason.length}
+                        hint="best first · scan walks this list"
+                        accent="library"
+                        collapsed={zone1Collapsed}
+                        onCollapse={() => { setZone1Collapsed(!zone1Collapsed); if (!zone1Collapsed) setZone1Expanded(false); }}
                       />
-                    )}
-                    {/* Map over the FULL array so isSampling index is always the
-                        unsliced position; rows beyond zone1Visible are null until
-                        zone1Expanded is true. */}
-                    <div id="zone1-rows">
-                      {withReason.map((row, i) =>
-                        !zone1Expanded && i >= zone1Visible ? null : (
-                          <FrontDoorRow
-                            key={row.ds.station.slug}
-                            ds={row.ds}
-                            show={row.show}
-                            ov={row.show?.djName != null ? pickerOv(row.show?.pickerId ?? null, row.show.djName) : row.ds.lifetimeCrossings}
-                            isActive={row.ds.station.slug === radio.station?.slug}
-                            isSampling={scan.samplingIdx === i}
-                            onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
-                            onEarlier={() => goStation(row.ds.station.slug)}
-                            displayMode={crossingSourceMode}
-                            presence={presenceMap.get(row.ds.station.id)}
-                          />
-                        )
+                      {zone1Expanded && !zone1Collapsed && withReason.length > zone1Visible && (
+                        <button
+                          className="dial-show-more-inline"
+                          aria-expanded={true}
+                          aria-controls="zone1-rows"
+                          onClick={() => setZone1Expanded(false)}
+                        >
+                          See less
+                        </button>
                       )}
                     </div>
-                    {withReason.length > zone1Visible && (
-                      <button
-                        className="dial-show-more"
-                        aria-expanded={zone1Expanded}
-                        aria-controls="zone1-rows"
-                        onClick={() => { if (!zone1Expanded) zone1ExpandAnchor.current = zone1SlugKey; else zone1ExpandAnchor.current = null; setZone1Expanded((e) => !e); }}
-                      >
-                        {zone1Expanded ? "See less" : `See all ${withReason.length}`}
-                      </button>
-                    )}
-                  </>
-                )}
-              </>
-            )}
-
-            {/* Library/seeds exist but nothing has crossed today — show a helpful
-                nudge instead of a blank Zone 1. */}
-            {!crossingsLoading &&
-              withReason.length === 0 &&
-              !isCoreLoading &&
-              (hasLibrary || hasSeeds || visibleSeeds.length > 0) && (
-              <>
-                <ZoneLabel label="On the Air × Your Music Library" accent="library" />
-                <div className="z1-placeholder z1-placeholder--no-cross">
-                  <div className="z1-placeholder__body">
-                    <p className="z1-placeholder__pitch">
-                      None of your artists have played on a live station today. Tune into a station or check back later.
-                    </p>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* No crossing rows yet: keep the existing Zone 1 onboarding surface
-                visible rather than leaving a blank section.  This is also the
-                settled state for listeners without a library or taste seeds. */}
-            {!crossingsLoading &&
-              withReason.length === 0 &&
-              !isCoreLoading &&
-              !hasLibrary &&
-              !hasSeeds &&
-              visibleSeeds.length === 0 &&
-              !isSpotifyConnected && (
-              <>
-                <ZoneLabel label="On the Air × Your Music Library" accent="library" />
-                <Zone1Placeholder
-                  isSpotifyConnected={isSpotifyConnected}
-                  hasLibrary={hasLibrary}
-                  hasSeeds={hasSeeds || visibleSeeds.length > 0}
-                  seeds={visibleSeeds}
-                  liveLoading={liveLoading}
-                  onAddSeed={addSeed}
-                  onRemoveSeed={removeSeed}
-                />
-              </>
-            )}
-
-            {/* Zone 2: Ghost — shown only after crossings load so it never
-                jumps above Zone 1 while scores are still in-flight */}
-            {!crossingsLoading && ghost.length > 0 && (
-              <>
-                <div className="fdzone-lbl-row">
-                  <ZoneLabel
-                    label="Missed while you were away"
-                    n={ghost.length}
-                    accent="picker"
-                    collapsed={zone2Collapsed}
-                    onCollapse={() => { setZone2Collapsed(!zone2Collapsed); if (!zone2Collapsed) setZone2Expanded(false); }}
-                  />
-                  {zone2Expanded && !zone2Collapsed && ghost.length > ZONE2_VISIBLE && (
-                    <button
-                      className="dial-show-more-inline"
-                      aria-expanded={true}
-                      aria-controls="zone2-rows"
-                      onClick={() => setZone2Expanded(false)}
-                    >
-                      See less
-                    </button>
-                  )}
-                </div>
-                {!zone2Collapsed && (
-                  <>
-                    <div id="zone2-rows">
-                      {ghost.slice(0, zone2Expanded ? ghost.length : ZONE2_VISIBLE).map((g) => (
-                        <GhostRow
-                          key={g.slug}
-                          station={g}
-                          isActive={g.slug === radio.station?.slug}
-                          onTuneIn={() => goStation(g.slug)}
-                        />
-                      ))}
-                    </div>
-                    {ghost.length > ZONE2_VISIBLE && (
-                      <button
-                        className="dial-show-more"
-                        aria-expanded={zone2Expanded}
-                        aria-controls="zone2-rows"
-                        onClick={() => { if (!zone2Expanded) zone2ExpandAnchor.current = zone2SlugKey; else zone2ExpandAnchor.current = null; setZone2Expanded((e) => !e); }}
-                      >
-                        {zone2Expanded ? "See less" : `See all ${ghost.length}`}
-                      </button>
-                    )}
-                  </>
-                )}
-              </>
-            )}
-
-            {/* Zone 3: Also on air — gated on crossingsLoading like Zones 1 & 2
-                so it never jumps ahead while scores are still in-flight.
-                Rendered as two visual bands:
-                  djBand  — r=5 attributed rows, always fully shown, picker accent
-                  restBand — r≠5 rows, subject to ZONE3_VISIBLE cap */}
-            {!crossingsLoading && alsoOnAir.length > 0 && (
-              <>
-                <div className="fdzone-lbl-row">
-                  <ZoneLabel
-                    label="Also on air"
-                    n={alsoOnAir.length}
-                    hint="nothing Lore can point to yet"
-                    accent="live"
-                    collapsed={zone3Collapsed}
-                    onCollapse={() => { setZone3Collapsed(!zone3Collapsed); if (!zone3Collapsed) setZone3Expanded(false); }}
-                  />
-                  {zone3Expanded && !zone3Collapsed && restBand.length > ZONE3_VISIBLE && (
-                    <button
-                      className="dial-show-more-inline"
-                      aria-expanded={true}
-                      aria-controls="zone3-rows"
-                      onClick={() => setZone3Expanded(false)}
-                    >
-                      See less
-                    </button>
-                  )}
-                </div>
-                {!zone3Collapsed && (
-                  <>
-                    {/* DJ band — attributed shows with no crossing yet.
-                        Always fully shown; no ZONE3_VISIBLE cap. */}
-                    {djBand.length > 0 && (
+                    {!zone1Collapsed && (
                       <>
-                        <ZoneLabel label="DJs on air" accent="picker" />
-                        {djBand.map((row) => (
-                          <FrontDoorRow
-                            key={row.ds.station.slug}
-                            ds={row.ds}
-                            show={row.show}
-                            ov={pickerOv(row.show?.pickerId ?? null, row.effectiveDjName)}
-                            isActive={row.ds.station.slug === radio.station?.slug}
-                            isSampling={false}
-                            onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
-                            onEarlier={() => goStation(row.ds.station.slug)}
-                            displayMode={crossingSourceMode}
-                            presence={presenceMap.get(row.ds.station.id)}
+                        {(hasSeeds || visibleSeeds.length > 0) && (
+                          <SeedBar
+                            seeds={visibleSeeds}
+                            onAddSeed={addSeed}
+                            onRemoveSeed={removeSeed}
                           />
-                        ))}
-                      </>
-                    )}
-                    {/* Rest band — unattributed / dark rows.
-                        Pinned stations float to the top of this band.
-                        Subject to ZONE3_VISIBLE cap + expand toggle. */}
-                    {restBand.length > 0 && (
-                      <>
-                        <div id="zone3-rows">
-                          {restBand.slice(0, zone3Expanded ? restBand.length : ZONE3_VISIBLE).map((row) => (
-                            <FrontDoorRow
-                              key={row.ds.station.slug}
-                              ds={row.ds}
-                              show={row.show}
-                              ov={row.ds.lifetimeCrossings}
-                              isActive={row.ds.station.slug === radio.station?.slug}
-                              isSampling={false}
-                              onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
-                              onEarlier={() => goStation(row.ds.station.slug)}
-                              displayMode={crossingSourceMode}
-                              presence={presenceMap.get(row.ds.station.id)}
-                            />
-                          ))}
+                        )}
+                        {/* Map over the FULL array so isSampling index is always the
+                            unsliced position; rows beyond zone1Visible are null until
+                            zone1Expanded is true. */}
+                        <div id="zone1-rows">
+                          {withReason.map((row, i) =>
+                            !zone1Expanded && i >= zone1Visible ? null : (
+                              <FrontDoorRow
+                                key={row.ds.station.slug}
+                                ds={row.ds}
+                                show={row.show}
+                                ov={row.show?.djName != null ? pickerOv(row.show?.pickerId ?? null, row.show.djName) : row.ds.lifetimeCrossings}
+                                isActive={row.ds.station.slug === radio.station?.slug}
+                                isSampling={scan.samplingIdx === i}
+                                onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
+                                onEarlier={() => goStation(row.ds.station.slug)}
+                                displayMode={crossingSourceMode}
+                                presence={presenceMap.get(row.ds.station.id)}
+                              />
+                            )
+                          )}
                         </div>
-                        {restBand.length > ZONE3_VISIBLE && (
+                        {/* Always-visible "Add artists" CTA — compact secondary link
+                            shown below the rows so listeners can expand their taste
+                            even when crossings are already showing. */}
+                        <button
+                          type="button"
+                          className="dial-ctabtn--ghost"
+                          onClick={() => window.dispatchEvent(new CustomEvent("lore:open-import-modal", { detail: { mode: "artist-seeds" } }))}
+                        >
+                          ＋ Add artists you love →
+                        </button>
+                        {withReason.length > zone1Visible && (
                           <button
                             className="dial-show-more"
-                            aria-expanded={zone3Expanded}
-                            aria-controls="zone3-rows"
-                            onClick={() => { if (!zone3Expanded) zone3ExpandAnchor.current = zone3SlugKey; else zone3ExpandAnchor.current = null; setZone3Expanded((e) => !e); }}
+                            aria-expanded={zone1Expanded}
+                            aria-controls="zone1-rows"
+                            onClick={() => { if (!zone1Expanded) zone1ExpandAnchor.current = zone1SlugKey; else zone1ExpandAnchor.current = null; setZone1Expanded((e) => !e); }}
                           >
-                            {zone3Expanded ? "See less" : `See all ${restBand.length}`}
+                            {zone1Expanded ? "See less" : `See all ${withReason.length}`}
                           </button>
                         )}
                       </>
                     )}
                   </>
                 )}
+
+                {/* Library/seeds exist but nothing has crossed today — helpful nudge. */}
+                {withReason.length === 0 && (hasLibrary || hasSeeds || visibleSeeds.length > 0) && (
+                  <>
+                    <ZoneLabel label="On the Air × Your Music Library" accent="library" />
+                    <div className="z1-placeholder z1-placeholder--no-cross">
+                      <div className="z1-placeholder__body">
+                        <p className="z1-placeholder__pitch">
+                          None of your artists have played on a live station today. Tune into a station or check back later.
+                        </p>
+                      </div>
+                    </div>
+                    {/* Always-visible CTA even in the no-cross state */}
+                    <button
+                      type="button"
+                      className="dial-ctabtn--ghost"
+                      onClick={() => window.dispatchEvent(new CustomEvent("lore:open-import-modal", { detail: { mode: "artist-seeds" } }))}
+                    >
+                      ＋ Add artists you love →
+                    </button>
+                  </>
+                )}
+
+                {/* No crossing rows, no library or seeds — full onboarding placeholder.
+                    The prominent CTA lives inside Zone1Placeholder for this state. */}
+                {withReason.length === 0 &&
+                  !hasLibrary &&
+                  !hasSeeds &&
+                  visibleSeeds.length === 0 &&
+                  !isSpotifyConnected && (
+                  <>
+                    <ZoneLabel label="On the Air × Your Music Library" accent="library" />
+                    <Zone1Placeholder
+                      isSpotifyConnected={isSpotifyConnected}
+                      hasLibrary={hasLibrary}
+                      hasSeeds={hasSeeds || visibleSeeds.length > 0}
+                      seeds={visibleSeeds}
+                      liveLoading={liveLoading}
+                      onAddSeed={addSeed}
+                      onRemoveSeed={removeSeed}
+                    />
+                  </>
+                )}
+
+                {/* Zone 2: Ghost stations — subsection within the primary tab.
+                    Rendered after Zone 1 content as "Missed while you were away". */}
+                {ghost.length > 0 && (
+                  <>
+                    <div className="fdzone-lbl-row">
+                      <ZoneLabel
+                        label="Missed while you were away"
+                        n={ghost.length}
+                        accent="picker"
+                        collapsed={zone2Collapsed}
+                        onCollapse={() => { setZone2Collapsed(!zone2Collapsed); if (!zone2Collapsed) setZone2Expanded(false); }}
+                      />
+                      {zone2Expanded && !zone2Collapsed && ghost.length > ZONE2_VISIBLE && (
+                        <button
+                          className="dial-show-more-inline"
+                          aria-expanded={true}
+                          aria-controls="zone2-rows"
+                          onClick={() => setZone2Expanded(false)}
+                        >
+                          See less
+                        </button>
+                      )}
+                    </div>
+                    {!zone2Collapsed && (
+                      <>
+                        <div id="zone2-rows">
+                          {ghost.slice(0, zone2Expanded ? ghost.length : ZONE2_VISIBLE).map((g) => (
+                            <GhostRow
+                              key={g.slug}
+                              station={g}
+                              isActive={g.slug === radio.station?.slug}
+                              onTuneIn={() => goStation(g.slug)}
+                            />
+                          ))}
+                        </div>
+                        {ghost.length > ZONE2_VISIBLE && (
+                          <button
+                            className="dial-show-more"
+                            aria-expanded={zone2Expanded}
+                            aria-controls="zone2-rows"
+                            onClick={() => { if (!zone2Expanded) zone2ExpandAnchor.current = zone2SlugKey; else zone2ExpandAnchor.current = null; setZone2Expanded((e) => !e); }}
+                          >
+                            {zone2Expanded ? "See less" : `See all ${ghost.length}`}
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
+
+                {/* Live-zone skeleton — shown after crossings resolve but while the
+                    first live pulse is still in-flight and no stations have appeared. */}
+                {liveLoading && sortedRows.length === 0 && (
+                  <>
+                    <DialRowSkeleton delay={0} />
+                    <DialRowSkeleton delay={1} />
+                    <DialRowSkeleton delay={2} />
+                  </>
+                )}
               </>
             )}
 
-            {/* Live-zone skeleton — shown after crossings resolve but while the
-                first live pulse is still in-flight and no stations have appeared.
-                Suppressed during the crossings-loading window because the three
-                zone skeletons above already hold the layout. */}
-            {!crossingsLoading && liveLoading && !isCoreLoading && sortedRows.length === 0 && (
+            {/* ── "Also on air" tab ────────────────────────────────────────────
+                Zone 3 content: DJ band (r=5) + rest band (r=0). */}
+            {zone1Settled && activeTab === "also-on-air" && (
               <>
-                <DialRowSkeleton delay={0} />
-                <DialRowSkeleton delay={1} />
-                <DialRowSkeleton delay={2} />
+                {alsoOnAir.length > 0 ? (
+                  <>
+                    <div className="fdzone-lbl-row">
+                      <ZoneLabel
+                        label="Also on air"
+                        n={alsoOnAir.length}
+                        hint="nothing Lore can point to yet"
+                        accent="live"
+                        collapsed={zone3Collapsed}
+                        onCollapse={() => { setZone3Collapsed(!zone3Collapsed); if (!zone3Collapsed) setZone3Expanded(false); }}
+                      />
+                      {zone3Expanded && !zone3Collapsed && restBand.length > ZONE3_VISIBLE && (
+                        <button
+                          className="dial-show-more-inline"
+                          aria-expanded={true}
+                          aria-controls="zone3-rows"
+                          onClick={() => setZone3Expanded(false)}
+                        >
+                          See less
+                        </button>
+                      )}
+                    </div>
+                    {!zone3Collapsed && (
+                      <>
+                        {/* DJ band — attributed shows with no crossing yet.
+                            Always fully shown; no ZONE3_VISIBLE cap. */}
+                        {djBand.length > 0 && (
+                          <>
+                            <ZoneLabel label="DJs on air" accent="picker" />
+                            {djBand.map((row) => (
+                              <FrontDoorRow
+                                key={row.ds.station.slug}
+                                ds={row.ds}
+                                show={row.show}
+                                ov={pickerOv(row.show?.pickerId ?? null, row.effectiveDjName)}
+                                isActive={row.ds.station.slug === radio.station?.slug}
+                                isSampling={false}
+                                onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
+                                onEarlier={() => goStation(row.ds.station.slug)}
+                                displayMode={crossingSourceMode}
+                                presence={presenceMap.get(row.ds.station.id)}
+                              />
+                            ))}
+                          </>
+                        )}
+                        {/* Rest band — unattributed / dark rows.
+                            Pinned stations float to the top of this band.
+                            Subject to ZONE3_VISIBLE cap + expand toggle. */}
+                        {restBand.length > 0 && (
+                          <>
+                            <div id="zone3-rows">
+                              {restBand.slice(0, zone3Expanded ? restBand.length : ZONE3_VISIBLE).map((row) => (
+                                <FrontDoorRow
+                                  key={row.ds.station.slug}
+                                  ds={row.ds}
+                                  show={row.show}
+                                  ov={row.ds.lifetimeCrossings}
+                                  isActive={row.ds.station.slug === radio.station?.slug}
+                                  isSampling={false}
+                                  onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
+                                  onEarlier={() => goStation(row.ds.station.slug)}
+                                  displayMode={crossingSourceMode}
+                                  presence={presenceMap.get(row.ds.station.id)}
+                                />
+                              ))}
+                            </div>
+                            {restBand.length > ZONE3_VISIBLE && (
+                              <button
+                                className="dial-show-more"
+                                aria-expanded={zone3Expanded}
+                                aria-controls="zone3-rows"
+                                onClick={() => { if (!zone3Expanded) zone3ExpandAnchor.current = zone3SlugKey; else zone3ExpandAnchor.current = null; setZone3Expanded((e) => !e); }}
+                              >
+                                {zone3Expanded ? "See less" : `See all ${restBand.length}`}
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <div style={{ padding: "20px 15px", opacity: 0.4, fontFamily: "var(--app-font-display)", fontSize: 12 }}>
+                    No additional stations on air right now
+                  </div>
+                )}
               </>
             )}
 
-            {/* While you were away — held until both crossings AND live data have
-                loaded so it never appears above the live zones.
-                For unauthenticated users crossingsLoading resolves in ~100 ms
-                (empty 200) but liveLoading can take several seconds, so gating
-                on crossingsLoading alone would flood the screen with 100+
-                offline rows before any live station has had a chance to appear. */}
-            {!crossingsLoading && !liveLoading && offlineStations.length > 0 && (
-              <ZoneLabel label="While you were away" n={offlineStations.length} />
-            )}
-            {!crossingsLoading && !liveLoading && visibleOffline.map((ds) => (
-              <OfflineRow
-                key={ds.station.slug}
-                dialStation={ds}
-                isActive={ds.station.slug === radio.station?.slug}
-                onStationClick={() => goStation(ds.station.slug)}
-                onPlay={() => void radio.toggle(ds.station)}
-                displayMode={crossingSourceMode}
-              />
-            ))}
-            {!crossingsLoading && !liveLoading && !showAllOffline && offlineStations.length > offlineWithProvenance.length && (
-              <button
-                className="dial-show-more"
-                onClick={() => setShowAllOffline(true)}
-              >
-                See all {offlineStations.length} stations
-              </button>
-            )}
-            {!crossingsLoading && !liveLoading && showAllOffline && offlineStations.length > offlineWithProvenance.length && (
-              <button
-                className="dial-show-more"
-                onClick={() => setShowAllOffline(false)}
-              >
-                See less
-              </button>
+            {/* ── "Recently aired" tab ─────────────────────────────────────────
+                Offline stations that aired recently.  Gated on the tab so it
+                never renders while live zones are still loading.
+                Default view shows only stations with provenance; "See all"
+                expands to include dark stations. */}
+            {zone1Settled && activeTab === "recently-aired" && (
+              <>
+                {offlineStations.length > 0 ? (
+                  <>
+                    <ZoneLabel label="While you were away" n={offlineStations.length} />
+                    {visibleOffline.map((ds) => (
+                      <OfflineRow
+                        key={ds.station.slug}
+                        dialStation={ds}
+                        isActive={ds.station.slug === radio.station?.slug}
+                        onStationClick={() => goStation(ds.station.slug)}
+                        onPlay={() => void radio.toggle(ds.station)}
+                        displayMode={crossingSourceMode}
+                      />
+                    ))}
+                    {!showAllOffline && offlineStations.length > offlineWithProvenance.length && (
+                      <button
+                        className="dial-show-more"
+                        onClick={() => setShowAllOffline(true)}
+                      >
+                        See all {offlineStations.length} stations
+                      </button>
+                    )}
+                    {showAllOffline && offlineStations.length > offlineWithProvenance.length && (
+                      <button
+                        className="dial-show-more"
+                        onClick={() => setShowAllOffline(false)}
+                      >
+                        See less
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <div style={{ padding: "20px 15px", opacity: 0.4, fontFamily: "var(--app-font-display)", fontSize: 12 }}>
+                    No recent station data
+                  </div>
+                )}
+              </>
             )}
 
             {/* Spinner while the live pulse hasn't arrived yet */}
