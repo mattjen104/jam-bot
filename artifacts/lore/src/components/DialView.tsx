@@ -1498,6 +1498,19 @@ export function DialView() {
       {/* Action bar — front door only (spec §10) */}
       {level === "all" && isRadioActive && (
              <div className="dial-actbar">
+                    <div className="dial-actpair">
+            <button type="button" className="dial-act dial-act--listen" onClick={tuneTop} disabled={!topRow}>
+              ▶ Listen{topLabel && <span className="dial-act__suffix"> · {topLabel}</span>}
+            </button>
+            <button
+              type="button"
+              className={`dial-act dial-act--scan${scan.scanning ? " dial-act--on" : ""}`}
+              onClick={scan.toggle}
+              disabled={withReason.length === 0}
+            >
+              {scan.scanning ? "■ Stop" : <><span className="dial-act__icon">↢</span> Scan<span className="dial-act__suffix"> · {withReason.length}</span></>}
+            </button>
+          </div>
            <div className="dial-mode" role="group" aria-label="Listening mode">
              <button
                type="button"
@@ -1518,19 +1531,6 @@ export function DialView() {
                Listening Party
              </button>
            </div>
-                    <div className="dial-actpair">
-            <button type="button" className="dial-act dial-act--listen" onClick={tuneTop} disabled={!topRow}>
-              ▶ Listen{topLabel && <span className="dial-act__suffix"> · {topLabel}</span>}
-            </button>
-            <button
-              type="button"
-              className={`dial-act dial-act--scan${scan.scanning ? " dial-act--on" : ""}`}
-              onClick={scan.toggle}
-              disabled={withReason.length === 0}
-            >
-              {scan.scanning ? "■ Stop" : <><span className="dial-act__icon">↢</span> Scan<span className="dial-act__suffix"> · {withReason.length}</span></>}
-            </button>
-          </div>
         </div>
       )}
 
@@ -1628,7 +1628,7 @@ export function DialView() {
                   aria-selected={activeTab === "library"}
                   onClick={() => setActiveTab("library")}
                 >
-                  On the Air × Your Music Library
+                  ON AIR × YOUR ARTISTS
                   {withReason.length > 0 && <span className="dial-tab__n">{withReason.length}</span>}
                 </button>
                 <button
@@ -1638,7 +1638,7 @@ export function DialView() {
                   aria-selected={activeTab === "also-on-air"}
                   onClick={() => setActiveTab("also-on-air")}
                 >
-                  Also on air
+                  Also On Air
                   {alsoOnAir.length > 0 && <span className="dial-tab__n">{alsoOnAir.length}</span>}
                 </button>
                 <button
@@ -1648,7 +1648,7 @@ export function DialView() {
                   aria-selected={activeTab === "recently-aired"}
                   onClick={() => setActiveTab("recently-aired")}
                 >
-                  Recently aired
+                  Recent
                   {offlineStations.length > 0 && <span className="dial-tab__n">{offlineStations.length}</span>}
                 </button>
               </div>
