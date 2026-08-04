@@ -910,8 +910,8 @@ function OfflineRow({
     t1Node = nn
       ? displayMode === "blended"
         ? <>Your group: {nn}</>
-        : <>{nn} aired here</>
-      : <><b>{crossings}</b> {displayMode === "blended" ? "heard here" : "of yours aired here"}</>;
+        : <>Set included {nn}.</>
+      : <><b>{crossings}</b> {displayMode === "blended" ? "heard here" : "of yours."}</>;
     t1Cls = "w3";
   } else if (artistCrossings > 0) {
     const names = (displayMode === "blended" && stationTopArtistNames.length > 0)
@@ -921,8 +921,8 @@ function OfflineRow({
     t1Node = nn
       ? displayMode === "blended"
         ? <>Your group: {nn}</>
-        : <>{nn} — an artist from your library</>
-      : <><b>{artistCrossings}</b> tracks by {displayMode === "blended" ? "community artists" : "your artists"} here</>;
+        : <>Set included {nn}.</>
+      : <><b>{artistCrossings}</b> {displayMode === "blended" ? "community artists here" : "tracks by your artists."}</>;
     t1Cls = "w4";
   } else if (lastSpin) {
     t1Node = (
@@ -1232,16 +1232,31 @@ export function DialView() {
     [ghostStations, liveSlugSet],
   );
 
+  // Helper: does a station's most recent non-future show have a usable DJ or show name?
+  const hasAttribution = (ds: DialStation): boolean => {
+    const lastShow = [...ds.shows].reverse().find((sh) => sh.state !== "future") ?? null;
+    if (!lastShow) return false;
+    const djName = lastShow.djName ?? null;
+    const showName = lastShow.showName && lastShow.showName.toLowerCase() !== "unknown show"
+      ? lastShow.showName : null;
+    return !!(djName || showName);
+  };
+
   // Offline stations (recently aired):
   //   1. Crossings desc — library matches first
-  //   2. Stations with any show history above stations with no data ever
-  //      (prevents "NO DATA TODAY" stations from clogging the top of the list)
-  //   3. Stable within each tier
+  //   2. Stations with a named DJ or show above stations with no attribution
+  //   3. Stations with any show history above stations with no data ever
+  //   4. Stable within each tier
   const offlineStations = useMemo(() =>
     [...stations]
       .filter((ds) => !ds.isLive)
       .sort((a, b) => {
-        if (b.crossings !== a.crossings) return b.crossings - a.crossings;
+        const aCrossings = a.crossings + a.artistCrossings;
+        const bCrossings = b.crossings + b.artistCrossings;
+        if (bCrossings !== aCrossings) return bCrossings - aCrossings;
+        const aAttr = hasAttribution(a) ? 1 : 0;
+        const bAttr = hasAttribution(b) ? 1 : 0;
+        if (bAttr !== aAttr) return bAttr - aAttr;
         const aHas = a.shows.length > 0 ? 1 : 0;
         const bHas = b.shows.length > 0 ? 1 : 0;
         return bHas - aHas;
@@ -1249,14 +1264,17 @@ export function DialView() {
     [stations, crossingSourceMode],
   );
 
-  // Render cap — start with 40 rows, expand on demand. Prevents mounting
-  // 500+ StationLane components at once when the user hasn't scrolled there.
-  const OFFLINE_PAGE = 40;
-  const [visibleOfflineCount, setVisibleOfflineCount] = useState(OFFLINE_PAGE);
-  const visibleOffline = useMemo(
-    () => offlineStations.slice(0, visibleOfflineCount),
-    [offlineStations, visibleOfflineCount],
+  // Two-state visibility gate for the offline section:
+  //   Default: only stations with provenance (crossings, artist crossings, named DJ, or show).
+  //   Expanded: all offline stations (dark stations included).
+  const [showAllOffline, setShowAllOffline] = useState(false);
+  const offlineWithProvenance = useMemo(
+    () => offlineStations.filter((ds) =>
+      ds.crossings > 0 || ds.artistCrossings > 0 || hasAttribution(ds)
+    ),
+    [offlineStations],
   );
+  const visibleOffline = showAllOffline ? offlineStations : offlineWithProvenance;
 
   // --- per-zone truncation (spec §16) ---
   // Zone 1: rung-1 rows are never hidden — expand the budget to cover them all.
@@ -1875,14 +1893,14 @@ export function DialView() {
               </>
             )}
 
-            {/* Recently aired — held until both crossings AND live data have
+            {/* While you were away — held until both crossings AND live data have
                 loaded so it never appears above the live zones.
                 For unauthenticated users crossingsLoading resolves in ~100 ms
                 (empty 200) but liveLoading can take several seconds, so gating
                 on crossingsLoading alone would flood the screen with 100+
                 offline rows before any live station has had a chance to appear. */}
             {!crossingsLoading && !liveLoading && offlineStations.length > 0 && (
-              <ZoneLabel label="Recently aired" n={offlineStations.length} />
+              <ZoneLabel label="While you were away" n={offlineStations.length} />
             )}
             {!crossingsLoading && !liveLoading && visibleOffline.map((ds) => (
               <OfflineRow
@@ -1894,12 +1912,20 @@ export function DialView() {
                 displayMode={crossingSourceMode}
               />
             ))}
-            {!crossingsLoading && !liveLoading && visibleOfflineCount < offlineStations.length && (
+            {!crossingsLoading && !liveLoading && !showAllOffline && offlineStations.length > offlineWithProvenance.length && (
               <button
                 className="dial-show-more"
-                onClick={() => setVisibleOfflineCount((n) => n + OFFLINE_PAGE)}
+                onClick={() => setShowAllOffline(true)}
               >
-                Show {Math.min(OFFLINE_PAGE, offlineStations.length - visibleOfflineCount)} more stations
+                See all {offlineStations.length} stations
+              </button>
+            )}
+            {!crossingsLoading && !liveLoading && showAllOffline && offlineStations.length > offlineWithProvenance.length && (
+              <button
+                className="dial-show-more"
+                onClick={() => setShowAllOffline(false)}
+              >
+                See less
               </button>
             )}
 
