@@ -164,6 +164,12 @@ export interface RideApi {
    * Null when not playing or when position is unknown.
    */
   progressMs: number | null;
+  /**
+   * Total track duration in milliseconds — populated by YouTube (via
+   * infoDelivery messages) and Apple Music (via currentPlaybackDuration).
+   * Null for preview/Spotify sources where duration is not exposed.
+   */
+  durationMs: number | null;
   /** What is sounding right now: the listener's connected service (Spotify,
    * YouTube, Apple Music) or the 30s preview element. Null before playback
    * begins. */
@@ -220,6 +226,12 @@ export interface RideApi {
    * disappears; if it fails again the message returns.
    */
   retrySpotify: () => void;
+  /**
+   * Seek to a position within the current track.  Only meaningful when
+   * `source` is `"youtube"` or `"apple-music"` — the active driver must
+   * implement the optional `seek()` method.  No-op for other sources.
+   */
+  seek: (ms: number) => void;
 }
 
 /** One scan hop — the preview currently sounding during a preview-mode scan. */
@@ -411,6 +423,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [replayLabel, setReplayLabel] = useState<string | null>(null);
   const [rideListenContext, setRideListenContext] = useState<string | null>(null);
   const [progressMs, setProgressMs] = useState<number | null>(null);
+  const [durationMs, setDurationMs] = useState<number | null>(null);
   const [timeOrientation, setTimeOrientation] =
     useState<TimeOrientation>("curated");
   // Read from localStorage once on mount; default to 'passthrough' (safe).
@@ -457,11 +470,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const pauseRadio = (radio as unknown as { pause: () => void }).pause;
   const resumeLiveRadio = (radio as unknown as { resume: () => void }).resume;
 
-  // Stable refs so stop()/togglePause() can call driver methods even though the
-  // driver hooks are instantiated later in the component body.
+  // Stable refs so stop()/togglePause()/seek() can call driver methods even
+  // though the driver hooks are instantiated later in the component body.
   const activeDriverStopRef = useRef<() => void>(() => {});
   const activeDriverPauseRef = useRef<() => Promise<void>>(async () => {});
   const activeDriverResumeRef = useRef<() => Promise<void>>(async () => {});
+  const activeDriverSeekRef = useRef<((ms: number) => Promise<void>) | null>(null);
 
   const stop = useCallback(() => {
     rideRef.current += 1;
@@ -487,6 +501,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setReplayLabel(null);
     setRideListenContext(null);
     setTimeOrientation("curated");
+    setDurationMs(null);
   }, []);
 
   const start = useCallback(
@@ -672,6 +687,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
   }, [status]);
 
+  /** Seek to `ms` within the current track (YouTube / Apple Music only). */
+  const seek = useCallback((ms: number) => {
+    const fn = activeDriverSeekRef.current;
+    if (!fn) return;
+    void fn(ms).catch(() => {/* best-effort — a seek failure is non-fatal */});
+  }, []);
+
   /** Persist the user's mode choice and switch immediately. */
   const setPlaybackMode = useCallback((newMode: PlaybackMode) => {
     writeStoredPlaybackMode(newMode);
@@ -796,7 +818,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     youtubeDriver.stop();
     appleMusicDriver.stop();
   };
-  // Route pause/resume to whichever driver is currently sounding, not the
+  // Route pause/resume/seek to whichever driver is currently sounding, not the
   // statically-preferred one — Spotify may be preferred but YouTube/Apple
   // could be carrying the audio after a per-track fallback.
   activeDriverPauseRef.current = async () => {
@@ -811,6 +833,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (src === "apple-music") return appleMusicDriver.resume();
     return spotifyDriver.handle.resume();
   };
+  activeDriverSeekRef.current = (() => {
+    const src = sourceRef.current;
+    if (src === "youtube") return youtubeDriver.seek ?? null;
+    if (src === "apple-music") return appleMusicDriver.seek ?? null;
+    return null;
+  })();
 
   // Convenience aliases from the Spotify driver extras.
   const { spotifyModeForCurrent, fallbackUsed, deviceLost, retryCurrentTrack } =
@@ -841,6 +869,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
     setAltDriverActiveMbid(null);
     altDriverFailedRef.current.clear();
+    // Clear stale duration when the track changes.
+    setDurationMs(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentMbid]);
 
@@ -940,6 +970,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     return youtubeDriver.onStatusChange((s) => {
       const mbid = s.trackId ?? null;
       if (mbid && mbid !== currentMbid) return;
+      if (s.durationMs !== undefined) setDurationMs(s.durationMs ?? null);
+      if (s.progressMs !== undefined && sourceRef.current === "youtube") {
+        setProgressMs(s.progressMs ?? null);
+      }
       if (s.state === "loading") {
         // Audio exclusivity: silence the broadcast while YouTube loads.
         pauseRadio?.();
@@ -981,6 +1015,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     return appleMusicDriver.onStatusChange((s) => {
       const mbid = s.trackId ?? null;
       if (mbid && mbid !== currentMbid) return;
+      if (s.durationMs !== undefined) setDurationMs(s.durationMs ?? null);
       if (s.state === "loading") {
         // Audio exclusivity: silence the broadcast while Apple Music loads.
         pauseRadio?.();
@@ -1544,6 +1579,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             ? index === queue.length - 1
             : atTrailEnd && index === queue.length - 1,
         progressMs,
+        durationMs,
         source,
         mode,
         replayLabel,
@@ -1560,6 +1596,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         togglePause,
         setPlaybackMode,
         retrySpotify,
+        seek,
       },
       spotify,
       scan: {
@@ -1592,6 +1629,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       seeking,
       atTrailEnd,
       progressMs,
+      durationMs,
       source,
       mode,
       replayLabel,
@@ -1608,6 +1646,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       togglePause,
       setPlaybackMode,
       retrySpotify,
+      seek,
       spotify,
       scanActive,
       toggleScan,

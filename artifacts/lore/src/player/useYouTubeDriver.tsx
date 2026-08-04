@@ -71,6 +71,8 @@ export function useYouTubeDriver(): PlaybackDriverHandle {
     subscribersRef.current.forEach((cb) => cb(status));
   }, []);
 
+  const durationMsRef = useRef<number | null>(null);
+
   // ---- Listen for YouTube IFrame API messages ----------------------------
 
   useEffect(() => {
@@ -82,7 +84,11 @@ export function useYouTubeDriver(): PlaybackDriverHandle {
       try {
         const payload = JSON.parse(event.data) as {
           event?: string;
-          info?: number | { playerState?: number };
+          info?: number | {
+            playerState?: number;
+            currentTime?: number;
+            duration?: number;
+          };
         };
         if (payload?.event === "onStateChange") {
           // YT.PlayerState: -1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=cued
@@ -104,6 +110,22 @@ export function useYouTubeDriver(): PlaybackDriverHandle {
           } else if (state === 2) {
             pausedRef.current = true;
             notify({ state: "paused", trackId: currentTrackIdRef.current });
+          }
+        } else if (payload?.event === "infoDelivery") {
+          // Periodic position + duration updates from the IFrame API.
+          if (typeof payload.info === "object" && payload.info !== null) {
+            const { currentTime, duration } = payload.info;
+            if (typeof duration === "number" && duration > 0) {
+              durationMsRef.current = Math.round(duration * 1000);
+            }
+            if (typeof currentTime === "number") {
+              notify({
+                state: playingRef.current ? "playing" : pausedRef.current ? "paused" : "loading",
+                progressMs: Math.round(currentTime * 1000),
+                durationMs: durationMsRef.current,
+                trackId: currentTrackIdRef.current,
+              });
+            }
           }
         }
       } catch {
@@ -183,6 +205,16 @@ export function useYouTubeDriver(): PlaybackDriverHandle {
         iframe.src = embedUrl;
 
         notify({ state: "loading", trackId: item.mbid });
+      },
+
+      seek: async (positionMs: number) => {
+        const iframe = iframeRef.current;
+        if (!iframe?.contentWindow) return;
+        const seconds = positionMs / 1000;
+        iframe.contentWindow.postMessage(
+          JSON.stringify({ event: "command", func: "seekTo", args: [seconds, true] }),
+          "https://www.youtube.com",
+        );
       },
 
       pause: async () => {

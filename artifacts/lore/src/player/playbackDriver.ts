@@ -41,6 +41,8 @@ export interface DriverPlaybackStatus {
   state: DriverState;
   /** Current playhead in ms (best-effort; omit when unknown). */
   progressMs?: number | null;
+  /** Total track duration in ms (best-effort; omit when unknown). */
+  durationMs?: number | null;
   /** MBID of the track this status report refers to (for staleness guards). */
   trackId?: string | null;
 }
@@ -86,6 +88,14 @@ export interface PlaybackDriverHandle {
    * `useEffect` dependency array.
    */
   onStatusChange(cb: (status: DriverPlaybackStatus) => void): () => void;
+
+  /**
+   * Seek to a position within the currently-playing track.  Optional — drivers
+   * that cannot seek (e.g. 30-second previews) omit this method.
+   * Resolves when the seek command has been sent; does not wait for playback
+   * to resume from the new position.
+   */
+  seek?(positionMs: number): Promise<void>;
 
   /**
    * Optional DOM surface that must be mounted in the component tree for the

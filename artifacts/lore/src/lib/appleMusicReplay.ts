@@ -39,6 +39,12 @@ export type MusicKitInstance = {
   stop?: () => Promise<unknown> | unknown;
   skipToNextItem?: () => Promise<unknown> | unknown;
   skipToPreviousItem?: () => Promise<unknown> | unknown;
+  /** Seek to a position in the current track. Time is in seconds. */
+  seekToTime?: (timeInSeconds: number) => Promise<void>;
+  /** Current playhead position in seconds. */
+  currentPlaybackTime?: number;
+  /** Total duration of the current track in seconds. */
+  currentPlaybackDuration?: number;
   addEventListener: (event: string, listener: (event: unknown) => void) => void;
   removeEventListener: (event: string, listener: (event: unknown) => void) => void;
   storefrontId?: string;

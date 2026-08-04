@@ -1,3 +1,4 @@
+import { useState, useRef, useCallback } from "react";
 import { Link } from "wouter";
 import type { RecordingLink } from "@workspace/api-client-react";
 import type { RideApi } from "../player/PlayerProvider";
@@ -20,6 +21,98 @@ import {
   SkipForward,
   X,
 } from "lucide-react";
+
+// ---------------------------------------------------------------------------
+// Progress / seek bar
+// ---------------------------------------------------------------------------
+
+function formatTime(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${sec.toString().padStart(2, "0")}`;
+}
+
+/**
+ * Interactive seek bar shown for YouTube and Apple Music sources.
+ * Uses a hidden range input overlaid on a visual track so the drag handle
+ * matches the design system.
+ */
+function SeekBar({
+  progressMs,
+  durationMs,
+  onSeek,
+}: {
+  progressMs: number | null;
+  durationMs: number | null;
+  onSeek: (ms: number) => void;
+}) {
+  // While the user is scrubbing we show their drag position, not the live
+  // playhead, so the bar doesn't jump beneath their finger/cursor.
+  const [scrubbing, setScrubbing] = useState(false);
+  const [scrubValue, setScrubValue] = useState(0);
+  const rangeRef = useRef<HTMLInputElement>(null);
+
+  const duration = durationMs ?? 0;
+  const progress = scrubbing ? scrubValue : (progressMs ?? 0);
+  const pct = duration > 0 ? Math.min(100, (progress / duration) * 100) : 0;
+
+  const handlePointerDown = useCallback(() => {
+    setScrubbing(true);
+    setScrubValue(progressMs ?? 0);
+  }, [progressMs]);
+
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setScrubValue(Number(e.target.value));
+    },
+    [],
+  );
+
+  const handlePointerUp = useCallback(
+    (e: React.PointerEvent<HTMLInputElement>) => {
+      const val = Number((e.target as HTMLInputElement).value);
+      setScrubbing(false);
+      onSeek(val);
+    },
+    [onSeek],
+  );
+
+  return (
+    <div className="px-5 pb-2">
+      <div className="relative flex items-center gap-2">
+        <span className="w-8 shrink-0 text-right font-mono text-[10px] text-muted-foreground">
+          {formatTime(progress)}
+        </span>
+        {/* Visual track */}
+        <div className="relative h-1 flex-1 overflow-hidden rounded-full bg-border">
+          <div
+            className="absolute inset-y-0 left-0 rounded-full bg-primary transition-none"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        {/* Range input — transparent overlay for interaction */}
+        <input
+          ref={rangeRef}
+          type="range"
+          min={0}
+          max={duration > 0 ? duration : 100}
+          value={scrubbing ? scrubValue : (progressMs ?? 0)}
+          step={500}
+          onPointerDown={handlePointerDown}
+          onChange={handleChange}
+          onPointerUp={handlePointerUp}
+          aria-label="Seek position"
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+          style={{ margin: 0 }}
+        />
+        <span className="w-8 shrink-0 font-mono text-[10px] text-muted-foreground">
+          {duration > 0 ? formatTime(duration) : "--:--"}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 /**
  * Human-readable label for which service is carrying the ride audio.
@@ -212,6 +305,15 @@ export function RideBar({
           </div>
         </div>
       ) : null}
+
+      {/* Seek bar — shown for full-track drivers that support seeking */}
+      {(ride.source === "youtube" || ride.source === "apple-music") && (
+        <SeekBar
+          progressMs={ride.progressMs}
+          durationMs={ride.durationMs}
+          onSeek={ride.seek}
+        />
+      )}
 
       <div className="flex items-center gap-4 px-5 py-3">
         <span

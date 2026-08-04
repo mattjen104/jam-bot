@@ -163,14 +163,19 @@ export function useAppleMusicDriver(opts: AppleMusicDriverOpts = {}): PlaybackDr
           const onStateChange = (event: unknown) => {
             const value = event as { state?: string; playbackState?: string } | null;
             const next = String(value?.state ?? value?.playbackState ?? "").toLowerCase();
+            const music = musicRef.current;
+            const durationMs =
+              music && typeof music.currentPlaybackDuration === "number"
+                ? Math.round(music.currentPlaybackDuration * 1000)
+                : null;
             if (next.includes("paused") || next === "0") {
               pausedRef.current = true;
               playingRef.current = false;
-              notify({ state: "paused", trackId: currentTrackIdRef.current });
+              notify({ state: "paused", durationMs, trackId: currentTrackIdRef.current });
             } else if (next.includes("playing") || next === "1") {
               playingRef.current = true;
               pausedRef.current = false;
-              notify({ state: "playing", trackId: currentTrackIdRef.current });
+              notify({ state: "playing", durationMs, trackId: currentTrackIdRef.current });
             } else if (next.includes("ended") || next.includes("complete") || next === "4") {
               playingRef.current = false;
               notify({ state: "ended", trackId: currentTrackIdRef.current });
@@ -203,13 +208,23 @@ export function useAppleMusicDriver(opts: AppleMusicDriverOpts = {}): PlaybackDr
         notify({ state: "playing", trackId: item.mbid });
       },
 
+      seek: async (positionMs: number) => {
+        const music = musicRef.current;
+        if (!music?.seekToTime) return;
+        await music.seekToTime(positionMs / 1000);
+      },
+
       pause: async () => {
         const music = musicRef.current;
         if (!music || pausedRef.current) return;
         await music.pause();
         pausedRef.current = true;
         playingRef.current = false;
-        notify({ state: "paused", trackId: currentTrackIdRef.current });
+        const durationMs =
+          typeof music.currentPlaybackDuration === "number"
+            ? Math.round(music.currentPlaybackDuration * 1000)
+            : null;
+        notify({ state: "paused", durationMs, trackId: currentTrackIdRef.current });
       },
 
       resume: async () => {
