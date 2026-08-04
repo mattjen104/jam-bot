@@ -469,6 +469,105 @@ describe("BottlePanel — expanded panel content", () => {
 });
 
 // ---------------------------------------------------------------------------
+// MBID change — panel state reset
+// ---------------------------------------------------------------------------
+
+describe("BottlePanel — MBID change resets panel state", () => {
+  it("closes the panel and clears the sealed flag when MBID changes after sending", async () => {
+    const send = vi.fn(
+      () => new Promise<void>(() => { /* intentionally never resolves */ }),
+    );
+    (mockUseSongBottles as Mock).mockReturnValue({
+      bottles: [],
+      archivedCount: 0,
+      hasUnread: false,
+      markRead: vi.fn(),
+      send,
+      loading: false,
+      error: null,
+    });
+
+    const { rerender } = render(
+      <BottlePanel {...DEFAULT_PROPS} mbid="track-A" />,
+    );
+
+    // Open the panel and type a note
+    fireEvent.click(screen.getByTestId("bottle-trigger"));
+    expect(screen.getByTestId("bottle-panel-expanded")).toBeTruthy();
+    fireEvent.change(screen.getByTestId("bottle-input"), {
+      target: { value: "Hello from track A" },
+    });
+
+    // Send — the panel optimistically seals immediately
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("bottle-send"));
+    });
+
+    // Sealed confirm is visible inside the open panel
+    expect(screen.getByTestId("bottle-sent-confirm")).toBeTruthy();
+
+    // Simulate the track changing
+    await act(async () => {
+      rerender(<BottlePanel {...DEFAULT_PROPS} mbid="track-B" />);
+    });
+
+    // Panel must be closed
+    expect(screen.queryByTestId("bottle-panel-expanded")).toBeNull();
+    // Sent-confirm must be gone
+    expect(screen.queryByTestId("bottle-sent-confirm")).toBeNull();
+    // Trigger must show the PostItIcon (write-note state, not sealed bottle)
+    expect(
+      screen.getByTestId("bottle-trigger").getAttribute("aria-label"),
+    ).toBe("Write a note");
+  });
+
+  it("clears a send error when MBID changes", async () => {
+    const send = vi.fn().mockRejectedValue(new Error("Network error"));
+    (mockUseSongBottles as Mock).mockReturnValue({
+      bottles: [],
+      archivedCount: 0,
+      hasUnread: false,
+      markRead: vi.fn(),
+      send,
+      loading: false,
+      error: null,
+    });
+
+    const { rerender } = render(
+      <BottlePanel {...DEFAULT_PROPS} mbid="track-A" />,
+    );
+
+    // Open, type, and send a note that will fail
+    fireEvent.click(screen.getByTestId("bottle-trigger"));
+    fireEvent.change(screen.getByTestId("bottle-input"), {
+      target: { value: "Error-bound message" },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("bottle-send"));
+    });
+
+    // Wait for the inline error to appear
+    await waitFor(() => {
+      expect(screen.getByTestId("bottle-send-error")).toBeTruthy();
+    });
+
+    // Change MBID — triggers the reset useEffect
+    await act(async () => {
+      rerender(<BottlePanel {...DEFAULT_PROPS} mbid="track-B" />);
+    });
+
+    // Error must be cleared
+    expect(screen.queryByTestId("bottle-send-error")).toBeNull();
+    // Panel must be closed
+    expect(screen.queryByTestId("bottle-panel-expanded")).toBeNull();
+    // Trigger must be back to the write-note (PostItIcon) state
+    expect(
+      screen.getByTestId("bottle-trigger").getAttribute("aria-label"),
+    ).toBe("Write a note");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // PostItIcon SVG geometry
 // ---------------------------------------------------------------------------
 
