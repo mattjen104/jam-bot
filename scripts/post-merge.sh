@@ -1,4 +1,7 @@
 #!/bin/bash
 set -e
 pnpm install --frozen-lockfile
-pnpm --filter db push-force
+# drizzle-kit push --force skips the final "execute?" confirmation but still
+# prompts "truncate table?" when adding a unique constraint to a non-empty table.
+# Piping a newline selects the default answer ("No, add without truncating").
+printf '\n' | pnpm --filter db push-force
