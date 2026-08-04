@@ -115,7 +115,7 @@ function intoSet(startedAt: string): string {
 function nameNodes(artists: string[]): ReactNode {
   const usable = artists.map((artist) => cleanLiveValue(artist)).filter((artist): artist is string => artist != null);
   if (usable.length === 0) return null;
-  const shown = usable.slice(0, 3);
+  const shown = usable.slice(0, 6);
   const rest = usable.length - shown.length;
   const nodes: ReactNode[] = [];
   shown.forEach((name, i) => {
@@ -245,10 +245,18 @@ function crossingSentence(
       showTitle: show.showName,
       stationName,
     });
+    if (artists.length === 1) {
+      return {
+        node: dj
+          ? <>{dj} — {artistNodes} on air.</>
+          : <>{artistNodes} on air.</>,
+        hasTrack: true,
+      };
+    }
     return {
       node: dj
-        ? <>{dj} — {artistNodes} on air.</>
-        : <>{artistNodes} on air.</>,
+        ? <>{dj} — {artistNodes} this set</>
+        : <>{artistNodes} this set</>,
       hasTrack: true,
     };
   }
@@ -283,6 +291,7 @@ function reason(
   stationCrossings: number,
   stationArtistCrossings = 0,
   displayMode: DialDisplayMode = "personal",
+  stationTopArtistNames: string[] = [],
 ): ReasonResult {
   if (!show) return { r: 0, cls: "w0", node: "on air · Lore can't see who's playing" };
 
@@ -333,8 +342,8 @@ function reason(
     return {
       r: 3, cls: "w3",
       node: nn
-        ? <>{nn} already this set</>
-        : <><b>{show.crossings} of yours</b> already this set</>,
+        ? <>{nn} this set</>
+        : <><b>{show.crossings} of yours</b> this set</>,
     };
   }
 
@@ -344,7 +353,7 @@ function reason(
     return {
       r: 4, cls: "w4",
       node: nn
-        ? <>{nn} — an artist from your library</>
+        ? <>{nn} this set</>
         : <><b>{show.artistCrossings}</b> tracks by artists from your library</>,
     };
   }
@@ -356,17 +365,23 @@ function reason(
 
   // r=6: 24h station exact crossings (no selector listed)
   if (stationCrossings > 0) {
+    const nn = stationTopArtistNames.length > 0 ? nameNodes(stationTopArtistNames) : null;
     return {
       r: 6, cls: "w6",
-      node: <><b>{stationCrossings} of yours</b> here in the last 24h</>,
+      node: nn
+        ? <>{nn} in the last 24 hours</>
+        : <><b>{stationCrossings} of yours</b> here in the last 24h</>,
     };
   }
 
   // r=7: 24h station artist crossings (no exact hits, no selector listed)
   if (stationArtistCrossings > 0) {
+    const nn = stationTopArtistNames.length > 0 ? nameNodes(stationTopArtistNames) : null;
     return {
       r: 7, cls: "w7",
-      node: <><b>{stationArtistCrossings}</b> tracks by your artists here in the last 24h</>,
+      node: nn
+        ? <>{nn} in the last 24 hours</>
+        : <><b>{stationArtistCrossings}</b> tracks by your artists here in the last 24h</>,
     };
   }
 
@@ -404,7 +419,7 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onE
   const safeShow = show && usableDj !== show.djName
     ? { ...show, djName: usableDj }
     : show;
-  const rz = reason(safeShow, ds.crossings, ds.artistCrossings, displayMode);
+  const rz = reason(safeShow, ds.crossings, ds.artistCrossings, displayMode, ds.topArtistNames);
 
   const crossing = crossingSentence(ds.station.name, safeShow, displayMode);
   // In blended mode: live sentence is a secondary attribution line shown below rz.node
