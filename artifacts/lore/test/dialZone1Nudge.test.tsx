@@ -328,3 +328,46 @@ describe("Zone 1 nudge — seed-change transitions mid-session (no page reload)"
     expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
   });
 });
+
+describe("Zone 1 nudge — library import completes mid-session (no page reload)", () => {
+  it("stays hidden while crossings are still loading after hasLibrary flips true", () => {
+    // Phase 1: no library, no seeds → nudge absent.
+    mockDialData({ hasLibrary: false, hasSeeds: false, stations: [] });
+    const { rerender } = render(<DialView />);
+    expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
+
+    // Phase 2: import finishes → hasLibrary flips true, but crossings are still
+    // in flight (crossingsLoading=true).  The nudge must stay hidden — showing it
+    // here would be a false "no artists played today" while data is loading.
+    (useDialData as ReturnType<typeof vi.fn>).mockReturnValue(
+      baseDialData({ hasLibrary: true, crossingsLoading: true, stations: [] }),
+    );
+    act(() => { rerender(<DialView />); });
+    // Advance past the skeleton delay to ensure any deferred show logic has run.
+    act(() => { vi.advanceTimersByTime(200); });
+
+    expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
+  });
+
+  it("shows the nudge once crossings settle with no results after a library import", () => {
+    // Phase 1: no library, no seeds → nudge absent.
+    mockDialData({ hasLibrary: false, hasSeeds: false, stations: [] });
+    const { rerender } = render(<DialView />);
+    expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
+
+    // Phase 2: hasLibrary flips true, crossings still loading → still hidden.
+    (useDialData as ReturnType<typeof vi.fn>).mockReturnValue(
+      baseDialData({ hasLibrary: true, crossingsLoading: true, stations: [] }),
+    );
+    act(() => { rerender(<DialView />); });
+    expect(screen.queryByText(NUDGE_TEXT, { exact: false })).toBeNull();
+
+    // Phase 3: crossings finish loading, no crossing rows exist → nudge appears.
+    (useDialData as ReturnType<typeof vi.fn>).mockReturnValue(
+      baseDialData({ hasLibrary: true, crossingsLoading: false, stations: [] }),
+    );
+    act(() => { rerender(<DialView />); });
+
+    expect(screen.getByText(NUDGE_TEXT, { exact: false })).toBeTruthy();
+  });
+});
