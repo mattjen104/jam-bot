@@ -21,6 +21,7 @@ export type MusicKitPlaybackState =
 
 export type MusicKitErrorKind =
   | "authorization-cancelled"
+  | "authorization-expired"
   | "subscription-required"
   | "configuration"
   | "provider"
@@ -160,6 +161,19 @@ export function loadMusicKit(): Promise<MusicKitGlobal> {
 export function describeMusicKitError(error: unknown): MusicKitError {
   const raw = error instanceof Error ? error.message : String(error ?? "");
   const normalized = raw.toLowerCase();
+  // Check for mid-session token expiry before the user-cancel check, since
+  // expired tokens can also surface "not authorized" messages.
+  if (
+    normalized.includes("expired") ||
+    normalized.includes("401") ||
+    normalized.includes("authorization_error") ||
+    normalized.includes("token refresh")
+  ) {
+    return {
+      kind: "authorization-expired",
+      message: "Apple Music authorization expired. Attempting to re-authorize.",
+    };
+  }
   if (
     normalized.includes("cancel") ||
     normalized.includes("denied") ||

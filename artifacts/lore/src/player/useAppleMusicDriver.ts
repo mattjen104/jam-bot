@@ -81,6 +81,9 @@ export function useAppleMusicDriver(opts: AppleMusicDriverOpts = {}): PlaybackDr
   const musicRef = useRef<MusicKitInstance | null>(null);
   const listenersRef = useRef<Array<[string, (event: unknown) => void]>>([]);
   const currentTrackIdRef = useRef<string | null>(null);
+  // Apple Music song ID for the currently queued track — needed to re-queue
+  // after a silent re-authorization when the token expires mid-session.
+  const currentAppleMusicIdRef = useRef<string | null>(null);
   const subscribersRef = useRef<Set<(s: DriverPlaybackStatus) => void>>(new Set());
   const pausedRef = useRef(false);
   const playingRef = useRef(false);
@@ -134,6 +137,7 @@ export function useAppleMusicDriver(opts: AppleMusicDriverOpts = {}): PlaybackDr
 
         notify({ state: "loading", trackId: item.mbid });
         currentTrackIdRef.current = item.mbid;
+        currentAppleMusicIdRef.current = appleMusicId;
 
         // Load MusicKit if needed.
         const global = await loadMusicKit().catch(() => {
@@ -181,10 +185,32 @@ export function useAppleMusicDriver(opts: AppleMusicDriverOpts = {}): PlaybackDr
               notify({ state: "ended", trackId: currentTrackIdRef.current });
             }
           };
-          const onError = (event: unknown) => {
+          const onError = async (event: unknown) => {
             const detail = event instanceof Error ? event : (event as { detail?: unknown })?.detail;
             const desc = describeMusicKitError(detail ?? event);
             playingRef.current = false;
+
+            // When the token expires mid-session, attempt a silent re-authorize
+            // before cascading to the error/fallback path.
+            if (desc.kind === "authorization-expired") {
+              const music = musicRef.current;
+              const replayId = currentAppleMusicIdRef.current;
+              if (music && replayId) {
+                try {
+                  await music.authorize();
+                  setAuthorized(true);
+                  // Re-queue and resume without interrupting the ride.
+                  await music.setQueue({ songs: [replayId] });
+                  await music.play();
+                  playingRef.current = true;
+                  notify({ state: "playing", trackId: currentTrackIdRef.current });
+                  return;
+                } catch {
+                  // Re-auth failed — fall through to the normal error path.
+                }
+              }
+            }
+
             const isSubscriptionError = desc.kind === "subscription-required";
             notify({
               state: isSubscriptionError ? "unavailable" : "error",
