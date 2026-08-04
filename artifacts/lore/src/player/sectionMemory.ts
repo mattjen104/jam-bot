@@ -22,9 +22,18 @@ export interface StoredStation {
   logoUrl: string | null;
 }
 
+export interface RadioLastTrack {
+  artworkUrl: string | null;
+  title: string;
+  artist: string;
+  mbid: string | null;
+}
+
 export interface RadioSectionMemory {
   kind: "radio";
   station: StoredStation;
+  /** The last resolved now-playing track while tuned to this station. */
+  lastTrack?: RadioLastTrack | null;
 }
 
 export interface SelectorSectionMemory {
@@ -97,12 +106,28 @@ function readValue(raw: unknown): SectionMemory {
       const streamUrl = stringValue(s.streamUrl, 4000);
       const streamFormat = stringValue(s.streamFormat, 40);
       if (id != null && slug && name && streamUrl && streamFormat) {
+        const rawLastTrack = (radio as Record<string, unknown>).lastTrack;
+        let lastTrack: RadioLastTrack | null = null;
+        if (rawLastTrack && typeof rawLastTrack === "object") {
+          const lt = rawLastTrack as Record<string, unknown>;
+          const ltTitle = stringValue(lt.title);
+          const ltArtist = stringValue(lt.artist);
+          if (ltTitle && ltArtist) {
+            lastTrack = {
+              artworkUrl: lt.artworkUrl == null ? null : stringValue(lt.artworkUrl, 4000),
+              title: ltTitle,
+              artist: ltArtist,
+              mbid: lt.mbid == null ? null : stringValue(lt.mbid, 100),
+            };
+          }
+        }
         memory.radio = {
           kind: "radio",
           station: {
             id, slug, name, streamUrl, streamFormat,
             logoUrl: s.logoUrl == null ? null : stringValue(s.logoUrl, 4000),
           },
+          lastTrack,
         };
       }
     }
@@ -183,7 +208,19 @@ export function writeRadioSectionMemory(station: Station): void {
       streamFormat: station.streamFormat,
       logoUrl: station.logoUrl ?? null,
     },
+    // Preserve any lastTrack already recorded for this station.
+    lastTrack: memory.radio?.station.slug === station.slug
+      ? (memory.radio?.lastTrack ?? null)
+      : null,
   };
+  writeMemory(memory);
+}
+
+/** Update the last resolved now-playing track for the current radio session. */
+export function writeRadioLastTrack(track: RadioLastTrack): void {
+  const memory = readSectionMemory();
+  if (!memory.radio) return; // only meaningful while a station is stored
+  memory.radio = { ...memory.radio, lastTrack: track };
   writeMemory(memory);
 }
 

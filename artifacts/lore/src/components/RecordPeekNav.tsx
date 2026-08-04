@@ -13,9 +13,73 @@ import {
   type SectionMemory,
   type StoredRideSeed,
 } from "../player/sectionMemory";
+import { useMyAlbumAvatar, useMyLibraryInfinite } from "../lib/meHooks";
 
 type Section = "radio" | "selectors" | "library";
-const HOLD_MS = 520;
+const HOLD_MS = 480;
+
+/**
+ * Renders the section label as individual characters.
+ * At rest they sit in a flat line at the label position;
+ * when the parent has class `record-peek-tab--holding` the CSS transitions
+ * each character to its arc position around the grown disc.
+ * CSS sin/cos: Safari 15.4+, Chrome 111+, Firefox 108+.
+ */
+function ArcLabel({ label }: { label: string }) {
+  const chars = label.toUpperCase().split("");
+  // Degrees between characters — tighter for long words (SELECTORS)
+  const spread = Math.min(18, 150 / Math.max(chars.length, 1));
+  const total = (chars.length - 1) * spread;
+  // Approximate centre-to-centre spacing for 10px monospace (charWidth ≈ 6px + 1.5px gap)
+  const charStep = 7.5;
+  return (
+    <span className="record-peek-arc" aria-hidden="true">
+      {chars.map((ch, i) => (
+        <span
+          key={i}
+          className="record-peek-arc__ch"
+          style={{
+            "--a":      `${-total / 2 + i * spread}deg`,
+            "--flat-x": `${(i - (chars.length - 1) / 2) * charStep}px`,
+          } as React.CSSProperties}
+        >
+          {ch}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** A realistic-looking vinyl disc rendered as an SVG. */
+function VinylDisc() {
+  return (
+    <svg
+      className="record-peek-tab__record"
+      viewBox="0 0 40 40"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      {/* Outer vinyl body */}
+      <circle cx="20" cy="20" r="19.5" fill="#120e18" />
+      {/* Pressed groove rings */}
+      <circle cx="20" cy="20" r="17.5" fill="none" stroke="#211828" strokeWidth="0.8" />
+      <circle cx="20" cy="20" r="15.0" fill="none" stroke="#211828" strokeWidth="0.8" />
+      <circle cx="20" cy="20" r="12.5" fill="none" stroke="#1e1625" strokeWidth="0.8" />
+      <circle cx="20" cy="20" r="10.0" fill="none" stroke="#1e1625" strokeWidth="0.7" />
+      {/* Subtle vinyl sheen — thin highlight arc top-left */}
+      <path
+        d="M 7.5 12 A 14 14 0 0 1 14 6.5"
+        stroke="#ffffff" strokeWidth="0.7" fill="none"
+        strokeLinecap="round" opacity="0.13"
+      />
+      {/* Centre label */}
+      <circle cx="20" cy="20" r="7.5" fill="#2b1448" />
+      <circle cx="20" cy="20" r="6.0" fill="#341858" />
+      {/* Spindle hole */}
+      <circle cx="20" cy="20" r="1.8" fill="#07040c" />
+    </svg>
+  );
+}
 
 function sectionFor(location: string): Section {
   if (location === "/selectors" || location.startsWith("/selectors/") ||
@@ -33,10 +97,22 @@ function artFor(
   memory: SectionMemory,
   liveRadioLogoUrl: string | null | undefined,
   liveRideArtworkUrl: string | null | undefined,
+  fallbackSelectorArt: string | null,
+  fallbackLibraryArt: string | null,
 ): string | null {
-  if (section === "radio") return memory.radio?.station.logoUrl ?? liveRadioLogoUrl ?? null;
-  if (section === "selectors") return memory.selectors?.queue[memory.selectors.index]?.artworkUrl ?? liveRideArtworkUrl ?? null;
-  return memory.library?.album.artworkUrl ?? memory.library?.track.artworkUrl ?? null;
+  if (section === "radio") {
+    // Last resolved track art > station logo > live station logo
+    return memory.radio?.lastTrack?.artworkUrl
+      ?? memory.radio?.station.logoUrl
+      ?? liveRadioLogoUrl
+      ?? null;
+  }
+  if (section === "selectors") {
+    // First track of the set (ghost radio thumbnail), not the current resume index
+    return memory.selectors?.queue[0]?.artworkUrl ?? liveRideArtworkUrl ?? fallbackSelectorArt;
+  }
+  // Library: album art of last keep or last manual play
+  return memory.library?.album.artworkUrl ?? memory.library?.track.artworkUrl ?? fallbackLibraryArt;
 }
 
 function fallbackMark(_section: Section) {
@@ -79,6 +155,14 @@ export function RecordPeekNav() {
   const memory = useSectionMemory();
   const { radio, ride } = usePlayer();
   const { data: dial } = useGetPickersDial();
+  // Library artwork cascade (most → least reliable):
+  //   1. avatarData.current — user's explicitly chosen cover
+  //   2. avatarData.candidates[0] — any MB-enriched library recording with art
+  //   3. libData scan — Spotify soft items carry artworkUrl even without enrichment
+  const { data: avatarData } = useMyAlbumAvatar();
+  // Fetch 20 items so we have a good chance of hitting one with artworkUrl
+  // even if the first few are hard rows that haven't been enriched yet.
+  const { data: libData } = useMyLibraryInfinite({}, 20);
   const [peek, setPeek] = useState<Section | null>(null);
   const [busy, setBusy] = useState(false);
   const [holding, setHolding] = useState<Section | null>(null);
@@ -122,6 +206,19 @@ export function RecordPeekNav() {
   const libraryMemory = memory.library;
   const radioMemory = memory.radio;
 
+  // Fallback artwork for Selectors: previewTracks is in the API response but
+  // absent from the generated PickerDialItemRun type — cast to access it.
+  const fallbackSelectorArt = (
+    (dial?.items[0] as unknown as { previewTracks?: Array<{ artworkUrl: string | null }> })
+      ?.previewTracks?.find((t) => t.artworkUrl)?.artworkUrl
+  ) ?? null;
+
+  // Fallback artwork for Library: cascade through the three sources above.
+  const fallbackLibraryArt =
+    avatarData?.current?.artworkUrl ??
+    avatarData?.candidates?.[0]?.artworkUrl ??
+    (libData?.pages[0]?.items.find((item) => item.recording?.artworkUrl)?.recording?.artworkUrl ?? null);
+
   const resume = async (section: Section) => {
     setBusy(true);
     try {
@@ -130,9 +227,10 @@ export function RecordPeekNav() {
         setPeek(null);
       } else if (section === "selectors") {
         if (selectorMemory) {
+          // Ghost run: always start from track 1 of the set, not the resume index.
           ride.startReplay(selectorMemory.queue, selectorMemory.label, {
             timeOrientation: selectorMemory.orientation,
-            startIndex: selectorMemory.index,
+            startIndex: 0,
           });
           setPeek(null);
         } else if (fallbackRun?.run) {
@@ -190,7 +288,7 @@ export function RecordPeekNav() {
       <nav className="record-peek-nav" aria-label="Primary">
         {(["radio", "selectors", "library"] as Section[]).map((section) => {
           const active = activeSection === section;
-          const artwork = artFor(section, memory, radio.station?.logoUrl, ride.current?.artworkUrl);
+          const artwork = artFor(section, memory, radio.station?.logoUrl, ride.current?.artworkUrl, fallbackSelectorArt, fallbackLibraryArt);
           const label = section === "radio" ? "Radio" : section === "selectors" ? "Selectors" : "Library";
           return (
             <button
@@ -208,6 +306,7 @@ export function RecordPeekNav() {
               onPointerMove={(event) => moveHold(event.clientX, event.clientY)}
               onPointerUp={stopHold}
               onPointerCancel={stopHold}
+              onContextMenu={(e) => e.preventDefault()}
               onKeyDown={(event) => {
                 if ((event.key === " " || event.key === "Enter") && event.repeat === false) {
                   event.preventDefault();
@@ -215,10 +314,12 @@ export function RecordPeekNav() {
                 }
               }}
             >
-              <span className="record-peek-tab__label">{label}</span>
+              {/* ArcLabel renders the section name — flat at rest, arced on hold */}
+              <ArcLabel label={label} />
               <span className="record-peek-tab__sleeve" aria-hidden="true">
-                {artwork ? <img src={artwork} alt="" /> : fallbackMark(section)}
-                <span className="record-peek-tab__record" />
+                {artwork ? <img src={artwork} alt="" draggable={false} /> : fallbackMark(section)}
+                {/* VinylDisc lives inside the sleeve; it grows into the art on hold */}
+                <VinylDisc />
               </span>
             </button>
           );

@@ -14,6 +14,7 @@ import {
   postListen,
   patchListen,
 } from "../lib/meHooks";
+import { writeRadioLastTrack } from "../player/sectionMemory";
 
 /** How often to send progress patches to the ledger (ms). */
 const LEDGER_PATCH_INTERVAL_MS = 10_000;
@@ -96,6 +97,15 @@ export function ListeningLogger() {
       stationSlug,
       stationName,
     });
+    // Persist the last resolved track so the Radio nav tile can show its art.
+    if (npTitle || npArtist) {
+      writeRadioLastTrack({
+        artworkUrl: npArtwork,
+        title: npTitle,
+        artist: npArtist,
+        mbid: npMbid,
+      });
+    }
   }, [
     npKey,
     stationSlug,

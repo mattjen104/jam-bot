@@ -2,9 +2,16 @@ import { useLocation } from "wouter";
 import { useState, useEffect, type ReactNode } from "react";
 import { ImportStrip } from "./ImportStrip";
 import { ManualImportModal, type ServiceId } from "./ManualImportModal";
-import { useMyDialCrossings } from "../lib/meHooks";
+import {
+  useMyDialCrossings,
+  ME_PICKER_OVERLAP_KEY,
+} from "../lib/meHooks";
 import { RecordPeekNav } from "./RecordPeekNav";
 import { useQueryClient } from "@tanstack/react-query";
+import {
+  getListStationsQueryOptions,
+  getListStationsNowPlayingQueryOptions,
+} from "@workspace/api-client-react";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
@@ -30,6 +37,20 @@ export function AppLayout({ children }: { children: ReactNode }) {
       if (detail?.mode === "artist-seeds") {
         setImportModalInitialMode("artist-seeds");
         setImportModalInitialService(undefined);
+
+        // ── Warm the dial cache while the user picks artists ──────────────
+        // The user spends ~20-30 s in the picker — fire these in the
+        // background so all three resolve before they land back on the dial.
+        void qc.prefetchQuery(getListStationsQueryOptions());
+        void qc.prefetchQuery(getListStationsNowPlayingQueryOptions());
+        void qc.prefetchQuery({
+          queryKey: ME_PICKER_OVERLAP_KEY,
+          queryFn: () =>
+            fetch("/api/me/pickers/overlap")
+              .then((r) => r.ok ? r.json() : { items: [] })
+              .then((d: { items?: unknown[] }) => d?.items ?? []),
+          staleTime: 5 * 60_000,
+        });
       } else if (detail?.service) {
         setImportModalInitialService(detail.service as ServiceId);
         setImportModalInitialMode(undefined);

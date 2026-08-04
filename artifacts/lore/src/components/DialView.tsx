@@ -1719,17 +1719,19 @@ export function DialView() {
                    : "your personal crossings"}
              </span>
            </div>
-                    <button type="button" className="dial-act dial-act--listen" onClick={tuneTop} disabled={!topRow}>
-            ▶ Listen{topLabel && <span className="dial-act__suffix"> · {topLabel}</span>}
-          </button>
-          <button
-            type="button"
-            className={`dial-act dial-act--scan${scan.scanning ? " dial-act--on" : ""}`}
-            onClick={scan.toggle}
-            disabled={withReason.length === 0}
-          >
-            {scan.scanning ? "■ Stop" : <>↢ Scan<span className="dial-act__suffix"> · {withReason.length}</span></>}
-          </button>
+                    <div className="dial-actpair">
+            <button type="button" className="dial-act dial-act--listen" onClick={tuneTop} disabled={!topRow}>
+              ▶ Listen{topLabel && <span className="dial-act__suffix"> · {topLabel}</span>}
+            </button>
+            <button
+              type="button"
+              className={`dial-act dial-act--scan${scan.scanning ? " dial-act--on" : ""}`}
+              onClick={scan.toggle}
+              disabled={withReason.length === 0}
+            >
+              {scan.scanning ? "■ Stop" : <><span className="dial-act__icon">↢</span> Scan<span className="dial-act__suffix"> · {withReason.length}</span></>}
+            </button>
+          </div>
         </div>
       )}
 
