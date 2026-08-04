@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import {
   useGetRecordingKnowledge,
   useGetRecordingEntry,
@@ -16,9 +16,11 @@ import { LikeButton } from "./LikeButton";
 import { KeepButton } from "./KeepButton";
 import { ShareButton } from "./ShareButton";
 import { LyricView } from "./LyricView";
+import { LinerNotesSheet } from "./LinerNotesSheet";
 import { usePlayer } from "../player/PlayerProvider";
 import {
   ArrowUpRight,
+  BookOpen,
   Disc3,
   ExternalLink,
   Heart,
@@ -46,19 +48,22 @@ export function NowPlaying({ data, isLoading, fallbackStation, clientNowPlaying 
   const artwork = rec?.artworkUrl ?? np?.artworkUrl ?? null;
 
   const { ride } = usePlayer();
+  const [, setLocation] = useLocation();
   const [artMode, setArtMode] = useState<ArtMode>("art");
+  const [linerOpen, setLinerOpen] = useState(false);
 
   const hasMbid = Boolean(rec?.mbid);
   const progressMs = ride.active && ride.current?.mbid === rec?.mbid
     ? ride.progressMs
     : null;
 
-  // Reset to art view whenever the track changes.
+  // Reset to art view and close liner sheet whenever the track changes.
   const prevMbidRef = useRef<string | null>(null);
   useEffect(() => {
     if (rec?.mbid !== prevMbidRef.current) {
       prevMbidRef.current = rec?.mbid ?? null;
       setArtMode("art");
+      setLinerOpen(false);
     }
   }, [rec?.mbid]);
 
@@ -80,6 +85,7 @@ export function NowPlaying({ data, isLoading, fallbackStation, clientNowPlaying 
   }
 
   return (
+    <>
     <div className="overflow-hidden rounded-2xl border border-card-border bg-card shadow-lg">
       <div className="relative z-10 aspect-square w-full overflow-hidden bg-muted">
         {artwork ? (
@@ -104,8 +110,15 @@ export function NowPlaying({ data, isLoading, fallbackStation, clientNowPlaying 
           </span>
         </div>
 
-        {/* Corner toggle cluster — knowledge-layer panels: Song Exploder + Lyrics */}
+        {/* Corner toggle cluster — knowledge-layer panels: Liner Notes + Song Exploder + Lyrics */}
         <div className="absolute bottom-3 right-3 flex items-center gap-1.5">
+          {hasMbid && rec && (
+            <LinerNotesToggleBtn
+              mbid={rec.mbid}
+              active={linerOpen}
+              onToggle={() => setLinerOpen((o) => !o)}
+            />
+          )}
           {hasMbid && rec && (
             <SEToggleBtn
               mbid={rec.mbid}
@@ -289,6 +302,71 @@ export function NowPlaying({ data, isLoading, fallbackStation, clientNowPlaying 
         <StationFooter station={station} playedAt={np?.playedAt} />
       </div>
     </div>
+    {linerOpen && rec && (
+      <LinerNotesSheet
+        mbid={rec.mbid}
+        title={rec.title}
+        artist={rec.artist}
+        artworkUrl={artwork}
+        radioArt={null}
+        selectorArt={null}
+        libraryArt={null}
+        onResume={(section) => {
+          setLinerOpen(false);
+          if (section === "radio") setLocation("/");
+          else if (section === "selectors") setLocation("/selectors");
+          else setLocation("/library");
+        }}
+        onDismiss={() => setLinerOpen(false)}
+        busy={false}
+      />
+    )}
+    </>
+  );
+}
+
+/**
+ * Renders the BookOpen toggle button only when the recording has liner notes
+ * or claims — fetches knowledge internally so the parent doesn't need to know.
+ * Internal component only; not exported.
+ */
+function LinerNotesToggleBtn({
+  mbid,
+  active,
+  onToggle,
+}: {
+  mbid: string;
+  active: boolean;
+  onToggle: () => void;
+}) {
+  const { data } = useGetRecordingKnowledge(mbid, {
+    query: {
+      queryKey: getGetRecordingKnowledgeQueryKey(mbid),
+      staleTime: 10 * 60_000,
+    },
+  });
+  const knowledge = data?.knowledge ?? null;
+  const claims = data?.claims ?? [];
+  const rows = knowledge ? groupCredits(knowledge.personnel) : [];
+  const pressing = knowledge ? pressingLine(knowledge) : null;
+  const hasNotes = rows.length > 0 || Boolean(pressing) || claims.length > 0;
+  if (!hasNotes) return null;
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      title={active ? "Close liner notes" : "Liner notes"}
+      aria-label={active ? "Close liner notes" : "Open liner notes"}
+      data-testid="liner-notes-sheet-toggle"
+      className={[
+        "flex h-7 w-7 cursor-pointer items-center justify-center rounded-full backdrop-blur transition-colors",
+        active
+          ? "bg-primary text-primary-foreground"
+          : "bg-background/70 text-foreground/80 hover:bg-background/90",
+      ].join(" ")}
+    >
+      <BookOpen className="h-3.5 w-3.5" />
+    </button>
   );
 }
 
