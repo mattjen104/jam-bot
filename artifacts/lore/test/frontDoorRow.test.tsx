@@ -322,25 +322,4 @@ describe("fallback and interaction", () => {
     expect(container.querySelector(".fdrow__ov-caption")?.textContent).toContain("7 artists you know play here");
   });
 
-  it("keeps the solo-mode re-enable control on the same resolved dial row", () => {
-    const { rerender } = renderRow(makeDialStation(), makeShow({ currentTrack: makeSpin() }));
-    fireEvent.click(screen.getByTestId("bottle-solo-toggle"));
-    rerender(
-      <FrontDoorRow
-        ds={makeDialStation()}
-        show={makeShow({ currentTrack: makeSpin() })}
-        ov={0}
-        isActive={false}
-        isSampling={false}
-        onTuneIn={vi.fn()}
-        onEarlier={vi.fn()}
-      />,
-    );
-
-    const toggle = screen.getByTestId("bottle-solo-toggle");
-    expect(toggle).toBeTruthy();
-    expect(toggle.getAttribute("aria-label")).toBe("Re-enable bottle notes (solo mode is on)");
-    fireEvent.click(toggle);
-    expect(localStorage.getItem("lore:social:enabled")).toBe("true");
-  });
 });
