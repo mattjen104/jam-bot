@@ -1807,7 +1807,7 @@ export function DialView() {
                     jump. Omitting it here means the count appears for the first
                     time only once crossing scores have fully resolved. */}
                 <ZoneLabel
-                  label="On air, with a reason"
+                  label="On the Air × Your Music Library"
                   accent="library"
                 />
                 <Zone1Placeholder
@@ -1839,12 +1839,12 @@ export function DialView() {
               </>
             )}
 
-            {/* Zone 1: On air, with a reason — only once crossing scores are ready */}
+            {/* Zone 1: On the Air × Your Music Library — only once crossing scores are ready */}
             {!crossingsLoading && withReason.length > 0 && (
               <>
                 <div className="fdzone-lbl-row">
                   <ZoneLabel
-                    label="On air, with a reason"
+                    label="On the Air × Your Music Library"
                     n={withReason.length}
                     hint="best first · scan walks this list"
                     accent="library"
@@ -1914,7 +1914,7 @@ export function DialView() {
               !isCoreLoading &&
               (hasLibrary || hasSeeds || visibleSeeds.length > 0) && (
               <>
-                <ZoneLabel label="On air, with a reason" accent="library" />
+                <ZoneLabel label="On the Air × Your Music Library" accent="library" />
                 <div className="z1-placeholder z1-placeholder--no-cross">
                   <div className="z1-placeholder__body">
                     <p className="z1-placeholder__pitch">
@@ -1936,7 +1936,7 @@ export function DialView() {
               visibleSeeds.length === 0 &&
               !isSpotifyConnected && (
               <>
-                <ZoneLabel label="On air, with a reason" accent="library" />
+                <ZoneLabel label="On the Air × Your Music Library" accent="library" />
                 <Zone1Placeholder
                   isSpotifyConnected={isSpotifyConnected}
                   hasLibrary={hasLibrary}
