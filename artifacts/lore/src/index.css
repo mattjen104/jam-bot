@@ -1100,16 +1100,149 @@
   flex-shrink: 0;
 }
 
-/* "All" level topbar has more items — allow wrapping on very narrow screens */
+/* "All" level topbar — single compact line, no wrap */
 .dial-topbar--all {
-  flex-wrap: wrap;
-  row-gap: 6px;
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
-/* In the all-level topbar the dial-mode spacer fills available width; search
-   sits naturally to its right with no margin trick needed. */
-.dial-topbar--all .dial-topbar__search {
-  margin-left: 0;
+
+/* ── New topbar controls (play/scan pill, paste box, ticker) ── */
+
+/* Play / scan pill */
+.topbar-pill {
+  display: flex;
+  align-items: center;
+  border: 1px solid hsl(var(--border));
+  border-radius: 4px;
+  overflow: hidden;
+  flex-shrink: 0;
 }
+.topbar-pill__play,
+.topbar-pill__scan {
+  background: hsl(var(--card));
+  border: none;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 5px 9px;
+  color: hsl(var(--faint));
+  transition: background 0.12s, color 0.12s;
+  line-height: 1;
+  min-width: 30px;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.topbar-pill__play:hover,
+.topbar-pill__scan:hover { color: hsl(var(--foreground)); background: hsl(var(--muted)); }
+.topbar-pill__play--on  { color: hsl(var(--live)); }
+.topbar-pill__scan--on  { color: hsl(var(--selector-dj)); }
+.topbar-pill__play + .topbar-pill__scan { border-left: 1px solid hsl(var(--border)); }
+
+/* +add artists toggle button */
+.topbar-add-artists {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--app-font-display);
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: hsl(var(--faint));
+  padding: 0 2px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  transition: color 0.12s;
+  line-height: 1;
+}
+.topbar-add-artists:hover,
+.topbar-add-artists--active { color: hsl(var(--foreground)); }
+
+/* Paste text box */
+.topbar-paste-box {
+  flex: 1;
+  min-width: 0;
+  background: hsl(var(--muted));
+  border: 1px solid transparent;
+  border-radius: 3px;
+  font-family: var(--app-font-display);
+  font-size: 9.5px;
+  color: hsl(var(--foreground));
+  padding: 5px 8px;
+  outline: none;
+  transition: border-color 0.12s;
+  height: 28px;
+}
+.topbar-paste-box::placeholder { color: hsl(var(--faint)); font-style: italic; }
+.topbar-paste-box:focus { border-color: hsl(var(--border)); }
+
+/* Ticker container */
+.topbar-ticker-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.topbar-ticker {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  /* mask edges so chips fade in/out rather than hard-clip */
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 10%, #000 90%, transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0%, #000 10%, #000 90%, transparent 100%);
+}
+.topbar-ticker__track {
+  display: inline-flex;
+  gap: 6px;
+  white-space: nowrap;
+  /* 20s complete scroll of the doubled list = seamless loop */
+  animation: topbar-ticker-scroll 22s linear infinite;
+}
+.topbar-ticker:hover .topbar-ticker__track {
+  animation-play-state: paused;
+}
+@keyframes topbar-ticker-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.topbar-ticker__chip {
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
+  border-radius: 3px;
+  font-family: var(--app-font-display);
+  font-size: 9.5px;
+  font-weight: 600;
+  color: hsl(var(--dim));
+  padding: 3px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: color 0.1s, background 0.1s;
+  height: 22px;
+  display: flex;
+  align-items: center;
+}
+.topbar-ticker__chip:hover { color: hsl(var(--foreground)); background: hsl(var(--card)); }
+
+/* "try Matt's library" button */
+.topbar-matt-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--app-font-display);
+  font-size: 9.5px;
+  font-weight: 600;
+  font-style: italic;
+  color: hsl(var(--faint));
+  padding: 0;
+  flex-shrink: 0;
+  white-space: nowrap;
+  transition: color 0.12s;
+}
+.topbar-matt-btn:hover { color: hsl(var(--foreground)); }
 .dial-topbar__wordmark {
   font-family: var(--app-font-serif);
   font-size: 19px;
@@ -4015,6 +4148,225 @@
   transition: color 0.1s;
 }
 .fdrow__back:hover { color: hsl(var(--foreground) / 0.7); }
+
+/* ── fdrow play button (right edge) ─────────────────────────────────────── */
+.fdrow__play-btn {
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 2px;
+  margin-left: 6px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid hsl(var(--border) / 0.6);
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  font-size: 10px;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+  line-height: 1;
+}
+.fdrow__play-btn:hover {
+  background: hsl(var(--primary) / 0.12);
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--primary) / 0.5);
+}
+.fdrow__play-btn--on {
+  background: hsl(var(--live) / 0.15);
+  color: hsl(var(--live));
+  border-color: hsl(var(--live) / 0.5);
+}
+
+/* ── Front-door gutter playbar ────────────────────────────────────────────── */
+
+/* Outer wrapper — gives position: relative for the absolute playbar */
+.fd-gutter-wrap {
+  position: relative;
+}
+
+/* Shift row content right to make room for the gutter strip */
+.fd-gutter-wrap .fdrow {
+  padding-left: 44px; /* 15px existing + 29px gutter */
+}
+
+/* Move the existing left-accent bar to start after the gutter */
+.fd-gutter-wrap .fdrow::before {
+  left: 32px;
+}
+
+/* The sliding cursor — absolutely positioned in the gutter column */
+.fd-playbar {
+  position: absolute;
+  left: 0;
+  width: 32px;
+  top: 0; /* overridden via inline style */
+  height: var(--row-h, 64px);
+  background: hsl(var(--live) / 0.12);
+  border-right: 2px solid hsl(var(--live) / 0.55);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 6px;
+  gap: 3px;
+  transition: top 300ms ease;
+  pointer-events: none; /* let row clicks pass through the background */
+}
+
+/* Play/scan pill — interactive children re-enable pointer events */
+.fd-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  pointer-events: auto;
+}
+
+.fd-pill__play,
+.fd-pill__scan {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  border: 1px solid hsl(var(--live) / 0.45);
+  background: hsl(var(--live) / 0.15);
+  color: hsl(var(--live));
+  font-size: 9px;
+  cursor: pointer;
+  transition: background 0.1s;
+  line-height: 1;
+}
+.fd-pill__play:hover,
+.fd-pill__scan:hover {
+  background: hsl(var(--live) / 0.28);
+}
+.fd-pill__scan--on {
+  background: hsl(var(--accent));
+  border-color: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+.fd-pill__scan:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* N/M counter shown while scanning */
+.fd-pill__counter {
+  font-family: var(--app-font-mono);
+  font-size: 7px;
+  color: hsl(var(--live));
+  line-height: 1;
+  text-align: center;
+  letter-spacing: -0.02em;
+}
+
+/* Compact back/land/next scan controls below the pill */
+.fd-pill-scan-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  pointer-events: auto;
+  margin-top: 1px;
+}
+.fd-sb-mini {
+  width: 24px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: hsl(var(--secondary) / 0.5);
+  border: 1px solid hsl(var(--border) / 0.4);
+  border-radius: 3px;
+  font-size: 8px;
+  cursor: pointer;
+  color: hsl(var(--muted-foreground));
+  line-height: 1;
+  transition: background 0.1s;
+}
+.fd-sb-mini:hover { background: hsl(var(--secondary) / 0.8); }
+.fd-sb-mini--land {
+  background: hsl(var(--library) / 0.12);
+  border-color: hsl(var(--library) / 0.35);
+  color: hsl(var(--library));
+}
+.fd-sb-mini--land:hover { background: hsl(var(--library) / 0.22); }
+
+/* ── Liner-notes card — inline strip below the active row ──────────────────── */
+.fd-liner-card {
+  padding: 5px 12px 6px 44px; /* left-aligns with row text */
+  border-bottom: 1px solid hsl(var(--border) / 0.3);
+  background: hsl(var(--secondary) / 0.18);
+  animation: fd-liner-in 150ms ease;
+}
+
+@keyframes fd-liner-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.fd-liner-card__track {
+  font-family: var(--app-font-mono);
+  font-size: 9px;
+  color: hsl(var(--muted-foreground) / 0.85);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 2px;
+}
+.fd-liner-card__title {
+  font-weight: 600;
+  color: hsl(var(--foreground) / 0.8);
+}
+.fd-liner-card__sep {
+  color: hsl(var(--muted-foreground) / 0.4);
+}
+.fd-liner-card__artist {
+  color: hsl(var(--library));
+}
+.fd-liner-card__credit {
+  font-family: var(--app-font-mono);
+  font-size: 8px;
+  color: hsl(var(--muted-foreground) / 0.7);
+  line-height: 1.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fd-liner-card__role {
+  color: hsl(var(--muted-foreground) / 0.45);
+  font-style: italic;
+}
+.fd-liner-card__name {
+  color: hsl(var(--foreground) / 0.65);
+}
+.fd-liner-card__claim {
+  font-family: var(--app-font-reading);
+  font-style: italic;
+  font-size: 10px;
+  color: hsl(var(--muted-foreground) / 0.7);
+  margin-top: 2px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Mode toggle inside dial-tabs row ───────────────────────────────────────── */
+.dial-mode--inline {
+  margin-left: auto;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 6px 8px;
+  border-left: 1px solid hsl(var(--border) / 0.3);
+}
 
 /* ─────────────────────────────────────────────────────────
    Dial zone tabs

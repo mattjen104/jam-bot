@@ -6,11 +6,13 @@
  * Library) lives in AppLayout; DialView renders the topbar/scanbar/subnav
  * chrome above the scroll body.
  */
-import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
 import { SeedInput } from "./SeedInput";
 import { Search } from "lucide-react";
 import { useLocation, Link } from "wouter";
 import { useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, type GhostStation } from "../lib/meHooks";
+import { useGetRecordingKnowledge, getGetRecordingKnowledgeQueryKey } from "@workspace/api-client-react";
+import { groupCredits } from "../lib/linerNotes";
 import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
 import { StationLane } from "./StationLane";
 import { ContextRail } from "./ContextRail";
@@ -47,7 +49,6 @@ import {
 } from "../hooks/useDialData";
 import { useStationPresence, type StationPresence } from "../hooks/useStationPresence";
 import { ListenerAvatarStack } from "./ListenerAvatarStack";
-
 /**
  * Returns a version of `value` that only flips to `true` after it has been
  * `true` continuously for `delayMs` milliseconds.  Flipping back to `false`
@@ -180,9 +181,10 @@ interface FrontDoorRowProps {
   onEarlier: () => void;
   displayMode?: DialDisplayMode;
   presence?: StationPresence;
+  onPlay?: () => void;
 }
 
-export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onEarlier, displayMode = "personal", presence }: FrontDoorRowProps) {
+export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onEarlier, displayMode = "personal", presence, onPlay }: FrontDoorRowProps) {
   const usableDjList = eligibleDjNames(
     { name: show?.showName ?? "", djName: show?.djName ?? undefined, djNames: show?.djNames },
     { artist: show?.currentTrack?.artist, title: show?.currentTrack?.title, showTitle: show?.showName, stationName: ds.station.name },
@@ -316,6 +318,20 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onE
         </div>
       </div>
 
+      {/* Play/pause button — right edge; stop-propagation so it doesn't trigger onTuneIn */}
+      {onPlay && (
+        <button
+          type="button"
+          className={`fdrow__play-btn${isActive ? " fdrow__play-btn--on" : ""}`}
+          onClick={(e) => { e.stopPropagation(); onPlay(); }}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); onPlay(); } }}
+          aria-label={isActive ? `Stop ${ds.station.name}` : `Play ${ds.station.name}`}
+          title={isActive ? "Stop" : "Play"}
+        >
+          {isActive ? "■" : "▶"}
+        </button>
+      )}
+
       {/* Station chip — far-right navigational affordance; tap goes to the
           station archive rather than tuning in. Propagation stopped so the
           row's tune-in handler doesn't fire. */}
@@ -336,6 +352,7 @@ interface GhostRowProps {
   station: GhostStation;
   isActive: boolean;
   onTuneIn: () => void;
+  onPlay?: () => void;
 }
 function ZoneLabel({ label, n, hint, accent, estimated, collapsed, onCollapse }: {
   label: string;
@@ -992,6 +1009,9 @@ export function DialView() {
   const [currentShow, setCurrentShow] = useState<DialShow | null>(null);
   const [currentDjName, setCurrentDjName] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  // Topbar artist-add state
+  const [addArtistMode, setAddArtistMode] = useState(false);
+  const [pasteInput, setPasteInput] = useState("");
   const { enabled: socialEnabled } = useSocialMode();
   // displayMode is derived directly from socialEnabled — one toggle drives both.
   const displayMode: DialDisplayMode = socialEnabled ? "blended" : "personal";
@@ -1366,18 +1386,34 @@ export function DialView() {
     }
   }, [scan.samplingIdx, zone1Visible]);
 
-  // Top row for Listen button label (spec §10)
-  const topRow = sortedRows[0] ?? null;
-  const topLabel = topRow?.show?.djName
-    ? `${topRow.show.djName} · ${topRow.ds.station.name}`
-    : (topRow?.ds.station.name ?? "—");
+  // --- gutter playbar cursor ---
+  const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const [playbarY, setPlaybarY] = useState<{ top: number; height: number } | null>(null);
 
-  const tuneTop = useCallback(() => {
-    if (topRow) {
-      scan.stop();
-      void radio.toggle(topRow.ds.station);
+  // Active row index: scan cursor → playing station → none (-1)
+  const activeIdx = useMemo(() => {
+    if (scan.samplingIdx != null) return scan.samplingIdx;
+    if (radio.station) {
+      const idx = withReason.findIndex((row) => row.ds.station.slug === radio.station!.slug);
+      return idx >= 0 ? idx : -1;
     }
-  }, [topRow, scan, radio]);
+    return -1;
+  }, [scan.samplingIdx, radio.station, withReason]);
+
+  const activeRow = activeIdx >= 0 ? (withReason[activeIdx] ?? null) : null;
+  const activeTrack = activeRow?.show?.currentTrack ?? null;
+  const activeMbid = activeTrack?.mbid ?? null;
+
+  // Measure active row's offsetTop/Height after DOM settles, drive the cursor animation.
+  useLayoutEffect(() => {
+    if (activeIdx < 0) { setPlaybarY(null); return; }
+    const el = rowRefs.current[activeIdx];
+    if (!el) { setPlaybarY(null); return; }
+    setPlaybarY({ top: el.offsetTop, height: el.offsetHeight });
+  }, [activeIdx, zone1Expanded, withReason.length]);
+
+  // Top row for Listen button label (spec §10) — kept for potential reuse
+  const topRow = sortedRows[0] ?? null;
 
   const handleScanLand = useCallback(() => {
     const idx = scan.samplingIdx;
@@ -1389,66 +1425,150 @@ export function DialView() {
     }
   }, [scan, withReason, radio]);
 
+  // --- topbar helpers ---
+  // Artists currently on air (Zone 1 + Zone 3) for the add-artist ticker
+  const tickerArtists = useMemo(() => {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    const allRows = [...withReason, ...djBand, ...restBand];
+    for (const row of allRows) {
+      const artist = row.show?.currentTrack?.artist?.trim();
+      if (artist && !seen.has(artist)) { seen.add(artist); result.push(artist); }
+      const dj = row.show?.djName?.trim();
+      if (dj && !seen.has(dj)) { seen.add(dj); result.push(dj); }
+    }
+    return result;
+  }, [withReason, djBand, restBand]);
+
+  const MATTS_LIBRARY: readonly string[] = [
+    "Cocteau Twins", "Talk Talk", "Beach House", "Grouper",
+    "Tim Hecker", "Mount Eerie", "Low", "Julianna Barwick",
+    "William Basinski", "Stars of the Lid", "Broadcast",
+    "Silver Apples", "Arthur Russell", "Harold Budd",
+  ];
+
+  function handleTryMattsLibrary() {
+    MATTS_LIBRARY.forEach(name => addSeed(name));
+    setAddArtistMode(false);
+    setPasteInput("");
+  }
+
+  function handlePasteText(text: string) {
+    const names = text.split(/[\n,;|•·]+/).map(s => s.trim()).filter(Boolean);
+    names.forEach(name => addSeed(name));
+    setPasteInput("");
+    setAddArtistMode(false);
+  }
+
+  function handlePasteEvent(e: React.ClipboardEvent<HTMLInputElement>) {
+    const text = e.clipboardData.getData("text");
+    if (text) {
+      e.preventDefault();
+      handlePasteText(text);
+      return;
+    }
+    // Image paste: OCR stubbed — show placeholder text until implemented
+    const items = Array.from(e.clipboardData.items);
+    const hasImage = items.some(it => it.type.startsWith("image/"));
+    if (hasImage) {
+      e.preventDefault();
+      setPasteInput("📷 screenshot pasted — OCR coming soon");
+    }
+  }
+
   // --- topbar ---
   function renderTopbar() {
     if (level === "all") {
+      const isPlaying = radio.status === "playing";
       return (
         <div className="dial-topbar dial-topbar--all">
+          {/* Wordmark */}
           <span className="dial-topbar__wordmark">Lore</span>
-          <div className="dial-actpair">
-            <button type="button" className="dial-act dial-act--listen" onClick={tuneTop} disabled={!topRow}>
-              ▶ Listen{topLabel && <span className="dial-act__suffix"> · {topLabel}</span>}
+
+          {/* Play / scan pill */}
+          <div className="topbar-pill">
+            <button
+              type="button"
+              className={`topbar-pill__play${isPlaying ? " topbar-pill__play--on" : ""}`}
+              aria-label={isPlaying ? "Pause" : "Play"}
+              title={isPlaying ? "Pause" : "Play"}
+              onClick={() => {
+                if (isPlaying && radio.station) {
+                  void radio.toggle(radio.station);
+                } else {
+                  const target = activeRow?.ds.station ?? withReason[0]?.ds.station;
+                  if (target) void radio.toggle(target);
+                }
+              }}
+            >
+              {isPlaying ? "■" : "▶"}
             </button>
             <button
               type="button"
-              className={`dial-act dial-act--scan${scan.scanning ? " dial-act--on" : ""}`}
+              className={`topbar-pill__scan${scan.scanning ? " topbar-pill__scan--on" : ""}`}
+              aria-label={scan.scanning ? "Stop scan" : "Scan stations"}
+              title={scan.scanning ? "Stop scan" : "Scan stations"}
               onClick={scan.toggle}
-              disabled={withReason.length === 0}
             >
-              {scan.scanning ? "■ Stop" : <><span className="dial-act__icon">↢</span> Scan<span className="dial-act__suffix"> · {withReason.length}</span></>}
+              ↢
             </button>
           </div>
+
+          {/* +add artists toggle */}
           <button
             type="button"
-            className="dial-act"
-            onClick={() => window.dispatchEvent(new CustomEvent("lore:open-import-modal", { detail: { mode: "artist-seeds" } }))}
+            className={`topbar-add-artists${addArtistMode ? " topbar-add-artists--active" : ""}`}
+            onClick={() => setAddArtistMode(m => !m)}
           >
-            ＋ Add artists
+            ＋ add artists
           </button>
-          <div className="dial-mode" role="group" aria-label="Listening mode">
-            <button
-              type="button"
-              className={`dial-mode__button${crossingSourceMode === "personal" ? " dial-mode__button--active" : ""}`}
-              aria-pressed={crossingSourceMode === "personal"}
-              aria-label="Solo mode"
-              onClick={() => setSocialEnabled(false)}
-            >
-              Solo
-            </button>
-            <button
-              type="button"
-              className={`dial-mode__button${crossingSourceMode === "blended" ? " dial-mode__button--active" : ""}`}
-              aria-pressed={crossingSourceMode === "blended"}
-              aria-label="Listening Party"
-              onClick={() => setSocialEnabled(true)}
-            >
-              Listening Party
-            </button>
-          </div>
-          {hasWeeklyRecap && (
-            <Link href="/weekly-recap" className="dial-topbar__crumb">
-              Weekly Recap
-            </Link>
+
+          {/* Paste box (default) ↔ auto-ticker + Matt's library (add-artist mode) */}
+          {!addArtistMode ? (
+            <input
+              type="text"
+              className="topbar-paste-box"
+              value={pasteInput}
+              placeholder="paste artist names or a screenshot…"
+              aria-label="Add artists by pasting names or a screenshot"
+              onChange={e => setPasteInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Enter" && pasteInput.trim()) {
+                  handlePasteText(pasteInput);
+                }
+                if (e.key === "Escape") { setPasteInput(""); }
+              }}
+              onPaste={handlePasteEvent}
+            />
+          ) : (
+            <div className="topbar-ticker-wrap">
+              {tickerArtists.length > 0 && (
+                <div className="topbar-ticker" aria-label="Artists on air — click to add">
+                  {/* Double the list so the CSS loop scrolls seamlessly */}
+                  <div className="topbar-ticker__track">
+                    {[...tickerArtists, ...tickerArtists].map((name, i) => (
+                      <button
+                        // eslint-disable-next-line react/no-array-index-key
+                        key={`ticker-${i}`}
+                        type="button"
+                        className="topbar-ticker__chip"
+                        onClick={() => { addSeed(name); setAddArtistMode(false); }}
+                      >
+                        {name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <button
+                type="button"
+                className="topbar-matt-btn"
+                onClick={handleTryMattsLibrary}
+              >
+                try Matt's library
+              </button>
+            </div>
           )}
-          <button
-            type="button"
-            className="dial-topbar__search"
-            onClick={() => setSearchOpen(true)}
-            aria-label="Search stations, selectors, shows"
-            title="Search"
-          >
-            <Search size={14} />
-          </button>
         </div>
       );
     }
@@ -1494,9 +1614,6 @@ export function DialView() {
   // determine if Radio tab is active
   const isRadioActive = location === "/" || location === "" || location.startsWith("/?");
 
-  // Current scan sample row (for scan band display)
-  const samplingRow = scan.samplingIdx != null ? (withReason[scan.samplingIdx] ?? null) : null;
-
   return (
     <div className="dial-root">
       {/* Search overlay */}
@@ -1512,44 +1629,6 @@ export function DialView() {
       {/* Topbar */}
       {renderTopbar()}
 
-
-      {/* Scan detail band — visible while scanning (spec §11) */}
-      {level === "all" && isRadioActive && scan.scanning && (
-        <div className="dial-scanband">
-          <div className="dial-sb-top">
-            <button type="button" className="dial-sb-step" onClick={scan.back} title="Back one">◀</button>
-            <div className="dial-sb-now">
-              {samplingRow ? (
-                <>
-                  <div className="dial-sb-t">
-                    {samplingRow.show?.currentTrack?.title ?? (samplingRow.show?.showName ?? samplingRow.ds.station.name)}
-                  </div>
-                  <div className="dial-sb-u">
-                    {samplingRow.show?.djName && <b>{samplingRow.show.djName}</b>}
-                    {samplingRow.show?.djName ? " · " : ""}{samplingRow.ds.station.name}
-                    {" · "}{(scan.samplingIdx! + 1)} of {withReason.length}
-                  </div>
-                </>
-              ) : (
-                <div className="dial-sb-t">—</div>
-              )}
-            </div>
-            <button type="button" className="dial-sb-step" onClick={scan.next} title="Next">▶</button>
-          </div>
-          <div className="dial-sb-track">
-            <div className="dial-sb-fill" style={{ width: `${scan.progress * 100}%` }} />
-          </div>
-          <div className="dial-sb-bot">
-            <button type="button" className="dial-sb-land" onClick={handleScanLand}>Land</button>
-            <div className="dial-sb-dwell">
-              <button type="button" onClick={() => scan.adjustDwell(-1)}>−</button>
-              <span>{scan.dwellMs / 1000}s</span>
-              <button type="button" onClick={() => scan.adjustDwell(1)}>+</button>
-            </div>
-            <button type="button" className="dial-sb-stop" onClick={scan.stop} title="Stop scan">✕</button>
-          </div>
-        </div>
-      )}
 
       {/* Scan bar — station / show / dj levels only */}
       {level !== "all" && isRadioActive && (
@@ -1621,6 +1700,27 @@ export function DialView() {
                   Recent
                   {offlineStations.length > 0 && <span className="dial-tab__n">{offlineStations.length}</span>}
                 </button>
+                {/* Solo / Listening Party toggle — moved from actbar, lives flush with the tab strip */}
+                <div className="dial-mode dial-mode--inline" role="group" aria-label="Listening mode">
+                  <button
+                    type="button"
+                    className={`dial-mode__button${crossingSourceMode === "personal" ? " dial-mode__button--active" : ""}`}
+                    aria-pressed={crossingSourceMode === "personal"}
+                    aria-label="Solo mode"
+                    onClick={() => setSocialEnabled(false)}
+                  >
+                    Solo
+                  </button>
+                  <button
+                    type="button"
+                    className={`dial-mode__button${crossingSourceMode === "blended" ? " dial-mode__button--active" : ""}`}
+                    aria-pressed={crossingSourceMode === "blended"}
+                    aria-label="Listening Party"
+                    onClick={() => setSocialEnabled(true)}
+                  >
+                    LP
+                  </button>
+                </div>
               </div>
             )}
 
@@ -1633,6 +1733,7 @@ export function DialView() {
                 {withReason.length > 0 && (
                   <>
                     <div className="fdzone-lbl-row">
+                      <ZoneLabel label="On air, with a reason" accent="live" n={withReason.length} />
                       {zone1Expanded && withReason.length > zone1Visible && (
                         <button
                           className="dial-show-more-inline"
@@ -1652,26 +1753,82 @@ export function DialView() {
                             onRemoveSeed={removeSeed}
                           />
                         )}
-                        {/* Map over the FULL array so isSampling index is always the
-                            unsliced position; rows beyond zone1Visible are null until
-                            zone1Expanded is true. */}
-                        <div id="zone1-rows">
-                          {withReason.map((row, i) =>
-                            !zone1Expanded && i >= zone1Visible ? null : (
-                              <FrontDoorRow
-                                key={row.ds.station.slug}
-                                ds={row.ds}
-                                show={row.show}
-                                ov={row.show?.djName != null ? pickerOv(row.show?.pickerId ?? null, row.show.djName) : row.ds.lifetimeCrossings}
-                                isActive={row.ds.station.slug === radio.station?.slug}
-                                isSampling={scan.samplingIdx === i}
-                                onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
-                                onEarlier={() => goStation(row.ds.station.slug)}
-                                displayMode={crossingSourceMode}
-                                presence={presenceMap.get(row.ds.station.id)}
-                              />
-                            )
+                        {/* Gutter wrap — positions the sliding playbar cursor behind the rows */}
+                        <div className="fd-gutter-wrap">
+                          {/* Playbar cursor — absolutely positioned, slides to the active row */}
+                          {playbarY !== null && (
+                            <div
+                              className="fd-playbar"
+                              style={{ top: playbarY.top, "--row-h": `${playbarY.height}px` } as React.CSSProperties}
+                            >
+                              <div className="fd-pill">
+                                <button
+                                  type="button"
+                                  className="fd-pill__play"
+                                  onClick={() => {
+                                    if (!activeRow) return;
+                                    if (scan.scanning) { handleScanLand(); }
+                                    else { void radio.toggle(activeRow.ds.station); }
+                                  }}
+                                  aria-label={radio.station?.slug === activeRow?.ds.station.slug ? "Pause" : "Play"}
+                                  title={radio.station?.slug === activeRow?.ds.station.slug ? "Pause" : "Play"}
+                                >
+                                  {radio.station?.slug === activeRow?.ds.station.slug ? "■" : "▶"}
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`fd-pill__scan${scan.scanning ? " fd-pill__scan--on" : ""}`}
+                                  onClick={scan.toggle}
+                                  disabled={withReason.length === 0}
+                                  aria-label={scan.scanning ? "Stop scan" : "Scan stations"}
+                                  title={scan.scanning ? "Stop scan" : "Scan stations"}
+                                >
+                                  ↢
+                                </button>
+                                {scan.scanning && scan.samplingIdx != null && (
+                                  <span className="fd-pill__counter">{scan.samplingIdx + 1}/{withReason.length}</span>
+                                )}
+                              </div>
+                              {scan.scanning && (
+                                <div className="fd-pill-scan-controls">
+                                  <button type="button" className="fd-sb-mini" onClick={scan.back} title="Previous">◀</button>
+                                  <button type="button" className="fd-sb-mini fd-sb-mini--land" onClick={handleScanLand} title="Land here">▣</button>
+                                  <button type="button" className="fd-sb-mini" onClick={scan.next} title="Next">▶</button>
+                                </div>
+                              )}
+                            </div>
                           )}
+                          {/* Map over the FULL array so isSampling index is always the
+                              unsliced position; rows beyond zone1Visible are null until
+                              zone1Expanded is true. */}
+                          <div id="zone1-rows">
+                            {withReason.map((row, i) =>
+                              !zone1Expanded && i >= zone1Visible ? null : (
+                                <div key={row.ds.station.slug} ref={(el) => { rowRefs.current[i] = el; }}>
+                                  <FrontDoorRow
+                                    ds={row.ds}
+                                    show={row.show}
+                                    ov={row.show?.djName != null ? pickerOv(row.show?.pickerId ?? null, row.show.djName) : row.ds.lifetimeCrossings}
+                                    isActive={row.ds.station.slug === radio.station?.slug}
+                                    isSampling={scan.samplingIdx === i}
+                                    onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
+                                    onEarlier={() => goStation(row.ds.station.slug)}
+                                    onPlay={() => { scan.stop(); void radio.toggle(row.ds.station); }}
+                                    displayMode={crossingSourceMode}
+                                    presence={presenceMap.get(row.ds.station.id)}
+                                  />
+                                  {activeIdx === i && activeMbid && (
+                                    <FdLinerCard
+                                      key={activeMbid}
+                                      mbid={activeMbid}
+                                      title={activeTrack?.title ?? null}
+                                      artist={activeTrack?.artist ?? null}
+                                    />
+                                  )}
+                                </div>
+                              )
+                            )}
+                          </div>
                         </div>
                         {withReason.length > zone1Visible && (
                           <button
@@ -1742,6 +1899,23 @@ export function DialView() {
                               station={g}
                               isActive={g.slug === radio.station?.slug}
                               onTuneIn={() => goStation(g.slug)}
+                              onPlay={() => {
+                                scan.stop();
+                                // Map GhostStation to a full Station object for the player
+                                void radio.toggle({
+                                  id: g.stationId,
+                                  slug: g.slug,
+                                  name: g.name,
+                                  streamUrl: g.streamUrl,
+                                  streamFormat: g.streamFormat,
+                                  mode: g.mode,
+                                  attribution: g.attribution,
+                                  mayHaveAds: false,
+                                  votes: 0,
+                                  clickcount: 0,
+                                  upcomingShowCount: 0,
+                                });
+                              }}
                             />
                           ))}
                         </div>
@@ -1805,6 +1979,7 @@ export function DialView() {
                                 isSampling={false}
                                 onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
                                 onEarlier={() => goStation(row.ds.station.slug)}
+                                onPlay={() => { scan.stop(); void radio.toggle(row.ds.station); }}
                                 displayMode={crossingSourceMode}
                                 presence={presenceMap.get(row.ds.station.id)}
                               />
@@ -1827,6 +2002,7 @@ export function DialView() {
                                   isSampling={false}
                                   onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
                                   onEarlier={() => goStation(row.ds.station.slug)}
+                                  onPlay={() => { scan.stop(); void radio.toggle(row.ds.station); }}
                                   displayMode={crossingSourceMode}
                                   presence={presenceMap.get(row.ds.station.id)}
                                 />
@@ -2211,7 +2387,58 @@ export function LiveArtistPicker({
   );
 }
 
-function GhostRow({ station, isActive, onTuneIn }: GhostRowProps) {
+function FdLinerCard({
+  mbid,
+  title,
+  artist,
+}: {
+  mbid: string | null;
+  title: string | null;
+  artist: string | null;
+}) {
+  const { data } = useGetRecordingKnowledge(mbid ?? "", {
+    query: {
+      enabled: !!mbid,
+      staleTime: 10 * 60_000,
+      queryKey: mbid ? getGetRecordingKnowledgeQueryKey(mbid) : ["fd-liner-disabled"],
+    },
+  });
+
+  if (!mbid) return null;
+
+  const knowledge = data?.knowledge ?? null;
+  const claims = data?.claims ?? [];
+  const creditRows = knowledge ? groupCredits(knowledge.personnel) : [];
+  const shownCredits = creditRows.slice(0, 2);
+  // TrackClaim.text holds the claim sentence
+  const firstClaim = claims.find((c) => !c.status || c.status === "published") ?? null;
+  const claimText = firstClaim?.text ?? null;
+
+  // If we have no knowledge yet and no title/artist, render nothing
+  if (!title && !artist && shownCredits.length === 0 && !claimText) return null;
+
+  return (
+    <div className="fd-liner-card">
+      {(title || artist) && (
+        <div className="fd-liner-card__track">
+          {title && <span className="fd-liner-card__title">{title}</span>}
+          {title && artist && <span className="fd-liner-card__sep"> · </span>}
+          {artist && <span className="fd-liner-card__artist">{artist}</span>}
+        </div>
+      )}
+      {shownCredits.map((row, i) => (
+        <div key={i} className="fd-liner-card__credit">
+          <span className="fd-liner-card__role">{row.label}</span>{" "}
+          <span className="fd-liner-card__name">{row.names}</span>
+        </div>
+      ))}
+      {claimText && (
+        <div className="fd-liner-card__claim">{claimText}</div>
+      )}
+    </div>
+  );
+}
+function GhostRow({ station, isActive, onTuneIn, onPlay }: GhostRowProps) {
   const cls = ["ghost-row", isActive ? "ghost-row--playing" : ""].filter(Boolean).join(" ");
   return (
     <div
@@ -2228,6 +2455,18 @@ function GhostRow({ station, isActive, onTuneIn }: GhostRowProps) {
           <span className="fdrow__station">{station.name}</span>
         </div>
       </div>
+      {onPlay && (
+        <button
+          type="button"
+          className={`fdrow__play-btn${isActive ? " fdrow__play-btn--on" : ""}`}
+          onClick={(e) => { e.stopPropagation(); onPlay(); }}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); onPlay(); } }}
+          aria-label={isActive ? `Stop ${station.name}` : `Play ${station.name}`}
+          title={isActive ? "Stop" : "Play"}
+        >
+          {isActive ? "■" : "▶"}
+        </button>
+      )}
     </div>
   );
 }

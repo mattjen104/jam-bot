@@ -401,6 +401,27 @@ export function reason(
     };
   }
 
+  // r=6: 24h station exact crossings — takes priority over r=5 (show attribution)
+  // because actually having played your music is stronger evidence than just having
+  // an attributed show name.  Checks before r=5 so a named-but-uncrossed show does
+  // not shadow a station that DID play your tracks in the last 24h.
+  if (stationCrossings > 0) {
+    const nn = stationTopArtistNames.length > 0 ? nameNodes(stationTopArtistNames) : null;
+    return {
+      r: 6, cls: "w6",
+      node: buildAttributedSentence(nn, stationCrossings, "of yours", null, null, "here in the last 24h"),
+    };
+  }
+
+  // r=7: 24h station artist crossings — likewise takes priority over r=5.
+  if (stationArtistCrossings > 0) {
+    const nn = stationTopArtistNames.length > 0 ? nameNodes(stationTopArtistNames) : null;
+    return {
+      r: 7, cls: "w7",
+      node: buildAttributedSentence(nn, stationArtistCrossings, "tracks by your artists", null, null, "here in the last 24h"),
+    };
+  }
+
   // r=5: attributed show or DJ on air, no crossing evidence yet.
   // Expanded to fire when either djName or showName is known (previously
   // only djName triggered r=5, leaving shows-without-DJ-name as r=0 dark).
@@ -412,24 +433,6 @@ export function reason(
       return { r: 5, cls: "w5", node: <><b className="fdrow__dj">{dj}</b> · {intoSet(show.startedAt)} in</> };
     }
     return { r: 5, cls: "w5", node: <><span className="fdrow__show">{showName}</span> · {intoSet(show.startedAt)} in</> };
-  }
-
-  // r=6: 24h station exact crossings (no selector listed)
-  if (stationCrossings > 0) {
-    const nn = stationTopArtistNames.length > 0 ? nameNodes(stationTopArtistNames) : null;
-    return {
-      r: 6, cls: "w6",
-      node: buildAttributedSentence(nn, stationCrossings, "of yours", null, null, "in the last 24 hours"),
-    };
-  }
-
-  // r=7: 24h station artist crossings (no exact hits, no selector listed)
-  if (stationArtistCrossings > 0) {
-    const nn = stationTopArtistNames.length > 0 ? nameNodes(stationTopArtistNames) : null;
-    return {
-      r: 7, cls: "w7",
-      node: buildAttributedSentence(nn, stationArtistCrossings, "artists of yours", null, null, "in the last 24 hours"),
-    };
   }
 
   // r=0: dark — nothing to go on
