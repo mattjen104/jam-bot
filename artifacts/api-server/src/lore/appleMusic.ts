@@ -3,6 +3,18 @@ import { createSign } from "node:crypto";
 const APPLE_MUSIC_API_BASE = "https://api.music.apple.com";
 const TOKEN_TTL_SECONDS = 60 * 60;
 
+/**
+ * How many seconds before expiry the server proactively mints a fresh token.
+ * Must be at least as long as the client's stale time (5 minutes) plus a
+ * safety buffer so that any token the client caches will still be valid when
+ * MusicKit JS uses it, even if the client holds onto it for the full stale
+ * window before trying to play.
+ *
+ *   client staleTime = 5 min → REFRESH_MARGIN_SECONDS = 6 min gives a
+ *   one-minute buffer beyond the client's max hold time.
+ */
+const REFRESH_MARGIN_SECONDS = 6 * 60;
+
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
 function configuredValues(): {
@@ -66,7 +78,7 @@ export function getAppleMusicDeveloperToken(): string | null {
   const config = configuredValues();
   if (!config) return null;
   const now = Math.floor(Date.now() / 1000);
-  if (cachedToken && cachedToken.expiresAt > now + 60) return cachedToken.token;
+  if (cachedToken && cachedToken.expiresAt > now + REFRESH_MARGIN_SECONDS) return cachedToken.token;
 
   const header = base64Url(JSON.stringify({ alg: "ES256", kid: config.keyId, typ: "JWT" }));
   const payload = base64Url(JSON.stringify({
@@ -85,6 +97,11 @@ export function getAppleMusicDeveloperToken(): string | null {
   const token = `${signingInput}.${base64Url(derSignatureToJose(derSignature))}`;
   cachedToken = { token, expiresAt: now + TOKEN_TTL_SECONDS };
   return token;
+}
+
+/** Reset the in-process token cache. Test-only — never call in production. */
+export function _resetTokenCacheForTesting(): void {
+  cachedToken = null;
 }
 
 export function getAppleMusicClientConfig(): {

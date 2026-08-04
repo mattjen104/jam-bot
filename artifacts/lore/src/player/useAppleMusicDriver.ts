@@ -182,8 +182,18 @@ export function useAppleMusicDriver(opts: AppleMusicDriverOpts = {}): PlaybackDr
 
         // Authorize if not yet done this session.
         if (!authorized) {
-          await music.authorize();
-          setAuthorized(true);
+          try {
+            await music.authorize();
+            setAuthorized(true);
+          } catch (err) {
+            // Authorization failed (user cancelled, expired token, subscription
+            // required, etc.).  Emit an error status so the UI doesn't hang on
+            // "loading", then re-throw so PlayerProvider can cascade to the next
+            // driver (YouTube → preview).
+            playingRef.current = false;
+            notify({ state: "error", trackId: currentTrackIdRef.current });
+            throw err;
+          }
         }
 
         await music.setQueue({ songs: [appleMusicId] });
