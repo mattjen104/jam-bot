@@ -49,7 +49,7 @@
   z-index: 2;
 }
 .record-peek-tab--active[data-section="radio"]::before     { background: hsl(var(--accent)); }
-.record-peek-tab--active[data-section="selectors"]::before { background: hsl(var(--picker)); }
+.record-peek-tab--active[data-section="selectors"]::before { background: hsl(var(--selector-dj)); }
 .record-peek-tab--active[data-section="library"]::before   { background: hsl(var(--library)); }
 
 /* Label */
@@ -62,7 +62,7 @@
   z-index: 2;
 }
 .record-peek-tab--active[data-section="radio"]     .record-peek-tab__label { color: hsl(var(--accent)); }
-.record-peek-tab--active[data-section="selectors"] .record-peek-tab__label { color: hsl(var(--picker)); }
+.record-peek-tab--active[data-section="selectors"] .record-peek-tab__label { color: hsl(var(--selector-dj)); }
 .record-peek-tab--active[data-section="library"]   .record-peek-tab__label { color: hsl(var(--library)); }
 
 /* Sleeve: full tab-width square starting just below the label */
@@ -641,9 +641,13 @@
   /* live = blue indicator */
   --live: 207 41% 64%;
   --live-foreground: 207 30% 10%;
-  /* picker = gold selector accent */
+  /* picker = gold selector accent (deprecated — kept for reference only) */
   --picker: 40 46% 60%;
   --picker-foreground: 40 30% 10%;
+  /* Selector blue ramp — replaces amber --picker for DJ/show/station attribution */
+  --selector-dj:      207 55% 68%;   /* lightest — DJ name, high contrast on dark bg */
+  --selector-show:    207 40% 55%;   /* mid — show name */
+  --selector-station: 207 30% 42%;   /* deepest/muted — station chip */
 
   /* dim: readable muted label — active tabs, attribution text */
   --dim: 33 10% 62%;
@@ -1012,7 +1016,7 @@
   white-space: nowrap;
   flex-shrink: 0;
 }
-.srch-row__badge--sel { border-color: rgba(200,169,107,.35); color: hsl(var(--picker)); background: rgba(200,169,107,.10); }
+.srch-row__badge--sel { border-color: hsl(var(--selector-show) / 0.35); color: hsl(var(--selector-dj)); background: hsl(var(--selector-show) / 0.10); }
 .srch-spin { animation: lore-spin 1s linear infinite; display: inline-block; }
 
 /* ── Library chip — compact pill in the DialView topbar ── */
@@ -1963,7 +1967,7 @@
 .dial-blk--warm { border-color: rgba(232,106,78,.4); background: rgba(232,106,78,.11); }
 .dial-blk--warm.dial-blk--past { opacity: 0.65; }
 .dial-blk--warm.dial-blk--live { border-color: hsl(var(--live)); }
-.dial-blk--picker { border-color: rgba(200,169,107,.35); background: rgba(200,169,107,.10); }
+.dial-blk--picker { border-color: hsl(var(--selector-show) / 0.35); background: hsl(var(--selector-show) / 0.10); }
 .dial-blk--picker.dial-blk--live { border-color: hsl(var(--live)); }
 .dial-blk--picker.dial-blk--past { opacity: 0.65; }
 
@@ -1981,7 +1985,7 @@
   gap: 5px;
 }
 .dial-blk__livepip { color: hsl(var(--live)); animation: lore-eq 2.4s ease-in-out infinite; }
-.dial-blk__pickerbadge { color: hsl(var(--picker)); }
+.dial-blk__pickerbadge { color: hsl(var(--selector-dj)); }
 .dial-blk__show {
   font-family: var(--app-font-display);
   font-size: 10.5px;
@@ -2079,7 +2083,7 @@
 .dial-fatblk:hover { background: hsl(var(--secondary)); }
 .dial-fatblk--live { border-color: hsl(var(--live)); background: rgba(127,168,201,.11); }
 .dial-fatblk--warm { background: rgba(232,106,78,.11); border-color: rgba(232,106,78,.35); }
-.dial-fatblk--picker { background: rgba(200,169,107,.10); border-color: rgba(200,169,107,.35); }
+.dial-fatblk--picker { background: hsl(var(--selector-show) / 0.10); border-color: hsl(var(--selector-show) / 0.35); }
 .dial-fatblk--future { opacity: 0.5; border-style: dashed; }
 .dial-fatblk__top {
   display: flex;
@@ -2118,7 +2122,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: hsl(var(--picker));
+  color: hsl(var(--selector-dj));
   margin-left: 5px;
 }
 .dial-fbar {
@@ -2199,9 +2203,9 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: hsl(var(--picker));
-  border: 1px solid rgba(200,169,107,.4);
-  background: rgba(200,169,107,.10);
+  color: hsl(var(--selector-dj));
+  border: 1px solid hsl(var(--selector-show) / 0.4);
+  background: hsl(var(--selector-show) / 0.10);
   padding: 4px 9px;
   border-radius: 3px;
   display: inline-block;
@@ -2428,7 +2432,7 @@
 }
 .dial-sch-badge--live { color: hsl(var(--live)); }
 .dial-sch-badge--cross { color: hsl(var(--library)); }
-.dial-sch-badge--sel { color: hsl(var(--picker)); }
+.dial-sch-badge--sel { color: hsl(var(--selector-show)); }
 
 /* ── Context rail ── */
 .ctx-rail {
@@ -2490,8 +2494,8 @@
 .ctx-chip:hover { background: hsl(var(--secondary)); color: hsl(var(--foreground)); }
 .ctx-chip--lib { border-color: rgba(232,106,78,.35); color: hsl(var(--library)); background: rgba(232,106,78,.11); }
 .ctx-chip--lib:hover { background: rgba(232,106,78,.18); }
-.ctx-chip--sel { border-color: rgba(200,169,107,.35); color: hsl(var(--picker)); background: rgba(200,169,107,.10); }
-.ctx-chip--sel:hover { background: rgba(200,169,107,.18); }
+.ctx-chip--sel { border-color: hsl(var(--selector-show) / 0.35); color: hsl(var(--selector-dj)); background: hsl(var(--selector-show) / 0.10); }
+.ctx-chip--sel:hover { background: hsl(var(--selector-show) / 0.18); }
 .ctx-chip--live { border-color: rgba(127,168,201,.35); color: hsl(var(--live)); background: rgba(127,168,201,.11); }
 .ctx-chip--live:hover { background: rgba(127,168,201,.18); }
 .ctx-chip--new { border-color: hsl(var(--border)); color: hsl(var(--muted-foreground)); font-style: italic; }
@@ -2513,11 +2517,11 @@
   cursor: pointer;
 }
 .sel-row:hover { background: hsl(var(--secondary)); }
-.sel-row--warm { background: rgba(200,169,107,.05); }
+.sel-row--warm { background: hsl(var(--selector-show) / 0.05); }
 
 .sel-row__pip {
   font-size: 9px;
-  color: hsl(var(--picker));
+  color: hsl(var(--selector-dj));
   flex-shrink: 0;
   margin-top: 5px;
   line-height: 1;
@@ -2581,7 +2585,7 @@
   font-family: var(--app-font-serif);
   font-size: 18px;
   font-weight: 600;
-  color: hsl(var(--picker));
+  color: hsl(var(--selector-dj));
   line-height: 1;
   display: block;
 }
@@ -2654,7 +2658,7 @@
   flex-shrink: 0;
 }
 .lib-ol-row__dot--stn { background: hsl(var(--library)); }
-.lib-ol-row__dot--sel { background: hsl(var(--picker)); }
+.lib-ol-row__dot--sel { background: hsl(var(--selector-dj)); }
 .lib-ol-row__dot--run { background: hsl(var(--live)); }
 .lib-ol-row__body { flex: 1; min-width: 0; }
 .lib-ol-row__name {
@@ -2682,7 +2686,7 @@
   white-space: nowrap;
 }
 .lib-ol-row__count--stn { color: hsl(var(--library)); }
-.lib-ol-row__count--sel { color: hsl(var(--picker)); }
+.lib-ol-row__count--sel { color: hsl(var(--selector-dj)); }
 .lib-ol-row__count--run { color: hsl(var(--live)); }
 
 /* ── Library CTA bar (mirrors .dial-scanbar) ── */
@@ -3916,21 +3920,47 @@
 .fdrow__t1.w0 { color: hsl(var(--muted-foreground) / 0.5); }
 .fdrow__t1 .fdrow__artist { color: hsl(var(--library)); }
 /* Entity-type colours for the attribution sentence — blue selector palette */
-.fdrow__t1 .fdrow__dj      { color: hsl(var(--live)); }
-.fdrow__t1 .fdrow__show    { color: hsl(var(--live) / 0.75); font-weight: 500; font-style: normal; }
+.fdrow__t1 .fdrow__dj      { color: hsl(var(--selector-dj)); }
+.fdrow__t1 .fdrow__show    { color: hsl(var(--selector-show)); font-weight: 500; font-style: normal; }
 .fdrow__t1 .fdrow__station { color: hsl(var(--foreground) / 0.45); font-weight: 400; font-style: normal; }
 /* Same tokens for ghost-row sentences */
 .ghost-row__reason .fdrow__artist  { color: hsl(var(--library)); }
 .ghost-row__reason .fdrow__station { color: hsl(var(--foreground) / 0.45); font-weight: 400; }
 
-/* Quiet schedule/show context beneath the live sentence. */
+/* Quiet context label (e.g. "Continuous") — station name removed from inline text */
 .fdrow__t3 {
   font-family: var(--app-font-mono);
   font-size: 9px;
   color: hsl(var(--muted-foreground) / 0.7);
   margin-bottom: 5px;
-  /* Allow long station/show names to wrap rather than overflow on narrow screens */
-  overflow-wrap: anywhere;
+}
+
+/* Station chip — right-side pill; tappable affordance to the station page */
+.fdrow__station-chip {
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-left: 8px;
+  margin-top: 2px;
+  font-family: var(--app-font-mono);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  color: hsl(var(--selector-station));
+  background: hsl(var(--selector-station) / 0.12);
+  border: 1px solid hsl(var(--selector-station) / 0.3);
+  border-radius: 4px;
+  padding: 2px 6px;
+  max-width: 7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+  display: block;
+}
+.fdrow__station-chip:hover {
+  background: hsl(var(--selector-station) / 0.22);
+  color: hsl(var(--selector-show));
 }
 .fdrow__context {
   color: hsl(var(--muted-foreground) / 0.65);
@@ -4046,7 +4076,7 @@
   margin-right: 1px;
 }
 .fdzone-lbl__pip--library { background: hsl(var(--library)); }
-.fdzone-lbl__pip--picker  { background: hsl(var(--picker)); }
+.fdzone-lbl__pip--picker  { background: hsl(var(--selector-dj)); }
 .fdzone-lbl__pip--live    { background: hsl(var(--live)); animation: lore-live-pip 1.4s ease-in-out infinite; }
 .fdzone-lbl__text {
   font-family: var(--app-font-label);
@@ -4062,7 +4092,7 @@
   font-size: 9px;
   color: hsl(var(--library));
 }
-.fdzone-lbl__n--picker { color: hsl(var(--picker)); }
+.fdzone-lbl__n--picker { color: hsl(var(--selector-dj)); }
 .fdzone-lbl__n--dim    { color: hsl(var(--faint)); }
 /* Estimated count shown during crossings-loading skeleton — slightly muted to
    signal it's a pre-score approximation, not the final value */
@@ -4144,7 +4174,7 @@
   position: absolute;
   left: 0; top: 0; bottom: 0;
   width: 3px;
-  background: hsl(var(--picker) / 0.55);
+  background: hsl(var(--selector-show) / 0.55);
   transition: background 0.12s;
 }
 .ghost-row:hover { background: hsl(var(--secondary) / 0.25); }

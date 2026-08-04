@@ -252,10 +252,13 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onE
 
         <span className="sr-only">{ds.station.slug}</span>
 
-        {/* Stable source label: show context when valid, station always. */}
-        <div className={`fdrow__t3 ${bylineContext ? "fdrow__context" : ""}`}>
-          {bylineContext ? `${bylineContext} · ${stationLabel}` : stationLabel}
-        </div>
+        {/* Continuous context label — only shown for automated streams; station
+            name has moved to the right-side chip so it is not duplicated here. */}
+        {bylineContext && (
+          <div className="fdrow__t3 fdrow__context">
+            {bylineContext}
+          </div>
+        )}
 
         {/* Zone 3 lifetime overlap caption: shown when the reason sentence carries no
             taste signal (r=0: no data; r=5: attributed show but no crossings yet) but
@@ -312,6 +315,19 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, onE
           </button>
         </div>
       </div>
+
+      {/* Station chip — far-right navigational affordance; tap goes to the
+          station archive rather than tuning in. Propagation stopped so the
+          row's tune-in handler doesn't fire. */}
+      <Link
+        href={`/archive/stations/${ds.station.slug}`}
+        className="fdrow__station-chip"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+        title={stationLabel}
+      >
+        {stationLabel}
+      </Link>
     </div>
   );
 }
