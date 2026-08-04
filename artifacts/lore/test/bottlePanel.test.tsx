@@ -542,3 +542,100 @@ describe("PostItIcon — SVG geometry", () => {
     expect(svg.getAttribute("aria-hidden")).toBe("true");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Unread-dot glow — markRead called on open, orange style absent when read
+// ---------------------------------------------------------------------------
+
+describe("BottlePanel — unread-dot glow clears after opening panel", () => {
+  it("calls markRead exactly once when the trigger is clicked to open the panel", () => {
+    const markRead = vi.fn();
+    mockUseSongBottles.mockReturnValue({
+      bottles: [
+        {
+          id: 1,
+          mbid: "test-mbid-1234",
+          handle: "listener1",
+          avatar: "🎵",
+          body: "Great track!",
+          progressMs: 10000,
+          playsRemaining: 2,
+          createdAt: new Date().toISOString(),
+          stationId: 7,
+        },
+      ],
+      archivedCount: 0,
+      hasUnread: true,
+      markRead,
+      send: vi.fn(),
+      loading: false,
+      error: null,
+    });
+
+    renderPanel();
+    expect(markRead).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId("bottle-trigger"));
+
+    expect(markRead).toHaveBeenCalledTimes(1);
+  });
+
+  it("trigger does NOT have orange color style when hasUnread=false", () => {
+    mockUseSongBottles.mockReturnValue({
+      bottles: [
+        {
+          id: 1,
+          mbid: "test-mbid-1234",
+          handle: "listener1",
+          avatar: "🎵",
+          body: "Great track!",
+          progressMs: 10000,
+          playsRemaining: 2,
+          createdAt: new Date().toISOString(),
+          stationId: 7,
+        },
+      ],
+      archivedCount: 0,
+      hasUnread: false,
+      markRead: vi.fn(),
+      send: vi.fn(),
+      loading: false,
+      error: null,
+    });
+
+    renderPanel();
+    const trigger = screen.getByTestId("bottle-trigger") as HTMLButtonElement;
+    // When hasUnread=false the trigger should NOT have the orange picker color
+    expect(trigger.style.color).not.toContain("#e67e3a");
+    expect(trigger.style.color).not.toContain("var(--picker");
+  });
+
+  it("trigger has orange color style when hasUnread=true", () => {
+    mockUseSongBottles.mockReturnValue({
+      bottles: [
+        {
+          id: 1,
+          mbid: "test-mbid-1234",
+          handle: "listener1",
+          avatar: "🎵",
+          body: "Great track!",
+          progressMs: 10000,
+          playsRemaining: 2,
+          createdAt: new Date().toISOString(),
+          stationId: 7,
+        },
+      ],
+      archivedCount: 0,
+      hasUnread: true,
+      markRead: vi.fn(),
+      send: vi.fn(),
+      loading: false,
+      error: null,
+    });
+
+    renderPanel();
+    const trigger = screen.getByTestId("bottle-trigger") as HTMLButtonElement;
+    // When hasUnread=true the trigger should have the orange picker color
+    expect(trigger.style.color).toContain("var(--picker");
+  });
+});
