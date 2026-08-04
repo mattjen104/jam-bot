@@ -1422,6 +1422,8 @@ export async function runImportWorker(
       .set({ status: "done", total, resolved, finishedAt: new Date() })
       .where(eq(libraryImportJobsTable.id, jobId));
 
+    bustCrossingsCache(userId);
+
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[me] import worker job=${jobId} failed`, err);
@@ -1674,6 +1676,7 @@ export async function runManualImportWorker(
     await db.update(libraryImportJobsTable)
       .set({ status: "done", total, resolved, finishedAt: new Date() })
       .where(eq(libraryImportJobsTable.id, jobId));
+    bustCrossingsCache(userId);
     console.log(`[me/import:manual] job=${jobId} done — ${resolved}/${total} resolved`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -2039,6 +2042,7 @@ export async function runListenBrainzImportWorker(
     await db.update(libraryImportJobsTable)
       .set({ status: "done", total, resolved, finishedAt: new Date() })
       .where(eq(libraryImportJobsTable.id, jobId));
+    bustCrossingsCache(userId);
     console.log(`[me/import:lb] job=${jobId} done — ${resolved}/${total} resolved`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

@@ -1076,6 +1076,8 @@ export default function Library() {
     void queryClient.invalidateQueries({ queryKey: ME_OVERLAP_STATIONS_KEY });
     void queryClient.invalidateQueries({ queryKey: ME_OVERLAP_RUNS_KEY });
     void queryClient.invalidateQueries({ queryKey: ME_LIBRARY_COVERAGE_KEY });
+    // Bust crossings so the Dial reflects the new library immediately
+    void queryClient.invalidateQueries({ queryKey: ["me", "crossings"] });
     // Auto-dismiss banner after 60s
     setBannerDismissed(false);
     const t = setTimeout(() => setBannerDismissed(true), 60_000);

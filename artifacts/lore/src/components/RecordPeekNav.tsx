@@ -321,6 +321,9 @@ export function RecordPeekNav() {
                 {/* VinylDisc lives inside the sleeve; it grows into the art on hold */}
                 <VinylDisc />
               </span>
+              {/* Disc lives outside the sleeve so it can animate past the sleeve's clip */}
+              <span className="record-peek-tab__record" aria-hidden="true" />
+              <ArcLabel label={label} />
             </button>
           );
         })}
