@@ -309,7 +309,7 @@ afterAll(async () => {
   }
 });
 
-const TEST_TIMEOUT = 30_000;
+const TEST_TIMEOUT = 90_000;
 
 type OverlapItem = { pickerId: number; pickerName: string; overlapCount: number };
 

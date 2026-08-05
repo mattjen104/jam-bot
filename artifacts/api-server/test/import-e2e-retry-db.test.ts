@@ -255,7 +255,7 @@ afterAll(async () => {
 
 // ── Test ──────────────────────────────────────────────────────────────────────
 
-const TEST_TIMEOUT = 30_000;
+const TEST_TIMEOUT = 90_000;
 
 describe("end-to-end: confirmed negative-cache entry blocks retry pass (soft row kept)", () => {
   /**

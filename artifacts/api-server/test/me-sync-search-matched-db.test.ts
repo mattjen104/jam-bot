@@ -291,7 +291,7 @@ beforeAll(async () => {
   await new Promise<void>((resolve) => server!.once("listening", resolve));
   const addr = server.address();
   if (addr && typeof addr === "object") baseUrl = `http://127.0.0.1:${addr.port}`;
-}, 30_000);
+}, 90_000);
 
 afterAll(async () => {
   if (server) await new Promise<void>((r) => server!.close(() => r()));
@@ -323,7 +323,7 @@ afterAll(async () => {
   await db.delete(spotifyConnectionsTable).where(
     inArray(spotifyConnectionsTable.sid, [SID, SID2]),
   );
-}, 30_000);
+}, 90_000);
 
 // ---------------------------------------------------------------------------
 // Tests

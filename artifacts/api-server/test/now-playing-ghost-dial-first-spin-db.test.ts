@@ -192,7 +192,7 @@ beforeAll(async () => {
   await new Promise<void>((resolve) => server!.once("listening", resolve));
   const addr = server.address();
   if (addr && typeof addr === "object") baseUrl = `http://127.0.0.1:${addr.port}`;
-}, 30_000);
+}, 90_000);
 
 // ─── Teardown ─────────────────────────────────────────────────────────────────
 afterAll(async () => {
@@ -203,7 +203,7 @@ afterAll(async () => {
     await db.delete(stationsTable).where(inArray(stationsTable.id, stationIds));
   }
   await db.delete(recordingsTable).where(inArray(recordingsTable.mbid, ALL_MBIDS));
-}, 30_000);
+}, 90_000);
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type NowPlayingItem = {
@@ -229,7 +229,7 @@ describe("GET /api/stations/now-playing?date=YYYY-MM-DD — isFirstSpin", () => 
     expect(item!.nowPlaying).not.toBeNull();
     expect(item!.nowPlaying!.recording?.mbid).toBe(Q_FRESH_MBID);
     expect(item!.nowPlaying!.isFirstSpin).toBe(true);
-  }, 30_000);
+  }, 90_000);
 
   it("returns isFirstSpin: false for an MBID that aired on a prior day", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
@@ -242,7 +242,7 @@ describe("GET /api/stations/now-playing?date=YYYY-MM-DD — isFirstSpin", () => 
     expect(item!.nowPlaying).not.toBeNull();
     expect(item!.nowPlaying!.recording?.mbid).toBe(Q_OLD_MBID);
     expect(item!.nowPlaying!.isFirstSpin).toBe(false);
-  }, 30_000);
+  }, 90_000);
 });
 
 // ─── Tests: path-param variant ────────────────────────────────────────────────
@@ -258,7 +258,7 @@ describe("GET /api/stations/at/:date/now-playing — isFirstSpin", () => {
     expect(item!.nowPlaying).not.toBeNull();
     expect(item!.nowPlaying!.recording?.mbid).toBe(P_FRESH_MBID);
     expect(item!.nowPlaying!.isFirstSpin).toBe(true);
-  }, 30_000);
+  }, 90_000);
 
   it("returns isFirstSpin: false for an MBID that aired on an even earlier date", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
@@ -271,5 +271,5 @@ describe("GET /api/stations/at/:date/now-playing — isFirstSpin", () => {
     expect(item!.nowPlaying).not.toBeNull();
     expect(item!.nowPlaying!.recording?.mbid).toBe(P_OLD_MBID);
     expect(item!.nowPlaying!.isFirstSpin).toBe(false);
-  }, 30_000);
+  }, 90_000);
 });

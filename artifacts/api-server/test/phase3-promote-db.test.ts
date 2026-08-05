@@ -314,7 +314,7 @@ afterAll(async () => {
       .where(inArray(loreUsersTable.id, allUserIds))
       .catch(() => {});
   }
-}, 30_000);
+}, 90_000);
 
 // ── Helper ────────────────────────────────────────────────────────────────────
 
@@ -340,7 +340,7 @@ async function insertDoneJob(
   return job!.id;
 }
 
-const TEST_TIMEOUT = 30_000;
+const TEST_TIMEOUT = 90_000;
 
 // ── Test 1: fresh promotion ───────────────────────────────────────────────────
 //

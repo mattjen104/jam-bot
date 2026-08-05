@@ -53,7 +53,7 @@ beforeAll(async () => {
     })
     .returning({ id: stationsTable.id });
   stationId = station!.id;
-}, 30_000);
+}, 90_000);
 
 afterAll(async () => {
   if (!dbAvailable || !stationId) return;
@@ -63,7 +63,7 @@ afterAll(async () => {
   await db.execute(
     sql`DELETE FROM migration_completions WHERE name IN ('applyArtistMetadataCleanup', 'applyUrlArtistRepair', 'applySyntheticUrlArtistCleanup', 'applyResolutionCollisionCleanup')`,
   );
-}, 30_000);
+}, 90_000);
 
 /** Remove the completion-ledger rows before each test so the migrations rerun. */
 beforeEach(async () => {
@@ -148,7 +148,7 @@ async function deleteTestRecordings(mbids: string[]): Promise<void> {
 describe("applyArtistMetadataCleanup", () => {
   it(
     "strips a leading dash from recordings.artist",
-    { timeout: 30_000 },
+    { timeout: 90_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 
@@ -170,7 +170,7 @@ describe("applyArtistMetadataCleanup", () => {
 
   it(
     "strips a leading en-dash from recordings.artist",
-    { timeout: 30_000 },
+    { timeout: 90_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 
@@ -191,7 +191,7 @@ describe("applyArtistMetadataCleanup", () => {
 
   it(
     "does NOT modify a recording that only has manual/backfill spins",
-    { timeout: 30_000 },
+    { timeout: 90_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 
@@ -212,7 +212,7 @@ describe("applyArtistMetadataCleanup", () => {
 
   it(
     "does NOT modify a recording with a clean artist (no leading dash)",
-    { timeout: 30_000 },
+    { timeout: 90_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 
@@ -232,7 +232,7 @@ describe("applyArtistMetadataCleanup", () => {
 
   it(
     "is idempotent: a second call is a no-op (completion ledger)",
-    { timeout: 60_000 },
+    { timeout: 90_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 
@@ -261,7 +261,7 @@ describe("applyArtistMetadataCleanup", () => {
 
   it(
     "completion ledger row is present after a successful run",
-    { timeout: 30_000 },
+    { timeout: 90_000 },
     async (ctx) => {
       if (!dbAvailable) return ctx.skip();
 
@@ -276,7 +276,7 @@ describe("applyArtistMetadataCleanup", () => {
 
   it(
     "uncertain recordings with no clear junk pattern are left unchanged",
-    { timeout: 30_000 },
+    { timeout: 90_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 
@@ -304,7 +304,7 @@ describe("applyArtistMetadataCleanup", () => {
 
   it(
     "non-Latin: Arabic artist فيروز is not modified",
-    { timeout: 30_000 },
+    { timeout: 90_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 
@@ -325,7 +325,7 @@ describe("applyArtistMetadataCleanup", () => {
 
   it(
     "non-Latin: Cyrillic artist Кино is not modified",
-    { timeout: 30_000 },
+    { timeout: 90_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 
@@ -346,7 +346,7 @@ describe("applyArtistMetadataCleanup", () => {
 
   it(
     "non-Latin: Japanese artist 坂本龍一 is not modified",
-    { timeout: 30_000 },
+    { timeout: 90_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 
@@ -367,7 +367,7 @@ describe("applyArtistMetadataCleanup", () => {
 
   it(
     "non-Latin: artist starting with CJK fullwidth minus ー is not modified",
-    { timeout: 30_000 },
+    { timeout: 90_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 
@@ -391,7 +391,7 @@ describe("applyArtistMetadataCleanup", () => {
 
   it(
     "purges resolution-cache entries with URL/domain-like keys",
-    { timeout: 30_000 },
+    { timeout: 90_000 },
     async (ctx) => {
       if (!dbAvailable) return ctx.skip();
 
@@ -459,7 +459,7 @@ describe("applyUrlArtistRepair", () => {
 
   it(
     "does NOT modify a recording with a clean artist (no URL/domain)",
-    { timeout: 30_000 },
+    { timeout: 90_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 
@@ -484,7 +484,7 @@ describe("applyUrlArtistRepair", () => {
 
   it(
     "sanitizes a sp: synthetic MBID with a domain artist",
-    { timeout: 30_000 },
+    { timeout: 90_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 
@@ -530,7 +530,7 @@ describe("applyUrlArtistRepair", () => {
 
   it(
     "does not sanitize a valid international artist",
-    { timeout: 30_000 },
+    { timeout: 90_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 
@@ -551,7 +551,7 @@ describe("applyUrlArtistRepair", () => {
 
   it(
     "detaches only legacy spins mismatched through the non-Latin cache collision",
-    { timeout: 30_000 },
+    { timeout: 90_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 
@@ -589,7 +589,7 @@ describe("applyUrlArtistRepair", () => {
 
   it(
     "recognizes collision-era contamination even after its cache key was purged",
-    { timeout: 30_000 },
+    { timeout: 90_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 
@@ -620,7 +620,7 @@ describe("applyUrlArtistRepair", () => {
 
   it(
     "defers completion when _testMbEnabled=false and a real-UUID domain-artist candidate exists",
-    { timeout: 30_000 },
+    { timeout: 90_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 
@@ -653,7 +653,7 @@ describe("applyUrlArtistRepair", () => {
 
   it(
     "defers completion when _testMbEnabled=false and an https:// artist real-UUID candidate exists",
-    { timeout: 30_000 },
+    { timeout: 90_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 
@@ -680,7 +680,7 @@ describe("applyUrlArtistRepair", () => {
 
   it(
     "proceeds and writes completion when _testMbEnabled=true even if MB returns no artist (genuine miss)",
-    { timeout: 30_000 },
+    { timeout: 90_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 
@@ -713,7 +713,7 @@ describe("applyUrlArtistRepair", () => {
 
   it(
     "does NOT modify a domain-artist recording that only has manual/backfill spins",
-    { timeout: 30_000 },
+    { timeout: 90_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 
@@ -743,7 +743,7 @@ describe("applyUrlArtistRepair", () => {
 
   it(
     "is idempotent: a second call is a no-op once the completion ledger is written",
-    { timeout: 60_000 },
+    { timeout: 90_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 
@@ -773,7 +773,7 @@ describe("applyUrlArtistRepair", () => {
 
   it(
     "completion ledger row is written when there are no real-UUID URL-artist candidates",
-    { timeout: 30_000 },
+    { timeout: 90_000 },
     async (ctx) => {
       if (!dbAvailable) return ctx.skip();
 

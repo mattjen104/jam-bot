@@ -30,6 +30,10 @@ args = "typecheck"
 task = "workflow.run"
 args = "server-tests"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "server-db-tests"
+
 [[workflows.workflow]]
 name = "typecheck"
 author = "agent"
@@ -45,12 +49,23 @@ isValidation = true
 name = "server-tests"
 author = "agent"
 
+[workflows.workflow.metadata]
+isValidation = true
+
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "pnpm --filter @workspace/api-server exec vitest run --exclude '**/*-db.test.ts'"
+args = "flock /tmp/api-server-vitest.lock pnpm --filter @workspace/api-server exec vitest run --exclude '**/*-db.test.ts'"
+
+[[workflows.workflow]]
+name = "server-db-tests"
+author = "agent"
 
 [workflows.workflow.metadata]
 isValidation = true
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "flock /tmp/api-server-vitest.lock pnpm --filter @workspace/api-server exec vitest run --config vitest.db.config.ts"
 
 [agent]
 stack = "PNPM_WORKSPACE"

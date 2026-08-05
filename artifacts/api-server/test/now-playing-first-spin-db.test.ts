@@ -118,7 +118,7 @@ beforeAll(async () => {
   await new Promise<void>((resolve) => server!.once("listening", resolve));
   const addr = server.address();
   if (addr && typeof addr === "object") baseUrl = `http://127.0.0.1:${addr.port}`;
-}, 30_000);
+}, 90_000);
 
 afterAll(async () => {
   server?.close();
@@ -130,7 +130,7 @@ afterAll(async () => {
     await db.delete(stationsTable).where(inArray(stationsTable.id, ids));
   }
   await db.delete(recordingsTable).where(inArray(recordingsTable.mbid, [FRESH_MBID, OLD_MBID]));
-}, 30_000);
+}, 90_000);
 
 // Helpers to pick out a specific station's item from the multi-station response.
 type NowPlayingItem = { slug: string; nowPlaying: { isFirstSpin: boolean; recording: { mbid: string } | null } | null };
@@ -154,7 +154,7 @@ describe("GET /api/stations/now-playing — isFirstSpin", () => {
     expect(item!.nowPlaying).not.toBeNull();
     expect(item!.nowPlaying!.recording?.mbid).toBe(FRESH_MBID);
     expect(item!.nowPlaying!.isFirstSpin).toBe(true);
-  }, 30_000);
+  }, 90_000);
 
   it("returns isFirstSpin: false for an MBID that aired yesterday", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
@@ -167,7 +167,7 @@ describe("GET /api/stations/now-playing — isFirstSpin", () => {
     expect(item!.nowPlaying).not.toBeNull();
     expect(item!.nowPlaying!.recording?.mbid).toBe(OLD_MBID);
     expect(item!.nowPlaying!.isFirstSpin).toBe(false);
-  }, 30_000);
+  }, 90_000);
 });
 
 describe("GET /api/stations/:slug/now-playing — isFirstSpin", () => {

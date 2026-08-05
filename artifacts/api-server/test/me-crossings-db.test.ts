@@ -501,7 +501,7 @@ afterAll(async () => {
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-const TEST_TIMEOUT = 30_000;
+const TEST_TIMEOUT = 90_000;
 
 describe("GET /api/me/crossings — release-group widening", () => {
   it("counts a crossing when the station plays a different pressing of a library album", async () => {

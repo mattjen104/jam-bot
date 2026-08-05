@@ -229,7 +229,7 @@ afterAll(async () => {
   for (const sid of [SID, SID_OTHER]) {
     await db.delete(spotifyConnectionsTable).where(eq(spotifyConnectionsTable.sid, sid));
   }
-}, 30_000);
+}, 90_000);
 
 // ── tests ─────────────────────────────────────────────────────────────────────
 describe("GET /api/me/library/list-coverage", () => {

@@ -112,7 +112,7 @@ beforeAll(async () => {
     .returning({ id: spinsTable.id });
   spinAId = spins[0]!.id;
   spinBId = spins[1]!.id;
-}, 30_000);
+}, 90_000);
 
 beforeEach(async () => {
   if (!dbAvailable) return;
@@ -138,7 +138,7 @@ afterAll(async () => {
     .delete(recordingsTable)
     .where(inArray(recordingsTable.mbid, [MBID_A, MBID_B, MBID_C]));
   await db.execute(sql`DELETE FROM migration_completions WHERE name = ${LEDGER_KEY}`);
-}, 30_000);
+}, 90_000);
 
 describe("applyLibraryProvenanceBackfill", () => {
   it("repairs attribution, counts disagreements, preserves context, and is idempotent", async (ctx) => {
@@ -230,5 +230,5 @@ describe("applyLibraryProvenanceBackfill", () => {
       sql`SELECT name FROM migration_completions WHERE name = ${LEDGER_KEY}`,
     );
     expect(ledger.rows).toHaveLength(1);
-  }, 30_000);
+  }, 90_000);
 });

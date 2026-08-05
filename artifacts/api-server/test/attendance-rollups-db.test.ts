@@ -103,7 +103,7 @@ afterAll(async () => {
   await db.delete(stationsTable).where(eq(stationsTable.id, stationId));
   await db.delete(loreUsersTable).where(eq(loreUsersTable.id, userId));
   await db.delete(spotifyConnectionsTable).where(eq(spotifyConnectionsTable.sid, SID));
-}, 30_000);
+}, 90_000);
 
 describe("attendance rollup backfill", () => {
   it("aggregates dwell, distinct qualifying spins, and first/last air time", async () => {

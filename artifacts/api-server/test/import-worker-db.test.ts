@@ -297,7 +297,7 @@ afterAll(async () => {
   await db
     .delete(loreUsersTable)
     .where(eq(loreUsersTable.id, userId));
-}, 30_000);
+}, 90_000);
 
 // ── Helper: create a fresh job row and return its id ────────────────────────
 
@@ -1222,7 +1222,7 @@ describe("Cross-user soft-row exclusion — Phase 3 for user 1 populates cache; 
       })
       .returning();
     connRow2 = c2!;
-  }, 30_000);
+  }, 90_000);
 
   afterAll(async () => {
     if (!dbAvailable) return;
@@ -1250,7 +1250,7 @@ describe("Cross-user soft-row exclusion — Phase 3 for user 1 populates cache; 
     await db
       .delete(loreUsersTable)
       .where(eq(loreUsersTable.id, userId2));
-  }, 30_000);
+  }, 90_000);
 
   it(
     "user 1 resolves via Phase 3; user 2 resolves via Phase 2 (cache hit); neither appears in spotify_library_items",

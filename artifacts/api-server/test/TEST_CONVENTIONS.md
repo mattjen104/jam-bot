@@ -76,3 +76,20 @@ Each test file runs in its own `vitest` worker — the DB connection pool, modul
 cache, and global variables are **not** shared across files.  However, the
 **database itself** is shared, so the isolation rules above apply regardless of
 worker boundaries.
+
+## DB-backed merge gate (`server-db-tests`)
+
+The `*-db.test.ts` files run in their own validation step, `server-db-tests`
+(`vitest run --config vitest.db.config.ts`), separate from the fast
+`server-tests` step (which excludes them). Full run is ~4–5 minutes.
+
+Reliability rules learned the hard way:
+- **maxWorkers is 2** in `vitest.db.config.ts`. At 4 workers, heavy-query
+  files (me-overlaps, me-crossings, now-playing-first-spin, import-worker)
+  time out on shared-Postgres contention against the ~1M-row spins table.
+- **Never write an inline 30s test timeout** in a `*-db.test.ts` file — under
+  parallel load a query that takes 2s alone can take 40s. Inline timeouts
+  override the config's 60s budget; if you must set one, use 90_000.
+- **Never hardcode a calendar date** in an assertion (a replay-export test
+  once baked in "2026-08-03" and broke two days later); derive expected dates
+  from the same base timestamp the seed data uses.

@@ -209,7 +209,7 @@ describe("GET /api/replay/:id", () => {
     expect(jspfResponse.status).toBe(200);
     expect(jspfResponse.headers.get("content-type")).toContain("application/jspf+json");
     expect(jspfResponse.headers.get("content-disposition")).toBe(
-      `attachment; filename="ghost-replay-${slug}-2026-08-03.jspf"`,
+      `attachment; filename="ghost-replay-${slug}-${base.toISOString().slice(0, 10)}.jspf"`,
     );
     expect(jspfResponse.headers.get("x-content-type-options")).toBe("nosniff");
     const jspf = (await jspfResponse.json()) as {

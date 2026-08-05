@@ -92,7 +92,7 @@ afterAll(async () => {
     .delete(recordingsTable)
     .where(eq(recordingsTable.mbid, MBID))
     .catch(() => {});
-}, 30_000);
+}, 90_000);
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
@@ -162,5 +162,5 @@ describe("runAnonCleanup", () => {
       const idx = insertedUserIds.indexOf(id);
       if (idx !== -1) insertedUserIds.splice(idx, 1);
     }
-  }, 30_000);
+  }, 90_000);
 });
