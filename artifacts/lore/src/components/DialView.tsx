@@ -268,15 +268,15 @@ function PopCrossingLine({ artists, seedsLower, onAdd }: {
 /**
  * Full setlist for the expanded "this set:" block.
  *
- * Renders artist names dot-separated with no header text — the parent
- * fdrow__also-block provides the "this set:" label and layout.
+ * Renders artist names as a flex-wrap pill grid — every line starts at the
+ * same left edge, no ragged wrap, each chip is a touch-friendly tap target.
  *
- * Colour rules (scoped via fdrow__also-block in CSS):
- *   - seeded this session → orange-red (library colour); "＋" disappears.
+ * Colour rules:
+ *   - seeded this session → orange-red (library colour); no "+" badge.
  *   - popular (rare-spin criterion) → lime green.
- *   - default → white.
- * Clicking a name (when not yet seeded) adds it; the "＋" glyph is a
- * passive indicator with pointer-events:none so the <b> receives the click.
+ *   - default → subtle muted background with trailing "+" badge.
+ * Clicking an unseeded chip adds the artist and the chip immediately updates
+ * to the seeded state via the seedsLower set.
  */
 function AlsoSentence({ artists, seedsLower, onAdd }: {
   artists: PopularCrossingArtist[];
@@ -286,29 +286,31 @@ function AlsoSentence({ artists, seedsLower, onAdd }: {
   const isSeeded = (a: PopularCrossingArtist) =>
     a.inLibrary || seedsLower.has(a.name.trim().toLowerCase());
 
-  const alsoCls = (a: PopularCrossingArtist): string => {
-    if (isSeeded(a)) return "fdrow__artist fdrow__artist--lib";
-    if (a.popular)   return "fdrow__artist fdrow__artist--pop";
-    return "fdrow__artist fdrow__artist--also";
+  const pillCls = (a: PopularCrossingArtist): string => {
+    if (isSeeded(a)) return "also-pill also-pill--lib";
+    if (a.popular)   return "also-pill also-pill--pop";
+    return "also-pill also-pill--default";
   };
 
-  const nodes: ReactNode[] = [];
-  artists.forEach((a, i) => {
-    if (i > 0) nodes.push(" · ");
-    const addable = !isSeeded(a);
-    nodes.push(
-      <b
-        key={a.name}
-        className={`${alsoCls(a)}${addable ? " fdrow__artist--addable" : ""}`}
-        onClick={addable ? (e) => { e.stopPropagation(); onAdd(a.name); } : undefined}
-      >
-        {a.name}
-        {addable && <span className="fdrow__addplus" aria-hidden="true">＋</span>}
-      </b>,
-    );
-  });
-  // No wrapper — parent block provides the layout container.
-  return <>{nodes}</>;
+  return (
+    <div className="also-pill-grid">
+      {artists.map((a) => {
+        const addable = !isSeeded(a);
+        return (
+          <button
+            key={a.name}
+            type="button"
+            className={pillCls(a)}
+            onClick={addable ? (e) => { e.stopPropagation(); onAdd(a.name); } : undefined}
+            aria-label={addable ? `Add ${a.name}` : a.name}
+          >
+            <span className="also-pill__name">{a.name}</span>
+            {addable && <span className="also-pill__plus" aria-hidden="true">+</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 interface ScrubItem {

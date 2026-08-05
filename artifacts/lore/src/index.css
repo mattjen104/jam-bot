@@ -4629,21 +4629,6 @@
 .fdrow__t1 .fdrow__artist--pop { color: hsl(var(--accent)); }
 .fdrow__t1 .fdrow__artist--new { color: hsl(var(--canary)); }
 .fdrow__t1 .fdrow__artist--lib { color: hsl(var(--library)); }
-/* "＋" indicator inside the Also sentence — passive span, not a button.
-   Clicks fall through to the parent artist <b> via pointer-events:none.
-   Appears immediately after the name with no gap. */
-.fdrow__addplus {
-  display: inline;
-  padding: 0;
-  margin-left: 1px;
-  font-size: 0.68em;
-  font-weight: 700;
-  line-height: 1;
-  color: hsl(var(--library));
-  vertical-align: super;
-  pointer-events: none;
-  user-select: none;
-}
 /* Artist names in the Also sentence that can be added — show pointer. */
 .fdrow__artist--addable { cursor: pointer; }
 /* ── Also-On-Air right-edge scrubber ─────────────────────────────────────
@@ -4736,44 +4721,79 @@
 }
 .fdrow__thisset:hover { color: hsl(var(--accent)); }
 /* ── "this set:" expanded block ─────────────────────────────────────────────
-   Appears as a flex row below the crossing sentence when the listener expands
-   the setlist. "this set:" label on the left is the collapse trigger;
-   artist dots fill the remaining width. */
+   Block container — left edge aligns with the row's text indent. The pill
+   grid inside wraps freely without ragged continuation lines. */
 .fdrow__also-block {
-  display: flex;
-  align-items: baseline;
-  gap: 7px;
+  display: block;
   margin-top: 5px;
 }
-/* "this set:" collapse label — left-edge, mono, muted */
-.fdrow__also-label {
+/* ── Artist pill grid ────────────────────────────────────────────────────────
+   Flex-wrap grid: every line starts at the same left edge, chips wrap to the
+   next row cleanly, no horizontal overflow even on 375px phones. */
+.also-pill-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  max-width: 100%;
+}
+/* Base pill — small rounded button, no border, background tint for contrast */
+.also-pill {
   appearance: none;
-  background: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
   border: none;
-  padding: 0;
-  margin: 0;
-  font-family: var(--app-font-mono);
-  font-size: 0.7em;
+  border-radius: 99px;
+  font-family: var(--app-font-display);
+  font-size: 11px;
   font-weight: 600;
-  color: hsl(var(--muted-foreground));
-  cursor: pointer;
-  white-space: nowrap;
-  flex-shrink: 0;
-  letter-spacing: 0.02em;
+  line-height: 1.4;
+  cursor: default;
+  max-width: 100%;
+  word-break: break-word;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: opacity 0.1s;
 }
-.fdrow__also-label:hover { color: hsl(var(--foreground) / 0.8); }
-/* Artist dots container — fills remaining width, slightly quieter base tone */
-.fdrow__also-artists {
-  flex: 1;
+/* Name span — can shrink and wrap within the chip */
+.also-pill__name {
   min-width: 0;
-  font-size: 0.9em;
-  color: hsl(var(--foreground) / 0.8);
-  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
 }
-/* Artist colour rules scoped to the also-block (mirror of fdrow__t1 rules) */
-.fdrow__also-block .fdrow__artist--pop  { color: hsl(var(--accent)); }
-.fdrow__also-block .fdrow__artist--lib  { color: hsl(var(--library)); }
-.fdrow__also-block .fdrow__artist--also { color: hsl(var(--foreground)); font-weight: 600; }
+/* "+" badge — trailing, lighter weight */
+.also-pill__plus {
+  font-size: 0.85em;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+/* Default state — unseeded, not popular: subtle muted background, pointer */
+.also-pill--default {
+  background: hsl(var(--muted) / 0.7);
+  color: hsl(var(--foreground) / 0.9);
+  cursor: pointer;
+}
+.also-pill--default:hover { opacity: 0.8; }
+/* Popular state — lime tint */
+.also-pill--pop {
+  background: hsl(var(--accent) / 0.18);
+  color: hsl(var(--accent));
+  cursor: pointer;
+}
+.also-pill--pop:hover { opacity: 0.8; }
+/* Seeded / already-in-library state — orange-red tint, inert */
+.also-pill--lib {
+  background: hsl(var(--library) / 0.15);
+  color: hsl(var(--library));
+  cursor: default;
+  opacity: 0.7;
+}
 /* Lime sort triangle next to the Also On Air tab — flips popular-heavy /
    deep-cuts station ordering (client-side re-sort, no refetch). */
 .dial-tab-sort {
