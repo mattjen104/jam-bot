@@ -17,7 +17,6 @@ import {
   upsertEmbedResolution,
   type EmbedResolutionInput,
 } from "../src/lore/embed-resolution.js";
-import { applyReplayResolutionMigration } from "../src/lore/replay-resolution-migration.js";
 
 const run = randomUUID().slice(0, 8);
 const mbid = `test-embed-resolution-${run}`;
@@ -45,7 +44,8 @@ function input(
 beforeAll(async () => {
   try {
     await db.execute(sql`select 1`);
-    await applyReplayResolutionMigration();
+    // Schema DDL is applied once in test/globalSetup.ts before workers spawn;
+    // re-running it per worker here raced other files' DDL and deadlocked.
     await db.insert(recordingsTable).values({
       mbid,
       title: "Embed Resolution Track",
@@ -242,9 +242,11 @@ describe("role-aware embed resolution", () => {
 
   it("enforces uniqueness at the database boundary", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
-    // Running the additive boot migration twice must be harmless for both
-    // existing deployments and fresh boots.
-    await applyReplayResolutionMigration();
+    // The additive boot migration runs once in test/globalSetup.ts. Do NOT
+    // re-run it here: its constraint-swapping DDL takes AccessExclusiveLock
+    // and deadlocks against parallel workers writing to the same tables.
+    // Idempotence across boots is guarded by the advisory lock inside
+    // applyReplayResolutionMigration itself.
     const rows = await db
       .select({ id: embedLinkTable.id })
       .from(embedLinkTable)

@@ -2,11 +2,28 @@ import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 
 /**
+ * Advisory-lock key serializing this migration across concurrent callers.
+ * Without it, the ALTER TABLE ... DROP/ADD CONSTRAINT statements below can
+ * deadlock (Postgres 40P01) when parallel test workers run the migration
+ * simultaneously. Any stable bigint works; this one is arbitrary but unique
+ * to this migration.
+ */
+const REPLAY_RESOLUTION_MIGRATION_LOCK_KEY = 7_233_141_497n;
+
+/**
  * Idempotent DDL for Ghost Replay's durable cross-service maps and jobs.
  * The manifest itself stays derived from spins; these tables contain only
  * enrichment assets and resumable user-requested work.
+ *
+ * The whole migration runs inside a single transaction holding a
+ * pg_advisory_xact_lock, so concurrent callers serialize instead of
+ * deadlocking on the constraint-swapping ALTER TABLE statements.
  */
 export async function applyReplayResolutionMigration(): Promise<void> {
+  await db.transaction(async (db) => {
+  await db.execute(sql`
+    SELECT pg_advisory_xact_lock(${REPLAY_RESOLUTION_MIGRATION_LOCK_KEY})
+  `);
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS service_track_map (
       id                 serial PRIMARY KEY,
@@ -296,4 +313,5 @@ export async function applyReplayResolutionMigration(): Promise<void> {
     ALTER TABLE replay_resolution_jobs
       ADD COLUMN IF NOT EXISTS network_errors integer NOT NULL DEFAULT 0
   `);
+  });
 }
