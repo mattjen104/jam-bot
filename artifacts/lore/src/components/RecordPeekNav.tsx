@@ -11,6 +11,7 @@ import {
 } from "@workspace/api-client-react";
 import type { RecordingLink } from "@workspace/api-client-react";
 import { X } from "lucide-react";
+import { RUMOURS, onArtError } from "../lib/rumours";
 import { usePlayer } from "../player/PlayerProvider";
 import {
   useSectionMemory,
@@ -34,7 +35,6 @@ function sectionFor(location: string): Section {
   return "radio";
 }
 
-const RUMOURS_ART_STATIC = "https://coverartarchive.org/release-group/3e0b2fe7-c6d3-41a5-843a-73ffe5c6c57f/front-500";
 
 function artFor(
   section: Section,
@@ -51,14 +51,14 @@ function artFor(
       ?? memory.radio?.lastTrack?.artworkUrl
       ?? memory.radio?.station.logoUrl
       ?? liveRadioLogoUrl
-      ?? RUMOURS_ART_STATIC;
+      ?? RUMOURS;
   }
   if (section === "selectors") {
     // First track of the set (ghost radio thumbnail), not the current resume index
-    return memory.selectors?.queue[0]?.artworkUrl ?? liveRideArtworkUrl ?? fallbackSelectorArt ?? RUMOURS_ART_STATIC;
+    return memory.selectors?.queue[0]?.artworkUrl ?? liveRideArtworkUrl ?? fallbackSelectorArt ?? RUMOURS;
   }
   // Library: album art of last keep or last manual play
-  return memory.library?.album.artworkUrl ?? memory.library?.track.artworkUrl ?? fallbackLibraryArt ?? RUMOURS_ART_STATIC;
+  return memory.library?.album.artworkUrl ?? memory.library?.track.artworkUrl ?? fallbackLibraryArt ?? RUMOURS;
 }
 
 function fallbackMark(_section: Section) {
@@ -178,16 +178,12 @@ export function RecordPeekNav() {
       ?.previewTracks?.find((t) => t.artworkUrl)?.artworkUrl
   ) ?? null;
 
-  // Rumours is the universal final fallback — every tab gets art even on a
-  // fresh visit with no library, no selectors, and no live now-playing yet.
-  const RUMOURS_ART = "https://coverartarchive.org/release-group/3e0b2fe7-c6d3-41a5-843a-73ffe5c6c57f/front-500";
-
   // Fallback artwork for Library: cascade through the three sources above.
   const fallbackLibraryArt =
     avatarData?.current?.artworkUrl ??
     avatarData?.candidates?.[0]?.artworkUrl ??
     (libData?.pages[0]?.items.find((item) => item.recording?.artworkUrl)?.recording?.artworkUrl ?? null) ??
-    RUMOURS_ART;
+    RUMOURS;
 
   const resume = async (section: Section) => {
     setBusy(true);
@@ -342,7 +338,7 @@ export function RecordPeekNav() {
             >
               <span className="record-peek-tab__label" aria-hidden="true">{label}</span>
               <span className="record-peek-tab__sleeve" aria-hidden="true">
-                {artwork ? <img src={artwork} alt="" draggable={false} loading="lazy" /> : fallbackMark(section)}
+                <img src={artwork} alt="" draggable={false} loading="lazy" onError={onArtError} />
               </span>
             </button>
           );
@@ -368,11 +364,11 @@ export function RecordPeekNav() {
                 setPeek(null);
               }}
             >
-              {peekTrackArt && <img src={peekTrackArt} alt="" draggable={false} loading="lazy" />}
+              {peekTrackArt && <img src={peekTrackArt} alt="" draggable={false} loading="lazy" onError={onArtError} />}
             </button>
           ) : peekTrackArt ? (
             <span className="record-peek__art">
-              <img src={peekTrackArt} alt="" draggable={false} loading="lazy" />
+              <img src={peekTrackArt} alt="" draggable={false} loading="lazy" onError={onArtError} />
             </span>
           ) : null}
           <div className="record-peek__copy">

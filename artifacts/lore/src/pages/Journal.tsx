@@ -7,6 +7,7 @@ import {
   type JournalEntry,
 } from "../lib/local";
 import { clockTime } from "../lib/format";
+import { RUMOURS, onArtError } from "../components/../lib/rumours";
 import { KeepButton } from "../components/KeepButton";
 import {
   ArrowLeft,
@@ -150,27 +151,15 @@ function JournalRow({ entry }: { entry: JournalEntry }) {
       className="flex items-center gap-3 rounded-xl border border-card-border bg-card p-3"
       data-testid="journal-entry"
     >
-      {/* 42×42 artwork swatch with gradient fallback */}
-      <div
-        className="h-[42px] w-[42px] shrink-0 overflow-hidden rounded-lg"
-        style={{
-          background: entry.artworkUrl
-            ? undefined
-            : "linear-gradient(135deg, hsl(var(--secondary)), hsl(var(--muted)))",
-        }}
-      >
-        {entry.artworkUrl ? (
-          <img
-            src={entry.artworkUrl}
-            alt=""
-            className="h-full w-full object-cover"
-            loading="lazy"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center">
-            <Disc3 className="h-4 w-4 text-muted-foreground/40" />
-          </div>
-        )}
+      {/* 42×42 artwork swatch */}
+      <div className="h-[42px] w-[42px] shrink-0 overflow-hidden rounded-lg">
+        <img
+          src={entry.artworkUrl ?? RUMOURS}
+          alt=""
+          className="h-full w-full object-cover"
+          loading="lazy"
+          onError={onArtError}
+        />
       </div>
 
       <div className="min-w-0 flex-1">

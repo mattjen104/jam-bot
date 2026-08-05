@@ -7,14 +7,7 @@ import { toast } from "../hooks/use-toast";
 import { useMyAlbumAvatar, useSetAlbumAvatar } from "../lib/meHooks";
 import { AlbumShelf } from "./AlbumShelf";
 import { ChevronDown, ChevronUp } from "lucide-react";
-
-/** Deterministic gradient fallback for artwork */
-function artGradient(a: string, b: string): string {
-  let x = 0;
-  for (const c of a + b) x = ((x * 31 + c.charCodeAt(0)) >>> 0);
-  const h = x % 360;
-  return `linear-gradient(150deg,hsl(${h},22%,20%),hsl(${(h + 42) % 360},28%,32%))`;
-}
+import { RUMOURS, onArtError } from "../lib/rumours";
 
 interface LibraryRowProps {
   item: LibraryItem;
@@ -256,16 +249,13 @@ export function LibraryRow({
 
   // Artwork swatch — for soft rows, links to Spotify instead of the song page.
   const artSwatch = (
-    <>
-      {artwork ? (
-        <img src={artwork} alt="" className="lrow__art-img" loading="lazy" />
-      ) : (
-        <span
-          className="lrow__art-grad"
-          style={{ background: artGradient(title, artist) }}
-        />
-      )}
-    </>
+    <img
+      src={artwork ?? RUMOURS}
+      alt=""
+      className="lrow__art-img"
+      loading="lazy"
+      onError={onArtError}
+    />
   );
 
   return (

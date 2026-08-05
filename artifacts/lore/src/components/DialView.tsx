@@ -21,6 +21,7 @@ import { usePlayer } from "../player/PlayerProvider";
 import { BottlePanel } from "./BottlePanel";
 import { AlbumAvatarPicker } from "./AlbumAvatarPicker";
 import { MoonPhaseGlyph } from "./MoonPhaseGlyph";
+import { RUMOURS, onArtError } from "../lib/rumours";
 import { useSocialMode, setSocialEnabled } from "../lib/social";
 import { eligibleDjName, eligibleDjNames } from "@workspace/lore-attribution";
 import {
@@ -1089,8 +1090,7 @@ export function DialView() {
   const { data: avatarData } = useMyAlbumAvatar();
   // Rumours is the universal fallback — ensures the topbar gradient always renders
   // even for brand-new users who haven't connected a library yet.
-  const RUMOURS_ART = "https://coverartarchive.org/release-group/3e0b2fe7-c6d3-41a5-843a-73ffe5c6c57f/front-500";
-  const avatarUrl = avatarData?.current?.artworkUrl ?? avatarData?.candidates?.[0]?.artworkUrl ?? RUMOURS_ART;
+  const avatarUrl = avatarData?.current?.artworkUrl ?? avatarData?.candidates?.[0]?.artworkUrl ?? RUMOURS;
   const hasWeeklyRecap = weeklyRecapData != null && (
     weeklyRecapData.stationsAttended.stations.length > 0 ||
     weeklyRecapData.firstEverHeards.items.length > 0 ||

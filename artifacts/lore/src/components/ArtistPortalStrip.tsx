@@ -1,12 +1,5 @@
 import { useState, useEffect } from "react";
-
-/** Deterministic gradient for album art fallback */
-function artGradient(a: string, b: string): string {
-  let x = 0;
-  for (const c of a + b) x = ((x * 31 + c.charCodeAt(0)) >>> 0);
-  const h = x % 360;
-  return `linear-gradient(150deg,hsl(${h},22%,20%),hsl(${(h + 42) % 360},28%,32%))`;
-}
+import { RUMOURS, onArtError } from "../lib/rumours";
 
 interface ArtistRelease {
   releaseGroupMbid: string;
@@ -73,19 +66,13 @@ export function ArtistPortalStrip({
               onClick={() => onSelect(r.releaseGroupMbid)}
               title={[r.title, r.releaseYear].filter(Boolean).join(" · ")}
             >
-              {r.artworkUrl ? (
-                <img
-                  src={r.artworkUrl}
-                  alt={r.title ?? ""}
-                  className="lrow__portal-tile-art"
-                  loading="lazy"
-                />
-              ) : (
-                <span
-                  className="lrow__portal-tile-art--grad"
-                  style={{ background: artGradient(r.title ?? "", artistName) }}
-                />
-              )}
+              <img
+                src={r.artworkUrl ?? RUMOURS}
+                alt={r.title ?? ""}
+                className="lrow__portal-tile-art"
+                loading="lazy"
+                onError={onArtError}
+              />
               <div className="lrow__portal-tile-name">
                 {r.title ?? r.primaryType ?? ""}
                 {r.releaseYear ? ` '${String(r.releaseYear).slice(-2)}` : ""}

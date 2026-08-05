@@ -1,7 +1,8 @@
 // @refresh reset
 import { useState, useRef, useEffect } from "react";
 import { Link } from "wouter";
-import { ChevronLeft, ChevronRight, Clock, Headphones, ChevronDown } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, ChevronDown } from "lucide-react";
+import { RUMOURS, onArtError } from "../lib/rumours";
 import {
   useMyWeeklySummary,
   useMyWeeklyHistory,
@@ -127,32 +128,13 @@ function WeekTrackRow({ track }: { track: WeeklyTrack }) {
           border: "1px solid hsl(var(--border) / 0.5)",
         }}
       >
-        {hasArt ? (
-          <img
-            src={track.artworkUrl!}
-            alt=""
-            style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            loading="lazy"
-          />
-        ) : (
-          <div
-            style={{
-              width: "100%",
-              height: "100%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Headphones
-              style={{
-                width: 14,
-                height: 14,
-                color: "hsl(var(--faint))",
-              }}
-            />
-          </div>
-        )}
+        <img
+          src={track.artworkUrl ?? RUMOURS}
+          alt=""
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          loading="lazy"
+          onError={onArtError}
+        />
       </div>
 
       {/* Title + artist */}

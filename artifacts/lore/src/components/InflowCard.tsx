@@ -1,7 +1,7 @@
 import { Link } from "wouter";
-import { Disc3 } from "lucide-react";
 import { KeepButton } from "./KeepButton";
 import type { LibraryItem } from "../lib/meHooks";
+import { RUMOURS, onArtError } from "../lib/rumours";
 
 interface InflowCardProps {
   item: LibraryItem;
@@ -32,18 +32,13 @@ export function InflowCard({ item, pickerName, pickerHandle }: InflowCardProps) 
       data-testid="inflow-card"
     >
       <div className="h-28 w-full overflow-hidden rounded-lg bg-muted">
-        {artwork ? (
-          <img
-            src={artwork}
-            alt={`${title} — ${artist}`}
-            className="h-full w-full object-cover"
-            loading="lazy"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center">
-            <Disc3 className="h-8 w-8 text-muted-foreground/30" />
-          </div>
-        )}
+        <img
+          src={artwork ?? RUMOURS}
+          alt={`${title} — ${artist}`}
+          className="h-full w-full object-cover"
+          loading="lazy"
+          onError={onArtError}
+        />
       </div>
 
       <div className="min-w-0">
