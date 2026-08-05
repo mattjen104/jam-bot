@@ -299,9 +299,9 @@ router.get("/me/crossings", h(async (req, res) => {
   // ReferenceError on every request → 503 → empty dial.
   const weekCutoff  = new Date(Date.now() - 7  * 24 * 60 * 60 * 1000);
   const monthCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const inWindow           = sql`${spinsTable.playedAt} >= ${cutoff}`;
-  const inWeek             = sql`${spinsTable.playedAt} >= ${weekCutoff}`;
-  const inMonth            = sql`${spinsTable.playedAt} >= ${monthCutoff}`;
+  const inWindow           = sql`${spinsTable.playedAt} >= ${spinCutoff}`;
+  const inWeek             = sql`${spinsTable.playedAt} >= ${blendedWeekCutoff}`;
+  const inMonth            = sql`${spinsTable.playedAt} >= ${blendedMonthCutoff}`;
 
   // ── Relevant MBIDs for the mbid-driven lifetime query ─────────────────────
   // Collects every recording MBID that could yield a crossing for this user:
@@ -404,12 +404,12 @@ router.get("/me/crossings", h(async (req, res) => {
   const rollingMap = new Map(rows.map((r) => [r.stationSlug, r]));
   const allSlugs = new Set([...rollingMap.keys(), ...lifetimeMap.keys()]);
 
-  const items: CrossingsRow[] = [...allSlugs].map((slug) => {
-    const r = rollingMap.get(slug);
-    const l = lifetimeMap.get(slug);
+  const items: BlendedCrossingsRow[] = [...blendedSlugs].map((slug) => {
+    const r = blendedRollingMap.get(slug);
+    const l = blendedLifetimeMap.get(slug);
     return {
       stationSlug:             slug,
-      crossings:               r?.crossings              ?? 0,
+      crossings:               r?.crossings               ?? 0,
       artistCrossings:         r?.artistCrossings         ?? 0,
       weekCrossings:           r?.weekCrossings           ?? 0,
       weekArtistCrossings:     r?.weekArtistCrossings     ?? 0,
@@ -417,24 +417,11 @@ router.get("/me/crossings", h(async (req, res) => {
       monthArtistCrossings:    r?.monthArtistCrossings    ?? 0,
       lifetimeCrossings:       l?.lifetimeCrossings       ?? 0,
       lifetimeArtistCrossings: l?.lifetimeArtistCrossings ?? 0,
+      topArtistNames:          blendedTopArtists(r?.topArtistNamesRaw ?? null),
     };
   });
 
   const builtAt = new Date();
-
-  // Write L2 (Postgres) first so that a concurrent request on a different
-  // instance can benefit from the fresh result immediately.
-  void writeL2Cache(user.id, items, builtAt);
-
-  // Then populate L1.
-  crossingsCache.set(user.id, { builtAt: builtAt.getTime(), data: items });
-
-  return res.json({ items });
-}));
-
-// ---------------------------------------------------------------------------
-// Blended crossings endpoint
-// ---------------------------------------------------------------------------
 
 /**
  * GET /api/me/crossings/blended — anonymous aggregate crossings from active
@@ -447,6 +434,7 @@ router.get("/me/crossings", h(async (req, res) => {
  *                             personal crossings so ranking is comparable
  */
 
+type BlendedCrossingsRow = CrossingsRow & { topArtistNames: string[] };
 /** Deduplicate and rank artist names from an array_agg result, returning top 5. */
 function blendedTopArtists(raw: string[] | null): string[] {
   if (!raw?.length) return [];
@@ -462,6 +450,11 @@ function blendedTopArtists(raw: string[] | null): string[] {
 }
 
 router.get("/me/crossings/blended", h(async (_req, res) => {
+  // ── Single-entry short-TTL cache ──────────────────────────────────────────
+  if (blendedCrossingsCache && Date.now() - blendedCrossingsCache.builtAt < BLENDED_CROSSINGS_CACHE_TTL_MS) {
+    return res.json({ items: blendedCrossingsCache.data });
+  }
+
   const presenceCutoff = new Date(Date.now() - SOCIAL_PRESENCE_TTL_MS);
   const spinCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const activeUsers = activeSocialUsers(presenceCutoff);
@@ -609,11 +602,6 @@ router.get("/me/crossings/blended", h(async (_req, res) => {
   const blendedLifetimeMap = new Map(lifetimeRows.map((r) => [r.stationSlug, r]));
   const blendedRollingMap  = new Map(blendedRows.map((r) => [r.stationSlug, r]));
   const blendedSlugs = new Set([...blendedRollingMap.keys(), ...blendedLifetimeMap.keys()]);
-
-  return res.json({
-    items: [...blendedSlugs].map((slug) => {
-      const r = blendedRollingMap.get(slug);
-      const l = blendedLifetimeMap.get(slug);
       return {
         stationSlug:             slug,
         crossings:               r?.crossings               ?? 0,
@@ -631,3 +619,17 @@ router.get("/me/crossings/blended", h(async (_req, res) => {
 }));
 
 export default router;
+
+/** Evict the blended cache — call before a test that needs a fresh DB hit. */
+export function _testOnly_clearBlendedCrossingsCache(): void {
+  blendedCrossingsCache = null;
+}
+
+/** Return the raw blended cache entry — lets tests verify cache hits without spying on db. */
+export function _testOnly_getBlendedCrossingsCache(): { builtAt: number; data: BlendedCrossingsRow[] } | null {
+  return blendedCrossingsCache;
+}
+
+let blendedCrossingsCache: { builtAt: number; data: BlendedCrossingsRow[] } | null = null;
+
+const BLENDED_CROSSINGS_CACHE_TTL_MS = 60 * 1000;

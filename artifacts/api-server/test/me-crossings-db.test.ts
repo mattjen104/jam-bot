@@ -15,7 +15,13 @@ import {
   spinsTable,
 } from "@workspace/db";
 import app from "../src/app.js";
-import { _testOnly_clearCrossingsCache, _testOnly_getCrossingsCache, SOCIAL_PRESENCE_TTL_MS } from "../src/routes/me/crossings.js";
+import {
+  _testOnly_clearCrossingsCache,
+  _testOnly_getCrossingsCache,
+  _testOnly_clearBlendedCrossingsCache,
+  _testOnly_getBlendedCrossingsCache,
+  SOCIAL_PRESENCE_TTL_MS,
+} from "../src/routes/me/crossings.js";
 
 /**
  * Integration tests for GET /api/me/crossings.
@@ -917,6 +923,7 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
 
   it("counts a 23h-old spin in crossings but excludes a 25h-old spin (24h spin window)", async () => {
     if (!dbAvailable) return;
+    _testOnly_clearBlendedCrossingsCache();
     const res = await fetch(`${baseUrl}/api/me/crossings/blended`);
     expect(res.status).toBe(200);
     const body = await res.json() as {
@@ -932,6 +939,7 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
 
   it("includes a spin older than 180 days in blended lifetimeCrossings with rolling counts 0", async () => {
     if (!dbAvailable) return;
+    _testOnly_clearBlendedCrossingsCache();
     const res = await fetch(`${baseUrl}/api/me/crossings/blended`);
     expect(res.status).toBe(200);
     const body = await res.json() as {
@@ -966,6 +974,7 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
       .set({ lastSeenAt: new Date(Date.now() - 10 * 60 * 1000) })
       .where(eq(loreUsersTable.id, bUserActiveId!));
 
+    _testOnly_clearBlendedCrossingsCache();
     const res = await fetch(`${baseUrl}/api/me/crossings/blended`);
     expect(res.status).toBe(200);
     const body = await res.json() as {
@@ -979,6 +988,35 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
     await db.update(loreUsersTable)
       .set({ lastSeenAt: new Date() })
       .where(eq(loreUsersTable.id, bUserActiveId!));
+  }, TEST_TIMEOUT);
+
+  it("serves the second blended request from the in-memory cache without updating builtAt", async () => {
+    if (!dbAvailable) return;
+
+    // Evict so the first request populates the cache fresh.
+    _testOnly_clearBlendedCrossingsCache();
+
+    // First request — populates cache.
+    const res1 = await fetch(`${baseUrl}/api/me/crossings/blended`);
+    expect(res1.status).toBe(200);
+    const body1 = await res1.json();
+
+    const afterFirst = _testOnly_getBlendedCrossingsCache();
+    expect(afterFirst).not.toBeNull();
+    const firstBuiltAt = afterFirst!.builtAt;
+
+    // Second request within the TTL — must be a cache hit: builtAt unchanged,
+    // meaning no fresh compute (and therefore no re-query) happened.
+    const res2 = await fetch(`${baseUrl}/api/me/crossings/blended`);
+    expect(res2.status).toBe(200);
+    const body2 = await res2.json();
+
+    const afterSecond = _testOnly_getBlendedCrossingsCache();
+    expect(afterSecond).not.toBeNull();
+    expect(afterSecond!.builtAt).toBe(firstBuiltAt);
+
+    // Response content must match.
+    expect(body2).toEqual(body1);
   }, TEST_TIMEOUT);
 
   it("SOCIAL_PRESENCE_TTL_MS is ≤ 5 minutes so presence stays short-lived", () => {
