@@ -17,3 +17,7 @@ Boot migrations (CREATE/ALTER TABLE) must run exactly once in `test/globalSetup.
 **Advisory locks are not enough:** they only serialize migrations against each other, not against concurrent test DML — a re-run FK swap (AccessExclusive on the table AND the referenced table, e.g. stations) still deadlocks against another worker's DELETE. Constraint-swapping DDL must be skip-when-applied: check pg_constraint / pg_attribute first and only DROP/ADD when the installed shape differs, so per-file migration re-runs take no exclusive locks at all.
 
 Even no-op `ADD COLUMN IF NOT EXISTS` / `SET NOT NULL` take AccessExclusive; migration tests that delete the completion ledger and re-run mid-suite (device-identity, automation-class) must skip DDL via information_schema shape checks or they stall/deadlock parallel workers on hot tables (lore_users, stations).
+
+**Guard test:** `test/migration-advisory-lock-guard.test.ts` scans `src/lore/*-migration.ts` and fails any transaction containing DDL whose first `tx.execute` isn't the advisory lock. New migrations with DDL-in-transaction must lock first or the suite fails.
+
+**Flake note:** under full-suite load, `test/replay-resolution.test.ts` can time out in its `afterAll` cleanup (10s hookTimeout) yet passes in isolation — retry before treating as a real regression.
