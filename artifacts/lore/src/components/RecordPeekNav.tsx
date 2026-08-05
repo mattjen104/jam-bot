@@ -6,6 +6,8 @@ import {
   useGetPickersDial,
   useGetRecordingKnowledge,
   getGetRecordingKnowledgeQueryKey,
+  useGetStationNowPlaying,
+  getGetStationNowPlayingQueryKey,
 } from "@workspace/api-client-react";
 import type { RecordingLink } from "@workspace/api-client-react";
 import { X } from "lucide-react";
@@ -32,27 +34,31 @@ function sectionFor(location: string): Section {
   return "radio";
 }
 
+const RUMOURS_ART_STATIC = "https://coverartarchive.org/release-group/3e0b2fe7-c6d3-41a5-843a-73ffe5c6c57f/front-500";
+
 function artFor(
   section: Section,
   memory: SectionMemory,
+  liveNpArtworkUrl: string | null | undefined,
   liveRadioLogoUrl: string | null | undefined,
   liveRideArtworkUrl: string | null | undefined,
   fallbackSelectorArt: string | null,
   fallbackLibraryArt: string | null,
-): string | null {
+): string {
   if (section === "radio") {
-    // Last resolved track art > station logo > live station logo
-    return memory.radio?.lastTrack?.artworkUrl
+    // Preference: live track art (most current) > last resolved track art > station logo
+    return liveNpArtworkUrl
+      ?? memory.radio?.lastTrack?.artworkUrl
       ?? memory.radio?.station.logoUrl
       ?? liveRadioLogoUrl
-      ?? null;
+      ?? RUMOURS_ART_STATIC;
   }
   if (section === "selectors") {
     // First track of the set (ghost radio thumbnail), not the current resume index
-    return memory.selectors?.queue[0]?.artworkUrl ?? liveRideArtworkUrl ?? fallbackSelectorArt;
+    return memory.selectors?.queue[0]?.artworkUrl ?? liveRideArtworkUrl ?? fallbackSelectorArt ?? RUMOURS_ART_STATIC;
   }
   // Library: album art of last keep or last manual play
-  return memory.library?.album.artworkUrl ?? memory.library?.track.artworkUrl ?? fallbackLibraryArt;
+  return memory.library?.album.artworkUrl ?? memory.library?.track.artworkUrl ?? fallbackLibraryArt ?? RUMOURS_ART_STATIC;
 }
 
 function fallbackMark(_section: Section) {
@@ -103,6 +109,21 @@ export function RecordPeekNav() {
   // Fetch 20 items so we have a good chance of hitting one with artworkUrl
   // even if the first few are hard rows that haven't been enriched yet.
   const { data: libData } = useMyLibraryInfinite({}, 20);
+  // Live now-playing artwork for the radio tab sleeve — shares the same cache
+  // entry as PlayerDock so this is effectively free after the first fetch.
+  const radioSlug = radio.station?.slug ?? "";
+  const { data: liveNpData } = useGetStationNowPlaying(radioSlug, {
+    query: {
+      queryKey: getGetStationNowPlayingQueryKey(radioSlug),
+      enabled: !!radio.station,
+      staleTime: 15_000,
+      refetchInterval: 30_000,
+    },
+  });
+  const liveNpArtworkUrl =
+    liveNpData?.nowPlaying?.recording?.artworkUrl ??
+    liveNpData?.nowPlaying?.artworkUrl ??
+    null;
   const [peek, setPeek] = useState<Section | null>(null);
   // Snapshotted track for the liner sheet — stored before peek is cleared so
   // the sheet still has identity to render against after peek becomes null.
@@ -157,11 +178,16 @@ export function RecordPeekNav() {
       ?.previewTracks?.find((t) => t.artworkUrl)?.artworkUrl
   ) ?? null;
 
+  // Rumours is the universal final fallback — every tab gets art even on a
+  // fresh visit with no library, no selectors, and no live now-playing yet.
+  const RUMOURS_ART = "https://coverartarchive.org/release-group/3e0b2fe7-c6d3-41a5-843a-73ffe5c6c57f/front-500";
+
   // Fallback artwork for Library: cascade through the three sources above.
   const fallbackLibraryArt =
     avatarData?.current?.artworkUrl ??
     avatarData?.candidates?.[0]?.artworkUrl ??
-    (libData?.pages[0]?.items.find((item) => item.recording?.artworkUrl)?.recording?.artworkUrl ?? null);
+    (libData?.pages[0]?.items.find((item) => item.recording?.artworkUrl)?.recording?.artworkUrl ?? null) ??
+    RUMOURS_ART;
 
   const resume = async (section: Section) => {
     setBusy(true);
@@ -253,7 +279,7 @@ export function RecordPeekNav() {
         : "";
 
   const peekTrackArt: string | null = peek === "radio"
-    ? (radioMemory?.lastTrack?.artworkUrl ?? null)
+    ? (liveNpArtworkUrl ?? radioMemory?.lastTrack?.artworkUrl ?? null)
     : peek === "selectors"
       ? (selectorMemory?.queue[selectorMemory.index]?.artworkUrl ?? null)
       : peek === "library"
@@ -286,7 +312,7 @@ export function RecordPeekNav() {
       <nav className="record-peek-nav" aria-label="Primary">
         {(["radio", "selectors", "library"] as Section[]).map((section) => {
           const active = activeSection === section;
-          const artwork = artFor(section, memory, radio.station?.logoUrl, ride.current?.artworkUrl, fallbackSelectorArt, fallbackLibraryArt);
+          const artwork = artFor(section, memory, liveNpArtworkUrl, radio.station?.logoUrl, ride.current?.artworkUrl, fallbackSelectorArt, fallbackLibraryArt);
           const label = section === "radio" ? "Radio" : section === "selectors" ? "Selectors" : "Library";
           return (
             <button
@@ -374,9 +400,9 @@ export function RecordPeekNav() {
           title={linerTrack.title}
           artist={linerTrack.artist}
           artworkUrl={linerTrack.artworkUrl}
-          radioArt={artFor("radio", memory, radio.station?.logoUrl, ride.current?.artworkUrl, fallbackSelectorArt, fallbackLibraryArt)}
-          selectorArt={artFor("selectors", memory, radio.station?.logoUrl, ride.current?.artworkUrl, fallbackSelectorArt, fallbackLibraryArt)}
-          libraryArt={artFor("library", memory, radio.station?.logoUrl, ride.current?.artworkUrl, fallbackSelectorArt, fallbackLibraryArt)}
+          radioArt={artFor("radio", memory, liveNpArtworkUrl, radio.station?.logoUrl, ride.current?.artworkUrl, fallbackSelectorArt, fallbackLibraryArt)}
+          selectorArt={artFor("selectors", memory, liveNpArtworkUrl, radio.station?.logoUrl, ride.current?.artworkUrl, fallbackSelectorArt, fallbackLibraryArt)}
+          libraryArt={artFor("library", memory, liveNpArtworkUrl, radio.station?.logoUrl, ride.current?.artworkUrl, fallbackSelectorArt, fallbackLibraryArt)}
           onResume={(section) => void resume(section)}
           onDismiss={() => setLinerTrack(null)}
           busy={busy}

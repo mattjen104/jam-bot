@@ -140,6 +140,7 @@ export function buildAttributedSentence(
           {artistNodes}
           {" on "}
           <span className="fdrow__show">{showName}</span>
+          {"."}
         </>
       );
     }
@@ -149,6 +150,7 @@ export function buildAttributedSentence(
           <b className="fdrow__dj">{djName}</b>
           {" selected "}
           {artistNodes}
+          {"."}
         </>
       );
     }
@@ -159,10 +161,11 @@ export function buildAttributedSentence(
           {" on "}
           <span className="fdrow__show">{showName}</span>
           {timing ? ` ${timing}` : ""}
+          {"."}
         </>
       );
     }
-    return <>{artistNodes}{timing ? ` ${timing}` : ""}</>;
+    return <>{artistNodes}{timing ? ` ${timing}` : ""}{"."}</>;
   }
 
   // Count-only fallback (no artist names resolved yet)
@@ -175,6 +178,7 @@ export function buildAttributedSentence(
         {countNode}
         {" on "}
         <span className="fdrow__show">{showName}</span>
+        {"."}
       </>
     );
   }
@@ -184,6 +188,7 @@ export function buildAttributedSentence(
         <b className="fdrow__dj">{djName}</b>
         {" · "}
         {countNode}
+        {"."}
       </>
     );
   }
@@ -194,10 +199,11 @@ export function buildAttributedSentence(
         {" on "}
         <span className="fdrow__show">{showName}</span>
         {timing ? ` ${timing}` : ""}
+        {"."}
       </>
     );
   }
-  return <>{countNode}{timing ? ` ${timing}` : ""}</>;
+  return <>{countNode}{timing ? ` ${timing}` : ""}{"."}</>;
 }
 
 // ---------------------------------------------------------------------------

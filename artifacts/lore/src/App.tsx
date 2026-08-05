@@ -34,6 +34,7 @@ import ScheduleCalendar from "@/pages/ScheduleCalendar";
 import WebPlayer from "./webplayer/WebPlayer";
 import { PlayerProvider } from "./player/PlayerProvider";
 import { PlayerDock } from "./components/PlayerDock";
+import { RecordPeekNav } from "./components/RecordPeekNav";
 import { ListeningLogger } from "./components/ListeningLogger";
 import { AppLayout } from "./components/AppLayout";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -157,8 +158,19 @@ function Shell() {
       <AppLayout>
         <Router />
       </AppLayout>
-      <PlayerDock />
+      <BottomShell />
     </>
+  );
+}
+
+/** Unified fixed bottom shell — player dock sits directly above the nav tabs,
+ *  sharing one fixed container so there is no gap or floating card. */
+function BottomShell() {
+  return (
+    <div className="bottom-shell">
+      <PlayerDock />
+      <RecordPeekNav />
+    </div>
   );
 }
 

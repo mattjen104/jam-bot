@@ -11,7 +11,6 @@ import {
   Loader2,
   Pause,
   Play,
-  Radio,
   RotateCw,
   ScanLine,
   Volume2,
@@ -24,32 +23,20 @@ interface PlayerBarProps {
   status: PlayerStatus;
   volume: number;
   error: string | null;
-  /** Live-cast state — non-"off" when the station resolves to Spotify. */
   casting?: RadioCastStatus;
-  /** Why the cast fell back — null unless casting === "fallback". */
   castFallbackReason?: RadioCastFallbackReason | null;
-  /** True when the cast is paused on the listener's Spotify. */
   castPaused?: boolean;
-  /** Retry Spotify for the current track after a retryable cast fallback. */
   onCastRetry?: () => void;
   onToggle: (station: Station) => void;
   onStop: () => void;
   onVolume: (v: number) => void;
-  /** Spotify Connect state — when provided and connected+premium, shows the device picker. */
   spotify?: SpotifyConnectApi;
-  /** Live now-playing data — used to decide whether to show album art or the station mark. */
   nowPlaying?: NowPlaying | null;
-  /** Whether FM-style station scan is active. */
   scanActive?: boolean;
-  /** 1-based index of the current scan position. */
   scanCurrent?: number;
-  /** Total stations in the scan rotation. */
   scanTotal?: number;
-  /** Toggle scan on/off. */
   onScanToggle?: () => void;
-  /** 1 = forward, -1 = backward. */
   scanDir?: 1 | -1;
-  /** Flip scan direction. */
   onScanDirToggle?: () => void;
 }
 
@@ -78,228 +65,180 @@ export function PlayerBar({
   const isPlaying = isCasting ? !castPaused : status === "playing";
   const isLoading = !isCasting && status === "loading";
   const showDevicePicker = !!(spotify?.connected && spotify.premium);
-
-  // Show album art only when the spin is confidently resolved; fall back to
-  // the station mark for unresolved / low-confidence / absent now-playing data.
-  const confirmedArtwork =
-    (nowPlaying?.confidence === "recording_id" || nowPlaying?.confidence === "isrc")
-      ? (nowPlaying.recording?.artworkUrl ?? nowPlaying.artworkUrl ?? null)
-      : null;
-  // Not connected yet — show the cast icon as an entry point to connect.
   const showConnectPrompt = !!(spotify?.configured && !spotify.connected);
   const castDeviceName = spotify?.pinnedDevice?.name ?? "your Spotify";
 
+  // Metadata for the ticker
+  // Layout (top→bottom): song (dim) · album (mid) · artist (lime, most prominent)
+  // Station name is already shown in the player-bar-info block above.
+  const metaSong   = nowPlaying?.recording?.title   ?? nowPlaying?.rawTitle  ?? null;
+  const metaArtist = nowPlaying?.recording?.artist  ?? nowPlaying?.rawArtist ?? null;
+  const metaAlbum: string | null = null; // album title not yet in NowPlaying type
+
+  // Status text for the secondary line
+  const statusText = error
+    ? error
+    : scanActive
+      ? `Scanning · ${scanCurrent} of ${scanTotal}`
+      : isCasting
+        ? (castPaused ? `Paused on ${castDeviceName}` : `Live · casting to ${castDeviceName}`)
+        : casting === "connecting"
+          ? "Waiting for a track…"
+          : casting === "fallback"
+            ? (castFallbackReason === "rate_limited"
+                ? "Spotify rate-limited · playing broadcast"
+                : castFallbackReason === "spotify_error"
+                  ? "Spotify unavailable · playing broadcast"
+                  : "Not on Spotify · playing broadcast")
+            : isLoading
+              ? "Buffering…"
+              : null;
+
   return (
-    <div
-      className="fixed z-40 border border-border bg-secondary/95 backdrop-blur-md shadow-lg
-        bottom-[68px] left-4 right-4 rounded-[18px]
-        lg:bottom-[68px] lg:left-4 lg:right-4"
-      data-testid="player-bar"
-    >
-      {/*
-        Mobile: flex row — [logo] [play] [info flex-1] [scan controls] [stop]
-        Desktop (lg): 3-column grid — [info] [play centered] [volume+stop right-aligned]
-      */}
-      <div className="flex items-center gap-4 px-5 py-3 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:gap-6">
-        {/* Artwork swatch — mobile only. Shows album art when the spin is
-            confidently resolved (recording_id / isrc); falls back to the
-            station mark so unresolved ICY art never bleeds through. */}
-        <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-primary/25 bg-primary/10 lg:hidden">
-          {confirmedArtwork ? (
-            <img
-              key={confirmedArtwork}
-              src={confirmedArtwork}
-              alt=""
-              className="h-full w-full object-cover"
+    <div className="player-bar-block" data-testid="player-bar">
+      {/* ── Controls row ─────────────────────────────────────────────── */}
+      <div className="player-bar-row">
+        {/* EQ animation bars */}
+        <span className="player-bar-eq" aria-hidden="true">
+          {[0, 1, 2, 3].map((i) => (
+            <span
+              key={i}
+              className="player-bar-eq__bar"
+              style={{
+                animationName: isPlaying ? "lore-eq" : undefined,
+                animationDuration: "900ms",
+                animationDelay: `${i * 120}ms`,
+                animationIterationCount: "infinite",
+                animationTimingFunction: "ease-in-out",
+                transform: isPlaying ? undefined : "scaleY(0.3)",
+              }}
             />
-          ) : station.logoUrl ? (
-            <img src={station.logoUrl} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center">
-              <Radio className="h-4 w-4 text-primary/60" />
-            </div>
+          ))}
+        </span>
+
+        {/* Station name + optional status */}
+        <div className="player-bar-info">
+          <span className="player-bar-station">{station.name}</span>
+          {statusText && (
+            <span className="player-bar-status">{statusText}</span>
           )}
         </div>
 
-        {/* Play/pause button — mobile: second; desktop: center column (lg:order-2) */}
-        <button
-          type="button"
-          onClick={() => onToggle(station)}
-          aria-label={isPlaying ? "Pause" : "Play"}
-          data-testid="player-toggle"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-primary-border bg-primary text-primary-foreground transition-transform active:scale-95 lg:order-2 lg:mx-auto"
-        >
-          {isLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : isPlaying ? (
-            <Pause className="h-4 w-4 fill-current" />
-          ) : (
-            <Play className="ml-0.5 h-4 w-4 fill-current" />
-          )}
-        </button>
-
-        {/* Station info — mobile: middle (flex-1); desktop: left column */}
-        <div className="min-w-0 flex-1 lg:order-1">
-          <div className="flex items-center gap-2">
-            <span className="flex h-3 items-end gap-[2px]" aria-hidden>
-              {[0, 1, 2, 3].map((i) => (
-                <span
-                  key={i}
-                  className="w-[2px] bg-primary"
-                  style={{
-                    height: "12px",
-                    transformOrigin: "bottom",
-                    animation: isPlaying
-                      ? `lore-eq 900ms ease-in-out ${i * 120}ms infinite`
-                      : "none",
-                    transform: isPlaying ? undefined : "scaleY(0.3)",
-                  }}
-                />
-              ))}
-            </span>
-            <p className="truncate font-serif text-base font-semibold text-foreground">
-              {station.name}
-            </p>
-          </div>
-          <p className="flex items-center gap-1.5 truncate font-mono text-[11px] text-muted-foreground">
-            {error ? (
-              error
-            ) : scanActive ? (
-              <>
-                <span
-                  className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-primary"
-                  aria-hidden
-                />
-                {`Scanning · ${scanCurrent} of ${scanTotal}`}
-              </>
-            ) : isCasting ? (
-              castPaused ? (
-                `Paused on ${castDeviceName}`
-              ) : (
-                <>
-                  <span
-                    className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent"
-                    aria-hidden
-                  />
-                  {`Live · casting to ${castDeviceName}`}
-                </>
-              )
-            ) : casting === "connecting" ? (
-              "Waiting for a track to resolve to Spotify…"
-            ) : casting === "fallback" ? (
-              <>
-                {castFallbackReason === "rate_limited"
-                  ? "Spotify is rate-limited right now · playing the broadcast"
-                  : castFallbackReason === "spotify_error"
-                    ? "Spotify unavailable · playing the broadcast"
-                    : "Not on Spotify · playing the broadcast"}
-                {castFallbackReason !== "not_on_spotify" && onCastRetry && (
-                  <button
-                    type="button"
-                    onClick={onCastRetry}
-                    className="inline-flex shrink-0 items-center gap-1 rounded border border-border px-1.5 py-0.5 font-mono text-[10px] text-foreground/80 transition-colors hover:bg-secondary"
-                    title="Try Spotify again for this track"
-                    data-testid="cast-retry"
-                  >
-                    <RotateCw className="h-2.5 w-2.5" aria-hidden />
-                    Retry
-                  </button>
-                )}
-              </>
-            ) : isLoading ? (
-              "Buffering the live stream…"
-            ) : isPlaying ? (
-              <>
-                <span
-                  className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent"
-                  aria-hidden
-                />
-                Live · playing unmodified from source
-              </>
-            ) : (
-              "Paused"
-            )}
-          </p>
-        </div>
-
-        {/* Controls — mobile: [scan] [stop]; desktop: [device] [volume] [scan] [stop] */}
-        <div className="flex shrink-0 items-center gap-2 lg:order-3 lg:justify-end">
-          {/* Extended controls — desktop only (hidden on mobile so scan+stop always fit) */}
-          <div className="hidden lg:flex lg:items-center lg:gap-2">
-            {/* Device picker — shown when Spotify is connected */}
+        {/* Right-side controls */}
+        <div className="player-bar-controls">
+          {/* Desktop-only: device picker + volume */}
+          <div className="player-bar-desktop">
             {showDevicePicker && spotify ? (
               <DevicePicker spotify={spotify} />
             ) : showConnectPrompt && spotify ? (
               <button
                 type="button"
                 onClick={spotify.connect}
-                aria-label="Connect Spotify to cast to your devices"
-                title="Connect Spotify to cast this station to your speakers"
-                data-testid="cast-connect-button"
-                className="hover-elevate flex h-9 items-center gap-1.5 rounded-full border border-border px-2.5 font-mono text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                className="player-bar-btn"
+                aria-label="Connect Spotify"
+                title="Connect Spotify to cast"
               >
-                <Cast className="h-3.5 w-3.5 shrink-0" />
+                <Cast className="h-3.5 w-3.5" />
               </button>
             ) : null}
-            <div className="flex items-center gap-2">
-              {volume === 0 ? (
-                <VolumeX className="h-4 w-4 text-muted-foreground" />
-              ) : (
-                <Volume2 className="h-4 w-4 text-muted-foreground" />
-              )}
+            <div className="player-bar-vol">
+              {volume === 0
+                ? <VolumeX className="h-3.5 w-3.5" />
+                : <Volume2 className="h-3.5 w-3.5" />}
               <input
                 type="range"
-                min={0}
-                max={1}
-                step={0.01}
+                min={0} max={1} step={0.01}
                 value={volume}
                 onChange={(e) => onVolume(Number(e.target.value))}
                 aria-label="Volume"
                 data-testid="player-volume"
-                className="h-1 w-24 cursor-pointer appearance-none rounded-full bg-muted accent-primary"
+                className="player-bar-vol__range"
               />
             </div>
           </div>
 
-          {/* Scan controls — on/off toggle + direction flip */}
-          {onScanToggle && (
-            <div className="flex items-center gap-1">
-              {scanActive && onScanDirToggle && (
-                <button
-                  type="button"
-                  onClick={onScanDirToggle}
-                  aria-label={scanDir === 1 ? "Switch to backward scan" : "Switch to forward scan"}
-                  title={scanDir === 1 ? "Scanning forward — click to reverse" : "Scanning backward — click to go forward"}
-                  className="hover-elevate flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-primary/50 bg-primary/10 font-mono text-xs text-primary transition-colors hover:bg-primary/20"
-                >
-                  {scanDir === 1 ? "›" : "‹"}
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={onScanToggle}
-                aria-label={scanActive ? "Stop scanning" : "Scan stations"}
-                title={scanActive ? "Stop scanning" : "Scan through all stations"}
-                data-testid="player-scan"
-                className={`hover-elevate flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition-colors ${
-                  scanActive
-                    ? "border-primary bg-primary/15 text-primary"
-                    : "border-border text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <ScanLine className="h-4 w-4" />
-              </button>
-            </div>
+          {/* Cast retry */}
+          {casting === "fallback"
+            && castFallbackReason !== "not_on_spotify"
+            && onCastRetry && (
+            <button
+              type="button"
+              onClick={onCastRetry}
+              className="player-bar-btn"
+              title="Retry Spotify"
+              data-testid="cast-retry"
+            >
+              <RotateCw className="h-3.5 w-3.5" />
+            </button>
           )}
+
+          {/* Scan direction flip (desktop) */}
+          {scanActive && onScanDirToggle && (
+            <button
+              type="button"
+              onClick={onScanDirToggle}
+              className="player-bar-btn player-bar-btn--ghost"
+              aria-label={scanDir === 1 ? "Scan backward" : "Scan forward"}
+              title={scanDir === 1 ? "Scanning forward" : "Scanning backward"}
+            >
+              {scanDir === 1 ? "›" : "‹"}
+            </button>
+          )}
+
+          {/* Play / pause */}
+          <button
+            type="button"
+            onClick={() => onToggle(station)}
+            aria-label={isPlaying ? "Pause" : "Play"}
+            data-testid="player-toggle"
+            className="player-bar-btn player-bar-btn--play"
+          >
+            {isLoading
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              : isPlaying
+                ? <Pause className="h-3.5 w-3.5 fill-current" />
+                : <Play className="h-3.5 w-3.5 fill-current ml-0.5" />}
+          </button>
+
+          {/* Scan */}
+          {onScanToggle && (
+            <button
+              type="button"
+              onClick={onScanToggle}
+              aria-label={scanActive ? "Stop scan" : "Scan stations"}
+              data-testid="player-scan"
+              className={`player-bar-btn${scanActive ? " player-bar-btn--scan-on" : ""}`}
+            >
+              <ScanLine className="h-3.5 w-3.5" />
+            </button>
+          )}
+
+          {/* Stop */}
           <button
             type="button"
             onClick={onStop}
             aria-label="Stop and close player"
             data-testid="player-stop"
-            className="hover-elevate flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground"
+            className="player-bar-btn"
           >
-            <X className="h-4 w-4" />
+            <X className="h-3.5 w-3.5" />
           </button>
+        </div>
+      </div>
+
+      {/* ── Ticker strip — 3-line car-radio track info ────────────────── */}
+      {/* Row order: song (dim) · album (mid) · artist (lime, most prominent) */}
+      <div className="player-ticker">
+        <div className="player-ticker__meta">
+          <div className="player-ticker__meta-line player-ticker__meta-song">
+            {metaSong ?? "—"}
+          </div>
+          <div className="player-ticker__meta-line player-ticker__meta-artist">
+            {metaAlbum ?? "—"}
+          </div>
+          <div className="player-ticker__meta-line player-ticker__meta-station">
+            {metaArtist ?? "—"}
+          </div>
         </div>
       </div>
     </div>

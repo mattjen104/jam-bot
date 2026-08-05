@@ -25,7 +25,7 @@ export function PlayerDock() {
 
   const notice = spotify.notice ? (
     <div
-      className="fixed z-50 border border-border bg-secondary/95 backdrop-blur-md shadow-lg bottom-[68px] left-4 right-4 rounded-[18px] lg:bottom-[68px] lg:left-4 lg:right-4"
+      className="fixed z-50 border border-border bg-secondary/95 backdrop-blur-md shadow-lg bottom-[200px] left-4 right-4 rounded-[18px]"
       data-testid="spotify-notice"
     >
       <div className="flex items-center justify-between gap-3 px-5 py-3">

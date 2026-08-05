@@ -1,17 +1,233 @@
-/* Record-peek primary navigation ------------------------------------------------ */
-/* ── Bottom nav bar ───────────────────────────────────────────────────────── */
-.record-peek-nav {
+/* ── Unified bottom shell — fixed container for player + nav ─────────────── */
+.bottom-shell {
   position: fixed;
-  z-index: 30;
-  inset: auto 0 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  background: hsl(var(--background));
+  border-top: 1px solid hsl(var(--border) / 0.45);
+}
+
+/* ── Player bar — compact block inside .bottom-shell ─────────────────────── */
+.player-bar-block {
+  border-bottom: 1px solid hsl(var(--border) / 0.25);
+}
+.player-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px 6px;
+}
+/* EQ animation bars */
+.player-bar-eq {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 12px;
+  flex-shrink: 0;
+}
+.player-bar-eq__bar {
+  width: 2px;
+  height: 12px;
+  background: hsl(var(--primary));
+  transform-origin: bottom;
+}
+/* Station name + status */
+.player-bar-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.player-bar-station {
+  font-family: var(--app-font-display);
+  font-size: 13px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.player-bar-status {
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+  color: hsl(var(--muted-foreground));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Controls cluster */
+.player-bar-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+/* Desktop-only controls (volume, device picker) */
+.player-bar-desktop {
+  display: none;
+  align-items: center;
+  gap: 8px;
+}
+@media (min-width: 1024px) {
+  .player-bar-desktop { display: flex; }
+}
+.player-bar-vol {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: hsl(var(--muted-foreground));
+}
+.player-bar-vol__range {
+  width: 80px;
+  height: 4px;
+  cursor: pointer;
+  appearance: none;
+  border-radius: 2px;
+  background: hsl(var(--muted));
+  accent-color: hsl(var(--primary));
+}
+/* Icon buttons */
+.player-bar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  border: 1px solid hsl(var(--border));
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.1s, color 0.1s;
+}
+.player-bar-btn:hover { background: hsl(var(--muted)); color: hsl(var(--foreground)); }
+.player-bar-btn--play {
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+  border-color: hsl(var(--foreground));
+}
+.player-bar-btn--play:hover { opacity: 0.85; background: hsl(var(--foreground)); }
+.player-bar-btn--ghost { font-size: 13px; font-weight: 700; }
+.player-bar-btn--scan-on {
+  color: hsl(var(--accent));
+  border-color: hsl(var(--accent) / 0.5);
+  background: hsl(var(--accent) / 0.08);
+}
+
+/* ── Ticker strip ─────────────────────────────────────────────────────────── */
+.player-ticker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px 10px;
+  min-height: 34px;
+}
+/* Artists scrolling ticker */
+.player-ticker__scroll {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 8%, #000 92%, transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0%, #000 8%, #000 92%, transparent 100%);
+}
+.player-ticker__track {
+  display: inline-flex;
+  gap: 8px;
+  white-space: nowrap;
+  animation: player-ticker-scroll 480s linear infinite;
+}
+.player-ticker__scroll:hover .player-ticker__track { animation-play-state: paused; }
+@keyframes player-ticker-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.player-ticker__chip {
+  background: transparent;
+  border: 1px solid hsl(var(--accent) / 0.35);
+  border-radius: 3px;
+  font-family: var(--app-font-mono);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: hsl(var(--accent));
+  padding: 2px 7px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  transition: background 0.1s, border-color 0.1s;
+}
+.player-ticker__chip:hover {
+  background: hsl(var(--accent) / 0.12);
+  border-color: hsl(var(--accent) / 0.7);
+}
+.player-ticker__empty {
+  flex: 1;
+  font-family: var(--app-font-mono);
+  font-size: 8px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: hsl(var(--faint));
+}
+/* Meta mode: car-radio 3-line lime display */
+.player-ticker__meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.player-ticker__meta-line {
+  font-family: var(--app-font-mono);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: hsl(var(--accent));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.player-ticker__meta-song    { opacity: 0.6; }
+.player-ticker__meta-artist  { opacity: 0.8; }
+.player-ticker__meta-station { opacity: 1;   }
+/* Mode toggle button */
+.player-ticker__toggle {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid hsl(var(--border) / 0.6);
+  border-radius: 4px;
+  color: hsl(var(--faint));
+  cursor: pointer;
+  font-size: 11px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.12s, border-color 0.12s;
+  line-height: 1;
+}
+.player-ticker__toggle:hover {
+  color: hsl(var(--accent));
+  border-color: hsl(var(--accent) / 0.5);
+}
+
+/* Record-peek primary navigation ------------------------------------------------ */
+/* ── Bottom nav bar — block inside .bottom-shell ─────────────────────────── */
+.record-peek-nav {
   height: 96px;
   padding: 0 6px max(env(safe-area-inset-bottom), 0px);
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 5px;
-  border-top: 1px solid hsl(var(--border) / 0.45);
-  background: hsl(var(--background) / 0.96);
-  backdrop-filter: blur(20px);
   user-select: none;
   -webkit-user-select: none;
 }
@@ -111,7 +327,7 @@
   z-index: 45;
   left: 12px;
   right: 12px;
-  bottom: 104px;
+  bottom: 200px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1104,40 +1320,105 @@
 .dial-topbar--all {
   flex-wrap: nowrap;
   overflow: hidden;
+  position: relative; /* anchor for bg-wash and avatar-fade */
 }
 
-/* ── New topbar controls (play/scan pill, paste box, ticker) ── */
+/* ── New topbar controls (paste box, ticker) ── */
 
-/* Play / scan pill */
-.topbar-pill {
-  display: flex;
-  align-items: center;
-  border: 1px solid hsl(var(--border));
-  border-radius: 4px;
-  overflow: hidden;
+/* ── Right-side album art wash — same image, large, fades in from the right ── */
+.dial-topbar__bg-wash {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  /* Wide enough to cover the paste-box area; clipped by overflow:hidden on parent */
+  width: 72%;
+  background-size: cover;
+  background-position: right center;
+  opacity: 0.18;
+  pointer-events: none;
+  z-index: 0;
+  /* Fade from transparent on the left to solid on the right */
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 55%);
+  mask-image: linear-gradient(to right, transparent 0%, #000 55%);
+}
+
+/* ── Album avatar that dissolves into the Lore wordmark ── */
+.dial-topbar__avatar-fade {
+  display: block;
   flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  overflow: hidden;
+  /* Overlap the right edge into the wordmark so the fade reads as "behind" it */
+  margin-right: -18px;
+  /* Gradient mask: solid on the left, fades to transparent by the time it
+     reaches the Lore text so the wordmark stays fully legible */
+  -webkit-mask-image: linear-gradient(to right, #000 0%, #000 35%, transparent 100%);
+  mask-image: linear-gradient(to right, #000 0%, #000 35%, transparent 100%);
+  pointer-events: none;
+  z-index: 1;
+  position: relative;
+  /* Softer overall so it reads as "behind" the wordmark */
+  opacity: 0.55;
 }
-.topbar-pill__play,
-.topbar-pill__scan {
-  background: hsl(var(--card));
-  border: none;
-  cursor: pointer;
-  font-size: 11px;
-  padding: 5px 9px;
-  color: hsl(var(--faint));
-  transition: background 0.12s, color 0.12s;
-  line-height: 1;
-  min-width: 30px;
-  min-height: 28px;
-  display: flex;
+.dial-topbar__avatar-fade img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+/* Wordmark sits on top of the fading avatar — "L O R E" spaced caps */
+.dial-topbar__wordmark {
+  position: relative;
+  z-index: 2;
+  font-family: var(--app-font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
+  gap: 0;
+  white-space: nowrap;
 }
-.topbar-pill__play:hover,
-.topbar-pill__scan:hover { color: hsl(var(--foreground)); background: hsl(var(--muted)); }
-.topbar-pill__play--on  { color: hsl(var(--live)); }
-.topbar-pill__scan--on  { color: hsl(var(--selector-dj)); }
-.topbar-pill__play + .topbar-pill__scan { border-left: 1px solid hsl(var(--border)); }
+
+/* Moon-phase glyph that replaces the O in LORE */
+.dial-topbar__moon-o {
+  display: inline-flex;
+  align-items: center;
+  /* optical nudge so the circle sits on the cap baseline */
+  margin-top: -1px;
+  /* letter-spacing bleeds after every char including this span; compensate */
+  margin-right: 0;
+}
+
+/* ── Moon SVG internals ── */
+.moon-glyph {
+  display: block;
+  overflow: visible;
+}
+.moon-glyph__lit {
+  fill: currentColor;
+  opacity: 0.92;
+}
+.moon-glyph__shadow {
+  /* Match the app background so the shadow reads as a transparent cut-out */
+  fill: hsl(var(--background));
+}
+.moon-glyph__ring {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 0.6px;
+  opacity: 0.35;
+}
+
+/* Raise paste-area controls above the bg-wash */
+.topbar-add-artists,
+.topbar-paste-box,
+.topbar-artist-input-wrap {
+  position: relative;
+  z-index: 2;
+}
 
 /* +add artists toggle button */
 .topbar-add-artists {
@@ -1226,6 +1507,58 @@
   align-items: center;
 }
 .topbar-ticker__chip:hover { color: hsl(var(--foreground)); background: hsl(var(--card)); }
+
+/* ── Lime artist input (add-artists mode) ── */
+.topbar-artist-input-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid hsl(var(--accent) / 0.45);
+  border-radius: 3px;
+  background: hsl(var(--accent) / 0.05);
+  padding: 0 6px;
+  height: 28px;
+}
+.topbar-artist-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: var(--app-font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: hsl(var(--accent));
+  caret-color: hsl(var(--accent));
+}
+.topbar-artist-input::placeholder {
+  color: hsl(var(--accent) / 0.38);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  font-style: italic;
+}
+.topbar-artist-input__esc {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: hsl(var(--accent) / 0.45);
+  font-size: 16px;
+  line-height: 1;
+  padding: 0;
+  flex-shrink: 0;
+  transition: color 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+}
+.topbar-artist-input__esc:hover { color: hsl(var(--accent)); }
 
 /* "try Matt's library" button */
 .topbar-matt-btn {
@@ -4000,8 +4333,7 @@
 /* ── Front-door row (spec §8) ────────────────────────────────────────────── */
 .fdrow {
   display: flex;
-  padding: 12px 15px 10px;
-  border-bottom: 1px solid hsl(var(--border) / 0.4);
+  padding: 12px 15px 18px;
   cursor: pointer;
   position: relative;
   transition: background 0.1s;
@@ -4023,7 +4355,7 @@
 .fdrow--t1::before { background: hsl(var(--library)); }
 /* Zone 1 non-t1 rows (r=2–4): soft library left bar to hold the warm zone coherence */
 .fdrow--z1::before { background: hsl(var(--library) / 0.38); }
-.fdrow--playing::before { background: hsl(var(--live)); }
+.fdrow--playing::before { background: hsl(var(--accent)); }
 .fdrow--dim { opacity: 0.55; }
 /* 24h-lookback rows (r=6/7): in Zone 1 but history, not live — cooler bar + mild fade */
 .fdrow--hist { opacity: 0.72; }
@@ -4033,7 +4365,21 @@
   outline: 1px solid hsl(var(--live) / 0.25);
 }
 
-.fdrow__c { flex: 1; min-width: 0; }
+.fdrow__c { flex: 1; min-width: 0; position: relative; z-index: 1; }
+
+/* Now-playing row artwork — right-edge fade from album art into background */
+.fdrow__art-fade {
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  width: 130px;
+  background-size: cover;
+  background-position: center;
+  /* Fade: solid on the right, transparent by halfway → left */
+  -webkit-mask-image: linear-gradient(to left, #000 0%, #000 50%, transparent 100%);
+  mask-image: linear-gradient(to left, #000 0%, #000 50%, transparent 100%);
+  pointer-events: none;
+  z-index: 0;
+}
 
 /* Tier 1: reason sentence — leads at full display weight */
 .fdrow__t1 {
@@ -4132,174 +4478,11 @@
 }
 .fdrow__ov-caption b { font-weight: 600; color: hsl(var(--foreground) / 0.6); font-style: normal; }
 
-/* ↩ earlier */
-.fdrow__foot { display: flex; }
-.fdrow__back {
-  font-family: var(--app-font-mono);
-  font-size: 8.5px;
-  color: hsl(var(--muted-foreground) / 0.5);
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  text-decoration-color: hsl(var(--border) / 0.6);
-  transition: color 0.1s;
-}
-.fdrow__back:hover { color: hsl(var(--foreground) / 0.7); }
 
-/* ── fdrow play button (right edge) ─────────────────────────────────────── */
-.fdrow__play-btn {
-  flex-shrink: 0;
-  align-self: flex-start;
-  margin-top: 2px;
-  margin-left: 6px;
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  border: 1px solid hsl(var(--border) / 0.6);
-  background: transparent;
-  color: hsl(var(--muted-foreground));
-  font-size: 10px;
-  cursor: pointer;
-  transition: background 0.1s, color 0.1s, border-color 0.1s;
-  line-height: 1;
-}
-.fdrow__play-btn:hover {
-  background: hsl(var(--primary) / 0.12);
-  color: hsl(var(--foreground));
-  border-color: hsl(var(--primary) / 0.5);
-}
-.fdrow__play-btn--on {
-  background: hsl(var(--live) / 0.15);
-  color: hsl(var(--live));
-  border-color: hsl(var(--live) / 0.5);
-}
-
-/* ── Front-door gutter playbar ────────────────────────────────────────────── */
-
-/* Outer wrapper — gives position: relative for the absolute playbar */
-.fd-gutter-wrap {
-  position: relative;
-}
-
-/* Shift row content right to make room for the gutter strip */
-.fd-gutter-wrap .fdrow {
-  padding-left: 44px; /* 15px existing + 29px gutter */
-}
-
-/* Move the existing left-accent bar to start after the gutter */
-.fd-gutter-wrap .fdrow::before {
-  left: 32px;
-}
-
-/* The sliding cursor — absolutely positioned in the gutter column */
-.fd-playbar {
-  position: absolute;
-  left: 0;
-  width: 32px;
-  top: 0; /* overridden via inline style */
-  height: var(--row-h, 64px);
-  background: hsl(var(--live) / 0.12);
-  border-right: 2px solid hsl(var(--live) / 0.55);
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding-top: 6px;
-  gap: 3px;
-  transition: top 300ms ease;
-  pointer-events: none; /* let row clicks pass through the background */
-}
-
-/* Play/scan pill — interactive children re-enable pointer events */
-.fd-pill {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  pointer-events: auto;
-}
-
-.fd-pill__play,
-.fd-pill__scan {
-  width: 26px;
-  height: 26px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  border: 1px solid hsl(var(--live) / 0.45);
-  background: hsl(var(--live) / 0.15);
-  color: hsl(var(--live));
-  font-size: 9px;
-  cursor: pointer;
-  transition: background 0.1s;
-  line-height: 1;
-}
-.fd-pill__play:hover,
-.fd-pill__scan:hover {
-  background: hsl(var(--live) / 0.28);
-}
-.fd-pill__scan--on {
-  background: hsl(var(--accent));
-  border-color: hsl(var(--accent));
-  color: hsl(var(--accent-foreground));
-}
-.fd-pill__scan:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-/* N/M counter shown while scanning */
-.fd-pill__counter {
-  font-family: var(--app-font-mono);
-  font-size: 7px;
-  color: hsl(var(--live));
-  line-height: 1;
-  text-align: center;
-  letter-spacing: -0.02em;
-}
-
-/* Compact back/land/next scan controls below the pill */
-.fd-pill-scan-controls {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  pointer-events: auto;
-  margin-top: 1px;
-}
-.fd-sb-mini {
-  width: 24px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: hsl(var(--secondary) / 0.5);
-  border: 1px solid hsl(var(--border) / 0.4);
-  border-radius: 3px;
-  font-size: 8px;
-  cursor: pointer;
-  color: hsl(var(--muted-foreground));
-  line-height: 1;
-  transition: background 0.1s;
-}
-.fd-sb-mini:hover { background: hsl(var(--secondary) / 0.8); }
-.fd-sb-mini--land {
-  background: hsl(var(--library) / 0.12);
-  border-color: hsl(var(--library) / 0.35);
-  color: hsl(var(--library));
-}
-.fd-sb-mini--land:hover { background: hsl(var(--library) / 0.22); }
 
 /* ── Liner-notes card — inline strip below the active row ──────────────────── */
 .fd-liner-card {
-  padding: 5px 12px 6px 44px; /* left-aligns with row text */
+  padding: 5px 12px 6px 15px;
   border-bottom: 1px solid hsl(var(--border) / 0.3);
   background: hsl(var(--secondary) / 0.18);
   animation: fd-liner-in 150ms ease;
@@ -4357,15 +4540,34 @@
   white-space: nowrap;
 }
 
-/* ── Mode toggle inside dial-tabs row ───────────────────────────────────────── */
-.dial-mode--inline {
+/* ── Mode toggle peek widget ────────────────────────────────────────────────── */
+/* Sticks to the right edge of the tab strip. Shows ~18px (right sliver of the
+   active button) at rest; expands to full width on hover so both pills are
+   visible. Background matches the page so it cleanly covers scrolled tabs.  */
+.dial-mode-peek {
+  position: sticky;
+  right: 0;
+  flex-shrink: 0;
   margin-left: auto;
+  overflow: hidden;
+  max-width: 18px;
+  transition: max-width 0.22s ease;
+  background: hsl(var(--background));
+  /* left-edge shadow cues that content is hidden */
+  box-shadow: -6px 0 10px 2px hsl(var(--background) / 0.85);
+}
+.dial-mode-peek:hover,
+.dial-mode-peek:focus-within {
+  max-width: 200px;
+}
+.dial-mode--inline {
   flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 0;
   padding: 6px 8px;
   border-left: 1px solid hsl(var(--border) / 0.3);
+  white-space: nowrap;
 }
 
 /* ─────────────────────────────────────────────────────────
@@ -4529,8 +4731,7 @@
 /* Less warm than Zone 1, not dimmed like Zone 3. Neutral-cool left accent. */
 .ghost-row {
   display: flex;
-  padding: 11px 15px 9px;
-  border-bottom: 1px solid hsl(var(--border) / 0.4);
+  padding: 11px 15px 18px;
   cursor: pointer;
   position: relative;
   transition: background 0.1s;
