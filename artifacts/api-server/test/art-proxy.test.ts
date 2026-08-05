@@ -499,3 +499,67 @@ describe("SSRF guard on intermediate redirect hops", () => {
     expect(fetchedUrls).not.toContain(unsafeUrl);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scenario 10 — redirect chain ending in text/html → 302, artPut never called
+// ─────────────────────────────────────────────────────────────────────────────
+describe("redirect chain ending in non-image content-type", () => {
+  it("returns 302 when the final URL returns text/html (e.g. an expired Spotify link page)", async () => {
+    artGetMock.mockResolvedValue(null); // cache miss
+    isSafeMock.mockResolvedValue(true); // all hops pass the SSRF guard
+
+    const initialUrl = "https://i.scdn.co/image/expired-link";
+    const finalUrl = "https://accounts.spotify.com/link-expired";
+
+    // One redirect to the final URL, which returns text/html
+    fetchMock
+      .mockResolvedValueOnce({
+        status: 302,
+        ok: false,
+        headers: {
+          get: (h: string) => (h === "location" ? finalUrl : null),
+        },
+        arrayBuffer: async () => new ArrayBuffer(0),
+      })
+      .mockResolvedValueOnce(
+        makeFetchResponse({ status: 200, contentType: "text/html; charset=utf-8" }),
+      );
+
+    const path = `/art?src=${encodeURIComponent(initialUrl)}`;
+    const res = await request(app).get(path);
+
+    // Non-image content-type must be rejected — fall back to 302, not 200
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe(initialUrl);
+    // artPut must never be called — corrupt content must not enter the cache
+    expect(artPutMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 302 and skips artPut when the redirect target returns text/plain", async () => {
+    artGetMock.mockResolvedValue(null);
+    isSafeMock.mockResolvedValue(true);
+
+    const initialUrl = "https://i.scdn.co/image/some-cover";
+    const finalUrl = "https://cdn.example.com/error.txt";
+
+    fetchMock
+      .mockResolvedValueOnce({
+        status: 301,
+        ok: false,
+        headers: {
+          get: (h: string) => (h === "location" ? finalUrl : null),
+        },
+        arrayBuffer: async () => new ArrayBuffer(0),
+      })
+      .mockResolvedValueOnce(
+        makeFetchResponse({ status: 200, contentType: "text/plain" }),
+      );
+
+    const path = `/art?src=${encodeURIComponent(initialUrl)}`;
+    const res = await request(app).get(path);
+
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe(initialUrl);
+    expect(artPutMock).not.toHaveBeenCalled();
+  });
+});
