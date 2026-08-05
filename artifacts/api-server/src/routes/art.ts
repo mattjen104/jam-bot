@@ -94,7 +94,9 @@ router.get("/art", async (req: Request, res: Response) => {
   }
 
   // Store in the background — respond immediately
-  void artPut(src, fetched.data, fetched.contentType);
+  void artPut(src, fetched.data, fetched.contentType).catch((err: unknown) => {
+    console.warn("[art-proxy] Object Storage write failed for src=%s: %o", src, err);
+  });
 
   res
     .set("Content-Type", fetched.contentType)
