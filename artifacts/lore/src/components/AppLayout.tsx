@@ -88,7 +88,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       )}
 
       {/* ── Main content — pad for bottom shell (nav + optional player) ── */}
-      <div className={isHome ? "" : hasPlayer ? "pb-[188px]" : "pb-24"}>{children}</div>
+      <div className={isHome ? "" : hasPlayer ? "content-pad-nav--player" : "content-pad-nav"}>{children}</div>
     </>
   );
 }

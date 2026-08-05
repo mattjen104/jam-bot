@@ -1098,6 +1098,20 @@ export function DialView() {
     probe.src = src;
     return () => { cancelled = true; };
   }, [avatarUrl]);
+  // "+ Artists" tab — inline add-artists input in the tab bar (replaces the
+  // old bottom artist-add strip). Submits via the same custom event the
+  // ticker listens to, so no shared state is needed.
+  const [addArtistsOpen, setAddArtistsOpen] = useState(false);
+  const [addArtistsText, setAddArtistsText] = useState("");
+  const submitAddArtists = useCallback((raw: string) => {
+    const names = raw.split(/[\n,;|•·]+/).map((s) => s.trim()).filter(Boolean);
+    names.forEach((name) =>
+      window.dispatchEvent(new CustomEvent("lore:add-ticker-artist", { detail: name })),
+    );
+    setAddArtistsText("");
+    setAddArtistsOpen(false);
+  }, []);
+
   // Fullscreen album-art overlay, opened by tapping the moon glyph in the topbar.
   const [albumArtOpen, setAlbumArtOpen] = useState(false);
   useEffect(() => {
@@ -1525,6 +1539,38 @@ export function DialView() {
                 Recent
                 {offlineStations.length > 0 && <span className="dial-tab__n">{offlineStations.length}</span>}
               </button>
+              <button
+                type="button"
+                className={`dial-tab dial-tab--add${addArtistsOpen ? " dial-tab--add-active" : ""}`}
+                onClick={() => setAddArtistsOpen((v) => !v)}
+                aria-label="Add artists"
+                aria-expanded={addArtistsOpen}
+              >
+                <span className="dial-tab--add__full">＋ Artists</span>
+                <span className="dial-tab--add__short" aria-hidden="true">＋</span>
+              </button>
+            </div>
+          )}
+          {zone1Settled && addArtistsOpen && (
+            <div className="dial-tabs-add-row">
+              {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
+              <input
+                autoFocus
+                type="text"
+                className="topbar-paste-box dial-tabs-add-row__input"
+                value={addArtistsText}
+                placeholder="type or paste artist names or a screenshot…"
+                aria-label="Add artists by typing or pasting names"
+                onChange={(e) => setAddArtistsText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && addArtistsText.trim()) submitAddArtists(addArtistsText);
+                  if (e.key === "Escape") { setAddArtistsOpen(false); setAddArtistsText(""); }
+                }}
+                onPaste={(e) => {
+                  const t = e.clipboardData.getData("text");
+                  if (t) { e.preventDefault(); submitAddArtists(t); }
+                }}
+              />
             </div>
           )}
         </div>

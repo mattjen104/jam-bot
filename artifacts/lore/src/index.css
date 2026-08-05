@@ -231,9 +231,14 @@
 
 /* Record-peek primary navigation ------------------------------------------------ */
 /* ── Bottom nav bar — block inside .bottom-shell ─────────────────────────── */
+/* Bottom padding reserved under page content for the fixed bottom shell:
+   label 22px + full-width square cover ((100vw − 12px pad − 10px gaps)/3)
+   + nav bottom padding, plus the player bar when one is docked. */
+.content-pad-nav { padding-bottom: calc(34px + (100vw - 22px) / 3); }
+.content-pad-nav--player { padding-bottom: calc(126px + (100vw - 22px) / 3); }
+
 .record-peek-nav {
-  height: 96px;
-  padding: 0 6px max(env(safe-area-inset-bottom), 0px);
+  padding: 0 6px max(env(safe-area-inset-bottom), 4px);
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 5px;
@@ -241,13 +246,12 @@
   -webkit-user-select: none;
 }
 
-/* Each tab fills the nav height and clips overflowing art at the bottom */
+/* Each tab shows its full square cover below the label */
 .record-peek-tab {
   appearance: none;
   position: relative;
   min-width: 0;
-  height: 100%;
-  overflow: hidden;
+  padding: 22px 0 0;
   border: 0;
   background: transparent;
   color: hsl(var(--faint));
@@ -290,16 +294,16 @@
 .record-peek-tab--active[data-section="selectors"] .record-peek-tab__label { color: hsl(var(--selector-dj)); }
 .record-peek-tab--active[data-section="library"]   .record-peek-tab__label { color: hsl(var(--library)); }
 
-/* Sleeve: full tab-width square starting just below the label */
+/* Sleeve: full square below the label — fills the tab width edge-to-edge,
+   whole cover always visible (nav height grows with viewport width) */
 .record-peek-tab__sleeve {
-  position: absolute;
-  top: 22px;
-  left: 0; right: 0;
+  position: relative;
+  display: block;
   width: 100%;
   aspect-ratio: 1 / 1;
   overflow: hidden;
-  border-top: 1px solid hsl(var(--border) / 0.4);
-  border-radius: 3px 3px 0 0;
+  border: 1px solid hsl(var(--border) / 0.4);
+  border-radius: 3px;
   background: hsl(var(--secondary));
   color: hsl(var(--muted-foreground));
   opacity: 0.45;
@@ -326,8 +330,8 @@
 .record-peek-tab--active .record-peek-tab__sleeve {
   opacity: 1;
   border-color: hsl(var(--foreground) / .25);
-  transform: scale(1.07);
-  transform-origin: top center;
+  transform: scale(1.04);
+  transform-origin: center;
 }
 
 /* ── Resume-peek card ─────────────────────────────────────────────────────── */
@@ -4875,6 +4879,32 @@
 .dial-tab--active {
   color: hsl(var(--foreground));
   border-bottom-color: hsl(var(--library));
+}
+
+/* "+ Artists" add tab — artist orange, full opacity on hover/active.
+   On narrow screens the label collapses to just the + sign. */
+.dial-tab--add {
+  color: hsl(var(--library) / 0.65);
+  margin-left: auto; /* push to the right edge of the tab strip */
+}
+.dial-tab--add:hover,
+.dial-tab--add-active {
+  color: hsl(var(--library));
+}
+.dial-tab--add__short { display: none; }
+@media (max-width: 640px) {
+  .dial-tab--add__full { display: none; }
+  .dial-tab--add__short { display: inline; font-size: 12px; line-height: 1; }
+}
+
+/* Inline add-artists input row under the tab strip */
+.dial-tabs-add-row {
+  display: flex;
+  padding: 4px 12px 8px;
+}
+.dial-tabs-add-row__input {
+  flex: 1;
+  min-width: 0;
 }
 
 /* Count badge inside a tab button */

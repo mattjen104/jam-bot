@@ -164,91 +164,10 @@ function Shell() {
   );
 }
 
-/** Full-width artist-add strip — sits above the nav tabs on the Radio section.
- *  Submits artists via the same "lore:add-ticker-artist" custom event that
- *  DialView already listens to, so no shared state is needed. */
-function ArtistAddStrip() {
-  const [addMode, setAddMode] = useState(false);
-  const [text, setText] = useState("");
-
-  function submitText(raw: string) {
-    const names = raw.split(/[\n,;|•·]+/).map((s) => s.trim()).filter(Boolean);
-    names.forEach((name) =>
-      window.dispatchEvent(new CustomEvent("lore:add-ticker-artist", { detail: name })),
-    );
-    setText("");
-    setAddMode(false);
-  }
-
-  function handlePaste(e: React.ClipboardEvent<HTMLInputElement>) {
-    const t = e.clipboardData.getData("text");
-    if (t) { e.preventDefault(); submitText(t); }
-  }
-
-  return (
-    <div className="artist-add-strip">
-      <button
-        type="button"
-        className={`topbar-add-artists${addMode ? " topbar-add-artists--active" : ""}`}
-        onClick={() => setAddMode((m) => !m)}
-      >
-        ＋ artists
-      </button>
-      {!addMode ? (
-        <input
-          type="text"
-          className="topbar-paste-box artist-add-strip__input"
-          value={text}
-          placeholder="paste artist names or a screenshot…"
-          aria-label="Add artists by pasting names or a screenshot"
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && text.trim()) submitText(text);
-            if (e.key === "Escape") setText("");
-          }}
-          onPaste={handlePaste}
-        />
-      ) : (
-        <div className="topbar-artist-input-wrap artist-add-strip__input">
-          {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
-          <input
-            autoFocus
-            type="text"
-            className="topbar-artist-input"
-            value={text}
-            placeholder="type or paste an artist name…"
-            aria-label="Add an artist"
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && text.trim()) submitText(text);
-              if (e.key === "Escape") { setAddMode(false); setText(""); }
-            }}
-            onPaste={handlePaste}
-          />
-          <button
-            type="button"
-            className="topbar-artist-input__esc"
-            onClick={() => { setAddMode(false); setText(""); }}
-            aria-label="Close"
-            title="Close (Esc)"
-          >
-            ×
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** Unified fixed bottom shell — player dock sits directly above the nav tabs.
- *  On the Radio section, the artist-add strip sits above the shell border. */
+/** Unified fixed bottom shell — player dock sits directly above the nav tabs. */
 function BottomShell() {
-  const [location] = useLocation();
-  const path = location.split("?")[0] ?? location;
-  const isRadio = path === "/";
   return (
     <div className="bottom-shell-wrap">
-      {isRadio && <ArtistAddStrip />}
       <div className="bottom-shell">
         <PlayerDock />
         <RecordPeekNav />
