@@ -465,6 +465,49 @@ describe("5-hop redirect chain (exceeds limit)", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Task-1451 — Object Storage error mid-session
+//   Confirms the 302 fallback Location is always the *exact* original src URL
+//   (fully-resolved, never a relative path or empty string) so album covers
+//   never silently break when Object Storage is unavailable.
+// ─────────────────────────────────────────────────────────────────────────────
+describe("Object Storage error mid-session — Location header is always exact src URL", () => {
+  it("artGet throws: 302 Location is the exact original src URL (not relative, not empty)", async () => {
+    // artGet throws (storage read unavailable) → falls through to origin fetch
+    // → origin also fails → proxy must issue 302 with the exact, fully-resolved
+    //   src URL so the browser can still attempt to load the image.
+    artGetMock.mockRejectedValue(new Error("Object Storage unavailable"));
+    isSafeMock.mockResolvedValue(true);
+    fetchMock.mockResolvedValue(makeFetchResponse({ status: 503 }));
+
+    const res = await request(app).get(PROXY_PATH);
+
+    expect(res.status).toBe(302);
+    // Must be the exact original src URL — not a relative path, not empty
+    expect(res.headers.location).toBe(SPOTIFY_URL);
+    // Sanity: it is a fully-resolved absolute URL
+    expect(() => new URL(res.headers.location as string)).not.toThrow();
+  });
+
+  it("artPut throws (write-failure path): image bytes are still served — no redirect", async () => {
+    // artGet miss, origin succeeds, artPut (write to Object Storage) throws.
+    // artPut is fire-and-forget; a write failure must NOT cause a 302 redirect —
+    // the browser must receive the image bytes so the cover still appears.
+    artGetMock.mockResolvedValue(null);
+    isSafeMock.mockResolvedValue(true);
+    fetchMock.mockResolvedValue(makeFetchResponse());
+    artPutMock.mockRejectedValue(new Error("Object Storage write error"));
+
+    const res = await request(app).get(PROXY_PATH);
+
+    // Cover image bytes are returned — a write failure is not a redirect trigger
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toMatch(/image\/jpeg/);
+    // No Location header should be present on a successful 200 response
+    expect(res.headers.location).toBeUndefined();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Scenario 9 — SSRF guard fires on an intermediate redirect hop
 // ─────────────────────────────────────────────────────────────────────────────
 describe("SSRF guard on intermediate redirect hops", () => {
