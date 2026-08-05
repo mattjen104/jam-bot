@@ -73,6 +73,22 @@ export async function artGet(
   }
 }
 
+/**
+ * Delete a cached blob from Object Storage. Best-effort — never throws.
+ * Called when a recording's artworkUrl changes so the old immutable blob is
+ * evicted and the next /api/art request re-fetches the new cover.
+ */
+export async function artDelete(url: string): Promise<void> {
+  try {
+    const hash = artUrlHash(url);
+    const file = getBucket().file(`${ART_PREFIX}${hash}`);
+    const [exists] = await file.exists();
+    if (exists) await file.delete();
+  } catch (err) {
+    console.error("[art-storage] delete failed", err);
+  }
+}
+
 /** Write a blob to Object Storage. Best-effort — never throws. */
 export async function artPut(
   url: string,

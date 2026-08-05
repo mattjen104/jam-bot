@@ -24,6 +24,7 @@ import { lookupScrapedShowId } from "./scraped-shows-sync.js";
 import type { NowPlayingRaw, RawSpin, ShowAttribution } from "./types.js";
 import { eligibleDjName } from "@workspace/lore-attribution";
 import { enqueueRecordingEmbeds } from "./embed-resolution.js";
+import { artDelete } from "../lib/artStorage.js";
 
 /** Outcome of trying to place a now-playing track on the MusicBrainz spine. */
 export interface MbidResolution {
@@ -452,6 +453,20 @@ async function upsertRecording(
     );
   }
   const newArtwork = artworkUrl ?? (artworkMissing ? fallbackArtwork : null);
+
+  // Evict the old cached blob when the artwork URL changes so the next
+  // /api/art request re-fetches and re-caches the new cover. The immutable
+  // Cache-Control header means the proxy never re-fetches an existing blob —
+  // deletion is the only way to force a refresh. Best-effort, off-request.
+  if (
+    newArtwork &&
+    existing?.artworkUrl &&
+    existing.artworkUrl !== newArtwork
+  ) {
+    void artDelete(existing.artworkUrl).catch((err) =>
+      console.error("[lore] art cache eviction failed", err),
+    );
+  }
 
   await db
     .insert(recordingsTable)
