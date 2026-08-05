@@ -1,5 +1,6 @@
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
+import { acquireMigrationLock, MIGRATION_LOCK_KEYS } from "./migration-advisory-lock.js";
 
 /**
  * Idempotent DDL for the attendance system tables.
@@ -171,6 +172,9 @@ export async function applyAttendanceMigration(): Promise<void> {
   if (!rollupBackfillComplete) {
     try {
       await db.transaction(async (tx) => {
+        // Serialize concurrent backfills to avoid row-lock deadlocks (40P01)
+        // when parallel test workers run the migration simultaneously.
+        await tx.execute(acquireMigrationLock(MIGRATION_LOCK_KEYS.attendance));
         await tx.execute(sql`
         INSERT INTO attendance_rollups (
           user_id,
@@ -313,6 +317,9 @@ export async function applyAttendanceMigration(): Promise<void> {
   if (!weeklyBackfillComplete) {
     try {
       await db.transaction(async (tx) => {
+        // Same advisory lock as the rollup backfill above — concurrent
+        // callers queue instead of deadlocking on row locks.
+        await tx.execute(acquireMigrationLock(MIGRATION_LOCK_KEYS.attendance));
         await tx.execute(sql`
           INSERT INTO attendance_weekly_rollups (
             user_id,

@@ -1,6 +1,7 @@
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { INVISIBLE_CHARS_PG_CLASS } from "./schedule-name-sanitizer.js";
+import { acquireMigrationLock, MIGRATION_LOCK_KEYS } from "./migration-advisory-lock.js";
 
 // The shared invisible-char class, as a quoted Postgres string literal.
 // Derived from the same range list as the parse-time sanitizer in
@@ -220,6 +221,10 @@ export async function applyStationScheduleMigration(): Promise<void> {
   }
 
   await db.transaction(async (tx) => {
+    // Serialize concurrent callers: this transaction updates/deletes across
+    // stations, scraped_shows, and list_entries — multi-table row locking
+    // that can deadlock (40P01) under parallel test workers.
+    await tx.execute(acquireMigrationLock(MIGRATION_LOCK_KEYS.stationSchedule));
     // ── upcoming_show_count backfill ──────────────────────────────────────
     // Stations that already have scraped_shows rows would stay at 0 until
     // their next weekly re-scrape without this one-time fix. Running the

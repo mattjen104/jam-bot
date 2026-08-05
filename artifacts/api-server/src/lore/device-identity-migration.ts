@@ -1,5 +1,6 @@
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
+import { acquireMigrationLock, MIGRATION_LOCK_KEYS } from "./migration-advisory-lock.js";
 
 /**
  * Idempotent DDL + data migration for the device-identity decoupling.
@@ -41,6 +42,42 @@ export async function applyDeviceIdentityMigration(): Promise<void> {
   }
 
   await db.transaction(async (tx) => {
+    // Serialize concurrent callers: this transaction holds AccessExclusive
+    // locks on two tables (lore_users, service_connections), which can
+    // deadlock (40P01) against other migrations touching the same tables.
+    await tx.execute(acquireMigrationLock(MIGRATION_LOCK_KEYS.deviceIdentity));
+
+    // Skip the DDL steps entirely when the schema is already migrated.
+    // ADD COLUMN IF NOT EXISTS / SET NOT NULL still take AccessExclusive
+    // locks on lore_users even when they are no-ops, which stalls or
+    // deadlocks concurrent test workers inserting users. Re-runs (e.g. the
+    // migration's own test deleting the completion ledger) then only perform
+    // the row-scoped Step 8 DML.
+    const shape = await tx.execute<{
+      table_name: string;
+      column_name: string;
+      is_nullable: string;
+    }>(sql`
+      SELECT table_name, column_name, is_nullable
+      FROM information_schema.columns
+      WHERE table_schema = current_schema()
+        AND (
+          (table_name = 'lore_users' AND column_name IN
+            ('device_key', 'spotify_user_id', 'last_seen_at', 'email', 'email_verified_at'))
+          OR (table_name = 'service_connections' AND column_name = 'external_user_id')
+        )
+    `);
+    const col = (table: string, name: string) =>
+      shape.rows.find((r) => r.table_name === table && r.column_name === name);
+    const ddlApplied =
+      col("lore_users", "device_key")?.is_nullable === "NO" &&
+      col("lore_users", "spotify_user_id")?.is_nullable === "YES" &&
+      col("lore_users", "last_seen_at") !== undefined &&
+      col("lore_users", "email") !== undefined &&
+      col("lore_users", "email_verified_at") !== undefined &&
+      col("service_connections", "external_user_id") !== undefined;
+
+    if (!ddlApplied) {
     // ── Step 1: add device_key as nullable first (can't set NOT NULL on a
     //   populated table until after back-fill).
     await tx.execute(sql`
@@ -116,6 +153,7 @@ export async function applyDeviceIdentityMigration(): Promise<void> {
         ON service_connections (service, external_user_id)
         WHERE external_user_id IS NOT NULL
     `);
+    }
 
     // ── Step 8: data migration — copy spotify_user_id → external_user_id on
     //   existing service_connections rows for service='spotify'.

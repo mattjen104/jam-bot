@@ -2,6 +2,7 @@ import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { normalizeGeniusFragment } from "./genius-annotations.js";
+import { acquireMigrationLock, MIGRATION_LOCK_KEYS } from "./migration-advisory-lock.js";
 
 const MIGRATION_NAME = "applyGeniusFragmentPointerMigration";
 
@@ -14,6 +15,10 @@ const MIGRATION_NAME = "applyGeniusFragmentPointerMigration";
  */
 export async function applyGeniusFragmentPointerMigration(): Promise<void> {
   await db.transaction(async (tx) => {
+    // Serialize concurrent callers: this transaction takes an AccessShare lock
+    // (the SELECTs below) before AccessExclusive (the ALTER TABLEs), which
+    // deadlocks (40P01) when two copies run in parallel test workers.
+    await tx.execute(acquireMigrationLock(MIGRATION_LOCK_KEYS.geniusFragment));
     const completion = await tx.execute(sql`
       SELECT 1
       FROM migration_completions

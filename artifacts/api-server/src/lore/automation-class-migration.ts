@@ -1,5 +1,6 @@
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
+import { acquireMigrationLock, MIGRATION_LOCK_KEYS } from "./migration-advisory-lock.js";
 
 /**
  * Idempotent migration that adds the `automation_class` column to `stations`
@@ -32,11 +33,23 @@ import { sql } from "drizzle-orm";
  * finds the ledger row and skips the DML entirely.
  */
 export async function applyAutomationClassMigration(): Promise<void> {
-  // ── DDL: always run (idempotent) ─────────────────────────────────────────
-  await db.execute(sql`
-    ALTER TABLE stations
-      ADD COLUMN IF NOT EXISTS automation_class text
+  // ── DDL: run only when the column is missing ──────────────────────────────
+  // ADD COLUMN IF NOT EXISTS still takes an AccessExclusive lock on stations
+  // even when it is a no-op, which stalls/deadlocks concurrent test workers
+  // touching stations; skip the ALTER entirely on re-runs.
+  const columnCheck = await db.execute(sql`
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = current_schema()
+      AND table_name = 'stations'
+      AND column_name = 'automation_class'
   `);
+  if ((columnCheck.rows?.length ?? 0) === 0) {
+    await db.execute(sql`
+      ALTER TABLE stations
+        ADD COLUMN IF NOT EXISTS automation_class text
+    `);
+  }
 
   // ── Completion-ledger gate ────────────────────────────────────────────────
   const completionCheck = await db.execute(
@@ -48,6 +61,9 @@ export async function applyAutomationClassMigration(): Promise<void> {
   }
 
   await db.transaction(async (tx) => {
+    // Serialize concurrent callers so parallel seeding transactions can't
+    // deadlock (40P01) on row locks against each other or other migrations.
+    await tx.execute(acquireMigrationLock(MIGRATION_LOCK_KEYS.automationClass));
     // 1. Seed 'automated' — known algorithmic playlist sources
     await tx.execute(sql`
       UPDATE stations

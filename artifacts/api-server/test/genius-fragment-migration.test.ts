@@ -21,6 +21,7 @@ describe("Genius fragment pointer migration", () => {
 
   it("backfills normalized receipts before dropping the legacy text column", async () => {
     execute
+      .mockResolvedValueOnce({ rows: [] }) // advisory lock
       .mockResolvedValueOnce({ rows: [] }) // completion ledger
       .mockResolvedValueOnce({ rows: [{ column_name: "fragment" }] }) // columns
       .mockResolvedValueOnce({ rows: [] }) // add hash
@@ -41,19 +42,23 @@ describe("Genius fragment pointer migration", () => {
         )
         .join("");
     });
-    expect(statements).toHaveLength(9);
-    expect(statements[5]).toContain("UPDATE genius_annotation_drafts");
-    expect(statements[5]).toContain("FROM (VALUES");
-    expect(statements[6]).toContain("ALTER TABLE genius_annotation_drafts");
-    expect(statements[7]).toContain("DROP COLUMN IF EXISTS fragment");
-    expect(statements[8]).toContain("INSERT INTO migration_completions");
+    expect(statements).toHaveLength(10);
+    expect(statements[0]).toContain("pg_advisory_xact_lock");
+    expect(statements[6]).toContain("UPDATE genius_annotation_drafts");
+    expect(statements[6]).toContain("FROM (VALUES");
+    expect(statements[7]).toContain("ALTER TABLE genius_annotation_drafts");
+    expect(statements[8]).toContain("DROP COLUMN IF EXISTS fragment");
+    expect(statements[9]).toContain("INSERT INTO migration_completions");
   });
 
   it("does not touch rows again after the completion ledger is present", async () => {
-    execute.mockResolvedValueOnce({ rows: [{ "?column?": 1 }] });
+    execute
+      .mockResolvedValueOnce({ rows: [] }) // advisory lock
+      .mockResolvedValueOnce({ rows: [{ "?column?": 1 }] });
 
     await applyGeniusFragmentPointerMigration();
 
-    expect(execute).toHaveBeenCalledOnce();
+    // Advisory lock + completion-ledger check only — no row-touching DDL/DML.
+    expect(execute).toHaveBeenCalledTimes(2);
   });
 });

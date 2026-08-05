@@ -181,15 +181,29 @@ export async function applyReplayResolutionMigration(): Promise<void> {
     CREATE INDEX IF NOT EXISTS embed_resolution_queue_recording_idx
       ON embed_resolution_queue (recording_mbid)
   `);
-  await db.execute(sql`
-    ALTER TABLE embed_resolution_queue
-      DROP CONSTRAINT IF EXISTS embed_resolution_queue_station_id_fkey
+  // Swap the station FK to ON DELETE SET NULL — but only when it doesn't
+  // already have that action. The swap takes AccessExclusive locks on BOTH
+  // embed_resolution_queue and stations, which deadlocks (40P01) against any
+  // concurrent DML touching stations (e.g. test cleanup in another worker),
+  // and the advisory lock above only serializes against other migration runs.
+  // Skipping the DDL when it is already applied keeps re-runs lock-free.
+  const queueFk = await db.execute<{ confdeltype: string }>(sql`
+    SELECT confdeltype
+    FROM pg_constraint
+    WHERE conname = 'embed_resolution_queue_station_id_fkey'
+      AND conrelid = 'embed_resolution_queue'::regclass
   `);
-  await db.execute(sql`
-    ALTER TABLE embed_resolution_queue
-      ADD CONSTRAINT embed_resolution_queue_station_id_fkey
-      FOREIGN KEY (station_id) REFERENCES stations(id) ON DELETE SET NULL
-  `);
+  if ((queueFk.rows[0]?.confdeltype ?? "") !== "n") {
+    await db.execute(sql`
+      ALTER TABLE embed_resolution_queue
+        DROP CONSTRAINT IF EXISTS embed_resolution_queue_station_id_fkey
+    `);
+    await db.execute(sql`
+      ALTER TABLE embed_resolution_queue
+        ADD CONSTRAINT embed_resolution_queue_station_id_fkey
+        FOREIGN KEY (station_id) REFERENCES stations(id) ON DELETE SET NULL
+    `);
+  }
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS embed_resolution_metrics (
       id              serial PRIMARY KEY,
@@ -210,27 +224,60 @@ export async function applyReplayResolutionMigration(): Promise<void> {
     CREATE INDEX IF NOT EXISTS embed_resolution_metrics_week_idx
       ON embed_resolution_metrics (week_start)
   `);
-  await db.execute(sql`
-    ALTER TABLE embed_resolution_metrics
-      DROP CONSTRAINT IF EXISTS embed_resolution_metrics_station_id_fkey
+  // Same skip-when-applied guard: dropping the metrics station FK and
+  // tightening the columns take AccessExclusive locks (the FK drop also locks
+  // stations), so only run when the legacy shape is still present.
+  const metricsFk = await db.execute(sql`
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'embed_resolution_metrics_station_id_fkey'
+      AND conrelid = 'embed_resolution_metrics'::regclass
   `);
-  await db.execute(sql`
-    UPDATE embed_resolution_metrics
-      SET station_id = 0 WHERE station_id IS NULL
+  if ((metricsFk.rows?.length ?? 0) > 0) {
+    await db.execute(sql`
+      ALTER TABLE embed_resolution_metrics
+        DROP CONSTRAINT IF EXISTS embed_resolution_metrics_station_id_fkey
+    `);
+  }
+  const metricsCols = await db.execute<{ attname: string; attnotnull: boolean }>(sql`
+    SELECT attname, attnotnull
+    FROM pg_attribute
+    WHERE attrelid = 'embed_resolution_metrics'::regclass
+      AND attname IN ('station_id', 'genre_cluster')
   `);
-  await db.execute(sql`
-    UPDATE embed_resolution_metrics
-      SET genre_cluster = 'unknown' WHERE genre_cluster IS NULL
-  `);
-  await db.execute(sql`
-    ALTER TABLE embed_resolution_metrics
-      ALTER COLUMN station_id SET DEFAULT 0,
-      ALTER COLUMN station_id SET NOT NULL,
-      ALTER COLUMN genre_cluster SET DEFAULT 'unknown',
-      ALTER COLUMN genre_cluster SET NOT NULL
-  `);
+  const metricsTightened =
+    metricsCols.rows.length === 2 && metricsCols.rows.every((row) => row.attnotnull);
+  if (!metricsTightened) {
+    await db.execute(sql`
+      UPDATE embed_resolution_metrics
+        SET station_id = 0 WHERE station_id IS NULL
+    `);
+    await db.execute(sql`
+      UPDATE embed_resolution_metrics
+        SET genre_cluster = 'unknown' WHERE genre_cluster IS NULL
+    `);
+    await db.execute(sql`
+      ALTER TABLE embed_resolution_metrics
+        ALTER COLUMN station_id SET DEFAULT 0,
+        ALTER COLUMN station_id SET NOT NULL,
+        ALTER COLUMN genre_cluster SET DEFAULT 'unknown',
+        ALTER COLUMN genre_cluster SET NOT NULL
+    `);
+  }
   // Refresh the outcome/rung invariant for installations that created the
   // table during an earlier boot of this additive migration.
+  // Only swap when the installed check predates the current invariant
+  // ('transient_failure' is the newest outcome) — a matching constraint means
+  // the swap already ran, and re-running would take AccessExclusive for nothing.
+  const outcomeCk = await db.execute<{ def: string }>(sql`
+    SELECT pg_get_constraintdef(oid) AS def
+    FROM pg_constraint
+    WHERE conname = 'embed_link_outcome_ck'
+      AND conrelid = 'embed_link'::regclass
+  `);
+  const outcomeCkCurrent =
+    (outcomeCk.rows[0]?.def ?? "").includes("transient_failure");
+  if (!outcomeCkCurrent) {
   await db.execute(sql`
     ALTER TABLE embed_link
       DROP CONSTRAINT IF EXISTS embed_link_outcome_ck
@@ -246,6 +293,7 @@ export async function applyReplayResolutionMigration(): Promise<void> {
         (outcome = 'transient_failure' AND rung BETWEEN 1 AND 6)
       )
   `);
+  }
 
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS replay_resolution_jobs (
