@@ -1083,6 +1083,22 @@ export function DialView() {
   // Rumours is the universal fallback — ensures the topbar gradient always renders
   // even for brand-new users who haven't connected a library yet.
   const avatarUrl = avatarData?.current?.artworkUrl ?? avatarData?.candidates?.[0]?.artworkUrl ?? RUMOURS;
+  // Pre-verified hero art. The topbar wash is a CSS background (no onError),
+  // so a dead avatar URL would silently render nothing. Start with the local
+  // RUMOURS asset (always loads), then swap to the real avatar art only once
+  // the browser has confirmed it actually loads. The fullscreen hero reuses
+  // the same resolved URL, so it's always a cached, known-good image.
+  const [heroArt, setHeroArt] = useState<string>(RUMOURS);
+  useEffect(() => {
+    const src = proxyArtUrl(avatarUrl) ?? avatarUrl;
+    if (!src || src === RUMOURS) { setHeroArt(RUMOURS); return; }
+    let cancelled = false;
+    const probe = new Image();
+    probe.onload = () => { if (!cancelled) setHeroArt(src); };
+    probe.onerror = () => { if (!cancelled) setHeroArt(RUMOURS); };
+    probe.src = src;
+    return () => { cancelled = true; };
+  }, [avatarUrl]);
   // Fullscreen album-art overlay, opened by tapping the moon glyph in the topbar.
   const [albumArtOpen, setAlbumArtOpen] = useState(false);
   useEffect(() => {
@@ -1390,7 +1406,7 @@ export function DialView() {
               className="dial-topbar__moon-btn"
               aria-label="View album art fullscreen"
               disabled={!avatarUrl}
-              onClick={() => { if (avatarUrl) setAlbumArtOpen(true); }}
+              onClick={() => { if (avatarUrl) setAlbumArtOpen((v) => !v); }}
             >
               <span className="dial-topbar__moon-prefix" aria-hidden="true">
                 <MoonPhaseGlyph size={14} />
@@ -1458,7 +1474,7 @@ export function DialView() {
   const isRadioActive = location === "/" || location === "" || location.startsWith("/?");
 
   return (
-    <div className="dial-root">
+    <div className={`dial-root${albumArtOpen && avatarUrl ? " dial-root--art-open" : ""}`}>
       {/* Search overlay */}
       {searchOpen && (
         <SearchOverlay
@@ -1474,13 +1490,11 @@ export function DialView() {
           tab strip in one stacking context. */}
       {level === "all" ? (
         <div className="dial-hero">
-          {avatarUrl && (
-            <div
-              className="dial-hero__bg"
-              style={{ backgroundImage: `url(${proxyArtUrl(avatarUrl) ?? avatarUrl})` }}
-              aria-hidden="true"
-            />
-          )}
+          <div
+            className="dial-hero__bg"
+            style={{ backgroundImage: `url(${heroArt})` }}
+            aria-hidden="true"
+          />
           {renderTopbar()}
           {zone1Settled && (
             <div className="dial-tabs" role="tablist" aria-label="Radio sections">
@@ -1521,7 +1535,10 @@ export function DialView() {
         renderTopbar()
       )}
 
-      {/* Fullscreen album-art overlay — opened by the moon glyph */}
+      {/* Fullscreen album-art overlay — toggled by the moon glyph.
+          The rest of the page fades to opacity 0 (see .dial-root--art-open);
+          the same image already loaded behind the LORE logo is shown scaled
+          to the window width. The moon stays visible as the toggle. */}
       {albumArtOpen && avatarUrl && (
         <div
           className="dial-art-fullscreen"
@@ -1530,15 +1547,7 @@ export function DialView() {
           aria-label="Album art"
           onClick={() => setAlbumArtOpen(false)}
         >
-          <img src={proxyArtUrl(avatarUrl) ?? avatarUrl} alt="" onError={onArtError} />
-          <button
-            type="button"
-            className="dial-art-fullscreen__close"
-            aria-label="Close album art"
-            onClick={(e) => { e.stopPropagation(); setAlbumArtOpen(false); }}
-          >
-            ×
-          </button>
+          <img src={heroArt} alt="" onError={onArtError} />
         </div>
       )}
 

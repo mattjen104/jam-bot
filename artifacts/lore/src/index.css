@@ -1446,8 +1446,12 @@
 .dial-hero__bg {
   position: absolute;
   inset: 0;
-  background-size: cover;
-  background-position: right center;
+  /* True to the album's edges: full window width, anchored to the top.
+     This matches the fullscreen hero geometry exactly, so tapping the moon
+     keeps the album in the same spot — only the gradients disappear. */
+  background-size: 100% auto;
+  background-position: top center;
+  background-repeat: no-repeat;
   opacity: 0.32;
   pointer-events: none;
   z-index: 0;
@@ -1507,7 +1511,41 @@
   border-radius: 3px;
 }
 
-/* ── Fullscreen album-art overlay (moon tap) ── */
+/* ── Fullscreen album-art overlay (moon toggle) ──
+   Effect: the moon fades the entire page to opacity 0, leaving only the
+   album art (the same image already loaded behind the LORE logo) scaled
+   horizontally to the window width, centered vertically. The moon stays
+   visible in its topbar spot as the toggle — no close button. */
+.dial-root > * {
+  transition: opacity 0.3s ease;
+}
+/* Fade everything except the overlay and the hero (which holds the moon) */
+.dial-root--art-open > *:not(.dial-art-fullscreen):not(.dial-hero) {
+  opacity: 0;
+  pointer-events: none;
+}
+/* Lift the hero above the overlay so the real topbar moon stays visible
+   and clickable in its usual spot — no duplicate moon, no jump. */
+.dial-root--art-open .dial-hero {
+  position: relative;
+  z-index: 10000;
+}
+/* Inside the hero, fade everything except the moon glyph: the washed bg
+   (its gradients "disappear", revealing the overlay's unmasked copy in the
+   exact same position), the tab strip, the LORE letters, search, and pill. */
+.dial-hero__bg,
+.dial-hero .dial-tabs,
+.dial-topbar--all > *,
+.dial-topbar__letter {
+  transition: opacity 0.3s ease;
+}
+.dial-root--art-open .dial-hero__bg,
+.dial-root--art-open .dial-hero .dial-tabs,
+.dial-root--art-open .dial-topbar--all > *:not(.dial-topbar__wordmark),
+.dial-root--art-open .dial-topbar__letter {
+  opacity: 0;
+  pointer-events: none;
+}
 @keyframes dial-art-fullscreen-in {
   from { opacity: 0; }
   to   { opacity: 1; }
@@ -1516,33 +1554,18 @@
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: #000;
+  background: hsl(var(--background));
+  display: flex;
+  align-items: flex-start; /* top-anchored, matching the topbar wash */
+  justify-content: center;
   cursor: pointer;
-  animation: dial-art-fullscreen-in 0.2s ease-out;
+  animation: dial-art-fullscreen-in 0.3s ease-out;
 }
 .dial-art-fullscreen img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  width: 100vw;
+  height: auto;
   display: block;
 }
-.dial-art-fullscreen__close {
-  position: absolute;
-  top: max(10px, env(safe-area-inset-top, 0px));
-  right: 12px;
-  width: 32px;
-  height: 32px;
-  display: grid;
-  place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.35);
-  color: rgba(255, 255, 255, 0.65);
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-}
-.dial-art-fullscreen__close:hover { color: #fff; }
 
 /* Moon-phase glyph that sits to the left of the LORE wordmark */
 .dial-topbar__moon-prefix {
