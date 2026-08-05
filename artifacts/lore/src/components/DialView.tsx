@@ -1083,6 +1083,14 @@ export function DialView() {
   // Rumours is the universal fallback — ensures the topbar gradient always renders
   // even for brand-new users who haven't connected a library yet.
   const avatarUrl = avatarData?.current?.artworkUrl ?? avatarData?.candidates?.[0]?.artworkUrl ?? RUMOURS;
+  // Fullscreen album-art overlay, opened by tapping the moon glyph in the topbar.
+  const [albumArtOpen, setAlbumArtOpen] = useState(false);
+  useEffect(() => {
+    if (!albumArtOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setAlbumArtOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [albumArtOpen]);
   const hasWeeklyRecap = weeklyRecapData != null && (
     weeklyRecapData.stationsAttended.stations.length > 0 ||
     weeklyRecapData.firstEverHeards.items.length > 0 ||
@@ -1373,19 +1381,21 @@ export function DialView() {
       const isPlaying = radio.status === "playing";
       return (
         <div className="dial-topbar dial-topbar--all">
-          {/* Right-side album art wash — same image, large, bleeds in from right */}
-          {avatarUrl && (
-            <div
-              className="dial-topbar__bg-wash"
-              style={{ backgroundImage: `url(${proxyArtUrl(avatarUrl) ?? avatarUrl})` }}
-              aria-hidden="true"
-            />
-          )}
-          {/* Wordmark — moon phase sits left of the full word "LORE" */}
+          {/* Wordmark — moon phase sits left of the full word "LORE".
+              The moon is a tap target that opens the fullscreen album-art
+              overlay when avatar art is available. */}
           <span className="dial-topbar__wordmark" aria-label="Lore">
-            <span className="dial-topbar__moon-prefix" aria-hidden="true">
-              <MoonPhaseGlyph size={14} />
-            </span>
+            <button
+              type="button"
+              className="dial-topbar__moon-btn"
+              aria-label="View album art fullscreen"
+              disabled={!avatarUrl}
+              onClick={() => { if (avatarUrl) setAlbumArtOpen(true); }}
+            >
+              <span className="dial-topbar__moon-prefix" aria-hidden="true">
+                <MoonPhaseGlyph size={14} />
+              </span>
+            </button>
             <span className="dial-topbar__letter" aria-hidden="true">Lore</span>
           </span>
 
@@ -1459,8 +1469,78 @@ export function DialView() {
         />
       )}
 
-      {/* Topbar */}
-      {renderTopbar()}
+      {/* Topbar — at the front door it lives inside a hero container so the
+          avatar album art can bleed full-width behind both the topbar and the
+          tab strip in one stacking context. */}
+      {level === "all" ? (
+        <div className="dial-hero">
+          {avatarUrl && (
+            <div
+              className="dial-hero__bg"
+              style={{ backgroundImage: `url(${proxyArtUrl(avatarUrl) ?? avatarUrl})` }}
+              aria-hidden="true"
+            />
+          )}
+          {renderTopbar()}
+          {zone1Settled && (
+            <div className="dial-tabs" role="tablist" aria-label="Radio sections">
+              <button
+                type="button"
+                role="tab"
+                className={`dial-tab${activeTab === "library" ? " dial-tab--active" : ""}`}
+                aria-selected={activeTab === "library"}
+                onClick={() => setActiveTab("library")}
+              >
+                ON AIR × YOUR ARTISTS
+                {withReason.length > 0 && <span className="dial-tab__n">{withReason.length}</span>}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                className={`dial-tab${activeTab === "also-on-air" ? " dial-tab--active" : ""}`}
+                aria-selected={activeTab === "also-on-air"}
+                onClick={() => setActiveTab("also-on-air")}
+              >
+                Also On Air
+                {alsoOnAir.length > 0 && <span className="dial-tab__n">{alsoOnAir.length}</span>}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                className={`dial-tab${activeTab === "recently-aired" ? " dial-tab--active" : ""}`}
+                aria-selected={activeTab === "recently-aired"}
+                onClick={() => setActiveTab("recently-aired")}
+              >
+                Recent
+                {offlineStations.length > 0 && <span className="dial-tab__n">{offlineStations.length}</span>}
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        renderTopbar()
+      )}
+
+      {/* Fullscreen album-art overlay — opened by the moon glyph */}
+      {albumArtOpen && avatarUrl && (
+        <div
+          className="dial-art-fullscreen"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Album art"
+          onClick={() => setAlbumArtOpen(false)}
+        >
+          <img src={proxyArtUrl(avatarUrl) ?? avatarUrl} alt="" />
+          <button
+            type="button"
+            className="dial-art-fullscreen__close"
+            aria-label="Close album art"
+            onClick={(e) => { e.stopPropagation(); setAlbumArtOpen(false); }}
+          >
+            ×
+          </button>
+        </div>
+      )}
 
 
       {/* Scan bar — station / show / dj levels only */}
@@ -1499,43 +1579,8 @@ export function DialView() {
               </>
             )}
 
-            {/* Tab strip — appears once Zone 1 has settled (crossings + live resolved).
-                Tabs replace the vertical-scroll three-zone layout. */}
-            {zone1Settled && (
-              <div className="dial-tabs" role="tablist" aria-label="Radio sections">
-                <button
-                  type="button"
-                  role="tab"
-                  className={`dial-tab${activeTab === "library" ? " dial-tab--active" : ""}`}
-                  aria-selected={activeTab === "library"}
-                  onClick={() => setActiveTab("library")}
-                >
-                  ON AIR × YOUR ARTISTS
-                  {withReason.length > 0 && <span className="dial-tab__n">{withReason.length}</span>}
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  className={`dial-tab${activeTab === "also-on-air" ? " dial-tab--active" : ""}`}
-                  aria-selected={activeTab === "also-on-air"}
-                  onClick={() => setActiveTab("also-on-air")}
-                >
-                  Also On Air
-                  {alsoOnAir.length > 0 && <span className="dial-tab__n">{alsoOnAir.length}</span>}
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  className={`dial-tab${activeTab === "recently-aired" ? " dial-tab--active" : ""}`}
-                  aria-selected={activeTab === "recently-aired"}
-                  onClick={() => setActiveTab("recently-aired")}
-                >
-                  Recent
-                  {offlineStations.length > 0 && <span className="dial-tab__n">{offlineStations.length}</span>}
-                </button>
-
-              </div>
-            )}
+            {/* Tab strip now renders inside .dial-hero above the scroll body so
+                the album-art hero can bleed behind it. */}
 
             {/* ── Primary tab: "On the Air × Your Music Library" ─────────────────
                 Contains Zone 1 crossing rows + Zone 2 ghost stations as a

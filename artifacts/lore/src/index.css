@@ -1431,6 +1431,118 @@
   white-space: nowrap;
 }
 
+/* ── Hero container — topbar + tab strip share one stacking context so the
+   avatar album art can bleed full-width behind both rows ── */
+.dial-hero {
+  position: relative;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+/* Full-width art wash behind topbar AND tabs. Two-axis mask: a left-edge
+   fade protects the wordmark (matching the old topbar bg-wash 0%→35%),
+   and a bottom fade brings the art to transparent just below the tab row
+   so nothing bleeds into the station list. */
+.dial-hero__bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: right center;
+  opacity: 0.32;
+  pointer-events: none;
+  z-index: 0;
+  -webkit-mask-image:
+    linear-gradient(to right, transparent 0%, #000 35%),
+    linear-gradient(to bottom, #000 55%, transparent 100%);
+  mask-image:
+    linear-gradient(to right, transparent 0%, #000 35%),
+    linear-gradient(to bottom, #000 55%, transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+/* Topbar inside the hero stays transparent so the hero art shows through */
+.dial-hero .dial-topbar--all {
+  overflow: visible;
+  background: transparent;
+}
+/* Tab strip inside the hero: content above the art, plus a thin scrim
+   mirroring the gradient depth used for the Lore logo — art stays visible
+   but tab labels/counts remain legible. */
+.dial-hero .dial-tabs {
+  position: relative;
+  z-index: 1;
+}
+.dial-hero .dial-tabs::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    hsl(var(--background) / 0.45),
+    hsl(var(--background) / 0.65)
+  );
+}
+
+/* Unstyled button wrapper so the moon glyph is tappable without changing
+   the wordmark's appearance */
+.dial-topbar__moon-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.dial-topbar__moon-btn:disabled { cursor: default; }
+.dial-topbar__moon-btn:focus-visible {
+  outline: 1px solid hsl(var(--primary));
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* ── Fullscreen album-art overlay (moon tap) ── */
+@keyframes dial-art-fullscreen-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.dial-art-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #000;
+  cursor: pointer;
+  animation: dial-art-fullscreen-in 0.2s ease-out;
+}
+.dial-art-fullscreen img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.dial-art-fullscreen__close {
+  position: absolute;
+  top: max(10px, env(safe-area-inset-top, 0px));
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.dial-art-fullscreen__close:hover { color: #fff; }
+
 /* Moon-phase glyph that sits to the left of the LORE wordmark */
 .dial-topbar__moon-prefix {
   display: inline-flex;
