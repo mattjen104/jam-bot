@@ -194,12 +194,14 @@ router.get("/me/crossings", h(async (req, res) => {
 
   // ── Full compute ──────────────────────────────────────────────────────────
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  // Scan bound: limit the spins table scan to 180 days so Postgres can use the
-  // spins_station_played_at_idx instead of a full table scan.  The widest SELECT
-  // window is 30 days (monthCrossings), so 180 days is more than generous for all
-  // rolling counts.  "Lifetime" counts are therefore bounded to this window — still
-  // practically complete for any active listener.
-  const scanCutoff = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000);
+  // Scan bound: limit the spins table scan so Postgres can use the
+  // spins_station_played_at_idx instead of a full table scan.  The widest rolling
+  // SELECT window is 30 days (monthCrossings).  "Lifetime" counts are bounded to
+  // this window — 365 days is generous enough to cover listeners who imported their
+  // library many months ago and whose stations last matched within the past year.
+  // (Previously 180 days; raised to 365 so users inactive for 6–12 months still
+  // see non-zero lifetime crossing scores rather than dropping off the dial.)
+  const scanCutoff = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
 
   // Subquery: recording MBIDs in user's library.
   const userLibMbids = db
