@@ -76,6 +76,7 @@ export function AlbumShelf({ mbid, artistName }: AlbumShelfProps) {
     query: {
       queryKey: getGetRecordingAlbumTracksQueryKey(mbid),
       staleTime: 10 * 60_000,
+      gcTime: 30 * 60_000,
     },
   });
 

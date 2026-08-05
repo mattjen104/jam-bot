@@ -291,6 +291,7 @@ export function RecordPeekNav() {
     query: {
       queryKey: getGetRecordingKnowledgeQueryKey(peekTrackMbid),
       staleTime: 10 * 60_000,
+      gcTime: 30 * 60_000,
       enabled: peekTrackMbid.length > 0,
     },
   });
@@ -341,7 +342,7 @@ export function RecordPeekNav() {
             >
               <span className="record-peek-tab__label" aria-hidden="true">{label}</span>
               <span className="record-peek-tab__sleeve" aria-hidden="true">
-                {artwork ? <img src={artwork} alt="" draggable={false} /> : fallbackMark(section)}
+                {artwork ? <img src={artwork} alt="" draggable={false} loading="lazy" /> : fallbackMark(section)}
               </span>
             </button>
           );
@@ -367,11 +368,11 @@ export function RecordPeekNav() {
                 setPeek(null);
               }}
             >
-              {peekTrackArt && <img src={peekTrackArt} alt="" draggable={false} />}
+              {peekTrackArt && <img src={peekTrackArt} alt="" draggable={false} loading="lazy" />}
             </button>
           ) : peekTrackArt ? (
             <span className="record-peek__art">
-              <img src={peekTrackArt} alt="" draggable={false} />
+              <img src={peekTrackArt} alt="" draggable={false} loading="lazy" />
             </span>
           ) : null}
           <div className="record-peek__copy">

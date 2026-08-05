@@ -343,6 +343,7 @@ function LinerNotesToggleBtn({
     query: {
       queryKey: getGetRecordingKnowledgeQueryKey(mbid),
       staleTime: 10 * 60_000,
+      gcTime: 30 * 60_000,
     },
   });
   const knowledge = data?.knowledge ?? null;
@@ -551,6 +552,7 @@ function LinerNotes({ mbid }: { mbid: string }) {
     query: {
       queryKey: getGetRecordingKnowledgeQueryKey(mbid),
       staleTime: 10 * 60_000,
+      gcTime: 30 * 60_000,
     },
   });
   const knowledge = data?.knowledge ?? null;

@@ -2237,6 +2237,7 @@ function FdLinerCard({
     query: {
       enabled: !!mbid,
       staleTime: 10 * 60_000,
+      gcTime: 30 * 60_000,
       queryKey: mbid ? getGetRecordingKnowledgeQueryKey(mbid) : ["fd-liner-disabled"],
     },
   });

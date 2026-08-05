@@ -51,6 +51,7 @@ export function LinerNotesSheet({
     query: {
       queryKey: getGetRecordingKnowledgeQueryKey(mbid),
       staleTime: 10 * 60_000,
+      gcTime: 30 * 60_000,
     },
   });
 

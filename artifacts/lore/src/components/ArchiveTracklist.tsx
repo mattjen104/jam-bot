@@ -95,6 +95,7 @@ export function ArchiveTracklist({
                   src={rec.artworkUrl}
                   alt=""
                   className="h-9 w-9 shrink-0 rounded-md object-cover"
+                  loading="lazy"
                 />
               ) : (
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted">
