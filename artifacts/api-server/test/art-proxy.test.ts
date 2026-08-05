@@ -300,3 +300,202 @@ describe("SSRF-blocked src", () => {
     // The browser will just 404 on a private IP, which is safe
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scenario 7 — 3-hop redirect chain → image is served successfully
+// ─────────────────────────────────────────────────────────────────────────────
+describe("3-hop redirect chain", () => {
+  it("follows up to 3 redirects and serves the image on the 4th fetch", async () => {
+    artGetMock.mockResolvedValue(null); // cache miss
+    isSafeMock.mockResolvedValue(true); // all hops are safe
+
+    const url1 = "https://i.scdn.co/image/hop1";
+    const url2 = "https://i.scdn.co/image/hop2";
+    const url3 = "https://i.scdn.co/image/hop3";
+    const url4 = "https://i.scdn.co/image/final";
+    const imageBody = Buffer.from("real-image-data");
+
+    // Three redirect responses, then a final 200 image
+    fetchMock
+      .mockResolvedValueOnce({
+        status: 301,
+        ok: false,
+        headers: {
+          get: (h: string) =>
+            h === "location" ? url2 : null,
+        },
+        arrayBuffer: async () => new ArrayBuffer(0),
+      })
+      .mockResolvedValueOnce({
+        status: 301,
+        ok: false,
+        headers: {
+          get: (h: string) =>
+            h === "location" ? url3 : null,
+        },
+        arrayBuffer: async () => new ArrayBuffer(0),
+      })
+      .mockResolvedValueOnce({
+        status: 301,
+        ok: false,
+        headers: {
+          get: (h: string) =>
+            h === "location" ? url4 : null,
+        },
+        arrayBuffer: async () => new ArrayBuffer(0),
+      })
+      .mockResolvedValueOnce(
+        makeFetchResponse({ status: 200, body: imageBody }),
+      );
+
+    const path = `/art?src=${encodeURIComponent(url1)}`;
+    const res = await request(app).get(path);
+
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toMatch(/image\/jpeg/);
+    expect(res.headers["x-art-proxy"]).toBe("miss");
+    // fetch was called 4 times: hop1→hop2→hop3→final
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it("calls isSafeArtworkUrl on every hop URL, not just the first", async () => {
+    artGetMock.mockResolvedValue(null);
+    isSafeMock.mockResolvedValue(true);
+
+    const url1 = "https://i.scdn.co/image/hop1";
+    const url2 = "https://i.scdn.co/image/hop2";
+    const url3 = "https://i.scdn.co/image/hop3";
+    const imageBody = Buffer.from("img");
+
+    fetchMock
+      .mockResolvedValueOnce({
+        status: 302,
+        ok: false,
+        headers: { get: (h: string) => (h === "location" ? url2 : null) },
+        arrayBuffer: async () => new ArrayBuffer(0),
+      })
+      .mockResolvedValueOnce({
+        status: 302,
+        ok: false,
+        headers: { get: (h: string) => (h === "location" ? url3 : null) },
+        arrayBuffer: async () => new ArrayBuffer(0),
+      })
+      .mockResolvedValueOnce(makeFetchResponse({ status: 200, body: imageBody }));
+
+    const path = `/art?src=${encodeURIComponent(url1)}`;
+    await request(app).get(path);
+
+    // isSafeArtworkUrl must be called for url1, url2, and url3 individually
+    // (the outer guard in the route handler calls it for url1, then
+    //  fetchFromOrigin calls it again for url1 on hop 0, url2 on hop 1, url3 on hop 2)
+    const checkedUrls = isSafeMock.mock.calls.map((c) => c[0]);
+    expect(checkedUrls).toContain(url1);
+    expect(checkedUrls).toContain(url2);
+    expect(checkedUrls).toContain(url3);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scenario 8 — 5-hop redirect chain → 302 fallback fires, no error or hang
+// ─────────────────────────────────────────────────────────────────────────────
+describe("5-hop redirect chain (exceeds limit)", () => {
+  it("returns 302 to the original src when the chain exceeds 4 hops", async () => {
+    artGetMock.mockResolvedValue(null); // cache miss
+    isSafeMock.mockResolvedValue(true); // all hops are safe
+
+    const url1 = "https://i.scdn.co/image/chain1";
+
+    // Return redirects indefinitely — only 4 will ever be consumed
+    fetchMock.mockImplementation((_url: string, _opts?: unknown) => {
+      const calledUrl = _url as string;
+      const nextIdx = fetchMock.mock.calls.length; // 1-based after this call
+      const nextUrl = `https://i.scdn.co/image/chain${nextIdx + 1}`;
+      return Promise.resolve({
+        status: 301,
+        ok: false,
+        headers: {
+          get: (h: string) => (h === "location" ? nextUrl : null),
+        },
+        arrayBuffer: async () => new ArrayBuffer(0),
+      });
+    });
+
+    const path = `/art?src=${encodeURIComponent(url1)}`;
+    const res = await request(app).get(path);
+
+    // The hop limit exhausts before reaching a 200 — must fall back gracefully
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe(url1); // fallback is always the original src
+    // Exactly 4 fetch calls were made (hop 0..3), then the loop gave up
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it("does not throw or hang when the chain is longer than the hop limit", async () => {
+    artGetMock.mockResolvedValue(null);
+    isSafeMock.mockResolvedValue(true);
+
+    // Simulate an infinite redirect loop — proxy must not hang
+    let hopCount = 0;
+    fetchMock.mockImplementation(() => {
+      hopCount++;
+      return Promise.resolve({
+        status: 302,
+        ok: false,
+        headers: {
+          get: (h: string) =>
+            h === "location"
+              ? `https://i.scdn.co/image/loop${hopCount + 1}`
+              : null,
+        },
+        arrayBuffer: async () => new ArrayBuffer(0),
+      });
+    });
+
+    const path = `/art?src=${encodeURIComponent(SPOTIFY_URL)}`;
+    // Should resolve promptly without hanging
+    const res = await request(app).get(path);
+
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe(SPOTIFY_URL);
+    // Hard cap: fetch called no more than 4 times
+    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(4);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scenario 9 — SSRF guard fires on an intermediate redirect hop
+// ─────────────────────────────────────────────────────────────────────────────
+describe("SSRF guard on intermediate redirect hops", () => {
+  it("returns 302 when the 2nd URL in the chain fails the SSRF guard", async () => {
+    artGetMock.mockResolvedValue(null);
+
+    const safeUrl = "https://i.scdn.co/image/safe-start";
+    const unsafeUrl = "http://169.254.169.254/metadata"; // private IP — SSRF target
+
+    // First call (outer route guard + fetchFromOrigin hop 0) is safe;
+    // second call (fetchFromOrigin hop 1, checking the redirect target) is unsafe
+    isSafeMock
+      .mockResolvedValueOnce(true) // outer route guard for safeUrl
+      .mockResolvedValueOnce(true) // fetchFromOrigin hop 0: safeUrl
+      .mockResolvedValueOnce(false); // fetchFromOrigin hop 1: unsafeUrl blocked
+
+    fetchMock.mockResolvedValueOnce({
+      status: 301,
+      ok: false,
+      headers: {
+        get: (h: string) => (h === "location" ? unsafeUrl : null),
+      },
+      arrayBuffer: async () => new ArrayBuffer(0),
+    });
+
+    const path = `/art?src=${encodeURIComponent(safeUrl)}`;
+    const res = await request(app).get(path);
+
+    // The SSRF block on the intermediate hop must trigger a 302 fallback
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe(safeUrl);
+    // The unsafe URL was never fetched
+    const fetchedUrls = fetchMock.mock.calls.map((c) => c[0] as string);
+    expect(fetchedUrls).not.toContain(unsafeUrl);
+  });
+});
