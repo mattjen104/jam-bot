@@ -1686,7 +1686,9 @@ describe("Retry pass — no newer import snapshot: all uncached tracks resolved 
         .delete(libraryImportJobsTable)
         .where(eq(libraryImportJobsTable.id, sourceJobId));
     },
-    15_000,
+    // Inline timeouts override the config-level DB timeout; must be ≥90s —
+    // this suite runs under heavy 1M-row contention at maxWorkers=2.
+    120_000,
   );
 });
 
