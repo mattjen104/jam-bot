@@ -30,18 +30,46 @@ export async function heroArtCandidates(album: {
   const out: string[] = [];
   try {
     const term = encodeURIComponent(`${album.artist} ${album.albumTitle}`);
+    // Explicit timeout: fetch has none by default, and a hung lookup here
+    // would leave the hero stuck on the fallback art forever (the candidate
+    // list only resolves after this settles).
     const res = await fetch(
-      `https://itunes.apple.com/search?term=${term}&entity=album&limit=1`,
+      `https://itunes.apple.com/search?term=${term}&entity=album&limit=5`,
+      { signal: AbortSignal.timeout(5000) },
     );
     if (res.ok) {
       const data = (await res.json()) as {
-        results?: Array<{ artworkUrl100?: string }>;
+        results?: Array<{
+          artworkUrl100?: string;
+          collectionName?: string;
+          artistName?: string;
+        }>;
       };
-      const a100 = data.results?.[0]?.artworkUrl100;
+      // The text search is fuzzy: for ambiguous artist/title pairs it happily
+      // returns remixes, alternate-version singles, deluxe editions, or cover
+      // artists — all with DIFFERENT artwork. Only trust a result whose artist
+      // and title actually match the library album (modulo the "- Single"/
+      // "- EP" suffix iTunes appends). A near-miss here is worse than falling
+      // through to CAA/original, which are release-exact.
+      const match = (data.results ?? []).find(
+        (r) =>
+          r.artworkUrl100 &&
+          itunesTitleMatches(album.albumTitle, r.collectionName) &&
+          normTitle(r.artistName ?? "") === normTitle(album.artist),
+      );
+      const a100 = match?.artworkUrl100;
       if (a100) out.push(a100.replace(/\/\d+x\d+([a-z-]*)\.(jpg|png)$/i, "/1200x1200$1.$2"));
     }
   } catch {
     // network/CORS failure — skip this tier
+  }
+  // Release-exact CAA lookup: library artwork URLs are usually CAA mirrors on
+  // archive.org whose path embeds the release MBID (…/mbid-<uuid>-…_thumb500.jpg).
+  // coverartarchive.org/release/<uuid>/front-1200 serves the same cover as a
+  // true 1200px master — guaranteed the right album, unlike the text search.
+  const releaseMbid = caaReleaseMbidFromUrl(album.artworkUrl);
+  if (releaseMbid) {
+    out.push(`https://coverartarchive.org/release/${releaseMbid}/front-1200`);
   }
   if (album.releaseGroupMbid) {
     out.push(
@@ -52,6 +80,15 @@ export async function heroArtCandidates(album: {
   out.push(upgraded);
   if (upgraded !== album.artworkUrl) out.push(album.artworkUrl);
   return out;
+}
+
+/** Lowercase, strip diacritics-free punctuation and collapse whitespace. */
+function normTitle(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[’'"“”·.,:;!?&]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function highResArtUrl(url: string): string {
@@ -78,4 +115,42 @@ export function highResArtUrl(url: string): string {
       .replace("ab67616d00004851", "ab67616d0000b273");
   }
   return parsed.toString();
+}
+
+/** Extract a release MBID from a CAA/archive.org-mirror artwork URL path. */
+export function caaReleaseMbidFromUrl(url: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  const host = parsed.hostname;
+  if (
+    host !== "coverartarchive.org" &&
+    !host.endsWith(".coverartarchive.org") &&
+    host !== "archive.org" &&
+    !host.endsWith(".archive.org")
+  ) {
+    return null;
+  }
+  const m = parsed.pathname.match(
+    /mbid-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i,
+  );
+  return m ? m[1].toLowerCase() : null;
+}
+
+/**
+ * Accept an iTunes collectionName only when it equals the library album title
+ * after stripping the "- Single" / "- EP" suffix iTunes appends. Parenthetical
+ * qualifiers ("(Lush Version)", "(Deluxe Edition)", "[feat. …]") that the
+ * library title lacks mean a different release with different artwork → reject.
+ */
+export function itunesTitleMatches(
+  libraryTitle: string,
+  collectionName: string | undefined,
+): boolean {
+  if (!collectionName) return false;
+  const stripped = collectionName.replace(/\s*-\s*(single|ep)\s*$/i, "");
+  return normTitle(stripped) === normTitle(libraryTitle);
 }

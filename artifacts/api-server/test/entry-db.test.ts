@@ -1,5 +1,13 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
+
+// The unresolved-pick test depends on resolution genuinely failing. The live
+// Spotify fuzzy fallback can "find" a track even for nonsense artist/title
+// pairs, which makes the assertion nondeterministic — stub it out like the
+// other resolve tests do.
+vi.mock("../src/spotify/appClient.js", () => ({
+  searchTrack: vi.fn(async () => null),
+}));
 import { eq, inArray, sql } from "drizzle-orm";
 import {
   db,
