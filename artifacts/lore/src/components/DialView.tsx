@@ -11,8 +11,7 @@ import { SeedInput } from "./SeedInput";
 import { Search } from "lucide-react";
 import { useLocation, Link } from "wouter";
 import { useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyAlbumAvatar, type GhostStation } from "../lib/meHooks";
-import { useGetRecordingKnowledge, getGetRecordingKnowledgeQueryKey, useGetStationNowPlaying, getGetStationNowPlayingQueryKey } from "@workspace/api-client-react";
-import { groupCredits } from "../lib/linerNotes";
+import { useGetStationNowPlaying, getGetStationNowPlayingQueryKey } from "@workspace/api-client-react";
 import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
 import { StationLane } from "./StationLane";
 import { ContextRail } from "./ContextRail";
@@ -1366,8 +1365,6 @@ export function DialView() {
   }, [scan.samplingIdx, radio.station, withReason]);
 
   const activeRow = activeIdx >= 0 ? (withReason[activeIdx] ?? null) : null;
-  const activeTrack = activeRow?.show?.currentTrack ?? null;
-  const activeMbid = activeTrack?.mbid ?? null;
 
   // Top row for Listen button label (spec §10) — kept for potential reuse
   const topRow = sortedRows[0] ?? null;
@@ -1624,14 +1621,6 @@ export function DialView() {
                                   displayMode={crossingSourceMode}
                                   presence={presenceMap.get(row.ds.station.id)}
                                 />
-                                {activeIdx === i && activeMbid && (
-                                  <FdLinerCard
-                                    key={activeMbid}
-                                    mbid={activeMbid}
-                                    title={activeTrack?.title ?? null}
-                                    artist={activeTrack?.artist ?? null}
-                                  />
-                                )}
                               </div>
                             )
                           )}
@@ -2174,58 +2163,6 @@ export function LiveArtistPicker({
   );
 }
 
-function FdLinerCard({
-  mbid,
-  title,
-  artist,
-}: {
-  mbid: string | null;
-  title: string | null;
-  artist: string | null;
-}) {
-  const { data } = useGetRecordingKnowledge(mbid ?? "", {
-    query: {
-      enabled: !!mbid,
-      staleTime: 10 * 60_000,
-      gcTime: 30 * 60_000,
-      queryKey: mbid ? getGetRecordingKnowledgeQueryKey(mbid) : ["fd-liner-disabled"],
-    },
-  });
-
-  if (!mbid) return null;
-
-  const knowledge = data?.knowledge ?? null;
-  const claims = data?.claims ?? [];
-  const creditRows = knowledge ? groupCredits(knowledge.personnel) : [];
-  const shownCredits = creditRows.slice(0, 2);
-  // TrackClaim.text holds the claim sentence
-  const firstClaim = claims.find((c) => !c.status || c.status === "published") ?? null;
-  const claimText = firstClaim?.text ?? null;
-
-  // If we have no knowledge yet and no title/artist, render nothing
-  if (!title && !artist && shownCredits.length === 0 && !claimText) return null;
-
-  return (
-    <div className="fd-liner-card">
-      {(title || artist) && (
-        <div className="fd-liner-card__track">
-          {title && <span className="fd-liner-card__title">{title}</span>}
-          {title && artist && <span className="fd-liner-card__sep"> · </span>}
-          {artist && <span className="fd-liner-card__artist">{artist}</span>}
-        </div>
-      )}
-      {shownCredits.map((row, i) => (
-        <div key={i} className="fd-liner-card__credit">
-          <span className="fd-liner-card__role">{row.label}</span>{" "}
-          <span className="fd-liner-card__name">{row.names}</span>
-        </div>
-      ))}
-      {claimText && (
-        <div className="fd-liner-card__claim">{claimText}</div>
-      )}
-    </div>
-  );
-}
 function GhostRow({ station, isActive, onTuneIn }: GhostRowProps) {
   const cls = ["ghost-row", isActive ? "ghost-row--playing" : ""].filter(Boolean).join(" ");
   return (
