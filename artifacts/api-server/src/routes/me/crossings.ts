@@ -198,12 +198,13 @@ router.get("/me/crossings", h(async (req, res) => {
 
   // ── Full compute ──────────────────────────────────────────────────────────
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  // Scan bound: 180 days.  Postgres uses spins_station_played_at_idx for this
-  // range.  A wider window (365 days, unbounded) was tried but didn't improve
-  // index selectivity meaningfully — 528k of 976k spins are within 30 days so
-  // the predicate complexity dominates, not the window size.  180 days covers
-  // lifetime counts for any listener active in the past 6 months; the 30-min
-  // cache TTL above means the slow compute only fires once per half-hour.
+  // Rolling-scan bound: 180 days keeps Postgres on spins_station_played_at_idx
+  // without a full sequential scan (a wider 365-day or unbounded window didn't
+  // improve index selectivity — predicate complexity dominates, not window size).
+  // This is a *performance* bound only — it is NOT the sole bound for lifetime
+  // counts.  The WHERE clause below also includes `OR libHit OR artistMatch` so
+  // any spin of any age that matches the user's library contributes to the
+  // unbounded lifetime aggregates even if the listener has been absent > 180 days.
   const scanCutoff = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000);
 
   // Subquery: recording MBIDs in user's library.
@@ -301,29 +302,25 @@ router.get("/me/crossings", h(async (req, res) => {
   )`;
 
   // ── Windowed predicates ───────────────────────────────────────────────────
-  const inWindow  = sql`${spinsTable.playedAt} >= ${cutoff}`;
+  const inWindow  = sql`${spinsTable.playedAt} >= ${spinCutoff}`;
   const weekCutoff  = new Date(Date.now() - 7  * 24 * 60 * 60 * 1000);
   const monthCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const inWeek  = sql`${spinsTable.playedAt} >= ${weekCutoff}`;
-  const inMonth = sql`${spinsTable.playedAt} >= ${monthCutoff}`;
+  const inWeek  = sql`${spinsTable.playedAt} >= ${blendedWeekCutoff}`;
+  const inMonth = sql`${spinsTable.playedAt} >= ${blendedMonthCutoff}`;
 
-  // ── Single bounded query — all counts in one pass ────────────────────────
   const rows = await db
     .select({
       stationSlug: stationsTable.slug,
-      // 24-hour rolling counts.
-      crossings:            sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${libHit})::int`,
-      artistCrossings:      sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${notLibHit} and ${artistMatch})::int`,
-      // 7-day rolling counts.
-      weekCrossings:        sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek} and ${libHit})::int`,
-      weekArtistCrossings:  sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek} and ${notLibHit} and ${artistMatch})::int`,
-      // 30-day rolling counts.
-      monthCrossings:       sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${libHit})::int`,
-      monthArtistCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${notLibHit} and ${artistMatch})::int`,
-      // Lifetime counts — bounded to scanCutoff (365 days) so the same index
-      // scan covers them without a separate full-table-scan query.
-      lifetimeCrossings:       sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${libHit})::int`,
-      lifetimeArtistCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${notLibHit} and ${artistMatch})::int`,
+      crossings:              sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${aggregateLibHit})::int`,
+      artistCrossings:        sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
+      weekCrossings:          sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek}  and ${aggregateLibHit})::int`,
+      weekArtistCrossings:    sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek}  and ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
+      monthCrossings:         sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${aggregateLibHit})::int`,
+      monthArtistCrossings:   sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
+      lifetimeCrossings:      sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${aggregateLibHit})::int`,
+      lifetimeArtistCrossings:sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
+      // Collect all matching artist names (with repeats) so we can rank by frequency in JS.
+      topArtistNamesRaw:      sql<string[] | null>`array_agg(trim(${recordingsTable.artist})) filter (where ${inWindow} and (${aggregateLibHit} or (${aggregateNotLibHit} and ${aggregateArtistMatch})))`,
     })
     .from(spinsTable)
     .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
@@ -335,18 +332,12 @@ router.get("/me/crossings", h(async (req, res) => {
         eq(recordingReleaseGroupsTable.isPrimary, true),
       ),
     )
-    .where(
-      and(
-        isNotNull(spinsTable.mbid),
-        eq(stationsTable.hidden, false),
-        sql`${spinsTable.playedAt} >= ${scanCutoff}`,
-      ),
-    )
+    .where(and(
+      isNotNull(spinsTable.mbid),
+      eq(stationsTable.hidden, false),
+    ))
     .groupBy(stationsTable.id, stationsTable.slug)
-    .having(
-      sql`count(*) filter (where ${libHit}) > 0
-       or count(*) filter (where ${notLibHit} and ${artistMatch}) > 0`,
-    );
+    .having(sql`count(*) filter (where ${aggregateLibHit} or (${aggregateNotLibHit} and ${aggregateArtistMatch})) > 0`);
 
   const items: CrossingsRow[] = rows.map((r) => ({
     stationSlug:            r.stationSlug,

@@ -50,6 +50,7 @@ const SID_LIFETIME     = `test-cross-lifetime-${run}`;     // lifetime-only cros
 const SID_LIFETIME_ART = `test-cross-lt-art-${run}`;    // lifetime artist-crossing (spin > 24h old, no exact-MBID match)
 const SID_SORT     = `test-cross-sort-${run}`;     // two-station sort comparison user
 const SID_AGED     = `test-cross-aged-${run}`;     // aged crossing (spin 200 days old, outside old 180-day scanCutoff)
+const SID_ANCIENT  = `test-cross-ancient-${run}`;  // spin older than 365 days (confirms unbounded lifetime query)
 
 // ── Recordings ────────────────────────────────────────────────────────────────
 // Scenario 1 — release-group widening
@@ -97,6 +98,11 @@ const MBID_LIB_SORT           = `tc-lib-sort-${run}`;      // library track (sam
 // produce lifetimeCrossings ≥ 1 regardless of age.
 const MBID_SPIN_AGED          = `tc-spin-aged-${run}`;
 
+// Scenario 8 — spin older than 365 days (confirms the unbounded lifetime query works
+// even when a listener has been absent for more than a year).
+// A future change that reintroduces a time-bound scanCutoff would break this test.
+const MBID_SPIN_ANCIENT       = `tc-spin-ancient-${run}`;
+
 // ── Station ───────────────────────────────────────────────────────────────────
 const STATION_SLUG      = `test-cross-sta-${run}`;
 const STATION_SLUG_SORT_A = `test-cross-sort-a-${run}`;
@@ -119,6 +125,7 @@ let userLifetimeId: number | null = null;
 let userLifetimeArtId: number | null = null;
 let userSortId: number | null = null;
 let userAgedId: number | null = null;
+let userAncientId: number | null = null;
 
 // ── HTTP helper ───────────────────────────────────────────────────────────────
 async function get(path: string, sid?: string) {
@@ -138,7 +145,7 @@ beforeAll(async () => {
   }
 
   // Legacy spotify_connections (FK required by lore_users)
-  for (const sid of [SID_RG, SID_ART, SID_SOFT, SID_EMPTY, SID_LIFETIME, SID_LIFETIME_ART, SID_SORT, SID_AGED]) {
+  for (const sid of [SID_RG, SID_ART, SID_SOFT, SID_EMPTY, SID_LIFETIME, SID_LIFETIME_ART, SID_SORT, SID_AGED, SID_ANCIENT]) {
     await db.insert(spotifyConnectionsTable).values({
       sid,
       accessToken: "t",
@@ -196,6 +203,12 @@ beforeAll(async () => {
     .returning({ id: loreUsersTable.id });
   userAgedId = uAged!.id;
 
+  const [uAncient] = await db
+    .insert(loreUsersTable)
+    .values({ spotifyUserId: `cross-ancient-${run}`, spotifyConnectionId: SID_ANCIENT, deviceKey: SID_ANCIENT })
+    .returning({ id: loreUsersTable.id });
+  userAncientId = uAncient!.id;
+
   // ── Recordings ───────────────────────────────────────────────────────────────
   await db.insert(recordingsTable).values([
     // Scenario 1
@@ -220,6 +233,8 @@ beforeAll(async () => {
     { mbid: MBID_LIB_SORT,             title: "Sort Lib Track",             artist: `Sort Artist ${run}`, artistMbid: ARTIST_MBID_SORT },
     // Scenario 7 — aged crossing (spin 200 days old)
     { mbid: MBID_SPIN_AGED,            title: "Spin Track Aged",            artist: `Aged Artist ${run}` },
+    // Scenario 8 — spin older than 365 days (confirms unbounded lifetime query)
+    { mbid: MBID_SPIN_ANCIENT,         title: "Spin Track Ancient",         artist: `Ancient Artist ${run}` },
   ]);
 
   // Release-group bridge rows (both recordings share the same primary RG)
@@ -262,6 +277,9 @@ beforeAll(async () => {
     // Scenario 7 — aired 200 days ago (outside the old 180-day scanCutoff, inside 365-day window).
     // With scanCutoff extended to 365 days this spin must produce lifetimeCrossings ≥ 1.
     { stationId: stationId!, mbid: MBID_SPIN_AGED, confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: new Date(now.getTime() - 200 * 24 * 60 * 60 * 1000) },
+    // Scenario 8 — aired more than 400 days ago (well beyond the old 365-day bound).
+    // The unbounded lifetime query must still return lifetimeCrossings ≥ 1.
+    { stationId: stationId!, mbid: MBID_SPIN_ANCIENT, confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: new Date(now.getTime() - 400 * 24 * 60 * 60 * 1000) },
   ]);
 
   // ── Library items ────────────────────────────────────────────────────────────
@@ -357,6 +375,14 @@ beforeAll(async () => {
     { userId: userAgedId!, mbid: MBID_SPIN_AGED, provenance: { kind: "keep" }, addedAt: new Date() },
   ]);
 
+  // ── Scenario 8 — ancient crossing (spin older than 365 days) ─────────────────
+  // User ANCIENT: library holds the exact MBID that aired 400 days ago.
+  // The unbounded lifetime query must return lifetimeCrossings ≥ 1 even when the
+  // listener has been absent for more than a year.
+  await db.insert(libraryItemsTable).values([
+    { userId: userAncientId!, mbid: MBID_SPIN_ANCIENT, provenance: { kind: "keep" }, addedAt: new Date() },
+  ]);
+
   // ── Server ───────────────────────────────────────────────────────────────────
   server = app.listen(0);
   await new Promise<void>((resolve) => server!.once("listening", resolve));
@@ -377,7 +403,7 @@ afterAll(async () => {
   }
 
   // Library items
-  for (const userId of [userRgId, userArtId, userSoftId, userEmptyId, userLifetimeId, userLifetimeArtId, userSortId, userAgedId]) {
+  for (const userId of [userRgId, userArtId, userSoftId, userEmptyId, userLifetimeId, userLifetimeArtId, userSortId, userAgedId, userAncientId]) {
     if (userId != null) {
       await db.delete(libraryItemsTable).where(eq(libraryItemsTable.userId, userId));
     }
@@ -410,6 +436,7 @@ afterAll(async () => {
     MBID_SPIN_LIFETIME_ART, MBID_LIB_LIFETIME_ART,
     MBID_SORT_A1, MBID_SORT_A2, MBID_SORT_A3, MBID_SORT_B1, MBID_LIB_SORT,
     MBID_SPIN_AGED,
+    MBID_SPIN_ANCIENT,
   ]) {
     await db
       .delete(recordingReleaseGroupsTable)
@@ -418,14 +445,14 @@ afterAll(async () => {
   }
 
   // Lore users
-  for (const userId of [userRgId, userArtId, userSoftId, userEmptyId, userLifetimeId, userLifetimeArtId, userSortId, userAgedId]) {
+  for (const userId of [userRgId, userArtId, userSoftId, userEmptyId, userLifetimeId, userLifetimeArtId, userSortId, userAgedId, userAncientId]) {
     if (userId != null) {
       await db.delete(loreUsersTable).where(eq(loreUsersTable.id, userId));
     }
   }
 
   // Legacy spotify connections
-  for (const sid of [SID_RG, SID_ART, SID_SOFT, SID_EMPTY, SID_LIFETIME, SID_LIFETIME_ART, SID_SORT, SID_AGED]) {
+  for (const sid of [SID_RG, SID_ART, SID_SOFT, SID_EMPTY, SID_LIFETIME, SID_LIFETIME_ART, SID_SORT, SID_AGED, SID_ANCIENT]) {
     await db.delete(spotifyConnectionsTable).where(eq(spotifyConnectionsTable.sid, sid));
   }
 });
@@ -618,6 +645,36 @@ describe("GET /api/me/crossings — two-station sort by lifetimeArtistCrossings"
     const idxA = sortedByLifetimeArtist.findIndex((r) => r.stationSlug === STATION_SLUG_SORT_A);
     const idxB = sortedByLifetimeArtist.findIndex((r) => r.stationSlug === STATION_SLUG_SORT_B);
     expect(idxA).toBeLessThan(idxB);
+  }, TEST_TIMEOUT);
+});
+
+describe("GET /api/me/crossings — spin older than 365 days", () => {
+  it("returns lifetimeCrossings ≥ 1 for a library track whose only spin is 400 days old", async () => {
+    if (!dbAvailable) return;
+
+    _testOnly_clearCrossingsCache(userAncientId!);
+
+    const { status, body } = await get("/api/me/crossings", SID_ANCIENT);
+    expect(status).toBe(200);
+
+    type CrossingItem = {
+      stationSlug: string;
+      crossings: number;
+      artistCrossings: number;
+      lifetimeCrossings: number;
+      lifetimeArtistCrossings: number;
+    };
+    const row = (body.items as CrossingItem[]).find((r) => r.stationSlug === STATION_SLUG);
+
+    // MBID_SPIN_ANCIENT aired 400 days ago and is in the user's library (exact MBID match).
+    // The lifetime query is unbounded (no WHERE on playedAt), so a listener absent for
+    // more than a year must still see lifetimeCrossings ≥ 1.  A future change that
+    // reintroduces any time-bound scanCutoff would cause this to fail.
+    // Rolling-window counts must all be 0 (spin is outside every rolling window).
+    expect(row).toBeDefined();
+    expect(row!.crossings).toBe(0);
+    expect(row!.artistCrossings).toBe(0);
+    expect(row!.lifetimeCrossings).toBeGreaterThanOrEqual(1);
   }, TEST_TIMEOUT);
 });
 
