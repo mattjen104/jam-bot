@@ -5,6 +5,7 @@ import {
   type AlbumAvatarCandidate,
 } from "../lib/meHooks";
 import { proxyArtUrl } from "../lib/proxyArt";
+import { onArtError } from "../lib/rumours";
 
 function sourceLabel(source: AlbumAvatarCandidate["source"]): string {
   if (source === "matt-starter") return "Matt’s starter library";
@@ -85,7 +86,7 @@ export function AlbumAvatarPicker({
                 cursor: "pointer",
               }}
             >
-              <img src={proxyArtUrl(candidate.artworkUrl) ?? undefined} alt="" width={82} height={82} style={{ display: "block", width: "100%", objectFit: "cover", borderRadius: 3 }} />
+              <img src={proxyArtUrl(candidate.artworkUrl) ?? undefined} alt="" width={82} height={82} style={{ display: "block", width: "100%", objectFit: "cover", borderRadius: 3 }} onError={onArtError} />
               <span style={{ display: "block", marginTop: 5, fontSize: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {candidate.albumTitle}
               </span>

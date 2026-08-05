@@ -128,7 +128,7 @@ describe("LibraryRow — artwork swatch fallback on load error", () => {
     // expired CDN URL, or network error).
     fireEvent.error(img!);
 
-    expect(img!.src).toBe(RUMOURS);
+    expect(img!.src).toBe(new URL(RUMOURS, document.baseURI).href);
   });
 
   it("does not enter a broken state on a second error after already showing RUMOURS", () => {
@@ -145,11 +145,11 @@ describe("LibraryRow — artwork swatch fallback on load error", () => {
     expect(img).toBeTruthy();
 
     fireEvent.error(img!);
-    expect(img!.src).toBe(RUMOURS);
+    expect(img!.src).toBe(new URL(RUMOURS, document.baseURI).href);
 
     // Second error — guard must hold, src must remain RUMOURS
     fireEvent.error(img!);
-    expect(img!.src).toBe(RUMOURS);
+    expect(img!.src).toBe(new URL(RUMOURS, document.baseURI).href);
   });
 
   it("renders RUMOURS directly when artworkUrl is null — no broken state possible", () => {
@@ -163,6 +163,6 @@ describe("LibraryRow — artwork swatch fallback on load error", () => {
     expect(img).toBeTruthy();
     // When there is no artwork URL the img src is pre-set to RUMOURS, so it
     // never enters a broken state regardless of network conditions.
-    expect(img!.src).toBe(RUMOURS);
+    expect(img!.src).toBe(new URL(RUMOURS, document.baseURI).href);
   });
 });

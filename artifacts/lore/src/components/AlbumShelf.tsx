@@ -8,6 +8,7 @@ import { usePlayer, type RideSeed } from "../player/PlayerProvider";
 import { KeepButton } from "./KeepButton";
 import { ArtistPortalStrip } from "./ArtistPortalStrip";
 import { ExternalLink } from "lucide-react";
+import { onArtError } from "../lib/rumours";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -190,6 +191,7 @@ export function AlbumShelf({ mbid, artistName }: AlbumShelfProps) {
                 alt=""
                 className="lrow__shelf-art"
                 loading="lazy"
+                onError={onArtError}
               />
             ) : (
               <span

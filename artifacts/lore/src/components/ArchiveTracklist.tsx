@@ -7,6 +7,7 @@ import { CONFIDENCE_LABEL } from "../lib/format";
 import { clockTime } from "../lib/format";
 import { ExternalLink, Ghost, Play } from "lucide-react";
 import { KeepButton } from "./KeepButton";
+import { onArtError } from "../lib/rumours";
 
 const BANDCAMP_HOST_RE = /bandcamp\.com/i;
 
@@ -97,6 +98,7 @@ export function ArchiveTracklist({
                   alt=""
                   className="h-9 w-9 shrink-0 rounded-md object-cover"
                   loading="lazy"
+                  onError={onArtError}
                 />
               ) : (
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted">

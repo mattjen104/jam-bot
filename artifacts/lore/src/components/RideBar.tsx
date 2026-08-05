@@ -8,6 +8,7 @@ import { rideFallbackLabel, rankServices } from "../player/playbackSession";
 import { KeepButton } from "./KeepButton";
 import { ShareButton } from "./ShareButton";
 import { DevicePicker } from "./DevicePicker";
+import { onArtError } from "../lib/rumours";
 import {
   AlertTriangle,
   ExternalLink,
@@ -477,6 +478,7 @@ export function RideBar({
             src={proxyArtUrl(cur.artworkUrl)!}
             alt=""
             className="hidden h-11 w-11 shrink-0 rounded-md object-cover sm:block"
+            onError={onArtError}
           />
         ) : null}
 

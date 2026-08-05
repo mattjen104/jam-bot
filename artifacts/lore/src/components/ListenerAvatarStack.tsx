@@ -42,6 +42,7 @@ if (typeof document !== "undefined" && !document.getElementById(STYLE_ID)) {
 // ---------------------------------------------------------------------------
 
 import { proxyArtUrl } from "../lib/proxyArt";
+import { onArtError } from "../lib/rumours";
 
 const MAX_VISIBLE = 4;
 
@@ -99,6 +100,7 @@ export function ListenerAvatarStack({
               <img
                 src={proxyArtUrl(av.artworkUrl)!}
                 alt={av.albumTitle}
+                onError={onArtError}
                 width={28}
                 height={28}
                 style={{

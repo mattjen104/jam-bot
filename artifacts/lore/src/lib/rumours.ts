@@ -3,10 +3,18 @@
  * Used as both the initial fallback (when artworkUrl is null) and the
  * onError recovery (when an external CDN URL fails to load).
  *
- * Cover Art Archive: release-group 3e0b2fe7-c6d3-41a5-843a-73ffe5c6c57f
+ * Served as a LOCAL bundled asset (public/rumours.jpg) so the fallback can
+ * never itself fail: the previous Cover Art Archive URL turned into a 404
+ * (no art for that release-group), which made every "fallback" a broken
+ * image.  A placeholder must have zero external dependencies.
  */
-export const RUMOURS =
-  "https://coverartarchive.org/release-group/3e0b2fe7-c6d3-41a5-843a-73ffe5c6c57f/front-500";
+export const RUMOURS = `${import.meta.env.BASE_URL}rumours.jpg`;
+
+/** True when an img element is currently showing the RUMOURS placeholder.
+ *  img.src is always absolutized by the browser, so compare by suffix. */
+function isShowingRumours(img: HTMLImageElement): boolean {
+  return img.src.endsWith(RUMOURS);
+}
 
 /**
  * Maximum number of back-off retries before permanently locking in RUMOURS.
@@ -58,7 +66,7 @@ export function onArtError(e: React.SyntheticEvent<HTMLImageElement>) {
 
   // Guard: if we're already showing RUMOURS, bail — retrying would risk an
   // infinite error loop if RUMOURS itself is unreachable.
-  if (img.src === RUMOURS) return;
+  if (isShowingRumours(img)) return;
 
   // Derive the canonical URL by stripping any _r=N retry param we added.
   const canonicalSrc = stripRetryParam(img.src);
@@ -92,7 +100,7 @@ export function onArtError(e: React.SyntheticEvent<HTMLImageElement>) {
   const retryForSrc = canonicalSrc;
   setTimeout(() => {
     // Skip if the src is no longer RUMOURS (navigated away, cover restored).
-    if (img.src !== RUMOURS) return;
+    if (!isShowingRumours(img)) return;
     // Skip if the element has since moved to a different artwork source —
     // that source's own retry will handle recovery.
     if (img.dataset.artOriginalSrc !== retryForSrc) return;

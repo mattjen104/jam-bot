@@ -6,6 +6,7 @@ import {
   getGetRecordingKnowledgeQueryKey,
 } from "@workspace/api-client-react";
 import { buildLinerGroups } from "../lib/linerNotes";
+import { onArtError } from "../lib/rumours";
 
 type Section = "radio" | "selectors" | "library";
 
@@ -145,6 +146,7 @@ export function LinerNotesSheet({
               alt=""
               className="liner-sheet__header-art"
               draggable={false}
+              onError={onArtError}
             />
           ) : (
             <div className="liner-sheet__header-art liner-sheet__header-art--empty" />
@@ -228,7 +230,7 @@ export function LinerNotesSheet({
             >
               <span className="liner-sheet__footer-art">
                 {art ? (
-                  <img src={proxyArtUrl(art)!} alt="" draggable={false} />
+                  <img src={proxyArtUrl(art)!} alt="" draggable={false} onError={onArtError} />
                 ) : (
                   <span className="liner-sheet__footer-art--empty" />
                 )}

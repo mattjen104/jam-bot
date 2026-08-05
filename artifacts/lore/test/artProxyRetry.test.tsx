@@ -49,14 +49,14 @@ describe("onArtError — immediate RUMOURS fallback", () => {
   it("swaps src to RUMOURS synchronously on the first error", () => {
     const img = renderImg();
     fireEvent.error(img);
-    expect(img.src).toBe(RUMOURS);
+    expect(img.src).toBe(new URL(RUMOURS, document.baseURI).href);
   });
 
   it("stays on RUMOURS when a second error fires (already showing RUMOURS)", () => {
     const img = renderImg();
     fireEvent.error(img); // first: proxy → RUMOURS
     fireEvent.error(img); // second: RUMOURS → should bail, still RUMOURS
-    expect(img.src).toBe(RUMOURS);
+    expect(img.src).toBe(new URL(RUMOURS, document.baseURI).href);
   });
 });
 
@@ -68,11 +68,11 @@ describe("onArtError — retry scheduling after proxy failure", () => {
   it("schedules a retry after 2 s when the proxy first fails", () => {
     const img = renderImg();
     fireEvent.error(img);
-    expect(img.src).toBe(RUMOURS);
+    expect(img.src).toBe(new URL(RUMOURS, document.baseURI).href);
 
     // Before 2 s — no retry yet
     vi.advanceTimersByTime(1_999);
-    expect(img.src).toBe(RUMOURS);
+    expect(img.src).toBe(new URL(RUMOURS, document.baseURI).href);
 
     // At 2 s — retry fires; src should include the original proxy URL
     vi.advanceTimersByTime(1);
@@ -85,7 +85,7 @@ describe("onArtError — retry scheduling after proxy failure", () => {
 
     // Failure 1 → RUMOURS → retry scheduled at 2 s
     fireEvent.error(img);
-    expect(img.src).toBe(RUMOURS);
+    expect(img.src).toBe(new URL(RUMOURS, document.baseURI).href);
 
     // Retry 1 fires
     vi.advanceTimersByTime(2_000);
@@ -93,11 +93,11 @@ describe("onArtError — retry scheduling after proxy failure", () => {
 
     // Simulate retry 1 also failing
     fireEvent.error(img);
-    expect(img.src).toBe(RUMOURS);
+    expect(img.src).toBe(new URL(RUMOURS, document.baseURI).href);
 
     // Before the second retry (4 s from this error) — still RUMOURS
     vi.advanceTimersByTime(3_999);
-    expect(img.src).toBe(RUMOURS);
+    expect(img.src).toBe(new URL(RUMOURS, document.baseURI).href);
 
     // Second retry fires
     vi.advanceTimersByTime(1);
@@ -119,11 +119,11 @@ describe("onArtError — retry scheduling after proxy failure", () => {
 
     // Retry 2 also fails — MAX_RETRIES (2) reached, no more retries
     fireEvent.error(img);
-    expect(img.src).toBe(RUMOURS);
+    expect(img.src).toBe(new URL(RUMOURS, document.baseURI).href);
 
     // Advance time significantly — no further retry should fire
     vi.advanceTimersByTime(60_000);
-    expect(img.src).toBe(RUMOURS);
+    expect(img.src).toBe(new URL(RUMOURS, document.baseURI).href);
   });
 });
 
@@ -137,7 +137,7 @@ describe("onArtError — silent recovery when proxy comes back", () => {
 
     // Initial proxy failure → RUMOURS
     fireEvent.error(img);
-    expect(img.src).toBe(RUMOURS);
+    expect(img.src).toBe(new URL(RUMOURS, document.baseURI).href);
 
     // Retry 1 fires after 2 s and sets the proxy URL (with _r=1)
     vi.advanceTimersByTime(2_000);
@@ -146,7 +146,7 @@ describe("onArtError — silent recovery when proxy comes back", () => {
 
     // The browser successfully loads the retried URL — no onError fires.
     // The cover is now showing the real art; RUMOURS is gone.
-    expect(img.src).not.toBe(RUMOURS);
+    expect(img.src).not.toBe(new URL(RUMOURS, document.baseURI).href);
   });
 
   it("skips the stale retry if the img src was already replaced externally", () => {
@@ -154,7 +154,7 @@ describe("onArtError — silent recovery when proxy comes back", () => {
 
     // Proxy failure → RUMOURS
     fireEvent.error(img);
-    expect(img.src).toBe(RUMOURS);
+    expect(img.src).toBe(new URL(RUMOURS, document.baseURI).href);
 
     // Something else (e.g. a React re-render) sets a brand-new URL before the
     // retry timer fires.
@@ -207,7 +207,7 @@ describe("onArtError — retry budget resets when the source changes", () => {
     fireEvent.error(img); // retry 1 failure → retries=2
     vi.advanceTimersByTime(4_000); // retry 2 fires
     fireEvent.error(img); // retry 2 failure → exhausted
-    expect(img.src).toBe(RUMOURS);
+    expect(img.src).toBe(new URL(RUMOURS, document.baseURI).href);
 
     // Now React updates the element with a different artwork URL
     const newProxyUrl =
@@ -216,7 +216,7 @@ describe("onArtError — retry budget resets when the source changes", () => {
 
     // The new URL fails — should restart with a fresh budget
     fireEvent.error(img);
-    expect(img.src).toBe(RUMOURS); // still shows RUMOURS immediately
+    expect(img.src).toBe(new URL(RUMOURS, document.baseURI).href); // still shows RUMOURS immediately
 
     // Retry 1 for the new URL must fire after 2 s
     vi.advanceTimersByTime(2_000);
@@ -229,7 +229,7 @@ describe("onArtError — retry budget resets when the source changes", () => {
 
     // One failure on the first URL
     fireEvent.error(img);
-    expect(img.src).toBe(RUMOURS);
+    expect(img.src).toBe(new URL(RUMOURS, document.baseURI).href);
 
     // Element is updated to a completely different proxy URL before the retry fires
     const newProxyUrl =
@@ -238,7 +238,7 @@ describe("onArtError — retry budget resets when the source changes", () => {
 
     // New URL fails
     fireEvent.error(img);
-    expect(img.src).toBe(RUMOURS);
+    expect(img.src).toBe(new URL(RUMOURS, document.baseURI).href);
 
     // The stale retry for the first URL fires — it must be skipped because
     // src is still RUMOURS (the guard fires), then the new retry fires
@@ -258,20 +258,20 @@ describe("onArtError — non-proxy URLs get immediate RUMOURS, no retries", () =
     const img = renderImg("https://i.scdn.co/image/abc123");
 
     fireEvent.error(img);
-    expect(img.src).toBe(RUMOURS);
+    expect(img.src).toBe(new URL(RUMOURS, document.baseURI).href);
 
     // No retry should fire — src stays RUMOURS after a long wait
     vi.advanceTimersByTime(60_000);
-    expect(img.src).toBe(RUMOURS);
+    expect(img.src).toBe(new URL(RUMOURS, document.baseURI).href);
   });
 
   it("does not schedule a retry for a data: URI that fails", () => {
     const img = renderImg("data:image/png;base64,INVALID");
 
     fireEvent.error(img);
-    expect(img.src).toBe(RUMOURS);
+    expect(img.src).toBe(new URL(RUMOURS, document.baseURI).href);
 
     vi.advanceTimersByTime(60_000);
-    expect(img.src).toBe(RUMOURS);
+    expect(img.src).toBe(new URL(RUMOURS, document.baseURI).href);
   });
 });

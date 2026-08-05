@@ -95,6 +95,7 @@ export function NowPlaying({ data, isLoading, fallbackStation, clientNowPlaying 
             alt={rec ? `${rec.title} — ${rec.artist}` : station.name}
             className="h-full w-full object-cover"
             data-testid="now-playing-artwork"
+            onError={onArtError}
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
@@ -543,6 +544,7 @@ function SongExploderPanel({
 
 // ListProvenance extracted to components/ListProvenance.tsx (shared with Song page).
 import { ListProvenance } from "./ListProvenance";
+import { onArtError } from "../lib/rumours";
 
 /**
  * Real liner-notes credits for the confirmed recording, fetched lazily and

@@ -81,5 +81,6 @@
 - [Weekly recap read model](weekly-recap-read-model.md) — weekly reflections use UTC Sunday-to-Saturday windows and confirmed attendance only; never surface incomplete weeks.
 - [Album-cover listener identity](album-avatar-identity.md) — anonymous cover identity preserves bottle emojis; covers are privacy-thresholded station tokens.
 - [Support ladder identity grounding](support-ladder-identity-grounding.md) — never infer a release MBID from a recording→release-group bridge; provider facts must carry release identity explicitly.
+- [Art fallback local asset](art-fallback-local-asset.md) — RUMOURS placeholder must be a bundled local file (old CAA URL 404s); compare img.src by suffix, every art <img> needs onArtError.
 - [Crossings query performance](crossings-query-performance.md) — single 180-day bounded query only; unbounded/two-query approach causes 10–16s hangs; cache TTL = 30 min.
 - [Crossings route merge-splice](crossings-route-merge-splice.md) — twin handlers in me/crossings.ts get merge-spliced repeatedly; typecheck both handlers after merges; CrossingsRow shared from lib/db.

@@ -1530,7 +1530,7 @@ export function DialView() {
           aria-label="Album art"
           onClick={() => setAlbumArtOpen(false)}
         >
-          <img src={proxyArtUrl(avatarUrl) ?? avatarUrl} alt="" />
+          <img src={proxyArtUrl(avatarUrl) ?? avatarUrl} alt="" onError={onArtError} />
           <button
             type="button"
             className="dial-art-fullscreen__close"

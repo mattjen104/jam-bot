@@ -141,7 +141,7 @@ describe("AlbumGroupRow — artwork fallback on load error", () => {
     // Simulate the browser failing to fetch the image
     fireEvent.error(headerImg);
 
-    expect(headerImg.src).toBe(RUMOURS);
+    expect(headerImg.src).toBe(new URL(RUMOURS, document.baseURI).href);
   });
 
   it("does not show a broken img when artworkUrl is null (gradient fallback renders instead)", () => {
@@ -190,7 +190,7 @@ describe("ArtistGroupRow — sub-album artwork fallback on load error", () => {
     // Simulate load failure
     fireEvent.error(albumImg);
 
-    expect(albumImg.src).toBe(RUMOURS);
+    expect(albumImg.src).toBe(new URL(RUMOURS, document.baseURI).href);
   });
 
   it("does not render a sub-album img when artworkUrl is null (gradient span instead)", () => {
