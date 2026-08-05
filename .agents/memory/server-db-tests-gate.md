@@ -13,3 +13,5 @@ The `server-db-tests` validation step runs `vitest run --config vitest.db.config
 - Full rules also documented in artifacts/api-server/test/TEST_CONVENTIONS.md.
 
 **Concurrency:** the merge gate runs all validation commands in parallel; both vitest suites are wrapped in `flock /tmp/api-server-vitest.lock` so they serialize — running them concurrently flaked the fast suite's beforeAll hooks on DB contention.
+
+- Non-DB suite too: vitest default hookTimeout (10s) flakes beforeAll DB-connect hooks when dev-server pollers load Postgres during validation runs; vitest.config.ts now sets hookTimeout 90s.

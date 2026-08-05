@@ -48,6 +48,9 @@ export interface PopularCrossingArtist {
   heard: boolean;
   inLibrary: boolean;
 }
+// Artists per station arrive in spin order (most recent first) and include
+// EVERY artist in the station's last-24h set — the client renders the full
+// setlist and derives both sort modes (popular-heavy / deep-cuts) locally.
 export interface PopularCrossingsItem {
   stationSlug: string;
   artists: PopularCrossingArtist[];
@@ -67,6 +70,8 @@ interface GlobalRow {
   name: string;   // display casing
   spins: number;
   firstPlayed: Date;
+  /** Most recent spin of this artist on this station (24h window) — drives setlist order. */
+  lastSpin: Date;
 }
 let globalCache: { builtAt: number; rows: GlobalRow[]; popularKeys: Set<string> } | null = null;
 /** Test-only: force the next request to recompute the global window. */
@@ -84,7 +89,8 @@ async function loadGlobal(): Promise<NonNullable<typeof globalCache>> {
     with win as (
       select st.slug,
              lower(trim(r.artist)) as akey,
-             min(trim(r.artist))   as name
+             min(trim(r.artist))   as name,
+             max(s.played_at)      as last_spin
       from spins s
       join stations st on st.id = s.station_id
       join recordings r on r.mbid = s.mbid
@@ -104,7 +110,7 @@ async function loadGlobal(): Promise<NonNullable<typeof globalCache>> {
         and lower(trim(r.artist)) in (select distinct akey from win)
       group by 1
     )
-    select w.slug, w.akey, w.name, st.spins, st.first_played
+    select w.slug, w.akey, w.name, w.last_spin, st.spins, st.first_played
     from win w
     join stats st using (akey)
   `);
@@ -114,6 +120,7 @@ async function loadGlobal(): Promise<NonNullable<typeof globalCache>> {
     name: String(r.name),
     spins: Number(r.spins),
     firstPlayed: new Date(String(r.first_played)),
+    lastSpin: new Date(String(r.last_spin)),
   }));
 
   // Popular set: top N distinct artists by 180-day spins.
@@ -164,21 +171,20 @@ router.get("/me/popular-crossings", h(async (req, res) => {
   const inLib = new Set([...libRows, ...softRows, ...seedRows].map((r) => r.akey));
   const debutCutoff = Date.now() - DEBUT_WINDOW_MS;
 
-  const byStation = new Map<string, PopularCrossingArtist[]>();
+  // Ship EVERY artist in the station's recent set, in spin order (most
+  // recent first). The client renders the full setlist and filters/styles
+  // by the flags; both sort modes are derived client-side from this payload.
+  const byStation = new Map<string, Array<PopularCrossingArtist & { _lastSpin: number }>>();
   for (const r of rows) {
-    const artist: PopularCrossingArtist = {
+    const artist = {
       name: r.name,
       spins: r.spins,
       popular: popularKeys.has(r.akey),
       debut: r.firstPlayed.getTime() >= debutCutoff,
       heard: heard.has(r.akey),
       inLibrary: inLib.has(r.akey),
+      _lastSpin: r.lastSpin.getTime(),
     };
-    // Only ship artists that carry a signal: popular, or surfaceable-as-new.
-    // "New" is suppressed when the user has heard the artist and chose not to
-    // keep them — that is not a discovery, it is a pass.
-    const isNew = (artist.debut || !artist.heard) && !artist.inLibrary;
-    if (!artist.popular && !isNew && !artist.inLibrary) continue;
     const list = byStation.get(r.slug) ?? [];
     list.push(artist);
     byStation.set(r.slug, list);
@@ -186,10 +192,10 @@ router.get("/me/popular-crossings", h(async (req, res) => {
 
   const items: PopularCrossingsItem[] = [...byStation.entries()].map(([stationSlug, artists]) => ({
     stationSlug,
-    // Popular first (by Lore-wide spins desc), then the rest.
-    artists: artists.sort((a, b) =>
-      Number(b.popular) - Number(a.popular) || b.spins - a.spins,
-    ),
+    // Spin order: most recently played first.
+    artists: artists
+      .sort((a, b) => b._lastSpin - a._lastSpin)
+      .map(({ _lastSpin, ...a }) => a),
   }));
 
   return res.json({ items });

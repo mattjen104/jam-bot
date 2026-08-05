@@ -183,36 +183,45 @@ function liveSentence(
 // Popular-crossing sentence — Also-On-Air "onboarding crossing sort"
 // ---------------------------------------------------------------------------
 
-/** Colour precedence for a popular-crossing artist name. */
-function popArtistCls(a: PopularCrossingArtist, inLib: boolean): string {
-  if (inLib) return "fdrow__artist fdrow__artist--lib";
-  if (!a.popular) return "fdrow__artist fdrow__artist--new";
-  return "fdrow__artist fdrow__artist--pop";
+/** Is this artist "new" — first spin on Lore ever, or never heard by this listener? */
+function popArtistIsNew(a: PopularCrossingArtist): boolean {
+  return !a.popular && (a.debut || !a.heard);
 }
 
+/** Colour precedence for a popular-crossing setlist name. */
+function popArtistCls(a: PopularCrossingArtist, inLib: boolean): string {
+  if (inLib) return "fdrow__artist fdrow__artist--lib";
+  if (a.popular) return "fdrow__artist fdrow__artist--pop";
+  if (popArtistIsNew(a)) return "fdrow__artist fdrow__artist--new";
+  return "fdrow__artist fdrow__artist--set";
+}
+
+/** Cap on setlist names shown before the "+N more" expand affordance. */
+const SETLIST_VISIBLE = 8;
+
 /**
- * Summary sentence for Also-On-Air rows, same philosophy as the Zone 1
- * crossing sentence: artist names carry the signal, everything else is plain.
- * Lime = crossing with Lore's most-played; canary = first time on Lore / first
- * time for this listener; orange-red = already in the library. Every name not
- * yet in the library gets a tiny orange-red "+" that seeds it.
+ * Full in-order setlist for Also-On-Air rows: every artist in the station's
+ * recent set, in spin order. Lime = crossing with Lore's most-played pool;
+ * canary = new-to-Lore / new-to-me; plain = heard-but-not-kept filler.
+ * Library artists are excluded (they surface in ON AIR), but artists seeded
+ * via "+" this session stay visible in orange-red until the next refresh so
+ * they don't vanish under the click. Every non-library name keeps its "+".
+ * Long sets collapse behind a "+N more" toggle to keep the dial legible.
  */
 function PopCrossingLine({ artists, seedsLower, onAdd }: {
   artists: PopularCrossingArtist[];
   seedsLower: Set<string>;
   onAdd: (name: string) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const inLib = (a: PopularCrossingArtist) => a.inLibrary || seedsLower.has(a.name.trim().toLowerCase());
-  // Library artists are excluded — they already surface in the ON AIR section.
-  // (a.inLibrary is the server flag from load time; artists seeded via "+"
-  // this session stay visible in orange-red until the next data refresh.)
-  const pop = artists.filter((a) => a.popular && !a.inLibrary).slice(0, 4);
-  // Yellow group: surfaceable-as-new only — the server already suppressed
-  // heard-but-not-kept artists.
-  const fresh = artists
-    .filter((a) => !a.popular && !a.inLibrary && (a.debut || !a.heard))
-    .slice(0, 3);
-  if (pop.length === 0 && fresh.length === 0) return null;
+  // Library artists (server flag from load time) are excluded — they already
+  // surface in the ON AIR section. Session-seeded artists remain (inLib()
+  // styles them orange-red without a "+").
+  const set = artists.filter((a) => !a.inLibrary);
+  if (set.length === 0) return null;
+  const visible = expanded ? set : set.slice(0, SETLIST_VISIBLE);
+  const hidden = set.length - visible.length;
 
   const span = (a: PopularCrossingArtist) => (
     <b key={a.name} className={popArtistCls(a, inLib(a))}>
@@ -227,22 +236,30 @@ function PopCrossingLine({ artists, seedsLower, onAdd }: {
       )}
     </b>
   );
-  const join = (list: PopularCrossingArtist[]) => {
-    const nodes: ReactNode[] = [];
-    list.forEach((a, i) => {
-      if (i > 0) nodes.push(i === list.length - 1 ? " and " : ", ");
-      nodes.push(span(a));
-    });
-    return <>{nodes}</>;
-  };
+  const nodes: ReactNode[] = [];
+  visible.forEach((a, i) => {
+    if (i > 0) nodes.push(" · ");
+    nodes.push(span(a));
+  });
 
   return (
     <>
-      {pop.length > 0 && (
-        <>{join(pop)}{" — Lore's most-played — this set."}</>
+      {nodes}
+      {hidden > 0 && (
+        <button
+          type="button"
+          className="fdrow__setmore"
+          aria-expanded={false}
+          onClick={(e) => { e.stopPropagation(); setExpanded(true); }}
+        >{`+${hidden} more`}</button>
       )}
-      {fresh.length > 0 && (
-        <>{pop.length > 0 ? " " : ""}{"New on air: "}{join(fresh)}{"."}</>
+      {expanded && set.length > SETLIST_VISIBLE && (
+        <button
+          type="button"
+          className="fdrow__setmore"
+          aria-expanded={true}
+          onClick={(e) => { e.stopPropagation(); setExpanded(false); }}
+        >less</button>
       )}
     </>
   );
@@ -1143,12 +1160,43 @@ export function DialView() {
     // into the sort either — they already drive the ON AIR section.
     return artists.reduce((n, a) => n + (a.popular && !a.inLibrary ? a.spins : 0), 0);
   }, [popMap]);
-  /** Whether the sentence would actually render content for this station. */
+  /**
+   * Deep-cuts vector: the station's non-library spin counts sorted ascending.
+   * The flipped sort reads each setlist from its rarest artist up — compare
+   * lowest spin count first, then next-lowest, and so on. A set carrying a
+   * one-spin-ever artist always surfaces, and between two such sets the one
+   * with more rare depth wins. This is a transparent ledger stat (Lore-wide
+   * spins), never a taste profile — nothing is hidden, only reordered.
+   */
+  const rareVector = useCallback((slug: string): number[] => {
+    const artists = popMap.get(slug);
+    if (!artists) return [];
+    return artists
+      .filter((a) => !a.inLibrary)
+      .map((a) => a.spins)
+      .sort((x, y) => x - y);
+  }, [popMap]);
+  // Triangle toggle: up (true) = popular-heavy sets first; down = deep-cuts
+  // (rarest-artist-first) ordering. Pure client-side re-sort.
+  const [popSortDesc, setPopSortDesc] = useState(true);
+  /** Signed comparison for the active sort mode; 0 when tied (fallbacks apply). */
+  const popCompare = useCallback((aSlug: string, bSlug: string) => {
+    if (popSortDesc) return popScore(bSlug) - popScore(aSlug);
+    // Lexicographic rarest-first: stations without setlist data sort last.
+    const av = rareVector(aSlug);
+    const bv = rareVector(bSlug);
+    if (av.length === 0 || bv.length === 0) return bv.length - av.length;
+    const n = Math.min(av.length, bv.length);
+    for (let i = 0; i < n; i++) {
+      if (av[i] !== bv[i]) return av[i] - bv[i]; // rarer artist wins
+    }
+    return bv.length - av.length; // equal prefix: deeper rare set wins
+  }, [popSortDesc, popScore, rareVector]);
+  /** Whether the setlist line would actually render content for this station. */
   const popHasContent = useCallback((slug: string) => {
     const artists = popMap.get(slug);
     if (!artists) return false;
-    return artists.some((a) => a.popular && !a.inLibrary)
-      || artists.some((a) => !a.popular && !a.inLibrary && (a.debut || !a.heard));
+    return artists.some((a) => !a.inLibrary);
   }, [popMap]);
 
   // Bridge: player-ticker artist clicks → addSeed (ticker lives in PlayerBar)
@@ -1346,18 +1394,17 @@ export function DialView() {
     alsoOnAir
       .filter((row) => row.rz.r === 5)
       .sort((a, b) => {
-        // Popular-crossing weight first (onboarding crossing sort), then
-        // picker overlap as the fallback within equal weights.
-        const aPop = popScore(a.ds.station.slug);
-        const bPop = popScore(b.ds.station.slug);
-        if (aPop !== bPop) return bPop - aPop;
+        // Popular-crossing weight first (triangle up: popular-heavy first;
+        // down: deep-cuts first), then picker overlap as the fallback.
+        const cmp = popCompare(a.ds.station.slug, b.ds.station.slug);
+        if (cmp !== 0) return cmp;
         const aOv = pickerOv(a.show?.pickerId ?? null, a.effectiveDjName);
         const bOv = pickerOv(b.show?.pickerId ?? null, b.effectiveDjName);
         return bOv - aOv;
       }),
   // pickerOv closure reads overlapByPickerId/pickerNameToId from outer scope
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  [alsoOnAir, overlapByPickerId, pickerNameToId, popScore]);
+  [alsoOnAir, overlapByPickerId, pickerNameToId, popCompare]);
 
   const restBand = useMemo(() =>
     alsoOnAir
@@ -1365,14 +1412,13 @@ export function DialView() {
       .sort((a, b) => {
         // Pinned stations float above non-pinned regardless of crossing count.
         if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
-        // Popular-crossing weight (onboarding crossing sort) …
-        const aPop = popScore(a.ds.station.slug);
-        const bPop = popScore(b.ds.station.slug);
-        if (aPop !== bPop) return bPop - aPop;
+        // Popular-crossing weight (triangle up/down) …
+        const cmp = popCompare(a.ds.station.slug, b.ds.station.slug);
+        if (cmp !== 0) return cmp;
         // … then lifetime station crossings as the fallback.
         return b.ds.lifetimeCrossings - a.ds.lifetimeCrossings;
       }),
-  [alsoOnAir, popScore]);
+  [alsoOnAir, popCompare]);
   // Ghost zone: stations that played library artists but user hasn't tuned into
   const { data: ghostStations = [] } = useMyGhostMissed();
   // Exclude any ghost station already appearing in Zone 1 or Zone 3 (live sets)
@@ -1660,6 +1706,20 @@ export function DialView() {
                 Also On Air
                 {alsoOnAir.length > 0 && <span className="dial-tab__n">{alsoOnAir.length}</span>}
               </button>
+              {activeTab === "also-on-air" && (
+                <button
+                  type="button"
+                  className="dial-tab-sort"
+                  aria-label={popSortDesc
+                    ? "Sorted by most popular Lore artists first — tap for deep cuts first"
+                    : "Sorted by deep cuts first — tap for most popular first"}
+                  aria-pressed={!popSortDesc}
+                  title={popSortDesc ? "Popular-heavy sets first" : "Deep-cut sets first"}
+                  onClick={() => setPopSortDesc((v) => !v)}
+                >
+                  {popSortDesc ? "▲" : "▼"}
+                </button>
+              )}
               <button
                 type="button"
                 role="tab"

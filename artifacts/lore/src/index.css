@@ -4643,6 +4643,42 @@
   vertical-align: super;
 }
 .fdrow__addplus:hover { color: hsl(var(--library) / 0.75); }
+/* Neutral setlist filler names (heard-but-not-kept, not popular, not new) */
+.fdrow__t1 .fdrow__artist--set { color: hsl(var(--foreground) / 0.55); font-weight: 400; }
+/* "+N more" / "less" setlist expand affordance */
+.fdrow__setmore {
+  appearance: none;
+  background: none;
+  border: 1px solid hsl(var(--border) / 0.6);
+  border-radius: 3px;
+  padding: 0 5px;
+  margin-left: 6px;
+  font-family: var(--app-font-mono);
+  font-size: 0.7em;
+  line-height: 1.6;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  vertical-align: middle;
+}
+.fdrow__setmore:hover { color: hsl(var(--accent)); border-color: hsl(var(--accent) / 0.5); }
+/* Lime sort triangle next to the Also On Air tab — flips popular-heavy /
+   deep-cuts station ordering (client-side re-sort, no refetch). */
+.dial-tab-sort {
+  appearance: none;
+  background: transparent;
+  border: 1px solid hsl(var(--accent) / 0.4);
+  border-radius: 4px;
+  color: hsl(var(--accent));
+  font-size: 10px;
+  line-height: 1;
+  width: 22px;
+  height: 22px;
+  align-self: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+}
+.dial-tab-sort:hover { background: hsl(var(--accent) / 0.1); border-color: hsl(var(--accent) / 0.7); }
 /* Entity-type colours for the attribution sentence — blue selector palette */
 .fdrow__t1 .fdrow__dj      { color: hsl(var(--selector-dj)); }
 .fdrow__t1 .fdrow__show    { color: hsl(var(--selector-show)); font-weight: 500; font-style: normal; }

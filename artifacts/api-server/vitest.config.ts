@@ -15,6 +15,10 @@ export default defineConfig({
     // The 5 s default caused spurious timeouts on overlaps/crossings/player
     // requests that had to wait for a connection under parallel load.
     testTimeout: 30_000,
+    // 90 s for beforeAll/afterAll — the default 10 s flakes under contention:
+    // hooks that open a DB connection time out when the dev api-server
+    // pollers and the DB suite load Postgres during validation runs.
+    hookTimeout: 90_000,
     // Cap concurrent workers so the shared Postgres instance is not
     // overwhelmed by connection-pool exhaustion.  lib/db creates a pg.Pool
     // per worker with a default max of 10 connections; 4 workers × 10 = 40
