@@ -2194,6 +2194,24 @@ export const crossingsCacheTable = pgTable("crossings_cache", {
 });
 
 /**
+ * Single-row persistent L2 cache for the anonymous blended crossings view
+ * (GET /api/me/crossings/blended).
+ *
+ * The blended result is global (no per-user key), so exactly one row exists
+ * (id = 1, enforced by the upsert in the route). Same L1/L2 pattern as
+ * `crossings_cache`: the route's in-memory single-entry cache is L1; this row
+ * survives restarts so cold starts within the TTL skip the two heavy
+ * aggregate queries. TTL is enforced in application code via `built_at`.
+ */
+export const blendedCrossingsCacheTable = pgTable("blended_crossings_cache", {
+  id: integer("id").primaryKey(),
+  /** Serialised rows — CrossingsRow plus the blended-only topArtistNames. */
+  data: jsonb("data").notNull().$type<Array<CrossingsRow & { topArtistNames: string[] }>>(),
+  /** When the data was last computed (used for TTL checks). */
+  builtAt: timestamp("built_at").notNull(),
+});
+
+/**
  * Pre-computed TRUE lifetime crossing counts per user (unbounded scan).
  *
  * The hot-path crossings query is bounded to 30 days so it stays fast even as

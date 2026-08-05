@@ -61,6 +61,7 @@ import { applyDeviceIdentityMigration } from "./lore/device-identity-migration.j
 import { applyMigrationCompletionsMigration } from "./lore/migration-completions-migration.js";
 import { applySpinDedupCleanup } from "./lore/spin-dedup-cleanup.js";
 import { applyCrossingsCacheMigration } from "./lore/crossings-cache-migration.js";
+import { applyBlendedCrossingsCacheMigration } from "./lore/blended-crossings-cache-migration.js";
 import { applyImportItemsMigration } from "./lore/import-items-migration.js";
 import { applyAttendanceMigration } from "./lore/attendance-migration.js";
 import { applyTasteSeedsMigration } from "./lore/taste-seeds-migration.js";
@@ -135,6 +136,7 @@ async function bootLore(): Promise<void> {
     await runMigration("applySpotifyLibraryItemsMigration", applySpotifyLibraryItemsMigration);
     await runMigration("applySpinDedupCleanup", applySpinDedupCleanup);
     await runMigration("applyCrossingsCacheMigration", applyCrossingsCacheMigration);
+    await runMigration("applyBlendedCrossingsCacheMigration", applyBlendedCrossingsCacheMigration);
     await runMigration("applyImportItemsMigration", applyImportItemsMigration);
     await runMigration("applyAttendanceMigration", applyAttendanceMigration);
     await runMigration("applyTasteSeedsMigration", applyTasteSeedsMigration);

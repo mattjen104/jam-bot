@@ -13,12 +13,15 @@ import {
   recordingReleaseGroupsTable,
   stationsTable,
   spinsTable,
+  blendedCrossingsCacheTable,
 } from "@workspace/db";
 import app from "../src/app.js";
+import { applyBlendedCrossingsCacheMigration } from "../src/lore/blended-crossings-cache-migration.js";
 import {
   _testOnly_clearCrossingsCache,
   _testOnly_getCrossingsCache,
   _testOnly_clearBlendedCrossingsCache,
+  _testOnly_clearBlendedCrossingsL2Cache,
   _testOnly_getBlendedCrossingsCache,
   SOCIAL_PRESENCE_TTL_MS,
 } from "../src/routes/me/crossings.js";
@@ -546,7 +549,7 @@ describe("GET /api/me/crossings — artist MBID crossing", () => {
     if (!dbAvailable) return;
     // MBID_SPIN_ART was seeded twice (>2 min apart) in beforeAll.
     // count(distinct mbid) must collapse both spin events into 1 distinct recording.
-    _testOnly_clearCrossingsCache(userArtId!);
+    await _testOnly_clearCrossingsCache(userArtId!);
     const { status, body } = await get("/api/me/crossings", SID_ART);
     expect(status).toBe(200);
 
@@ -581,7 +584,7 @@ describe("GET /api/me/crossings — lifetime-only crossing (spin outside 24h win
     if (!dbAvailable) return;
 
     // Evict any cached result so we hit the DB fresh for this user.
-    _testOnly_clearCrossingsCache(userLifetimeId!);
+    await _testOnly_clearCrossingsCache(userLifetimeId!);
 
     const { status, body } = await get("/api/me/crossings", SID_LIFETIME);
     expect(status).toBe(200);
@@ -610,7 +613,7 @@ describe("GET /api/me/crossings — lifetime artist crossing (spin outside 24h w
     if (!dbAvailable) return;
 
     // Evict any cached result so we hit the DB fresh for this user.
-    _testOnly_clearCrossingsCache(userLifetimeArtId!);
+    await _testOnly_clearCrossingsCache(userLifetimeArtId!);
 
     const { status, body } = await get("/api/me/crossings", SID_LIFETIME_ART);
     expect(status).toBe(200);
@@ -641,7 +644,7 @@ describe("GET /api/me/crossings — two-station sort by lifetimeArtistCrossings"
   it("station with 3 distinct artist tracks scores higher than station with 1", async () => {
     if (!dbAvailable) return;
 
-    _testOnly_clearCrossingsCache(userSortId!);
+    await _testOnly_clearCrossingsCache(userSortId!);
 
     const { status, body } = await get("/api/me/crossings", SID_SORT);
     expect(status).toBe(200);
@@ -691,7 +694,7 @@ describe("GET /api/me/crossings — spin older than 365 days", () => {
   it("returns lifetimeCrossings ≥ 1 for a library track whose only spin is 400 days old", async () => {
     if (!dbAvailable) return;
 
-    _testOnly_clearCrossingsCache(userAncientId!);
+    await _testOnly_clearCrossingsCache(userAncientId!);
 
     const { status, body } = await get("/api/me/crossings", SID_ANCIENT);
     expect(status).toBe(200);
@@ -721,7 +724,7 @@ describe("GET /api/me/crossings — artist-level crossing, listener absent > 1 y
   it("returns lifetimeArtistCrossings ≥ 1 when the only artist spin is 400 days old and library holds a different track by the same artist", async () => {
     if (!dbAvailable) return;
 
-    _testOnly_clearCrossingsCache(userAncientArtId!);
+    await _testOnly_clearCrossingsCache(userAncientArtId!);
 
     const { status, body } = await get("/api/me/crossings", SID_ANCIENT_ART);
     expect(status).toBe(200);
@@ -753,7 +756,7 @@ describe("GET /api/me/crossings — aged crossing (spin outside old 180-day wind
   it("returns lifetimeCrossings ≥ 1 for a library track whose only spin is 200 days old", async () => {
     if (!dbAvailable) return;
 
-    _testOnly_clearCrossingsCache(userAgedId!);
+    await _testOnly_clearCrossingsCache(userAgedId!);
 
     const { status, body } = await get("/api/me/crossings", SID_AGED);
     expect(status).toBe(200);
@@ -785,7 +788,7 @@ describe("GET /api/me/crossings — TTL cache", () => {
     if (!dbAvailable) return;
 
     // Evict so the first request populates the cache fresh.
-    _testOnly_clearCrossingsCache(userRgId!);
+    await _testOnly_clearCrossingsCache(userRgId!);
 
     // First request — populates cache.
     const first = await get("/api/me/crossings", SID_RG);
@@ -835,6 +838,11 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
 
   beforeAll(async () => {
     if (!dbAvailable) return;
+
+    // Tests boot app.js without the index.ts boot migrations — ensure the
+    // blended L2 table exists before the L2 read-path tests touch it.
+    await applyBlendedCrossingsCacheMigration();
+    await _testOnly_clearBlendedCrossingsL2Cache();
 
     await db.insert(spotifyConnectionsTable).values([
       { sid: BSID_ACTIVE, accessToken: "t", refreshToken: "r", expiresAt: new Date(Date.now() + 3_600_000) },
@@ -924,6 +932,7 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
   it("counts a 23h-old spin in crossings but excludes a 25h-old spin (24h spin window)", async () => {
     if (!dbAvailable) return;
     _testOnly_clearBlendedCrossingsCache();
+    await _testOnly_clearBlendedCrossingsL2Cache();
     const res = await fetch(`${baseUrl}/api/me/crossings/blended`);
     expect(res.status).toBe(200);
     const body = await res.json() as {
@@ -940,6 +949,7 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
   it("includes a spin older than 180 days in blended lifetimeCrossings with rolling counts 0", async () => {
     if (!dbAvailable) return;
     _testOnly_clearBlendedCrossingsCache();
+    await _testOnly_clearBlendedCrossingsL2Cache();
     const res = await fetch(`${baseUrl}/api/me/crossings/blended`);
     expect(res.status).toBe(200);
     const body = await res.json() as {
@@ -975,6 +985,7 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
       .where(eq(loreUsersTable.id, bUserActiveId!));
 
     _testOnly_clearBlendedCrossingsCache();
+    await _testOnly_clearBlendedCrossingsL2Cache();
     const res = await fetch(`${baseUrl}/api/me/crossings/blended`);
     expect(res.status).toBe(200);
     const body = await res.json() as {
@@ -995,6 +1006,7 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
 
     // Evict so the first request populates the cache fresh.
     _testOnly_clearBlendedCrossingsCache();
+    await _testOnly_clearBlendedCrossingsL2Cache();
 
     // First request — populates cache.
     const res1 = await fetch(`${baseUrl}/api/me/crossings/blended`);
@@ -1017,6 +1029,120 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
 
     // Response content must match.
     expect(body2).toEqual(body1);
+  }, TEST_TIMEOUT);
+
+  it("serves a cold-start blended request from the Postgres L2 cache without recomputing", async () => {
+    if (!dbAvailable) return;
+
+    // Seed a distinctive L2 row directly (a marker slug no real compute would
+    // produce), then clear L1 to simulate a fresh process after a restart.
+    const marker = `blended-l2-marker-${run}`;
+    const l2Row = {
+      stationSlug: marker,
+      crossings: 7, artistCrossings: 3,
+      weekCrossings: 7, weekArtistCrossings: 3,
+      monthCrossings: 7, monthArtistCrossings: 3,
+      lifetimeCrossings: 42, lifetimeArtistCrossings: 9,
+      topArtistNames: ["L2 Marker Artist"],
+    };
+    await db
+      .insert(blendedCrossingsCacheTable)
+      .values({ id: 1, data: [l2Row], builtAt: new Date() })
+      .onConflictDoUpdate({ target: blendedCrossingsCacheTable.id, set: { data: [l2Row], builtAt: new Date() } });
+    _testOnly_clearBlendedCrossingsCache();
+
+    const res = await fetch(`${baseUrl}/api/me/crossings/blended`);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { items: Array<{ stationSlug: string }> };
+
+    // Served straight from the L2 row — the marker slug proves no recompute ran.
+    expect(body.items).toEqual([l2Row]);
+
+    // L1 must be repopulated so the next same-process request skips Postgres.
+    const l1 = _testOnly_getBlendedCrossingsCache();
+    expect(l1).not.toBeNull();
+    expect(l1!.data).toEqual([l2Row]);
+
+    await _testOnly_clearBlendedCrossingsL2Cache();
+    _testOnly_clearBlendedCrossingsCache();
+  }, TEST_TIMEOUT);
+
+  it("ignores a stale L2 row and recomputes instead of serving expired data", async () => {
+    if (!dbAvailable) return;
+
+    const marker = `blended-l2-stale-${run}`;
+    const staleRow = {
+      stationSlug: marker,
+      crossings: 1, artistCrossings: 0,
+      weekCrossings: 1, weekArtistCrossings: 0,
+      monthCrossings: 1, monthArtistCrossings: 0,
+      lifetimeCrossings: 1, lifetimeArtistCrossings: 0,
+      topArtistNames: [],
+    };
+    // builtAt 10 minutes ago — well past the 60s TTL.
+    const staleBuiltAt = new Date(Date.now() - 10 * 60 * 1000);
+    await db
+      .insert(blendedCrossingsCacheTable)
+      .values({ id: 1, data: [staleRow], builtAt: staleBuiltAt })
+      .onConflictDoUpdate({ target: blendedCrossingsCacheTable.id, set: { data: [staleRow], builtAt: staleBuiltAt } });
+    _testOnly_clearBlendedCrossingsCache();
+
+    const res = await fetch(`${baseUrl}/api/me/crossings/blended`);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { items: Array<{ stationSlug: string }> };
+
+    // The stale marker must NOT be served; a fresh compute ran instead.
+    expect(body.items.find((r) => r.stationSlug === marker)).toBeUndefined();
+
+    // The fresh compute must have overwritten the stale L2 row. The write is
+    // fire-and-forget, so poll briefly instead of racing it.
+    let overwritten = false;
+    for (let i = 0; i < 20 && !overwritten; i++) {
+      const rows = await db.select().from(blendedCrossingsCacheTable);
+      overwritten = rows.length === 1 && rows[0]!.builtAt.getTime() > staleBuiltAt.getTime();
+      if (!overwritten) await new Promise((r) => setTimeout(r, 100));
+    }
+    expect(overwritten).toBe(true);
+
+    await _testOnly_clearBlendedCrossingsL2Cache();
+    _testOnly_clearBlendedCrossingsCache();
+  }, TEST_TIMEOUT);
+
+  it("after an explicit L1+L2 clear the next request cannot serve the prior cached payload", async () => {
+    if (!dbAvailable) return;
+
+    const marker = `blended-l2-cleared-${run}`;
+    const markerRow = {
+      stationSlug: marker,
+      crossings: 5, artistCrossings: 0,
+      weekCrossings: 5, weekArtistCrossings: 0,
+      monthCrossings: 5, monthArtistCrossings: 0,
+      lifetimeCrossings: 5, lifetimeArtistCrossings: 0,
+      topArtistNames: [],
+    };
+    await db
+      .insert(blendedCrossingsCacheTable)
+      .values({ id: 1, data: [markerRow], builtAt: new Date() })
+      .onConflictDoUpdate({ target: blendedCrossingsCacheTable.id, set: { data: [markerRow], builtAt: new Date() } });
+    _testOnly_clearBlendedCrossingsCache();
+
+    // First request serves the marker (proves it was cached).
+    const res1 = await fetch(`${baseUrl}/api/me/crossings/blended`);
+    const body1 = await res1.json() as { items: Array<{ stationSlug: string }> };
+    expect(body1.items.find((r) => r.stationSlug === marker)).toBeDefined();
+
+    // Clear BOTH layers — the clear awaits any in-flight L2 write, so nothing
+    // can resurrect the marker afterwards.
+    _testOnly_clearBlendedCrossingsCache();
+    await _testOnly_clearBlendedCrossingsL2Cache();
+
+    const res2 = await fetch(`${baseUrl}/api/me/crossings/blended`);
+    expect(res2.status).toBe(200);
+    const body2 = await res2.json() as { items: Array<{ stationSlug: string }> };
+    expect(body2.items.find((r) => r.stationSlug === marker)).toBeUndefined();
+
+    _testOnly_clearBlendedCrossingsCache();
+    await _testOnly_clearBlendedCrossingsL2Cache();
   }, TEST_TIMEOUT);
 
   it("SOCIAL_PRESENCE_TTL_MS is ≤ 5 minutes so presence stays short-lived", () => {

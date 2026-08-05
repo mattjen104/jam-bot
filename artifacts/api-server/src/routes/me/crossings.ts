@@ -9,6 +9,7 @@ import {
   stationsTable,
   spotifyLibraryItemsTable,
   crossingsCacheTable,
+  blendedCrossingsCacheTable,
   tasteSeedsTable,
   type CrossingsRow,
 } from "@workspace/db";
@@ -87,17 +88,38 @@ export function activeSocialUsers(cutoff = new Date(Date.now() - SOCIAL_PRESENCE
  */
 export function bustCrossingsCache(userId: number): void {
   crossingsCache.delete(userId);
-  void db
-    .delete(crossingsCacheTable)
-    .where(eq(crossingsCacheTable.userId, userId))
-    .catch(() => {});
+  // Order the delete AFTER any in-flight fire-and-forget L2 write for this
+  // user, so a slow write cannot land after the delete and resurrect a stale
+  // row (observed under parallel test / high-latency DB load).
+  const inFlight = l2WriteInFlight.get(userId) ?? Promise.resolve();
+  void inFlight
+    .catch(() => {})
+    .then(() =>
+      db
+        .delete(crossingsCacheTable)
+        .where(eq(crossingsCacheTable.userId, userId))
+        .catch(() => {}),
+    );
   // Queue a background refresh of the true lifetime counts for this user.
   scheduleLifetimeCrossingsRefresh(userId);
 }
 
-/** Evict a user's cached entry — call before a test that needs a fresh DB hit. */
-export function _testOnly_clearCrossingsCache(userId: number): void {
-  bustCrossingsCache(userId);
+/** Last per-user L2 upsert still (possibly) in flight — ordered against by busts. */
+const l2WriteInFlight = new Map<number, Promise<void>>();
+/**
+ * Evict a user's cached entry — call before a test that needs a fresh DB hit.
+ * Awaitable: settles any in-flight L2 write, then completes the L2 delete, so
+ * the next request is guaranteed a fresh compute.
+ */
+export async function _testOnly_clearCrossingsCache(userId: number): Promise<void> {
+  crossingsCache.delete(userId);
+  const inFlight = l2WriteInFlight.get(userId);
+  if (inFlight) await inFlight.catch(() => {});
+  await db
+    .delete(crossingsCacheTable)
+    .where(eq(crossingsCacheTable.userId, userId))
+    .catch(() => {});
+  scheduleLifetimeCrossingsRefresh(userId);
 }
 
 /** Returns true when a fresh cache entry exists for the user — used in tests only. */
@@ -422,7 +444,9 @@ router.get("/me/crossings", h(async (req, res) => {
 
   const builtAt = new Date();
   crossingsCache.set(user.id, { builtAt: builtAt.getTime(), data: items });
-  void writeL2Cache(user.id, items, builtAt);
+  const l2Write = writeL2Cache(user.id, items, builtAt);
+  l2WriteInFlight.set(user.id, l2Write);
+  void l2Write;
   return res.json({ items });
 }));
 
@@ -456,10 +480,20 @@ function blendedTopArtists(raw: string[] | null): string[] {
     .map(([name]) => name);
 }
 
+const BLENDED_CACHE_ROW_ID = 1;
+
 router.get("/me/crossings/blended", h(async (_req, res) => {
-  // ── Single-entry short-TTL cache ──────────────────────────────────────────
+  // ── L1: single-entry short-TTL in-process cache ───────────────────────────
   if (blendedCrossingsCache && Date.now() - blendedCrossingsCache.builtAt < BLENDED_CROSSINGS_CACHE_TTL_MS) {
     return res.json({ items: blendedCrossingsCache.data });
+  }
+
+  // ── L2: Postgres persistent cache (survives restarts) ─────────────────────
+  const l2data = await readBlendedL2Cache();
+  if (l2data !== null) {
+    // Repopulate L1 so subsequent same-instance requests skip Postgres.
+    blendedCrossingsCache = { builtAt: Date.now(), data: l2data };
+    return res.json({ items: l2data });
   }
 
   const presenceCutoff = new Date(Date.now() - SOCIAL_PRESENCE_TTL_MS);
@@ -627,17 +661,36 @@ router.get("/me/crossings/blended", h(async (_req, res) => {
       };
   });
 
-  blendedCrossingsCache = { builtAt: Date.now(), data: blendedData };
+  const builtAt = new Date();
+  blendedCrossingsCache = { builtAt: builtAt.getTime(), data: blendedData };
+  // Fire-and-forget, but keep a handle so test-only cleanup can await any
+  // in-flight write before deleting the L2 row (prevents a write landing
+  // after a clear and repopulating the cache nondeterministically).
+  blendedL2WriteInFlight = writeBlendedL2Cache(blendedData, builtAt);
+  void blendedL2WriteInFlight;
   return res.json({ items: blendedData });
 }));
 
+/** Last blended L2 upsert still (possibly) in flight — awaited by test cleanup. */
+let blendedL2WriteInFlight: Promise<void> | null = null;
+
 export default router;
 
-/** Evict the blended cache — call before a test that needs a fresh DB hit. */
+/** Evict the blended L1 cache — call before a test that needs a fresh DB hit. */
 export function _testOnly_clearBlendedCrossingsCache(): void {
   blendedCrossingsCache = null;
 }
 
+/** Evict the blended Postgres L2 row — awaitable so tests can order around it. */
+export async function _testOnly_clearBlendedCrossingsL2Cache(): Promise<void> {
+  // Let any in-flight fire-and-forget write settle first, so it cannot land
+  // after the delete and resurrect stale data mid-test.
+  if (blendedL2WriteInFlight) await blendedL2WriteInFlight.catch(() => {});
+  await db
+    .delete(blendedCrossingsCacheTable)
+    .where(eq(blendedCrossingsCacheTable.id, BLENDED_CACHE_ROW_ID))
+    .catch(() => {});
+}
 /** Return the raw blended cache entry — lets tests verify cache hits without spying on db. */
 export function _testOnly_getBlendedCrossingsCache(): { builtAt: number; data: BlendedCrossingsRow[] } | null {
   return blendedCrossingsCache;
@@ -646,3 +699,42 @@ export function _testOnly_getBlendedCrossingsCache(): { builtAt: number; data: B
 let blendedCrossingsCache: { builtAt: number; data: BlendedCrossingsRow[] } | null = null;
 
 const BLENDED_CROSSINGS_CACHE_TTL_MS = 60 * 1000;
+
+/**
+ * Try to read a fresh blended entry from the Postgres L2 cache.
+ * Returns the rows on a hit, null on a miss, stale row, or any read error.
+ */
+async function readBlendedL2Cache(): Promise<BlendedCrossingsRow[] | null> {
+  try {
+    const rows = await db
+      .select()
+      .from(blendedCrossingsCacheTable)
+      .where(eq(blendedCrossingsCacheTable.id, BLENDED_CACHE_ROW_ID))
+      .limit(1);
+    if (rows.length === 0) return null;
+    const row = rows[0]!;
+    if (Date.now() - row.builtAt.getTime() >= BLENDED_CROSSINGS_CACHE_TTL_MS) return null;
+    return row.data;
+  } catch {
+    // L2 read errors are non-fatal: fall through to full compute.
+    return null;
+  }
+}
+
+/**
+ * Persist a fresh blended result to the Postgres L2 cache (single-row upsert).
+ * Fire-and-forget — errors are logged but never surface to the caller.
+ */
+async function writeBlendedL2Cache(data: BlendedCrossingsRow[], builtAt: Date): Promise<void> {
+  try {
+    await db
+      .insert(blendedCrossingsCacheTable)
+      .values({ id: BLENDED_CACHE_ROW_ID, data, builtAt })
+      .onConflictDoUpdate({
+        target: blendedCrossingsCacheTable.id,
+        set: { data, builtAt },
+      });
+  } catch (err) {
+    console.error("[crossings] blended L2 cache write failed", err);
+  }
+}
