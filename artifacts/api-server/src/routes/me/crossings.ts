@@ -299,9 +299,9 @@ router.get("/me/crossings", h(async (req, res) => {
   // ReferenceError on every request → 503 → empty dial.
   const weekCutoff  = new Date(Date.now() - 7  * 24 * 60 * 60 * 1000);
   const monthCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const inWindow           = sql`${spinsTable.playedAt} >= ${spinCutoff}`;
-  const inWeek             = sql`${spinsTable.playedAt} >= ${blendedWeekCutoff}`;
-  const inMonth            = sql`${spinsTable.playedAt} >= ${blendedMonthCutoff}`;
+  const inWindow           = sql`${spinsTable.playedAt} >= ${cutoff}`;
+  const inWeek             = sql`${spinsTable.playedAt} >= ${weekCutoff}`;
+  const inMonth            = sql`${spinsTable.playedAt} >= ${monthCutoff}`;
 
   // ── Relevant MBIDs for the mbid-driven lifetime query ─────────────────────
   // Collects every recording MBID that could yield a crossing for this user:
@@ -404,9 +404,9 @@ router.get("/me/crossings", h(async (req, res) => {
   const rollingMap = new Map(rows.map((r) => [r.stationSlug, r]));
   const allSlugs = new Set([...rollingMap.keys(), ...lifetimeMap.keys()]);
 
-  const items: BlendedCrossingsRow[] = [...blendedSlugs].map((slug) => {
-    const r = blendedRollingMap.get(slug);
-    const l = blendedLifetimeMap.get(slug);
+  const items: CrossingsRow[] = [...allSlugs].map((slug) => {
+    const r = rollingMap.get(slug);
+    const l = lifetimeMap.get(slug);
     return {
       stationSlug:             slug,
       crossings:               r?.crossings               ?? 0,
@@ -417,11 +417,14 @@ router.get("/me/crossings", h(async (req, res) => {
       monthArtistCrossings:    r?.monthArtistCrossings    ?? 0,
       lifetimeCrossings:       l?.lifetimeCrossings       ?? 0,
       lifetimeArtistCrossings: l?.lifetimeArtistCrossings ?? 0,
-      topArtistNames:          blendedTopArtists(r?.topArtistNamesRaw ?? null),
     };
   });
 
   const builtAt = new Date();
+  crossingsCache.set(user.id, { builtAt: builtAt.getTime(), data: items });
+  void writeL2Cache(user.id, items, builtAt);
+  return res.json({ items });
+}));
 
 /**
  * GET /api/me/crossings/blended — anonymous aggregate crossings from active
@@ -602,6 +605,10 @@ router.get("/me/crossings/blended", h(async (_req, res) => {
   const blendedLifetimeMap = new Map(lifetimeRows.map((r) => [r.stationSlug, r]));
   const blendedRollingMap  = new Map(blendedRows.map((r) => [r.stationSlug, r]));
   const blendedSlugs = new Set([...blendedRollingMap.keys(), ...blendedLifetimeMap.keys()]);
+
+  const blendedData: BlendedCrossingsRow[] = [...blendedSlugs].map((slug) => {
+    const r = blendedRollingMap.get(slug);
+    const l = blendedLifetimeMap.get(slug);
       return {
         stationSlug:             slug,
         crossings:               r?.crossings               ?? 0,
@@ -614,8 +621,10 @@ router.get("/me/crossings/blended", h(async (_req, res) => {
         lifetimeArtistCrossings: l?.lifetimeArtistCrossings ?? 0,
         topArtistNames:          blendedTopArtists(r?.topArtistNamesRaw ?? null),
       };
-    }),
   });
+
+  blendedCrossingsCache = { builtAt: Date.now(), data: blendedData };
+  return res.json({ items: blendedData });
 }));
 
 export default router;
