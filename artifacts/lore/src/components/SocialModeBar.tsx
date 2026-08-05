@@ -31,7 +31,8 @@ export function SocialModeBar({ variant = "strip" }: Props) {
           aria-label="Listening Party"
           onClick={() => setSocialEnabled(true)}
         >
-          Listening Party
+          <span className="dial-mode__label-full">Listening Party</span>
+          <span className="dial-mode__label-short" aria-hidden="true">LP</span>
         </button>
       </div>
     </div>

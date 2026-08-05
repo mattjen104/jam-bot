@@ -1407,7 +1407,7 @@ export function DialView() {
             aria-label="Search stations, shows, and artists"
           >
             <Search size={11} strokeWidth={2.2} aria-hidden="true" />
-            Search stations, shows, artists…
+            <span className="dial-topbar__search-label">Search</span>
           </button>
 
           {/* Solo / Listening Party — compact pill pinned to top-right */}

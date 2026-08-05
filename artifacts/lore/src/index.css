@@ -1356,11 +1356,12 @@
   align-self: center;
 }
 
-/* Search — center column, naturally sized, never stretched */
+/* Search — center column, minimized pill, centered until clicked */
 .dial-topbar--all .dial-topbar__search-btn {
   grid-column: 2;
   grid-row: 1;
   align-self: center;
+  justify-self: center;
 }
 
 /* Solo/LP pill — right column, pinned to the right edge */
@@ -4793,6 +4794,13 @@
   background: hsl(var(--foreground));
   color: hsl(var(--background));
   border-left-color: transparent;
+}
+
+/* "Listening Party" label — full text on desktop, "LP" on mobile */
+.dial-mode__label-short { display: none; }
+@media (max-width: 640px) {
+  .dial-mode__label-full { display: none; }
+  .dial-mode__label-short { display: inline; }
 }
 
 /* Topbar variant — sits in the topbar row, z-index above bg-wash */

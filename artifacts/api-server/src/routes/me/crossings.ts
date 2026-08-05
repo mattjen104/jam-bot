@@ -300,11 +300,15 @@ router.get("/me/crossings", h(async (req, res) => {
   )`;
 
   // ── Windowed predicates ───────────────────────────────────────────────────
-  const inWindow           = sql`${spinsTable.playedAt} >= ${spinCutoff}`;
+  // NOTE: this route must reference ONLY its own local cutoffs (`cutoff`,
+  // `weekCutoff`, `monthCutoff`).  Merges have twice spliced the blended
+  // handler's names (spinCutoff/blendedWeekCutoff) in here, which throws a
+  // ReferenceError on every request → 503 → empty dial.
+  const inWindow           = sql`${spinsTable.playedAt} >= ${cutoff}`;
   const weekCutoff  = new Date(Date.now() - 7  * 24 * 60 * 60 * 1000);
   const monthCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const inWeek             = sql`${spinsTable.playedAt} >= ${blendedWeekCutoff}`;
-  const inMonth            = sql`${spinsTable.playedAt} >= ${blendedMonthCutoff}`;
+  const inWeek             = sql`${spinsTable.playedAt} >= ${weekCutoff}`;
+  const inMonth            = sql`${spinsTable.playedAt} >= ${monthCutoff}`;
 
   // ── Relevant MBIDs for the mbid-driven lifetime query ─────────────────────
   // Collects every recording MBID that could yield a crossing for this user:
