@@ -2159,6 +2159,27 @@ export type InsertSpotifyLibraryItem =
  * L2 Postgres row — it is filled on the first request after a restart and
  * stays hot for the duration of the process.
  */
+/**
+ * One station's crossing counts for a user — the payload shape returned by
+ * GET /api/me/crossings AND the element type of `crossings_cache.data`.
+ *
+ * This is the single source of truth for that shape: the route handler in
+ * `artifacts/api-server/src/routes/me/crossings.ts` imports it, and the
+ * `crossingsCacheTable.data` column below is typed with it, so adding a
+ * field in only one place fails typecheck instead of silently drifting.
+ */
+export interface CrossingsRow {
+  stationSlug: string;
+  crossings: number;
+  artistCrossings: number;
+  weekCrossings: number;
+  weekArtistCrossings: number;
+  monthCrossings: number;
+  monthArtistCrossings: number;
+  lifetimeCrossings: number;
+  lifetimeArtistCrossings: number;
+}
+
 export const crossingsCacheTable = pgTable("crossings_cache", {
   userId: integer("user_id")
     .primaryKey()
@@ -2167,19 +2188,7 @@ export const crossingsCacheTable = pgTable("crossings_cache", {
    * Serialised CrossingsRow[] — the same shape returned by GET /api/me/crossings.
    * Stored as jsonb so Postgres can store/retrieve it cheaply without a scan.
    */
-  data: jsonb("data").notNull().$type<
-    Array<{
-      stationSlug: string;
-      crossings: number;
-      artistCrossings: number;
-      weekCrossings: number;
-      weekArtistCrossings: number;
-      monthCrossings: number;
-      monthArtistCrossings: number;
-      lifetimeCrossings: number;
-      lifetimeArtistCrossings: number;
-    }>
-  >(),
+  data: jsonb("data").notNull().$type<CrossingsRow[]>(),
   /** When the data was last computed (used for TTL checks). */
   builtAt: timestamp("built_at").notNull(),
 });

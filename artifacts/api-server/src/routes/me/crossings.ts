@@ -10,6 +10,7 @@ import {
   spotifyLibraryItemsTable,
   crossingsCacheTable,
   tasteSeedsTable,
+  type CrossingsRow,
 } from "@workspace/db";
 import { eq, and, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { h } from "../../middlewares/asyncHandler.js";
@@ -59,17 +60,8 @@ const CROSSINGS_CACHE_TTL_MS = 30 * 60 * 1000;
 const JUNK_ARTIST_SQL_RE =
   String.raw`(^https?://|[.](com|net|org|edu|gov|io|fm|co|info|biz|music|radio|ca|uk|au|de|fr|es|it|nl|se|no|dk|fi|pl|ru|cz|at|ch|be|pt|nz|mx|br|ar|za|in|sg|hk|jp|us)([/?#[:space:]]|$))`;
 
-type CrossingsRow = {
-  stationSlug: string;
-  crossings: number;
-  artistCrossings: number;
-  weekCrossings: number;
-  weekArtistCrossings: number;
-  monthCrossings: number;
-  monthArtistCrossings: number;
-  lifetimeCrossings: number;
-  lifetimeArtistCrossings: number;
-};
+// The CrossingsRow shape is shared with the crossings_cache column typing in
+// lib/db (single source of truth) — see the interface doc there.
 
 const crossingsCache = new Map<number, { builtAt: number; data: CrossingsRow[] }>();
 
@@ -137,7 +129,8 @@ async function readL2Cache(userId: number): Promise<CrossingsRow[] | null> {
     if (rows.length === 0) return null;
     const row = rows[0]!;
     if (Date.now() - row.builtAt.getTime() >= CROSSINGS_CACHE_TTL_MS) return null;
-    return row.data as CrossingsRow[];
+    // `data` is typed CrossingsRow[] via the schema's $type — no cast needed.
+    return row.data;
   } catch {
     // L2 read errors are non-fatal: fall through to full compute.
     return null;
@@ -304,11 +297,11 @@ router.get("/me/crossings", h(async (req, res) => {
   // `weekCutoff`, `monthCutoff`).  Merges have twice spliced the blended
   // handler's names (spinCutoff/blendedWeekCutoff) in here, which throws a
   // ReferenceError on every request → 503 → empty dial.
-  const inWindow           = sql`${spinsTable.playedAt} >= ${spinCutoff}`;
   const weekCutoff  = new Date(Date.now() - 7  * 24 * 60 * 60 * 1000);
   const monthCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const inWeek             = sql`${spinsTable.playedAt} >= ${blendedWeekCutoff}`;
-  const inMonth            = sql`${spinsTable.playedAt} >= ${blendedMonthCutoff}`;
+  const inWindow           = sql`${spinsTable.playedAt} >= ${cutoff}`;
+  const inWeek             = sql`${spinsTable.playedAt} >= ${weekCutoff}`;
+  const inMonth            = sql`${spinsTable.playedAt} >= ${monthCutoff}`;
 
   // ── Relevant MBIDs for the mbid-driven lifetime query ─────────────────────
   // Collects every recording MBID that could yield a crossing for this user:
@@ -614,11 +607,27 @@ router.get("/me/crossings/blended", h(async (_req, res) => {
   // A station whose only matching spins are old (>30 days) appears via the
   // lifetime map only — rolling counts 0, topArtistNames empty.
   const blendedLifetimeMap = new Map(lifetimeRows.map((r) => [r.stationSlug, r]));
-export default router;
-      const l = blendedLifetimeMap.get(slug);
   const blendedRollingMap  = new Map(blendedRows.map((r) => [r.stationSlug, r]));
   const blendedSlugs = new Set([...blendedRollingMap.keys(), ...blendedLifetimeMap.keys()]);
 
   return res.json({
     items: [...blendedSlugs].map((slug) => {
       const r = blendedRollingMap.get(slug);
+      const l = blendedLifetimeMap.get(slug);
+      return {
+        stationSlug:             slug,
+        crossings:               r?.crossings               ?? 0,
+        artistCrossings:         r?.artistCrossings         ?? 0,
+        weekCrossings:           r?.weekCrossings           ?? 0,
+        weekArtistCrossings:     r?.weekArtistCrossings     ?? 0,
+        monthCrossings:          r?.monthCrossings          ?? 0,
+        monthArtistCrossings:    r?.monthArtistCrossings    ?? 0,
+        lifetimeCrossings:       l?.lifetimeCrossings       ?? 0,
+        lifetimeArtistCrossings: l?.lifetimeArtistCrossings ?? 0,
+        topArtistNames:          blendedTopArtists(r?.topArtistNamesRaw ?? null),
+      };
+    }),
+  });
+}));
+
+export default router;
