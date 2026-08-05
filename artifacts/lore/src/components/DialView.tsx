@@ -33,6 +33,7 @@ import {
   intoSet,
   type ReasonResult,
 } from "./dialViewHelpers";
+import { proxyArtUrl } from "../lib/proxyArt";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -237,7 +238,7 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, dis
       {isActive && artworkUrl && (
         <div
           className="fdrow__art-fade"
-          style={{ backgroundImage: `url(${artworkUrl})` }}
+          style={{ backgroundImage: `url(${proxyArtUrl(artworkUrl) ?? artworkUrl})` }}
           aria-hidden="true"
         />
       )}

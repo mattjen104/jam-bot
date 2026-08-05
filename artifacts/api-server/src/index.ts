@@ -41,6 +41,7 @@ import { applyDonateCheckerMigration } from "./lore/donate-checker-migration.js"
 import { applySupportHoldsMigration } from "./lore/support-holds-migration.js";
 import { startDiscoveryScoreJob } from "./lore/discovery-score-job.js";
 import { startQualityRecomputeJob } from "./lore/quality.js";
+import { startArtPrewarm } from "./lore/artPrewarm.js";
 import { applyStationScheduleMigration } from "./lore/station-schedule-migration.js";
 import { applyPendingKeepsMigration } from "./lore/pending-keeps-migration.js";
 import { applyLibraryExportMigration } from "./lore/library-export-migration.js";
@@ -215,6 +216,7 @@ async function bootLore(): Promise<void> {
     await wireImageExtractor();
     startDiscoveryScoreJob();
     startQualityRecomputeJob();
+    startArtPrewarm();
     startPhase3RetryScheduler();
     await resumeReplayResolutionJobs();
     await resumeReplayMaterializationJobs();

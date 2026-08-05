@@ -8,6 +8,7 @@ import { useMyAlbumAvatar, useSetAlbumAvatar } from "../lib/meHooks";
 import { AlbumShelf } from "./AlbumShelf";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { RUMOURS, onArtError } from "../lib/rumours";
+import { proxyArtUrl } from "../lib/proxyArt";
 
 interface LibraryRowProps {
   item: LibraryItem;
@@ -247,10 +248,11 @@ export function LibraryRow({
     .filter(Boolean)
     .join(" ");
 
-  // Artwork swatch — for soft rows, links to Spotify instead of the song page.
+  // Artwork swatch — proxy external URLs for immutable browser caching;
+  // fall back to RUMOURS placeholder via onError if the proxy or origin fails.
   const artSwatch = (
     <img
-      src={artwork ?? RUMOURS}
+      src={proxyArtUrl(artwork) ?? artwork ?? RUMOURS}
       alt=""
       className="lrow__art-img"
       loading="lazy"

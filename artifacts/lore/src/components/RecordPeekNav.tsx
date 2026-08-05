@@ -20,6 +20,7 @@ import {
 } from "../player/sectionMemory";
 import { useMyAlbumAvatar, useMyLibraryInfinite } from "../lib/meHooks";
 import { LinerNotesSheet } from "./LinerNotesSheet";
+import { proxyArtUrl } from "../lib/proxyArt";
 
 type Section = "radio" | "selectors" | "library";
 const HOLD_MS = 480;
@@ -179,6 +180,7 @@ export function RecordPeekNav() {
   ) ?? null;
 
   // Fallback artwork for Library: cascade through the three sources above.
+  // Uses the shared RUMOURS constant from lib/rumours as the final fallback.
   const fallbackLibraryArt =
     avatarData?.current?.artworkUrl ??
     avatarData?.candidates?.[0]?.artworkUrl ??
@@ -309,6 +311,7 @@ export function RecordPeekNav() {
       <nav className="record-peek-nav" aria-label="Primary">
         {(["radio", "selectors", "library"] as Section[]).map((section) => {
           const active = activeSection === section;
+          // artFor always returns a string (falls back to RUMOURS), so no null check needed.
           const artwork = artFor(section, memory, liveNpArtworkUrl, radio.station?.logoUrl, ride.current?.artworkUrl, fallbackSelectorArt, fallbackLibraryArt);
           const label = section === "radio" ? "Radio" : section === "selectors" ? "Selectors" : "Library";
           return (
@@ -338,7 +341,7 @@ export function RecordPeekNav() {
             >
               <span className="record-peek-tab__label" aria-hidden="true">{label}</span>
               <span className="record-peek-tab__sleeve" aria-hidden="true">
-                <img src={artwork} alt="" draggable={false} loading="lazy" onError={onArtError} />
+                <img src={proxyArtUrl(artwork) ?? artwork} alt="" draggable={false} loading="lazy" onError={onArtError} />
               </span>
             </button>
           );
@@ -364,11 +367,11 @@ export function RecordPeekNav() {
                 setPeek(null);
               }}
             >
-              {peekTrackArt && <img src={peekTrackArt} alt="" draggable={false} loading="lazy" onError={onArtError} />}
+              {peekTrackArt && <img src={proxyArtUrl(peekTrackArt) ?? peekTrackArt} alt="" draggable={false} loading="lazy" onError={onArtError} />}
             </button>
           ) : peekTrackArt ? (
             <span className="record-peek__art">
-              <img src={peekTrackArt} alt="" draggable={false} loading="lazy" onError={onArtError} />
+              <img src={proxyArtUrl(peekTrackArt) ?? peekTrackArt} alt="" draggable={false} loading="lazy" onError={onArtError} />
             </span>
           ) : null}
           <div className="record-peek__copy">
