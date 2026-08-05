@@ -1,6 +1,6 @@
 /* ── Unified bottom shell — fixed container for player + nav ─────────────── */
-/* .bottom-shell-wrap holds the fixed position so the Solo/LP folder-tab can
-   sit above the shell border without being inside it.                        */
+/* .bottom-shell-wrap holds the fixed position; the artist-add strip sits
+   above the shell border when on the Radio section.                          */
 .bottom-shell-wrap {
   position: fixed;
   bottom: 0;
@@ -9,7 +9,7 @@
   z-index: 40;
   display: flex;
   flex-direction: column;
-  align-items: center;   /* centre the folder-tab pill horizontally */
+  align-items: stretch;
 }
 .bottom-shell {
   /* no longer fixed — it's a block child of .bottom-shell-wrap */
@@ -1406,6 +1406,12 @@
   height: 0.72em;
   /* sink the circle to sit on the cap baseline rather than the full em-box */
   vertical-align: -0.1em;
+}
+
+/* Letters (L, RE) scaled to match the moon glyph's visual height */
+.dial-topbar__letter {
+  font-size: 0.72em;
+  line-height: 1;
 }
 
 /* ── Moon SVG internals ── */
@@ -4556,38 +4562,99 @@
   white-space: nowrap;
 }
 
-/* ── Social mode bar — folder tab sitting above the bottom shell ─────────────── */
-/* The tab IS the toggle — no inner pill, just two halves split by a divider.
-   overflow:hidden clips active-half backgrounds to the rounded top corners.      */
+/* ── Artist-add strip — full-width bar sitting above the bottom shell ─────── */
+.artist-add-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  background: hsl(var(--background));
+  border-top: 1px solid hsl(var(--border) / 0.45);
+  flex-shrink: 0;
+}
+.artist-add-strip__input {
+  flex: 1 1 0;
+  min-width: 0;
+}
+/* When the paste box is inside the strip give it a tighter height */
+.artist-add-strip .topbar-paste-box {
+  width: 100%;
+  height: 26px;
+  font-size: 9px;
+  padding: 3px 8px;
+}
+.artist-add-strip .topbar-artist-input-wrap {
+  width: 100%;
+  height: 26px;
+}
+
+/* ── Search button in topbar — looks like a disabled input ───────────────── */
+.dial-topbar__search-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: hsl(var(--muted));
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-family: var(--app-font-display);
+  font-size: 10px;
+  color: hsl(var(--faint));
+  font-style: italic;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+  transition: border-color 0.12s, color 0.12s;
+  position: relative;
+  z-index: 2;
+}
+.dial-topbar__search-btn:hover {
+  border-color: hsl(var(--border));
+  color: hsl(var(--muted-foreground));
+}
+
+/* ── Social mode pill — two variants ────────────────────────────────────── */
+/* Base: in the bottom-shell (now unused as folder-tab; kept for any reuse) */
 .social-mode-bar {
   display: inline-flex;
   align-items: stretch;
   background: hsl(var(--background));
   border: 1px solid hsl(var(--border) / 0.45);
-  border-bottom: none;
-  border-radius: 8px 8px 0 0;
+  border-radius: 6px;
   overflow: hidden;
+  flex-shrink: 0;
 }
-/* dial-mode is still the flex row but gap and stacking are handled here */
 .social-mode-bar .dial-mode {
   flex: none;
   gap: 0;
 }
-/* Strip all inner borders and radii from the buttons — the tab is the container */
 .social-mode-bar .dial-mode__button {
   border: none;
   border-radius: 0;
-  padding: 7px 16px;
+  padding: 6px 12px;
 }
-/* Single divider between the two halves */
 .social-mode-bar .dial-mode__button + .dial-mode__button {
   border-left: 1px solid hsl(var(--border) / 0.45);
 }
-/* Active half: filled, absorbs the divider on its left */
 .social-mode-bar .dial-mode__button--active {
   background: hsl(var(--foreground));
   color: hsl(var(--background));
   border-left-color: transparent;
+}
+
+/* Topbar variant — sits in the topbar row, z-index above bg-wash */
+.social-mode-bar--topbar {
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+}
+.social-mode-bar--topbar .dial-mode__button {
+  padding: 5px 10px;
+  font-size: 8.5px;
 }
 
 /* ─────────────────────────────────────────────────────────

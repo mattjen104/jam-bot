@@ -1,5 +1,5 @@
 import { Switch, Route, Router as WouterRouter, useLocation, Redirect } from "wouter";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -35,11 +35,11 @@ import WebPlayer from "./webplayer/WebPlayer";
 import { PlayerProvider } from "./player/PlayerProvider";
 import { PlayerDock } from "./components/PlayerDock";
 import { RecordPeekNav } from "./components/RecordPeekNav";
+import { SocialModeBar } from "./components/SocialModeBar";
 import { ListeningLogger } from "./components/ListeningLogger";
 import { AppLayout } from "./components/AppLayout";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { postStartImport, ME_LATEST_IMPORT_JOB_KEY } from "./lib/meHooks";
-import { useSocialMode, setSocialEnabled } from "./lib/social";
 
 
 const queryClient = new QueryClient();
@@ -164,46 +164,91 @@ function Shell() {
   );
 }
 
-/** Slim two-sided pill — Solo / Listening Party — shown between the player
- *  bar and the nav tabs when the user is on the Radio section. */
-function SocialModeBar() {
-  const { enabled } = useSocialMode();
+/** Full-width artist-add strip — sits above the nav tabs on the Radio section.
+ *  Submits artists via the same "lore:add-ticker-artist" custom event that
+ *  DialView already listens to, so no shared state is needed. */
+function ArtistAddStrip() {
+  const [addMode, setAddMode] = useState(false);
+  const [text, setText] = useState("");
+
+  function submitText(raw: string) {
+    const names = raw.split(/[\n,;|•·]+/).map((s) => s.trim()).filter(Boolean);
+    names.forEach((name) =>
+      window.dispatchEvent(new CustomEvent("lore:add-ticker-artist", { detail: name })),
+    );
+    setText("");
+    setAddMode(false);
+  }
+
+  function handlePaste(e: React.ClipboardEvent<HTMLInputElement>) {
+    const t = e.clipboardData.getData("text");
+    if (t) { e.preventDefault(); submitText(t); }
+  }
+
   return (
-    <div className="social-mode-bar">
-      <div className="dial-mode" role="group" aria-label="Listening mode">
-        <button
-          type="button"
-          className={`dial-mode__button${!enabled ? " dial-mode__button--active" : ""}`}
-          aria-pressed={!enabled}
-          aria-label="Solo mode"
-          onClick={() => setSocialEnabled(false)}
-        >
-          Solo
-        </button>
-        <button
-          type="button"
-          className={`dial-mode__button${enabled ? " dial-mode__button--active" : ""}`}
-          aria-pressed={enabled}
-          aria-label="Listening Party"
-          onClick={() => setSocialEnabled(true)}
-        >
-          Listening Party
-        </button>
-      </div>
+    <div className="artist-add-strip">
+      <button
+        type="button"
+        className={`topbar-add-artists${addMode ? " topbar-add-artists--active" : ""}`}
+        onClick={() => setAddMode((m) => !m)}
+      >
+        ＋ artists
+      </button>
+      {!addMode ? (
+        <input
+          type="text"
+          className="topbar-paste-box artist-add-strip__input"
+          value={text}
+          placeholder="paste artist names or a screenshot…"
+          aria-label="Add artists by pasting names or a screenshot"
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && text.trim()) submitText(text);
+            if (e.key === "Escape") setText("");
+          }}
+          onPaste={handlePaste}
+        />
+      ) : (
+        <div className="topbar-artist-input-wrap artist-add-strip__input">
+          {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
+          <input
+            autoFocus
+            type="text"
+            className="topbar-artist-input"
+            value={text}
+            placeholder="type or paste an artist name…"
+            aria-label="Add an artist"
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && text.trim()) submitText(text);
+              if (e.key === "Escape") { setAddMode(false); setText(""); }
+            }}
+            onPaste={handlePaste}
+          />
+          <button
+            type="button"
+            className="topbar-artist-input__esc"
+            onClick={() => { setAddMode(false); setText(""); }}
+            aria-label="Close"
+            title="Close (Esc)"
+          >
+            ×
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
-/** Unified fixed bottom shell — player dock sits directly above the nav tabs,
- *  sharing one fixed container so there is no gap or floating card.
- *  The Solo / LP pill sits *above* the shell border like the tab of a folder. */
+/** Unified fixed bottom shell — player dock sits directly above the nav tabs.
+ *  On the Radio section, the artist-add strip sits above the shell border. */
 function BottomShell() {
   const [location] = useLocation();
   const path = location.split("?")[0] ?? location;
   const isRadio = path === "/";
   return (
     <div className="bottom-shell-wrap">
-      {isRadio && <SocialModeBar />}
+      {isRadio && <ArtistAddStrip />}
       <div className="bottom-shell">
         <PlayerDock />
         <RecordPeekNav />

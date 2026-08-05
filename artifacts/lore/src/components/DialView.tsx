@@ -22,7 +22,8 @@ import { BottlePanel } from "./BottlePanel";
 import { AlbumAvatarPicker } from "./AlbumAvatarPicker";
 import { MoonPhaseGlyph } from "./MoonPhaseGlyph";
 import { RUMOURS, onArtError } from "../lib/rumours";
-import { useSocialMode, setSocialEnabled } from "../lib/social";
+import { useSocialMode } from "../lib/social";
+import { SocialModeBar } from "./SocialModeBar";
 import { eligibleDjName, eligibleDjNames } from "@workspace/lore-attribution";
 import {
   cleanLiveValue,
@@ -947,9 +948,6 @@ export function DialView() {
   const [currentShow, setCurrentShow] = useState<DialShow | null>(null);
   const [currentDjName, setCurrentDjName] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
-  // Topbar artist-add state
-  const [addArtistMode, setAddArtistMode] = useState(false);
-  const [pasteInput, setPasteInput] = useState("");
   const { enabled: socialEnabled } = useSocialMode();
   // displayMode is derived directly from socialEnabled — one toggle drives both.
   const displayMode: DialDisplayMode = socialEnabled ? "blended" : "personal";
@@ -1381,35 +1379,6 @@ export function DialView() {
     "Silver Apples", "Arthur Russell", "Harold Budd",
   ];
 
-  function handleTryMattsLibrary() {
-    MATTS_LIBRARY.forEach(name => addSeed(name));
-    setAddArtistMode(false);
-    setPasteInput("");
-  }
-
-  function handlePasteText(text: string) {
-    const names = text.split(/[\n,;|•·]+/).map(s => s.trim()).filter(Boolean);
-    names.forEach(name => addSeed(name));
-    setPasteInput("");
-    setAddArtistMode(false);
-  }
-
-  function handlePasteEvent(e: React.ClipboardEvent<HTMLInputElement>) {
-    const text = e.clipboardData.getData("text");
-    if (text) {
-      e.preventDefault();
-      handlePasteText(text);
-      return;
-    }
-    // Image paste: OCR stubbed — show placeholder text until implemented
-    const items = Array.from(e.clipboardData.items);
-    const hasImage = items.some(it => it.type.startsWith("image/"));
-    if (hasImage) {
-      e.preventDefault();
-      setPasteInput("📷 screenshot pasted — OCR coming soon");
-    }
-  }
-
   // --- topbar ---
   function renderTopbar() {
     if (level === "all") {
@@ -1432,12 +1401,26 @@ export function DialView() {
           )}
           {/* Wordmark — moon phase replaces the O; letter-spacing handles gaps */}
           <span className="dial-topbar__wordmark" aria-label="Lore">
-            {"L"}
+            <span className="dial-topbar__letter" aria-hidden="true">L </span>
             <span className="dial-topbar__moon-o" aria-hidden="true">
               <MoonPhaseGlyph size={14} />
             </span>
-            {"RE"}
+            <span className="dial-topbar__letter" aria-hidden="true">R E</span>
           </span>
+
+          {/* Global search — tappable fake-input that opens the SearchOverlay */}
+          <button
+            type="button"
+            className="dial-topbar__search-btn"
+            onClick={() => setSearchOpen(true)}
+            aria-label="Search stations, shows, and artists"
+          >
+            <Search size={11} strokeWidth={2.2} aria-hidden="true" />
+            Search stations, shows, artists…
+          </button>
+
+          {/* Solo / Listening Party — compact pill pinned to top-right */}
+          <SocialModeBar variant="topbar" />
         </div>
       );
     }
@@ -1570,67 +1553,6 @@ export function DialView() {
                   {offlineStations.length > 0 && <span className="dial-tab__n">{offlineStations.length}</span>}
                 </button>
 
-                {/* ── Add artists controls — right-aligned in the same strip ── */}
-                <div className="dial-tabs__add">
-                  <button
-                    type="button"
-                    role="presentation"
-                    className={`topbar-add-artists${addArtistMode ? " topbar-add-artists--active" : ""}`}
-                    onClick={() => setAddArtistMode(m => !m)}
-                  >
-                    ＋ artists
-                  </button>
-                  {!addArtistMode ? (
-                    <input
-                      type="text"
-                      className="topbar-paste-box"
-                      value={pasteInput}
-                      placeholder="paste names or screenshot…"
-                      aria-label="Add artists by pasting names or a screenshot"
-                      onChange={e => setPasteInput(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === "Enter" && pasteInput.trim()) {
-                          handlePasteText(pasteInput);
-                        }
-                        if (e.key === "Escape") { setPasteInput(""); }
-                      }}
-                      onPaste={handlePasteEvent}
-                    />
-                  ) : (
-                    <div className="topbar-artist-input-wrap">
-                      <input
-                        // eslint-disable-next-line jsx-a11y/no-autofocus
-                        autoFocus
-                        type="text"
-                        className="topbar-artist-input"
-                        value={pasteInput}
-                        placeholder="type or paste an artist name…"
-                        aria-label="Add an artist"
-                        onChange={e => setPasteInput(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === "Enter" && pasteInput.trim()) {
-                            handlePasteText(pasteInput);
-                            setAddArtistMode(false);
-                          }
-                          if (e.key === "Escape") { setAddArtistMode(false); setPasteInput(""); }
-                        }}
-                        onPaste={e => {
-                          handlePasteEvent(e);
-                          setAddArtistMode(false);
-                        }}
-                      />
-                      <button
-                        type="button"
-                        className="topbar-artist-input__esc"
-                        onClick={() => { setAddArtistMode(false); setPasteInput(""); }}
-                        aria-label="Close"
-                        title="Close (Esc)"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  )}
-                </div>
               </div>
             )}
 
