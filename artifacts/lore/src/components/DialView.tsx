@@ -32,9 +32,13 @@ import {
   crossingSentence,
   reason,
   intoSet,
+  usableShowName,
+  buildAttributedSentence,
+  dialShowAsAttribution,
   type ReasonResult,
 } from "./dialViewHelpers";
 import { proxyArtUrl } from "../lib/proxyArt";
+import { runDate, clockTime } from "../lib/format";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -851,13 +855,23 @@ function OfflineRow({
     ? lastShow.spins[lastShow.spins.length - 1]
     : null;
 
-  // ── Tier 1: reason — same rung hierarchy as laneReason in StationLane ───
-  //   r=3: exact show crossings → top artist name(s) or "N of yours this set"
-  //   r=4: artist crossings only → top artist name(s) or "N artist matches"
-  //   r=5: last spin title (bare fact)
-  //   r=0: no data
+  // ── Attribution helpers ───────────────────────────────────────────────────
   const showCrossings = lastShow?.crossings ?? 0;
   const showArtistCrossings = lastShow?.artistCrossings ?? 0;
+
+  // Resolve single eligible DJ name — null when unknown or multiple (ambiguous).
+  const _djList = lastShow ? eligibleDjNames(dialShowAsAttribution(lastShow)) : [];
+  const djName = _djList.length === 1 ? _djList[0] : null;
+  // Sanitised show name — suppresses DJ-echo and placeholder values.
+  const showName = usableShowName(lastShow);
+
+  // Broadcast date + time for the row timing label.
+  const timingSrc = lastShow?.startedAt ?? null;
+  const timing = timingSrc
+    ? `${runDate(timingSrc)} · ${clockTime(timingSrc)}`
+    : "";
+
+  // ── Tier 1: reason — via buildAttributedSentence ────────────────────────
   let t1Node: ReactNode;
   let t1Cls: string;
   if (showCrossings > 0) {
@@ -865,18 +879,14 @@ function OfflineRow({
       ? stationTopArtistNames
       : (lastShow?.topArtists ?? []);
     const nn = names.length > 0 ? nameNodes(names) : null;
-    t1Node = nn
-      ? nn
-      : <><b>{showCrossings}</b> of yours this set</>;
+    t1Node = buildAttributedSentence(nn, showCrossings, "of yours", djName, showName, timing);
     t1Cls = "w3";
   } else if (showArtistCrossings > 0) {
     const names = (displayMode === "blended" && stationTopArtistNames.length > 0)
       ? stationTopArtistNames
       : (lastShow?.topArtistNames ?? []);
     const nn = names.length > 0 ? nameNodes(names) : null;
-    t1Node = nn
-      ? nn
-      : <><b>{showArtistCrossings}</b> artist matches</>;
+    t1Node = buildAttributedSentence(nn, showArtistCrossings, "artist matches", djName, showName, timing);
     t1Cls = "w4";
   } else if (lastSpin) {
     t1Node = (
@@ -891,15 +901,8 @@ function OfflineRow({
     t1Cls = "w0";
   }
 
-  // ── Tier 2: DJ attribution (omit unknown show) ────────────────────────────
-  const djName = lastShow?.djName ?? null;
-  // Suppress "Unknown show" — never surface it
-  const showName = lastShow?.showName && lastShow.showName.toLowerCase() !== "unknown show"
-    ? lastShow.showName
-    : null;
-
-  // ── Tier 3: station destination label ────────────────────────────────────
-  const t3Text = showName ? `${showName} · ${station.name}` : station.name;
+  // ── Tier 3: station destination label — always station name ──────────────
+  const t3Text = station.name;
 
   const hasCrossings = crossings > 0 || artistCrossings > 0;
   const rowCls = [
@@ -920,12 +923,7 @@ function OfflineRow({
         {/* Tier 1: reason sentence — leads at full display weight */}
         <div className={`fdrow__t1 ${t1Cls}`}>{t1Node}</div>
 
-        {/* Tier 2: human DJ name when known */}
-        {djName && (
-          <div className="fdrow__t2">{djName}</div>
-        )}
-
-        {/* Tier 3: show · station — small identity label */}
+        {/* Tier 3: station identity label */}
         <div className="fdrow__t3">{t3Text}</div>
       </div>
 
@@ -1229,34 +1227,24 @@ export function DialView() {
     return !!(djName || showName);
   };
 
-  // Date-window filter for the Recently Aired tab — not persisted across visits.
-  const [recentWindow, setRecentWindow] = useState<"week" | "month" | "all">("week");
-
-  // Offline stations (recently aired): sorted by descending crossings for the
-  // selected date window — no secondary attribution or history tier.
+  // Offline stations (recently aired): always sorted by all-time crossings.
   const offlineStations = useMemo(() => {
-    const windowScore = (ds: DialStation): number => {
-      if (recentWindow === "week")  return ds.weekCrossings  + ds.weekArtistCrossings;
-      if (recentWindow === "month") return ds.monthCrossings + ds.monthArtistCrossings;
-      return ds.lifetimeCrossings + ds.lifetimeArtistCrossings;
-    };
+    const lifetimeScore = (ds: DialStation): number =>
+      ds.lifetimeCrossings + ds.lifetimeArtistCrossings;
     return [...stations]
       .filter((ds) => !ds.isLive)
-      .sort((a, b) => windowScore(b) - windowScore(a));
-  }, [stations, recentWindow]);
+      .sort((a, b) => lifetimeScore(b) - lifetimeScore(a));
+  }, [stations]);
 
   // Two-state visibility gate for the offline section:
-  //   Default: only stations with provenance for the selected window or named attribution.
+  //   Default: only stations with any lifetime crossings or named attribution.
   //   Expanded: all offline stations (dark stations included).
   const [showAllOffline, setShowAllOffline] = useState(false);
   const offlineWithProvenance = useMemo(() => {
-    const windowScore = (ds: DialStation): number => {
-      if (recentWindow === "week")  return ds.weekCrossings  + ds.weekArtistCrossings;
-      if (recentWindow === "month") return ds.monthCrossings + ds.monthArtistCrossings;
-      return ds.lifetimeCrossings + ds.lifetimeArtistCrossings;
-    };
-    return offlineStations.filter((ds) => windowScore(ds) > 0 || hasAttribution(ds));
-  }, [offlineStations, recentWindow]);
+    return offlineStations.filter(
+      (ds) => ds.lifetimeCrossings + ds.lifetimeArtistCrossings > 0 || hasAttribution(ds),
+    );
+  }, [offlineStations]);
   const visibleOffline = showAllOffline ? offlineStations : offlineWithProvenance;
 
   // --- per-zone truncation (spec §16) ---
@@ -1782,20 +1770,6 @@ export function DialView() {
                 expands to include dark stations. */}
             {zone1Settled && activeTab === "recently-aired" && (
               <>
-                {/* Date-window filter pills */}
-                <div className="dial-window-pills" role="group" aria-label="Date filter">
-                  {(["week", "month", "all"] as const).map((w) => (
-                    <button
-                      key={w}
-                      type="button"
-                      className={`dial-window-pill${recentWindow === w ? " dial-window-pill--active" : ""}`}
-                      aria-pressed={recentWindow === w}
-                      onClick={() => setRecentWindow(w)}
-                    >
-                      {w === "week" ? "Last Week" : w === "month" ? "Last Month" : "All Time"}
-                    </button>
-                  ))}
-                </div>
                 {offlineStations.length > 0 ? (
                   <>
                     {visibleOffline.map((ds) => (

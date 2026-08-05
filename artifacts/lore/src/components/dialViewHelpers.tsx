@@ -19,7 +19,7 @@ import { type DialShow, type DialDisplayMode } from "../hooks/useDialData";
  * lore-attribution helpers.  DialShow uses `showName` (not `name`), and
  * carries djName as `string | null` (library uses `string | undefined`).
  */
-function dialShowAsAttribution(show: DialShow): ShowAttributionLike {
+export function dialShowAsAttribution(show: DialShow): ShowAttributionLike {
   return {
     name: show.showName,
     djName: show.djName ?? undefined,

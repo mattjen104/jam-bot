@@ -4783,36 +4783,6 @@
   }
 }
 
-/* ── Recent tab date-window filter pills ─────────────────────────────────── */
-.dial-window-pills {
-  display: flex;
-  gap: 6px;
-  padding: 10px 15px 8px;
-  flex-shrink: 0;
-}
-.dial-window-pill {
-  flex-shrink: 0;
-  padding: 4px 10px;
-  border-radius: 20px;
-  border: 1px solid hsl(var(--border) / 0.6);
-  background: transparent;
-  font: 600 10px var(--app-font-display);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: hsl(var(--muted-foreground));
-  cursor: pointer;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
-  white-space: nowrap;
-}
-.dial-window-pill:hover {
-  color: hsl(var(--foreground));
-  border-color: hsl(var(--border));
-}
-.dial-window-pill--active {
-  background: hsl(var(--library) / 0.12);
-  border-color: hsl(var(--library) / 0.5);
-  color: hsl(var(--library));
-}
 
 /* ── Zone section labels (spec §6) ──────────────────────────────────────── */
 .fdzone-lbl {
