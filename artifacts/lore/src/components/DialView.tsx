@@ -265,6 +265,143 @@ function PopCrossingLine({ artists, seedsLower, onAdd }: {
   );
 }
 
+/**
+ * The appended "Also, …" second sentence behind the clickable "and" in a
+ * crossing sentence: the rest of the station's set in setlist order, with the
+ * same lime/canary/library coloring and "+" adders as the setlist line.
+ * Copy rules: informal register, Oxford comma for three or more names.
+ */
+function AlsoSentence({ artists, seedsLower, onAdd }: {
+  artists: PopularCrossingArtist[];
+  seedsLower: Set<string>;
+  onAdd: (name: string) => void;
+}) {
+  const inLib = (a: PopularCrossingArtist) => a.inLibrary || seedsLower.has(a.name.trim().toLowerCase());
+  const nodes: ReactNode[] = [];
+  artists.forEach((a, i) => {
+    if (i > 0) {
+      if (i === artists.length - 1) nodes.push(artists.length > 2 ? ", and " : " and ");
+      else nodes.push(", ");
+    }
+    nodes.push(
+      <b key={a.name} className={popArtistCls(a, inLib(a))}>
+        {a.name}
+        {!inLib(a) && (
+          <button
+            type="button"
+            className="fdrow__addplus"
+            aria-label={`Add ${a.name} to your artists`}
+            onClick={(e) => { e.stopPropagation(); onAdd(a.name); }}
+          >＋</button>
+        )}
+      </b>,
+    );
+  });
+  return <span className="fdrow__also">{" Also, "}{nodes}{"."}</span>;
+}
+
+interface ScrubItem {
+  slug: string;
+  name: string;
+  /** Popular-crossing weight (same stat as the triangle sort). */
+  score: number;
+  /** Set carries at least one new-to-Lore / new-to-you artist. */
+  hasNew: boolean;
+}
+
+/**
+ * Right-edge scrubber for the Also-On-Air list. One tick per station in the
+ * current sort order — tick length tracks the station's popular-crossing
+ * weight (so the lime gradient IS the sort, in either triangle direction),
+ * canary ticks mark sets carrying new artists. Dragging scrubs the full
+ * list; a bubble names the station under the finger.
+ */
+function PopScrubber({ items, onScrub }: {
+  items: ScrubItem[];
+  onScrub: (item: ScrubItem, index: number) => void;
+}) {
+  const railRef = useRef<HTMLDivElement | null>(null);
+  // Active selection is tracked by slug so a live-data reorder mid-drag can't
+  // silently retarget the bubble/ARIA state at a different station.
+  const [activeSlug, setActiveSlug] = useState<string | null>(null);
+  const pointerId = useRef<number | null>(null);
+  const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (clearTimer.current) clearTimeout(clearTimer.current); }, []);
+  const maxScore = Math.max(1, ...items.map((i) => i.score));
+  const active = activeSlug != null ? items.findIndex((i) => i.slug === activeSlug) : -1;
+
+  const select = (idx: number) => {
+    const it = items[idx];
+    if (!it) return;
+    if (clearTimer.current) { clearTimeout(clearTimer.current); clearTimer.current = null; }
+    setActiveSlug(it.slug);
+    onScrub(it, idx);
+  };
+  const pick = (clientY: number) => {
+    const el = railRef.current;
+    if (!el || items.length === 0) return;
+    const r = el.getBoundingClientRect();
+    const f = Math.min(1, Math.max(0, (clientY - r.top) / r.height));
+    select(Math.min(items.length - 1, Math.floor(f * items.length)));
+  };
+  const release = () => {
+    pointerId.current = null;
+    if (clearTimer.current) clearTimeout(clearTimer.current);
+    clearTimer.current = setTimeout(() => { setActiveSlug(null); clearTimer.current = null; }, 700);
+  };
+
+  return (
+    <div
+      ref={railRef}
+      className="popscrub"
+      role="slider"
+      tabIndex={0}
+      aria-label="Scrub the station list"
+      aria-orientation="vertical"
+      aria-valuemin={0}
+      aria-valuemax={items.length - 1}
+      aria-valuenow={active >= 0 ? active : 0}
+      aria-valuetext={active >= 0 ? items[active]?.name : undefined}
+      onPointerDown={(e) => {
+        pointerId.current = e.pointerId;
+        e.currentTarget.setPointerCapture(e.pointerId);
+        pick(e.clientY);
+      }}
+      onPointerMove={(e) => { if (pointerId.current === e.pointerId) pick(e.clientY); }}
+      onPointerUp={(e) => { if (pointerId.current === e.pointerId) release(); }}
+      onPointerCancel={(e) => { if (pointerId.current === e.pointerId) release(); }}
+      onKeyDown={(e) => {
+        const cur = active >= 0 ? active : -1;
+        if (e.key === "ArrowDown" || e.key === "ArrowRight") { e.preventDefault(); select(Math.min(items.length - 1, cur + 1)); }
+        else if (e.key === "ArrowUp" || e.key === "ArrowLeft") { e.preventDefault(); select(Math.max(0, cur - 1)); }
+        else if (e.key === "Home") { e.preventDefault(); select(0); }
+        else if (e.key === "End") { e.preventDefault(); select(items.length - 1); }
+      }}
+      onBlur={release}
+    >
+      {items.map((it, i) => (
+        <div
+          key={it.slug}
+          className={[
+            "popscrub__tick",
+            it.hasNew ? "popscrub__tick--new" : "",
+            i === active ? "popscrub__tick--active" : "",
+          ].filter(Boolean).join(" ")}
+          style={{ width: 4 + Math.round((it.score / maxScore) * 10) }}
+        />
+      ))}
+      {active != null && items[active] && (
+        <div
+          className="popscrub__bubble"
+          style={{ top: `${((active + 0.5) / items.length) * 100}%` }}
+        >
+          {items[active].name}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface FrontDoorRowProps {
   ds: DialStation;
   show: DialShow | null;
@@ -278,9 +415,15 @@ interface FrontDoorRowProps {
   artworkUrl?: string | null;
   /** Popular-crossing sentence (Also-On-Air): replaces the tier-1 reason line. */
   popLine?: ReactNode | null;
+  /** When set, tags the row root so the Also-On-Air scrubber can scroll to it. */
+  scrubSlug?: string;
+  /** Full setlist for the station — powers the clickable-"and" expansion. */
+  setArtists?: PopularCrossingArtist[] | null;
+  seedsLower?: Set<string>;
+  onAddArtist?: (name: string) => void;
 }
 
-export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, displayMode = "personal", presence, artworkUrl, popLine }: FrontDoorRowProps) {
+export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, displayMode = "personal", presence, artworkUrl, popLine, scrubSlug, setArtists, seedsLower, onAddArtist }: FrontDoorRowProps) {
   const usableDjList = eligibleDjNames(
     { name: show?.showName ?? "", djName: show?.djName ?? undefined, djNames: show?.djNames },
     { artist: show?.currentTrack?.artist, title: show?.currentTrack?.title, showTitle: show?.showName, stationName: ds.station.name },
@@ -291,7 +434,27 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, dis
     : show;
   const rz = reason(safeShow, ds.crossings, ds.artistCrossings, displayMode, ds.topArtistNames);
 
-  const crossing = crossingSentence(ds.station.name, safeShow, displayMode);
+  // Clickable-"and" expansion: probe the sentence first to learn which artist
+  // names it already shows, derive the rest of the set (setlist order, library
+  // artists excluded), then rebuild with the toggle wired only when there is
+  // actually something to reveal. crossingSentence is pure, so the double call
+  // is cheap.
+  const [alsoExpanded, setAlsoExpanded] = useState(false);
+  const probe = crossingSentence(ds.station.name, safeShow, displayMode);
+  const remainingSet = useMemo(() => {
+    if (!probe || !setArtists || !seedsLower || !onAddArtist) return [];
+    return setArtists.filter((a) =>
+      !a.inLibrary && !probe.artistsShown.some((s) => sameLiveValue(s, a.name)));
+  // probe is rebuilt each render but its artistsShown is derived from show data
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [safeShow, displayMode, setArtists, seedsLower, onAddArtist]);
+  const crossing = remainingSet.length > 0 && seedsLower && onAddArtist
+    ? crossingSentence(ds.station.name, safeShow, displayMode, {
+        expanded: alsoExpanded,
+        onToggle: () => setAlsoExpanded((v) => !v),
+        node: <AlsoSentence artists={remainingSet} seedsLower={seedsLower} onAdd={onAddArtist} />,
+      })
+    : probe;
   // In blended mode: live sentence is a secondary attribution line shown below rz.node
   // (the community count). It uses only public DJ/track metadata — no personal flags.
   // In personal mode: live sentence fills in when there is no crossing sentence.
@@ -326,6 +489,7 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, dis
   return (
     <div
       className={rowCls}
+      data-scrub-slug={scrubSlug}
       role="button"
       tabIndex={0}
       onClick={onTuneIn}
@@ -1373,6 +1537,13 @@ export function DialView() {
   // Zone 3: r=0 (no now-playing data at all) or r=5 (DJ on air, no library overlap).
   const withReason = useMemo(() => sortedRows.filter((row) => (row.rz.r >= 1 && row.rz.r <= 4) || row.rz.r === 6 || row.rz.r === 7), [sortedRows]);
   const alsoOnAir = useMemo(() => sortedRows.filter((row) => row.rz.r === 0 || row.rz.r === 5), [sortedRows]);
+  // Merged-tab display order for the crossing rows: default (▲) keeps the
+  // attribution-ladder order; flipped (▼) is its exact inverse, so the least-
+  // crossed stations lead and the strongest crossings sink to the bottom.
+  const zone1Display = useMemo(
+    () => popSortDesc ? withReason : [...withReason].reverse(),
+    [withReason, popSortDesc],
+  );
 
   // Community presence — poll all live station IDs every 60 s.
   // Only needed when Listening Party is active; still safe to call in personal
@@ -1419,6 +1590,32 @@ export function DialView() {
         return b.ds.lifetimeCrossings - a.ds.lifetimeCrossings;
       }),
   [alsoOnAir, popCompare]);
+
+  // ── Merged-list scrubber ─────────────────────────────────────────────
+  // One entry per on-air station in the current display order. Tick weight is
+  // normalized per band (crossings for ON AIR rows, popScore for the rest) so
+  // both gradients read at full width; hasNew mirrors the canary highlight.
+  const scrubItems = useMemo<ScrubItem[]>(() => {
+    const hasNew = (slug: string) =>
+      (popMap.get(slug) ?? []).some((a) => !a.popular && !a.inLibrary && (a.debut || !a.heard));
+    const zone1Max = Math.max(1, ...withReason.map((r) => r.ds.crossings + r.ds.artistCrossings));
+    const alsoRows = popSortDesc ? [...djBand, ...restBand] : [...restBand, ...djBand];
+    const popMax = Math.max(1, ...alsoRows.map((r) => popScore(r.ds.station.slug)));
+    const z1 = zone1Display.map((row) => ({
+      slug: row.ds.station.slug,
+      name: cleanLiveValue(row.ds.station.name) ?? row.ds.station.name,
+      score: Math.round(((row.ds.crossings + row.ds.artistCrossings) / zone1Max) * 100),
+      hasNew: hasNew(row.ds.station.slug),
+    }));
+    const also = alsoRows.map((row) => ({
+      slug: row.ds.station.slug,
+      name: cleanLiveValue(row.ds.station.name) ?? row.ds.station.name,
+      score: Math.round((popScore(row.ds.station.slug) / popMax) * 100),
+      hasNew: hasNew(row.ds.station.slug),
+    }));
+    return popSortDesc ? [...z1, ...also] : [...also, ...z1];
+  }, [withReason, zone1Display, djBand, restBand, popMap, popScore, popSortDesc]);
+  const [scrubTarget, setScrubTarget] = useState<string | null>(null);
   // Ghost zone: stations that played library artists but user hasn't tuned into
   const { data: ghostStations = [] } = useMyGhostMissed();
   // Exclude any ghost station already appearing in Zone 1 or Zone 3 (live sets)
@@ -1469,9 +1666,24 @@ export function DialView() {
   const [zone1Expanded, setZone1Expanded] = useState(false);
   const [zone2Expanded, setZone2Expanded] = useState(false);
   const [zone3Expanded, setZone3Expanded] = useState(false);
+  /** Scrub → expand whichever collapsed band hides the row, then scroll to it. */
+  const handleScrub = useCallback((item: ScrubItem) => {
+    // Band membership is looked up by slug (not scrub index) so the logic is
+    // independent of the current display order / sort direction.
+    const z1Idx = zone1Display.findIndex((r) => r.ds.station.slug === item.slug);
+    if (z1Idx >= zone1Visible) setZone1Expanded(true);
+    const restIdx = restBand.findIndex((r) => r.ds.station.slug === item.slug);
+    if (restIdx >= ZONE3_VISIBLE) setZone3Expanded(true);
+    setScrubTarget(item.slug);
+  }, [zone1Display, restBand, zone1Visible]);
+  useEffect(() => {
+    if (!scrubTarget) return;
+    const el = document.querySelector(`[data-scrub-slug="${CSS.escape(scrubTarget)}"]`);
+    if (el) el.scrollIntoView({ block: "center" });
+  }, [scrubTarget, zone1Expanded, zone3Expanded]);
 
   // Active tab — resets to primary on each page load (not persisted).
-  const [activeTab, setActiveTab] = useState<"library" | "also-on-air" | "recently-aired">("library");
+  const [activeTab, setActiveTab] = useState<"library" | "recently-aired">("library");
 
   // Slug-key strings — order-insensitive (sorted) so a live reorder of the same
   // stations does NOT reset expansion; only a real membership change does.
@@ -1540,10 +1752,12 @@ export function DialView() {
   // true is a React no-op (no re-render), so the dependency on zone1Visible alone
   // is safe.
   useEffect(() => {
-    if (scan.samplingIdx != null && scan.samplingIdx >= zone1Visible) {
-      setZone1Expanded(true);
-    }
-  }, [scan.samplingIdx, zone1Visible]);
+    if (scan.samplingIdx == null) return;
+    // scan indexes into withReason; convert to the displayed position, which is
+    // reversed when the triangle sort is flipped.
+    const displayIdx = popSortDesc ? scan.samplingIdx : withReason.length - 1 - scan.samplingIdx;
+    if (displayIdx >= zone1Visible) setZone1Expanded(true);
+  }, [scan.samplingIdx, zone1Visible, popSortDesc, withReason.length]);
 
   // Active row index: scan cursor → playing station → none (-1)
   const activeIdx = useMemo(() => {
@@ -1661,6 +1875,84 @@ export function DialView() {
   // determine if Radio tab is active
   const isRadioActive = location === "/" || location === "" || location.startsWith("/?");
 
+  // ── Also-on-air section (former tab, now folded into ON AIR × YOUR ARTISTS).
+  // Band order follows the triangle: ▲ renders DJ band then rest band below the
+  // crossing rows; ▼ renders rest band (rarest-first) then DJ band above them.
+  const djBandJsx = djBand.length > 0 && (
+    <>
+      <ZoneLabel label="DJs on air" accent="picker" />
+      {djBand.map((row) => (
+        <FrontDoorRow
+          key={row.ds.station.slug}
+          ds={row.ds}
+          show={row.show}
+          ov={pickerOv(row.show?.pickerId ?? null, row.effectiveDjName)}
+          scrubSlug={row.ds.station.slug}
+          isActive={row.ds.station.slug === radio.station?.slug}
+          isSampling={false}
+          onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
+          displayMode={crossingSourceMode}
+          presence={presenceMap.get(row.ds.station.id)}
+          artworkUrl={activeArtworkUrl}
+          popLine={popHasContent(row.ds.station.slug)
+            ? <PopCrossingLine artists={popMap.get(row.ds.station.slug)!} seedsLower={seedsLower} onAdd={addSeed} />
+            : null}
+        />
+      ))}
+    </>
+  );
+  const restBandJsx = restBand.length > 0 && (
+    <>
+      <div id="zone3-rows">
+        {restBand.slice(0, zone3Expanded ? restBand.length : ZONE3_VISIBLE).map((row) => (
+          <FrontDoorRow
+            key={row.ds.station.slug}
+            ds={row.ds}
+            show={row.show}
+            ov={row.ds.lifetimeCrossings}
+            scrubSlug={row.ds.station.slug}
+            isActive={row.ds.station.slug === radio.station?.slug}
+            isSampling={false}
+            onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
+            displayMode={crossingSourceMode}
+            presence={presenceMap.get(row.ds.station.id)}
+            artworkUrl={activeArtworkUrl}
+            popLine={popHasContent(row.ds.station.slug)
+              ? <PopCrossingLine artists={popMap.get(row.ds.station.slug)!} seedsLower={seedsLower} onAdd={addSeed} />
+              : null}
+          />
+        ))}
+      </div>
+      {restBand.length > ZONE3_VISIBLE && (
+        <button
+          className="dial-show-more"
+          aria-expanded={zone3Expanded}
+          aria-controls="zone3-rows"
+          onClick={() => { if (!zone3Expanded) zone3ExpandAnchor.current = zone3SlugKey; else zone3ExpandAnchor.current = null; setZone3Expanded((e) => !e); }}
+        >
+          {zone3Expanded ? "See less" : `See all ${restBand.length}`}
+        </button>
+      )}
+    </>
+  );
+  const alsoSection = alsoOnAir.length > 0 && (
+    <>
+      <div className="fdzone-lbl-row">
+        {zone3Expanded && restBand.length > ZONE3_VISIBLE && (
+          <button
+            className="dial-show-more-inline"
+            aria-expanded={true}
+            aria-controls="zone3-rows"
+            onClick={() => setZone3Expanded(false)}
+          >
+            See less
+          </button>
+        )}
+      </div>
+      {popSortDesc ? <>{djBandJsx}{restBandJsx}</> : <>{restBandJsx}{djBandJsx}</>}
+    </>
+  );
+
   return (
     <div className={`dial-root${albumArtOpen && avatarUrl ? " dial-root--art-open" : ""}`}>
       {/* Search overlay */}
@@ -1694,27 +1986,19 @@ export function DialView() {
                 onClick={() => setActiveTab("library")}
               >
                 ON AIR × YOUR ARTISTS
-                {withReason.length > 0 && <span className="dial-tab__n">{withReason.length}</span>}
+                {withReason.length + alsoOnAir.length > 0 && (
+                  <span className="dial-tab__n">{withReason.length + alsoOnAir.length}</span>
+                )}
               </button>
-              <button
-                type="button"
-                role="tab"
-                className={`dial-tab${activeTab === "also-on-air" ? " dial-tab--active" : ""}`}
-                aria-selected={activeTab === "also-on-air"}
-                onClick={() => setActiveTab("also-on-air")}
-              >
-                Also On Air
-                {alsoOnAir.length > 0 && <span className="dial-tab__n">{alsoOnAir.length}</span>}
-              </button>
-              {activeTab === "also-on-air" && (
+              {activeTab === "library" && (
                 <button
                   type="button"
                   className="dial-tab-sort"
                   aria-label={popSortDesc
-                    ? "Sorted by most popular Lore artists first — tap for deep cuts first"
-                    : "Sorted by deep cuts first — tap for most popular first"}
+                    ? "Sorted by most crossings first — tap for least crossings and deep cuts first"
+                    : "Sorted by least crossings and deep cuts first — tap for most crossings first"}
                   aria-pressed={!popSortDesc}
-                  title={popSortDesc ? "Popular-heavy sets first" : "Deep-cut sets first"}
+                  title={popSortDesc ? "Most crossings first" : "Deep cuts first"}
                   onClick={() => setPopSortDesc((v) => !v)}
                 >
                   {popSortDesc ? "▲" : "▼"}
@@ -1830,6 +2114,11 @@ export function DialView() {
                 subsection below. */}
             {zone1Settled && activeTab === "library" && (
               <>
+                {scrubItems.length > 6 && (
+                  <PopScrubber items={scrubItems} onScrub={handleScrub} />
+                )}
+                {/* Flipped sort (▼): the also-on-air bands (deep cuts) lead. */}
+                {!popSortDesc && alsoSection}
                 {/* Zone 1: crossing rows */}
                 {withReason.length > 0 && (
                   <>
@@ -1845,18 +2134,22 @@ export function DialView() {
                             unsliced position; rows beyond zone1Visible are null until
                             zone1Expanded is true. */}
                         <div id="zone1-rows">
-                          {withReason.map((row, i) =>
+                          {zone1Display.map((row, i) =>
                             !zone1Expanded && i >= zone1Visible ? null : (
                               <div key={row.ds.station.slug}>
                                 <FrontDoorRow
                                   ds={row.ds}
                                   show={row.show}
                                   ov={row.show?.djName != null ? pickerOv(row.show?.pickerId ?? null, row.show.djName) : row.ds.lifetimeCrossings}
+                                  scrubSlug={row.ds.station.slug}
                                   isActive={row.ds.station.slug === radio.station?.slug}
-                                  isSampling={scan.samplingIdx === i}
+                                  isSampling={scan.samplingIdx != null && withReason[scan.samplingIdx]?.ds.station.slug === row.ds.station.slug}
                                   onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
                                   displayMode={crossingSourceMode}
                                   presence={presenceMap.get(row.ds.station.id)}
+                                  setArtists={popMap.get(row.ds.station.slug) ?? null}
+                                  seedsLower={seedsLower}
+                                  onAddArtist={addSeed}
                                 />
                               </div>
                             )
@@ -1957,95 +2250,9 @@ export function DialView() {
                     <DialRowSkeleton delay={2} />
                   </>
                 )}
-              </>
-            )}
 
-            {/* ── "Also on air" tab ────────────────────────────────────────────
-                Zone 3 content: DJ band (r=5) + rest band (r=0). */}
-            {zone1Settled && activeTab === "also-on-air" && (
-              <>
-                {alsoOnAir.length > 0 ? (
-                  <>
-                    <div className="fdzone-lbl-row">
-                      {zone3Expanded && restBand.length > ZONE3_VISIBLE && (
-                        <button
-                          className="dial-show-more-inline"
-                          aria-expanded={true}
-                          aria-controls="zone3-rows"
-                          onClick={() => setZone3Expanded(false)}
-                        >
-                          See less
-                        </button>
-                      )}
-                    </div>
-                    <>
-                      {/* DJ band — attributed shows with no crossing yet.
-                            Always fully shown; no ZONE3_VISIBLE cap. */}
-                        {djBand.length > 0 && (
-                          <>
-                            <ZoneLabel label="DJs on air" accent="picker" />
-                            {djBand.map((row) => (
-                              <FrontDoorRow
-                                key={row.ds.station.slug}
-                                ds={row.ds}
-                                show={row.show}
-                                ov={pickerOv(row.show?.pickerId ?? null, row.effectiveDjName)}
-                                isActive={row.ds.station.slug === radio.station?.slug}
-                                isSampling={false}
-                                onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
-                                displayMode={crossingSourceMode}
-                                presence={presenceMap.get(row.ds.station.id)}
-                                artworkUrl={activeArtworkUrl}
-                                popLine={popHasContent(row.ds.station.slug)
-                                  ? <PopCrossingLine artists={popMap.get(row.ds.station.slug)!} seedsLower={seedsLower} onAdd={addSeed} />
-                                  : null}
-                              />
-                            ))}
-                          </>
-                        )}
-                        {/* Rest band — unattributed / dark rows.
-                            Pinned stations float to the top of this band.
-                            Subject to ZONE3_VISIBLE cap + expand toggle. */}
-                        {restBand.length > 0 && (
-                          <>
-                            <div id="zone3-rows">
-                              {restBand.slice(0, zone3Expanded ? restBand.length : ZONE3_VISIBLE).map((row) => (
-                                <FrontDoorRow
-                                  key={row.ds.station.slug}
-                                  ds={row.ds}
-                                  show={row.show}
-                                  ov={row.ds.lifetimeCrossings}
-                                  isActive={row.ds.station.slug === radio.station?.slug}
-                                  isSampling={false}
-                                  onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
-                                  displayMode={crossingSourceMode}
-                                  presence={presenceMap.get(row.ds.station.id)}
-                                  artworkUrl={activeArtworkUrl}
-                                  popLine={popHasContent(row.ds.station.slug)
-                                    ? <PopCrossingLine artists={popMap.get(row.ds.station.slug)!} seedsLower={seedsLower} onAdd={addSeed} />
-                                    : null}
-                                />
-                              ))}
-                            </div>
-                            {restBand.length > ZONE3_VISIBLE && (
-                              <button
-                                className="dial-show-more"
-                                aria-expanded={zone3Expanded}
-                                aria-controls="zone3-rows"
-                                onClick={() => { if (!zone3Expanded) zone3ExpandAnchor.current = zone3SlugKey; else zone3ExpandAnchor.current = null; setZone3Expanded((e) => !e); }}
-                              >
-                                {zone3Expanded ? "See less" : `See all ${restBand.length}`}
-                              </button>
-                            )}
-                          </>
-                        )}
-                    </>
-                  </>
-                ) : (
-                  <div style={{ padding: "20px 15px", opacity: 0.4, fontFamily: "var(--app-font-display)", fontSize: 12 }}>
-                    No additional stations on air right now
-                  </div>
-                )}
+                {/* Default sort (▲): also-on-air bands trail the crossing rows. */}
+                {popSortDesc && alsoSection}
               </>
             )}
 

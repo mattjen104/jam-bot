@@ -4643,6 +4643,61 @@
   vertical-align: super;
 }
 .fdrow__addplus:hover { color: hsl(var(--library) / 0.75); }
+/* ── Also-On-Air right-edge scrubber ─────────────────────────────────────
+   One tick per station in the current sort order; tick length tracks the
+   popular-crossing weight (the lime gradient IS the sort), canary ticks
+   mark sets carrying new-to-Lore / new-to-you artists. */
+.popscrub {
+  position: fixed;
+  right: 2px;
+  /* Sit above the fixed bottom shell (z-40): center in the upper viewport
+     and cap the height so no tick can hide under fixed chrome. */
+  top: 44%;
+  transform: translateY(-50%);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 3px;
+  padding: 12px 5px;
+  max-height: 50vh;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+.popscrub:active { cursor: grabbing; }
+.popscrub__tick {
+  height: 2px;
+  border-radius: 1px;
+  background: hsl(var(--accent) / 0.75);
+  pointer-events: none;
+  transition: width 200ms ease;
+}
+.popscrub__tick--new { background: hsl(var(--canary) / 0.85); }
+.popscrub__tick--active {
+  height: 3px;
+  box-shadow: 0 0 6px hsl(var(--accent) / 0.6);
+}
+.popscrub__bubble {
+  position: absolute;
+  right: 22px;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  max-width: 46vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: hsl(var(--background) / 0.95);
+  border: 1px solid hsl(var(--accent) / 0.35);
+  color: hsl(var(--foreground) / 0.9);
+  font-family: var(--app-font-display);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  padding: 4px 8px;
+  border-radius: 6px;
+  pointer-events: none;
+}
 /* Neutral setlist filler names (heard-but-not-kept, not popular, not new) */
 .fdrow__t1 .fdrow__artist--set { color: hsl(var(--foreground) / 0.55); font-weight: 400; }
 /* "+N more" / "less" setlist expand affordance */
@@ -4661,6 +4716,23 @@
   vertical-align: middle;
 }
 .fdrow__setmore:hover { color: hsl(var(--accent)); border-color: hsl(var(--accent) / 0.5); }
+/* Clickable "and" inside a crossing sentence — toggles the "Also, …" tail.
+   Kept inline and word-like: only a dotted underline signals the affordance. */
+.fdrow__and {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+.fdrow__and:hover { color: hsl(var(--accent)); }
+/* Appended "Also, …" second sentence — slightly quieter than the main clause */
+.fdrow__also { color: hsl(var(--foreground) / 0.75); }
 /* Lime sort triangle next to the Also On Air tab — flips popular-heavy /
    deep-cuts station ordering (client-side re-sort, no refetch). */
 .dial-tab-sort {

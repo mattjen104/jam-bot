@@ -86,4 +86,5 @@
 - [server-db-tests merge gate](server-db-tests-gate.md) — DB suite gates at maxWorkers=2 (4 flakes on 1M-row contention); inline 30s test timeouts override config and must be ≥90s; never hardcode dates.
 - [Test-suite migration DDL deadlocks](test-migration-deadlocks.md) — migrations run once in globalSetup only; mid-suite constraint-swap DDL deadlocks parallel workers; advisory-lock the migration for concurrent boots.
 - [Hero art iTunes vs CAA](hero-art-itunes-caa.md) — never trust iTunes Search art without exact title/artist validation; derive release-exact CAA front-1200 from the mbid embedded in library artwork URLs.
+- [Merged dial tab & invertible sort](dial-merged-tab-sort.md) — ▼ is a discovery ranking (rarest-first), not a key inversion; Oxford commas + ", now."; clickable "and" appends "Also, …"; copy test file is pre-red on master.
 - [Crossings route merge-splice](crossings-route-merge-splice.md) — twin handlers in me/crossings.ts get merge-spliced repeatedly; typecheck both handlers after merges; CrossingsRow shared from lib/db.

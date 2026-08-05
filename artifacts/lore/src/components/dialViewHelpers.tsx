@@ -61,17 +61,43 @@ export function sameLiveValue(a: string | null, b: string | null): boolean {
  *
  * Up to 6 names are shown in full; any overflow is collapsed to "… and N more".
  */
-export function nameNodes(artists: string[]): ReactNode {
+/** Toggle handle for the expandable "Also, …" second sentence. */
+export interface AlsoToggle {
+  expanded: boolean;
+  onToggle: () => void;
+}
+
+export function nameNodes(artists: string[], also?: AlsoToggle): ReactNode {
   const usable = artists.map((artist) => cleanLiveValue(artist)).filter((artist): artist is string => artist != null);
   if (usable.length === 0) return null;
   const shown = usable.slice(0, 6);
   const rest = usable.length - shown.length;
+  // When an expansion is wired, the word "and" itself becomes the toggle for
+  // the appended "Also, …" sentence. Click must not bubble to the row tune-in.
+  const andWord = (key: string): ReactNode => also ? (
+    <button
+      type="button"
+      key={key}
+      className="fdrow__and"
+      aria-expanded={also.expanded}
+      aria-label={also.expanded ? "Hide the rest of this set" : "Show the rest of this set"}
+      onClick={(e) => { e.stopPropagation(); also.onToggle(); }}
+      onKeyDown={(e) => e.stopPropagation()}
+    >and</button>
+  ) : "and";
   const nodes: ReactNode[] = [];
   shown.forEach((name, i) => {
-    if (i > 0) nodes.push(i === shown.length - 1 && rest === 0 ? " and " : ", ");
+    if (i > 0) {
+      if (i === shown.length - 1 && rest === 0) {
+        // Oxford comma for three or more names ("A, B, and C").
+        nodes.push(shown.length > 2 ? ", " : " ", andWord(`and-${i}`), " ");
+      } else {
+        nodes.push(", ");
+      }
+    }
     nodes.push(<b className="fdrow__artist" key={i}>{name}</b>);
   });
-  if (rest > 0) nodes.push(` and ${rest} more`);
+  if (rest > 0) nodes.push(shown.length > 1 ? ", " : " ", andWord("and-more"), ` ${rest} more`);
   return <>{nodes}</>;
 }
 
@@ -130,7 +156,11 @@ export function buildAttributedSentence(
   djName: string | null | undefined,
   showName: string | null,
   timing: string,
+  alsoTail?: ReactNode,
 ): ReactNode {
+  // Copy rule: "now" always takes a comma before it ("…, and X, now.");
+  // "this set" reads as part of the clause and stays comma-free.
+  const timingText = timing ? (timing === "now" ? ", now" : ` ${timing}`) : "";
   if (artistNodes) {
     if (djName && showName) {
       return (
@@ -141,6 +171,7 @@ export function buildAttributedSentence(
           {" on "}
           <span className="fdrow__show">{showName}</span>
           {"."}
+          {alsoTail}
         </>
       );
     }
@@ -151,6 +182,7 @@ export function buildAttributedSentence(
           {" selected "}
           {artistNodes}
           {"."}
+          {alsoTail}
         </>
       );
     }
@@ -160,12 +192,13 @@ export function buildAttributedSentence(
           {artistNodes}
           {" on "}
           <span className="fdrow__show">{showName}</span>
-          {timing ? ` ${timing}` : ""}
+          {timingText}
           {"."}
+          {alsoTail}
         </>
       );
     }
-    return <>{artistNodes}{timing ? ` ${timing}` : ""}{"."}</>;
+    return <>{artistNodes}{timingText}{"."}{alsoTail}</>;
   }
 
   // Count-only fallback (no artist names resolved yet)
@@ -198,12 +231,12 @@ export function buildAttributedSentence(
         {countNode}
         {" on "}
         <span className="fdrow__show">{showName}</span>
-        {timing ? ` ${timing}` : ""}
+        {timingText}
         {"."}
       </>
     );
   }
-  return <>{countNode}{timing ? ` ${timing}` : ""}{"."}</>;
+  return <>{countNode}{timingText}{"."}</>;
 }
 
 // ---------------------------------------------------------------------------
@@ -218,7 +251,8 @@ export function crossingSentence(
   stationName: string,
   show: DialShow | null,
   displayMode: DialDisplayMode = "personal",
-): { node: ReactNode; hasTrack: boolean } | null {
+  also?: AlsoToggle & { node: ReactNode },
+): { node: ReactNode; hasTrack: boolean; artistsShown: string[] } | null {
   if (!show) return null;
   if (displayMode === "blended") return null;
 
@@ -238,7 +272,7 @@ export function crossingSentence(
     .filter((artist): artist is string => artist != null)
     .filter((artist) => !sameLiveValue(artist, station))
     .filter((artist, index, all) => all.findIndex((other) => sameLiveValue(other, artist)) === index);
-  const artistNodes = nameNodes(artists);
+  const artistNodes = nameNodes(artists, also);
   const count = hasExactCrossing
     ? Math.max(show.crossings, current?.isLibraryHit ? 1 : 0)
     : Math.max(show.artistCrossings, current?.isArtistHit ? 1 : 0);
@@ -259,8 +293,17 @@ export function crossingSentence(
 
   if (artistNodes) {
     return {
-      node: buildAttributedSentence(artistNodes, count, "of yours", dj, showName, timing),
+      node: buildAttributedSentence(
+        artistNodes,
+        count,
+        "of yours",
+        dj,
+        showName,
+        timing,
+        also?.expanded ? also.node : null,
+      ),
       hasTrack: true,
+      artistsShown: artists.slice(0, 6),
     };
   }
 
@@ -275,6 +318,7 @@ export function crossingSentence(
         timing,
       ),
       hasTrack: true,
+      artistsShown: [],
     };
   }
 

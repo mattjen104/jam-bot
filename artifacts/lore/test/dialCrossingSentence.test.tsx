@@ -479,19 +479,19 @@ describe("nameNodes — text formatting", () => {
   });
 
   it("renders three names with Oxford comma", () => {
-    expect(text(nameNodes(["A", "B", "C"]))).toBe("A, B and C");
+    expect(text(nameNodes(["A", "B", "C"]))).toBe("A, B, and C");
   });
 
   it("renders 6 names with commas and final 'and'", () => {
-    expect(text(nameNodes(["A", "B", "C", "D", "E", "F"]))).toBe("A, B, C, D, E and F");
+    expect(text(nameNodes(["A", "B", "C", "D", "E", "F"]))).toBe("A, B, C, D, E, and F");
   });
 
   it("collapses 7 to 6 shown + '1 more'", () => {
-    expect(text(nameNodes(["A", "B", "C", "D", "E", "F", "G"]))).toBe("A, B, C, D, E, F and 1 more");
+    expect(text(nameNodes(["A", "B", "C", "D", "E", "F", "G"]))).toBe("A, B, C, D, E, F, and 1 more");
   });
 
   it("collapses 8 to 6 shown + '2 more'", () => {
-    expect(text(nameNodes(["A", "B", "C", "D", "E", "F", "G", "H"]))).toBe("A, B, C, D, E, F and 2 more");
+    expect(text(nameNodes(["A", "B", "C", "D", "E", "F", "G", "H"]))).toBe("A, B, C, D, E, F, and 2 more");
   });
 });
 
