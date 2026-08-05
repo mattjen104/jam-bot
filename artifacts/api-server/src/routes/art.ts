@@ -30,13 +30,15 @@ async function fetchFromOrigin(
   let current = src;
   for (let hop = 0; hop < 4; hop++) {
     if (!(await isSafeArtworkUrl(current))) return null;
-    let res: Response & { arrayBuffer(): Promise<ArrayBuffer>; headers: Headers };
+    // NOTE: `Response` in this file resolves to Express's Response import, so
+    // the fetch result must be typed via the fetch signature itself.
+    let res: Awaited<ReturnType<typeof fetch>>;
     try {
-      res = (await fetch(current, {
+      res = await fetch(current, {
         signal: AbortSignal.timeout(8_000),
         redirect: "manual",
         headers: { Accept: "image/*,*/*;q=0.8" },
-      })) as typeof res;
+      });
     } catch {
       return null;
     }
