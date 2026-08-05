@@ -817,10 +817,13 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
 
   const BMBID_LIB   = `tc-blend-lib-${brun}`;   // in active user's library; aired 23h ago
   const BMBID_OLD   = `tc-blend-old-${brun}`;   // in active user's library; aired 25h ago
+  const BMBID_AGED  = `tc-blend-aged-${brun}`;  // in active user's library; aired 200 days ago
 
-  const BSLUG = `tc-blend-station-${brun}`;
+  const BSLUG      = `tc-blend-station-${brun}`;
+  const BSLUG_AGED = `tc-blend-aged-station-${brun}`; // station whose ONLY spin is 200 days old
 
   let bStationId: number | undefined;
+  let bStationAgedId: number | undefined;
   let bUserActiveId: number | undefined;
   let bUserStaleId: number | undefined;
 
@@ -851,8 +854,9 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
     bUserStaleId = uS!.id;
 
     await db.insert(recordingsTable).values([
-      { mbid: BMBID_LIB, title: "Recent Blend Track", artist: `Blend Artist ${brun}` },
-      { mbid: BMBID_OLD, title: "Old Blend Track",    artist: `Blend Artist ${brun}` },
+      { mbid: BMBID_LIB,  title: "Recent Blend Track", artist: `Blend Artist ${brun}` },
+      { mbid: BMBID_OLD,  title: "Old Blend Track",    artist: `Blend Artist ${brun}` },
+      { mbid: BMBID_AGED, title: "Aged Blend Track",   artist: `Aged Blend Artist ${brun}` },
     ]);
 
     const [bSt] = await db.insert(stationsTable).values({
@@ -861,26 +865,40 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
     }).returning({ id: stationsTable.id });
     bStationId = bSt!.id;
 
-    const ago23h = new Date(Date.now() - 23 * 60 * 60 * 1000);
-    const ago25h = new Date(Date.now() - 25 * 60 * 60 * 1000);
+    // Station whose ONLY matching spin is 200 days old — must surface via the
+    // lifetime map merge (not the bounded rolling scan).
+    const [bStAged] = await db.insert(stationsTable).values({
+      slug: BSLUG_AGED, name: `Blend Aged Station ${brun}`,
+      streamUrl: "http://example.invalid/blend-aged", stationClass: "community",
+    }).returning({ id: stationsTable.id });
+    bStationAgedId = bStAged!.id;
+
+    const ago23h    = new Date(Date.now() - 23 * 60 * 60 * 1000);
+    const ago25h    = new Date(Date.now() - 25 * 60 * 60 * 1000);
+    const ago200d   = new Date(Date.now() - 200 * 24 * 60 * 60 * 1000);
     await db.insert(spinsTable).values([
       { stationId: bStationId!, mbid: BMBID_LIB, confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: ago23h },
       { stationId: bStationId!, mbid: BMBID_OLD, confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: ago25h },
+      // 200 days old — outside any rolling window and outside the old 180-day bound
+      { stationId: bStationAgedId!, mbid: BMBID_AGED, confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: ago200d },
     ]);
 
-    // Active user owns both library items; stale user owns only BMBID_LIB
+    // Active user owns all three library items; stale user owns only BMBID_LIB
     await db.insert(libraryItemsTable).values([
-      { userId: bUserActiveId!, mbid: BMBID_LIB, provenance: { kind: "keep" }, addedAt: new Date() },
-      { userId: bUserActiveId!, mbid: BMBID_OLD, provenance: { kind: "keep" }, addedAt: new Date() },
-      { userId: bUserStaleId!,  mbid: BMBID_LIB, provenance: { kind: "keep" }, addedAt: new Date() },
+      { userId: bUserActiveId!, mbid: BMBID_LIB,  provenance: { kind: "keep" }, addedAt: new Date() },
+      { userId: bUserActiveId!, mbid: BMBID_OLD,  provenance: { kind: "keep" }, addedAt: new Date() },
+      { userId: bUserActiveId!, mbid: BMBID_AGED, provenance: { kind: "keep" }, addedAt: new Date() },
+      { userId: bUserStaleId!,  mbid: BMBID_LIB,  provenance: { kind: "keep" }, addedAt: new Date() },
     ]);
   }, TEST_TIMEOUT);
 
   afterAll(async () => {
     if (!dbAvailable) return;
-    if (bStationId != null) {
-      await db.delete(spinsTable).where(eq(spinsTable.stationId, bStationId));
-      await db.delete(stationsTable).where(eq(stationsTable.id, bStationId));
+    for (const sid of [bStationId, bStationAgedId]) {
+      if (sid != null) {
+        await db.delete(spinsTable).where(eq(spinsTable.stationId, sid));
+        await db.delete(stationsTable).where(eq(stationsTable.id, sid));
+      }
     }
     for (const uid of [bUserActiveId, bUserStaleId]) {
       if (uid != null) {
@@ -888,7 +906,7 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
         await db.delete(loreUsersTable).where(eq(loreUsersTable.id, uid));
       }
     }
-    for (const mbid of [BMBID_LIB, BMBID_OLD]) {
+    for (const mbid of [BMBID_LIB, BMBID_OLD, BMBID_AGED]) {
       await db.delete(recordingReleaseGroupsTable).where(eq(recordingReleaseGroupsTable.recordingMbid, mbid));
       await db.delete(recordingsTable).where(eq(recordingsTable.mbid, mbid));
     }
@@ -910,6 +928,35 @@ describe("GET /api/me/crossings/blended — presence TTL and spin window", () =>
     expect(row!.crossings).toBe(1);
     // BMBID_OLD aired 25h ago — outside window → only lifetimeCrossings
     expect(row!.lifetimeCrossings).toBeGreaterThanOrEqual(2);
+  }, TEST_TIMEOUT);
+
+  it("includes a spin older than 180 days in blended lifetimeCrossings with rolling counts 0", async () => {
+    if (!dbAvailable) return;
+    const res = await fetch(`${baseUrl}/api/me/crossings/blended`);
+    expect(res.status).toBe(200);
+    const body = await res.json() as {
+      items: Array<{
+        stationSlug: string;
+        crossings: number;
+        artistCrossings: number;
+        weekCrossings: number;
+        monthCrossings: number;
+        lifetimeCrossings: number;
+        topArtistNames: string[];
+      }>;
+    };
+    const row = body.items.find((r) => r.stationSlug === BSLUG_AGED);
+
+    // BMBID_AGED aired 200 days ago and is in the active user's library.
+    // The station's ONLY spin is aged, so it must surface via the lifetime map
+    // merge: lifetimeCrossings ≥ 1, every rolling count 0, topArtistNames empty.
+    expect(row).toBeDefined();
+    expect(row!.crossings).toBe(0);
+    expect(row!.artistCrossings).toBe(0);
+    expect(row!.weekCrossings).toBe(0);
+    expect(row!.monthCrossings).toBe(0);
+    expect(row!.lifetimeCrossings).toBeGreaterThanOrEqual(1);
+    expect(row!.topArtistNames).toEqual([]);
   }, TEST_TIMEOUT);
 
   it("excludes a user whose lastSeenAt exceeds SOCIAL_PRESENCE_TTL_MS", async () => {

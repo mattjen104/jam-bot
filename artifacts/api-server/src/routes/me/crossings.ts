@@ -304,11 +304,11 @@ router.get("/me/crossings", h(async (req, res) => {
   // `weekCutoff`, `monthCutoff`).  Merges have twice spliced the blended
   // handler's names (spinCutoff/blendedWeekCutoff) in here, which throws a
   // ReferenceError on every request → 503 → empty dial.
-  const inWindow           = sql`${spinsTable.playedAt} >= ${cutoff}`;
+  const inWindow           = sql`${spinsTable.playedAt} >= ${spinCutoff}`;
   const weekCutoff  = new Date(Date.now() - 7  * 24 * 60 * 60 * 1000);
   const monthCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const inWeek             = sql`${spinsTable.playedAt} >= ${weekCutoff}`;
-  const inMonth            = sql`${spinsTable.playedAt} >= ${monthCutoff}`;
+  const inWeek             = sql`${spinsTable.playedAt} >= ${blendedWeekCutoff}`;
+  const inMonth            = sql`${spinsTable.playedAt} >= ${blendedMonthCutoff}`;
 
   // ── Relevant MBIDs for the mbid-driven lifetime query ─────────────────────
   // Collects every recording MBID that could yield a crossing for this user:
@@ -525,6 +525,8 @@ router.get("/me/crossings/blended", h(async (_req, res) => {
   const inWindow           = sql`${spinsTable.playedAt} >= ${spinCutoff}`;
   const blendedWeekCutoff  = new Date(Date.now() - 7  * 24 * 60 * 60 * 1000);
   const blendedMonthCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  const blendedScanCutoff  = blendedMonthCutoff;
   const inWeek             = sql`${spinsTable.playedAt} >= ${blendedWeekCutoff}`;
   const inMonth            = sql`${spinsTable.playedAt} >= ${blendedMonthCutoff}`;
 
@@ -537,8 +539,6 @@ router.get("/me/crossings/blended", h(async (_req, res) => {
       weekArtistCrossings:     sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek}  and ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
       monthCrossings:          sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${aggregateLibHit})::int`,
       monthArtistCrossings:    sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
-      lifetimeCrossings:       sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${aggregateLibHit})::int`,
-      lifetimeArtistCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
       // Collect all matching artist names (with repeats) so we can rank by frequency in JS.
       topArtistNamesRaw:       sql<string[] | null>`array_agg(trim(${recordingsTable.artist})) filter (where ${inWindow} and (${aggregateLibHit} or (${aggregateNotLibHit} and ${aggregateArtistMatch})))`,
     })
@@ -555,6 +555,7 @@ router.get("/me/crossings/blended", h(async (_req, res) => {
     .where(and(
       isNotNull(spinsTable.mbid),
       eq(stationsTable.hidden, false),
+      sql`${spinsTable.playedAt} >= ${blendedScanCutoff}`,
     ))
     .groupBy(stationsTable.id, stationsTable.slug)
     .having(sql`count(*) filter (where ${aggregateLibHit} or (${aggregateNotLibHit} and ${aggregateArtistMatch})) > 0`);
@@ -609,20 +610,15 @@ router.get("/me/crossings/blended", h(async (_req, res) => {
        or count(*) filter (where ${aggregateNotLibHit} and ${aggregateArtistMatch}) > 0`,
     );
 
-  return res.json({
-    items: blendedRows.map((r) => ({
-      stationSlug:             r.stationSlug,
-      crossings:               r.crossings,
-      artistCrossings:         r.artistCrossings,
-      weekCrossings:           r.weekCrossings,
-      weekArtistCrossings:     r.weekArtistCrossings,
-      monthCrossings:          r.monthCrossings,
-      monthArtistCrossings:    r.monthArtistCrossings,
-      lifetimeCrossings:       r.lifetimeCrossings,
-      lifetimeArtistCrossings: r.lifetimeArtistCrossings,
-      topArtistNames:          blendedTopArtists(r.topArtistNamesRaw),
-    })),
-  });
-}));
-
+  // Merge: rolling counts from the bounded scan, lifetime from the mbid scan.
+  // A station whose only matching spins are old (>30 days) appears via the
+  // lifetime map only — rolling counts 0, topArtistNames empty.
+  const blendedLifetimeMap = new Map(lifetimeRows.map((r) => [r.stationSlug, r]));
 export default router;
+      const l = blendedLifetimeMap.get(slug);
+  const blendedRollingMap  = new Map(blendedRows.map((r) => [r.stationSlug, r]));
+  const blendedSlugs = new Set([...blendedRollingMap.keys(), ...blendedLifetimeMap.keys()]);
+
+  return res.json({
+    items: [...blendedSlugs].map((slug) => {
+      const r = blendedRollingMap.get(slug);
