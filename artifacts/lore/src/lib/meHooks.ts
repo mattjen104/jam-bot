@@ -647,6 +647,67 @@ export function useMyPopularCrossings() {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Recent sets — ghost radio discovery with crossing sentences
+// ---------------------------------------------------------------------------
+
+export type RecentSetWindow = "all" | "today" | "yesterday" | "week" | "month" | "year";
+
+export interface RecentSetArtist {
+  name: string;
+  spins: number;
+  /** Artist is in Lore's top-100 by 180-day spin count (lime green in the UI). */
+  popular: boolean;
+  /** Matches the user's library / soft Spotify artists / taste seeds (orange-red). */
+  inLibrary: boolean;
+}
+
+export interface RecentSetRun {
+  runId: number;
+  date: string;
+  startedAt: string;
+  endedAt: string;
+  spinCount: number;
+  resolvedCount: number;
+  show: { name: string; djName: string | null } | null;
+}
+
+export interface RecentSetItem {
+  station: { slug: string; name: string; stationClass: string };
+  run: RecentSetRun;
+  artists: RecentSetArtist[];
+}
+
+interface RecentSetsPage {
+  items: RecentSetItem[];
+  nextCursor: string | null;
+}
+
+export const ME_RECENT_SETS_KEY = (w: RecentSetWindow) =>
+  ["me", "recent-sets", w] as const;
+
+/**
+ * Infinite-scrolling completed runs from the ghost radio archive, with
+ * per-artist crossing data relative to the authenticated listener's library.
+ * Powers the "Recent" tab on the Dial front door.
+ */
+export function useRecentSets(w: RecentSetWindow = "all") {
+  return useInfiniteQuery({
+    queryKey: ME_RECENT_SETS_KEY(w),
+    queryFn: ({ pageParam }) => {
+      const params = new URLSearchParams({ window: w });
+      if (pageParam) params.set("cursor", pageParam);
+      return fetchOrNull<RecentSetsPage>(`/api/me/recent-sets?${params}`).then(
+        (d) => d ?? { items: [], nextCursor: null },
+      );
+    },
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? null,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
 export const ME_BLENDED_CROSSINGS_KEY = ["me", "crossings", "blended"] as const;
 export function useMyLibraryMbids() {
   return useQuery({

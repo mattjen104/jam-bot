@@ -2745,6 +2745,54 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MePickerOverlapResult"
+  /me/recent-sets:
+    get:
+      operationId: getMyRecentSets
+      tags: [me]
+      summary: Completed show runs from the archive with per-artist crossing data
+      description: >
+        Returns paginated completed runs (station + show/DJ + date) from the
+        ghost radio archive, augmented with per-artist crossing data relative
+        to the authenticated listener's library, soft Spotify artists, and
+        taste seeds. Each run carries a list of artists played in that set,
+        each flagged with `inLibrary` (matches the listener's library) and
+        `popular` (Lore-wide top-100 by 180-day spin count). Powers the
+        "Recent" tab on the Dial front door. Cursor-based pagination via
+        `cursor`; 30 runs per page ordered by `endedAt DESC, runId DESC`.
+        Returns an empty list for unauthenticated requests.
+      parameters:
+        - name: window
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [all, today, yesterday, week, month, year]
+            default: all
+          description: >
+            Time-window filter. `all` returns the full archive; the others
+            limit to runs that ended within the named period (UTC).
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+          description: >
+            Opaque pagination cursor. Omit for the first page; pass the
+            `nextCursor` value from the previous response to fetch the next
+            page. An invalid value returns 400.
+      responses:
+        "200":
+          description: Paginated recent sets with crossing data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeRecentSetsResponse"
+        "400":
+          description: Invalid cursor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /me/crossings/blended:
     get:
       operationId: getMyBlendedCrossings
@@ -6755,6 +6803,96 @@ components:
             $ref: "#/components/schemas/LibraryCoverageList"
       required:
         - items
+    MeRecentSetArtist:
+      type: object
+      description: One artist from a run's setlist, flagged for the listener's library.
+      properties:
+        name:
+          type: string
+          description: Display artist name.
+        spins:
+          type: integer
+          description: Number of spins of this artist within the run.
+        popular:
+          type: boolean
+          description: >
+            True when the artist is in Lore's top-100 by 180-day spin count
+            (lime-green in the UI).
+        inLibrary:
+          type: boolean
+          description: >
+            True when the artist matches the authenticated listener's library,
+            unresolved Spotify soft rows, or taste seeds (orange-red in the UI).
+      required: [name, spins, popular, inLibrary]
+    MeRecentSetRun:
+      type: object
+      description: One completed station run from the archive.
+      properties:
+        runId:
+          type: integer
+          description: Stable opaque identifier for the run (min spin ID in the group).
+        date:
+          type: string
+          format: date
+          description: UTC broadcast day, YYYY-MM-DD.
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+        spinCount:
+          type: integer
+        resolvedCount:
+          type: integer
+          description: Spins resolved to the MBID spine (replayable tracks).
+        show:
+          oneOf:
+            - type: object
+              properties:
+                name:
+                  type: string
+                djName:
+                  type: ["string", "null"]
+              required: [name, djName]
+            - type: "null"
+      required: [runId, date, startedAt, endedAt, spinCount, resolvedCount, show]
+    MeRecentSetItem:
+      type: object
+      description: >
+        One recent run entry for the ghost-radio discovery surface, with
+        per-artist crossing data relative to the authenticated listener.
+      properties:
+        station:
+          type: object
+          properties:
+            slug:
+              type: string
+            name:
+              type: string
+            stationClass:
+              type: string
+          required: [slug, name, stationClass]
+        run:
+          $ref: "#/components/schemas/MeRecentSetRun"
+        artists:
+          type: array
+          items:
+            $ref: "#/components/schemas/MeRecentSetArtist"
+      required: [station, run, artists]
+    MeRecentSetsResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MeRecentSetItem"
+        nextCursor:
+          type: ["string", "null"]
+          description: >
+            Opaque cursor for the next page. Null when there are no more
+            results.
+      required: [items, nextCursor]
     MattStarterLibraryResult:
       type: object
       properties:

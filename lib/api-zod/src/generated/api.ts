@@ -4698,6 +4698,59 @@ export const SetMyAlbumAvatarResponse = zod.object({
 });
 
 /**
+ * Completed show runs from the archive with per-artist crossing data.
+ * @summary Completed show runs from the archive with per-artist crossing data
+ */
+
+export const GetMyRecentSetsQueryParams = zod.object({
+  window: zod
+    .enum(["all", "today", "yesterday", "week", "month", "year"])
+    .optional()
+    .describe(
+      "Time-window filter. `all` returns the full archive; the others limit to runs that ended within the named period (UTC).",
+    ),
+  cursor: zod.coerce.string().optional().describe("Opaque pagination cursor."),
+});
+
+export const MeRecentSetArtist = zod.object({
+  name: zod.string(),
+  spins: zod.number(),
+  popular: zod.boolean(),
+  inLibrary: zod.boolean(),
+});
+
+export const MeRecentSetItem = zod.object({
+  station: zod.object({
+    slug: zod.string(),
+    name: zod.string(),
+    stationClass: zod.string(),
+  }),
+  run: zod.object({
+    runId: zod.number(),
+    date: zod.string(),
+    startedAt: zod.string(),
+    endedAt: zod.string(),
+    spinCount: zod.number(),
+    resolvedCount: zod.number(),
+    show: zod
+      .union([
+        zod.object({
+          name: zod.string(),
+          djName: zod.string().nullish(),
+        }),
+        zod.null(),
+      ])
+      .optional(),
+  }),
+  artists: zod.array(MeRecentSetArtist),
+});
+
+export const GetMyRecentSetsResponse = zod.object({
+  items: zod.array(MeRecentSetItem),
+  nextCursor: zod.string().nullish(),
+});
+
+/**
  * @summary Read privacy-preserving anonymous listener presence
  */
 export const GetStationSocialPresenceQueryParams = zod.object({
