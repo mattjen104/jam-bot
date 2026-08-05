@@ -394,8 +394,10 @@ async function lookupSpotifyArtwork(
  * `enrichLinks: false` (deep backfill) skips the per-recording Spotify/Odesli
  * fetch entirely — the spine node still lands, and links converge later when
  * the track is viewed or spun live.
+ *
+ * Exported for unit testing only — internal callers use it directly.
  */
-async function upsertRecording(
+export async function upsertRecording(
   r: MbidResolution,
   artworkUrl?: string,
   enrichLinks = true,
