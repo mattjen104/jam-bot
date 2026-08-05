@@ -9,7 +9,7 @@
  *                                     fire-and-forget, failure is silent)
  *   3. Cache read failure (GCS down)→ falls through to origin fetch, serves
  *                                     image bytes (storage error doesn't 302)
- *   4. Cache hit                    → serves bytes with immutable headers
+ *   4. Cache hit                    → serves bytes with stale-while-revalidate headers
  *   5. Missing src param            → 400
  *   6. SSRF-blocked src             → 302 to original src (not an error page)
  */
@@ -123,7 +123,7 @@ describe("cache miss + GCS write failure", () => {
     expect(res.headers["x-art-proxy"]).toBe("miss");
   });
 
-  it("sets immutable Cache-Control so the browser won't re-fetch", async () => {
+  it("sets stale-while-revalidate Cache-Control so browsers re-check after a day", async () => {
     artGetMock.mockResolvedValue(null);
     isSafeMock.mockResolvedValue(true);
     fetchMock.mockResolvedValue(makeFetchResponse());
@@ -131,7 +131,8 @@ describe("cache miss + GCS write failure", () => {
 
     const res = await request(app).get(PROXY_PATH);
 
-    expect(res.headers["cache-control"]).toMatch(/immutable/);
+    expect(res.headers["cache-control"]).toMatch(/stale-while-revalidate/);
+    expect(res.headers["cache-control"]).not.toMatch(/immutable/);
   });
 });
 
@@ -178,7 +179,7 @@ describe("cache read failure (GCS unreachable)", () => {
 // Scenario 4 — cache hit → bytes served, no origin fetch
 // ─────────────────────────────────────────────────────────────────────────────
 describe("cache hit", () => {
-  it("serves cached bytes with immutable headers and x-art-proxy: hit", async () => {
+  it("serves cached bytes with stale-while-revalidate headers and x-art-proxy: hit", async () => {
     const cachedData = Buffer.from("cached-image-bytes");
     artGetMock.mockResolvedValue({
       data: cachedData,
@@ -189,7 +190,8 @@ describe("cache hit", () => {
 
     expect(res.status).toBe(200);
     expect(res.headers["x-art-proxy"]).toBe("hit");
-    expect(res.headers["cache-control"]).toMatch(/immutable/);
+    expect(res.headers["cache-control"]).toMatch(/stale-while-revalidate/);
+    expect(res.headers["cache-control"]).not.toMatch(/immutable/);
     expect(Buffer.from(res.body)).toEqual(cachedData);
     // Origin should never be called on a cache hit
     expect(fetchMock).not.toHaveBeenCalled();
@@ -215,9 +217,9 @@ describe("missing src param", () => {
 // Scenario 7 — exact Cache-Control and X-Art-Proxy header assertions
 // ─────────────────────────────────────────────────────────────────────────────
 describe("Cache-Control and X-Art-Proxy headers", () => {
-  const EXACT_CACHE_CONTROL = "public, max-age=31536000, immutable";
+  const EXACT_CACHE_CONTROL = "public, max-age=86400, stale-while-revalidate=604800";
 
-  it("cache HIT: sets exact Cache-Control immutable string", async () => {
+  it("cache HIT: sets exact Cache-Control stale-while-revalidate string", async () => {
     artGetMock.mockResolvedValue({
       data: Buffer.from("cached-image-bytes"),
       contentType: "image/jpeg",
@@ -240,7 +242,7 @@ describe("Cache-Control and X-Art-Proxy headers", () => {
     expect(res.headers["x-art-proxy"]).toBe("hit");
   });
 
-  it("cache MISS: sets exact Cache-Control immutable string", async () => {
+  it("cache MISS: sets exact Cache-Control stale-while-revalidate string", async () => {
     artGetMock.mockResolvedValue(null);
     isSafeMock.mockResolvedValue(true);
     fetchMock.mockResolvedValue(makeFetchResponse());
@@ -261,7 +263,7 @@ describe("Cache-Control and X-Art-Proxy headers", () => {
     expect(res.headers["x-art-proxy"]).toBe("miss");
   });
 
-  it("regression: weakening the IMMUTABLE constant is caught immediately", async () => {
+  it("regression: changing the CACHE_CONTROL constant is caught immediately", async () => {
     // Both hit and miss must carry the same unmodified constant
     artGetMock.mockResolvedValue({
       data: Buffer.from("img"),

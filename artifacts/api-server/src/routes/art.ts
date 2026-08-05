@@ -1,14 +1,20 @@
 /**
  * Art proxy — GET /art?src=<encoded-url>
  *
- * On cache HIT: stream the blob from Object Storage with immutable headers.
+ * On cache HIT: stream the blob from Object Storage with revalidation headers.
  * On cache MISS: validate src with the SSRF guard, fetch from origin, store,
  *   then stream the bytes back.
  * On any error (SSRF rejection, origin 4xx/5xx, storage failure): 302
  *   redirect to the original src so the browser still loads the image.
  *
- * Cache-Control: public, max-age=31536000, immutable — the browser never
- * re-fetches after the first hit.
+ * Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+ *   - 1 day hard freshness window — browser skips network entirely.
+ *   - Up to 7 days stale-while-revalidate — browser serves the cached copy
+ *     immediately but re-fetches in the background, so a changed cover
+ *     surfaces on the next page load after the 24-hour window lapses.
+ *
+ * This replaces the old `immutable` directive, which prevented the browser
+ * from picking up a new cover even after Object Storage was evicted.
  */
 import { Router, type IRouter, type Request, type Response } from "express";
 import { isSafeArtworkUrl } from "../lore/share.js";
@@ -16,7 +22,7 @@ import { artGet, artPut } from "../lib/artStorage.js";
 
 const router: IRouter = Router();
 
-const IMMUTABLE = "public, max-age=31536000, immutable";
+const CACHE_CONTROL = "public, max-age=86400, stale-while-revalidate=604800";
 
 async function fetchFromOrigin(
   src: string,
@@ -65,7 +71,7 @@ router.get("/art", async (req: Request, res: Response) => {
     if (cached) {
       res
         .set("Content-Type", cached.contentType)
-        .set("Cache-Control", IMMUTABLE)
+        .set("Cache-Control", CACHE_CONTROL)
         .set("X-Art-Proxy", "hit")
         .send(cached.data);
       return;
@@ -92,7 +98,7 @@ router.get("/art", async (req: Request, res: Response) => {
 
   res
     .set("Content-Type", fetched.contentType)
-    .set("Cache-Control", IMMUTABLE)
+    .set("Cache-Control", CACHE_CONTROL)
     .set("X-Art-Proxy", "miss")
     .send(fetched.data);
 });
