@@ -1393,13 +1393,12 @@ export function DialView() {
               aria-hidden="true"
             />
           )}
-          {/* Wordmark — moon phase replaces the O; letter-spacing handles gaps */}
+          {/* Wordmark — moon phase sits left of the full word "LORE" */}
           <span className="dial-topbar__wordmark" aria-label="Lore">
-            <span className="dial-topbar__letter" aria-hidden="true">L </span>
-            <span className="dial-topbar__moon-o" aria-hidden="true">
+            <span className="dial-topbar__moon-prefix" aria-hidden="true">
               <MoonPhaseGlyph size={14} />
             </span>
-            <span className="dial-topbar__letter" aria-hidden="true">r e</span>
+            <span className="dial-topbar__letter" aria-hidden="true">Lore</span>
           </span>
 
           {/* Global search — tappable fake-input that opens the SearchOverlay */}

@@ -1426,24 +1426,22 @@
   white-space: nowrap;
 }
 
-/* Moon-phase glyph that replaces the O in LORE */
-.dial-topbar__moon-o {
+/* Moon-phase glyph that sits to the left of the LORE wordmark */
+.dial-topbar__moon-prefix {
   display: inline-flex;
   align-items: center;
-  /* letter-spacing doesn't apply between flex items, so mirror it manually */
-  margin-right: 0.22em;
+  /* small gap between moon and the L */
+  margin-right: 0.18em;
 }
-/* Size the SVG to match the font's cap-height (≈0.72em) so the circle is the
-   same visual footprint as an O. CSS overrides the presentational width/height
-   attributes on the <svg> element. */
-.dial-topbar__moon-o svg.moon-glyph {
+/* Size the SVG to match the font's cap-height (≈0.72em) */
+.dial-topbar__moon-prefix svg.moon-glyph {
   width: 0.72em;
   height: 0.72em;
   /* sink the circle to sit on the cap baseline rather than the full em-box */
   vertical-align: -0.1em;
 }
 
-/* Letters (L, re) scaled to match the moon glyph's visual height */
+/* Wordmark letters */
 .dial-topbar__letter {
   font-size: 0.72em;
   line-height: 1;
