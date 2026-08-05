@@ -60,6 +60,7 @@ export function sameLiveValue(a: string | null, b: string | null): boolean {
  * CSS colour applies only to the names, not the separators.
  *
  * Up to 6 names are shown in full; any overflow is collapsed to "… and N more".
+ * Oxford commas are used for three or more names.
  */
 /** Toggle handle for the expandable "Also, …" second sentence. */
 export interface AlsoToggle {
@@ -67,37 +68,24 @@ export interface AlsoToggle {
   onToggle: () => void;
 }
 
-export function nameNodes(artists: string[], also?: AlsoToggle): ReactNode {
+export function nameNodes(artists: string[]): ReactNode {
   const usable = artists.map((artist) => cleanLiveValue(artist)).filter((artist): artist is string => artist != null);
   if (usable.length === 0) return null;
   const shown = usable.slice(0, 6);
   const rest = usable.length - shown.length;
-  // When an expansion is wired, the word "and" itself becomes the toggle for
-  // the appended "Also, …" sentence. Click must not bubble to the row tune-in.
-  const andWord = (key: string): ReactNode => also ? (
-    <button
-      type="button"
-      key={key}
-      className="fdrow__and"
-      aria-expanded={also.expanded}
-      aria-label={also.expanded ? "Hide the rest of this set" : "Show the rest of this set"}
-      onClick={(e) => { e.stopPropagation(); also.onToggle(); }}
-      onKeyDown={(e) => e.stopPropagation()}
-    >and</button>
-  ) : "and";
   const nodes: ReactNode[] = [];
   shown.forEach((name, i) => {
     if (i > 0) {
       if (i === shown.length - 1 && rest === 0) {
         // Oxford comma for three or more names ("A, B, and C").
-        nodes.push(shown.length > 2 ? ", " : " ", andWord(`and-${i}`), " ");
+        nodes.push(shown.length > 2 ? ", and " : " and ");
       } else {
         nodes.push(", ");
       }
     }
     nodes.push(<b className="fdrow__artist" key={i}>{name}</b>);
   });
-  if (rest > 0) nodes.push(shown.length > 1 ? ", " : " ", andWord("and-more"), ` ${rest} more`);
+  if (rest > 0) nodes.push(shown.length > 1 ? ", and " : " and ", `${rest} more`);
   return <>{nodes}</>;
 }
 
@@ -146,6 +134,10 @@ export function usableShowName(show: DialShow | null): string | null {
  *   No DJ, show known   → "[artists] on [Show] {timing}"
  *   Neither             → "[artists] {timing}"
  *
+ * When `also` is provided and timing is "this set", the phrase "this set"
+ * becomes a clickable button that toggles the appended "Also, …" tail.
+ * For "now" sentences the timing stays plain text with a leading comma.
+ *
  * When no artistNodes are available, falls back to a count-based phrase.
  * Song titles are never included — the player handles that.
  */
@@ -157,10 +149,27 @@ export function buildAttributedSentence(
   showName: string | null,
   timing: string,
   alsoTail?: ReactNode,
+  also?: AlsoToggle,
 ): ReactNode {
-  // Copy rule: "now" always takes a comma before it ("…, and X, now.");
-  // "this set" reads as part of the clause and stays comma-free.
-  const timingText = timing ? (timing === "now" ? ", now" : ` ${timing}`) : "";
+  // Build the timing element.
+  // "now" → plain ", now" (comma rule)
+  // "this set" + toggle → clickable button
+  // "this set" without toggle / any other string → plain " <timing>"
+  const timingEl: ReactNode = !timing ? null :
+    timing === "now" ? ", now" :
+    also ? (
+      <>
+        {" "}
+        <button
+          type="button"
+          className="fdrow__thisset"
+          aria-expanded={also.expanded}
+          aria-label={also.expanded ? "Hide the rest of this set" : "Show the rest of this set"}
+          onClick={(e) => { e.stopPropagation(); also.onToggle(); }}
+        >this set</button>
+      </>
+    ) : ` ${timing}`;
+
   if (artistNodes) {
     if (djName && showName) {
       return (
@@ -170,6 +179,7 @@ export function buildAttributedSentence(
           {artistNodes}
           {" on "}
           <span className="fdrow__show">{showName}</span>
+          {timingEl}
           {"."}
           {alsoTail}
         </>
@@ -181,6 +191,7 @@ export function buildAttributedSentence(
           <b className="fdrow__dj">{djName}</b>
           {" selected "}
           {artistNodes}
+          {timingEl}
           {"."}
           {alsoTail}
         </>
@@ -192,16 +203,16 @@ export function buildAttributedSentence(
           {artistNodes}
           {" on "}
           <span className="fdrow__show">{showName}</span>
-          {timingText}
+          {timingEl}
           {"."}
           {alsoTail}
         </>
       );
     }
-    return <>{artistNodes}{timingText}{"."}{alsoTail}</>;
+    return <>{artistNodes}{timingEl}{"."}{alsoTail}</>;
   }
 
-  // Count-only fallback (no artist names resolved yet)
+  // Count-only fallback (no artist names resolved yet) — no toggle affordance
   const countNode = <b>{count} {countLabel}</b>;
   if (djName && showName) {
     return (
@@ -231,12 +242,12 @@ export function buildAttributedSentence(
         {countNode}
         {" on "}
         <span className="fdrow__show">{showName}</span>
-        {timingText}
+        {!also && timing ? (timing === "now" ? ", now" : ` ${timing}`) : timingEl}
         {"."}
       </>
     );
   }
-  return <>{countNode}{timingText}{"."}</>;
+  return <>{countNode}{!also && timing ? (timing === "now" ? ", now" : ` ${timing}`) : timingEl}{"."}</>;
 }
 
 // ---------------------------------------------------------------------------
@@ -272,7 +283,7 @@ export function crossingSentence(
     .filter((artist): artist is string => artist != null)
     .filter((artist) => !sameLiveValue(artist, station))
     .filter((artist, index, all) => all.findIndex((other) => sameLiveValue(other, artist)) === index);
-  const artistNodes = nameNodes(artists, also);
+  const artistNodes = nameNodes(artists);
   const count = hasExactCrossing
     ? Math.max(show.crossings, current?.isLibraryHit ? 1 : 0)
     : Math.max(show.artistCrossings, current?.isArtistHit ? 1 : 0);
@@ -291,6 +302,10 @@ export function crossingSentence(
   const isLive = !!(current?.isLibraryHit || current?.isArtistHit);
   const timing = isLive ? "now" : "this set";
 
+  // Only wire the toggle when timing is "this set" — live sentences have no
+  // "this set" word to click, so no toggle affordance is offered.
+  const activeAlso = !isLive ? also : undefined;
+
   if (artistNodes) {
     return {
       node: buildAttributedSentence(
@@ -300,7 +315,8 @@ export function crossingSentence(
         dj,
         showName,
         timing,
-        also?.expanded ? also.node : null,
+        activeAlso?.expanded ? activeAlso.node : null,
+        activeAlso,
       ),
       hasTrack: true,
       artistsShown: artists.slice(0, 6),

@@ -4629,20 +4629,23 @@
 .fdrow__t1 .fdrow__artist--pop { color: hsl(var(--accent)); }
 .fdrow__t1 .fdrow__artist--new { color: hsl(var(--canary)); }
 .fdrow__t1 .fdrow__artist--lib { color: hsl(var(--library)); }
+/* "＋" indicator inside the Also sentence — passive span, not a button.
+   Clicks fall through to the parent artist <b> via pointer-events:none.
+   Appears immediately after the name with no gap. */
 .fdrow__addplus {
-  appearance: none;
-  background: none;
-  border: none;
-  padding: 0 1px;
-  margin-left: 2px;
-  font-size: 0.72em;
+  display: inline;
+  padding: 0;
+  margin-left: 1px;
+  font-size: 0.68em;
   font-weight: 700;
   line-height: 1;
   color: hsl(var(--library));
-  cursor: pointer;
   vertical-align: super;
+  pointer-events: none;
+  user-select: none;
 }
-.fdrow__addplus:hover { color: hsl(var(--library) / 0.75); }
+/* Artist names in the Also sentence that can be added — show pointer. */
+.fdrow__artist--addable { cursor: pointer; }
 /* ── Also-On-Air right-edge scrubber ─────────────────────────────────────
    One tick per station in the current sort order; tick length tracks the
    popular-crossing weight (the lime gradient IS the sort), canary ticks
@@ -4716,9 +4719,10 @@
   vertical-align: middle;
 }
 .fdrow__setmore:hover { color: hsl(var(--accent)); border-color: hsl(var(--accent) / 0.5); }
-/* Clickable "and" inside a crossing sentence — toggles the "Also, …" tail.
-   Kept inline and word-like: only a dotted underline signals the affordance. */
-.fdrow__and {
+/* Clickable "this set" inside a crossing sentence — toggles the "Also, …"
+   appended sentence. Rendered inline, word-like; dotted underline is the
+   only affordance so the sentence still reads naturally when collapsed. */
+.fdrow__thisset {
   appearance: none;
   background: none;
   border: none;
@@ -4730,9 +4734,46 @@
   text-decoration: underline dotted;
   text-underline-offset: 2px;
 }
-.fdrow__and:hover { color: hsl(var(--accent)); }
-/* Appended "Also, …" second sentence — slightly quieter than the main clause */
-.fdrow__also { color: hsl(var(--foreground) / 0.75); }
+.fdrow__thisset:hover { color: hsl(var(--accent)); }
+/* ── "this set:" expanded block ─────────────────────────────────────────────
+   Appears as a flex row below the crossing sentence when the listener expands
+   the setlist. "this set:" label on the left is the collapse trigger;
+   artist dots fill the remaining width. */
+.fdrow__also-block {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin-top: 5px;
+}
+/* "this set:" collapse label — left-edge, mono, muted */
+.fdrow__also-label {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font-family: var(--app-font-mono);
+  font-size: 0.7em;
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+.fdrow__also-label:hover { color: hsl(var(--foreground) / 0.8); }
+/* Artist dots container — fills remaining width, slightly quieter base tone */
+.fdrow__also-artists {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.9em;
+  color: hsl(var(--foreground) / 0.8);
+  line-height: 1.5;
+}
+/* Artist colour rules scoped to the also-block (mirror of fdrow__t1 rules) */
+.fdrow__also-block .fdrow__artist--pop  { color: hsl(var(--accent)); }
+.fdrow__also-block .fdrow__artist--lib  { color: hsl(var(--library)); }
+.fdrow__also-block .fdrow__artist--also { color: hsl(var(--foreground)); font-weight: 600; }
 /* Lime sort triangle next to the Also On Air tab — flips popular-heavy /
    deep-cuts station ordering (client-side re-sort, no refetch). */
 .dial-tab-sort {

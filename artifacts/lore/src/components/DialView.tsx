@@ -266,38 +266,49 @@ function PopCrossingLine({ artists, seedsLower, onAdd }: {
 }
 
 /**
- * The appended "Also, …" second sentence behind the clickable "and" in a
- * crossing sentence: the rest of the station's set in setlist order, with the
- * same lime/canary/library coloring and "+" adders as the setlist line.
- * Copy rules: informal register, Oxford comma for three or more names.
+ * Full setlist for the expanded "this set:" block.
+ *
+ * Renders artist names dot-separated with no header text — the parent
+ * fdrow__also-block provides the "this set:" label and layout.
+ *
+ * Colour rules (scoped via fdrow__also-block in CSS):
+ *   - seeded this session → orange-red (library colour); "＋" disappears.
+ *   - popular (rare-spin criterion) → lime green.
+ *   - default → white.
+ * Clicking a name (when not yet seeded) adds it; the "＋" glyph is a
+ * passive indicator with pointer-events:none so the <b> receives the click.
  */
 function AlsoSentence({ artists, seedsLower, onAdd }: {
   artists: PopularCrossingArtist[];
   seedsLower: Set<string>;
   onAdd: (name: string) => void;
 }) {
-  const inLib = (a: PopularCrossingArtist) => a.inLibrary || seedsLower.has(a.name.trim().toLowerCase());
+  const isSeeded = (a: PopularCrossingArtist) =>
+    a.inLibrary || seedsLower.has(a.name.trim().toLowerCase());
+
+  const alsoCls = (a: PopularCrossingArtist): string => {
+    if (isSeeded(a)) return "fdrow__artist fdrow__artist--lib";
+    if (a.popular)   return "fdrow__artist fdrow__artist--pop";
+    return "fdrow__artist fdrow__artist--also";
+  };
+
   const nodes: ReactNode[] = [];
   artists.forEach((a, i) => {
-    if (i > 0) {
-      if (i === artists.length - 1) nodes.push(artists.length > 2 ? ", and " : " and ");
-      else nodes.push(", ");
-    }
+    if (i > 0) nodes.push(" · ");
+    const addable = !isSeeded(a);
     nodes.push(
-      <b key={a.name} className={popArtistCls(a, inLib(a))}>
+      <b
+        key={a.name}
+        className={`${alsoCls(a)}${addable ? " fdrow__artist--addable" : ""}`}
+        onClick={addable ? (e) => { e.stopPropagation(); onAdd(a.name); } : undefined}
+      >
         {a.name}
-        {!inLib(a) && (
-          <button
-            type="button"
-            className="fdrow__addplus"
-            aria-label={`Add ${a.name} to your artists`}
-            onClick={(e) => { e.stopPropagation(); onAdd(a.name); }}
-          >＋</button>
-        )}
+        {addable && <span className="fdrow__addplus" aria-hidden="true">＋</span>}
       </b>,
     );
   });
-  return <span className="fdrow__also">{" Also, "}{nodes}{"."}</span>;
+  // No wrapper — parent block provides the layout container.
+  return <>{nodes}</>;
 }
 
 interface ScrubItem {
@@ -452,7 +463,7 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, dis
     ? crossingSentence(ds.station.name, safeShow, displayMode, {
         expanded: alsoExpanded,
         onToggle: () => setAlsoExpanded((v) => !v),
-        node: <AlsoSentence artists={remainingSet} seedsLower={seedsLower} onAdd={onAddArtist} />,
+        node: null, // expanded content rendered as fdrow__also-block below tier1
       })
     : probe;
   // In blended mode: live sentence is a secondary attribution line shown below rz.node
@@ -507,6 +518,15 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, dis
         <div className={`fdrow__t1 ${tier1Cls}`}>
           {tier1Node}
         </div>
+
+        {/* "this set:" expanded block — shows the full station setlist below the
+            crossing sentence when the listener clicks "this set".
+            "this set:" label on the left is the collapse trigger. */}
+        {alsoExpanded && remainingSet.length > 0 && seedsLower && onAddArtist && (
+          <div className="fdrow__also-block" onClick={(e) => e.stopPropagation()}>
+            <AlsoSentence artists={remainingSet} seedsLower={seedsLower} onAdd={onAddArtist} />
+          </div>
+        )}
 
         {/* Blended mode secondary: live DJ/track attribution shown below the
             community count. Uses only public DJ/track metadata, not personal
