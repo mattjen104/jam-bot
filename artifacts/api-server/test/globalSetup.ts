@@ -43,6 +43,16 @@ export async function setup(): Promise<void> {
       "../src/lore/replay-resolution-migration.js"
     );
     await applyReplayResolutionMigration();
+
+    const { applyCrossingsCacheMigration } = await import(
+      "../src/lore/crossings-cache-migration.js"
+    );
+    await applyCrossingsCacheMigration();
+
+    const { applyLifetimeCrossingsMigration } = await import(
+      "../src/lore/lifetime-crossings-migration.js"
+    );
+    await applyLifetimeCrossingsMigration();
   } catch {
     // No real DB available — pure-unit environment.  Workers that need the
     // tables will skip their tests gracefully via their own dbAvailable guards.

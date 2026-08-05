@@ -84,6 +84,8 @@ import {
   startEmbedResolutionWorker,
 } from "./lore/embed-resolution.js";
 import { applySocialPresenceMigration } from "./lore/social-presence-migration.js";
+import { applyLifetimeCrossingsMigration } from "./lore/lifetime-crossings-migration.js";
+import { startLifetimeCrossingsJob } from "./lore/lifetime-crossings-job.js";
 
 const rawPort = process.env["PORT"];
 
@@ -216,6 +218,8 @@ async function bootLore(): Promise<void> {
     await wireImageExtractor();
     startDiscoveryScoreJob();
     startQualityRecomputeJob();
+    await runMigration("applyLifetimeCrossingsMigration", applyLifetimeCrossingsMigration);
+    startLifetimeCrossingsJob();
     startArtPrewarm();
     startPhase3RetryScheduler();
     await resumeReplayResolutionJobs();

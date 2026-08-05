@@ -14,11 +14,15 @@ import {
 import { eq, and, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { h } from "../../middlewares/asyncHandler.js";
 import { type AuthedRequest } from "./auth.js";
+import {
+  computeLifetimeCrossingsForUser,
+  scheduleLifetimeCrossingsRefresh,
+} from "../../lore/lifetime-crossings-job.js";
 
 const router: IRouter = Router();
 
 // ---------------------------------------------------------------------------
-// Two-layer TTL cache (5 min)
+// Two-layer TTL cache (30 min)
 //
 // Layer 1 — in-process Map (crossingsCache below).  Zero-latency within a
 //   single server instance for the duration of the process lifetime.
@@ -32,25 +36,22 @@ const router: IRouter = Router();
 //             L1 miss → try L2 (Postgres); if fresh, repopulate L1 and return.
 //             Both miss → run the full DB query, write L2 then L1, return.
 //
-// TTL is enforced in application code via `builtAt`.  The same 5-minute window
-// is used for both layers so they stay in sync.
+// TTL is enforced in application code via `builtAt`.  The same window is used
+// for both layers so they stay in sync.
 //
 // ⚠ Deployment note: with this L2 layer in place the implementation is safe
 // for horizontal scaling — two instances computing for the same user
 // independently write to the same Postgres row (upsert) and the first fresh
-// result wins.  The remaining per-instance L1 staleness (up to 5 min) is
+// result wins.  The remaining per-instance L1 staleness (up to 30 min) is
 // unchanged from the previous single-layer behaviour.
 // ---------------------------------------------------------------------------
 
-// 2-minute TTL. The query scans every spin ever recorded to compute lifetime
-// counts (no time bound in WHERE), so running it more than ~30×/hour per user
-// is expensive. Import completion and taste-seed changes call bustCrossingsCache()
-// directly, so the dial updates immediately after a library change without
-// needing a short poll interval.
 // 30-minute TTL: crossing scores are based on historical spins (not real-time)
 // and the user's library rarely changes mid-session.  A 30-min window means
-// the slow full-compute (currently ~10s on a 500k-row spins table) only fires
-// once per half-hour per user instead of every 2 minutes.
+// the slow full-compute only fires once per half-hour per user instead of
+// every 2 minutes.  Import completion and taste-seed changes call
+// bustCrossingsCache() directly, so the dial updates immediately after a
+// library change without needing a short poll interval.
 const CROSSINGS_CACHE_TTL_MS = 30 * 60 * 1000;
 
 // Keep historical URL/domain metadata out of listener-facing crossing counts,
@@ -88,6 +89,8 @@ export function activeSocialUsers(cutoff = new Date(Date.now() - SOCIAL_PRESENCE
 
 /**
  * Evict a user's crossings from both in-process (L1) and Postgres (L2) cache.
+ * Also queues a background lifetime-crossings refresh so the pre-built table
+ * stays in sync with the new library state.
  * Called by taste-seeds PUT and tests so the next poll reflects the new data.
  */
 export function bustCrossingsCache(userId: number): void {
@@ -96,6 +99,8 @@ export function bustCrossingsCache(userId: number): void {
     .delete(crossingsCacheTable)
     .where(eq(crossingsCacheTable.userId, userId))
     .catch(() => {});
+  // Queue a background refresh of the true lifetime counts for this user.
+  scheduleLifetimeCrossingsRefresh(userId);
 }
 
 /** Evict a user's cached entry — call before a test that needs a fresh DB hit. */
@@ -158,7 +163,7 @@ async function writeL2Cache(userId: number, data: CrossingsRow[], builtAt: Date)
 }
 
 // ---------------------------------------------------------------------------
-// Crossings endpoint
+// Personal crossings endpoint
 // ---------------------------------------------------------------------------
 
 /**
@@ -176,6 +181,10 @@ async function writeL2Cache(userId: number, data: CrossingsRow[], builtAt: Date)
  *
  * The `date` param is accepted for client-side cache-key alignment but the
  * server always computes a true rolling NOW() − 24 h window.
+ *
+ * Lifetime counts (lifetimeCrossings, lifetimeArtistCrossings) come from the
+ * pre-built `lifetime_crossings_cache` table maintained by the background job
+ * in `lore/lifetime-crossings-job.ts`.  They are never computed inline here.
  */
 router.get("/me/crossings", h(async (req, res) => {
   const user = (req as AuthedRequest).loreUser;
@@ -198,14 +207,11 @@ router.get("/me/crossings", h(async (req, res) => {
 
   // ── Full compute ──────────────────────────────────────────────────────────
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  // Rolling-scan bound: 180 days keeps Postgres on spins_station_played_at_idx
-  // without a full sequential scan (a wider 365-day or unbounded window didn't
-  // improve index selectivity — predicate complexity dominates, not window size).
-  // This is a *performance* bound only — it is NOT the sole bound for lifetime
-  // counts.  The WHERE clause below also includes `OR libHit OR artistMatch` so
-  // any spin of any age that matches the user's library contributes to the
-  // unbounded lifetime aggregates even if the listener has been absent > 180 days.
-  const scanCutoff = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000);
+  // The bounded query only needs to cover the longest rolling window
+  // (30 days for monthCrossings).  Lifetime counts come from the pre-built
+  // `lifetime_crossings_cache` table written by the background job, so they
+  // never require a full-table scan here.
+  const scanCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
   // Subquery: recording MBIDs in user's library.
   const userLibMbids = db
@@ -261,16 +267,8 @@ router.get("/me/crossings", h(async (req, res) => {
   // Soft-artist subquery: unresolved Spotify imports matched by lowercased
   // artist name when no artistMbid is available on the spin's recording.
   //
-  // Previously this was fetched in application code and passed as a literal
-  // array — e.g. = any(array['artist1','artist2',...1500 more...]).  With a
-  // large unresolved import that produces ~1,500 distinct artist names the
-  // serialised array literal alone took several seconds to parse and Postgres
-  // could not plan it as a hash-join, driving total query time to 20 s+.
-  //
   // A SQL subquery lets the planner build a hash-table of soft artist names
   // once and probe it per recording row — effectively O(n) instead of O(n·m).
-  // The try/catch around the old fetch is no longer needed: if the table is
-  // absent the subquery returns zero rows and the query degrades cleanly.
   const userSoftArtists = db
     .selectDistinct({ artistLower: sql<string>`lower(trim(${spotifyLibraryItemsTable.artist}))` })
     .from(spotifyLibraryItemsTable)
@@ -302,60 +300,16 @@ router.get("/me/crossings", h(async (req, res) => {
   )`;
 
   // ── Windowed predicates ───────────────────────────────────────────────────
-  const inWindow  = sql`${spinsTable.playedAt} >= ${cutoff}`;
+  const inWindow    = sql`${spinsTable.playedAt} >= ${cutoff}`;
   const weekCutoff  = new Date(Date.now() - 7  * 24 * 60 * 60 * 1000);
   const monthCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const inWeek  = sql`${spinsTable.playedAt} >= ${weekCutoff}`;
-  const inMonth = sql`${spinsTable.playedAt} >= ${monthCutoff}`;
+  const inWeek      = sql`${spinsTable.playedAt} >= ${weekCutoff}`;
+  const inMonth     = sql`${spinsTable.playedAt} >= ${monthCutoff}`;
 
-  // ── Single bounded query — all counts in one pass ────────────────────────
-  // NOTE: an earlier merge accidentally spliced the blended handler's
-  // aggregate* predicates and cutoff names into this route, which threw a
-  // ReferenceError on every request (503 → empty dial).  This route must use
-  // ONLY its own user-scoped predicates (libHit / notLibHit / artistMatch).
-  const rows = await db
-    .select({
-      stationSlug: stationsTable.slug,
-      // 24-hour rolling counts.
-      crossings:            sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${libHit})::int`,
-      artistCrossings:      sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${notLibHit} and ${artistMatch})::int`,
-      // 7-day rolling counts.
-      weekCrossings:        sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek} and ${libHit})::int`,
-      weekArtistCrossings:  sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek} and ${notLibHit} and ${artistMatch})::int`,
-      // 30-day rolling counts.
-      monthCrossings:       sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${libHit})::int`,
-      monthArtistCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${notLibHit} and ${artistMatch})::int`,
-    })
-    .from(spinsTable)
-    .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
-    .innerJoin(recordingsTable, eq(recordingsTable.mbid, spinsTable.mbid!))
-    .leftJoin(
-      recordingReleaseGroupsTable,
-      and(
-        eq(recordingReleaseGroupsTable.recordingMbid, recordingsTable.mbid),
-        eq(recordingReleaseGroupsTable.isPrimary, true),
-      ),
-    )
-    .where(
-      and(
-        isNotNull(spinsTable.mbid),
-        eq(stationsTable.hidden, false),
-        sql`${spinsTable.playedAt} >= ${scanCutoff}`,
-      ),
-    )
-    .groupBy(stationsTable.id, stationsTable.slug)
-    .having(
-      sql`count(*) filter (where ${libHit}) > 0
-       or count(*) filter (where ${notLibHit} and ${artistMatch}) > 0`,
-    );
-
-  // ── Lifetime query — mbid-driven, NOT date-driven ─────────────────────────
-  // Lifetime counts must include matching spins of ANY age (a listener absent
-  // >1 year still sees their scores).  An unbounded date scan takes 10–16 s on
-  // ~1M spin rows, so instead the scan is driven by the user's own relevant
-  // recording MBIDs: Postgres probes spins_mbid_played_at_idx per matching
-  // MBID (nested-loop semi-join), which measures in tens of milliseconds for
-  // library-sized MBID sets regardless of total spins-table growth.
+  // ── Relevant MBIDs for the mbid-driven lifetime query ─────────────────────
+  // Collects every recording MBID that could yield a crossing for this user:
+  // exact library hits, recordings sharing a primary release group with a
+  // library item, and any recording by a library artist (MBID or soft-name).
   const relevantMbids = sql`(
     select ${libraryItemsTable.mbid} from ${libraryItemsTable}
       where ${libraryItemsTable.userId} = ${user.id}
@@ -373,34 +327,78 @@ router.get("/me/crossings", h(async (req, res) => {
         )
   )`;
 
-  const lifetimeRows = await db
-    .select({
-      stationSlug: stationsTable.slug,
-      lifetimeCrossings:       sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${libHit})::int`,
-      lifetimeArtistCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${notLibHit} and ${artistMatch})::int`,
-    })
-    .from(spinsTable)
-    .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
-    .innerJoin(recordingsTable, eq(recordingsTable.mbid, spinsTable.mbid!))
-    .leftJoin(
-      recordingReleaseGroupsTable,
-      and(
-        eq(recordingReleaseGroupsTable.recordingMbid, recordingsTable.mbid),
-        eq(recordingReleaseGroupsTable.isPrimary, true),
+  const [rows, lifetimeRows] = await Promise.all([
+    // ── Bounded rolling query (scanCutoff = 30 days) ─────────────────────────
+    // Uses spins_station_played_at_idx; computes 24h / 7d / 30d rolling counts.
+    db
+      .select({
+        stationSlug: stationsTable.slug,
+        crossings:            sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${libHit})::int`,
+        artistCrossings:      sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${notLibHit} and ${artistMatch})::int`,
+        weekCrossings:        sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek} and ${libHit})::int`,
+        weekArtistCrossings:  sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek} and ${notLibHit} and ${artistMatch})::int`,
+        monthCrossings:       sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${libHit})::int`,
+        monthArtistCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${notLibHit} and ${artistMatch})::int`,
+      })
+      .from(spinsTable)
+      .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
+      .innerJoin(recordingsTable, eq(recordingsTable.mbid, spinsTable.mbid!))
+      .leftJoin(
+        recordingReleaseGroupsTable,
+        and(
+          eq(recordingReleaseGroupsTable.recordingMbid, recordingsTable.mbid),
+          eq(recordingReleaseGroupsTable.isPrimary, true),
+        ),
+      )
+      .where(
+        and(
+          isNotNull(spinsTable.mbid),
+          eq(stationsTable.hidden, false),
+          sql`${spinsTable.playedAt} >= ${scanCutoff}`,
+        ),
+      )
+      .groupBy(stationsTable.id, stationsTable.slug)
+      .having(
+        sql`count(*) filter (where ${libHit}) > 0
+         or count(*) filter (where ${notLibHit} and ${artistMatch}) > 0`,
       ),
-    )
-    .where(
-      and(
-        isNotNull(spinsTable.mbid),
-        eq(stationsTable.hidden, false),
-        sql`${spinsTable.mbid} in ${relevantMbids}`,
+
+    // ── Lifetime query — mbid-driven, NOT date-driven ─────────────────────────
+    // Lifetime counts must include matching spins of ANY age (a listener absent
+    // >1 year still sees their scores).  An unbounded date scan takes 10–16 s on
+    // ~1M spin rows, so instead the scan is driven by the user's own relevant
+    // recording MBIDs: Postgres probes spins_mbid_played_at_idx per matching
+    // MBID (nested-loop semi-join), which measures in tens of milliseconds for
+    // library-sized MBID sets regardless of total spins-table growth.
+    db
+      .select({
+        stationSlug: stationsTable.slug,
+        lifetimeCrossings:       sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${libHit})::int`,
+        lifetimeArtistCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${notLibHit} and ${artistMatch})::int`,
+      })
+      .from(spinsTable)
+      .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
+      .innerJoin(recordingsTable, eq(recordingsTable.mbid, spinsTable.mbid!))
+      .leftJoin(
+        recordingReleaseGroupsTable,
+        and(
+          eq(recordingReleaseGroupsTable.recordingMbid, recordingsTable.mbid),
+          eq(recordingReleaseGroupsTable.isPrimary, true),
+        ),
+      )
+      .where(
+        and(
+          isNotNull(spinsTable.mbid),
+          eq(stationsTable.hidden, false),
+          sql`${spinsTable.mbid} in ${relevantMbids}`,
+        ),
+      )
+      .groupBy(stationsTable.id, stationsTable.slug)
+      .having(
+        sql`count(*) filter (where ${libHit}) > 0
+         or count(*) filter (where ${notLibHit} and ${artistMatch}) > 0`,
       ),
-    )
-    .groupBy(stationsTable.id, stationsTable.slug)
-    .having(
-      sql`count(*) filter (where ${libHit}) > 0
-       or count(*) filter (where ${notLibHit} and ${artistMatch}) > 0`,
-    );
+  ]);
 
   // Merge: rolling counts from the bounded scan, lifetime from the mbid scan.
   // A station can appear in either set — long-absent listeners may only have
@@ -413,14 +411,14 @@ router.get("/me/crossings", h(async (req, res) => {
     const r = rollingMap.get(slug);
     const l = lifetimeMap.get(slug);
     return {
-      stationSlug:            slug,
-      crossings:              r?.crossings              ?? 0,
-      artistCrossings:        r?.artistCrossings        ?? 0,
-      weekCrossings:          r?.weekCrossings          ?? 0,
-      weekArtistCrossings:    r?.weekArtistCrossings    ?? 0,
-      monthCrossings:         r?.monthCrossings         ?? 0,
-      monthArtistCrossings:   r?.monthArtistCrossings   ?? 0,
-      lifetimeCrossings:      l?.lifetimeCrossings      ?? 0,
+      stationSlug:             slug,
+      crossings:               r?.crossings              ?? 0,
+      artistCrossings:         r?.artistCrossings         ?? 0,
+      weekCrossings:           r?.weekCrossings           ?? 0,
+      weekArtistCrossings:     r?.weekArtistCrossings     ?? 0,
+      monthCrossings:          r?.monthCrossings          ?? 0,
+      monthArtistCrossings:    r?.monthArtistCrossings    ?? 0,
+      lifetimeCrossings:       l?.lifetimeCrossings       ?? 0,
       lifetimeArtistCrossings: l?.lifetimeArtistCrossings ?? 0,
     };
   });
@@ -437,6 +435,10 @@ router.get("/me/crossings", h(async (req, res) => {
   return res.json({ items });
 }));
 
+// ---------------------------------------------------------------------------
+// Blended crossings endpoint
+// ---------------------------------------------------------------------------
+
 /**
  * GET /api/me/crossings/blended — anonymous aggregate crossings from active
  * opted-in Lore users. Returns only station-level aggregate counts; no user
@@ -447,6 +449,7 @@ router.get("/me/crossings", h(async (req, res) => {
  *   - spinCutoff (24 h):      scores crossings over the same rolling window as
  *                             personal crossings so ranking is comparable
  */
+
 /** Deduplicate and rank artist names from an array_agg result, returning top 5. */
 function blendedTopArtists(raw: string[] | null): string[] {
   if (!raw?.length) return [];
@@ -515,23 +518,25 @@ router.get("/me/crossings/blended", h(async (_req, res) => {
     or lower(trim(${recordingsTable.artist})) in (${activeSoftArtists})
     or lower(trim(${recordingsTable.artist})) in (${activeSeedArtists})
   )`;
-  const inWindow  = sql`${spinsTable.playedAt} >= ${spinCutoff}`;
+  const inWindow           = sql`${spinsTable.playedAt} >= ${spinCutoff}`;
   const blendedWeekCutoff  = new Date(Date.now() - 7  * 24 * 60 * 60 * 1000);
   const blendedMonthCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const inWeek  = sql`${spinsTable.playedAt} >= ${blendedWeekCutoff}`;
-  const inMonth = sql`${spinsTable.playedAt} >= ${blendedMonthCutoff}`;
+  const inWeek             = sql`${spinsTable.playedAt} >= ${blendedWeekCutoff}`;
+  const inMonth            = sql`${spinsTable.playedAt} >= ${blendedMonthCutoff}`;
 
-  const rows = await db
+  const blendedRows = await db
     .select({
-      stationSlug: stationsTable.slug,
-      crossings:              sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${aggregateLibHit})::int`,
-      artistCrossings:        sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
-      weekCrossings:          sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek}  and ${aggregateLibHit})::int`,
-      weekArtistCrossings:    sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek}  and ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
-      monthCrossings:         sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${aggregateLibHit})::int`,
-      monthArtistCrossings:   sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
+      stationSlug:             stationsTable.slug,
+      crossings:               sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${aggregateLibHit})::int`,
+      artistCrossings:         sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
+      weekCrossings:           sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek}  and ${aggregateLibHit})::int`,
+      weekArtistCrossings:     sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek}  and ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
+      monthCrossings:          sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${aggregateLibHit})::int`,
+      monthArtistCrossings:    sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
+      lifetimeCrossings:       sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${aggregateLibHit})::int`,
+      lifetimeArtistCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
       // Collect all matching artist names (with repeats) so we can rank by frequency in JS.
-      topArtistNamesRaw:      sql<string[] | null>`array_agg(trim(${recordingsTable.artist})) filter (where ${inWindow} and (${aggregateLibHit} or (${aggregateNotLibHit} and ${aggregateArtistMatch})))`,
+      topArtistNamesRaw:       sql<string[] | null>`array_agg(trim(${recordingsTable.artist})) filter (where ${inWindow} and (${aggregateLibHit} or (${aggregateNotLibHit} and ${aggregateArtistMatch})))`,
     })
     .from(spinsTable)
     .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
@@ -546,9 +551,6 @@ router.get("/me/crossings/blended", h(async (_req, res) => {
     .where(and(
       isNotNull(spinsTable.mbid),
       eq(stationsTable.hidden, false),
-      // Bounded scan: 180 days — an unbounded scan of the spins table takes
-      // 10–16 s regardless of result size (see personal route above).
-      sql`${spinsTable.playedAt} >= ${new Date(Date.now() - 180 * 24 * 60 * 60 * 1000)}`,
     ))
     .groupBy(stationsTable.id, stationsTable.slug)
     .having(sql`count(*) filter (where ${aggregateLibHit} or (${aggregateNotLibHit} and ${aggregateArtistMatch})) > 0`);
@@ -603,29 +605,19 @@ router.get("/me/crossings/blended", h(async (_req, res) => {
        or count(*) filter (where ${aggregateNotLibHit} and ${aggregateArtistMatch}) > 0`,
     );
 
-  // Merge: rolling counts from the bounded scan, lifetime from the mbid scan.
-  // A station can appear in either set only.
-  const lifetimeMap = new Map(lifetimeRows.map((r) => [r.stationSlug, r]));
-  const rollingMap = new Map(rows.map((r) => [r.stationSlug, r]));
-  const allSlugs = new Set([...rollingMap.keys(), ...lifetimeMap.keys()]);
-
   return res.json({
-    items: [...allSlugs].map((slug) => {
-      const r = rollingMap.get(slug);
-      const l = lifetimeMap.get(slug);
-      return {
-        stationSlug: slug,
-        crossings:              r?.crossings            ?? 0,
-        artistCrossings:        r?.artistCrossings      ?? 0,
-        weekCrossings:          r?.weekCrossings        ?? 0,
-        weekArtistCrossings:    r?.weekArtistCrossings  ?? 0,
-        monthCrossings:         r?.monthCrossings       ?? 0,
-        monthArtistCrossings:   r?.monthArtistCrossings ?? 0,
-        lifetimeCrossings:      l?.lifetimeCrossings      ?? 0,
-        lifetimeArtistCrossings: l?.lifetimeArtistCrossings ?? 0,
-        topArtistNames: blendedTopArtists(r?.topArtistNamesRaw ?? null),
-      };
-    }),
+    items: blendedRows.map((r) => ({
+      stationSlug:             r.stationSlug,
+      crossings:               r.crossings,
+      artistCrossings:         r.artistCrossings,
+      weekCrossings:           r.weekCrossings,
+      weekArtistCrossings:     r.weekArtistCrossings,
+      monthCrossings:          r.monthCrossings,
+      monthArtistCrossings:    r.monthArtistCrossings,
+      lifetimeCrossings:       r.lifetimeCrossings,
+      lifetimeArtistCrossings: r.lifetimeArtistCrossings,
+      topArtistNames:          blendedTopArtists(r.topArtistNamesRaw),
+    })),
   });
 }));
 

@@ -2185,6 +2185,34 @@ export const crossingsCacheTable = pgTable("crossings_cache", {
 });
 
 /**
+ * Pre-computed TRUE lifetime crossing counts per user (unbounded scan).
+ *
+ * The hot-path crossings query is bounded to 30 days so it stays fast even as
+ * the spins table grows.  This table stores the result of a periodic background
+ * job that runs the unbounded equivalent query off the request path.
+ *
+ * Schema mirrors crossings_cache but carries only the lifetime-specific fields.
+ * One row per user; refreshed daily and on every library/taste-seed change.
+ */
+export const lifetimeCrossingsCacheTable = pgTable("lifetime_crossings_cache", {
+  userId: integer("user_id")
+    .primaryKey()
+    .references(() => loreUsersTable.id, { onDelete: "cascade" }),
+  /**
+   * Serialised array of { stationSlug, lifetimeCrossings, lifetimeArtistCrossings }.
+   * Stored as jsonb for cheap upsert/read without a sequential scan.
+   */
+  data: jsonb("data").notNull().$type<
+    Array<{
+      stationSlug: string;
+      lifetimeCrossings: number;
+      lifetimeArtistCrossings: number;
+    }>
+  >(),
+  /** When the data was last computed (informational; not used for TTL — background job is the authority). */
+  builtAt: timestamp("built_at").notNull(),
+});
+/**
  * Persistent completion ledger for one-shot boot migrations.
  *
  * Each row marks a named migration as durably complete. Boot migrations that
