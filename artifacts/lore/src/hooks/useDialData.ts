@@ -104,6 +104,14 @@ export interface DialStation {
   crossings: number;
   /** rolling 24h artist-level crossings (exact track not in library) */
   artistCrossings: number;
+  /** rolling 7-day exact-MBID/release-group crossings — sort key for Recent tab "Last Week" filter */
+  weekCrossings: number;
+  /** rolling 7-day artist-level crossings */
+  weekArtistCrossings: number;
+  /** rolling 30-day exact-MBID/release-group crossings — sort key for Recent tab "Last Month" filter */
+  monthCrossings: number;
+  /** rolling 30-day artist-level crossings */
+  monthArtistCrossings: number;
   /** lifetime (all-time) exact-MBID/release-group crossings — primary sort key for unattributed rows */
   lifetimeCrossings: number;
   /** lifetime artist-level crossings — all-time equivalent of artistCrossings */
@@ -641,11 +649,15 @@ export function useDialData(displayMode: DialDisplayMode = "personal"): {
     displayMode === "blended" ? blendedCrossings == null && !blendedError : crossingsLoading;
 
   const serverCrossingsBySlug = useMemo(() => {
-    const m = new Map<string, { crossings: number; artistCrossings: number; lifetimeCrossings: number; lifetimeArtistCrossings: number; topArtistNames: string[] }>();
+    const m = new Map<string, { crossings: number; artistCrossings: number; weekCrossings: number; weekArtistCrossings: number; monthCrossings: number; monthArtistCrossings: number; lifetimeCrossings: number; lifetimeArtistCrossings: number; topArtistNames: string[] }>();
     for (const cx of selectedCrossings ?? []) {
       m.set(cx.stationSlug, {
         crossings: cx.crossings,
         artistCrossings: cx.artistCrossings,
+        weekCrossings: cx.weekCrossings ?? 0,
+        weekArtistCrossings: cx.weekArtistCrossings ?? 0,
+        monthCrossings: cx.monthCrossings ?? 0,
+        monthArtistCrossings: cx.monthArtistCrossings ?? 0,
         lifetimeCrossings: cx.lifetimeCrossings,
         lifetimeArtistCrossings: cx.lifetimeArtistCrossings,
         topArtistNames: cx.topArtistNames ?? [],
@@ -908,6 +920,11 @@ export function useDialData(displayMode: DialDisplayMode = "personal"): {
           : scoresUnavailable
             ? 0
           : artistCrossings;
+      // Week / month counts: server-only (no client-side schedule-derived fallback).
+      const weekCrossings = serverCx !== undefined ? serverCx.weekCrossings : 0;
+      const weekArtistCrossings = serverCx !== undefined ? serverCx.weekArtistCrossings : 0;
+      const monthCrossings = serverCx !== undefined ? serverCx.monthCrossings : 0;
+      const monthArtistCrossings = serverCx !== undefined ? serverCx.monthArtistCrossings : 0;
 
       // In blended mode the server returns cumulative top artist names across all
       // active listeners; in personal mode leave empty (DialView reads per-show data).
@@ -922,6 +939,10 @@ export function useDialData(displayMode: DialDisplayMode = "personal"): {
         shows,
         crossings,
         artistCrossings,
+        weekCrossings,
+        weekArtistCrossings,
+        monthCrossings,
+        monthArtistCrossings,
         lifetimeCrossings,
         lifetimeArtistCrossings,
         topArtistNames,

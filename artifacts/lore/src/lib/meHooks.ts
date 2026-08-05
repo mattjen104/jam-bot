@@ -485,6 +485,10 @@ export interface DialCrossing {
   stationSlug: string;
   crossings: number;
   artistCrossings: number;
+  weekCrossings: number;
+  weekArtistCrossings: number;
+  monthCrossings: number;
+  monthArtistCrossings: number;
   lifetimeCrossings: number;
   lifetimeArtistCrossings: number;
   /** Top 5 crossing artist names by frequency. Only populated by the blended endpoint. */

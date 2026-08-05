@@ -6305,11 +6305,19 @@ components:
           type: integer
         artistCrossings:
           type: integer
+        weekCrossings:
+          type: integer
+        weekArtistCrossings:
+          type: integer
+        monthCrossings:
+          type: integer
+        monthArtistCrossings:
+          type: integer
         lifetimeCrossings:
           type: integer
         lifetimeArtistCrossings:
           type: integer
-      required: [stationSlug, crossings, artistCrossings, lifetimeCrossings, lifetimeArtistCrossings]
+      required: [stationSlug, crossings, artistCrossings, weekCrossings, weekArtistCrossings, monthCrossings, monthArtistCrossings, lifetimeCrossings, lifetimeArtistCrossings]
     StationsScheduleResult:
       type: object
       description: Per-station show-run timeline for a given calendar day.

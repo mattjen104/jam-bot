@@ -850,37 +850,32 @@ function OfflineRow({
     ? lastShow.spins[lastShow.spins.length - 1]
     : null;
 
-  // ── Tier 1: reason — what was aired ──────────────────────────────────────
-  // Mirror the live reason() rungs adapted for past context:
-  //   crossings (exact library hits) → w3 warm
-  //   artist crossings only          → w4 warm
-  //   last track title (bare fact)   → w5 dim
-  //   no data                        → w0 very dim
+  // ── Tier 1: reason — same rung hierarchy as laneReason in StationLane ───
+  //   r=3: exact show crossings → top artist name(s) or "N of yours this set"
+  //   r=4: artist crossings only → top artist name(s) or "N artist matches"
+  //   r=5: last spin title (bare fact)
+  //   r=0: no data
+  const showCrossings = lastShow?.crossings ?? 0;
+  const showArtistCrossings = lastShow?.artistCrossings ?? 0;
   let t1Node: ReactNode;
   let t1Cls: string;
-  if (crossings > 0) {
-    // Blended mode: prefer cumulative station-level names from the group endpoint.
-    // Personal mode: fall back to the most recent show's individual artist names.
+  if (showCrossings > 0) {
     const names = (displayMode === "blended" && stationTopArtistNames.length > 0)
       ? stationTopArtistNames
       : (lastShow?.topArtists ?? []);
     const nn = names.length > 0 ? nameNodes(names) : null;
     t1Node = nn
-      ? displayMode === "blended"
-        ? <>Your group: {nn}</>
-        : <>Set included {nn}.</>
-      : <><b>{crossings}</b> {displayMode === "blended" ? "heard here" : "of yours."}</>;
+      ? nn
+      : <><b>{showCrossings}</b> of yours this set</>;
     t1Cls = "w3";
-  } else if (artistCrossings > 0) {
+  } else if (showArtistCrossings > 0) {
     const names = (displayMode === "blended" && stationTopArtistNames.length > 0)
       ? stationTopArtistNames
       : (lastShow?.topArtistNames ?? []);
     const nn = names.length > 0 ? nameNodes(names) : null;
     t1Node = nn
-      ? displayMode === "blended"
-        ? <>Your group: {nn}</>
-        : <>Set included {nn}.</>
-      : <><b>{artistCrossings}</b> {displayMode === "blended" ? "community artists here" : "tracks by your artists."}</>;
+      ? nn
+      : <><b>{showArtistCrossings}</b> artist matches</>;
     t1Cls = "w4";
   } else if (lastSpin) {
     t1Node = (
@@ -891,7 +886,7 @@ function OfflineRow({
     );
     t1Cls = "w5";
   } else {
-    t1Node = "no recent data";
+    t1Node = "—";
     t1Cls = "w0";
   }
 
@@ -1236,38 +1231,34 @@ export function DialView() {
     return !!(djName || showName);
   };
 
-  // Offline stations (recently aired):
-  //   1. Combined crossings desc — library matches first
-  //   2. Stations with a named DJ or show above stations with no attribution
-  //   3. Stations with any show history above stations with no data ever
-  //   4. Stable within each tier
-  const offlineStations = useMemo(() =>
-    [...stations]
+  // Date-window filter for the Recently Aired tab — not persisted across visits.
+  const [recentWindow, setRecentWindow] = useState<"week" | "month" | "all">("week");
+
+  // Offline stations (recently aired): sorted by descending crossings for the
+  // selected date window — no secondary attribution or history tier.
+  const offlineStations = useMemo(() => {
+    const windowScore = (ds: DialStation): number => {
+      if (recentWindow === "week")  return ds.weekCrossings  + ds.weekArtistCrossings;
+      if (recentWindow === "month") return ds.monthCrossings + ds.monthArtistCrossings;
+      return ds.lifetimeCrossings + ds.lifetimeArtistCrossings;
+    };
+    return [...stations]
       .filter((ds) => !ds.isLive)
-      .sort((a, b) => {
-        const aCrossings = a.crossings + a.artistCrossings;
-        const bCrossings = b.crossings + b.artistCrossings;
-        if (bCrossings !== aCrossings) return bCrossings - aCrossings;
-        const aAttr = hasAttribution(a) ? 1 : 0;
-        const bAttr = hasAttribution(b) ? 1 : 0;
-        if (bAttr !== aAttr) return bAttr - aAttr;
-        const aHas = a.shows.length > 0 ? 1 : 0;
-        const bHas = b.shows.length > 0 ? 1 : 0;
-        return bHas - aHas;
-      }),
-    [stations, crossingSourceMode],
-  );
+      .sort((a, b) => windowScore(b) - windowScore(a));
+  }, [stations, recentWindow]);
 
   // Two-state visibility gate for the offline section:
-  //   Default: only stations with provenance (crossings, artist crossings, named DJ, or show).
+  //   Default: only stations with provenance for the selected window or named attribution.
   //   Expanded: all offline stations (dark stations included).
   const [showAllOffline, setShowAllOffline] = useState(false);
-  const offlineWithProvenance = useMemo(
-    () => offlineStations.filter((ds) =>
-      ds.crossings > 0 || ds.artistCrossings > 0 || hasAttribution(ds)
-    ),
-    [offlineStations],
-  );
+  const offlineWithProvenance = useMemo(() => {
+    const windowScore = (ds: DialStation): number => {
+      if (recentWindow === "week")  return ds.weekCrossings  + ds.weekArtistCrossings;
+      if (recentWindow === "month") return ds.monthCrossings + ds.monthArtistCrossings;
+      return ds.lifetimeCrossings + ds.lifetimeArtistCrossings;
+    };
+    return offlineStations.filter((ds) => windowScore(ds) > 0 || hasAttribution(ds));
+  }, [offlineStations, recentWindow]);
   const visibleOffline = showAllOffline ? offlineStations : offlineWithProvenance;
 
   // --- per-zone truncation (spec §16) ---
@@ -1875,6 +1866,20 @@ export function DialView() {
                 expands to include dark stations. */}
             {zone1Settled && activeTab === "recently-aired" && (
               <>
+                {/* Date-window filter pills */}
+                <div className="dial-window-pills" role="group" aria-label="Date filter">
+                  {(["week", "month", "all"] as const).map((w) => (
+                    <button
+                      key={w}
+                      type="button"
+                      className={`dial-window-pill${recentWindow === w ? " dial-window-pill--active" : ""}`}
+                      aria-pressed={recentWindow === w}
+                      onClick={() => setRecentWindow(w)}
+                    >
+                      {w === "week" ? "Last Week" : w === "month" ? "Last Month" : "All Time"}
+                    </button>
+                  ))}
+                </div>
                 {offlineStations.length > 0 ? (
                   <>
                     {visibleOffline.map((ds) => (
