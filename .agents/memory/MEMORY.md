@@ -81,3 +81,4 @@
 - [Weekly recap read model](weekly-recap-read-model.md) — weekly reflections use UTC Sunday-to-Saturday windows and confirmed attendance only; never surface incomplete weeks.
 - [Album-cover listener identity](album-avatar-identity.md) — anonymous cover identity preserves bottle emojis; covers are privacy-thresholded station tokens.
 - [Support ladder identity grounding](support-ladder-identity-grounding.md) — never infer a release MBID from a recording→release-group bridge; provider facts must carry release identity explicitly.
+- [Crossings query performance](crossings-query-performance.md) — single 180-day bounded query only; unbounded/two-query approach causes 10–16s hangs; cache TTL = 30 min.
