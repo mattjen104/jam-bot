@@ -190,8 +190,16 @@ router.get("/me/crossings", h(async (req, res) => {
     return res.json({ items: l2data });
   }
 
+  console.log(`[crossings] full compute for user=${user.id}`);
+
   // ── Full compute ──────────────────────────────────────────────────────────
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  // Scan bound: limit the spins table scan to 180 days so Postgres can use the
+  // spins_station_played_at_idx instead of a full table scan.  The widest SELECT
+  // window is 30 days (monthCrossings), so 180 days is more than generous for all
+  // rolling counts.  "Lifetime" counts are therefore bounded to this window — still
+  // practically complete for any active listener.
+  const scanCutoff = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000);
 
   // Subquery: recording MBIDs in user's library.
   const userLibMbids = db
@@ -331,6 +339,8 @@ router.get("/me/crossings", h(async (req, res) => {
       and(
         isNotNull(spinsTable.mbid),
         eq(stationsTable.hidden, false),
+        // Bind the table scan to 180 days so the planner uses spins_station_played_at_idx.
+        sql`${spinsTable.playedAt} >= ${scanCutoff}`,
       ),
     )
     .groupBy(stationsTable.id, stationsTable.slug)

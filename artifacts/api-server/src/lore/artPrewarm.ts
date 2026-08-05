@@ -50,7 +50,7 @@ async function runPrewarm(): Promise<void> {
       FROM spins sp
       JOIN recordings r ON r.mbid = sp.mbid
       WHERE r.artwork_url IS NOT NULL
-        AND sp.spun_at > NOW() - INTERVAL '48 hours'
+        AND sp.played_at > NOW() - INTERVAL '48 hours'
       ORDER BY r.artwork_url
       LIMIT ${BATCH_SIZE}
     `);

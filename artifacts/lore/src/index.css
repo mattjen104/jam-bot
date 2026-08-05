@@ -1325,11 +1325,46 @@
   flex-shrink: 0;
 }
 
-/* "All" level topbar — single compact line, no wrap */
+/* "All" level topbar — 3-col grid: [logo 1fr] [search auto] [pill 1fr]
+   Equal outer columns keep the LORE wordmark symmetrically balanced;
+   the search sits in a naturally-sized center column and never stretches. */
 .dial-topbar--all {
-  flex-wrap: nowrap;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  grid-template-rows: auto;
   overflow: hidden;
   position: relative; /* anchor for bg-wash and avatar-fade */
+}
+
+/* Absolutely-positioned decorations span all columns so they don't
+   consume a grid slot and push the real content out of column order. */
+.dial-topbar--all .dial-topbar__bg-wash,
+.dial-topbar--all .dial-topbar__avatar-fade {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+
+/* Wordmark — left column */
+.dial-topbar--all .dial-topbar__wordmark {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
+  align-self: center;
+}
+
+/* Search — center column, naturally sized, never stretched */
+.dial-topbar--all .dial-topbar__search-btn {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+}
+
+/* Solo/LP pill — right column, pinned to the right edge */
+.dial-topbar--all .social-mode-bar--topbar {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+  align-self: center;
 }
 
 /* ── New topbar controls (paste box, ticker) ── */
@@ -1340,16 +1375,16 @@
   top: 0;
   right: 0;
   bottom: 0;
-  /* Wide enough to cover the paste-box area; clipped by overflow:hidden on parent */
-  width: 72%;
+  /* Stretch toward the LORE wordmark; clipped by overflow:hidden on parent */
+  width: 90%;
   background-size: cover;
   background-position: right center;
   opacity: 0.18;
   pointer-events: none;
   z-index: 0;
-  /* Fade from transparent on the left to solid on the right */
-  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 55%);
-  mask-image: linear-gradient(to right, transparent 0%, #000 55%);
+  /* Fade: transparent at the far left, full opacity by ~70% from left */
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 70%);
+  mask-image: linear-gradient(to right, transparent 0%, #000 70%);
 }
 
 /* ── Album avatar that dissolves into the Lore wordmark ── */
@@ -1408,10 +1443,11 @@
   vertical-align: -0.1em;
 }
 
-/* Letters (L, RE) scaled to match the moon glyph's visual height */
+/* Letters (L, re) scaled to match the moon glyph's visual height */
 .dial-topbar__letter {
   font-size: 0.72em;
   line-height: 1;
+  text-transform: none;
 }
 
 /* ── Moon SVG internals ── */
@@ -4590,19 +4626,17 @@
 
 /* ── Search button in topbar — looks like a disabled input ───────────────── */
 .dial-topbar__search-btn {
-  flex: 1 1 0;
   min-width: 0;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: hsl(var(--muted));
-  border: 1px solid transparent;
-  border-radius: 4px;
-  padding: 5px 10px;
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border) / 0.45);
+  border-radius: 999px;
+  padding: 5px 14px;
   font-family: var(--app-font-display);
-  font-size: 10px;
+  font-size: 8.5px;
   color: hsl(var(--faint));
-  font-style: italic;
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
@@ -4624,7 +4658,7 @@
   align-items: stretch;
   background: hsl(var(--background));
   border: 1px solid hsl(var(--border) / 0.45);
-  border-radius: 6px;
+  border-radius: 999px;
   overflow: hidden;
   flex-shrink: 0;
 }
