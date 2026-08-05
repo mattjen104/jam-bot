@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import { proxyArtUrl } from "../lib/proxyArt";
 import type {
   NowPlaying,
   PickedLookupItem,
@@ -147,7 +148,7 @@ export function StationList({
                       {artwork && (
                         <>
                           <img
-                            src={artwork}
+                            src={proxyArtUrl(artwork)!}
                             alt=""
                             aria-hidden
                             className="absolute inset-0 h-full w-full object-cover"

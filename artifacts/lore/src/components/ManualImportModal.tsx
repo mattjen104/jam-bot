@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { proxyArtUrl } from "../lib/proxyArt";
 import { X, Upload, FileText, ArrowLeft, ChevronRight, Image as ImageIcon, Loader2, Trash2, RotateCcw, Copy, Download, Clock, CheckCircle2 } from "lucide-react";
 import {
   postStartManualImport,
@@ -1577,7 +1578,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
                         className={`import-modal-avatar-cell${chosen ? " import-modal-avatar-cell--chosen" : ""}`}
                       >
                         <img
-                          src={c.artworkUrl}
+                          src={proxyArtUrl(c.artworkUrl) ?? undefined}
                           alt={`${c.albumTitle} by ${c.artist}`}
                           className="import-modal-avatar-img"
                           loading="lazy"

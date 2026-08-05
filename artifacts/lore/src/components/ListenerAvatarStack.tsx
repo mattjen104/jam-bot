@@ -41,6 +41,8 @@ if (typeof document !== "undefined" && !document.getElementById(STYLE_ID)) {
 // Component
 // ---------------------------------------------------------------------------
 
+import { proxyArtUrl } from "../lib/proxyArt";
+
 const MAX_VISIBLE = 4;
 
 export interface ListenerAvatarStackProps {
@@ -95,7 +97,7 @@ export function ListenerAvatarStack({
               }}
             >
               <img
-                src={av.artworkUrl}
+                src={proxyArtUrl(av.artworkUrl)!}
                 alt={av.albumTitle}
                 width={28}
                 height={28}

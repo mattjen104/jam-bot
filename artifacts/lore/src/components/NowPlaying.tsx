@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { proxyArtUrl } from "../lib/proxyArt";
 import { Link, useLocation } from "wouter";
 import {
   useGetRecordingKnowledge,
@@ -90,7 +91,7 @@ export function NowPlaying({ data, isLoading, fallbackStation, clientNowPlaying 
       <div className="relative z-10 aspect-square w-full overflow-hidden bg-muted">
         {artwork ? (
           <img
-            src={artwork}
+            src={proxyArtUrl(artwork)!}
             alt={rec ? `${rec.title} — ${rec.artist}` : station.name}
             className="h-full w-full object-cover"
             data-testid="now-playing-artwork"

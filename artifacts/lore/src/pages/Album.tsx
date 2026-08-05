@@ -1,4 +1,5 @@
 import { Link, useParams } from "wouter";
+import { proxyArtUrl } from "../lib/proxyArt";
 import {
   useGetAlbum,
   type AlbumResult,
@@ -45,7 +46,7 @@ function TrackRow({ track }: { track: AlbumTrackRow }) {
         <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-muted">
           {track.artworkUrl ? (
             <img
-              src={track.artworkUrl}
+              src={proxyArtUrl(track.artworkUrl)!}
               alt={track.title}
               className="h-full w-full object-cover"
             />

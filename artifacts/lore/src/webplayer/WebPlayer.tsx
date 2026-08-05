@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { proxyArtUrl } from "../lib/proxyArt";
 import { Link, useLocation, useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { Pause, Play, Check, RefreshCw, ChevronRight, Bookmark, Loader2, ScanLine, AudioLines, LibraryBig, Users, CalendarDays } from "lucide-react";
@@ -514,7 +515,7 @@ function OnAirRow({
                     {presence.avatars.map((avatar, index) => (
                       <img
                         key={`${avatar.artworkUrl}-${index}`}
-                        src={avatar.artworkUrl}
+                        src={proxyArtUrl(avatar.artworkUrl)!}
                         alt=""
                         width={15}
                         height={15}

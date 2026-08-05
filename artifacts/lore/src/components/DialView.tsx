@@ -1429,14 +1429,14 @@ export function DialView() {
           {avatarUrl && (
             <div
               className="dial-topbar__bg-wash"
-              style={{ backgroundImage: `url(${avatarUrl})` }}
+              style={{ backgroundImage: `url(${proxyArtUrl(avatarUrl) ?? avatarUrl})` }}
               aria-hidden="true"
             />
           )}
           {/* Album avatar — fades into the Lore wordmark */}
           {avatarUrl && (
             <span className="dial-topbar__avatar-fade" aria-hidden="true">
-              <img src={avatarUrl} alt="" />
+              <img src={proxyArtUrl(avatarUrl) ?? avatarUrl} alt="" />
             </span>
           )}
           {/* Wordmark — moon phase replaces the O; letter-spacing handles gaps */}

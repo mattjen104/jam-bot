@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import { KeepButton } from "./KeepButton";
 import type { LibraryItem } from "../lib/meHooks";
 import { RUMOURS, onArtError } from "../lib/rumours";
+import { proxyArtUrl } from "../lib/proxyArt";
 
 interface InflowCardProps {
   item: LibraryItem;
@@ -33,7 +34,7 @@ export function InflowCard({ item, pickerName, pickerHandle }: InflowCardProps) 
     >
       <div className="h-28 w-full overflow-hidden rounded-lg bg-muted">
         <img
-          src={artwork ?? RUMOURS}
+          src={proxyArtUrl(artwork) ?? RUMOURS}
           alt={`${title} — ${artist}`}
           className="h-full w-full object-cover"
           loading="lazy"

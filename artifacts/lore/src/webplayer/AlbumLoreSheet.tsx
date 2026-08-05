@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { proxyArtUrl } from "../lib/proxyArt";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Disc3,
@@ -437,7 +438,7 @@ export function AlbumLoreSheet({
         >
           {rec?.artworkUrl ? (
             <img
-              src={rec.artworkUrl}
+              src={proxyArtUrl(rec.artworkUrl)!}
               alt=""
               style={{ width: 52, height: 52, borderRadius: "var(--wp-radius)", objectFit: "cover", flexShrink: 0 }}
             />

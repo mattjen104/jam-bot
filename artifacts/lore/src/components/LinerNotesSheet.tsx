@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback } from "react";
+import { proxyArtUrl } from "../lib/proxyArt";
 import { X, ExternalLink } from "lucide-react";
 import {
   useGetRecordingKnowledge,
@@ -140,7 +141,7 @@ export function LinerNotesSheet({
         <div className="liner-sheet__header">
           {artworkUrl ? (
             <img
-              src={artworkUrl}
+              src={proxyArtUrl(artworkUrl)!}
               alt=""
               className="liner-sheet__header-art"
               draggable={false}
@@ -227,7 +228,7 @@ export function LinerNotesSheet({
             >
               <span className="liner-sheet__footer-art">
                 {art ? (
-                  <img src={art} alt="" draggable={false} />
+                  <img src={proxyArtUrl(art)!} alt="" draggable={false} />
                 ) : (
                   <span className="liner-sheet__footer-art--empty" />
                 )}

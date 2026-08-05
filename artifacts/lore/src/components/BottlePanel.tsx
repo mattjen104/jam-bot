@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { proxyArtUrl } from "../lib/proxyArt";
 import { PostItIcon } from "./icons/PostItIcon";
 import { BottleIcon } from "./icons/BottleIcon";
 import { AlbumAvatarPicker } from "./AlbumAvatarPicker";
@@ -58,7 +59,7 @@ function NoteRow({ bottle, stationName }: NoteRowProps) {
     >
       {isUrl ? (
         <img
-          src={bottle.avatar}
+          src={proxyArtUrl(bottle.avatar)!}
           width={24}
           height={24}
           alt=""
@@ -422,7 +423,7 @@ export function BottlePanel({
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <img
-                    src={albumAvatarUrl}
+                    src={proxyArtUrl(albumAvatarUrl)!}
                     width={28}
                     height={28}
                     alt={albumAvatarTitle ?? "your album cover"}

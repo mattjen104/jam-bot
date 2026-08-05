@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import { proxyArtUrl } from "../lib/proxyArt";
 import type { ArchiveTrack } from "@workspace/api-client-react";
 import { usePlayer } from "../player/PlayerProvider";
 import type { TimeOrientation } from "../player/playbackSession";
@@ -92,7 +93,7 @@ export function ArchiveTracklist({
               </span>
               {rec?.artworkUrl ? (
                 <img
-                  src={rec.artworkUrl}
+                  src={proxyArtUrl(rec.artworkUrl)!}
                   alt=""
                   className="h-9 w-9 shrink-0 rounded-md object-cover"
                   loading="lazy"

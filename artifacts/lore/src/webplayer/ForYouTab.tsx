@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { proxyArtUrl } from "../lib/proxyArt";
 import { Radio, TrendingUp, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { useWpForYou, useWpRun, useWpLoreCounts, type WpForYouRun, type WpRunSpin } from "./hooks";
 import { useIsAuthenticated, startSpotifyLibraryConnect } from "../lib/meHooks";
@@ -99,7 +100,7 @@ function RunTrackList({
         >
           {spin.artworkUrl ? (
             <img
-              src={spin.artworkUrl}
+              src={proxyArtUrl(spin.artworkUrl)!}
               alt=""
               style={{ width: 24, height: 24, borderRadius: 3, objectFit: "cover", flexShrink: 0 }}
             />

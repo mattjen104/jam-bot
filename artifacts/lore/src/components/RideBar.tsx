@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useMemo } from "react";
+import { proxyArtUrl } from "../lib/proxyArt";
 import { Link } from "wouter";
 import type { RecordingLink } from "@workspace/api-client-react";
 import type { RideApi } from "../player/PlayerProvider";
@@ -473,7 +474,7 @@ export function RideBar({
 
         {cur.artworkUrl ? (
           <img
-            src={cur.artworkUrl}
+            src={proxyArtUrl(cur.artworkUrl)!}
             alt=""
             className="hidden h-11 w-11 shrink-0 rounded-md object-cover sm:block"
           />

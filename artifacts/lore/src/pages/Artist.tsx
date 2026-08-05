@@ -1,4 +1,5 @@
 import { Link, useParams } from "wouter";
+import { proxyArtUrl } from "../lib/proxyArt";
 import {
   useGetArtist,
   type ArtistTopTrack,
@@ -47,7 +48,7 @@ function TopTrackCard({ track }: { track: ArtistTopTrack }) {
         <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-muted">
           {track.artworkUrl ? (
             <img
-              src={track.artworkUrl}
+              src={proxyArtUrl(track.artworkUrl)!}
               alt={track.title}
               className="h-full w-full object-cover"
             />

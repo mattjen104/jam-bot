@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { RUMOURS, onArtError } from "../lib/rumours";
+import { proxyArtUrl } from "../lib/proxyArt";
 
 interface ArtistRelease {
   releaseGroupMbid: string;
@@ -67,7 +68,7 @@ export function ArtistPortalStrip({
               title={[r.title, r.releaseYear].filter(Boolean).join(" · ")}
             >
               <img
-                src={r.artworkUrl ?? RUMOURS}
+                src={proxyArtUrl(r.artworkUrl) ?? RUMOURS}
                 alt={r.title ?? ""}
                 className="lrow__portal-tile-art"
                 loading="lazy"

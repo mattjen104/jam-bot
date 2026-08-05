@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { Link } from "wouter";
 import { ChevronLeft, ChevronRight, Clock, ChevronDown } from "lucide-react";
 import { RUMOURS, onArtError } from "../lib/rumours";
+import { proxyArtUrl } from "../lib/proxyArt";
 import {
   useMyWeeklySummary,
   useMyWeeklyHistory,
@@ -129,7 +130,7 @@ function WeekTrackRow({ track }: { track: WeeklyTrack }) {
         }}
       >
         <img
-          src={track.artworkUrl ?? RUMOURS}
+          src={proxyArtUrl(track.artworkUrl) ?? RUMOURS}
           alt=""
           style={{ width: "100%", height: "100%", objectFit: "cover" }}
           loading="lazy"

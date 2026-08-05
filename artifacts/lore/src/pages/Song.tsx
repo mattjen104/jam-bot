@@ -1,4 +1,5 @@
 import { Link, useParams } from "wouter";
+import { proxyArtUrl } from "../lib/proxyArt";
 import {
   useGetRecording,
   useGetRecordingPreview,
@@ -133,7 +134,7 @@ export default function Song() {
               <div className="h-40 w-40 shrink-0 overflow-hidden rounded-2xl border border-card-border bg-muted shadow-lg">
                 {artwork ? (
                   <img
-                    src={artwork}
+                    src={proxyArtUrl(artwork)!}
                     alt={`${rec.title} — ${rec.artist}`}
                     className="h-full w-full object-cover"
                     data-testid="song-artwork"
@@ -429,7 +430,7 @@ function Segues({ next }: { next: SegueNext[] }) {
               >
                 <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-muted">
                   {n.artworkUrl ? (
-                    <img src={n.artworkUrl} alt="" className="h-full w-full object-cover" />
+                    <img src={proxyArtUrl(n.artworkUrl)!} alt="" className="h-full w-full object-cover" />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center">
                       <Disc3 className="h-6 w-6 text-muted-foreground/40" />

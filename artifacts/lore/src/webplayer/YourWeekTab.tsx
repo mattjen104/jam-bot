@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { proxyArtUrl } from "../lib/proxyArt";
 import { ChevronLeft, ChevronRight, Clock, Headphones, CalendarCheck } from "lucide-react";
 import { useMyWeeklySummary } from "../lib/meHooks";
 
@@ -261,7 +262,7 @@ export function YourWeekTab() {
                 {/* Artwork / placeholder */}
                 {track.artworkUrl ? (
                   <img
-                    src={track.artworkUrl}
+                    src={proxyArtUrl(track.artworkUrl)!}
                     alt=""
                     style={{
                       width: 28,

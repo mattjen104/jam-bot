@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { proxyArtUrl } from "../lib/proxyArt";
 import { Disc3, Radio, Loader2, Search, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "@workspace/api-client-react";
@@ -573,7 +574,7 @@ function LibraryRow({
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         {rec?.artworkUrl ? (
           <img
-            src={rec.artworkUrl}
+            src={proxyArtUrl(rec.artworkUrl)!}
             alt=""
             style={{ width: 36, height: 36, borderRadius: 6, objectFit: "cover", flexShrink: 0 }}
           />

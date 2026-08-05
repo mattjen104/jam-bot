@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { proxyArtUrl } from "../lib/proxyArt";
 import {
   useGetRecordingAlbumTracks,
   getGetRecordingAlbumTracksQueryKey,
@@ -185,7 +186,7 @@ export function AlbumShelf({ mbid, artistName }: AlbumShelfProps) {
           <div className="lrow__shelf-hd">
             {album.artworkUrl ? (
               <img
-                src={album.artworkUrl}
+                src={proxyArtUrl(album.artworkUrl)!}
                 alt=""
                 className="lrow__shelf-art"
                 loading="lazy"

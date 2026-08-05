@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { proxyArtUrl } from "../lib/proxyArt";
 import { Link } from "wouter";
 import { usePlayer } from "../player/PlayerProvider";
 import {
@@ -154,7 +155,7 @@ function JournalRow({ entry }: { entry: JournalEntry }) {
       {/* 42×42 artwork swatch */}
       <div className="h-[42px] w-[42px] shrink-0 overflow-hidden rounded-lg">
         <img
-          src={entry.artworkUrl ?? RUMOURS}
+          src={proxyArtUrl(entry.artworkUrl) ?? RUMOURS}
           alt=""
           className="h-full w-full object-cover"
           loading="lazy"
