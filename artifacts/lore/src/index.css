@@ -4642,9 +4642,40 @@
 }
 .dial-tab--active .dial-tab__n { opacity: 0.8; }
 
+/* Right-aligned add-artists controls embedded in the tab strip */
+.dial-tabs__add {
+  margin-left: auto;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 0 8px;
+  border-left: 1px solid hsl(var(--border) / 0.3);
+}
+
+/* Inside the tab strip the paste box gets a compact fixed width */
+.dial-tabs__add .topbar-paste-box {
+  flex: none;
+  width: 160px;
+  height: 24px;
+  font-size: 9px;
+  padding: 3px 7px;
+}
+
+/* Inside the tab strip the artist input wrap matches the compact height */
+.dial-tabs__add .topbar-artist-input-wrap {
+  flex: none;
+  width: 160px;
+  height: 24px;
+}
+
 @media (max-width: 480px) {
   .dial-tab {
     padding: 8px 8px;
+  }
+  .dial-tabs__add .topbar-paste-box,
+  .dial-tabs__add .topbar-artist-input-wrap {
+    width: 110px;
   }
 }
 

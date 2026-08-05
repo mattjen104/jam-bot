@@ -1438,67 +1438,6 @@ export function DialView() {
             </span>
             {"RE"}
           </span>
-
-          {/* +add artists toggle */}
-          <button
-            type="button"
-            className={`topbar-add-artists${addArtistMode ? " topbar-add-artists--active" : ""}`}
-            onClick={() => setAddArtistMode(m => !m)}
-          >
-            ＋ add artists
-          </button>
-
-          {/* Paste box (default) ↔ lime artist input (add-artist mode) */}
-          {!addArtistMode ? (
-            <input
-              type="text"
-              className="topbar-paste-box"
-              value={pasteInput}
-              placeholder="paste artist names or a screenshot…"
-              aria-label="Add artists by pasting names or a screenshot"
-              onChange={e => setPasteInput(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === "Enter" && pasteInput.trim()) {
-                  handlePasteText(pasteInput);
-                }
-                if (e.key === "Escape") { setPasteInput(""); }
-              }}
-              onPaste={handlePasteEvent}
-            />
-          ) : (
-            <div className="topbar-artist-input-wrap">
-              <input
-                // eslint-disable-next-line jsx-a11y/no-autofocus
-                autoFocus
-                type="text"
-                className="topbar-artist-input"
-                value={pasteInput}
-                placeholder="type or paste an artist name…"
-                aria-label="Add an artist"
-                onChange={e => setPasteInput(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === "Enter" && pasteInput.trim()) {
-                    handlePasteText(pasteInput);
-                    setAddArtistMode(false);
-                  }
-                  if (e.key === "Escape") { setAddArtistMode(false); setPasteInput(""); }
-                }}
-                onPaste={e => {
-                  handlePasteEvent(e);
-                  setAddArtistMode(false);
-                }}
-              />
-              <button
-                type="button"
-                className="topbar-artist-input__esc"
-                onClick={() => { setAddArtistMode(false); setPasteInput(""); }}
-                aria-label="Close"
-                title="Close (Esc)"
-              >
-                ×
-              </button>
-            </div>
-          )}
         </div>
       );
     }
@@ -1630,6 +1569,68 @@ export function DialView() {
                   Recent
                   {offlineStations.length > 0 && <span className="dial-tab__n">{offlineStations.length}</span>}
                 </button>
+
+                {/* ── Add artists controls — right-aligned in the same strip ── */}
+                <div className="dial-tabs__add">
+                  <button
+                    type="button"
+                    role="presentation"
+                    className={`topbar-add-artists${addArtistMode ? " topbar-add-artists--active" : ""}`}
+                    onClick={() => setAddArtistMode(m => !m)}
+                  >
+                    ＋ artists
+                  </button>
+                  {!addArtistMode ? (
+                    <input
+                      type="text"
+                      className="topbar-paste-box"
+                      value={pasteInput}
+                      placeholder="paste names or screenshot…"
+                      aria-label="Add artists by pasting names or a screenshot"
+                      onChange={e => setPasteInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter" && pasteInput.trim()) {
+                          handlePasteText(pasteInput);
+                        }
+                        if (e.key === "Escape") { setPasteInput(""); }
+                      }}
+                      onPaste={handlePasteEvent}
+                    />
+                  ) : (
+                    <div className="topbar-artist-input-wrap">
+                      <input
+                        // eslint-disable-next-line jsx-a11y/no-autofocus
+                        autoFocus
+                        type="text"
+                        className="topbar-artist-input"
+                        value={pasteInput}
+                        placeholder="type or paste an artist name…"
+                        aria-label="Add an artist"
+                        onChange={e => setPasteInput(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === "Enter" && pasteInput.trim()) {
+                            handlePasteText(pasteInput);
+                            setAddArtistMode(false);
+                          }
+                          if (e.key === "Escape") { setAddArtistMode(false); setPasteInput(""); }
+                        }}
+                        onPaste={e => {
+                          handlePasteEvent(e);
+                          setAddArtistMode(false);
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="topbar-artist-input__esc"
+                        onClick={() => { setAddArtistMode(false); setPasteInput(""); }}
+                        aria-label="Close"
+                        title="Close (Esc)"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
