@@ -212,6 +212,76 @@ describe("missing src param", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Scenario 7 — exact Cache-Control and X-Art-Proxy header assertions
+// ─────────────────────────────────────────────────────────────────────────────
+describe("Cache-Control and X-Art-Proxy headers", () => {
+  const EXACT_CACHE_CONTROL = "public, max-age=31536000, immutable";
+
+  it("cache HIT: sets exact Cache-Control immutable string", async () => {
+    artGetMock.mockResolvedValue({
+      data: Buffer.from("cached-image-bytes"),
+      contentType: "image/jpeg",
+    });
+
+    const res = await request(app).get(PROXY_PATH);
+
+    expect(res.status).toBe(200);
+    expect(res.headers["cache-control"]).toBe(EXACT_CACHE_CONTROL);
+  });
+
+  it("cache HIT: sets X-Art-Proxy: hit", async () => {
+    artGetMock.mockResolvedValue({
+      data: Buffer.from("cached-image-bytes"),
+      contentType: "image/jpeg",
+    });
+
+    const res = await request(app).get(PROXY_PATH);
+
+    expect(res.headers["x-art-proxy"]).toBe("hit");
+  });
+
+  it("cache MISS: sets exact Cache-Control immutable string", async () => {
+    artGetMock.mockResolvedValue(null);
+    isSafeMock.mockResolvedValue(true);
+    fetchMock.mockResolvedValue(makeFetchResponse());
+
+    const res = await request(app).get(PROXY_PATH);
+
+    expect(res.status).toBe(200);
+    expect(res.headers["cache-control"]).toBe(EXACT_CACHE_CONTROL);
+  });
+
+  it("cache MISS: sets X-Art-Proxy: miss", async () => {
+    artGetMock.mockResolvedValue(null);
+    isSafeMock.mockResolvedValue(true);
+    fetchMock.mockResolvedValue(makeFetchResponse());
+
+    const res = await request(app).get(PROXY_PATH);
+
+    expect(res.headers["x-art-proxy"]).toBe("miss");
+  });
+
+  it("regression: weakening the IMMUTABLE constant is caught immediately", async () => {
+    // Both hit and miss must carry the same unmodified constant
+    artGetMock.mockResolvedValue({
+      data: Buffer.from("img"),
+      contentType: "image/png",
+    });
+    const hitRes = await request(app).get(PROXY_PATH);
+
+    vi.clearAllMocks();
+    artGetMock.mockResolvedValue(null);
+    isSafeMock.mockResolvedValue(true);
+    fetchMock.mockResolvedValue(makeFetchResponse({ contentType: "image/png" }));
+    artPutMock.mockResolvedValue(undefined);
+    const missRes = await request(app).get(PROXY_PATH);
+
+    expect(hitRes.headers["cache-control"]).toBe(EXACT_CACHE_CONTROL);
+    expect(missRes.headers["cache-control"]).toBe(EXACT_CACHE_CONTROL);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Scenario 6 — SSRF-blocked URL → 302, not an error page
 // ─────────────────────────────────────────────────────────────────────────────
 describe("SSRF-blocked src", () => {
