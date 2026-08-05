@@ -563,3 +563,39 @@ describe("redirect chain ending in non-image content-type", () => {
     expect(artPutMock).not.toHaveBeenCalled();
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scenario 11 — body size guard (>8 MB or 0 bytes) → 302 fallback
+// ─────────────────────────────────────────────────────────────────────────────
+describe("body size guard", () => {
+  it("returns 302 when the origin response body exceeds 8 MB", async () => {
+    artGetMock.mockResolvedValue(null); // cache miss
+    isSafeMock.mockResolvedValue(true);
+
+    // Build a buffer that is exactly 1 byte over the 8 MB limit
+    const oversizedBody = Buffer.alloc(8_000_001, 0x42);
+    fetchMock.mockResolvedValue(makeFetchResponse({ body: oversizedBody }));
+
+    const res = await request(app).get(PROXY_PATH);
+
+    // fetchFromOrigin returns null for oversized buffers; route must 302
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe(SPOTIFY_URL);
+    // Nothing should be written to the cache
+    expect(artPutMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 302 when the origin response body is empty (0 bytes)", async () => {
+    artGetMock.mockResolvedValue(null); // cache miss
+    isSafeMock.mockResolvedValue(true);
+
+    fetchMock.mockResolvedValue(makeFetchResponse({ body: Buffer.alloc(0) }));
+
+    const res = await request(app).get(PROXY_PATH);
+
+    // Empty body is treated the same as a fetch failure
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe(SPOTIFY_URL);
+    expect(artPutMock).not.toHaveBeenCalled();
+  });
+});
