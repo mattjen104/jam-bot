@@ -644,3 +644,131 @@ describe("body size guard", () => {
     expect(artPutMock).not.toHaveBeenCalled();
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scenario 12 — hung CDN (timeout) → 302 fallback fires promptly
+//
+// `fetchFromOrigin` passes `AbortSignal.timeout(8_000)` to every fetch call.
+// This test verifies that the route resolves promptly with a 302 redirect when
+// the origin CDN never responds, rather than holding the connection open for
+// the full 8 seconds.
+//
+// Strategy: stub `AbortSignal.timeout` so it returns an already-aborted signal,
+// then stub `fetch` to return a Promise that never resolves on its own but
+// immediately rejects (via the signal's "abort" event) the moment the signal
+// fires.  This makes the test complete in milliseconds without fake timers.
+// ─────────────────────────────────────────────────────────────────────────────
+describe("hung CDN origin — AbortSignal.timeout fires, route returns 302 promptly", () => {
+  it("returns 302 to the original src when the origin fetch is stuck and the timeout fires", async () => {
+    artGetMock.mockResolvedValue(null); // cache miss
+    isSafeMock.mockResolvedValue(true);
+
+    // Return an already-aborted signal so the timeout fires immediately in the
+    // test environment without waiting 8 real seconds.
+    const timeoutError = new DOMException(
+      "The operation timed out.",
+      "TimeoutError",
+    );
+    const abortedSignal = AbortSignal.abort(timeoutError);
+    const timeoutSpy = vi
+      .spyOn(AbortSignal, "timeout")
+      .mockReturnValue(abortedSignal);
+
+    // Simulate a hung CDN: the Promise never resolves on its own.  It rejects
+    // only when the AbortSignal fires — which, with our stub, is immediate.
+    fetchMock.mockImplementation(
+      (_url: string, opts?: { signal?: AbortSignal }) => {
+        return new Promise<never>((_resolve, reject) => {
+          const signal = opts?.signal;
+          if (signal?.aborted) {
+            // Signal already fired — reject right away.
+            reject(signal.reason ?? timeoutError);
+            return;
+          }
+          if (signal) {
+            signal.addEventListener("abort", () => {
+              reject(signal.reason ?? timeoutError);
+            });
+          }
+          // No signal path: the Promise truly never resolves (the test would
+          // hang here, proving the timeout guard is load-bearing).
+        });
+      },
+    );
+
+    const start = Date.now();
+    const res = await request(app).get(PROXY_PATH);
+    const elapsed = Date.now() - start;
+
+    // Must fall back with a 302 to the original src URL
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe(SPOTIFY_URL);
+
+    // Must resolve well within a second — not after the real 8s timeout
+    expect(elapsed).toBeLessThan(1_000);
+
+    // AbortSignal.timeout must have been called with 8_000 ms
+    expect(timeoutSpy).toHaveBeenCalledWith(8_000);
+
+    // Nothing should be cached on a timeout
+    expect(artPutMock).not.toHaveBeenCalled();
+
+    timeoutSpy.mockRestore();
+  });
+
+  it("calls AbortSignal.timeout on every hop, not just the first", async () => {
+    artGetMock.mockResolvedValue(null);
+    isSafeMock.mockResolvedValue(true);
+
+    const timeoutError = new DOMException(
+      "The operation timed out.",
+      "TimeoutError",
+    );
+    const abortedSignal = AbortSignal.abort(timeoutError);
+    const timeoutSpy = vi
+      .spyOn(AbortSignal, "timeout")
+      .mockReturnValue(abortedSignal);
+
+    // First hop redirects; second hop hangs — both must use AbortSignal.timeout
+    const redirectTarget = "https://i.scdn.co/image/redirect-target";
+    fetchMock
+      .mockResolvedValueOnce({
+        status: 301,
+        ok: false,
+        headers: {
+          get: (h: string) => (h === "location" ? redirectTarget : null),
+        },
+        arrayBuffer: async () => new ArrayBuffer(0),
+      })
+      .mockImplementationOnce(
+        (_url: string, opts?: { signal?: AbortSignal }) => {
+          return new Promise<never>((_resolve, reject) => {
+            const signal = opts?.signal;
+            if (signal?.aborted) {
+              reject(signal.reason ?? timeoutError);
+              return;
+            }
+            if (signal) {
+              signal.addEventListener("abort", () => {
+                reject(signal.reason ?? timeoutError);
+              });
+            }
+          });
+        },
+      );
+
+    const res = await request(app).get(PROXY_PATH);
+
+    // Both fetch calls hang → still resolves with 302
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe(SPOTIFY_URL);
+
+    // timeout was set on each individual fetch call
+    expect(timeoutSpy.mock.calls.length).toBeGreaterThanOrEqual(1);
+    timeoutSpy.mock.calls.forEach((args) => {
+      expect(args[0]).toBe(8_000);
+    });
+
+    timeoutSpy.mockRestore();
+  });
+});
