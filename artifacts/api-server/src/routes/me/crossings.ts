@@ -299,9 +299,9 @@ router.get("/me/crossings", h(async (req, res) => {
   // ReferenceError on every request → 503 → empty dial.
   const weekCutoff  = new Date(Date.now() - 7  * 24 * 60 * 60 * 1000);
   const monthCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const inWindow           = sql`${spinsTable.playedAt} >= ${cutoff}`;
-  const inWeek             = sql`${spinsTable.playedAt} >= ${weekCutoff}`;
-  const inMonth            = sql`${spinsTable.playedAt} >= ${monthCutoff}`;
+  const inWindow           = sql`${spinsTable.playedAt} >= ${spinCutoff}`;
+  const inWeek             = sql`${spinsTable.playedAt} >= ${blendedWeekCutoff}`;
+  const inMonth            = sql`${spinsTable.playedAt} >= ${blendedMonthCutoff}`;
 
   // ── Relevant MBIDs for the mbid-driven lifetime query ─────────────────────
   // Collects every recording MBID that could yield a crossing for this user:
@@ -425,6 +425,20 @@ router.get("/me/crossings", h(async (req, res) => {
   void writeL2Cache(user.id, items, builtAt);
   return res.json({ items });
 }));
+
+  // Write L2 (Postgres) first so that a concurrent request on a different
+  // instance can benefit from the fresh result immediately.
+  void writeL2Cache(user.id, items, builtAt);
+
+  // Then populate L1.
+  crossingsCache.set(user.id, { builtAt: builtAt.getTime(), data: items });
+
+  return res.json({ items });
+}));
+
+// ---------------------------------------------------------------------------
+// Blended crossings endpoint
+// ---------------------------------------------------------------------------
 
 /**
  * GET /api/me/crossings/blended — anonymous aggregate crossings from active
