@@ -91,9 +91,10 @@ const MBID_SORT_A3            = `tc-sort-a3-${run}`;
 const MBID_SORT_B1            = `tc-sort-b1-${run}`;
 const MBID_LIB_SORT           = `tc-lib-sort-${run}`;      // library track (same artist, never aired)
 
-// Scenario 7 — aged crossing (spin 200 days old, outside the old 180-day scanCutoff)
-// The user's library holds the exact MBID that aired 200 days ago.  With scanCutoff
-// extended to 365 days this spin must still produce lifetimeCrossings ≥ 1.
+// Scenario 7 — aged crossing (spin 200 days old, outside every rolling window)
+// The user's library holds the exact MBID that aired 200 days ago.  Lifetime counts
+// now run in a separate unbounded query (no scanCutoff), so any historical spin must
+// produce lifetimeCrossings ≥ 1 regardless of age.
 const MBID_SPIN_AGED          = `tc-spin-aged-${run}`;
 
 // ── Station ───────────────────────────────────────────────────────────────────
@@ -639,9 +640,9 @@ describe("GET /api/me/crossings — aged crossing (spin outside old 180-day wind
     const row = (body.items as CrossingItem[]).find((r) => r.stationSlug === STATION_SLUG);
 
     // MBID_SPIN_AGED aired 200 days ago and is in the user's library (exact MBID match).
-    // With scanCutoff extended to 365 days the spin falls inside the scan window, so
-    // the station must appear with lifetimeCrossings ≥ 1 even though it is outside
-    // every rolling window (24h / 7d / 30d → crossings/week/month = 0).
+    // Lifetime counts now run via a separate unbounded query (no WHERE on playedAt),
+    // so the station must appear with lifetimeCrossings ≥ 1 regardless of how old the
+    // spin is.  Rolling-window fields must all be 0 (outside 24h / 7d / 30d).
     expect(row).toBeDefined();
     expect(row!.crossings).toBe(0);
     expect(row!.artistCrossings).toBe(0);

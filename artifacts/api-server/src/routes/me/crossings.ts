@@ -194,14 +194,12 @@ router.get("/me/crossings", h(async (req, res) => {
 
   // ── Full compute ──────────────────────────────────────────────────────────
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  // Scan bound: limit the spins table scan so Postgres can use the
-  // spins_station_played_at_idx instead of a full table scan.  The widest rolling
-  // SELECT window is 30 days (monthCrossings).  "Lifetime" counts are bounded to
-  // this window — 365 days is generous enough to cover listeners who imported their
-  // library many months ago and whose stations last matched within the past year.
-  // (Previously 180 days; raised to 365 so users inactive for 6–12 months still
-  // see non-zero lifetime crossing scores rather than dropping off the dial.)
-  const scanCutoff = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+  // Scan bound for rolling-window counts: the widest rolling window is 30 days
+  // (monthCrossings), so we bind the index-friendly bounded scan to 30 days.
+  // Lifetime counts run in a SEPARATE unbounded query (no WHERE on playedAt)
+  // so they are never silently capped to any rolling window — a listener absent
+  // for >1 year still sees correct lifetime crossing scores when they return.
+  const scanCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
   // Subquery: recording MBIDs in user's library.
   const userLibMbids = db
@@ -304,25 +302,58 @@ router.get("/me/crossings", h(async (req, res) => {
   const inWeek  = sql`${spinsTable.playedAt} >= ${weekCutoff}`;
   const inMonth = sql`${spinsTable.playedAt} >= ${monthCutoff}`;
 
-  const rows = await db
+  // ── Query 1: bounded — rolling 24h / 7d / 30d counts ─────────────────────
+  // WHERE binds the scan to 30 days (the widest rolling window) so Postgres
+  // can use spins_station_played_at_idx instead of a full table scan.
+  // Lifetime counts are intentionally absent here — they run in Query 2.
+  const rollingQuery = db
     .select({
       stationSlug: stationsTable.slug,
       // 24-hour rolling counts.
       // All four fields share the unit "distinct library-relevant recordings" so
       // consumers can safely compare or combine them.  A station that replays one
       // artist track 50× scores 1, not 50 — count(distinct mbid) collapses replays.
-      crossings:       sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${libHit})::int`,
+      crossings:            sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${libHit})::int`,
       // Unit: distinct recordings (not spin events) — same scale as `crossings` above.
-      artistCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${notLibHit} and ${artistMatch})::int`,
+      artistCrossings:      sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${notLibHit} and ${artistMatch})::int`,
       // 7-day rolling counts — used by the Recent tab "Last Week" filter.
-      weekCrossings:       sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek} and ${libHit})::int`,
-      weekArtistCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek} and ${notLibHit} and ${artistMatch})::int`,
+      weekCrossings:        sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek} and ${libHit})::int`,
+      weekArtistCrossings:  sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek} and ${notLibHit} and ${artistMatch})::int`,
       // 30-day rolling counts — used by the Recent tab "Last Month" filter.
       monthCrossings:       sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${libHit})::int`,
       monthArtistCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${notLibHit} and ${artistMatch})::int`,
-      // All-time (lifetime) counts — distinct mbid so the scale matches pickerOv()
-      // (count(distinct picks.mbid)) and attributed DJ rows don't get systematically
-      // outranked by stations with high-replay playlists.
+    })
+    .from(spinsTable)
+    .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
+    .innerJoin(recordingsTable, eq(recordingsTable.mbid, spinsTable.mbid!))
+    .leftJoin(
+      recordingReleaseGroupsTable,
+      and(
+        eq(recordingReleaseGroupsTable.recordingMbid, recordingsTable.mbid),
+        eq(recordingReleaseGroupsTable.isPrimary, true),
+      ),
+    )
+    .where(
+      and(
+        isNotNull(spinsTable.mbid),
+        eq(stationsTable.hidden, false),
+        sql`${spinsTable.playedAt} >= ${scanCutoff}`,
+      ),
+    )
+    .groupBy(stationsTable.id, stationsTable.slug)
+    .having(
+      sql`count(*) filter (where ${libHit}) > 0
+       or count(*) filter (where ${notLibHit} and ${artistMatch}) > 0`,
+    );
+
+  // ── Query 2: unbounded — lifetime counts only ─────────────────────────────
+  // No WHERE on playedAt so every historical spin ever recorded is considered.
+  // Distinct mbid so the scale matches pickerOv() (count(distinct picks.mbid))
+  // and attributed DJ rows don't get systematically outranked by high-replay stations.
+  // Running this as a separate query keeps the 30-day bounded scan index-friendly.
+  const lifetimeQuery = db
+    .select({
+      stationSlug: stationsTable.slug,
       lifetimeCrossings:       sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${libHit})::int`,
       // Unit: distinct recordings — same scale as `lifetimeCrossings` and `crossings`.
       lifetimeArtistCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${notLibHit} and ${artistMatch})::int`,
@@ -341,29 +372,41 @@ router.get("/me/crossings", h(async (req, res) => {
       and(
         isNotNull(spinsTable.mbid),
         eq(stationsTable.hidden, false),
-        // Bind the table scan to 180 days so the planner uses spins_station_played_at_idx.
-        sql`${spinsTable.playedAt} >= ${scanCutoff}`,
       ),
     )
     .groupBy(stationsTable.id, stationsTable.slug)
     .having(
-      // At least one 24h crossing or lifetime crossing — keeps the result set
-      // compact (no row for stations with zero overlap of any kind).
       sql`count(*) filter (where ${libHit}) > 0
        or count(*) filter (where ${notLibHit} and ${artistMatch}) > 0`,
     );
 
-  const items: CrossingsRow[] = rows.map((r) => ({
-    stationSlug: r.stationSlug,
-    crossings: r.crossings,
-    artistCrossings: r.artistCrossings,
-    weekCrossings: r.weekCrossings,
-    weekArtistCrossings: r.weekArtistCrossings,
-    monthCrossings: r.monthCrossings,
-    monthArtistCrossings: r.monthArtistCrossings,
-    lifetimeCrossings: r.lifetimeCrossings,
-    lifetimeArtistCrossings: r.lifetimeArtistCrossings,
-  }));
+  // Run both queries in parallel — they are independent.
+  const [rollingRows, lifetimeRows] = await Promise.all([rollingQuery, lifetimeQuery]);
+
+  // ── Merge results ─────────────────────────────────────────────────────────
+  // A station can appear in either or both result sets. Stations with crossings
+  // only in the lifetime query (spins > 30 days old) are included so long-absent
+  // listeners still see their historical scores on return.
+  const rollingMap = new Map(rollingRows.map((r) => [r.stationSlug, r]));
+  const lifetimeMap = new Map(lifetimeRows.map((r) => [r.stationSlug, r]));
+  const allSlugs = new Set([...rollingMap.keys(), ...lifetimeMap.keys()]);
+
+  const items: CrossingsRow[] = [];
+  for (const slug of allSlugs) {
+    const r = rollingMap.get(slug);
+    const l = lifetimeMap.get(slug);
+    items.push({
+      stationSlug: slug,
+      crossings:            r?.crossings            ?? 0,
+      artistCrossings:      r?.artistCrossings       ?? 0,
+      weekCrossings:        r?.weekCrossings         ?? 0,
+      weekArtistCrossings:  r?.weekArtistCrossings   ?? 0,
+      monthCrossings:       r?.monthCrossings        ?? 0,
+      monthArtistCrossings: r?.monthArtistCrossings  ?? 0,
+      lifetimeCrossings:       l?.lifetimeCrossings       ?? 0,
+      lifetimeArtistCrossings: l?.lifetimeArtistCrossings ?? 0,
+    });
+  }
 
   const builtAt = new Date();
 
