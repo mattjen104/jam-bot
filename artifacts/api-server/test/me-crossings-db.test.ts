@@ -51,6 +51,7 @@ const SID_LIFETIME_ART = `test-cross-lt-art-${run}`;    // lifetime artist-cross
 const SID_SORT     = `test-cross-sort-${run}`;     // two-station sort comparison user
 const SID_AGED     = `test-cross-aged-${run}`;     // aged crossing (spin 200 days old, outside old 180-day scanCutoff)
 const SID_ANCIENT  = `test-cross-ancient-${run}`;  // spin older than 365 days (confirms unbounded lifetime query)
+const SID_ANCIENT_ART = `test-cross-ancient-art-${run}`; // spin > 400 days ago, different track by same artist (artist-level)
 
 // ── Recordings ────────────────────────────────────────────────────────────────
 // Scenario 1 — release-group widening
@@ -103,6 +104,13 @@ const MBID_SPIN_AGED          = `tc-spin-aged-${run}`;
 // A future change that reintroduces a time-bound scanCutoff would break this test.
 const MBID_SPIN_ANCIENT       = `tc-spin-ancient-${run}`;
 
+// Scenario 9 — artist-level crossing, listener absent > 1 year.
+// Spin is > 400 days old; the listener's library holds a DIFFERENT track by the same
+// artist (not the exact aired MBID).  lifetimeArtistCrossings must be ≥ 1; artistCrossings = 0.
+const ARTIST_MBID_ANCIENT     = `tc-artist-anc-${run}`;
+const MBID_SPIN_ANCIENT_ART   = `tc-spin-anc-art-${run}`;  // aired 400+ days ago (not in library)
+const MBID_LIB_ANCIENT_ART    = `tc-lib-anc-art-${run}`;   // in library (same ARTIST_MBID_ANCIENT)
+
 // ── Station ───────────────────────────────────────────────────────────────────
 const STATION_SLUG      = `test-cross-sta-${run}`;
 const STATION_SLUG_SORT_A = `test-cross-sort-a-${run}`;
@@ -126,6 +134,7 @@ let userLifetimeArtId: number | null = null;
 let userSortId: number | null = null;
 let userAgedId: number | null = null;
 let userAncientId: number | null = null;
+let userAncientArtId: number | null = null;
 
 // ── HTTP helper ───────────────────────────────────────────────────────────────
 async function get(path: string, sid?: string) {
@@ -145,7 +154,7 @@ beforeAll(async () => {
   }
 
   // Legacy spotify_connections (FK required by lore_users)
-  for (const sid of [SID_RG, SID_ART, SID_SOFT, SID_EMPTY, SID_LIFETIME, SID_LIFETIME_ART, SID_SORT, SID_AGED, SID_ANCIENT]) {
+  for (const sid of [SID_RG, SID_ART, SID_SOFT, SID_EMPTY, SID_LIFETIME, SID_LIFETIME_ART, SID_SORT, SID_AGED, SID_ANCIENT, SID_ANCIENT_ART]) {
     await db.insert(spotifyConnectionsTable).values({
       sid,
       accessToken: "t",
@@ -209,6 +218,12 @@ beforeAll(async () => {
     .returning({ id: loreUsersTable.id });
   userAncientId = uAncient!.id;
 
+  const [uAncientArt] = await db
+    .insert(loreUsersTable)
+    .values({ spotifyUserId: `cross-anc-art-${run}`, spotifyConnectionId: SID_ANCIENT_ART, deviceKey: SID_ANCIENT_ART })
+    .returning({ id: loreUsersTable.id });
+  userAncientArtId = uAncientArt!.id;
+
   // ── Recordings ───────────────────────────────────────────────────────────────
   await db.insert(recordingsTable).values([
     // Scenario 1
@@ -235,6 +250,9 @@ beforeAll(async () => {
     { mbid: MBID_SPIN_AGED,            title: "Spin Track Aged",            artist: `Aged Artist ${run}` },
     // Scenario 8 — spin older than 365 days (confirms unbounded lifetime query)
     { mbid: MBID_SPIN_ANCIENT,         title: "Spin Track Ancient",         artist: `Ancient Artist ${run}` },
+    // Scenario 9 — artist-level crossing, listener absent > 1 year (different track, same artist)
+    { mbid: MBID_SPIN_ANCIENT_ART,     title: "Spin Track Ancient Art",     artist: `Ancient Art Artist ${run}`, artistMbid: ARTIST_MBID_ANCIENT },
+    { mbid: MBID_LIB_ANCIENT_ART,      title: "Lib Track Ancient Art",      artist: `Ancient Art Artist ${run}`, artistMbid: ARTIST_MBID_ANCIENT },
   ]);
 
   // Release-group bridge rows (both recordings share the same primary RG)
@@ -280,6 +298,11 @@ beforeAll(async () => {
     // Scenario 8 — aired more than 400 days ago (well beyond the old 365-day bound).
     // The unbounded lifetime query must still return lifetimeCrossings ≥ 1.
     { stationId: stationId!, mbid: MBID_SPIN_ANCIENT, confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: new Date(now.getTime() - 400 * 24 * 60 * 60 * 1000) },
+    // Scenario 9 — artist-level crossing, listener absent > 1 year.
+    // MBID_SPIN_ANCIENT_ART aired 400+ days ago and is NOT in the library.
+    // MBID_LIB_ANCIENT_ART is in the library and shares ARTIST_MBID_ANCIENT.
+    // lifetimeArtistCrossings must be ≥ 1 even with no exact-MBID or RG match.
+    { stationId: stationId!, mbid: MBID_SPIN_ANCIENT_ART, confidence: "text", rawTitle: "t", rawArtist: "a", playedAt: new Date(now.getTime() - 400 * 24 * 60 * 60 * 1000) },
   ]);
 
   // ── Library items ────────────────────────────────────────────────────────────
@@ -383,6 +406,15 @@ beforeAll(async () => {
     { userId: userAncientId!, mbid: MBID_SPIN_ANCIENT, provenance: { kind: "keep" }, addedAt: new Date() },
   ]);
 
+  // ── Scenario 9 — artist-level crossing, listener absent > 1 year ─────────────
+  // User ANCIENT_ART: library holds a DIFFERENT track (MBID_LIB_ANCIENT_ART) by the
+  // same artist as the 400-day-old spin (MBID_SPIN_ANCIENT_ART).  There is no exact
+  // MBID or release-group match — only an artistMbid match.  The unbounded
+  // lifetimeArtistCrossings query must still return ≥ 1.
+  await db.insert(libraryItemsTable).values([
+    { userId: userAncientArtId!, mbid: MBID_LIB_ANCIENT_ART, provenance: { kind: "keep" }, addedAt: new Date() },
+  ]);
+
   // ── Server ───────────────────────────────────────────────────────────────────
   server = app.listen(0);
   await new Promise<void>((resolve) => server!.once("listening", resolve));
@@ -403,7 +435,7 @@ afterAll(async () => {
   }
 
   // Library items
-  for (const userId of [userRgId, userArtId, userSoftId, userEmptyId, userLifetimeId, userLifetimeArtId, userSortId, userAgedId, userAncientId]) {
+  for (const userId of [userRgId, userArtId, userSoftId, userEmptyId, userLifetimeId, userLifetimeArtId, userSortId, userAgedId, userAncientId, userAncientArtId]) {
     if (userId != null) {
       await db.delete(libraryItemsTable).where(eq(libraryItemsTable.userId, userId));
     }
@@ -437,6 +469,7 @@ afterAll(async () => {
     MBID_SORT_A1, MBID_SORT_A2, MBID_SORT_A3, MBID_SORT_B1, MBID_LIB_SORT,
     MBID_SPIN_AGED,
     MBID_SPIN_ANCIENT,
+    MBID_SPIN_ANCIENT_ART, MBID_LIB_ANCIENT_ART,
   ]) {
     await db
       .delete(recordingReleaseGroupsTable)
@@ -445,14 +478,14 @@ afterAll(async () => {
   }
 
   // Lore users
-  for (const userId of [userRgId, userArtId, userSoftId, userEmptyId, userLifetimeId, userLifetimeArtId, userSortId, userAgedId, userAncientId]) {
+  for (const userId of [userRgId, userArtId, userSoftId, userEmptyId, userLifetimeId, userLifetimeArtId, userSortId, userAgedId, userAncientId, userAncientArtId]) {
     if (userId != null) {
       await db.delete(loreUsersTable).where(eq(loreUsersTable.id, userId));
     }
   }
 
   // Legacy spotify connections
-  for (const sid of [SID_RG, SID_ART, SID_SOFT, SID_EMPTY, SID_LIFETIME, SID_LIFETIME_ART, SID_SORT, SID_AGED, SID_ANCIENT]) {
+  for (const sid of [SID_RG, SID_ART, SID_SOFT, SID_EMPTY, SID_LIFETIME, SID_LIFETIME_ART, SID_SORT, SID_AGED, SID_ANCIENT, SID_ANCIENT_ART]) {
     await db.delete(spotifyConnectionsTable).where(eq(spotifyConnectionsTable.sid, sid));
   }
 });
@@ -675,6 +708,38 @@ describe("GET /api/me/crossings — spin older than 365 days", () => {
     expect(row!.crossings).toBe(0);
     expect(row!.artistCrossings).toBe(0);
     expect(row!.lifetimeCrossings).toBeGreaterThanOrEqual(1);
+  }, TEST_TIMEOUT);
+});
+
+describe("GET /api/me/crossings — artist-level crossing, listener absent > 1 year", () => {
+  it("returns lifetimeArtistCrossings ≥ 1 when the only artist spin is 400 days old and library holds a different track by the same artist", async () => {
+    if (!dbAvailable) return;
+
+    _testOnly_clearCrossingsCache(userAncientArtId!);
+
+    const { status, body } = await get("/api/me/crossings", SID_ANCIENT_ART);
+    expect(status).toBe(200);
+
+    type CrossingItem = {
+      stationSlug: string;
+      crossings: number;
+      artistCrossings: number;
+      lifetimeCrossings: number;
+      lifetimeArtistCrossings: number;
+    };
+    const row = (body.items as CrossingItem[]).find((r) => r.stationSlug === STATION_SLUG);
+
+    // MBID_SPIN_ANCIENT_ART aired 400+ days ago and is NOT in the library (no exact-MBID
+    // or release-group match).  MBID_LIB_ANCIENT_ART is in the library and shares
+    // ARTIST_MBID_ANCIENT.  The unbounded lifetimeArtistCrossings query must return ≥ 1
+    // even when the listener has been absent for more than a year.
+    // A future regression that reintroduces a time-bound on the artist-crossing path
+    // would cause this assertion to fail, surfacing the issue before it reaches production.
+    expect(row).toBeDefined();
+    expect(row!.crossings).toBe(0);             // spin is outside the 24h window
+    expect(row!.artistCrossings).toBe(0);       // spin is outside the 24h window
+    expect(row!.lifetimeCrossings).toBe(0);     // aired track is not in the library
+    expect(row!.lifetimeArtistCrossings).toBeGreaterThanOrEqual(1); // artist match via MBID
   }, TEST_TIMEOUT);
 });
 

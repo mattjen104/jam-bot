@@ -300,11 +300,11 @@ router.get("/me/crossings", h(async (req, res) => {
   )`;
 
   // ── Windowed predicates ───────────────────────────────────────────────────
-  const inWindow    = sql`${spinsTable.playedAt} >= ${cutoff}`;
+  const inWindow           = sql`${spinsTable.playedAt} >= ${spinCutoff}`;
   const weekCutoff  = new Date(Date.now() - 7  * 24 * 60 * 60 * 1000);
   const monthCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const inWeek      = sql`${spinsTable.playedAt} >= ${weekCutoff}`;
-  const inMonth     = sql`${spinsTable.playedAt} >= ${monthCutoff}`;
+  const inWeek             = sql`${spinsTable.playedAt} >= ${blendedWeekCutoff}`;
+  const inMonth            = sql`${spinsTable.playedAt} >= ${blendedMonthCutoff}`;
 
   // ── Relevant MBIDs for the mbid-driven lifetime query ─────────────────────
   // Collects every recording MBID that could yield a crossing for this user:
