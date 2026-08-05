@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { proxyArtUrl } from "../lib/proxyArt";
+import { RUMOURS, onArtError } from "../lib/rumours";
 import { Link, useLocation, useSearch } from "wouter";
 import { SearchOverlay } from "../components/SearchOverlay";
 import { useQueryClient } from "@tanstack/react-query";
@@ -620,10 +621,11 @@ export function AlbumGroupRow({
         >
           {group.artworkUrl ? (
             <img
-              src={proxyArtUrl(group.artworkUrl)!}
+              src={proxyArtUrl(group.artworkUrl) ?? group.artworkUrl}
               alt=""
               style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
               loading="lazy"
+              onError={onArtError}
             />
           ) : (
             <span
@@ -828,10 +830,11 @@ export function ArtistGroupRow({
               >
                 {album.artworkUrl ? (
                   <img
-                    src={proxyArtUrl(album.artworkUrl)!}
+                    src={proxyArtUrl(album.artworkUrl) ?? album.artworkUrl}
                     alt=""
                     style={{ width: 24, height: 24, borderRadius: 2, flexShrink: 0, objectFit: "cover" }}
                     loading="lazy"
+                    onError={onArtError}
                   />
                 ) : (
                   <span

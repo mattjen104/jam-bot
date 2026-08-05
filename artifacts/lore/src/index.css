@@ -1334,6 +1334,10 @@
   grid-template-rows: auto;
   overflow: hidden;
   position: relative; /* anchor for bg-wash and avatar-fade */
+  /* Extend into the safe area on phones with a notch/dynamic island so the
+     album art bg-wash reaches the physical top edge of the screen.
+     Falls back to the base 10px top padding on devices without a safe area. */
+  padding-top: max(10px, env(safe-area-inset-top, 0px));
 }
 
 /* Absolutely-positioned decorations span all columns so they don't
@@ -1369,7 +1373,7 @@
 
 /* ── New topbar controls (paste box, ticker) ── */
 
-/* ── Right-side album art wash — same image, large, fades in from the right ── */
+/* ── Right-side album art wash — fills most of the bar, fades toward the logo ── */
 .dial-topbar__bg-wash {
   position: absolute;
   top: 0;
@@ -1379,12 +1383,13 @@
   width: 90%;
   background-size: cover;
   background-position: right center;
-  opacity: 0.18;
+  opacity: 0.32;
   pointer-events: none;
   z-index: 0;
-  /* Fade: transparent at the far left, full opacity by ~70% from left */
-  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 70%);
-  mask-image: linear-gradient(to right, transparent 0%, #000 70%);
+  /* Fade: transparent at the far left (near the logo), opaque by ~35% across
+     the element so the art fills most of the bar while melting near the wordmark */
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 35%);
+  mask-image: linear-gradient(to right, transparent 0%, #000 35%);
 }
 
 /* ── Album avatar that dissolves into the Lore wordmark ── */
