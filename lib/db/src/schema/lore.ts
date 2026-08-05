@@ -2172,6 +2172,10 @@ export const crossingsCacheTable = pgTable("crossings_cache", {
       stationSlug: string;
       crossings: number;
       artistCrossings: number;
+      weekCrossings: number;
+      weekArtistCrossings: number;
+      monthCrossings: number;
+      monthArtistCrossings: number;
       lifetimeCrossings: number;
       lifetimeArtistCrossings: number;
     }>
