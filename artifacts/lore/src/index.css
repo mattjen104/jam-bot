@@ -18,6 +18,16 @@
   border-top: 1px solid hsl(var(--border) / 0.45);
 }
 
+/* Fixed-height separator strip between the on-air list and the bottom menu —
+   same idiom as the dial tab strip (transparent black, hairline border),
+   never changes size regardless of what's tapped below it. */
+.bottom-shell__strip {
+  height: 26px;
+  flex-shrink: 0;
+  background: hsl(0 0% 0% / 0.35);
+  border-bottom: 1px solid hsl(var(--border) / 0.5);
+}
+
 /* ── Player bar — compact block inside .bottom-shell ─────────────────────── */
 .player-bar-block {
   border-bottom: 1px solid hsl(var(--border) / 0.25);
@@ -231,11 +241,10 @@
 
 /* Record-peek primary navigation ------------------------------------------------ */
 /* ── Bottom nav bar — block inside .bottom-shell ─────────────────────────── */
-/* Bottom padding reserved under page content for the fixed bottom shell:
-   label 22px + full-width square cover ((100vw − 12px pad − 10px gaps)/3)
-   + nav bottom padding, plus the player bar when one is docked. */
-.content-pad-nav { padding-bottom: calc(34px + (100vw - 22px) / 3); }
-.content-pad-nav--player { padding-bottom: calc(126px + (100vw - 22px) / 3); }
+/* Bottom padding reserved under page content for the fixed bottom shell.
+   --shell-h is the measured height of .bottom-shell-wrap (set from App.tsx),
+   so it automatically tracks cover size, player dock presence, and safe-area. */
+.content-pad-shell { padding-bottom: calc(var(--shell-h, 200px) + 12px); }
 
 .record-peek-nav {
   padding: 0 6px max(env(safe-area-inset-bottom), 4px);
@@ -326,12 +335,10 @@
   transform: translateX(-50%);
 }
 
-/* Active: art at full opacity, sleeve slightly lifted */
+/* Active: art at full opacity — no movement, covers stay perfectly still */
 .record-peek-tab--active .record-peek-tab__sleeve {
   opacity: 1;
   border-color: hsl(var(--foreground) / .25);
-  transform: scale(1.04);
-  transform-origin: center;
 }
 
 /* ── Resume-peek card ─────────────────────────────────────────────────────── */
@@ -867,6 +874,8 @@
   /* library = orange primary accent */
   --library: 11 77% 61%;
   --library-foreground: 38 13% 7%;
+  /* canary = "new on air" first-hearing accent (Also-On-Air sentences) */
+  --canary: 54 92% 62%;
   /* live = blue indicator */
   --live: 207 41% 64%;
   --live-foreground: 207 30% 10%;
@@ -1091,8 +1100,8 @@
 .dial-root {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 56px);   /* fallback for browsers without dvh */
-  height: calc(100dvh - 56px);  /* overrides with dvh when supported */
+  height: calc(100vh - 56px - var(--shell-h, 0px));   /* fallback for browsers without dvh */
+  height: calc(100dvh - 56px - var(--shell-h, 0px));  /* overrides with dvh when supported */
   overflow: hidden;
   background: hsl(var(--background));
 }
@@ -4611,6 +4620,29 @@
 .fdrow__t1.w7 { color: hsl(var(--muted-foreground)); }
 .fdrow__t1.w0 { color: hsl(var(--muted-foreground) / 0.5); }
 .fdrow__t1 .fdrow__artist { color: hsl(var(--library)); }
+
+/* ── Popular-crossing sentence (Also-On-Air onboarding crossing sort) ──────
+   Lime = crossing with Lore's most-played; canary = new on air / first
+   hearing; orange-red = already in the library. The tiny "+" seeds the
+   artist and flips its name to the library colour. */
+.fdrow__pop-sentence { color: hsl(var(--foreground) / 0.85); }
+.fdrow__t1 .fdrow__artist--pop { color: hsl(var(--accent)); }
+.fdrow__t1 .fdrow__artist--new { color: hsl(var(--canary)); }
+.fdrow__t1 .fdrow__artist--lib { color: hsl(var(--library)); }
+.fdrow__addplus {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0 1px;
+  margin-left: 2px;
+  font-size: 0.72em;
+  font-weight: 700;
+  line-height: 1;
+  color: hsl(var(--library));
+  cursor: pointer;
+  vertical-align: super;
+}
+.fdrow__addplus:hover { color: hsl(var(--library) / 0.75); }
 /* Entity-type colours for the attribution sentence — blue selector palette */
 .fdrow__t1 .fdrow__dj      { color: hsl(var(--selector-dj)); }
 .fdrow__t1 .fdrow__show    { color: hsl(var(--selector-show)); font-weight: 500; font-style: normal; }

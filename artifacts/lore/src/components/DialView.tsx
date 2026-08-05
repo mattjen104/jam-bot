@@ -10,7 +10,7 @@ import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, typ
 import { SeedInput } from "./SeedInput";
 import { Search } from "lucide-react";
 import { useLocation, Link } from "wouter";
-import { useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyAlbumAvatar, type GhostStation } from "../lib/meHooks";
+import { useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyAlbumAvatar, useMyPopularCrossings, type GhostStation, type PopularCrossingArtist } from "../lib/meHooks";
 import { useGetStationNowPlaying, getGetStationNowPlayingQueryKey } from "@workspace/api-client-react";
 import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
 import { StationLane } from "./StationLane";
@@ -37,6 +37,7 @@ import {
   type ReasonResult,
 } from "./dialViewHelpers";
 import { proxyArtUrl } from "../lib/proxyArt";
+import { heroArtCandidates } from "../lib/artRes";
 import { runDate, clockTime } from "../lib/format";
 
 // ---------------------------------------------------------------------------
@@ -178,6 +179,75 @@ function liveSentence(
   // reason instead of manufacturing a generic sentence.
   return null;
 }
+// ---------------------------------------------------------------------------
+// Popular-crossing sentence — Also-On-Air "onboarding crossing sort"
+// ---------------------------------------------------------------------------
+
+/** Colour precedence for a popular-crossing artist name. */
+function popArtistCls(a: PopularCrossingArtist, inLib: boolean): string {
+  if (inLib) return "fdrow__artist fdrow__artist--lib";
+  if (!a.popular) return "fdrow__artist fdrow__artist--new";
+  return "fdrow__artist fdrow__artist--pop";
+}
+
+/**
+ * Summary sentence for Also-On-Air rows, same philosophy as the Zone 1
+ * crossing sentence: artist names carry the signal, everything else is plain.
+ * Lime = crossing with Lore's most-played; canary = first time on Lore / first
+ * time for this listener; orange-red = already in the library. Every name not
+ * yet in the library gets a tiny orange-red "+" that seeds it.
+ */
+function PopCrossingLine({ artists, seedsLower, onAdd }: {
+  artists: PopularCrossingArtist[];
+  seedsLower: Set<string>;
+  onAdd: (name: string) => void;
+}) {
+  const inLib = (a: PopularCrossingArtist) => a.inLibrary || seedsLower.has(a.name.trim().toLowerCase());
+  // Library artists are excluded — they already surface in the ON AIR section.
+  // (a.inLibrary is the server flag from load time; artists seeded via "+"
+  // this session stay visible in orange-red until the next data refresh.)
+  const pop = artists.filter((a) => a.popular && !a.inLibrary).slice(0, 4);
+  // Yellow group: surfaceable-as-new only — the server already suppressed
+  // heard-but-not-kept artists.
+  const fresh = artists
+    .filter((a) => !a.popular && !a.inLibrary && (a.debut || !a.heard))
+    .slice(0, 3);
+  if (pop.length === 0 && fresh.length === 0) return null;
+
+  const span = (a: PopularCrossingArtist) => (
+    <b key={a.name} className={popArtistCls(a, inLib(a))}>
+      {a.name}
+      {!inLib(a) && (
+        <button
+          type="button"
+          className="fdrow__addplus"
+          aria-label={`Add ${a.name} to your artists`}
+          onClick={(e) => { e.stopPropagation(); onAdd(a.name); }}
+        >＋</button>
+      )}
+    </b>
+  );
+  const join = (list: PopularCrossingArtist[]) => {
+    const nodes: ReactNode[] = [];
+    list.forEach((a, i) => {
+      if (i > 0) nodes.push(i === list.length - 1 ? " and " : ", ");
+      nodes.push(span(a));
+    });
+    return <>{nodes}</>;
+  };
+
+  return (
+    <>
+      {pop.length > 0 && (
+        <>{join(pop)}{" — Lore's most-played — this set."}</>
+      )}
+      {fresh.length > 0 && (
+        <>{pop.length > 0 ? " " : ""}{"New on air: "}{join(fresh)}{"."}</>
+      )}
+    </>
+  );
+}
+
 interface FrontDoorRowProps {
   ds: DialStation;
   show: DialShow | null;
@@ -189,9 +259,11 @@ interface FrontDoorRowProps {
   presence?: StationPresence;
   /** Artwork URL for the currently-playing track — renders a right-edge fade when active */
   artworkUrl?: string | null;
+  /** Popular-crossing sentence (Also-On-Air): replaces the tier-1 reason line. */
+  popLine?: ReactNode | null;
 }
 
-export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, displayMode = "personal", presence, artworkUrl }: FrontDoorRowProps) {
+export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, displayMode = "personal", presence, artworkUrl, popLine }: FrontDoorRowProps) {
   const usableDjList = eligibleDjNames(
     { name: show?.showName ?? "", djName: show?.djName ?? undefined, djNames: show?.djNames },
     { artist: show?.currentTrack?.artist, title: show?.currentTrack?.title, showTitle: show?.showName, stationName: ds.station.name },
@@ -210,12 +282,15 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, dis
     ? liveSentence(ds.station.name, safeShow)
     : crossing ? null : liveSentence(ds.station.name, safeShow);
   // Tier 1 always shows the community aggregate sentence in blended mode.
+  // Popular-crossing sentence (Also-On-Air) outranks the dim fallback reason
+  // but never a personal crossing sentence — your own library evidence wins.
+  const usePop = displayMode !== "blended" && !crossing && popLine != null;
   const tier1Cls = displayMode === "blended"
     ? rz.cls
-    : crossing ? rz.cls : live ? "fdrow__live-sentence" : rz.cls;
+    : crossing ? rz.cls : usePop ? "fdrow__pop-sentence" : live ? "fdrow__live-sentence" : rz.cls;
   const tier1Node = displayMode === "blended"
     ? rz.node
-    : crossing?.node ?? live?.node ?? rz.node;
+    : crossing?.node ?? (usePop ? popLine : null) ?? live?.node ?? rz.node;
   const dj = usableDj;
   const stationLabel = cleanLiveValue(ds.station.name) ?? ds.station.name;
 
@@ -345,6 +420,9 @@ function ZoneLabel({ label, n, hint, accent, estimated, collapsed, onCollapse }:
 //   Zone 3 p50≈3  p90≈7  max≈12
 // Zone 1 p90 > 5, so truncation is worth shipping.
 // ---------------------------------------------------------------------------
+/** Max taste seeds per user — must match MAX_SEEDS in api-server taste-seeds.ts. */
+const MAX_TASTE_SEEDS = 50;
+
 const ZONE1_VISIBLE = 5;
 const ZONE2_VISIBLE = 3;
 const ZONE3_VISIBLE = 3;
@@ -1012,7 +1090,7 @@ export function DialView() {
     const base = pending ? pending.catch(() => seedArtists) : Promise.resolve(visibleSeeds);
     seedWriteRef.current = base.then(async (current) => {
       const lower = trimmed.toLowerCase();
-      if (current.some((s) => s.toLowerCase() === lower) || current.length >= 10) return current;
+      if (current.some((s) => s.toLowerCase() === lower) || current.length >= MAX_TASTE_SEEDS) return current;
       const next = [...current, trimmed];
       setOptimisticSeeds(next);
       try {
@@ -1046,6 +1124,32 @@ export function DialView() {
     });
     void seedWriteRef.current.catch(() => undefined);
   }, [seedArtists, setSeedsMutation, visibleSeeds]);
+
+  // Popular crossings — Also-On-Air sentences + sort order.
+  const { data: popCrossings = [] } = useMyPopularCrossings();
+  const popMap = useMemo(
+    () => new Map(popCrossings.map((i) => [i.stationSlug, i.artists])),
+    [popCrossings],
+  );
+  const seedsLower = useMemo(
+    () => new Set(visibleSeeds.map((s) => s.trim().toLowerCase())),
+    [visibleSeeds],
+  );
+  /** Station sort weight: Lore-wide spins of its popular crossing artists. */
+  const popScore = useCallback((slug: string) => {
+    const artists = popMap.get(slug);
+    if (!artists) return 0;
+    // Library artists are excluded from the sentence, so they don't weigh
+    // into the sort either — they already drive the ON AIR section.
+    return artists.reduce((n, a) => n + (a.popular && !a.inLibrary ? a.spins : 0), 0);
+  }, [popMap]);
+  /** Whether the sentence would actually render content for this station. */
+  const popHasContent = useCallback((slug: string) => {
+    const artists = popMap.get(slug);
+    if (!artists) return false;
+    return artists.some((a) => a.popular && !a.inLibrary)
+      || artists.some((a) => !a.popular && !a.inLibrary && (a.debut || !a.heard));
+  }, [popMap]);
 
   // Bridge: player-ticker artist clicks → addSeed (ticker lives in PlayerBar)
   useEffect(() => {
@@ -1087,17 +1191,34 @@ export function DialView() {
   // RUMOURS asset (always loads), then swap to the real avatar art only once
   // the browser has confirmed it actually loads. The fullscreen hero reuses
   // the same resolved URL, so it's always a cached, known-good image.
+  // Dedicated hi-res pipeline for the hero cover: look the album up by
+  // artist + title on sources that serve true 1200px masters (iTunes, then
+  // Cover Art Archive by release-group), then fall back to the upscaled or
+  // original library URL, then RUMOURS. Each candidate is probed offscreen,
+  // so whichever wins is fully cached before it's ever displayed — the
+  // moon-tap hero appears instantly at full quality.
+  const avatarAlbum = avatarData?.current ?? avatarData?.candidates?.[0] ?? null;
   const [heroArt, setHeroArt] = useState<string>(RUMOURS);
   useEffect(() => {
-    const src = proxyArtUrl(avatarUrl) ?? avatarUrl;
-    if (!src || src === RUMOURS) { setHeroArt(RUMOURS); return; }
+    if (!avatarAlbum || !avatarUrl || avatarUrl === RUMOURS) { setHeroArt(RUMOURS); return; }
     let cancelled = false;
-    const probe = new Image();
-    probe.onload = () => { if (!cancelled) setHeroArt(src); };
-    probe.onerror = () => { if (!cancelled) setHeroArt(RUMOURS); };
-    probe.src = src;
+    void heroArtCandidates(avatarAlbum).then((urls) => {
+      if (cancelled) return;
+      const candidates = urls.map((u) => proxyArtUrl(u) ?? u);
+      const tryLoad = (i: number) => {
+        if (cancelled) return;
+        if (i >= candidates.length) { setHeroArt(RUMOURS); return; }
+        const probe = new Image();
+        probe.onload = () => { if (!cancelled) setHeroArt(candidates[i]); };
+        probe.onerror = () => tryLoad(i + 1);
+        probe.src = candidates[i];
+      };
+      tryLoad(0);
+    });
     return () => { cancelled = true; };
-  }, [avatarUrl]);
+    // avatarUrl is derived from avatarAlbum; keying on it keeps deps simple.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [avatarAlbum?.recordingMbid, avatarUrl]);
   // "+ Artists" tab — inline add-artists input in the tab bar (replaces the
   // old bottom artist-add strip). Submits via the same custom event the
   // ticker listens to, so no shared state is needed.
@@ -1225,13 +1346,18 @@ export function DialView() {
     alsoOnAir
       .filter((row) => row.rz.r === 5)
       .sort((a, b) => {
+        // Popular-crossing weight first (onboarding crossing sort), then
+        // picker overlap as the fallback within equal weights.
+        const aPop = popScore(a.ds.station.slug);
+        const bPop = popScore(b.ds.station.slug);
+        if (aPop !== bPop) return bPop - aPop;
         const aOv = pickerOv(a.show?.pickerId ?? null, a.effectiveDjName);
         const bOv = pickerOv(b.show?.pickerId ?? null, b.effectiveDjName);
         return bOv - aOv;
       }),
   // pickerOv closure reads overlapByPickerId/pickerNameToId from outer scope
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  [alsoOnAir, overlapByPickerId, pickerNameToId]);
+  [alsoOnAir, overlapByPickerId, pickerNameToId, popScore]);
 
   const restBand = useMemo(() =>
     alsoOnAir
@@ -1239,9 +1365,14 @@ export function DialView() {
       .sort((a, b) => {
         // Pinned stations float above non-pinned regardless of crossing count.
         if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+        // Popular-crossing weight (onboarding crossing sort) …
+        const aPop = popScore(a.ds.station.slug);
+        const bPop = popScore(b.ds.station.slug);
+        if (aPop !== bPop) return bPop - aPop;
+        // … then lifetime station crossings as the fallback.
         return b.ds.lifetimeCrossings - a.ds.lifetimeCrossings;
       }),
-  [alsoOnAir]);
+  [alsoOnAir, popScore]);
   // Ghost zone: stations that played library artists but user hasn't tuned into
   const { data: ghostStations = [] } = useMyGhostMissed();
   // Exclude any ghost station already appearing in Zone 1 or Zone 3 (live sets)
@@ -1805,6 +1936,9 @@ export function DialView() {
                                 displayMode={crossingSourceMode}
                                 presence={presenceMap.get(row.ds.station.id)}
                                 artworkUrl={activeArtworkUrl}
+                                popLine={popHasContent(row.ds.station.slug)
+                                  ? <PopCrossingLine artists={popMap.get(row.ds.station.slug)!} seedsLower={seedsLower} onAdd={addSeed} />
+                                  : null}
                               />
                             ))}
                           </>
@@ -1827,6 +1961,9 @@ export function DialView() {
                                   displayMode={crossingSourceMode}
                                   presence={presenceMap.get(row.ds.station.id)}
                                   artworkUrl={activeArtworkUrl}
+                                  popLine={popHasContent(row.ds.station.slug)
+                                    ? <PopCrossingLine artists={popMap.get(row.ds.station.slug)!} seedsLower={seedsLower} onAdd={addSeed} />
+                                    : null}
                                 />
                               ))}
                             </div>
@@ -2164,7 +2301,7 @@ export function LiveArtistPicker({
           <div className="live-artist-picker__options">
             {rows.map((suggestion) => {
             const isSelected = selected.has(liveIdentityKey(suggestion.artist));
-            const isAtLimit = seeds.length >= 10 && !isSelected;
+            const isAtLimit = seeds.length >= MAX_TASTE_SEEDS && !isSelected;
             return (
               <button
                 key={suggestion.artist.toLocaleLowerCase()}
@@ -2196,9 +2333,9 @@ export function LiveArtistPicker({
             );
             })}
           </div>
-          {seeds.length >= 10 && (
+          {seeds.length >= MAX_TASTE_SEEDS && (
             <div className="live-artist-picker__limit" role="status">
-              Ten artists selected — remove one below to choose another.
+              Seed limit reached — remove one below to choose another.
             </div>
           )}
         </>

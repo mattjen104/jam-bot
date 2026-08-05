@@ -1,5 +1,5 @@
 import { Switch, Route, Router as WouterRouter, useLocation, Redirect } from "wouter";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -164,11 +164,29 @@ function Shell() {
   );
 }
 
-/** Unified fixed bottom shell — player dock sits directly above the nav tabs. */
+/** Unified fixed bottom shell — player dock sits directly above the nav tabs.
+ *  Its rendered height is measured and published as --shell-h on <html>, so
+ *  page padding and the dial's own height always match the real shell size
+ *  (covers grow with viewport width, player dock comes and goes). */
 function BottomShell() {
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const apply = () =>
+      document.documentElement.style.setProperty("--shell-h", `${el.offsetHeight}px`);
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      document.documentElement.style.removeProperty("--shell-h");
+    };
+  }, []);
   return (
-    <div className="bottom-shell-wrap">
+    <div className="bottom-shell-wrap" ref={wrapRef}>
       <div className="bottom-shell">
+        <div className="bottom-shell__strip" aria-hidden="true" />
         <PlayerDock />
         <RecordPeekNav />
       </div>

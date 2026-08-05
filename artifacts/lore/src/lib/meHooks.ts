@@ -608,6 +608,45 @@ export function useMyDialCrossings(date: string) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Popular crossings — Also-On-Air "onboarding crossing sort"
+// ---------------------------------------------------------------------------
+
+export interface PopularCrossingArtist {
+  name: string;
+  spins: number;
+  /** In Lore's top-played set (lime green). */
+  popular: boolean;
+  /** First-ever Lore spin within the last week (canary yellow). */
+  debut: boolean;
+  /** User has credited attendance for this artist. */
+  heard: boolean;
+  /** Matches the user's library / soft artists / taste seeds (orange-red). */
+  inLibrary: boolean;
+}
+export interface PopularCrossingsItem {
+  stationSlug: string;
+  artists: PopularCrossingArtist[];
+}
+export const ME_POPULAR_CROSSINGS_KEY = ["me", "popular-crossings"] as const;
+
+/**
+ * Station crossings with Lore's most-played artists (library-independent) —
+ * powers the Also-On-Air summary sentences and its sort order.
+ */
+export function useMyPopularCrossings() {
+  return useQuery({
+    queryKey: ME_POPULAR_CROSSINGS_KEY,
+    queryFn: () =>
+      fetchOrNull<{ items: PopularCrossingsItem[] }>("/api/me/popular-crossings").then(
+        (d) => d?.items ?? [],
+      ),
+    staleTime: 5 * 60_000,
+    refetchInterval: 5 * 60_000,
+    retry: false,
+  });
+}
+
 export const ME_BLENDED_CROSSINGS_KEY = ["me", "crossings", "blended"] as const;
 export function useMyLibraryMbids() {
   return useQuery({

@@ -23,6 +23,7 @@ import tasteSeedsRouter from "./taste-seeds.js";
 import weeklyRecapRouter from "./weekly-recap.js";
 import avatarRouter from "./avatar.js";
 import presenceRouter from "./presence.js";
+import popularCrossingsRouter from "./popular-crossings.js";
 
 export {
   startPhase3RetryScheduler,
@@ -58,5 +59,6 @@ router.use(tasteSeedsRouter);
 router.use(weeklyRecapRouter);
 router.use(avatarRouter);
 router.use(presenceRouter);
+router.use(popularCrossingsRouter);
 
 export default router;

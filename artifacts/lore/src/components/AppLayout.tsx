@@ -6,7 +6,6 @@ import {
   useMyDialCrossings,
   ME_PICKER_OVERLAP_KEY,
 } from "../lib/meHooks";
-import { usePlayer } from "../player/PlayerProvider";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getListStationsQueryOptions,
@@ -24,8 +23,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
   useMyDialCrossings(today);
 
   const isHome = location === "/" || location === "";
-  const { radio, ride } = usePlayer();
-  const hasPlayer = !!radio.station || ride.active;
 
   // ── Global import modal — hosted here so any route (Dial, Library, etc.)
   //    can open it by dispatching "lore:open-import-modal". ─────────────────
@@ -88,7 +85,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       )}
 
       {/* ── Main content — pad for bottom shell (nav + optional player) ── */}
-      <div className={isHome ? "" : hasPlayer ? "content-pad-nav--player" : "content-pad-nav"}>{children}</div>
+      <div className={isHome ? "" : "content-pad-shell"}>{children}</div>
     </>
   );
 }

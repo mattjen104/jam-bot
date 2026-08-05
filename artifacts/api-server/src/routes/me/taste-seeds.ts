@@ -18,7 +18,9 @@ import { bustLibraryHitCache } from "../../lore/library-hits.js";
 
 const router: IRouter = Router();
 
-const MAX_SEEDS = 10;
+// Raised from 10: the Also-On-Air "+" buttons append seeds one artist at a
+// time, so the onboarding path needs headroom beyond the manual entry box.
+const MAX_SEEDS = 50;
 const MAX_ARTIST_LEN = 100;
 
 /** Ordered list of seeded artist names for the authenticated user. */
