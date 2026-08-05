@@ -1638,29 +1638,6 @@ export function DialView() {
                   Recent
                   {offlineStations.length > 0 && <span className="dial-tab__n">{offlineStations.length}</span>}
                 </button>
-                {/* Solo / Listening Party — peeks from right edge, expands on hover */}
-                <div className="dial-mode-peek">
-                  <div className="dial-mode dial-mode--inline" role="group" aria-label="Listening mode">
-                    <button
-                      type="button"
-                      className={`dial-mode__button${crossingSourceMode === "personal" ? " dial-mode__button--active" : ""}`}
-                      aria-pressed={crossingSourceMode === "personal"}
-                      aria-label="Solo mode"
-                      onClick={() => setSocialEnabled(false)}
-                    >
-                      Solo
-                    </button>
-                    <button
-                      type="button"
-                      className={`dial-mode__button${crossingSourceMode === "blended" ? " dial-mode__button--active" : ""}`}
-                      aria-pressed={crossingSourceMode === "blended"}
-                      aria-label="Listening Party"
-                      onClick={() => setSocialEnabled(true)}
-                    >
-                      Listening Party
-                    </button>
-                  </div>
-                </div>
               </div>
             )}
 

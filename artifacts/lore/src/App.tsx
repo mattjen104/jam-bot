@@ -39,6 +39,7 @@ import { ListeningLogger } from "./components/ListeningLogger";
 import { AppLayout } from "./components/AppLayout";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { postStartImport, ME_LATEST_IMPORT_JOB_KEY } from "./lib/meHooks";
+import { useSocialMode, setSocialEnabled } from "./lib/social";
 
 
 const queryClient = new QueryClient();
@@ -163,12 +164,46 @@ function Shell() {
   );
 }
 
+/** Slim two-sided pill — Solo / Listening Party — shown between the player
+ *  bar and the nav tabs when the user is on the Radio section. */
+function SocialModeBar() {
+  const { enabled } = useSocialMode();
+  return (
+    <div className="social-mode-bar">
+      <div className="dial-mode" role="group" aria-label="Listening mode">
+        <button
+          type="button"
+          className={`dial-mode__button${!enabled ? " dial-mode__button--active" : ""}`}
+          aria-pressed={!enabled}
+          aria-label="Solo mode"
+          onClick={() => setSocialEnabled(false)}
+        >
+          Solo
+        </button>
+        <button
+          type="button"
+          className={`dial-mode__button${enabled ? " dial-mode__button--active" : ""}`}
+          aria-pressed={enabled}
+          aria-label="Listening Party"
+          onClick={() => setSocialEnabled(true)}
+        >
+          Listening Party
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** Unified fixed bottom shell — player dock sits directly above the nav tabs,
  *  sharing one fixed container so there is no gap or floating card. */
 function BottomShell() {
+  const [location] = useLocation();
+  const path = location.split("?")[0] ?? location;
+  const isRadio = path === "/";
   return (
     <div className="bottom-shell">
       <PlayerDock />
+      {isRadio && <SocialModeBar />}
       <RecordPeekNav />
     </div>
   );

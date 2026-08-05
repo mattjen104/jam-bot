@@ -4540,34 +4540,20 @@
   white-space: nowrap;
 }
 
-/* ── Mode toggle peek widget ────────────────────────────────────────────────── */
-/* Sticks to the right edge of the tab strip. Shows ~18px (right sliver of the
-   active button) at rest; expands to full width on hover so both pills are
-   visible. Background matches the page so it cleanly covers scrolled tabs.  */
-.dial-mode-peek {
-  position: sticky;
-  right: 0;
-  flex-shrink: 0;
-  margin-left: auto;
-  overflow: hidden;
-  max-width: 18px;
-  transition: max-width 0.22s ease;
-  background: hsl(var(--background));
-  /* left-edge shadow cues that content is hidden */
-  box-shadow: -6px 0 10px 2px hsl(var(--background) / 0.85);
-}
-.dial-mode-peek:hover,
-.dial-mode-peek:focus-within {
-  max-width: 200px;
-}
-.dial-mode--inline {
-  flex-shrink: 0;
+/* ── Social mode bar — slim row between PlayerDock and nav tabs ─────────────── */
+/* Only rendered on the Radio route (/). Full-width, centres the pill, with a
+   faint top border to separate it from the player ticker.                      */
+.social-mode-bar {
   display: flex;
+  justify-content: center;
   align-items: center;
-  gap: 0;
-  padding: 6px 8px;
-  border-left: 1px solid hsl(var(--border) / 0.3);
-  white-space: nowrap;
+  padding: 5px 0;
+  background: hsl(var(--background));
+  border-top: 1px solid hsl(var(--border) / 0.25);
+}
+/* Override .dial-mode flex:1 so the pill doesn't stretch wall-to-wall */
+.social-mode-bar .dial-mode {
+  flex: none;
 }
 
 /* ─────────────────────────────────────────────────────────
