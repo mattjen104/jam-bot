@@ -530,8 +530,6 @@ router.get("/me/crossings/blended", h(async (_req, res) => {
       weekArtistCrossings:    sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek}  and ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
       monthCrossings:         sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${aggregateLibHit})::int`,
       monthArtistCrossings:   sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
-      lifetimeCrossings:      sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${aggregateLibHit})::int`,
-      lifetimeArtistCrossings:sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
       // Collect all matching artist names (with repeats) so we can rank by frequency in JS.
       topArtistNamesRaw:      sql<string[] | null>`array_agg(trim(${recordingsTable.artist})) filter (where ${inWindow} and (${aggregateLibHit} or (${aggregateNotLibHit} and ${aggregateArtistMatch})))`,
     })
@@ -555,19 +553,79 @@ router.get("/me/crossings/blended", h(async (_req, res) => {
     .groupBy(stationsTable.id, stationsTable.slug)
     .having(sql`count(*) filter (where ${aggregateLibHit} or (${aggregateNotLibHit} and ${aggregateArtistMatch})) > 0`);
 
+  // ── Lifetime query — mbid-driven, NOT date-driven ─────────────────────────
+  // Same pattern as the personal route above: lifetime counts must include
+  // matching spins of ANY age, and an unbounded date scan of the spins table
+  // takes 10–16 s. Instead the scan is driven by the active users' relevant
+  // recording MBIDs so Postgres probes spins_mbid_played_at_idx per matching
+  // MBID (nested-loop semi-join).
+  const blendedRelevantMbids = sql`(
+    select ${libraryItemsTable.mbid} from ${libraryItemsTable}
+      where ${libraryItemsTable.userId} in (${activeUsers})
+    union
+    select ${recordingReleaseGroupsTable.recordingMbid} from ${recordingReleaseGroupsTable}
+      where ${recordingReleaseGroupsTable.isPrimary} = true
+        and ${recordingReleaseGroupsTable.releaseGroupMbid} in (${activeLibraryRgs})
+    union
+    select ${recordingsTable.mbid} from ${recordingsTable}
+      where ${recordingsTable.artist} !~* ${JUNK_ARTIST_SQL_RE}
+        and (
+          ${recordingsTable.artistMbid} in (${activeLibraryArtists})
+          or lower(trim(${recordingsTable.artist})) in (${activeSoftArtists})
+          or lower(trim(${recordingsTable.artist})) in (${activeSeedArtists})
+        )
+  )`;
+
+  const lifetimeRows = await db
+    .select({
+      stationSlug: stationsTable.slug,
+      lifetimeCrossings:       sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${aggregateLibHit})::int`,
+      lifetimeArtistCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
+    })
+    .from(spinsTable)
+    .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
+    .innerJoin(recordingsTable, eq(recordingsTable.mbid, spinsTable.mbid!))
+    .leftJoin(
+      recordingReleaseGroupsTable,
+      and(
+        eq(recordingReleaseGroupsTable.recordingMbid, recordingsTable.mbid),
+        eq(recordingReleaseGroupsTable.isPrimary, true),
+      ),
+    )
+    .where(and(
+      isNotNull(spinsTable.mbid),
+      eq(stationsTable.hidden, false),
+      sql`${spinsTable.mbid} in ${blendedRelevantMbids}`,
+    ))
+    .groupBy(stationsTable.id, stationsTable.slug)
+    .having(
+      sql`count(*) filter (where ${aggregateLibHit}) > 0
+       or count(*) filter (where ${aggregateNotLibHit} and ${aggregateArtistMatch}) > 0`,
+    );
+
+  // Merge: rolling counts from the bounded scan, lifetime from the mbid scan.
+  // A station can appear in either set only.
+  const lifetimeMap = new Map(lifetimeRows.map((r) => [r.stationSlug, r]));
+  const rollingMap = new Map(rows.map((r) => [r.stationSlug, r]));
+  const allSlugs = new Set([...rollingMap.keys(), ...lifetimeMap.keys()]);
+
   return res.json({
-    items: rows.map((r) => ({
-      stationSlug: r.stationSlug,
-      crossings: r.crossings,
-      artistCrossings: r.artistCrossings,
-      weekCrossings: r.weekCrossings,
-      weekArtistCrossings: r.weekArtistCrossings,
-      monthCrossings: r.monthCrossings,
-      monthArtistCrossings: r.monthArtistCrossings,
-      lifetimeCrossings: r.lifetimeCrossings,
-      lifetimeArtistCrossings: r.lifetimeArtistCrossings,
-      topArtistNames: blendedTopArtists(r.topArtistNamesRaw),
-    })),
+    items: [...allSlugs].map((slug) => {
+      const r = rollingMap.get(slug);
+      const l = lifetimeMap.get(slug);
+      return {
+        stationSlug: slug,
+        crossings:              r?.crossings            ?? 0,
+        artistCrossings:        r?.artistCrossings      ?? 0,
+        weekCrossings:          r?.weekCrossings        ?? 0,
+        weekArtistCrossings:    r?.weekArtistCrossings  ?? 0,
+        monthCrossings:         r?.monthCrossings       ?? 0,
+        monthArtistCrossings:   r?.monthArtistCrossings ?? 0,
+        lifetimeCrossings:      l?.lifetimeCrossings      ?? 0,
+        lifetimeArtistCrossings: l?.lifetimeArtistCrossings ?? 0,
+        topArtistNames: blendedTopArtists(r?.topArtistNamesRaw ?? null),
+      };
+    }),
   });
 }));
 
