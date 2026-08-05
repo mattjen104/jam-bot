@@ -304,8 +304,8 @@ function AlsoSentence({ artists, seedsLower, onAdd }: {
             onClick={addable ? (e) => { e.stopPropagation(); onAdd(a.name); } : undefined}
             aria-label={addable ? `Add ${a.name}` : a.name}
           >
-            <span className="also-pill__name">{a.name}</span>
             {addable && <span className="also-pill__plus" aria-hidden="true">+</span>}
+            <span className="also-pill__name">{a.name}</span>
           </button>
         );
       })}

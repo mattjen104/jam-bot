@@ -4771,7 +4771,7 @@
   font-weight: 700;
   line-height: 1;
   flex-shrink: 0;
-  opacity: 0.75;
+  color: hsl(var(--library));
 }
 /* Default state — unseeded, not popular: subtle muted background, pointer */
 .also-pill--default {
