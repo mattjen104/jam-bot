@@ -195,16 +195,19 @@ function SocialModeBar() {
 }
 
 /** Unified fixed bottom shell — player dock sits directly above the nav tabs,
- *  sharing one fixed container so there is no gap or floating card. */
+ *  sharing one fixed container so there is no gap or floating card.
+ *  The Solo / LP pill sits *above* the shell border like the tab of a folder. */
 function BottomShell() {
   const [location] = useLocation();
   const path = location.split("?")[0] ?? location;
   const isRadio = path === "/";
   return (
-    <div className="bottom-shell">
-      <PlayerDock />
+    <div className="bottom-shell-wrap">
       {isRadio && <SocialModeBar />}
-      <RecordPeekNav />
+      <div className="bottom-shell">
+        <PlayerDock />
+        <RecordPeekNav />
+      </div>
     </div>
   );
 }

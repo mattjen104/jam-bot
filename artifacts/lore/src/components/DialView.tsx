@@ -1438,13 +1438,13 @@ export function DialView() {
               <img src={avatarUrl} alt="" />
             </span>
           )}
-          {/* Wordmark — "L O R E" spaced caps, moon phase replaces the O */}
+          {/* Wordmark — moon phase replaces the O; letter-spacing handles gaps */}
           <span className="dial-topbar__wordmark" aria-label="Lore">
-            {"L "}
+            {"L"}
             <span className="dial-topbar__moon-o" aria-hidden="true">
               <MoonPhaseGlyph size={14} />
             </span>
-            {" R E"}
+            {"RE"}
           </span>
 
           {/* +add artists toggle */}
