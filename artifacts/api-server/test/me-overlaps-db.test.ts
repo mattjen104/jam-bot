@@ -332,3 +332,59 @@ describe("session isolation between two listeners", () => {
     expect(slugs).not.toContain(STATION_SLUG);
   });
 });
+
+// -------------------------------------------------------------------------------
+// ?day= parameter — day-scoped filtering
+// -------------------------------------------------------------------------------
+
+describe("?day= query parameter on /me/overlaps/runs", () => {
+  it("omitting ?day= returns all-time runs (existing behaviour unchanged)", async () => {
+    if (!dbAvailable) return;
+    const { status, body } = await get("/api/me/overlaps/runs", SID_A);
+    expect(status).toBe(200);
+    expect(Array.isArray(body.items)).toBe(true);
+    // User A has spins seeded today — at least one run should be returned.
+    const slugs = body.items.map((i: { station: { slug: string } }) => i.station.slug);
+    expect(slugs).toContain(STATION_SLUG);
+  });
+
+  it("?day= matching today returns runs whose day field equals today's UTC date", async () => {
+    if (!dbAvailable) return;
+    // Build today's date in YYYY-MM-DD UTC format — must match spinDayExpr.
+    const now = new Date();
+    const today = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(now.getUTCDate()).padStart(2, "0")}`;
+
+    const { status, body } = await get(`/api/me/overlaps/runs?day=${today}`, SID_A);
+    expect(status).toBe(200);
+    expect(Array.isArray(body.items)).toBe(true);
+
+    // Every returned item must have day === today.
+    for (const item of body.items as Array<{ day: string }>) {
+      expect(item.day).toBe(today);
+    }
+
+    // The test station's spins were inserted with `new Date()` (today), so it
+    // should appear.
+    const slugs = body.items.map((i: { station: { slug: string } }) => i.station.slug);
+    expect(slugs).toContain(STATION_SLUG);
+  });
+
+  it("?day= for a past date with no matching spins returns empty items", async () => {
+    if (!dbAvailable) return;
+    const { status, body } = await get("/api/me/overlaps/runs?day=2000-01-01", SID_A);
+    expect(status).toBe(200);
+    expect(Array.isArray(body.items)).toBe(true);
+    expect(body.items).toHaveLength(0);
+  });
+
+  it("?day= with an invalid format is ignored and returns all-time results", async () => {
+    if (!dbAvailable) return;
+    const { status, body } = await get("/api/me/overlaps/runs?day=not-a-date", SID_A);
+    expect(status).toBe(200);
+    expect(Array.isArray(body.items)).toBe(true);
+    // Invalid day is silently dropped — falls back to all-time, which includes
+    // at least the runs seeded for User A.
+    const slugs = body.items.map((i: { station: { slug: string } }) => i.station.slug);
+    expect(slugs).toContain(STATION_SLUG);
+  });
+});

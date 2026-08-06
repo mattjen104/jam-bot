@@ -1111,6 +1111,33 @@ export function useMyOverlapRuns() {
   });
 }
 
+export const ME_OVERLAP_RUNS_DAY_KEY = (day: string) =>
+  ["me", "overlaps", "runs", "day", day] as const;
+
+/**
+ * Station runs filtered to a single UTC calendar day (YYYY-MM-DD), or all-time
+ * when `day` is null (same as `useMyOverlapRuns`). The `enabled` option can
+ * gate the fetch so the query is only issued when the mode is active.
+ */
+export function useMyOverlapRunsFor(
+  day: string | null,
+  opts: { enabled?: boolean } = {},
+) {
+  const { enabled = true } = opts;
+  const queryKey = day ? ME_OVERLAP_RUNS_DAY_KEY(day) : ME_OVERLAP_RUNS_KEY;
+  const url = day
+    ? `/api/me/overlaps/runs?day=${encodeURIComponent(day)}`
+    : "/api/me/overlaps/runs";
+  return useQuery({
+    queryKey,
+    queryFn: () =>
+      fetchOrNull<{ items: OverlapRun[] }>(url).then((d) => d?.items ?? []),
+    enabled,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Library list coverage — publication lists featuring the user's albums
 // ---------------------------------------------------------------------------

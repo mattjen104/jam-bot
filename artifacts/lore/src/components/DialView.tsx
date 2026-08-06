@@ -10,7 +10,7 @@ import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, typ
 import { SeedInput } from "./SeedInput";
 import { Search } from "lucide-react";
 import { useLocation, Link } from "wouter";
-import { useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyAlbumAvatar, useMyPopularCrossings, useRecentSets, type GhostStation, type PopularCrossingArtist, type RecentSetItem, type RecentSetArtist, type RecentSetWindow } from "../lib/meHooks";
+import { useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyAlbumAvatar, useMyPopularCrossings, useRecentSets, useMyOverlapRunsFor, type GhostStation, type PopularCrossingArtist, type RecentSetItem, type RecentSetArtist, type RecentSetWindow, type OverlapRun } from "../lib/meHooks";
 import { useGetStationNowPlaying, getGetStationNowPlayingQueryKey } from "@workspace/api-client-react";
 import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
 import { StationLane } from "./StationLane";
@@ -612,6 +612,165 @@ function ZoneLabel({ label, n, hint, accent, estimated, collapsed, onCollapse }:
           {collapsed ? "▸" : "▾"}
         </button>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// DialTimeTravelStrip — day nav (← Prev | label | →) + Top sets toggle
+// ---------------------------------------------------------------------------
+
+export type TtMode = "live" | "day" | "top";
+
+/**
+ * Compact controls row above Zone 1.
+ * Owns no data — only emits mode/day change callbacks.
+ * The → arrow is disabled in live mode (today) and top-sets mode.
+ */
+/** Current day in UTC (YYYY-MM-DD) — matches the API's spinDayExpr contract. */
+function todayUtcStr(): string {
+  const d = new Date();
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
+export function DialTimeTravelStrip({
+  mode,
+  day,
+  onModeChange,
+  onDayChange,
+}: {
+  mode: TtMode;
+  day: string | null;
+  onModeChange: (m: TtMode) => void;
+  onDayChange: (d: string | null) => void;
+}) {
+  const stepDay = (base: string, delta: number): string => {
+    const d = new Date(base + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() + delta);
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+  };
+
+  const handlePrev = () => {
+    if (mode === "top") {
+      onModeChange("live");
+      onDayChange(null);
+      return;
+    }
+    // Use UTC today so navigation aligns with the API's spinDayExpr (UTC).
+    const base = mode === "live" ? todayUtcStr() : (day ?? todayUtcStr());
+    const prev = stepDay(base, -1);
+    onModeChange("day");
+    onDayChange(prev);
+  };
+
+  const handleNext = () => {
+    if (mode !== "day" || !day) return;
+    const next = stepDay(day, 1);
+    if (next >= todayUtcStr()) {
+      // Stepped forward to UTC today → return to live mode.
+      onModeChange("live");
+      onDayChange(null);
+    } else {
+      onDayChange(next);
+    }
+  };
+
+  const handleTopToggle = () => {
+    if (mode === "top") {
+      onModeChange("live");
+      onDayChange(null);
+    } else {
+      onModeChange("top");
+      onDayChange(null);
+    }
+  };
+
+  let label: string;
+  if (mode === "top") {
+    label = "Top sets · all time";
+  } else if (mode === "day" && day) {
+    label = runDate(day);
+  } else {
+    label = "Today";
+  }
+
+  const nextDisabled = mode === "live" || mode === "top";
+
+  return (
+    <div className="dial-timetravel" data-mode={mode}>
+      <button
+        type="button"
+        className="dial-timetravel__arrow"
+        aria-label="Previous day"
+        onClick={handlePrev}
+      >
+        ←
+      </button>
+      <span className="dial-timetravel__label">{label}</span>
+      <button
+        type="button"
+        className="dial-timetravel__arrow dial-timetravel__arrow--next"
+        aria-label="Next day"
+        disabled={nextDisabled}
+        aria-disabled={nextDisabled}
+        onClick={handleNext}
+      >
+        →
+      </button>
+      <button
+        type="button"
+        className={`dial-timetravel__top${mode === "top" ? " dial-timetravel__top--active" : ""}`}
+        aria-pressed={mode === "top"}
+        onClick={handleTopToggle}
+      >
+        ⭐ Top sets
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// RunRow — a historical crossing run row (day mode / top sets mode)
+// ---------------------------------------------------------------------------
+
+/**
+ * A single run from /me/overlaps/runs, rendered in the style of a FrontDoorRow
+ * but with a subtle replay affordance. Clicking navigates to /replay/{runId}.
+ */
+function RunRow({ run }: { run: OverlapRun }) {
+  const [, navigate] = useLocation();
+  const djName = run.show?.djName ?? null;
+  const showName = run.show?.name ?? null;
+
+  return (
+    <div
+      className="fdrow fdrow--run"
+      role="button"
+      tabIndex={0}
+      data-run-id={run.runId}
+      onClick={() => navigate(`/replay/${run.runId}`)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          navigate(`/replay/${run.runId}`);
+        }
+      }}
+    >
+      <div className="fdrow__run-main">
+        <span className="fdrow__station">{run.station.name}</span>
+        {djName && <b className="fdrow__dj"> · {djName}</b>}
+        {showName && !djName && (
+          <span className="fdrow__show"> · {showName}</span>
+        )}
+      </div>
+      <div className="fdrow__run-sub">
+        <span className="fdrow__owned">{run.owned} of yours</span>
+        {run.discover > 0 && (
+          <span className="fdrow__discover"> · {run.discover} new</span>
+        )}
+        <span className="fdrow__replay-badge"> · ▶ replay</span>
+        <span className="fdrow__run-day">{run.day}</span>
+      </div>
     </div>
   );
 }
@@ -1899,6 +2058,26 @@ export function DialView() {
   // Active tab — resets to primary on each page load (not persisted).
   const [activeTab, setActiveTab] = useState<"library" | "recently-aired">("library");
 
+  // ── Time-travel mode (day nav + top sets) ───────────────────────────────────
+  const [ttMode, setTtMode] = useState<TtMode>("live");
+  const [ttDay, setTtDay] = useState<string | null>(null);
+
+  // Fetch day-specific runs (only when day mode is active).
+  const { data: ttDayRuns = [], isLoading: ttDayLoading } = useMyOverlapRunsFor(
+    ttDay,
+    { enabled: ttMode === "day" },
+  );
+  // Fetch all-time top runs (only when top mode is active).
+  const { data: ttTopRuns = [], isLoading: ttTopLoading } = useMyOverlapRunsFor(
+    null,
+    { enabled: ttMode === "top" },
+  );
+
+  const handleTtModeChange = (m: TtMode) => {
+    setTtMode(m);
+    if (m === "live") setTtDay(null);
+  };
+
   // Slug-key strings — order-insensitive (sorted) so a live reorder of the same
   // stations does NOT reset expansion; only a real membership change does.
   const zone1SlugKey = useMemo(() => withReason.map((r) => r.ds.station.slug).sort().join(","), [withReason]);
@@ -2323,6 +2502,16 @@ export function DialView() {
       {/* Main scroll body */}
       <div className="dial-body">
         <AlbumAvatarPicker compact />
+        {/* Time-travel strip — compact day-nav + Top sets toggle.
+            Rendered above Zone 1 once zones have settled on the front door. */}
+        {level === "all" && zone1Settled && (
+          <DialTimeTravelStrip
+            mode={ttMode}
+            day={ttDay}
+            onModeChange={handleTtModeChange}
+            onDayChange={setTtDay}
+          />
+        )}
         {/* DIAL view — three-zone front door (spec §6) */}
         {level === "all" && (
           <>
@@ -2352,105 +2541,212 @@ export function DialView() {
                 subsection below. */}
             {zone1Settled && activeTab === "library" && (
               <>
-                {scrubItems.length > 6 && (
+                {/* PopScrubber only in live mode (day/top have no live sort). */}
+                {ttMode === "live" && scrubItems.length > 6 && (
                   <PopScrubber items={scrubItems} onScrub={handleScrub} />
                 )}
-                {/* Flipped sort (▼): the also-on-air bands (deep cuts) lead. */}
-                {!popSortDesc && alsoSection}
-                {/* Zone 1: crossing rows */}
-                {withReason.length > 0 && (
+
+                {/* ── Day mode: historical crossing runs for the selected day ── */}
+                {ttMode === "day" && (
                   <>
-                    <>
-                      {(hasSeeds || visibleSeeds.length > 0) && (
-                          <SeedBar
-                            seeds={visibleSeeds}
-                            onAddSeed={addSeed}
-                            onRemoveSeed={removeSeed}
-                          />
-                        )}
-                        {/* Map over the FULL array so isSampling index is always the
-                            unsliced position; rows beyond zone1Visible are null until
-                            zone1Expanded is true. */}
-                        <div id="zone1-rows">
-                          {zone1Display.map((row, i) =>
-                            !zone1Expanded && i >= zone1Visible ? null : (
-                              <div key={row.ds.station.slug}>
-                                <FrontDoorRow
-                                  ds={row.ds}
-                                  show={row.show}
-                                  ov={row.show?.djName != null ? pickerOv(row.show?.pickerId ?? null, row.show.djName) : row.ds.lifetimeCrossings}
-                                  scrubSlug={row.ds.station.slug}
-                                  isActive={row.ds.station.slug === radio.station?.slug}
-                                  isSampling={scan.samplingIdx != null && withReason[scan.samplingIdx]?.ds.station.slug === row.ds.station.slug}
-                                  onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
-                                  displayMode={crossingSourceMode}
-                                  presence={presenceMap.get(row.ds.station.id)}
-                                  setArtists={popMap.get(row.ds.station.slug) ?? null}
-                                  seedsLower={seedsLower}
-                                  onAddArtist={addSeed}
-                                />
-                              </div>
-                            )
+                    {ttDayLoading && (
+                      <>
+                        <DialRowSkeleton delay={0} />
+                        <DialRowSkeleton delay={1} />
+                        <DialRowSkeleton delay={2} />
+                      </>
+                    )}
+                    {!ttDayLoading && ttDayRuns.length === 0 && (
+                      <div className="z1-placeholder z1-placeholder--no-cross">
+                        <div className="z1-placeholder__body">
+                          <p className="z1-placeholder__pitch">No sets that day.</p>
+                        </div>
+                      </div>
+                    )}
+                    {ttDayRuns.map((run) => (
+                      <RunRow key={run.runId} run={run} />
+                    ))}
+                  </>
+                )}
+
+                {/* ── Top sets mode: all-time crossing runs ranked by owned ── */}
+                {ttMode === "top" && (
+                  <>
+                    {ttTopLoading && (
+                      <>
+                        <DialRowSkeleton delay={0} />
+                        <DialRowSkeleton delay={1} />
+                        <DialRowSkeleton delay={2} />
+                      </>
+                    )}
+                    {!ttTopLoading && ttTopRuns.length === 0 && (
+                      <div className="z1-placeholder z1-placeholder--no-cross">
+                        <div className="z1-placeholder__body">
+                          <p className="z1-placeholder__pitch">No sets found.</p>
+                        </div>
+                      </div>
+                    )}
+                    {ttTopRuns.map((run) => (
+                      <RunRow key={run.runId} run={run} />
+                    ))}
+                  </>
+                )}
+
+                {/* ── Live mode: Zone 1 crossing rows ─────────────────────── */}
+                {ttMode === "live" && (
+                  <>
+                    {/* Flipped sort (▼): the also-on-air bands (deep cuts) lead. */}
+                    {!popSortDesc && alsoSection}
+                    {/* Zone 1: crossing rows */}
+                    {withReason.length > 0 && (
+                      <>
+                        <>
+                          {(hasSeeds || visibleSeeds.length > 0) && (
+                              <SeedBar
+                                seeds={visibleSeeds}
+                                onAddSeed={addSeed}
+                                onRemoveSeed={removeSeed}
+                              />
+                            )}
+                            {/* Map over the FULL array so isSampling index is always the
+                                unsliced position; rows beyond zone1Visible are null until
+                                zone1Expanded is true. */}
+                            <div id="zone1-rows">
+                              {zone1Display.map((row, i) =>
+                                !zone1Expanded && i >= zone1Visible ? null : (
+                                  <div key={row.ds.station.slug}>
+                                    <FrontDoorRow
+                                      ds={row.ds}
+                                      show={row.show}
+                                      ov={row.show?.djName != null ? pickerOv(row.show?.pickerId ?? null, row.show.djName) : row.ds.lifetimeCrossings}
+                                      scrubSlug={row.ds.station.slug}
+                                      isActive={row.ds.station.slug === radio.station?.slug}
+                                      isSampling={scan.samplingIdx != null && withReason[scan.samplingIdx]?.ds.station.slug === row.ds.station.slug}
+                                      onTuneIn={() => { scan.stop(); void radio.toggle(row.ds.station); }}
+                                      displayMode={crossingSourceMode}
+                                      presence={presenceMap.get(row.ds.station.id)}
+                                      setArtists={popMap.get(row.ds.station.slug) ?? null}
+                                      seedsLower={seedsLower}
+                                      onAddArtist={addSeed}
+                                    />
+                                  </div>
+                                )
+                              )}
+                            </div>
+                            {withReason.length > zone1Visible && (
+                              <button
+                                className="dial-show-more"
+                                aria-expanded={zone1Expanded}
+                                aria-controls="zone1-rows"
+                                onClick={() => { if (!zone1Expanded) zone1ExpandAnchor.current = zone1SlugKey; else zone1ExpandAnchor.current = null; setZone1Expanded((e) => !e); }}
+                              >
+                                {zone1Expanded ? "See less" : `See all ${withReason.length}`}
+                              </button>
+                            )}
+                        </>
+                      </>
+                    )}
+
+                    {/* Library/seeds exist but nothing has crossed today — helpful nudge.
+                        Suppressed while liveLoading is true: crossings depend on the
+                        live-station list, so until that poll completes sortedRows is
+                        empty and withReason is vacuously 0 even if crossings exist. */}
+                    {withReason.length === 0 && (hasLibrary || hasSeeds || visibleSeeds.length > 0) && !liveLoading && (
+                      <div className="z1-placeholder z1-placeholder--no-cross">
+                        <div className="z1-placeholder__body">
+                          <p className="z1-placeholder__pitch">
+                            None of your artists have played on a live station today. Tune into a station or check back later.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* No crossing rows, no library or seeds — full onboarding placeholder.
+                        The prominent CTA lives inside Zone1Placeholder for this state. */}
+                    {withReason.length === 0 &&
+                      !hasLibrary &&
+                      !hasSeeds &&
+                      visibleSeeds.length === 0 &&
+                      !isSpotifyConnected && (
+                      <>
+                        <Zone1Placeholder
+                          isSpotifyConnected={isSpotifyConnected}
+                          hasLibrary={hasLibrary}
+                          hasSeeds={hasSeeds || visibleSeeds.length > 0}
+                          seeds={visibleSeeds}
+                          liveLoading={liveLoading}
+                          onAddSeed={addSeed}
+                          onRemoveSeed={removeSeed}
+                        />
+                      </>
+                    )}
+
+                    {/* Zone 2: Ghost stations — subsection within the primary tab.
+                        Rendered after Zone 1 content as "Missed while you were away".
+                        Shown in live mode and day mode, hidden in top sets mode. */}
+                    {ghost.length > 0 && (
+                      <>
+                        <div className="fdzone-lbl-row">
+                          {zone2Expanded && ghost.length > ZONE2_VISIBLE && (
+                            <button
+                              className="dial-show-more-inline"
+                              aria-expanded={true}
+                              aria-controls="zone2-rows"
+                              onClick={() => setZone2Expanded(false)}
+                            >
+                              See less
+                            </button>
                           )}
                         </div>
-                        {withReason.length > zone1Visible && (
-                          <button
-                            className="dial-show-more"
-                            aria-expanded={zone1Expanded}
-                            aria-controls="zone1-rows"
-                            onClick={() => { if (!zone1Expanded) zone1ExpandAnchor.current = zone1SlugKey; else zone1ExpandAnchor.current = null; setZone1Expanded((e) => !e); }}
-                          >
-                            {zone1Expanded ? "See less" : `See all ${withReason.length}`}
-                          </button>
-                        )}
-                    </>
+                        <>
+                          <div id="zone2-rows">
+                              {ghost.slice(0, zone2Expanded ? ghost.length : ZONE2_VISIBLE).map((g) => (
+                                <GhostRow
+                                  key={g.slug}
+                                  station={g}
+                                  isActive={g.slug === radio.station?.slug}
+                                  onTuneIn={() => goStation(g.slug)}
+                                />
+                              ))}
+                            </div>
+                            {ghost.length > ZONE2_VISIBLE && (
+                              <button
+                                className="dial-show-more"
+                                aria-expanded={zone2Expanded}
+                                aria-controls="zone2-rows"
+                                onClick={() => { if (!zone2Expanded) zone2ExpandAnchor.current = zone2SlugKey; else zone2ExpandAnchor.current = null; setZone2Expanded((e) => !e); }}
+                              >
+                                {zone2Expanded ? "See less" : `See all ${ghost.length}`}
+                              </button>
+                            )}
+                        </>
+                      </>
+                    )}
+
+                    {/* Live-zone skeleton — shown after crossings resolve but while the
+                        first live pulse is still in-flight and no stations have appeared. */}
+                    {liveLoading && sortedRows.length === 0 && (
+                      <>
+                        <DialRowSkeleton delay={0} />
+                        <DialRowSkeleton delay={1} />
+                        <DialRowSkeleton delay={2} />
+                      </>
+                    )}
+
+                    {/* Default sort (▲): also-on-air bands trail the crossing rows. */}
+                    {popSortDesc && alsoSection}
                   </>
                 )}
 
-                {/* Library/seeds exist but nothing has crossed today — helpful nudge.
-                    Suppressed while liveLoading is true: crossings depend on the
-                    live-station list, so until that poll completes sortedRows is
-                    empty and withReason is vacuously 0 even if crossings exist. */}
-                {withReason.length === 0 && (hasLibrary || hasSeeds || visibleSeeds.length > 0) && !liveLoading && (
-                  <div className="z1-placeholder z1-placeholder--no-cross">
-                    <div className="z1-placeholder__body">
-                      <p className="z1-placeholder__pitch">
-                        None of your artists have played on a live station today. Tune into a station or check back later.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* No crossing rows, no library or seeds — full onboarding placeholder.
-                    The prominent CTA lives inside Zone1Placeholder for this state. */}
-                {withReason.length === 0 &&
-                  !hasLibrary &&
-                  !hasSeeds &&
-                  visibleSeeds.length === 0 &&
-                  !isSpotifyConnected && (
-                  <>
-                    <Zone1Placeholder
-                      isSpotifyConnected={isSpotifyConnected}
-                      hasLibrary={hasLibrary}
-                      hasSeeds={hasSeeds || visibleSeeds.length > 0}
-                      seeds={visibleSeeds}
-                      liveLoading={liveLoading}
-                      onAddSeed={addSeed}
-                      onRemoveSeed={removeSeed}
-                    />
-                  </>
-                )}
-
-                {/* Zone 2: Ghost stations — subsection within the primary tab.
-                    Rendered after Zone 1 content as "Missed while you were away". */}
-                {ghost.length > 0 && (
+                {/* ── Day mode: Zone 2 ghost rows (Zone 3 suppressed) ────── */}
+                {ttMode === "day" && ghost.length > 0 && (
                   <>
                     <div className="fdzone-lbl-row">
                       {zone2Expanded && ghost.length > ZONE2_VISIBLE && (
                         <button
                           className="dial-show-more-inline"
                           aria-expanded={true}
-                          aria-controls="zone2-rows"
+                          aria-controls="zone2-rows-day"
                           onClick={() => setZone2Expanded(false)}
                         >
                           See less
@@ -2458,42 +2754,30 @@ export function DialView() {
                       )}
                     </div>
                     <>
-                      <div id="zone2-rows">
-                          {ghost.slice(0, zone2Expanded ? ghost.length : ZONE2_VISIBLE).map((g) => (
-                            <GhostRow
-                              key={g.slug}
-                              station={g}
-                              isActive={g.slug === radio.station?.slug}
-                              onTuneIn={() => goStation(g.slug)}
-                            />
-                          ))}
-                        </div>
-                        {ghost.length > ZONE2_VISIBLE && (
-                          <button
-                            className="dial-show-more"
-                            aria-expanded={zone2Expanded}
-                            aria-controls="zone2-rows"
-                            onClick={() => { if (!zone2Expanded) zone2ExpandAnchor.current = zone2SlugKey; else zone2ExpandAnchor.current = null; setZone2Expanded((e) => !e); }}
-                          >
-                            {zone2Expanded ? "See less" : `See all ${ghost.length}`}
-                          </button>
-                        )}
+                      <div id="zone2-rows-day">
+                        {ghost.slice(0, zone2Expanded ? ghost.length : ZONE2_VISIBLE).map((g) => (
+                          <GhostRow
+                            key={g.slug}
+                            station={g}
+                            isActive={g.slug === radio.station?.slug}
+                            onTuneIn={() => goStation(g.slug)}
+                          />
+                        ))}
+                      </div>
+                      {ghost.length > ZONE2_VISIBLE && (
+                        <button
+                          className="dial-show-more"
+                          aria-expanded={zone2Expanded}
+                          aria-controls="zone2-rows-day"
+                          onClick={() => { if (!zone2Expanded) zone2ExpandAnchor.current = zone2SlugKey; else zone2ExpandAnchor.current = null; setZone2Expanded((e) => !e); }}
+                        >
+                          {zone2Expanded ? "See less" : `See all ${ghost.length}`}
+                        </button>
+                      )}
                     </>
                   </>
                 )}
-
-                {/* Live-zone skeleton — shown after crossings resolve but while the
-                    first live pulse is still in-flight and no stations have appeared. */}
-                {liveLoading && sortedRows.length === 0 && (
-                  <>
-                    <DialRowSkeleton delay={0} />
-                    <DialRowSkeleton delay={1} />
-                    <DialRowSkeleton delay={2} />
-                  </>
-                )}
-
-                {/* Default sort (▲): also-on-air bands trail the crossing rows. */}
-                {popSortDesc && alsoSection}
+                {/* Zone 3 (also-on-air) is suppressed in day and top modes */}
               </>
             )}
 

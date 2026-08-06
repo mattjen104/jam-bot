@@ -2984,6 +2984,37 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /me/overlaps/runs:
+    get:
+      operationId: getMyOverlapRuns
+      tags: [me]
+      summary: Station broadcast runs ranked by library overlap
+      description: >
+        Station broadcast runs (station + show/DJ + calendar day) ranked by how
+        many of the caller's library MBIDs were played in each run (`owned`),
+        then by resolved MBIDs NOT in the library (`discover`). When the
+        optional `day` parameter is supplied, results are restricted to runs
+        whose UTC broadcast day matches that calendar date; omitting `day`
+        returns the all-time top 30 runs. Returns an empty list for
+        unauthenticated requests.
+      parameters:
+        - name: day
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: >
+            Optional UTC calendar day (YYYY-MM-DD). When present, restricts
+            results to runs whose broadcast day matches. Omit to get all-time
+            top runs.
+      responses:
+        "200":
+          description: Overlap run items (may be empty)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeOverlapRunsResponse"
   /me/ghost/missed:
     get:
       operationId: getMyGhostMissed
@@ -7008,6 +7039,47 @@ components:
         - showName
         - djName
         - runId
+    MeOverlapRunsResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OverlapRunItem"
+      required: [items]
+    OverlapRunItem:
+      type: object
+      properties:
+        runId:
+          type: integer
+        day:
+          type: string
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+        station:
+          type: object
+          properties:
+            slug:
+              type: string
+            name:
+              type: string
+            stationClass:
+              type: ["string", "null"]
+          required: [slug, name, stationClass]
+        show:
+          anyOf:
+            - type: object
+              properties:
+                name:
+                  type: string
+                djName:
+                  type: ["string", "null"]
+              required: [name, djName]
+            - type: "null"
+        owned:
+          type: integer
+        discover:
+          type: integer
+      required: [runId, day, station, show, owned, discover]
     GhostMissedResponse:
       type: object
       properties:

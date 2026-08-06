@@ -2015,6 +2015,86 @@
   color: hsl(var(--muted-foreground));
 }
 
+/* ── Time-travel strip — day nav + Top sets toggle ──────────────────────── */
+.dial-timetravel {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 15px;
+  border-bottom: 1px solid hsl(var(--border) / 0.35);
+  background: hsl(var(--background));
+}
+
+.dial-timetravel__arrow {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  background: none;
+  border: 1px solid hsl(var(--border) / 0.5);
+  border-radius: 5px;
+  font-size: 14px;
+  line-height: 1;
+  color: hsl(var(--foreground) / 0.8);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, opacity 0.12s;
+}
+.dial-timetravel__arrow:hover:not(:disabled) {
+  background: hsl(var(--secondary) / 0.4);
+  color: hsl(var(--foreground));
+}
+.dial-timetravel__arrow:disabled,
+.dial-timetravel__arrow[aria-disabled="true"] {
+  opacity: 0.3;
+  cursor: default;
+  pointer-events: none;
+}
+
+.dial-timetravel__label {
+  flex: 1;
+  text-align: center;
+  font-family: var(--app-font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: hsl(var(--foreground) / 0.75);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dial-timetravel[data-mode="day"] .dial-timetravel__label {
+  color: hsl(var(--foreground));
+}
+
+.dial-timetravel[data-mode="top"] .dial-timetravel__label {
+  color: hsl(var(--library));
+}
+
+.dial-timetravel__top {
+  flex-shrink: 0;
+  margin-left: 4px;
+  padding: 4px 10px;
+  background: none;
+  border: 1px solid hsl(var(--border) / 0.5);
+  border-radius: 5px;
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  white-space: nowrap;
+}
+.dial-timetravel__top:hover {
+  background: hsl(var(--secondary) / 0.35);
+  color: hsl(var(--foreground));
+}
+.dial-timetravel__top--active {
+  background: hsl(var(--library) / 0.15);
+  border-color: hsl(var(--library) / 0.55);
+  color: hsl(var(--library));
+}
+
 .dial-show-more {
   display: block;
   width: 100%;
@@ -4595,6 +4675,70 @@
 .fdrow--sampling {
   background: hsl(var(--live) / 0.07);
   outline: 1px solid hsl(var(--live) / 0.25);
+}
+
+/* ── Historical crossing run rows (day mode / top-sets mode) ─────────────
+   Visually consistent with Zone 1 rows but carries a muted archive tone:
+   left bar uses the muted-foreground colour (not the live accent) so
+   listeners immediately read these as past, not live. */
+.fdrow--run {
+  flex-direction: column;
+  gap: 3px;
+  padding: 11px 15px 14px;
+  cursor: pointer;
+}
+.fdrow--run::before {
+  background: hsl(var(--muted-foreground) / 0.4);
+}
+.fdrow--run:hover::before {
+  background: hsl(var(--library) / 0.65);
+}
+
+.fdrow__run-main {
+  font-family: var(--app-font-display);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: hsl(var(--foreground) / 0.9);
+  overflow-wrap: anywhere;
+}
+.fdrow__station {
+  color: hsl(var(--foreground));
+}
+.fdrow__dj {
+  font-weight: 700;
+  color: hsl(var(--foreground) / 0.85);
+}
+.fdrow__show {
+  color: hsl(var(--muted-foreground));
+  font-weight: 400;
+}
+
+.fdrow__run-sub {
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+  line-height: 1.4;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 2px;
+}
+.fdrow__owned {
+  color: hsl(var(--library) / 0.9);
+  font-weight: 600;
+}
+.fdrow__discover {
+  color: hsl(var(--accent) / 0.85);
+}
+.fdrow__replay-badge {
+  color: hsl(var(--muted-foreground) / 0.7);
+  font-style: italic;
+}
+.fdrow__run-day {
+  margin-left: auto;
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: hsl(var(--muted-foreground) / 0.55);
 }
 
 .fdrow__c { flex: 1; min-width: 0; position: relative; z-index: 1; }

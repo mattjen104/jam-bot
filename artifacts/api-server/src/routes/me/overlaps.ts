@@ -497,10 +497,22 @@ router.get("/me/overlaps/runs", h(async (req, res) => {
   const { showsTable } = await import("@workspace/db");
   const { spinDayExpr } = await import("../../lore/runs.js");
 
+  // Optional ?day=YYYY-MM-DD filter — when present, restrict to that calendar day.
+  const rawDay = req.query["day"];
+  const dayParam =
+    typeof rawDay === "string" && /^\d{4}-\d{2}-\d{2}$/.test(rawDay)
+      ? rawDay
+      : null;
+
   const userMbids = db
     .select({ mbid: libraryItemsTable.mbid })
     .from(libraryItemsTable)
     .where(eq(libraryItemsTable.userId, user.id));
+
+  const baseWhere = and(isNotNull(spinsTable.mbid), eq(stationsTable.hidden, false));
+  const whereClause = dayParam
+    ? and(baseWhere, sql`${spinDayExpr} = ${dayParam}`)
+    : baseWhere;
 
   const rows = await db
     .select({
@@ -520,7 +532,7 @@ router.get("/me/overlaps/runs", h(async (req, res) => {
       showsTable,
       and(eq(spinsTable.showId, showsTable.id), validScheduleShowAttribution()),
     )
-    .where(and(isNotNull(spinsTable.mbid), eq(stationsTable.hidden, false)))
+    .where(whereClause)
     .groupBy(
       spinDayExpr,
       spinsTable.stationId,
