@@ -2406,8 +2406,11 @@ export function DialView() {
                   </>
                 )}
 
-                {/* Library/seeds exist but nothing has crossed today — helpful nudge. */}
-                {withReason.length === 0 && (hasLibrary || hasSeeds || visibleSeeds.length > 0) && (
+                {/* Library/seeds exist but nothing has crossed today — helpful nudge.
+                    Suppressed while liveLoading is true: crossings depend on the
+                    live-station list, so until that poll completes sortedRows is
+                    empty and withReason is vacuously 0 even if crossings exist. */}
+                {withReason.length === 0 && (hasLibrary || hasSeeds || visibleSeeds.length > 0) && !liveLoading && (
                   <div className="z1-placeholder z1-placeholder--no-cross">
                     <div className="z1-placeholder__body">
                       <p className="z1-placeholder__pitch">

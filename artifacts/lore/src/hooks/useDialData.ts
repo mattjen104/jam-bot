@@ -198,20 +198,26 @@ function showState(run: StationScheduleRun, isStationLive: boolean): "live" | "p
 }
 
 export function topArtistsFromSpins(spins: DialSpin[], max = 3, hitField: "isLibraryHit" | "isArtistHit" = "isLibraryHit"): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
+  // Accumulate play counts so the result is ordered by frequency (most-played
+  // artist first), matching the Recently Aired section's sort order.  Use
+  // lower-case as the dedup key but preserve the first-encountered display form.
+  const counts = new Map<string, { artist: string; count: number }>();
   for (const sp of spins) {
     // Defense in depth for old API responses and cached timeline data. Domain
     // values are radio metadata/ad slots, never artist names.
     const artist = sp.artist?.trim() ?? "";
     const domainLike = /^(?:https?:\/\/|[a-z0-9][a-z0-9.-]*\.(?:com|net|org|edu|gov|io|fm|co|info|biz|music|radio|ca|uk|au|de|fr|es|it|nl|se|no|dk|fi|pl|ru|cz|at|ch|be|pt|nz|mx|br|ar|za|in|sg|hk|jp|us)(?:[/?#\s]|$))/i.test(artist);
-    if (sp[hitField] && artist && !domainLike && !seen.has(artist)) {
-      seen.add(artist);
-      out.push(artist);
-      if (out.length >= max) break;
+    if (sp[hitField] && artist && !domainLike) {
+      const key = artist.toLowerCase();
+      const entry = counts.get(key);
+      if (entry) entry.count++;
+      else counts.set(key, { artist, count: 1 });
     }
   }
-  return out;
+  return [...counts.values()]
+    .sort((a, b) => b.count - a.count)
+    .slice(0, max)
+    .map((v) => v.artist);
 }
 
 const MISSING_LIVE_ARTIST_VALUES = new Set([
