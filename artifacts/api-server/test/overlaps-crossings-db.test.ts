@@ -451,4 +451,43 @@ describe("GET /api/me/overlaps/runs/:runId/crossings", () => {
     // spinDurationSeconds is null for test data (no duration inserted)
     expect(m.spinDurationSeconds).toBeNull();
   });
+
+  it("populates spinDurationSeconds from attendance when a duration exists, null otherwise", async (ctx) => {
+    if (!dbAvailable) return ctx.skip();
+
+    // Attendance rows require a listen session. Insert one, then an
+    // attendance row with a real duration on the non-anchor spin.
+    const sessionRes = await db.execute<{ id: number }>(sql`
+      INSERT INTO listen_sessions (user_id, station_id)
+      VALUES (${userId1}, ${stationIds[0]})
+      RETURNING id
+    `);
+    const sessionId = sessionRes.rows[0]!.id;
+
+    try {
+      await db.execute(sql`
+        INSERT INTO attendance (user_id, spin_id, session_id, dwell_seconds, spin_duration_seconds)
+        VALUES (${userId1}, ${nonAnchorSpinId}, ${sessionId}, 120, 245)
+        ON CONFLICT (user_id, spin_id) DO UPDATE SET spin_duration_seconds = excluded.spin_duration_seconds
+      `);
+
+      const res = await get(`/api/me/overlaps/runs/${runIdAnchor}/crossings`, DEVICE_KEY_1);
+      expect(res.status).toBe(200);
+      const body = await res.json() as {
+        moments: Array<{ spinId: number; spinDurationSeconds: number | null }>;
+      };
+
+      const withDuration = body.moments.find((m) => m.spinId === nonAnchorSpinId);
+      expect(withDuration).toBeDefined();
+      expect(withDuration!.spinDurationSeconds).toBe(245);
+
+      // Spins with no attendance duration stay honestly null.
+      const without = body.moments.find((m) => m.spinId === runIdAnchor);
+      expect(without).toBeDefined();
+      expect(without!.spinDurationSeconds).toBeNull();
+    } finally {
+      await db.execute(sql`DELETE FROM attendance WHERE session_id = ${sessionId}`);
+      await db.execute(sql`DELETE FROM listen_sessions WHERE id = ${sessionId}`);
+    }
+  });
 });

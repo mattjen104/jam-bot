@@ -680,6 +680,18 @@ router.get("/me/overlaps/runs/:runId/crossings", h(async (req, res) => {
       stationName: stationsTable.name,
       showName: showsTable.name,
       djName: showsTable.djName,
+      // Real spin duration from the attendance ledger. The duration is a
+      // property of the broadcast spin (not the listener), so any attendance
+      // row for this spin can supply it — prefer the caller's own row when
+      // both exist. NULL stays the honest value when no duration was recorded.
+      spinDurationSeconds: sql<number | null>`(
+        SELECT a.spin_duration_seconds
+        FROM attendance a
+        WHERE a.spin_id = ${spinsTable.id}
+          AND a.spin_duration_seconds IS NOT NULL
+        ORDER BY (a.user_id = ${user.id}) DESC, a.id ASC
+        LIMIT 1
+      )`,
     })
     .from(spinsTable)
     .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
@@ -713,7 +725,7 @@ router.get("/me/overlaps/runs/:runId/crossings", h(async (req, res) => {
         showTitle: r.showName ?? undefined,
         stationName: r.stationName,
       }),
-      spinDurationSeconds: null,
+      spinDurationSeconds: r.spinDurationSeconds ?? null,
     })),
   });
 }));
