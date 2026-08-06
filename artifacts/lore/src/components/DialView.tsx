@@ -1618,12 +1618,30 @@ export function DialView() {
   }, []);
 
   // Fullscreen album-art overlay, opened by tapping the moon glyph in the topbar.
+  const moonBtnRef = useRef<HTMLButtonElement>(null);
+  const artCloseBtnRef = useRef<HTMLButtonElement>(null);
   const [albumArtOpen, setAlbumArtOpen] = useState(false);
   useEffect(() => {
     if (!albumArtOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setAlbumArtOpen(false); };
+    // Move focus into the overlay so keyboard users can reach the close button.
+    artCloseBtnRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setAlbumArtOpen(false);
+      }
+      // Trap Tab/Shift+Tab — the only focusable element inside the overlay is
+      // the close button, so both directions stay there.
+      if (e.key === "Tab") {
+        e.preventDefault();
+        artCloseBtnRef.current?.focus();
+      }
+    };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      // Return focus to the moon button that opened the overlay.
+      moonBtnRef.current?.focus();
+    };
   }, [albumArtOpen]);
   const hasWeeklyRecap = weeklyRecapData != null && (
     weeklyRecapData.stationsAttended.stations.length > 0 ||
@@ -1999,6 +2017,7 @@ export function DialView() {
               overlay when avatar art is available. */}
           <span className="dial-topbar__wordmark" aria-label="Lore">
             <button
+              ref={moonBtnRef}
               type="button"
               className="dial-topbar__moon-btn"
               aria-label="View album art fullscreen"
@@ -2276,6 +2295,13 @@ export function DialView() {
           aria-label="Album art"
           onClick={() => setAlbumArtOpen(false)}
         >
+          <button
+            ref={artCloseBtnRef}
+            type="button"
+            className="dial-art-fullscreen__close"
+            aria-label="Close album art"
+            onClick={() => setAlbumArtOpen(false)}
+          >✕</button>
           <img src={heroArt} alt="" onError={onArtError} />
         </div>
       )}

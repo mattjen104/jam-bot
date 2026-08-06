@@ -1579,6 +1579,28 @@
   height: auto;
   display: block;
 }
+.dial-art-fullscreen__close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 1;
+  background: hsl(var(--background) / 0.7);
+  border: 1px solid hsl(var(--border));
+  border-radius: 50%;
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+.dial-art-fullscreen__close:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
 
 /* Moon-phase glyph that sits to the left of the LORE wordmark */
 .dial-topbar__moon-prefix {
