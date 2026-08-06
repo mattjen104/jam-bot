@@ -207,6 +207,11 @@ function makeGhostStation(slug: string): GhostStation {
     mode: "spinitron",
     attribution: true,
     artistName: "Ghost Artist",
+    playedAt: null,
+    day: "2026-08-06",
+    showName: null,
+    djName: null,
+    runId: null,
   };
 }
 

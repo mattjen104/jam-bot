@@ -6,8 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface AlbumTracksTrack {
-  mbid: string;
-  title: string;
-  artist: string;
-}
+export type MeRecentSetItemStation = {
+  slug: string;
+  name: string;
+  stationClass: string;
+};

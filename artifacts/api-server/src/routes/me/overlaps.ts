@@ -120,7 +120,22 @@ router.get("/me/ghost/missed", h(async (req, res) => {
     mode: string;
     attribution: boolean;
     artist_name: string;
+    played_at: string;
+    day: string;
+    show_name: string | null;
+    raw_dj_name: string | null;
+    run_id: number | null;
   };
+
+  // Build the attribution guard for the shows LEFT JOIN, reusing the same
+  // validScheduleShowAttribution helper the runs handler uses. Pass raw SQL
+  // aliases that match the CTE/join aliases in the outer query.
+  const attrCondition = validScheduleShowAttribution(
+    sql.raw("gc.station_id"),
+    sql.raw("gc.played_at"),
+    sql.raw("sh.name"),
+    sql.raw("sh.picker_id"),
+  );
 
   const rows = await db.execute<GhostRow>(sql`
     WITH lib_artists AS (
@@ -139,7 +154,10 @@ router.get("/me/ghost/missed", h(async (req, res) => {
     ghost_candidates AS (
       SELECT DISTINCT ON (s.station_id)
         s.station_id,
-        r.artist AS artist_name
+        s.id         AS spin_id,
+        s.played_at,
+        s.show_id,
+        r.artist     AS artist_name
       FROM spins s
       JOIN recordings r ON s.mbid = r.mbid
       JOIN lib_artists la ON r.artist_mbid = la.artist_mbid
@@ -155,10 +173,26 @@ router.get("/me/ghost/missed", h(async (req, res) => {
       st.stream_format,
       st.mode,
       st.attribution,
-      gc.artist_name
+      gc.artist_name,
+      gc.played_at,
+      to_char(gc.played_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day,
+      sh.name           AS show_name,
+      sh.dj_name        AS raw_dj_name,
+      CASE
+        WHEN gc.show_id IS NOT NULL AND sh.id IS NOT NULL THEN (
+          SELECT min(s2.id)
+          FROM spins s2
+          WHERE s2.station_id = gc.station_id
+            AND s2.show_id = gc.show_id
+            AND to_char(s2.played_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')
+                = to_char(gc.played_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')
+        )
+        ELSE NULL
+      END               AS run_id
     FROM ghost_candidates gc
     JOIN stations st ON gc.station_id = st.id
     LEFT JOIN heard_stations hs ON hs.station_id = st.id
+    LEFT JOIN shows sh ON sh.id = gc.show_id AND ${attrCondition}
     WHERE st.active = true
       AND st.hidden = false
       AND hs.station_id IS NULL
@@ -167,16 +201,28 @@ router.get("/me/ghost/missed", h(async (req, res) => {
   `);
 
   return res.json({
-    stations: rows.rows.map((r) => ({
-      stationId: r.station_id,
-      slug: r.slug,
-      name: r.name,
-      streamUrl: r.stream_url,
-      streamFormat: r.stream_format ?? "aac",
-      mode: r.mode ?? "live",
-      attribution: r.attribution ?? true,
-      artistName: r.artist_name,
-    })),
+    stations: rows.rows.map((r) => {
+      const djName = eligibleDjName(r.raw_dj_name ?? null, {
+        artist: r.artist_name,
+        showTitle: r.show_name ?? undefined,
+        stationName: r.name,
+      });
+      return {
+        stationId: r.station_id,
+        slug: r.slug,
+        name: r.name,
+        streamUrl: r.stream_url,
+        streamFormat: r.stream_format ?? "aac",
+        mode: r.mode ?? "live",
+        attribution: r.attribution ?? true,
+        artistName: r.artist_name,
+        playedAt: r.played_at,
+        day: r.day,
+        showName: r.show_name ?? null,
+        djName: djName ?? null,
+        runId: r.run_id !== null && r.run_id !== undefined ? Number(r.run_id) : null,
+      };
+    }),
   });
 }));
 

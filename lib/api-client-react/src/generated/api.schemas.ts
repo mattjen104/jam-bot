@@ -2422,38 +2422,12 @@ export interface AlbumTracksTrack {
   mbid: string;
   title: string;
   artist: string;
-  durationMs: number | null;
-  position: number;
 }
 
 export interface AlbumTracksResponse {
   rgMbid: string;
   rgTitle: string | null;
   rgType: string | null;
-  releaseYear: number | null;
-  artworkUrl: string | null;
-  tracks: AlbumTracksTrack[];
-}
-
-export interface ArtistReleaseItem {
-  releaseGroupMbid: string;
-  title: string | null;
-  primaryType: string | null;
-  releaseYear: number | null;
-  artworkUrl: string | null;
-}
-
-export interface RecordingArtistReleasesResponse {
-  artistName: string;
-  releases: ArtistReleaseItem[];
-}
-
-export interface ReleaseGroupTracksResponse {
-  rgMbid: string;
-  rgTitle: string | null;
-  rgType: string | null;
-  releaseYear: number | null;
-  artworkUrl: string | null;
   tracks: AlbumTracksTrack[];
 }
 
@@ -2507,10 +2481,7 @@ export interface StationRecentSpin {
 export interface StationScheduleRunShow {
   name: string;
   djName: string | null;
-  /**
-   * Co-host / multi-DJ names when the source provides more than one.
-   * When present, takes precedence over djName in attribution helpers.
-   * Absent for single-DJ or unattributed shows.
+  /** Co-host / multi-DJ names when the source provides more than one. When present, takes precedence over djName in attribution helpers. Absent for single-DJ or unattributed shows.
    */
   djNames?: string[] | null;
   pickerId: number | null;
@@ -2847,6 +2818,70 @@ export interface LibraryCoverageResponse {
   items: LibraryCoverageList[];
 }
 
+/**
+ * One artist from a run's setlist, flagged for the listener's library.
+ */
+export interface MeRecentSetArtist {
+  /** Display artist name. */
+  name: string;
+  /** Number of spins of this artist within the run. */
+  spins: number;
+  /** True when the artist is in Lore's top-100 by 180-day spin count (lime-green in the UI).
+   */
+  popular: boolean;
+  /** True when the artist matches the authenticated listener's library, unresolved Spotify soft rows, or taste seeds (orange-red in the UI).
+   */
+  inLibrary: boolean;
+}
+
+export type MeRecentSetRunShow = {
+  name: string;
+  /** @nullable */
+  djName: string | null;
+} | null;
+
+/**
+ * One completed station run from the archive.
+ */
+export interface MeRecentSetRun {
+  /** Stable opaque identifier for the run (min spin ID in the group). */
+  runId: number;
+  /** UTC broadcast day, YYYY-MM-DD. */
+  date: string;
+  startedAt: string;
+  endedAt: string;
+  spinCount: number;
+  /** Spins resolved to the MBID spine (replayable tracks). */
+  resolvedCount: number;
+  show: MeRecentSetRunShow;
+}
+
+export type MeRecentSetItemStation = {
+  slug: string;
+  name: string;
+  stationClass: string;
+};
+
+/**
+ * One recent run entry for the ghost-radio discovery surface, with per-artist crossing data relative to the authenticated listener.
+
+ */
+export interface MeRecentSetItem {
+  station: MeRecentSetItemStation;
+  run: MeRecentSetRun;
+  artists: MeRecentSetArtist[];
+}
+
+export interface MeRecentSetsResponse {
+  items: MeRecentSetItem[];
+  /**
+   * Opaque cursor for the next page. Null when there are no more results.
+
+   * @nullable
+   */
+  nextCursor: string | null;
+}
+
 export interface MattStarterLibraryResult {
   available: boolean;
   addedCount: number;
@@ -2877,6 +2912,36 @@ export type AlbumAvatarCurrent = AlbumAvatarCandidate & {
   /** @nullable */
   selectedAt: string | null;
 };
+
+/**
+ * A station that played a library artist in the 24h window but was never consciously tuned into.
+ */
+export interface GhostMissedStation {
+  stationId: number;
+  slug: string;
+  name: string;
+  streamUrl: string;
+  streamFormat: string;
+  mode: string;
+  attribution: boolean;
+  /** The library artist name that links the listener to this station. */
+  artistName: string;
+  /** ISO timestamp of the matching spin. */
+  playedAt?: string | null;
+  /** UTC broadcast day of the matching spin (YYYY-MM-DD). */
+  day: string;
+  /** Scheduled show name when the spin has attributable show context. */
+  showName: string | null;
+  /** Eligible DJ name (post eligibleDjName filter); null when suppressed or absent. */
+  djName: string | null;
+  /** Stable run id (min spin id for the station+show+day group) when the spin can be attributed to a show. Null when no qualifying attribution exists. When non-null, the client should navigate to /replay/{runId} on click.
+   */
+  runId: number | null;
+}
+
+export interface GhostMissedResponse {
+  stations: GhostMissedStation[];
+}
 
 export type AlbumAvatarResponseRotation = {
   /** @nullable */
@@ -3105,6 +3170,31 @@ export type GetSpotifySavedParams = {
    */
   mbid: string;
 };
+
+export type GetMyRecentSetsParams = {
+  /**
+ * Time-window filter. `all` returns the full archive; the others limit to runs that ended within the named period (UTC).
+
+ */
+  window?: GetMyRecentSetsWindow;
+  /**
+ * Opaque pagination cursor. Omit for the first page; pass the `nextCursor` value from the previous response to fetch the next page. An invalid value returns 400.
+
+ */
+  cursor?: string;
+};
+
+export type GetMyRecentSetsWindow =
+  (typeof GetMyRecentSetsWindow)[keyof typeof GetMyRecentSetsWindow];
+
+export const GetMyRecentSetsWindow = {
+  all: "all",
+  today: "today",
+  yesterday: "yesterday",
+  week: "week",
+  month: "month",
+  year: "year",
+} as const;
 
 export type GetMyWeeklyRecapParams = {
   /**

@@ -1161,6 +1161,20 @@ export interface GhostStation {
   attribution: boolean;
   /** The library artist name that links the listener to this station. */
   artistName: string;
+  /** ISO timestamp of the matching spin. Null on legacy responses. */
+  playedAt: string | null;
+  /** UTC broadcast day of the matching spin (YYYY-MM-DD). */
+  day: string;
+  /** Scheduled show name when the spin has attributable show context. */
+  showName: string | null;
+  /** Eligible DJ name (post eligibleDjName() filter); null when suppressed or absent. */
+  djName: string | null;
+  /**
+   * Stable run id (min spin id for the station+show+day group) when the spin
+   * can be attributed to a show. Null when no qualifying attribution exists.
+   * When non-null, clicking the ghost row should navigate to /replay/{runId}.
+   */
+  runId: number | null;
 }
 export interface MyPreferences {
   ledgerEnabled: boolean;

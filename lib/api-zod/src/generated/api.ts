@@ -1223,53 +1223,11 @@ export const GetRecordingAlbumTracksResponse = zod.object({
   rgMbid: zod.string(),
   rgTitle: zod.string().nullable(),
   rgType: zod.string().nullable(),
-  releaseYear: zod.number().nullable(),
-  artworkUrl: zod.string().nullable(),
   tracks: zod.array(
     zod.object({
       mbid: zod.string(),
       title: zod.string(),
       artist: zod.string(),
-      durationMs: zod.number().nullable(),
-      position: zod.number(),
-    }),
-  ),
-});
-
-export const GetRecordingArtistReleasesParams = zod.object({
-  mbid: zod.coerce.string().min(1),
-});
-
-export const GetRecordingArtistReleasesResponse = zod.object({
-  artistName: zod.string(),
-  releases: zod.array(
-    zod.object({
-      releaseGroupMbid: zod.string(),
-      title: zod.string().nullable(),
-      primaryType: zod.string().nullable(),
-      releaseYear: zod.number().nullable(),
-      artworkUrl: zod.string().nullable(),
-    }),
-  ),
-});
-
-export const GetReleaseGroupTracksParams = zod.object({
-  rgMbid: zod.coerce.string().min(1),
-});
-
-export const GetReleaseGroupTracksResponse = zod.object({
-  rgMbid: zod.string(),
-  rgTitle: zod.string().nullable(),
-  rgType: zod.string().nullable(),
-  releaseYear: zod.number().nullable(),
-  artworkUrl: zod.string().nullable(),
-  tracks: zod.array(
-    zod.object({
-      mbid: zod.string(),
-      title: zod.string(),
-      artist: zod.string(),
-      durationMs: zod.number().nullable(),
-      position: zod.number(),
     }),
   ),
 });
@@ -3306,7 +3264,12 @@ export const GetStationsScheduleResponse = zod
                 zod.object({
                   name: zod.string(),
                   djName: zod.string().nullable(),
-                  djNames: zod.array(zod.string()).nullish(),
+                  djNames: zod
+                    .array(zod.string())
+                    .nullish()
+                    .describe(
+                      "Co-host \/ multi-DJ names when the source provides more than one. When present, takes precedence over djName in attribution helpers. Absent for single-DJ or unattributed shows.\n",
+                    ),
                   pickerId: zod.number().nullable(),
                 }),
                 zod.null(),
@@ -4412,6 +4375,97 @@ export const GetMyPickerOverlapResponse = zod.object({
 });
 
 /**
+ * Returns paginated completed runs (station + show/DJ + date) from the ghost radio archive, augmented with per-artist crossing data relative to the authenticated listener's library, soft Spotify artists, and taste seeds. Each run carries a list of artists played in that set, each flagged with `inLibrary` (matches the listener's library) and `popular` (Lore-wide top-100 by 180-day spin count). Powers the "Recent" tab on the Dial front door. Cursor-based pagination via `cursor`; 30 runs per page ordered by `endedAt DESC, runId DESC`. Returns an empty list for unauthenticated requests.
+
+ * @summary Completed show runs from the archive with per-artist crossing data
+ */
+export const getMyRecentSetsQueryWindowDefault = `all`;
+
+export const GetMyRecentSetsQueryParams = zod.object({
+  window: zod
+    .enum(["all", "today", "yesterday", "week", "month", "year"])
+    .default(getMyRecentSetsQueryWindowDefault)
+    .describe(
+      "Time-window filter. `all` returns the full archive; the others limit to runs that ended within the named period (UTC).\n",
+    ),
+  cursor: zod.coerce
+    .string()
+    .optional()
+    .describe(
+      "Opaque pagination cursor. Omit for the first page; pass the `nextCursor` value from the previous response to fetch the next page. An invalid value returns 400.\n",
+    ),
+});
+
+export const GetMyRecentSetsResponse = zod.object({
+  items: zod.array(
+    zod
+      .object({
+        station: zod.object({
+          slug: zod.string(),
+          name: zod.string(),
+          stationClass: zod.string(),
+        }),
+        run: zod
+          .object({
+            runId: zod
+              .number()
+              .describe(
+                "Stable opaque identifier for the run (min spin ID in the group).",
+              ),
+            date: zod.date().describe("UTC broadcast day, YYYY-MM-DD."),
+            startedAt: zod.date(),
+            endedAt: zod.date(),
+            spinCount: zod.number(),
+            resolvedCount: zod
+              .number()
+              .describe(
+                "Spins resolved to the MBID spine (replayable tracks).",
+              ),
+            show: zod.union([
+              zod.object({
+                name: zod.string(),
+                djName: zod.string().nullable(),
+              }),
+              zod.null(),
+            ]),
+          })
+          .describe("One completed station run from the archive."),
+        artists: zod.array(
+          zod
+            .object({
+              name: zod.string().describe("Display artist name."),
+              spins: zod
+                .number()
+                .describe("Number of spins of this artist within the run."),
+              popular: zod
+                .boolean()
+                .describe(
+                  "True when the artist is in Lore's top-100 by 180-day spin count (lime-green in the UI).\n",
+                ),
+              inLibrary: zod
+                .boolean()
+                .describe(
+                  "True when the artist matches the authenticated listener's library, unresolved Spotify soft rows, or taste seeds (orange-red in the UI).\n",
+                ),
+            })
+            .describe(
+              "One artist from a run's setlist, flagged for the listener's library.",
+            ),
+        ),
+      })
+      .describe(
+        "One recent run entry for the ghost-radio discovery surface, with per-artist crossing data relative to the authenticated listener.\n",
+      ),
+  ),
+  nextCursor: zod
+    .string()
+    .nullable()
+    .describe(
+      "Opaque cursor for the next page. Null when there are no more results.\n",
+    ),
+});
+
+/**
  * Returns station-level crossing counts from distinct Lore users who have sent a site-presence heartbeat within the last three minutes and have opted into anonymous social participation. No user IDs, identities, libraries, or per-user breakdowns are returned.
 
  * @summary Anonymous active-listener crossing aggregate for the Dial
@@ -4422,6 +4476,10 @@ export const GetMyBlendedCrossingsResponse = zod.object({
       stationSlug: zod.string(),
       crossings: zod.number(),
       artistCrossings: zod.number(),
+      weekCrossings: zod.number(),
+      weekArtistCrossings: zod.number(),
+      monthCrossings: zod.number(),
+      monthArtistCrossings: zod.number(),
       lifetimeCrossings: zod.number(),
       lifetimeArtistCrossings: zod.number(),
     }),
@@ -4698,56 +4756,56 @@ export const SetMyAlbumAvatarResponse = zod.object({
 });
 
 /**
- * Completed show runs from the archive with per-artist crossing data.
- * @summary Completed show runs from the archive with per-artist crossing data
+ * Stations that have aired a library artist in the past 24 hours but that the authenticated user has never consciously tuned into (no listens row for that station). When a spin can be attributed to a scheduled show, the response includes a runId so the client can navigate directly to the Ghost Replay for the missed set. runId is null when no qualifying show attribution is available.
+
+ * @summary Stations that played library artists in the rolling 24h window
  */
-
-export const GetMyRecentSetsQueryParams = zod.object({
-  window: zod
-    .enum(["all", "today", "yesterday", "week", "month", "year"])
-    .optional()
-    .describe(
-      "Time-window filter. `all` returns the full archive; the others limit to runs that ended within the named period (UTC).",
-    ),
-  cursor: zod.coerce.string().optional().describe("Opaque pagination cursor."),
-});
-
-export const MeRecentSetArtist = zod.object({
-  name: zod.string(),
-  spins: zod.number(),
-  popular: zod.boolean(),
-  inLibrary: zod.boolean(),
-});
-
-export const MeRecentSetItem = zod.object({
-  station: zod.object({
-    slug: zod.string(),
-    name: zod.string(),
-    stationClass: zod.string(),
-  }),
-  run: zod.object({
-    runId: zod.number(),
-    date: zod.string(),
-    startedAt: zod.string(),
-    endedAt: zod.string(),
-    spinCount: zod.number(),
-    resolvedCount: zod.number(),
-    show: zod
-      .union([
-        zod.object({
-          name: zod.string(),
-          djName: zod.string().nullish(),
-        }),
-        zod.null(),
-      ])
-      .optional(),
-  }),
-  artists: zod.array(MeRecentSetArtist),
-});
-
-export const GetMyRecentSetsResponse = zod.object({
-  items: zod.array(MeRecentSetItem),
-  nextCursor: zod.string().nullish(),
+export const GetMyGhostMissedResponse = zod.object({
+  stations: zod.array(
+    zod
+      .object({
+        stationId: zod.number(),
+        slug: zod.string(),
+        name: zod.string(),
+        streamUrl: zod.string(),
+        streamFormat: zod.string(),
+        mode: zod.string(),
+        attribution: zod.boolean(),
+        artistName: zod
+          .string()
+          .describe(
+            "The library artist name that links the listener to this station.",
+          ),
+        playedAt: zod
+          .date()
+          .nullish()
+          .describe("ISO timestamp of the matching spin."),
+        day: zod
+          .string()
+          .describe("UTC broadcast day of the matching spin (YYYY-MM-DD)."),
+        showName: zod
+          .string()
+          .nullable()
+          .describe(
+            "Scheduled show name when the spin has attributable show context.",
+          ),
+        djName: zod
+          .string()
+          .nullable()
+          .describe(
+            "Eligible DJ name (post eligibleDjName filter); null when suppressed or absent.",
+          ),
+        runId: zod
+          .number()
+          .nullable()
+          .describe(
+            "Stable run id (min spin id for the station+show+day group) when the spin can be attributed to a show. Null when no qualifying attribution exists. When non-null, the client should navigate to \/replay\/{runId} on click.\n",
+          ),
+      })
+      .describe(
+        "A station that played a library artist in the 24h window but was never consciously tuned into.",
+      ),
+  ),
 });
 
 /**

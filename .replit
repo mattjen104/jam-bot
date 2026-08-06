@@ -90,23 +90,3 @@ ATTENDANCE_DEDUP_CONFIRMED = "1"
 [userenv.production]
 SPOTIFY_LIBRARY_REDIRECT_URI = "https://tune-tribe.replit.app/api/me/connect/spotify/callback"
 SPOTIFY_REDIRECT_URI = "https://tune-tribe.replit.app/api/spotify/callback"
-
-[[ports]]
-localPort = 8080
-externalPort = 8080
-
-[[ports]]
-localPort = 8081
-externalPort = 8081
-
-[[ports]]
-localPort = 8082
-externalPort = 3001
-
-[[ports]]
-localPort = 24224
-externalPort = 3000
-
-[[ports]]
-localPort = 26102
-externalPort = 80

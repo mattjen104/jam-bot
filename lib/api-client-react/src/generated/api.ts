@@ -21,8 +21,6 @@ import type {
   AlbumAvatarResponse,
   AlbumResult,
   AlbumTracksResponse,
-  RecordingArtistReleasesResponse,
-  ReleaseGroupTracksResponse,
   AllDraftClaimsList,
   ApiError,
   AppleMusicReplayMaterialization,
@@ -39,6 +37,7 @@ import type {
   GeniusDraftReviewResponse,
   GetArchiveRecentRunsParams,
   GetGuidedReplayQueueParams,
+  GetMyRecentSetsParams,
   GetMyWeeklyRecapParams,
   GetOembedParams,
   GetRecordingsAvailabilityParams,
@@ -48,6 +47,7 @@ import type {
   GetStationsRecentSpinsParams,
   GetStationsScheduleParams,
   GetWikipediaDraftsParams,
+  GhostMissedResponse,
   GuidedReplayQueue,
   HealthStatus,
   IcecastReport,
@@ -64,6 +64,7 @@ import type {
   MattStarterLibraryResult,
   MeBlendedCrossingsResult,
   MePickerOverlapResult,
+  MeRecentSetsResponse,
   OEmbed,
   PatchClaimRequest,
   PickedLookup,
@@ -7846,6 +7847,102 @@ export function useGetMyPickerOverlap<
 }
 
 /**
+ * Returns paginated completed runs (station + show/DJ + date) from the ghost radio archive, augmented with per-artist crossing data relative to the authenticated listener's library, soft Spotify artists, and taste seeds. Each run carries a list of artists played in that set, each flagged with `inLibrary` (matches the listener's library) and `popular` (Lore-wide top-100 by 180-day spin count). Powers the "Recent" tab on the Dial front door. Cursor-based pagination via `cursor`; 30 runs per page ordered by `endedAt DESC, runId DESC`. Returns an empty list for unauthenticated requests.
+
+ * @summary Completed show runs from the archive with per-artist crossing data
+ */
+export const getGetMyRecentSetsUrl = (params?: GetMyRecentSetsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/me/recent-sets?${stringifiedParams}`
+    : `/api/me/recent-sets`;
+};
+
+export const getMyRecentSets = async (
+  params?: GetMyRecentSetsParams,
+  options?: RequestInit,
+): Promise<MeRecentSetsResponse> => {
+  return customFetch<MeRecentSetsResponse>(getGetMyRecentSetsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyRecentSetsQueryKey = (params?: GetMyRecentSetsParams) => {
+  return [`/api/me/recent-sets`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetMyRecentSetsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyRecentSets>>,
+  TError = ErrorType<ApiError>,
+>(
+  params?: GetMyRecentSetsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyRecentSets>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMyRecentSetsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyRecentSets>>> = ({
+    signal,
+  }) => getMyRecentSets(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyRecentSets>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyRecentSetsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyRecentSets>>
+>;
+export type GetMyRecentSetsQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Completed show runs from the archive with per-artist crossing data
+ */
+
+export function useGetMyRecentSets<
+  TData = Awaited<ReturnType<typeof getMyRecentSets>>,
+  TError = ErrorType<ApiError>,
+>(
+  params?: GetMyRecentSetsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyRecentSets>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyRecentSetsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * Returns station-level crossing counts from distinct Lore users who have sent a site-presence heartbeat within the last three minutes and have opted into anonymous social participation. No user IDs, identities, libraries, or per-user breakdowns are returned.
 
  * @summary Anonymous active-listener crossing aggregate for the Dial
@@ -8597,6 +8694,83 @@ export const useSetMyAlbumAvatar = <
 > => {
   return useMutation(getSetMyAlbumAvatarMutationOptions(options));
 };
+
+/**
+ * Stations that have aired a library artist in the past 24 hours but that the authenticated user has never consciously tuned into (no listens row for that station). When a spin can be attributed to a scheduled show, the response includes a runId so the client can navigate directly to the Ghost Replay for the missed set. runId is null when no qualifying show attribution is available.
+
+ * @summary Stations that played library artists in the rolling 24h window
+ */
+export const getGetMyGhostMissedUrl = () => {
+  return `/api/me/ghost/missed`;
+};
+
+export const getMyGhostMissed = async (
+  options?: RequestInit,
+): Promise<GhostMissedResponse> => {
+  return customFetch<GhostMissedResponse>(getGetMyGhostMissedUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyGhostMissedQueryKey = () => {
+  return [`/api/me/ghost/missed`] as const;
+};
+
+export const getGetMyGhostMissedQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyGhostMissed>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyGhostMissed>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMyGhostMissedQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMyGhostMissed>>
+  > = ({ signal }) => getMyGhostMissed({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyGhostMissed>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyGhostMissedQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyGhostMissed>>
+>;
+export type GetMyGhostMissedQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Stations that played library artists in the rolling 24h window
+ */
+
+export function useGetMyGhostMissed<
+  TData = Awaited<ReturnType<typeof getMyGhostMissed>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyGhostMissed>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyGhostMissedQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Read privacy-preserving anonymous listener presence

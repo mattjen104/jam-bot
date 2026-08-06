@@ -576,6 +576,7 @@ export function FrontDoorRow({ ds, show, ov, isActive, isSampling, onTuneIn, dis
 interface GhostRowProps {
   station: GhostStation;
   isActive: boolean;
+  /** Called when the station has no qualifying run (runId === null). */
   onTuneIn: () => void;
 }
 function ZoneLabel({ label, n, hint, accent, estimated, collapsed, onCollapse }: {
@@ -2873,18 +2874,42 @@ export function LiveArtistPicker({
 }
 
 function GhostRow({ station, isActive, onTuneIn }: GhostRowProps) {
+  const [, navigate] = useLocation();
   const cls = ["ghost-row", isActive ? "ghost-row--playing" : ""].filter(Boolean).join(" ");
+
+  const hasReplay = station.runId != null;
+
+  function handleClick() {
+    if (hasReplay) {
+      navigate(`/replay/${station.runId}`);
+    } else {
+      onTuneIn();
+    }
+  }
+
+  const displayName = station.showName ?? station.name;
+  const timeLabel = station.playedAt ? agoLabel(station.playedAt) : null;
+
   return (
     <div
       className={cls}
       role="button"
       tabIndex={0}
-      onClick={onTuneIn}
-      onKeyDown={(e) => e.key === "Enter" && onTuneIn()}
+      onClick={handleClick}
+      onKeyDown={(e) => e.key === "Enter" && handleClick()}
     >
       <div className="ghost-row__c">
         <div className="ghost-row__reason">
-          <b className="fdrow__artist">{station.artistName}</b>
+          {hasReplay ? (
+            <>
+              <span className="ghost-row__show">{displayName}</span>
+              {" played "}
+              <b className="fdrow__artist">{station.artistName}</b>
+              {timeLabel && <> · <span className="ghost-row__time">{timeLabel}</span></>}
+            </>
+          ) : (
+            <b className="fdrow__artist">{station.artistName}</b>
+          )}
         </div>
       </div>
       <div className="fdrow__station-label" aria-hidden="true">{station.name}</div>

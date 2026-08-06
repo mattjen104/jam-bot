@@ -2984,6 +2984,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /me/ghost/missed:
+    get:
+      operationId: getMyGhostMissed
+      tags: [me]
+      summary: Stations that played library artists in the rolling 24h window
+      description: >
+        Stations that have aired a library artist in the past 24 hours but that
+        the authenticated user has never consciously tuned into (no listens row
+        for that station). When a spin can be attributed to a scheduled show,
+        the response includes a runId so the client can navigate directly to
+        the Ghost Replay for the missed set. runId is null when no qualifying
+        show attribution is available.
+      responses:
+        "200":
+          description: Ghost-missed stations (empty array when unauthenticated or library is empty)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GhostMissedResponse"
   /stations/social/presence:
     get:
       operationId: getStationSocialPresence
@@ -6932,6 +6951,71 @@ components:
               type: ["string", "null"]
               format: date-time
           required: [selectedAt]
+    GhostMissedStation:
+      type: object
+      description: A station that played a library artist in the 24h window but was never consciously tuned into.
+      properties:
+        stationId:
+          type: integer
+        slug:
+          type: string
+        name:
+          type: string
+        streamUrl:
+          type: string
+        streamFormat:
+          type: string
+        mode:
+          type: string
+        attribution:
+          type: boolean
+        artistName:
+          type: string
+          description: The library artist name that links the listener to this station.
+        playedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: ISO timestamp of the matching spin.
+        day:
+          type: string
+          description: UTC broadcast day of the matching spin (YYYY-MM-DD).
+        showName:
+          type: string
+          nullable: true
+          description: Scheduled show name when the spin has attributable show context.
+        djName:
+          type: string
+          nullable: true
+          description: Eligible DJ name (post eligibleDjName filter); null when suppressed or absent.
+        runId:
+          type: integer
+          nullable: true
+          description: >
+            Stable run id (min spin id for the station+show+day group) when the spin
+            can be attributed to a show. Null when no qualifying attribution exists.
+            When non-null, the client should navigate to /replay/{runId} on click.
+      required:
+        - stationId
+        - slug
+        - name
+        - streamUrl
+        - streamFormat
+        - mode
+        - attribution
+        - artistName
+        - day
+        - showName
+        - djName
+        - runId
+    GhostMissedResponse:
+      type: object
+      properties:
+        stations:
+          type: array
+          items:
+            $ref: "#/components/schemas/GhostMissedStation"
+      required: [stations]
     AlbumAvatarResponse:
       type: object
       properties:
