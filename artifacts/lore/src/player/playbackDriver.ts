@@ -3,13 +3,19 @@
  *
  * A `PlaybackDriverHandle` lets `PlayerProvider` delegate play / pause /
  * resume / status to whichever service is active (Spotify, YouTube, Apple
- * Music) through a single contract. The fallback cascade becomes a simple
- * preference list; no behavioral change for existing Spotify users.
+ * Music, local files, Bandcamp) through a single contract. The fallback
+ * cascade becomes a simple preference list; no behavioral change for existing
+ * Spotify users.
+ *
+ * Cascade order (highest → lowest priority):
+ *   Local file → Spotify → Apple Music → Bandcamp embed → YouTube
  *
  * All driver hooks live alongside this file:
- *   useSpotifyDriver.ts   — wraps the Spotify Connect remote-control path
- *   useYouTubeDriver.ts   — hidden iframe + YouTube IFrame API
- *   useAppleMusicDriver.ts — MusicKit JS
+ *   useSpotifyDriver.ts      — wraps the Spotify Connect remote-control path
+ *   useYouTubeDriver.ts      — hidden iframe + YouTube IFrame API
+ *   useAppleMusicDriver.ts   — MusicKit JS
+ *   useLocalFileDriver.ts    — browser File System Access API
+ *   useBandcampDriver.tsx    — sandboxed Bandcamp embed iframe
  */
 
 import type { ReactNode } from "react";
@@ -53,12 +59,12 @@ export interface DriverPlaybackStatus {
 
 export interface PlaybackDriverHandle {
   /** Unique identifier — becomes `RideApi.source` while this driver is active. */
-  id: "spotify" | "youtube" | "apple-music";
+  id: "spotify" | "youtube" | "apple-music" | "local-file" | "bandcamp";
 
   /**
    * Whether this driver is capable of playing anything right now at the
-   * service level (connected, Premium, token present, etc.).  Per-track
-   * availability is signalled via the "unavailable" state through
+   * service level (connected, Premium, token present, files matched, etc.).
+   * Per-track availability is signalled via the "unavailable" state through
    * `onStatusChange` when `play()` is called.
    */
   available: boolean;

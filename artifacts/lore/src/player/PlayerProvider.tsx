@@ -66,6 +66,9 @@ function extractSpotifyDeepLink(links: RecordingLink[]): string | null {
 import { useSpotifyDriver } from "./useSpotifyDriver";
 import { useYouTubeDriver } from "./useYouTubeDriver";
 import { useAppleMusicDriver } from "./useAppleMusicDriver";
+import { useLocalFileDriver } from "./useLocalFileDriver";
+import { useBandcampDriver } from "./useBandcampDriver";
+import { ConnectionCentre } from "./ConnectionCentre";
 import {
   writeRadioSectionMemory,
   writeSelectorSectionMemory,
@@ -199,9 +202,16 @@ export interface RideApi {
    */
   durationMs: number | null;
   /** What is sounding right now: the listener's connected service (Spotify,
-   * YouTube, Apple Music) or the 30s preview element. Null before playback
-   * begins. */
-  source: "spotify" | "youtube" | "apple-music" | "preview" | null;
+   * YouTube, Apple Music, local file, Bandcamp) or the 30s preview element.
+   * Null before playback begins. */
+  source: "spotify" | "youtube" | "apple-music" | "local-file" | "bandcamp" | "preview" | null;
+
+  /**
+   * Human-readable label for the current audio source.  Suitable for display
+   * in the transparent source chip beneath the player controls.
+   * Null before playback begins.
+   */
+  sourceLabel: string | null;
   /** "trail" follows live segues hop by hop; "replay" plays a fixed,
    * documented run in its original order (ghost radio). */
   mode: "trail" | "replay";
@@ -254,6 +264,9 @@ export interface RideApi {
    * disappears; if it fails again the message returns.
    */
   retrySpotify: () => void;
+
+  /** Open the Connection Centre panel. */
+  openConnectionCentre: () => void;
   /**
    * Seek to a position within the current track.  Only meaningful when
    * `source` is `"youtube"` or `"apple-music"` — the active driver must
@@ -490,7 +503,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [index, setIndex] = useState(0);
   const [seeking, setSeeking] = useState(false);
   const [atTrailEnd, setAtTrailEnd] = useState(false);
-  const [source, setSource] = useState<"spotify" | "youtube" | "apple-music" | "preview" | null>(null);
+  const [source, setSource] = useState<"spotify" | "youtube" | "apple-music" | "local-file" | "bandcamp" | "preview" | null>(null);
+  const [connectionCentreOpen, setConnectionCentreOpen] = useState(false);
   const [mode, setMode] = useState<"trail" | "replay">("trail");
   const [replayLabel, setReplayLabel] = useState<string | null>(null);
   const [rideListenContext, setRideListenContext] = useState<string | null>(null);
@@ -552,7 +566,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, []); // audioRef.current is a singleton created during render — stable
 
   // Mirror of `source` readable inside stable callbacks.
-  const sourceRef = useRef<"spotify" | "youtube" | "apple-music" | "preview" | null>(null);
+  const sourceRef = useRef<"spotify" | "youtube" | "apple-music" | "local-file" | "bandcamp" | "preview" | null>(null);
   // Queue length readable inside the poll interval without re-arming it.
   const queueLenRef = useRef(0);
   queueLenRef.current = queue.length;
@@ -905,7 +919,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   });
   const youtubeDriver = useYouTubeDriver();
 
-  // Preference order: Spotify → Apple Music → YouTube.
+  // Local file driver — highest cascade priority when files are matched.
+  const localFileDriver = useLocalFileDriver();
+
+  // Bandcamp embed driver — lowest priority before YouTube.
+  const bandcampDriver = useBandcampDriver();
+
+  // Preference order: Local file → Spotify → Apple Music → YouTube.
+  // (Bandcamp and local file are wired into the cascade via effects below.)
   // `activeDriver` is the first service-level driver with `available === true`.
   const activeDriver =
     spotifyDriver.handle.available
@@ -920,6 +941,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     spotifyDriver.handle.stop();
     youtubeDriver.stop();
     appleMusicDriver.stop();
+    localFileDriver.stop();
+    bandcampDriver.stop();
   };
   // Route pause/resume/seek to whichever driver is currently sounding, not the
   // statically-preferred one — Spotify may be preferred but YouTube/Apple
@@ -928,18 +951,23 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const src = sourceRef.current;
     if (src === "youtube") return youtubeDriver.pause();
     if (src === "apple-music") return appleMusicDriver.pause();
+    if (src === "local-file") return localFileDriver.pause();
+    if (src === "bandcamp") return bandcampDriver.pause();
     return spotifyDriver.handle.pause();
   };
   activeDriverResumeRef.current = async () => {
     const src = sourceRef.current;
     if (src === "youtube") return youtubeDriver.resume();
     if (src === "apple-music") return appleMusicDriver.resume();
+    if (src === "local-file") return localFileDriver.resume();
+    if (src === "bandcamp") return bandcampDriver.resume();
     return spotifyDriver.handle.resume();
   };
   activeDriverSeekRef.current = (() => {
     const src = sourceRef.current;
     if (src === "youtube") return youtubeDriver.seek ?? null;
     if (src === "apple-music") return appleMusicDriver.seek ?? null;
+    if (src === "local-file") return localFileDriver.seek ?? null;
     return null;
   })();
 
@@ -967,6 +995,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       // Clear per-track failures so the cascade can attempt each driver again.
       altDriverFailedRef.current.delete(`yt:${currentMbid}`);
       altDriverFailedRef.current.delete(`am:${currentMbid}`);
+      altDriverFailedRef.current.delete(`bc:${currentMbid}`);
+      altDriverFailedRef.current.delete(`lf:${currentMbid}`);
       setAltDriversAllFailed(false);
       setAltDriverActiveMbid(null);
       // Directly invoke the cascade — skipApple only when the user
@@ -982,6 +1012,23 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   // Apple Music configuration flag — derived from app config (server token).
   const appleMusicConfigured = Boolean(appConfig?.appleMusic?.developerToken ?? null);
+
+  // Connection Centre open/close.
+  const openConnectionCentre = useCallback(() => setConnectionCentreOpen(true), []);
+  const closeConnectionCentre = useCallback(() => setConnectionCentreOpen(false), []);
+
+  // Cascade transparency label — human-readable name for the current audio source.
+  const sourceLabel = useMemo((): string | null => {
+    switch (source) {
+      case "local-file":  return "Local file";
+      case "spotify":     return "Spotify";
+      case "apple-music": return "Apple Music";
+      case "bandcamp":    return "Bandcamp";
+      case "youtube":     return "YouTube";
+      case "preview":     return "Preview";
+      default:            return null;
+    }
+  }, [source]);
 
   // Spotify deep-link for the current track — pure derivation, no API call.
   const spotifyDeepLink = useMemo(
@@ -1036,12 +1083,18 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // On every track change: stop any alt driver still playing from the previous
   // track so audio-exclusivity is enforced across queue advances, prev/next,
   // and live now-playing advances.  Spotify handles its own continuity via its
-  // internal poll + command effect; only YouTube and Apple Music need explicit
-  // teardown here.
+  // internal poll + command effect; all other drivers need explicit teardown.
   useEffect(() => {
     youtubeDriver.stop();
     appleMusicDriver.stop();
-    if (sourceRef.current === "youtube" || sourceRef.current === "apple-music") {
+    localFileDriver.stop();
+    bandcampDriver.stop();
+    if (
+      sourceRef.current === "youtube" ||
+      sourceRef.current === "apple-music" ||
+      sourceRef.current === "local-file" ||
+      sourceRef.current === "bandcamp"
+    ) {
       sourceRef.current = null;
       setSource(null);
     }
@@ -1084,9 +1137,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     };
   }, [currentMbid]);
 
-  // Try the next alt driver in the cascade (Apple Music → YouTube).  Called
-  // after Spotify fails, and again when Apple Music fails so YouTube gets a
-  // chance before we drop to preview/broadcast.
+  // Try the next alt driver in the cascade:
+  //   Local file → Apple Music → Bandcamp → YouTube
+  // Called after Spotify fails, and again when any driver fails so the next
+  // one in the ladder gets a chance before we drop to preview/broadcast.
   const tryAltDriverRef = useRef<(mbid: string, item: RideItem, skipApple: boolean) => void>(
     () => {},
   );
@@ -1094,18 +1148,49 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // The ref indirection avoids a dependency cycle.
   useEffect(() => {
     tryAltDriverRef.current = (mbid: string, item: RideItem, skipApple: boolean) => {
+      // ── Local file: try first if a file is matched ───────────────────────
+      const failedLf = altDriverFailedRef.current.has(`lf:${mbid}`);
+      if (!failedLf && localFileDriver.available) {
+        pauseRadio?.();
+        setAltDriverActiveMbid(mbid);
+        void localFileDriver.play(item).catch(() => {
+          // No local file for this track — cascade to Apple Music.
+          altDriverFailedRef.current.add(`lf:${mbid}`);
+          setAltDriverActiveMbid(null);
+          tryAltDriverRef.current(mbid, item, skipApple);
+        });
+        return;
+      }
+
+      // ── Apple Music ───────────────────────────────────────────────────────
       const failedAm = altDriverFailedRef.current.has(`am:${mbid}`);
       if (!skipApple && appleMusicDriver.available && !failedAm) {
         // Enforce audio exclusivity before handing off to Apple Music.
         pauseRadio?.();
         setAltDriverActiveMbid(mbid);
         void appleMusicDriver.play(item).catch(() => {
-          // play() itself threw (no token, etc.) — cascade to YouTube.
+          // play() itself threw (no token, etc.) — cascade to Bandcamp.
           altDriverFailedRef.current.add(`am:${mbid}`);
+          setAltDriverActiveMbid(null);
           tryAltDriverRef.current(mbid, item, true);
         });
         return;
       }
+
+      // ── Bandcamp embed: last resort before YouTube ────────────────────────
+      const failedBc = altDriverFailedRef.current.has(`bc:${mbid}`);
+      if (!failedBc) {
+        pauseRadio?.();
+        setAltDriverActiveMbid(mbid);
+        void bandcampDriver.play(item).catch(() => {
+          altDriverFailedRef.current.add(`bc:${mbid}`);
+          setAltDriverActiveMbid(null);
+          tryAltDriverRef.current(mbid, item, true);
+        });
+        return;
+      }
+
+      // ── YouTube ───────────────────────────────────────────────────────────
       const failedYt = altDriverFailedRef.current.has(`yt:${mbid}`);
       if (!failedYt) {
         pauseRadio?.();
@@ -1113,21 +1198,19 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         void youtubeDriver.play(item).catch(() => {
           altDriverFailedRef.current.add(`yt:${mbid}`);
           setAltDriverActiveMbid(null);
-          // YouTube is always the last driver in the cascade — every option
-          // is now exhausted. Set the flag immediately so the live fallback
-          // effect fires and resumes the broadcast without waiting for a
-          // second tryAltDriverRef call.
+          // YouTube is the last driver in the cascade — every option is now
+          // exhausted. Set the flag so the live fallback effect fires.
           setAltDriversAllFailed(true);
         });
         return;
       }
       // All alt drivers were already failed when tryAltDriverRef was entered
-      // (e.g. a retry that found both keys still in the set). Safety net.
+      // (e.g. a retry that found all keys still in the set). Safety net.
       setAltDriverActiveMbid(null);
       setAltDriversAllFailed(true);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appleMusicDriver, youtubeDriver, pauseRadio]);
+  }, [appleMusicDriver, youtubeDriver, localFileDriver, bandcampDriver, pauseRadio]);
 
   // ---- Preferred service trigger: start the user's chosen driver ----------
   // Fires when the user explicitly picks YouTube or Apple Music from the
@@ -1149,11 +1232,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       const mbid = s.trackId ?? null;
       if (mbid && mbid !== currentMbid) return; // stale
       if (s.state === "loading") {
-        // Spotify is taking over — stop any alt driver that might still be
-        // running for this track (e.g. a YouTube fallback that started while
-        // Spotify was connecting).
+        // Spotify is taking over — stop every other driver so audio is exclusive.
         youtubeDriver.stop();
         appleMusicDriver.stop();
+        localFileDriver.stop();
+        bandcampDriver.stop();
         setAltDriverActiveMbid(null);
         sourceRef.current = "spotify";
         setSource("spotify");
@@ -1161,6 +1244,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       } else if (s.state === "playing") {
         youtubeDriver.stop();
         appleMusicDriver.stop();
+        localFileDriver.stop();
+        bandcampDriver.stop();
         setAltDriverActiveMbid(null);
         sourceRef.current = "spotify";
         setSource("spotify");
@@ -1280,7 +1365,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           });
         }
       } else if (s.state === "unavailable" || s.state === "error") {
-        // Apple Music failed — cascade to YouTube.
+        // Apple Music failed — cascade to Bandcamp then YouTube.
         if (mbid) altDriverFailedRef.current.add(`am:${mbid}`);
         setAltDriverActiveMbid(null);
         if (sourceRef.current === "apple-music") { sourceRef.current = null; setSource(null); }
@@ -1291,6 +1376,94 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appleMusicDriver, currentMbid, currentItem, isLiveSvcRide, pauseRadio]);
+
+  // Subscribe to local file driver status changes.
+  useEffect(() => {
+    return localFileDriver.onStatusChange((s) => {
+      const mbid = s.trackId ?? null;
+      if (mbid && mbid !== currentMbid) return;
+      if (s.durationMs !== undefined) setDurationMs(s.durationMs ?? null);
+      if (s.progressMs !== undefined && sourceRef.current === "local-file") {
+        setProgressMs(s.progressMs ?? null);
+      }
+      if (s.state === "loading") {
+        pauseRadio?.();
+        setAltDriverActiveMbid(mbid);
+        sourceRef.current = "local-file";
+        setSource("local-file");
+        setStatus("loading");
+      } else if (s.state === "playing") {
+        pauseRadio?.();
+        setAltDriverActiveMbid(mbid);
+        sourceRef.current = "local-file";
+        setSource("local-file");
+        setStatus("playing");
+      } else if (s.state === "paused") {
+        setStatus("paused");
+      } else if (s.state === "ended") {
+        setAltDriverActiveMbid(null);
+        sourceRef.current = null;
+        setSource(null);
+        if (!isLiveSvcRide) {
+          setIndex((i) => {
+            if (i + 1 < queueLenRef.current) return i + 1;
+            setStatus("ended");
+            return i;
+          });
+        }
+      } else if (s.state === "unavailable" || s.state === "error") {
+        if (mbid) altDriverFailedRef.current.add(`lf:${mbid}`);
+        setAltDriverActiveMbid(null);
+        if (sourceRef.current === "local-file") { sourceRef.current = null; setSource(null); }
+        if (currentItem && mbid) {
+          tryAltDriverRef.current(mbid, currentItem, false);
+        }
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localFileDriver, currentMbid, currentItem, isLiveSvcRide, pauseRadio]);
+
+  // Subscribe to Bandcamp driver status changes.
+  useEffect(() => {
+    return bandcampDriver.onStatusChange((s) => {
+      const mbid = s.trackId ?? null;
+      if (mbid && mbid !== currentMbid) return;
+      if (s.state === "loading") {
+        pauseRadio?.();
+        setAltDriverActiveMbid(mbid);
+        sourceRef.current = "bandcamp";
+        setSource("bandcamp");
+        setStatus("loading");
+      } else if (s.state === "playing") {
+        pauseRadio?.();
+        setAltDriverActiveMbid(mbid);
+        sourceRef.current = "bandcamp";
+        setSource("bandcamp");
+        setStatus("playing");
+      } else if (s.state === "paused") {
+        setStatus("paused");
+      } else if (s.state === "ended") {
+        setAltDriverActiveMbid(null);
+        sourceRef.current = null;
+        setSource(null);
+        if (!isLiveSvcRide) {
+          setIndex((i) => {
+            if (i + 1 < queueLenRef.current) return i + 1;
+            setStatus("ended");
+            return i;
+          });
+        }
+      } else if (s.state === "unavailable" || s.state === "error") {
+        if (mbid) altDriverFailedRef.current.add(`bc:${mbid}`);
+        setAltDriverActiveMbid(null);
+        if (sourceRef.current === "bandcamp") { sourceRef.current = null; setSource(null); }
+        if (currentItem && mbid) {
+          tryAltDriverRef.current(mbid, currentItem, true);
+        }
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bandcampDriver, currentMbid, currentItem, isLiveSvcRide, pauseRadio]);
 
   // Push-channel trigger hooks: the SSE effect below calls these to fire an
   // immediate now-playing re-check when the server pushes a spin change for
@@ -1838,6 +2011,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         setPlaybackMode,
         retrySpotify,
         seek,
+        sourceLabel,
+        openConnectionCentre,
         spotifyDeepLink,
         bandcampAlbumUrl,
         appleMusicConfigured,
@@ -1894,6 +2069,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setPlaybackMode,
       retrySpotify,
       seek,
+      sourceLabel,
+      openConnectionCentre,
       spotifyDeepLink,
       bandcampAlbumUrl,
       appleMusicConfigured,
@@ -1914,6 +2091,24 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       {/* Hidden iframe the YouTube driver uses — must be in the DOM at all
           times so the driver can postMessage into it. */}
       {youtubeDriver.surface}
+      {/* Bandcamp embed iframe — portal-mounted when a Bandcamp track is active. */}
+      {bandcampDriver.surface}
+      {/* Connection Centre — modal/drawer with service cards. */}
+      <ConnectionCentre
+        open={connectionCentreOpen}
+        onClose={closeConnectionCentre}
+        spotify={spotify}
+        appleMusicConfigured={appleMusicConfigured}
+        appleMusicConnected={appleMusicConnected}
+        onConnectAppleMusic={() => {
+          // Called after ConnectionCentre successfully calls MusicKit.authorize().
+          // Mark Apple Music as connected so the card flips to "Connected ✓"
+          // immediately without waiting for a full play cycle.
+          setAppleMusicConnected(true);
+          closeConnectionCentre();
+        }}
+        localFiles={localFileDriver}
+      />
     </PlayerContext.Provider>
   );
 }

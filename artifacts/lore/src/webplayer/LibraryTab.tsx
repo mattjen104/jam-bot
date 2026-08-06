@@ -7,6 +7,7 @@ import {
   useMyLibraryInfinite,
   useIsAuthenticated,
   useLatestSyncJob,
+  useAppConfig,
   startSpotifyLibraryConnect,
   startSpotifyLibraryReconnect,
   postImportLibraryFile,
@@ -727,6 +728,135 @@ export function LibraryTab({
   const isAuthenticated = useIsAuthenticated();
   const queryClient = useQueryClient();
 
+  // Apple Music config — if the server has a developer token, show the import.
+  const { data: appConfig } = useAppConfig();
+  const appleMusicConfigured = Boolean(appConfig?.appleMusic?.developerToken ?? null);
+
+  // Apple Music library import local state.
+  const [amImporting, setAmImporting] = useState(false);
+  const [amImportProgress, setAmImportProgress] = useState<{
+    received: number;
+    total: number | null;
+    resolved: number;
+  } | null>(null);
+  const [amImportDone, setAmImportDone] = useState(false);
+  const [amImportError, setAmImportError] = useState<string | null>(null);
+
+  const handleAppleMusicImport = useCallback(async () => {
+    // Access MusicKit instance (initialized by the Apple Music driver).
+    const mk = (window as unknown as Record<string, unknown>).MusicKit;
+    if (!mk || typeof (mk as { getInstance?: () => { isAuthorized?: boolean; api?: unknown } }).getInstance !== "function") {
+      setAmImportError("Apple Music not available — connect it from the player first.");
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const instance = (mk as any).getInstance() as {
+      isAuthorized?: boolean;
+      api?: {
+        music?: (
+          path: string,
+          opts?: { limit?: number; offset?: number },
+        ) => Promise<{
+          data: {
+            data?: Array<{
+              id: string;
+              attributes?: {
+                name?: string;
+                artistName?: string;
+                albumName?: string;
+                artwork?: { url?: string };
+                isrc?: string;
+              };
+            }>;
+          };
+        }>;
+      };
+    };
+    if (!instance.isAuthorized) {
+      setAmImportError("Authorize Apple Music first by playing a track.");
+      return;
+    }
+
+    setAmImporting(true);
+    setAmImportDone(false);
+    setAmImportError(null);
+    setAmImportProgress({ received: 0, total: null, resolved: 0 });
+
+    try {
+      const limit = 100;
+      let offset = 0;
+      let total: number | null = null;
+      let received = 0;
+      let resolved = 0;
+
+      // Track whether the loop ended normally (reached last page) vs. via error.
+      let fetchError: Error | null = null;
+
+      while (true) {
+        // Fetch a page of library songs via MusicKit JS.
+        let page: { data: { data?: Array<{ id: string; attributes?: { name?: string; artistName?: string; albumName?: string; artwork?: { url?: string }; isrc?: string } }> } };
+        try {
+          page = await instance.api!.music!("/v1/me/library/songs", { limit, offset });
+        } catch (e) {
+          // MusicKit API error — abort the import with an error state.
+          // Do NOT treat this as a natural end-of-library: the user would
+          // see "done" when the import is actually incomplete.
+          fetchError = e instanceof Error ? e : new Error("MusicKit API error");
+          break;
+        }
+
+        const songs = page.data.data ?? [];
+
+        // Empty page = confirmed end of library.
+        if (songs.length === 0) break;
+
+        // Build batch payload.
+        const batch = songs.map((s) => ({
+          appleId: s.id,
+          title: s.attributes?.name ?? "",
+          artist: s.attributes?.artistName ?? "",
+          albumName: s.attributes?.albumName ?? null,
+          artworkUrl: s.attributes?.artwork?.url?.replace("{w}x{h}", "300x300") ?? null,
+          isrc: s.attributes?.isrc ?? null,
+        }));
+
+        // POST batch to server.
+        const res = await fetch("/api/me/apple-library-import", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ songs: batch }),
+        });
+        if (res.ok) {
+          const json = await res.json() as { inserted?: number; resolved?: number };
+          received += songs.length;
+          resolved += json.resolved ?? 0;
+          setAmImportProgress({ received, total, resolved });
+        } else {
+          // Server-side error posting this batch — abort with error.
+          fetchError = new Error(`Server error ${res.status} while importing batch`);
+          break;
+        }
+
+        offset += limit;
+        // songs.length < limit = last page (Apple returns shorter final pages).
+        if (songs.length < limit) break;
+      }
+
+      if (fetchError) {
+        // A fetch/server error occurred — report it rather than marking done.
+        setAmImportError(fetchError.message);
+      } else {
+        setAmImportDone(true);
+        setAmImportProgress({ received, total, resolved });
+      }
+    } catch (err) {
+      setAmImportError(err instanceof Error ? err.message : "Import failed — please try again.");
+    } finally {
+      setAmImporting(false);
+    }
+  }, []);
+
   // Sync state
   const { data: syncJobData } = useLatestSyncJob();
   const [syncBusy, setSyncBusy] = useState(false);
@@ -1356,6 +1486,67 @@ export function LibraryTab({
               TuneMyMusic
             </a>
           </p>
+
+          {/* Apple Music library import */}
+          {appleMusicConfigured && (
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: "0.5px solid var(--wp-border)" }} data-testid="wp-apple-library-import">
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                <div style={{ minWidth: 0 }}>
+                  <p className="wp-mono" style={{ margin: 0, fontSize: 11, color: "var(--wp-text-secondary)", fontWeight: 500 }}>import apple music library</p>
+                  <p className="wp-mono" style={{ margin: "2px 0 0", fontSize: 11, color: "var(--wp-text-muted)" }}>
+                    authorize apple music first, then import · matched tracks appear in your library
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={amImporting}
+                  onClick={() => void handleAppleMusicImport()}
+                  className="wp-mono"
+                  style={{
+                    fontSize: 11,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.04em",
+                    color: "var(--wp-text-secondary)",
+                    background: "none",
+                    border: "0.5px solid var(--wp-border)",
+                    borderRadius: 999,
+                    padding: "5px 12px",
+                    cursor: amImporting ? "default" : "pointer",
+                    opacity: amImporting ? 0.5 : 1,
+                    flexShrink: 0,
+                  }}
+                  data-testid="wp-apple-library-import-button"
+                >
+                  {amImporting ? "importing…" : "import now"}
+                </button>
+              </div>
+              {/* Progress bar */}
+              {amImporting && amImportProgress && (
+                <div style={{ marginTop: 8 }}>
+                  <p className="wp-mono" style={{ margin: "0 0 4px", fontSize: 11, color: "var(--wp-text-muted)" }}>
+                    {amImportProgress.received} songs received · {amImportProgress.resolved} matched
+                  </p>
+                  <div style={{ height: 2, background: "var(--wp-border)", borderRadius: 1 }}>
+                    {amImportProgress.total && amImportProgress.total > 0 && (
+                      <div style={{ height: "100%", background: "var(--wp-green, #C6F53F)", borderRadius: 1, width: `${Math.min(100, (amImportProgress.received / amImportProgress.total) * 100)}%`, transition: "width 0.4s" }} />
+                    )}
+                  </div>
+                </div>
+              )}
+              {/* Done state */}
+              {amImportDone && amImportProgress && !amImporting && (
+                <p className="wp-mono" style={{ margin: "8px 0 0", fontSize: 11, color: "var(--wp-text-muted)" }} data-testid="wp-apple-library-import-done">
+                  {amImportProgress.received} songs scanned · {amImportProgress.resolved} matched to recordings
+                </p>
+              )}
+              {/* Error state */}
+              {amImportError && (
+                <p className="wp-mono" style={{ margin: "8px 0 0", fontSize: 11, color: "var(--wp-danger, #c0605f)" }} data-testid="wp-apple-library-import-error">
+                  {amImportError}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

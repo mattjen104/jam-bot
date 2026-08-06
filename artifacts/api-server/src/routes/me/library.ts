@@ -3649,4 +3649,11 @@ export async function markOrphanedImportJobsAsError(_testUserIds?: number[]): Pr
   }
 }
 
+// ── Apple Music library import ───────────────────────────────────────────────
+// Client-driven: MusicKit JS paginates the user's Apple library in the browser
+// and POSTs each page here. The server resolves ISRCs and promotes resolved
+// rows to library_items.
+import { mountAppleLibraryImport } from "../../lore/apple-library-batch-endpoint.js";
+mountAppleLibraryImport(router);
+
 export default router;

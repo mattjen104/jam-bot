@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { proxyArtUrl } from "../lib/proxyArt";
 import { Link } from "wouter";
 import type { RecordingLink } from "@workspace/api-client-react";
@@ -9,9 +9,11 @@ import { KeepButton } from "./KeepButton";
 import { ShareButton } from "./ShareButton";
 import { DevicePicker } from "./DevicePicker";
 import { onArtError } from "../lib/rumours";
+import { toast } from "@/hooks/use-toast";
 import {
   AlertTriangle,
   ExternalLink,
+  FolderOpen,
   History,
   Loader2,
   Music2,
@@ -20,6 +22,7 @@ import {
   Radio,
   RefreshCw,
   Route as RouteIcon,
+  Settings,
   ShoppingBag,
   SkipForward,
   Youtube,
@@ -207,6 +210,46 @@ function attributionLine(ride: RideApi): string {
 // Main component
 // ---------------------------------------------------------------------------
 
+/**
+ * Cascade transparency chip — shows which service is currently playing.
+ * Tapping it opens the Connection Centre.
+ */
+function SourceChip({
+  source,
+  sourceLabel,
+  onOpenCentre,
+}: {
+  source: RideApi["source"];
+  sourceLabel: string | null;
+  onOpenCentre: () => void;
+}) {
+  if (!source || source === "preview" || !sourceLabel) return null;
+
+  const icon =
+    source === "youtube" ? (
+      <Youtube className="h-3 w-3 shrink-0" />
+    ) : source === "apple-music" ? (
+      <Music2 className="h-3 w-3 shrink-0" />
+    ) : source === "local-file" ? (
+      <FolderOpen className="h-3 w-3 shrink-0" />
+    ) : source === "bandcamp" ? (
+      <ShoppingBag className="h-3 w-3 shrink-0" />
+    ) : null;
+
+  return (
+    <button
+      type="button"
+      onClick={onOpenCentre}
+      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+      title="Open Connection Centre"
+      data-testid="ride-source-chip"
+    >
+      {icon}
+      Playing via {sourceLabel}
+    </button>
+  );
+}
+
 export function RideBar({
   ride,
   spotify,
@@ -217,6 +260,43 @@ export function RideBar({
   const cur = ride.current;
   if (!cur) return null;
 
+  // Fallback toast: fire once per source downgrade (e.g. Spotify → YouTube).
+  //
+  // PlayerProvider clears source to `null` before the cascade fires the next
+  // driver, so the real transition is e.g. `spotify → null → youtube` not
+  // `spotify → youtube` directly.  Using a plain prevSourceRef would see the
+  // `null` update and lose the Spotify context.
+  //
+  // Fix: keep a separate ref that only advances when source becomes a
+  // "preferred" service (spotify / apple-music).  Null and fallback sources
+  // do NOT update it, so the context survives through the null intermediate.
+  const lastPreferredSourceRef = useRef<"spotify" | "apple-music" | null>(null);
+  useEffect(() => {
+    const next = ride.source;
+    // Advance the preferred-source tracker.
+    if (next === "spotify" || next === "apple-music") {
+      lastPreferredSourceRef.current = next;
+      return; // no toast when switching *to* a preferred service
+    }
+    // Detect downgrade: preferred service had been active, now a fallback took over.
+    if (
+      lastPreferredSourceRef.current !== null &&
+      (next === "youtube" || next === "bandcamp")
+    ) {
+      const prevLabel =
+        lastPreferredSourceRef.current === "spotify" ? "Spotify" : "Apple Music";
+      const nextLabel = next === "youtube" ? "YouTube" : "Bandcamp";
+      toast({
+        title: `Switched to ${nextLabel}`,
+        description: `${prevLabel} wasn't available for this track. Reconnect for full quality.`,
+        duration: 4000,
+      });
+      // Clear so the same fallback session doesn't fire again on subsequent
+      // tracks that also use the fallback driver.
+      lastPreferredSourceRef.current = null;
+    }
+  }, [ride.source]);
+
   const isPlaying = ride.status === "playing";
   const isLoading = ride.status === "loading" || ride.seeking;
   // Any service driver (YouTube, Apple Music, or Spotify for devs) provides
@@ -224,7 +304,9 @@ export function RideBar({
   const onServiceDriver =
     ride.source === "spotify" ||
     ride.source === "youtube" ||
-    ride.source === "apple-music";
+    ride.source === "apple-music" ||
+    ride.source === "local-file" ||
+    ride.source === "bandcamp";
   const noPreview = cur.previewUrl === null && !onServiceDriver;
 
   const bestLink =
@@ -298,6 +380,17 @@ export function RideBar({
       {/* Tiered playback options panel */}
       <div className="border-b border-border/60 bg-background/40 px-5 py-2">
         <div className="flex flex-wrap items-center gap-2">
+          {/* Settings icon to open Connection Centre */}
+          <button
+            type="button"
+            onClick={ride.openConnectionCentre}
+            aria-label="Open Connection Centre"
+            data-testid="ride-connection-centre"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border px-2 py-1 font-mono text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+            title="Connection Centre — manage playback services"
+          >
+            <Settings className="h-3.5 w-3.5" />
+          </button>
 
           {/* ── Seamless service options (YouTube, Apple Music) ── */}
           {rankedSvcs.map((svc) => {
@@ -426,19 +519,29 @@ export function RideBar({
       </div>
 
       {/* Seek bar — interactive for full-track drivers that support seeking */}
-      {(ride.source === "youtube" || ride.source === "apple-music") && (
+      {(ride.source === "youtube" || ride.source === "apple-music" || ride.source === "local-file") && (
         <SeekBar
           progressMs={ride.progressMs}
           durationMs={ride.durationMs}
           onSeek={ride.seek}
         />
       )}
-      {/* Progress bar — read-only for Spotify and preview sources */}
-      {(ride.source === "spotify" || ride.source === "preview") && (
+      {/* Progress bar — read-only for Spotify, Bandcamp, and preview sources */}
+      {(ride.source === "spotify" || ride.source === "bandcamp" || ride.source === "preview") && (
         <ProgressBar
           progressMs={ride.progressMs}
           durationMs={ride.durationMs}
         />
+      )}
+      {/* Cascade transparency chip */}
+      {ride.source && ride.source !== "preview" && ride.sourceLabel && (
+        <div className="px-5 pb-1">
+          <SourceChip
+            source={ride.source}
+            sourceLabel={ride.sourceLabel}
+            onOpenCentre={ride.openConnectionCentre}
+          />
+        </div>
       )}
 
       <div className="flex items-center gap-4 px-5 py-3">
