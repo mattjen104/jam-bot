@@ -216,17 +216,20 @@ router.get("/me/recent-sets", h(async (req, res) => {
   const inLibSet = new Set([...libRows, ...softRows, ...seedRows].map((r) => r.akey));
 
   // ── Fetch artists for all visible runs via a single SQL query ──────────────
-  // Build an OR predicate matching each run's (station_id, show_id, date).
-  // At most 30 OR branches — fast given the date-bounded scan.
+  // Filter by the union of station IDs on this page + the same date bounds used
+  // by the main query (or the 180-day cutoff for unbounded windows).  This keeps
+  // the query shape stable regardless of page size, avoiding prepared-statement
+  // cache conflicts that arise from a variable-length OR predicate.
   const scanCutoff = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000);
+  const uniqueStationIds = [...new Set(pageRows.map((r) => r.stationId))];
+  // ARRAY[…]::integer[] pattern per drizzle raw-SQL convention (sql.array() absent).
+  const stationArray = sql`ARRAY[${sql.join(uniqueStationIds.map((id) => sql`${id}`), sql`, `)}]::integer[]`;
+  const effectiveLower = bounds.start ?? scanCutoff;
+  const upperBoundClause = bounds.end ? sql`AND s.played_at < ${bounds.end}` : sql``;
 
-  const runOrParts = pageRows.map((r) =>
-    r.showId != null
-      ? sql`(s.station_id = ${r.stationId} AND s.show_id = ${r.showId} AND DATE(s.played_at AT TIME ZONE 'UTC') = ${r.date}::date)`
-      : sql`(s.station_id = ${r.stationId} AND s.show_id IS NULL AND DATE(s.played_at AT TIME ZONE 'UTC') = ${r.date}::date)`,
-  );
-  const runFilter = sql.join(runOrParts, sql` OR `);
-
+  // EXISTS with a GROUP BY outer query causes "subquery uses ungrouped column"
+  // in Postgres (code 42803).  Use a LEFT JOIN on popular + bool_or() aggregate
+  // instead — the join key lower(trim(r.artist)) IS in the GROUP BY.
   const artistRes = await db.execute(sql`
     WITH popular AS (
       SELECT lower(trim(r2.artist)) AS akey
@@ -241,16 +244,17 @@ router.get("/me/recent-sets", h(async (req, res) => {
     SELECT
       s.station_id,
       s.show_id,
-      DATE(s.played_at AT TIME ZONE 'UTC') AS run_date,
-      lower(trim(r.artist))                AS akey,
-      min(trim(r.artist))                  AS name,
-      count(*)::int                        AS spins,
-      (EXISTS (
-        SELECT 1 FROM popular p WHERE p.akey = lower(trim(r.artist))
-      ))                                   AS popular
+      DATE(s.played_at AT TIME ZONE 'UTC')  AS run_date,
+      lower(trim(r.artist))                 AS akey,
+      min(trim(r.artist))                   AS name,
+      count(*)::int                         AS spins,
+      bool_or(pop.akey IS NOT NULL)         AS popular
     FROM spins s
-    JOIN recordings r ON r.mbid = s.mbid
-    WHERE (${runFilter})
+    JOIN recordings r  ON r.mbid = s.mbid
+    LEFT JOIN popular pop ON pop.akey = lower(trim(r.artist))
+    WHERE s.station_id = ANY(${stationArray})
+      AND s.played_at >= ${effectiveLower}
+      ${upperBoundClause}
       AND s.mbid IS NOT NULL
       AND r.artist !~* ${JUNK_ARTIST_SQL_RE}
     GROUP BY s.station_id, s.show_id, DATE(s.played_at AT TIME ZONE 'UTC'), lower(trim(r.artist))

@@ -4627,7 +4627,6 @@
    artist and flips its name to the library colour. */
 .fdrow__pop-sentence { color: hsl(var(--foreground) / 0.85); }
 .fdrow__t1 .fdrow__artist--pop { color: hsl(var(--accent)); }
-.fdrow__t1 .fdrow__artist--new { color: hsl(var(--canary)); }
 .fdrow__t1 .fdrow__artist--lib { color: hsl(var(--library)); }
 /* Artist names in the Also sentence that can be added — show pointer. */
 .fdrow__artist--addable { cursor: pointer; }

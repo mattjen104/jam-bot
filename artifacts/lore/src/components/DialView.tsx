@@ -192,7 +192,6 @@ function popArtistIsNew(a: PopularCrossingArtist): boolean {
 function popArtistCls(a: PopularCrossingArtist, inLib: boolean): string {
   if (inLib) return "fdrow__artist fdrow__artist--lib";
   if (a.popular) return "fdrow__artist fdrow__artist--pop";
-  if (popArtistIsNew(a)) return "fdrow__artist fdrow__artist--new";
   return "fdrow__artist fdrow__artist--set";
 }
 
@@ -225,7 +224,6 @@ function PopCrossingLine({ artists, seedsLower, onAdd }: {
 
   const span = (a: PopularCrossingArtist) => (
     <b key={a.name} className={popArtistCls(a, inLib(a))}>
-      {a.name}
       {!inLib(a) && (
         <button
           type="button"
@@ -234,6 +232,7 @@ function PopCrossingLine({ artists, seedsLower, onAdd }: {
           onClick={(e) => { e.stopPropagation(); onAdd(a.name); }}
         >＋</button>
       )}
+      {a.name}
     </b>
   );
   const nodes: ReactNode[] = [];
