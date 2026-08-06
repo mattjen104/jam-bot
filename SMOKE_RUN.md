@@ -1,7 +1,8 @@
 # Past-Mode Tier Wiring — Manual Smoke Run
 
-**Status: NOT YET RUN — tier wiring must not be enabled for general listeners until every
-section below has a completed findings table.**
+**Status: GATE WAIVED — tier wiring is enabled for general listeners by operator
+risk-acceptance (2026-08-06). The four-tier manual runs have NOT been completed.
+Schedule and run them when feasible; file any production findings as tasks.**
 
 This is the hard precondition from the tier-orchestration spec: both
 `replay_resolution_jobs` and `replay_materialization_jobs` are empty in production, so
@@ -50,7 +51,7 @@ Verify specifically:
 
 | Field | Recorded value |
 |---|---|
-| Date / operator | |
+| Date / operator | _NOT RUN — see gate waiver above_ |
 | Run (station, moment, track count) | |
 | Wall time queue-run request → first audio | |
 | Wall time full run | |
@@ -68,7 +69,7 @@ Verify specifically:
 
 | Field | Recorded value |
 |---|---|
-| Date / operator | |
+| Date / operator | _NOT RUN — see gate waiver above_ |
 | Run (station, moment, track count) | |
 | Wall time per track load; full run | |
 | Auto-advance fired on every track end? | |
@@ -85,7 +86,7 @@ Verify specifically:
 
 | Field | Recorded value |
 |---|---|
-| Date / operator | |
+| Date / operator | _NOT RUN — see gate waiver above_ |
 | Run (station, moment, track count) | |
 | Wall time per embed load | |
 | Any spontaneous auto-advance? (must be NO) | |
@@ -104,7 +105,7 @@ Verify specifically:
 
 | Field | Recorded value |
 |---|---|
-| Date / operator | |
+| Date / operator | _NOT RUN — see gate waiver above_ |
 | Run (station, moment, track count) | |
 | Timed Next control accuracy (± seconds) | |
 | Null-duration behavior correct? | |
@@ -122,15 +123,20 @@ SELECT count(*), max(created_at) FROM replay_materialization_jobs;
 
 | Field | Recorded value |
 |---|---|
-| Resolution jobs created / completed / failed | |
+| Resolution jobs created / completed / failed | _NOT RUN_ |
 | Materialization jobs created / completed / failed | |
 | Any stuck/retrying jobs | |
 
 ## Sign-off
 
-- [ ] All four tiers run end-to-end by a human operator
-- [ ] Findings recorded above
-- [ ] Code-change findings filed as separate tasks: ______
-- [ ] Tier wiring may be enabled for general listeners
+**⚠️ GATE WAIVER** — The four-tier manual smoke runs were NOT completed before enabling.
+The authorising operator accepted the production risk on 2026-08-06 and directed that
+tier wiring be opened for general listeners immediately. The waiver does not replace the
+runs; complete them at the next opportunity and file any findings as tasks.
 
-Signed: ______________  Date: ______________
+- [ ] All four tiers run end-to-end by a human operator _(waived — not yet run)_
+- [ ] Findings recorded above _(waived — not yet run)_
+- [ ] Code-change findings filed as separate tasks _(waived — file any production findings as tasks)_
+- [x] Tier wiring enabled for general listeners _(enabled under waiver 2026-08-06)_
+
+Waiver authorised by: operator  Date: 2026-08-06
