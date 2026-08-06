@@ -196,17 +196,29 @@ export async function runKexpDurationBackfill(
   }
 
   // -------------------------------------------------------------------
-  // 5. Record completion in the ledger
+  // 5. Record completion in the ledger — only when fully successful
+  //
+  // If any individual MBID fetch failed, do NOT write the ledger row.
+  // The next invocation will re-query recordings with null duration_ms
+  // and retry only the MBIDs that are still missing — making the job
+  // naturally resumable without needing an explicit retry list.
   // -------------------------------------------------------------------
-  await db.execute(
-    sql`INSERT INTO migration_completions (name) VALUES (${MIGRATION_NAME})
-        ON CONFLICT (name) DO NOTHING`,
-  );
-
-  console.info(
-    `[kexp-backfill] done — ` +
-    `updated: ${mbidsUpdated}, no-length: ${mbidsNoLength}, failed: ${mbidsFailed}`,
-  );
+  if (mbidsFailed === 0) {
+    await db.execute(
+      sql`INSERT INTO migration_completions (name) VALUES (${MIGRATION_NAME})
+          ON CONFLICT (name) DO NOTHING`,
+    );
+    console.info(
+      `[kexp-backfill] done — ` +
+      `updated: ${mbidsUpdated}, no-length: ${mbidsNoLength}`,
+    );
+  } else {
+    console.warn(
+      `[kexp-backfill] partial run — ` +
+      `updated: ${mbidsUpdated}, no-length: ${mbidsNoLength}, failed: ${mbidsFailed}. ` +
+      `Re-run to retry the failed MBIDs (completion ledger NOT written).`,
+    );
+  }
 
   return {
     skippedAlreadyDone: false,
