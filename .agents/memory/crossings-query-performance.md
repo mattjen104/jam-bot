@@ -30,7 +30,11 @@ Results are **unioned by stationSlug** (not inner-joined) so stations absent fro
 - `bustCrossingsCache` evicts both layers and calls `scheduleLifetimeCrossingsRefresh` (which writes to `lifetime_crossings_cache` as a belt-and-suspenders background table — not read by the hot path anymore, but kept for potential future use).
 
 ## Blended endpoint (GET /api/me/crossings/blended)
-Uses a single unbounded-WHERE scan with all-time aggregate counts inline (`aggregateLibHit` etc. without date filter) and windowed counts via FILTER clauses. No separate mbid-driven query — the blended endpoint aggregates all active users at once, so the per-user MBID approach doesn't apply.
+Uses the same two-query split as personal crossings:
+1. **Bounded rolling query** — `WHERE playedAt >= blendedScanCutoff (30 days)`: computes 24h / 7d / 30d rolling counts + topArtistNamesRaw for all active opted-in users combined.
+2. **Mbid-driven lifetime query** — `WHERE spins.mbid IN (blendedRelevantMbids)`: unbounded date range, fast via index; `blendedRelevantMbids` unions all active users' exact MBIDs + release-group expansions + artist matches.
+
+Results are merged by stationSlug — same pattern as personal crossings. Cache TTL is 60 s (single shared L1/L2 entry, not per-user).
 
 ## How to apply
 - New time-window fields (e.g. quarter-year) → add to the **bounded** rolling query only.
