@@ -111,6 +111,8 @@ import type {
   SongExploderClaimResponse,
   SongExploderEpisodeListResult,
   SpotifyDevicesResult,
+  SpotifyQueueRunRequest,
+  SpotifyQueueRunResult,
   SpotifyPlayRequest,
   SpotifyPlayResult,
   SpotifyPlayerState,
@@ -7190,6 +7192,29 @@ export const useSpotifyLogout = <
   TContext
 > => {
   return useMutation(getSpotifyLogoutMutationOptions(options));
+};
+
+/**
+ * Queue an entire replay run on the listener's Spotify Connect device in a
+ * single gapless call. uris must be spotify:track:<id> URIs already known
+ * client-side. Requires Premium and an active device. Never call per-track.
+ *
+ * @summary Queue an entire replay run on the listener's Spotify Connect device
+ */
+export const getSpotifyQueueRunUrl = () => {
+  return `/api/spotify/queue-run`;
+};
+
+export const spotifyQueueRun = async (
+  spotifyQueueRunRequest: SpotifyQueueRunRequest,
+  options?: RequestInit,
+): Promise<SpotifyQueueRunResult> => {
+  return customFetch<SpotifyQueueRunResult>(getSpotifyQueueRunUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(spotifyQueueRunRequest),
+  });
 };
 
 /**

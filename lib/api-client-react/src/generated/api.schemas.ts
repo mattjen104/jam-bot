@@ -2136,6 +2136,24 @@ export interface SpotifyStatus {
   product?: string | null;
 }
 
+/**
+ * Queue an entire replay run on the listener's Spotify Connect device in one
+ * gapless call. uris must be spotify:track:<id> URIs already known client-side
+ * (e.g. from recording links). Requires Premium and an active device.
+ * Never pass these per-track; always pass the full run at once.
+ */
+export interface SpotifyQueueRunRequest {
+  /** Spotify track URIs to queue, in playback order. */
+  uris: string[];
+  /** @nullable */
+  deviceId?: string | null;
+}
+
+export interface SpotifyQueueRunResult {
+  /** Number of tracks queued. */
+  queued: number;
+}
+
 export interface SpotifyPlayRequest {
   /** @minLength 1 */
   mbid: string;

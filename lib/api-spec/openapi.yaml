@@ -2546,6 +2546,59 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /spotify/queue-run:
+    post:
+      operationId: spotifyQueueRun
+      tags: [spotify]
+      summary: Queue an entire replay run on the listener's Spotify Connect device
+      description: >
+        Starts playing a list of spotify:track:<id> URIs in order on the
+        listener's Connect device — a single gapless call for the whole
+        past-crossing run. Requires Premium and an active (or pinned) device.
+        Never call this per-track; pass the full run's uris array at once.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SpotifyQueueRunRequest"
+      responses:
+        "200":
+          description: Run queued successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpotifyQueueRunResult"
+        "400":
+          description: uris missing or empty
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: No Spotify connection for this session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Spotify Premium required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: No active Spotify device
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Spotify not configured on the server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /spotify/pause:
     post:
       operationId: spotifyPause
@@ -6003,6 +6056,33 @@ components:
       required:
         - configured
         - connected
+    SpotifyQueueRunRequest:
+      type: object
+      description: >
+        Queue an entire replay run on the listener's Spotify Connect device in
+        one gapless call. uris must be spotify:track:<id> URIs already known
+        client-side (e.g. from recording links). Requires Premium and an active
+        device. Never pass these per-track; always pass the full run at once.
+      properties:
+        uris:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          description: Spotify track URIs to queue, in playback order.
+        deviceId:
+          type: ["string", "null"]
+          description: Target device id; omit or null to use the active device.
+      required:
+        - uris
+    SpotifyQueueRunResult:
+      type: object
+      properties:
+        queued:
+          type: integer
+          description: Number of tracks queued.
+      required:
+        - queued
     SpotifyPlayRequest:
       type: object
       properties:

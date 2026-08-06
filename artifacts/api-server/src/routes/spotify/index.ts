@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { Router, type IRouter, type Request, type Response } from "express";
-import { SpotifyPlayBody } from "@workspace/api-zod";
+import { SpotifyPlayBody, SpotifyQueueRunBody } from "@workspace/api-zod";
 import { db, recordingsTable, loreUsersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import {
@@ -15,6 +15,7 @@ import {
   getRawConnectionRow,
   resolveSpotifyTrack,
   playTrack,
+  playTracks,
   pausePlayback,
   resumePlayback,
   getPlayerState,
@@ -253,6 +254,49 @@ async function requireConnection(req: Request, res: Response) {
   }
   return conn;
 }
+
+/**
+ * POST /spotify/queue-run
+ *
+ * Queue an entire past-crossing run on the listener's Spotify Connect device
+ * in a single gapless call.  Accepts a list of spotify:track:<id> URIs already
+ * known client-side (from recording links), so no MBID resolution is needed.
+ *
+ * This is the Tier-1 playback path: one uris-array call for the whole run,
+ * never per-track commands.  Requires Premium and an active Connect device.
+ */
+router.post("/spotify/queue-run", async (req: Request, res: Response) => {
+  const parsed = SpotifyQueueRunBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "uris (non-empty array of Spotify track URIs) is required" });
+    return;
+  }
+  const conn = await requireConnection(req, res);
+  if (!conn) return;
+
+  if (conn.product && conn.product !== "premium") {
+    res.status(403).json({ error: "Spotify Premium is required for remote playback" });
+    return;
+  }
+
+  try {
+    await playTracks(conn.accessToken, parsed.data.uris, parsed.data.deviceId ?? null);
+    res.json({ queued: parsed.data.uris.length });
+  } catch (err) {
+    if (err instanceof SpotifyPlayError) {
+      const status =
+        err.code === "premium_required" ? 403
+        : err.code === "no_active_device" ? 409
+        : err.code === "rate_limited" ? 429
+        : 502;
+      const body: Record<string, unknown> = { error: err.message };
+      if (err.code === "rate_limited") body.retryAfter = err.retryAfterSecs ?? 30;
+      res.status(status).json(body);
+      return;
+    }
+    throw err;
+  }
+});
 
 router.post("/spotify/play", async (req: Request, res: Response) => {
   const parsed = SpotifyPlayBody.safeParse(req.body);

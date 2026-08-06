@@ -20,7 +20,7 @@ export type TimeOrientation = "live" | "past" | "curated";
 export type PlaybackMode = "passthrough" | "resolve_to_service";
 
 /** Connected remote-control service. */
-export type ConnectedService = "spotify" | "youtube" | "apple-music";
+export type ConnectedService = "spotify" | "youtube" | "apple-music" | "bandcamp";
 
 /**
  * One playback session — "tuned into this content, in this mode".
@@ -548,4 +548,151 @@ function recomputePrefetchDepth(tracker: ServicePrefetchTracker): ServicePrefetc
   const raw = Math.ceil(tracker.latencyEwma / tracker.cadenceEwma);
   const depth = Math.max(1, Math.min(PREFETCH_DEPTH_MAX, raw));
   return { ...tracker, depth };
+}
+
+// ---------------------------------------------------------------------------
+// Past-mode playback tier — derived from GUIDED_SERVICE_OPTIONS manifest
+// ---------------------------------------------------------------------------
+
+import type { GuidedServiceOption } from "../lib/guidedReplay";
+
+/**
+ * Playback tier for a past crossing moment.
+ *
+ *  1 — Spotify Connect: whole run queued in one `uris`-array call, gapless
+ *  2 — Embed + auto-advance (e.g. YouTube): IFrame ENDED handler advances
+ *  3 — Embed + manual advance (e.g. Bandcamp): listener taps next each track
+ *  4 — Cue sheet: timed "Next: {artist} — {title}" affordance
+ *
+ * Tier 0 (export) is already shipped and not represented here.
+ */
+export type PlaybackTier = 1 | 2 | 3 | 4;
+
+/** localStorage key for the last-used service preference. */
+export const LAST_USED_SERVICE_KEY = "lore:last-used-service";
+
+/** Read the last-used service from localStorage. Returns null when absent or unreadable. */
+export function readLastUsedService(): string | null {
+  try {
+    return typeof localStorage !== "undefined"
+      ? localStorage.getItem(LAST_USED_SERVICE_KEY)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Persist the last-used service to localStorage. */
+export function writeLastUsedService(service: string): void {
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(LAST_USED_SERVICE_KEY, service);
+    }
+  } catch {
+    // Ignore write failures
+  }
+}
+
+/**
+ * Derive the playback tier for a single `GUIDED_SERVICE_OPTIONS` entry.
+ *
+ * Derived exclusively from manifest fields — no per-service switch statements:
+ *  - `embedUrlBuilder && embedAutoAdvance` → Tier 2
+ *  - `embedUrlBuilder && !embedAutoAdvance` → Tier 3
+ *  - otherwise (external-only) → Tier 4
+ *
+ * A synthetic entry added to GUIDED_SERVICE_OPTIONS with `embedUrlBuilder +
+ * embedAutoAdvance` is treated as Tier 2 with no other code change — proves
+ * derivation from the manifest, not from a hardcoded per-service switch.
+ *
+ * Pure — deterministic, no side-effects.
+ */
+export function serviceOptionTier(option: GuidedServiceOption): PlaybackTier {
+  if (option.embedUrlBuilder) {
+    return option.embedAutoAdvance ? 2 : 3;
+  }
+  return 4;
+}
+
+/** Inputs for `selectPastModeTier`. */
+export interface PastModeTierOpts {
+  /** Spotify Connect availability for this listener. */
+  spotify: {
+    connected: boolean;
+    premium: boolean;
+    /** True when a pinned Connect device is reachable. */
+    hasActiveDevice: boolean;
+  };
+  /** Service options to evaluate (typically `GUIDED_SERVICE_OPTIONS`). */
+  guidedOptions: ReadonlyArray<GuidedServiceOption>;
+  /**
+   * The last-used service key from localStorage.  When set and achievable,
+   * returns that service's tier directly, overriding the best-available ranking.
+   * Ignored when the service is "spotify" but Spotify is not Tier-1 eligible.
+   */
+  lastUsedService?: string | null;
+}
+
+/**
+ * Select the highest achievable playback tier for a past crossing moment.
+ *
+ * Algorithm:
+ *  1. If `lastUsedService` is set and achievable, return its tier (preference
+ *     overrides the best-available ranking).
+ *  2. Otherwise return the minimum (best) tier across Spotify + all options.
+ *
+ * Pure — deterministic, no side-effects.
+ */
+export function selectPastModeTier(opts: PastModeTierOpts): PlaybackTier {
+  const { spotify, guidedOptions, lastUsedService } = opts;
+
+  const spotifyTier1Eligible =
+    spotify.connected && spotify.premium && spotify.hasActiveDevice;
+
+  // Honour the listener's last-used preference when it is achievable.
+  if (lastUsedService) {
+    if (lastUsedService === "spotify") {
+      if (spotifyTier1Eligible) return 1;
+      // Preferred but not eligible — fall through to best available.
+    } else {
+      const preferred = guidedOptions.find((o) => o.service === lastUsedService);
+      if (preferred) return serviceOptionTier(preferred);
+    }
+  }
+
+  // No preference (or preferred was ineligible) — find the best tier.
+  let best: PlaybackTier = 4;
+  if (spotifyTier1Eligible) best = 1;
+
+  for (const option of guidedOptions) {
+    const tier = serviceOptionTier(option);
+    if (tier < best) best = tier;
+  }
+
+  return best;
+}
+
+/**
+ * One-sentence tier announcement shown before a past-crossing replay starts.
+ *
+ * Clear, not apologetic. Copy frames the cue-sheet tier as a feature, not an
+ * apology or a promise of future support.
+ *
+ * Pure — deterministic, no side-effects.
+ */
+export function tierAnnouncementText(tier: PlaybackTier, serviceLabel?: string): string {
+  switch (tier) {
+    case 1:
+      return "This will play hands-free on Spotify";
+    case 2:
+      return serviceLabel
+        ? `${serviceLabel} will auto-advance through the run`
+        : "Audio will auto-advance through the run";
+    case 3:
+      return serviceLabel
+        ? `Each track opens in ${serviceLabel} — you'll advance manually`
+        : "Each track opens in a player — you'll advance manually";
+    case 4:
+      return "Follow the cue sheet to advance each track";
+  }
 }

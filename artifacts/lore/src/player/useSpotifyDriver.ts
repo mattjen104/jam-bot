@@ -73,7 +73,7 @@ export interface SpotifyDriverOpts {
    * the chosen alt driver takes over immediately.  Spotify Connect itself is
    * intentionally excluded from the user-facing options panel.
    */
-  preferredService?: "youtube" | "apple-music" | null;
+  preferredService?: "youtube" | "apple-music" | "bandcamp" | null;
 }
 
 // ---------------------------------------------------------------------------

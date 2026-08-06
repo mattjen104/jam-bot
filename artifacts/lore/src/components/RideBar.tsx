@@ -25,6 +25,7 @@ import {
   Settings,
   ShoppingBag,
   SkipForward,
+  StopCircle,
   Youtube,
   X,
 } from "lucide-react";
@@ -604,6 +605,28 @@ export function RideBar({
         </div>
       )}
 
+      {/* Past-mode tier announcement — one sentence, shown before playback
+          starts on a past crossing run. Cleared once the ride is fully active. */}
+      {ride.mode === "replay" && ride.timeOrientation === "past" && ride.pastModeTierAnnouncement && (
+        <div
+          className="mx-5 mb-2 rounded-md bg-primary/8 px-3 py-2 font-mono text-[11px] text-primary"
+          data-testid="past-tier-announcement"
+        >
+          {ride.pastModeTierAnnouncement}
+        </div>
+      )}
+
+      {/* Past-mode hard-stop failure state — no retry, no silent downgrade */}
+      {ride.pastRunFailed && (
+        <div
+          className="mx-5 mb-2 flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-2 font-mono text-[11px] text-destructive"
+          data-testid="past-run-failed"
+        >
+          <StopCircle className="h-3.5 w-3.5 shrink-0" />
+          Replay stopped — a track in this run couldn't be loaded from the connected service.
+        </div>
+      )}
+
       <div className="flex items-center gap-4 px-5 py-3">
         <span
           className="hidden shrink-0 items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 font-mono text-[13px] uppercase tracking-wide text-primary sm:inline-flex"
@@ -723,6 +746,32 @@ export function RideBar({
           <X className="h-4 w-4" />
         </button>
       </div>
+
+      {/* Past-mode Tier 4 cue sheet: large "Next: artist — title" affordance.
+          Visible when ride.cueSheetVisible && ride.cueSheetNext.  When
+          spinDurationSeconds is null (42.3% of spins) this appears immediately
+          and stays visible — a common case, not an edge case.  Copy frames the
+          situation honestly — no apology, no promise of future support. */}
+      {ride.cueSheetVisible && ride.cueSheetNext && (
+        <div className="px-5 pb-3" data-testid="past-cue-sheet">
+          <button
+            type="button"
+            onClick={ride.next}
+            data-testid="past-cue-next"
+            className="hover-elevate flex w-full items-center gap-3 rounded-lg border border-primary/40 bg-primary/8 px-4 py-3 text-left transition-colors hover:bg-primary/15"
+          >
+            <SkipForward className="h-5 w-5 shrink-0 text-primary" />
+            <span className="min-w-0">
+              <span className="block font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+                Next
+              </span>
+              <span className="block truncate font-serif text-sm font-semibold text-foreground">
+                {ride.cueSheetNext.artist} — {ride.cueSheetNext.title}
+              </span>
+            </span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

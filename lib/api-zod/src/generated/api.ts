@@ -4260,6 +4260,11 @@ export const GetSpotifyStatusResponse = zod
  * @summary Play a recording (full track) on the listener's own Spotify
  */
 
+export const SpotifyQueueRunBody = zod.object({
+  uris: zod.array(zod.string().min(1)).min(1),
+  deviceId: zod.string().nullish(),
+});
+
 export const SpotifyPlayBody = zod.object({
   mbid: zod.string().min(1),
   deviceId: zod

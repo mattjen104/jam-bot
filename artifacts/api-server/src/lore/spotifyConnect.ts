@@ -597,6 +597,24 @@ export async function playTrack(
   throwPlayError(first, "play");
 }
 
+/**
+ * Queue an ordered list of Spotify track URIs as a single gapless playlist on
+ * the listener's active Connect device. Used for Tier-1 past-crossing runs —
+ * the entire run is front-loaded in one call instead of per-track commands.
+ */
+export async function playTracks(
+  accessToken: string,
+  uris: string[],
+  deviceId?: string | null,
+): Promise<void> {
+  const path = deviceId
+    ? `/me/player/play?device_id=${encodeURIComponent(deviceId)}`
+    : "/me/player/play";
+  const result = await playerRequest(accessToken, "PUT", path, { uris });
+  if (result.status === 202 || result.status === 204 || result.status === 200) return;
+  throwPlayError(result, "play");
+}
+
 /** Pause; a missing device is treated as already-paused (idempotent). */
 export async function pausePlayback(accessToken: string): Promise<void> {
   const result = await playerRequest(accessToken, "PUT", "/me/player/pause");

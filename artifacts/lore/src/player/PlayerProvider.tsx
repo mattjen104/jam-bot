@@ -14,10 +14,12 @@ import {
   getRecordingSegues,
   getRecordingPreview,
   getRecordingSupport,
+  getSpotifyPlayer,
   getStationNowPlaying,
   spotifyPlay,
   spotifyPause,
   spotifyResume,
+  spotifyQueueRun,
   useListStations,
   type RecordingLink,
   type SegueNext,
@@ -33,24 +35,35 @@ import {
 import {
   type TimeOrientation,
   type PlaybackMode,
+  type PlaybackTier,
   isLiveServiceRide,
   checkDeviceContinuity,
   readStoredPlaybackMode,
   writeStoredPlaybackMode,
+  readLastUsedService,
+  writeLastUsedService,
   createServicePrefetchTracker,
   observeMaterializationLatency,
   observeScrubCadence,
+  selectPastModeTier,
+  serviceOptionTier,
+  tierAnnouncementText,
   type ServicePrefetchTracker,
 } from "./playbackSession";
+import { GUIDED_SERVICE_OPTIONS } from "../lib/guidedReplay";
 
 // ---------------------------------------------------------------------------
 // Spotify deep-link helper — pure, lives outside the component
 // ---------------------------------------------------------------------------
 
 /**
- * Extracts a `spotify:track/<id>` URI from the recording's links array.
+ * Extracts a `spotify:track:<id>` URI from the recording's links array.
  * Returns null when no Spotify link is present.  Falls back gracefully when
  * the URL is malformed.
+ *
+ * The returned URI uses colons (`spotify:track:<id>`) — the standard Spotify
+ * URI scheme accepted by the Connect API and by deep-link protocol handlers
+ * on all platforms.
  */
 function extractSpotifyDeepLink(links: RecordingLink[]): string | null {
   for (const link of links) {
@@ -61,7 +74,7 @@ function extractSpotifyDeepLink(links: RecordingLink[]): string | null {
       const trackIdx = parts.indexOf("track");
       if (trackIdx >= 0 && trackIdx + 1 < parts.length) {
         const id = parts[trackIdx + 1];
-        if (id) return `spotify:track/${id}`;
+        if (id) return `spotify:track:${id}`;
       }
     } catch {
       // malformed URL — ignore
@@ -98,6 +111,8 @@ export interface RideItem {
   links: RecordingLink[];
   previewUrl?: string | null;
   attribution: RideAttribution | null;
+  /** Spin duration in seconds, from the broadcast record. Used by Tier-4 cue sheet. */
+  spinDurationSeconds?: number | null;
 }
 
 export type RideStatus =
@@ -115,6 +130,8 @@ export interface RideSeed {
   artist: string;
   artworkUrl: string | null;
   links: RecordingLink[];
+  /** Spin duration in seconds, from the broadcast record. Used by Tier-4 cue sheet. */
+  spinDurationSeconds?: number | null;
 }
 
 /** Options for starting a trail ride. */
@@ -315,14 +332,14 @@ export interface RideApi {
    * Explicitly selected playback service.  When set, the driver cascade
    * starts from this service, bypassing Spotify.  Null = default cascade.
    */
-  preferredService: "youtube" | "apple-music" | null;
+  preferredService: "youtube" | "apple-music" | "bandcamp" | null;
 
   /**
    * Explicitly select a service to drive playback.  Sets playback mode to
    * resolve_to_service and stops any currently-active driver.  Null clears
    * the preference (keeps the last playback mode).
    */
-  setPreferredService: (svc: "youtube" | "apple-music" | null) => void;
+  setPreferredService: (svc: "youtube" | "apple-music" | "bandcamp" | null) => void;
 
   /**
    * ⚠️ FLAGGED — companion-mode live-to-past crossing detected.
@@ -361,6 +378,45 @@ export interface RideApi {
    * The UI must show "Finding this on [Service]…" rather than silence.
    */
   bufferOutrun: boolean;
+
+  // ---- Past-mode tier orchestration ----------------------------------------
+
+  /**
+   * Playback tier selected for this past crossing run.
+   *  1 = Spotify Connect (whole run queued gaplessly in one call)
+   *  2 = Embed + auto-advance (e.g. YouTube IFrame ENDED)
+   *  3 = Embed + manual advance (e.g. Bandcamp)
+   *  4 = Cue sheet (timed "Next: {artist} — {title}" affordance)
+   * Null when not in past-mode replay.
+   */
+  pastModeTier: PlaybackTier | null;
+
+  /**
+   * One-sentence announcement of which tier applies, shown before playback
+   * starts on a past crossing. Null when not in past-mode replay.
+   */
+  pastModeTierAnnouncement: string | null;
+
+  /**
+   * True when the Tier-4 cue sheet "Next: {artist} — {title}" control should
+   * be visible. Becomes true after `spinDurationSeconds` for the current track
+   * (or immediately when `spinDurationSeconds` is null/unknown — a common case:
+   * 42.3% of all-time spins have no recorded duration).
+   */
+  cueSheetVisible: boolean;
+
+  /**
+   * The next item in the replay queue — shown in the Tier-4 cue sheet control.
+   * Null when on the last track or when not in past-mode Tier-4.
+   */
+  cueSheetNext: { artist: string; title: string } | null;
+
+  /**
+   * True when service resolution failed mid-run and the ride stopped.
+   * Never silently downgrades to a lower tier — the dial surfaces this state
+   * explicitly so the listener knows why playback stopped.
+   */
+  pastRunFailed: boolean;
 }
 
 /** One scan hop — the preview currently sounding during a preview-mode scan. */
@@ -562,7 +618,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   );
 
   // Options-panel state: explicit service preference + derived async fields.
-  const [preferredService, setPreferredServiceState] = useState<"youtube" | "apple-music" | null>(null);
+  const [preferredService, setPreferredServiceState] = useState<"youtube" | "apple-music" | "bandcamp" | null>(null);
   const [bandcampAlbumUrl, setBandcampAlbumUrl] = useState<string | null>(null);
   // True once Apple Music has successfully played a track this session.
   const [appleMusicConnected, setAppleMusicConnected] = useState(false);
@@ -571,6 +627,30 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // live broadcast resume when the user explicitly selected a service that
   // then failed — ensuring audio never goes silent on a live ride.
   const [altDriversAllFailed, setAltDriversAllFailed] = useState(false);
+
+  // Past-mode tier orchestration state.
+  const [pastModeTier, setPastModeTier] = useState<PlaybackTier | null>(null);
+  const [pastModeTierLabel, setPastModeTierLabel] = useState<string | null>(null);
+  const [cueSheetVisible, setCueSheetVisible] = useState(false);
+  const [pastRunFailed, setPastRunFailed] = useState(false);
+  // One-shot flag: true once the Tier-1 uris-array queue call has fired for
+  // the current ride. Reset in stop() and startReplay(). Stored as a ref so
+  // the effect can read/write it without triggering extra re-renders.
+  const tier1RunQueuedRef = useRef(false);
+  // Set of MBIDs currently being link-fetched by the Tier-1 prefetch effect.
+  const tier1FetchingRef = useRef<Set<string>>(new Set());
+  // True once ALL Tier-1 link-prefetch fetches for the current ride have
+  // completed (resolved or errored). Resets to false on each new ride start.
+  // Added to queue-run effect deps so validation only fires after all links
+  // are resolved — prevents silent partial-URI queue calls.
+  const [tier1LinkBatchDone, setTier1LinkBatchDone] = useState(false);
+  // One-shot flag: true once the Tier-2/3 deferred service-driver activation
+  // effect has run for the current ride. Reset on each new ride start.
+  const tierRefinedRef = useRef(false);
+  // Set of MBIDs whose links are currently being fetched by the Tier-2/3
+  // independent link-hydration effect. Prevents double-fetches when the
+  // current item changes before a prior fetch completes.
+  const tier23LinkFetchingRef = useRef<Set<string>>(new Set());
 
   // ⚠️ FLAGGED — live-to-past pipeline crossing interstitial.
   // Set when the audio pipeline crosses from live broadcast to past replay.
@@ -709,6 +789,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setDeviceCheckPending(false);
     // NOTE: deviceContinuityCheckedRef is NOT reset here — it is a session-level
     // flag (once per session, not once per ride).
+    // Reset past-mode tier state.
+    setPastModeTier(null);
+    setPastModeTierLabel(null);
+    setCueSheetVisible(false);
+    setPastRunFailed(false);
+    tier1RunQueuedRef.current = false;
+    tier1FetchingRef.current = new Set();
+    setTier1LinkBatchDone(false);
+    tierRefinedRef.current = false;
+    tier23LinkFetchingRef.current = new Set();
   }, []);
 
   const start = useCallback(
@@ -805,6 +895,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         // Keep armed if set by the crossing above; otherwise leave untouched.
         return prev;
       });
+      // Clear past-mode tier state — trail rides do not use tier orchestration.
+      setPastModeTier(null);
+      setPastModeTierLabel(null);
+      setCueSheetVisible(false);
+      setPastRunFailed(false);
+      tier1RunQueuedRef.current = false;
+      tier1FetchingRef.current = new Set();
+      setTier1LinkBatchDone(false);
+      tierRefinedRef.current = false;
+      tier23LinkFetchingRef.current = new Set();
       setTimeOrientation(newOrientation);
       setQueue([
         {
@@ -916,6 +1016,58 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
       // Ghost-radio station runs are 'past'; curated picker runs are 'curated'.
       setTimeOrientation(newOrientation);
+      // Reset past-mode tier state for the new ride.
+      tier1RunQueuedRef.current = false;
+      tier1FetchingRef.current = new Set();
+      setTier1LinkBatchDone(false);
+      tierRefinedRef.current = false;
+      tier23LinkFetchingRef.current = new Set();
+      setPastRunFailed(false);
+      setCueSheetVisible(false);
+      // Compute playback tier for past-orientation rides from the connected services.
+      if (newOrientation === "past") {
+        const tier = selectPastModeTier({
+          spotify: {
+            connected: spotify.connected,
+            premium: spotify.premium,
+            hasActiveDevice: !!spotify.pinnedDevice,
+          },
+          guidedOptions: GUIDED_SERVICE_OPTIONS,
+          lastUsedService: readLastUsedService(),
+        });
+        let label: string | null = null;
+        if (tier === 1) {
+          label = "Spotify";
+        } else {
+          const opt = GUIDED_SERVICE_OPTIONS.find((o) => serviceOptionTier(o) === tier);
+          label = opt?.label ?? null;
+        }
+        setPastModeTier(tier);
+        setPastModeTierLabel(label);
+        // Record the chosen service so next time the listener's preference is honoured.
+        if (tier === 1) {
+          writeLastUsedService("spotify");
+          // Tier 1 must run in resolve_to_service mode.  If the listener has
+          // passthrough persisted (e.g. they have never opened Settings), the
+          // queue-run effect would never fire while the audio path is already
+          // suppressed, producing silence.  Switch explicitly here.
+          writeStoredPlaybackMode("resolve_to_service");
+          setPlaybackModeState("resolve_to_service");
+        } else if (label) {
+          const opt = GUIDED_SERVICE_OPTIONS.find((o) => serviceOptionTier(o) === tier);
+          if (opt) writeLastUsedService(opt.service);
+        }
+        // Tier 2 / Tier 3: embed driver activation is deferred to the
+        // `tierRefinedEffect` below.  That effect fires once the current item's
+        // links resolve, tests each candidate option's `embedUrlBuilder` against
+        // the real link URLs, and picks the best service (honouring
+        // `lastUsedService`).  Deferred activation makes Tier 3 (Bandcamp)
+        // reachable for runs that only have Bandcamp links, and hard-stops to
+        // Tier 4 when no embed service can handle the run — honest, not silent.
+      } else {
+        setPastModeTier(null);
+        setPastModeTierLabel(null);
+      }
       setQueue(
         seeds.map((seed) => ({
           mbid: seed.mbid,
@@ -924,6 +1076,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           artworkUrl: seed.artworkUrl,
           links: seed.links,
           attribution: null,
+          spinDurationSeconds: seed.spinDurationSeconds ?? null,
         })),
       );
       // "Hear it in context": start mid-run when asked (clamped to the queue),
@@ -1207,7 +1360,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     // Spotify driver must not command the connected device. Passing
     // `active && !interstitialArmed` suppresses the driver's play effect for
     // the entire crossing window (silence placeholder or real Lore tone).
-    active: active && !interstitialArmed,
+    // ⚠️ Tier 1 past-mode gate: when the bulk uris-array queue call owns the
+    // run, suppress the Spotify driver's per-track play commands entirely so
+    // they do not race with the single queue-run call.
+    active:
+      active &&
+      !interstitialArmed &&
+      !(pastModeTier === 1 && timeOrientation === "past" && mode === "replay"),
     playbackMode,
     timeOrientation,
     currentItem,
@@ -1390,7 +1549,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
    * selected service takes over the current track immediately.
    */
   const setPreferredService = useCallback(
-    (svc: "youtube" | "apple-music" | null) => {
+    (svc: "youtube" | "apple-music" | "bandcamp" | null) => {
       setPreferredServiceState(svc);
       if (svc) {
         // Ensure service-ride mode is active.
@@ -1476,13 +1635,18 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   //   Local file → Apple Music → Bandcamp → YouTube
   // Called after Spotify fails, and again when any driver fails so the next
   // one in the ladder gets a chance before we drop to preview/broadcast.
-  const tryAltDriverRef = useRef<(mbid: string, item: RideItem, skipApple: boolean) => void>(
-    () => {},
-  );
+  const tryAltDriverRef = useRef<
+    (mbid: string, item: RideItem, skipApple: boolean, skipBandcamp?: boolean) => void
+  >(() => {});
   // Defined after the subscriptions below so the closures can call it recursively.
   // The ref indirection avoids a dependency cycle.
   useEffect(() => {
-    tryAltDriverRef.current = (mbid: string, item: RideItem, skipApple: boolean) => {
+    tryAltDriverRef.current = (
+      mbid: string,
+      item: RideItem,
+      skipApple: boolean,
+      skipBandcamp = false,
+    ) => {
       // ⚠️ FLAGGED — interstitial gate.
       // While the live→past interstitial is armed, no driver may command audio.
       // We read from the ref (not state) so this closure always sees the latest
@@ -1498,7 +1662,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           // No local file for this track — cascade to Apple Music.
           altDriverFailedRef.current.add(`lf:${mbid}`);
           setAltDriverActiveMbid(null);
-          tryAltDriverRef.current(mbid, item, skipApple);
+          // Preserve both skip flags so the caller's intent carries through.
+          tryAltDriverRef.current(mbid, item, skipApple, skipBandcamp);
         });
         return;
       }
@@ -1513,20 +1678,23 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           // play() itself threw (no token, etc.) — cascade to Bandcamp.
           altDriverFailedRef.current.add(`am:${mbid}`);
           setAltDriverActiveMbid(null);
-          tryAltDriverRef.current(mbid, item, true);
+          // Preserve skipBandcamp so a Tier-2 run still reaches YouTube.
+          tryAltDriverRef.current(mbid, item, true, skipBandcamp);
         });
         return;
       }
 
-      // ── Bandcamp embed: last resort before YouTube ────────────────────────
+      // ── Bandcamp embed ────────────────────────────────────────────────────
+      // Skipped when skipBandcamp=true (Tier 2 / YouTube preferred — go
+      // directly to YouTube without stopping at Bandcamp first).
       const failedBc = altDriverFailedRef.current.has(`bc:${mbid}`);
-      if (!failedBc) {
+      if (!failedBc && !skipBandcamp) {
         pauseRadio?.();
         setAltDriverActiveMbid(mbid);
         void bandcampDriver.play(item).catch(() => {
           altDriverFailedRef.current.add(`bc:${mbid}`);
           setAltDriverActiveMbid(null);
-          tryAltDriverRef.current(mbid, item, true);
+          tryAltDriverRef.current(mbid, item, true, false);
         });
         return;
       }
@@ -1564,8 +1732,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (interstitialArmed) return; // gate: do not start any driver while crossing
     if (altDriverActiveMbid === currentMbid) return; // already driving this track
     if (driverActive) return; // Spotify or an alt driver is already carrying audio
-    const skipApple = preferredService === "youtube";
-    tryAltDriverRef.current(currentMbid, currentItem, skipApple);
+    // Skip Apple Music when the listener chose YouTube (Tier 2, go straight to
+    // YouTube) or Bandcamp (Tier 3, land on Bandcamp, not Apple Music).
+    const skipApple = preferredService === "youtube" || preferredService === "bandcamp";
+    // Skip Bandcamp when YouTube was selected (Tier 2): the cascade must reach
+    // YouTube directly so the IFrame ENDED auto-advance path is used.
+    // Not set for Bandcamp (Tier 3) — we want to land on Bandcamp.
+    const skipBandcamp = preferredService === "youtube";
+    tryAltDriverRef.current(currentMbid, currentItem, skipApple, skipBandcamp);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, preferredService, currentMbid, currentItem, playbackMode, interstitialArmed, altDriverActiveMbid, driverActive]);
 
@@ -2131,6 +2305,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       return undefined;
     }
     if (driverActive) return undefined; // a service driver carries this track
+    // Tier 1 past mode: the bulk queue-run owns the entire run — no per-track
+    // preview fetch or audio element use; Spotify advances autonomously.
+    if (pastModeTier === 1 && mode === "replay" && timeOrientation === "past") {
+      return undefined;
+    }
     // For live fallback, the broadcast carries the audio — no preview needed.
     // Guard on effectiveFallbackUsed so the preferredService path (where
     // Spotify is never attempted) also skips preview after all drivers fail.
@@ -2194,9 +2373,22 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       return undefined;
     }
 
-    // Resolved but no preview available — auto-advance so the ride keeps
-    // flowing; the track stays visible in the queue with its link-outs.
+    // Resolved but no preview available.
     if (currentPreview === null) {
+      // Past-mode replay with a service tier: do NOT silently skip to the next
+      // track. Instead stop and surface an explicit failure state so the listener
+      // knows why playback halted. No silent downgrade to a lower tier mid-run.
+      if (
+        timeOrientation === "past" &&
+        mode === "replay" &&
+        playbackMode === "resolve_to_service" &&
+        effectiveFallbackUsed
+      ) {
+        setPastRunFailed(true);
+        setStatus("error");
+        return undefined;
+      }
+      // For all other modes: auto-advance so the ride keeps flowing.
       if (hasNextHop) {
         const t = setTimeout(() => {
           if (token === rideRef.current) setIndex((i) => i + 1);
@@ -2232,6 +2424,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     driverActive,
     playbackMode,
     timeOrientation,
+    mode,
+    effectiveFallbackUsed,
     fallbackUsed,
   ]);
 
@@ -2313,6 +2507,315 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     [active, radio, stop],
   );
 
+  // ---------------------------------------------------------------------------
+  // Past-mode Tier 1: link prefetch — resolve all queue items' links before the
+  // uris-array queue call fires.  Seeds arrive with links:[] from startReplay;
+  // this effect calls getRecording for each empty-links item, patches the queue
+  // by MBID, and sets tier1LinkBatchDone once all fetches complete.  The queue-
+  // run effect below gates on tier1LinkBatchDone so it never fires with stale
+  // empty-link items and never silently drops tracks from the URI array.
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (!active || pastModeTier !== 1 || mode !== "replay" || timeOrientation !== "past") return;
+    if (tier1RunQueuedRef.current) return; // queue-run already fired; skip re-prefetch
+
+    const token = rideRef.current;
+    const slice = queue.slice(index);
+
+    // Items already with links — or already in-flight — are "not pending".
+    const pending = slice.filter(
+      (item) => item.links.length === 0 && !tier1FetchingRef.current.has(item.mbid),
+    );
+
+    if (pending.length === 0) {
+      // All items already have links (or nothing is left to fetch).
+      // If nothing is also in-flight, the batch is complete.
+      if (tier1FetchingRef.current.size === 0) {
+        setTier1LinkBatchDone(true);
+      }
+      // else: in-flight fetches are running — their .finally() handlers will
+      // call setTier1LinkBatchDone(true) once the last one completes.
+      return;
+    }
+
+    for (const item of pending) {
+      const targetMbid = item.mbid;
+      tier1FetchingRef.current.add(targetMbid);
+
+      void getRecording(targetMbid)
+        .catch(() => null)
+        .then((node) => {
+          if (token !== rideRef.current) return;
+          setQueue((q) =>
+            q.map((qi) =>
+              qi.mbid === targetMbid
+                ? { ...qi, links: qi.links.length ? qi.links : (node?.links ?? []) }
+                : qi,
+            ),
+          );
+        })
+        .finally(() => {
+          tier1FetchingRef.current.delete(targetMbid);
+          if (token !== rideRef.current) return;
+          // Set batch done once the last in-flight fetch completes.
+          if (tier1FetchingRef.current.size === 0) {
+            setTier1LinkBatchDone(true);
+          }
+        });
+    }
+  }, [active, pastModeTier, mode, timeOrientation, queue, index]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ---------------------------------------------------------------------------
+  // Past-mode Tier 1: queue the entire run in one Spotify uris-array call.
+  //
+  // Gates on `tier1LinkBatchDone` — all queue items must have been through the
+  // getRecording link-prefetch before this fires, preventing silent drops.
+  //
+  // Hard-stops if any item is still missing a Spotify URI after prefetch: no
+  // silent filtering, no shorter-than-expected runs.
+  //
+  // Fires once per ride (tier1RunQueuedRef one-shot). The Spotify driver still
+  // polls track progress — the bulk queue call front-loads all URIs so Spotify
+  // advances gaplessly without per-track commands from Lore.
+  // ---------------------------------------------------------------------------
+  const currentItemForTier1 = queue[index];
+  useEffect(() => {
+    if (!active) return;
+    if (mode !== "replay") return;
+    if (timeOrientation !== "past") return;
+    if (pastModeTier !== 1) return;
+    if (playbackMode !== "resolve_to_service") return;
+    if (tier1RunQueuedRef.current) return; // already queued for this ride
+    if (!spotify.connected || !spotify.premium) return;
+    // Gate: all link-prefetch fetches must have completed.
+    if (!tier1LinkBatchDone) return;
+
+    // Collect Spotify URIs from all queue items at or after the current index.
+    // Hard-stop if ANY item is missing a URI — no silent filtering.
+    const slice = queue.slice(index);
+    const uris: string[] = [];
+    for (const item of slice) {
+      const uri = extractSpotifyDeepLink(item.links);
+      if (!uri) {
+        // A queue item has no Spotify URI even after link prefetch — hard stop.
+        tier1RunQueuedRef.current = true; // prevent re-fire
+        setPastRunFailed(true);
+        setStatus("error");
+        return;
+      }
+      uris.push(uri);
+    }
+    if (uris.length === 0) return;
+
+    tier1RunQueuedRef.current = true;
+    void spotifyQueueRun({
+      uris,
+      deviceId: spotify.pinnedDevice?.id ?? null,
+    }).catch(() => {
+      // Queue call failed — keep tier1RunQueuedRef.current = true so this effect
+      // cannot re-fire and the per-track driver cannot silently resume.
+      // Surface a hard stop: no silent downgrade to a lower tier.
+      setPastRunFailed(true);
+      setStatus("error");
+    });
+  }, [
+    active,
+    mode,
+    timeOrientation,
+    pastModeTier,
+    playbackMode,
+    queue,
+    index,
+    spotify.connected,
+    spotify.premium,
+    spotify.pinnedDevice,
+    tier1LinkBatchDone,
+    // intentionally omit currentItemForTier1 — links are part of queue
+  ]);
+
+  // ---------------------------------------------------------------------------
+  // Past-mode Tier 1: index synchronisation with Spotify's autonomous
+  // playlist advancement.
+  //
+  // The bulk queue-run hands control to Spotify — Spotify advances tracks
+  // without any per-track command from Lore.  This effect polls the Spotify
+  // player state every 3 seconds, maps the currently-playing URI back to the
+  // matching queue item, and calls setIndex() so the ride bar and cue-sheet
+  // affordances stay in sync with what Spotify is actually playing.
+  //
+  // Runs whenever Tier 1 is active and the queue-run ref is set.  Uses a
+  // functional setIndex update to avoid capturing a stale index closure while
+  // still detecting advances (including mid-run joins).
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (!active) return undefined;
+    if (mode !== "replay" || timeOrientation !== "past" || pastModeTier !== 1) return undefined;
+    if (pastRunFailed) return undefined;
+
+    const rideToken = rideRef.current;
+    const id = setInterval(() => {
+      // Wait until the queue-run has been dispatched before polling.
+      if (!tier1RunQueuedRef.current) return;
+      if (rideToken !== rideRef.current) return; // stale ride
+
+      void getSpotifyPlayer()
+        .then((st) => {
+          if (rideToken !== rideRef.current) return;
+          if (!st?.trackUri || !st.isPlaying) return;
+
+          const playingUri = st.trackUri;
+          setIndex((currentIdx) => {
+            // Find the queue item whose Spotify URI matches what is playing.
+            const matchIdx = queue.findIndex(
+              (item) => extractSpotifyDeepLink(item.links) === playingUri,
+            );
+            // Only advance — never step backward — unless Spotify jumped ahead.
+            if (matchIdx !== -1 && matchIdx !== currentIdx) return matchIdx;
+            return currentIdx;
+          });
+        })
+        .catch(() => {
+          // Transient poll failure — keep riding; next tick retries.
+        });
+    }, 3000);
+
+    return () => clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, mode, timeOrientation, pastModeTier, pastRunFailed, queue]);
+
+  // ---------------------------------------------------------------------------
+  // Past-mode Tier 2/3: independent current-item link hydration.
+  //
+  // Seeds arrive with links:[] from startReplay.  The preview-resolution play
+  // effect calls getRecording() for the current item, but only when it also
+  // fetches a preview URL — if previewUrl gets resolved through another path
+  // (e.g. adaptive look-ahead when the listener advanced from the previous
+  // track), getRecording() is never called and links stay [].  The
+  // tierRefinedEffect gates on currentItem.links.length > 0, so it would
+  // stall indefinitely.
+  //
+  // This effect independently hydrates the current item's links for Tier 2/3
+  // regardless of preview resolution.  It is idempotent (tier23LinkFetchingRef
+  // deduplicates) and fires whenever the current item has no links.
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (!active || mode !== "replay" || timeOrientation !== "past") return;
+    if (pastModeTier !== 2 && pastModeTier !== 3) return;
+    if (!currentMbid) return;
+    if (currentItem && currentItem.links.length > 0) return; // already hydrated
+    if (tier23LinkFetchingRef.current.has(currentMbid)) return; // in flight
+
+    const token = rideRef.current;
+    const targetMbid = currentMbid;
+    tier23LinkFetchingRef.current.add(targetMbid);
+
+    void getRecording(targetMbid)
+      .catch(() => null)
+      .then((node) => {
+        if (token !== rideRef.current) return;
+        setQueue((q) =>
+          q.map((qi) =>
+            qi.mbid === targetMbid
+              ? { ...qi, links: qi.links.length ? qi.links : (node?.links ?? []) }
+              : qi,
+          ),
+        );
+      })
+      .finally(() => {
+        tier23LinkFetchingRef.current.delete(targetMbid);
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, mode, timeOrientation, pastModeTier, currentMbid, currentItem?.links.length]);
+
+  // ---------------------------------------------------------------------------
+  // Past-mode Tier 2/3: deferred embed-driver activation.
+  //
+  // Seeds arrive with links:[] from startReplay (resolved lazily by the play
+  // effect OR by the independent hydration effect above).  Calling
+  // setPreferredService at startReplay time would lock in a service before we
+  // know whether its embedUrlBuilder can actually produce an embed URL for this
+  // run's links.
+  //
+  // This effect fires once per ride (tierRefinedRef one-shot) when the current
+  // item's links resolve:
+  //
+  //   1. Iterates GUIDED_SERVICE_OPTIONS candidates that have an embedUrlBuilder
+  //      AND are in EMBED_DRIVER_SERVICES (real PlayerProvider drivers).
+  //   2. Tests each candidate's embedUrlBuilder against every resolved link.
+  //   3. Picks the first candidate that produces a non-null embed URL, honouring
+  //      lastUsedService preference.
+  //   4. If no driver can handle the run → falls to Tier 4 (cue sheet).
+  //
+  // This makes Tier 3 (Bandcamp) reachable for runs that only have Bandcamp
+  // links, and makes the non-driver fallback honest (Tier 4) rather than silent.
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (!active || mode !== "replay" || timeOrientation !== "past") return;
+    if (pastModeTier !== 2 && pastModeTier !== 3) return;
+    if (tierRefinedRef.current) return; // already activated for this ride
+    if (!currentItem || currentItem.links.length === 0) return; // wait for links
+
+    tierRefinedRef.current = true;
+
+    const EMBED_DRIVER_SERVICES = new Set<string>(["youtube", "bandcamp"]);
+    const lastUsed = readLastUsedService();
+
+    // Sort options so the listener's last-used service is tried first.
+    const sortedOptions = [...GUIDED_SERVICE_OPTIONS].sort((a, b) => {
+      if (a.service === lastUsed) return -1;
+      if (b.service === lastUsed) return 1;
+      return 0;
+    });
+
+    // Find the first service option that: has a real driver AND whose
+    // embedUrlBuilder returns non-null for at least one link in this run.
+    const embedOpt = sortedOptions.find((o) => {
+      if (!EMBED_DRIVER_SERVICES.has(o.service)) return false;
+      const builder = o.embedUrlBuilder;
+      if (!builder) return false;
+      return currentItem.links.some((link) => builder(link.url) !== null);
+    });
+
+    if (embedOpt) {
+      // Wire the driver and correct the tier if needed (e.g. manifest said Tier
+      // 2 but the only matching service is Tier 3 Bandcamp).
+      setPreferredService(embedOpt.service as "youtube" | "bandcamp");
+      const refinedTier = embedOpt.embedAutoAdvance ? 2 : 3;
+      if (refinedTier !== pastModeTier) setPastModeTier(refinedTier);
+    } else {
+      // No embed driver can handle this run's links → honest Tier 4 cue sheet.
+      setPastModeTier(4);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, mode, timeOrientation, pastModeTier, currentItem]);
+
+  // ---------------------------------------------------------------------------
+  // Past-mode Tier 4: timed cue sheet "Next: {artist} — {title}" affordance.
+  //
+  // Appears after spinDurationSeconds for the current track.  When
+  // spinDurationSeconds is null/undefined (42.3% of spins), appears immediately
+  // and persistently — this is a common case, not an edge case.
+  // Reset on every track change (currentMbid).
+  // ---------------------------------------------------------------------------
+  const currentItemSpinDur = queue[index]?.spinDurationSeconds;
+  useEffect(() => {
+    // Reset on track change regardless of mode.
+    setCueSheetVisible(false);
+
+    if (!active || timeOrientation !== "past" || pastModeTier !== 4) return;
+    const spinDur = currentItemSpinDur;
+    if (spinDur == null) {
+      // Null/absent duration → show immediately and persistently.
+      setCueSheetVisible(true);
+      return;
+    }
+    const id = window.setTimeout(() => setCueSheetVisible(true), spinDur * 1000);
+    return () => window.clearTimeout(id);
+    // currentMbid (from queue[index].mbid) drives the reset; spinDur is a
+    // derived property of the same item so including currentItemSpinDur is
+    // sufficient — no need to also depend on index directly here.
+  }, [active, timeOrientation, pastModeTier, queue[index]?.mbid, currentItemSpinDur]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Buffer-outrun: the scrub head has advanced to an item whose preview URL
   // has not yet been resolved.  The UI must show "Finding this on [Service]…"
   // rather than silence so the listener knows we are working on it.
@@ -2385,6 +2888,17 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         deviceMismatch,
         dismissDeviceMismatch,
         bufferOutrun,
+        pastModeTier,
+        pastModeTierAnnouncement:
+          pastModeTier !== null
+            ? tierAnnouncementText(pastModeTier, pastModeTierLabel ?? undefined)
+            : null,
+        cueSheetVisible,
+        cueSheetNext:
+          pastModeTier === 4 && index + 1 < queue.length
+            ? { artist: queue[index + 1]!.artist, title: queue[index + 1]!.title }
+            : null,
+        pastRunFailed,
       },
       spotify,
       scan: {
@@ -2448,6 +2962,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       deviceMismatch,
       dismissDeviceMismatch,
       bufferOutrun,
+      pastModeTier,
+      pastModeTierLabel,
+      cueSheetVisible,
+      pastRunFailed,
       spotify,
       scanActive,
       toggleScan,

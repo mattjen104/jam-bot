@@ -621,7 +621,6 @@ function ZoneLabel({ label, n, hint, accent, estimated, collapsed, onCollapse }:
 // ---------------------------------------------------------------------------
 
 
-
 // ---------------------------------------------------------------------------
 // DensitySpine — interactive crossing-density spine for coarse run navigation
 // ---------------------------------------------------------------------------
@@ -2117,6 +2116,10 @@ export function DialView() {
           artist: m.artistName ?? "",
           artworkUrl: null,
           links: [],
+          // Propagate broadcast spin duration so the Tier-4 cue sheet can time
+          // its "Next: {artist} — {title}" affordance correctly.  Null when
+          // absent (42.3% of all-time spins) — cue sheet shows immediately.
+          spinDurationSeconds: m.spinDurationSeconds ?? null,
         }));
       if (seeds.length === 0) return;
 
