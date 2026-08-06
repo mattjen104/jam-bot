@@ -607,7 +607,10 @@ export function RideBar({
 
       {/* Past-mode tier announcement — one sentence, shown before playback
           starts on a past crossing run. Cleared once the ride is fully active. */}
-      {ride.mode === "replay" && ride.timeOrientation === "past" && ride.pastModeTierAnnouncement && (
+      {ride.mode === "replay" &&
+        ride.timeOrientation === "past" &&
+        !ride.interstitialArmed &&
+        ride.pastModeTierAnnouncement && (
         <div
           className="mx-5 mb-2 rounded-md bg-primary/8 px-3 py-2 font-mono text-[11px] text-primary"
           data-testid="past-tier-announcement"
@@ -623,7 +626,7 @@ export function RideBar({
           data-testid="past-run-failed"
         >
           <StopCircle className="h-3.5 w-3.5 shrink-0" />
-          Replay stopped — a track in this run couldn't be loaded from the connected service.
+          Playback stopped — a track in this run couldn't be loaded from the connected service.
         </div>
       )}
 
