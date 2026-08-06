@@ -89,3 +89,4 @@
 - [Merged dial tab & invertible sort](dial-merged-tab-sort.md) — ▼ is a discovery ranking (rarest-first), not a key inversion; Oxford commas + ", now."; clickable "and" appends "Also, …"; copy test file is pre-red on master.
 - [Crossings route merge-splice](crossings-route-merge-splice.md) — twin handlers in me/crossings.ts get merge-spliced repeatedly; typecheck both handlers after merges; CrossingsRow shared from lib/db.
 - [Drizzle CTE correlated subquery in GROUP BY](drizzle-cte-correlated-subquery.md) — EXISTS inside GROUP BY outer = PG 42803; fix: LEFT JOIN on CTE + bool_or(). Also: kill stale tsx pids before trusting response to edits.
+- [dialCrossingSentence.test.tsx pre-existing failures](dialcrossingsent-preexisting-failures.md) — 33/71 tests fail on master (expected old "on air"/"dash" grammar, current impl uses "selected"/"this set"). Not a regression; verify with git stash before fixing.

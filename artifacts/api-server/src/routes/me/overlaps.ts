@@ -562,4 +562,77 @@ router.get("/me/overlaps/runs", h(async (req, res) => {
   });
 }));
 
+/**
+ * GET /api/me/overlaps/spine — hourly density bins for the time-axis spine.
+ *
+ * Returns per-hour counts of `owned` (MBIDs in the user's library) and
+ * `discover` (resolved MBIDs NOT in the library) for a single station over a
+ * requested time range.
+ *
+ * Coverage note: `covered` is intentionally absent from the response.
+ * Per-station per-hour polling coverage is NOT derivable from existing data
+ * (confirmed in the prerequisites report). The frontend treats every bin with
+ * owned=0 and discover=0 as "unknown" rather than "silence", which is the only
+ * honest rendering when coverage cannot be established.
+ *
+ * Query params:
+ *   stationId  required  integer  station primary key
+ *   from       required  ISO 8601 datetime (inclusive)
+ *   to         required  ISO 8601 datetime (exclusive)
+ */
+router.get("/me/overlaps/spine", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+
+  const stationIdRaw = req.query["stationId"];
+  const fromRaw = req.query["from"];
+  const toRaw = req.query["to"];
+
+  const stationId = Number(stationIdRaw);
+  if (!stationIdRaw || !Number.isInteger(stationId) || stationId <= 0) {
+    return res.status(400).json({ error: "stationId must be a positive integer" });
+  }
+  if (!fromRaw || !toRaw || typeof fromRaw !== "string" || typeof toRaw !== "string") {
+    return res.status(400).json({ error: "from and to are required ISO datetime strings" });
+  }
+  const fromDate = new Date(fromRaw);
+  const toDate = new Date(toRaw);
+  if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+    return res.status(400).json({ error: "from and to must be valid ISO datetimes" });
+  }
+  if (toDate <= fromDate) {
+    return res.status(400).json({ error: "to must be after from" });
+  }
+
+  const userMbids = db
+    .select({ mbid: libraryItemsTable.mbid })
+    .from(libraryItemsTable)
+    .where(eq(libraryItemsTable.userId, user.id));
+
+  const rows = await db
+    .select({
+      hourStart: sql<string>`date_trunc('hour', ${spinsTable.playedAt})::text`,
+      owned: sql<number>`count(*) filter (where ${spinsTable.mbid} in (${userMbids}))::int`,
+      discover: sql<number>`count(*) filter (where ${spinsTable.mbid} is not null and ${spinsTable.mbid} not in (${userMbids}))::int`,
+    })
+    .from(spinsTable)
+    .where(
+      and(
+        eq(spinsTable.stationId, stationId),
+        isNotNull(spinsTable.mbid),
+        sql`${spinsTable.playedAt} >= ${fromDate.toISOString()}::timestamptz`,
+        sql`${spinsTable.playedAt} < ${toDate.toISOString()}::timestamptz`,
+      ),
+    )
+    .groupBy(sql`date_trunc('hour', ${spinsTable.playedAt})`)
+    .orderBy(sql`date_trunc('hour', ${spinsTable.playedAt})`);
+
+  return res.json({
+    bins: rows.map((r) => ({
+      hourStart: r.hourStart,
+      owned: r.owned,
+      discover: r.discover,
+    })),
+  });
+}));
+
 export default router;

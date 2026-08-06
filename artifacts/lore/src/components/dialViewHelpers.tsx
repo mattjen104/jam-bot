@@ -263,7 +263,16 @@ export function crossingSentence(
   show: DialShow | null,
   displayMode: DialDisplayMode = "personal",
   also?: AlsoToggle & { node: ReactNode },
-): { node: ReactNode; hasTrack: boolean; artistsShown: string[] } | null {
+  past?: PastContext,
+): {
+  node: ReactNode;
+  hasTrack: boolean;
+  artistsShown: string[];
+  /** Present only in past mode when a real playback service is resolved.
+   *  The caller is responsible for appending this as a separate sentence —
+   *  never inline it as a provenance verb subject. */
+  serviceClause: string | null;
+} | null {
   if (!show) return null;
   if (displayMode === "blended") return null;
 
@@ -298,13 +307,22 @@ export function crossingSentence(
   const dj = djList.length === 1 ? djList[0] : null;
   const showName = usableShowName(show);
 
-  // Live (single artist currently on air) vs. "this set" (multiple/historical)
-  const isLive = !!(current?.isLibraryHit || current?.isArtistHit);
-  const timing = isLive ? "now" : "this set";
-
-  // Only wire the toggle when timing is "this set" — live sentences have no
-  // "this set" word to click, so no toggle affordance is offered.
-  const activeAlso = !isLive ? also : undefined;
+  // Past-mode: timing comes from the playedAt timestamp localised to the
+  // station's timezone.  No "this set" toggle in past mode (the timing label
+  // replaces it).  Live-mode: "now" vs. "this set" as before.
+  const serviceClause = pastServiceClause(past?.resolvedService);
+  let timing: string;
+  let activeAlso: (AlsoToggle & { node: ReactNode }) | undefined;
+  if (past) {
+    timing = pastTimingLabel(past.playedAt, past.stationIanaTimezone ?? null);
+    activeAlso = undefined;
+  } else {
+    const isLive = !!(current?.isLibraryHit || current?.isArtistHit);
+    timing = isLive ? "now" : "this set";
+    // Only wire the toggle when timing is "this set" — live sentences have no
+    // "this set" word to click, so no toggle affordance is offered.
+    activeAlso = !isLive ? also : undefined;
+  }
 
   if (artistNodes) {
     return {
@@ -320,6 +338,7 @@ export function crossingSentence(
       ),
       hasTrack: true,
       artistsShown: artists.slice(0, 6),
+      serviceClause,
     };
   }
 
@@ -335,10 +354,130 @@ export function crossingSentence(
       ),
       hasTrack: true,
       artistsShown: [],
+      serviceClause,
     };
   }
 
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Past-mode time formatting and service attribution
+// ---------------------------------------------------------------------------
+
+const HOUR_WORDS = [
+  "one", "two", "three", "four", "five", "six",
+  "seven", "eight", "nine", "ten", "eleven",
+] as const;
+
+/**
+ * Formats a past `playedAt` timestamp as a human-readable timing label,
+ * degrading with distance.  Daypart uses the **station's** local timezone so
+ * "Tuesday night" reflects where the show aired, not where the listener is.
+ *
+ * | Distance  | Format                         |
+ * |-----------|--------------------------------|
+ * | < 1 h     | "23 minutes ago"               |
+ * | < 12 h    | "two hours ago"                |
+ * | < 7 d     | "Tuesday night" (station-local)|
+ * | older     | "Jul 15"                       |
+ *
+ * A null or invalid `stationIanaTimezone` falls back to absolute date format
+ * for the < 7d case — never a guessed daypart.
+ */
+export function pastTimingLabel(
+  playedAt: Date,
+  stationIanaTimezone: string | null,
+): string {
+  const elapsedMs = Date.now() - playedAt.getTime();
+  const elapsedMin = Math.max(0, Math.round(elapsedMs / 60_000));
+
+  // < 1h → "X minutes ago"
+  if (elapsedMin < 60) {
+    return elapsedMin <= 1 ? "1 minute ago" : `${elapsedMin} minutes ago`;
+  }
+
+  // < 12h → word-form "X hours ago"
+  const elapsedH = Math.round(elapsedMin / 60);
+  if (elapsedH < 12) {
+    const word = HOUR_WORDS[elapsedH - 1] ?? `${elapsedH}`;
+    return `${word} hour${elapsedH === 1 ? "" : "s"} ago`;
+  }
+
+  // < 7d → weekday + daypart in station-local time (requires a valid tz)
+  if (elapsedMs < 7 * 24 * 60 * 60 * 1000 && stationIanaTimezone) {
+    try {
+      const fmt = new Intl.DateTimeFormat("en-US", {
+        timeZone: stationIanaTimezone,
+        weekday: "long",
+        hour: "numeric",
+        hour12: true,
+      });
+      const parts = fmt.formatToParts(playedAt);
+      const weekday = parts.find((p) => p.type === "weekday")?.value ?? "";
+      const hour = parseInt(parts.find((p) => p.type === "hour")?.value ?? "0", 10);
+      const isPM = (parts.find((p) => p.type === "dayPeriod")?.value ?? "").toLowerCase() === "pm";
+      const h24 = isPM
+        ? hour === 12 ? 12 : hour + 12
+        : hour === 12 ? 0 : hour;
+      const daypart =
+        h24 >= 5 && h24 < 12 ? "morning"
+        : h24 >= 12 && h24 < 17 ? "afternoon"
+        : h24 >= 17 && h24 < 21 ? "evening"
+        : h24 >= 21 ? "night"
+        : "late night"; // midnight–5 am
+      if (weekday) return `${weekday} ${daypart}`;
+    } catch {
+      // Invalid timezone — fall through to absolute date
+    }
+  }
+
+  // Older or no usable timezone → absolute date (e.g., "Jul 15")
+  const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+  if (stationIanaTimezone) {
+    try {
+      opts.timeZone = stationIanaTimezone;
+    } catch {
+      /* ignore invalid tz */
+    }
+  }
+  return new Intl.DateTimeFormat("en-US", opts).format(playedAt);
+}
+
+/**
+ * Returns the playback-service clause appended after a past-mode provenance
+ * sentence.  The service is never the grammatical subject of a provenance
+ * verb — it is always a co-star in the "Replaying on your X." appendage.
+ *
+ * Returns null when no service is resolved or the service is unrecognised.
+ */
+export function pastServiceClause(
+  service: string | null | undefined,
+): string | null {
+  if (!service) return null;
+  const label =
+    service === "spotify" ? "Spotify"
+    : service === "youtube" ? "YouTube"
+    : service === "apple-music" ? "Apple Music"
+    : null;
+  return label ? `Replaying on your ${label}.` : null;
+}
+
+/**
+ * Optional context injected into `crossingSentence` for past-mode rendering.
+ */
+export interface PastContext {
+  /** When the crossing spin actually aired — drives timing label. */
+  playedAt: Date;
+  /** Station IANA timezone used to localise the daypart label. */
+  stationIanaTimezone?: string | null;
+  /**
+   * Resolved playback service, if any.  Never speculative — only pass this
+   * when a service is actually about to play.  Drives the appended clause
+   * "Replaying on your Spotify." which must never claim a service as the
+   * subject of a provenance verb.
+   */
+  resolvedService?: string | null;
 }
 
 // ---------------------------------------------------------------------------
