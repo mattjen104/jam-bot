@@ -734,8 +734,13 @@ export function DialTimeTravelStrip({
 // ---------------------------------------------------------------------------
 
 /**
- * A single run from /me/overlaps/runs, rendered in the style of a FrontDoorRow
- * but with a subtle replay affordance. Clicking navigates to /replay/{runId}.
+ * A single run from /me/overlaps/runs, rendered in the style of a FrontDoorRow.
+ * Clicking navigates to /archive/station-runs/{runId} — the station-run archive
+ * page that shows the full tracklist and optionally starts a ride.
+ *
+ * NOTE: runId here is min(spin.id) for the run grouping, which is the same anchor
+ * the station-run archive uses. It is NOT a replay manifest ID; routing to
+ * /replay/{runId} would silently fail for runs without a manifest.
  */
 function RunRow({ run }: { run: OverlapRun }) {
   const [, navigate] = useLocation();
@@ -748,11 +753,11 @@ function RunRow({ run }: { run: OverlapRun }) {
       role="button"
       tabIndex={0}
       data-run-id={run.runId}
-      onClick={() => navigate(`/replay/${run.runId}`)}
+      onClick={() => navigate(`/archive/station-runs/${run.runId}`)}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          navigate(`/replay/${run.runId}`);
+          navigate(`/archive/station-runs/${run.runId}`);
         }
       }}
     >
@@ -768,7 +773,7 @@ function RunRow({ run }: { run: OverlapRun }) {
         {run.discover > 0 && (
           <span className="fdrow__discover"> · {run.discover} new</span>
         )}
-        <span className="fdrow__replay-badge"> · ▶ replay</span>
+        <span className="fdrow__replay-badge"> · ▶ hear it</span>
         <span className="fdrow__run-day">{run.day}</span>
       </div>
     </div>

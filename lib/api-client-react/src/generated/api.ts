@@ -37,6 +37,8 @@ import type {
   GeniusDraftReviewResponse,
   GetArchiveRecentRunsParams,
   GetGuidedReplayQueueParams,
+  GetMyOverlapRunsParams,
+  GetMyOverlapSpineParams,
   GetMyRecentSetsParams,
   GetMyWeeklyRecapParams,
   GetOembedParams,
@@ -63,9 +65,11 @@ import type {
   ManualSpinResponse,
   MattStarterLibraryResult,
   MeBlendedCrossingsResult,
+  MeOverlapRunsResponse,
   MePickerOverlapResult,
   MeRecentSetsResponse,
   OEmbed,
+  OverlapSpineResponse,
   PatchClaimRequest,
   PickedLookup,
   Picker,
@@ -8694,6 +8698,206 @@ export const useSetMyAlbumAvatar = <
 > => {
   return useMutation(getSetMyAlbumAvatarMutationOptions(options));
 };
+
+/**
+ * Station broadcast runs (station + show/DJ + calendar day) ranked by how many of the caller's library MBIDs were played in each run (`owned`), then by resolved MBIDs NOT in the library (`discover`). When the optional `day` parameter is supplied, results are restricted to runs whose UTC broadcast day matches that calendar date; omitting `day` returns the all-time top 30 runs. Returns an empty list for unauthenticated requests.
+
+ * @summary Station broadcast runs ranked by library overlap
+ */
+export const getGetMyOverlapRunsUrl = (params?: GetMyOverlapRunsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/me/overlaps/runs?${stringifiedParams}`
+    : `/api/me/overlaps/runs`;
+};
+
+export const getMyOverlapRuns = async (
+  params?: GetMyOverlapRunsParams,
+  options?: RequestInit,
+): Promise<MeOverlapRunsResponse> => {
+  return customFetch<MeOverlapRunsResponse>(getGetMyOverlapRunsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyOverlapRunsQueryKey = (
+  params?: GetMyOverlapRunsParams,
+) => {
+  return [`/api/me/overlaps/runs`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetMyOverlapRunsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyOverlapRuns>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetMyOverlapRunsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyOverlapRuns>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetMyOverlapRunsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMyOverlapRuns>>
+  > = ({ signal }) => getMyOverlapRuns(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyOverlapRuns>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyOverlapRunsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyOverlapRuns>>
+>;
+export type GetMyOverlapRunsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Station broadcast runs ranked by library overlap
+ */
+
+export function useGetMyOverlapRuns<
+  TData = Awaited<ReturnType<typeof getMyOverlapRuns>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetMyOverlapRunsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyOverlapRuns>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyOverlapRunsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns per-hour counts of `owned` (MBIDs in the listener's library) and `discover` (resolved MBIDs NOT in the library) for a single station over a requested time window. Powers the DensitySpine component.
+Coverage note — `covered` is intentionally absent. Per-station per-hour polling coverage is not derivable from existing data. The frontend treats every bin with owned=0 and discover=0 as "unknown" rather than "silence", which is the only honest rendering when coverage cannot be established.
+Only bins with at least one resolved spin appear in the response; the client fills missing hours as unknown bins.
+
+ * @summary Hourly density bins for the time-axis spine visualisation
+ */
+export const getGetMyOverlapSpineUrl = (params: GetMyOverlapSpineParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/me/overlaps/spine?${stringifiedParams}`
+    : `/api/me/overlaps/spine`;
+};
+
+export const getMyOverlapSpine = async (
+  params: GetMyOverlapSpineParams,
+  options?: RequestInit,
+): Promise<OverlapSpineResponse> => {
+  return customFetch<OverlapSpineResponse>(getGetMyOverlapSpineUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyOverlapSpineQueryKey = (
+  params?: GetMyOverlapSpineParams,
+) => {
+  return [`/api/me/overlaps/spine`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetMyOverlapSpineQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyOverlapSpine>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: GetMyOverlapSpineParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyOverlapSpine>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetMyOverlapSpineQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMyOverlapSpine>>
+  > = ({ signal }) => getMyOverlapSpine(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyOverlapSpine>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyOverlapSpineQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyOverlapSpine>>
+>;
+export type GetMyOverlapSpineQueryError = ErrorType<ApiError>;
+
+/**
+ * @summary Hourly density bins for the time-axis spine visualisation
+ */
+
+export function useGetMyOverlapSpine<
+  TData = Awaited<ReturnType<typeof getMyOverlapSpine>>,
+  TError = ErrorType<ApiError>,
+>(
+  params: GetMyOverlapSpineParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyOverlapSpine>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyOverlapSpineQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * Stations that have aired a library artist in the past 24 hours but that the authenticated user has never consciously tuned into (no listens row for that station). When a spin can be attributed to a scheduled show, the response includes a runId so the client can navigate directly to the Ghost Replay for the missed set. runId is null when no qualifying show attribution is available.

@@ -2939,6 +2939,53 @@ export interface GhostMissedStation {
   runId: number | null;
 }
 
+export type OverlapRunItemStation = {
+  slug: string;
+  name: string;
+  /** @nullable */
+  stationClass: string | null;
+};
+
+export type OverlapRunItemShow = {
+  name: string;
+  /** @nullable */
+  djName: string | null;
+} | null;
+
+export interface OverlapRunItem {
+  runId: number;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  day: string;
+  station: OverlapRunItemStation;
+  show: OverlapRunItemShow;
+  owned: number;
+  discover: number;
+}
+
+export interface MeOverlapRunsResponse {
+  items: OverlapRunItem[];
+}
+
+/**
+ * One hourly bucket from the density spine.  Both `owned` and `discover` count only resolved MBIDs; raw-text-only spins are excluded.  An empty bin (owned=0, discover=0) means no resolved spins were logged in that hour — not that Lore was definitely listening and found nothing.
+
+ */
+export interface OverlapSpineBin {
+  /** ISO 8601 timestamp of the start of this hour bucket (UTC). Formatted as a truncated timestamp from Postgres date_trunc.
+   */
+  hourStart: string;
+  /** Resolved spins whose MBID is in the listener's library. */
+  owned: number;
+  /** Resolved spins whose MBID is NOT in the listener's library. */
+  discover: number;
+}
+
+export interface OverlapSpineResponse {
+  /** Hourly bins with at least one resolved spin, ordered by hourStart ascending. Missing hours (no resolved spins) are omitted; the client fills them as unknown bins.
+   */
+  bins: OverlapSpineBin[];
+}
+
 export interface GhostMissedResponse {
   stations: GhostMissedStation[];
 }
@@ -3205,6 +3252,30 @@ export type GetMyWeeklyRecapParams = {
 
 export type SetMyAlbumAvatarBody = {
   recordingMbid: string;
+};
+
+export type GetMyOverlapRunsParams = {
+  /**
+ * Optional UTC calendar day (YYYY-MM-DD). When present, restricts results to runs whose broadcast day matches. Omit to get all-time top runs.
+
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+  day?: string;
+};
+
+export type GetMyOverlapSpineParams = {
+  /**
+   * Station primary key.
+   */
+  stationId: number;
+  /**
+   * Start of the window (inclusive), ISO 8601.
+   */
+  from: string;
+  /**
+   * End of the window (exclusive), ISO 8601.
+   */
+  to: string;
 };
 
 export type GetStationSocialPresenceParams = {

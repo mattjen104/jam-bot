@@ -329,8 +329,8 @@ describe("(d) 'Top sets' toggle renders all-time run rows and hides Zones 2 & 3"
   });
 });
 
-describe("(e) clicking a run row navigates to /replay/{runId}", () => {
-  it("click on day run row triggers navigation to /replay/101", () => {
+describe("(e) clicking a run row navigates to /archive/station-runs/{runId}", () => {
+  it("click on day run row triggers navigation to /archive/station-runs/101", () => {
     mockDialDataSettled();
     renderDial();
 
@@ -343,8 +343,11 @@ describe("(e) clicking a run row navigates to /replay/{runId}", () => {
 
     act(() => { fireEvent.click(runRow!); });
 
-    // The wouter navigate mock should have been called with /replay/101
-    expect(mockNavigate).toHaveBeenCalledWith("/replay/101");
+    // RunRow must route to the station-run archive page, not /replay/{runId}.
+    // runId here is min(spin.id) — a run anchor, not a replay manifest ID.
+    // Routing to /replay/ would silently produce "not in archive" errors for
+    // runs that have no replay manifest.
+    expect(mockNavigate).toHaveBeenCalledWith("/archive/station-runs/101");
   });
 });
 

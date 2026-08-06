@@ -4756,6 +4756,95 @@ export const SetMyAlbumAvatarResponse = zod.object({
 });
 
 /**
+ * Station broadcast runs (station + show/DJ + calendar day) ranked by how many of the caller's library MBIDs were played in each run (`owned`), then by resolved MBIDs NOT in the library (`discover`). When the optional `day` parameter is supplied, results are restricted to runs whose UTC broadcast day matches that calendar date; omitting `day` returns the all-time top 30 runs. Returns an empty list for unauthenticated requests.
+
+ * @summary Station broadcast runs ranked by library overlap
+ */
+export const getMyOverlapRunsQueryDayRegExp = new RegExp(
+  "^\\d{4}-\\d{2}-\\d{2}$",
+);
+
+export const GetMyOverlapRunsQueryParams = zod.object({
+  day: zod.coerce
+    .string()
+    .regex(getMyOverlapRunsQueryDayRegExp)
+    .optional()
+    .describe(
+      "Optional UTC calendar day (YYYY-MM-DD). When present, restricts results to runs whose broadcast day matches. Omit to get all-time top runs.\n",
+    ),
+});
+
+export const getMyOverlapRunsResponseItemsItemDayRegExp = new RegExp(
+  "^\\d{4}-\\d{2}-\\d{2}$",
+);
+
+export const GetMyOverlapRunsResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      runId: zod.number(),
+      day: zod.string().regex(getMyOverlapRunsResponseItemsItemDayRegExp),
+      station: zod.object({
+        slug: zod.string(),
+        name: zod.string(),
+        stationClass: zod.string().nullable(),
+      }),
+      show: zod.union([
+        zod.object({
+          name: zod.string(),
+          djName: zod.string().nullable(),
+        }),
+        zod.null(),
+      ]),
+      owned: zod.number(),
+      discover: zod.number(),
+    }),
+  ),
+});
+
+/**
+ * Returns per-hour counts of `owned` (MBIDs in the listener's library) and `discover` (resolved MBIDs NOT in the library) for a single station over a requested time window. Powers the DensitySpine component.
+Coverage note — `covered` is intentionally absent. Per-station per-hour polling coverage is not derivable from existing data. The frontend treats every bin with owned=0 and discover=0 as "unknown" rather than "silence", which is the only honest rendering when coverage cannot be established.
+Only bins with at least one resolved spin appear in the response; the client fills missing hours as unknown bins.
+
+ * @summary Hourly density bins for the time-axis spine visualisation
+ */
+export const GetMyOverlapSpineQueryParams = zod.object({
+  stationId: zod.coerce.number().describe("Station primary key."),
+  from: zod.date().describe("Start of the window (inclusive), ISO 8601."),
+  to: zod.date().describe("End of the window (exclusive), ISO 8601."),
+});
+
+export const GetMyOverlapSpineResponse = zod.object({
+  bins: zod
+    .array(
+      zod
+        .object({
+          hourStart: zod
+            .string()
+            .describe(
+              "ISO 8601 timestamp of the start of this hour bucket (UTC). Formatted as a truncated timestamp from Postgres date_trunc.\n",
+            ),
+          owned: zod
+            .number()
+            .describe(
+              "Resolved spins whose MBID is in the listener's library.",
+            ),
+          discover: zod
+            .number()
+            .describe(
+              "Resolved spins whose MBID is NOT in the listener's library.",
+            ),
+        })
+        .describe(
+          "One hourly bucket from the density spine.  Both `owned` and `discover` count only resolved MBIDs; raw-text-only spins are excluded.  An empty bin (owned=0, discover=0) means no resolved spins were logged in that hour — not that Lore was definitely listening and found nothing.\n",
+        ),
+    )
+    .describe(
+      "Hourly bins with at least one resolved spin, ordered by hourStart ascending. Missing hours (no resolved spins) are omitted; the client fills them as unknown bins.\n",
+    ),
+});
+
+/**
  * Stations that have aired a library artist in the past 24 hours but that the authenticated user has never consciously tuned into (no listens row for that station). When a spin can be attributed to a scheduled show, the response includes a runId so the client can navigate directly to the Ghost Replay for the missed set. runId is null when no qualifying show attribution is available.
 
  * @summary Stations that played library artists in the rolling 24h window
