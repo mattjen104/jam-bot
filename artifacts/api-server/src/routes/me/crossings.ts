@@ -81,6 +81,23 @@ export function activeSocialUsers(cutoff = new Date(Date.now() - SOCIAL_PRESENCE
 }
 
 /**
+ * Returns true if at least one opted-in user has been seen recently.
+ * Cheap existence check used by the background warm job to skip idle work.
+ */
+export async function hasActiveSocialUsers(): Promise<boolean> {
+  const cutoff = new Date(Date.now() - SOCIAL_PRESENCE_TTL_MS);
+  const rows = await db
+    .select({ id: loreUsersTable.id })
+    .from(loreUsersTable)
+    .where(and(
+      eq(loreUsersTable.socialParticipation, true),
+      sql`${loreUsersTable.lastSeenAt} >= ${cutoff}`,
+    ))
+    .limit(1);
+  return rows.length > 0;
+}
+
+/**
  * Evict a user's crossings from both in-process (L1) and Postgres (L2) cache.
  * Also queues a background lifetime-crossings refresh so the pre-built table
  * stays in sync with the new library state.
@@ -496,6 +513,97 @@ router.get("/me/crossings/blended", h(async (_req, res) => {
     return res.json({ items: l2data });
   }
 
+  const blendedData = await computeBlendedCrossings();
+  const builtAt = new Date();
+  blendedCrossingsCache = { builtAt: builtAt.getTime(), data: blendedData };
+  // Fire-and-forget, but keep a handle so test-only cleanup can await any
+  // in-flight write before deleting the L2 row (prevents a write landing
+  // after a clear and repopulating the cache nondeterministically).
+  blendedL2WriteInFlight = writeBlendedL2Cache(blendedData, builtAt);
+  void blendedL2WriteInFlight;
+  return res.json({ items: blendedData });
+}));
+
+/** Last blended L2 upsert still (possibly) in flight — awaited by test cleanup. */
+let blendedL2WriteInFlight: Promise<void> | null = null;
+
+export default router;
+
+/** Evict the blended L1 cache — call before a test that needs a fresh DB hit. */
+export function _testOnly_clearBlendedCrossingsCache(): void {
+  blendedCrossingsCache = null;
+}
+
+/** Evict the blended Postgres L2 row — awaitable so tests can order around it. */
+export async function _testOnly_clearBlendedCrossingsL2Cache(): Promise<void> {
+  // Let any in-flight fire-and-forget write settle first, so it cannot land
+  // after the delete and resurrect stale data mid-test.
+  if (blendedL2WriteInFlight) await blendedL2WriteInFlight.catch(() => {});
+  await db
+    .delete(blendedCrossingsCacheTable)
+    .where(eq(blendedCrossingsCacheTable.id, BLENDED_CACHE_ROW_ID))
+    .catch(() => {});
+}
+/** Return the raw blended cache entry — lets tests verify cache hits without spying on db. */
+export function _testOnly_getBlendedCrossingsCache(): { builtAt: number; data: BlendedCrossingsRow[] } | null {
+  return blendedCrossingsCache;
+}
+
+let blendedCrossingsCache: { builtAt: number; data: BlendedCrossingsRow[] } | null = null;
+
+const BLENDED_CROSSINGS_CACHE_TTL_MS = 60 * 1000;
+
+/**
+ * Try to read a fresh blended entry from the Postgres L2 cache.
+ * Returns the rows on a hit, null on a miss, stale row, or any read error.
+ */
+async function readBlendedL2Cache(): Promise<BlendedCrossingsRow[] | null> {
+  try {
+    const rows = await db
+      .select()
+      .from(blendedCrossingsCacheTable)
+      .where(eq(blendedCrossingsCacheTable.id, BLENDED_CACHE_ROW_ID))
+      .limit(1);
+    if (rows.length === 0) return null;
+    const row = rows[0]!;
+    if (Date.now() - row.builtAt.getTime() >= BLENDED_CROSSINGS_CACHE_TTL_MS) return null;
+    return row.data;
+  } catch {
+    // L2 read errors are non-fatal: fall through to full compute.
+    return null;
+  }
+}
+
+/**
+ * Persist a fresh blended result to the Postgres L2 cache (single-row upsert).
+ * Fire-and-forget — errors are logged but never surface to the caller.
+ */
+async function writeBlendedL2Cache(data: BlendedCrossingsRow[], builtAt: Date): Promise<void> {
+  try {
+    await db
+      .insert(blendedCrossingsCacheTable)
+      .values({ id: BLENDED_CACHE_ROW_ID, data, builtAt })
+      .onConflictDoUpdate({
+        target: blendedCrossingsCacheTable.id,
+        set: { data, builtAt },
+      });
+  } catch (err) {
+    console.error("[crossings] blended L2 cache write failed", err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Extracted compute + public refresh helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Run the two heavy aggregate queries that produce blended crossings.
+ * Pure computation — no cache reads or writes.
+ *
+ * This is separated from the route handler so the background warm job can call
+ * it without going through the HTTP layer.
+ */
+export async function computeBlendedCrossings(): Promise<BlendedCrossingsRow[]> {
   const presenceCutoff = new Date(Date.now() - SOCIAL_PRESENCE_TTL_MS);
   const spinCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const activeUsers = activeSocialUsers(presenceCutoff);
@@ -553,21 +661,21 @@ router.get("/me/crossings/blended", h(async (_req, res) => {
   const blendedWeekCutoff  = new Date(Date.now() - 7  * 24 * 60 * 60 * 1000);
   const blendedMonthCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-  const blendedScanCutoff  = blendedMonthCutoff;
-  const inWeek             = sql`${spinsTable.playedAt} >= ${blendedWeekCutoff}`;
-  const inMonth            = sql`${spinsTable.playedAt} >= ${blendedMonthCutoff}`;
+  const blendedScanCutoff = blendedMonthCutoff;
+  const inWeek            = sql`${spinsTable.playedAt} >= ${blendedWeekCutoff}`;
+  const inMonth           = sql`${spinsTable.playedAt} >= ${blendedMonthCutoff}`;
 
   const blendedRows = await db
     .select({
-      stationSlug:             stationsTable.slug,
-      crossings:               sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${aggregateLibHit})::int`,
-      artistCrossings:         sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
-      weekCrossings:           sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek}  and ${aggregateLibHit})::int`,
-      weekArtistCrossings:     sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek}  and ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
-      monthCrossings:          sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${aggregateLibHit})::int`,
-      monthArtistCrossings:    sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
+      stationSlug:         stationsTable.slug,
+      crossings:           sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${aggregateLibHit})::int`,
+      artistCrossings:     sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWindow} and ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
+      weekCrossings:       sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek}  and ${aggregateLibHit})::int`,
+      weekArtistCrossings: sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inWeek}  and ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
+      monthCrossings:      sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${aggregateLibHit})::int`,
+      monthArtistCrossings:sql<number>`count(distinct ${spinsTable.mbid}) filter (where ${inMonth} and ${aggregateNotLibHit} and ${aggregateArtistMatch})::int`,
       // Collect all matching artist names (with repeats) so we can rank by frequency in JS.
-      topArtistNamesRaw:       sql<string[] | null>`array_agg(trim(${recordingsTable.artist})) filter (where ${inWindow} and (${aggregateLibHit} or (${aggregateNotLibHit} and ${aggregateArtistMatch})))`,
+      topArtistNamesRaw:   sql<string[] | null>`array_agg(trim(${recordingsTable.artist})) filter (where ${inWindow} and (${aggregateLibHit} or (${aggregateNotLibHit} and ${aggregateArtistMatch})))`,
     })
     .from(spinsTable)
     .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
@@ -644,97 +752,40 @@ router.get("/me/crossings/blended", h(async (_req, res) => {
   const blendedRollingMap  = new Map(blendedRows.map((r) => [r.stationSlug, r]));
   const blendedSlugs = new Set([...blendedRollingMap.keys(), ...blendedLifetimeMap.keys()]);
 
-  const blendedData: BlendedCrossingsRow[] = [...blendedSlugs].map((slug) => {
+  return [...blendedSlugs].map((slug) => {
     const r = blendedRollingMap.get(slug);
     const l = blendedLifetimeMap.get(slug);
-      return {
-        stationSlug:             slug,
-        crossings:               r?.crossings               ?? 0,
-        artistCrossings:         r?.artistCrossings         ?? 0,
-        weekCrossings:           r?.weekCrossings           ?? 0,
-        weekArtistCrossings:     r?.weekArtistCrossings     ?? 0,
-        monthCrossings:          r?.monthCrossings          ?? 0,
-        monthArtistCrossings:    r?.monthArtistCrossings    ?? 0,
-        lifetimeCrossings:       l?.lifetimeCrossings       ?? 0,
-        lifetimeArtistCrossings: l?.lifetimeArtistCrossings ?? 0,
-        topArtistNames:          blendedTopArtists(r?.topArtistNamesRaw ?? null),
-      };
+    return {
+      stationSlug:             slug,
+      crossings:               r?.crossings               ?? 0,
+      artistCrossings:         r?.artistCrossings         ?? 0,
+      weekCrossings:           r?.weekCrossings           ?? 0,
+      weekArtistCrossings:     r?.weekArtistCrossings     ?? 0,
+      monthCrossings:          r?.monthCrossings          ?? 0,
+      monthArtistCrossings:    r?.monthArtistCrossings    ?? 0,
+      lifetimeCrossings:       l?.lifetimeCrossings       ?? 0,
+      lifetimeArtistCrossings: l?.lifetimeArtistCrossings ?? 0,
+      topArtistNames:          blendedTopArtists(r?.topArtistNamesRaw ?? null),
+    };
   });
-
-  const builtAt = new Date();
-  blendedCrossingsCache = { builtAt: builtAt.getTime(), data: blendedData };
-  // Fire-and-forget, but keep a handle so test-only cleanup can await any
-  // in-flight write before deleting the L2 row (prevents a write landing
-  // after a clear and repopulating the cache nondeterministically).
-  blendedL2WriteInFlight = writeBlendedL2Cache(blendedData, builtAt);
-  void blendedL2WriteInFlight;
-  return res.json({ items: blendedData });
-}));
-
-/** Last blended L2 upsert still (possibly) in flight — awaited by test cleanup. */
-let blendedL2WriteInFlight: Promise<void> | null = null;
-
-export default router;
-
-/** Evict the blended L1 cache — call before a test that needs a fresh DB hit. */
-export function _testOnly_clearBlendedCrossingsCache(): void {
-  blendedCrossingsCache = null;
-}
-
-/** Evict the blended Postgres L2 row — awaitable so tests can order around it. */
-export async function _testOnly_clearBlendedCrossingsL2Cache(): Promise<void> {
-  // Let any in-flight fire-and-forget write settle first, so it cannot land
-  // after the delete and resurrect stale data mid-test.
-  if (blendedL2WriteInFlight) await blendedL2WriteInFlight.catch(() => {});
-  await db
-    .delete(blendedCrossingsCacheTable)
-    .where(eq(blendedCrossingsCacheTable.id, BLENDED_CACHE_ROW_ID))
-    .catch(() => {});
-}
-/** Return the raw blended cache entry — lets tests verify cache hits without spying on db. */
-export function _testOnly_getBlendedCrossingsCache(): { builtAt: number; data: BlendedCrossingsRow[] } | null {
-  return blendedCrossingsCache;
-}
-
-let blendedCrossingsCache: { builtAt: number; data: BlendedCrossingsRow[] } | null = null;
-
-const BLENDED_CROSSINGS_CACHE_TTL_MS = 60 * 1000;
-
-/**
- * Try to read a fresh blended entry from the Postgres L2 cache.
- * Returns the rows on a hit, null on a miss, stale row, or any read error.
- */
-async function readBlendedL2Cache(): Promise<BlendedCrossingsRow[] | null> {
-  try {
-    const rows = await db
-      .select()
-      .from(blendedCrossingsCacheTable)
-      .where(eq(blendedCrossingsCacheTable.id, BLENDED_CACHE_ROW_ID))
-      .limit(1);
-    if (rows.length === 0) return null;
-    const row = rows[0]!;
-    if (Date.now() - row.builtAt.getTime() >= BLENDED_CROSSINGS_CACHE_TTL_MS) return null;
-    return row.data;
-  } catch {
-    // L2 read errors are non-fatal: fall through to full compute.
-    return null;
-  }
 }
 
 /**
- * Persist a fresh blended result to the Postgres L2 cache (single-row upsert).
- * Fire-and-forget — errors are logged but never surface to the caller.
+ * Recompute blended crossings and write the result to both L1 (in-process) and
+ * L2 (Postgres).  Designed for the background warm job.
+ *
+ * Never throws — errors are logged and swallowed so a transient DB hiccup
+ * cannot crash the scheduler.
  */
-async function writeBlendedL2Cache(data: BlendedCrossingsRow[], builtAt: Date): Promise<void> {
+export async function refreshBlendedCrossingsCache(): Promise<void> {
   try {
-    await db
-      .insert(blendedCrossingsCacheTable)
-      .values({ id: BLENDED_CACHE_ROW_ID, data, builtAt })
-      .onConflictDoUpdate({
-        target: blendedCrossingsCacheTable.id,
-        set: { data, builtAt },
-      });
+    const data = await computeBlendedCrossings();
+    const builtAt = new Date();
+    // Write L1 immediately so the next in-process request is served instantly.
+    blendedCrossingsCache = { builtAt: builtAt.getTime(), data };
+    // Write L2 fire-and-forget (errors already logged inside writeBlendedL2Cache).
+    void writeBlendedL2Cache(data, builtAt);
   } catch (err) {
-    console.error("[crossings] blended L2 cache write failed", err);
+    console.error("[crossings] blended background refresh failed", err);
   }
 }
