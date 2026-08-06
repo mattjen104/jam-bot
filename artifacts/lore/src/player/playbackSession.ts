@@ -404,3 +404,148 @@ export function clearStoredPinnedDevice(): void {
     // Ignore
   }
 }
+
+// ---------------------------------------------------------------------------
+// Live-to-past pipeline crossing detection
+// ---------------------------------------------------------------------------
+
+/**
+ * True when the ride session crosses from live broadcast to past replay.
+ * This boundary swaps audio pipelines: station passthrough → service-orchestrated
+ * playback. The caller is responsible for wiring the interstitial tone.
+ *
+ * Pure — compare the previous and next orientations; no side-effects.
+ */
+export function isLiveToPastCrossing(
+  prev: TimeOrientation | null,
+  next: TimeOrientation,
+): boolean {
+  return prev === "live" && next === "past";
+}
+
+/**
+ * True when the listener is moving between two non-live orientations.
+ * No interstitial is needed — the audio pipeline does not change.
+ *
+ * Pure — no side-effects.
+ */
+export function isPastToPastTransition(
+  prev: TimeOrientation | null,
+  next: TimeOrientation,
+): boolean {
+  return prev !== null && prev !== "live" && next !== "live";
+}
+
+// ---------------------------------------------------------------------------
+// Device continuity — pure check before a live→past crossing
+// ---------------------------------------------------------------------------
+
+export interface DeviceContinuityResult {
+  /**
+   * True when the pinned device matches the current output, or when Connect
+   * is not active (no pinned device) — no prompt needed.
+   */
+  matches: boolean;
+  /** True when Connect is not configured (no pinned device). */
+  noPinnedDevice: boolean;
+}
+
+/**
+ * Decide whether a device-continuity prompt is needed before a live→past crossing.
+ *
+ * When `pinnedDeviceId` is null/undefined, Connect is not active — skip check.
+ * When the ids match, audio stays in the same room — no prompt needed.
+ * Otherwise the crossing would silently move audio to a different device —
+ * surface the existing device picker so the listener can confirm.
+ *
+ * Pure — no side-effects.
+ */
+export function checkDeviceContinuity(
+  pinnedDeviceId: string | null | undefined,
+  activeDeviceId: string | null | undefined,
+): DeviceContinuityResult {
+  if (!pinnedDeviceId) return { matches: true, noPinnedDevice: true };
+  if (pinnedDeviceId === activeDeviceId) return { matches: true, noPinnedDevice: false };
+  return { matches: false, noPinnedDevice: false };
+}
+
+// ---------------------------------------------------------------------------
+// Adaptive prefetch depth — EWMA per service
+// ---------------------------------------------------------------------------
+
+/** Maximum prefetch depth — beyond this, memory pressure outweighs latency gain. */
+export const PREFETCH_DEPTH_MAX = 12;
+
+/** Starting depth before any observations — conservative but responsive. */
+export const PREFETCH_DEPTH_START = 3;
+
+/** EWMA smoothing factor α ∈ (0, 1). Higher = responds faster to recent samples. */
+export const PREFETCH_EWMA_ALPHA = 0.3;
+
+export interface ServicePrefetchTracker {
+  /** EWMA of materialization latency in ms. Null until the first observation. */
+  latencyEwma: number | null;
+  /** EWMA of inter-detent cadence (ms between successive track advances). Null until first. */
+  cadenceEwma: number | null;
+  /** Current computed prefetch depth. Starts at PREFETCH_DEPTH_START. */
+  depth: number;
+}
+
+/** Create a fresh per-service prefetch tracker with the conservative starting depth. */
+export function createServicePrefetchTracker(): ServicePrefetchTracker {
+  return { latencyEwma: null, cadenceEwma: null, depth: PREFETCH_DEPTH_START };
+}
+
+/**
+ * Record one materialization latency observation and recompute depth.
+ *
+ * Depth converges UP for slow services (high latency per track) and DOWN for
+ * fast ones, so we pre-resolve further ahead when each track takes longer.
+ *
+ * Pure — returns a new tracker value.
+ */
+export function observeMaterializationLatency(
+  tracker: ServicePrefetchTracker,
+  latencyMs: number,
+): ServicePrefetchTracker {
+  const next =
+    tracker.latencyEwma === null
+      ? latencyMs
+      : PREFETCH_EWMA_ALPHA * latencyMs + (1 - PREFETCH_EWMA_ALPHA) * tracker.latencyEwma;
+  return recomputePrefetchDepth({ ...tracker, latencyEwma: next });
+}
+
+/**
+ * Record one scrub-cadence observation and recompute depth.
+ *
+ * Faster scrubbing (shorter cadence between advances) increases depth so more
+ * tracks are resolved ahead of time before the listener reaches them.
+ *
+ * Pure — returns a new tracker value.
+ */
+export function observeScrubCadence(
+  tracker: ServicePrefetchTracker,
+  cadenceMs: number,
+): ServicePrefetchTracker {
+  const next =
+    tracker.cadenceEwma === null
+      ? cadenceMs
+      : PREFETCH_EWMA_ALPHA * cadenceMs + (1 - PREFETCH_EWMA_ALPHA) * tracker.cadenceEwma;
+  return recomputePrefetchDepth({ ...tracker, cadenceEwma: next });
+}
+
+function recomputePrefetchDepth(tracker: ServicePrefetchTracker): ServicePrefetchTracker {
+  if (
+    tracker.latencyEwma === null ||
+    tracker.cadenceEwma === null ||
+    tracker.cadenceEwma <= 0
+  ) {
+    // Not enough data yet — keep the current depth (starts at PREFETCH_DEPTH_START).
+    return tracker;
+  }
+  // depth = how many tracks ahead must be pre-resolved so one is always ready
+  // by the time the listener advances. Clamped to [1, PREFETCH_DEPTH_MAX].
+  const raw = Math.ceil(tracker.latencyEwma / tracker.cadenceEwma);
+  const depth = Math.max(1, Math.min(PREFETCH_DEPTH_MAX, raw));
+  return { ...tracker, depth };
+}

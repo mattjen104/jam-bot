@@ -28,13 +28,19 @@ import { useRadioPlayer, type PlayerStatus } from "../hooks/useRadioPlayer";
 import {
   useSpotifyConnect,
   type SpotifyConnectApi,
+  type SpotifyDevice,
 } from "./useSpotifyConnect";
 import {
   type TimeOrientation,
   type PlaybackMode,
   isLiveServiceRide,
+  checkDeviceContinuity,
   readStoredPlaybackMode,
   writeStoredPlaybackMode,
+  createServicePrefetchTracker,
+  observeMaterializationLatency,
+  observeScrubCadence,
+  type ServicePrefetchTracker,
 } from "./playbackSession";
 
 // ---------------------------------------------------------------------------
@@ -317,6 +323,44 @@ export interface RideApi {
    * the preference (keeps the last playback mode).
    */
   setPreferredService: (svc: "youtube" | "apple-music" | null) => void;
+
+  /**
+   * ⚠️ FLAGGED — companion-mode live-to-past crossing detected.
+   * True on the edge where the audio pipeline crosses from live broadcast
+   * (station passthrough) to past replay (service-orchestrated). A Lore-authored
+   * interstitial tone must play here to mark the boundary honestly.
+   *
+   * While armed, the preview-drive playback effect is gated — past audio does
+   * not start until the interstitial clears.
+   *
+   * DO NOT merge the interstitial wiring without explicit human sign-off on the
+   * companion-mode defensibility call. Using silence as placeholder until the
+   * Lore asset is produced and approved.
+   */
+  interstitialArmed: boolean;
+  /** Dismiss the interstitial after it plays (or while the silence placeholder runs). */
+  dismissInterstitial: () => void;
+
+  /**
+   * True when a live→past crossing revealed that the listener's active Spotify
+   * output differs from their pinned device. Cleared when the listener confirms
+   * via dismissDeviceMismatch(), or when a new ride starts.
+   *
+   * The UI should surface the device picker with an explanation so the listener
+   * can confirm (or change) where replay audio will play before it begins.
+   */
+  deviceMismatch: boolean;
+  /** Called when the listener has acknowledged the device-mismatch banner (or
+   *  confirmed their device in the picker). Clears the mismatch gate so the
+   *  interstitial can auto-dismiss and past playback can begin. */
+  dismissDeviceMismatch: () => void;
+
+  /**
+   * True when the scrub head has outrun the prefetch buffer — the current track
+   * is still being resolved on the active service.
+   * The UI must show "Finding this on [Service]…" rather than silence.
+   */
+  bufferOutrun: boolean;
 }
 
 /** One scan hop — the preview currently sounding during a preview-mode scan. */
@@ -528,6 +572,46 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // then failed — ensuring audio never goes silent on a live ride.
   const [altDriversAllFailed, setAltDriversAllFailed] = useState(false);
 
+  // ⚠️ FLAGGED — live-to-past pipeline crossing interstitial.
+  // Set when the audio pipeline crosses from live broadcast to past replay.
+  // While true, the preview-drive playback effect is gated (past audio waits).
+  // The interstitial wiring is present; DO NOT merge without explicit human
+  // sign-off on the companion-mode defensibility call. Silence is the placeholder
+  // until the Lore-authored tone asset is produced and approved.
+  const [interstitialArmed, setInterstitialArmed] = useState(false);
+  // Ref mirror so stable callbacks (tryAltDriverRef etc.) can read without
+  // being captured in their closure dependency arrays.
+  const interstitialArmedRef = useRef(false);
+  interstitialArmedRef.current = interstitialArmed;
+
+  // True when the device-continuity check found a mismatch between the active
+  // Spotify output and the pinned device. Keeps the interstitial gate held open
+  // until the listener acknowledges via dismissDeviceMismatch().
+  const [deviceMismatch, setDeviceMismatch] = useState(false);
+
+  // True while the async getSpotifyDevices call is in flight at a crossing.
+  // Prevents the auto-dismiss timer from firing before the check resolves.
+  const [deviceCheckPending, setDeviceCheckPending] = useState(false);
+
+  // Session flag: device continuity was checked on the first live→past crossing.
+  // After the check runs once this session, no further prompts are shown.
+  const deviceContinuityCheckedRef = useRef(false);
+
+  // Per-service prefetch trackers (keyed by service string: "preview", "spotify", etc.)
+  // Updated as materialization observations arrive; mutated via ref (no re-render needed).
+  const prefetchTrackersRef = useRef<Map<string, ServicePrefetchTracker>>(new Map());
+
+  // Timestamp (Date.now()) when the most recent track advance occurred.
+  // Used to measure inter-detent cadence for the EWMA prefetch tracker.
+  const lastAdvanceTimeRef = useRef<number | null>(null);
+
+  // Stable refs to Spotify primitives the crossing handler needs inside async
+  // .then() callbacks — avoids capturing a stale closure over spotify.
+  const spotifyFetchDevicesRef = useRef<(() => Promise<SpotifyDevice[]>) | null>(null);
+  spotifyFetchDevicesRef.current = spotify.fetchDevices;
+  const spotifyPinnedDeviceIdRef = useRef<string | null | undefined>(spotify.pinnedDevice?.id);
+  spotifyPinnedDeviceIdRef.current = spotify.pinnedDevice?.id;
+
   // Guards so async resolves don't stack up or race a stopped ride.
   const rideRef = useRef(0); // bumped on every start/stop to invalidate stale async work
   const fetchingNextRef = useRef(false);
@@ -592,6 +676,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     previewFetchingRef.current.clear();
     playingUrlRef.current = null;
     liveStationSlugRef.current = null;
+    lastAdvanceTimeRef.current = null;
     const el = audioRef.current;
     if (el) {
       el.pause();
@@ -616,6 +701,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setPreferredServiceState(null);
     setAppleMusicConnected(false);
     setAltDriversAllFailed(false);
+    // Clear the interstitial and related device-continuity state — fired once
+    // per live→past crossing; dismissed on ride end so the next crossing arms
+    // cleanly.
+    setInterstitialArmed(false);
+    setDeviceMismatch(false);
+    setDeviceCheckPending(false);
+    // NOTE: deviceContinuityCheckedRef is NOT reset here — it is a session-level
+    // flag (once per session, not once per ride).
   }, []);
 
   const start = useCallback(
@@ -633,6 +726,73 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       activeDriverStopRef.current();
       sourceRef.current = null;
       liveStationSlugRef.current = opts?.stationSlug ?? null;
+
+      // Live-to-past crossing detection.
+      // "live" means: an active live-orientation ride, OR plain radio playing
+      // (station passthrough was carrying audio before this start call).
+      const newOrientation = opts?.timeOrientation ?? "curated";
+      const wasLiveAudio =
+        (active && timeOrientationRef.current === "live") ||
+        (!active &&
+          radioRef.current.status !== "idle" &&
+          radioRef.current.status !== "error");
+      if (wasLiveAudio && newOrientation === "past") {
+        // ⚠️ FLAGGED — companion-mode interstitial crossing.
+        // Arms the gate: the preview-drive playback effect will not start audio
+        // until interstitialArmed clears (see auto-dismiss effect below).
+        // The audio asset requires explicit human sign-off before this fires audio.
+        // Using silence as placeholder until the Lore-authored tone is approved.
+        setInterstitialArmed(true);
+        // Device continuity: on the first live→past crossing this session, fetch
+        // the device list, find the currently-active output, compare it to the
+        // pinned Connect device. If they differ, set deviceMismatch so the UI
+        // surfaces a confirmation gate and the interstitial stays armed until
+        // the listener confirms. Must complete (setDeviceCheckPending(false))
+        // before the auto-dismiss effect allows playback to start.
+        if (
+          !deviceContinuityCheckedRef.current &&
+          playbackModeRef.current === "resolve_to_service"
+        ) {
+          deviceContinuityCheckedRef.current = true;
+          setDeviceCheckPending(true);
+          // Capture the pin ID synchronously — reading the ref here gives us a
+          // coherent pre-fetch snapshot.  Reading it inside .then() would be
+          // racy: fetchDevices() calls setPinnedDevice(null) when the pin is
+          // unreachable, but that React state update has not flushed by the time
+          // .then() runs, so the ref could still hold the stale (now-cleared) ID.
+          const pinnedIdAtCrossing = spotifyPinnedDeviceIdRef.current ?? null;
+          // Capture the ride token so a stale response cannot gate a new ride.
+          const tokenAtCheck = rideRef.current;
+          void spotifyFetchDevicesRef.current?.()
+            .then((devices) => {
+              // Discard if the ride was replaced while the fetch was in flight.
+              if (rideRef.current !== tokenAtCheck) return;
+              // No pin at crossing → no device to compare against.
+              if (!pinnedIdAtCrossing) return;
+              // If the pinned device is not in the returned list it is unreachable.
+              // fetchDevices() already cleared the pin and showed the "Pinned
+              // device unreachable" toast — we must not additionally show a
+              // blocking mismatch banner for a device that no longer exists.
+              const pinnedReachable = (devices ?? []).some(
+                (d) => d.id === pinnedIdAtCrossing,
+              );
+              if (!pinnedReachable) return;
+              // Device is reachable.  Check if it is the currently active output.
+              const activeDevice = (devices ?? []).find((d) => d.isActive);
+              if (!activeDevice || activeDevice.id !== pinnedIdAtCrossing) {
+                // Mismatch: keep interstitial armed until the listener confirms
+                // their device via the RideBar confirmation gate.
+                setDeviceMismatch(true);
+              }
+            })
+            .catch(() => {})
+            .finally(() => {
+              // Always clear the pending flag so the auto-dismiss can proceed.
+              setDeviceCheckPending(false);
+            });
+        }
+      }
+
       setSource(null);
       setActive(true);
       setStatus("loading");
@@ -641,7 +801,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setMode("trail");
       setReplayLabel(null);
       setRideListenContext(null);
-      setTimeOrientation(opts?.timeOrientation ?? "curated");
+      setInterstitialArmed((prev) => {
+        // Keep armed if set by the crossing above; otherwise leave untouched.
+        return prev;
+      });
+      setTimeOrientation(newOrientation);
       setQueue([
         {
           mbid: seed.mbid,
@@ -654,7 +818,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       ]);
       setIndex(0);
     },
-    [pauseRadio, clearScanTimer, stopScanAudio],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [active, pauseRadio, clearScanTimer, stopScanAudio],
   );
 
   // Ghost radio / curated picker replay: play a documented run exactly as it
@@ -700,8 +865,57 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           remembered.mbid,
         );
       }
+      // Live-to-past crossing detection (same logic as start()).
+      const newOrientation = opts?.timeOrientation ?? "past";
+      const wasLiveAudio =
+        (active && timeOrientationRef.current === "live") ||
+        (!active &&
+          radioRef.current.status !== "idle" &&
+          radioRef.current.status !== "error");
+      if (wasLiveAudio && newOrientation === "past") {
+        // ⚠️ FLAGGED — companion-mode interstitial crossing.
+        // Arms the gate: the preview-drive playback effect will not start audio
+        // until interstitialArmed clears (see auto-dismiss effect below).
+        // The audio asset requires explicit human sign-off before this fires audio.
+        // Using silence as placeholder until the Lore-authored tone is approved.
+        setInterstitialArmed(true);
+        // Device continuity: fetch devices, find the active output, compare to
+        // the pinned device. If mismatch, set deviceMismatch so the UI shows a
+        // confirmation gate before replay audio begins. The fetch must complete
+        // (setDeviceCheckPending(false)) before the auto-dismiss can fire.
+        if (
+          !deviceContinuityCheckedRef.current &&
+          playbackModeRef.current === "resolve_to_service"
+        ) {
+          deviceContinuityCheckedRef.current = true;
+          setDeviceCheckPending(true);
+          // Capture the pin synchronously — same rationale as in start(): reading
+          // spotifyPinnedDeviceIdRef inside .then() would see a stale value after
+          // fetchDevices() calls setPinnedDevice(null) for an unreachable pin.
+          const pinnedIdAtCrossing = spotifyPinnedDeviceIdRef.current ?? null;
+          const tokenAtCheck = rideRef.current;
+          void spotifyFetchDevicesRef.current?.()
+            .then((devices) => {
+              if (rideRef.current !== tokenAtCheck) return;
+              if (!pinnedIdAtCrossing) return;
+              const pinnedReachable = (devices ?? []).some(
+                (d) => d.id === pinnedIdAtCrossing,
+              );
+              if (!pinnedReachable) return; // fetchDevices already cleared + toasted
+              const activeDevice = (devices ?? []).find((d) => d.isActive);
+              if (!activeDevice || activeDevice.id !== pinnedIdAtCrossing) {
+                setDeviceMismatch(true);
+              }
+            })
+            .catch(() => {})
+            .finally(() => {
+              setDeviceCheckPending(false);
+            });
+        }
+      }
+
       // Ghost-radio station runs are 'past'; curated picker runs are 'curated'.
-      setTimeOrientation(opts?.timeOrientation ?? "past");
+      setTimeOrientation(newOrientation);
       setQueue(
         seeds.map((seed) => ({
           mbid: seed.mbid,
@@ -730,12 +944,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             links: seed.links,
           })),
           label,
-          opts?.timeOrientation === "curated" ? "curated" : "past",
+          newOrientation === "curated" ? "curated" : "past",
           startAt >= 0 && startAt < seeds.length ? startAt : 0,
         );
       }
     },
-    [pauseRadio, clearScanTimer, stopScanAudio],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [active, pauseRadio, clearScanTimer, stopScanAudio],
   );
 
   // Safety net: if a ride becomes active while a preview scan is running
@@ -887,6 +1102,99 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // driver end-of-track events.
   const isLiveSvcRide = isLiveServiceRide(playbackMode, timeOrientation);
 
+  // Scrub-cadence tracking: record time between successive track advances so
+  // the EWMA prefetch tracker can adjust depth for the listener's browse pace.
+  useEffect(() => {
+    if (!active) return;
+    const now = Date.now();
+    if (lastAdvanceTimeRef.current !== null) {
+      const cadenceMs = now - lastAdvanceTimeRef.current;
+      // Only record if cadence looks plausible (between 500ms and 30min).
+      if (cadenceMs > 500 && cadenceMs < 30 * 60 * 1000) {
+        const svc = sourceRef.current ?? "preview";
+        const current =
+          prefetchTrackersRef.current.get(svc) ?? createServicePrefetchTracker();
+        prefetchTrackersRef.current.set(
+          svc,
+          observeScrubCadence(current, cadenceMs),
+        );
+      }
+    }
+    lastAdvanceTimeRef.current = now;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, index]);
+
+  // Adaptive prefetch: pre-resolve preview URLs for upcoming items in a past-
+  // orientation replay up to `depth` tracks ahead of the current index.
+  //
+  // - Only fires in past orientation — live orientation has no fixed queue to
+  //   pre-fetch, and curated rides are shorter-lived.
+  // - Skips items whose preview is already resolved (previewUrl !== undefined).
+  // - On direction reversal, stale in-flight forward fetches are allowed to
+  //   land (they will resolve the item correctly via MBID-keyed setQueue) but
+  //   no NEW forward fetches are started for the stale direction.
+  // - A nearly-done in-flight job is always allowed to complete.
+  useEffect(() => {
+    if (!active) return;
+    if (timeOrientation !== "past") return; // only prefetch in past orientation
+    if (mode !== "replay") return; // trail mode uses the segue-lookahead path
+
+    const svc = "preview";
+    const tracker =
+      prefetchTrackersRef.current.get(svc) ?? createServicePrefetchTracker();
+    const depth = tracker.depth; // PREFETCH_DEPTH_START until EWMA converges
+
+    const token = rideRef.current;
+
+    for (let ahead = 1; ahead <= depth; ahead++) {
+      const item = queue[index + ahead];
+      if (!item) break;
+      if (item.previewUrl !== undefined) continue; // already resolved
+      if (previewFetchingRef.current.has(item.mbid)) continue; // in flight
+
+      const targetMbid = item.mbid;
+      const fetchStart = Date.now();
+      previewFetchingRef.current.add(targetMbid);
+
+      void getRecordingPreview(targetMbid)
+        .then((p) => {
+          if (token !== rideRef.current) return;
+          // Record materialization latency for the EWMA tracker.
+          const latencyMs = Date.now() - fetchStart;
+          const cur =
+            prefetchTrackersRef.current.get(svc) ?? createServicePrefetchTracker();
+          prefetchTrackersRef.current.set(
+            svc,
+            observeMaterializationLatency(cur, latencyMs),
+          );
+          setQueue((q) =>
+            q.map((qi) =>
+              qi.mbid === targetMbid
+                ? {
+                    ...qi,
+                    previewUrl: p.previewUrl,
+                    artworkUrl: qi.artworkUrl ?? p.artworkUrl ?? null,
+                  }
+                : qi,
+            ),
+          );
+        })
+        .catch(() => {
+          if (token === rideRef.current) {
+            setQueue((q) =>
+              q.map((qi) =>
+                qi.mbid === targetMbid ? { ...qi, previewUrl: null } : qi,
+              ),
+            );
+          }
+        })
+        .finally(() => {
+          previewFetchingRef.current.delete(targetMbid);
+        });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, index, queue, timeOrientation, mode]);
+
   // ---- Playback drivers ---------------------------------------------------
   // Three drivers are instantiated each session. PlayerProvider selects the
   // first available one (Spotify → Apple Music → YouTube) as `activeDriver`
@@ -895,7 +1203,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // the next available driver before falling back to preview/broadcast.
 
   const spotifyDriver = useSpotifyDriver({
-    active,
+    // ⚠️ FLAGGED — interstitial gate. While interstitialArmed is true the
+    // Spotify driver must not command the connected device. Passing
+    // `active && !interstitialArmed` suppresses the driver's play effect for
+    // the entire crossing window (silence placeholder or real Lore tone).
+    active: active && !interstitialArmed,
     playbackMode,
     timeOrientation,
     currentItem,
@@ -1009,6 +1321,29 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, [altDriversAllFailed, currentMbid, currentItem, preferredService, retryCurrentTrack]);
 
   const retrySpotify = retryService;
+
+  /** Dismiss the live→past interstitial after it plays (or during silence placeholder). */
+  const dismissInterstitial = useCallback(() => setInterstitialArmed(false), []);
+
+  /** Acknowledge the device-mismatch gate. Clears the mismatch flag so the
+   *  auto-dismiss effect can proceed and past playback can begin. */
+  const dismissDeviceMismatch = useCallback(() => setDeviceMismatch(false), []);
+
+  // ⚠️ FLAGGED — interstitial auto-dismiss.
+  // When the interstitial is armed but no device check is pending and no device
+  // mismatch is blocking, dismiss the interstitial after the silence placeholder
+  // duration. INTERSTITIAL_SILENCE_MS is 0 (no perceptible pause) until the
+  // Lore-authored tone is approved; at that point replace 0 with the asset
+  // duration in milliseconds.
+  const INTERSTITIAL_SILENCE_MS = 0;
+  useEffect(() => {
+    if (!interstitialArmed || deviceCheckPending || deviceMismatch) return;
+    const id = window.setTimeout(
+      () => setInterstitialArmed(false),
+      INTERSTITIAL_SILENCE_MS,
+    );
+    return () => window.clearTimeout(id);
+  }, [interstitialArmed, deviceCheckPending, deviceMismatch]);
 
   // Apple Music configuration flag — derived from app config (server token).
   const appleMusicConfigured = Boolean(appConfig?.appleMusic?.developerToken ?? null);
@@ -1148,6 +1483,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // The ref indirection avoids a dependency cycle.
   useEffect(() => {
     tryAltDriverRef.current = (mbid: string, item: RideItem, skipApple: boolean) => {
+      // ⚠️ FLAGGED — interstitial gate.
+      // While the live→past interstitial is armed, no driver may command audio.
+      // We read from the ref (not state) so this closure always sees the latest
+      // value without requiring the ref to be in the deps array.
+      if (interstitialArmedRef.current) return;
+
       // ── Local file: try first if a file is matched ───────────────────────
       const failedLf = altDriverFailedRef.current.has(`lf:${mbid}`);
       if (!failedLf && localFileDriver.available) {
@@ -1216,15 +1557,17 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // Fires when the user explicitly picks YouTube or Apple Music from the
   // options panel.  The cascade is adjusted: skipApple=true sends us straight
   // to YouTube; skipApple=false tries Apple Music first then falls to YouTube.
+  // ⚠️ FLAGGED — interstitial gate: suppressed while crossing is pending.
   useEffect(() => {
     if (!active || !preferredService || !currentMbid || !currentItem) return;
     if (playbackMode !== "resolve_to_service") return;
+    if (interstitialArmed) return; // gate: do not start any driver while crossing
     if (altDriverActiveMbid === currentMbid) return; // already driving this track
     if (driverActive) return; // Spotify or an alt driver is already carrying audio
     const skipApple = preferredService === "youtube";
     tryAltDriverRef.current(currentMbid, currentItem, skipApple);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, preferredService, currentMbid, currentItem, playbackMode, altDriverActiveMbid, driverActive]);
+  }, [active, preferredService, currentMbid, currentItem, playbackMode, interstitialArmed, altDriverActiveMbid, driverActive]);
 
   // Subscribe to Spotify driver status updates — mirror source/status state.
   useEffect(() => {
@@ -1781,6 +2124,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // Drive playback of the current item: resolve its preview, then play it.
   useEffect(() => {
     if (!active) return undefined;
+    // ⚠️ FLAGGED — interstitial gate: hold off past-audio start until the
+    // live→past interstitial clears (silence plays + device check resolves).
+    if (interstitialArmed) {
+      setStatus("loading");
+      return undefined;
+    }
     if (driverActive) return undefined; // a service driver carries this track
     // For live fallback, the broadcast carries the audio — no preview needed.
     // Guard on effectiveFallbackUsed so the preferredService path (where
@@ -1874,6 +2223,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     return undefined;
   }, [
     active,
+    interstitialArmed,
     index,
     currentMbid,
     currentPreview,
@@ -1963,6 +2313,17 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     [active, radio, stop],
   );
 
+  // Buffer-outrun: the scrub head has advanced to an item whose preview URL
+  // has not yet been resolved.  The UI must show "Finding this on [Service]…"
+  // rather than silence so the listener knows we are working on it.
+  // True only when no service driver is already carrying the track (which
+  // would mean the service is handling playback independently).
+  const bufferOutrun =
+    active &&
+    !driverActive &&
+    currentMbid != null &&
+    currentPreview === undefined;
+
   const value = useMemo<PlayerContextValue>(
     () => ({
       radio: {
@@ -2019,6 +2380,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         appleMusicConnected,
         preferredService,
         setPreferredService,
+        interstitialArmed,
+        dismissInterstitial,
+        deviceMismatch,
+        dismissDeviceMismatch,
+        bufferOutrun,
       },
       spotify,
       scan: {
@@ -2077,6 +2443,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       appleMusicConnected,
       preferredService,
       setPreferredService,
+      interstitialArmed,
+      dismissInterstitial,
+      deviceMismatch,
+      dismissDeviceMismatch,
+      bufferOutrun,
       spotify,
       scanActive,
       toggleScan,

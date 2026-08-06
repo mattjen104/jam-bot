@@ -355,6 +355,50 @@ export function RideBar({
       className="fixed z-40 border border-border bg-secondary/95 backdrop-blur-md shadow-lg bottom-[68px] left-4 right-4 rounded-[18px] lg:bottom-[68px] lg:left-4 lg:right-4"
       data-testid="ride-bar"
     >
+      {/* ── Live-to-past crossing interstitial gate ─────────────────────── */}
+      {/* ⚠️ FLAGGED — companion-mode interstitial crossing.                  */}
+      {/* Shown while the interstitial is armed (silence placeholder or a     */}
+      {/* real Lore tone once approved). If a device mismatch was detected,   */}
+      {/* the listener must confirm before past replay begins.                */}
+      {ride.interstitialArmed ? (
+        <div
+          className="border-b border-border/60 bg-background/40"
+          data-testid="ride-crossing-interstitial"
+        >
+          {ride.deviceMismatch ? (
+            // Mismatch: listener must pick/confirm the right device first.
+            <div className="px-5 py-2">
+              <div className="flex items-center justify-between gap-3">
+                <p className="font-mono text-[11px] text-muted-foreground">
+                  Replay will play on your pinned device — confirm to continue.
+                </p>
+                <button
+                  type="button"
+                  onClick={ride.dismissDeviceMismatch}
+                  aria-label="Continue"
+                  data-testid="ride-device-mismatch-confirm"
+                  className="hover-elevate shrink-0 rounded-full border border-border px-2.5 py-0.5 font-mono text-[11px] text-muted-foreground"
+                >
+                  Continue
+                </button>
+              </div>
+              {/* Let the listener switch devices directly from this banner. */}
+              <div className="mt-1.5 flex justify-start">
+                <DevicePicker spotify={spotify} />
+              </div>
+            </div>
+          ) : (
+            // No mismatch (or check pending): brief "Crossing to replay…" state.
+            <div className="flex items-center gap-2 px-5 py-1.5">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+              <span className="font-mono text-[11px] text-muted-foreground">
+                Crossing to replay…
+              </span>
+            </div>
+          )}
+        </div>
+      ) : null}
+
       {/* One-shot notice (OAuth return or device availability). */}
       {spotify.notice ? (
         <div className="border-b border-border/60 bg-background/40">
@@ -474,6 +518,22 @@ export function RideBar({
             </a>
           ) : null}
         </div>
+
+        {/* ── Buffer-outrun: scrub head has outrun the prefetch buffer ── */}
+        {/* Show "Finding this on [Service]…" so the listener never sees silence */}
+        {ride.bufferOutrun ? (
+          <div className="mt-1.5 flex items-center gap-2">
+            <span
+              className="inline-flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground"
+              data-testid="ride-buffer-outrun"
+            >
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              {ride.sourceLabel
+                ? `Finding this on ${ride.sourceLabel}…`
+                : "Finding this track…"}
+            </span>
+          </div>
+        ) : null}
 
         {/* ── Fallback / status line ── */}
         {ride.fallbackUsed ? (
