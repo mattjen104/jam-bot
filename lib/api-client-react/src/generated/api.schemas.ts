@@ -2966,6 +2966,40 @@ export interface MeOverlapRunsResponse {
   items: OverlapRunItem[];
 }
 
+export type RunCrossingMomentStation = {
+  slug: string;
+  name: string;
+};
+
+/**
+ * A single library-crossing moment within a broadcast run. Returned by /me/overlaps/runs/{runId}/crossings and used as fine detents in the two-speed dial scan (swipe left/right on the now-playing card).
+
+ */
+export interface RunCrossingMoment {
+  spinId: number;
+  playedAt: string;
+  /** @nullable */
+  mbid: string | null;
+  /** @nullable */
+  artistName: string | null;
+  /** @nullable */
+  trackTitle: string | null;
+  station: RunCrossingMomentStation;
+  /** @nullable */
+  runId: number | null;
+  /** @nullable */
+  showName: string | null;
+  /** @nullable */
+  djName: string | null;
+  /** @nullable */
+  spinDurationSeconds: number | null;
+}
+
+export interface RunCrossingMomentsResponse {
+  runId: number;
+  moments: RunCrossingMoment[];
+}
+
 /**
  * One hourly bucket from the density spine.  Both `owned` and `discover` count only resolved MBIDs; raw-text-only spins are excluded.  An empty bin (owned=0, discover=0) means no resolved spins were logged in that hour — not that Lore was definitely listening and found nothing.
 
@@ -3261,7 +3295,19 @@ export type GetMyOverlapRunsParams = {
  * @pattern ^\d{4}-\d{2}-\d{2}$
  */
   day?: string;
+  /**
+ * When "recent", returns runs in reverse-chronological order (newest first) windowed to the last 60 runs — the coarse detent list for the two-speed dial scan. Omit for the default owned-count ranking.
+
+ */
+  order?: GetMyOverlapRunsOrder;
 };
+
+export type GetMyOverlapRunsOrder =
+  (typeof GetMyOverlapRunsOrder)[keyof typeof GetMyOverlapRunsOrder];
+
+export const GetMyOverlapRunsOrder = {
+  recent: "recent",
+} as const;
 
 export type GetMyOverlapSpineParams = {
   /**

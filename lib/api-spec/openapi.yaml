@@ -3008,6 +3008,16 @@ paths:
             Optional UTC calendar day (YYYY-MM-DD). When present, restricts
             results to runs whose broadcast day matches. Omit to get all-time
             top runs.
+        - name: order
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [recent]
+          description: >
+            When "recent", returns runs in reverse-chronological order (newest
+            first) windowed to the last 60 runs — the coarse detent list for the
+            two-speed dial scan. Omit for the default owned-count ranking.
       responses:
         "200":
           description: Overlap run items (may be empty)
@@ -3015,6 +3025,45 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MeOverlapRunsResponse"
+  /me/overlaps/runs/{runId}/crossings:
+    get:
+      operationId: getMyRunCrossings
+      tags: [me]
+      summary: Library-crossing moments within a broadcast run
+      description: >
+        Returns all spins within the run whose MBID is in the caller's
+        library, ordered by playedAt asc. These are the fine detents for
+        the two-speed dial scan — swipe left/right on the now-playing card
+        steps through them.
+
+        runId semantics: the server resolves the run partition (station +
+        show + UTC day) from the given spin ID and returns all crossing
+        moments in that partition. Callers sourced from /me/overlaps/runs
+        will receive the canonical run anchor (min spin ID per partition),
+        which is the recommended input. Passing any other spin ID that
+        exists in the same partition returns the same result. Returns an
+        empty list when no spin with that ID exists or the run has no
+        library crossings.
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: >
+            Spin ID identifying the run partition. The canonical value is
+            min(spin.id) for the run, as returned by /me/overlaps/runs.
+            Any spin ID from the same partition (station + show + UTC day)
+            returns the same crossing moments.
+      responses:
+        "200":
+          description: Crossing moments for the run (may be empty)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunCrossingMomentsResponse"
+        "400":
+          description: runId is not a positive integer
   /me/overlaps/spine:
     get:
       operationId: getMyOverlapSpine
@@ -7118,9 +7167,6 @@ components:
         day:
           type: string
           pattern: '^\d{4}-\d{2}-\d{2}$'
-        stationId:
-          type: integer
-          description: Station primary key — used to fetch per-station spine density.
         station:
           type: object
           properties:
@@ -7145,7 +7191,53 @@ components:
           type: integer
         discover:
           type: integer
-      required: [runId, day, stationId, station, show, owned, discover]
+      required: [runId, day, station, show, owned, discover]
+    RunCrossingMomentsResponse:
+      type: object
+      properties:
+        runId:
+          type: integer
+        moments:
+          type: array
+          items:
+            $ref: "#/components/schemas/RunCrossingMoment"
+      required: [runId, moments]
+    RunCrossingMoment:
+      type: object
+      description: >
+        A single library-crossing moment within a broadcast run. Returned by
+        /me/overlaps/runs/{runId}/crossings and used as fine detents in the
+        two-speed dial scan (swipe left/right on the now-playing card).
+      properties:
+        spinId:
+          type: integer
+        playedAt:
+          type: string
+          format: date-time
+        mbid:
+          type: ["string", "null"]
+        artistName:
+          type: ["string", "null"]
+        trackTitle:
+          type: ["string", "null"]
+        station:
+          type: object
+          properties:
+            slug:
+              type: string
+            name:
+              type: string
+          required: [slug, name]
+        runId:
+          type: ["integer", "null"]
+        showName:
+          type: ["string", "null"]
+        djName:
+          type: ["string", "null"]
+        spinDurationSeconds:
+          type: ["integer", "null"]
+      required:
+        [spinId, playedAt, mbid, artistName, trackTitle, station, runId, showName, djName, spinDurationSeconds]
     OverlapSpineBin:
       type: object
       description: >

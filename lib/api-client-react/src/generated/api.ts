@@ -97,6 +97,7 @@ import type {
   ReplayResolutionJob,
   ResolveSongParams,
   ResolvedSong,
+  RunCrossingMomentsResponse,
   RymListRequest,
   ScrapedStationList,
   SearchArtistRunsParams,
@@ -8790,6 +8791,99 @@ export function useGetMyOverlapRuns<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetMyOverlapRunsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns all spins within the run (identified by the run anchor min(spin.id)) whose MBID is in the caller's library, ordered by playedAt asc. These are the fine detents for the two-speed dial scan — swipe left/right on the now-playing card steps through them. Returns an empty moments list when runId is not a run anchor or the run has no library crossings.
+
+ * @summary Library-crossing moments within a broadcast run
+ */
+export const getGetMyRunCrossingsUrl = (runId: number) => {
+  return `/api/me/overlaps/runs/${runId}/crossings`;
+};
+
+export const getMyRunCrossings = async (
+  runId: number,
+  options?: RequestInit,
+): Promise<RunCrossingMomentsResponse> => {
+  return customFetch<RunCrossingMomentsResponse>(
+    getGetMyRunCrossingsUrl(runId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetMyRunCrossingsQueryKey = (runId: number) => {
+  return [`/api/me/overlaps/runs/${runId}/crossings`] as const;
+};
+
+export const getGetMyRunCrossingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyRunCrossings>>,
+  TError = ErrorType<void>,
+>(
+  runId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyRunCrossings>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetMyRunCrossingsQueryKey(runId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMyRunCrossings>>
+  > = ({ signal }) => getMyRunCrossings(runId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!runId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyRunCrossings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyRunCrossingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyRunCrossings>>
+>;
+export type GetMyRunCrossingsQueryError = ErrorType<void>;
+
+/**
+ * @summary Library-crossing moments within a broadcast run
+ */
+
+export function useGetMyRunCrossings<
+  TData = Awaited<ReturnType<typeof getMyRunCrossings>>,
+  TError = ErrorType<void>,
+>(
+  runId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyRunCrossings>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyRunCrossingsQueryOptions(runId, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

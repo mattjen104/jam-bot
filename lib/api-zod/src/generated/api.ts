@@ -4772,6 +4772,12 @@ export const GetMyOverlapRunsQueryParams = zod.object({
     .describe(
       "Optional UTC calendar day (YYYY-MM-DD). When present, restricts results to runs whose broadcast day matches. Omit to get all-time top runs.\n",
     ),
+  order: zod
+    .enum(["recent"])
+    .optional()
+    .describe(
+      'When \"recent\", returns runs in reverse-chronological order (newest first) windowed to the last 60 runs — the coarse detent list for the two-speed dial scan. Omit for the default owned-count ranking.\n',
+    ),
 });
 
 export const getMyOverlapRunsResponseItemsItemDayRegExp = new RegExp(
@@ -4798,6 +4804,42 @@ export const GetMyOverlapRunsResponse = zod.object({
       owned: zod.number(),
       discover: zod.number(),
     }),
+  ),
+});
+
+/**
+ * Returns all spins within the run (identified by the run anchor min(spin.id)) whose MBID is in the caller's library, ordered by playedAt asc. These are the fine detents for the two-speed dial scan — swipe left/right on the now-playing card steps through them. Returns an empty moments list when runId is not a run anchor or the run has no library crossings.
+
+ * @summary Library-crossing moments within a broadcast run
+ */
+export const GetMyRunCrossingsParams = zod.object({
+  runId: zod.coerce
+    .number()
+    .describe("min(spin.id) for the run — the run anchor."),
+});
+
+export const GetMyRunCrossingsResponse = zod.object({
+  runId: zod.number(),
+  moments: zod.array(
+    zod
+      .object({
+        spinId: zod.number(),
+        playedAt: zod.date(),
+        mbid: zod.string().nullable(),
+        artistName: zod.string().nullable(),
+        trackTitle: zod.string().nullable(),
+        station: zod.object({
+          slug: zod.string(),
+          name: zod.string(),
+        }),
+        runId: zod.number().nullable(),
+        showName: zod.string().nullable(),
+        djName: zod.string().nullable(),
+        spinDurationSeconds: zod.number().nullable(),
+      })
+      .describe(
+        "A single library-crossing moment within a broadcast run. Returned by \/me\/overlaps\/runs\/{runId}\/crossings and used as fine detents in the two-speed dial scan (swipe left\/right on the now-playing card).\n",
+      ),
   ),
 });
 

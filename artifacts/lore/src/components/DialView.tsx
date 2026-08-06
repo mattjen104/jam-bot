@@ -10,14 +10,13 @@ import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, typ
 import { SeedInput } from "./SeedInput";
 import { Search } from "lucide-react";
 import { useLocation, Link } from "wouter";
-import { useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyAlbumAvatar, useMyPopularCrossings, useRecentSets, useMyOverlapRunsFor, useMyOverlapSpine, fillSpineBins, type GhostStation, type PopularCrossingArtist, type RecentSetItem, type RecentSetArtist, type RecentSetWindow, type OverlapRun } from "../lib/meHooks";
-import { DensitySpine } from "./DensitySpine";
+import { useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyAlbumAvatar, useMyPopularCrossings, useRecentSets, useMyOverlapRunsFor, useMyOverlapRunsRecent, useMyRunCrossings, type GhostStation, type PopularCrossingArtist, type RecentSetItem, type RecentSetArtist, type RecentSetWindow, type OverlapRun, type RunCrossingMoment } from "../lib/meHooks";
 import { useGetStationNowPlaying, getGetStationNowPlayingQueryKey } from "@workspace/api-client-react";
 import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
 import { StationLane } from "./StationLane";
 import { ContextRail } from "./ContextRail";
 import { SearchOverlay } from "./SearchOverlay";
-import { usePlayer } from "../player/PlayerProvider";
+import { usePlayer, type RideSeed } from "../player/PlayerProvider";
 import { BottlePanel } from "./BottlePanel";
 import { AlbumAvatarPicker } from "./AlbumAvatarPicker";
 import { MoonPhaseGlyph } from "./MoonPhaseGlyph";
@@ -618,91 +617,187 @@ function ZoneLabel({ label, n, hint, accent, estimated, collapsed, onCollapse }:
 }
 
 // ---------------------------------------------------------------------------
-// DialTimeTravelStrip — day nav (← Prev | label | →) + Top sets toggle
+// DialTimeTravelStrip — run nav (← Prev | label | →) + Top sets toggle
 // ---------------------------------------------------------------------------
 
-export type TtMode = "live" | "day" | "top";
+
+
+// ---------------------------------------------------------------------------
+// DensitySpine — interactive crossing-density spine for coarse run navigation
+// ---------------------------------------------------------------------------
+
+/**
+ * A horizontal row of clickable bins, one per crossing run, ordered oldest
+ * (left) to newest (right).  Displays crossing density (owned count) as a
+ * proportional bar height so dense regions are visually prominent.
+ *
+ * Interactions:
+ * - Click a bin → onRunSelect(runIdx)
+ * - Pointer-drag along the spine → continuously calls onRunSelect as the
+ *   pointer moves, giving the "scan" feel of the coarse detent drag.
+ *
+ * Suppressed in Top Sets mode (caller controls visibility).
+ */
+export function DensitySpine({
+  runs,
+  activeIdx,
+  onRunSelect,
+}: {
+  runs: OverlapRun[];
+  activeIdx: number | null;
+  onRunSelect: (idx: number) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isDragging = useRef(false);
+
+  /** Map a clientX pixel to the nearest run index (newest=right, oldest=left). */
+  const clientXToIdx = useCallback((clientX: number): number => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect || runs.length === 0) return 0;
+    // x=0 → oldest run (highest array index); x=1 → newest (idx 0)
+    const ratio = (clientX - rect.left) / rect.width;
+    const raw = (1 - Math.max(0, Math.min(1, ratio))) * (runs.length - 1);
+    return Math.round(raw);
+  }, [runs.length]);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    isDragging.current = true;
+    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+    onRunSelect(clientXToIdx(e.clientX));
+  }, [clientXToIdx, onRunSelect]);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging.current) return;
+    onRunSelect(clientXToIdx(e.clientX));
+  }, [clientXToIdx, onRunSelect]);
+
+  const handlePointerUp = useCallback(() => {
+    isDragging.current = false;
+  }, []);
+
+  if (runs.length === 0) return null;
+
+  const maxOwned = Math.max(...runs.map((r) => r.owned), 1);
+
+  return (
+    <div
+      ref={containerRef}
+      className="dial-density-spine"
+      role="slider"
+      aria-label="Crossing run navigator — drag to scan"
+      aria-valuemin={0}
+      aria-valuemax={runs.length - 1}
+      aria-valuenow={activeIdx ?? 0}
+      data-spine="true"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+    >
+      {/* Display oldest → newest (runs array is newest-first, so reverse) */}
+      {[...runs].reverse().map((run, displayIdx) => {
+        const runIdx = runs.length - 1 - displayIdx; // convert back to array index
+        const isActive = runIdx === activeIdx;
+        const heightPct = Math.max(10, Math.round((run.owned / maxOwned) * 100));
+        return (
+          <button
+            key={run.runId}
+            type="button"
+            className={`dial-density-spine__bin${isActive ? " dial-density-spine__bin--active" : ""}`}
+            style={{ height: `${heightPct}%` }}
+            data-run-idx={runIdx}
+            data-day={run.day}
+            aria-label={`${run.day} — ${run.owned} library tracks`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onRunSelect(runIdx);
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+export type TtMode = "live" | "past" | "top";
+
+/**
+ * Narrow handle type for the PastScanHandle passed to DialTimeTravelStrip.
+ * Only exposes what the strip needs; the full state machine lives in
+ * usePastScanState.
+ */
+export interface PastScanHandle {
+  currentRun: OverlapRun | null;
+  isAtLiveEdge: boolean;
+  prevRun: () => void;
+  nextRun: () => void;
+}
 
 /**
  * Compact controls row above Zone 1.
- * Owns no data — only emits mode/day change callbacks.
- * The → arrow is disabled in live mode (today) and top-sets mode.
+ *
+ * Navigation model (replaces calendar day-stepping):
+ *   ← → buttons step through crossing runs (coarse detents) rather than
+ *   calendar days. The strip owns no data — it delegates to pastScan and
+ *   emits mode-change callbacks.
+ *
+ *   ← (Previous run): step to the next older run; in top mode, exits top mode.
+ *   → (Next run):     step to the next newer run; disabled at the live edge
+ *                     (coarseIdx === null) and in top mode.
+ *   ⭐ Top sets:       toggles all-time ranked mode.
  */
-/** Current day in UTC (YYYY-MM-DD) — matches the API's spinDayExpr contract. */
-function todayUtcStr(): string {
-  const d = new Date();
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
-}
-
 export function DialTimeTravelStrip({
   mode,
-  day,
+  pastScan,
   onModeChange,
-  onDayChange,
 }: {
   mode: TtMode;
-  day: string | null;
+  pastScan: PastScanHandle;
   onModeChange: (m: TtMode) => void;
-  onDayChange: (d: string | null) => void;
 }) {
-  const stepDay = (base: string, delta: number): string => {
-    const d = new Date(base + "T00:00:00Z");
-    d.setUTCDate(d.getUTCDate() + delta);
-    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
-  };
-
   const handlePrev = () => {
     if (mode === "top") {
+      // Pressing ← from top mode exits to live.
       onModeChange("live");
-      onDayChange(null);
       return;
     }
-    // Use UTC today so navigation aligns with the API's spinDayExpr (UTC).
-    const base = mode === "live" ? todayUtcStr() : (day ?? todayUtcStr());
-    const prev = stepDay(base, -1);
-    onModeChange("day");
-    onDayChange(prev);
+    pastScan.prevRun();
   };
 
   const handleNext = () => {
-    if (mode !== "day" || !day) return;
-    const next = stepDay(day, 1);
-    if (next >= todayUtcStr()) {
-      // Stepped forward to UTC today → return to live mode.
-      onModeChange("live");
-      onDayChange(null);
-    } else {
-      onDayChange(next);
-    }
+    if (mode === "top" || pastScan.isAtLiveEdge) return;
+    pastScan.nextRun();
   };
 
   const handleTopToggle = () => {
-    if (mode === "top") {
-      onModeChange("live");
-      onDayChange(null);
-    } else {
-      onModeChange("top");
-      onDayChange(null);
-    }
+    onModeChange(mode === "top" ? "live" : "top");
   };
 
   let label: string;
   if (mode === "top") {
     label = "Top sets · all time";
-  } else if (mode === "day" && day) {
-    label = runDate(day);
+  } else if (pastScan.currentRun) {
+    const run = pastScan.currentRun;
+    const djName = run.show?.djName ?? null;
+    const showName = run.show?.name ?? null;
+    const by = djName ?? showName ?? null;
+    label = by
+      ? `${run.station.name} · ${by} · ${runDate(run.day)}`
+      : `${run.station.name} · ${runDate(run.day)}`;
   } else {
     label = "Today";
   }
 
-  const nextDisabled = mode === "live" || mode === "top";
+  // Disable → only when in top mode or when already at the live edge.
+  // In "past" mode (stepped back), → should be enabled so the user can step forward.
+  const nextDisabled = mode === "top" || pastScan.isAtLiveEdge;
 
   return (
     <div className="dial-timetravel" data-mode={mode}>
       <button
         type="button"
         className="dial-timetravel__arrow"
-        aria-label="Previous day"
+        aria-label="Previous run"
         onClick={handlePrev}
       >
         ←
@@ -711,7 +806,7 @@ export function DialTimeTravelStrip({
       <button
         type="button"
         className="dial-timetravel__arrow dial-timetravel__arrow--next"
-        aria-label="Next day"
+        aria-label="Next run"
         disabled={nextDisabled}
         aria-disabled={nextDisabled}
         onClick={handleNext}
@@ -729,6 +824,15 @@ export function DialTimeTravelStrip({
     </div>
   );
 }
+
+// Constants for the past-scan density spine.
+// Synthetic timestamps assign each run a unique X-position (oldest run → smallest
+// timestamp) so that multiple runs on the same calendar day get distinct spine bins.
+// The spine maps hourMs back to a run index via:
+//   binIdx = round((hourMs - PAST_SCAN_BIN_BASE_MS) / PAST_SCAN_BIN_STEP_MS)
+//   runIdx = runs.length - 1 - binIdx   (reversal: pastScanBins is oldest-first)
+export const PAST_SCAN_BIN_BASE_MS = new Date("2020-01-01T00:00:00Z").getTime();
+export const PAST_SCAN_BIN_STEP_MS = 3_600_000; // 1 hour per bin slot
 
 // ---------------------------------------------------------------------------
 // RunRow — a historical crossing run row (day mode / top sets mode)
@@ -1129,6 +1233,29 @@ function useScanState(cands: Array<{ sp: DialSpin; show: DialShow; station: Dial
   return { scanning, sampling, toggle, land, stopScan };
 }
 
+/**
+ * Find the index of the run in `runs` whose UTC broadcast day is nearest to
+ * `hourMs` (epoch milliseconds). Returns 0 when the list is empty.
+ *
+ * Used by the density-spine tap/drag handlers to convert an hour position
+ * into a coarse scan detent. Exported for unit testing in dialPastScan.test.tsx.
+ */
+export function findRunIndexByHour(hourMs: number, runs: OverlapRun[]): number {
+  if (runs.length === 0) return 0;
+  let best = 0;
+  let bestDist = Infinity;
+  for (let i = 0; i < runs.length; i++) {
+    const run = runs[i]!;
+    // Use noon UTC for the run's day to produce a stable representative time.
+    const runDayMs = new Date(run.day + "T12:00:00Z").getTime();
+    const dist = Math.abs(runDayMs - hourMs);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = i;
+    }
+  }
+  return best;
+}
 function ScanBar({
   stations,
   level,
@@ -1717,7 +1844,7 @@ export function DialView() {
   // resolved. At that point we know what's in Zone 1 and can show the tab strip.
   const zone1Settled = !crossingsLoading && !isCoreLoading;
   const isSpotifyConnected = useSpotifyLibraryConnected();
-  const { radio } = usePlayer();
+  const { radio, ride } = usePlayer();
   const { data: weeklyRecapData } = useMyWeeklyRecap();
   // Artwork for the now-playing row indicator
   const activeSlug = radio.station?.slug ?? "";
@@ -2064,72 +2191,138 @@ export function DialView() {
   // Active tab — resets to primary on each page load (not persisted).
   const [activeTab, setActiveTab] = useState<"library" | "recently-aired">("library");
 
-  // ── Time-travel mode (day nav + top sets + spine) ───────────────────────────
+  // ── Time-travel mode (top sets toggle) ─────────────────────────────────────
   const [ttMode, setTtMode] = useState<TtMode>("live");
-  const [ttDay, setTtDay] = useState<string | null>(null);
-  /** Index into `ttDayRunsChron` (sorted oldest-first by runId) for run navigation. */
-  const [ttRunIndex, setTtRunIndex] = useState<number | null>(null);
 
-  // Fetch day-specific runs (only when day mode is active).
-  const { data: ttDayRuns = [], isLoading: ttDayLoading } = useMyOverlapRunsFor(
-    ttDay,
-    { enabled: ttMode === "day" },
-  );
   // Fetch all-time top runs (only when top mode is active).
   const { data: ttTopRuns = [], isLoading: ttTopLoading } = useMyOverlapRunsFor(
     null,
     { enabled: ttMode === "top" },
   );
 
-  // Chronological sort of day runs for prev/next navigation.
-  // Server returns owned-desc order; we want oldest-first for time travel.
-  const ttDayRunsChron = useMemo(
-    () => [...ttDayRuns].sort((a, b) => a.runId - b.runId),
-    [ttDayRuns],
+  // Fetch the recent crossing runs (reverse-chrono) — coarse scan detents.
+  // Always fetched so coarse navigation is immediately available on first ← tap.
+  const { data: recentRuns = [] } = useMyOverlapRunsRecent();
+
+  // Two-level past-scan state machine (coarse = runs, fine = crossing moments).
+  const pastScan = usePastScanState(recentRuns);
+  // Shorthand used by JSX and some callbacks.
+  const currentRun = pastScan.currentRun;
+
+  // Fine crossing moments for the currently-landed run.
+  const { data: fineCrossings = [] } = useMyRunCrossings(
+    pastScan.currentRun?.runId ?? null,
+    { enabled: !pastScan.isAtLiveEdge },
   );
 
-  // Focused run — whichever the user has navigated to; falls back to null.
-  const focusedRun: OverlapRun | null =
-    ttRunIndex !== null ? (ttDayRunsChron[ttRunIndex] ?? null) : null;
+  // Start (or restart) ghost-radio replay at the given fine-crossing index.
+  //
+  // Seeds are built with `links: []` — the same established pattern used by
+  // LibraryRow, StationScrubTimeline, and all other startReplay call-sites.
+  // The PlayerProvider resolves preview URLs and link-outs on demand for each
+  // seed via `getRecordingPreview(mbid)` + `getRecording(mbid)` (PlayerProvider
+  // line ~1810 — triggered by `currentNeedsLinks && currentPreview === undefined`).
+  // Passing empty links is intentional: pre-fetching them here would duplicate
+  // work the player already does and add latency before playback starts.
+  const startPastReplay = useCallback(
+    (atIdx: number) => {
+      if (fineCrossings.length === 0 || !pastScan.currentRun) return;
+      const seeds: RideSeed[] = fineCrossings
+        .filter((m): m is RunCrossingMoment & { mbid: string } => m.mbid !== null)
+        .map((m) => ({
+          mbid: m.mbid,
+          title: m.trackTitle ?? "",
+          artist: m.artistName ?? "",
+          artworkUrl: null,
+          links: [],
+        }));
+      if (seeds.length === 0) return;
 
-  // Reset run index when the day changes.
-  useEffect(() => { setTtRunIndex(null); }, [ttDay]);
+      // Translate source index (position in fineCrossings, which may contain
+      // null-MBID entries the API schema permits) to seed index (position in the
+      // filtered seeds[]).  Count non-null entries up to and including atIdx:
+      //   non-null crossing  → seedIdx = nonNullCount - 1
+      //   null-MBID crossing → clamp to preceding seed (play the last playable track)
+      const nonNullUpTo = fineCrossings
+        .slice(0, atIdx + 1)
+        .filter((m) => m.mbid !== null).length;
+      const selectedIsNull = (fineCrossings[atIdx]?.mbid ?? null) === null;
+      const seedIdx = selectedIsNull
+        ? Math.max(0, nonNullUpTo - 1) // clamp backward to preceding non-null seed
+        : nonNullUpTo - 1;
 
-  // Spine density bins for the selected day — aggregated across all stations
-  // (no stationId) when no specific run is focused; per-station when focused.
-  const { data: spineServerBins = [], isLoading: spineLoading } = useMyOverlapSpine(
-    ttDay,
-    {
-      stationId: focusedRun?.stationId,
-      enabled: ttMode === "day" && ttDay !== null,
+      const run = pastScan.currentRun;
+      const label = run.show?.djName
+        ? `${run.show.djName} · ${run.station.name}`
+        : run.station.name;
+      ride.startReplay(seeds, label, {
+        timeOrientation: "past",
+        startIndex: Math.max(0, Math.min(seedIdx, seeds.length - 1)),
+        context: "dial-past-scan",
+      });
     },
+    [fineCrossings, pastScan.currentRun, ride],
   );
 
-  const spineBins = useMemo(
-    () => ttDay ? fillSpineBins(ttDay, spineServerBins) : [],
-    [ttDay, spineServerBins],
+  // Swipe handlers — attached to the past-scan card wrapper.
+  // Each handler computes the landing fine-index before updating state so
+  // startPastReplay receives the correct index without waiting for React to
+  // flush the state update.
+  const swipeHandlers = useSwipeHandler(
+    useCallback(() => {
+      if (fineCrossings.length === 0) return;
+      const cur = pastScan.fineIdx ?? -1;
+      const nextIdx = cur >= fineCrossings.length - 1 ? Math.max(cur, 0) : cur + 1;
+      pastScan.nextCrossing(fineCrossings.length);
+      startPastReplay(nextIdx);
+    }, [pastScan, fineCrossings, startPastReplay]),
+    useCallback(() => {
+      if (fineCrossings.length === 0) return;
+      const prevIdx = pastScan.fineIdx === null
+        ? fineCrossings.length - 1
+        : Math.max(pastScan.fineIdx - 1, 0);
+      pastScan.prevCrossing(fineCrossings.length);
+      startPastReplay(prevIdx);
+    }, [pastScan, fineCrossings, startPastReplay]),
   );
 
-  /** Step to the previous run in chronological order within the day. */
-  const handleRunPrev = useCallback(() => {
-    if (ttDayRunsChron.length === 0) return;
-    setTtRunIndex((prev) =>
-      prev === null ? ttDayRunsChron.length - 1 : Math.max(0, prev - 1),
-    );
-  }, [ttDayRunsChron]);
+  // Coarse landing playback: start ghost-radio replay at crossing index 0 whenever
+  // the user lands on a new run via ← / → buttons or the density-spine.  Guards:
+  //   • fineIdx must be null (fine landings are handled by crossing-row click/swipe)
+  //   • fineCrossings must be loaded for the new run
+  //   • only fires once per new run (coarseLandRunRef tracks the last started run)
+  const coarseLandRunRef = useRef<number | null>(null);
+  const currentRunIdForEffect = pastScan.currentRun?.runId ?? null;
+  const fineIdxForEffect = pastScan.fineIdx;
+  useEffect(() => {
+    if (currentRunIdForEffect === null) {
+      coarseLandRunRef.current = null; // reset when returning to live edge
+      return;
+    }
+    if (fineIdxForEffect !== null) return; // fine navigation — handled separately
+    if (fineCrossings.length === 0) return; // wait for the crossing fetch
+    if (coarseLandRunRef.current === currentRunIdForEffect) return; // already started
+    coarseLandRunRef.current = currentRunIdForEffect;
+    startPastReplay(0);
+  }, [currentRunIdForEffect, fineIdxForEffect, fineCrossings.length, startPastReplay]);
 
-  /** Step to the next run in chronological order within the day. */
-  const handleRunNext = useCallback(() => {
-    if (ttDayRunsChron.length === 0) return;
-    setTtRunIndex((prev) =>
-      prev === null ? 0 : Math.min(ttDayRunsChron.length - 1, prev + 1),
-    );
-  }, [ttDayRunsChron]);
-
-  const handleTtModeChange = (m: TtMode) => {
+  const handleTtModeChange = useCallback((m: TtMode) => {
     setTtMode(m);
-    if (m === "live") { setTtDay(null); setTtRunIndex(null); }
-  };
+    pastScan.reset(); // clear past-scan on any mode change
+  }, [pastScan]);
+
+  // Effective mode: "past" when the user has stepped back at least one run,
+  // "top" when top-sets mode is active, otherwise "live".
+  // Passed to DialTimeTravelStrip so it renders data-mode="past" correctly.
+  const effectiveTtMode: TtMode = ttMode === "top" ? "top" : (pastScan.isAtLiveEdge ? "live" : "past");
+
+  // ── Fine-landing effect — fire startPastReplay(fineIdx) on crossing step ──
+  // Fires when the user steps to a specific crossing (swipe or row click).
+  useEffect(() => {
+    if (pastScan.fineIdx === null) return;
+    startPastReplay(pastScan.fineIdx);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pastScan.fineIdx]);
 
   // Slug-key strings — order-insensitive (sorted) so a live reorder of the same
   // stations does NOT reset expansion; only a real membership change does.
@@ -2555,14 +2748,18 @@ export function DialView() {
       {/* Main scroll body */}
       <div className="dial-body">
         <AlbumAvatarPicker compact />
-        {/* Time-travel strip — compact day-nav + Top sets toggle.
+        {/* Time-travel strip — compact run-nav + Top sets toggle.
             Rendered above Zone 1 once zones have settled on the front door. */}
         {level === "all" && zone1Settled && (
           <DialTimeTravelStrip
-            mode={ttMode}
-            day={ttDay}
+            mode={effectiveTtMode}
+            pastScan={{
+              currentRun: pastScan.currentRun,
+              isAtLiveEdge: pastScan.isAtLiveEdge,
+              prevRun: pastScan.prevRun,
+              nextRun: pastScan.nextRun,
+            }}
             onModeChange={handleTtModeChange}
-            onDayChange={setTtDay}
           />
         )}
         {/* DIAL view — three-zone front door (spec §6) */}
@@ -2595,101 +2792,65 @@ export function DialView() {
             {zone1Settled && activeTab === "library" && (
               <>
                 {/* PopScrubber only in live mode (day/top have no live sort). */}
-                {ttMode === "live" && scrubItems.length > 6 && (
+                {effectiveTtMode === "live" && scrubItems.length > 6 && (
                   <PopScrubber items={scrubItems} onScrub={handleScrub} />
                 )}
 
-                {/* ── Day mode: density spine + historical crossing runs ── */}
-                {ttMode === "day" && (
+                {/* ── Past mode: landed crossing run + fine crossing moments ── */}
+                
+                {effectiveTtMode === "past" && (
                   <>
-                    {/* Density spine — shows hourly crossing density for the day.
-                        Loaded independently so runs can render while spine fetches. */}
-                    {ttDay && (
-                      <div className="dial-tt-spine">
-                        {spineLoading && spineBins.length === 0 ? (
-                          <div className="dial-tt-spine__loading" aria-label="Loading spine" />
-                        ) : (
-                          <DensitySpine
-                            bins={spineBins}
-                            nowMs={Date.now()}
-                            onTap={(hourMs) => {
-                              // Find the nearest run by hour (runId = min spin.id = chronological proxy)
-                              // We approximate each run's hour from the day string since we don't
-                              // have per-run timestamps yet; distribute runs evenly across the day.
-                              if (ttDayRunsChron.length === 0) return;
-                              const dayStartMs = new Date(`${ttDay}T00:00:00Z`).getTime();
-                              const dayMs = 24 * 60 * 60_000;
-                              const fraction = Math.max(0, Math.min(1, (hourMs - dayStartMs) / dayMs));
-                              const idx = Math.min(
-                                ttDayRunsChron.length - 1,
-                                Math.floor(fraction * ttDayRunsChron.length),
-                              );
-                              setTtRunIndex(idx);
-                              // Scroll the focused run into view
-                              setTimeout(() => {
-                                document
-                                  .querySelector(`[data-run-id="${ttDayRunsChron[idx]?.runId}"]`)
-                                  ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-                              }, 0);
-                            }}
-                            className="dial-tt-spine__canvas"
-                          />
-                        )}
-                      </div>
-                    )}
-
-                    {/* Run navigation — prev/next accessible alternatives to spine drag */}
-                    {!ttDayLoading && ttDayRunsChron.length > 1 && (
-                      <div className="dial-tt-runnav">
-                        <button
-                          type="button"
-                          className="dial-tt-runnav__btn"
-                          aria-label="Previous set"
-                          disabled={ttRunIndex === 0}
-                          onClick={handleRunPrev}
-                        >
-                          ‹ prev
-                        </button>
-                        <span className="dial-tt-runnav__label">
-                          {ttRunIndex !== null
-                            ? `${ttRunIndex + 1} of ${ttDayRunsChron.length} sets`
-                            : `${ttDayRunsChron.length} sets`}
-                        </span>
-                        <button
-                          type="button"
-                          className="dial-tt-runnav__btn"
-                          aria-label="Next set"
-                          disabled={ttRunIndex === ttDayRunsChron.length - 1}
-                          onClick={handleRunNext}
-                        >
-                          next ›
-                        </button>
-                      </div>
-                    )}
-
-                    {ttDayLoading && (
+                    {currentRun ? (
                       <>
-                        <DialRowSkeleton delay={0} />
-                        <DialRowSkeleton delay={1} />
-                        <DialRowSkeleton delay={2} />
+                        {/* Coarse detent: the run row (click → archive page) */}
+                        <RunRow key={currentRun.runId} run={currentRun} />
+                        {/* Fine detents: crossing moments within the run.
+                            Swipe left/right to step ±1 crossing.
+                            Click a row to jump directly to that crossing.
+                            data-crossing-index allows tests to locate rows.
+                            Note: the endpoint guarantees non-null mbid (only
+                            library-hit spins are returned), so no disabled
+                            guard is needed here. */}
+                        {fineCrossings.length > 0 && (
+                          <div
+                            className="dial-past-crossings"
+                            {...swipeHandlers}
+                          >
+                            {fineCrossings.map((m, i) => (
+                              <button
+                                key={m.spinId}
+                                type="button"
+                                className={`dial-past-crossing${pastScan.fineIdx === i ? " dial-past-crossing--active" : ""}`}
+                                data-crossing-index={i}
+                                onClick={() => {
+                                  // jumpToFine sets fineIdx so the active highlight
+                                  // moves to this row and subsequent swipes continue
+                                  // from this position (not from the head of the run).
+                                  pastScan.jumpToFine(i, fineCrossings.length);
+                                }}
+                              >
+                                <span className="dial-past-crossing__title">{m.trackTitle ?? "Unknown track"}</span>
+                                <span className="dial-past-crossing__artist">{m.artistName ?? "Unknown artist"}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {/* Density spine — coarse run navigation.
+                            Drag to scan runs; tap a bin to jump to that run.
+                            Suppressed in Top Sets mode (caller controls render). */}
+                        <DensitySpine
+                          runs={recentRuns}
+                          activeIdx={pastScan.coarseIdx}
+                          onRunSelect={pastScan.jumpToRunByIndex}
+                        />
                       </>
-                    )}
-                    {!ttDayLoading && ttDayRuns.length === 0 && (
+                    ) : (
                       <div className="z1-placeholder z1-placeholder--no-cross">
                         <div className="z1-placeholder__body">
-                          <p className="z1-placeholder__pitch">No sets that day.</p>
+                          <p className="z1-placeholder__pitch">No sets found.</p>
                         </div>
                       </div>
                     )}
-                    {/* Render runs in owned-desc order (server order).
-                        The focused run (from spine tap or prev/next) gets a highlight class. */}
-                    {ttDayRuns.map((run) => (
-                      <RunRow
-                        key={run.runId}
-                        run={run}
-                        focused={focusedRun?.runId === run.runId}
-                      />
-                    ))}
                   </>
                 )}
 
@@ -2717,7 +2878,7 @@ export function DialView() {
                 )}
 
                 {/* ── Live mode: Zone 1 crossing rows ─────────────────────── */}
-                {ttMode === "live" && (
+                {effectiveTtMode === "live" && (
                   <>
                     {/* Flipped sort (▼): the also-on-air bands (deep cuts) lead. */}
                     {!popSortDesc && alsoSection}
@@ -2862,8 +3023,8 @@ export function DialView() {
                   </>
                 )}
 
-                {/* ── Day mode: Zone 2 ghost rows (Zone 3 suppressed) ────── */}
-                {ttMode === "day" && ghost.length > 0 && (
+                {/* ── Past mode: Zone 2 ghost rows (Zone 3 suppressed) ────── */}
+                {effectiveTtMode === "past" && ghost.length > 0 && (
                   <>
                     <div className="fdzone-lbl-row">
                       {zone2Expanded && ghost.length > ZONE2_VISIBLE && (
@@ -3323,4 +3484,188 @@ function GhostRow({ station, isActive, onTuneIn }: GhostRowProps) {
       <div className="fdrow__station-label" aria-hidden="true">{station.name}</div>
     </div>
   );
+}
+
+/**
+ * Touch-swipe handler that fires onSwipeLeft / onSwipeRight.
+ *
+ * Guards:
+ *   - Left-edge exclusion (20 px default): touches starting within that zone
+ *     are ignored — iOS Safari uses it for back-navigation.
+ *   - Axis guard: swipe fires only when |dx| > |dy|, so vertical scrolling
+ *     in any parent container is never hijacked.
+ *   - Min distance (40 px default): micro-movements are ignored.
+ *
+ * Attach via `<div {...swipeHandlers}>` on the now-playing card wrapper.
+ */
+export function useSwipeHandler(
+  onSwipeLeft: () => void,
+  onSwipeRight: () => void,
+  {
+    leftEdgeExcludePx = 20,
+    minDistPx = 40,
+  }: { leftEdgeExcludePx?: number; minDistPx?: number } = {},
+) {
+  const startX = useRef<number | null>(null);
+  const startY = useRef<number | null>(null);
+
+  const onTouchStart = useCallback(
+    (e: React.TouchEvent) => {
+      const touch = e.touches[0];
+      if (!touch) return;
+      if (touch.clientX < leftEdgeExcludePx) return; // iOS Safari back-nav zone
+      startX.current = touch.clientX;
+      startY.current = touch.clientY;
+    },
+    [leftEdgeExcludePx],
+  );
+
+  const onTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      if (startX.current === null || startY.current === null) return;
+      const touch = e.changedTouches[0];
+      if (!touch) {
+        startX.current = null;
+        startY.current = null;
+        return;
+      }
+      const dx = touch.clientX - startX.current;
+      const dy = touch.clientY - startY.current;
+      startX.current = null;
+      startY.current = null;
+      // Axis guard: ignore if primarily vertical or too short.
+      if (Math.abs(dx) < minDistPx || Math.abs(dy) >= Math.abs(dx)) return;
+      if (dx < 0) onSwipeLeft();
+      else onSwipeRight();
+    },
+    [minDistPx, onSwipeLeft, onSwipeRight],
+  );
+
+  return { onTouchStart, onTouchEnd };
+}
+
+/**
+ * Two-level scan state for the dial's past-mode navigation.
+ *
+ * Coarse level: crossing runs (reverse-chronological, from useMyOverlapRunsRecent).
+ *   Index 0 = most recent run, index N-1 = oldest.
+ * Fine level:   crossing moments within the landed run.
+ *
+ * Window constants (from measured density):
+ *   COARSE_WINDOW_SIZE = 60 runs — at 135 crossings/24h → ~39 runs/day for a
+ *   heavy user; 60 provides ~1.5 days of comfortable coarse-detent coverage.
+ *   N (fine) is bounded by the run size; typically 2–10 moments per run.
+ *
+ * Navigation contract:
+ *   prevRun()               → older run (idx++); at live edge → idx 0
+ *   nextRun()               → newer run (idx--); resists at live edge (null)
+ *   jumpToRunByIndex(idx)   → absolute coarse position (spine drag)
+ *   jumpToRunByHour(hourMs) → nearest run by day (spine bin tap)
+ *   prevCrossing(n)         → earlier crossing (swipe right)
+ *   nextCrossing(n)         → later crossing (swipe left); resists at last stop
+ *   reset()                 → return to live edge, clear fine state
+ *
+ * State machine does NOT fork: every coarse navigation call resets fineIdx.
+ */
+export function usePastScanState(coarseCands: OverlapRun[]) {
+  const [coarseIdx, setCoarseIdx] = useState<number | null>(null);
+  const [fineIdx, setFineIdx] = useState<number | null>(null);
+  const coarseCount = coarseCands.length;
+
+  // Internal setter: updates coarse and resets fine whenever the index changes.
+  const setCoarseWithFineReset = useCallback(
+    (fn: (prev: number | null) => number | null) => {
+      setCoarseIdx((prev) => {
+        const next = fn(prev);
+        if (next !== prev) setFineIdx(null);
+        return next;
+      });
+    },
+    [],
+  );
+
+  /** Step to the next older run (coarseIdx++). At live edge, enters most-recent run. */
+  const prevRun = useCallback(() => {
+    setCoarseWithFineReset((i) =>
+      i === null ? (coarseCount > 0 ? 0 : null) : Math.min(i + 1, coarseCount - 1),
+    );
+  }, [coarseCount, setCoarseWithFineReset]);
+
+  /** Step to the next newer run (coarseIdx--). Resists at live edge (stays null). */
+  const nextRun = useCallback(() => {
+    setCoarseWithFineReset((i) => (i === null || i === 0 ? null : i - 1));
+  }, [setCoarseWithFineReset]);
+
+  /** Jump to an absolute coarse index — used by density-spine drag. */
+  const jumpToRunByIndex = useCallback(
+    (idx: number) => {
+      if (idx >= 0 && idx < coarseCount) {
+        setCoarseWithFineReset(() => idx);
+      }
+    },
+    [coarseCount, setCoarseWithFineReset],
+  );
+
+  /**
+   * Jump to the run nearest to `hourMs` (epoch ms) by day — used by density-
+   * spine tap. Delegates nearest-run lookup to findRunIndexByHour.
+   */
+  const jumpToRunByHour = useCallback(
+    (hourMs: number) => {
+      if (coarseCands.length === 0) return;
+      setCoarseWithFineReset(() => findRunIndexByHour(hourMs, coarseCands));
+    },
+    [coarseCands, setCoarseWithFineReset],
+  );
+
+  /** Step to the earlier crossing within the run (swipe right). */
+  const prevCrossing = useCallback((fineCount: number) => {
+    if (fineCount === 0) return;
+    setFineIdx((i) => (i === null ? fineCount - 1 : Math.max(i - 1, 0)));
+  }, []);
+
+  /**
+   * Step to the later crossing within the run (swipe left).
+   * Resists at the last fine stop — never silently advances past the run.
+   */
+  const nextCrossing = useCallback((fineCount: number) => {
+    if (fineCount === 0) return;
+    setFineIdx((i) => {
+      const cur = i ?? -1;
+      return cur >= fineCount - 1 ? Math.max(cur, 0) : cur + 1;
+    });
+  }, []);
+
+  /** Return to live edge and clear fine state. */
+  const reset = useCallback(() => {
+    setCoarseIdx(null);
+    setFineIdx(null);
+  }, []);
+
+  /**
+   * Jump directly to a fine crossing by index — used by crossing row clicks
+   * so the active class and subsequent swipes continue from the clicked position.
+   */
+  const jumpToFine = useCallback((idx: number, fineCount: number) => {
+    if (idx >= 0 && idx < fineCount) {
+      setFineIdx(idx);
+    }
+  }, []);
+
+  const currentRun = coarseIdx !== null ? (coarseCands[coarseIdx] ?? null) : null;
+
+  return {
+    coarseIdx,
+    fineIdx,
+    currentRun,
+    isAtLiveEdge: coarseIdx === null,
+    prevRun,
+    nextRun,
+    jumpToRunByIndex,
+    jumpToRunByHour,
+    jumpToFine,
+    prevCrossing,
+    nextCrossing,
+    reset,
+  };
 }

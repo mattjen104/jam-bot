@@ -38,11 +38,20 @@ vi.mock("../src/hooks/useDialData", () => ({
   normalizeDjName: vi.fn((s: string | null) => s ?? ""),
 }));
 
+vi.mock("@workspace/api-client-react", async (importOriginal) => {
+  const { makeApiClientMock } = await import("./helpers/apiClientMock");
+  return makeApiClientMock(importOriginal);
+});
+
 vi.mock("../src/lib/meHooks", async (importOriginal) => {
   const { makeMeHooksMock } = await import("./helpers/meHooksMock");
   return makeMeHooksMock(importOriginal, {
     useMyOverlapSelectors: vi.fn(() => ({ data: [] })),
     useMyGhostMissed: vi.fn(() => ({ data: [] })),
+    useMyOverlapRunsRecent: vi.fn(() => ({ data: [], isLoading: false })),
+    useMyRunCrossings: vi.fn(() => ({ data: [], isLoading: false })),
+    useMyOverlapRunsFor: vi.fn(() => ({ data: [], isLoading: false })),
+    useMyWeeklyRecap: vi.fn(() => ({ data: undefined })),
     useSpotifyLibraryConnected: vi.fn(() => true),
     startSpotifyLibraryConnect: vi.fn(),
   });
@@ -96,6 +105,10 @@ vi.mock("../src/hooks/useFrontDoorScan", () => ({
     adjustDwell: vi.fn(),
     stop: vi.fn(),
   })),
+}));
+
+vi.mock("../src/hooks/useStationPresence", () => ({
+  useStationPresence: vi.fn(() => new Map()),
 }));
 
 // ---------------------------------------------------------------------------

@@ -1139,6 +1139,8 @@ export function useMyOverlapRunsFor(
   });
 }
 
+export const ME_OVERLAP_RUNS_RECENT_KEY = ["me", "overlaps", "runs", "recent"] as const;
+
 // ---------------------------------------------------------------------------
 // Spine density bins
 // ---------------------------------------------------------------------------
@@ -1743,4 +1745,75 @@ export function useMyBlendedCrossings(enabled = true) {
     refetchInterval: 60_000,
     retry: false,
   });
+}
+
+export interface RunCrossingMoment {
+  spinId: number;
+  playedAt: string;
+  mbid: string | null;
+  artistName: string | null;
+  trackTitle: string | null;
+  station: { slug: string; name: string };
+  /** min(spin.id) for the enclosing run. Null only for forward extensibility. */
+  runId: number | null;
+  showName: string | null;
+  djName: string | null;
+  spinDurationSeconds: number | null;
+}
+
+export const ME_RUN_CROSSINGS_KEY = (runId: number) =>
+  ["me", "overlaps", "runs", runId, "crossings"] as const;
+
+/**
+ * Station crossing runs in reverse-chronological order (newest first),
+ * windowed by count. Used as the coarse detent list for the two-speed
+ * dial scan.
+ *
+ * Window: last 60 runs (M). At 135 crossings/24h density → ~39 runs/day
+ * for a heavy user; M=60 gives ~1.5 days of comfortable coarse coverage.
+ */
+export function useMyOverlapRunsRecent(opts: { enabled?: boolean } = {}) {
+  const { enabled = true } = opts;
+  return useQuery({
+    queryKey: ME_OVERLAP_RUNS_RECENT_KEY,
+    queryFn: () =>
+      fetchOrNull<{ items: OverlapRun[] }>("/api/me/overlaps/runs?order=recent").then(
+        (d) => d?.items ?? [],
+      ),
+    enabled,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+/**
+ * Crossing moments within a single broadcast run, ordered by playedAt asc.
+ * Used as the fine detent list for the two-speed dial scan: swipe left/right
+ * on the now-playing card steps through these moments.
+ */
+export function useMyRunCrossings(
+  runId: number | null,
+  opts: { enabled?: boolean } = {},
+) {
+  const { enabled = true } = opts;
+  return useQuery({
+    queryKey:
+      runId != null
+        ? ME_RUN_CROSSINGS_KEY(runId)
+        : ["me", "overlaps", "runs", null, "crossings"],
+    queryFn: () =>
+      runId != null
+        ? fetchOrNull<RunCrossingMomentsResponse>(
+            `/api/me/overlaps/runs/${runId}/crossings`,
+          ).then((d) => d?.moments ?? [])
+        : Promise.resolve<RunCrossingMoment[]>([]),
+    enabled: enabled && runId != null,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+export interface RunCrossingMomentsResponse {
+  runId: number;
+  moments: RunCrossingMoment[];
 }

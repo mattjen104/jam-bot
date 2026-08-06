@@ -489,20 +489,34 @@ router.get("/me/overlaps/stations", h(async (req, res) => {
 
 /**
  * GET /api/me/overlaps/runs — station broadcast runs with `owned` (MBIDs in
- * user's library) and `discover` (resolved MBIDs NOT in library), ranked by
- * owned desc, then discover desc.
+ * user's library) and `discover` (resolved MBIDs NOT in library).
+ *
+ * Query params:
+ *   day    optional  YYYY-MM-DD  restrict to a calendar day (UTC)
+ *   order  optional  "recent"    reverse-chronological, newest first (coarse
+ *                                detent list for the two-speed dial scan).
+ *                                Default (omit) ranks by owned desc, then
+ *                                discover desc. Limit is 60 when order=recent,
+ *                                30 otherwise.
+ *
+ * Window note (order=recent):
+ *   At 135 crossings/24h density → ~39 runs/day for a heavy user.
+ *   M=60 provides ~1.5 days of comfortable coarse-detent coverage.
  */
 router.get("/me/overlaps/runs", h(async (req, res) => {
   const user = (req as AuthedRequest).loreUser;
   const { showsTable } = await import("@workspace/db");
   const { spinDayExpr } = await import("../../lore/runs.js");
 
-  // Optional ?day=YYYY-MM-DD filter — when present, restrict to that calendar day.
+  // Optional ?day=YYYY-MM-DD filter
   const rawDay = req.query["day"];
   const dayParam =
     typeof rawDay === "string" && /^\d{4}-\d{2}-\d{2}$/.test(rawDay)
       ? rawDay
       : null;
+
+  // Optional ?order=recent — reverse-chrono (two-speed scan coarse detents)
+  const orderRecent = req.query["order"] === "recent";
 
   const userMbids = db
     .select({ mbid: libraryItemsTable.mbid })
@@ -546,10 +560,14 @@ router.get("/me/overlaps/runs", h(async (req, res) => {
     )
     .having(sql`count(*) filter (where ${spinsTable.mbid} in (${userMbids})) > 0`)
     .orderBy(
-      sql`count(*) filter (where ${spinsTable.mbid} in (${userMbids})) desc`,
-      sql`count(*) filter (where ${spinsTable.mbid} is not null and ${spinsTable.mbid} not in (${userMbids})) desc`,
+      orderRecent
+        ? sql`max(${spinsTable.playedAt}) desc`
+        : sql`count(*) filter (where ${spinsTable.mbid} in (${userMbids})) desc`,
+      orderRecent
+        ? sql`min(${spinsTable.id}) desc`
+        : sql`count(*) filter (where ${spinsTable.mbid} is not null and ${spinsTable.mbid} not in (${userMbids})) desc`,
     )
-    .limit(30);
+    .limit(orderRecent ? 60 : 30);
 
   return res.json({
     items: rows.map((r) => ({
@@ -572,6 +590,112 @@ router.get("/me/overlaps/runs", h(async (req, res) => {
         : null,
       owned: r.owned,
       discover: r.discover,
+    })),
+  });
+}));
+
+/**
+ * GET /api/me/overlaps/runs/:runId/crossings — library-crossing moments within
+ * a single broadcast run.
+ *
+ * Returns all spins in the run whose MBID is in the user's library_items,
+ * ordered by playedAt asc. Each moment carries enough context for playback
+ * (mbid, track title/artist, DJ attribution) and for the fine-scan index
+ * (spinId as the stable identifier within the run).
+ *
+ * runId semantics: the endpoint accepts any spin ID; it resolves the run
+ * partition (station + show + UTC day) from that spin and returns all
+ * crossing moments in the partition. Callers sourced from /me/overlaps/runs
+ * will receive the canonical anchor (min spin ID) which is the recommended
+ * input. Passing an ID whose spin does not exist returns an empty list.
+ *
+ * Path params:
+ *   runId  required  positive integer  any spin ID within the target run
+ */
+router.get("/me/overlaps/runs/:runId/crossings", h(async (req, res) => {
+  const user = (req as AuthedRequest).loreUser;
+
+  const runIdRaw = req.params["runId"];
+  const runId = Number(runIdRaw);
+  if (!Number.isInteger(runId) || runId <= 0) {
+    return res.status(400).json({ error: "runId must be a positive integer" });
+  }
+
+  // Step 1: Find the anchor spin to get its stationId, showId, and UTC day.
+  // Join stationsTable to enforce hidden=false — callers must not be able to
+  // bypass the hidden-station suppression by guessing a spin ID.
+  const anchorRows = await db
+    .select({
+      stationId: spinsTable.stationId,
+      showId: spinsTable.showId,
+      day: sql<string>`to_char(${spinsTable.playedAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
+    })
+    .from(spinsTable)
+    .innerJoin(stationsTable, and(eq(spinsTable.stationId, stationsTable.id), eq(stationsTable.hidden, false)))
+    .where(eq(spinsTable.id, runId))
+    .limit(1);
+
+  if (anchorRows.length === 0) {
+    return res.json({ runId, moments: [] });
+  }
+
+  const anchor = anchorRows[0]!;
+
+  // Step 2: Fetch all library-hit spins in the same run partition.
+  const userMbids = db
+    .select({ mbid: libraryItemsTable.mbid })
+    .from(libraryItemsTable)
+    .where(eq(libraryItemsTable.userId, user.id));
+
+  const showCondition = anchor.showId == null
+    ? sql`${spinsTable.showId} IS NULL`
+    : eq(spinsTable.showId, anchor.showId);
+
+  const rows = await db
+    .select({
+      spinId: spinsTable.id,
+      playedAt: sql<string>`${spinsTable.playedAt}::text`,
+      mbid: spinsTable.mbid,
+      rawTitle: spinsTable.rawTitle,
+      rawArtist: spinsTable.rawArtist,
+      stationSlug: stationsTable.slug,
+      stationName: stationsTable.name,
+      showName: showsTable.name,
+      djName: showsTable.djName,
+    })
+    .from(spinsTable)
+    .innerJoin(stationsTable, eq(spinsTable.stationId, stationsTable.id))
+    .leftJoin(
+      showsTable,
+      and(eq(spinsTable.showId, showsTable.id), validScheduleShowAttribution()),
+    )
+    .where(
+      and(
+        eq(spinsTable.stationId, anchor.stationId),
+        showCondition,
+        sql`to_char(${spinsTable.playedAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD') = ${anchor.day}`,
+        isNotNull(spinsTable.mbid),
+        inArray(spinsTable.mbid, userMbids),
+      ),
+    )
+    .orderBy(spinsTable.playedAt);
+
+  return res.json({
+    runId,
+    moments: rows.map((r) => ({
+      spinId: r.spinId,
+      playedAt: r.playedAt,
+      mbid: r.mbid,
+      artistName: r.rawArtist ?? null,
+      trackTitle: r.rawTitle ?? null,
+      station: { slug: r.stationSlug, name: r.stationName },
+      runId,
+      showName: r.showName ?? null,
+      djName: eligibleDjName(r.djName, {
+        showTitle: r.showName ?? undefined,
+        stationName: r.stationName,
+      }),
+      spinDurationSeconds: null,
     })),
   });
 }));
