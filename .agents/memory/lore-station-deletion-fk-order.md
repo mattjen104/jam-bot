@@ -12,7 +12,10 @@ references. Delete in this order:
 3. `radio_browser_stations` where `station_id` matches (easy to miss —
    this table isn't part of the play-history spine, so it's not the
    first FK you think of, but it references `stations.id` too)
-4. `stations` itself
+4. `station_quality` where `station_id` matches (another non-obvious
+   child — discovered when `resolve-dedup-db.test.ts` hit a 23503 on
+   teardown; must be cleared before step 5)
+5. `stations` itself
 
 **Why:** the discovery pipeline (radio-browser.info ingestion) keeps its
 own bookkeeping row per discovered candidate in `radio_browser_stations`,

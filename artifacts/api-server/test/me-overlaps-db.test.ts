@@ -172,7 +172,16 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  if (server) await new Promise<void>((r) => server!.close(() => r()));
+  if (server) {
+    // closeAllConnections() destroys keep-alive sockets. We race server.close()
+    // against a 5-second fallback so afterAll never blocks on internal app
+    // timers or SSE connections that outlive the test suite.
+    (server as unknown as { closeAllConnections?: () => void }).closeAllConnections?.();
+    await Promise.race([
+      new Promise<void>((r) => server!.close(() => r())),
+      new Promise<void>((r) => setTimeout(r, 5000)),
+    ]);
+  }
   if (!dbAvailable) return;
 
   // Clean up in FK order.

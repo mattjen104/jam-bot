@@ -551,6 +551,7 @@ router.get("/me/overlaps/runs", h(async (req, res) => {
     .groupBy(
       spinDayExpr,
       spinsTable.stationId,
+      stationsTable.id,
       spinsTable.showId,
       stationsTable.slug,
       stationsTable.name,

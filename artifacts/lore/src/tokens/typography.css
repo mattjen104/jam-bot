@@ -7,15 +7,31 @@
      display  Archivo Narrow / system-ui — labels, chips, station names, callouts
      mono     IBM Plex Mono / Menlo — metadata, timestamps, counts, technical strings
 
+   Brutalist mode: Signifier (Klim Type Foundry) is the single face for the
+   entire site — all role tokens point at it, and index.css flattens sizes
+   to one uniform value (wordmark excepted). Falls back to Georgia/serif if
+   the font file hasn't loaded yet.
+
    Editorial serif (Newsreader) is NOT loaded globally. Scope it by wrapping
    a container with the `.reading-context` class when a genuine long-form or
    editorial reading surface is needed.
    ───────────────────────────────────────────────────────────────────────────── */
 
+/* Signifier Regular — site-wide face */
+@font-face {
+  font-family: 'Signifier';
+  src: url('/lore/fonts/Signifier-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
-  --lore-font-body:    'Inter', system-ui, sans-serif;
-  --lore-font-display: 'Archivo Narrow', system-ui, sans-serif;
-  --lore-font-mono:    'IBM Plex Mono', Menlo, 'Courier New', monospace;
+  /* Brutalist mode: one face for the entire site — Signifier everywhere. */
+  --lore-font-body:     'Signifier', Georgia, serif;
+  --lore-font-display:  'Signifier', Georgia, serif;
+  --lore-font-mono:     'Signifier', Georgia, serif;
+  --lore-font-wordmark: 'Signifier', Georgia, serif;
 }
 
 /* Editorial face — only active inside an explicit reading surface. */

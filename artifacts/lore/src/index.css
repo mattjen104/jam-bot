@@ -1452,54 +1452,66 @@
   flex-shrink: 0;
   overflow: hidden;
 }
-/* Full-width art wash behind topbar AND tabs. Two-axis mask: a left-edge
-   fade protects the wordmark (matching the old topbar bg-wash 0%→35%),
-   and a bottom fade brings the art to transparent just below the tab row
-   so nothing bleeds into the station list. */
-.dial-hero__bg {
-  position: absolute;
-  inset: 0;
-  /* True to the album's edges: full window width, anchored to the top.
-     This matches the fullscreen hero geometry exactly, so tapping the moon
-     keeps the album in the same spot — only the gradients disappear. */
-  background-size: 100% auto;
-  background-position: top center;
-  background-repeat: no-repeat;
-  opacity: 0.32;
-  pointer-events: none;
+/* ── Avatar album hero — the art IS the front-door content.
+   Portrait: full-width square directly under the topbar; dial rows scroll
+   below it in normal flow.
+   Landscape (phones): the art pins to the left edge filling the available
+   viewport height, and everything else (topbar, toolbar, rows) moves into
+   a right column via padding-left on .dial-root.
+   Tapping the art opens the same fullscreen overlay as the moon. ── */
+.dial-hero__art {
+  position: relative;
   z-index: 0;
-  -webkit-mask-image:
-    linear-gradient(to right, transparent 0%, #000 35%),
-    linear-gradient(to bottom, #000 55%, transparent 100%);
-  mask-image:
-    linear-gradient(to right, transparent 0%, #000 35%),
-    linear-gradient(to bottom, #000 55%, transparent 100%);
-  -webkit-mask-composite: source-in;
-  mask-composite: intersect;
+  width: 100%;
+  aspect-ratio: 1;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  cursor: pointer;
 }
-/* Topbar inside the hero stays transparent so the hero art shows through */
+.dial-hero__art:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: -2px;
+}
+/* Topbar inside the hero stays transparent */
 .dial-hero .dial-topbar--all {
   overflow: visible;
   background: transparent;
 }
-/* Tab strip inside the hero: content above the art, plus a thin scrim
-   mirroring the gradient depth used for the Lore logo — art stays visible
-   but tab labels/counts remain legible. */
-.dial-hero .dial-tabs {
-  position: relative;
-  z-index: 1;
+/* Slim utility row under the art: sort toggle + add-artists, no heading */
+.dial-hero__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 4px 12px;
 }
-.dial-hero .dial-tabs::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background: linear-gradient(
-    to bottom,
-    hsl(var(--background) / 0.45),
-    hsl(var(--background) / 0.65)
-  );
+/* Landscape phones: art left at full height, content column right. Thumbs
+   rest at the sides in landscape grip, so controls stay in the right column
+   near the edge. Height-capped so desktop windows are unaffected. */
+@media (orientation: landscape) and (max-height: 540px) {
+  .dial-hero__art {
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: calc(100dvh - var(--shell-h, 56px));
+    width: min(calc(100dvh - var(--shell-h, 56px)), 52vw);
+    aspect-ratio: auto;
+    z-index: 5;
+  }
+  /* Front door only — drill levels (station/show/DJ) have no fixed art
+     panel, so they keep the full width. */
+  .dial-root--front {
+    padding-left: min(calc(100dvh - var(--shell-h, 56px)), 52vw);
+  }
+  /* Collapse the bottom nav to a slim label bar — the big record sleeves
+     would otherwise eat most of the landscape height. --shell-h is measured
+     live in App.tsx, so the hero art auto-expands into the reclaimed space. */
+  .record-peek-tab__sleeve { display: none; }
+  .record-peek-tab { padding: 4px 0 6px; }
+  .record-peek-tab__label { position: static; }
+  /* Fullscreen overlay: fit the art to the height instead of the width */
+  .dial-art-fullscreen img { width: auto; height: 100dvh; margin: 0 auto; }
 }
 
 /* Unstyled button wrapper so the moon glyph is tappable without changing
@@ -1543,17 +1555,17 @@
   position: relative;
   z-index: 10000;
 }
-/* Inside the hero, fade everything except the moon glyph: the washed bg
-   (its gradients "disappear", revealing the overlay's unmasked copy in the
-   exact same position), the tab strip, the LORE letters, search, and pill. */
-.dial-hero__bg,
-.dial-hero .dial-tabs,
+/* Inside the hero, fade everything except the moon glyph: the in-flow art
+   (revealing the overlay's fullscreen copy), the toolbar, the LORE letters,
+   search, and pill. */
+.dial-hero__art,
+.dial-hero__toolbar,
 .dial-topbar--all > *,
 .dial-topbar__letter {
   transition: opacity 0.3s ease;
 }
-.dial-root--art-open .dial-hero__bg,
-.dial-root--art-open .dial-hero .dial-tabs,
+.dial-root--art-open .dial-hero__art,
+.dial-root--art-open .dial-hero__toolbar,
 .dial-root--art-open .dial-topbar--all > *:not(.dial-topbar__wordmark),
 .dial-root--art-open .dial-topbar__letter {
   opacity: 0;
@@ -1617,11 +1629,14 @@
   vertical-align: -0.1em;
 }
 
-/* Wordmark letters */
+/* Wordmark letters — Signifier (Klim) Regular, logo only */
 .dial-topbar__letter {
-  font-size: 0.72em;
+  font-family: var(--lore-font-wordmark);
+  font-weight: 400;
+  font-size: 0.78em;
   line-height: 1;
   text-transform: none;
+  letter-spacing: 0.04em;
 }
 
 /* ── Moon SVG internals ── */
@@ -5437,21 +5452,10 @@
 }
 
 /* ─────────────────────────────────────────────────────────
-   Dial zone tabs
-   Strip that replaces the three-zone vertical layout once
-   Zone 1 has settled. Three buttons, primary always selected.
+   Dial hero toolbar buttons (formerly the zone tab strip —
+   the heading/Recent tabs are gone; only the sort toggle and
+   the "+ Artists" control survive, right-aligned under the art)
 ───────────────────────────────────────────────────────── */
-.dial-tabs {
-  display: flex;
-  align-items: stretch;
-  border-bottom: 1px solid hsl(var(--border) / 0.5);
-  margin: 2px 0 0;
-  flex-shrink: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.dial-tabs::-webkit-scrollbar { display: none; }
-
 .dial-tab {
   flex-shrink: 0;
   display: inline-flex;
@@ -5471,10 +5475,6 @@
   transition: color 0.12s, border-color 0.12s;
 }
 .dial-tab:hover { color: hsl(var(--foreground)); }
-.dial-tab--active {
-  color: hsl(var(--foreground));
-  border-bottom-color: hsl(var(--library));
-}
 
 /* "+ Artists" add tab — artist orange, full opacity on hover/active.
    On narrow screens the label collapses to just the + sign. */
@@ -5502,52 +5502,9 @@
   min-width: 0;
 }
 
-/* Count badge inside a tab button */
-.dial-tab__n {
-  font-size: 9px;
-  font-weight: 700;
-  opacity: 0.55;
-  background: hsl(var(--secondary));
-  border-radius: 8px;
-  padding: 1px 5px;
-  line-height: 1.4;
-}
-.dial-tab--active .dial-tab__n { opacity: 0.8; }
-
-/* Right-aligned add-artists controls embedded in the tab strip */
-.dial-tabs__add {
-  margin-left: auto;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 10px 0 8px;
-  border-left: 1px solid hsl(var(--border) / 0.3);
-}
-
-/* Inside the tab strip the paste box gets a compact fixed width */
-.dial-tabs__add .topbar-paste-box {
-  flex: none;
-  width: 160px;
-  height: 24px;
-  font-size: 9px;
-  padding: 3px 7px;
-}
-
-/* Inside the tab strip the artist input wrap matches the compact height */
-.dial-tabs__add .topbar-artist-input-wrap {
-  flex: none;
-  width: 160px;
-  height: 24px;
-}
-
 @media (max-width: 480px) {
   .dial-tab {
     padding: 8px 8px;
-  }
-  .dial-tabs__add .topbar-paste-box,
-  .dial-tabs__add .topbar-artist-input-wrap {
-    width: 110px;
   }
 }
 
@@ -5807,4 +5764,26 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BRUTALIST TYPOGRAPHY — one face, one size.
+   Everything on the site is Signifier at a single uniform size (14.5px —
+   one step above the old logo size of ~12.5px). The moon + Lore wordmark
+   is the lone exception: two steps larger than it used to be (base 22px →
+   letters ~17px, moon glyph ~16px, both em-scaled from the wordmark base).
+   Appended last so it wins the cascade.
+   ═══════════════════════════════════════════════════════════════════════════ */
+body,
+body * {
+  font-family: 'Signifier', Georgia, serif !important;
+  font-size: 14.5px !important;
+}
+/* Logo exception: moon + letters scale together off the wordmark base */
+.dial-topbar__wordmark,
+.dial-topbar__wordmark * {
+  font-size: 22px !important;
+}
+.dial-topbar__letter {
+  font-size: 17px !important;
 }

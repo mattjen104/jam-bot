@@ -142,7 +142,8 @@ function findItem(items: NowPlayingItem[], slug: string) {
 
 describe("GET /api/stations/now-playing — isFirstSpin", () => {
   // The multi-station endpoint queries all active stations and runs a batch
-  // archive check — allow up to 30 s in case the DB has many stations.
+  // archive check — allow up to 150 s on a loaded shared-Postgres instance
+  // with many active stations (was 90 s, which contends under maxWorkers=2).
   it("returns isFirstSpin: true for an MBID with no prior-day spin", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
     const res = await fetch(`${baseUrl}/api/stations/now-playing`);
@@ -154,7 +155,7 @@ describe("GET /api/stations/now-playing — isFirstSpin", () => {
     expect(item!.nowPlaying).not.toBeNull();
     expect(item!.nowPlaying!.recording?.mbid).toBe(FRESH_MBID);
     expect(item!.nowPlaying!.isFirstSpin).toBe(true);
-  }, 90_000);
+  }, 150_000);
 
   it("returns isFirstSpin: false for an MBID that aired yesterday", async (ctx) => {
     if (!dbAvailable) return ctx.skip();
@@ -167,7 +168,7 @@ describe("GET /api/stations/now-playing — isFirstSpin", () => {
     expect(item!.nowPlaying).not.toBeNull();
     expect(item!.nowPlaying!.recording?.mbid).toBe(OLD_MBID);
     expect(item!.nowPlaying!.isFirstSpin).toBe(false);
-  }, 90_000);
+  }, 150_000);
 });
 
 describe("GET /api/stations/:slug/now-playing — isFirstSpin", () => {

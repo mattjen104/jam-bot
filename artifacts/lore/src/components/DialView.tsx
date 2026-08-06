@@ -10,7 +10,7 @@ import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, typ
 import { SeedInput } from "./SeedInput";
 import { Search } from "lucide-react";
 import { useLocation, Link } from "wouter";
-import { useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyAlbumAvatar, useMyPopularCrossings, useRecentSets, useMyOverlapRunsFor, useMyOverlapRunsRecent, useMyRunCrossings, type GhostStation, type PopularCrossingArtist, type RecentSetItem, type RecentSetArtist, type RecentSetWindow, type OverlapRun, type RunCrossingMoment } from "../lib/meHooks";
+import { useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyAlbumAvatar, useMyPopularCrossings, useMyOverlapRunsFor, useMyOverlapRunsRecent, useMyRunCrossings, type GhostStation, type PopularCrossingArtist, type OverlapRun, type RunCrossingMoment } from "../lib/meHooks";
 import { useGetStationNowPlaying, getGetStationNowPlayingQueryKey } from "@workspace/api-client-react";
 import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
 import { StationLane } from "./StationLane";
@@ -1511,156 +1511,6 @@ function OfflineRow({
   );
 }
 
-// ---------------------------------------------------------------------------
-// RecentSetRow — archive run row for the "Recent" tab.
-// Mirrors FrontDoorRow's three-tier reading order but works from the
-// pre-computed RecentSetItem shape (no live DialShow needed).
-// ---------------------------------------------------------------------------
-const RECENT_WINDOW_LABELS: Record<RecentSetWindow, string> = {
-  all: "All",
-  today: "Today",
-  yesterday: "Yesterday",
-  week: "Last week",
-  month: "Last month",
-  year: "Last year",
-};
-
-function recentSetArtistCls(a: RecentSetArtist, seeded: boolean): string {
-  if (a.inLibrary || seeded) return "fdrow__artist fdrow__artist--lib";
-  if (a.popular) return "fdrow__artist fdrow__artist--pop";
-  return "fdrow__artist fdrow__artist--set";
-}
-
-function RecentSetRow({
-  item,
-  seedsLower,
-  onAddArtist,
-  onStationClick,
-}: {
-  item: RecentSetItem;
-  seedsLower: Set<string>;
-  onAddArtist: (name: string) => void;
-  onStationClick: (slug: string) => void;
-}) {
-  const [alsoExpanded, setAlsoExpanded] = useState(false);
-
-  // Sort: inLibrary first, then popular, then by spin count desc.
-  const sorted = useMemo(
-    () =>
-      [...item.artists].sort((a, b) => {
-        if (a.inLibrary !== b.inLibrary) return a.inLibrary ? -1 : 1;
-        if (a.popular !== b.popular) return a.popular ? -1 : 1;
-        return b.spins - a.spins;
-      }),
-    [item.artists],
-  );
-
-  // Artists shown in the crossing sentence (up to 3, skipping pure-default ones
-  // when we have library or popular hits).
-  const hasLibrary = sorted.some((a) => a.inLibrary);
-  const hasPop = sorted.some((a) => a.popular);
-  const sentencePool = hasLibrary
-    ? sorted.filter((a) => a.inLibrary)
-    : hasPop
-      ? sorted.filter((a) => a.popular)
-      : sorted;
-  const sentenceArtists = sentencePool.slice(0, 3);
-  const sentenceNames = sentenceArtists.map((a) => a.name);
-
-  // Remaining artists for the pill-chip expansion (non-library, not already in sentence).
-  const remainingArtists: Array<RecentSetArtist & { debut: boolean; heard: boolean }> = useMemo(
-    () =>
-      sorted
-        .filter(
-          (a) =>
-            !a.inLibrary &&
-            !sentenceNames.some((n) => sameLiveValue(n, a.name)),
-        )
-        .map((a) => ({ ...a, debut: false, heard: false })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sorted, item.run.runId],
-  );
-
-  // DJ and show name from the run, with the same eligibility guards as live rows.
-  const rawShow = item.run.show;
-  const djName = rawShow?.djName ? eligibleDjName(rawShow.djName) : null;
-  const rawShowName = cleanLiveValue(rawShow?.name ?? null);
-  const showName =
-    rawShowName && !sameLiveValue(rawShowName, djName ?? null) ? rawShowName : null;
-
-  // Build artist nodes using nameNodes (styling via t1 CSS class).
-  const artistNodes = sentenceArtists.length > 0 ? nameNodes(sentenceNames) : null;
-  const count = hasLibrary
-    ? item.artists.filter((a) => a.inLibrary).length
-    : sorted.length;
-  const countLabel = hasLibrary ? "of yours" : hasPop ? "popular picks" : "tracks";
-
-  // Wire the "this set" toggle only when there are remaining pills to reveal.
-  const also: import("./dialViewHelpers").AlsoToggle | undefined =
-    remainingArtists.length > 0
-      ? {
-          expanded: alsoExpanded,
-          onToggle: () => setAlsoExpanded((v) => !v),
-        }
-      : undefined;
-
-  const sentenceNode = buildAttributedSentence(
-    artistNodes,
-    count,
-    countLabel,
-    djName,
-    showName,
-    "this set",
-    null, // expanded content rendered as fdrow__also-block below tier1
-    also,
-  );
-
-  // Tier-1 CSS class drives artist name colour for the whole sentence.
-  const t1Cls = hasLibrary ? "w3" : hasPop ? "w6" : sentenceArtists.length > 0 ? "w5" : "w0";
-  const rowCls = [
-    "fdrow",
-    hasLibrary ? "fdrow--z1" : hasPop ? "fdrow--hist" : "fdrow--dim",
-  ].join(" ");
-
-  // Timing label: "Mon 12 Aug" style (reuses the same runDate helper).
-  const dateLabel = runDate(item.run.startedAt);
-
-  // Byline: show/DJ attribution + date (tier 3).
-  const bylineParts: string[] = [];
-  if (djName) bylineParts.push(djName);
-  else if (showName) bylineParts.push(showName);
-  bylineParts.push(dateLabel);
-  const t3Text = `${item.station.name} · ${bylineParts.join(" · ")}`;
-
-  return (
-    <div
-      className={rowCls}
-      role="button"
-      tabIndex={0}
-      onClick={() => onStationClick(item.station.slug)}
-      onKeyDown={(e) => e.key === "Enter" && onStationClick(item.station.slug)}
-    >
-      <div className="fdrow__c">
-        {/* Tier 1: crossing sentence */}
-        <div className={`fdrow__t1 ${t1Cls}`}>{sentenceNode}</div>
-
-        {/* Expanded pill grid — shows when listener clicks "this set". */}
-        {alsoExpanded && remainingArtists.length > 0 && (
-          <div className="fdrow__also-block" onClick={(e) => e.stopPropagation()}>
-            <AlsoSentence
-              artists={remainingArtists}
-              seedsLower={seedsLower}
-              onAdd={onAddArtist}
-            />
-          </div>
-        )}
-
-        {/* Tier 3: station identity + show/DJ + date */}
-        <div className="fdrow__t3">{t3Text}</div>
-      </div>
-    </div>
-  );
-}
 
 export function DialView() {
   const [location] = useLocation();
@@ -1913,6 +1763,8 @@ export function DialView() {
   // Fullscreen album-art overlay, opened by tapping the moon glyph in the topbar.
   const moonBtnRef = useRef<HTMLButtonElement>(null);
   const artCloseBtnRef = useRef<HTMLButtonElement>(null);
+  // Whichever control opened the overlay (moon or hero art) gets focus back.
+  const artOpenerRef = useRef<HTMLElement | null>(null);
   const [albumArtOpen, setAlbumArtOpen] = useState(false);
   useEffect(() => {
     if (!albumArtOpen) return;
@@ -1932,8 +1784,8 @@ export function DialView() {
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("keydown", onKey);
-      // Return focus to the moon button that opened the overlay.
-      moonBtnRef.current?.focus();
+      // Return focus to whichever control opened the overlay.
+      (artOpenerRef.current ?? moonBtnRef.current)?.focus();
     };
   }, [albumArtOpen]);
   const hasWeeklyRecap = weeklyRecapData != null && (
@@ -2165,31 +2017,6 @@ export function DialView() {
     if (el) el.scrollIntoView({ block: "center" });
   }, [scrubTarget, zone1Expanded, zone3Expanded]);
 
-  // ── Recent sets (recently-aired tab) ────────────────────────────────────────
-  const [recentWindow, setRecentWindow] = useState<RecentSetWindow>("all");
-  const [recentSortDesc, setRecentSortDesc] = useState(true);
-  const {
-    data: recentSetsData,
-    fetchNextPage: fetchNextRecentSets,
-    hasNextPage: hasNextRecentSets,
-    isFetchingNextPage: isFetchingNextRecentSets,
-    isLoading: recentSetsLoading,
-  } = useRecentSets(recentWindow);
-
-  const sortedRecentSets = useMemo(() => {
-    const allItems = recentSetsData?.pages.flatMap((p) => p.items) ?? [];
-    // Crossing score = total inLibrary spin count for the run
-    const score = (item: RecentSetItem) =>
-      item.artists.reduce((n, a) => n + (a.inLibrary ? a.spins : 0), 0);
-    return [...allItems].sort((a, b) => {
-      const diff = score(b) - score(a);
-      if (diff !== 0) return recentSortDesc ? diff : -diff;
-      return 0; // preserve server order (newest first) within equal score
-    });
-  }, [recentSetsData, recentSortDesc]);
-
-  // Active tab — resets to primary on each page load (not persisted).
-  const [activeTab, setActiveTab] = useState<"library" | "recently-aired">("library");
 
   // ── Time-travel mode (top sets toggle) ─────────────────────────────────────
   const [ttMode, setTtMode] = useState<TtMode>("live");
@@ -2448,7 +2275,7 @@ export function DialView() {
               className="dial-topbar__moon-btn"
               aria-label="View album art fullscreen"
               disabled={!avatarUrl}
-              onClick={() => { if (avatarUrl) setAlbumArtOpen((v) => !v); }}
+              onClick={(e) => { if (avatarUrl) { artOpenerRef.current = e.currentTarget; setAlbumArtOpen((v) => !v); } }}
             >
               <span className="dial-topbar__moon-prefix" aria-hidden="true">
                 <MoonPhaseGlyph size={14} />
@@ -2594,7 +2421,7 @@ export function DialView() {
   );
 
   return (
-    <div className={`dial-root${albumArtOpen && avatarUrl ? " dial-root--art-open" : ""}`}>
+    <div className={`dial-root${albumArtOpen && avatarUrl ? " dial-root--art-open" : ""}${level === "all" ? " dial-root--front" : ""}`}>
       {/* Search overlay */}
       {searchOpen && (
         <SearchOverlay
@@ -2605,70 +2432,42 @@ export function DialView() {
         />
       )}
 
-      {/* Topbar — at the front door it lives inside a hero container so the
-          avatar album art can bleed full-width behind both the topbar and the
-          tab strip in one stacking context. */}
+      {/* Topbar + avatar album hero — the art IS the front-door content:
+          full-width square in portrait, full-height left panel in landscape
+          (see .dial-hero__art CSS). No section heading — the sort is already
+          opinionated, and time-travel/scrub covers what Recent did. Tapping
+          the art (or the moon) opens the fullscreen overlay. */}
       {level === "all" ? (
         <div className="dial-hero">
-          <div
-            className="dial-hero__bg"
-            style={{ backgroundImage: `url(${heroArt})` }}
-            aria-hidden="true"
-          />
           {renderTopbar()}
+          <div
+            className="dial-hero__art"
+            style={{ backgroundImage: `url(${heroArt})` }}
+            role="button"
+            tabIndex={0}
+            aria-label="Open album art fullscreen"
+            onClick={(e) => { artOpenerRef.current = e.currentTarget; setAlbumArtOpen(true); }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                artOpenerRef.current = e.currentTarget;
+                setAlbumArtOpen(true);
+              }
+            }}
+          />
           {zone1Settled && (
-            <div className="dial-tabs" role="tablist" aria-label="Radio sections">
+            <div className="dial-hero__toolbar">
               <button
                 type="button"
-                role="tab"
-                className={`dial-tab${activeTab === "library" ? " dial-tab--active" : ""}`}
-                aria-selected={activeTab === "library"}
-                onClick={() => setActiveTab("library")}
+                className="dial-tab-sort"
+                aria-label={popSortDesc
+                  ? "Sorted by most crossings first — tap for least crossings and deep cuts first"
+                  : "Sorted by least crossings and deep cuts first — tap for most crossings first"}
+                aria-pressed={!popSortDesc}
+                title={popSortDesc ? "Most crossings first" : "Deep cuts first"}
+                onClick={() => setPopSortDesc((v) => !v)}
               >
-                ON AIR × YOUR ARTISTS
-                {withReason.length + alsoOnAir.length > 0 && (
-                  <span className="dial-tab__n">{withReason.length + alsoOnAir.length}</span>
-                )}
-              </button>
-              {activeTab === "library" && (
-                <button
-                  type="button"
-                  className="dial-tab-sort"
-                  aria-label={popSortDesc
-                    ? "Sorted by most crossings first — tap for least crossings and deep cuts first"
-                    : "Sorted by least crossings and deep cuts first — tap for most crossings first"}
-                  aria-pressed={!popSortDesc}
-                  title={popSortDesc ? "Most crossings first" : "Deep cuts first"}
-                  onClick={() => setPopSortDesc((v) => !v)}
-                >
-                  {popSortDesc ? "▲" : "▼"}
-                </button>
-              )}
-              {activeTab === "recently-aired" && (
-                <button
-                  type="button"
-                  className="dial-tab-sort"
-                  aria-label={recentSortDesc
-                    ? "Sorted by most library matches first — tap for fewest matches first (discovery mode)"
-                    : "Sorted by fewest library matches first — tap for most matches first"}
-                  aria-pressed={!recentSortDesc}
-                  title={recentSortDesc ? "Most library matches first" : "Fewest matches first"}
-                  onClick={() => setRecentSortDesc((v) => !v)}
-                >
-                  {recentSortDesc ? "▲" : "▼"}
-                </button>
-              )}
-              <button
-                type="button"
-                role="tab"
-                className={`dial-tab${activeTab === "recently-aired" ? " dial-tab--active" : ""}`}
-                aria-selected={activeTab === "recently-aired"}
-                onClick={() => setActiveTab("recently-aired")}
-              >
-                Recent
-                {recentWindow !== "all" && sortedRecentSets.length > 0 && (
-                  <span className="dial-tab__n">{sortedRecentSets.length}</span>
-                )}
+                {popSortDesc ? "▲" : "▼"}
               </button>
               <button
                 type="button"
@@ -2789,7 +2588,7 @@ export function DialView() {
             {/* ── Primary tab: "On the Air × Your Music Library" ─────────────────
                 Contains Zone 1 crossing rows + Zone 2 ghost stations as a
                 subsection below. */}
-            {zone1Settled && activeTab === "library" && (
+            {zone1Settled && (
               <>
                 {/* PopScrubber only in live mode (day/top have no live sort). */}
                 {effectiveTtMode === "live" && scrubItems.length > 6 && (
@@ -3066,68 +2865,6 @@ export function DialView() {
               </>
             )}
 
-            {/* ── "Recent" tab ─────────────────────────────────────────────────
-                Ghost radio repository: completed show runs from the archive
-                with crossing sentences and "this set" pill expansion.
-                Gated on zone1Settled so it never renders before live zones
-                have resolved. */}
-            {zone1Settled && activeTab === "recently-aired" && (
-              <>
-                {/* Time filter chips */}
-                <div className="dial-recent-filters">
-                  {(["all", "today", "yesterday", "week", "month", "year"] as RecentSetWindow[]).map((w) => (
-                    <button
-                      key={w}
-                      type="button"
-                      className={`dial-filter-chip${recentWindow === w ? " dial-filter-chip--active" : ""}`}
-                      onClick={() => setRecentWindow(w)}
-                    >
-                      {RECENT_WINDOW_LABELS[w]}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Loading skeleton — shown only on the initial fetch */}
-                {recentSetsLoading && !recentSetsData && (
-                  <>
-                    <DialRowSkeleton delay={0} />
-                    <DialRowSkeleton delay={1} />
-                    <DialRowSkeleton delay={2} />
-                  </>
-                )}
-
-                {/* Run list */}
-                {sortedRecentSets.map((item) => (
-                  <RecentSetRow
-                    key={item.run.runId}
-                    item={item}
-                    seedsLower={seedsLower}
-                    onAddArtist={addSeed}
-                    onStationClick={goStation}
-                  />
-                ))}
-
-                {/* Load more — shown whenever the server says there are more
-                    pages, even if the current sorted list is empty (e.g. all
-                    items on this page were filtered client-side). */}
-                {hasNextRecentSets && (
-                  <button
-                    className="dial-show-more"
-                    onClick={() => { void fetchNextRecentSets(); }}
-                    disabled={isFetchingNextRecentSets}
-                  >
-                    {isFetchingNextRecentSets ? "Loading…" : "Load more"}
-                  </button>
-                )}
-
-                {/* Empty state — only when fully settled with no items */}
-                {!recentSetsLoading && !hasNextRecentSets && sortedRecentSets.length === 0 && (
-                  <div style={{ padding: "20px 15px", opacity: 0.4, fontFamily: "var(--app-font-display)", fontSize: 12 }}>
-                    No sets found for this period
-                  </div>
-                )}
-              </>
-            )}
 
             {/* Spinner while the live pulse hasn't arrived yet */}
             {isCoreLoading && (

@@ -43,7 +43,9 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (!dbAvailable || !stationId) return;
+  // Clear all FK children before removing the station row (no cascade defined).
   await db.delete(spinsTable).where(inArray(spinsTable.stationId, [stationId]));
+  await db.execute(sql`DELETE FROM station_quality WHERE station_id = ${stationId}`);
   await db.delete(stationsTable).where(inArray(stationsTable.id, [stationId]));
 });
 
