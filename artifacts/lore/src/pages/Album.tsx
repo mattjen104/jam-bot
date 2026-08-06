@@ -20,11 +20,11 @@ function SectionHeading({
   return (
     <div className="mb-3 flex items-center gap-2">
       <span className="text-primary">{icon}</span>
-      <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-foreground/70">
+      <span className="font-mono text-[13px] uppercase tracking-[0.18em] text-foreground/70">
         {title}
       </span>
       {hint && (
-        <span className="ml-auto font-mono text-[11px] text-muted-foreground/60">
+        <span className="ml-auto font-mono text-[13px] text-muted-foreground/60">
           {hint}
         </span>
       )}
@@ -57,11 +57,11 @@ function TrackRow({ track }: { track: AlbumTrackRow }) {
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-foreground group-hover:text-primary">
+          <p className="truncate text-base font-normal text-foreground group-hover:text-primary">
             {track.title}
           </p>
           {spunOnLore ? (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               <span className="text-primary">
                 {track.spinCount} spin{track.spinCount === 1 ? "" : "s"} on Lore
               </span>
@@ -72,7 +72,7 @@ function TrackRow({ track }: { track: AlbumTrackRow }) {
               )}
             </p>
           ) : (
-            <p className="text-xs text-muted-foreground/50">Not yet heard on Lore</p>
+            <p className="text-sm text-muted-foreground/50">Not yet heard on Lore</p>
           )}
         </div>
         <Play className="h-4 w-4 shrink-0 text-muted-foreground/40 transition-colors group-hover:text-primary" />
@@ -108,7 +108,7 @@ export default function Album() {
         <div className="mt-6">
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider text-muted-foreground/70 hover:text-primary"
+            className="inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wider text-muted-foreground/70 hover:text-primary"
           >
             <ArrowLeft className="h-3 w-3" />
             Back to the dial
@@ -125,13 +125,13 @@ export default function Album() {
         <div className="mt-6">
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider text-muted-foreground/70 hover:text-primary"
+            className="inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wider text-muted-foreground/70 hover:text-primary"
           >
             <ArrowLeft className="h-3 w-3" />
             Back to the dial
           </Link>
         </div>
-        <div className="mt-10 rounded-2xl border border-destructive-border bg-destructive/10 p-6 text-sm text-destructive-foreground">
+        <div className="mt-10 rounded-2xl border border-destructive-border bg-destructive/10 p-6 text-base text-destructive-foreground">
           Couldn't load this album. Please refresh.
         </div>
       </div>
@@ -148,7 +148,7 @@ export default function Album() {
       <div className="mt-6">
         <Link
           href="/"
-          className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider text-muted-foreground/70 hover:text-primary"
+          className="inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wider text-muted-foreground/70 hover:text-primary"
           data-testid="back-to-dial"
         >
           <ArrowLeft className="h-3 w-3" />
@@ -157,16 +157,16 @@ export default function Album() {
       </div>
 
       <header className="mt-8 space-y-1">
-        <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
+        <p className="font-mono text-[13px] uppercase tracking-[0.2em] text-primary">
           {album.primaryType ?? "Album"}
         </p>
         <h1
-          className="font-serif text-4xl font-semibold leading-tight text-foreground sm:text-5xl"
+          className="font-serif text-4xl font-normal leading-tight text-foreground sm:text-5xl"
           data-testid="album-title"
         >
           {album.title}
         </h1>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-base text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-lg text-muted-foreground">
           {artistMbid ? (
             <Link
               href={`/artist/${artistMbid}`}
@@ -188,7 +188,7 @@ export default function Album() {
           )}
         </div>
         {totalSpins > 0 && (
-          <p className="pt-1 text-sm text-muted-foreground">
+          <p className="pt-1 text-base text-muted-foreground">
             {totalSpins} spin{totalSpins === 1 ? "" : "s"} from{" "}
             {heardTracks.length} track{heardTracks.length === 1 ? "" : "s"} on
             Lore
@@ -229,7 +229,7 @@ export default function Album() {
 
         {album.tracks.length === 0 && (
           <div className="rounded-2xl border border-border bg-card/50 p-8 text-center">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-base text-muted-foreground">
               No tracks found for this album yet.
             </p>
           </div>

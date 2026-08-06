@@ -196,13 +196,13 @@ export function StationList({
                     <Link
                       href={`/archive/stations/${station.slug}`}
                       onClick={(e) => e.stopPropagation()}
-                      className="truncate font-serif text-sm font-semibold leading-tight text-foreground hover:text-primary transition-colors"
+                      className="truncate font-serif text-base font-normal leading-tight text-foreground hover:text-primary transition-colors"
                       data-testid={`featured-station-link-${station.slug}`}
                     >
                       {station.name}
                     </Link>
                   ) : (
-                    <h3 className="truncate font-serif text-sm font-semibold leading-tight text-foreground">
+                    <h3 className="truncate font-serif text-base font-normal leading-tight text-foreground">
                       {station.name}
                     </h3>
                   )}
@@ -215,7 +215,7 @@ export function StationList({
                       aria-label={`Visit ${station.name}'s homepage`}
                       title={station.homepageUrl ?? undefined}
                       data-testid={`homepage-link-${station.slug}`}
-                      className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-mono text-muted-foreground/50 transition-colors hover:text-primary"
+                      className="mt-0.5 inline-flex items-center gap-1 text-[12px] font-mono text-muted-foreground/50 transition-colors hover:text-primary"
                     >
                       <ExternalLink className="h-2.5 w-2.5 shrink-0" />
                       <span className="truncate">site</span>
@@ -231,13 +231,13 @@ export function StationList({
                       <Link
                         href={`/archive/stations/${station.slug}`}
                         onClick={(e) => e.stopPropagation()}
-                        className="truncate font-serif text-sm font-semibold leading-tight text-foreground hover:text-primary transition-colors"
+                        className="truncate font-serif text-base font-normal leading-tight text-foreground hover:text-primary transition-colors"
                         data-testid={`featured-station-link-mobile-${station.slug}`}
                       >
                         {station.name}
                       </Link>
                     ) : (
-                      <span className="truncate font-serif text-sm font-semibold leading-tight text-foreground">
+                      <span className="truncate font-serif text-base font-normal leading-tight text-foreground">
                         {station.name}
                       </span>
                     )}
@@ -258,14 +258,14 @@ export function StationList({
                   {/* Primary track / show line */}
                   {trackLine ? (
                     <p
-                      className="truncate text-xs text-foreground/80"
+                      className="truncate text-sm text-foreground/80"
                       data-testid={`pulse-track-${station.slug}`}
                     >
                       {trackLine}
                     </p>
                   ) : np?.show ? (
                     <p
-                      className="flex items-center gap-1.5 truncate font-mono text-[11px] text-muted-foreground"
+                      className="flex items-center gap-1.5 truncate font-mono text-[13px] text-muted-foreground"
                       data-testid={`pulse-show-${station.slug}`}
                     >
                       <Mic className="h-3 w-3 shrink-0 text-primary/70" />
@@ -287,7 +287,7 @@ export function StationList({
                     </p>
                   ) : scrapedNow ? (
                     <p
-                      className="flex items-center gap-1.5 truncate font-mono text-[11px] text-muted-foreground"
+                      className="flex items-center gap-1.5 truncate font-mono text-[13px] text-muted-foreground"
                       data-testid={`scraped-now-${station.slug}`}
                     >
                       <Mic className="h-3 w-3 shrink-0 text-primary/70" />
@@ -308,7 +308,7 @@ export function StationList({
                       )}
                     </p>
                   ) : (
-                    <p className="flex items-center gap-1.5 truncate font-mono text-xs text-muted-foreground">
+                    <p className="flex items-center gap-1.5 truncate font-mono text-sm text-muted-foreground">
                       <Radio className="h-3 w-3 shrink-0" />
                       <span className="truncate">
                         {[station.org, station.city, station.country].filter(Boolean).join(" · ") || "Independent"}
@@ -319,7 +319,7 @@ export function StationList({
                   {/* Show attribution below track line when both are present */}
                   {np?.show && trackLine && (
                     <p
-                      className="mt-0.5 flex items-center gap-1.5 truncate font-mono text-[11px] text-muted-foreground"
+                      className="mt-0.5 flex items-center gap-1.5 truncate font-mono text-[13px] text-muted-foreground"
                       data-testid={`pulse-show-${station.slug}`}
                     >
                       <Mic className="h-3 w-3 shrink-0 text-primary/70" />
@@ -347,7 +347,7 @@ export function StationList({
                       <Link
                         href={`/archive/selector-runs/${pick.runId}`}
                         onClick={(e) => e.stopPropagation()}
-                        className="mt-1 inline-flex max-w-full items-center gap-1 truncate rounded-full border border-primary-border bg-primary/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-primary hover:bg-primary/20"
+                        className="mt-1 inline-flex max-w-full items-center gap-1 truncate rounded-full border border-primary-border bg-primary/10 px-2 py-0.5 font-mono text-[12px] uppercase tracking-wide text-primary hover:bg-primary/20"
                         title={
                           pick.listTitle
                             ? `${pick.picker.name} — ${pick.listTitle}`
@@ -360,7 +360,7 @@ export function StationList({
                       </Link>
                     ) : (
                       <span
-                        className="mt-1 inline-flex max-w-full items-center gap-1 truncate rounded-full border border-primary-border bg-primary/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-primary"
+                        className="mt-1 inline-flex max-w-full items-center gap-1 truncate rounded-full border border-primary-border bg-primary/10 px-2 py-0.5 font-mono text-[12px] uppercase tracking-wide text-primary"
                         title={
                           pick.listTitle
                             ? `${pick.picker.name} — ${pick.listTitle}`
@@ -376,7 +376,7 @@ export function StationList({
                   {/* May-have-ads badge — inline in now-playing column */}
                   {station.mayHaveAds && (
                     <span
-                      className="mt-1 inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wide text-amber-600 dark:text-amber-400"
+                      className="mt-1 inline-flex items-center gap-1 rounded-full border border-zinc-500/30 bg-zinc-500/10 px-2 py-0.5 font-mono text-[12px] font-normal uppercase tracking-wide text-zinc-600 dark:text-zinc-400"
                       title="This station has been observed airing ad breaks"
                       data-testid={`ads-badge-${station.slug}`}
                     >
@@ -393,7 +393,7 @@ export function StationList({
                     >
                       {!np?.show && trackLine && (
                         <span
-                          className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-background/40 px-2 py-0.5 font-mono text-[10px] text-muted-foreground/70 whitespace-nowrap"
+                          className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-background/40 px-2 py-0.5 font-mono text-[12px] text-muted-foreground/70 whitespace-nowrap"
                           title={trackLine}
                         >
                           <span className="max-w-[18ch] truncate">{trackLine}</span>
@@ -401,7 +401,7 @@ export function StationList({
                       )}
                       {avail.hasLyrics && (
                         <span
-                          className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-background/60 px-2 py-0.5 font-mono text-[10px] text-muted-foreground whitespace-nowrap"
+                          className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-background/60 px-2 py-0.5 font-mono text-[12px] text-muted-foreground whitespace-nowrap"
                           title="Synced lyrics available"
                           data-testid={`chip-lyrics-${station.slug}`}
                         >
@@ -411,7 +411,7 @@ export function StationList({
                       )}
                       {avail.hasSe && (
                         <span
-                          className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-background/60 px-2 py-0.5 font-mono text-[10px] text-muted-foreground whitespace-nowrap"
+                          className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-background/60 px-2 py-0.5 font-mono text-[12px] text-muted-foreground whitespace-nowrap"
                           title="Song Exploder episode available"
                           data-testid={`chip-se-${station.slug}`}
                         >
@@ -449,14 +449,14 @@ export function StationList({
                           onGenreClick(tag);
                         }}
                         data-testid={`genre-tag-${station.slug}-${tag}`}
-                        className={`inline-flex items-center rounded-full border border-border bg-background/40 px-2 py-0.5 font-mono text-[9px] text-muted-foreground/70 whitespace-nowrap hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer ${gi >= 2 ? "hidden sm:inline-flex" : ""}`}
+                        className={`inline-flex items-center rounded-full border border-border bg-background/40 px-2 py-0.5 font-mono text-[10px] text-muted-foreground/70 whitespace-nowrap hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer ${gi >= 2 ? "hidden sm:inline-flex" : ""}`}
                       >
                         <span className="truncate max-w-[9ch]">{tag}</span>
                       </button>
                     ) : (
                       <span
                         key={tag}
-                        className={`inline-flex items-center rounded-full border border-border bg-background/40 px-2 py-0.5 font-mono text-[9px] text-muted-foreground/70 whitespace-nowrap ${gi >= 2 ? "hidden sm:inline-flex" : ""}`}
+                        className={`inline-flex items-center rounded-full border border-border bg-background/40 px-2 py-0.5 font-mono text-[10px] text-muted-foreground/70 whitespace-nowrap ${gi >= 2 ? "hidden sm:inline-flex" : ""}`}
                       >
                         <span className="truncate max-w-[9ch]">{tag}</span>
                       </span>
@@ -473,7 +473,7 @@ export function StationList({
                   <QualityBadge quality={station.streamQuality} format={station.streamFormat} />
                   {(station.qualityTier === "silent" || station.qualityTier === "unscored") && (
                     <span
-                      className="inline-flex items-center gap-1 rounded-full border border-border bg-background/40 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wide text-muted-foreground/50"
+                      className="inline-flex items-center gap-1 rounded-full border border-border bg-background/40 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground/50"
                       title={
                         station.qualityTier === "silent"
                           ? "Active stream but near-zero usable track metadata in the last 7 days"
@@ -492,7 +492,7 @@ export function StationList({
               {featured && (
                 <div className="px-3 pb-2.5 pl-[calc(3.5rem+0.75rem+3px)]">
                   {station.homepageBlurb && (
-                    <p className="line-clamp-2 text-xs text-muted-foreground/70">
+                    <p className="line-clamp-2 text-sm text-muted-foreground/70">
                       {station.homepageBlurb}
                     </p>
                   )}
@@ -531,7 +531,7 @@ function TrackTimeline({
       {spins.map((spin, i) => {
         const label = [spin.title, spin.artist].filter(Boolean).join(" · ");
         const isActive = i === 0 && !!currentMbid && spin.mbid === currentMbid;
-        const chipClass = `inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[10px] whitespace-nowrap transition-colors ${
+        const chipClass = `inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[12px] whitespace-nowrap transition-colors ${
           isActive
             ? "border-primary/40 bg-primary/15 text-primary"
             : "border-border bg-background/50 text-muted-foreground hover:border-primary/30 hover:text-foreground"
@@ -608,7 +608,7 @@ function ShowTimeline({
                 : `${label} · ${run.resolvedCount}/${run.spinCount} tracks playable`
             }
             data-testid={`show-chip-${run.runId}`}
-            className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[10px] whitespace-nowrap transition-colors ${
+            className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[12px] whitespace-nowrap transition-colors ${
               isActive
                 ? "border-primary/40 bg-primary/15 text-primary"
                 : "border-border bg-background/50 text-muted-foreground hover:border-primary/30 hover:text-foreground"
@@ -681,7 +681,7 @@ function UpcomingShowStrip({ slug }: { slug: string }) {
         <span key={`${show.showName}-${show.dayOfWeek}-${i}`} className="flex items-center gap-1">
           <Link
             href={`/archive/stations/${slug}?show=${encodeURIComponent(show.showName)}`}
-            className="inline-flex items-center gap-1 rounded-full border border-border bg-background/60 px-2 py-0.5 font-mono text-[10px] text-foreground/80 hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-colors whitespace-nowrap"
+            className="inline-flex items-center gap-1 rounded-full border border-border bg-background/60 px-2 py-0.5 font-mono text-[12px] text-foreground/80 hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-colors whitespace-nowrap"
             title={`${show.dayOfWeek} ${show.startTime} — browse archive`}
             data-testid={`show-chip-featured-${slug}-${show.showName}`}
           >
@@ -692,7 +692,7 @@ function UpcomingShowStrip({ slug }: { slug: string }) {
           {show.djName && (
             <Link
               href={`/dj/${encodeURIComponent(show.djName)}`}
-              className="inline-flex items-center gap-1 rounded-full border border-border bg-background/40 px-2 py-0.5 font-mono text-[10px] text-muted-foreground/70 hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-colors whitespace-nowrap"
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-background/40 px-2 py-0.5 font-mono text-[12px] text-muted-foreground/70 hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-colors whitespace-nowrap"
               title={`${show.djName}'s schedule`}
               data-testid={`dj-chip-featured-${slug}-${show.djName}`}
             >

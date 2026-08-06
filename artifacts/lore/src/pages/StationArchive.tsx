@@ -37,7 +37,7 @@ export default function StationArchive() {
       <div className={`mx-auto max-w-4xl px-4 pt-8 sm:px-6 ${dockPadding}`}>
         <Link
           href="/archive"
-          className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wide text-muted-foreground hover:text-primary"
+          className="inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wide text-muted-foreground hover:text-primary"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
           All archives
@@ -46,18 +46,18 @@ export default function StationArchive() {
         {isLoading ? (
           <div className="mt-8 h-40 animate-pulse rounded-xl border border-card-border bg-card" />
         ) : isError || !data ? (
-          <p className="mt-8 rounded-xl border border-destructive-border bg-destructive/10 p-4 text-sm text-destructive-foreground">
+          <p className="mt-8 rounded-xl border border-destructive-border bg-destructive/10 p-4 text-base text-destructive-foreground">
             Couldn't load this station's archive.
           </p>
         ) : (
           <>
             <header className="mb-6 mt-6">
-              <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] text-primary">
+              <div className="flex items-center gap-2 font-mono text-[13px] uppercase tracking-[0.3em] text-primary">
                 <Radio className="h-4 w-4" />
                 Station archive
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-3">
-                <h1 className="font-serif text-3xl font-semibold text-foreground">
+                <h1 className="font-serif text-4xl font-normal text-foreground">
                   {data.station.name}
                 </h1>
                 <ShareButton
@@ -65,7 +65,7 @@ export default function StationArchive() {
                   kind="station"
                 />
               </div>
-              <p className="mt-2 font-mono text-xs text-muted-foreground">
+              <p className="mt-2 font-mono text-sm text-muted-foreground">
                 {data.runs.length} documented run{data.runs.length === 1 ? "" : "s"} ·
                 grouped by show and broadcast day (UTC)
               </p>
@@ -75,7 +75,7 @@ export default function StationArchive() {
             <div className="mb-6 flex gap-1 rounded-xl border border-card-border bg-card p-1">
               <button
                 onClick={() => setActiveTab("archive")}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2 font-mono text-[11px] uppercase tracking-wide transition-colors ${
+                className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2 font-mono text-[13px] uppercase tracking-wide transition-colors ${
                   activeTab === "archive"
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:text-foreground"
@@ -86,7 +86,7 @@ export default function StationArchive() {
               </button>
               <button
                 onClick={() => setActiveTab("schedule")}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2 font-mono text-[11px] uppercase tracking-wide transition-colors ${
+                className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2 font-mono text-[13px] uppercase tracking-wide transition-colors ${
                   activeTab === "schedule"
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:text-foreground"
@@ -96,7 +96,7 @@ export default function StationArchive() {
                 Schedule
                 {(data.station.upcomingShowCount ?? 0) > 0 && (
                   <span
-                    className={`rounded-full px-1.5 py-0.5 text-[9px] leading-none ${
+                    className={`rounded-full px-1.5 py-0.5 text-[10px] leading-none ${
                       activeTab === "schedule"
                         ? "bg-primary-foreground/20 text-primary-foreground"
                         : "bg-muted text-muted-foreground"
@@ -123,7 +123,7 @@ export default function StationArchive() {
                 </div>
 
                 {data.runs.length === 0 ? (
-                  <p className="rounded-xl border border-card-border bg-card p-4 font-mono text-xs text-muted-foreground">
+                  <p className="rounded-xl border border-card-border bg-card p-4 font-mono text-sm text-muted-foreground">
                     Nothing documented yet — the pollers are listening.
                   </p>
                 ) : (
@@ -133,7 +133,7 @@ export default function StationArchive() {
                         <Link
                           href={`/archive/station-runs/${data.runs[0].runId}?play=1`}
                           data-testid="ride-most-recent"
-                          className="hover-elevate inline-flex items-center gap-2 rounded-full border border-primary-border bg-primary px-5 py-2.5 font-mono text-xs uppercase tracking-wide text-primary-foreground"
+                          className="hover-elevate inline-flex items-center gap-2 rounded-full border border-primary-border bg-primary px-5 py-2.5 font-mono text-sm uppercase tracking-wide text-primary-foreground"
                         >
                           <Ghost className="h-4 w-4" />
                           Ride most recent · {data.runs[0].show?.name ?? "station stream"}
@@ -143,12 +143,12 @@ export default function StationArchive() {
 
                     {showFilter && (
                       <div className="mb-4 flex items-center gap-2 rounded-xl border border-primary-border bg-primary/10 px-4 py-2">
-                        <span className="font-mono text-xs text-primary">
-                          Showing runs for: <span className="font-semibold">{showFilter}</span>
+                        <span className="font-mono text-sm text-primary">
+                          Showing runs for: <span className="font-normal">{showFilter}</span>
                         </span>
                         <Link
                           href={`/archive/stations/${slug}`}
-                          className="ml-auto font-mono text-[10px] uppercase tracking-wide text-muted-foreground hover:text-primary"
+                          className="ml-auto font-mono text-[12px] uppercase tracking-wide text-muted-foreground hover:text-primary"
                         >
                           Clear filter
                         </Link>
@@ -172,7 +172,7 @@ export default function StationArchive() {
                                 href={`/archive/station-runs/${r.runId}`}
                                 className="min-w-0 flex-1"
                               >
-                                <p className="truncate font-serif text-base font-semibold text-foreground">
+                                <p className="truncate font-serif text-lg font-normal text-foreground">
                                   {r.show?.name ?? "Station stream"}
                                   {r.show?.djName ? (
                                     <span className="text-muted-foreground">
@@ -181,7 +181,7 @@ export default function StationArchive() {
                                     </span>
                                   ) : null}
                                 </p>
-                                <p className="truncate font-mono text-[11px] text-muted-foreground">
+                                <p className="truncate font-mono text-[13px] text-muted-foreground">
                                   {runDate(r.date)} · {r.spinCount} track
                                   {r.spinCount === 1 ? "" : "s"} ·{" "}
                                   <span
@@ -195,7 +195,7 @@ export default function StationArchive() {
                                 <Link
                                   href={`/archive/station-runs/${r.runId}?play=1`}
                                   data-testid={`ride-run-${r.runId}`}
-                                  className="hover-elevate shrink-0 inline-flex items-center gap-1.5 rounded-full border border-primary-border bg-primary px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide text-primary-foreground"
+                                  className="hover-elevate shrink-0 inline-flex items-center gap-1.5 rounded-full border border-primary-border bg-primary px-3 py-1.5 font-mono text-[13px] uppercase tracking-wide text-primary-foreground"
                                 >
                                   <Ghost className="h-3.5 w-3.5" />
                                   Ride
@@ -217,11 +217,11 @@ export default function StationArchive() {
 
                 {overlaps && overlaps.items.length > 0 && (
                   <section className="mt-10">
-                    <h2 className="mb-1 flex items-center gap-2 font-serif text-xl font-semibold text-foreground">
+                    <h2 className="mb-1 flex items-center gap-2 font-serif text-2xl font-normal text-foreground">
                       <Users className="h-5 w-5 text-primary" />
                       Critics agree
                     </h2>
-                    <p className="mb-3 text-sm text-muted-foreground">
+                    <p className="mb-3 text-base text-muted-foreground">
                       Selectors who vouched for the exact recordings this station has spun.
                     </p>
                     <ul
@@ -236,13 +236,13 @@ export default function StationArchive() {
                             data-testid={`overlap-selector-${o.picker.handle}`}
                           >
                             <div className="min-w-0">
-                              <p className="truncate text-sm font-medium text-foreground">
+                              <p className="truncate text-base font-normal text-foreground">
                                 {o.picker.name}
-                                <span className="ml-2 font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+                                <span className="ml-2 font-mono text-[13px] uppercase tracking-wide text-muted-foreground">
                                   {o.picker.pickerType}
                                 </span>
                               </p>
-                              <p className="truncate font-mono text-[11px] text-muted-foreground">
+                              <p className="truncate font-mono text-[13px] text-muted-foreground">
                                 {o.sharedCount} shared song
                                 {o.sharedCount === 1 ? "" : "s"}
                               </p>

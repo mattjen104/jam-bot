@@ -54,21 +54,21 @@ export default function Archive() {
       <div className={`mx-auto max-w-4xl px-4 pt-8 sm:px-6 ${dockPadding}`}>
         <Link
           href="/"
-          className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wide text-muted-foreground hover:text-primary"
+          className="inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wide text-muted-foreground hover:text-primary"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
           Back to the dial
         </Link>
 
         <header className="mb-10 mt-6">
-          <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] text-primary">
+          <div className="flex items-center gap-2 font-mono text-[13px] uppercase tracking-[0.3em] text-primary">
             <Ghost className="h-4 w-4" />
             Ghost radio
           </div>
-          <h1 className="mt-3 max-w-[20ch] font-serif text-4xl font-semibold leading-[1.05] text-foreground">
+          <h1 className="mt-3 max-w-[20ch] font-serif text-4xl font-normal leading-[1.05] text-foreground">
             Replay a run as it aired.
           </h1>
-          <p className="mt-4 max-w-[52ch] text-base text-muted-foreground">
+          <p className="mt-4 max-w-[52ch] text-lg text-muted-foreground">
             Every documented run — a station show's broadcast day, an NTS
             episode, a blog's tracklist — can be replayed in its original
             order. Real sequences from real people, never an algorithm.
@@ -78,7 +78,7 @@ export default function Archive() {
         <section className="mb-10">
           <label
             htmlFor="artist-run-search"
-            className="mb-3 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] text-primary"
+            className="mb-3 flex items-center gap-2 font-mono text-[13px] uppercase tracking-[0.3em] text-primary"
           >
             <Search className="h-4 w-4" />
             Who played my artist?
@@ -89,20 +89,20 @@ export default function Archive() {
             value={artistQuery}
             onChange={(e) => setArtistQuery(e.target.value)}
             placeholder="Type an artist — e.g. Fleetwood Mac"
-            className="w-full rounded-xl border border-card-border bg-card px-4 py-3 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full rounded-xl border border-card-border bg-card px-4 py-3 font-mono text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             data-testid="input-artist-run-search"
           />
           {searchEnabled ? (
             <div className="mt-4" data-testid="artist-run-results">
               {searchFetching && !artistRuns ? (
-                <p className="font-mono text-xs text-muted-foreground">
+                <p className="font-mono text-sm text-muted-foreground">
                   Digging through the vault…
                 </p>
               ) : artistRuns &&
                 artistRuns.stationRuns.length === 0 &&
                 artistRuns.pickerRuns.length === 0 ? (
                 <p
-                  className="rounded-xl border border-card-border bg-card p-4 font-mono text-xs text-muted-foreground"
+                  className="rounded-xl border border-card-border bg-card p-4 font-mono text-sm text-muted-foreground"
                   data-testid="artist-run-empty"
                 >
                   No documented runs with “{debouncedQuery}” yet.
@@ -117,11 +117,11 @@ export default function Archive() {
                         data-testid={`artist-run-station-${m.run.runId}`}
                       >
                         <div className="min-w-0">
-                          <p className="truncate font-serif text-base font-semibold text-foreground">
+                          <p className="truncate font-serif text-lg font-normal text-foreground">
                             {m.station.name}
                             {m.run.show ? ` · ${m.run.show.name}` : ""}
                           </p>
-                          <p className="truncate font-mono text-[11px] text-muted-foreground">
+                          <p className="truncate font-mono text-[13px] text-muted-foreground">
                             {runDate(m.run.startedAt)} · {m.matchCount} track
                             {m.matchCount === 1 ? "" : "s"} matched ·{" "}
                             {m.run.spinCount} spins in the run
@@ -139,11 +139,11 @@ export default function Archive() {
                         data-testid={`artist-run-picker-${m.runId}`}
                       >
                         <div className="min-w-0">
-                          <p className="truncate font-serif text-base font-semibold text-foreground">
+                          <p className="truncate font-serif text-lg font-normal text-foreground">
                             {m.picker.name}
                             {m.title ? ` · ${m.title}` : ""}
                           </p>
-                          <p className="truncate font-mono text-[11px] text-muted-foreground">
+                          <p className="truncate font-mono text-[13px] text-muted-foreground">
                             {m.pickedAt ? `${runDate(m.pickedAt)} · ` : ""}
                             {m.matchCount} track
                             {m.matchCount === 1 ? "" : "s"} matched ·{" "}
@@ -165,7 +165,7 @@ export default function Archive() {
             className="mb-10 rounded-xl border border-card-border bg-card p-4"
             data-testid="archive-coverage"
           >
-            <h2 className="mb-3 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] text-primary">
+            <h2 className="mb-3 flex items-center gap-2 font-mono text-[13px] uppercase tracking-[0.3em] text-primary">
               <Gauge className="h-4 w-4" />
               How deep the vault goes
             </h2>
@@ -175,7 +175,7 @@ export default function Archive() {
                 .map((s) => (
                   <li
                     key={s.slug}
-                    className="font-mono text-[11px] text-muted-foreground"
+                    className="font-mono text-[13px] text-muted-foreground"
                     data-testid={`coverage-station-${s.slug}`}
                   >
                     <span className="text-foreground">{s.name}</span>
@@ -200,7 +200,7 @@ export default function Archive() {
                 .map((p) => (
                   <li
                     key={p.handle}
-                    className="font-mono text-[11px] text-muted-foreground"
+                    className="font-mono text-[13px] text-muted-foreground"
                     data-testid={`coverage-picker-${p.handle}`}
                   >
                     <span className="text-foreground">{p.name}</span>
@@ -221,14 +221,14 @@ export default function Archive() {
         ) : null}
 
         <section className="mb-10">
-          <h2 className="mb-4 flex items-center gap-2 font-serif text-xl font-semibold text-foreground">
+          <h2 className="mb-4 flex items-center gap-2 font-serif text-2xl font-normal text-foreground">
             <Ghost className="h-4 w-4 text-primary" />
             Recent runs
           </h2>
           {recentRunsLoading ? (
             <ListSkeleton />
           ) : recentRuns.length === 0 ? (
-            <p className="rounded-xl border border-card-border bg-card p-4 font-mono text-xs text-muted-foreground">
+            <p className="rounded-xl border border-card-border bg-card p-4 font-mono text-sm text-muted-foreground">
               No documented runs yet.
             </p>
           ) : (
@@ -242,11 +242,11 @@ export default function Archive() {
                       data-testid={`recent-run-${item.run.runId}`}
                     >
                       <div className="min-w-0">
-                        <p className="truncate font-serif text-base font-semibold text-foreground">
+                        <p className="truncate font-serif text-lg font-normal text-foreground">
                           {item.station.name}
                           {item.run.show ? ` · ${item.run.show.name}` : ""}
                         </p>
-                        <p className="truncate font-mono text-[11px] text-muted-foreground">
+                        <p className="truncate font-mono text-[13px] text-muted-foreground">
                           {runDate(item.run.startedAt)} · {item.run.spinCount}{" "}
                           track{item.run.spinCount === 1 ? "" : "s"} ·{" "}
                           <span
@@ -268,7 +268,7 @@ export default function Archive() {
         </section>
 
         <section className="mb-10">
-          <h2 className="mb-4 flex items-center gap-2 font-serif text-xl font-semibold text-foreground">
+          <h2 className="mb-4 flex items-center gap-2 font-serif text-2xl font-normal text-foreground">
             <Radio className="h-4 w-4 text-primary" />
             Station archives
           </h2>
@@ -284,10 +284,10 @@ export default function Archive() {
                     data-testid={`archive-station-${s.slug}`}
                   >
                     <div className="min-w-0">
-                      <p className="truncate font-serif text-base font-semibold text-foreground">
+                      <p className="truncate font-serif text-lg font-normal text-foreground">
                         {s.name}
                       </p>
-                      <p className="truncate font-mono text-[11px] text-muted-foreground">
+                      <p className="truncate font-mono text-[13px] text-muted-foreground">
                         {s.org} · documented runs by show and broadcast day
                       </p>
                     </div>
@@ -300,14 +300,14 @@ export default function Archive() {
         </section>
 
         <section>
-          <h2 className="mb-4 flex items-center gap-2 font-serif text-xl font-semibold text-foreground">
+          <h2 className="mb-4 flex items-center gap-2 font-serif text-2xl font-normal text-foreground">
             <Users className="h-4 w-4 text-primary" />
             Selector archives
           </h2>
           {pickersLoading ? (
             <ListSkeleton />
           ) : pickers.length === 0 ? (
-            <p className="rounded-xl border border-card-border bg-card p-4 font-mono text-xs text-muted-foreground">
+            <p className="rounded-xl border border-card-border bg-card p-4 font-mono text-sm text-muted-foreground">
               No selectors with documented runs yet.
             </p>
           ) : (
@@ -320,10 +320,10 @@ export default function Archive() {
                     data-testid={`archive-selector-${p.handle}`}
                   >
                     <div className="min-w-0">
-                      <p className="truncate font-serif text-base font-semibold text-foreground">
+                      <p className="truncate font-serif text-lg font-normal text-foreground">
                         {p.name}
                       </p>
-                      <p className="truncate font-mono text-[11px] text-muted-foreground">
+                      <p className="truncate font-mono text-[13px] text-muted-foreground">
                         {p.pickerType}
                         {p.description ? ` · ${p.description}` : ""}
                       </p>

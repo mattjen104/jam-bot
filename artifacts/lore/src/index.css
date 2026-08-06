@@ -62,8 +62,8 @@
 }
 .player-bar-station {
   font-family: var(--app-font-display);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 400;
   color: hsl(var(--foreground));
   white-space: nowrap;
   overflow: hidden;
@@ -71,7 +71,7 @@
 }
 .player-bar-status {
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: 12px;
   color: hsl(var(--muted-foreground));
   white-space: nowrap;
   overflow: hidden;
@@ -130,7 +130,7 @@
   border-color: hsl(var(--foreground));
 }
 .player-bar-btn--play:hover { opacity: 0.85; background: hsl(var(--foreground)); }
-.player-bar-btn--ghost { font-size: 13px; font-weight: 700; }
+.player-bar-btn--ghost { font-size: 15px; font-weight: 400; }
 .player-bar-btn--scan-on {
   color: hsl(var(--accent));
   border-color: hsl(var(--accent) / 0.5);
@@ -150,8 +150,8 @@
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 8%, #000 92%, transparent 100%);
-  mask-image: linear-gradient(to right, transparent 0%, #000 8%, #000 92%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000000 8%, #000000 92%, transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0%, #000000 8%, #000000 92%, transparent 100%);
 }
 .player-ticker__track {
   display: inline-flex;
@@ -169,8 +169,8 @@
   border: 1px solid hsl(var(--accent) / 0.35);
   border-radius: 3px;
   font-family: var(--app-font-mono);
-  font-size: 8px;
-  font-weight: 700;
+  font-size: 9px;
+  font-weight: 400;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: hsl(var(--accent));
@@ -178,7 +178,7 @@
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
-  height: 20px;
+  min-height: 20px;
   display: flex;
   align-items: center;
   transition: background 0.1s, border-color 0.1s;
@@ -190,7 +190,7 @@
 .player-ticker__empty {
   flex: 1;
   font-family: var(--app-font-mono);
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: hsl(var(--faint));
@@ -205,8 +205,8 @@
 }
 .player-ticker__meta-line {
   font-family: var(--app-font-mono);
-  font-size: 8px;
-  font-weight: 700;
+  font-size: 9px;
+  font-weight: 400;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: hsl(var(--accent));
@@ -225,7 +225,7 @@
   border-radius: 4px;
   color: hsl(var(--faint));
   cursor: pointer;
-  font-size: 11px;
+  font-size: 13px;
   width: 22px;
   height: 22px;
   display: flex;
@@ -266,7 +266,7 @@
   color: hsl(var(--faint));
   cursor: pointer;
   font-family: var(--app-font-mono);
-  font-size: 12px;
+  font-size: 14px;
   letter-spacing: .11em;
   text-transform: uppercase;
   border-radius: 4px;
@@ -359,10 +359,10 @@
   animation: record-peek-in .18s ease-out;
 }
 .record-peek__copy { min-width: 0; flex: 1; display: grid; gap: 2px; }
-.record-peek__copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--app-font-display); font-size: 13px; }
-.record-peek__copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--app-font-mono); font-size: 9px; color: hsl(var(--faint)); }
+.record-peek__copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--app-font-display); font-size: 15px; }
+.record-peek__copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--app-font-mono); font-size: 10px; color: hsl(var(--faint)); }
 .record-peek__action, .record-peek__close { border: 1px solid hsl(var(--border)); background: transparent; cursor: pointer; }
-.record-peek__action { flex-shrink: 0; padding: 7px 8px; color: hsl(var(--foreground)); font-family: var(--app-font-mono); font-size: 9px; text-transform: uppercase; letter-spacing: .05em; }
+.record-peek__action { flex-shrink: 0; padding: 7px 8px; color: hsl(var(--foreground)); font-family: var(--app-font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
 .record-peek__action:disabled { opacity: .55; cursor: wait; }
 .record-peek__close { width: 28px; height: 28px; display: grid; place-items: center; color: hsl(var(--faint)); }
 .record-peek__close svg { width: 14px; height: 14px; }
@@ -489,7 +489,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--app-font-display);
-  font-size: 15px;
+  font-size: 17px;
   color: hsl(var(--foreground));
 }
 .liner-sheet__header-artist {
@@ -497,7 +497,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: .08em;
   color: hsl(var(--dim));
 }
@@ -532,7 +532,7 @@
 .liner-sheet__section {}
 .liner-sheet__section-label {
   font-family: var(--app-font-mono);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: .15em;
   text-transform: uppercase;
   color: hsl(var(--faint));
@@ -550,13 +550,13 @@
   align-items: baseline;
   flex-wrap: wrap;
   gap: 4px;
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.45;
 }
 .liner-sheet__row-label {
   flex-shrink: 0;
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: .05em;
   color: hsl(var(--dim));
   white-space: nowrap;
@@ -577,7 +577,7 @@
 .liner-sheet__source-chip {
   display: inline-block;
   font-family: var(--app-font-mono);
-  font-size: 8px;
+  font-size: 9px;
   letter-spacing: .1em;
   text-transform: uppercase;
   color: hsl(var(--faint));
@@ -618,7 +618,7 @@
 /* Empty state */
 .liner-sheet__empty {
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: .08em;
   color: hsl(var(--faint));
   text-align: center;
@@ -678,7 +678,7 @@
 }
 .liner-sheet__footer-label {
   font-family: var(--app-font-mono);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: .1em;
   text-transform: uppercase;
   color: var(--section-accent, hsl(var(--dim)));
@@ -811,98 +811,98 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* LORE — warm-dark palette. Background #151310, orange accent, blue live, gold selector. Dark-first. */
+/* LORE — warm-dark palette. Background #131313, orange accent, blue live, gold selector. Dark-first. */
 :root {
-  --button-outline: rgba(232, 106, 78, .15);
-  --badge-outline: rgba(232, 106, 78, .10);
+  --button-outline: rgba(131, 131, 131, .15);
+  --badge-outline: rgba(131, 131, 131, .10);
 
   --opaque-button-border-intensity: 6;
 
-  --elevate-1: rgba(255,255,255, .03);
-  --elevate-2: rgba(255,255,255, .07);
+  --elevate-1: rgba(255, 255, 255, .03);
+  --elevate-2: rgba(255, 255, 255, .07);
 
   /* ── Warm-dark raw palette tokens ────────────────────────── */
-  /* void     #151310  */ /* H≈38  S≈13% L≈7%  */
-  /* panel    #1e1b17  */ /* H≈35  S≈10% L≈11% */
-  /* panel2   #252018  */ /* H≈33  S≈9%  L≈13% */
-  /* orange   #E86A4E  */ /* H≈11  S≈77% L≈61% — primary / library */
-  /* blue     #7FA8C9  */ /* H≈207 S≈41% L≈64% — live indicator */
-  /* gold     #C8A96B  */ /* H≈40  S≈46% L≈60% — picker / selector */
-  /* keep     #C6F53F  */ /* H≈76  S≈90% L≈60% — keep/save action */
+  /* void     #131313  */ /* H≈38  S≈13% L≈7%  */
+  /* panel    #1b1b1b  */ /* H≈35  S≈10% L≈11% */
+  /* panel2   #202020  */ /* H≈33  S≈9%  L≈13% */
+  /* orange   #838383  */ /* H≈11  S≈77% L≈61% — primary / library */
+  /* blue     #a2a2a2  */ /* H≈207 S≈41% L≈64% — live indicator */
+  /* gold     #ababab  */ /* H≈40  S≈46% L≈60% — picker / selector */
+  /* keep     #dedede  */ /* H≈76  S≈90% L≈60% — keep/save action */
 
   /* ── shadcn semantic mappings ──────────────────────────── */
-  --background: 38 13% 7%;
-  --foreground: 35 15% 90%;
+  --background: 0 0% 7%;
+  --foreground: 0 0% 90%;
 
-  --border: 33 8% 18%;
+  --border: 0 0% 18%;
 
-  --card: 33 9% 11%;
-  --card-foreground: 35 15% 90%;
-  --card-border: 32 8% 16%;
+  --card: 0 0% 11%;
+  --card-foreground: 0 0% 90%;
+  --card-border: 0 0% 16%;
 
-  --sidebar: 33 9% 11%;
-  --sidebar-foreground: 35 15% 90%;
-  --sidebar-border: 32 8% 16%;
-  --sidebar-primary: 11 77% 61%;
-  --sidebar-primary-foreground: 38 13% 7%;
-  --sidebar-accent: 33 8% 14%;
-  --sidebar-accent-foreground: 35 15% 90%;
-  --sidebar-ring: 11 77% 61%;
+  --sidebar: 0 0% 11%;
+  --sidebar-foreground: 0 0% 90%;
+  --sidebar-border: 0 0% 16%;
+  --sidebar-primary: 0 0% 82%;
+  --sidebar-primary-foreground: 0 0% 8%;
+  --sidebar-accent: 0 0% 14%;
+  --sidebar-accent-foreground: 0 0% 90%;
+  --sidebar-ring: 0 0% 82%;
 
-  --popover: 33 9% 11%;
-  --popover-foreground: 35 15% 90%;
-  --popover-border: 32 8% 16%;
+  --popover: 0 0% 11%;
+  --popover-foreground: 0 0% 90%;
+  --popover-border: 0 0% 16%;
 
-  --primary: 11 77% 61%;
-  --primary-foreground: 38 13% 7%;
+  --primary: 0 0% 82%;
+  --primary-foreground: 0 0% 8%;
 
-  --secondary: 33 8% 14%;
-  --secondary-foreground: 35 15% 90%;
+  --secondary: 0 0% 14%;
+  --secondary-foreground: 0 0% 90%;
 
-  --muted: 33 7% 12%;
-  --muted-foreground: 33 8% 55%;
+  --muted: 0 0% 12%;
+  --muted-foreground: 0 0% 55%;
 
   /* accent = keep/lime, used only on Keep actions */
-  --accent: 76 90% 60%;
-  --accent-foreground: 80 40% 15%;
+  --accent: 0 0% 90%;
+  --accent-foreground: 0 0% 12%;
 
   /* keep = lime alias — exposed as --color-keep for Tailwind */
-  --keep: 76 90% 60%;
-  --keep-foreground: 80 40% 15%;
+  --keep: 0 0% 90%;
+  --keep-foreground: 0 0% 12%;
 
   /* ── New semantic extras ─────────────────────────────────── */
   /* library = orange primary accent */
-  --library: 11 77% 61%;
-  --library-foreground: 38 13% 7%;
+  --library: 0 0% 75%;
+  --library-foreground: 0 0% 8%;
   /* canary = "new on air" first-hearing accent (Also-On-Air sentences) */
-  --canary: 54 92% 62%;
+  --canary: 0 0% 96%;
   /* live = blue indicator */
-  --live: 207 41% 64%;
-  --live-foreground: 207 30% 10%;
+  --live: 0 0% 62%;
+  --live-foreground: 0 0% 10%;
   /* picker = gold selector accent (deprecated — kept for reference only) */
-  --picker: 40 46% 60%;
-  --picker-foreground: 40 30% 10%;
+  --picker: 0 0% 60%;
+  --picker-foreground: 0 0% 10%;
   /* Selector blue ramp — replaces amber --picker for DJ/show/station attribution */
-  --selector-dj:      207 55% 68%;   /* lightest — DJ name, high contrast on dark bg */
-  --selector-show:    207 40% 55%;   /* mid — show name */
-  --selector-station: 207 30% 42%;   /* deepest/muted — station chip */
+  --selector-dj: 0 0% 82%;   /* lightest — DJ name, high contrast on dark bg */
+  --selector-show: 0 0% 64%;   /* mid — show name */
+  --selector-station: 0 0% 46%;   /* deepest/muted — station chip */
 
   /* dim: readable muted label — active tabs, attribution text */
-  --dim: 33 10% 62%;
+  --dim: 0 0% 62%;
   /* faint: barely-visible — inactive tabs, secondary hints */
-  --faint: 33 6% 33%;
+  --faint: 0 0% 33%;
 
-  --destructive: 4 68% 48%;
-  --destructive-foreground: 35 15% 94%;
+  --destructive: 0 0% 88%;
+  --destructive-foreground: 0 0% 8%;
 
-  --input: 33 8% 22%;
-  --ring: 11 77% 61%;
+  --input: 0 0% 22%;
+  --ring: 0 0% 82%;
 
-  --chart-1: 11 77% 61%;
-  --chart-2: 76 90% 60%;
-  --chart-3: 207 41% 64%;
-  --chart-4: 40 46% 60%;
-  --chart-5: 300 30% 55%;
+  --chart-1: 0 0% 82%;
+  --chart-2: 0 0% 92%;
+  --chart-3: 0 0% 70%;
+  --chart-4: 0 0% 58%;
+  --chart-5: 0 0% 46%;
 
   /* App-font aliases — point to the canonical shared tokens in tokens/typography.css.
      Use --lore-font-* in new code; these aliases keep legacy CSS classes working. */
@@ -917,14 +917,14 @@
   --app-font-label:   var(--lore-font-display);
   --radius: .625rem;
 
-  --shadow-2xs: 0px 1px 2px 0px hsl(38 15% 2% / 0.50);
-  --shadow-xs: 0px 1px 2px 0px hsl(38 15% 2% / 0.50);
-  --shadow-sm: 0px 2px 4px -1px hsl(38 15% 2% / 0.55), 0px 1px 2px -1px hsl(38 15% 2% / 0.55);
-  --shadow: 0px 4px 8px -2px hsl(38 15% 2% / 0.60), 0px 2px 4px -2px hsl(38 15% 2% / 0.55);
-  --shadow-md: 0px 6px 12px -3px hsl(38 15% 2% / 0.65), 0px 2px 4px -2px hsl(38 15% 2% / 0.60);
-  --shadow-lg: 0px 12px 24px -6px hsl(38 15% 2% / 0.70), 0px 4px 8px -4px hsl(38 15% 2% / 0.65);
-  --shadow-xl: 0px 20px 40px -10px hsl(38 15% 2% / 0.75), 0px 8px 16px -8px hsl(38 15% 2% / 0.70);
-  --shadow-2xl: 0px 28px 56px -12px hsl(38 15% 2% / 0.85);
+  --shadow-2xs: 0px 1px 2px 0px hsl(0 0% 2% / 0.50);
+  --shadow-xs: 0px 1px 2px 0px hsl(0 0% 2% / 0.50);
+  --shadow-sm: 0px 2px 4px -1px hsl(0 0% 2% / 0.55), 0px 1px 2px -1px hsl(0 0% 2% / 0.55);
+  --shadow: 0px 4px 8px -2px hsl(0 0% 2% / 0.60), 0px 2px 4px -2px hsl(0 0% 2% / 0.55);
+  --shadow-md: 0px 6px 12px -3px hsl(0 0% 2% / 0.65), 0px 2px 4px -2px hsl(0 0% 2% / 0.60);
+  --shadow-lg: 0px 12px 24px -6px hsl(0 0% 2% / 0.70), 0px 4px 8px -4px hsl(0 0% 2% / 0.65);
+  --shadow-xl: 0px 20px 40px -10px hsl(0 0% 2% / 0.75), 0px 8px 16px -8px hsl(0 0% 2% / 0.70);
+  --shadow-2xl: 0px 28px 56px -12px hsl(0 0% 2% / 0.85);
   --tracking-normal: 0em;
   --spacing: 0.25rem;
 
@@ -977,8 +977,8 @@
   }
 
   .lore-glow {
-    background: radial-gradient(circle at 10% 10%, rgba(200, 169, 107, 0.06) 0%, transparent 50%),
-                radial-gradient(circle at 90% 90%, rgba(127, 168, 201, 0.04) 0%, transparent 50%);
+    background: radial-gradient(circle at 10% 10%, rgba(171, 171, 171, 0.06) 0%, transparent 50%),
+                radial-gradient(circle at 90% 90%, rgba(162, 162, 162, 0.04) 0%, transparent 50%);
   }
 
   input[type="search"]::-webkit-search-cancel-button {
@@ -1134,7 +1134,7 @@
   border: none;
   outline: none;
   font-family: var(--app-font-display);
-  font-size: 15px;
+  font-size: 17px;
   color: hsl(var(--foreground));
   min-width: 0;
 }
@@ -1147,8 +1147,8 @@
 }
 .srch-close {
   font-family: var(--app-font-display);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: hsl(var(--dim));
@@ -1172,8 +1172,8 @@
 .srch-filters::-webkit-scrollbar { display: none; }
 .srch-fchip {
   font-family: var(--app-font-display);
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   padding: 4px 10px;
@@ -1195,16 +1195,16 @@
 .srch-empty {
   padding: 32px 16px;
   font-family: var(--app-font-display);
-  font-size: 12px;
+  font-size: 14px;
   color: hsl(var(--faint));
   text-align: center;
 }
-.srch-empty em { font-style: italic; color: hsl(var(--dim)); }
+.srch-empty em { font-style: normal; color: hsl(var(--dim)); }
 .srch-group { padding-bottom: 4px; }
 .srch-grp-lbl {
   font-family: var(--app-font-display);
-  font-size: 9.5px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: hsl(var(--faint));
@@ -1225,12 +1225,12 @@
 }
 .srch-row:hover, .srch-row:focus-visible { background: hsl(var(--secondary)); }
 .srch-row--muted { opacity: 0.45; cursor: default; }
-.srch-row__icon { font-size: 14px; flex-shrink: 0; width: 20px; text-align: center; }
+.srch-row__icon { font-size: 16px; flex-shrink: 0; width: 20px; text-align: center; }
 .srch-row__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .srch-row__label {
   font-family: var(--app-font-serif);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 400;
   color: hsl(var(--foreground));
   white-space: nowrap;
   overflow: hidden;
@@ -1238,7 +1238,7 @@
 }
 .srch-row__sub {
   font-family: var(--app-font-display);
-  font-size: 10px;
+  font-size: 12px;
   color: hsl(var(--dim));
   white-space: nowrap;
   overflow: hidden;
@@ -1246,7 +1246,7 @@
 }
 .srch-row__badge {
   font-family: var(--app-font-mono);
-  font-size: 9px;
+  font-size: 10px;
   padding: 2px 6px;
   border-radius: 2px;
   border: 1px solid hsl(var(--border));
@@ -1265,7 +1265,7 @@
   padding: 3px 8px 3px 7px;
   border-radius: 999px;
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1;
   border: none;
   cursor: pointer;
@@ -1319,7 +1319,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 15px;
+  font-size: 17px;
   padding: 2px;
   margin-left: auto;
   line-height: 1;
@@ -1349,8 +1349,9 @@
   position: relative; /* anchor for bg-wash and avatar-fade */
   /* Extend into the safe area on phones with a notch/dynamic island so the
      album art bg-wash reaches the physical top edge of the screen.
-     Falls back to the base 10px top padding on devices without a safe area. */
-  padding-top: max(10px, env(safe-area-inset-top, 0px));
+     Compact: the logo row should take minimal vertical space. */
+  padding-top: max(4px, env(safe-area-inset-top, 0px));
+  padding-bottom: 2px;
 }
 
 /* Absolutely-positioned decorations span all columns so they don't
@@ -1361,12 +1362,15 @@
   grid-row: 1;
 }
 
-/* Wordmark — left column */
+/* Wordmark — left column. Dotted underline reads as a clickable link. */
 .dial-topbar--all .dial-topbar__wordmark {
   grid-column: 1;
   grid-row: 1;
   justify-self: start;
   align-self: center;
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 5px;
 }
 
 /* Search — center column, minimized pill, centered until clicked */
@@ -1402,8 +1406,8 @@
   z-index: 0;
   /* Fade: transparent at the far left (near the logo), opaque by ~35% across
      the element so the art fills most of the bar while melting near the wordmark */
-  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 35%);
-  mask-image: linear-gradient(to right, transparent 0%, #000 35%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000000 35%);
+  mask-image: linear-gradient(to right, transparent 0%, #000000 35%);
 }
 
 /* ── Album avatar that dissolves into the Lore wordmark ── */
@@ -1417,8 +1421,8 @@
   margin-right: -18px;
   /* Gradient mask: solid on the left, fades to transparent by the time it
      reaches the Lore text so the wordmark stays fully legible */
-  -webkit-mask-image: linear-gradient(to right, #000 0%, #000 35%, transparent 100%);
-  mask-image: linear-gradient(to right, #000 0%, #000 35%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, #000000 0%, #000000 35%, transparent 100%);
+  mask-image: linear-gradient(to right, #000000 0%, #000000 35%, transparent 100%);
   pointer-events: none;
   z-index: 1;
   position: relative;
@@ -1436,7 +1440,7 @@
   position: relative;
   z-index: 2;
   font-family: var(--app-font-display);
-  font-weight: 700;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.22em;
   display: inline-flex;
@@ -1452,13 +1456,16 @@
   flex-shrink: 0;
   overflow: hidden;
 }
-/* ── Avatar album hero — the art IS the front-door content.
-   Portrait: full-width square directly under the topbar; dial rows scroll
-   below it in normal flow.
-   Landscape (phones): the art pins to the left edge filling the available
-   viewport height, and everything else (topbar, toolbar, rows) moves into
-   a right column via padding-left on .dial-root.
+/* ── Avatar album hero — maximized art with the interface fitting around it.
+   Portrait: full-width square under the topbar, slim section nav overlaid
+   across the top edge of the art, station list scrolls below.
+   Landscape / desktop: the art pins to the left edge filling the available
+   viewport height, and everything else moves into a right column.
    Tapping the art opens the same fullscreen overlay as the moon. ── */
+.dial-hero__artwrap {
+  position: relative;
+  z-index: 0;
+}
 .dial-hero__art {
   position: relative;
   z-index: 0;
@@ -1469,6 +1476,54 @@
   background-repeat: no-repeat;
   cursor: pointer;
 }
+
+/* ── Slim section nav — RADIO / SELECTORS / LIBRARY text buttons.
+   Overlay variant sits across the top of the album art (front door);
+   bar variant is a top strip on the other sections. ── */
+.slim-nav {
+  display: flex;
+  align-items: stretch;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.slim-nav__btn {
+  appearance: none;
+  flex: 1;
+  min-width: 0;
+  padding: 8px 0 7px;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--faint));
+  cursor: pointer;
+  font-family: var(--app-font-mono);
+  font-size: 14px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  text-align: center;
+  border-bottom: 2px solid transparent;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: color .2s ease, border-color .2s ease;
+}
+.slim-nav__btn:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: -2px; }
+.slim-nav__btn--active[data-section="radio"]     { color: hsl(var(--accent));      border-bottom-color: hsl(var(--accent)); }
+.slim-nav__btn--active[data-section="selectors"] { color: hsl(var(--selector-dj)); border-bottom-color: hsl(var(--selector-dj)); }
+.slim-nav__btn--active[data-section="library"]   { color: hsl(var(--library));     border-bottom-color: hsl(var(--library)); }
+/* Bar variant (non-home sections): opaque row under the top edge */
+.slim-nav:not(.slim-nav--overlay) {
+  background: hsl(var(--background));
+  border-bottom: 1px solid hsl(var(--border) / 0.4);
+}
+/* Overlay variant: scrim across the top of the art for legibility */
+.slim-nav--overlay {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 2;
+  background: linear-gradient(to bottom, rgb(9 9 9 / 0.62), rgb(9 9 9 / 0));
+  padding-bottom: 10px;
+}
+.slim-nav--overlay .slim-nav__btn { color: rgb(251 251 251 / 0.72); text-shadow: 0 1px 2px rgb(0 0 0 / 0.5); }
+.slim-nav--overlay .slim-nav__btn--active[data-section="radio"] { color: hsl(var(--accent)); }
 .dial-hero__art:focus-visible {
   outline: 2px solid hsl(var(--primary));
   outline-offset: -2px;
@@ -1478,38 +1533,50 @@
   overflow: visible;
   background: transparent;
 }
-/* Slim utility row under the art: sort toggle + add-artists, no heading */
+/* Slim utility row under the art strip: sort toggle + add-artists.
+   Opaque + raised so the clipped album art doesn't bleed through. */
 .dial-hero__toolbar {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
   padding: 4px 12px;
+  background: hsl(var(--background));
 }
-/* Landscape phones: art left at full height, content column right. Thumbs
-   rest at the sides in landscape grip, so controls stay in the right column
-   near the edge. Height-capped so desktop windows are unaffected. */
-@media (orientation: landscape) and (max-height: 540px) {
-  .dial-hero__art {
+.dial-hero .dial-tabs-add-row {
+  position: relative;
+  z-index: 1;
+  background: hsl(var(--background));
+}
+/* Landscape / desktop: sidebar format. The art is the largest square the
+   available space allows — full viewport height (minus the live-measured
+   shell), only ceding width when the content column would drop below a
+   readable minimum. Portrait keeps the stacked full-width-square format. */
+@media (orientation: landscape) {
+  :root {
+    /* Largest square that fits the height while leaving ≥ 300px of column */
+    --hero-art-size: min(calc(100dvh - var(--shell-h, 0px)), calc(100vw - 300px));
+  }
+  .dial-hero__artwrap {
     position: fixed;
     left: 0;
     top: 0;
-    height: calc(100dvh - var(--shell-h, 56px));
-    width: min(calc(100dvh - var(--shell-h, 56px)), 52vw);
-    aspect-ratio: auto;
+    height: var(--hero-art-size);
+    width: var(--hero-art-size);
     z-index: 5;
+  }
+  .dial-hero__art {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
   }
   /* Front door only — drill levels (station/show/DJ) have no fixed art
      panel, so they keep the full width. */
   .dial-root--front {
-    padding-left: min(calc(100dvh - var(--shell-h, 56px)), 52vw);
+    padding-left: var(--hero-art-size);
   }
-  /* Collapse the bottom nav to a slim label bar — the big record sleeves
-     would otherwise eat most of the landscape height. --shell-h is measured
-     live in App.tsx, so the hero art auto-expands into the reclaimed space. */
-  .record-peek-tab__sleeve { display: none; }
-  .record-peek-tab { padding: 4px 0 6px; }
-  .record-peek-tab__label { position: static; }
   /* Fullscreen overlay: fit the art to the height instead of the width */
   .dial-art-fullscreen img { width: auto; height: 100dvh; margin: 0 auto; }
 }
@@ -1558,13 +1625,13 @@
 /* Inside the hero, fade everything except the moon glyph: the in-flow art
    (revealing the overlay's fullscreen copy), the toolbar, the LORE letters,
    search, and pill. */
-.dial-hero__art,
+.dial-hero__artwrap,
 .dial-hero__toolbar,
 .dial-topbar--all > *,
 .dial-topbar__letter {
   transition: opacity 0.3s ease;
 }
-.dial-root--art-open .dial-hero__art,
+.dial-root--art-open .dial-hero__artwrap,
 .dial-root--art-open .dial-hero__toolbar,
 .dial-root--art-open .dial-topbar--all > *:not(.dial-topbar__wordmark),
 .dial-root--art-open .dial-topbar__letter {
@@ -1606,12 +1673,43 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.85rem;
+  font-size: 0.98rem;
   line-height: 1;
 }
 .dial-art-fullscreen__close:focus-visible {
   outline: 2px solid hsl(var(--primary));
   outline-offset: 2px;
+}
+
+/* Moon split toggle — the moon glyph doubles as the Solo / Listening Party
+   control: left half = Solo, right half = Listening Party. Two invisible
+   half-buttons overlay the glyph; the glyph tints accent in party mode. */
+.dial-topbar__moon-split {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.dial-topbar__moon-split--party .dial-topbar__moon-prefix {
+  color: hsl(var(--accent));
+}
+.dial-topbar__moon-half {
+  appearance: none;
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 50%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.dial-topbar__moon-half--left { left: 0; }
+.dial-topbar__moon-half--right { right: 0; }
+.dial-topbar__moon-half:focus-visible {
+  outline: 1px solid hsl(var(--primary));
+  outline-offset: 1px;
+  border-radius: 2px;
 }
 
 /* Moon-phase glyph that sits to the left of the LORE wordmark */
@@ -1633,7 +1731,7 @@
 .dial-topbar__letter {
   font-family: var(--lore-font-wordmark);
   font-weight: 400;
-  font-size: 0.78em;
+  font-size: 0.9em;
   line-height: 1;
   text-transform: none;
   letter-spacing: 0.04em;
@@ -1652,11 +1750,9 @@
   /* Match the app background so the shadow reads as a transparent cut-out */
   fill: hsl(var(--background));
 }
+/* No outer ring — the moon's dark side blends into the page background. */
 .moon-glyph__ring {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 0.6px;
-  opacity: 0.35;
+  display: none;
 }
 
 /* Raise paste-area controls above the bg-wash */
@@ -1673,8 +1769,8 @@
   border: none;
   cursor: pointer;
   font-family: var(--app-font-display);
-  font-size: 9.5px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: hsl(var(--faint));
@@ -1695,14 +1791,14 @@
   border: 1px solid transparent;
   border-radius: 3px;
   font-family: var(--app-font-display);
-  font-size: 9.5px;
+  font-size: 11px;
   color: hsl(var(--foreground));
   padding: 5px 8px;
   outline: none;
   transition: border-color 0.12s;
   height: 28px;
 }
-.topbar-paste-box::placeholder { color: hsl(var(--faint)); font-style: italic; }
+.topbar-paste-box::placeholder { color: hsl(var(--faint)); font-style: normal; }
 .topbar-paste-box:focus { border-color: hsl(var(--border)); }
 
 /* Ticker container */
@@ -1719,8 +1815,8 @@
   min-width: 0;
   overflow: hidden;
   /* mask edges so chips fade in/out rather than hard-clip */
-  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 10%, #000 90%, transparent 100%);
-  mask-image: linear-gradient(to right, transparent 0%, #000 10%, #000 90%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000000 10%, #000000 90%, transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0%, #000000 10%, #000000 90%, transparent 100%);
 }
 .topbar-ticker__track {
   display: inline-flex;
@@ -1741,8 +1837,8 @@
   border: 1px solid hsl(var(--border));
   border-radius: 3px;
   font-family: var(--app-font-display);
-  font-size: 9.5px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 400;
   color: hsl(var(--dim));
   padding: 3px 8px;
   cursor: pointer;
@@ -1775,8 +1871,8 @@
   border: none;
   outline: none;
   font-family: var(--app-font-mono);
-  font-size: 9px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 400;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: hsl(var(--accent));
@@ -1787,14 +1883,14 @@
   font-weight: 400;
   text-transform: none;
   letter-spacing: normal;
-  font-style: italic;
+  font-style: normal;
 }
 .topbar-artist-input__esc {
   background: none;
   border: none;
   cursor: pointer;
   color: hsl(var(--accent) / 0.45);
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1;
   padding: 0;
   flex-shrink: 0;
@@ -1813,9 +1909,9 @@
   border: none;
   cursor: pointer;
   font-family: var(--app-font-display);
-  font-size: 9.5px;
-  font-weight: 600;
-  font-style: italic;
+  font-size: 11px;
+  font-weight: 400;
+  font-style: normal;
   color: hsl(var(--faint));
   padding: 0;
   flex-shrink: 0;
@@ -1825,8 +1921,8 @@
 .topbar-matt-btn:hover { color: hsl(var(--foreground)); }
 .dial-topbar__wordmark {
   font-family: var(--app-font-serif);
-  font-size: 19px;
-  font-weight: 600;
+  font-size: 22px;
+  font-weight: 400;
   letter-spacing: -0.01em;
   color: hsl(var(--foreground));
   line-height: 1;
@@ -1834,8 +1930,8 @@
 }
 .dial-topbar__title {
   font-family: var(--app-font-display);
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: hsl(var(--dim));
@@ -1849,16 +1945,16 @@
 }
 .dial-topbar__sort-chip {
   font-family: var(--app-font-mono);
-  font-size: 9px;
+  font-size: 10px;
   color: hsl(var(--library));
-  border: 1px solid rgba(232,106,78,.3);
+  border: 1px solid rgba(131, 131, 131,.3);
   border-radius: 2px;
   padding: 3px 7px;
 }
 .dial-topbar__crumb {
   font-family: var(--app-font-display);
-  font-size: 9.5px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: hsl(var(--faint));
@@ -1872,13 +1968,13 @@
 .dial-topbar__sep {
   color: hsl(var(--faint));
   font-family: var(--app-font-display);
-  font-size: 9.5px;
+  font-size: 11px;
   margin: 0 2px;
 }
 .dial-topbar__back {
   font-family: var(--app-font-display);
-  font-size: 9px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   border: 1px solid hsl(var(--border));
@@ -1904,8 +2000,8 @@
 }
 .dial-scanbtn {
   font-family: var(--app-font-display);
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   border: 1px solid hsl(var(--border));
@@ -1928,8 +2024,8 @@
 }
 .dial-scantrack__name {
   font-family: var(--app-font-reading);
-  font-size: 13.5px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 400;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1937,8 +2033,8 @@
 }
 .dial-scantrack__by {
   font-family: var(--app-font-reading);
-  font-style: italic;
-  font-size: 11px;
+  font-style: normal;
+  font-size: 13px;
   color: hsl(var(--muted-foreground));
   white-space: nowrap;
   overflow: hidden;
@@ -1947,19 +2043,19 @@
 }
 .dial-scantrack__idle {
   font-family: var(--app-font-reading);
-  font-style: italic;
-  font-size: 12px;
+  font-style: normal;
+  font-size: 14px;
   color: hsl(var(--muted-foreground));
 }
 .dial-scantrack__idle b {
   font-style: normal;
-  font-weight: 600;
+  font-weight: 400;
   color: hsl(var(--dim));
 }
 .dial-landbtn {
   font-family: var(--app-font-display);
-  font-size: 9.5px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   border: 0;
@@ -1993,8 +2089,8 @@
 .dial-subnav::-webkit-scrollbar { display: none; }
 .dial-subnav__chip {
   font-family: var(--app-font-display);
-  font-size: 10.5px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   padding: 6px 14px;
@@ -2024,7 +2120,7 @@
 .dial-loading {
   padding: 24px 15px;
   font-family: var(--app-font-mono);
-  font-size: 11px;
+  font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: hsl(var(--muted-foreground));
@@ -2046,7 +2142,7 @@
   background: none;
   border: 1px solid hsl(var(--border) / 0.5);
   border-radius: 5px;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1;
   color: hsl(var(--foreground) / 0.8);
   cursor: pointer;
@@ -2067,7 +2163,7 @@
   flex: 1;
   text-align: center;
   font-family: var(--app-font-mono);
-  font-size: 11px;
+  font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: hsl(var(--foreground) / 0.75);
@@ -2092,7 +2188,7 @@
   border: 1px solid hsl(var(--border) / 0.5);
   border-radius: 5px;
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: hsl(var(--muted-foreground));
@@ -2214,6 +2310,21 @@
   flex: 1;                      /* equal width per run regardless of run count */
   min-height: 4px;
   min-width: 3px;
+}
+/* Dense mode (wide ranges, >60 runs): drop min-width/gap so every run still
+   fits inside the fixed-width spine instead of being clipped by overflow. */
+.dial-density-spine--dense {
+  gap: 0;
+}
+.dial-density-spine--dense .dial-density-spine__bin {
+  min-width: 0;
+  border-radius: 0;
+}
+.dial-density-spine--dense .dial-density-spine__bin--daystart {
+  margin-left: 2px;
+  box-shadow: -1px 0 0 0 hsl(0 0% 30%);
+}
+.dial-density-spine__bin {
   background: hsl(var(--border) / 0.28);
   border-radius: 2px 2px 0 0;
   border: none;
@@ -2268,7 +2379,7 @@
   cursor: pointer;
   border-radius: 5px;
   transition: background 0.1s;
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.35;
   color: hsl(var(--foreground) / 0.85);
 }
@@ -2287,7 +2398,7 @@
 }
 .dial-past-crossing--active::before {
   content: "▶";
-  font-size: 9px;
+  font-size: 10px;
   color: hsl(var(--library));
   flex-shrink: 0;
   margin-right: 2px;
@@ -2295,7 +2406,7 @@
 
 /* Text fragments inside a crossing row */
 .dial-past-crossing__artist {
-  font-weight: 600;
+  font-weight: 400;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2314,7 +2425,7 @@
 }
 .dial-past-crossing__dj {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: 13px;
   font-family: var(--app-font-mono);
   color: hsl(var(--muted-foreground));
   white-space: nowrap;
@@ -2340,7 +2451,7 @@
   border: none;
   border-top: 1px solid hsl(var(--border) / 0.4);
   font-family: var(--app-font-mono);
-  font-size: 11px;
+  font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: hsl(var(--muted-foreground));
@@ -2359,7 +2470,7 @@
   gap: 8px;
   padding: 14px 15px;
   font-family: var(--app-font-mono);
-  font-size: 11px;
+  font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: hsl(var(--muted-foreground));
@@ -2433,7 +2544,7 @@
   gap: 8px;
   padding: 14px 15px 10px;
   font-family: var(--app-font-mono);
-  font-size: 11px;
+  font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: hsl(var(--muted-foreground));
@@ -2459,7 +2570,7 @@
 }
 .z1-placeholder__pitch {
   margin: 0;
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.55;
   color: hsl(var(--muted-foreground));
 }
@@ -2494,7 +2605,7 @@
 }
 .z1-placeholder__manual-label {
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: hsl(var(--faint));
@@ -2524,14 +2635,14 @@
 .live-artist-picker h2 {
   margin: 0;
   font-family: var(--app-font-display);
-  font-size: 15px;
+  font-size: 17px;
   line-height: 1.15;
-  font-weight: 600;
+  font-weight: 400;
   color: hsl(var(--foreground));
 }
 .live-artist-picker__heading p {
   margin: 3px 0 0;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.4;
   color: hsl(var(--muted-foreground));
 }
@@ -2588,8 +2699,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--app-font-display);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 400;
   color: hsl(var(--foreground));
 }
 .live-artist-picker__context {
@@ -2598,14 +2709,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11px;
+  font-size: 13px;
   color: hsl(var(--muted-foreground) / 0.75);
 }
 .live-artist-picker__action {
   grid-area: action;
   margin-top: 3px;
   font-family: var(--app-font-mono);
-  font-size: 9px;
+  font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: hsl(var(--live));
@@ -2616,7 +2727,7 @@
 .live-artist-picker__limit {
   margin-top: 1px;
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.04em;
   color: hsl(var(--library));
 }
@@ -2624,7 +2735,7 @@
   padding: 9px 10px;
   border: 1px dashed hsl(var(--border));
   border-radius: 5px;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.4;
   color: hsl(var(--muted-foreground));
 }
@@ -2657,7 +2768,7 @@
   border: 1px solid hsl(var(--border) / 0.6);
   border-radius: 6px;
   color: hsl(var(--foreground));
-  font-size: 13px;
+  font-size: 15px;
   font-family: inherit;
   outline: none;
   transition: border-color 0.15s;
@@ -2673,8 +2784,8 @@
   border: 1px solid hsl(var(--library) / 0.35);
   border-radius: 6px;
   color: hsl(var(--library));
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 400;
   cursor: pointer;
   white-space: nowrap;
   transition: background 0.15s, opacity 0.15s;
@@ -2694,7 +2805,7 @@
   border: 1px solid hsl(var(--border) / 0.4);
   border-radius: 20px;
   color: hsl(var(--muted-foreground));
-  font-size: 12px;
+  font-size: 14px;
   cursor: pointer;
   transition: background 0.12s, color 0.12s;
 }
@@ -2714,12 +2825,12 @@
   border: 1px solid hsl(var(--library) / 0.3);
   border-radius: 20px;
   color: hsl(var(--library));
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 400;
   white-space: nowrap;
 }
 .seed-chip--sm {
-  font-size: 11px;
+  font-size: 13px;
   padding: 3px 7px 3px 9px;
 }
 .seed-chip__remove {
@@ -2732,7 +2843,7 @@
   border: none;
   border-radius: 50%;
   color: hsl(var(--library) / 0.7);
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1;
   cursor: pointer;
   padding: 0;
@@ -2755,7 +2866,7 @@
 }
 .seed-bar__label {
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: hsl(var(--library) / 0.6);
@@ -2773,7 +2884,7 @@
 .seed-bar .seed-input-row { gap: 4px; }
 .seed-bar .seed-input {
   height: 26px;
-  font-size: 11px;
+  font-size: 13px;
   padding: 0 8px;
   min-width: 80px;
   max-width: 120px;
@@ -2781,10 +2892,10 @@
 .seed-bar .seed-add-btn {
   height: 26px;
   padding: 0 8px;
-  font-size: 11px;
+  font-size: 13px;
 }
 .seed-bar__upgrade {
-  font-size: 11px;
+  font-size: 13px;
   color: hsl(var(--muted-foreground) / 0.7);
   text-decoration: none;
   white-space: nowrap;
@@ -2805,7 +2916,7 @@
   border: none;
   cursor: pointer;
   font-family: var(--app-font-mono);
-  font-size: 11px;
+  font-size: 13px;
   color: hsl(var(--muted-foreground) / 0.6);
   padding: 3px 15px 4px;
   text-align: right;
@@ -2823,8 +2934,8 @@
 }
 .dial-tier-hd__label {
   font-family: var(--app-font-display);
-  font-size: 9px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.09em;
   color: hsl(var(--muted-foreground));
@@ -2856,8 +2967,8 @@
 }
 .dial-lane__name {
   font-family: var(--app-font-display);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: hsl(var(--dim));
@@ -2866,8 +2977,8 @@
 .dial-lane__name--tuned { color: hsl(var(--live)); }
 .dial-lane__cross {
   font-family: var(--app-font-display);
-  font-size: 9px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 400;
   letter-spacing: 0.02em;
   color: hsl(var(--dim));
   background: none;
@@ -2882,8 +2993,8 @@
 }
 .dial-lane__cross--warm {
   color: hsl(var(--library));
-  background: rgba(232,106,78,.11);
-  border-color: rgba(232,106,78,.2);
+  background: rgba(131, 131, 131,.11);
+  border-color: rgba(131, 131, 131,.2);
 }
 .dial-lane__cross--zero {
   color: hsl(var(--faint));
@@ -2891,7 +3002,7 @@
   border-color: hsl(var(--border));
 }
 .dial-lane__play {
-  font-size: 9px;
+  font-size: 10px;
   color: hsl(var(--faint));
   border: 1px solid hsl(var(--card-border));
   background: none;
@@ -2906,12 +3017,12 @@
 .dial-lane__play--on {
   color: hsl(var(--live));
   border-color: hsl(var(--live));
-  background: rgba(127,168,201,.12);
+  background: rgba(162, 162, 162,.12);
 }
 
 .dial-lane__pin {
   margin-left: 4px;
-  font-size: 10px;
+  font-size: 12px;
   color: hsl(var(--faint));
   border: none;
   background: none;
@@ -2935,10 +3046,10 @@
   background: linear-gradient(
     to bottom,
     transparent 0%,
-    rgba(127,168,201,.3) 8%,
+    rgba(162, 162, 162,.3) 8%,
     hsl(var(--live)) 20%,
     hsl(var(--live)) 80%,
-    rgba(127,168,201,.3) 92%,
+    rgba(162, 162, 162,.3) 92%,
     transparent 100%
   );
   pointer-events: none;
@@ -2949,7 +3060,7 @@
   top: 6px;
   left: 4px;
   font-family: var(--app-font-mono);
-  font-size: 7px;
+  font-size: 8px;
   color: hsl(var(--live));
   letter-spacing: 0.1em;
   white-space: nowrap;
@@ -2987,11 +3098,11 @@
 .dial-blk:hover { background: hsl(var(--secondary)); }
 .dial-blk--past { opacity: 0.55; background: hsl(var(--background)); }
 .dial-blk--past:hover { opacity: 0.85; background: hsl(var(--card)); }
-.dial-blk--live { border-color: hsl(var(--live)); background: rgba(127,168,201,.11); opacity: 1; }
-.dial-blk--live:hover { background: rgba(127,168,201,.17); }
+.dial-blk--live { border-color: hsl(var(--live)); background: rgba(162, 162, 162,.11); opacity: 1; }
+.dial-blk--live:hover { background: rgba(162, 162, 162,.17); }
 .dial-blk--future { opacity: 0.38; background: hsl(var(--background)); border-style: dashed; }
 .dial-blk--future:hover { opacity: 0.65; background: hsl(var(--card)); }
-.dial-blk--warm { border-color: rgba(232,106,78,.4); background: rgba(232,106,78,.11); }
+.dial-blk--warm { border-color: rgba(131, 131, 131,.4); background: rgba(131, 131, 131,.11); }
 .dial-blk--warm.dial-blk--past { opacity: 0.65; }
 .dial-blk--warm.dial-blk--live { border-color: hsl(var(--live)); }
 .dial-blk--picker { border-color: hsl(var(--selector-show) / 0.35); background: hsl(var(--selector-show) / 0.10); }
@@ -3001,8 +3112,8 @@
 /* block internals */
 .dial-blk__kind {
   font-family: var(--app-font-display);
-  font-size: 7.5px;
-  font-weight: 700;
+  font-size: 9px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: hsl(var(--muted-foreground));
@@ -3015,8 +3126,8 @@
 .dial-blk__pickerbadge { color: hsl(var(--selector-dj)); }
 .dial-blk__show {
   font-family: var(--app-font-display);
-  font-size: 10.5px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.02em;
   line-height: 1.15;
@@ -3027,8 +3138,8 @@
 }
 .dial-blk__dj {
   font-family: var(--app-font-reading);
-  font-style: italic;
-  font-size: 11.5px;
+  font-style: normal;
+  font-size: 13px;
   color: hsl(var(--dim));
   line-height: 1.2;
   white-space: nowrap;
@@ -3037,21 +3148,21 @@
 }
 .dial-blk__now {
   font-family: var(--app-font-reading);
-  font-size: 11.5px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 400;
   line-height: 1.25;
   color: hsl(var(--foreground));
   margin-top: 3px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  border-top: 1px solid rgba(127,168,201,.2);
+  border-top: 1px solid rgba(162, 162, 162,.2);
   padding-top: 5px;
 }
 .dial-blk__now-ar {
   font-family: var(--app-font-reading);
-  font-style: italic;
-  font-size: 10.5px;
+  font-style: normal;
+  font-size: 12px;
   color: hsl(var(--live));
   line-height: 1.2;
   white-space: nowrap;
@@ -3060,7 +3171,7 @@
 }
 .dial-blk__artists {
   font-family: var(--app-font-mono);
-  font-size: 8.5px;
+  font-size: 10px;
   color: hsl(var(--library));
   margin-top: 4px;
   white-space: nowrap;
@@ -3078,14 +3189,14 @@
 }
 .dial-blk__time {
   font-family: var(--app-font-mono);
-  font-size: 7.5px;
+  font-size: 9px;
   color: hsl(var(--faint));
   white-space: nowrap;
 }
 .dial-blk__ride {
   font-family: var(--app-font-display);
-  font-size: 8px;
-  font-weight: 700;
+  font-size: 9px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: hsl(var(--muted-foreground));
@@ -3108,8 +3219,8 @@
   transition: background 0.12s;
 }
 .dial-fatblk:hover { background: hsl(var(--secondary)); }
-.dial-fatblk--live { border-color: hsl(var(--live)); background: rgba(127,168,201,.11); }
-.dial-fatblk--warm { background: rgba(232,106,78,.11); border-color: rgba(232,106,78,.35); }
+.dial-fatblk--live { border-color: hsl(var(--live)); background: rgba(162, 162, 162,.11); }
+.dial-fatblk--warm { background: rgba(131, 131, 131,.11); border-color: rgba(131, 131, 131,.35); }
 .dial-fatblk--picker { background: hsl(var(--selector-show) / 0.10); border-color: hsl(var(--selector-show) / 0.35); }
 .dial-fatblk--future { opacity: 0.5; border-style: dashed; }
 .dial-fatblk__top {
@@ -3119,34 +3230,34 @@
 }
 .dial-fatblk__show {
   font-family: var(--app-font-reading);
-  font-size: 17px;
-  font-weight: 600;
+  font-size: 20px;
+  font-weight: 400;
   line-height: 1.15;
 }
 .dial-fatblk__when {
   font-family: var(--app-font-mono);
-  font-size: 9px;
+  font-size: 10px;
   color: hsl(var(--faint));
   margin-left: auto;
   flex-shrink: 0;
 }
 .dial-fatblk__dj {
   font-family: var(--app-font-reading);
-  font-style: italic;
-  font-size: 12.5px;
+  font-style: normal;
+  font-size: 14px;
   color: hsl(var(--muted-foreground));
   margin-top: 3px;
 }
 .dial-fatblk__dj b {
   font-style: normal;
-  font-weight: 600;
+  font-weight: 400;
   color: hsl(var(--dim));
 }
 .dial-fatblk__pickerbadge {
   font-family: var(--app-font-display);
   font-style: normal;
-  font-size: 8px;
-  font-weight: 700;
+  font-size: 9px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: hsl(var(--selector-dj));
@@ -3168,14 +3279,14 @@
 .dial-fbar__hit { background: hsl(var(--library)) !important; opacity: 1 !important; }
 .dial-fatblk__cross {
   font-family: var(--app-font-mono);
-  font-size: 9px;
+  font-size: 10px;
   color: hsl(var(--library));
   margin-top: 7px;
 }
 .dial-fatblk__cross--zero { color: hsl(var(--faint)); }
 .dial-fatblk__peek {
   font-family: var(--app-font-reading);
-  font-size: 12.5px;
+  font-size: 14px;
   color: hsl(var(--dim));
   margin-top: 6px;
   line-height: 1.45;
@@ -3189,14 +3300,14 @@
 }
 .dial-djhd__name {
   font-family: var(--app-font-reading);
-  font-size: 24px;
-  font-weight: 600;
+  font-size: 28px;
+  font-weight: 400;
   line-height: 1.05;
 }
 .dial-djhd__sub {
   font-family: var(--app-font-reading);
-  font-style: italic;
-  font-size: 13px;
+  font-style: normal;
+  font-size: 15px;
   color: hsl(var(--muted-foreground));
   margin-top: 4px;
 }
@@ -3208,7 +3319,7 @@
 }
 .dial-djhd__stat {
   font-family: var(--app-font-mono);
-  font-size: 9px;
+  font-size: 10px;
   color: hsl(var(--faint));
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -3216,8 +3327,8 @@
 .dial-djhd__stat b {
   display: block;
   font-family: var(--app-font-reading);
-  font-size: 20px;
-  font-weight: 600;
+  font-size: 23px;
+  font-weight: 400;
   color: hsl(var(--foreground));
   text-transform: none;
   letter-spacing: 0;
@@ -3226,8 +3337,8 @@
 .dial-djhd__stat--warm b { color: hsl(var(--library)); }
 .dial-pickerbadge {
   font-family: var(--app-font-display);
-  font-size: 9px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: hsl(var(--selector-dj));
@@ -3240,12 +3351,12 @@
 }
 .dial-dj-chip {
   font-family: var(--app-font-display);
-  font-size: 9.5px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  border: 1px solid rgba(232,106,78,.4);
-  background: rgba(232,106,78,.11);
+  border: 1px solid rgba(131, 131, 131,.4);
+  background: rgba(131, 131, 131,.11);
   color: hsl(var(--library));
   padding: 5px 10px;
   border-radius: 3px;
@@ -3259,8 +3370,8 @@
   gap: 9px;
   padding: 13px 15px 7px;
   font-family: var(--app-font-display);
-  font-size: 9.5px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.13em;
   color: hsl(var(--muted-foreground));
@@ -3268,11 +3379,11 @@
 .dial-sec-lbl__hint {
   margin-left: auto;
   font-family: var(--app-font-reading);
-  font-style: italic;
+  font-style: normal;
   font-weight: 400;
   text-transform: none;
   letter-spacing: 0;
-  font-size: 12px;
+  font-size: 14px;
   color: hsl(var(--faint));
 }
 
@@ -3298,7 +3409,7 @@
 .dial-trow--hit::before { background: hsl(var(--library)); }
 .dial-trow__time {
   font-family: var(--app-font-mono);
-  font-size: 9.5px;
+  font-size: 11px;
   color: hsl(var(--muted-foreground));
   width: 38px;
   flex-shrink: 0;
@@ -3307,19 +3418,19 @@
 .dial-trow__content { flex: 1; min-width: 0; }
 .dial-trow__title {
   font-family: var(--app-font-reading);
-  font-size: 15.5px;
-  font-weight: 500;
+  font-size: 18px;
+  font-weight: 400;
   line-height: 1.2;
 }
 .dial-trow__artist {
-  font-size: 12px;
+  font-size: 14px;
   color: hsl(var(--dim));
   margin-top: 2px;
 }
 .dial-trow__badge {
   font-family: var(--app-font-display);
-  font-size: 9px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.13em;
   flex-shrink: 0;
@@ -3356,28 +3467,28 @@
 .dial-stn-info { flex: 1; min-width: 0; }
 .dial-stn-name {
   font-family: var(--app-font-display);
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: hsl(var(--foreground));
 }
 .dial-stn-now {
   font-family: var(--app-font-reading);
-  font-style: italic;
-  font-size: 12px;
+  font-style: normal;
+  font-size: 14px;
   color: hsl(var(--muted-foreground));
   margin-top: 2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.dial-stn-now b { font-style: normal; font-weight: 600; color: hsl(var(--dim)); }
+.dial-stn-now b { font-style: normal; font-weight: 400; color: hsl(var(--dim)); }
 
 /* Track sub-line — bare title fact, no artist appended */
 .dial-stn-track {
   font-family: var(--app-font-mono);
-  font-size: 9px;
+  font-size: 10px;
   color: hsl(var(--faint));
   margin-top: 2px;
   white-space: nowrap;
@@ -3389,12 +3500,12 @@
 
 .dial-stn-cross {
   font-family: var(--app-font-mono);
-  font-size: 9px;
+  font-size: 10px;
   text-align: right;
   flex-shrink: 0;
 }
 .dial-stn-cross__num { color: hsl(var(--library)); display: block; }
-.dial-stn-cross__lbl { color: hsl(var(--faint)); font-size: 8px; }
+.dial-stn-cross__lbl { color: hsl(var(--faint)); font-size: 9px; }
 .dial-stn-cross--zero .dial-stn-cross__num { color: hsl(var(--faint)); }
 
 /* ── Schedule view ── */
@@ -3408,12 +3519,12 @@
   align-items: baseline;
 }
 .dial-sch-row:hover { background: hsl(var(--card)); }
-.dial-sch-row--live { background: rgba(127,168,201,.11); }
-.dial-sch-row--warm { background: rgba(232,106,78,.07); }
+.dial-sch-row--live { background: rgba(162, 162, 162,.11); }
+.dial-sch-row--warm { background: rgba(131, 131, 131,.07); }
 .dial-sch-row--future { opacity: 0.55; border-style: dashed; }
 .dial-sch-time {
   font-family: var(--app-font-mono);
-  font-size: 9px;
+  font-size: 10px;
   color: hsl(var(--muted-foreground));
   width: 40px;
   flex-shrink: 0;
@@ -3423,22 +3534,22 @@
 .dial-sch-info { flex: 1; min-width: 0; }
 .dial-sch-show {
   font-family: var(--app-font-reading);
-  font-size: 15px;
-  font-weight: 500;
+  font-size: 17px;
+  font-weight: 400;
   line-height: 1.2;
 }
 .dial-sch-dj {
   font-family: var(--app-font-reading);
-  font-style: italic;
-  font-size: 12px;
+  font-style: normal;
+  font-size: 14px;
   color: hsl(var(--muted-foreground));
   margin-top: 2px;
 }
-.dial-sch-dj b { font-style: normal; font-weight: 600; color: hsl(var(--dim)); }
+.dial-sch-dj b { font-style: normal; font-weight: 400; color: hsl(var(--dim)); }
 .dial-sch-stn {
   font-family: var(--app-font-display);
-  font-size: 8.5px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: hsl(var(--faint));
@@ -3447,8 +3558,8 @@
 .dial-sch-badge {
   flex-shrink: 0;
   font-family: var(--app-font-display);
-  font-size: 8px;
-  font-weight: 700;
+  font-size: 9px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   padding-top: 3px;
@@ -3488,8 +3599,8 @@
 }
 .ctx-grp-lbl {
   font-family: var(--app-font-display);
-  font-size: 7.5px;
-  font-weight: 700;
+  font-size: 9px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: hsl(var(--faint));
@@ -3504,8 +3615,8 @@
 }
 .ctx-chip {
   font-family: var(--app-font-display);
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 400;
   text-transform: none;
   letter-spacing: 0.01em;
   padding: 6px 11px;
@@ -3519,13 +3630,13 @@
   flex-shrink: 0;
 }
 .ctx-chip:hover { background: hsl(var(--secondary)); color: hsl(var(--foreground)); }
-.ctx-chip--lib { border-color: rgba(232,106,78,.35); color: hsl(var(--library)); background: rgba(232,106,78,.11); }
-.ctx-chip--lib:hover { background: rgba(232,106,78,.18); }
+.ctx-chip--lib { border-color: rgba(131, 131, 131,.35); color: hsl(var(--library)); background: rgba(131, 131, 131,.11); }
+.ctx-chip--lib:hover { background: rgba(131, 131, 131,.18); }
 .ctx-chip--sel { border-color: hsl(var(--selector-show) / 0.35); color: hsl(var(--selector-dj)); background: hsl(var(--selector-show) / 0.10); }
 .ctx-chip--sel:hover { background: hsl(var(--selector-show) / 0.18); }
-.ctx-chip--live { border-color: rgba(127,168,201,.35); color: hsl(var(--live)); background: rgba(127,168,201,.11); }
-.ctx-chip--live:hover { background: rgba(127,168,201,.18); }
-.ctx-chip--new { border-color: hsl(var(--border)); color: hsl(var(--muted-foreground)); font-style: italic; }
+.ctx-chip--live { border-color: rgba(162, 162, 162,.35); color: hsl(var(--live)); background: rgba(162, 162, 162,.11); }
+.ctx-chip--live:hover { background: rgba(162, 162, 162,.18); }
+.ctx-chip--new { border-color: hsl(var(--border)); color: hsl(var(--muted-foreground)); font-style: normal; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Selector & Library flat rows — same design language as .dial-*
@@ -3547,7 +3658,7 @@
 .sel-row--warm { background: hsl(var(--selector-show) / 0.05); }
 
 .sel-row__pip {
-  font-size: 9px;
+  font-size: 10px;
   color: hsl(var(--selector-dj));
   flex-shrink: 0;
   margin-top: 5px;
@@ -3561,8 +3672,8 @@
 .sel-row__body { flex: 1; min-width: 0; }
 .sel-row__kind {
   font-family: var(--app-font-display);
-  font-size: 8px;
-  font-weight: 700;
+  font-size: 9px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: hsl(var(--faint));
@@ -3572,8 +3683,8 @@
 .sel-row__kind--live { color: hsl(var(--live)); }
 .sel-row__name {
   font-family: var(--app-font-serif);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 400;
   color: hsl(var(--foreground));
   white-space: nowrap;
   overflow: hidden;
@@ -3582,7 +3693,7 @@
 }
 .sel-row__meta {
   font-family: var(--app-font-mono);
-  font-size: 9.5px;
+  font-size: 11px;
   color: hsl(var(--dim));
   margin-top: 3px;
   white-space: nowrap;
@@ -3591,7 +3702,7 @@
 }
 .sel-row__artists {
   font-family: var(--app-font-mono);
-  font-size: 9px;
+  font-size: 10px;
   color: hsl(var(--library));
   margin-top: 2px;
   white-space: nowrap;
@@ -3610,16 +3721,16 @@
 .sel-row__match { text-align: right; min-width: 30px; }
 .sel-row__match-num {
   font-family: var(--app-font-serif);
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 21px;
+  font-weight: 400;
   color: hsl(var(--selector-dj));
   line-height: 1;
   display: block;
 }
-.sel-row__match-num--zero { color: hsl(var(--faint)); font-size: 13px; }
+.sel-row__match-num--zero { color: hsl(var(--faint)); font-size: 15px; }
 .sel-row__match-lbl {
   font-family: var(--app-font-display);
-  font-size: 7px;
+  font-size: 8px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: hsl(var(--faint));
@@ -3629,8 +3740,8 @@
 
 .sel-row__follow {
   font-family: var(--app-font-display);
-  font-size: 9px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   border: 1px solid hsl(var(--border));
@@ -3647,12 +3758,12 @@
 .sel-row__follow:hover { color: hsl(var(--foreground)); background: hsl(var(--secondary)); }
 .sel-row__follow--on {
   color: hsl(var(--library));
-  border-color: rgba(232,106,78,.35);
-  background: rgba(232,106,78,.08);
+  border-color: rgba(131, 131, 131,.35);
+  background: rgba(131, 131, 131,.08);
 }
 
 .sel-row__play {
-  font-size: 9px;
+  font-size: 10px;
   color: hsl(var(--faint));
   border: 1px solid hsl(var(--card-border));
   background: none;
@@ -3690,8 +3801,8 @@
 .lib-ol-row__body { flex: 1; min-width: 0; }
 .lib-ol-row__name {
   font-family: var(--app-font-serif);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 400;
   color: hsl(var(--foreground));
   white-space: nowrap;
   overflow: hidden;
@@ -3699,7 +3810,7 @@
 }
 .lib-ol-row__sub {
   font-family: var(--app-font-mono);
-  font-size: 9.5px;
+  font-size: 11px;
   color: hsl(var(--dim));
   margin-top: 2px;
   white-space: nowrap;
@@ -3708,7 +3819,7 @@
 }
 .lib-ol-row__count {
   font-family: var(--app-font-mono);
-  font-size: 9.5px;
+  font-size: 11px;
   flex-shrink: 0;
   white-space: nowrap;
 }
@@ -3728,8 +3839,8 @@
 }
 .dial-ctabar__label {
   font-family: var(--app-font-display);
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: hsl(var(--dim));
@@ -3742,8 +3853,8 @@
 
 .dial-ctabtn {
   font-family: var(--app-font-display);
-  font-size: 9.5px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   border: 1px solid hsl(var(--border));
@@ -3772,8 +3883,8 @@
 /* Ghost CTA — compact secondary link, always visible below Zone 1 rows */
 .dial-ctabtn--ghost {
   font-family: var(--app-font-display);
-  font-size: 9px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 400;
   letter-spacing: 0.05em;
   background: transparent;
   border: none;
@@ -3796,8 +3907,8 @@
 }
 .lib-hero__kicker {
   font-family: var(--app-font-display);
-  font-size: 9.5px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: hsl(var(--library));
@@ -3805,8 +3916,8 @@
 }
 .lib-hero__headline {
   font-family: var(--app-font-reading);
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 21px;
+  font-weight: 400;
   color: hsl(var(--foreground));
   line-height: 1.25;
   margin-bottom: 12px;
@@ -3818,8 +3929,8 @@
 }
 .lib-hero__stat {
   font-family: var(--app-font-display);
-  font-size: 9.5px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 5px 9px;
@@ -3833,7 +3944,7 @@
   cursor: default;
 }
 .lib-hero__stat b {
-  font-size: 14px;
+  font-size: 16px;
   font-family: var(--app-font-mono);
   font-weight: 400;
   color: hsl(var(--foreground));
@@ -3882,8 +3993,8 @@
 .lib-live__text {
   flex: 1;
   font-family: var(--app-font-display);
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: hsl(var(--live));
@@ -3891,7 +4002,7 @@
 .lib-live__text b { color: hsl(var(--foreground)); font-style: normal; }
 .lib-live__go {
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: 12px;
   color: hsl(var(--live) / 0.65);
   flex-shrink: 0;
 }
@@ -3935,8 +4046,8 @@
 .lrow__tr {
   display: block;
   font-family: var(--app-font-reading);
-  font-size: 14.5px;
-  font-weight: 600;
+  font-size: 17px;
+  font-weight: 400;
   color: hsl(var(--foreground));
   line-height: 1.25;
   text-decoration: none;
@@ -3947,7 +4058,7 @@
 .lrow__tr:hover { color: hsl(var(--library)); }
 .lrow__ar {
   font-family: var(--app-font-display);
-  font-size: 11px;
+  font-size: 13px;
   color: hsl(var(--muted-foreground));
   margin: 1px 0 0;
   white-space: nowrap;
@@ -3956,8 +4067,8 @@
 }
 .lrow__by {
   font-family: var(--app-font-reading);
-  font-style: italic;
-  font-size: 11.5px;
+  font-style: normal;
+  font-size: 13px;
   color: hsl(var(--muted-foreground));
   margin: 3px 0 0;
   line-height: 1.35;
@@ -3967,7 +4078,7 @@
 }
 .lrow__by-name {
   font-style: normal;
-  font-weight: 600;
+  font-weight: 400;
   color: hsl(var(--foreground));
   text-decoration: none;
 }
@@ -3975,8 +4086,8 @@
 .lrow__by-stn {
   font-family: var(--app-font-display);
   font-style: normal;
-  font-size: 9px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: hsl(var(--muted-foreground) / 0.6);
@@ -3987,15 +4098,15 @@
 .lrow__by--import {
   font-family: var(--app-font-mono);
   font-style: normal;
-  font-size: 9.5px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: hsl(var(--faint));
 }
 .lrow__badge {
   font-family: var(--app-font-display);
-  font-size: 9px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: hsl(var(--live));
@@ -4016,7 +4127,7 @@
   border-radius: 3px;
   background: none;
   color: hsl(var(--muted-foreground));
-  font-size: 9px;
+  font-size: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4035,8 +4146,8 @@
 }
 .sel-hero__kicker {
   font-family: var(--app-font-display);
-  font-size: 9.5px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: hsl(var(--library));
@@ -4044,8 +4155,8 @@
 }
 .sel-hero__headline {
   font-family: var(--app-font-reading);
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 21px;
+  font-weight: 400;
   color: hsl(var(--foreground));
   line-height: 1.25;
   margin-bottom: 12px;
@@ -4057,8 +4168,8 @@
 }
 .sel-hero__stat {
   font-family: var(--app-font-display);
-  font-size: 9.5px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 5px 9px;
@@ -4072,7 +4183,7 @@
   cursor: default;
 }
 .sel-hero__stat b {
-  font-size: 14px;
+  font-size: 16px;
   font-family: var(--app-font-mono);
   font-weight: 400;
   color: hsl(var(--foreground));
@@ -4104,8 +4215,8 @@
 .sel-filters::-webkit-scrollbar { display: none; }
 .sel-fchip {
   font-family: var(--app-font-display);
-  font-size: 9.5px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 5px 10px;
@@ -4128,7 +4239,7 @@
 }
 .sel-fchip__ct {
   font-family: var(--app-font-mono);
-  font-size: 8.5px;
+  font-size: 10px;
   color: hsl(var(--faint));
 }
 .sel-fchip--on .sel-fchip__ct { color: hsl(var(--library) / 0.7); }
@@ -4153,8 +4264,8 @@
 .sel-card__body { flex: 1; min-width: 0; }
 .sel-card__nm {
   font-family: var(--app-font-reading);
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 400;
   color: hsl(var(--foreground));
   line-height: 1.25;
   white-space: nowrap;
@@ -4163,8 +4274,8 @@
 }
 .sel-card__ctx {
   font-family: var(--app-font-reading);
-  font-style: italic;
-  font-size: 12px;
+  font-style: normal;
+  font-size: 14px;
   color: hsl(var(--muted-foreground));
   margin: 2px 0 0;
   white-space: nowrap;
@@ -4173,14 +4284,14 @@
 }
 .sel-card__ctx a, .sel-card__ctx b {
   font-style: normal;
-  font-weight: 600;
+  font-weight: 400;
   color: hsl(var(--foreground));
   text-decoration: none;
 }
 .sel-card__ctx a:hover, .sel-card__ctx b:hover { color: hsl(var(--library)); }
 .sel-card__meta {
   font-family: var(--app-font-mono);
-  font-size: 9.5px;
+  font-size: 11px;
   color: hsl(var(--faint));
   margin: 4px 0 0;
   white-space: nowrap;
@@ -4202,8 +4313,8 @@
 }
 .sel-card__onair {
   font-family: var(--app-font-display);
-  font-size: 9px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: hsl(var(--live));
@@ -4217,24 +4328,24 @@
 .sel-card__ov-num {
   display: block;
   font-family: var(--app-font-mono);
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1;
   color: hsl(var(--library));
 }
-.sel-card__ov-num--zero { color: hsl(var(--faint)); font-size: 13px; }
+.sel-card__ov-num--zero { color: hsl(var(--faint)); font-size: 15px; }
 .sel-card__ov-lbl {
   display: block;
   font-family: var(--app-font-display);
-  font-size: 8.5px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: hsl(var(--muted-foreground) / 0.65);
 }
 .sel-card__follow {
   font-family: var(--app-font-display);
-  font-size: 9px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   padding: 5px 8px;
@@ -4280,8 +4391,8 @@
 .icard__art img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .icard__tr {
   font-family: var(--app-font-reading);
-  font-size: 12.5px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 400;
   color: hsl(var(--foreground));
   white-space: nowrap;
   overflow: hidden;
@@ -4290,7 +4401,7 @@
 }
 .icard__ar {
   font-family: var(--app-font-display);
-  font-size: 10px;
+  font-size: 12px;
   color: hsl(var(--muted-foreground));
   white-space: nowrap;
   overflow: hidden;
@@ -4298,8 +4409,8 @@
 }
 .icard__by {
   font-family: var(--app-font-reading);
-  font-style: italic;
-  font-size: 10.5px;
+  font-style: normal;
+  font-size: 12px;
   color: hsl(var(--muted-foreground));
   white-space: nowrap;
   overflow: hidden;
@@ -4307,7 +4418,7 @@
 }
 .icard__by b {
   font-style: normal;
-  font-weight: 600;
+  font-weight: 400;
   color: hsl(var(--foreground));
 }
 
@@ -4335,8 +4446,8 @@
   background: hsl(var(--card));
   color: hsl(var(--foreground));
   font-family: var(--app-font-mono);
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   cursor: pointer;
@@ -4401,8 +4512,8 @@
 
 .lrow__shelf-album-title {
   font-family: var(--app-font-display);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 400;
   color: hsl(var(--foreground));
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4411,7 +4522,7 @@
 
 .lrow__shelf-album-sub {
   font-family: var(--app-font-mono);
-  font-size: 9px;
+  font-size: 10px;
   color: hsl(var(--faint));
   margin-top: 2px;
   text-transform: uppercase;
@@ -4420,8 +4531,8 @@
 
 .lrow__shelf-play-all {
   font-family: var(--app-font-mono);
-  font-size: 9.5px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 5px 9px;
@@ -4457,7 +4568,7 @@
 
 .lrow__shelf-track-pos {
   font-family: var(--app-font-mono);
-  font-size: 9.5px;
+  font-size: 11px;
   color: hsl(var(--faint));
   width: 18px;
   text-align: right;
@@ -4468,7 +4579,7 @@
   flex: 1;
   min-width: 0;
   font-family: var(--app-font-reading);
-  font-size: 12.5px;
+  font-size: 14px;
   color: hsl(var(--foreground));
   background: none;
   border: none;
@@ -4484,7 +4595,7 @@
 
 .lrow__shelf-track-dur {
   font-family: var(--app-font-mono);
-  font-size: 9.5px;
+  font-size: 11px;
   color: hsl(var(--faint));
   flex-shrink: 0;
 }
@@ -4497,7 +4608,7 @@
   border-top: 1px solid hsl(var(--border) / 0.25);
   background: none;
   font-family: var(--app-font-mono);
-  font-size: 9.5px;
+  font-size: 11px;
   color: hsl(var(--dim));
   cursor: pointer;
   text-align: left;
@@ -4513,14 +4624,14 @@
   gap: 6px;
   padding: 12px;
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: 12px;
   color: hsl(var(--faint));
 }
 
 .lrow__shelf-mb-link {
   color: hsl(var(--dim));
   text-decoration: none;
-  font-size: 10px;
+  font-size: 12px;
   display: inline-flex;
   align-items: center;
   gap: 3px;
@@ -4570,7 +4681,7 @@
 
 .lrow__portal-label {
   font-family: var(--app-font-mono);
-  font-size: 9px;
+  font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: hsl(var(--faint));
@@ -4628,7 +4739,7 @@
 
 .lrow__portal-tile-name {
   font-family: var(--app-font-mono);
-  font-size: 8px;
+  font-size: 9px;
   color: hsl(var(--dim));
   margin-top: 3px;
   overflow: hidden;
@@ -4745,7 +4856,7 @@
 
 /* Inline destination suffix — lighter weight after the action label */
 .dial-act__suffix {
-  font-weight: 500;
+  font-weight: 400;
   opacity: 0.7;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4777,7 +4888,7 @@
   background: hsl(var(--secondary) / 0.4);
   border: 1px solid hsl(var(--border) / 0.4);
   border-radius: 4px;
-  font-size: 10px;
+  font-size: 12px;
   cursor: pointer;
   color: hsl(var(--foreground) / 0.7);
 }
@@ -4786,8 +4897,8 @@
 .dial-sb-now { flex: 1; min-width: 0; text-align: center; }
 .dial-sb-t {
   font-family: var(--app-font-display);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 400;
   color: hsl(var(--foreground));
   white-space: nowrap;
   overflow: hidden;
@@ -4795,7 +4906,7 @@
 }
 .dial-sb-u {
   font-family: var(--app-font-mono);
-  font-size: 9px;
+  font-size: 10px;
   color: hsl(var(--muted-foreground) / 0.7);
   white-space: nowrap;
   overflow: hidden;
@@ -4829,8 +4940,8 @@
   flex: 1;
   padding: 5px 8px;
   font-family: var(--app-font-label);
-  font-size: 9px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   background: hsl(var(--library) / 0.15);
@@ -4846,7 +4957,7 @@
   align-items: center;
   gap: 3px;
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: 12px;
   color: hsl(var(--muted-foreground));
 }
 .dial-sb-dwell button {
@@ -4858,7 +4969,7 @@
   background: hsl(var(--secondary) / 0.4);
   border: 1px solid hsl(var(--border) / 0.4);
   border-radius: 3px;
-  font-size: 11px;
+  font-size: 13px;
   cursor: pointer;
   line-height: 1;
 }
@@ -4873,7 +4984,7 @@
   background: transparent;
   border: 1px solid hsl(var(--border) / 0.4);
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 13px;
   cursor: pointer;
   color: hsl(var(--muted-foreground));
 }
@@ -4940,8 +5051,8 @@
 
 .fdrow__run-main {
   font-family: var(--app-font-display);
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 17px;
+  font-weight: 400;
   line-height: 1.25;
   color: hsl(var(--foreground) / 0.9);
   overflow-wrap: anywhere;
@@ -4950,7 +5061,7 @@
   color: hsl(var(--foreground));
 }
 .fdrow__dj {
-  font-weight: 700;
+  font-weight: 400;
   color: hsl(var(--foreground) / 0.85);
 }
 .fdrow__show {
@@ -4959,7 +5070,7 @@
 }
 
 .fdrow__run-sub {
-  font-size: 11px;
+  font-size: 13px;
   color: hsl(var(--muted-foreground));
   line-height: 1.4;
   display: flex;
@@ -4968,19 +5079,19 @@
 }
 .fdrow__owned {
   color: hsl(var(--library) / 0.9);
-  font-weight: 600;
+  font-weight: 400;
 }
 .fdrow__discover {
   color: hsl(var(--accent) / 0.85);
 }
 .fdrow__replay-badge {
   color: hsl(var(--muted-foreground) / 0.7);
-  font-style: italic;
+  font-style: normal;
 }
 .fdrow__run-day {
   margin-left: auto;
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.04em;
   color: hsl(var(--muted-foreground) / 0.55);
 }
@@ -4995,8 +5106,8 @@
   background-size: cover;
   background-position: center;
   /* Fade: solid on the right, transparent by halfway → left */
-  -webkit-mask-image: linear-gradient(to left, #000 0%, #000 50%, transparent 100%);
-  mask-image: linear-gradient(to left, #000 0%, #000 50%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to left, #000000 0%, #000000 50%, transparent 100%);
+  mask-image: linear-gradient(to left, #000000 0%, #000000 50%, transparent 100%);
   pointer-events: none;
   z-index: 0;
 }
@@ -5004,22 +5115,22 @@
 /* Tier 1: reason sentence — leads at full display weight */
 .fdrow__t1 {
   font-family: var(--app-font-display);
-  font-size: 17px;
-  font-weight: 600;
+  font-size: 20px;
+  font-weight: 400;
   line-height: 1.3;
   margin-bottom: 5px;
   overflow-wrap: anywhere;
 }
-.fdrow__t1 b { font-style: normal; font-weight: 700; color: inherit; }
+.fdrow__t1 b { font-style: normal; font-weight: 400; color: inherit; }
 .fdrow__live-sentence { color: hsl(var(--foreground)); }
 /* Blended-mode secondary: live DJ/track attribution below the community aggregate count */
 .fdrow__live-secondary {
-  font-size: 12px;
+  font-size: 14px;
   color: hsl(var(--muted-foreground) / 0.8);
   margin-top: 2px;
   line-height: 1.4;
 }
-.fdrow__live-secondary b { font-weight: 600; font-style: normal; color: inherit; }
+.fdrow__live-secondary b { font-weight: 400; font-style: normal; color: inherit; }
 .fdrow__t1-sfx { color: hsl(var(--muted-foreground) / 0.75); font-weight: 400; }
 .fdrow__t1.w1 { color: hsl(var(--foreground) / 0.9); }
 .fdrow__t1.w2 { color: hsl(var(--foreground) / 0.9); }
@@ -5029,15 +5140,16 @@
 .fdrow__t1.w6 { color: hsl(var(--muted-foreground)); }
 .fdrow__t1.w7 { color: hsl(var(--muted-foreground)); }
 .fdrow__t1.w0 { color: hsl(var(--muted-foreground) / 0.5); }
-.fdrow__t1 .fdrow__artist { color: hsl(var(--library)); }
+/* Artist names read bright white against the gray sentence */
+.fdrow__t1 .fdrow__artist { color: #fff; }
 
 /* ── Popular-crossing sentence (Also-On-Air onboarding crossing sort) ──────
    Lime = crossing with Lore's most-played; canary = new on air / first
    hearing; orange-red = already in the library. The tiny "+" seeds the
    artist and flips its name to the library colour. */
 .fdrow__pop-sentence { color: hsl(var(--foreground) / 0.85); }
-.fdrow__t1 .fdrow__artist--pop { color: hsl(var(--accent)); }
-.fdrow__t1 .fdrow__artist--lib { color: hsl(var(--library)); }
+.fdrow__t1 .fdrow__artist--pop { color: #fff; }
+.fdrow__t1 .fdrow__artist--lib { color: #fff; }
 /* Artist names in the Also sentence that can be added — show pointer. */
 .fdrow__artist--addable { cursor: pointer; }
 /* ── Also-On-Air right-edge scrubber ─────────────────────────────────────
@@ -5089,7 +5201,7 @@
   border: 1px solid hsl(var(--accent) / 0.35);
   color: hsl(var(--foreground) / 0.9);
   font-family: var(--app-font-display);
-  font-size: 11px;
+  font-size: 13px;
   letter-spacing: 0.04em;
   padding: 4px 8px;
   border-radius: 6px;
@@ -5106,7 +5218,7 @@
   padding: 0 5px;
   margin-left: 6px;
   font-family: var(--app-font-mono);
-  font-size: 0.7em;
+  font-size: 0.8em;
   line-height: 1.6;
   color: hsl(var(--muted-foreground));
   cursor: pointer;
@@ -5155,8 +5267,8 @@
   border: none;
   border-radius: 99px;
   font-family: var(--app-font-display);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 400;
   line-height: 1.4;
   cursor: default;
   max-width: 100%;
@@ -5176,8 +5288,8 @@
 }
 /* "+" badge — trailing, lighter weight */
 .also-pill__plus {
-  font-size: 0.85em;
-  font-weight: 700;
+  font-size: 0.98em;
+  font-weight: 400;
   line-height: 1;
   flex-shrink: 0;
   color: hsl(var(--library));
@@ -5211,7 +5323,7 @@
   border: 1px solid hsl(var(--accent) / 0.4);
   border-radius: 4px;
   color: hsl(var(--accent));
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1;
   width: 22px;
   height: 22px;
@@ -5223,7 +5335,7 @@
 .dial-tab-sort:hover { background: hsl(var(--accent) / 0.1); border-color: hsl(var(--accent) / 0.7); }
 /* Entity-type colours for the attribution sentence — blue selector palette */
 .fdrow__t1 .fdrow__dj      { color: hsl(var(--selector-dj)); }
-.fdrow__t1 .fdrow__show    { color: hsl(var(--selector-show)); font-weight: 500; font-style: normal; }
+.fdrow__t1 .fdrow__show    { color: hsl(var(--selector-show)); font-weight: 400; font-style: normal; }
 .fdrow__t1 .fdrow__station { color: hsl(var(--library)); font-weight: 400; font-style: normal; }
 /* Same tokens for ghost-row sentences */
 .ghost-row__reason .fdrow__artist  { color: hsl(var(--library)); }
@@ -5232,7 +5344,7 @@
 /* Quiet context label (e.g. "Continuous") — station name removed from inline text */
 .fdrow__t3 {
   font-family: var(--app-font-mono);
-  font-size: 9px;
+  font-size: 10px;
   color: hsl(var(--library) / 0.75);
   margin-bottom: 5px;
   pointer-events: none;
@@ -5246,7 +5358,7 @@
   margin-left: 8px;
   margin-top: 2px;
   font-family: var(--app-font-mono);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.04em;
   color: hsl(var(--selector-station));
   background: hsl(var(--selector-station) / 0.12);
@@ -5277,17 +5389,17 @@
 .fdrow__first-spin { color: hsl(var(--library) / 0.8); font-style: normal; }
 
 @media (max-width: 420px) {
-  .fdrow__t1 { font-size: 15px; }
+  .fdrow__t1 { font-size: 17px; }
 }
 
 /* Zone 3 lifetime overlap caption — "N artists you know play here" */
 .fdrow__ov-caption {
   font-family: var(--app-font-display);
-  font-size: 11px;
+  font-size: 13px;
   color: hsl(var(--muted-foreground) / 0.75);
   margin-bottom: 4px;
 }
-.fdrow__ov-caption b { font-weight: 600; color: hsl(var(--foreground) / 0.6); font-style: normal; }
+.fdrow__ov-caption b { font-weight: 400; color: hsl(var(--foreground) / 0.6); font-style: normal; }
 
 
 
@@ -5306,7 +5418,7 @@
 
 .fd-liner-card__track {
   font-family: var(--app-font-mono);
-  font-size: 9px;
+  font-size: 10px;
   color: hsl(var(--muted-foreground) / 0.85);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -5314,7 +5426,7 @@
   margin-bottom: 2px;
 }
 .fd-liner-card__title {
-  font-weight: 600;
+  font-weight: 400;
   color: hsl(var(--foreground) / 0.8);
 }
 .fd-liner-card__sep {
@@ -5325,7 +5437,7 @@
 }
 .fd-liner-card__credit {
   font-family: var(--app-font-mono);
-  font-size: 8px;
+  font-size: 9px;
   color: hsl(var(--muted-foreground) / 0.7);
   line-height: 1.7;
   white-space: nowrap;
@@ -5334,15 +5446,15 @@
 }
 .fd-liner-card__role {
   color: hsl(var(--muted-foreground) / 0.45);
-  font-style: italic;
+  font-style: normal;
 }
 .fd-liner-card__name {
   color: hsl(var(--foreground) / 0.65);
 }
 .fd-liner-card__claim {
   font-family: var(--app-font-reading);
-  font-style: italic;
-  font-size: 10px;
+  font-style: normal;
+  font-size: 12px;
   color: hsl(var(--muted-foreground) / 0.7);
   margin-top: 2px;
   line-height: 1.4;
@@ -5369,7 +5481,7 @@
 .artist-add-strip .topbar-paste-box {
   width: 100%;
   height: 26px;
-  font-size: 9px;
+  font-size: 10px;
   padding: 3px 8px;
 }
 .artist-add-strip .topbar-artist-input-wrap {
@@ -5388,7 +5500,7 @@
   border-radius: 999px;
   padding: 5px 14px;
   font-family: var(--app-font-display);
-  font-size: 8.5px;
+  font-size: 10px;
   color: hsl(var(--faint));
   cursor: pointer;
   white-space: nowrap;
@@ -5448,7 +5560,7 @@
 }
 .social-mode-bar--topbar .dial-mode__button {
   padding: 5px 10px;
-  font-size: 8.5px;
+  font-size: 10px;
 }
 
 /* ─────────────────────────────────────────────────────────
@@ -5489,7 +5601,7 @@
 .dial-tab--add__short { display: none; }
 @media (max-width: 640px) {
   .dial-tab--add__full { display: none; }
-  .dial-tab--add__short { display: inline; font-size: 12px; line-height: 1; }
+  .dial-tab--add__short { display: inline; font-size: 14px; line-height: 1; }
 }
 
 /* Inline add-artists input row under the tab strip */
@@ -5529,8 +5641,8 @@
 .fdzone-lbl__pip--live    { background: hsl(var(--live)); animation: lore-live-pip 1.4s ease-in-out infinite; }
 .fdzone-lbl__text {
   font-family: var(--app-font-label);
-  font-size: 9.5px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.13em;
   color: hsl(var(--muted-foreground));
@@ -5538,7 +5650,7 @@
 /* count badge — inherits zone accent colour via inline style */
 .fdzone-lbl__n {
   font-family: var(--app-font-mono);
-  font-size: 9px;
+  font-size: 10px;
   color: hsl(var(--library));
 }
 .fdzone-lbl__n--picker { color: hsl(var(--selector-dj)); }
@@ -5550,9 +5662,9 @@
 .fdzone-lbl__hint {
   margin-left: auto;
   font-family: var(--app-font-reading);
-  font-style: italic;
+  font-style: normal;
   font-weight: 400;
-  font-size: 12px;
+  font-size: 14px;
   text-transform: none;
   letter-spacing: 0;
   color: hsl(var(--muted-foreground) / 0.45);
@@ -5564,7 +5676,7 @@
   border: none;
   padding: 0 2px;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1;
   color: hsl(var(--muted-foreground) / 0.5);
   transition: color 0.15s;
@@ -5596,7 +5708,7 @@
   background: none;
   border: none;
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: hsl(var(--muted-foreground));
@@ -5632,8 +5744,8 @@
 
 .ghost-row__name {
   font-family: var(--app-font-display);
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 400;
   line-height: 1.15;
   color: hsl(var(--foreground) / 0.85);
   overflow: hidden;
@@ -5644,29 +5756,29 @@
 
 .ghost-row__reason {
   font-family: var(--app-font-display);
-  font-style: italic;
-  font-size: 12.5px;
+  font-style: normal;
+  font-size: 14px;
   line-height: 1.4;
   color: hsl(var(--muted-foreground) / 0.8);
 }
 .ghost-row__reason b {
   font-style: normal;
-  font-weight: 600;
+  font-weight: 400;
   color: hsl(var(--foreground) / 0.7);
 }
 
 /* ── Selectors page — overlap sentence ──────────────────────────────────── */
 .sel-card__overlap-sentence {
   font-family: var(--app-font-display);
-  font-style: italic;
-  font-size: 12.5px;
+  font-style: normal;
+  font-size: 14px;
   color: hsl(var(--muted-foreground));
   margin-top: 3px;
   line-height: 1.4;
 }
 .sel-card__overlap-n {
   font-style: normal;
-  font-weight: 600;
+  font-weight: 400;
   color: hsl(var(--library));
 }
 .sel-card__overlap-zero {
@@ -5692,7 +5804,7 @@
   border: 1px solid hsl(var(--border));
   background: hsl(var(--muted) / 0.25);
   font-family: var(--app-font-mono);
-  font-size: 11px;
+  font-size: 13px;
   color: hsl(var(--foreground));
   cursor: pointer;
   transition: border-color .12s, background .12s, color .12s;
@@ -5708,7 +5820,7 @@
   border-color: hsl(var(--primary));
   background: hsl(var(--primary) / 0.18);
   color: hsl(var(--primary));
-  font-weight: 600;
+  font-weight: 400;
 }
 .import-modal-chip--live {
   border-color: hsl(var(--live) / 0.35);
@@ -5777,13 +5889,57 @@
 body,
 body * {
   font-family: 'Signifier', Georgia, serif !important;
-  font-size: 14.5px !important;
+  font-size: 23px !important;
 }
-/* Logo exception: moon + letters scale together off the wordmark base */
+/* Logo sits at the uniform body size like everything else. */
 .dial-topbar__wordmark,
 .dial-topbar__wordmark * {
-  font-size: 22px !important;
+  font-size: 23px !important;
 }
-.dial-topbar__letter {
+/* Section nav exception: mono small-caps must fit three labels across a
+   phone, so it sits below the uniform body size. */
+.slim-nav__btn {
   font-size: 17px !important;
+}
+/* Grayscale brand: big bright-white wordmark, left-justified. */
+.dial-topbar__letter {
+  color: #fff;
+}
+/* Moon in the time-travel strip — the phase-accurate time indicator. */
+.dial-timetravel__label svg.moon-glyph {
+  vertical-align: middle;
+  color: #fff;
+}
+
+/* Dial range pills — pinned to the strip's right edge. */
+.dial-timetravel__range {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.dial-timetravel__range-btn {
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  cursor: pointer;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: hsl(0 0% 46%);
+}
+.dial-timetravel__range-btn--active {
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+/* Day boundary markers keep the wide-range spine legible. */
+.dial-density-spine__bin--daystart {
+  margin-left: 5px;
+  box-shadow: -3px 0 0 -1px hsl(0 0% 30%);
+}
+
+/* ── Typography policy: no bold, no italic, anywhere. ── */
+b, strong, em, i, th, h1, h2, h3, h4, h5, h6, dt, legend, optgroup {
+  font-weight: 400;
+  font-style: normal;
 }

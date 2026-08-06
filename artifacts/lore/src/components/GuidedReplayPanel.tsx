@@ -197,11 +197,11 @@ export function GuidedReplayPanel({
     <section className="mb-6 rounded-xl border border-primary/30 bg-primary/[0.04] p-4" data-testid="guided-replay">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
+          <div className="flex items-center gap-2 font-mono text-[13px] uppercase tracking-[0.2em] text-primary">
             <Ghost className="h-3.5 w-3.5" />
             Guided Ghost Replay
           </div>
-          <p className="mt-1 max-w-xl text-sm leading-relaxed text-muted-foreground">
+          <p className="mt-1 max-w-xl text-base leading-relaxed text-muted-foreground">
             {isEmbedService
               ? `Hear the reconstruction through official ${currentLabel} embeds.`
               : `Step through the reconstruction with official ${currentLabel} links.`}
@@ -213,7 +213,7 @@ export function GuidedReplayPanel({
             type="button"
             onClick={start}
             disabled={!guide.available && !officialDoors.current}
-            className="hover-elevate inline-flex items-center gap-2 rounded-full border border-primary-border bg-primary px-4 py-2 font-mono text-xs uppercase tracking-wide text-primary-foreground disabled:opacity-40"
+            className="hover-elevate inline-flex items-center gap-2 rounded-full border border-primary-border bg-primary px-4 py-2 font-mono text-sm uppercase tracking-wide text-primary-foreground disabled:opacity-40"
             data-testid="guided-start"
           >
             <Play className="h-3.5 w-3.5" />
@@ -223,7 +223,7 @@ export function GuidedReplayPanel({
           <button
             type="button"
             onClick={close}
-            className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide text-muted-foreground hover:text-foreground"
+            className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 font-mono text-[13px] uppercase tracking-wide text-muted-foreground hover:text-foreground"
             data-testid="guided-close"
           >
             <X className="h-3.5 w-3.5" />
@@ -233,14 +233,14 @@ export function GuidedReplayPanel({
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">Service</span>
+        <span className="font-mono text-[12px] uppercase tracking-wide text-muted-foreground">Service</span>
         {availableServices.map(({ service: option, label: optLabel }) => (
           <button
             key={option}
             type="button"
             onClick={() => setService(option)}
             aria-pressed={service === option}
-            className={`rounded-full border px-3 py-1 font-mono text-[11px] transition-colors ${
+            className={`rounded-full border px-3 py-1 font-mono text-[13px] transition-colors ${
               service === option
                 ? "border-primary bg-primary/15 text-primary"
                 : "border-border text-muted-foreground hover:text-foreground"
@@ -250,7 +250,7 @@ export function GuidedReplayPanel({
             {optLabel}
           </button>
         ))}
-        <span className="ml-auto font-mono text-[11px] text-muted-foreground" data-testid="guided-coverage">
+        <span className="ml-auto font-mono text-[13px] text-muted-foreground" data-testid="guided-coverage">
           {guide.available} of {guide.total} available
         </span>
       </div>
@@ -271,8 +271,8 @@ export function GuidedReplayPanel({
           className="rounded-lg border border-border px-3 py-2 text-left disabled:opacity-45"
           data-testid="guided-door-current"
         >
-          <span className="block font-mono text-[10px] uppercase tracking-wide text-primary">Current song</span>
-          <span className="mt-1 block text-xs text-muted-foreground">
+          <span className="block font-mono text-[12px] uppercase tracking-wide text-primary">Current song</span>
+          <span className="mt-1 block text-sm text-muted-foreground">
             {officialDoors.current
               ? officialDoors.current.embedUrl ? "Open the verified official embed." : "Open the verified provider link."
               : officialEmbedStatus(firstOfficialEntry?.embedFacts)}
@@ -289,8 +289,8 @@ export function GuidedReplayPanel({
           className="rounded-lg border border-border px-3 py-2 text-left disabled:opacity-45"
           data-testid="guided-door-album"
         >
-          <span className="block font-mono text-[10px] uppercase tracking-wide text-primary">Whole album</span>
-          <span className="mt-1 block text-xs text-muted-foreground">
+          <span className="block font-mono text-[12px] uppercase tracking-wide text-primary">Whole album</span>
+          <span className="mt-1 block text-sm text-muted-foreground">
             {officialDoors.album ? "Known Bandcamp release · begins at track one." : "Only available for a known release."}
           </span>
         </button>
@@ -300,8 +300,8 @@ export function GuidedReplayPanel({
             className="rounded-lg border border-border px-3 py-2 text-left hover:border-primary"
             data-testid="guided-door-broadcast"
           >
-            <span className="block font-mono text-[10px] uppercase tracking-wide text-primary">Broadcast context</span>
-            <span className="mt-1 block text-xs text-muted-foreground">Return to Lore’s ordered broadcast receipt.</span>
+            <span className="block font-mono text-[12px] uppercase tracking-wide text-primary">Broadcast context</span>
+            <span className="mt-1 block text-sm text-muted-foreground">Return to Lore’s ordered broadcast receipt.</span>
           </a>
         ) : null}
       </div>
@@ -310,10 +310,10 @@ export function GuidedReplayPanel({
         <div className="mt-4 rounded-lg border border-card-border bg-card p-3">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0">
-              <p className="truncate font-serif text-base font-semibold text-foreground">
+              <p className="truncate font-serif text-lg font-normal text-foreground">
                 {officialDoor === "album" ? "Whole album" : current?.title ?? firstOfficialEntry?.recording?.title ?? "Current song"}
               </p>
-              <p className="truncate font-mono text-[11px] text-muted-foreground">
+              <p className="truncate font-mono text-[13px] text-muted-foreground">
                 {officialDoor === "album"
                   ? "Bandcamp · starts at track one"
                   : `${current?.artist ?? firstOfficialEntry?.recording?.artist ?? ""} · ${
@@ -321,7 +321,7 @@ export function GuidedReplayPanel({
                   }${serviceLabel(officialSource?.provider ?? current?.source?.service ?? service)}`}
               </p>
             </div>
-            <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+            <span className="font-mono text-[12px] uppercase tracking-wide text-muted-foreground">
               {officialDoor ? "official result" : `${playableIndex + 1} of ${guide.playable.length}`}
             </span>
           </div>
@@ -330,7 +330,7 @@ export function GuidedReplayPanel({
           {isEmbed ? (
             <div className="overflow-hidden rounded-md bg-black/20">
               {embedState === "loading" ? (
-                <div className="flex h-20 items-center justify-center gap-2 font-mono text-[11px] text-muted-foreground">
+                <div className="flex h-20 items-center justify-center gap-2 font-mono text-[13px] text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Loading official embed…
                 </div>
@@ -339,7 +339,7 @@ export function GuidedReplayPanel({
                 <div
                   role="status"
                   data-testid="guided-embed-error"
-                  className="flex min-h-20 items-center justify-center gap-2 px-4 text-center font-mono text-[11px] text-muted-foreground"
+                  className="flex min-h-20 items-center justify-center gap-2 px-4 text-center font-mono text-[13px] text-muted-foreground"
                 >
                   <AlertTriangle className="h-4 w-4 shrink-0 text-primary" />
                   This official embed could not load. The manifest row remains in the receipt.
@@ -364,7 +364,7 @@ export function GuidedReplayPanel({
                 href={officialSource?.url ?? current?.source?.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-full border border-primary/50 px-4 py-2 font-mono text-xs text-primary hover:bg-primary/10 transition-colors"
+                className="inline-flex items-center gap-2 rounded-full border border-primary/50 px-4 py-2 font-mono text-sm text-primary hover:bg-primary/10 transition-colors"
                 data-testid="guided-external-link"
               >
                 <ExternalLink className="h-3.5 w-3.5" />
@@ -378,13 +378,13 @@ export function GuidedReplayPanel({
               type="button"
               onClick={previous}
               disabled={officialDoor != null || playableIndex === 0}
-              className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 font-mono text-[11px] text-muted-foreground disabled:opacity-35"
+              className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 font-mono text-[13px] text-muted-foreground disabled:opacity-35"
               data-testid="guided-previous"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
               Previous
             </button>
-            <span className="font-mono text-[10px] text-muted-foreground">
+            <span className="font-mono text-[12px] text-muted-foreground">
               {officialSource?.autoAdvance || current?.source?.autoAdvance
                 ? "YouTube advances automatically when the embed reports ended."
                 : isEmbed
@@ -397,7 +397,7 @@ export function GuidedReplayPanel({
               type="button"
               onClick={next}
               disabled={officialDoor != null || playableIndex >= guide.playable.length - 1}
-              className="inline-flex items-center gap-1 rounded-full border border-primary/50 px-3 py-1.5 font-mono text-[11px] text-primary disabled:opacity-35"
+              className="inline-flex items-center gap-1 rounded-full border border-primary/50 px-3 py-1.5 font-mono text-[13px] text-primary disabled:opacity-35"
               data-testid="guided-next"
             >
               Next
@@ -412,7 +412,7 @@ export function GuidedReplayPanel({
           {guide.missing.map((entry) => (
             <span
               key={`${entry.position}-${entry.recordingMbid ?? "missing"}`}
-              className="rounded-full border border-border px-2 py-1 font-mono text-[10px] text-muted-foreground"
+              className="rounded-full border border-border px-2 py-1 font-mono text-[12px] text-muted-foreground"
             >
               {entry.position + 1} · {guidedMissingLabel(entry.missingReason!)}
             </span>

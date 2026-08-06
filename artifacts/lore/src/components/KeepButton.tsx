@@ -123,12 +123,12 @@ export function KeepButton({ mbid, spinId, provenance, compact = false }: KeepBu
       aria-label={title}
       aria-pressed={isKept}
       data-testid="keep-button"
-      className={`hover-elevate inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide transition-colors ${
+      className={`hover-elevate inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 font-mono text-[13px] uppercase tracking-wide transition-colors ${
         isKept
           ? pendingOnly
-            ? "border-amber-400/30 bg-amber-400/10 text-amber-400/60"
-            : "border-[#C6F53F]/30 bg-[#C6F53F]/10 text-[#C6F53F]/60"
-          : "border-[#C6F53F]/50 bg-[#C6F53F]/15 text-[#C6F53F]"
+            ? "border-zinc-400/30 bg-zinc-400/10 text-zinc-400/60"
+            : "border-[#dedede]/30 bg-[#dedede]/10 text-[#dedede]/60"
+          : "border-[#dedede]/50 bg-[#dedede]/15 text-[#dedede]"
       } ${isPending ? "opacity-60" : ""}`}
     >
       {isPending ? (

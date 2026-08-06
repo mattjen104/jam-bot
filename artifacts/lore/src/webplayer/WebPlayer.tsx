@@ -152,16 +152,16 @@ function NowPlayingCard({
         )}
       </button>
       <div style={{ minWidth: 0, flex: 1 }}>
-        <p style={{ margin: 0, fontSize: 15, fontWeight: 500 }}>
+        <p style={{ margin: 0, fontSize: 17, fontWeight: 400 }}>
           {trackLine}
         </p>
-        <p style={{ margin: "2px 0 0", fontSize: 13, color: "var(--wp-text-secondary)" }}>
+        <p style={{ margin: "2px 0 0", fontSize: 15, color: "var(--wp-text-secondary)" }}>
           {stationLine}
           {!scanHop && showLabel && (
             <>
               {" "}
               <span style={{ color: "var(--wp-text-muted)" }}>· via</span>{" "}
-              <span className="wp-mono" style={{ fontSize: 12 }}>
+              <span className="wp-mono" style={{ fontSize: 14 }}>
                 {radio.station?.name}
               </span>
             </>
@@ -173,7 +173,7 @@ function NowPlayingCard({
             </>
           )}
           {scanHop && (
-            <span className="wp-mono" style={{ fontSize: 11, color: "var(--wp-text-muted)", marginLeft: 6 }}>
+            <span className="wp-mono" style={{ fontSize: 13, color: "var(--wp-text-muted)", marginLeft: 6 }}>
               · preview
             </span>
           )}
@@ -221,8 +221,8 @@ function NowPlayingCard({
               background: "var(--wp-bg-accent)",
               color: "var(--wp-text-accent)",
               fontFamily: "monospace",
-              fontSize: 14,
-              fontWeight: 600,
+              fontSize: 16,
+              fontWeight: 400,
               padding: 0,
               cursor: "pointer",
             }}
@@ -312,7 +312,7 @@ function ImportStrip() {
       data-testid="wp-import-strip"
     >
       <RefreshCw size={16} style={{ color: "var(--wp-text-accent)", flexShrink: 0 }} aria-hidden="true" />
-      <p style={{ margin: 0, fontSize: 13, color: "var(--wp-text-accent)", flex: 1 }}>
+      <p style={{ margin: 0, fontSize: 15, color: "var(--wp-text-accent)", flex: 1 }}>
         Reading your Spotify library · {job.resolved.toLocaleString()} /{" "}
         {job.total.toLocaleString()} tracks resolved — matches below update as we go
       </p>
@@ -347,7 +347,7 @@ function OnAirFreshness({ updatedAt }: { updatedAt: number }) {
   const secs = Math.max(0, Math.round((Date.now() - updatedAt) / 1000));
   const label = secs < 15 ? "just now" : secs < 90 ? `${secs}s ago` : `${Math.round(secs / 60)}m ago`;
   return (
-    <span className="wp-mono" style={{ fontSize: 11, color: "var(--wp-text-muted)" }} data-testid="wp-onair-freshness">
+    <span className="wp-mono" style={{ fontSize: 13, color: "var(--wp-text-muted)" }} data-testid="wp-onair-freshness">
       updated {label}
     </span>
   );
@@ -401,7 +401,7 @@ function OnAirKeep({
       disabled={keepMutation.isPending}
       title="Keep this track in your library"
       aria-label="Keep this track in your library"
-      style={{ display: "inline-flex", alignItems: "center", padding: "4px 7px", fontSize: 12, flexShrink: 0 }}
+      style={{ display: "inline-flex", alignItems: "center", padding: "4px 7px", fontSize: 14, flexShrink: 0 }}
       data-testid={`wp-onair-keep-${mbid}`}
     >
       {keepMutation.isPending ? (
@@ -487,27 +487,27 @@ function OnAirRow({
         }}
         aria-label={`Open tonight's run for ${title}`}
       >
-        <p style={{ margin: 0, fontSize: 13, fontWeight: 500, ...oneLine }}>
+        <p style={{ margin: 0, fontSize: 15, fontWeight: 400, ...oneLine }}>
           {title}
           {item.show?.djName && (
-            <span style={{ fontSize: 11, color: "var(--wp-text-muted)", fontWeight: 400 }}>
+            <span style={{ fontSize: 13, color: "var(--wp-text-muted)", fontWeight: 400 }}>
               {" "}
               · {item.show.djName}
             </span>
           )}
           {stationContext && (
-            <span className="wp-mono" style={{ fontSize: 10, color: "var(--wp-text-muted)", fontWeight: 400 }}>
+            <span className="wp-mono" style={{ fontSize: 12, color: "var(--wp-text-muted)", fontWeight: 400 }}>
               {" "}
               · {stationContext}
             </span>
           )}
         </p>
         {item.now.resolved ? (
-          <p style={{ margin: "1px 0 0", fontSize: 12, color: nowInLibrary ? "var(--wp-text-success)" : "var(--wp-text-secondary)", ...oneLine }}>
+          <p style={{ margin: "1px 0 0", fontSize: 14, color: nowInLibrary ? "var(--wp-text-success)" : "var(--wp-text-secondary)", ...oneLine }}>
             {item.now.artist}
             {socialEnabled && presence != null && presence.count > 1 && (
               <span
-                style={{ display: "inline-flex", alignItems: "center", fontSize: 10, color: "var(--wp-text-muted)", marginLeft: 5, opacity: 0.8 }}
+                style={{ display: "inline-flex", alignItems: "center", fontSize: 12, color: "var(--wp-text-muted)", marginLeft: 5, opacity: 0.8 }}
                 title={`${presence.count} anonymous listeners here now`}
               >
                 {presence.avatars.length > 0 && (
@@ -536,7 +536,7 @@ function OnAirRow({
             )}
           </p>
         ) : (
-          <p style={{ margin: "1px 0 0", fontSize: 12, color: "var(--wp-text-muted)", ...oneLine }}>
+          <p style={{ margin: "1px 0 0", fontSize: 14, color: "var(--wp-text-muted)", ...oneLine }}>
             {item.now.title ?? "resolving spins…"}
           </p>
         )}
@@ -555,7 +555,7 @@ function OnAirRow({
         item.matchCount ? (
           <span
             className="wp-mono"
-            style={{ fontSize: 11, fontWeight: 500, color: "var(--wp-text-success)", flexShrink: 0 }}
+            style={{ fontSize: 13, fontWeight: 400, color: "var(--wp-text-success)", flexShrink: 0 }}
             title={`${item.matchCount} matches with your taste`}
           >
             {item.matchCount}✦
@@ -675,16 +675,16 @@ export default function WebPlayer() {
             marginBottom: 16,
           }}
         >
-          <h1 style={{ margin: 0, fontSize: 18 }}>
+          <h1 style={{ margin: 0, fontSize: 21 }}>
             <span style={{ color: "var(--wp-text-accent)" }}>●</span> Lore{" "}
-            <span className="wp-mono" style={{ fontSize: 11, color: "var(--wp-text-muted)" }}>
+            <span className="wp-mono" style={{ fontSize: 13, color: "var(--wp-text-muted)" }}>
               PLAYER
             </span>
           </h1>
           <Link
             href="/"
             className="wp-mono"
-            style={{ fontSize: 11, color: "var(--wp-text-muted)", textDecoration: "none" }}
+            style={{ fontSize: 13, color: "var(--wp-text-muted)", textDecoration: "none" }}
             data-testid="wp-back-to-classic"
             onClick={() => rememberPrefersClassic()}
           >
@@ -722,7 +722,7 @@ export default function WebPlayer() {
                 onClick={() => setTab(key)}
                 className="wp-mono"
                 style={{
-                  fontSize: 12,
+                  fontSize: 14,
                   textTransform: "uppercase",
                   letterSpacing: "0.06em",
                   padding: "7px 14px",
@@ -746,7 +746,7 @@ export default function WebPlayer() {
               className="wp-mono"
               style={{
                 margin: "6px 0 0",
-                fontSize: 11,
+                fontSize: 13,
                 color: "var(--wp-text-muted)",
                 display: "flex",
                 gap: 10,
@@ -783,12 +783,12 @@ export default function WebPlayer() {
         {tab === "onair" && (
           <div className="wp-card" style={{ overflow: "hidden" }}>
             {isLoading && (
-              <p style={{ padding: "14px 16px", margin: 0, fontSize: 13, color: "var(--wp-text-muted)" }}>
+              <p style={{ padding: "14px 16px", margin: 0, fontSize: 15, color: "var(--wp-text-muted)" }}>
                 Tuning across the dial…
               </p>
             )}
             {!isLoading && items.length === 0 && (
-              <p style={{ padding: "14px 16px", margin: 0, fontSize: 13, color: "var(--wp-text-muted)" }}>
+              <p style={{ padding: "14px 16px", margin: 0, fontSize: 15, color: "var(--wp-text-muted)" }}>
                 Nothing on the air right now — stations appear here as they log spins.
               </p>
             )}

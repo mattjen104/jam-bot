@@ -33,15 +33,15 @@ function TokenGate({ onSave }: { onSave: (t: string) => void }) {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm rounded-2xl border border-card-border bg-card p-8 shadow-lg">
-        <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wide text-primary">
+        <div className="flex items-center gap-2 font-mono text-[13px] uppercase tracking-wide text-primary">
           <KeyRound className="h-3.5 w-3.5" />
           Admin access
         </div>
-        <h1 className="mt-3 font-serif text-2xl font-semibold text-foreground">
+        <h1 className="mt-3 font-serif text-3xl font-normal text-foreground">
           Enter admin token
         </h1>
         <input
-          className="mt-5 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+          className="mt-5 w-full rounded-lg border border-input bg-background px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-primary"
           type="password"
           placeholder="Admin token"
           value={draft}
@@ -49,7 +49,7 @@ function TokenGate({ onSave }: { onSave: (t: string) => void }) {
           onKeyDown={(e) => { if (e.key === "Enter" && draft.trim()) onSave(draft.trim()); }}
         />
         <button
-          className="mt-3 w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-40"
+          className="mt-3 w-full rounded-lg bg-primary px-4 py-2 text-base font-normal text-primary-foreground disabled:opacity-40"
           disabled={!draft.trim()}
           onClick={() => onSave(draft.trim())}
         >
@@ -132,13 +132,13 @@ function SettingsPanel({ token, onClearToken }: { token: string; onClearToken: (
 
       <div className="mt-8 flex items-center justify-between">
         <div>
-          <h1 className="font-serif text-2xl font-semibold text-foreground">Runtime settings</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <h1 className="font-serif text-3xl font-normal text-foreground">Runtime settings</h1>
+          <p className="mt-1 text-base text-muted-foreground">
             Toggle feature flags without restarting the server. Changes take effect within ~30 s.
           </p>
         </div>
         <button
-          className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+          className="text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"
           onClick={onClearToken}
         >
           Sign out
@@ -148,12 +148,12 @@ function SettingsPanel({ token, onClearToken }: { token: string; onClearToken: (
       {loading && (
         <div className="mt-10 flex items-center gap-2 text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
-          <span className="text-sm">Loading settings…</span>
+          <span className="text-base">Loading settings…</span>
         </div>
       )}
 
       {error && (
-        <div className="mt-6 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div className="mt-6 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-base text-destructive">
           {error}
         </div>
       )}
@@ -185,26 +185,26 @@ function SettingsPanel({ token, onClearToken }: { token: string; onClearToken: (
 
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-foreground">{meta.label}</span>
+                    <span className="text-base font-normal text-foreground">{meta.label}</span>
                     <span
                       className={[
-                        "rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide",
+                        "rounded px-1.5 py-0.5 font-mono text-[12px] uppercase tracking-wide",
                         s.value
-                          ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                          ? "bg-zinc-500/15 text-zinc-600 dark:text-zinc-400"
                           : "bg-muted text-muted-foreground",
                       ].join(" ")}
                     >
                       {s.value ? "on" : "off"}
                     </span>
-                    <span className="font-mono text-[10px] text-muted-foreground/60">
+                    <span className="font-mono text-[12px] text-muted-foreground/60">
                       {s.source === "env" ? "env default" : "db"}
                     </span>
                   </div>
                   {meta.description && (
-                    <p className="mt-1 text-xs text-muted-foreground">{meta.description}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{meta.description}</p>
                   )}
                   {s.updatedAt && (
-                    <p className="mt-1 font-mono text-[10px] text-muted-foreground/60">
+                    <p className="mt-1 font-mono text-[12px] text-muted-foreground/60">
                       Last changed {new Date(s.updatedAt).toLocaleString()}
                     </p>
                   )}

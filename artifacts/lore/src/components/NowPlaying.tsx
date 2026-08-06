@@ -75,10 +75,10 @@ export function NowPlaying({ data, isLoading, fallbackStation, clientNowPlaying 
     return (
       <div className="flex h-full min-h-[420px] flex-col items-center justify-center rounded-2xl border border-card-border bg-card p-8 text-center">
         <Disc3 className="lore-spin h-10 w-10 text-muted-foreground/50" />
-        <p className="mt-4 max-w-[24ch] font-serif text-lg text-muted-foreground">
+        <p className="mt-4 max-w-[24ch] font-serif text-xl text-muted-foreground">
           Pick a station to tune in.
         </p>
-        <p className="mt-1 font-mono text-xs text-muted-foreground/70">
+        <p className="mt-1 font-mono text-sm text-muted-foreground/70">
           Streams play unmodified from the source.
         </p>
       </div>
@@ -106,7 +106,7 @@ export function NowPlaying({ data, isLoading, fallbackStation, clientNowPlaying 
         )}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-card via-card/70 to-transparent" />
         <div className="absolute left-4 top-4">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-background/70 px-2.5 py-1 font-mono text-[11px] uppercase tracking-wide text-primary backdrop-blur">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-background/70 px-2.5 py-1 font-mono text-[13px] uppercase tracking-wide text-primary backdrop-blur">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
             On air · {station.name}
           </span>
@@ -156,7 +156,7 @@ export function NowPlaying({ data, isLoading, fallbackStation, clientNowPlaying 
             <LyricView mbid={rec.mbid} progressMs={progressMs} />
           ) : (
             <div className="px-5 py-4">
-              <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+              <p className="font-mono text-[13px] uppercase tracking-[0.15em] text-muted-foreground">
                 Track not yet identified — lyrics unavailable
               </p>
             </div>
@@ -177,7 +177,7 @@ export function NowPlaying({ data, isLoading, fallbackStation, clientNowPlaying 
       <div className="relative -mt-10 p-6">
         {np ? (
           <>
-            <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+            <p className="font-mono text-[13px] uppercase tracking-[0.15em] text-muted-foreground">
               {CONFIDENCE_LABEL[np.confidence] ?? "Now playing"}
               {" · "}
               {np.playedAt ? timeAgo(np.playedAt) : ""}
@@ -185,20 +185,20 @@ export function NowPlaying({ data, isLoading, fallbackStation, clientNowPlaying 
             {rec ? (
               <Link
                 href={`/song/${rec.mbid}`}
-                className="mt-1.5 block font-serif text-2xl font-semibold leading-tight text-foreground hover:text-primary"
+                className="mt-1.5 block font-serif text-3xl font-normal leading-tight text-foreground hover:text-primary"
                 data-testid="now-playing-title"
               >
                 {rec.title}
               </Link>
             ) : (
               <h2
-                className="mt-1.5 font-serif text-2xl font-semibold leading-tight text-foreground"
+                className="mt-1.5 font-serif text-3xl font-normal leading-tight text-foreground"
                 data-testid="now-playing-title"
               >
                 {np.rawTitle}
               </h2>
             )}
-            <p className="mt-1 text-base text-muted-foreground" data-testid="now-playing-artist">
+            <p className="mt-1 text-lg text-muted-foreground" data-testid="now-playing-artist">
               {rec?.artistMbid ? (
                 <Link
                   href={`/artist/${rec.artistMbid}`}
@@ -216,17 +216,17 @@ export function NowPlaying({ data, isLoading, fallbackStation, clientNowPlaying 
                 className="mt-4 rounded-xl border border-border bg-secondary/40 p-3"
                 data-testid="on-air-show"
               >
-                <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+                <p className="font-mono text-[13px] uppercase tracking-[0.15em] text-muted-foreground">
                   <Mic className="mr-1.5 inline h-3 w-3 text-primary" />
                   On air
                 </p>
                 <div className="mt-1.5 min-w-0">
                   {np.show.djName && (
-                    <p className="truncate font-serif text-base font-semibold text-foreground">
+                    <p className="truncate font-serif text-lg font-normal text-foreground">
                       {np.show.djName}
                     </p>
                   )}
-                  <p className="truncate text-xs text-muted-foreground">
+                  <p className="truncate text-sm text-muted-foreground">
                     {np.show.name}
                   </p>
                 </div>
@@ -256,7 +256,7 @@ export function NowPlaying({ data, isLoading, fallbackStation, clientNowPlaying 
                 href={`https://musicbrainz.org/recording/${rec.mbid}`}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-3 inline-flex items-center gap-1 font-mono text-[11px] text-muted-foreground/80 hover:text-primary"
+                className="mt-3 inline-flex items-center gap-1 font-mono text-[13px] text-muted-foreground/80 hover:text-primary"
                 title="This track's canonical MusicBrainz identity"
               >
                 <Music4 className="h-3 w-3" />
@@ -269,18 +269,18 @@ export function NowPlaying({ data, isLoading, fallbackStation, clientNowPlaying 
           </>
         ) : clientNowPlaying ? (
           <div className="py-2">
-            <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+            <p className="font-mono text-[13px] uppercase tracking-[0.15em] text-muted-foreground">
               Now playing · stream
             </p>
             <h2
-              className="mt-1.5 font-serif text-2xl font-semibold leading-tight text-foreground"
+              className="mt-1.5 font-serif text-3xl font-normal leading-tight text-foreground"
               data-testid="now-playing-title"
             >
               {clientNowPlaying.rawTitle || station.name}
             </h2>
             {clientNowPlaying.rawArtist && (
               <p
-                className="mt-1 text-base text-muted-foreground"
+                className="mt-1 text-lg text-muted-foreground"
                 data-testid="now-playing-artist"
               >
                 {clientNowPlaying.rawArtist}
@@ -289,13 +289,13 @@ export function NowPlaying({ data, isLoading, fallbackStation, clientNowPlaying 
           </div>
         ) : (
           <div className="py-2">
-            <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+            <p className="font-mono text-[13px] uppercase tracking-[0.15em] text-muted-foreground">
               {isLoading ? "Reading the dial…" : "Awaiting the next spin"}
             </p>
-            <h2 className="mt-1.5 font-serif text-2xl font-semibold leading-tight text-foreground">
+            <h2 className="mt-1.5 font-serif text-3xl font-normal leading-tight text-foreground">
               {station.name}
             </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1 text-base text-muted-foreground">
               Now-playing data appears the moment the station logs its next track.
             </p>
           </div>
@@ -454,7 +454,7 @@ function SongExploderPanel({
   if (isLoading) {
     return (
       <div className="px-5 py-4">
-        <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground animate-pulse">
+        <p className="font-mono text-[13px] uppercase tracking-[0.15em] text-muted-foreground animate-pulse">
           Loading…
         </p>
       </div>
@@ -464,7 +464,7 @@ function SongExploderPanel({
   if (!episode) {
     return (
       <div className="px-5 py-4">
-        <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+        <p className="font-mono text-[13px] uppercase tracking-[0.15em] text-muted-foreground">
           No Song Exploder episode for this track.
         </p>
       </div>
@@ -474,14 +474,14 @@ function SongExploderPanel({
   return (
     <div data-testid="se-panel-inner">
       <div className="flex items-center justify-between px-5 pb-2 pt-4">
-        <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+        <p className="font-mono text-[13px] uppercase tracking-[0.15em] text-muted-foreground">
           Song Exploder
         </p>
         <a
           href={episode.episodeUrl}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1 font-mono text-[10px] text-primary hover:underline"
+          className="inline-flex items-center gap-1 font-mono text-[12px] text-primary hover:underline"
         >
           Full episode
           <ExternalLink className="h-2.5 w-2.5" />
@@ -489,7 +489,7 @@ function SongExploderPanel({
       </div>
 
       {anchors.length === 0 ? (
-        <p className="px-5 pb-4 text-sm text-muted-foreground">
+        <p className="px-5 pb-4 text-base text-muted-foreground">
           Episode cued up — timestamped anchors haven't been added yet.
         </p>
       ) : (
@@ -505,9 +505,9 @@ function SongExploderPanel({
                 key={anchor.id}
                 ref={isActive ? activeRef : null}
                 className={cn(
-                  "py-1 text-sm leading-relaxed transition-colors duration-300",
+                  "py-1 text-base leading-relaxed transition-colors duration-300",
                   isActive
-                    ? "font-semibold text-foreground"
+                    ? "font-normal text-foreground"
                     : isPast
                       ? "text-muted-foreground/60"
                       : progressMs !== null
@@ -516,7 +516,7 @@ function SongExploderPanel({
                 )}
               >
                 <div className="flex items-start gap-2">
-                  <span className="mt-0.5 shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground/50">
+                  <span className="mt-0.5 shrink-0 font-mono text-[12px] tabular-nums text-muted-foreground/50">
                     {msToTimecode(anchor.positionMs)}
                   </span>
                   <span className="flex-1">{anchor.text}</span>
@@ -570,22 +570,22 @@ function LinerNotes({ mbid }: { mbid: string }) {
     <div className="mt-5" data-testid="liner-notes">
       {hasNotes && (
         <>
-          <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <p className="mb-2 font-mono text-[13px] uppercase tracking-[0.15em] text-muted-foreground">
             Liner notes
             {knowledge?.approximate ? " · matched by title" : ""}
           </p>
           <dl className="space-y-1.5">
             {rows.map((row) => (
-              <div key={row.label} className="text-sm leading-snug">
-                <dt className="inline font-medium text-foreground">
+              <div key={row.label} className="text-base leading-snug">
+                <dt className="inline font-normal text-foreground">
                   {row.label}{" "}
                 </dt>
                 <dd className="inline text-muted-foreground">{row.names}</dd>
               </div>
             ))}
             {pressing && (
-              <div className="text-sm leading-snug">
-                <dt className="inline font-medium text-foreground">Pressing </dt>
+              <div className="text-base leading-snug">
+                <dt className="inline font-normal text-foreground">Pressing </dt>
                 <dd className="inline text-muted-foreground">{pressing}</dd>
               </div>
             )}
@@ -594,12 +594,12 @@ function LinerNotes({ mbid }: { mbid: string }) {
       )}
       {claims.length > 0 && (
         <div className={hasNotes ? "mt-4" : undefined} data-testid="track-claims">
-          <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <p className="mb-2 font-mono text-[13px] uppercase tracking-[0.15em] text-muted-foreground">
             From {claims[0]!.sourceLabel}
           </p>
           <ul className="space-y-2">
             {claims.map((claim) => (
-              <li key={claim.sourceUrl + claim.text} className="text-sm leading-snug">
+              <li key={claim.sourceUrl + claim.text} className="text-base leading-snug">
                 <span className="text-muted-foreground">{claim.text} </span>
                 <a
                   href={claim.sourceUrl}
@@ -623,7 +623,7 @@ function LinerNotes({ mbid }: { mbid: string }) {
 export function DeepLinks({ links }: { links: RecordingLink[] }) {
   return (
     <div className="mt-5">
-      <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+      <p className="mb-2 font-mono text-[13px] uppercase tracking-[0.15em] text-muted-foreground">
         Listen elsewhere
       </p>
       <div className="flex flex-wrap gap-2" data-testid="deep-links">
@@ -633,7 +633,7 @@ export function DeepLinks({ links }: { links: RecordingLink[] }) {
             href={link.url}
             target="_blank"
             rel="noreferrer"
-            className="hover-elevate inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary px-3 py-1.5 text-sm text-secondary-foreground"
+            className="hover-elevate inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary px-3 py-1.5 text-base text-secondary-foreground"
             title={
               link.kind === "exact"
                 ? `Open this exact recording on ${link.name}`
@@ -664,10 +664,10 @@ function StationFooter({
     <div className="mt-6 border-t border-border pt-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+          <p className="font-mono text-[13px] uppercase tracking-[0.15em] text-muted-foreground">
             Source
           </p>
-          <p className="truncate text-sm text-foreground">
+          <p className="truncate text-base text-foreground">
             {[station.org, station.country].filter(Boolean).join(" · ") ||
               station.name}
             {playedAt ? (
@@ -681,7 +681,7 @@ function StationFooter({
               href={safeHttpUrl(station.homepageUrl)!}
               target="_blank"
               rel="noreferrer"
-              className="hover-elevate inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm"
+              className="hover-elevate inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-base"
             >
               <ExternalLink className="h-3.5 w-3.5" />
               Station
@@ -693,7 +693,7 @@ function StationFooter({
               target="_blank"
               rel="noreferrer"
               data-testid={`donate-${station.slug}`}
-              className="hover-elevate inline-flex items-center gap-1.5 rounded-lg border border-primary-border bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary"
+              className="hover-elevate inline-flex items-center gap-1.5 rounded-lg border border-primary-border bg-primary/10 px-3 py-1.5 text-base font-normal text-primary"
             >
               <Heart className="h-3.5 w-3.5" />
               Support

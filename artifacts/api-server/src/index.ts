@@ -45,6 +45,7 @@ import { startArtPrewarm } from "./lore/artPrewarm.js";
 import { applyStationScheduleMigration } from "./lore/station-schedule-migration.js";
 import { applyPendingKeepsMigration } from "./lore/pending-keeps-migration.js";
 import { applyLibraryExportMigration } from "./lore/library-export-migration.js";
+import { applySpinsPlayedAtIndexMigration } from "./lore/spins-played-at-index-migration.js";
 import { applyAutomationClassMigration } from "./lore/automation-class-migration.js";
 import { applyLibrarySyncMigration } from "./lore/library-sync-migration.js";
 import { applyImportBufferMigration } from "./lore/import-buffer-migration.js";
@@ -126,6 +127,7 @@ async function bootLore(): Promise<void> {
     await runMigration("applyDeviceIdentityMigration", applyDeviceIdentityMigration);
     await runMigration("applyPendingKeepsMigration", applyPendingKeepsMigration);
     await runMigration("applyLibraryExportMigration", applyLibraryExportMigration);
+    await runMigration("applySpinsPlayedAtIndexMigration", applySpinsPlayedAtIndexMigration);
     await runMigration("applyLibraryProvenanceBackfill", async () => {
       await applyLibraryProvenanceBackfill();
     });

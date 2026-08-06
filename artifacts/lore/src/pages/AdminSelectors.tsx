@@ -18,14 +18,14 @@ function TokenGate({ onSave }: { onSave: (t: string) => void }) {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm rounded-2xl border border-card-border bg-card p-8 shadow-lg">
-        <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wide text-primary">
+        <div className="flex items-center gap-2 font-mono text-[13px] uppercase tracking-wide text-primary">
           <KeyRound className="h-3.5 w-3.5" />
           Admin access
         </div>
-        <h1 className="mt-3 font-serif text-2xl font-semibold text-foreground">
+        <h1 className="mt-3 font-serif text-3xl font-normal text-foreground">
           Enter admin token
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1 text-base text-muted-foreground">
           Stored in your browser — you won't need to re-enter it.
         </p>
         <form
@@ -41,12 +41,12 @@ function TokenGate({ onSave }: { onSave: (t: string) => void }) {
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Token"
             autoFocus
-            className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+            className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
           />
           <button
             type="submit"
             disabled={!draft.trim()}
-            className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-opacity disabled:opacity-40"
+            className="rounded-full bg-primary px-5 py-2 text-base font-normal text-primary-foreground shadow-sm transition-opacity disabled:opacity-40"
           >
             Continue
           </button>
@@ -68,17 +68,17 @@ function SelectorsPanel({
       <div className="relative z-10 mx-auto max-w-2xl px-4 py-10 sm:px-6">
         <div className="flex items-center justify-between">
           <div>
-            <p className="font-mono text-[11px] uppercase tracking-wide text-primary">
+            <p className="font-mono text-[13px] uppercase tracking-wide text-primary">
               Admin
             </p>
-            <h1 className="mt-1 font-serif text-3xl font-semibold text-foreground">
+            <h1 className="mt-1 font-serif text-4xl font-normal text-foreground">
               Selectors
             </h1>
           </div>
           <button
             type="button"
             onClick={onClearToken}
-            className="font-mono text-[11px] text-muted-foreground/70 hover:text-primary"
+            className="font-mono text-[13px] text-muted-foreground/70 hover:text-primary"
           >
             Clear token
           </button>
@@ -86,7 +86,7 @@ function SelectorsPanel({
 
         <AdminNav token={token} />
 
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="mt-2 text-base text-muted-foreground">
           Enrol new taste sources. Each entry is picked up by the relevant
           poller on its next cycle — no restart required.
         </p>
@@ -116,7 +116,7 @@ function Field({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+      <label className="font-mono text-[13px] uppercase tracking-wide text-muted-foreground">
         {label}{" "}
         {required ? (
           <span className="text-destructive-foreground">*</span>
@@ -147,7 +147,7 @@ function TextInput({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       disabled={disabled}
-      className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none disabled:opacity-50"
+      className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none disabled:opacity-50"
     />
   );
 }
@@ -163,7 +163,7 @@ function StatusBanner({
 }) {
   if (ok) {
     return (
-      <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm text-foreground">
+      <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-base text-foreground">
         {message}{" "}
         {link && (
           <a
@@ -179,7 +179,7 @@ function StatusBanner({
     );
   }
   return (
-    <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
+    <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-base text-destructive-foreground">
       {message}
     </p>
   );
@@ -200,7 +200,7 @@ function SubmitButton({
     <button
       type="submit"
       disabled={busy || disabled}
-      className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-opacity disabled:opacity-40"
+      className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2 text-base font-normal text-primary-foreground shadow-sm transition-opacity disabled:opacity-40"
     >
       {busy ? (
         <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -266,11 +266,11 @@ function NtsShowForm({ token }: { token: string }) {
     <div className="rounded-2xl border border-card-border bg-card p-6">
       <div className="flex items-center gap-2">
         <Radio className="h-4 w-4 text-primary" />
-        <h2 className="font-serif text-lg font-semibold text-foreground">Add NTS show</h2>
+        <h2 className="font-serif text-xl font-normal text-foreground">Add NTS show</h2>
       </div>
-      <p className="mt-1 text-sm text-muted-foreground">
+      <p className="mt-1 text-base text-muted-foreground">
         Enter a show's NTS alias (the slug in its URL, e.g.{" "}
-        <code className="font-mono text-xs">floating-points</code>). The alias is
+        <code className="font-mono text-sm">floating-points</code>). The alias is
         validated against the NTS API and enrolled as a curator selector — the
         archive poller will start ingesting episodes on its next cycle.
       </p>
@@ -354,9 +354,9 @@ function BlogForm({ token }: { token: string }) {
     <div className="rounded-2xl border border-card-border bg-card p-6">
       <div className="flex items-center gap-2">
         <Rss className="h-4 w-4 text-primary" />
-        <h2 className="font-serif text-lg font-semibold text-foreground">Add blog / critic feed</h2>
+        <h2 className="font-serif text-xl font-normal text-foreground">Add blog / critic feed</h2>
       </div>
-      <p className="mt-1 text-sm text-muted-foreground">
+      <p className="mt-1 text-base text-muted-foreground">
         Ingest an RSS/Atom feed. Posts that yield a confident artist/track match
         become picks; the feed is re-polled automatically.
       </p>
@@ -428,9 +428,9 @@ function LabelForm({ token }: { token: string }) {
     <div className="rounded-2xl border border-card-border bg-card p-6">
       <div className="flex items-center gap-2">
         <Tag className="h-4 w-4 text-primary" />
-        <h2 className="font-serif text-lg font-semibold text-foreground">Add label</h2>
+        <h2 className="font-serif text-xl font-normal text-foreground">Add label</h2>
       </div>
-      <p className="mt-1 text-sm text-muted-foreground">
+      <p className="mt-1 text-base text-muted-foreground">
         Seed a label selector from a verified MusicBrainz label MBID. Every
         release on the label becomes a rideable pick at recording-ID confidence.
       </p>

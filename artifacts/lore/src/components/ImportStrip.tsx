@@ -144,7 +144,7 @@ export function ImportStrip({ onAddMore }: { onAddMore?: () => void }) {
           style={{ color: "hsl(var(--keep))" }}
           aria-hidden="true"
         />
-        <p className="flex-1 font-mono text-[11px] text-muted-foreground">
+        <p className="flex-1 font-mono text-[13px] text-muted-foreground">
           {job.resolved.toLocaleString()} of {job.total.toLocaleString()} track{job.total === 1 ? "" : "s"} matched
           {unresolved > 0 && (
             <> · <span style={{ color: "hsl(var(--faint))" }}>{unresolved.toLocaleString()} resolving overnight</span></>
@@ -154,7 +154,7 @@ export function ImportStrip({ onAddMore }: { onAddMore?: () => void }) {
           <button
             type="button"
             onClick={onAddMore}
-            className="shrink-0 font-mono text-[10px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            className="shrink-0 font-mono text-[12px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
             aria-label="Add more music"
           >
             Add more +
@@ -192,7 +192,7 @@ export function ImportStrip({ onAddMore }: { onAddMore?: () => void }) {
         <div className="flex items-center gap-2">
           {isResumed(job) && (
             <span
-              className="shrink-0 rounded-sm px-1 font-mono text-[10px] font-medium leading-[1.6]"
+              className="shrink-0 rounded-sm px-1 font-mono text-[12px] font-normal leading-[1.6]"
               style={{
                 background: "hsl(var(--primary) / 0.12)",
                 color: "hsl(var(--primary))",
@@ -202,13 +202,13 @@ export function ImportStrip({ onAddMore }: { onAddMore?: () => void }) {
               Resuming
             </span>
           )}
-          <p className="font-mono text-[11px] text-muted-foreground truncate">
+          <p className="font-mono text-[13px] text-muted-foreground truncate">
             {phaseLabel(job)} · {job.resolved.toLocaleString()} /{" "}
             {job.total.toLocaleString()} tracks resolved — matches update as we go
           </p>
         </div>
         {isResumed(job) && (
-          <p className="font-mono text-[10px]" style={{ color: "hsl(var(--faint))" }}>
+          <p className="font-mono text-[12px]" style={{ color: "hsl(var(--faint))" }}>
             Picked up where it left off — no tracks lost
           </p>
         )}

@@ -222,7 +222,7 @@ function SelectorCard({
               borderRadius: 3,
               background: "none",
               color: "hsl(var(--muted-foreground))",
-              fontSize: 9,
+              fontSize: 10,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -558,7 +558,7 @@ export default function Selectors() {
             <span
               style={{
                 fontFamily: "var(--app-font-mono)",
-                fontSize: 9,
+                fontSize: 10,
                 color: "hsl(var(--faint))",
                 margin: "0 8px",
                 whiteSpace: "nowrap",
@@ -596,13 +596,13 @@ export default function Selectors() {
             style={{
               padding: "14px 15px",
               fontFamily: "var(--app-font-reading)",
-              fontStyle: "italic",
-              fontSize: 12.5,
+              fontStyle: "normal",
+              fontSize: 14,
               color: "hsl(var(--faint))",
               lineHeight: 1.6,
             }}
           >
-            <b style={{ fontStyle: "normal", fontWeight: 600, color: "hsl(var(--muted-foreground))" }}>
+            <b style={{ fontStyle: "normal", fontWeight: 400, color: "hsl(var(--muted-foreground))" }}>
               One list, one ranking.
             </b>{" "}
             Zero-overlap selectors rank last but stay visible — an honest nothing beats a hidden nothing.

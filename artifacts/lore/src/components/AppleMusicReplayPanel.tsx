@@ -176,10 +176,10 @@ export function AppleMusicReplayPanel({ materialization }: Props) {
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
+          <p className="font-mono text-[13px] uppercase tracking-[0.2em] text-primary">
             Apple Music playback
           </p>
-          <p className="mt-1 max-w-xl text-sm leading-relaxed text-muted-foreground">
+          <p className="mt-1 max-w-xl text-base leading-relaxed text-muted-foreground">
             Play the exact Apple Music matches in broadcast order. Lore never hosts
             or proxies the audio.
           </p>
@@ -189,7 +189,7 @@ export function AppleMusicReplayPanel({ materialization }: Props) {
             type="button"
             onClick={() => void start()}
             disabled={!canPlayAppleMusic(materialization)}
-            className="inline-flex items-center gap-2 rounded-full border border-primary-border bg-primary px-4 py-2 font-mono text-xs uppercase tracking-wide text-primary-foreground disabled:opacity-40"
+            className="inline-flex items-center gap-2 rounded-full border border-primary-border bg-primary px-4 py-2 font-mono text-sm uppercase tracking-wide text-primary-foreground disabled:opacity-40"
             data-testid="apple-music-start"
           >
             <Play className="h-3.5 w-3.5" />
@@ -199,7 +199,7 @@ export function AppleMusicReplayPanel({ materialization }: Props) {
           <button
             type="button"
             onClick={() => void cleanup()}
-            className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide text-muted-foreground hover:text-foreground"
+            className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1.5 font-mono text-[13px] uppercase tracking-wide text-muted-foreground hover:text-foreground"
             data-testid="apple-music-close"
           >
             <Square className="h-3.5 w-3.5" />
@@ -208,7 +208,7 @@ export function AppleMusicReplayPanel({ materialization }: Props) {
         )}
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+      <div className="mt-3 flex flex-wrap items-center gap-2 font-mono text-[12px] uppercase tracking-wide text-muted-foreground">
         <span data-testid="apple-music-status">{statusText}</span>
         <span>·</span>
         <span data-testid="apple-music-coverage">
@@ -217,20 +217,20 @@ export function AppleMusicReplayPanel({ materialization }: Props) {
       </div>
 
       {!materialization.configured ? (
-        <p role="status" className="mt-3 text-xs text-muted-foreground" data-testid="apple-music-unconfigured">
+        <p role="status" className="mt-3 text-sm text-muted-foreground" data-testid="apple-music-unconfigured">
           Inline Apple Music playback is not configured here. The guided Apple Music link remains available below.
         </p>
       ) : null}
       {materialization.configured && !queue.ids.length ? (
-        <p role="status" className="mt-3 text-xs text-muted-foreground">
+        <p role="status" className="mt-3 text-sm text-muted-foreground">
           No exact Apple Music tracks are available for this replay. The guided link remains available below.
         </p>
       ) : null}
       {error ? (
-        <div role="alert" className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-destructive-border bg-destructive/10 p-3 text-xs text-destructive-foreground" data-testid="apple-music-error">
+        <div role="alert" className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-destructive-border bg-destructive/10 p-3 text-sm text-destructive-foreground" data-testid="apple-music-error">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <span>{error.message}</span>
-          <button type="button" onClick={() => void retry()} className="ml-auto inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 font-mono text-[10px] uppercase">
+          <button type="button" onClick={() => void retry()} className="ml-auto inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 font-mono text-[12px] uppercase">
             <RotateCcw className="h-3 w-3" /> Retry
           </button>
         </div>
@@ -240,7 +240,7 @@ export function AppleMusicReplayPanel({ materialization }: Props) {
         {materialization.entries.map((entry) => (
           <span
             key={`${entry.position}-${entry.spinId}`}
-            className={`rounded-full border px-2 py-1 font-mono text-[10px] ${
+            className={`rounded-full border px-2 py-1 font-mono text-[12px] ${
               entry.status === "available" ? "border-primary/40 text-primary" : "border-border text-muted-foreground"
             }`}
             data-testid={`apple-music-entry-${entry.position}`}
@@ -252,10 +252,10 @@ export function AppleMusicReplayPanel({ materialization }: Props) {
 
       {active && queue.entries[currentQueueIndex] ? (
         <div className="mt-4 rounded-lg border border-card-border bg-card p-3">
-          <p className="truncate font-serif text-base font-semibold text-foreground">
+          <p className="truncate font-serif text-lg font-normal text-foreground">
             {entryLabel(queue.entries[currentQueueIndex])}
           </p>
-          <p className="mt-1 font-mono text-[11px] text-muted-foreground">
+          <p className="mt-1 font-mono text-[13px] text-muted-foreground">
             manifest position {queue.entries[currentQueueIndex].position + 1} · {currentQueueIndex + 1} of {queue.entries.length} exact matches
           </p>
           <div className="mt-3 flex items-center justify-center gap-2">
@@ -272,7 +272,7 @@ export function AppleMusicReplayPanel({ materialization }: Props) {
         </div>
       ) : null}
       {(state === "loading" || state === "authorizing") ? (
-        <div className="mt-4 flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
+        <div className="mt-4 flex items-center gap-2 font-mono text-[13px] text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> {statusText}
         </div>
       ) : null}

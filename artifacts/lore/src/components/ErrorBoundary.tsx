@@ -46,8 +46,8 @@ export class ErrorBoundary extends Component<Props, State> {
         >
           <div
             style={{
-              fontSize: 13,
-              fontWeight: 700,
+              fontSize: 15,
+              fontWeight: 400,
               textTransform: "uppercase",
               letterSpacing: "0.06em",
               color: "hsl(var(--destructive, 4 68% 48%))",
@@ -58,7 +58,7 @@ export class ErrorBoundary extends Component<Props, State> {
           </div>
           <div
             style={{
-              fontSize: 11,
+              fontSize: 13,
               color: "hsl(var(--faint, 33 6% 33%))",
               maxWidth: 320,
               lineHeight: 1.5,
@@ -71,8 +71,8 @@ export class ErrorBoundary extends Component<Props, State> {
             onClick={() => this.setState({ error: null })}
             style={{
               marginTop: 20,
-              fontSize: 10,
-              fontWeight: 700,
+              fontSize: 12,
+              fontWeight: 400,
               textTransform: "uppercase",
               letterSpacing: "0.06em",
               border: "1px solid hsl(var(--border, 33 8% 18%))",

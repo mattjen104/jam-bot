@@ -94,12 +94,12 @@ function GoDeeperRow({
         {icon}
       </span>
       <span style={{ minWidth: 0, flex: 1 }}>
-        <span style={{ display: "block", fontSize: 14, fontWeight: 500 }}>{title}</span>
+        <span style={{ display: "block", fontSize: 16, fontWeight: 400 }}>{title}</span>
         <span
           style={{
             display: "block",
             marginTop: 2,
-            fontSize: 12,
+            fontSize: 14,
             color: "var(--wp-text-secondary)",
           }}
         >
@@ -109,7 +109,7 @@ function GoDeeperRow({
       <span
         className="wp-mono"
         style={{
-          fontSize: 11,
+          fontSize: 13,
           color: "var(--wp-text-muted)",
           whiteSpace: "nowrap",
           display: "inline-flex",
@@ -459,11 +459,11 @@ export function AlbumLoreSheet({
             </div>
           )}
           <div style={{ minWidth: 0, flex: 1 }}>
-            <p style={{ margin: 0, fontSize: 16, fontWeight: 500 }}>
+            <p style={{ margin: 0, fontSize: 18, fontWeight: 400 }}>
               {rec ? `${rec.title} · ${rec.artist}` : "Loading…"}
             </p>
             {(headerMeta || spinningOn) && (
-              <p style={{ margin: "2px 0 0", fontSize: 13, color: "var(--wp-text-secondary)" }}>
+              <p style={{ margin: "2px 0 0", fontSize: 15, color: "var(--wp-text-secondary)" }}>
                 {headerMeta}
                 {spinningOn && (
                   <>
@@ -508,7 +508,7 @@ export function AlbumLoreSheet({
         >
             <p
               className="wp-mono"
-              style={{ margin: "0 0 10px", fontSize: 12, color: "var(--wp-text-muted)" }}
+              style={{ margin: "0 0 10px", fontSize: 14, color: "var(--wp-text-muted)" }}
               id="wp-provenance-heading"
             >
               PROVENANCE
@@ -519,7 +519,7 @@ export function AlbumLoreSheet({
                 <span
                   key={`list-${l.listId}`}
                   style={{
-                    fontSize: 13,
+                    fontSize: 15,
                     padding: "5px 11px",
                     border: "0.5px solid var(--wp-border-strong)",
                     borderRadius: 999,
@@ -537,7 +537,7 @@ export function AlbumLoreSheet({
                 <span
                   key={`pick-${i}`}
                   style={{
-                    fontSize: 13,
+                    fontSize: 15,
                     padding: "5px 11px",
                     border: "0.5px solid var(--wp-border-strong)",
                     borderRadius: 999,
@@ -554,7 +554,7 @@ export function AlbumLoreSheet({
                 <span
                   key={`sel-${name}`}
                   style={{
-                    fontSize: 13,
+                    fontSize: 15,
                     padding: "5px 11px",
                     border: "0.5px solid var(--wp-border-strong)",
                     borderRadius: 999,
@@ -570,7 +570,7 @@ export function AlbumLoreSheet({
               {count?.keptSince && (
                 <span
                   style={{
-                    fontSize: 13,
+                    fontSize: 15,
                     padding: "5px 11px",
                     border: "0.5px solid var(--wp-border-strong)",
                     borderRadius: 999,
@@ -610,7 +610,7 @@ export function AlbumLoreSheet({
         <div style={{ padding: "14px 18px 16px" }}>
           <p
             className="wp-mono"
-            style={{ margin: "0 0 10px", fontSize: 12, color: "var(--wp-text-muted)" }}
+            style={{ margin: "0 0 10px", fontSize: 14, color: "var(--wp-text-muted)" }}
           >
             GO DEEPER
           </p>

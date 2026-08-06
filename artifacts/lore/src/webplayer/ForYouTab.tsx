@@ -10,8 +10,8 @@ function OverlapBadge({ pct }: { pct: number }) {
     <span
       className="wp-mono"
       style={{
-        fontSize: 11,
-        fontWeight: 600,
+        fontSize: 13,
+        fontWeight: 400,
         color: "var(--wp-text-success)",
         background: "var(--wp-bg-success)",
         padding: "3px 7px",
@@ -46,7 +46,7 @@ function RunTrackList({
           alignItems: "center",
           gap: 6,
           color: "var(--wp-text-muted)",
-          fontSize: 12,
+          fontSize: 14,
         }}
       >
         <Loader2 size={12} className="animate-spin" aria-hidden="true" />
@@ -57,7 +57,7 @@ function RunTrackList({
 
   if (isError || !data) {
     return (
-      <p style={{ padding: "8px 14px", margin: 0, fontSize: 12, color: "var(--wp-text-muted)" }}>
+      <p style={{ padding: "8px 14px", margin: 0, fontSize: 14, color: "var(--wp-text-muted)" }}>
         Couldn't load tracks.
       </p>
     );
@@ -74,7 +74,7 @@ function RunTrackList({
 
   if (all.length === 0) {
     return (
-      <p style={{ padding: "8px 14px", margin: 0, fontSize: 12, color: "var(--wp-text-muted)" }}>
+      <p style={{ padding: "8px 14px", margin: 0, fontSize: 14, color: "var(--wp-text-muted)" }}>
         No resolved tracks in this run yet.
       </p>
     );
@@ -118,7 +118,7 @@ function RunTrackList({
           <p
             style={{
               margin: 0,
-              fontSize: 12,
+              fontSize: 14,
               flex: 1,
               minWidth: 0,
               overflow: "hidden",
@@ -169,7 +169,7 @@ function RunCard({
         {/* Overlap badge */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, flexShrink: 0 }}>
           <OverlapBadge pct={run.overlapPct} />
-          <span style={{ fontSize: 10, color: "var(--wp-text-muted)" }}>overlap</span>
+          <span style={{ fontSize: 12, color: "var(--wp-text-muted)" }}>overlap</span>
         </div>
 
         {/* Run info — clicking opens the full run drawer */}
@@ -187,18 +187,18 @@ function RunCard({
           }}
           aria-label={`Open run: ${label}`}
         >
-          <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>
+          <p style={{ margin: 0, fontSize: 16, fontWeight: 400 }}>
             {label}
             {run.djName && run.showName && (
-              <span style={{ fontSize: 12, color: "var(--wp-text-muted)", fontWeight: 400 }}>
+              <span style={{ fontSize: 14, color: "var(--wp-text-muted)", fontWeight: 400 }}>
                 {" "}· {run.djName}
               </span>
             )}
           </p>
           {sub && (
-            <p style={{ margin: "1px 0 0", fontSize: 12, color: "var(--wp-text-muted)" }}>{sub}</p>
+            <p style={{ margin: "1px 0 0", fontSize: 14, color: "var(--wp-text-muted)" }}>{sub}</p>
           )}
-          <p className="wp-mono" style={{ margin: "4px 0 0", fontSize: 11, color: "var(--wp-text-secondary)" }}>
+          <p className="wp-mono" style={{ margin: "4px 0 0", fontSize: 13, color: "var(--wp-text-secondary)" }}>
             {run.day} · {run.matchCount} of {run.totalResolved} resolved tracks
           </p>
         </button>
@@ -256,7 +256,7 @@ export function ForYouTab({
           aria-hidden="true"
           style={{ color: "var(--wp-text-muted)", marginBottom: 10 }}
         />
-        <p style={{ margin: "0 0 10px", fontSize: 14, color: "var(--wp-text-secondary)" }}>
+        <p style={{ margin: "0 0 10px", fontSize: 16, color: "var(--wp-text-secondary)" }}>
           Connect Spotify to see the runs that best match your taste — ranked
           by how much of your library they played.
         </p>
@@ -267,7 +267,7 @@ export function ForYouTab({
             background: "var(--wp-fill-primary)",
             color: "var(--wp-on-primary)",
             border: "none",
-            fontSize: 13,
+            fontSize: 15,
             padding: "8px 16px",
           }}
           data-testid="wp-foryou-connect"
@@ -291,31 +291,31 @@ export function ForYouTab({
         }}
       >
         <TrendingUp size={13} style={{ color: "var(--wp-text-accent)", flexShrink: 0 }} aria-hidden="true" />
-        <p className="wp-mono" style={{ margin: 0, fontSize: 11, color: "var(--wp-text-muted)", letterSpacing: "0.04em" }}>
+        <p className="wp-mono" style={{ margin: 0, fontSize: 13, color: "var(--wp-text-muted)", letterSpacing: "0.04em" }}>
           RUNS RANKED BY YOUR LIBRARY OVERLAP · LAST 90 DAYS
         </p>
       </div>
 
       {isLoading && (
-        <p style={{ padding: "14px 16px", margin: 0, fontSize: 13, color: "var(--wp-text-muted)" }}>
+        <p style={{ padding: "14px 16px", margin: 0, fontSize: 15, color: "var(--wp-text-muted)" }}>
           Finding your best runs…
         </p>
       )}
 
       {isError && !isLoading && (
         <div style={{ padding: "14px 16px" }} data-testid="foryou-error">
-          <p style={{ margin: "0 0 10px", fontSize: 13, color: "var(--wp-text-muted)" }}>
+          <p style={{ margin: "0 0 10px", fontSize: 15, color: "var(--wp-text-muted)" }}>
             Couldn't load your runs — connection dropped or library not yet
             synced.
           </p>
-          <button type="button" onClick={() => void refetch()} style={{ fontSize: 12 }}>
+          <button type="button" onClick={() => void refetch()} style={{ fontSize: 14 }}>
             Try again
           </button>
         </div>
       )}
 
       {!isLoading && !isError && runs.length === 0 && (
-        <p style={{ padding: "14px 16px", margin: 0, fontSize: 13, color: "var(--wp-text-muted)" }}>
+        <p style={{ padding: "14px 16px", margin: 0, fontSize: 15, color: "var(--wp-text-muted)" }}>
           No runs with your music found in the last 90 days — stations build
           history over time, check back soon.
         </p>

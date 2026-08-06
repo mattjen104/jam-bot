@@ -108,7 +108,7 @@ export function YourWeekTab() {
         />
         <p
           className="wp-mono"
-          style={{ margin: 0, fontSize: 11, color: "var(--wp-text-muted)", letterSpacing: "0.04em", flex: 1 }}
+          style={{ margin: 0, fontSize: 13, color: "var(--wp-text-muted)", letterSpacing: "0.04em", flex: 1 }}
         >
           YOUR WEEK
         </p>
@@ -136,7 +136,7 @@ export function YourWeekTab() {
 
           <span
             className="wp-mono"
-            style={{ fontSize: 10, color: "var(--wp-text-secondary)", whiteSpace: "nowrap" }}
+            style={{ fontSize: 12, color: "var(--wp-text-secondary)", whiteSpace: "nowrap" }}
             data-testid="wp-yourweek-label"
           >
             {summary
@@ -186,7 +186,7 @@ export function YourWeekTab() {
 
       {isError && !isLoading && (
         <p
-          style={{ padding: "14px 16px", margin: 0, fontSize: 13, color: "var(--wp-text-muted)" }}
+          style={{ padding: "14px 16px", margin: 0, fontSize: 15, color: "var(--wp-text-muted)" }}
           data-testid="wp-yourweek-error"
         >
           Couldn't load your week — try again later.
@@ -198,12 +198,12 @@ export function YourWeekTab() {
           style={{ padding: "14px 16px" }}
           data-testid="wp-yourweek-empty"
         >
-          <p style={{ margin: "0 0 4px", fontSize: 13, color: "var(--wp-text-secondary)" }}>
+          <p style={{ margin: "0 0 4px", fontSize: 15, color: "var(--wp-text-secondary)" }}>
             {isCurrentWeek
               ? "No confirmed listens this week yet."
               : "Nothing confirmed for this week."}
           </p>
-          <p className="wp-mono" style={{ margin: 0, fontSize: 11, color: "var(--wp-text-muted)" }}>
+          <p className="wp-mono" style={{ margin: 0, fontSize: 13, color: "var(--wp-text-muted)" }}>
             {isCurrentWeek
               ? "Lore counts a track once you've heard enough of it on air."
               : "Tracks are counted when you heard enough of them on air."}
@@ -223,14 +223,14 @@ export function YourWeekTab() {
               borderBottom: "0.5px solid var(--wp-border)",
             }}
           >
-            <span className="wp-mono" style={{ fontSize: 11, color: "var(--wp-text-secondary)" }}>
+            <span className="wp-mono" style={{ fontSize: 13, color: "var(--wp-text-secondary)" }}>
               <strong style={{ color: "var(--wp-text-primary)" }}>{summary!.totalTracks}</strong>{" "}
               track{summary!.totalTracks === 1 ? "" : "s"}
             </span>
             <span
               className="wp-mono"
               style={{
-                fontSize: 11,
+                fontSize: 13,
                 color: "var(--wp-text-muted)",
                 display: "flex",
                 alignItems: "center",
@@ -295,8 +295,8 @@ export function YourWeekTab() {
                   <p
                     style={{
                       margin: 0,
-                      fontSize: 13,
-                      fontWeight: 500,
+                      fontSize: 15,
+                      fontWeight: 400,
                       color: "var(--wp-text-primary)",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -309,7 +309,7 @@ export function YourWeekTab() {
                     className="wp-mono"
                     style={{
                       margin: "1px 0 0",
-                      fontSize: 10,
+                      fontSize: 12,
                       color: "var(--wp-text-muted)",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -334,8 +334,8 @@ export function YourWeekTab() {
                     <span
                       className="wp-mono"
                       style={{
-                        fontSize: 9,
-                        fontWeight: 700,
+                        fontSize: 10,
+                        fontWeight: 400,
                         color: "var(--wp-text-success)",
                         background: "var(--wp-bg-success)",
                         borderRadius: 3,
@@ -349,7 +349,7 @@ export function YourWeekTab() {
                   <span
                     className="wp-mono"
                     style={{
-                      fontSize: 9,
+                      fontSize: 10,
                       color: "var(--wp-text-muted)",
                       display: "flex",
                       alignItems: "center",

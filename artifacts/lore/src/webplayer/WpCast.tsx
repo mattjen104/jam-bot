@@ -181,7 +181,7 @@ export function WpCast() {
         <span
           className="wp-mono"
           style={{
-            fontSize: 11,
+            fontSize: 13,
             color:
               radio.casting === "fallback"
                 ? "var(--wp-text-muted)"
@@ -207,7 +207,7 @@ export function WpCast() {
               background: "transparent",
               color: "var(--wp-text-secondary)",
               cursor: "pointer",
-              fontSize: 11,
+              fontSize: 13,
             }}
             title="Try Spotify again for this track"
             data-testid="wp-cast-retry"
@@ -229,7 +229,7 @@ export function WpCast() {
             zIndex: 50,
             width: 260,
             padding: 0,
-            boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
+            boxShadow: "0 10px 30px rgba(0, 0, 0,0.35)",
           }}
           data-testid="wp-cast-panel"
         >
@@ -242,7 +242,7 @@ export function WpCast() {
               borderBottom: "0.5px solid var(--wp-border)",
             }}
           >
-            <span className="wp-mono" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--wp-text-muted)" }}>
+            <span className="wp-mono" style={{ fontSize: 13, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--wp-text-muted)" }}>
               Cast to device
             </span>
             <button
@@ -261,11 +261,11 @@ export function WpCast() {
                 <Loader2 size={18} className="animate-spin" style={{ color: "var(--wp-text-muted)" }} aria-hidden="true" />
               </div>
             ) : fetchError ? (
-              <p className="wp-mono" style={{ margin: 0, padding: "14px 14px", fontSize: 11, color: "var(--wp-text-muted)" }} data-testid="wp-cast-devices-error">
+              <p className="wp-mono" style={{ margin: 0, padding: "14px 14px", fontSize: 13, color: "var(--wp-text-muted)" }} data-testid="wp-cast-devices-error">
                 Couldn't reach Spotify — try again in a moment.
               </p>
             ) : (devices ?? []).length === 0 ? (
-              <p className="wp-mono" style={{ margin: 0, padding: "14px 14px", fontSize: 11, color: "var(--wp-text-muted)" }} data-testid="wp-cast-devices-empty">
+              <p className="wp-mono" style={{ margin: 0, padding: "14px 14px", fontSize: 13, color: "var(--wp-text-muted)" }} data-testid="wp-cast-devices-empty">
                 No Spotify devices found. Open Spotify on a device and try again.
               </p>
             ) : (
@@ -294,16 +294,16 @@ export function WpCast() {
                     data-testid={`wp-cast-device-${device.id}`}
                   >
                     <div style={{ minWidth: 0, flex: 1 }}>
-                      <p style={{ margin: 0, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <p style={{ margin: 0, fontSize: 15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {device.name}
                       </p>
-                      <p className="wp-mono" style={{ margin: 0, fontSize: 10, color: "var(--wp-text-muted)" }}>
+                      <p className="wp-mono" style={{ margin: 0, fontSize: 12, color: "var(--wp-text-muted)" }}>
                         {device.type}
                         {device.isActive ? " · playing" : ""}
                       </p>
                     </div>
                     {isSelected && (
-                      <span className="wp-mono" style={{ fontSize: 10, color: "var(--wp-text-accent)", flexShrink: 0 }}>
+                      <span className="wp-mono" style={{ fontSize: 12, color: "var(--wp-text-accent)", flexShrink: 0 }}>
                         casting
                       </span>
                     )}
@@ -324,7 +324,7 @@ export function WpCast() {
                   setOpen(false);
                 }}
                 className="wp-mono"
-                style={{ width: "100%", background: "none", border: "none", padding: "5px 0", fontSize: 11, color: "var(--wp-text-muted)", cursor: "pointer" }}
+                style={{ width: "100%", background: "none", border: "none", padding: "5px 0", fontSize: 13, color: "var(--wp-text-muted)", cursor: "pointer" }}
                 data-testid="wp-cast-stop"
               >
                 Stop casting · back to the stream

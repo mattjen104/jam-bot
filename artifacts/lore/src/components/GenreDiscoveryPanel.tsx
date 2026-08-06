@@ -41,7 +41,7 @@ export function GenreDiscoveryPanel({
       data-testid="genre-discovery-panel"
     >
       <div className="min-w-0">
-        <div className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+        <div className="flex items-center gap-1.5 font-mono text-[12px] uppercase tracking-wide text-muted-foreground">
           <Tags className="h-3 w-3" />
           Genre map
         </div>
@@ -50,19 +50,19 @@ export function GenreDiscoveryPanel({
             {genreBreakdown!.top.slice(0, 6).map((g) => (
               <span
                 key={g.genre}
-                className="rounded-full border border-card-border bg-background px-2.5 py-0.5 font-mono text-[11px] text-foreground"
+                className="rounded-full border border-card-border bg-background px-2.5 py-0.5 font-mono text-[13px] text-foreground"
               >
                 {g.genre} <span className="text-muted-foreground">· {g.count}</span>
               </span>
             ))}
             {genreBreakdown!.unknownCount > 0 ? (
-              <span className="rounded-full border border-card-border bg-background px-2.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+              <span className="rounded-full border border-card-border bg-background px-2.5 py-0.5 font-mono text-[13px] text-muted-foreground">
                 {genreBreakdown!.unknownCount} unknown
               </span>
             ) : null}
           </div>
         ) : (
-          <p className="mt-1.5 font-mono text-[11px] text-muted-foreground">
+          <p className="mt-1.5 font-mono text-[13px] text-muted-foreground">
             Not enough genre data yet
           </p>
         )}
@@ -78,11 +78,11 @@ export function GenreDiscoveryPanel({
         }
       >
         <Compass className="h-3.5 w-3.5 text-primary" />
-        <span className="font-mono text-[11px] uppercase tracking-wide text-primary">
+        <span className="font-mono text-[13px] uppercase tracking-wide text-primary">
           {LABEL_TEXT[label] ?? "Not enough data"}
         </span>
         {discoveryScore?.score != null ? (
-          <span className="font-mono text-[11px] text-primary/80">
+          <span className="font-mono text-[13px] text-primary/80">
             {Math.round(discoveryScore.score)}
           </span>
         ) : null}

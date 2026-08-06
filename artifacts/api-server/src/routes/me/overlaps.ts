@@ -518,15 +518,32 @@ router.get("/me/overlaps/runs", h(async (req, res) => {
   // Optional ?order=recent — reverse-chrono (two-speed scan coarse detents)
   const orderRecent = req.query["order"] === "recent";
 
+  // Optional ?days=N (order=recent only) — widen/narrow the dial range.
+  // Bounds the query by playedAt (cheap: indexed time bound) and scales the
+  // run limit so a month-wide spine still fits in one response.
+  const rawDays = req.query["days"];
+  const daysParam =
+    orderRecent && typeof rawDays === "string" && /^\d{1,2}$/.test(rawDays)
+      ? Math.max(1, Math.min(31, parseInt(rawDays, 10)))
+      : null;
+  const recentLimit =
+    daysParam == null ? 60 : daysParam <= 2 ? 120 : daysParam <= 7 ? 200 : 300;
+
   const userMbids = db
     .select({ mbid: libraryItemsTable.mbid })
     .from(libraryItemsTable)
     .where(eq(libraryItemsTable.userId, user.id));
 
   const baseWhere = and(isNotNull(spinsTable.mbid), eq(stationsTable.hidden, false));
-  const whereClause = dayParam
-    ? and(baseWhere, sql`${spinDayExpr} = ${dayParam}`)
+  const rangedWhere = daysParam
+    ? and(
+        baseWhere,
+        sql`${spinsTable.playedAt} >= now() - make_interval(days => ${daysParam})`,
+      )
     : baseWhere;
+  const whereClause = dayParam
+    ? and(rangedWhere, sql`${spinDayExpr} = ${dayParam}`)
+    : rangedWhere;
 
   const rows = await db
     .select({
@@ -568,7 +585,7 @@ router.get("/me/overlaps/runs", h(async (req, res) => {
         ? sql`min(${spinsTable.id}) desc`
         : sql`count(*) filter (where ${spinsTable.mbid} is not null and ${spinsTable.mbid} not in (${userMbids})) desc`,
     )
-    .limit(orderRecent ? 60 : 30);
+    .limit(orderRecent ? recentLimit : 30);
 
   return res.json({
     items: rows.map((r) => ({

@@ -54,7 +54,7 @@ function NoteRow({ bottle, stationName }: NoteRowProps) {
         display: "flex",
         gap: 10,
         padding: "8px 0",
-        borderBottom: "0.5px solid var(--border, rgba(255,255,255,0.08))",
+        borderBottom: "0.5px solid var(--border, rgba(255, 255, 255,0.08))",
       }}
     >
       {isUrl ? (
@@ -77,15 +77,15 @@ function NoteRow({ bottle, stationName }: NoteRowProps) {
       <div style={{ minWidth: 0, flex: 1 }}>
         <div
           style={{
-            fontSize: 11,
-            color: "var(--muted-foreground, #888)",
+            fontSize: 13,
+            color: "var(--muted-foreground, #888888)",
             marginBottom: 3,
             display: "flex",
             gap: 4,
             flexWrap: "wrap",
           }}
         >
-          <span style={{ fontWeight: 500 }}>{bottle.handle}</span>
+          <span style={{ fontWeight: 400 }}>{bottle.handle}</span>
           {stationName && (
             <span style={{ opacity: 0.6 }}>on {stationName}</span>
           )}
@@ -94,9 +94,9 @@ function NoteRow({ bottle, stationName }: NoteRowProps) {
         <p
           style={{
             margin: 0,
-            fontSize: 13,
-            fontStyle: "italic",
-            color: "var(--muted-foreground, #999)",
+            fontSize: 15,
+            fontStyle: "normal",
+            color: "var(--muted-foreground, #999999)",
             lineHeight: 1.6,
             wordBreak: "break-word",
           }}
@@ -256,8 +256,8 @@ export function BottlePanel({
             padding: "2px 4px",
             borderRadius: 6,
             color: hasUnread
-              ? "var(--picker, #e67e3a)"
-              : "var(--muted-foreground, #888)",
+              ? "var(--picker, #8f8f8f)"
+              : "var(--muted-foreground, #888888)",
             transition: "color 0.15s",
           }}
           data-testid="bottle-trigger"
@@ -273,13 +273,13 @@ export function BottlePanel({
               className={sealed && !sentConfirm ? "bottle-trigger-seal-in" : undefined}
               style={{
                 filter: hasUnread
-                  ? "drop-shadow(0 0 4px var(--picker, #e67e3a))"
+                  ? "drop-shadow(0 0 4px var(--picker, #8f8f8f))"
                   : undefined,
               }}
             />
           )}
           {triggerLabel && (
-            <span style={{ fontSize: 11, fontVariantNumeric: "tabular-nums" }}>
+            <span style={{ fontSize: 13, fontVariantNumeric: "tabular-nums" }}>
               {triggerLabel}
             </span>
           )}
@@ -293,8 +293,8 @@ export function BottlePanel({
           style={{
             marginTop: 4,
             borderRadius: 12,
-            border: "0.5px solid var(--border, rgba(255,255,255,0.1))",
-            background: "var(--background, #111)",
+            border: "0.5px solid var(--border, rgba(255, 255, 255,0.1))",
+            background: "var(--background, #111111)",
             backdropFilter: "blur(12px)",
             padding: "10px 14px",
           }}
@@ -310,9 +310,9 @@ export function BottlePanel({
           >
             <span
               style={{
-                fontSize: 12,
-                fontWeight: 500,
-                color: "var(--muted-foreground, #888)",
+                fontSize: 14,
+                fontWeight: 400,
+                color: "var(--muted-foreground, #888888)",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
@@ -329,8 +329,8 @@ export function BottlePanel({
                 background: "none",
                 border: "none",
                 cursor: "pointer",
-                fontSize: 14,
-                color: "var(--muted-foreground, #888)",
+                fontSize: 16,
+                color: "var(--muted-foreground, #888888)",
                 padding: 2,
                 lineHeight: 1,
               }}
@@ -344,9 +344,9 @@ export function BottlePanel({
             <p
               style={{
                 margin: "12px 0",
-                fontSize: 13,
-                fontStyle: "italic",
-                color: "var(--muted-foreground, #888)",
+                fontSize: 15,
+                fontStyle: "normal",
+                color: "var(--muted-foreground, #888888)",
                 opacity: 0.6,
                 textAlign: "center",
               }}
@@ -366,8 +366,8 @@ export function BottlePanel({
             <p
               style={{
                 margin: "8px 0 4px",
-                fontSize: 11,
-                color: "var(--muted-foreground, #888)",
+                fontSize: 13,
+                color: "var(--muted-foreground, #888888)",
                 opacity: 0.5,
                 textAlign: "center",
               }}
@@ -377,13 +377,13 @@ export function BottlePanel({
           )}
 
           {/* Input area */}
-          <div style={{ marginTop: 10, borderTop: "0.5px solid var(--border, rgba(255,255,255,0.08))", paddingTop: 10 }}>
+          <div style={{ marginTop: 10, borderTop: "0.5px solid var(--border, rgba(255, 255, 255,0.08))", paddingTop: 10 }}>
             {sentConfirm ? (
               <p
                 style={{
-                  fontSize: 12,
-                  fontStyle: "italic",
-                  color: "var(--picker, #e67e3a)",
+                  fontSize: 14,
+                  fontStyle: "normal",
+                  color: "var(--picker, #8f8f8f)",
                   textAlign: "center",
                   padding: "8px 0",
                 }}
@@ -397,8 +397,8 @@ export function BottlePanel({
                 <p
                   style={{
                     margin: "0 0 6px",
-                    fontSize: 12,
-                    color: "var(--muted-foreground, #888)",
+                    fontSize: 14,
+                    color: "var(--muted-foreground, #888888)",
                   }}
                 >
                   pick your album cover to write a note
@@ -410,10 +410,10 @@ export function BottlePanel({
               <p
                 style={{
                   margin: 0,
-                  fontSize: 12,
-                  color: "var(--muted-foreground, #888)",
+                  fontSize: 14,
+                  color: "var(--muted-foreground, #888888)",
                   opacity: 0.6,
-                  fontStyle: "italic",
+                  fontStyle: "normal",
                 }}
               >
                 add some tracks to your library to write notes.
@@ -450,12 +450,12 @@ export function BottlePanel({
                     style={{
                       flex: 1,
                       resize: "none",
-                      background: "var(--surface-2, rgba(255,255,255,0.04))",
-                      border: "0.5px solid var(--border, rgba(255,255,255,0.12))",
+                      background: "var(--surface-2, rgba(255, 255, 255,0.04))",
+                      border: "0.5px solid var(--border, rgba(255, 255, 255,0.12))",
                       borderRadius: 8,
                       padding: "6px 8px",
-                      fontSize: 13,
-                      color: "var(--foreground, #fff)",
+                      fontSize: 15,
+                      color: "var(--foreground, #ffffff)",
                       fontFamily: "inherit",
                       lineHeight: 1.5,
                       outline: "none",
@@ -463,7 +463,7 @@ export function BottlePanel({
                   />
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 10, color: "var(--muted-foreground, #888)", opacity: 0.5 }}>
+                  <span style={{ fontSize: 12, color: "var(--muted-foreground, #888888)", opacity: 0.5 }}>
                     {noteText.length}/280
                   </span>
                   <button
@@ -476,10 +476,10 @@ export function BottlePanel({
                       borderRadius: 20,
                       border: "none",
                       background: noteText.trim()
-                        ? "var(--picker, #e67e3a)"
-                        : "var(--surface-2, rgba(255,255,255,0.08))",
-                      color: noteText.trim() ? "#fff" : "var(--muted-foreground, #888)",
-                      fontSize: 12,
+                        ? "var(--picker, #8f8f8f)"
+                        : "var(--surface-2, rgba(255, 255, 255,0.08))",
+                      color: noteText.trim() ? "#ffffff" : "var(--muted-foreground, #888888)",
+                      fontSize: 14,
                       cursor: noteText.trim() ? "pointer" : "default",
                       transition: "background 0.15s",
                     }}
@@ -492,8 +492,8 @@ export function BottlePanel({
                     data-testid="bottle-send-error"
                     style={{
                       margin: "4px 0 0",
-                      fontSize: 12,
-                      color: "var(--destructive, #e05252)",
+                      fontSize: 14,
+                      color: "var(--destructive, #707070)",
                       textAlign: "right",
                     }}
                   >

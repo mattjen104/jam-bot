@@ -231,22 +231,22 @@ export default function ScheduleCalendar() {
       <div className={`mx-auto max-w-4xl px-4 pt-8 sm:px-6 ${dockPadding}`}>
         <Link
           href="/"
-          className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wide text-muted-foreground hover:text-primary"
+          className="inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wide text-muted-foreground hover:text-primary"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
           The dial
         </Link>
 
         <header className="mb-6 mt-6">
-          <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] text-primary">
+          <div className="flex items-center gap-2 font-mono text-[13px] uppercase tracking-[0.3em] text-primary">
             <CalendarDays className="h-4 w-4" />
             Schedule
           </div>
-          <h1 className="mt-2 font-serif text-3xl font-semibold text-foreground">
+          <h1 className="mt-2 font-serif text-4xl font-normal text-foreground">
             {isLiveView ? "On the air" : formatDateHeading(dates[0]!)}
           </h1>
           {!isLoading && stations.length > 0 && (
-            <p className="mt-1 font-mono text-[11px] text-muted-foreground">
+            <p className="mt-1 font-mono text-[13px] text-muted-foreground">
               {totalSlots.toLocaleString()} show slots across{" "}
               {stationFilter === "all"
                 ? `${stations.length} stations`
@@ -262,7 +262,7 @@ export default function ScheduleCalendar() {
             <select
               value={stationFilter}
               onChange={(e) => setStationFilter(e.target.value)}
-              className="rounded-lg border border-border bg-card px-3 py-2 font-mono text-[11px] text-foreground focus:border-primary focus:outline-none"
+              className="rounded-lg border border-border bg-card px-3 py-2 font-mono text-[13px] text-foreground focus:border-primary focus:outline-none"
             >
               <option value="all">All {stations.length} stations</option>
               {sortedStations.map((s) => (
@@ -278,7 +278,7 @@ export default function ScheduleCalendar() {
               type="button"
               onClick={() => setOffsetDays((d) => d - 1)}
               data-testid="schedule-earlier"
-              className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2.5 py-2 font-mono text-[11px] text-muted-foreground hover:border-primary/40 hover:text-primary transition-colors"
+              className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2.5 py-2 font-mono text-[13px] text-muted-foreground hover:border-primary/40 hover:text-primary transition-colors"
               title="Step one day earlier"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
@@ -289,7 +289,7 @@ export default function ScheduleCalendar() {
                 type="button"
                 onClick={() => setOffsetDays(0)}
                 data-testid="schedule-now"
-                className="inline-flex items-center gap-1 rounded-lg border border-primary-border bg-primary/10 px-2.5 py-2 font-mono text-[11px] uppercase tracking-wide text-primary hover:bg-primary/20 transition-colors"
+                className="inline-flex items-center gap-1 rounded-lg border border-primary-border bg-primary/10 px-2.5 py-2 font-mono text-[13px] uppercase tracking-wide text-primary hover:bg-primary/20 transition-colors"
               >
                 Now
               </button>
@@ -298,7 +298,7 @@ export default function ScheduleCalendar() {
               type="button"
               onClick={() => setOffsetDays((d) => d + 1)}
               data-testid="schedule-later"
-              className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2.5 py-2 font-mono text-[11px] text-muted-foreground hover:border-primary/40 hover:text-primary transition-colors"
+              className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2.5 py-2 font-mono text-[13px] text-muted-foreground hover:border-primary/40 hover:text-primary transition-colors"
               title="Step one day later"
             >
               Later
@@ -324,18 +324,18 @@ export default function ScheduleCalendar() {
             {isLiveView && liveNow.length > 0 && (
               <section data-testid="live-now-section">
                 <div className="mb-2 flex items-center gap-3">
-                  <h2 className="flex items-center gap-2 font-mono text-[11px] font-semibold uppercase tracking-wider text-foreground">
+                  <h2 className="flex items-center gap-2 font-mono text-[13px] font-normal uppercase tracking-wider text-foreground">
                     <span className="relative flex h-2 w-2" aria-hidden>
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-60" />
-                      <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-zinc-500 opacity-60" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-zinc-500" />
                     </span>
                     Live radio
                   </h2>
-                  <span className="font-mono text-[10px] text-muted-foreground">
+                  <span className="font-mono text-[12px] text-muted-foreground">
                     {liveNow.length} on the air
                   </span>
                 </div>
-                <div className="overflow-hidden rounded-xl border border-red-500/25 bg-card">
+                <div className="overflow-hidden rounded-xl border border-zinc-500/25 bg-card">
                   <ColumnHeader />
                   {liveNow.map((show, i) => (
                     <SlotRow
@@ -363,10 +363,10 @@ export default function ScheduleCalendar() {
             {isLiveView && upcomingToday.length > 0 && (
               <section>
                 <div className="mb-2 flex items-center gap-3">
-                  <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wider text-foreground">
+                  <h2 className="font-mono text-[13px] font-normal uppercase tracking-wider text-foreground">
                     Later today
                   </h2>
-                  <span className="font-mono text-[10px] text-muted-foreground">
+                  <span className="font-mono text-[12px] text-muted-foreground">
                     {upcomingToday.length} shows
                   </span>
                 </div>
@@ -404,20 +404,20 @@ export default function ScheduleCalendar() {
               return (
                 <section key={key} id={key}>
                   <div className="mb-2 flex items-center gap-3">
-                    <h2 className={`font-mono text-[11px] font-semibold uppercase tracking-wider ${isPast ? "text-muted-foreground" : "text-foreground"}`}>
+                    <h2 className={`font-mono text-[13px] font-normal uppercase tracking-wider ${isPast ? "text-muted-foreground" : "text-foreground"}`}>
                       {formatDateHeading(date)}
                     </h2>
                     {isToday && (
-                      <span className="rounded-full bg-primary/15 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide text-primary">
+                      <span className="rounded-full bg-primary/15 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-primary">
                         today
                       </span>
                     )}
                     {isPast && (
-                      <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[9px] uppercase tracking-wide text-muted-foreground">
+                      <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
                         past
                       </span>
                     )}
-                    <span className="font-mono text-[10px] text-muted-foreground">
+                    <span className="font-mono text-[12px] text-muted-foreground">
                       {shows.length} shows
                     </span>
                   </div>
@@ -448,14 +448,14 @@ export default function ScheduleCalendar() {
             })}
 
             {totalSlots === 0 && !isLoading && (
-              <div className="rounded-xl border border-border bg-card p-8 text-center font-mono text-sm text-muted-foreground">
+              <div className="rounded-xl border border-border bg-card p-8 text-center font-mono text-base text-muted-foreground">
                 No shows found for this selection.
               </div>
             )}
 
             {/* Timezone footnote — only shown when stations span multiple zones */}
             {!isLoading && totalSlots > 0 && hasMultipleTimezones && (
-              <p className="font-mono text-[10px] text-muted-foreground/50">
+              <p className="font-mono text-[12px] text-muted-foreground/50">
                 Times are shown in each station's own local time. The timezone
                 abbreviation next to each time indicates the station's zone when
                 known.
@@ -481,7 +481,7 @@ const ROW_GRID =
 function ColumnHeader() {
   return (
     <div
-      className={`${ROW_GRID} border-b border-border/60 bg-background/40 py-1.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground/60`}
+      className={`${ROW_GRID} border-b border-border/60 bg-background/40 py-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground/60`}
     >
       <span>Time</span>
       <span className="hidden sm:block">Station</span>
@@ -503,7 +503,7 @@ function DiscoveryEraCell({ chips }: { chips: RollingGenreChip[] | undefined }) 
 
   if (!label) {
     return (
-      <span className="text-right font-mono text-[10px] text-muted-foreground/40">
+      <span className="text-right font-mono text-[12px] text-muted-foreground/40">
         —
       </span>
     );
@@ -527,7 +527,7 @@ function DiscoveryEraCell({ chips }: { chips: RollingGenreChip[] | undefined }) 
 
   return (
     <span
-      className={`inline-flex items-center justify-end gap-1 text-right font-mono text-[10px] ${tone}`}
+      className={`inline-flex items-center justify-end gap-1 text-right font-mono text-[12px] ${tone}`}
       title={title}
       data-testid={`discovery-era-label`}
     >
@@ -591,16 +591,16 @@ function SlotRow({
       {/* Time or LIVE badge — both include a timezone abbreviation when known */}
       {live ? (
         <span className="flex flex-col leading-none gap-0.5" data-testid="live-badge">
-          <span className="inline-flex items-center gap-1 font-mono text-[9px] font-semibold uppercase tracking-wide text-red-500">
+          <span className="inline-flex items-center gap-1 font-mono text-[10px] font-normal uppercase tracking-wide text-zinc-500">
             <span className="relative flex h-1.5 w-1.5 shrink-0" aria-hidden>
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-60" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-red-500" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-zinc-500 opacity-60" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-zinc-500" />
             </span>
             Live
           </span>
           {show.timezoneHint && (
             <span
-              className="font-mono text-[8px] text-muted-foreground/40"
+              className="font-mono text-[9px] text-muted-foreground/40"
               title={show.timezoneHint}
             >
               {tzAbbr(show.timezoneHint) ?? show.timezoneHint.split("/")[1] ?? "TZ"}
@@ -609,12 +609,12 @@ function SlotRow({
         </span>
       ) : (
         <span className="flex flex-col leading-none">
-          <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+          <span className="font-mono text-[12px] tabular-nums text-muted-foreground">
             {show.startTime}
           </span>
           {show.timezoneHint && (
             <span
-              className="font-mono text-[8px] text-muted-foreground/40"
+              className="font-mono text-[9px] text-muted-foreground/40"
               title={show.timezoneHint}
             >
               {tzAbbr(show.timezoneHint) ?? show.timezoneHint.split("/")[1] ?? "TZ"}
@@ -627,7 +627,7 @@ function SlotRow({
       <Link
         href={`/archive/stations/${show.stationSlug}`}
         onClick={(e) => e.stopPropagation()}
-        className="hidden sm:inline-flex min-w-0 items-center gap-1 rounded-full border border-border bg-background/40 px-2 py-0.5 font-mono text-[9px] text-muted-foreground/70 hover:border-primary/40 hover:text-primary transition-colors overflow-hidden"
+        className="hidden sm:inline-flex min-w-0 items-center gap-1 rounded-full border border-border bg-background/40 px-2 py-0.5 font-mono text-[10px] text-muted-foreground/70 hover:border-primary/40 hover:text-primary transition-colors overflow-hidden"
         title={show.stationName}
       >
         <Radio className="h-2 w-2 shrink-0" />
@@ -638,7 +638,7 @@ function SlotRow({
       <span className="flex min-w-0 items-center gap-2">
         <Link
           href={`/archive/stations/${show.stationSlug}?show=${encodeURIComponent(show.showName)}`}
-          className="min-w-0 truncate font-mono text-[11px] text-foreground hover:text-primary transition-colors"
+          className="min-w-0 truncate font-mono text-[13px] text-foreground hover:text-primary transition-colors"
           title={show.showName}
         >
           {show.showName}
@@ -648,7 +648,7 @@ function SlotRow({
           <Link
             href={`/dj/${encodeURIComponent(show.djName)}`}
             onClick={(e) => e.stopPropagation()}
-            className="hidden md:inline-flex shrink-0 items-center gap-1 font-mono text-[10px] text-muted-foreground/70 hover:text-primary transition-colors"
+            className="hidden md:inline-flex shrink-0 items-center gap-1 font-mono text-[12px] text-muted-foreground/70 hover:text-primary transition-colors"
             title={`${show.djName}'s schedule`}
           >
             <Mic className="h-2.5 w-2.5 shrink-0" />
@@ -669,7 +669,7 @@ function SlotRow({
             return (
               <span
                 key={chip.playedAt}
-                className={`inline-flex min-w-0 items-center rounded-full border px-2 py-0.5 font-mono text-[9px] whitespace-nowrap ${
+                className={`inline-flex min-w-0 items-center rounded-full border px-2 py-0.5 font-mono text-[10px] whitespace-nowrap ${
                   isNewest
                     ? "border-border bg-background/40 text-muted-foreground/70"
                     : "border-border/40 bg-background/20 text-muted-foreground/35"
@@ -681,7 +681,7 @@ function SlotRow({
           })}
         </span>
       ) : (
-        <span className="font-mono text-[10px] text-muted-foreground/40">—</span>
+        <span className="font-mono text-[12px] text-muted-foreground/40">—</span>
       )}
 
       {/* Era / discovery column */}

@@ -98,7 +98,7 @@ export default function Song() {
       >
         <Link
           href="/"
-          className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wide text-muted-foreground hover:text-primary"
+          className="inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wide text-muted-foreground hover:text-primary"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
           Back to the dial
@@ -109,21 +109,21 @@ export default function Song() {
         {notFound && (
           <div className="mt-8 rounded-2xl border border-card-border bg-card p-8 text-center">
             <Disc3 className="mx-auto h-10 w-10 text-muted-foreground/50" />
-            <h1 className="mt-4 font-serif text-2xl font-semibold text-foreground">
+            <h1 className="mt-4 font-serif text-3xl font-normal text-foreground">
               Not on the spine yet
             </h1>
-            <p className="mx-auto mt-2 max-w-[42ch] text-sm text-muted-foreground">
+            <p className="mx-auto mt-2 max-w-[42ch] text-base text-muted-foreground">
               This recording hasn't been logged on any Lore station. Once a
               station spins it, its full story shows up here.
             </p>
-            <p className="mt-3 font-mono text-[11px] text-muted-foreground/70">
+            <p className="mt-3 font-mono text-[13px] text-muted-foreground/70">
               MBID {mbid.slice(0, 8)}
             </p>
           </div>
         )}
 
         {isError && !notFound && (
-          <div className="mt-8 rounded-2xl border border-destructive-border bg-destructive/10 p-6 text-sm text-destructive-foreground">
+          <div className="mt-8 rounded-2xl border border-destructive-border bg-destructive/10 p-6 text-base text-destructive-foreground">
             Couldn't load this recording. Please refresh.
           </div>
         )}
@@ -147,17 +147,17 @@ export default function Song() {
               </div>
 
               <div className="min-w-0 flex-1">
-                <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
+                <p className="font-mono text-[13px] uppercase tracking-[0.2em] text-primary">
                   Recording
                 </p>
                 <h1
-                  className="mt-1 font-serif text-3xl font-semibold leading-tight text-foreground sm:text-4xl"
+                  className="mt-1 font-serif text-4xl font-normal leading-tight text-foreground sm:text-4xl"
                   data-testid="song-title"
                 >
                   {rec.title}
                 </h1>
                 <p
-                  className="mt-1 text-lg text-muted-foreground"
+                  className="mt-1 text-xl text-muted-foreground"
                   data-testid="song-artist"
                 >
                   {rec.artistMbid ? (
@@ -177,7 +177,7 @@ export default function Song() {
                     type="button"
                     onClick={isRidingThis ? ride.stop : startRide}
                     data-testid="ride-from-here"
-                    className="inline-flex h-10 items-center gap-2 rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground shadow-sm transition-transform active:scale-95"
+                    className="inline-flex h-10 items-center gap-2 rounded-full bg-primary px-5 text-base font-normal text-primary-foreground shadow-sm transition-transform active:scale-95"
                   >
                     <RouteIcon className="h-4 w-4" />
                     {isRidingThis ? "Stop riding" : "Ride from here"}
@@ -187,7 +187,7 @@ export default function Song() {
                     href={`https://musicbrainz.org/recording/${rec.mbid}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1 font-mono text-[11px] text-muted-foreground/80 hover:text-primary"
+                    className="inline-flex items-center gap-1 font-mono text-[13px] text-muted-foreground/80 hover:text-primary"
                     title="This track's canonical MusicBrainz identity"
                   >
                     <Music4 className="h-3 w-3" />
@@ -196,7 +196,7 @@ export default function Song() {
                   </a>
                 </div>
                 {preview && preview.previewUrl === null && (
-                  <p className="mt-2 font-mono text-[11px] text-muted-foreground/70">
+                  <p className="mt-2 font-mono text-[13px] text-muted-foreground/70">
                     No preview clip available — riding will follow the trail and
                     link out for this one.
                   </p>
@@ -262,7 +262,7 @@ function AlbumSection({
       />
       <div className="rounded-2xl border border-card-border bg-card p-5">
         {album.year != null && (
-          <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground/60">
+          <p className="mb-3 font-mono text-[13px] uppercase tracking-[0.15em] text-muted-foreground/60">
             {album.year}
           </p>
         )}
@@ -273,13 +273,13 @@ function AlbumSection({
               <li
                 key={`${track.trackNumber}-${track.title}`}
                 className={[
-                  "flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm",
+                  "flex items-center gap-3 rounded-lg px-2 py-1.5 text-base",
                   isCurrent
-                    ? "bg-primary/8 font-medium text-foreground"
+                    ? "bg-primary/8 font-normal text-foreground"
                     : "text-muted-foreground",
                 ].join(" ")}
               >
-                <span className="w-5 shrink-0 text-right font-mono text-[11px] text-muted-foreground/50 tabular-nums">
+                <span className="w-5 shrink-0 text-right font-mono text-[13px] text-muted-foreground/50 tabular-nums">
                   {track.trackNumber}
                 </span>
                 {track.mbid && !isCurrent ? (
@@ -293,7 +293,7 @@ function AlbumSection({
                   <span className="truncate">{track.title}</span>
                 )}
                 {isCurrent && (
-                  <span className="ml-auto shrink-0 font-mono text-[11px] text-primary">
+                  <span className="ml-auto shrink-0 font-mono text-[13px] text-primary">
                     ← here
                   </span>
                 )}
@@ -317,12 +317,12 @@ function SectionHeading({
 }) {
   return (
     <div className="mb-3 mt-10 flex items-baseline justify-between">
-      <h2 className="flex items-center gap-2 font-serif text-xl font-semibold text-foreground">
+      <h2 className="flex items-center gap-2 font-serif text-2xl font-normal text-foreground">
         <span className="text-primary">{icon}</span>
         {title}
       </h2>
       {hint ? (
-        <span className="font-mono text-xs text-muted-foreground">{hint}</span>
+        <span className="font-mono text-sm text-muted-foreground">{hint}</span>
       ) : null}
     </div>
   );
@@ -346,15 +346,15 @@ function EntryLadder({
         hint={RUNG_FRAMING[entry.rung] ?? entry.rung}
       />
       <div className="rounded-2xl border border-card-border bg-card p-5">
-        <p className="text-sm text-muted-foreground">{entry.framing}</p>
+        <p className="text-base text-muted-foreground">{entry.framing}</p>
 
         {isEmpty ? (
           <div className="mt-4 rounded-xl border border-dashed border-primary-border bg-primary/5 p-4">
-            <p className="font-serif text-base text-foreground">
+            <p className="font-serif text-lg text-foreground">
               {entry.invitation?.message ??
                 `No one has vouched for this ${artist} track yet.`}
             </p>
-            <p className="mt-1 font-mono text-[11px] uppercase tracking-wide text-primary">
+            <p className="mt-1 font-mono text-[13px] uppercase tracking-wide text-primary">
               Be the first to pick it
             </p>
           </div>
@@ -373,20 +373,20 @@ function EntryLadder({
 function EntryPickRow({ pick }: { pick: EntryPick }) {
   return (
     <li className="flex items-start gap-3 rounded-xl border border-border bg-secondary/40 p-3">
-      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 font-mono text-[11px] uppercase text-primary">
+      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 font-mono text-[13px] uppercase text-primary">
         {pick.pickerType.slice(0, 2)}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-foreground">
+        <p className="text-base font-normal text-foreground">
           {pick.pickerName}
-          <span className="ml-2 font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+          <span className="ml-2 font-mono text-[13px] uppercase tracking-wide text-muted-foreground">
             {pick.pickerType} · trust {pick.trustTier}
           </span>
         </p>
         {pick.context && (
-          <p className="mt-0.5 text-sm text-muted-foreground">{pick.context}</p>
+          <p className="mt-0.5 text-base text-muted-foreground">{pick.context}</p>
         )}
-        <p className="mt-1 font-mono text-[11px] text-muted-foreground/70">
+        <p className="mt-1 font-mono text-[13px] text-muted-foreground/70">
           {CONFIDENCE_LABEL[pick.confidence] ?? pick.confidence}
           {pick.pickedAt ? ` · ${timeAgo(pick.pickedAt)}` : ""}
         </p>
@@ -396,7 +396,7 @@ function EntryPickRow({ pick }: { pick: EntryPick }) {
           href={pick.sourceUrl}
           target="_blank"
           rel="noreferrer"
-          className="hover-elevate inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-border px-2.5 text-xs text-muted-foreground"
+          className="hover-elevate inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-border px-2.5 text-sm text-muted-foreground"
           title={`Source: ${pick.source}`}
         >
           <ExternalLink className="h-3 w-3" />
@@ -416,7 +416,7 @@ function Segues({ next }: { next: SegueNext[] }) {
         hint={next.length ? `${next.length} real transition${next.length === 1 ? "" : "s"}` : undefined}
       />
       {next.length === 0 ? (
-        <div className="rounded-2xl border border-card-border bg-card p-5 text-sm text-muted-foreground">
+        <div className="rounded-2xl border border-card-border bg-card p-5 text-base text-muted-foreground">
           No segues observed after this track yet. Ride it and you might set the
           first one.
         </div>
@@ -439,9 +439,9 @@ function Segues({ next }: { next: SegueNext[] }) {
                 </div>
                 <div className="min-w-0 flex-1">
                   {/* Fraunces title for segue cards */}
-                  <p className="truncate font-serif font-semibold text-foreground">{n.title}</p>
-                  <p className="truncate text-sm text-muted-foreground">{n.artist}</p>
-                  <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground/70">
+                  <p className="truncate font-serif font-normal text-foreground">{n.title}</p>
+                  <p className="truncate text-base text-muted-foreground">{n.artist}</p>
+                  <p className="mt-0.5 truncate font-mono text-[13px] text-muted-foreground/70">
                     {n.pickers && n.pickers.length > 0
                       ? `Sequenced by ${n.pickers[0].name}`
                       : n.stations.length > 0
@@ -469,7 +469,7 @@ function Spins({ spins, mbid }: { spins: RecordingSpin[]; mbid: string }) {
         hint={spins.length ? `${spins.length} spin${spins.length === 1 ? "" : "s"}` : undefined}
       />
       {spins.length === 0 ? (
-        <div className="rounded-2xl border border-card-border bg-card p-5 text-sm text-muted-foreground">
+        <div className="rounded-2xl border border-card-border bg-card p-5 text-base text-muted-foreground">
           No logged spins for this recording yet.
         </div>
       ) : (
@@ -481,7 +481,7 @@ function Spins({ spins, mbid }: { spins: RecordingSpin[]; mbid: string }) {
             >
               <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-foreground">
+                <p className="truncate text-base font-normal text-foreground">
                   {s.station.name}
                   {s.show ? (
                     <span className="text-muted-foreground">
@@ -491,7 +491,7 @@ function Spins({ spins, mbid }: { spins: RecordingSpin[]; mbid: string }) {
                     </span>
                   ) : null}
                 </p>
-                <p className="truncate font-mono text-[11px] text-muted-foreground/70">
+                <p className="truncate font-mono text-[13px] text-muted-foreground/70">
                   {CONFIDENCE_LABEL[s.confidence] ?? s.confidence}
                   {" · "}
                   {timeAgo(s.playedAt)}
@@ -501,7 +501,7 @@ function Spins({ spins, mbid }: { spins: RecordingSpin[]; mbid: string }) {
               {s.runId != null && (
                 <Link
                   href={`/archive/station-runs/${s.runId}?play=1&from=${mbid}`}
-                  className="hover-elevate inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-border px-2.5 text-xs text-muted-foreground"
+                  className="hover-elevate inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-border px-2.5 text-sm text-muted-foreground"
                   title="Replay this run starting at this song"
                   data-testid={`spin-replay-${i}`}
                 >
@@ -532,7 +532,7 @@ function Picks({ picks, mbid }: { picks: RecordingPick[]; mbid: string }) {
         hint={picks.length ? `${picks.length} pick${picks.length === 1 ? "" : "s"}` : undefined}
       />
       {picks.length === 0 ? (
-        <div className="rounded-2xl border border-card-border bg-card p-5 text-sm text-muted-foreground">
+        <div className="rounded-2xl border border-card-border bg-card p-5 text-base text-muted-foreground">
           No selector has vouched for this recording yet.
         </div>
       ) : (
@@ -542,11 +542,11 @@ function Picks({ picks, mbid }: { picks: RecordingPick[]; mbid: string }) {
               key={`${p.picker.handle}-${p.sourceUrl ?? ""}-${i}`}
               className="flex items-center gap-3 rounded-xl border border-card-border bg-card p-3"
             >
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 font-mono text-[11px] uppercase text-primary">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 font-mono text-[13px] uppercase text-primary">
                 {p.picker.pickerType.slice(0, 2)}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-foreground">
+                <p className="truncate text-base font-normal text-foreground">
                   <Link
                     href={`/archive/selectors/${p.picker.handle}`}
                     className="hover:text-primary"
@@ -554,11 +554,11 @@ function Picks({ picks, mbid }: { picks: RecordingPick[]; mbid: string }) {
                   >
                     {p.picker.name}
                   </Link>
-                  <span className="ml-2 font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+                  <span className="ml-2 font-mono text-[13px] uppercase tracking-wide text-muted-foreground">
                     {p.picker.pickerType} · trust {p.picker.trustTier}
                   </span>
                 </p>
-                <p className="truncate font-mono text-[11px] text-muted-foreground/70">
+                <p className="truncate font-mono text-[13px] text-muted-foreground/70">
                   {p.listTitle ?? "Untitled list"}
                   {p.ordinal != null && p.trackCount != null
                     ? ` · track ${p.ordinal + 1} of ${p.trackCount}`
@@ -569,7 +569,7 @@ function Picks({ picks, mbid }: { picks: RecordingPick[]; mbid: string }) {
               {p.runId != null && (
                 <Link
                   href={`/archive/selector-runs/${p.runId}?play=1&from=${mbid}`}
-                  className="hover-elevate inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-border px-2.5 text-xs text-muted-foreground"
+                  className="hover-elevate inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-border px-2.5 text-sm text-muted-foreground"
                   title="Play this list starting at this song"
                   data-testid={`pick-replay-${i}`}
                 >
@@ -582,7 +582,7 @@ function Picks({ picks, mbid }: { picks: RecordingPick[]; mbid: string }) {
                   href={p.sourceUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="hover-elevate inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-border px-2.5 text-xs text-muted-foreground"
+                  className="hover-elevate inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-border px-2.5 text-sm text-muted-foreground"
                   title="Original source"
                 >
                   <ExternalLink className="h-3 w-3" />
@@ -653,10 +653,10 @@ function SongExploderSection({
           data-testid="se-episode-link"
         >
           <div className="min-w-0">
-            <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-primary">
+            <p className="font-mono text-[13px] uppercase tracking-[0.15em] text-primary">
               The artist takes this apart →
             </p>
-            <p className="mt-0.5 truncate text-sm font-medium text-foreground group-hover:text-primary">
+            <p className="mt-0.5 truncate text-base font-normal text-foreground group-hover:text-primary">
               {episode.title}
             </p>
           </div>
@@ -671,13 +671,13 @@ function SongExploderSection({
                 <li
                   key={anchor.id}
                   className={[
-                    "flex items-start gap-3 rounded-xl border px-3 py-2.5 text-sm transition-colors",
+                    "flex items-start gap-3 rounded-xl border px-3 py-2.5 text-base transition-colors",
                     isActive
                       ? "border-primary/40 bg-primary/5"
                       : "border-border bg-secondary/30",
                   ].join(" ")}
                 >
-                  <span className="mt-0.5 shrink-0 font-mono text-[11px] text-muted-foreground/70 tabular-nums">
+                  <span className="mt-0.5 shrink-0 font-mono text-[13px] text-muted-foreground/70 tabular-nums">
                     {msToTimecode(anchor.positionMs)}
                   </span>
                   <span className="flex-1 text-muted-foreground leading-snug">
@@ -688,7 +688,7 @@ function SongExploderSection({
                     target="_blank"
                     rel="noreferrer"
                     title="Hear this in the episode"
-                    className="shrink-0 font-mono text-[11px] text-primary hover:underline whitespace-nowrap"
+                    className="shrink-0 font-mono text-[13px] text-primary hover:underline whitespace-nowrap"
                   >
                     → hear it
                   </a>
@@ -699,7 +699,7 @@ function SongExploderSection({
         )}
 
         {anchors.length === 0 && (
-          <p className="mt-3 font-mono text-[11px] text-muted-foreground/70">
+          <p className="mt-3 font-mono text-[13px] text-muted-foreground/70">
             No timeline anchors yet — admin can add them on the Song Exploder admin page.
           </p>
         )}
@@ -725,9 +725,9 @@ function Claims({ claims }: { claims: TrackClaim[] }) {
             key={i}
             className="rounded-xl border border-card-border border-l-2 border-l-primary bg-card p-4 pl-5"
           >
-            <p className="text-sm leading-relaxed text-foreground">{c.text}</p>
+            <p className="text-base leading-relaxed text-foreground">{c.text}</p>
             <div className="mt-2 flex items-center justify-between gap-2">
-              <p className="font-mono text-[11px] text-muted-foreground/70">
+              <p className="font-mono text-[13px] text-muted-foreground/70">
                 {c.sourceLabel}
                 {c.positionMs != null
                   ? ` · ${Math.floor(c.positionMs / 60000)}:${String(Math.floor((c.positionMs % 60000) / 1000)).padStart(2, "0")}`
@@ -737,7 +737,7 @@ function Claims({ claims }: { claims: TrackClaim[] }) {
                 href={c.sourceUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="hover-elevate inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-border px-2.5 text-xs text-muted-foreground"
+                className="hover-elevate inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-border px-2.5 text-sm text-muted-foreground"
               >
                 <ExternalLink className="h-3 w-3" />
                 Source
@@ -791,15 +791,15 @@ function WikipediaClaimCard({
       key={claim.id ?? index}
       className="rounded-xl border border-card-border border-l-2 border-l-primary bg-card p-4 pl-5"
     >
-      <p className="mb-1 font-mono text-[11px] uppercase tracking-wide text-primary">
+      <p className="mb-1 font-mono text-[13px] uppercase tracking-wide text-primary">
         {label}
       </p>
-      <p className="text-sm text-foreground">{claim.text}</p>
+      <p className="text-base text-foreground">{claim.text}</p>
       <a
         href={claim.sourceUrl}
         target="_blank"
         rel="noreferrer"
-        className="mt-1.5 inline-flex items-center gap-1 font-mono text-[11px] text-muted-foreground/70 hover:text-primary"
+        className="mt-1.5 inline-flex items-center gap-1 font-mono text-[13px] text-muted-foreground/70 hover:text-primary"
         title={claim.sourceLabel}
       >
         <BookOpen className="h-3 w-3" />

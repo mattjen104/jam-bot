@@ -100,9 +100,9 @@ export function LikeButton({ mbid }: { mbid: string }) {
         aria-label={title}
         aria-pressed={saved}
         data-testid="like-button"
-        className={`hover-elevate inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+        className={`hover-elevate inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-base transition-colors ${
           saved
-            ? "border-primary-border bg-primary/10 font-medium text-primary"
+            ? "border-primary-border bg-primary/10 font-normal text-primary"
             : "border-border bg-secondary text-secondary-foreground"
         } ${saveMutation.isPending ? "opacity-60" : ""}`}
       >
@@ -112,7 +112,7 @@ export function LikeButton({ mbid }: { mbid: string }) {
         {saved ? "Liked" : "Like"}
       </button>
       {notice && (
-        <span className="font-mono text-[11px] text-muted-foreground" data-testid="like-notice">
+        <span className="font-mono text-[13px] text-muted-foreground" data-testid="like-notice">
           {notice}
         </span>
       )}

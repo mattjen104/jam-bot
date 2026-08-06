@@ -18,14 +18,14 @@ function TokenGate({ onSave }: { onSave: (t: string) => void }) {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm rounded-2xl border border-card-border bg-card p-8 shadow-lg">
-        <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wide text-primary">
+        <div className="flex items-center gap-2 font-mono text-[13px] uppercase tracking-wide text-primary">
           <KeyRound className="h-3.5 w-3.5" />
           Admin access
         </div>
-        <h1 className="mt-3 font-serif text-2xl font-semibold text-foreground">
+        <h1 className="mt-3 font-serif text-3xl font-normal text-foreground">
           Enter admin token
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1 text-base text-muted-foreground">
           Stored in your browser — you won't need to re-enter it.
         </p>
         <form
@@ -41,12 +41,12 @@ function TokenGate({ onSave }: { onSave: (t: string) => void }) {
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Token"
             autoFocus
-            className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+            className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
           />
           <button
             type="submit"
             disabled={!draft.trim()}
-            className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-opacity disabled:opacity-40"
+            className="rounded-full bg-primary px-5 py-2 text-base font-normal text-primary-foreground shadow-sm transition-opacity disabled:opacity-40"
           >
             Continue
           </button>
@@ -70,8 +70,8 @@ interface RbStation {
 }
 
 function icyStatusIcon(status: string) {
-  if (status === "active") return <Wifi className="h-3.5 w-3.5 text-green-500" />;
-  if (status === "icy_unsupported") return <WifiOff className="h-3.5 w-3.5 text-amber-500" />;
+  if (status === "active") return <Wifi className="h-3.5 w-3.5 text-zinc-500" />;
+  if (status === "icy_unsupported") return <WifiOff className="h-3.5 w-3.5 text-zinc-500" />;
   return <AlertCircle className="h-3.5 w-3.5 text-destructive" />;
 }
 
@@ -127,17 +127,17 @@ function RadioBrowserPanel({
       <div className="relative z-10 mx-auto max-w-2xl px-4 py-10 sm:px-6">
         <div className="flex items-center justify-between">
           <div>
-            <p className="font-mono text-[11px] uppercase tracking-wide text-primary">
+            <p className="font-mono text-[13px] uppercase tracking-wide text-primary">
               Admin
             </p>
-            <h1 className="mt-1 font-serif text-3xl font-semibold text-foreground">
+            <h1 className="mt-1 font-serif text-4xl font-normal text-foreground">
               Radio Browser Stations
             </h1>
           </div>
           <button
             type="button"
             onClick={onClearToken}
-            className="font-mono text-[11px] text-muted-foreground/70 hover:text-primary"
+            className="font-mono text-[13px] text-muted-foreground/70 hover:text-primary"
           >
             Clear token
           </button>
@@ -145,7 +145,7 @@ function RadioBrowserPanel({
 
         <AdminNav token={token} />
 
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="mt-2 text-base text-muted-foreground">
           Enrol internet radio stations from{" "}
           <a
             href="https://www.radio-browser.info"
@@ -164,27 +164,27 @@ function RadioBrowserPanel({
           <EnrollForm token={token} onEnrolled={() => void loadStations()} />
 
           <div>
-            <h2 className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+            <h2 className="font-mono text-[13px] uppercase tracking-wide text-muted-foreground">
               Enrolled stations
             </h2>
             {loading ? (
-              <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="mt-4 flex items-center gap-2 text-base text-muted-foreground">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 Loading…
               </div>
             ) : loadError ? (
-              <div className="mt-4 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
+              <div className="mt-4 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-base text-destructive-foreground">
                 {loadError}
               </div>
             ) : stations.length === 0 ? (
-              <p className="mt-4 text-sm text-muted-foreground">
+              <p className="mt-4 text-base text-muted-foreground">
                 No stations enrolled yet.
               </p>
             ) : (
               <div className="mt-3 flex flex-col gap-2">
                 {/* Warning list for unsupported / erroring stations */}
                 {stations.some((s) => s.icyStatus !== "active") && (
-                  <div className="flex items-start gap-2 rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
+                  <div className="flex items-start gap-2 rounded-lg border border-zinc-400/40 bg-zinc-400/10 px-3 py-2 text-base text-zinc-700 dark:text-zinc-300">
                     <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                     <span>
                       Some stations are not delivering ICY metadata — check their status
@@ -261,7 +261,7 @@ function CoverageSection({ token }: { token: string }) {
 
   if (error) {
     return (
-      <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
+      <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-base text-destructive-foreground">
         Coverage: {error}
       </div>
     );
@@ -274,7 +274,7 @@ function CoverageSection({ token }: { token: string }) {
     <div className="rounded-2xl border border-card-border bg-card p-6">
       <div className="flex items-center gap-2">
         <Wifi className="h-4 w-4 text-primary" />
-        <h2 className="font-serif text-lg font-semibold text-foreground">
+        <h2 className="font-serif text-xl font-normal text-foreground">
           Coverage
         </h2>
       </div>
@@ -283,9 +283,9 @@ function CoverageSection({ token }: { token: string }) {
           (k) => (
             <span
               key={k}
-              className={`rounded-full border px-2.5 py-1 font-mono text-[11px] ${
+              className={`rounded-full border px-2.5 py-1 font-mono text-[13px] ${
                 k === "blind-spot"
-                  ? "border-amber-400/40 bg-amber-400/10 text-amber-700 dark:text-amber-300"
+                  ? "border-zinc-400/40 bg-zinc-400/10 text-zinc-700 dark:text-zinc-300"
                   : "border-border bg-secondary/40 text-muted-foreground"
               }`}
             >
@@ -296,7 +296,7 @@ function CoverageSection({ token }: { token: string }) {
       </div>
       {blindSpots.length > 0 && (
         <div className="mt-4">
-          <div className="flex items-start gap-2 rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
+          <div className="flex items-start gap-2 rounded-lg border border-zinc-400/40 bg-zinc-400/10 px-3 py-2 text-base text-zinc-700 dark:text-zinc-300">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>
               {blindSpots.length} station{blindSpots.length !== 1 ? "s" : ""}{" "}
@@ -308,7 +308,7 @@ function CoverageSection({ token }: { token: string }) {
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
-            className="mt-2 font-mono text-[11px] text-primary hover:underline"
+            className="mt-2 font-mono text-[13px] text-primary hover:underline"
           >
             {expanded ? "Hide blind spots" : "Show blind spots"}
           </button>
@@ -319,10 +319,10 @@ function CoverageSection({ token }: { token: string }) {
                   key={s.id}
                   className="flex items-center justify-between rounded-lg border border-card-border bg-secondary/20 px-3 py-1.5"
                 >
-                  <span className="truncate text-sm text-foreground">
+                  <span className="truncate text-base text-foreground">
                     {s.name}
                   </span>
-                  <span className="ml-3 shrink-0 font-mono text-[11px] text-muted-foreground">
+                  <span className="ml-3 shrink-0 font-mono text-[13px] text-muted-foreground">
                     {s.source ?? "?"}
                   </span>
                 </div>
@@ -389,11 +389,11 @@ function EnrollForm({
     <div className="rounded-2xl border border-card-border bg-card p-6">
       <div className="flex items-center gap-2">
         <Radio className="h-4 w-4 text-primary" />
-        <h2 className="font-serif text-lg font-semibold text-foreground">
+        <h2 className="font-serif text-xl font-normal text-foreground">
           Add Radio Browser station
         </h2>
       </div>
-      <p className="mt-1 text-sm text-muted-foreground">
+      <p className="mt-1 text-base text-muted-foreground">
         Paste the station UUID from{" "}
         <a
           href="https://www.radio-browser.info"
@@ -405,14 +405,14 @@ function EnrollForm({
         </a>
         . Find it in the station's URL (the long UUID string) or via the API. The
         station must support ICY metadata — stations that don't are marked{" "}
-        <span className="font-mono text-xs">no ICY</span> and paused.
+        <span className="font-mono text-sm">no ICY</span> and paused.
       </p>
       <form
         className="mt-5 flex flex-col gap-3"
         onSubmit={(e) => void handleSubmit(e)}
       >
         <div className="flex flex-col gap-1">
-          <label className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+          <label className="font-mono text-[13px] uppercase tracking-wide text-muted-foreground">
             Station UUID{" "}
             <span className="text-destructive-foreground">*</span>
           </label>
@@ -422,16 +422,16 @@ function EnrollForm({
             onChange={(e) => setUuid(e.target.value)}
             placeholder="e.g. 960a8447-6600-11e8-ae2d-52543be04c81"
             disabled={busy}
-            className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none disabled:opacity-50"
+            className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-base font-mono text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none disabled:opacity-50"
           />
         </div>
         {status && (
           status.ok ? (
-            <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm text-foreground">
+            <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-base text-foreground">
               {status.message}
             </div>
           ) : (
-            <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
+            <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-base text-destructive-foreground">
               {status.message}
             </p>
           )
@@ -439,7 +439,7 @@ function EnrollForm({
         <button
           type="submit"
           disabled={busy || !uuid.trim()}
-          className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-opacity disabled:opacity-40"
+          className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2 text-base font-normal text-primary-foreground shadow-sm transition-opacity disabled:opacity-40"
         >
           {busy ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -528,10 +528,10 @@ function StationRow({
             />
           )}
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-foreground">
+            <p className="truncate text-base font-normal text-foreground">
               {station.name}
             </p>
-            <p className="truncate font-mono text-[11px] text-muted-foreground">
+            <p className="truncate font-mono text-[13px] text-muted-foreground">
               {station.radioBrowserUuid}
             </p>
           </div>
@@ -539,11 +539,11 @@ function StationRow({
         <div className="flex shrink-0 items-center gap-2">
           <div className="flex items-center gap-1">
             {icyStatusIcon(station.icyStatus)}
-            <span className="font-mono text-[11px] text-muted-foreground">
+            <span className="font-mono text-[13px] text-muted-foreground">
               {icyStatusLabel(station.icyStatus)}
             </span>
             {station.consecutiveErrors > 0 && station.icyStatus !== "active" && (
-              <span className="font-mono text-[11px] text-muted-foreground/60">
+              <span className="font-mono text-[13px] text-muted-foreground/60">
                 ({station.consecutiveErrors})
               </span>
             )}
@@ -553,7 +553,7 @@ function StationRow({
               type="button"
               onClick={() => void handleReenroll()}
               disabled={reenrolling || removing}
-              className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/5 px-2.5 py-1 font-mono text-[11px] text-primary transition-colors hover:bg-primary/10 disabled:opacity-40"
+              className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/5 px-2.5 py-1 font-mono text-[13px] text-primary transition-colors hover:bg-primary/10 disabled:opacity-40"
               title="Reset status and resume polling"
             >
               {reenrolling ? (
@@ -580,21 +580,21 @@ function StationRow({
         </div>
       </div>
       {station.lastStreamTitle && (
-        <p className="mt-2 truncate text-sm text-muted-foreground">
-          <span className="font-mono text-[11px] text-muted-foreground/60">
+        <p className="mt-2 truncate text-base text-muted-foreground">
+          <span className="font-mono text-[13px] text-muted-foreground/60">
             now:{" "}
           </span>
           {station.lastStreamTitle}
         </p>
       )}
       {station.icyStatus === "icy_unsupported" && (
-        <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
           This stream does not advertise ICY metadata. Polling is paused — try
           re-enrolling first, or remove and re-add with a different stream URL.
         </p>
       )}
       {station.icyStatus === "error" && (
-        <p className="mt-2 text-xs text-destructive-foreground">
+        <p className="mt-2 text-sm text-destructive-foreground">
           {station.consecutiveErrors > 0
             ? `${station.consecutiveErrors} consecutive error${station.consecutiveErrors !== 1 ? "s" : ""} — `
             : ""}
@@ -602,13 +602,13 @@ function StationRow({
         </p>
       )}
       {station.consecutiveErrors > 0 && station.icyStatus === "active" && (
-        <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
           {station.consecutiveErrors} consecutive error
           {station.consecutiveErrors !== 1 ? "s" : ""} — will be suspended after 3.
         </p>
       )}
       {reenrollError && (
-        <p className="mt-2 text-xs text-destructive-foreground">
+        <p className="mt-2 text-sm text-destructive-foreground">
           Re-enroll failed: {reenrollError}
         </p>
       )}

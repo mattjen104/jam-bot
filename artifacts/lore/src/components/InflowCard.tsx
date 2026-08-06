@@ -46,20 +46,20 @@ export function InflowCard({ item, pickerName, pickerHandle }: InflowCardProps) 
         {item.mbid ? (
           <Link
             href={`/song/${item.mbid}`}
-            className="block truncate font-serif text-sm font-semibold leading-tight text-foreground hover:text-primary"
+            className="block truncate font-serif text-base font-normal leading-tight text-foreground hover:text-primary"
           >
             {title}
           </Link>
         ) : (
-          <p className="truncate font-serif text-sm font-semibold leading-tight text-foreground">
+          <p className="truncate font-serif text-base font-normal leading-tight text-foreground">
             {title}
           </p>
         )}
         {artist && (
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">{artist}</p>
+          <p className="mt-0.5 truncate text-sm text-muted-foreground">{artist}</p>
         )}
         {attribution && (
-          <p className="mt-1 truncate font-mono text-[10px] uppercase tracking-wide text-[#a78bfa]">
+          <p className="mt-1 truncate font-mono text-[12px] uppercase tracking-wide text-[#999999]">
             {attributionHref ? (
               <Link href={attributionHref} className="hover:text-primary">
                 via {attribution}

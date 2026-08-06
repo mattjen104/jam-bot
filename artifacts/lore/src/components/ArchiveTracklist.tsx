@@ -66,12 +66,12 @@ export function ArchiveTracklist({
           onClick={replay}
           disabled={resolved.length === 0}
           data-testid="replay-run"
-          className="hover-elevate inline-flex items-center gap-2 rounded-full border border-primary-border bg-primary px-5 py-2.5 font-mono text-xs uppercase tracking-wide text-primary-foreground disabled:opacity-40"
+          className="hover-elevate inline-flex items-center gap-2 rounded-full border border-primary-border bg-primary px-5 py-2.5 font-mono text-sm uppercase tracking-wide text-primary-foreground disabled:opacity-40"
         >
           <Ghost className="h-4 w-4" />
           Replay this run
         </button>
-        <p className="font-mono text-[11px] text-muted-foreground">
+        <p className="font-mono text-[13px] text-muted-foreground">
           {resolved.length} of {tracks.length} tracks resolved
           {gapCount > 0 ? ` · ${gapCount} honest gap${gapCount === 1 ? "" : "s"}` : ""}
         </p>
@@ -89,7 +89,7 @@ export function ArchiveTracklist({
                   : "border-dashed border-border bg-transparent opacity-70"
               }`}
             >
-              <span className="w-7 shrink-0 text-right font-mono text-[11px] text-muted-foreground">
+              <span className="w-7 shrink-0 text-right font-mono text-[13px] text-muted-foreground">
                 {t.position + 1}
               </span>
               {rec?.artworkUrl ? (
@@ -113,16 +113,16 @@ export function ArchiveTracklist({
                 {rec ? (
                   <Link
                     href={`/song/${rec.mbid}`}
-                    className="block truncate font-serif text-sm font-semibold text-foreground hover:text-primary"
+                    className="block truncate font-serif text-base font-normal text-foreground hover:text-primary"
                   >
                     {rec.title}
                   </Link>
                 ) : (
-                  <p className="truncate font-serif text-sm font-semibold text-muted-foreground">
+                  <p className="truncate font-serif text-base font-normal text-muted-foreground">
                     {t.rawTitle || "Untitled"}
                   </p>
                 )}
-                <p className="truncate font-mono text-[11px] text-muted-foreground">
+                <p className="truncate font-mono text-[13px] text-muted-foreground">
                   {rec ? (
                     rec.artistMbid ? (
                       <Link
@@ -153,7 +153,7 @@ export function ArchiveTracklist({
                           href={link.url}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-wide text-primary hover:underline"
+                          className="inline-flex items-center gap-1 font-mono text-[12px] uppercase tracking-wide text-primary hover:underline"
                         >
                           <ExternalLink className="h-2.5 w-2.5" />
                           {link.name}
@@ -166,17 +166,17 @@ export function ArchiveTracklist({
                     href={runSourceUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-wide text-primary hover:underline"
+                    className="inline-flex items-center gap-1 font-mono text-[12px] uppercase tracking-wide text-primary hover:underline"
                   >
                     <ExternalLink className="h-2.5 w-2.5" />
                     Listen on Bandcamp
                   </a>
                 ) : t.playedAt ? (
-                  <span className="font-mono text-[11px] text-muted-foreground">
+                  <span className="font-mono text-[13px] text-muted-foreground">
                     {clockTime(t.playedAt)}
                   </span>
                 ) : null}
-                <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground/70">
+                <span className="font-mono text-[12px] uppercase tracking-wide text-muted-foreground/70">
                   {CONFIDENCE_LABEL[t.confidence] ?? t.confidence}
                 </span>
                 {t.spinId != null ? (

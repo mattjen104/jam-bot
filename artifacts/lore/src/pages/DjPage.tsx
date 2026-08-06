@@ -38,18 +38,18 @@ export default function DjPage() {
       <div className={`mx-auto max-w-4xl px-4 pt-8 sm:px-6 ${dockPadding}`}>
         <Link
           href="/"
-          className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wide text-muted-foreground hover:text-primary"
+          className="inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wide text-muted-foreground hover:text-primary"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
           The dial
         </Link>
 
         <header className="mb-8 mt-6">
-          <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] text-primary">
+          <div className="flex items-center gap-2 font-mono text-[13px] uppercase tracking-[0.3em] text-primary">
             <Mic className="h-4 w-4" />
             DJ schedule
           </div>
-          <h1 className="mt-3 font-serif text-3xl font-semibold text-foreground">
+          <h1 className="mt-3 font-serif text-4xl font-normal text-foreground">
             {name}
           </h1>
         </header>
@@ -63,13 +63,13 @@ export default function DjPage() {
         )}
 
         {isError && (
-          <div className="rounded-xl border border-destructive-border bg-destructive/10 p-4 text-sm text-destructive-foreground">
+          <div className="rounded-xl border border-destructive-border bg-destructive/10 p-4 text-base text-destructive-foreground">
             DJ not found or no shows scraped yet.
           </div>
         )}
 
         {data && data.shows.length === 0 && (
-          <div className="rounded-xl border border-border bg-card p-6 text-center font-mono text-sm text-muted-foreground">
+          <div className="rounded-xl border border-border bg-card p-6 text-center font-mono text-base text-muted-foreground">
             No schedule found for this DJ yet.
           </div>
         )}
@@ -84,7 +84,7 @@ export default function DjPage() {
                     <Radio className="h-4 w-4 shrink-0 text-primary" />
                     <Link
                       href={`/archive/stations/${stationSlug}`}
-                      className="font-serif text-lg font-semibold text-foreground hover:text-primary"
+                      className="font-serif text-xl font-normal text-foreground hover:text-primary"
                     >
                       {stationName}
                     </Link>
@@ -92,7 +92,7 @@ export default function DjPage() {
                   <div className="space-y-3">
                     {byDay.map(({ day, shows: dayShows }) => (
                       <div key={day} className="flex flex-wrap items-start gap-2">
-                        <span className="w-9 shrink-0 font-mono text-[11px] uppercase tracking-wide text-muted-foreground pt-0.5">
+                        <span className="w-9 shrink-0 font-mono text-[13px] uppercase tracking-wide text-muted-foreground pt-0.5">
                           {day}
                         </span>
                         <div className="flex flex-wrap gap-1.5">
@@ -100,7 +100,7 @@ export default function DjPage() {
                             <Link
                               key={i}
                               href={`/archive/stations/${stationSlug}?show=${encodeURIComponent(show.showName)}`}
-                              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background/60 px-3 py-1 font-mono text-[11px] text-foreground hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-colors"
+                              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background/60 px-3 py-1 font-mono text-[13px] text-foreground hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-colors"
                             >
                               {show.showName}
                               <span className="text-muted-foreground/70">

@@ -1772,14 +1772,16 @@ export const ME_RUN_CROSSINGS_KEY = (runId: number) =>
  * Window: last 60 runs (M). At 135 crossings/24h density → ~39 runs/day
  * for a heavy user; M=60 gives ~1.5 days of comfortable coarse coverage.
  */
-export function useMyOverlapRunsRecent(opts: { enabled?: boolean } = {}) {
-  const { enabled = true } = opts;
+export function useMyOverlapRunsRecent(
+  opts: { enabled?: boolean; days?: number | null } = {},
+) {
+  const { enabled = true, days = null } = opts;
   return useQuery({
-    queryKey: ME_OVERLAP_RUNS_RECENT_KEY,
+    queryKey: [...ME_OVERLAP_RUNS_RECENT_KEY, days ?? "auto"],
     queryFn: () =>
-      fetchOrNull<{ items: OverlapRun[] }>("/api/me/overlaps/runs?order=recent").then(
-        (d) => d?.items ?? [],
-      ),
+      fetchOrNull<{ items: OverlapRun[] }>(
+        `/api/me/overlaps/runs?order=recent${days != null ? `&days=${days}` : ""}`,
+      ).then((d) => d?.items ?? []),
     enabled,
     staleTime: 5 * 60_000,
     retry: false,

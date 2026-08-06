@@ -307,7 +307,7 @@ export function LibraryRow({
                 border: "none",
                 background: "none",
                 color: isCurrentAvatar ? "hsl(var(--library))" : "hsl(var(--faint))",
-                fontSize: 13,
+                fontSize: 15,
                 padding: "4px",
                 cursor: isCurrentAvatar ? "default" : "pointer",
               }}

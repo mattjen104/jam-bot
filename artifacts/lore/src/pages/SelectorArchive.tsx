@@ -44,7 +44,7 @@ export default function SelectorArchive() {
       <div className={`mx-auto max-w-4xl px-4 pt-8 sm:px-6 ${dockPadding}`}>
         <Link
           href="/selectors"
-          className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wide text-muted-foreground hover:text-primary"
+          className="inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wide text-muted-foreground hover:text-primary"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
           All selectors
@@ -53,13 +53,13 @@ export default function SelectorArchive() {
         {isLoading ? (
           <div className="mt-8 h-40 animate-pulse rounded-xl border border-card-border bg-card" />
         ) : isError || !data ? (
-          <p className="mt-8 rounded-xl border border-destructive-border bg-destructive/10 p-4 text-sm text-destructive-foreground">
+          <p className="mt-8 rounded-xl border border-destructive-border bg-destructive/10 p-4 text-base text-destructive-foreground">
             Couldn't load this selector's archive.
           </p>
         ) : (
           <>
             <header className="mb-8 mt-6">
-              <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] text-primary">
+              <div className="flex items-center gap-2 font-mono text-[13px] uppercase tracking-[0.3em] text-primary">
                 {isDj ? (
                   <Radio className="h-4 w-4" />
                 ) : (
@@ -68,7 +68,7 @@ export default function SelectorArchive() {
                 {isDj ? "Radio selector archive" : "Selector archive"}
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-3">
-                <h1 className="font-serif text-3xl font-semibold text-foreground">
+                <h1 className="font-serif text-4xl font-normal text-foreground">
                   {data.picker.name}
                 </h1>
                 <ShareButton
@@ -76,7 +76,7 @@ export default function SelectorArchive() {
                   kind="picker"
                 />
               </div>
-              <p className="mt-2 max-w-[52ch] text-sm text-muted-foreground">
+              <p className="mt-2 max-w-[52ch] text-base text-muted-foreground">
                 {isDj
                   ? "Every show aired on KEXP, browsable by date."
                   : (data.picker.description ?? "")}
@@ -86,7 +86,7 @@ export default function SelectorArchive() {
                   href={data.picker.homeUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="mt-2 inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wide text-primary hover:underline"
+                  className="mt-2 inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wide text-primary hover:underline"
                 >
                   <ExternalLink className="h-3 w-3" />
                   Source
@@ -107,7 +107,7 @@ export default function SelectorArchive() {
               selectorRunsLoading ? (
                 <div className="h-40 animate-pulse rounded-xl border border-card-border bg-card" />
               ) : !selectorRuns || selectorRuns.runs.length === 0 ? (
-                <p className="rounded-xl border border-card-border bg-card p-4 font-mono text-xs text-muted-foreground">
+                <p className="rounded-xl border border-card-border bg-card p-4 font-mono text-sm text-muted-foreground">
                   No shows logged yet — spins appear as they air.
                 </p>
               ) : (
@@ -120,10 +120,10 @@ export default function SelectorArchive() {
                         data-testid={`selector-run-${r.runId}`}
                       >
                         <div className="min-w-0">
-                          <p className="truncate font-serif text-base font-semibold text-foreground">
+                          <p className="truncate font-serif text-lg font-normal text-foreground">
                             {r.show?.name ?? data.picker.name}
                           </p>
-                          <p className="truncate font-mono text-[11px] text-muted-foreground">
+                          <p className="truncate font-mono text-[13px] text-muted-foreground">
                             {r.date ? `${runDate(r.date)} · ` : ""}
                             {r.spinCount} spin{r.spinCount === 1 ? "" : "s"}
                           </p>
@@ -137,7 +137,7 @@ export default function SelectorArchive() {
             ) : (
               /* Picks-backed archive for curated selectors */
               data.runs.length === 0 ? (
-                <p className="rounded-xl border border-card-border bg-card p-4 font-mono text-xs text-muted-foreground">
+                <p className="rounded-xl border border-card-border bg-card p-4 font-mono text-sm text-muted-foreground">
                   No documented runs yet — syncing happens in the background.
                 </p>
               ) : (
@@ -150,10 +150,10 @@ export default function SelectorArchive() {
                         data-testid={`selector-run-${r.runId}`}
                       >
                         <div className="min-w-0">
-                          <p className="truncate font-serif text-base font-semibold text-foreground">
+                          <p className="truncate font-serif text-lg font-normal text-foreground">
                             {r.title ?? "Untitled run"}
                           </p>
-                          <p className="truncate font-mono text-[11px] text-muted-foreground">
+                          <p className="truncate font-mono text-[13px] text-muted-foreground">
                             {r.pickedAt ? `${runDate(r.pickedAt)} · ` : ""}
                             {r.trackCount} track{r.trackCount === 1 ? "" : "s"} ·{" "}
                             <span
@@ -175,11 +175,11 @@ export default function SelectorArchive() {
 
             {!isDj && overlaps && overlaps.items.length > 0 && (
               <section className="mt-10">
-                <h2 className="mb-1 flex items-center gap-2 font-serif text-xl font-semibold text-foreground">
+                <h2 className="mb-1 flex items-center gap-2 font-serif text-2xl font-normal text-foreground">
                   <Radio className="h-5 w-5 text-primary" />
                   On the radio too
                 </h2>
-                <p className="mb-3 text-sm text-muted-foreground">
+                <p className="mb-3 text-base text-muted-foreground">
                   Stations that have spun the exact recordings this selector
                   vouched for.
                 </p>
@@ -195,10 +195,10 @@ export default function SelectorArchive() {
                         data-testid={`overlap-station-${o.station.slug}`}
                       >
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-foreground">
+                          <p className="truncate text-base font-normal text-foreground">
                             {o.station.name}
                           </p>
-                          <p className="truncate font-mono text-[11px] text-muted-foreground">
+                          <p className="truncate font-mono text-[13px] text-muted-foreground">
                             {o.sharedCount} shared song
                             {o.sharedCount === 1 ? "" : "s"}
                           </p>

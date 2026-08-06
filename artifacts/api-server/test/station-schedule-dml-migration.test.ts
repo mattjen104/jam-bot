@@ -65,8 +65,11 @@ afterAll(async () => {
   if (!dbAvailable || !stationId) return;
   await db.execute(sql`DELETE FROM scraped_shows WHERE station_id = ${stationId}`);
   // Must clear all FK children before the station row — order from memory note:
-  // radio_browser_stations → spins → shows → stations (no cascade defined)
+  // radio_browser_stations → spins → shows → stations (no cascade defined).
+  // station_quality too: the dev server's background quality scorer can score
+  // this test station mid-run, leaving an FK row that blocks the delete.
   await db.execute(sql`DELETE FROM radio_browser_stations WHERE station_id = ${stationId}`);
+  await db.execute(sql`DELETE FROM station_quality WHERE station_id = ${stationId}`);
   await db.execute(sql`DELETE FROM spins WHERE station_id = ${stationId}`);
   await db.execute(sql`DELETE FROM shows WHERE station_id = ${stationId}`);
   await db.execute(sql`DELETE FROM stations WHERE id = ${stationId}`);
@@ -121,7 +124,7 @@ async function showExists(id: number): Promise<boolean> {
 describe("applyStationScheduleMigration — DML ledger gate", () => {
   it(
     "backfills upcoming_show_count from scraped_shows on first run",
-    { timeout: 30_000 },
+    { timeout: 90_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 
@@ -143,7 +146,7 @@ describe("applyStationScheduleMigration — DML ledger gate", () => {
 
   it(
     "is idempotent: upcoming_show_count backfill does not run on second call (completion ledger)",
-    { timeout: 60_000 },
+    { timeout: 120_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 
@@ -170,7 +173,7 @@ describe("applyStationScheduleMigration — DML ledger gate", () => {
 
   it(
     "cleans invisible characters from show_name on first run",
-    { timeout: 30_000 },
+    { timeout: 90_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 
@@ -188,7 +191,7 @@ describe("applyStationScheduleMigration — DML ledger gate", () => {
 
   it(
     "is idempotent: invisible-char cleanup does not run on second call (completion ledger)",
-    { timeout: 60_000 },
+    { timeout: 120_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 
@@ -217,7 +220,7 @@ describe("applyStationScheduleMigration — DML ledger gate", () => {
 describe("applyStationScheduleMigration — extraction receipt migration", () => {
   it(
     "backfills schedule receipts from the station source and stays idempotent",
-    { timeout: 30_000 },
+    { timeout: 90_000 },
     async (ctx) => {
       if (!dbAvailable || !stationId) return ctx.skip();
 

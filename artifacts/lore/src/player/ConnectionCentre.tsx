@@ -49,7 +49,7 @@ export interface ConnectionCentreProps {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="px-1 pb-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground/60">
+    <p className="px-1 pb-1 font-mono text-[12px] uppercase tracking-widest text-muted-foreground/60">
       {children}
     </p>
   );
@@ -80,20 +80,20 @@ function ServiceCard({
 }: ServiceCardProps) {
   const statusBadge: Record<string, React.ReactNode> = {
     active: (
-      <span className="inline-flex items-center gap-1 font-mono text-[11px] text-emerald-400">
+      <span className="inline-flex items-center gap-1 font-mono text-[13px] text-zinc-400">
         <CheckCircle2 className="h-3 w-3" />
         Active
       </span>
     ),
     connected: (
-      <span className="inline-flex items-center gap-1 font-mono text-[11px] text-emerald-400">
+      <span className="inline-flex items-center gap-1 font-mono text-[13px] text-zinc-400">
         <CheckCircle2 className="h-3 w-3" />
         Connected
       </span>
     ),
     available: null,
     "not-configured": (
-      <span className="font-mono text-[11px] text-muted-foreground/50">
+      <span className="font-mono text-[13px] text-muted-foreground/50">
         Unavailable
       </span>
     ),
@@ -106,12 +106,12 @@ function ServiceCard({
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="font-mono text-[13px] font-medium text-foreground">
+          <span className="font-mono text-[15px] font-normal text-foreground">
             {name}
           </span>
           {statusBadge[status]}
         </div>
-        <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+        <p className="mt-0.5 font-mono text-[13px] text-muted-foreground">
           {benefit}
         </p>
         {(onAction || onSecondaryAction) && (
@@ -121,7 +121,7 @@ function ServiceCard({
                 type="button"
                 onClick={onAction}
                 disabled={disabled}
-                className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 font-mono text-[11px] text-primary transition-colors hover:bg-primary/20 disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 font-mono text-[13px] text-primary transition-colors hover:bg-primary/20 disabled:opacity-40"
               >
                 {actionLabel}
               </button>
@@ -130,7 +130,7 @@ function ServiceCard({
               <button
                 type="button"
                 onClick={onSecondaryAction}
-                className="font-mono text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                className="font-mono text-[13px] text-muted-foreground hover:text-foreground transition-colors"
               >
                 {secondaryLabel}
               </button>
@@ -230,10 +230,10 @@ export function ConnectionCentre({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border/60 px-5 py-4">
           <div>
-            <h2 className="font-mono text-sm font-semibold text-foreground">
+            <h2 className="font-mono text-base font-normal text-foreground">
               Connection Centre
             </h2>
-            <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+            <p className="mt-0.5 font-mono text-[13px] text-muted-foreground">
               Choose how Lore plays music for you
             </p>
           </div>
@@ -315,7 +315,7 @@ export function ConnectionCentre({
                     disabled={amConnecting}
                   />
                   {amAuthError && (
-                    <p className="font-mono text-[11px] text-rose-400 pl-1">
+                    <p className="font-mono text-[13px] text-zinc-400 pl-1">
                       {amAuthError}
                     </p>
                   )}
@@ -372,7 +372,7 @@ export function ConnectionCentre({
           <div className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3">
             <div className="flex items-start gap-2">
               <Zap className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              <p className="font-mono text-[11px] text-muted-foreground">
+              <p className="font-mono text-[13px] text-muted-foreground">
                 Lore tries each service in order: Local files → Spotify → Apple Music →
                 Bandcamp → YouTube. You always hear audio; higher services just
                 mean better quality and your own library.

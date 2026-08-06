@@ -68,8 +68,8 @@ export function ShareButton({ sharePath, kind, compact }: ShareButtonProps) {
       title="Copy a share link — unfurls with a preview card wherever you paste it"
       className={
         copied
-          ? "hover-elevate inline-flex items-center gap-1.5 rounded-full border border-primary-border bg-primary/15 px-3.5 py-1.5 font-mono text-[11px] uppercase tracking-wide text-primary"
-          : "hover-elevate inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3.5 py-1.5 font-mono text-[11px] uppercase tracking-wide text-foreground"
+          ? "hover-elevate inline-flex items-center gap-1.5 rounded-full border border-primary-border bg-primary/15 px-3.5 py-1.5 font-mono text-[13px] uppercase tracking-wide text-primary"
+          : "hover-elevate inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3.5 py-1.5 font-mono text-[13px] uppercase tracking-wide text-foreground"
       }
     >
       {copied ? (

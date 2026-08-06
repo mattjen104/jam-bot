@@ -39,11 +39,11 @@ export function AvatarPicker({ selected, onSelect }: AvatarPickerProps) {
               height: 40,
               borderRadius: 8,
               border: isSelected
-                ? "2px solid var(--picker, #e67e3a)"
+                ? "2px solid var(--picker, #8f8f8f)"
                 : "1.5px solid transparent",
               background: isSelected
-                ? "var(--picker-bg, rgba(230,126,58,0.12))"
-                : "var(--surface-2, rgba(255,255,255,0.04))",
+                ? "var(--picker-bg, rgba(143, 143, 143,0.12))"
+                : "var(--surface-2, rgba(255, 255, 255,0.04))",
               cursor: "pointer",
               padding: 4,
               transition: "border-color 0.15s, background 0.15s",

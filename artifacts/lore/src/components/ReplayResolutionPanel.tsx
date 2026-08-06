@@ -105,11 +105,11 @@ export function ReplayResolutionPanel({
         className="mb-6 rounded-xl border border-card-border bg-card p-4"
         data-testid="replay-resolution"
       >
-        <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+        <p className="font-mono text-[12px] uppercase tracking-wider text-muted-foreground">
           Streaming availability
         </p>
         <p
-          className="mt-1 flex items-center gap-2 text-sm text-foreground"
+          className="mt-1 flex items-center gap-2 text-base text-foreground"
           data-testid="resolution-fully-resolved"
         >
           <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-primary" />
@@ -133,17 +133,17 @@ export function ReplayResolutionPanel({
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+          <p className="font-mono text-[12px] uppercase tracking-wider text-muted-foreground">
             Streaming availability
           </p>
           {!job ? (
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1 text-base text-muted-foreground">
               Look up which tracks are available on streaming services to build
               a playlist.
             </p>
           ) : isRunning ? (
             <div className="mt-1">
-              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+              <p className="flex items-center gap-2 text-base text-muted-foreground">
                 <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
                 Checking{" "}
                 {job.total > 0
@@ -152,7 +152,7 @@ export function ReplayResolutionPanel({
               </p>
               {job.networkErrors > 0 ? (
                 <p
-                  className="mt-1 flex items-center gap-1.5 text-xs text-amber-400"
+                  className="mt-1 flex items-center gap-1.5 text-sm text-zinc-400"
                   data-testid="resolution-network-errors"
                   role="status"
                 >
@@ -163,13 +163,13 @@ export function ReplayResolutionPanel({
             </div>
           ) : isDoneWithErrors ? (
             <div className="mt-1">
-              <p className="flex items-center gap-2 text-sm text-foreground">
+              <p className="flex items-center gap-2 text-base text-foreground">
                 <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-primary" />
                 {job.resolved} of {job.total} tracks found on a streaming
                 service
               </p>
               <p
-                className="mt-1 flex items-center gap-1.5 text-xs text-amber-400"
+                className="mt-1 flex items-center gap-1.5 text-sm text-zinc-400"
                 data-testid="resolution-network-errors"
                 role="alert"
               >
@@ -178,44 +178,44 @@ export function ReplayResolutionPanel({
               </p>
               {breakdownSummary ? (
                 <p
-                  className="mt-1 text-xs text-muted-foreground"
+                  className="mt-1 text-sm text-muted-foreground"
                   data-testid="resolution-miss-breakdown"
                 >
                   {breakdownSummary}
                 </p>
               ) : null}
-              <p className="mt-1 text-xs text-muted-foreground" data-testid="resolution-checked-at">
+              <p className="mt-1 text-sm text-muted-foreground" data-testid="resolution-checked-at">
                 Last checked {formatCheckedAt(job.finishedAt)}
               </p>
             </div>
           ) : isDone ? (
             <div className="mt-1">
-              <p className="flex items-center gap-2 text-sm text-foreground">
+              <p className="flex items-center gap-2 text-base text-foreground">
                 <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-primary" />
                 {job.resolved} of {job.total} tracks found on a streaming
                 service
               </p>
               {breakdownSummary ? (
                 <p
-                  className="mt-1 text-xs text-muted-foreground"
+                  className="mt-1 text-sm text-muted-foreground"
                   data-testid="resolution-miss-breakdown"
                 >
                   {breakdownSummary}
                 </p>
               ) : null}
-              <p className="mt-1 text-xs text-muted-foreground" data-testid="resolution-checked-at">
+              <p className="mt-1 text-sm text-muted-foreground" data-testid="resolution-checked-at">
                 Last checked {formatCheckedAt(job.finishedAt)}
               </p>
             </div>
           ) : isError ? (
-            <p className="mt-1 flex items-center gap-2 text-sm text-destructive-foreground">
+            <p className="mt-1 flex items-center gap-2 text-base text-destructive-foreground">
               <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
               {job.error ?? "Resolution failed"}
             </p>
           ) : null}
           {startError ? (
             <p
-              className="mt-2 text-xs text-destructive-foreground"
+              className="mt-2 text-sm text-destructive-foreground"
               role="alert"
             >
               {startError}
@@ -227,7 +227,7 @@ export function ReplayResolutionPanel({
             type="button"
             disabled={starting}
             onClick={() => void start()}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-card-border px-3 py-2 font-mono text-[10px] uppercase tracking-wide text-foreground hover:border-primary hover:text-primary disabled:opacity-50"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-card-border px-3 py-2 font-mono text-[12px] uppercase tracking-wide text-foreground hover:border-primary hover:text-primary disabled:opacity-50"
             data-testid={isTerminalDone ? "recheck-tracks-button" : "resolve-tracks-button"}
           >
             {starting ? (

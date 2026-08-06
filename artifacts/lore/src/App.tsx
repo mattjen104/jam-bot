@@ -34,7 +34,6 @@ import ScheduleCalendar from "@/pages/ScheduleCalendar";
 import WebPlayer from "./webplayer/WebPlayer";
 import { PlayerProvider } from "./player/PlayerProvider";
 import { PlayerDock } from "./components/PlayerDock";
-import { RecordPeekNav } from "./components/RecordPeekNav";
 import { SocialModeBar } from "./components/SocialModeBar";
 import { ListeningLogger } from "./components/ListeningLogger";
 import { AppLayout } from "./components/AppLayout";
@@ -188,7 +187,8 @@ function BottomShell() {
       <div className="bottom-shell">
         <div className="bottom-shell__strip" aria-hidden="true" />
         <PlayerDock />
-        <RecordPeekNav />
+        {/* RecordPeekNav (record-sleeve tabs) hidden for now — section nav
+            moved into the page space as SlimSectionNav (AppLayout/DialView). */}
       </div>
     </div>
   );

@@ -243,10 +243,6 @@ function getPrevBtn() {
   return screen.getByRole("button", { name: "Previous run" });
 }
 
-function getTopSetsBtn() {
-  return screen.getByRole("button", { name: "⭐ Top sets" });
-}
-
 // ---------------------------------------------------------------------------
 // Teardown
 // ---------------------------------------------------------------------------
@@ -276,11 +272,15 @@ describe("(a) strip renders with → disabled in live mode", () => {
     expect(getPrevBtn().hasAttribute("disabled")).toBe(false);
   });
 
-  it("the strip label reads 'Today' in live mode", () => {
+  it("the strip shows the moon (labelled 'Today') in live mode — no day text", () => {
     mockDialDataSettled();
     renderDial();
 
-    expect(screen.getByText("Today")).toBeTruthy();
+    const ttLabel = document.querySelector(".dial-timetravel__label");
+    expect(ttLabel?.getAttribute("aria-label")).toBe("Today");
+    // Day text is gone — the moon glyph is the time indicator now.
+    expect(screen.queryByText("Today")).toBeNull();
+    expect(ttLabel?.querySelector("svg.moon-glyph")).toBeTruthy();
   });
 });
 
@@ -318,10 +318,19 @@ describe("(b) stepping ← shows most recent crossing run", () => {
       fireEvent.click(getPrevBtn());
     });
 
-    // The DialTimeTravelStrip label span contains station + DJ + date
+    // The DialTimeTravelStrip label span contains station + DJ as text;
+    // the date is carried by the moon glyph (phase of the scrubbed day)
+    // and by the full title/aria-label.
     const ttLabel = document.querySelector(".dial-timetravel__label");
     expect(ttLabel?.textContent).toContain("KEXP");
     expect(ttLabel?.textContent).toContain("DJ Alex");
+    // Full old label (incl. date) preserved for hover + assistive tech
+    expect(ttLabel?.getAttribute("aria-label")).toMatch(/^KEXP · DJ Alex · /);
+    expect(ttLabel?.getAttribute("title")).toBe(ttLabel?.getAttribute("aria-label"));
+    // Moon glyph present and decorative (label carries the semantics)
+    const moon = ttLabel?.querySelector("svg.moon-glyph");
+    expect(moon).toBeTruthy();
+    expect(moon?.getAttribute("aria-hidden")).toBe("true");
   });
 
   it("live Zone 1 crossing rows (.fdrow) are absent after stepping back into past-scan", () => {
@@ -365,69 +374,21 @@ describe("(c) stepping → from the most recent run returns to live mode", () =>
       fireEvent.click(getNextBtn());
     });
 
-    // Back to live mode
-    expect(screen.getByText("Today")).toBeTruthy();
+    // Back to live mode — label carries the "Today" aria-label, moon shown
+    expect(document.querySelector(".dial-timetravel__label")?.getAttribute("aria-label")).toBe("Today");
     const nextBtn = getNextBtn();
     expect(nextBtn.hasAttribute("disabled")).toBe(true);
   });
 });
 
-describe("(d) 'Top sets' toggle renders all-time run rows and hides Zones 2 & 3", () => {
-  it("shows WFMU top run and no ghost row when top sets active", () => {
+describe("(d) 'Top sets' toggle is hidden for now (machinery kept for later)", () => {
+  it("no Top sets button renders in the strip", () => {
     mockDialDataSettled();
     renderDial();
 
-    act(() => {
-      fireEvent.click(getTopSetsBtn());
-    });
-
-    // Top run row visible
-    expect(screen.getByText("WFMU")).toBeTruthy();
-    expect(screen.getByText(/DJ Best/)).toBeTruthy();
-
-    // Zone 2 ghost row NOT visible (top mode hides it)
-    expect(screen.queryByText("Ghost Radio")).toBeNull();
-  });
-
-  it("strip label reads 'Top sets · all time' in top mode", () => {
-    mockDialDataSettled();
-    renderDial();
-
-    act(() => {
-      fireEvent.click(getTopSetsBtn());
-    });
-
-    expect(screen.getByText("Top sets · all time")).toBeTruthy();
-  });
-
-  it("pressing 'Top sets' again returns to live mode", () => {
-    mockDialDataSettled();
-    renderDial();
-
-    act(() => {
-      fireEvent.click(getTopSetsBtn());
-    });
-    act(() => {
-      fireEvent.click(getTopSetsBtn());
-    });
-
-    expect(screen.getByText("Today")).toBeTruthy();
-  });
-
-  it("pressing ← in top mode exits top mode and returns to live", () => {
-    mockDialDataSettled();
-    renderDial();
-
-    act(() => {
-      fireEvent.click(getTopSetsBtn());
-    });
-    expect(screen.getByText("Top sets · all time")).toBeTruthy();
-
-    act(() => {
-      fireEvent.click(getPrevBtn());
-    });
-    // Exited top mode — back to live
-    expect(screen.getByText("Today")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "⭐ Top sets" })).toBeNull();
+    // Strip still shows the live label (moon with "Today" aria-label)
+    expect(document.querySelector(".dial-timetravel__label")?.getAttribute("aria-label")).toBe("Today");
   });
 });
 
@@ -455,6 +416,34 @@ describe("(e) clicking a run row navigates to /archive/station-runs/{runId}", ()
   });
 });
 
+describe("(r) dial range pills widen the coarse scan window", () => {
+  it("renders 2d / 1w / 1m pills with 2d active by default, and requests the wider window on click", () => {
+    mockDialDataSettled();
+    renderDial();
+
+    const pill2d = screen.getByRole("button", { name: "Scan back 2 days" });
+    const pill1w = screen.getByRole("button", { name: "Scan back 7 days" });
+    const pill1m = screen.getByRole("button", { name: "Scan back 30 days" });
+    expect(pill2d.getAttribute("aria-pressed")).toBe("true");
+    expect(pill1w.getAttribute("aria-pressed")).toBe("false");
+    expect(pill1m.getAttribute("aria-pressed")).toBe("false");
+
+    // Default fetch asks for the 2-day window
+    const recentMock = useMyOverlapRunsRecent as ReturnType<typeof vi.fn>;
+    expect(recentMock.mock.calls.some((c) => c[0]?.days === 2)).toBe(true);
+
+    act(() => {
+      fireEvent.click(pill1w);
+    });
+
+    // Re-render fetches the 7-day window and the pill becomes active
+    expect(recentMock.mock.calls.some((c) => c[0]?.days === 7)).toBe(true);
+    expect(
+      screen.getByRole("button", { name: "Scan back 7 days" }).getAttribute("aria-pressed"),
+    ).toBe("true");
+  });
+});
+
 describe("(f) empty recent-runs: ← keeps the view at live edge", () => {
   it("when recentRuns is empty, ← does not change the label from 'Today'", () => {
     (useMyOverlapRunsRecent as ReturnType<typeof vi.fn>).mockReturnValue({
@@ -470,7 +459,7 @@ describe("(f) empty recent-runs: ← keeps the view at live edge", () => {
     });
 
     // Stays at live edge — no coarse candidates to navigate to
-    expect(screen.getByText("Today")).toBeTruthy();
+    expect(document.querySelector(".dial-timetravel__label")?.getAttribute("aria-label")).toBe("Today");
     const nextBtn = getNextBtn();
     expect(nextBtn.hasAttribute("disabled")).toBe(true);
   });

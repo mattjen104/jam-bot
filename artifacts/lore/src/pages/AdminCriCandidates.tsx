@@ -40,8 +40,8 @@ const ICY_LABELS: Record<string, string> = {
 };
 
 const ICY_COLORS: Record<string, string> = {
-  yes: "bg-emerald-500/15 text-emerald-400",
-  no: "bg-amber-500/15 text-amber-400",
+  yes: "bg-zinc-500/15 text-zinc-400",
+  no: "bg-zinc-500/15 text-zinc-400",
   unknown: "bg-muted/60 text-muted-foreground",
 };
 
@@ -68,14 +68,14 @@ function TokenGate({ onSave }: { onSave: (t: string) => void }) {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm rounded-2xl border border-card-border bg-card p-8 shadow-lg">
-        <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wide text-primary">
+        <div className="flex items-center gap-2 font-mono text-[13px] uppercase tracking-wide text-primary">
           <KeyRound className="h-3.5 w-3.5" />
           Admin access
         </div>
-        <h1 className="mt-3 font-serif text-2xl font-semibold text-foreground">
+        <h1 className="mt-3 font-serif text-3xl font-normal text-foreground">
           Enter admin token
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1 text-base text-muted-foreground">
           Stored in your browser — you won't need to re-enter it.
         </p>
         <form
@@ -91,12 +91,12 @@ function TokenGate({ onSave }: { onSave: (t: string) => void }) {
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Token"
             autoFocus
-            className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+            className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
           />
           <button
             type="submit"
             disabled={!draft.trim()}
-            className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-opacity disabled:opacity-40"
+            className="rounded-full bg-primary px-5 py-2 text-base font-normal text-primary-foreground shadow-sm transition-opacity disabled:opacity-40"
           >
             Continue
           </button>
@@ -204,10 +204,10 @@ function CriPanel({
       <div className="relative z-10 mx-auto max-w-3xl px-4 py-10 sm:px-6">
         <div className="flex items-center justify-between">
           <div>
-            <p className="font-mono text-[11px] uppercase tracking-wide text-primary">
+            <p className="font-mono text-[13px] uppercase tracking-wide text-primary">
               Admin
             </p>
-            <h1 className="mt-1 font-serif text-3xl font-semibold text-foreground">
+            <h1 className="mt-1 font-serif text-4xl font-normal text-foreground">
               CRI Candidates
             </h1>
           </div>
@@ -215,7 +215,7 @@ function CriPanel({
             <button
               type="button"
               onClick={() => void load(icyFilter, loreFilter, onlyPromotable)}
-              className="inline-flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground/70 hover:text-primary"
+              className="inline-flex items-center gap-1.5 font-mono text-[13px] text-muted-foreground/70 hover:text-primary"
             >
               <RefreshCw className="h-3.5 w-3.5" />
               Refresh
@@ -223,7 +223,7 @@ function CriPanel({
             <button
               type="button"
               onClick={onClearToken}
-              className="font-mono text-[11px] text-muted-foreground/70 hover:text-primary"
+              className="font-mono text-[13px] text-muted-foreground/70 hover:text-primary"
             >
               Clear token
             </button>
@@ -232,7 +232,7 @@ function CriPanel({
 
         <AdminNav token={token} />
 
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="mt-2 text-base text-muted-foreground">
           Stations discovered via the{" "}
           <a
             href="https://community.radio"
@@ -243,7 +243,7 @@ function CriPanel({
             Community Radio Index
           </a>{" "}
           and cross-referenced against Radio Browser. Only stations with{" "}
-          <span className="font-mono text-xs">ICY ✓</span> deliver now-playing
+          <span className="font-mono text-sm">ICY ✓</span> deliver now-playing
           metadata and can be promoted to Lore.
         </p>
 
@@ -254,7 +254,7 @@ function CriPanel({
               key={f.value}
               type="button"
               onClick={() => handleIcyFilter(f.value)}
-              className={`rounded-full px-3 py-1 font-mono text-[11px] uppercase tracking-wide transition-colors ${
+              className={`rounded-full px-3 py-1 font-mono text-[13px] uppercase tracking-wide transition-colors ${
                 icyFilter === f.value && !onlyPromotable
                   ? "bg-primary text-primary-foreground"
                   : "border border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
@@ -270,7 +270,7 @@ function CriPanel({
               key={f.value}
               type="button"
               onClick={() => handleLoreFilter(f.value)}
-              className={`rounded-full px-3 py-1 font-mono text-[11px] uppercase tracking-wide transition-colors ${
+              className={`rounded-full px-3 py-1 font-mono text-[13px] uppercase tracking-wide transition-colors ${
                 loreFilter === f.value && !onlyPromotable
                   ? "bg-primary text-primary-foreground"
                   : "border border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
@@ -283,9 +283,9 @@ function CriPanel({
           <button
             type="button"
             onClick={handlePromotable}
-            className={`rounded-full px-3 py-1 font-mono text-[11px] uppercase tracking-wide transition-colors ${
+            className={`rounded-full px-3 py-1 font-mono text-[13px] uppercase tracking-wide transition-colors ${
               onlyPromotable
-                ? "bg-emerald-600 text-white"
+                ? "bg-zinc-600 text-white"
                 : "border border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
             }`}
           >
@@ -297,21 +297,21 @@ function CriPanel({
         {loading && (
           <div className="mt-12 flex items-center justify-center gap-2 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <span className="text-sm">Loading candidates…</span>
+            <span className="text-base">Loading candidates…</span>
           </div>
         )}
 
         {/* Error */}
         {fetchError && !loading && (
           <div className="mt-8 rounded-2xl border border-destructive/40 bg-destructive/10 p-6">
-            <div className="flex items-center gap-2 text-sm text-destructive-foreground">
+            <div className="flex items-center gap-2 text-base text-destructive-foreground">
               <AlertCircle className="h-4 w-4 shrink-0" />
               {fetchError}
             </div>
             <button
               type="button"
               onClick={() => void load(icyFilter, loreFilter, onlyPromotable)}
-              className="mt-3 font-mono text-[11px] text-primary hover:underline"
+              className="mt-3 font-mono text-[13px] text-primary hover:underline"
             >
               Retry
             </button>
@@ -322,8 +322,8 @@ function CriPanel({
         {!loading && !fetchError && candidates?.length === 0 && (
           <div className="mt-12 rounded-2xl border border-card-border bg-card p-8 text-center">
             <Music className="mx-auto h-8 w-8 text-muted-foreground/40" />
-            <p className="mt-4 font-serif text-lg text-foreground">No candidates</p>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-4 font-serif text-xl text-foreground">No candidates</p>
+            <p className="mt-1 text-base text-muted-foreground">
               {onlyPromotable
                 ? "No stations are ready to promote right now."
                 : "No CRI candidates found with the current filter."}
@@ -333,7 +333,7 @@ function CriPanel({
 
         {/* Count */}
         {!loading && candidates && candidates.length > 0 && (
-          <p className="mt-4 font-mono text-[11px] text-muted-foreground/70">
+          <p className="mt-4 font-mono text-[13px] text-muted-foreground/70">
             {candidates.length} candidate{candidates.length === 1 ? "" : "s"}
           </p>
         )}
@@ -397,28 +397,28 @@ function CandidateRow({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span
-              className={`shrink-0 rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide ${
+              className={`shrink-0 rounded-full px-2 py-0.5 font-mono text-[12px] uppercase tracking-wide ${
                 ICY_COLORS[candidate.icyStatus] ?? "bg-muted/60 text-muted-foreground"
               }`}
             >
               {ICY_LABELS[candidate.icyStatus] ?? candidate.icyStatus}
             </span>
             {candidate.alreadyInLore && (
-              <span className="shrink-0 rounded-full bg-primary/15 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-primary">
+              <span className="shrink-0 rounded-full bg-primary/15 px-2 py-0.5 font-mono text-[12px] uppercase tracking-wide text-primary">
                 In Lore
               </span>
             )}
           </div>
-          <p className="mt-1.5 font-medium text-foreground leading-snug">{candidate.name}</p>
+          <p className="mt-1.5 font-normal text-foreground leading-snug">{candidate.name}</p>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
             {(candidate.city || candidate.country) && (
-              <span className="flex items-center gap-1 font-mono text-[11px] text-muted-foreground/70">
+              <span className="flex items-center gap-1 font-mono text-[13px] text-muted-foreground/70">
                 <MapPin className="h-3 w-3" />
                 {[candidate.city, candidate.country].filter(Boolean).join(", ")}
               </span>
             )}
             {candidate.genres.length > 0 && (
-              <span className="flex items-center gap-1 font-mono text-[11px] text-muted-foreground/70">
+              <span className="flex items-center gap-1 font-mono text-[13px] text-muted-foreground/70">
                 <Music className="h-3 w-3" />
                 {candidate.genres.slice(0, 3).join(" · ")}
               </span>
@@ -429,13 +429,13 @@ function CandidateRow({
               href={candidate.streamUrl}
               target="_blank"
               rel="noreferrer"
-              className="mt-1 block truncate font-mono text-[11px] text-muted-foreground/60 hover:text-primary"
+              className="mt-1 block truncate font-mono text-[13px] text-muted-foreground/60 hover:text-primary"
               title={candidate.streamUrl}
             >
               {candidate.streamUrl}
             </a>
           )}
-          <p className="mt-0.5 font-mono text-[10px] text-muted-foreground/50">
+          <p className="mt-0.5 font-mono text-[12px] text-muted-foreground/50">
             Checked {fmtDate(candidate.checkedAt)}
           </p>
         </div>
@@ -443,9 +443,9 @@ function CandidateRow({
         {/* Right: links + status icon */}
         <div className="flex shrink-0 items-center gap-2">
           {candidate.icyStatus === "yes" ? (
-            <Wifi className="h-3.5 w-3.5 text-emerald-500" />
+            <Wifi className="h-3.5 w-3.5 text-zinc-500" />
           ) : candidate.icyStatus === "no" ? (
-            <WifiOff className="h-3.5 w-3.5 text-amber-500" />
+            <WifiOff className="h-3.5 w-3.5 text-zinc-500" />
           ) : (
             <AlertCircle className="h-3.5 w-3.5 text-muted-foreground/40" />
           )}
@@ -454,7 +454,7 @@ function CandidateRow({
               href={candidate.websiteUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 font-mono text-[11px] text-muted-foreground/60 hover:text-primary"
+              className="inline-flex items-center gap-1 font-mono text-[13px] text-muted-foreground/60 hover:text-primary"
               title="Station website"
             >
               <Globe className="h-3.5 w-3.5" />
@@ -465,7 +465,7 @@ function CandidateRow({
               href={`https://community.radio/stations/${candidate.criSlug}`}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 font-mono text-[11px] text-muted-foreground/60 hover:text-primary"
+              className="inline-flex items-center gap-1 font-mono text-[13px] text-muted-foreground/60 hover:text-primary"
               title="CRI page"
             >
               <ArrowUpRight className="h-3.5 w-3.5" />
@@ -476,7 +476,7 @@ function CandidateRow({
 
       {/* Notes */}
       {candidate.notes && (
-        <p className="mt-2 rounded-lg bg-secondary/40 px-3 py-1.5 font-mono text-[11px] text-muted-foreground">
+        <p className="mt-2 rounded-lg bg-secondary/40 px-3 py-1.5 font-mono text-[13px] text-muted-foreground">
           {candidate.notes}
         </p>
       )}
@@ -485,7 +485,7 @@ function CandidateRow({
       {(canPromote || candidate.alreadyInLore || promoted) && (
         <div className="mt-3 flex items-center gap-2">
           {candidate.alreadyInLore || promoted ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 font-mono text-[11px] text-primary">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 font-mono text-[13px] text-primary">
               <Check className="h-3 w-3" />
               Promoted to Lore
             </span>
@@ -494,7 +494,7 @@ function CandidateRow({
               type="button"
               disabled={promoting}
               onClick={() => void handlePromote()}
-              className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600/90 px-4 py-1.5 font-mono text-[11px] text-white shadow-sm transition-opacity hover:bg-emerald-600 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-full bg-zinc-600/90 px-4 py-1.5 font-mono text-[13px] text-white shadow-sm transition-opacity hover:bg-zinc-600 disabled:opacity-50"
             >
               {promoting ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -507,7 +507,7 @@ function CandidateRow({
         </div>
       )}
       {promoteError && (
-        <p className="mt-1.5 text-xs text-destructive-foreground">{promoteError}</p>
+        <p className="mt-1.5 text-sm text-destructive-foreground">{promoteError}</p>
       )}
     </li>
   );

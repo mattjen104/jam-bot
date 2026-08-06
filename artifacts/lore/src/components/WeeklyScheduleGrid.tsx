@@ -104,10 +104,10 @@ export function WeeklyScheduleGrid({ shows, lastScrapedAt, timezoneHint }: Weekl
     return (
       <div className="rounded-xl border border-card-border bg-card p-8 text-center">
         <Radio className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
-        <p className="font-mono text-xs text-muted-foreground">
+        <p className="font-mono text-sm text-muted-foreground">
           No schedule available for this station yet.
         </p>
-        <p className="mt-1 font-mono text-[10px] text-muted-foreground/60">
+        <p className="mt-1 font-mono text-[12px] text-muted-foreground/60">
           Schedule data is collected automatically — check back soon.
         </p>
       </div>
@@ -134,20 +134,20 @@ export function WeeklyScheduleGrid({ shows, lastScrapedAt, timezoneHint }: Weekl
           <thead>
             <tr className="border-b border-card-border bg-card">
               {/* Empty time-label column header */}
-              <th className="w-16 px-3 py-2.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground/60">
+              <th className="w-16 px-3 py-2.5 font-mono text-[12px] uppercase tracking-wide text-muted-foreground/60">
                 Time
               </th>
               {DAYS.map((d) => (
                 <th
                   key={d}
                   title={DAY_LONG[d]}
-                  className={`px-3 py-2.5 font-mono text-[10px] uppercase tracking-wide ${
+                  className={`px-3 py-2.5 font-mono text-[12px] uppercase tracking-wide ${
                     d === currentDay ? "text-primary" : "text-muted-foreground"
                   }`}
                 >
                   {DAY_SHORT[d]}
                   {d === currentDay && (
-                    <span className="ml-1.5 rounded-full border border-primary-border bg-primary/10 px-1 py-0.5 text-[8px] text-primary">
+                    <span className="ml-1.5 rounded-full border border-primary-border bg-primary/10 px-1 py-0.5 text-[9px] text-primary">
                       today
                     </span>
                   )}
@@ -164,7 +164,7 @@ export function WeeklyScheduleGrid({ shows, lastScrapedAt, timezoneHint }: Weekl
                 }`}
               >
                 {/* Time label */}
-                <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[11px] text-muted-foreground">
+                <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[13px] text-muted-foreground">
                   {formatTime(time)}
                 </td>
 
@@ -186,13 +186,13 @@ export function WeeklyScheduleGrid({ shows, lastScrapedAt, timezoneHint }: Weekl
                     >
                       <div className="flex flex-col gap-0.5">
                         <span
-                          className={`text-[12px] font-medium leading-snug ${
+                          className={`text-[14px] font-normal leading-snug ${
                             airing ? "text-primary" : "text-foreground"
                           }`}
                         >
                           {show.showName}
                           {airing && (
-                            <span className="ml-1.5 inline-flex items-center gap-0.5 font-mono text-[9px] uppercase tracking-wide text-primary">
+                            <span className="ml-1.5 inline-flex items-center gap-0.5 font-mono text-[10px] uppercase tracking-wide text-primary">
                               <span className="inline-block h-1 w-1 animate-pulse rounded-full bg-primary" />
                               live
                             </span>
@@ -201,13 +201,13 @@ export function WeeklyScheduleGrid({ shows, lastScrapedAt, timezoneHint }: Weekl
                         {show.djName && (
                           <Link
                             href={`/dj/${encodeURIComponent(show.djName)}`}
-                            className="w-fit font-mono text-[10px] text-muted-foreground hover:text-primary"
+                            className="w-fit font-mono text-[12px] text-muted-foreground hover:text-primary"
                             onClick={(e) => e.stopPropagation()}
                           >
                             {show.djName}
                           </Link>
                         )}
-                        <span className="font-mono text-[10px] text-muted-foreground/60">
+                        <span className="font-mono text-[12px] text-muted-foreground/60">
                           {formatTime(show.startTime)}–{formatTime(show.endTime)}
                         </span>
                       </div>
@@ -221,7 +221,7 @@ export function WeeklyScheduleGrid({ shows, lastScrapedAt, timezoneHint }: Weekl
       </div>
 
       {lastScrapedAt && (
-        <p className="font-mono text-[10px] text-muted-foreground/50">
+        <p className="font-mono text-[12px] text-muted-foreground/50">
           Schedule last updated{" "}
           {new Date(lastScrapedAt).toLocaleDateString(undefined, {
             month: "short",

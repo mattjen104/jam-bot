@@ -67,9 +67,9 @@ export function ContextRail({
     // Simple ephemeral toast using existing Toaster infrastructure
     const el = document.createElement("div");
     el.style.cssText = `position:fixed;bottom:140px;left:50%;transform:translateX(-50%);
-      background:var(--raised,#241F1A);border:1px solid var(--rule-strong,#4A433A);border-radius:3px;
+      background:var(--raised,#202020);border:1px solid var(--rule-strong,#444444);border-radius:3px;
       font-family:var(--app-font-display,'Archivo Narrow',sans-serif);font-size:10px;text-transform:uppercase;
-      letter-spacing:.07em;color:var(--ink-2,#B9B1A1);padding:9px 16px;white-space:nowrap;z-index:9999;
+      letter-spacing:.07em;color:var(--ink-2,#b2b2b2);padding:9px 16px;white-space:nowrap;z-index:9999;
       pointer-events:none`;
     el.textContent = msg;
     document.body.appendChild(el);

@@ -84,10 +84,12 @@
 - [Support ladder identity grounding](support-ladder-identity-grounding.md) — never infer a release MBID from a recording→release-group bridge; provider facts must carry release identity explicitly.
 - [Art fallback local asset](art-fallback-local-asset.md) — RUMOURS placeholder must be a bundled local file (old CAA URL 404s); compare img.src by suffix, every art <img> needs onArtError.
 - [Crossings query performance](crossings-query-performance.md) — single 180-day bounded query only; unbounded/two-query approach causes 10–16s hangs; cache TTL = 30 min.
+- [Dial ranged coarse-scan window](dial-range-window.md) — time-only spins filters need the played_at-leading index (boot migration); spine goes dense >60 runs; clamp coarseIdx on shrink.
 - [server-db-tests merge gate](server-db-tests-gate.md) — DB suite gates at maxWorkers=2 (4 flakes on 1M-row contention); inline 30s test timeouts override config and must be ≥90s; never hardcode dates.
 - [Test-suite migration DDL deadlocks](test-migration-deadlocks.md) — migrations run once in globalSetup only; mid-suite constraint-swap DDL deadlocks parallel workers; advisory-lock the migration for concurrent boots.
 - [Hero art iTunes vs CAA](hero-art-itunes-caa.md) — never trust iTunes Search art without exact title/artist validation; derive release-exact CAA front-1200 from the mbid embedded in library artwork URLs.
 - [Merged dial tab & invertible sort](dial-merged-tab-sort.md) — ▼ is a discovery ranking (rarest-first), not a key inversion; Oxford commas + ", now."; clickable "and" appends "Also, …"; copy test file is pre-red on master.
 - [Crossings route merge-splice](crossings-route-merge-splice.md) — twin handlers in me/crossings.ts get merge-spliced repeatedly; typecheck both handlers after merges; CrossingsRow shared from lib/db.
 - [Drizzle CTE correlated subquery in GROUP BY](drizzle-cte-correlated-subquery.md) — EXISTS inside GROUP BY outer = PG 42803; fix: LEFT JOIN on CTE + bool_or(). Also: kill stale tsx pids before trusting response to edits.
+- [Lore brutalist typography block](lore-brutalist-typography.md) — `body *` !important uniform font-size at end of index.css overrides all per-rule sizes; resize type by editing that block only.
 - [dialCrossingSentence.test.tsx pre-existing failures](dialcrossingsent-preexisting-failures.md) — 33/71 tests fail on master (expected old "on air"/"dash" grammar, current impl uses "selected"/"this set"). Not a regression; verify with git stash before fixing.

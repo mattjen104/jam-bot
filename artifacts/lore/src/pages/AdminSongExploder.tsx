@@ -34,11 +34,11 @@ function TokenGate({ onSave }: { onSave: (t: string) => void }) {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm rounded-2xl border border-card-border bg-card p-8 shadow-lg">
-        <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wide text-primary">
+        <div className="flex items-center gap-2 font-mono text-[13px] uppercase tracking-wide text-primary">
           <KeyRound className="h-3.5 w-3.5" />
           Admin access
         </div>
-        <h1 className="mt-3 font-serif text-2xl font-semibold text-foreground">
+        <h1 className="mt-3 font-serif text-3xl font-normal text-foreground">
           Enter admin token
         </h1>
         <form
@@ -54,12 +54,12 @@ function TokenGate({ onSave }: { onSave: (t: string) => void }) {
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Token"
             autoFocus
-            className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+            className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
           />
           <button
             type="submit"
             disabled={!draft.trim()}
-            className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-opacity disabled:opacity-40"
+            className="rounded-full bg-primary px-5 py-2 text-base font-normal text-primary-foreground shadow-sm transition-opacity disabled:opacity-40"
           >
             Continue
           </button>
@@ -95,10 +95,10 @@ function EpisodesPanel({
       <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
         <div className="flex items-center justify-between">
           <div>
-            <p className="font-mono text-[11px] uppercase tracking-wide text-primary">
+            <p className="font-mono text-[13px] uppercase tracking-wide text-primary">
               Admin
             </p>
-            <h1 className="mt-1 flex items-center gap-2 font-serif text-3xl font-semibold text-foreground">
+            <h1 className="mt-1 flex items-center gap-2 font-serif text-4xl font-normal text-foreground">
               <Mic2 className="h-7 w-7 text-primary" />
               Song Exploder anchors
             </h1>
@@ -106,7 +106,7 @@ function EpisodesPanel({
           <button
             type="button"
             onClick={onClearToken}
-            className="font-mono text-[11px] text-muted-foreground/70 hover:text-primary"
+            className="font-mono text-[13px] text-muted-foreground/70 hover:text-primary"
           >
             Clear token
           </button>
@@ -114,7 +114,7 @@ function EpisodesPanel({
 
         <AdminNav token={token} />
 
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="mt-2 text-base text-muted-foreground">
           For each resolved episode, set the YouTube URL (enables ?t= timestamped
           linking) then add timeline anchors: song position + paraphrased label +
           deep-link.
@@ -123,18 +123,18 @@ function EpisodesPanel({
         {isLoading && (
           <div className="mt-12 flex items-center justify-center gap-2 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <span className="text-sm">Loading episodes…</span>
+            <span className="text-base">Loading episodes…</span>
           </div>
         )}
         {isError && (
           <div className="mt-8 rounded-2xl border border-destructive/40 bg-destructive/10 p-6">
-            <p className="text-sm text-destructive-foreground">
+            <p className="text-base text-destructive-foreground">
               Could not load episodes. Check the admin token or server.
             </p>
             <button
               type="button"
               onClick={() => void refetch()}
-              className="mt-3 font-mono text-[11px] text-primary hover:underline"
+              className="mt-3 font-mono text-[13px] text-primary hover:underline"
             >
               Retry
             </button>
@@ -145,7 +145,7 @@ function EpisodesPanel({
           <div className="mt-8 grid gap-8 lg:grid-cols-5">
             {/* Episode list */}
             <div className="lg:col-span-2">
-              <p className="mb-3 font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+              <p className="mb-3 font-mono text-[13px] uppercase tracking-wide text-muted-foreground">
                 Resolved ({resolved.length})
               </p>
               <ul className="flex flex-col gap-2">
@@ -165,10 +165,10 @@ function EpisodesPanel({
                           : "border-card-border bg-card hover:border-primary/30",
                       ].join(" ")}
                     >
-                      <p className="truncate text-sm font-medium text-foreground">
+                      <p className="truncate text-base font-normal text-foreground">
                         {ep.title}
                       </p>
-                      <p className="mt-0.5 font-mono text-[11px] text-muted-foreground/70">
+                      <p className="mt-0.5 font-mono text-[13px] text-muted-foreground/70">
                         {ep.anchorCount} anchor{ep.anchorCount === 1 ? "" : "s"}
                         {ep.youtubeUrl ? " · YT ✓" : " · no YT URL"}
                       </p>
@@ -178,7 +178,7 @@ function EpisodesPanel({
               </ul>
               {unresolved.length > 0 && (
                 <>
-                  <p className="mb-3 mt-6 font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+                  <p className="mb-3 mt-6 font-mono text-[13px] uppercase tracking-wide text-muted-foreground">
                     Unresolved ({unresolved.length})
                   </p>
                   <ul className="flex flex-col gap-1.5">
@@ -187,7 +187,7 @@ function EpisodesPanel({
                         key={ep.id}
                         className="rounded-xl border border-card-border bg-card/50 px-3 py-2"
                       >
-                        <p className="truncate text-sm text-muted-foreground">
+                        <p className="truncate text-base text-muted-foreground">
                           {ep.title}
                         </p>
                       </li>
@@ -212,7 +212,7 @@ function EpisodesPanel({
               ) : (
                 <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-card-border bg-card/40 py-16 text-center">
                   <Mic2 className="h-10 w-10 text-muted-foreground/30" />
-                  <p className="mt-4 font-serif text-lg text-muted-foreground">
+                  <p className="mt-4 font-serif text-xl text-muted-foreground">
                     Select an episode to add anchors
                   </p>
                 </div>
@@ -467,10 +467,10 @@ function EpisodeEditor({
       {/* Episode header */}
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
-          <p className="font-mono text-[11px] uppercase tracking-wide text-primary">
+          <p className="font-mono text-[13px] uppercase tracking-wide text-primary">
             Editing episode
           </p>
-          <p className="mt-0.5 font-serif text-lg font-semibold text-foreground">
+          <p className="mt-0.5 font-serif text-xl font-normal text-foreground">
             {episode.title}
           </p>
         </div>
@@ -478,7 +478,7 @@ function EpisodeEditor({
           href={episode.episodeUrl}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex shrink-0 items-center gap-1 font-mono text-[11px] text-muted-foreground/70 hover:text-primary"
+          className="inline-flex shrink-0 items-center gap-1 font-mono text-[13px] text-muted-foreground/70 hover:text-primary"
         >
           <ExternalLink className="h-3 w-3" />
           Episode
@@ -486,14 +486,14 @@ function EpisodeEditor({
       </div>
 
       {submitted > 0 && (
-        <p className="mt-3 font-mono text-[11px] text-primary">
+        <p className="mt-3 font-mono text-[13px] text-primary">
           ✓ {submitted} anchor{submitted === 1 ? "" : "s"} saved
         </p>
       )}
 
       {/* YouTube URL */}
       <div className="mt-5">
-        <label className="mb-1.5 block font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+        <label className="mb-1.5 block font-mono text-[13px] uppercase tracking-wide text-muted-foreground">
           YouTube URL (enables ?t= timestamped links)
         </label>
         <div className="flex gap-2">
@@ -505,13 +505,13 @@ function EpisodeEditor({
               setYtSaved(false);
             }}
             placeholder="https://youtube.com/watch?v=…"
-            className="flex-1 rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+            className="flex-1 rounded-lg border border-border bg-secondary/40 px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
           />
           <button
             type="button"
             onClick={() => void saveYoutubeUrl()}
             disabled={ytSaving}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-sm font-medium text-primary transition-opacity disabled:opacity-50"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-base font-normal text-primary transition-opacity disabled:opacity-50"
           >
             {ytSaving ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -522,10 +522,10 @@ function EpisodeEditor({
           </button>
         </div>
         {ytError && (
-          <p className="mt-1 text-xs text-destructive-foreground">{ytError}</p>
+          <p className="mt-1 text-sm text-destructive-foreground">{ytError}</p>
         )}
         {ytSaved && (
-          <p className="mt-1 font-mono text-[11px] text-primary">Saved ✓</p>
+          <p className="mt-1 font-mono text-[13px] text-primary">Saved ✓</p>
         )}
 
         {/* Import chapters button — shown when a YouTube URL is entered (saved or unsaved) */}
@@ -535,7 +535,7 @@ function EpisodeEditor({
               type="button"
               onClick={() => void importChapters()}
               disabled={importing}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary/30 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary/30 px-3 py-1.5 text-sm font-normal text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary disabled:opacity-50"
             >
               {importing ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -545,7 +545,7 @@ function EpisodeEditor({
               Import chapters from YouTube
             </button>
             {importError && (
-              <p className="mt-1 text-xs text-destructive-foreground">{importError}</p>
+              <p className="mt-1 text-sm text-destructive-foreground">{importError}</p>
             )}
           </div>
         )}
@@ -555,14 +555,14 @@ function EpisodeEditor({
       {chapterDrafts.length > 0 && (
         <div className="mt-5 rounded-xl border border-primary/20 bg-primary/5 p-4">
           <div className="mb-3 flex items-center justify-between">
-            <p className="font-mono text-[11px] uppercase tracking-wide text-primary">
+            <p className="font-mono text-[13px] uppercase tracking-wide text-primary">
               {chapterDrafts.filter((d) => !d.done).length} chapter
               {chapterDrafts.filter((d) => !d.done).length === 1 ? "" : "s"} to add
             </p>
             <button
               type="button"
               onClick={() => setChapterDrafts([])}
-              className="font-mono text-[10px] text-muted-foreground/60 hover:text-destructive-foreground"
+              className="font-mono text-[12px] text-muted-foreground/60 hover:text-destructive-foreground"
             >
               Clear all
             </button>
@@ -580,10 +580,10 @@ function EpisodeEditor({
               >
                 <div className="flex items-start gap-2">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-foreground">
+                    <p className="truncate text-base font-normal text-foreground">
                       {draft.text}
                     </p>
-                    <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+                    <p className="mt-0.5 font-mono text-[13px] text-muted-foreground">
                       ep {msToTimecode(draft.positionMs)}
                     </p>
                   </div>
@@ -602,13 +602,13 @@ function EpisodeEditor({
                       value={draft.songPos}
                       onChange={(e) => updateDraft(draft.key, { songPos: e.target.value, error: "" })}
                       placeholder="Song pos M:SS"
-                      className="w-28 rounded-md border border-border bg-secondary/40 px-2 py-1 font-mono text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none"
+                      className="w-28 rounded-md border border-border bg-secondary/40 px-2 py-1 font-mono text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none"
                     />
                     <button
                       type="button"
                       onClick={() => void submitChapterAnchor(draft)}
                       disabled={draft.submitting || !draft.songPos.trim()}
-                      className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                      className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-sm font-normal text-primary-foreground disabled:opacity-50"
                     >
                       {draft.submitting ? (
                         <Loader2 className="h-3 w-3 animate-spin" />
@@ -618,12 +618,12 @@ function EpisodeEditor({
                       Add anchor
                     </button>
                     {draft.error && (
-                      <p className="text-xs text-destructive-foreground">{draft.error}</p>
+                      <p className="text-sm text-destructive-foreground">{draft.error}</p>
                     )}
                   </div>
                 )}
                 {draft.done && (
-                  <p className="mt-1 font-mono text-[11px] text-primary">✓ Added</p>
+                  <p className="mt-1 font-mono text-[13px] text-primary">✓ Added</p>
                 )}
               </li>
             ))}
@@ -633,13 +633,13 @@ function EpisodeEditor({
 
       {/* Anchor entry form */}
       <div className="mt-6 border-t border-border pt-5">
-        <p className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+        <p className="font-mono text-[13px] uppercase tracking-wide text-muted-foreground">
           Add timeline anchor
         </p>
 
         <div className="mt-3 grid grid-cols-2 gap-3">
           <div>
-            <label className="mb-1 block text-xs text-muted-foreground">
+            <label className="mb-1 block text-sm text-muted-foreground">
               Song position (M:SS)
             </label>
             <input
@@ -647,11 +647,11 @@ function EpisodeEditor({
               value={songPos}
               onChange={(e) => setSongPos(e.target.value)}
               placeholder="1:52"
-              className="w-full rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+              className="w-full rounded-lg border border-border bg-secondary/40 px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-muted-foreground">
+            <label className="mb-1 block text-sm text-muted-foreground">
               Episode position (M:SS)
             </label>
             <input
@@ -659,13 +659,13 @@ function EpisodeEditor({
               value={epPos}
               onChange={(e) => setEpPos(e.target.value)}
               placeholder="4:10"
-              className="w-full rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+              className="w-full rounded-lg border border-border bg-secondary/40 px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
             />
           </div>
         </div>
 
         <div className="mt-3">
-          <label className="mb-1 block text-xs text-muted-foreground">
+          <label className="mb-1 block text-sm text-muted-foreground">
             Paraphrased topic label (never verbatim)
           </label>
           <input
@@ -673,7 +673,7 @@ function EpisodeEditor({
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             placeholder="Artist discusses the bass entry here"
-            className="w-full rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+            className="w-full rounded-lg border border-border bg-secondary/40 px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
           />
         </div>
 
@@ -685,7 +685,7 @@ function EpisodeEditor({
               href={previewLink}
               target="_blank"
               rel="noreferrer"
-              className="min-w-0 flex-1 truncate font-mono text-[11px] text-primary hover:underline"
+              className="min-w-0 flex-1 truncate font-mono text-[13px] text-primary hover:underline"
             >
               {previewLink}
             </a>
@@ -693,7 +693,7 @@ function EpisodeEditor({
         )}
 
         <div className="mt-3">
-          <label className="mb-1 block text-xs text-muted-foreground">
+          <label className="mb-1 block text-sm text-muted-foreground">
             Override deep-link URL (leave blank to use preview above)
           </label>
           <input
@@ -701,12 +701,12 @@ function EpisodeEditor({
             value={deepLink}
             onChange={(e) => setDeepLink(e.target.value)}
             placeholder="https://…"
-            className="w-full rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+            className="w-full rounded-lg border border-border bg-secondary/40 px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
           />
         </div>
 
         {submitError && (
-          <p className="mt-2 text-xs text-destructive-foreground">
+          <p className="mt-2 text-sm text-destructive-foreground">
             {submitError}
           </p>
         )}
@@ -715,7 +715,7 @@ function EpisodeEditor({
           type="button"
           onClick={() => void submitAnchor()}
           disabled={submitting}
-          className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-opacity disabled:opacity-50"
+          className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-primary px-5 py-2 text-base font-normal text-primary-foreground shadow-sm transition-opacity disabled:opacity-50"
         >
           {submitting ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />

@@ -111,7 +111,7 @@ export function DevicePicker({ spotify }: DevicePickerProps) {
         }
         data-testid="device-picker-button"
         className={[
-          "hover-elevate flex h-9 items-center gap-1.5 rounded-full border px-2.5 font-mono text-[11px] transition-colors",
+          "hover-elevate flex h-9 items-center gap-1.5 rounded-full border px-2.5 font-mono text-[13px] transition-colors",
           isPinned
             ? "border-primary/40 bg-primary/10 text-primary"
             : "border-border text-muted-foreground hover:text-foreground",
@@ -140,7 +140,7 @@ export function DevicePicker({ spotify }: DevicePickerProps) {
           className="absolute bottom-full mb-2 right-0 z-50 w-64 rounded-xl border border-border bg-secondary/98 shadow-xl backdrop-blur-md"
         >
           <div className="flex items-center justify-between border-b border-border/60 px-4 py-2.5">
-            <span className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+            <span className="font-mono text-[13px] uppercase tracking-wide text-muted-foreground">
               Play on device
             </span>
             <button
@@ -159,7 +159,7 @@ export function DevicePicker({ spotify }: DevicePickerProps) {
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
             ) : devices.length === 0 ? (
-              <p className="px-4 py-4 font-mono text-[11px] text-muted-foreground">
+              <p className="px-4 py-4 font-mono text-[13px] text-muted-foreground">
                 No Spotify devices found. Open Spotify on a device and try again.
               </p>
             ) : (
@@ -186,10 +186,10 @@ export function DevicePicker({ spotify }: DevicePickerProps) {
                       ].join(" ")}
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-mono text-[12px]">
+                      <p className="truncate font-mono text-[14px]">
                         {device.name}
                       </p>
-                      <p className="font-mono text-[10px] text-muted-foreground">
+                      <p className="font-mono text-[12px] text-muted-foreground">
                         {device.type}
                       </p>
                     </div>
@@ -197,14 +197,14 @@ export function DevicePicker({ spotify }: DevicePickerProps) {
                       {device.isActive ? (
                         <span
                           data-testid={`device-playing-badge-${device.id}`}
-                          className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 font-mono text-[10px] text-emerald-500"
+                          className="flex items-center gap-1 rounded-full bg-zinc-500/15 px-1.5 py-0.5 font-mono text-[12px] text-zinc-500"
                         >
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          <span className="h-1.5 w-1.5 rounded-full bg-zinc-500" />
                           Playing
                         </span>
                       ) : null}
                       {isSelected ? (
-                        <span className="rounded-full bg-primary/20 px-1.5 py-0.5 font-mono text-[10px] text-primary">
+                        <span className="rounded-full bg-primary/20 px-1.5 py-0.5 font-mono text-[12px] text-primary">
                           Pinned
                         </span>
                       ) : null}
@@ -222,7 +222,7 @@ export function DevicePicker({ spotify }: DevicePickerProps) {
                 type="button"
                 onClick={handleDisconnect}
                 data-testid="device-picker-disconnect"
-                className="w-full rounded-lg py-1.5 font-mono text-[11px] text-muted-foreground hover:text-foreground transition-colors text-center"
+                className="w-full rounded-lg py-1.5 font-mono text-[13px] text-muted-foreground hover:text-foreground transition-colors text-center"
               >
                 Stop sending to this device
               </button>

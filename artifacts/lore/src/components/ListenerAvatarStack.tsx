@@ -30,7 +30,7 @@ if (typeof document !== "undefined" && !document.getElementById(STYLE_ID)) {
       height: 7px;
       border-radius: 50%;
       background: hsl(var(--las-live));
-      border: 1.5px solid var(--las-bg, #1a1625);
+      border: 1.5px solid var(--las-bg, #181818);
       animation: las-pulse 2.4s ease-out infinite;
     }
   `;
@@ -109,7 +109,7 @@ export function ListenerAvatarStack({
                   height: 28,
                   borderRadius: 4,
                   objectFit: "cover",
-                  border: "1.5px solid var(--background, #1a1625)",
+                  border: "1.5px solid var(--background, #181818)",
                 }}
               />
               {/* Live indicator dot */}
@@ -132,8 +132,8 @@ export function ListenerAvatarStack({
             borderRadius: 10,
             background: "hsl(var(--accent) / 0.18)",
             border: "1px solid hsl(var(--accent) / 0.3)",
-            fontSize: 10,
-            fontWeight: 600,
+            fontSize: 12,
+            fontWeight: 400,
             color: "hsl(var(--accent-foreground, 80 40% 15%))",
             fontVariantNumeric: "tabular-nums",
             lineHeight: 1,
@@ -149,7 +149,7 @@ export function ListenerAvatarStack({
       {/* "also here" / "you + N others" framing */}
       <span
         style={{
-          fontSize: 11,
+          fontSize: 13,
           color: "hsl(var(--muted-foreground) / 0.7)",
           lineHeight: 1,
         }}

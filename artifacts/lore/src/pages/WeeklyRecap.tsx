@@ -14,25 +14,25 @@ export default function WeeklyRecap() {
       <div className={`mx-auto max-w-4xl px-4 pt-8 sm:px-6 ${dockPadding}`}>
         <Link
           href="/"
-          className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wide text-muted-foreground hover:text-primary transition-colors"
+          className="inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wide text-muted-foreground hover:text-primary transition-colors"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
           Back to the dial
         </Link>
 
         <header className="mb-10 mt-6">
-          <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] text-primary mb-3">
+          <div className="flex items-center gap-2 font-mono text-[13px] uppercase tracking-[0.3em] text-primary mb-3">
             <Calendar className="h-4 w-4" />
             Weekly Recap
           </div>
-          <h1 className="max-w-[20ch] font-serif text-4xl font-semibold leading-[1.05] text-foreground">
+          <h1 className="max-w-[20ch] font-serif text-4xl font-normal leading-[1.05] text-foreground">
             A look back at your week in radio.
           </h1>
-          <p className="mt-4 max-w-[52ch] text-base text-muted-foreground">
+          <p className="mt-4 max-w-[52ch] text-lg text-muted-foreground">
             A counts-only reflection of the radio you actually attended, from Sunday through Saturday.
           </p>
           {data?.week && (
-            <p className="mt-3 font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+            <p className="mt-3 font-mono text-[13px] uppercase tracking-wide text-muted-foreground">
               {data.week.startDate} — {data.week.endDate} · UTC
             </p>
           )}
@@ -44,19 +44,19 @@ export default function WeeklyRecap() {
           </div>
         ) : error ? (
           <div className="rounded-xl border border-destructive-border bg-destructive/10 p-8 text-center">
-            <p className="font-serif text-lg text-destructive-foreground">Failed to load weekly recap.</p>
+            <p className="font-serif text-xl text-destructive-foreground">Failed to load weekly recap.</p>
           </div>
         ) : !data ? (
           <div className="rounded-xl border border-card-border bg-card p-8 text-center">
-            <p className="font-serif text-lg text-muted-foreground">Nothing to show yet.</p>
+            <p className="font-serif text-xl text-muted-foreground">Nothing to show yet.</p>
           </div>
         ) : (
           <div className="flex flex-col gap-12">
             <section>
-              <h2 className="mb-4 font-mono text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
+              <h2 className="mb-4 font-mono text-[13px] uppercase tracking-[0.3em] text-muted-foreground">
                 Stations Attended
               </h2>
-              <p className="mb-3 font-serif text-3xl text-foreground">{data.stationsAttended.count}</p>
+              <p className="mb-3 font-serif text-4xl text-foreground">{data.stationsAttended.count}</p>
               {data.stationsAttended.stations.length === 0 ? (
                 <div className="rounded-xl border border-card-border bg-card p-6 text-center text-muted-foreground">
                   No stations attended this week.
@@ -67,7 +67,7 @@ export default function WeeklyRecap() {
                     <Link
                       key={station.slug}
                       href={`/archive/stations/${station.slug}`}
-                      className="rounded-full border border-card-border bg-card px-4 py-2 font-mono text-sm transition-colors hover:border-primary/50 hover:text-primary"
+                      className="rounded-full border border-card-border bg-card px-4 py-2 font-mono text-base transition-colors hover:border-primary/50 hover:text-primary"
                     >
                       {station.name}
                     </Link>
@@ -77,10 +77,10 @@ export default function WeeklyRecap() {
             </section>
 
             <section>
-              <h2 className="mb-4 font-mono text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
+              <h2 className="mb-4 font-mono text-[13px] uppercase tracking-[0.3em] text-muted-foreground">
                 First-Ever-Heards
               </h2>
-              <p className="mb-3 font-serif text-3xl text-foreground">{data.firstEverHeards.count}</p>
+              <p className="mb-3 font-serif text-4xl text-foreground">{data.firstEverHeards.count}</p>
               {data.firstEverHeards.items.length === 0 ? (
                 <div className="rounded-xl border border-card-border bg-card p-6 text-center text-muted-foreground">
                   No first-ever-heards this week.
@@ -95,11 +95,11 @@ export default function WeeklyRecap() {
                       <div className="flex flex-col">
                         <Link
                           href={`/song/${track.mbid}`}
-                          className="text-base font-medium text-foreground hover:text-primary transition-colors"
+                          className="text-lg font-normal text-foreground hover:text-primary transition-colors"
                         >
                           {track.title}
                         </Link>
-                        <span className="text-sm" style={{ color: "hsl(var(--dim))" }}>
+                        <span className="text-base" style={{ color: "hsl(var(--dim))" }}>
                           {track.artist}
                         </span>
                       </div>
@@ -111,10 +111,10 @@ export default function WeeklyRecap() {
 
             {/* Ripened Crossings */}
             <section>
-              <h2 className="mb-4 font-mono text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
+              <h2 className="mb-4 font-mono text-[13px] uppercase tracking-[0.3em] text-muted-foreground">
                 Ripened Crossings
               </h2>
-              <p className="mb-3 font-serif text-3xl text-foreground">{data.ripenedCrossings.count}</p>
+              <p className="mb-3 font-serif text-4xl text-foreground">{data.ripenedCrossings.count}</p>
               {data.ripenedCrossings.items.length === 0 ? (
                 <div className="rounded-xl border border-card-border bg-card p-6 text-center text-muted-foreground">
                   No ripened crossings this week.
@@ -129,11 +129,11 @@ export default function WeeklyRecap() {
                       <div className="min-w-0">
                         <Link
                           href={`/archive/stations/${crossing.station.slug}`}
-                          className="text-base font-medium text-foreground hover:text-primary transition-colors"
+                          className="text-lg font-normal text-foreground hover:text-primary transition-colors"
                         >
                           {crossing.title}
                         </Link>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-base text-muted-foreground">
                           {crossing.artist} · {crossing.station.name}
                         </p>
                       </div>
@@ -146,19 +146,19 @@ export default function WeeklyRecap() {
             {/* Missed Ghost Replay */}
             {data.missedGhostReplay && (
               <section>
-                <h2 className="mb-4 font-mono text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
+                <h2 className="mb-4 font-mono text-[13px] uppercase tracking-[0.3em] text-muted-foreground">
                   Missed Ghost Replay
                 </h2>
                 <div className="flex flex-col gap-1 rounded-xl border border-card-border bg-card p-4">
                   <Link
                     href={`/replay/${data.missedGhostReplay.replayId}`}
-                    className="inline-flex items-center gap-2 text-base font-medium text-foreground hover:text-primary transition-colors"
+                    className="inline-flex items-center gap-2 text-lg font-normal text-foreground hover:text-primary transition-colors"
                   >
                     <Radio className="h-4 w-4" />
                     {data.missedGhostReplay.station.name}
                     <ExternalLink className="h-3.5 w-3.5" />
                   </Link>
-                  <span className="text-sm" style={{ color: "hsl(var(--dim))" }}>
+                  <span className="text-base" style={{ color: "hsl(var(--dim))" }}>
                     {data.missedGhostReplay.show?.name ?? "Ghost Replay"} · {data.missedGhostReplay.date}
                   </span>
                 </div>

@@ -59,15 +59,15 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: "bg-amber-500/15 text-amber-400",
-  extracted: "bg-emerald-500/15 text-emerald-400",
+  pending: "bg-zinc-500/15 text-zinc-400",
+  extracted: "bg-zinc-500/15 text-zinc-400",
   failed: "bg-destructive/15 text-destructive-foreground",
   skipped: "bg-muted/60 text-muted-foreground",
 };
 
 const CONFIDENCE_COLORS: Record<string, string> = {
-  exact: "bg-emerald-500/15 text-emerald-400",
-  fuzzy: "bg-amber-500/15 text-amber-400",
+  exact: "bg-zinc-500/15 text-zinc-400",
+  fuzzy: "bg-zinc-500/15 text-zinc-400",
   unresolved: "bg-destructive/15 text-destructive-foreground",
 };
 
@@ -103,14 +103,14 @@ function TokenGate({ onSave }: { onSave: (t: string) => void }) {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm rounded-2xl border border-card-border bg-card p-8 shadow-lg">
-        <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wide text-primary">
+        <div className="flex items-center gap-2 font-mono text-[13px] uppercase tracking-wide text-primary">
           <KeyRound className="h-3.5 w-3.5" />
           Admin access
         </div>
-        <h1 className="mt-3 font-serif text-2xl font-semibold text-foreground">
+        <h1 className="mt-3 font-serif text-3xl font-normal text-foreground">
           Enter admin token
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1 text-base text-muted-foreground">
           Stored in your browser — you won't need to re-enter it.
         </p>
         <form
@@ -126,12 +126,12 @@ function TokenGate({ onSave }: { onSave: (t: string) => void }) {
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Token"
             autoFocus
-            className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+            className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
           />
           <button
             type="submit"
             disabled={!draft.trim()}
-            className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-opacity disabled:opacity-40"
+            className="rounded-full bg-primary px-5 py-2 text-base font-normal text-primary-foreground shadow-sm transition-opacity disabled:opacity-40"
           >
             Continue
           </button>
@@ -217,10 +217,10 @@ function CandidatesPanel({
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <p className="font-mono text-[11px] uppercase tracking-wide text-primary">
+            <p className="font-mono text-[13px] uppercase tracking-wide text-primary">
               Admin
             </p>
-            <h1 className="mt-1 font-serif text-3xl font-semibold text-foreground">
+            <h1 className="mt-1 font-serif text-4xl font-normal text-foreground">
               List candidates
             </h1>
           </div>
@@ -228,7 +228,7 @@ function CandidatesPanel({
             <button
               type="button"
               onClick={() => void loadCandidates(statusFilter)}
-              className="inline-flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground/70 hover:text-primary"
+              className="inline-flex items-center gap-1.5 font-mono text-[13px] text-muted-foreground/70 hover:text-primary"
             >
               <RefreshCw className="h-3.5 w-3.5" />
               Refresh
@@ -236,7 +236,7 @@ function CandidatesPanel({
             <button
               type="button"
               onClick={onClearToken}
-              className="font-mono text-[11px] text-muted-foreground/70 hover:text-primary"
+              className="font-mono text-[13px] text-muted-foreground/70 hover:text-primary"
             >
               Clear token
             </button>
@@ -252,7 +252,7 @@ function CandidatesPanel({
               key={f.value}
               type="button"
               onClick={() => handleFilterChange(f.value)}
-              className={`rounded-full px-3 py-1 font-mono text-[11px] uppercase tracking-wide transition-colors ${
+              className={`rounded-full px-3 py-1 font-mono text-[13px] uppercase tracking-wide transition-colors ${
                 statusFilter === f.value
                   ? "bg-primary text-primary-foreground"
                   : "border border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
@@ -267,21 +267,21 @@ function CandidatesPanel({
         {loading && (
           <div className="mt-12 flex items-center justify-center gap-2 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <span className="text-sm">Loading candidates…</span>
+            <span className="text-base">Loading candidates…</span>
           </div>
         )}
 
         {/* Error */}
         {fetchError && !loading && (
           <div className="mt-8 rounded-2xl border border-destructive/40 bg-destructive/10 p-6">
-            <div className="flex items-center gap-2 text-sm text-destructive-foreground">
+            <div className="flex items-center gap-2 text-base text-destructive-foreground">
               <AlertCircle className="h-4 w-4 shrink-0" />
               {fetchError}
             </div>
             <button
               type="button"
               onClick={() => void loadCandidates(statusFilter)}
-              className="mt-3 font-mono text-[11px] text-primary hover:underline"
+              className="mt-3 font-mono text-[13px] text-primary hover:underline"
             >
               Retry
             </button>
@@ -292,10 +292,10 @@ function CandidatesPanel({
         {!loading && !fetchError && candidates?.length === 0 && (
           <div className="mt-12 rounded-2xl border border-card-border bg-card p-8 text-center">
             <List className="mx-auto h-8 w-8 text-muted-foreground/40" />
-            <p className="mt-4 font-serif text-lg text-foreground">
+            <p className="mt-4 font-serif text-xl text-foreground">
               No candidates
             </p>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1 text-base text-muted-foreground">
               {statusFilter
                 ? `No ${STATUS_LABELS[statusFilter]?.toLowerCase() ?? statusFilter} candidates yet.`
                 : "No list candidates have been queued yet."}
@@ -305,7 +305,7 @@ function CandidatesPanel({
 
         {/* Count */}
         {!loading && candidates && candidates.length > 0 && (
-          <p className="mt-4 font-mono text-[11px] text-muted-foreground/70">
+          <p className="mt-4 font-mono text-[13px] text-muted-foreground/70">
             {candidates.length} candidate{candidates.length === 1 ? "" : "s"}
           </p>
         )}
@@ -383,20 +383,20 @@ function CandidateCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span
-              className={`shrink-0 rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide ${
+              className={`shrink-0 rounded-full px-2 py-0.5 font-mono text-[12px] uppercase tracking-wide ${
                 STATUS_COLORS[candidate.status] ?? "bg-muted/60 text-muted-foreground"
               }`}
             >
               {STATUS_LABELS[candidate.status] ?? candidate.status}
             </span>
-            <span className="font-mono text-[11px] text-muted-foreground/70">
+            <span className="font-mono text-[13px] text-muted-foreground/70">
               {candidate.pickerName}
             </span>
           </div>
-          <p className="mt-1.5 font-medium text-foreground leading-snug">
+          <p className="mt-1.5 font-normal text-foreground leading-snug">
             {candidate.title}
           </p>
-          <p className="mt-0.5 font-mono text-[11px] text-muted-foreground/60">
+          <p className="mt-0.5 font-mono text-[13px] text-muted-foreground/60">
             Published {fmtDate(candidate.publishedAt)} · Queued{" "}
             {fmtDate(candidate.createdAt)}
             {candidate.processedAt && (
@@ -408,7 +408,7 @@ function CandidateCard({
           href={candidate.url}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex shrink-0 items-center gap-1 font-mono text-[11px] text-muted-foreground/70 hover:text-primary"
+          className="inline-flex shrink-0 items-center gap-1 font-mono text-[13px] text-muted-foreground/70 hover:text-primary"
         >
           <ArrowUpRight className="h-3.5 w-3.5" />
           Post
@@ -417,7 +417,7 @@ function CandidateCard({
 
       {/* Note */}
       {candidate.note && (
-        <p className="mt-2 rounded-lg bg-secondary/40 px-3 py-2 font-mono text-[11px] text-muted-foreground">
+        <p className="mt-2 rounded-lg bg-secondary/40 px-3 py-2 font-mono text-[13px] text-muted-foreground">
           {candidate.note}
         </p>
       )}
@@ -429,7 +429,7 @@ function CandidateCard({
           type="button"
           disabled={retrying}
           onClick={() => void handleRetry()}
-          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-base text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground disabled:opacity-50"
         >
           {retrying ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -444,7 +444,7 @@ function CandidateCard({
           <button
             type="button"
             onClick={() => setShowEntries((v) => !v)}
-            className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 text-sm text-primary transition-colors hover:bg-primary/20"
+            className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 text-base text-primary transition-colors hover:bg-primary/20"
           >
             {showEntries ? (
               <ChevronDown className="h-3.5 w-3.5" />
@@ -457,7 +457,7 @@ function CandidateCard({
       </div>
 
       {retryError && (
-        <p className="mt-1.5 text-xs text-destructive-foreground">{retryError}</p>
+        <p className="mt-1.5 text-sm text-destructive-foreground">{retryError}</p>
       )}
 
       {/* Inline entries review panel */}
@@ -540,12 +540,12 @@ function EntriesReviewPanel({
   return (
     <div className="mt-4 rounded-xl border border-border bg-secondary/20 p-4">
       <div className="flex items-center justify-between gap-2">
-        <p className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+        <p className="font-mono text-[13px] uppercase tracking-wide text-muted-foreground">
           List #{listId} entries
         </p>
         <div className="flex items-center gap-3">
           {!loading && entries && (
-            <span className="font-mono text-[11px] text-muted-foreground/60">
+            <span className="font-mono text-[13px] text-muted-foreground/60">
               {showAll
                 ? `${entries.length} total`
                 : `${pendingCount} need review`}
@@ -554,7 +554,7 @@ function EntriesReviewPanel({
           <button
             type="button"
             onClick={handleToggleAll}
-            className="font-mono text-[11px] text-muted-foreground/70 hover:text-primary"
+            className="font-mono text-[13px] text-muted-foreground/70 hover:text-primary"
           >
             {showAll ? "Show pending only" : "Show all"}
           </button>
@@ -564,19 +564,19 @@ function EntriesReviewPanel({
       {loading && (
         <div className="mt-4 flex items-center gap-2 text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          <span className="text-sm">Loading entries…</span>
+          <span className="text-base">Loading entries…</span>
         </div>
       )}
 
       {error && !loading && (
-        <div className="mt-3 flex items-center gap-2 text-sm text-destructive-foreground">
+        <div className="mt-3 flex items-center gap-2 text-base text-destructive-foreground">
           <AlertCircle className="h-3.5 w-3.5 shrink-0" />
           {error}
         </div>
       )}
 
       {!loading && !error && entries?.length === 0 && (
-        <p className="mt-3 text-sm text-muted-foreground">
+        <p className="mt-3 text-base text-muted-foreground">
           {showAll
             ? "No entries in this list yet."
             : "No pending entries — all matches are confirmed or exact."}
@@ -668,7 +668,7 @@ function EntryRow({
   const isConfirmed = entry.confirmed;
   const confidenceBadge = (
     <span
-      className={`shrink-0 rounded-full px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wide ${
+      className={`shrink-0 rounded-full px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide ${
         CONFIDENCE_COLORS[entry.confidence] ?? "bg-muted/60 text-muted-foreground"
       }`}
     >
@@ -680,7 +680,7 @@ function EntryRow({
     <li className="rounded-lg border border-border bg-card p-3">
       <div className="flex items-start gap-3">
         {/* Rank */}
-        <span className="mt-0.5 w-6 shrink-0 text-right font-mono text-[11px] text-muted-foreground/50">
+        <span className="mt-0.5 w-6 shrink-0 text-right font-mono text-[13px] text-muted-foreground/50">
           {entry.rank ?? "—"}
         </span>
 
@@ -689,19 +689,19 @@ function EntryRow({
           <div className="flex items-center gap-2">
             {confidenceBadge}
             {isConfirmed && (
-              <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wide text-emerald-400">
+              <span className="rounded-full bg-zinc-500/15 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-zinc-400">
                 confirmed
               </span>
             )}
           </div>
-          <p className="mt-1 font-medium text-sm text-foreground">
-            {entry.rawAlbum ?? <span className="text-muted-foreground italic">no album</span>}
+          <p className="mt-1 font-normal text-base text-foreground">
+            {entry.rawAlbum ?? <span className="text-muted-foreground not-italic">no album</span>}
           </p>
-          <p className="text-sm text-muted-foreground">
-            {entry.rawArtist ?? <span className="italic">no artist</span>}
+          <p className="text-base text-muted-foreground">
+            {entry.rawArtist ?? <span className="not-italic">no artist</span>}
           </p>
           {entry.confidence !== "unresolved" && (
-            <p className="mt-0.5 font-mono text-[10px] text-muted-foreground/50 truncate">
+            <p className="mt-0.5 font-mono text-[12px] text-muted-foreground/50 truncate">
               MB: {entry.releaseGroupMbid}
             </p>
           )}
@@ -746,7 +746,7 @@ function EntryRow({
 
         {/* Already confirmed exact — show tick */}
         {(isConfirmed || entry.confidence === "exact") && !showCorrect && (
-          <Check className="mt-1 h-4 w-4 shrink-0 text-emerald-400" />
+          <Check className="mt-1 h-4 w-4 shrink-0 text-zinc-400" />
         )}
       </div>
 
@@ -758,13 +758,13 @@ function EntryRow({
             value={correctedMbid}
             onChange={(e) => setCorrectedMbid(e.target.value)}
             placeholder="Correct release group MBID (e.g. a1b2c3d4-…)"
-            className="flex-1 rounded-lg border border-border bg-secondary/40 px-3 py-1.5 font-mono text-[11px] text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none"
+            className="flex-1 rounded-lg border border-border bg-secondary/40 px-3 py-1.5 font-mono text-[13px] text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none"
           />
           <button
             type="button"
             disabled={busy || !correctedMbid.trim()}
             onClick={() => void handleCorrect()}
-            className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
+            className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-base font-normal text-primary-foreground disabled:opacity-50"
           >
             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
             Apply
@@ -772,7 +772,7 @@ function EntryRow({
           <button
             type="button"
             onClick={() => { setShowCorrect(false); setCorrectedMbid(""); }}
-            className="font-mono text-[11px] text-muted-foreground/70 hover:text-primary"
+            className="font-mono text-[13px] text-muted-foreground/70 hover:text-primary"
           >
             Cancel
           </button>
@@ -780,7 +780,7 @@ function EntryRow({
       )}
 
       {err && (
-        <p className="mt-1 pl-9 text-xs text-destructive-foreground">{err}</p>
+        <p className="mt-1 pl-9 text-sm text-destructive-foreground">{err}</p>
       )}
     </li>
   );

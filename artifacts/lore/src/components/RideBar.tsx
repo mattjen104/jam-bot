@@ -59,7 +59,7 @@ function ProgressBar({
   return (
     <div className="px-5 pb-2">
       <div className="relative flex items-center gap-2">
-        <span className="w-8 shrink-0 text-right font-mono text-[10px] text-muted-foreground">
+        <span className="w-8 shrink-0 text-right font-mono text-[12px] text-muted-foreground">
           {formatTime(progress)}
         </span>
         {/* Visual track — no interactive overlay */}
@@ -76,7 +76,7 @@ function ProgressBar({
             style={{ width: `${pct}%` }}
           />
         </div>
-        <span className="w-8 shrink-0 font-mono text-[10px] text-muted-foreground">
+        <span className="w-8 shrink-0 font-mono text-[12px] text-muted-foreground">
           {duration > 0 ? formatTime(duration) : "--:--"}
         </span>
       </div>
@@ -134,7 +134,7 @@ export function SeekBar({
   return (
     <div className="px-5 pb-2">
       <div className="relative flex items-center gap-2">
-        <span className="w-8 shrink-0 text-right font-mono text-[10px] text-muted-foreground">
+        <span className="w-8 shrink-0 text-right font-mono text-[12px] text-muted-foreground">
           {formatTime(progress)}
         </span>
         {/* Visual track */}
@@ -159,7 +159,7 @@ export function SeekBar({
           className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
           style={{ margin: 0 }}
         />
-        <span className="w-8 shrink-0 font-mono text-[10px] text-muted-foreground">
+        <span className="w-8 shrink-0 font-mono text-[12px] text-muted-foreground">
           {duration > 0 ? formatTime(duration) : "--:--"}
         </span>
       </div>
@@ -240,7 +240,7 @@ function SourceChip({
     <button
       type="button"
       onClick={onOpenCentre}
-      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[12px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
       title="Open Connection Centre"
       data-testid="ride-source-chip"
     >
@@ -369,7 +369,7 @@ export function RideBar({
             // Mismatch: listener must pick/confirm the right device first.
             <div className="px-5 py-2">
               <div className="flex items-center justify-between gap-3">
-                <p className="font-mono text-[11px] text-muted-foreground">
+                <p className="font-mono text-[13px] text-muted-foreground">
                   Replay will play on your pinned device — confirm to continue.
                 </p>
                 <button
@@ -377,7 +377,7 @@ export function RideBar({
                   onClick={ride.dismissDeviceMismatch}
                   aria-label="Continue"
                   data-testid="ride-device-mismatch-confirm"
-                  className="hover-elevate shrink-0 rounded-full border border-border px-2.5 py-0.5 font-mono text-[11px] text-muted-foreground"
+                  className="hover-elevate shrink-0 rounded-full border border-border px-2.5 py-0.5 font-mono text-[13px] text-muted-foreground"
                 >
                   Continue
                 </button>
@@ -391,7 +391,7 @@ export function RideBar({
             // No mismatch (or check pending): brief "Crossing to replay…" state.
             <div className="flex items-center gap-2 px-5 py-1.5">
               <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-              <span className="font-mono text-[11px] text-muted-foreground">
+              <span className="font-mono text-[13px] text-muted-foreground">
                 Crossing to replay…
               </span>
             </div>
@@ -404,7 +404,7 @@ export function RideBar({
         <div className="border-b border-border/60 bg-background/40">
           <div className="flex items-center justify-between gap-3 px-5 py-1.5">
             <p
-              className="truncate font-mono text-[11px] text-muted-foreground"
+              className="truncate font-mono text-[13px] text-muted-foreground"
               data-testid="spotify-notice"
             >
               {spotify.notice}
@@ -413,7 +413,7 @@ export function RideBar({
               type="button"
               onClick={spotify.clearNotice}
               aria-label="Dismiss"
-              className="hover-elevate shrink-0 rounded-full border border-border px-2.5 py-0.5 font-mono text-[11px] text-muted-foreground"
+              className="hover-elevate shrink-0 rounded-full border border-border px-2.5 py-0.5 font-mono text-[13px] text-muted-foreground"
             >
               OK
             </button>
@@ -430,7 +430,7 @@ export function RideBar({
             onClick={ride.openConnectionCentre}
             aria-label="Open Connection Centre"
             data-testid="ride-connection-centre"
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border px-2 py-1 font-mono text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border px-2 py-1 font-mono text-[13px] text-muted-foreground hover:text-foreground transition-colors"
             title="Connection Centre — manage playback services"
           >
             <Settings className="h-3.5 w-3.5" />
@@ -454,7 +454,7 @@ export function RideBar({
                     : undefined
                 }
                 className={[
-                  "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-[11px] transition-colors",
+                  "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-[13px] transition-colors",
                   isActive
                     ? "border-primary-border bg-primary/10 text-primary"
                     : svc.trackSupported
@@ -469,7 +469,7 @@ export function RideBar({
                 )}
                 {svc.label}
                 {svc.requiresConnect ? (
-                  <span className="opacity-60 text-[10px]">connect</span>
+                  <span className="opacity-60 text-[12px]">connect</span>
                 ) : null}
               </button>
             );
@@ -481,7 +481,7 @@ export function RideBar({
             onClick={handleBroadcastClick}
             data-testid="ride-broadcast"
             className={[
-              "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-[11px] transition-colors",
+              "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-[13px] transition-colors",
               !inServiceRide
                 ? "border-primary-border bg-primary/10 text-primary"
                 : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground",
@@ -496,7 +496,7 @@ export function RideBar({
             <a
               href={ride.spotifyDeepLink}
               data-testid="ride-open-spotify"
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-1 font-mono text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-1 font-mono text-[13px] text-muted-foreground hover:text-foreground transition-colors"
               title="Opens in your Spotify app — won't autoadvance"
             >
               <ExternalLink className="h-3 w-3" />
@@ -511,7 +511,7 @@ export function RideBar({
               target="_blank"
               rel="noreferrer"
               data-testid="ride-buy-bandcamp"
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-1 font-mono text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-1 font-mono text-[13px] text-muted-foreground hover:text-foreground transition-colors"
             >
               <ShoppingBag className="h-3 w-3" />
               Buy on Bandcamp
@@ -524,7 +524,7 @@ export function RideBar({
         {ride.bufferOutrun ? (
           <div className="mt-1.5 flex items-center gap-2">
             <span
-              className="inline-flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground"
+              className="inline-flex items-center gap-1.5 font-mono text-[13px] text-muted-foreground"
               data-testid="ride-buffer-outrun"
             >
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -539,7 +539,7 @@ export function RideBar({
         {ride.fallbackUsed ? (
           <div className="mt-1.5 flex items-center gap-2">
             <span
-              className="inline-flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground"
+              className="inline-flex items-center gap-1.5 font-mono text-[13px] text-muted-foreground"
               data-testid="ride-fallback-indicator"
             >
               <AlertTriangle className="h-3.5 w-3.5" />
@@ -554,7 +554,7 @@ export function RideBar({
                 type="button"
                 onClick={ride.retrySpotify}
                 data-testid="ride-retry-spotify"
-                className="hover-elevate inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-primary transition-opacity hover:bg-primary/20"
+                className="hover-elevate inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 font-mono text-[12px] uppercase tracking-wide text-primary transition-opacity hover:bg-primary/20"
                 title="Retry playing this track on your connected service"
               >
                 <RefreshCw className="h-2.5 w-2.5" />
@@ -564,7 +564,7 @@ export function RideBar({
           </div>
         ) : inServiceRide && ride.source && ride.source !== "preview" ? (
           <div className="mt-1">
-            <span className="font-mono text-[10px] text-muted-foreground">
+            <span className="font-mono text-[12px] text-muted-foreground">
               {rideSourceLabel(ride.source)}
             </span>
           </div>
@@ -606,7 +606,7 @@ export function RideBar({
 
       <div className="flex items-center gap-4 px-5 py-3">
         <span
-          className="hidden shrink-0 items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 font-mono text-[11px] uppercase tracking-wide text-primary sm:inline-flex"
+          className="hidden shrink-0 items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 font-mono text-[13px] uppercase tracking-wide text-primary sm:inline-flex"
           data-testid="ride-mode-badge"
         >
           {ride.mode === "replay" ? (
@@ -648,12 +648,12 @@ export function RideBar({
         <div className="min-w-0 flex-1">
           <Link
             href={`/song/${cur.mbid}`}
-            className="block truncate font-serif text-base font-semibold text-foreground hover:text-primary"
+            className="block truncate font-serif text-lg font-normal text-foreground hover:text-primary"
             data-testid="ride-title"
           >
             {cur.title}
           </Link>
-          <p className="truncate font-mono text-[11px] text-muted-foreground">
+          <p className="truncate font-mono text-[13px] text-muted-foreground">
             {cur.artist}
             {" · "}
             {noPreview
@@ -667,7 +667,7 @@ export function RideBar({
           {/* Hinge hint row — shortcut links to lean-in detail */}
           {cur.mbid && (
             <div
-              className="mt-0.5 flex items-center gap-2 font-mono text-[10px]"
+              className="mt-0.5 flex items-center gap-2 font-mono text-[12px]"
               style={{ color: "hsl(var(--faint))" }}
             >
               <Link
@@ -695,7 +695,7 @@ export function RideBar({
             target="_blank"
             rel="noreferrer"
             aria-label="Open this track externally"
-            className="hover-elevate hidden h-9 items-center gap-1.5 rounded-full border border-border px-3 text-sm text-muted-foreground sm:inline-flex"
+            className="hover-elevate hidden h-9 items-center gap-1.5 rounded-full border border-border px-3 text-base text-muted-foreground sm:inline-flex"
           >
             <ExternalLink className="h-3.5 w-3.5" />
             Open

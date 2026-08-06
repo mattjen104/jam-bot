@@ -30,7 +30,7 @@ function SelectorRuns({
   const { data, isLoading } = useWpSelectorRuns(handle);
   if (isLoading) {
     return (
-      <p style={{ margin: 0, padding: "8px 16px 12px 44px", fontSize: 12, color: "var(--wp-text-muted)", display: "flex", alignItems: "center", gap: 6 }}>
+      <p style={{ margin: 0, padding: "8px 16px 12px 44px", fontSize: 14, color: "var(--wp-text-muted)", display: "flex", alignItems: "center", gap: 6 }}>
         <Loader2 size={12} className="animate-spin" aria-hidden="true" /> loading runs…
       </p>
     );
@@ -38,7 +38,7 @@ function SelectorRuns({
   const runs = data?.runs ?? [];
   if (runs.length === 0) {
     return (
-      <p style={{ margin: 0, padding: "8px 16px 12px 44px", fontSize: 12, color: "var(--wp-text-muted)" }}>
+      <p style={{ margin: 0, padding: "8px 16px 12px 44px", fontSize: 14, color: "var(--wp-text-muted)" }}>
         No logged runs yet.
       </p>
     );
@@ -64,13 +64,13 @@ function SelectorRuns({
           }}
           data-testid={`wp-selector-run-${r.runId}`}
         >
-          <span className="wp-mono" style={{ fontSize: 11, color: "var(--wp-text-muted)", flexShrink: 0 }}>
+          <span className="wp-mono" style={{ fontSize: 13, color: "var(--wp-text-muted)", flexShrink: 0 }}>
             {r.day}
           </span>
-          <span style={{ fontSize: 12, minWidth: 0, flex: 1, ...oneLine }}>
+          <span style={{ fontSize: 14, minWidth: 0, flex: 1, ...oneLine }}>
             {r.show?.name ?? r.station.name}
           </span>
-          <span className="wp-mono" style={{ fontSize: 10, color: "var(--wp-text-muted)", flexShrink: 0 }}>
+          <span className="wp-mono" style={{ fontSize: 12, color: "var(--wp-text-muted)", flexShrink: 0 }}>
             {r.spinCount} spins
           </span>
         </button>
@@ -117,14 +117,14 @@ function SelectorRow({
           <ChevronRight size={14} style={{ color: "var(--wp-text-muted)", flexShrink: 0 }} aria-hidden="true" />
         )}
         <div style={{ minWidth: 0, flex: 1 }}>
-          <p style={{ margin: 0, fontSize: 13, fontWeight: 500, ...oneLine }}>{s.name}</p>
-          <p style={{ margin: "1px 0 0", fontSize: 11, color: "var(--wp-text-muted)", ...oneLine }}>
+          <p style={{ margin: 0, fontSize: 15, fontWeight: 400, ...oneLine }}>{s.name}</p>
+          <p style={{ margin: "1px 0 0", fontSize: 13, color: "var(--wp-text-muted)", ...oneLine }}>
             {s.stationName ?? "—"}
             {s.recentSpinCount > 0 && ` · ${s.recentSpinCount} spins this month`}
           </p>
         </div>
         {ago && (
-          <span className="wp-mono" style={{ fontSize: 10, color: "var(--wp-text-muted)", flexShrink: 0 }}>
+          <span className="wp-mono" style={{ fontSize: 12, color: "var(--wp-text-muted)", flexShrink: 0 }}>
             {ago}
           </span>
         )}
@@ -147,12 +147,12 @@ export function SelectorsTab({
   return (
     <div className="wp-card" style={{ overflow: "hidden" }} data-testid="wp-selectors-tab">
       {isLoading && (
-        <p style={{ padding: "14px 16px", margin: 0, fontSize: 13, color: "var(--wp-text-muted)" }}>
+        <p style={{ padding: "14px 16px", margin: 0, fontSize: 15, color: "var(--wp-text-muted)" }}>
           Finding the humans behind the dials…
         </p>
       )}
       {!isLoading && selectors.length === 0 && (
-        <p style={{ padding: "14px 16px", margin: 0, fontSize: 13, color: "var(--wp-text-muted)" }}>
+        <p style={{ padding: "14px 16px", margin: 0, fontSize: 15, color: "var(--wp-text-muted)" }}>
           No selectors with logged spins yet.
         </p>
       )}

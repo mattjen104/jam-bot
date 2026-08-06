@@ -27,7 +27,7 @@ function VinylIcon({ size = 20 }: { size?: number }) {
       <circle cx="12" cy="12" r="9" fill="none" stroke="#3a3a3a" strokeWidth="0.7" />
       <circle cx="12" cy="12" r="7" fill="none" stroke="#2e2e2e" strokeWidth="0.7" />
       <circle cx="12" cy="12" r="5" fill="none" stroke="#3a3a3a" strokeWidth="0.7" />
-      <circle cx="12" cy="12" r="3.2" fill="#c8a84b" />
+      <circle cx="12" cy="12" r="3.2" fill="#a8a8a8" />
       <circle cx="12" cy="12" r="1.1" fill="#1a1a1a" />
     </svg>
   );
@@ -181,14 +181,14 @@ function PlayModeButton({
 
   // Visual config per mode
   const modeAccent =
-    mode === "ghost" ? "var(--wp-fill-accent)" : mode === "album" ? "#c8a84b" : "var(--wp-text-muted)";
+    mode === "ghost" ? "var(--wp-fill-accent)" : mode === "album" ? "#a8a8a8" : "var(--wp-text-muted)";
   const centerBg =
     mode === "ghost"
       ? "var(--wp-fill-accent)"
       : mode === "album"
         ? "var(--wp-surface-2)"
         : "var(--wp-surface-2)";
-  const centerColor = mode === "ghost" ? "#fff" : "var(--wp-text-secondary)";
+  const centerColor = mode === "ghost" ? "#ffffff" : "var(--wp-text-secondary)";
 
   return (
     <div
@@ -248,7 +248,7 @@ function PlayModeButton({
                 width: DOT_SIZE,
                 height: DOT_SIZE,
                 borderRadius: "50%",
-                background: isActive ? "#fff" : "rgba(255,255,255,0.28)",
+                background: isActive ? "#ffffff" : "rgba(255, 255, 255,0.28)",
                 border: "none",
                 padding: 0,
                 cursor: "pointer",
@@ -275,7 +275,7 @@ function PlayModeButton({
         >
           <Loader2
             size={CONTAINER - 4}
-            style={{ color: "rgba(232,106,78,0.2)", position: "absolute" }}
+            style={{ color: "rgba(131, 131, 131,0.2)", position: "absolute" }}
             className="animate-spin"
             aria-hidden="true"
           />
@@ -290,8 +290,8 @@ function PlayModeButton({
             bottom: 1,
             left: "50%",
             transform: "translateX(-50%)",
-            fontSize: 7,
-            color: "rgba(255,255,255,0.35)",
+            fontSize: 8,
+            color: "rgba(255, 255, 255,0.35)",
             pointerEvents: "none",
             lineHeight: 1,
             userSelect: "none",
@@ -334,7 +334,7 @@ function PlayModeButton({
                 width: DOT_SIZE,
                 height: DOT_SIZE,
                 borderRadius: "50%",
-                background: isActive ? "#c8a84b" : "rgba(200,168,75,0.35)",
+                background: isActive ? "#a8a8a8" : "rgba(168, 168, 168,0.35)",
                 border: "none",
                 padding: 0,
                 cursor: "pointer",
@@ -361,7 +361,7 @@ function PlayModeButton({
         >
           <Loader2
             size={CONTAINER - 4}
-            style={{ color: "rgba(200,168,75,0.2)", position: "absolute" }}
+            style={{ color: "rgba(168, 168, 168,0.2)", position: "absolute" }}
             className="animate-spin"
             aria-hidden="true"
           />
@@ -376,8 +376,8 @@ function PlayModeButton({
             bottom: 1,
             left: "50%",
             transform: "translateX(-50%)",
-            fontSize: 7,
-            color: "rgba(200,168,75,0.45)",
+            fontSize: 8,
+            color: "rgba(168, 168, 168,0.45)",
             pointerEvents: "none",
             lineHeight: 1,
             userSelect: "none",
@@ -407,7 +407,7 @@ function PlayModeButton({
               width: 3,
               height: 3,
               borderRadius: "50%",
-              background: m === mode ? modeAccent : "rgba(255,255,255,0.2)",
+              background: m === mode ? modeAccent : "rgba(255, 255, 255,0.2)",
               transition: "background 0.2s",
             }}
           />
@@ -442,7 +442,7 @@ function PlayModeButton({
           height: 28,
           borderRadius: "50%",
           background: centerBg,
-          border: `1.5px solid ${mode === "ghost" ? "rgba(232,106,78,0.6)" : "var(--wp-border)"}`,
+          border: `1.5px solid ${mode === "ghost" ? "rgba(131, 131, 131,0.6)" : "var(--wp-border)"}`,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -455,7 +455,7 @@ function PlayModeButton({
         aria-label={`${mode} mode`}
       >
         {mode === "song" && (
-          <span style={{ fontSize: 10, marginLeft: 2, lineHeight: 1 }}>▶</span>
+          <span style={{ fontSize: 12, marginLeft: 2, lineHeight: 1 }}>▶</span>
         )}
         {mode === "album" && <VinylIcon size={16} />}
         {mode === "ghost" && <GhostIcon size={15} />}
@@ -478,11 +478,11 @@ function HearInRuns({
   if (isError) {
     return (
       <p
-        style={{ margin: "6px 0 2px", fontSize: 12, color: "var(--wp-text-muted)" }}
+        style={{ margin: "6px 0 2px", fontSize: 14, color: "var(--wp-text-muted)" }}
         data-testid="runs-error"
       >
         Couldn't load run history.{" "}
-        <button type="button" onClick={() => void refetch()} style={{ fontSize: 12 }}>
+        <button type="button" onClick={() => void refetch()} style={{ fontSize: 14 }}>
           Try again
         </button>
       </p>
@@ -493,7 +493,7 @@ function HearInRuns({
       <p
         style={{
           margin: "6px 0 2px",
-          fontSize: 12,
+          fontSize: 14,
           color: "var(--wp-text-muted)",
           display: "flex",
           alignItems: "center",
@@ -506,7 +506,7 @@ function HearInRuns({
   }
   if (runs.length === 0) {
     return (
-      <p style={{ margin: "6px 0 2px", fontSize: 12, color: "var(--wp-text-muted)" }}>
+      <p style={{ margin: "6px 0 2px", fontSize: 14, color: "var(--wp-text-muted)" }}>
         Not aired in any documented run yet.
       </p>
     );
@@ -518,7 +518,7 @@ function HearInRuns({
           key={`${r.runId ?? r.slug}-${r.day}`}
           type="button"
           onClick={() => onOpenRun(r.slug, r.runId)}
-          style={{ fontSize: 12, display: "inline-flex", alignItems: "center", gap: 5 }}
+          style={{ fontSize: 14, display: "inline-flex", alignItems: "center", gap: 5 }}
           data-testid={`hear-run-${r.runId ?? r.slug}`}
         >
           <Radio size={12} aria-hidden="true" />
@@ -596,15 +596,15 @@ function LibraryRow({
           </div>
         )}
         <div style={{ minWidth: 0, flex: 1 }}>
-          <p style={{ margin: 0, fontSize: 14 }}>
+          <p style={{ margin: 0, fontSize: 16 }}>
             {rec ? `${rec.artist} — ${rec.title}` : (item.mbid ?? "Unknown track")}
           </p>
           {rec?.albumTitle && (
-            <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--wp-text-secondary)" }}>
+            <p style={{ margin: "2px 0 0", fontSize: 14, color: "var(--wp-text-secondary)" }}>
               {rec.albumTitle}
             </p>
           )}
-          <p className="wp-mono" style={{ margin: "2px 0 0", fontSize: 11, color: "var(--wp-text-muted)" }}>
+          <p className="wp-mono" style={{ margin: "2px 0 0", fontSize: 13, color: "var(--wp-text-muted)" }}>
             kept {item.addedAt.slice(0, 10)}
             {item.provenance.stationSlug
               ? ` · via ${item.provenance.stationSlug}`
@@ -638,7 +638,7 @@ function LibraryRow({
               border: "none",
               cursor: "pointer",
               padding: "2px 0",
-              fontSize: 11,
+              fontSize: 13,
               color: note
                 ? "var(--wp-text-secondary)"
                 : "var(--wp-text-muted)",
@@ -666,8 +666,8 @@ function LibraryRow({
                 border: "0.5px solid var(--wp-border)",
                 borderRadius: 8,
                 padding: "6px 8px",
-                fontSize: 13,
-                fontStyle: "italic",
+                fontSize: 15,
+                fontStyle: "normal",
                 color: "var(--wp-text-secondary)",
                 fontFamily: "inherit",
                 lineHeight: 1.6,
@@ -977,7 +977,7 @@ export function LibraryTab({
   if (isAuthenticated === false) {
     return (
       <div className="wp-card" style={{ padding: "18px 16px", textAlign: "center" }}>
-        <p style={{ margin: "0 0 10px", fontSize: 14, color: "var(--wp-text-secondary)" }}>
+        <p style={{ margin: "0 0 10px", fontSize: 16, color: "var(--wp-text-secondary)" }}>
           Connect Spotify to see your kept and imported tracks here — with their
           lore and the runs they aired in.
         </p>
@@ -988,7 +988,7 @@ export function LibraryTab({
             background: "var(--wp-fill-primary)",
             color: "var(--wp-on-primary)",
             border: "none",
-            fontSize: 13,
+            fontSize: 15,
             padding: "8px 16px",
           }}
           data-testid="wp-library-connect"
@@ -1000,7 +1000,7 @@ export function LibraryTab({
   }
 
   const selectStyle: CSSProperties = {
-    fontSize: 12,
+    fontSize: 14,
     background: "var(--wp-surface-2)",
     color: "var(--wp-text-secondary)",
     border: "0.5px solid var(--wp-border)",
@@ -1044,7 +1044,7 @@ export function LibraryTab({
             style={{
               flex: 1,
               minWidth: 0,
-              fontSize: 13,
+              fontSize: 15,
               background: "transparent",
               border: "none",
               outline: "none",
@@ -1104,13 +1104,13 @@ export function LibraryTab({
         )}
       </div>
       {isLoading && (
-        <p style={{ padding: "14px 16px", margin: 0, fontSize: 13, color: "var(--wp-text-muted)" }}>
+        <p style={{ padding: "14px 16px", margin: 0, fontSize: 15, color: "var(--wp-text-muted)" }}>
           Loading your library…
         </p>
       )}
       {!isLoading && totalLoaded === 0 && (
         <p
-          style={{ padding: "14px 16px", margin: 0, fontSize: 13, color: "var(--wp-text-muted)" }}
+          style={{ padding: "14px 16px", margin: 0, fontSize: 15, color: "var(--wp-text-muted)" }}
           data-testid="wp-library-empty"
         >
           {hasFilters
@@ -1145,7 +1145,7 @@ export function LibraryTab({
             style={{ color: "var(--wp-text-muted)", flexShrink: 0 }}
             aria-hidden="true"
           />
-          <span style={{ fontSize: 12, color: "var(--wp-text-muted)" }}>Loading more tracks…</span>
+          <span style={{ fontSize: 14, color: "var(--wp-text-muted)" }}>Loading more tracks…</span>
         </div>
       )}
       {totalLoaded > 0 && !isFetchingNextPage && (
@@ -1164,18 +1164,18 @@ export function LibraryTab({
               type="button"
               onClick={() => void fetchNextPage()}
               disabled={isFetchingNextPage}
-              style={{ fontSize: 12, display: "inline-flex", alignItems: "center", gap: 6 }}
+              style={{ fontSize: 14, display: "inline-flex", alignItems: "center", gap: 6 }}
               data-testid="wp-library-load-more"
             >
               Load more
             </button>
           ) : (
-            <p className="wp-mono" style={{ margin: 0, fontSize: 11, color: "var(--wp-text-muted)" }}>
+            <p className="wp-mono" style={{ margin: 0, fontSize: 13, color: "var(--wp-text-muted)" }}>
               that's everything · {totalLoaded} tracks
             </p>
           )}
           {hasNextPage && (
-            <p className="wp-mono" style={{ margin: 0, fontSize: 11, color: "var(--wp-text-muted)" }}>
+            <p className="wp-mono" style={{ margin: 0, fontSize: 13, color: "var(--wp-text-muted)" }}>
               {totalLoaded} loaded
             </p>
           )}
@@ -1186,7 +1186,7 @@ export function LibraryTab({
           style={{ padding: "12px 16px", borderTop: "0.5px solid var(--wp-border)" }}
           data-testid="wp-library-export"
         >
-          <p className="wp-mono" style={{ margin: "0 0 8px", fontSize: 11, color: "var(--wp-text-muted)" }}>
+          <p className="wp-mono" style={{ margin: "0 0 8px", fontSize: 13, color: "var(--wp-text-muted)" }}>
             take it with you — fields we don't have export empty, never guessed
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -1197,7 +1197,7 @@ export function LibraryTab({
                 download
                 className="wp-mono"
                 style={{
-                  fontSize: 11,
+                  fontSize: 13,
                   textTransform: "uppercase",
                   letterSpacing: "0.04em",
                   color: "var(--wp-text-secondary)",
@@ -1231,7 +1231,7 @@ export function LibraryTab({
               onClick={() => importFileRef.current?.click()}
               className="wp-mono"
               style={{
-                fontSize: 11,
+                fontSize: 13,
                 textTransform: "uppercase",
                 letterSpacing: "0.04em",
                 color: "var(--wp-text-secondary)",
@@ -1247,12 +1247,12 @@ export function LibraryTab({
               {importingFile ? "importing…" : "import json file"}
             </button>
             {fileImportError && (
-              <p className="wp-mono" style={{ margin: "8px 0 0", fontSize: 11, color: "var(--wp-danger, #c0605f)" }} data-testid="wp-library-import-file-error">
+              <p className="wp-mono" style={{ margin: "8px 0 0", fontSize: 13, color: "var(--wp-danger, #747474)" }} data-testid="wp-library-import-file-error">
                 {fileImportError}
               </p>
             )}
             {fileImportSummary && (
-              <p className="wp-mono" style={{ margin: "8px 0 0", fontSize: 11, color: "var(--wp-text-muted)" }} data-testid="wp-library-import-file-summary">
+              <p className="wp-mono" style={{ margin: "8px 0 0", fontSize: 13, color: "var(--wp-text-muted)" }} data-testid="wp-library-import-file-summary">
                 imported {fileImportSummary.imported} · skipped {fileImportSummary.skipped} · rejected {fileImportSummary.rejected}
                 {fileImportSummary.errors.length > 0 &&
                   ` — first issue: item ${fileImportSummary.errors[0].index + 1}: ${fileImportSummary.errors[0].reason}`}
@@ -1263,8 +1263,8 @@ export function LibraryTab({
           <div style={{ marginTop: 10, paddingTop: 10, borderTop: "0.5px solid var(--wp-border)" }} data-testid="wp-library-sync">
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
               <div style={{ minWidth: 0 }}>
-                <p className="wp-mono" style={{ margin: 0, fontSize: 11, color: "var(--wp-text-secondary)", fontWeight: 500 }}>sync to spotify</p>
-                <p className="wp-mono" style={{ margin: "2px 0 0", fontSize: 11, color: "var(--wp-text-muted)" }}>
+                <p className="wp-mono" style={{ margin: 0, fontSize: 13, color: "var(--wp-text-secondary)", fontWeight: 400 }}>sync to spotify</p>
+                <p className="wp-mono" style={{ margin: "2px 0 0", fontSize: 13, color: "var(--wp-text-muted)" }}>
                   push kept tracks · unavailable ones get a Bandcamp link
                 </p>
               </div>
@@ -1274,7 +1274,7 @@ export function LibraryTab({
                 onClick={() => void handleSync()}
                 className="wp-mono"
                 style={{
-                  fontSize: 11,
+                  fontSize: 13,
                   textTransform: "uppercase",
                   letterSpacing: "0.04em",
                   color: "var(--wp-text-secondary)",
@@ -1294,7 +1294,7 @@ export function LibraryTab({
 
             {syncError && (
               <div style={{ margin: "8px 0 0" }} data-testid="wp-library-sync-error">
-                <p className="wp-mono" style={{ margin: 0, fontSize: 11, color: "var(--wp-danger, #c0605f)" }}>
+                <p className="wp-mono" style={{ margin: 0, fontSize: 13, color: "var(--wp-danger, #747474)" }}>
                   {syncError}
                 </p>
                 {syncNeedsReconnect && (
@@ -1305,7 +1305,7 @@ export function LibraryTab({
                     className="wp-mono"
                     style={{
                       marginTop: 6,
-                      fontSize: 11,
+                      fontSize: 13,
                       textTransform: "uppercase",
                       letterSpacing: "0.04em",
                       color: "var(--wp-text-secondary)",
@@ -1327,7 +1327,7 @@ export function LibraryTab({
             {/* Active progress */}
             {isSyncActive && syncJobData && (
               <div style={{ marginTop: 8 }} data-testid="wp-library-sync-progress">
-                <p className="wp-mono" style={{ margin: 0, fontSize: 11, color: "var(--wp-text-muted)" }}>
+                <p className="wp-mono" style={{ margin: 0, fontSize: 13, color: "var(--wp-text-muted)" }}>
                   {syncJobData.phase === "matching" && "matching tracks…"}
                   {syncJobData.phase === "checking" && "checking already saved…"}
                   {syncJobData.phase === "saving" && "saving to spotify…"}
@@ -1336,7 +1336,7 @@ export function LibraryTab({
                 </p>
                 {syncJobData.total > 0 && (
                   <div style={{ marginTop: 4, height: 2, background: "var(--wp-border)", borderRadius: 1, overflow: "hidden" }}>
-                    <div style={{ height: "100%", background: "var(--wp-green, #C6F53F)", borderRadius: 1, width: `${Math.min(100, (syncJobData.processed / syncJobData.total) * 100)}%`, transition: "width 0.4s" }} />
+                    <div style={{ height: "100%", background: "var(--wp-green, #dedede)", borderRadius: 1, width: `${Math.min(100, (syncJobData.processed / syncJobData.total) * 100)}%`, transition: "width 0.4s" }} />
                   </div>
                 )}
               </div>
@@ -1345,7 +1345,7 @@ export function LibraryTab({
             {/* Receipt */}
             {syncJobData?.status === "done" && syncJobData.results && (
               <div style={{ marginTop: 8 }} data-testid="wp-library-sync-receipt">
-                <p className="wp-mono" style={{ margin: 0, fontSize: 11, color: "var(--wp-text-muted)" }}>
+                <p className="wp-mono" style={{ margin: 0, fontSize: 13, color: "var(--wp-text-muted)" }}>
                   {syncJobData.results.synced} synced
                   {syncJobData.results.searchMatched > 0 && ` · ${syncJobData.results.searchMatched} by search`}
                   {syncJobData.results.alreadySaved > 0 && ` · ${syncJobData.results.alreadySaved} already saved`}
@@ -1358,7 +1358,7 @@ export function LibraryTab({
                         type="button"
                         onClick={() => setSyncReceiptOpen((v) => !v)}
                         className="wp-mono"
-                        style={{ fontSize: 11, color: "var(--wp-text-muted)", background: "none", border: "none", padding: 0, cursor: "pointer" }}
+                        style={{ fontSize: 13, color: "var(--wp-text-muted)", background: "none", border: "none", padding: 0, cursor: "pointer" }}
                         data-testid="wp-library-sync-receipt-toggle"
                       >
                         {syncReceiptOpen ? "▲ hide" : "▼ not on spotify"}
@@ -1368,7 +1368,7 @@ export function LibraryTab({
                           href={`/api/me/library/sync/${syncJobData.jobId}/unavailable?format=csv`}
                           download
                           className="wp-mono"
-                          style={{ fontSize: 11, color: "var(--wp-text-muted)", flexShrink: 0, textDecoration: "none" }}
+                          style={{ fontSize: 13, color: "var(--wp-text-muted)", flexShrink: 0, textDecoration: "none" }}
                           data-testid="wp-library-sync-unavailable-download"
                         >
                           download full list ↓
@@ -1379,7 +1379,7 @@ export function LibraryTab({
                       <ul style={{ margin: "6px 0 0", padding: 0, listStyle: "none" }}>
                         {syncJobData.results.unavailableItems.slice(0, 20).map((item) => (
                           <li key={item.mbid} style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
-                            <span className="wp-mono" style={{ fontSize: 11, color: "var(--wp-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            <span className="wp-mono" style={{ fontSize: 13, color: "var(--wp-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               {item.artist} — {item.title}
                             </span>
                             <a
@@ -1387,7 +1387,7 @@ export function LibraryTab({
                               target="_blank"
                               rel="noreferrer"
                               className="wp-mono"
-                              style={{ fontSize: 11, color: "var(--wp-text-muted)", flexShrink: 0, textDecoration: "none" }}
+                              style={{ fontSize: 13, color: "var(--wp-text-muted)", flexShrink: 0, textDecoration: "none" }}
                             >
                               bandcamp ↗
                             </a>
@@ -1400,7 +1400,7 @@ export function LibraryTab({
                 {syncJobData.results.searchMatchedItems.length > 0 && (
                   <div style={{ marginTop: 6 }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                      <p className="wp-mono" style={{ margin: 0, fontSize: 11, color: "var(--wp-text-muted)" }}>
+                      <p className="wp-mono" style={{ margin: 0, fontSize: 13, color: "var(--wp-text-muted)" }}>
                         matched by search
                       </p>
                       {syncJobData.results.searchMatched > 200 && (
@@ -1408,7 +1408,7 @@ export function LibraryTab({
                           href={`/api/me/library/sync/${syncJobData.jobId}/search-matched?format=csv`}
                           download
                           className="wp-mono"
-                          style={{ fontSize: 11, color: "var(--wp-text-muted)", flexShrink: 0, textDecoration: "none" }}
+                          style={{ fontSize: 13, color: "var(--wp-text-muted)", flexShrink: 0, textDecoration: "none" }}
                           data-testid="wp-library-sync-search-matched-download"
                         >
                           download full list ↓
@@ -1422,7 +1422,7 @@ export function LibraryTab({
 
             {syncJobData?.status === "error" && (
               <div style={{ margin: "8px 0 0" }} data-testid="wp-library-sync-job-error">
-                <p className="wp-mono" style={{ margin: 0, fontSize: 11, color: "var(--wp-danger, #c0605f)" }}>
+                <p className="wp-mono" style={{ margin: 0, fontSize: 13, color: "var(--wp-danger, #747474)" }}>
                   {syncJobData.error ?? "sync failed — please try again"}
                 </p>
                 {syncJobData.error?.toLowerCase().includes("reconnect spotify") ? (
@@ -1433,7 +1433,7 @@ export function LibraryTab({
                     className="wp-mono"
                     style={{
                       marginTop: 6,
-                      fontSize: 11,
+                      fontSize: 13,
                       textTransform: "uppercase",
                       letterSpacing: "0.04em",
                       color: "var(--wp-text-secondary)",
@@ -1456,7 +1456,7 @@ export function LibraryTab({
                     className="wp-mono"
                     style={{
                       marginTop: 6,
-                      fontSize: 11,
+                      fontSize: 13,
                       textTransform: "uppercase",
                       letterSpacing: "0.04em",
                       color: "var(--wp-text-secondary)",
@@ -1476,7 +1476,7 @@ export function LibraryTab({
             )}
           </div>
 
-          <p className="wp-mono" style={{ margin: "8px 0 0", fontSize: 11, color: "var(--wp-text-muted)" }}>
+          <p className="wp-mono" style={{ margin: "8px 0 0", fontSize: 13, color: "var(--wp-text-muted)" }}>
             move to another service via{" "}
             <a href="https://soundiiz.com" target="_blank" rel="noreferrer" style={{ color: "inherit" }}>
               Soundiiz
@@ -1492,8 +1492,8 @@ export function LibraryTab({
             <div style={{ marginTop: 10, paddingTop: 10, borderTop: "0.5px solid var(--wp-border)" }} data-testid="wp-apple-library-import">
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                 <div style={{ minWidth: 0 }}>
-                  <p className="wp-mono" style={{ margin: 0, fontSize: 11, color: "var(--wp-text-secondary)", fontWeight: 500 }}>import apple music library</p>
-                  <p className="wp-mono" style={{ margin: "2px 0 0", fontSize: 11, color: "var(--wp-text-muted)" }}>
+                  <p className="wp-mono" style={{ margin: 0, fontSize: 13, color: "var(--wp-text-secondary)", fontWeight: 400 }}>import apple music library</p>
+                  <p className="wp-mono" style={{ margin: "2px 0 0", fontSize: 13, color: "var(--wp-text-muted)" }}>
                     authorize apple music first, then import · matched tracks appear in your library
                   </p>
                 </div>
@@ -1503,7 +1503,7 @@ export function LibraryTab({
                   onClick={() => void handleAppleMusicImport()}
                   className="wp-mono"
                   style={{
-                    fontSize: 11,
+                    fontSize: 13,
                     textTransform: "uppercase",
                     letterSpacing: "0.04em",
                     color: "var(--wp-text-secondary)",
@@ -1523,25 +1523,25 @@ export function LibraryTab({
               {/* Progress bar */}
               {amImporting && amImportProgress && (
                 <div style={{ marginTop: 8 }}>
-                  <p className="wp-mono" style={{ margin: "0 0 4px", fontSize: 11, color: "var(--wp-text-muted)" }}>
+                  <p className="wp-mono" style={{ margin: "0 0 4px", fontSize: 13, color: "var(--wp-text-muted)" }}>
                     {amImportProgress.received} songs received · {amImportProgress.resolved} matched
                   </p>
                   <div style={{ height: 2, background: "var(--wp-border)", borderRadius: 1 }}>
                     {amImportProgress.total && amImportProgress.total > 0 && (
-                      <div style={{ height: "100%", background: "var(--wp-green, #C6F53F)", borderRadius: 1, width: `${Math.min(100, (amImportProgress.received / amImportProgress.total) * 100)}%`, transition: "width 0.4s" }} />
+                      <div style={{ height: "100%", background: "var(--wp-green, #dedede)", borderRadius: 1, width: `${Math.min(100, (amImportProgress.received / amImportProgress.total) * 100)}%`, transition: "width 0.4s" }} />
                     )}
                   </div>
                 </div>
               )}
               {/* Done state */}
               {amImportDone && amImportProgress && !amImporting && (
-                <p className="wp-mono" style={{ margin: "8px 0 0", fontSize: 11, color: "var(--wp-text-muted)" }} data-testid="wp-apple-library-import-done">
+                <p className="wp-mono" style={{ margin: "8px 0 0", fontSize: 13, color: "var(--wp-text-muted)" }} data-testid="wp-apple-library-import-done">
                   {amImportProgress.received} songs scanned · {amImportProgress.resolved} matched to recordings
                 </p>
               )}
               {/* Error state */}
               {amImportError && (
-                <p className="wp-mono" style={{ margin: "8px 0 0", fontSize: 11, color: "var(--wp-danger, #c0605f)" }} data-testid="wp-apple-library-import-error">
+                <p className="wp-mono" style={{ margin: "8px 0 0", fontSize: 13, color: "var(--wp-danger, #747474)" }} data-testid="wp-apple-library-import-error">
                   {amImportError}
                 </p>
               )}

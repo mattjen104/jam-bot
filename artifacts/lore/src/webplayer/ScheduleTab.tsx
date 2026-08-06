@@ -36,7 +36,7 @@ function SlotRow({
       <span
         className="wp-mono"
         style={{
-          fontSize: 10,
+          fontSize: 12,
           color: slot.isLive ? "var(--wp-text-live)" : "var(--wp-text-muted)",
           width: 44,
           textAlign: "left",
@@ -60,18 +60,18 @@ function SlotRow({
         }}
         aria-label={`Open ${slot.showName} on ${slot.stationName}`}
       >
-        <p style={{ margin: 0, fontSize: 13, fontWeight: 500, ...oneLine }}>
+        <p style={{ margin: 0, fontSize: 15, fontWeight: 400, ...oneLine }}>
           {slot.showName}
           {slot.djName && (
-            <span style={{ fontSize: 11, color: "var(--wp-text-muted)", fontWeight: 400 }}>
+            <span style={{ fontSize: 13, color: "var(--wp-text-muted)", fontWeight: 400 }}>
               {" "}
               · {slot.djName}
             </span>
           )}
         </p>
-        <p style={{ margin: "1px 0 0", fontSize: 11, color: "var(--wp-text-secondary)", ...oneLine }}>
+        <p style={{ margin: "1px 0 0", fontSize: 13, color: "var(--wp-text-secondary)", ...oneLine }}>
           {slot.stationName}
-          <span className="wp-mono" style={{ fontSize: 10, color: "var(--wp-text-muted)" }}>
+          <span className="wp-mono" style={{ fontSize: 12, color: "var(--wp-text-muted)" }}>
             {" "}
             · {shortTime(slot.startTime)}–{shortTime(slot.endTime)} local
           </span>
@@ -83,7 +83,7 @@ function SlotRow({
           style={{
             background: "var(--wp-bg-live)",
             color: "var(--wp-text-live)",
-            fontSize: 10,
+            fontSize: 12,
             flexShrink: 0,
           }}
         >
@@ -104,19 +104,19 @@ export function ScheduleTab({ onOpenRun }: { onOpenRun: (slug: string) => void }
     <div data-testid="wp-schedule-tab">
       {isLoading && (
         <div className="wp-card">
-          <p style={{ padding: "14px 16px", margin: 0, fontSize: 13, color: "var(--wp-text-muted)" }}>
+          <p style={{ padding: "14px 16px", margin: 0, fontSize: 15, color: "var(--wp-text-muted)" }}>
             Reading the programme guides…
           </p>
         </div>
       )}
       {!isLoading && (
         <>
-          <p className="wp-mono" style={{ margin: "0 0 6px", fontSize: 11, color: "var(--wp-text-muted)" }}>
+          <p className="wp-mono" style={{ margin: "0 0 6px", fontSize: 13, color: "var(--wp-text-muted)" }}>
             ON NOW · {liveNow.length}
           </p>
           <div className="wp-card" style={{ overflow: "hidden", marginBottom: 18 }}>
             {liveNow.length === 0 && (
-              <p style={{ padding: "14px 16px", margin: 0, fontSize: 13, color: "var(--wp-text-muted)" }}>
+              <p style={{ padding: "14px 16px", margin: 0, fontSize: 15, color: "var(--wp-text-muted)" }}>
                 No scheduled shows airing right now.
               </p>
             )}
@@ -124,12 +124,12 @@ export function ScheduleTab({ onOpenRun }: { onOpenRun: (slug: string) => void }
               <SlotRow key={`${s.stationSlug}-${s.startTime}-${s.showName}`} slot={s} onOpenRun={onOpenRun} />
             ))}
           </div>
-          <p className="wp-mono" style={{ margin: "0 0 6px", fontSize: 11, color: "var(--wp-text-muted)" }}>
+          <p className="wp-mono" style={{ margin: "0 0 6px", fontSize: 13, color: "var(--wp-text-muted)" }}>
             LATER TODAY · {upcoming.length}
           </p>
           <div className="wp-card" style={{ overflow: "hidden" }}>
             {upcoming.length === 0 && (
-              <p style={{ padding: "14px 16px", margin: 0, fontSize: 13, color: "var(--wp-text-muted)" }}>
+              <p style={{ padding: "14px 16px", margin: 0, fontSize: 15, color: "var(--wp-text-muted)" }}>
                 Nothing more on today's grids.
               </p>
             )}

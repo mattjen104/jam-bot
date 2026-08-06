@@ -199,7 +199,7 @@ export function StationLane({ dialStation, isPinned, onStationClick, onShowClick
           ))}
           {shows.length === 0 && (
             <div className="dial-blk dial-blk--past" style={{ opacity: 0.3 }}>
-              <div className="dial-blk__show" style={{ fontSize: 11 }}>No data today</div>
+              <div className="dial-blk__show" style={{ fontSize: 13 }}>No data today</div>
             </div>
           )}
         </div>

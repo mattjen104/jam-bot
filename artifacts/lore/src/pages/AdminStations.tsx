@@ -71,11 +71,11 @@ function TokenGate({ onSave }: { onSave: (t: string) => void }) {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm rounded-2xl border border-card-border bg-card p-8 shadow-lg">
-        <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wide text-primary">
+        <div className="flex items-center gap-2 font-mono text-[13px] uppercase tracking-wide text-primary">
           <KeyRound className="h-3.5 w-3.5" />
           Admin access
         </div>
-        <h1 className="mt-3 font-serif text-2xl font-semibold text-foreground">
+        <h1 className="mt-3 font-serif text-3xl font-normal text-foreground">
           Enter admin token
         </h1>
         <form
@@ -91,12 +91,12 @@ function TokenGate({ onSave }: { onSave: (t: string) => void }) {
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Token"
             autoFocus
-            className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+            className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
           />
           <button
             type="submit"
             disabled={!draft.trim()}
-            className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-opacity disabled:opacity-40"
+            className="rounded-full bg-primary px-5 py-2 text-base font-normal text-primary-foreground shadow-sm transition-opacity disabled:opacity-40"
           >
             Continue
           </button>
@@ -231,17 +231,17 @@ function StationsPanel({
       <div className="relative z-10 mx-auto max-w-3xl px-4 py-10 sm:px-6">
         <div className="flex items-center justify-between">
           <div>
-            <p className="font-mono text-[11px] uppercase tracking-wide text-primary">
+            <p className="font-mono text-[13px] uppercase tracking-wide text-primary">
               Admin
             </p>
-            <h1 className="mt-1 font-serif text-3xl font-semibold text-foreground">
+            <h1 className="mt-1 font-serif text-4xl font-normal text-foreground">
               Station curation
             </h1>
           </div>
           <button
             type="button"
             onClick={onClearToken}
-            className="font-mono text-[11px] text-muted-foreground/70 hover:text-primary"
+            className="font-mono text-[13px] text-muted-foreground/70 hover:text-primary"
           >
             Clear token
           </button>
@@ -249,7 +249,7 @@ function StationsPanel({
 
         <AdminNav token={token} />
 
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="mt-2 text-base text-muted-foreground">
           Favorites get a persistent connection for instant now-playing; other
           stations poll on an interval. Hidden stations leave the dial and stop
           polling entirely — history is kept, reintroduce any time.
@@ -258,9 +258,9 @@ function StationsPanel({
         {/* Favorites budget */}
         <div
           data-testid="favorites-count"
-          className={`mt-6 flex items-center gap-2 rounded-xl border px-4 py-3 text-sm ${
+          className={`mt-6 flex items-center gap-2 rounded-xl border px-4 py-3 text-base ${
             favoriteCount > FAVORITE_SOFT_CAP
-              ? "border-amber-400/40 bg-amber-400/10 text-amber-700 dark:text-amber-300"
+              ? "border-zinc-400/40 bg-zinc-400/10 text-zinc-700 dark:text-zinc-300"
               : "border-card-border bg-card text-foreground"
           }`}
         >
@@ -281,7 +281,7 @@ function StationsPanel({
         {allocation && (
           <div
             data-testid="socket-allocation"
-            className="mt-3 rounded-xl border border-card-border bg-card px-4 py-3 text-sm"
+            className="mt-3 rounded-xl border border-card-border bg-card px-4 py-3 text-base"
           >
             <button
               type="button"
@@ -293,17 +293,17 @@ function StationsPanel({
               ) : (
                 <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
               )}
-              <span className="font-mono text-[11px] uppercase tracking-wide text-primary">
+              <span className="font-mono text-[13px] uppercase tracking-wide text-primary">
                 Socket allocation
               </span>
-              <span className="ml-auto font-mono text-[11px] tabular-nums text-muted-foreground">
+              <span className="ml-auto font-mono text-[13px] tabular-nums text-muted-foreground">
                 {allocation.pinnedCount} pinned · {allocation.leasedCount}{" "}
                 leased · {allocation.freeSlots} free / {allocation.budget}
               </span>
             </button>
             {allocationOpen && (
               <div className="mt-3 space-y-3">
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   Spare slots are leased to the non-favorite stations most
                   likely to play music from the library (recent library
                   crossings, recency-decayed). Leases rotate every ~20 minutes.
@@ -321,7 +321,7 @@ function StationsPanel({
                   )}
                 </p>
                 {allocation.leases.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-sm text-muted-foreground">
                     No active leases — either no spare slots or no station has
                     crossed the library recently.
                   </p>
@@ -333,12 +333,12 @@ function StationsPanel({
                         className="flex items-center justify-between gap-3 rounded-lg bg-secondary/30 px-3 py-1.5"
                       >
                         <span className="flex min-w-0 items-center gap-1.5">
-                          <span className="truncate text-xs text-foreground">
+                          <span className="truncate text-sm text-foreground">
                             {l.name}
                           </span>
                           {l.scopedToShow && (
                             <span
-                              className="shrink-0 rounded bg-primary/15 px-1 py-0.5 font-mono text-[9px] text-primary"
+                              className="shrink-0 rounded bg-primary/15 px-1 py-0.5 font-mono text-[10px] text-primary"
                               title={
                                 l.activeDj
                                   ? `Score narrowed to ${l.activeDj}'s show window`
@@ -349,7 +349,7 @@ function StationsPanel({
                             </span>
                           )}
                         </span>
-                        <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
+                        <span className="shrink-0 font-mono text-[12px] tabular-nums text-muted-foreground">
                           score {l.score.toFixed(2)} · {l.crossings} crossings
                           · until{" "}
                           {new Date(l.expiresAt).toLocaleTimeString([], {
@@ -367,7 +367,7 @@ function StationsPanel({
         )}
 
         {actionError && (
-          <p className="mt-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
+          <p className="mt-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-base text-destructive-foreground">
             {actionError}
           </p>
         )}
@@ -381,17 +381,17 @@ function StationsPanel({
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search stations…"
             data-testid="station-search"
-            className="w-full rounded-full border border-border bg-card py-2 pl-9 pr-4 text-sm text-foreground placeholder-muted-foreground/50 focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full rounded-full border border-border bg-card py-2 pl-9 pr-4 text-base text-foreground placeholder-muted-foreground/50 focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </div>
 
         {loading ? (
-          <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="mt-6 flex items-center gap-2 text-base text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             Loading…
           </div>
         ) : loadError ? (
-          <div className="mt-6 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
+          <div className="mt-6 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-base text-destructive-foreground">
             {loadError}
           </div>
         ) : (
@@ -409,7 +409,7 @@ function StationsPanel({
                 />
               ))}
               {visible.length === 0 && (
-                <p className="mt-2 text-sm text-muted-foreground">
+                <p className="mt-2 text-base text-muted-foreground">
                   No stations match.
                 </p>
               )}
@@ -421,7 +421,7 @@ function StationsPanel({
                 type="button"
                 onClick={() => setHiddenOpen((v) => !v)}
                 data-testid="hidden-section-toggle"
-                className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                className="inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wide text-muted-foreground hover:text-foreground"
               >
                 {hiddenOpen ? (
                   <ChevronDown className="h-3.5 w-3.5" />
@@ -429,14 +429,14 @@ function StationsPanel({
                   <ChevronRight className="h-3.5 w-3.5" />
                 )}
                 Hidden stations
-                <span className="rounded-full bg-secondary px-1.5 font-mono text-[10px] tabular-nums">
+                <span className="rounded-full bg-secondary px-1.5 font-mono text-[12px] tabular-nums">
                   {hiddenStations.length}
                 </span>
               </button>
               {hiddenOpen && (
                 <div className="mt-3 flex flex-col gap-1.5">
                   {hiddenStations.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-base text-muted-foreground">
                       Nothing hidden.
                     </p>
                   ) : (
@@ -451,7 +451,7 @@ function StationsPanel({
                           onClick={() => void patchFlags(s.id, { hidden: false })}
                           disabled={busyIds.has(s.id)}
                           data-testid={`reintroduce-${s.slug}`}
-                          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-primary/40 bg-primary/5 px-3 py-1 font-mono text-[11px] text-primary transition-colors hover:bg-primary/10 disabled:opacity-40"
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-primary/40 bg-primary/5 px-3 py-1 font-mono text-[13px] text-primary transition-colors hover:bg-primary/10 disabled:opacity-40"
                         >
                           {busyIds.has(s.id) ? (
                             <Loader2 className="h-3 w-3 animate-spin" />
@@ -494,18 +494,18 @@ function StationIdentity({
       )}
       <div className="min-w-0">
         <p
-          className={`truncate text-sm font-medium ${
+          className={`truncate text-base font-normal ${
             dimmed ? "text-muted-foreground" : "text-foreground"
           }`}
         >
           {station.name}
           {!station.active && (
-            <span className="ml-2 font-mono text-[10px] uppercase text-muted-foreground/60">
+            <span className="ml-2 font-mono text-[12px] uppercase text-muted-foreground/60">
               inactive
             </span>
           )}
         </p>
-        <p className="truncate font-mono text-[11px] text-muted-foreground/70">
+        <p className="truncate font-mono text-[13px] text-muted-foreground/70">
           {[station.org, station.country, station.nowPlayingSource]
             .filter(Boolean)
             .join(" · ")}
@@ -541,9 +541,9 @@ function StationRow({
               ? "Unfavorite — drops the persistent connection"
               : "Favorite — holds a persistent connection for instant now-playing"
           }
-          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-[11px] transition-colors disabled:opacity-40 ${
+          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-[13px] transition-colors disabled:opacity-40 ${
             station.favorite
-              ? "border-[#C6F53F]/40 bg-[#C6F53F]/10 text-[#C6F53F]"
+              ? "border-[#dedede]/40 bg-[#dedede]/10 text-[#dedede]"
               : "border-border bg-secondary/30 text-muted-foreground hover:text-foreground"
           }`}
         >

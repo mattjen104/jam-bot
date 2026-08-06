@@ -29,14 +29,14 @@ export function PlayerDock() {
       data-testid="spotify-notice"
     >
       <div className="flex items-center justify-between gap-3 px-5 py-3">
-        <p className="truncate font-mono text-[11px] text-muted-foreground">
+        <p className="truncate font-mono text-[13px] text-muted-foreground">
           {spotify.notice}
         </p>
         <button
           type="button"
           onClick={spotify.clearNotice}
           aria-label="Dismiss"
-          className="hover-elevate shrink-0 rounded-full border border-border px-2.5 py-0.5 font-mono text-[11px] text-muted-foreground"
+          className="hover-elevate shrink-0 rounded-full border border-border px-2.5 py-0.5 font-mono text-[13px] text-muted-foreground"
         >
           OK
         </button>

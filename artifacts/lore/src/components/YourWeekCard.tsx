@@ -145,8 +145,8 @@ function WeekTrackRow({ track }: { track: WeeklyTrack }) {
             href={`/song/${track.mbid}`}
             style={{
               fontFamily: "var(--app-font-display)",
-              fontSize: 13,
-              fontWeight: 600,
+              fontSize: 15,
+              fontWeight: 400,
               color: "hsl(var(--foreground))",
               textDecoration: "none",
               display: "block",
@@ -161,8 +161,8 @@ function WeekTrackRow({ track }: { track: WeeklyTrack }) {
           <span
             style={{
               fontFamily: "var(--app-font-display)",
-              fontSize: 13,
-              fontWeight: 600,
+              fontSize: 15,
+              fontWeight: 400,
               color: "hsl(var(--foreground))",
               display: "block",
               overflow: "hidden",
@@ -176,7 +176,7 @@ function WeekTrackRow({ track }: { track: WeeklyTrack }) {
         <span
           style={{
             fontFamily: "var(--app-font-mono)",
-            fontSize: 10,
+            fontSize: 12,
             color: "hsl(var(--dim))",
             display: "block",
             overflow: "hidden",
@@ -202,8 +202,8 @@ function WeekTrackRow({ track }: { track: WeeklyTrack }) {
           <span
             style={{
               fontFamily: "var(--app-font-mono)",
-              fontSize: 9,
-              fontWeight: 700,
+              fontSize: 10,
+              fontWeight: 400,
               color: "hsl(var(--library))",
               background: "hsl(var(--library) / 0.12)",
               border: "1px solid hsl(var(--library) / 0.25)",
@@ -218,7 +218,7 @@ function WeekTrackRow({ track }: { track: WeeklyTrack }) {
         <span
           style={{
             fontFamily: "var(--app-font-mono)",
-            fontSize: 9,
+            fontSize: 10,
             color: "hsl(var(--faint))",
             display: "flex",
             alignItems: "center",
@@ -325,8 +325,8 @@ function WeekPickerDropdown({
           padding: "6px 12px",
           borderBottom: "1px solid hsl(var(--border) / 0.5)",
           fontFamily: "var(--app-font-mono)",
-          fontSize: 9,
-          fontWeight: 700,
+          fontSize: 10,
+          fontWeight: 400,
           textTransform: "uppercase",
           letterSpacing: "0.1em",
           color: "hsl(var(--faint))",
@@ -367,7 +367,7 @@ function WeekPickerDropdown({
                 style={{
                   display: "block",
                   fontFamily: "var(--app-font-display)",
-                  fontSize: 12,
+                  fontSize: 14,
                   fontWeight: isSelected ? 700 : 500,
                   color: isSelected
                     ? "hsl(var(--library))"
@@ -383,7 +383,7 @@ function WeekPickerDropdown({
                 <span
                   style={{
                     fontFamily: "var(--app-font-mono)",
-                    fontSize: 9,
+                    fontSize: 10,
                     color: "hsl(var(--faint))",
                   }}
                 >
@@ -395,7 +395,7 @@ function WeekPickerDropdown({
               <span
                 style={{
                   fontFamily: "var(--app-font-mono)",
-                  fontSize: 9,
+                  fontSize: 10,
                   color: "hsl(var(--dim))",
                   flexShrink: 0,
                 }}
@@ -406,7 +406,7 @@ function WeekPickerDropdown({
               <span
                 style={{
                   fontFamily: "var(--app-font-mono)",
-                  fontSize: 9,
+                  fontSize: 10,
                   color: "hsl(var(--faint))",
                   flexShrink: 0,
                 }}
@@ -492,8 +492,8 @@ export function YourWeekCard() {
         <span
           style={{
             fontFamily: "var(--app-font-display)",
-            fontSize: 9,
-            fontWeight: 700,
+            fontSize: 10,
+            fontWeight: 400,
             textTransform: "uppercase",
             letterSpacing: "0.12em",
             color: "hsl(var(--library))",
@@ -556,7 +556,7 @@ export function YourWeekCard() {
             <span
               style={{
                 fontFamily: "var(--app-font-mono)",
-                fontSize: 10,
+                fontSize: 12,
                 whiteSpace: "nowrap",
               }}
               data-testid="your-week-label"
@@ -646,7 +646,7 @@ export function YourWeekCard() {
           <span
             style={{
               fontFamily: "var(--app-font-reading)",
-              fontSize: 13,
+              fontSize: 15,
               color: "hsl(var(--muted-foreground))",
             }}
           >
@@ -657,7 +657,7 @@ export function YourWeekCard() {
           <span
             style={{
               fontFamily: "var(--app-font-mono)",
-              fontSize: 10,
+              fontSize: 12,
               color: "hsl(var(--faint))",
             }}
           >
@@ -681,7 +681,7 @@ export function YourWeekCard() {
             <span
               style={{
                 fontFamily: "var(--app-font-mono)",
-                fontSize: 10,
+                fontSize: 12,
                 color: "hsl(var(--dim))",
               }}
             >
@@ -693,7 +693,7 @@ export function YourWeekCard() {
             <span
               style={{
                 fontFamily: "var(--app-font-mono)",
-                fontSize: 10,
+                fontSize: 12,
                 color: "hsl(var(--faint))",
                 display: "flex",
                 alignItems: "center",

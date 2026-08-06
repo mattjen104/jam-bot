@@ -472,6 +472,24 @@ describe("findRunIndexByHour — pure spine-tap mapping", () => {
 // ---------------------------------------------------------------------------
 
 describe("usePastScanState — coarse navigation", () => {
+  it("clamps coarseIdx when the candidate list shrinks (range narrowed while past-scanning)", () => {
+    const { result, rerender } = renderHook(
+      ({ runs }: { runs: typeof THREE_RUNS }) => usePastScanState(runs),
+      { initialProps: { runs: THREE_RUNS } },
+    );
+    act(() => result.current.jumpToRunByIndex(2));
+    expect(result.current.coarseIdx).toBe(2);
+
+    // Shrink to one run: coarseIdx must clamp to the last valid index.
+    rerender({ runs: THREE_RUNS.slice(0, 1) });
+    expect(result.current.coarseIdx).toBe(0);
+    expect(result.current.currentRun).toBe(THREE_RUNS[0]);
+
+    // Shrink to empty: back to live edge.
+    rerender({ runs: [] });
+    expect(result.current.coarseIdx).toBe(null);
+  });
+
   it("starts at live edge (coarseIdx = null, isAtLiveEdge = true)", () => {
     const { result } = renderHook(() => usePastScanState(THREE_RUNS));
     expect(result.current.coarseIdx).toBeNull();

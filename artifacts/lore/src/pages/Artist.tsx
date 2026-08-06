@@ -25,11 +25,11 @@ function SectionHeading({
   return (
     <div className="mb-3 flex items-center gap-2">
       <span className="text-primary">{icon}</span>
-      <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-foreground/70">
+      <span className="font-mono text-[13px] uppercase tracking-[0.18em] text-foreground/70">
         {title}
       </span>
       {hint && (
-        <span className="ml-auto font-mono text-[11px] text-muted-foreground/60">
+        <span className="ml-auto font-mono text-[13px] text-muted-foreground/60">
           {hint}
         </span>
       )}
@@ -59,10 +59,10 @@ function TopTrackCard({ track }: { track: ArtistTopTrack }) {
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-foreground group-hover:text-primary">
+          <p className="truncate text-base font-normal text-foreground group-hover:text-primary">
             {track.title}
           </p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {track.spinCount} spin{track.spinCount === 1 ? "" : "s"}
             {track.lastSpunAt && (
               <span className="ml-2 text-muted-foreground/60">
@@ -104,7 +104,7 @@ export default function Artist() {
         <div className="mt-6">
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider text-muted-foreground/70 hover:text-primary"
+            className="inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wider text-muted-foreground/70 hover:text-primary"
           >
             <ArrowLeft className="h-3 w-3" />
             Back to the dial
@@ -121,13 +121,13 @@ export default function Artist() {
         <div className="mt-6">
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider text-muted-foreground/70 hover:text-primary"
+            className="inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wider text-muted-foreground/70 hover:text-primary"
           >
             <ArrowLeft className="h-3 w-3" />
             Back to the dial
           </Link>
         </div>
-        <div className="mt-10 rounded-2xl border border-destructive-border bg-destructive/10 p-6 text-sm text-destructive-foreground">
+        <div className="mt-10 rounded-2xl border border-destructive-border bg-destructive/10 p-6 text-base text-destructive-foreground">
           Couldn't load this artist. Please refresh.
         </div>
       </div>
@@ -142,7 +142,7 @@ export default function Artist() {
       <div className="mt-6">
         <Link
           href="/"
-          className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider text-muted-foreground/70 hover:text-primary"
+          className="inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wider text-muted-foreground/70 hover:text-primary"
           data-testid="back-to-dial"
         >
           <ArrowLeft className="h-3 w-3" />
@@ -151,17 +151,17 @@ export default function Artist() {
       </div>
 
       <header className="mt-8 space-y-1">
-        <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-primary">
+        <p className="font-mono text-[13px] uppercase tracking-[0.2em] text-primary">
           Artist
         </p>
         <h1
-          className="font-serif text-4xl font-semibold leading-tight text-foreground sm:text-5xl"
+          className="font-serif text-4xl font-normal leading-tight text-foreground sm:text-5xl"
           data-testid="artist-name"
         >
           {artist.name}
         </h1>
         {artist.topTracks.length > 0 && (
-          <p className="text-base text-muted-foreground">
+          <p className="text-lg text-muted-foreground">
             {artist.topTracks.reduce((s: number, t: ArtistTopTrack) => s + t.spinCount, 0)} total spins on Lore
           </p>
         )}
@@ -201,14 +201,14 @@ export default function Artist() {
                     data-testid="artist-album"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-foreground group-hover:text-primary">
+                      <p className="truncate text-base font-normal text-foreground group-hover:text-primary">
                         {album.name}
                       </p>
                       {album.year != null && (
-                        <p className="text-xs text-muted-foreground">{album.year}</p>
+                        <p className="text-sm text-muted-foreground">{album.year}</p>
                       )}
                     </div>
-                    <span className="ml-3 shrink-0 font-mono text-[11px] text-muted-foreground/60">
+                    <span className="ml-3 shrink-0 font-mono text-[13px] text-muted-foreground/60">
                       Spotify →
                     </span>
                   </a>
@@ -229,7 +229,7 @@ export default function Artist() {
               {spotifyTopTracks.map((t) => (
                 <li
                   key={t.id}
-                  className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm text-muted-foreground"
+                  className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-base text-muted-foreground"
                 >
                   <Music4 className="h-4 w-4 shrink-0 text-muted-foreground/40" />
                   <span className="truncate">{t.title}</span>
@@ -241,7 +241,7 @@ export default function Artist() {
 
         {artist.topTracks.length === 0 && albums.length === 0 && (
           <div className="rounded-2xl border border-border bg-card/50 p-8 text-center">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-base text-muted-foreground">
               No spins or discography found for this artist yet.
             </p>
           </div>

@@ -54,7 +54,7 @@ export default function SelectorRun() {
       <div className={`mx-auto max-w-4xl px-4 pt-8 sm:px-6 ${dockPadding}`}>
         <Link
           href={data ? `/archive/selectors/${data.picker.handle}` : "/selectors"}
-          className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wide text-muted-foreground hover:text-primary"
+          className="inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wide text-muted-foreground hover:text-primary"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
           {data ? `${data.picker.name} archive` : "All selectors"}
@@ -63,18 +63,18 @@ export default function SelectorRun() {
         {isLoading ? (
           <div className="mt-8 h-64 animate-pulse rounded-xl border border-card-border bg-card" />
         ) : isError || !data ? (
-          <p className="mt-8 rounded-xl border border-destructive-border bg-destructive/10 p-4 text-sm text-destructive-foreground">
+          <p className="mt-8 rounded-xl border border-destructive-border bg-destructive/10 p-4 text-base text-destructive-foreground">
             This run isn't in the archive.
           </p>
         ) : (
           <>
             <header className="mb-8 mt-6">
-              <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] text-primary">
+              <div className="flex items-center gap-2 font-mono text-[13px] uppercase tracking-[0.3em] text-primary">
                 <Ghost className="h-4 w-4" />
                 Dated reconstruction
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-3">
-                <h1 className="font-serif text-3xl font-semibold text-foreground">
+                <h1 className="font-serif text-4xl font-normal text-foreground">
                   {data.run.title ?? "Untitled run"}
                 </h1>
                 <ShareButton
@@ -82,7 +82,7 @@ export default function SelectorRun() {
                   kind="picker-run"
                 />
               </div>
-              <p className="mt-2 font-mono text-xs text-muted-foreground">
+              <p className="mt-2 font-mono text-sm text-muted-foreground">
                 Picked by {data.picker.name}
                 {data.run.pickedAt ? ` · ${runDate(data.run.pickedAt)}` : ""}
               </p>
@@ -90,7 +90,7 @@ export default function SelectorRun() {
                 href={data.run.sourceUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-2 inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wide text-primary hover:underline"
+                className="mt-2 inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wide text-primary hover:underline"
                 data-testid="run-source-link"
               >
                 <ExternalLink className="h-3 w-3" />
@@ -109,7 +109,7 @@ export default function SelectorRun() {
             {showFallbackNotice && (
               <div
                 data-testid="from-fallback-notice"
-                className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-border bg-muted/60 px-4 py-3 text-sm text-muted-foreground"
+                className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-border bg-muted/60 px-4 py-3 text-base text-muted-foreground"
               >
                 <span>
                   That song isn't in this run's resolved tracklist — starting

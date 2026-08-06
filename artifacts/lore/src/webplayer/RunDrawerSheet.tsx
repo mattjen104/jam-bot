@@ -37,10 +37,10 @@ function SpinRow({
         />
       )}
       <div style={{ minWidth: 0, flex: 1 }}>
-        <p style={{ margin: 0, fontSize: 14 }}>
+        <p style={{ margin: 0, fontSize: 16 }}>
           {spin.artist} — {spin.title}
         </p>
-        <p style={{ margin: "1px 0 0", fontSize: 12, color: "var(--wp-text-muted)" }}>
+        <p style={{ margin: "1px 0 0", fontSize: 14, color: "var(--wp-text-muted)" }}>
           spun {fmtTime(spin.playedAt)}
           {!spin.resolved && " · unresolved"}
         </p>
@@ -128,7 +128,7 @@ export function RunDrawerSheet({
           }}
         >
           <div style={{ minWidth: 0, flex: 1 }}>
-            <p style={{ margin: 0, fontSize: 16, fontWeight: 500 }}>
+            <p style={{ margin: 0, fontSize: 18, fontWeight: 400 }}>
               {run
                 ? `${run.show?.name ?? run.station.name} · tonight's run`
                 : isError
@@ -136,13 +136,13 @@ export function RunDrawerSheet({
                   : "Loading run…"}
             </p>
             {run && (
-              <p style={{ margin: "3px 0 0", fontSize: 13, color: "var(--wp-text-secondary)" }}>
+              <p style={{ margin: "3px 0 0", fontSize: 15, color: "var(--wp-text-secondary)" }}>
                 {run.show?.djName && (
                   <>
                     selector {run.show.djName} <span style={{ color: "var(--wp-text-muted)" }}>· </span>
                   </>
                 )}
-                <span className="wp-mono" style={{ fontSize: 12 }}>
+                <span className="wp-mono" style={{ fontSize: 14 }}>
                   {run.station.name}
                 </span>{" "}
                 <span style={{ color: "var(--wp-text-muted)" }}>
@@ -173,7 +173,7 @@ export function RunDrawerSheet({
                 borderRadius: 20,
                 background: "var(--wp-bg-accent)",
                 color: "var(--wp-text-accent)",
-                fontSize: 12,
+                fontSize: 14,
                 border: "none",
                 cursor: "pointer",
                 flexShrink: 0,
@@ -194,18 +194,18 @@ export function RunDrawerSheet({
         </div>
 
         {isLoading && (
-          <p style={{ padding: "16px 18px", color: "var(--wp-text-muted)", fontSize: 13 }}>
+          <p style={{ padding: "16px 18px", color: "var(--wp-text-muted)", fontSize: 15 }}>
             Loading tonight's spins…
           </p>
         )}
 
         {isError && !isLoading && (
           <div style={{ padding: "16px 18px" }} data-testid="run-error">
-            <p style={{ margin: "0 0 10px", color: "var(--wp-text-muted)", fontSize: 13 }}>
+            <p style={{ margin: "0 0 10px", color: "var(--wp-text-muted)", fontSize: 15 }}>
               Couldn't load this run — it may have been removed, or the
               connection dropped.
             </p>
-            <button type="button" onClick={() => void refetch()} style={{ fontSize: 12 }}>
+            <button type="button" onClick={() => void refetch()} style={{ fontSize: 14 }}>
               Try again
             </button>
           </div>
@@ -216,7 +216,7 @@ export function RunDrawerSheet({
           <div style={{ padding: "14px 18px 6px" }}>
             <p
               className="wp-mono"
-              style={{ margin: "0 0 8px", fontSize: 12, color: "var(--wp-text-muted)" }}
+              style={{ margin: "0 0 8px", fontSize: 14, color: "var(--wp-text-muted)" }}
             >
               FROM YOUR LIBRARY · {run.fromLibrary.length}
             </p>
@@ -237,7 +237,7 @@ export function RunDrawerSheet({
           <div style={{ padding: "10px 18px 16px" }}>
             <p
               className="wp-mono"
-              style={{ margin: "0 0 8px", fontSize: 12, color: "var(--wp-text-muted)" }}
+              style={{ margin: "0 0 8px", fontSize: 14, color: "var(--wp-text-muted)" }}
             >
               {run.authenticated ? "NEW TO YOU" : "TONIGHT"} · {run.newToYou.length}
             </p>
@@ -254,7 +254,7 @@ export function RunDrawerSheet({
         )}
 
         {run && run.fromLibrary.length === 0 && run.newToYou.length === 0 && !isLoading && (
-          <p style={{ padding: "16px 18px", color: "var(--wp-text-muted)", fontSize: 13 }}>
+          <p style={{ padding: "16px 18px", color: "var(--wp-text-muted)", fontSize: 15 }}>
             No spins logged for tonight yet.
           </p>
         )}
@@ -287,8 +287,8 @@ export function RunDrawerSheet({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: 12,
-                  fontWeight: 500,
+                  fontSize: 14,
+                  fontWeight: 400,
                   flexShrink: 0,
                 }}
                 aria-hidden="true"
@@ -300,7 +300,7 @@ export function RunDrawerSheet({
                   .join("")
                   .toUpperCase()}
               </div>
-              <p style={{ margin: 0, fontSize: 13, color: "var(--wp-text-secondary)", flex: 1 }}>
+              <p style={{ margin: 0, fontSize: 15, color: "var(--wp-text-secondary)", flex: 1 }}>
                 You and {run.trove.selectorName} share {run.trove.sharedCount} recordings.
                 {run.trove.deepCuts.length > 0 &&
                   " Deeper in their stacks, past runs you haven't heard:"}
@@ -324,8 +324,8 @@ export function RunDrawerSheet({
                       padding: "10px 12px",
                     }}
                   >
-                    <p style={{ margin: 0, fontSize: 13, fontWeight: 500 }}>{c.artist}</p>
-                    <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--wp-text-muted)" }}>
+                    <p style={{ margin: 0, fontSize: 15, fontWeight: 400 }}>{c.artist}</p>
+                    <p style={{ margin: "2px 0 0", fontSize: 14, color: "var(--wp-text-muted)" }}>
                       spun {c.spinCount}x across {c.runCount} {c.runCount === 1 ? "run" : "runs"}
                     </p>
                   </div>
@@ -336,7 +336,7 @@ export function RunDrawerSheet({
               type="button"
               style={{
                 marginTop: 10,
-                fontSize: 12,
+                fontSize: 14,
                 color: "var(--wp-text-accent)",
                 background: "none",
                 border: "0.5px solid var(--wp-border)",

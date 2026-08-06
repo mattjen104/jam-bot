@@ -117,7 +117,7 @@ export function StationScrubTimeline({
 
   return (
     <section className="rounded-xl border border-card-border bg-card p-4" data-testid="station-scrub">
-      <div className="mb-3 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] text-primary">
+      <div className="mb-3 flex items-center gap-2 font-mono text-[13px] uppercase tracking-[0.3em] text-primary">
         <History className="h-4 w-4" />
         Scrub the full history
       </div>
@@ -134,7 +134,7 @@ export function StationScrubTimeline({
             className="w-full accent-primary"
             aria-label={`Scrub ${stationName}'s spin history`}
           />
-          <div className="mt-1 flex items-center justify-between font-mono text-[10px] text-muted-foreground">
+          <div className="mt-1 flex items-center justify-between font-mono text-[12px] text-muted-foreground">
             <span>{runDate(bounds!.oldestSpinAt!)}</span>
             <span data-testid="scrub-position-label" className="text-foreground">
               {sliderLabel ? `${runDate(sliderLabel.toISOString())} · ${clockTime(sliderLabel.toISOString())}` : ""}
@@ -142,7 +142,7 @@ export function StationScrubTimeline({
             </span>
             <span>{runDate(bounds!.newestSpinAt!)}</span>
           </div>
-          <p className="mt-1 font-mono text-[10px] text-muted-foreground">
+          <p className="mt-1 font-mono text-[12px] text-muted-foreground">
             {bounds!.spinCount} spins logged
           </p>
         </>
@@ -159,25 +159,25 @@ export function StationScrubTimeline({
               className="flex items-center gap-3 rounded-lg border border-card-border/60 bg-background/40 p-2.5"
               data-testid="scrub-track"
             >
-              <span className="w-16 shrink-0 font-mono text-[10px] text-muted-foreground">
+              <span className="w-16 shrink-0 font-mono text-[12px] text-muted-foreground">
                 {t.playedAt ? clockTime(t.playedAt) : ""}
               </span>
               <div className="min-w-0 flex-1">
                 {rec ? (
                   <Link
                     href={`/song/${rec.mbid}`}
-                    className="block truncate text-sm font-medium text-foreground hover:text-primary"
+                    className="block truncate text-base font-normal text-foreground hover:text-primary"
                   >
                     {rec.title}
                     <span className="text-muted-foreground"> · {rec.artist}</span>
                   </Link>
                 ) : (
-                  <p className="truncate text-sm text-muted-foreground">
+                  <p className="truncate text-base text-muted-foreground">
                     {t.rawTitle || "Untitled"}
                     {t.rawArtist ? ` · ${t.rawArtist}` : ""}
                   </p>
                 )}
-                <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground/70">
+                <span className="font-mono text-[12px] uppercase tracking-wide text-muted-foreground/70">
                   {CONFIDENCE_LABEL[t.confidence] ?? t.confidence}
                 </span>
               </div>
@@ -186,7 +186,7 @@ export function StationScrubTimeline({
                 onClick={() => t.playedAt && playFrom(t.playedAt, rec?.mbid)}
                 disabled={!rec}
                 data-testid="scrub-play-from-here"
-                className="hover-elevate shrink-0 inline-flex items-center gap-1 rounded-full border border-primary-border bg-primary px-2.5 py-1 font-mono text-[10px] uppercase tracking-wide text-primary-foreground disabled:opacity-30"
+                className="hover-elevate shrink-0 inline-flex items-center gap-1 rounded-full border border-primary-border bg-primary px-2.5 py-1 font-mono text-[12px] uppercase tracking-wide text-primary-foreground disabled:opacity-30"
                 title={rec ? "Play from here" : "Never resolved — can't replay"}
               >
                 {rec ? <Play className="h-3 w-3" /> : <Ghost className="h-3 w-3" />}
@@ -202,7 +202,7 @@ export function StationScrubTimeline({
           type="button"
           onClick={loadOlder}
           data-testid="scrub-load-older"
-          className="mt-3 w-full rounded-lg border border-card-border py-2 font-mono text-[11px] uppercase tracking-wide text-muted-foreground hover:text-foreground"
+          className="mt-3 w-full rounded-lg border border-card-border py-2 font-mono text-[13px] uppercase tracking-wide text-muted-foreground hover:text-foreground"
         >
           Load older spins
         </button>

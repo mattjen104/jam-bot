@@ -32,7 +32,7 @@ function ListProvenanceItems({
 
   return (
     <div className="mt-5" data-testid="list-provenance">
-      <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+      <p className="mb-2 font-mono text-[13px] uppercase tracking-[0.15em] text-muted-foreground">
         Listed on
       </p>
       <ul className="space-y-2">
@@ -53,10 +53,10 @@ function ListProvenanceItems({
           return (
             <li
               key={`${item.listId}-${item.releaseGroupMbid}`}
-              className="text-sm leading-snug"
+              className="text-base leading-snug"
             >
               {albumLine && (
-                <span className="font-medium text-foreground">
+                <span className="font-normal text-foreground">
                   {albumLine} —{" "}
                 </span>
               )}

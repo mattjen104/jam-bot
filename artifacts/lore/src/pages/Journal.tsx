@@ -35,21 +35,21 @@ export default function Journal() {
       <div className={`mx-auto max-w-4xl px-4 pt-8 sm:px-6 ${dockPadding}`}>
         <Link
           href="/"
-          className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wide text-muted-foreground hover:text-primary"
+          className="inline-flex items-center gap-1.5 font-mono text-[13px] uppercase tracking-wide text-muted-foreground hover:text-primary"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
           Back to the dial
         </Link>
 
         <header className="mb-8 mt-6">
-          <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] text-primary">
+          <div className="flex items-center gap-2 font-mono text-[13px] uppercase tracking-[0.3em] text-primary">
             <BookOpen className="h-4 w-4" />
             Your journal
           </div>
-          <h1 className="mt-3 max-w-[20ch] font-serif text-4xl font-semibold leading-[1.05] text-foreground">
+          <h1 className="mt-3 max-w-[20ch] font-serif text-4xl font-normal leading-[1.05] text-foreground">
             Everything you heard here.
           </h1>
-          <p className="mt-4 max-w-[52ch] text-base text-muted-foreground">
+          <p className="mt-4 max-w-[52ch] text-lg text-muted-foreground">
             Lore remembers what played while you listened — the answer to
             "what was that song?" Stored only on this device, never on a
             server.
@@ -58,7 +58,7 @@ export default function Journal() {
 
         {entries.length > 0 && (
           <div className="mb-6 flex items-center justify-between gap-3">
-            <p className="font-mono text-[11px] text-muted-foreground">
+            <p className="font-mono text-[13px] text-muted-foreground">
               {entries.length} listen{entries.length === 1 ? "" : "s"} on this
               device
             </p>
@@ -71,14 +71,14 @@ export default function Journal() {
                     setConfirmClear(false);
                   }}
                   data-testid="journal-clear-confirm"
-                  className="hover-elevate rounded-lg border border-destructive-border bg-destructive/10 px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide text-destructive-foreground"
+                  className="hover-elevate rounded-lg border border-destructive-border bg-destructive/10 px-3 py-1.5 font-mono text-[13px] uppercase tracking-wide text-destructive-foreground"
                 >
                   Erase everything
                 </button>
                 <button
                   type="button"
                   onClick={() => setConfirmClear(false)}
-                  className="hover-elevate rounded-lg border border-border bg-card px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide text-muted-foreground"
+                  className="hover-elevate rounded-lg border border-border bg-card px-3 py-1.5 font-mono text-[13px] uppercase tracking-wide text-muted-foreground"
                 >
                   Keep it
                 </button>
@@ -88,7 +88,7 @@ export default function Journal() {
                 type="button"
                 onClick={() => setConfirmClear(true)}
                 data-testid="journal-clear"
-                className="hover-elevate inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide text-muted-foreground"
+                className="hover-elevate inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 font-mono text-[13px] uppercase tracking-wide text-muted-foreground"
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 Clear journal
@@ -100,13 +100,13 @@ export default function Journal() {
         {entries.length === 0 ? (
           <div className="rounded-xl border border-card-border bg-card p-8 text-center">
             <Disc3 className="mx-auto h-10 w-10 text-muted-foreground/50" />
-            <p className="mx-auto mt-4 max-w-[32ch] font-serif text-lg text-muted-foreground">
+            <p className="mx-auto mt-4 max-w-[32ch] font-serif text-xl text-muted-foreground">
               Nothing heard yet. Tune into a station or ride a trail — every
               track lands here.
             </p>
             <Link
               href="/"
-              className="hover-elevate mt-5 inline-flex items-center gap-2 rounded-full border border-primary-border bg-primary/10 px-4 py-2 font-mono text-[11px] uppercase tracking-wide text-primary"
+              className="hover-elevate mt-5 inline-flex items-center gap-2 rounded-full border border-primary-border bg-primary/10 px-4 py-2 font-mono text-[13px] uppercase tracking-wide text-primary"
             >
               <Radio className="h-3.5 w-3.5" />
               Open the dial
@@ -116,7 +116,7 @@ export default function Journal() {
           <div className="flex flex-col gap-8" data-testid="journal-days">
             {days.map(([day, dayEntries]) => (
               <section key={day}>
-                <h2 className="mb-3 font-mono text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
+                <h2 className="mb-3 font-mono text-[13px] uppercase tracking-[0.3em] text-muted-foreground">
                   {day}
                 </h2>
                 <ul className="flex flex-col gap-2">
@@ -137,12 +137,12 @@ function JournalRow({ entry }: { entry: JournalEntry }) {
   const title = entry.mbid ? (
     <Link
       href={`/song/${entry.mbid}`}
-      className="truncate text-base font-medium text-foreground hover:text-primary"
+      className="truncate text-lg font-normal text-foreground hover:text-primary"
     >
       {entry.title}
     </Link>
   ) : (
-    <span className="truncate text-base font-medium text-foreground">
+    <span className="truncate text-lg font-normal text-foreground">
       {entry.title}
     </span>
   );
@@ -165,7 +165,7 @@ function JournalRow({ entry }: { entry: JournalEntry }) {
 
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-baseline gap-2">{title}</div>
-        <p className="truncate text-sm" style={{ color: "hsl(var(--dim))" }}>
+        <p className="truncate text-base" style={{ color: "hsl(var(--dim))" }}>
           {entry.artistMbid ? (
             <Link
               href={`/artist/${entry.artistMbid}`}
@@ -178,7 +178,7 @@ function JournalRow({ entry }: { entry: JournalEntry }) {
           )}
         </p>
         {/* IBM Plex Mono source attribution — source name in violet */}
-        <p className="mt-0.5 flex items-center gap-1.5 truncate font-mono text-[11px]" style={{ color: "hsl(var(--faint))" }}>
+        <p className="mt-0.5 flex items-center gap-1.5 truncate font-mono text-[13px]" style={{ color: "hsl(var(--faint))" }}>
           <SourceIcon kind={entry.kind} />
           <span className="text-primary">
             <SourceLabel entry={entry} />
@@ -191,7 +191,7 @@ function JournalRow({ entry }: { entry: JournalEntry }) {
 
       {/* Right side: time + service sync badge */}
       <div className="flex shrink-0 flex-col items-end gap-1">
-        <span className="font-mono text-[11px]" style={{ color: "hsl(var(--faint))" }}>
+        <span className="font-mono text-[13px]" style={{ color: "hsl(var(--faint))" }}>
           {clockTime(entry.at)}
         </span>
         {entry.mbid && <ServiceBadge mbid={entry.mbid} />}
@@ -206,7 +206,7 @@ function ServiceBadge({ mbid }: { mbid: string }) {
   if (!spotify.configured) {
     return (
       <span
-        className="rounded border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wide"
+        className="rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide"
         style={{ borderColor: "hsl(var(--faint))", color: "hsl(var(--dim))" }}
       >
         ID'd ✓
@@ -218,7 +218,7 @@ function ServiceBadge({ mbid }: { mbid: string }) {
       type="button"
       onClick={spotify.connected ? undefined : spotify.connect}
       title={spotify.connected ? "Saved to Spotify Liked Songs" : "Connect Spotify to save"}
-      className="rounded border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wide transition-colors hover:border-primary/40 hover:text-primary"
+      className="rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide transition-colors hover:border-primary/40 hover:text-primary"
       style={{
         borderColor: "hsl(var(--faint))",
         color: spotify.connected ? "hsl(var(--dim))" : "hsl(var(--faint))",

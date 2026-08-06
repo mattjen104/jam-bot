@@ -20,9 +20,9 @@ import { usePlayer, type RideSeed } from "../player/PlayerProvider";
 import { BottlePanel } from "./BottlePanel";
 import { AlbumAvatarPicker } from "./AlbumAvatarPicker";
 import { MoonPhaseGlyph } from "./MoonPhaseGlyph";
+import { SlimSectionNav } from "./SlimSectionNav";
 import { RUMOURS, onArtError } from "../lib/rumours";
-import { useSocialMode } from "../lib/social";
-import { SocialModeBar } from "./SocialModeBar";
+import { useSocialMode, setSocialEnabled } from "../lib/social";
 import { eligibleDjName, eligibleDjNames } from "@workspace/lore-attribution";
 import {
   cleanLiveValue,
@@ -682,7 +682,7 @@ export function DensitySpine({
   return (
     <div
       ref={containerRef}
-      className="dial-density-spine"
+      className={`dial-density-spine${runs.length > 60 ? " dial-density-spine--dense" : ""}`}
       role="slider"
       aria-label="Crossing run navigator — drag to scan"
       aria-valuemin={0}
@@ -695,15 +695,17 @@ export function DensitySpine({
       onPointerCancel={handlePointerUp}
     >
       {/* Display oldest → newest (runs array is newest-first, so reverse) */}
-      {[...runs].reverse().map((run, displayIdx) => {
+      {[...runs].reverse().map((run, displayIdx, reversed) => {
         const runIdx = runs.length - 1 - displayIdx; // convert back to array index
         const isActive = runIdx === activeIdx;
         const heightPct = Math.max(10, Math.round((run.owned / maxOwned) * 100));
+        // Mark the first run of each calendar day so wide ranges stay legible.
+        const dayStart = displayIdx > 0 && reversed[displayIdx - 1]!.day !== run.day;
         return (
           <button
             key={run.runId}
             type="button"
-            className={`dial-density-spine__bin${isActive ? " dial-density-spine__bin--active" : ""}`}
+            className={`dial-density-spine__bin${isActive ? " dial-density-spine__bin--active" : ""}${dayStart ? " dial-density-spine__bin--daystart" : ""}`}
             style={{ height: `${heightPct}%` }}
             data-run-idx={runIdx}
             data-day={run.day}
@@ -746,14 +748,29 @@ export interface PastScanHandle {
  *                     (coarseIdx === null) and in top mode.
  *   ⭐ Top sets:       toggles all-time ranked mode.
  */
+/** Dial range options — how far back the coarse scan reaches. */
+const TT_RANGE_OPTIONS: { days: number; label: string }[] = [
+  { days: 2, label: "2d" },
+  { days: 7, label: "1w" },
+  { days: 30, label: "1m" },
+];
+
 export function DialTimeTravelStrip({
   mode,
   pastScan,
   onModeChange,
+  rangeDays,
+  onRangeChange,
+  sortDesc,
+  onSortToggle,
 }: {
   mode: TtMode;
   pastScan: PastScanHandle;
   onModeChange: (m: TtMode) => void;
+  rangeDays: number;
+  onRangeChange: (days: number) => void;
+  sortDesc?: boolean;
+  onSortToggle?: () => void;
 }) {
   const handlePrev = () => {
     if (mode === "top") {
@@ -773,17 +790,23 @@ export function DialTimeTravelStrip({
     onModeChange(mode === "top" ? "live" : "top");
   };
 
+  // The day label is gone — the moon IS the time indicator. Its phase is
+  // computed for the scrubbed date (today at the live edge, the run's day
+  // when stepped back into ghost sets). Station/DJ context stays as text.
   let label: string;
+  let labelPrefix: string | null = null;
+  let scrubDate = new Date();
   if (mode === "top") {
     label = "Top sets · all time";
+    labelPrefix = label;
   } else if (pastScan.currentRun) {
     const run = pastScan.currentRun;
     const djName = run.show?.djName ?? null;
     const showName = run.show?.name ?? null;
     const by = djName ?? showName ?? null;
-    label = by
-      ? `${run.station.name} · ${by} · ${runDate(run.day)}`
-      : `${run.station.name} · ${runDate(run.day)}`;
+    labelPrefix = by ? `${run.station.name} · ${by}` : run.station.name;
+    label = `${labelPrefix} · ${runDate(run.day)}`;
+    scrubDate = new Date(`${run.day}T12:00:00`);
   } else {
     label = "Today";
   }
@@ -802,7 +825,10 @@ export function DialTimeTravelStrip({
       >
         ←
       </button>
-      <span className="dial-timetravel__label">{label}</span>
+      <span className="dial-timetravel__label" title={label} aria-label={label}>
+        {labelPrefix && <>{labelPrefix}{mode !== "top" && " · "}</>}
+        {mode !== "top" && <MoonPhaseGlyph size={22} date={scrubDate} />}
+      </span>
       <button
         type="button"
         className="dial-timetravel__arrow dial-timetravel__arrow--next"
@@ -813,14 +839,39 @@ export function DialTimeTravelStrip({
       >
         →
       </button>
-      <button
-        type="button"
-        className={`dial-timetravel__top${mode === "top" ? " dial-timetravel__top--active" : ""}`}
-        aria-pressed={mode === "top"}
-        onClick={handleTopToggle}
-      >
-        ⭐ Top sets
-      </button>
+      {/* Dial range — widens the scan window (and the density spine). */}
+      {mode !== "top" && (
+        <span className="dial-timetravel__range" role="group" aria-label="Dial range">
+          {TT_RANGE_OPTIONS.map((opt) => (
+            <button
+              key={opt.days}
+              type="button"
+              className={`dial-timetravel__range-btn${rangeDays === opt.days ? " dial-timetravel__range-btn--active" : ""}`}
+              aria-pressed={rangeDays === opt.days}
+              aria-label={`Scan back ${opt.days} days`}
+              onClick={() => onRangeChange(opt.days)}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </span>
+      )}
+      {/* Sort triangle — lives here in the filter strip, not the logo area. */}
+      {mode !== "top" && onSortToggle && (
+        <button
+          type="button"
+          className="dial-tab-sort"
+          aria-label={sortDesc
+            ? "Sorted by most crossings first — tap for least crossings and deep cuts first"
+            : "Sorted by least crossings and deep cuts first — tap for most crossings first"}
+          aria-pressed={!sortDesc}
+          title={sortDesc ? "Most crossings first" : "Deep cuts first"}
+          onClick={onSortToggle}
+        >
+          {sortDesc ? "▲" : "▼"}
+        </button>
+      )}
+      {/* ⭐ Top sets toggle hidden for now — handleTopToggle kept for later. */}
     </div>
   );
 }
@@ -1045,7 +1096,7 @@ function ShowTracklistView({
       <div className="dial-djhd">
         <div className="dial-djhd__name">{show.showName}</div>
         <div className="dial-djhd__sub">
-          {show.djName && <><b style={{ fontStyle: "normal", fontWeight: 600 }}>{show.djName}</b>{" · "}</>}
+          {show.djName && <><b style={{ fontStyle: "normal", fontWeight: 400 }}>{show.djName}</b>{" · "}</>}
           {station.station.name} · {fmtHM(show.startedAt)}{isLive ? "–now" : `–${fmtHM(show.endedAt)}`}
         </div>
         <div className="dial-djhd__stats">
@@ -1169,7 +1220,7 @@ function DjView({
           );
         })}
         {djSets.length === 0 && (
-          <div style={{ padding: "20px 15px", opacity: 0.4, fontFamily: "var(--app-font-display)", fontSize: 12 }}>
+          <div style={{ padding: "20px 15px", opacity: 0.4, fontFamily: "var(--app-font-display)", fontSize: 14 }}>
             No sets archived for today
           </div>
         )}
@@ -1371,7 +1422,7 @@ function ScheduleView({ stations }: { stations: DialStation[] }) {
         </div>
         <div className="dial-sch-badge">
           {isLive && <span className="dial-sch-badge--live">● Live</span>}
-          {isFuture && <span style={{ color: "hsl(var(--faint))", fontSize: 8 }}>Soon</span>}
+          {isFuture && <span style={{ color: "hsl(var(--faint))", fontSize: 9 }}>Soon</span>}
           {!isLive && !isFuture && warm && <span className="dial-sch-badge--cross">◆ {show.crossings}</span>}
           {show.isPickerShow && <span className="dial-sch-badge--sel">Selector</span>}
         </div>
@@ -1382,7 +1433,7 @@ function ScheduleView({ stations }: { stations: DialStation[] }) {
   return (
     <div>
       {pastAndLive.length === 0 && upcoming.length === 0 && (
-        <div style={{ padding: "24px 15px", opacity: 0.4, fontFamily: "var(--app-font-display)", fontSize: 12 }}>
+        <div style={{ padding: "24px 15px", opacity: 0.4, fontFamily: "var(--app-font-display)", fontSize: 14 }}>
           No show data for today
         </div>
       )}
@@ -2027,9 +2078,13 @@ export function DialView() {
     { enabled: ttMode === "top" },
   );
 
+  // Dial range — how far back the coarse scan (and its density spine) reaches.
+  // 2 = today + yesterday (default), 7 = a week, 30 = a month.
+  const [ttRangeDays, setTtRangeDays] = useState<number>(2);
+
   // Fetch the recent crossing runs (reverse-chrono) — coarse scan detents.
   // Always fetched so coarse navigation is immediately available on first ← tap.
-  const { data: recentRuns = [] } = useMyOverlapRunsRecent();
+  const { data: recentRuns = [] } = useMyOverlapRunsRecent({ days: ttRangeDays });
 
   // Two-level past-scan state machine (coarse = runs, fine = crossing moments).
   const pastScan = usePastScanState(recentRuns);
@@ -2265,38 +2320,14 @@ export function DialView() {
       const isPlaying = radio.status === "playing";
       return (
         <div className="dial-topbar dial-topbar--all">
-          {/* Wordmark — moon phase sits left of the full word "LORE".
-              The moon is a tap target that opens the fullscreen album-art
-              overlay when avatar art is available. */}
+          {/* Wordmark — plain "Lore" text, left-justified like the list.
+              The moon moved down to the time-travel strip, where its phase
+              tracks the scrubbed date. (Solo/LP toggle machinery kept.) */}
           <span className="dial-topbar__wordmark" aria-label="Lore">
-            <button
-              ref={moonBtnRef}
-              type="button"
-              className="dial-topbar__moon-btn"
-              aria-label="View album art fullscreen"
-              disabled={!avatarUrl}
-              onClick={(e) => { if (avatarUrl) { artOpenerRef.current = e.currentTarget; setAlbumArtOpen((v) => !v); } }}
-            >
-              <span className="dial-topbar__moon-prefix" aria-hidden="true">
-                <MoonPhaseGlyph size={14} />
-              </span>
-            </button>
             <span className="dial-topbar__letter" aria-hidden="true">Lore</span>
           </span>
 
-          {/* Global search — tappable fake-input that opens the SearchOverlay */}
-          <button
-            type="button"
-            className="dial-topbar__search-btn"
-            onClick={() => setSearchOpen(true)}
-            aria-label="Search stations, shows, and artists"
-          >
-            <Search size={11} strokeWidth={2.2} aria-hidden="true" />
-            <span className="dial-topbar__search-label">Search</span>
-          </button>
-
-          {/* Solo / Listening Party — compact pill pinned to top-right */}
-          <SocialModeBar variant="topbar" />
+          {/* Global search hidden — SearchOverlay machinery kept for later. */}
         </div>
       );
     }
@@ -2440,47 +2471,26 @@ export function DialView() {
       {level === "all" ? (
         <div className="dial-hero">
           {renderTopbar()}
-          <div
-            className="dial-hero__art"
-            style={{ backgroundImage: `url(${heroArt})` }}
-            role="button"
-            tabIndex={0}
-            aria-label="Open album art fullscreen"
-            onClick={(e) => { artOpenerRef.current = e.currentTarget; setAlbumArtOpen(true); }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                artOpenerRef.current = e.currentTarget;
-                setAlbumArtOpen(true);
-              }
-            }}
-          />
-          {zone1Settled && (
-            <div className="dial-hero__toolbar">
-              <button
-                type="button"
-                className="dial-tab-sort"
-                aria-label={popSortDesc
-                  ? "Sorted by most crossings first — tap for least crossings and deep cuts first"
-                  : "Sorted by least crossings and deep cuts first — tap for most crossings first"}
-                aria-pressed={!popSortDesc}
-                title={popSortDesc ? "Most crossings first" : "Deep cuts first"}
-                onClick={() => setPopSortDesc((v) => !v)}
-              >
-                {popSortDesc ? "▲" : "▼"}
-              </button>
-              <button
-                type="button"
-                className={`dial-tab dial-tab--add${addArtistsOpen ? " dial-tab--add-active" : ""}`}
-                onClick={() => setAddArtistsOpen((v) => !v)}
-                aria-label="Add artists"
-                aria-expanded={addArtistsOpen}
-              >
-                <span className="dial-tab--add__full">＋ Artists</span>
-                <span className="dial-tab--add__short" aria-hidden="true">＋</span>
-              </button>
-            </div>
-          )}
+          <div className="dial-hero__artwrap">
+            <div
+              className="dial-hero__art"
+              style={{ backgroundImage: `url(${heroArt})` }}
+              role="button"
+              tabIndex={0}
+              aria-label="Open album art fullscreen"
+              onClick={(e) => { artOpenerRef.current = e.currentTarget; setAlbumArtOpen(true); }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  artOpenerRef.current = e.currentTarget;
+                  setAlbumArtOpen(true);
+                }
+              }}
+            />
+            <SlimSectionNav overlay />
+          </div>
+          {/* Sort toggle moved into the time-travel (filter) strip.
+              ＋ Artists button hidden — addArtistsOpen machinery kept. */}
           {zone1Settled && addArtistsOpen && (
             <div className="dial-tabs-add-row">
               {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
@@ -2559,6 +2569,10 @@ export function DialView() {
               nextRun: pastScan.nextRun,
             }}
             onModeChange={handleTtModeChange}
+            rangeDays={ttRangeDays}
+            onRangeChange={setTtRangeDays}
+            sortDesc={popSortDesc}
+            onSortToggle={() => setPopSortDesc((v) => !v)}
           />
         )}
         {/* DIAL view — three-zone front door (spec §6) */}
@@ -3308,6 +3322,17 @@ export function usePastScanState(coarseCands: OverlapRun[]) {
   const [coarseIdx, setCoarseIdx] = useState<number | null>(null);
   const [fineIdx, setFineIdx] = useState<number | null>(null);
   const coarseCount = coarseCands.length;
+
+  // The candidate list can shrink under us (e.g. the dial range is narrowed
+  // while stepped back). Clamp the coarse position so currentRun never reads
+  // past the end of the array. Plain effect reads — no nested setters, which
+  // are unsafe under Strict/Concurrent semantics.
+  useEffect(() => {
+    if (coarseIdx !== null && coarseIdx >= coarseCount) {
+      setCoarseIdx(coarseCount > 0 ? coarseCount - 1 : null);
+      setFineIdx(null);
+    }
+  }, [coarseCount, coarseIdx]);
 
   // Internal setter: updates coarse and resets fine whenever the index changes.
   const setCoarseWithFineReset = useCallback(

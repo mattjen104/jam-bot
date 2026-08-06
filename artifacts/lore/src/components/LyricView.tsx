@@ -67,7 +67,7 @@ export function LyricView({ mbid, progressMs }: LyricViewProps) {
   if (isLoading) {
     return (
       <div className="px-5 py-4">
-        <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground animate-pulse">
+        <p className="font-mono text-[13px] uppercase tracking-[0.15em] text-muted-foreground animate-pulse">
           Loading lyrics…
         </p>
       </div>
@@ -77,7 +77,7 @@ export function LyricView({ mbid, progressMs }: LyricViewProps) {
   if (!lines.length) {
     return (
       <div className="px-5 py-4">
-        <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+        <p className="font-mono text-[13px] uppercase tracking-[0.15em] text-muted-foreground">
           No lyrics found for this track.
         </p>
       </div>
@@ -86,7 +86,7 @@ export function LyricView({ mbid, progressMs }: LyricViewProps) {
 
   return (
     <div className="overflow-hidden rounded-2xl border border-card-border bg-card">
-      <p className="px-5 pt-4 pb-2 font-mono text-[11px] uppercase tracking-[0.15em] text-muted-foreground">
+      <p className="px-5 pt-4 pb-2 font-mono text-[13px] uppercase tracking-[0.15em] text-muted-foreground">
         {synced ? "Lyrics" : "Lyrics · unsynced"}
       </p>
       <ul
@@ -102,9 +102,9 @@ export function LyricView({ mbid, progressMs }: LyricViewProps) {
               key={line.offsetMs}
               ref={i === activeIndex ? activeRef : null}
               className={cn(
-                "py-0.5 text-sm leading-relaxed transition-colors duration-300",
+                "py-0.5 text-base leading-relaxed transition-colors duration-300",
                 i === activeIndex
-                  ? "font-semibold text-foreground"
+                  ? "font-normal text-foreground"
                   : activeIndex === -1 || Math.abs(i - Math.max(activeIndex, 0)) < 6
                     ? "text-muted-foreground/70"
                     : "text-muted-foreground/30",
@@ -136,13 +136,13 @@ export function LyricView({ mbid, progressMs }: LyricViewProps) {
                   {lineClaims.map((claim, ci) => (
                     <div
                       key={ci}
-                      className="rounded-lg border border-border bg-secondary/50 p-2.5 text-xs"
+                      className="rounded-lg border border-border bg-secondary/50 p-2.5 text-sm"
                     >
                       <p className="text-foreground leading-snug">{claim.text}</p>
                       <div className="mt-1.5 flex items-center justify-between gap-2">
                         <span
                           className={cn(
-                            "font-mono text-[10px] uppercase tracking-wide",
+                            "font-mono text-[12px] uppercase tracking-wide",
                             claim.verified
                               ? "text-primary"
                               : "text-muted-foreground/70",
@@ -154,7 +154,7 @@ export function LyricView({ mbid, progressMs }: LyricViewProps) {
                           href={claim.sourceUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex items-center gap-1 font-mono text-[10px] text-primary hover:underline"
+                          className="inline-flex items-center gap-1 font-mono text-[12px] text-primary hover:underline"
                         >
                           Read on Genius
                           <ExternalLink className="h-2.5 w-2.5" />

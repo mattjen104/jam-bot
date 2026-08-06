@@ -1,6 +1,7 @@
 import { useLocation } from "wouter";
 import { useState, useEffect, type ReactNode } from "react";
 import { ImportStrip } from "./ImportStrip";
+import { SlimSectionNav } from "./SlimSectionNav";
 import { ManualImportModal, type ServiceId } from "./ManualImportModal";
 import {
   useMyDialCrossings,
@@ -84,7 +85,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
         />
       )}
 
-      {/* ── Main content — pad for bottom shell (nav + optional player) ── */}
+      {/* ── Main content — pad for bottom shell (optional player dock) ── */}
+      {/* Section nav: on the front door it overlays the album art (DialView);
+          on every other section it renders as a slim top bar here. */}
+      {!isHome && <SlimSectionNav />}
       <div className={isHome ? "" : "content-pad-shell"}>{children}</div>
     </>
   );

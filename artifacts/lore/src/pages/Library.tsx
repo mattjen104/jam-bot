@@ -104,7 +104,7 @@ function TierHd({
         <span
           style={{
             fontFamily: "var(--app-font-mono)",
-            fontSize: 9,
+            fontSize: 10,
             color: "hsl(var(--faint))",
             margin: "0 8px",
             whiteSpace: "nowrap",
@@ -175,7 +175,7 @@ export function SyncBar({
           <span
             style={{
               fontFamily: "var(--app-font-mono)",
-              fontSize: 9,
+              fontSize: 10,
               color: "hsl(var(--library))",
               marginRight: 6,
             }}
@@ -217,7 +217,7 @@ export function SyncBar({
           style={{ padding: "8px 15px", borderBottom: "1px solid hsl(var(--border) / 0.5)" }}
           data-testid="library-sync-error"
         >
-          <p style={{ fontFamily: "var(--app-font-mono)", fontSize: 10, color: "hsl(var(--destructive))" }}>
+          <p style={{ fontFamily: "var(--app-font-mono)", fontSize: 12, color: "hsl(var(--destructive))" }}>
             {syncError}
           </p>
           {syncNeedsReconnect && (
@@ -237,7 +237,7 @@ export function SyncBar({
       {syncJobData?.status === "error" && (
         <div style={{ padding: "8px 15px", borderBottom: "1px solid hsl(var(--border) / 0.5)" }}>
           <p
-            style={{ fontFamily: "var(--app-font-mono)", fontSize: 10, color: "hsl(var(--destructive))" }}
+            style={{ fontFamily: "var(--app-font-mono)", fontSize: 12, color: "hsl(var(--destructive))" }}
             data-testid="library-sync-job-error"
           >
             {syncJobData.error ?? "Sync failed — try again."}
@@ -277,7 +277,7 @@ export function SyncBar({
               onClick={onToggleReceipt}
               style={{
                 fontFamily: "var(--app-font-mono)",
-                fontSize: 10,
+                fontSize: 12,
                 color: "hsl(var(--dim))",
                 background: "none",
                 border: "none",
@@ -417,8 +417,8 @@ export function LibraryImportBanner({
           <div
             style={{
               fontFamily: "var(--app-font-display)",
-              fontSize: 9,
-              fontWeight: 700,
+              fontSize: 10,
+              fontWeight: 400,
               textTransform: "uppercase",
               letterSpacing: "0.1em",
               color: `hsl(${accent})`,
@@ -429,7 +429,7 @@ export function LibraryImportBanner({
           {isDone && (() => {
             const unresolved = Math.max(0, job.total - job.resolved);
             return (
-              <div style={{ fontFamily: "var(--app-font-mono)", fontSize: 10, color: "hsl(var(--dim))", marginTop: 2 }}>
+              <div style={{ fontFamily: "var(--app-font-mono)", fontSize: 12, color: "hsl(var(--dim))", marginTop: 2 }}>
                 {job.resolved.toLocaleString()} of {job.total.toLocaleString()} track{job.total === 1 ? "" : "s"} matched
                 {unresolved > 0 && (
                   <span style={{ color: "hsl(var(--faint))" }}>
@@ -440,7 +440,7 @@ export function LibraryImportBanner({
             );
           })()}
           {!isDone && !isError && job.total > 0 && (
-            <div style={{ fontFamily: "var(--app-font-mono)", fontSize: 10, color: "hsl(var(--dim))", marginTop: 2 }}>
+            <div style={{ fontFamily: "var(--app-font-mono)", fontSize: 12, color: "hsl(var(--dim))", marginTop: 2 }}>
               {isBackoff
                 ? "MusicBrainz is busy — resuming shortly"
                 : isFetchingPhase
@@ -450,7 +450,7 @@ export function LibraryImportBanner({
           )}
           {isError && job.error && (
             <div
-              style={{ fontFamily: "var(--app-font-mono)", fontSize: 10, color: "hsl(var(--destructive))", marginTop: 2 }}
+              style={{ fontFamily: "var(--app-font-mono)", fontSize: 12, color: "hsl(var(--destructive))", marginTop: 2 }}
             >
               {job.error}
             </div>
@@ -461,7 +461,7 @@ export function LibraryImportBanner({
           onClick={onDismiss}
           style={{
             fontFamily: "var(--app-font-display)",
-            fontSize: 9,
+            fontSize: 10,
             textTransform: "uppercase",
             letterSpacing: "0.07em",
             color: "hsl(var(--faint))",
@@ -644,8 +644,8 @@ export function AlbumGroupRow({
           <div
             style={{
               fontFamily: "var(--app-font-display)",
-              fontSize: 13,
-              fontWeight: 600,
+              fontSize: 15,
+              fontWeight: 400,
               color: "hsl(var(--foreground))",
               overflow: "hidden",
               textOverflow: "ellipsis",
@@ -658,7 +658,7 @@ export function AlbumGroupRow({
             <div
               style={{
                 fontFamily: "var(--app-font-reading)",
-                fontSize: 11,
+                fontSize: 13,
                 color: "hsl(var(--dim))",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
@@ -673,7 +673,7 @@ export function AlbumGroupRow({
 
         {/* Count + chevron */}
         {group.items.some((item) => item.mbid === avatarRecordingMbid) && (
-          <span style={{ color: "hsl(var(--library))", fontSize: 11 }} title="Current anonymous listener cover">●</span>
+          <span style={{ color: "hsl(var(--library))", fontSize: 13 }} title="Current anonymous listener cover">●</span>
         )}
         {group.items.find((item) => item.mbid)?.mbid && (
           <button
@@ -693,7 +693,7 @@ export function AlbumGroupRow({
         <span
           style={{
             fontFamily: "var(--app-font-mono)",
-            fontSize: 9,
+            fontSize: 10,
             color: "hsl(var(--faint))",
             flexShrink: 0,
             marginRight: 4,
@@ -782,8 +782,8 @@ export function ArtistGroupRow({
           <div
             style={{
               fontFamily: "var(--app-font-display)",
-              fontSize: 12,
-              fontWeight: 700,
+              fontSize: 14,
+              fontWeight: 400,
               color: "hsl(var(--foreground))",
               overflow: "hidden",
               textOverflow: "ellipsis",
@@ -795,7 +795,7 @@ export function ArtistGroupRow({
           <div
             style={{
               fontFamily: "var(--app-font-mono)",
-              fontSize: 9,
+              fontSize: 10,
               color: "hsl(var(--faint))",
               marginTop: 2,
             }}
@@ -852,8 +852,8 @@ export function ArtistGroupRow({
                 <span
                   style={{
                     fontFamily: "var(--app-font-display)",
-                    fontSize: 10,
-                    fontWeight: 600,
+                    fontSize: 12,
+                    fontWeight: 400,
                     color: "hsl(var(--dim))",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -881,7 +881,7 @@ export function ArtistGroupRow({
                 <span
                   style={{
                     fontFamily: "var(--app-font-mono)",
-                    fontSize: 9,
+                    fontSize: 10,
                     color: "hsl(var(--faint))",
                     flexShrink: 0,
                   }}
@@ -1393,7 +1393,7 @@ export default function Library() {
               <span
                 style={{
                   fontFamily: "var(--app-font-mono)",
-                  fontSize: 10,
+                  fontSize: 12,
                   color: "hsl(var(--faint))",
                 }}
               >
@@ -1407,7 +1407,7 @@ export default function Library() {
               aria-expanded={reviewExpanded}
               style={{
                 fontFamily: "var(--app-font-mono)",
-                fontSize: 9,
+                fontSize: 10,
                 color: "hsl(var(--dim))",
                 background: "none",
                 border: "none",
@@ -1428,7 +1428,7 @@ export default function Library() {
               onClick={() => setReviewDismissedJobId(jobData.jobId)}
               style={{
                 fontFamily: "var(--app-font-display)",
-                fontSize: 9,
+                fontSize: 10,
                 textTransform: "uppercase",
                 letterSpacing: "0.07em",
                 color: "hsl(var(--faint))",
@@ -1463,7 +1463,7 @@ export default function Library() {
                   <span
                     style={{
                       fontFamily: "var(--app-font-display)",
-                      fontSize: 10,
+                      fontSize: 12,
                       color: "hsl(var(--dim))",
                     }}
                   >
@@ -1472,7 +1472,7 @@ export default function Library() {
                   <span
                     style={{
                       fontFamily: "var(--app-font-mono)",
-                      fontSize: 10,
+                      fontSize: 12,
                       color: "hsl(var(--faint))",
                     }}
                   >
@@ -1485,7 +1485,7 @@ export default function Library() {
                   style={{
                     padding: "5px 15px",
                     fontFamily: "var(--app-font-mono)",
-                    fontSize: 9,
+                    fontSize: 10,
                     color: "hsl(var(--faint))",
                   }}
                 >
@@ -1611,7 +1611,7 @@ export default function Library() {
               <span
                 style={{
                   fontFamily: "var(--app-font-mono)",
-                  fontSize: 10,
+                  fontSize: 12,
                   color: "hsl(var(--faint))",
                 }}
               >
@@ -1641,7 +1641,7 @@ export default function Library() {
             <div
               style={{
                 fontFamily: "var(--app-font-reading)",
-                fontSize: 13,
+                fontSize: 15,
                 color: "hsl(var(--muted-foreground))",
                 marginBottom: 10,
               }}
@@ -1653,7 +1653,7 @@ export default function Library() {
               onClick={openImportModal}
               className="dial-ctabtn dial-ctabtn--keep"
               data-testid="library-import-open"
-              style={{ fontSize: 11, padding: "8px 14px" }}
+              style={{ fontSize: 13, padding: "8px 14px" }}
             >
               <Music2 style={{ display: "inline", width: 11, height: 11, marginRight: 5, verticalAlign: "middle" }} />
               Add music
@@ -1670,8 +1670,8 @@ export default function Library() {
             <div
               style={{
                 fontFamily: "var(--app-font-display)",
-                fontSize: 9,
-                fontWeight: 700,
+                fontSize: 10,
+                fontWeight: 400,
                 textTransform: "uppercase",
                 letterSpacing: "0.1em",
                 color: "hsl(var(--library))",
@@ -1683,7 +1683,7 @@ export default function Library() {
             <div
               style={{
                 fontFamily: "var(--app-font-reading)",
-                fontSize: 13,
+                fontSize: 15,
                 color: "hsl(var(--foreground))",
                 marginBottom: 8,
                 maxWidth: "52ch",
@@ -1741,8 +1741,8 @@ export default function Library() {
               onClick={() => setSourceFilter(value)}
               style={{
                 fontFamily: "var(--app-font-display)",
-                fontSize: 9,
-                fontWeight: 700,
+                fontSize: 10,
+                fontWeight: 400,
                 textTransform: "uppercase",
                 letterSpacing: "0.07em",
                 padding: "4px 10px",
@@ -1784,8 +1784,8 @@ export default function Library() {
               <span
                 style={{
                   fontFamily: "var(--app-font-display)",
-                  fontSize: 9,
-                  fontWeight: 700,
+                  fontSize: 10,
+                  fontWeight: 400,
                   textTransform: "uppercase",
                   letterSpacing: "0.07em",
                   color: "hsl(var(--dim))",
@@ -1807,8 +1807,8 @@ export default function Library() {
                   onClick={() => setSortFilter(value)}
                   style={{
                     fontFamily: "var(--app-font-display)",
-                    fontSize: 9,
-                    fontWeight: 700,
+                    fontSize: 10,
+                    fontWeight: 400,
                     textTransform: "uppercase",
                     letterSpacing: "0.07em",
                     padding: "4px 10px",
@@ -1849,8 +1849,8 @@ export default function Library() {
           <span
             style={{
               fontFamily: "var(--app-font-display)",
-              fontSize: 9,
-              fontWeight: 700,
+              fontSize: 10,
+              fontWeight: 400,
               textTransform: "uppercase",
               letterSpacing: "0.07em",
               color: "hsl(var(--dim))",
@@ -1872,8 +1872,8 @@ export default function Library() {
               onClick={() => setViewMode(value)}
               style={{
                 fontFamily: "var(--app-font-display)",
-                fontSize: 9,
-                fontWeight: 700,
+                fontSize: 10,
+                fontWeight: 400,
                 textTransform: "uppercase",
                 letterSpacing: "0.07em",
                 padding: "4px 10px",
@@ -1921,7 +1921,7 @@ export default function Library() {
                 border: "none",
                 outline: "none",
                 fontFamily: "var(--app-font-mono)",
-                fontSize: 11,
+                fontSize: 13,
                 color: "hsl(var(--foreground))",
               }}
               aria-label={viewMode === "album" ? "Filter albums" : "Filter artists"}
@@ -2004,7 +2004,7 @@ export default function Library() {
             <span
               style={{
                 fontFamily: "var(--app-font-mono)",
-                fontSize: 9,
+                fontSize: 10,
                 color: "hsl(var(--faint))",
               }}
             >
@@ -2050,7 +2050,7 @@ export default function Library() {
                     padding: "20px 15px",
                     textAlign: "center",
                     fontFamily: "var(--app-font-mono)",
-                    fontSize: 11,
+                    fontSize: 13,
                     color: "hsl(var(--faint))",
                   }}
                   data-testid="library-group-filter-empty"
@@ -2073,7 +2073,7 @@ export default function Library() {
                   padding: "14px 0",
                   textAlign: "center",
                   fontFamily: "var(--app-font-mono)",
-                  fontSize: 10,
+                  fontSize: 12,
                   textTransform: "uppercase",
                   letterSpacing: "0.07em",
                   color: "hsl(var(--faint))",
@@ -2108,7 +2108,7 @@ export default function Library() {
                     padding: "20px 15px",
                     textAlign: "center",
                     fontFamily: "var(--app-font-mono)",
-                    fontSize: 11,
+                    fontSize: 13,
                     color: "hsl(var(--faint))",
                   }}
                   data-testid="library-group-filter-empty"
@@ -2131,7 +2131,7 @@ export default function Library() {
                   padding: "14px 0",
                   textAlign: "center",
                   fontFamily: "var(--app-font-mono)",
-                  fontSize: 10,
+                  fontSize: 12,
                   textTransform: "uppercase",
                   letterSpacing: "0.07em",
                   color: "hsl(var(--faint))",
@@ -2150,7 +2150,7 @@ export default function Library() {
                 <div
                   style={{
                     fontFamily: "var(--app-font-reading)",
-                    fontSize: 16,
+                    fontSize: 18,
                     color: "hsl(var(--muted-foreground))",
                     marginBottom: 12,
                   }}
@@ -2171,13 +2171,13 @@ export default function Library() {
                     alignItems: "center",
                     gap: 6,
                     fontFamily: "var(--app-font-display)",
-                    fontSize: 10,
-                    fontWeight: 700,
+                    fontSize: 12,
+                    fontWeight: 400,
                     textTransform: "uppercase",
                     letterSpacing: "0.07em",
                     color: "hsl(var(--library))",
                     background: "none",
-                    border: "1px solid rgba(232,106,78,.35)",
+                    border: "1px solid rgba(131, 131, 131,.35)",
                     borderRadius: 3,
                     padding: "6px 12px",
                     cursor: "pointer",
@@ -2204,8 +2204,8 @@ export default function Library() {
                   <div
                     style={{
                       fontFamily: "var(--app-font-display)",
-                      fontSize: 18,
-                      fontWeight: 700,
+                      fontSize: 21,
+                      fontWeight: 400,
                       color: "hsl(var(--foreground))",
                       marginBottom: 8,
                     }}
@@ -2215,7 +2215,7 @@ export default function Library() {
                   <div
                     style={{
                       fontFamily: "var(--app-font-reading)",
-                      fontSize: 13,
+                      fontSize: 15,
                       lineHeight: 1.55,
                       color: "hsl(var(--muted-foreground))",
                     }}
@@ -2236,8 +2236,8 @@ export default function Library() {
                     alignItems: "center",
                     gap: 6,
                     fontFamily: "var(--app-font-display)",
-                    fontSize: 11,
-                    fontWeight: 700,
+                    fontSize: 13,
+                    fontWeight: 400,
                     textTransform: "uppercase",
                     letterSpacing: "0.07em",
                     color: "hsl(var(--keep-foreground))",
@@ -2257,7 +2257,7 @@ export default function Library() {
                   href="/"
                   style={{
                     fontFamily: "var(--app-font-mono)",
-                    fontSize: 10,
+                    fontSize: 12,
                     color: "hsl(var(--faint))",
                     textDecoration: "none",
                     display: "inline-flex",
@@ -2312,7 +2312,7 @@ export default function Library() {
                   padding: "14px 0",
                   textAlign: "center",
                   fontFamily: "var(--app-font-mono)",
-                  fontSize: 10,
+                  fontSize: 12,
                   textTransform: "uppercase",
                   letterSpacing: "0.07em",
                   color: "hsl(var(--faint))",
@@ -2370,8 +2370,8 @@ export default function Library() {
                         alignItems: "center",
                         gap: 5,
                         fontFamily: "var(--app-font-display)",
-                        fontSize: 10,
-                        fontWeight: 700,
+                        fontSize: 12,
+                        fontWeight: 400,
                         textTransform: "uppercase",
                         letterSpacing: "0.07em",
                         color: "hsl(var(--library))",
@@ -2398,7 +2398,7 @@ export default function Library() {
                             <span
                               style={{
                                 fontFamily: "var(--app-font-mono)",
-                                fontSize: 10,
+                                fontSize: 12,
                                 color: "hsl(var(--library))",
                                 minWidth: 28,
                                 textAlign: "right",
@@ -2411,7 +2411,7 @@ export default function Library() {
                           <span
                             style={{
                               fontFamily: "var(--app-font-reading)",
-                              fontSize: 13,
+                              fontSize: 15,
                               color: "hsl(var(--foreground))",
                             }}
                           >
@@ -2420,7 +2420,7 @@ export default function Library() {
                               <span
                                 style={{
                                   fontFamily: "var(--app-font-mono)",
-                                  fontSize: 10,
+                                  fontSize: 12,
                                   color: "hsl(var(--dim))",
                                   marginLeft: 5,
                                 }}
@@ -2459,7 +2459,7 @@ export default function Library() {
                   download
                   style={{
                     fontFamily: "var(--app-font-mono)",
-                    fontSize: 9,
+                    fontSize: 10,
                     color: "hsl(var(--library))",
                     textDecoration: "none",
                     textTransform: "uppercase",
@@ -2524,8 +2524,8 @@ export default function Library() {
             <div
               style={{
                 fontFamily: "var(--app-font-display)",
-                fontSize: 9,
-                fontWeight: 700,
+                fontSize: 10,
+                fontWeight: 400,
                 textTransform: "uppercase",
                 letterSpacing: "0.1em",
                 color: "hsl(var(--dim))",
@@ -2560,7 +2560,7 @@ export default function Library() {
                 style={{
                   marginTop: 6,
                   fontFamily: "var(--app-font-mono)",
-                  fontSize: 10,
+                  fontSize: 12,
                   color: "hsl(var(--destructive))",
                 }}
                 data-testid="library-import-file-error"
@@ -2570,13 +2570,13 @@ export default function Library() {
             )}
             {fileImportSummary && (
               <p
-                style={{ marginTop: 6, fontFamily: "var(--app-font-mono)", fontSize: 10, color: "hsl(var(--dim))" }}
+                style={{ marginTop: 6, fontFamily: "var(--app-font-mono)", fontSize: 12, color: "hsl(var(--dim))" }}
                 data-testid="library-import-file-summary"
               >
                 Imported {fileImportSummary.imported} · skipped {fileImportSummary.skipped} · rejected {fileImportSummary.rejected}
               </p>
             )}
-            <p style={{ marginTop: 8, fontFamily: "var(--app-font-mono)", fontSize: 9, color: "hsl(var(--faint))" }}>
+            <p style={{ marginTop: 8, fontFamily: "var(--app-font-mono)", fontSize: 10, color: "hsl(var(--faint))" }}>
               To move to another streaming service, use{" "}
               <a href="https://soundiiz.com" target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "underline" }}>
                 Soundiiz
@@ -2598,8 +2598,8 @@ export default function Library() {
             marginTop: 8,
           }}
         >
-          <p style={{ fontFamily: "var(--app-font-reading)", fontStyle: "italic", fontSize: 12.5, color: "hsl(var(--faint))", lineHeight: 1.6 }}>
-            <b style={{ fontStyle: "normal", fontWeight: 600, color: "hsl(var(--muted-foreground))" }}>One song is enough.</b>{" "}
+          <p style={{ fontFamily: "var(--app-font-reading)", fontStyle: "normal", fontSize: 14, color: "hsl(var(--faint))", lineHeight: 1.6 }}>
+            <b style={{ fontStyle: "normal", fontWeight: 400, color: "hsl(var(--muted-foreground))" }}>One song is enough.</b>{" "}
             A keep is an entry point, not a collectible. Where Lore doesn't know who picked
             something, it says less rather than guessing.
           </p>

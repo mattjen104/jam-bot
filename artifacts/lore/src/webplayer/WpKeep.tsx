@@ -112,7 +112,7 @@ export function WpKeep({
       aria-pressed={isKept}
       data-testid="wp-keep-button"
       style={{
-        fontSize: 13,
+        fontSize: 15,
         whiteSpace: "nowrap",
         display: "inline-flex",
         alignItems: "center",
@@ -120,7 +120,7 @@ export function WpKeep({
         ...(isKept
           ? {
               color: pendingOnly
-                ? "var(--wp-text-amber, #f59e0b)"
+                ? "var(--wp-text-amber, #a6a6a6)"
                 : "var(--wp-text-success)",
               borderColor: "var(--wp-border)",
             }

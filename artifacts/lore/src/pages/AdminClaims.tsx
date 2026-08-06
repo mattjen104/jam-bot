@@ -33,14 +33,14 @@ function TokenGate({ onSave }: { onSave: (t: string) => void }) {
     <div className="min-h-screen">
       <div className="flex min-h-screen items-center justify-center px-4">
         <div className="w-full max-w-sm rounded-2xl border border-card-border bg-card p-8 shadow-lg">
-          <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wide text-primary">
+          <div className="flex items-center gap-2 font-mono text-[13px] uppercase tracking-wide text-primary">
             <KeyRound className="h-3.5 w-3.5" />
             Admin access
           </div>
-          <h1 className="mt-3 font-serif text-2xl font-semibold text-foreground">
+          <h1 className="mt-3 font-serif text-3xl font-normal text-foreground">
             Enter admin token
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-base text-muted-foreground">
             Stored in your browser — you won't need to re-enter it.
           </p>
           <form
@@ -56,12 +56,12 @@ function TokenGate({ onSave }: { onSave: (t: string) => void }) {
               onChange={(e) => setDraft(e.target.value)}
               placeholder="Token"
               autoFocus
-              className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+              className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
             />
             <button
               type="submit"
               disabled={!draft.trim()}
-              className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-opacity disabled:opacity-40"
+              className="rounded-full bg-primary px-5 py-2 text-base font-normal text-primary-foreground shadow-sm transition-opacity disabled:opacity-40"
             >
               Continue
             </button>
@@ -178,17 +178,17 @@ function ClaimsReview({
       <div className="relative z-10 mx-auto max-w-3xl px-4 py-10 sm:px-6">
         <div className="flex items-center justify-between">
           <div>
-            <p className="font-mono text-[11px] uppercase tracking-wide text-primary">
+            <p className="font-mono text-[13px] uppercase tracking-wide text-primary">
               Admin
             </p>
-            <h1 className="mt-1 font-serif text-3xl font-semibold text-foreground">
+            <h1 className="mt-1 font-serif text-4xl font-normal text-foreground">
               Wikipedia drafts
             </h1>
           </div>
           <button
             type="button"
             onClick={onClearToken}
-            className="font-mono text-[11px] text-muted-foreground/70 hover:text-primary"
+            className="font-mono text-[13px] text-muted-foreground/70 hover:text-primary"
           >
             Clear token
           </button>
@@ -199,19 +199,19 @@ function ClaimsReview({
         {isLoading && (
           <div className="mt-12 flex items-center justify-center gap-2 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <span className="text-sm">Loading drafts…</span>
+            <span className="text-base">Loading drafts…</span>
           </div>
         )}
 
         {isError && (
           <div className="mt-8 rounded-2xl border border-destructive/40 bg-destructive/10 p-6">
-            <p className="text-sm text-destructive-foreground">
+            <p className="text-base text-destructive-foreground">
               Could not load drafts. Check the admin token or server.
             </p>
             <button
               type="button"
               onClick={() => void refetch()}
-              className="mt-3 font-mono text-[11px] text-primary hover:underline"
+              className="mt-3 font-mono text-[13px] text-primary hover:underline"
             >
               Retry
             </button>
@@ -221,17 +221,17 @@ function ClaimsReview({
         {!isLoading && !isError && visible.length === 0 && (
           <div className="mt-12 rounded-2xl border border-card-border bg-card p-8 text-center">
             <BookOpen className="mx-auto h-8 w-8 text-muted-foreground/40" />
-            <p className="mt-4 font-serif text-lg text-foreground">
+            <p className="mt-4 font-serif text-xl text-foreground">
               No pending drafts
             </p>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1 text-base text-muted-foreground">
               All Wikipedia claims have been reviewed.
             </p>
           </div>
         )}
 
         {visible.length > 0 && (
-          <p className="mt-4 font-mono text-[11px] text-muted-foreground/70">
+          <p className="mt-4 font-mono text-[13px] text-muted-foreground/70">
             {visible.length} draft{visible.length === 1 ? "" : "s"} pending
           </p>
         )}
@@ -244,10 +244,10 @@ function ClaimsReview({
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <p className="font-mono text-[11px] uppercase tracking-wide text-primary">
+                  <p className="font-mono text-[13px] uppercase tracking-wide text-primary">
                     {claim.anchorValue || "—"}
                   </p>
-                  <p className="mt-1 truncate font-medium text-foreground">
+                  <p className="mt-1 truncate font-normal text-foreground">
                     {claim.trackTitle ?? claim.mbid}
                     {claim.trackArtist && (
                       <span className="ml-2 font-normal text-muted-foreground">
@@ -255,7 +255,7 @@ function ClaimsReview({
                       </span>
                     )}
                   </p>
-                  <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground/70">
+                  <p className="mt-0.5 truncate font-mono text-[13px] text-muted-foreground/70">
                     {claim.sourceLabel}
                   </p>
                 </div>
@@ -263,7 +263,7 @@ function ClaimsReview({
                   href={claim.sourceUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex shrink-0 items-center gap-1 font-mono text-[11px] text-muted-foreground/70 hover:text-primary"
+                  className="inline-flex shrink-0 items-center gap-1 font-mono text-[13px] text-muted-foreground/70 hover:text-primary"
                 >
                   <BookOpen className="h-3 w-3" />
                   Wikipedia
@@ -281,11 +281,11 @@ function ClaimsReview({
                     [claim.id]: e.target.value,
                   }))
                 }
-                className="mt-4 w-full rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+                className="mt-4 w-full rounded-lg border border-border bg-secondary/40 px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
               />
 
               {errors[claim.id] && (
-                <p className="mt-1.5 text-xs text-destructive-foreground">
+                <p className="mt-1.5 text-sm text-destructive-foreground">
                   {errors[claim.id]}
                 </p>
               )}
@@ -295,7 +295,7 @@ function ClaimsReview({
                   type="button"
                   disabled={busy.has(claim.id)}
                   onClick={() => void handleAction(claim, "published")}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground shadow-sm transition-opacity disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-1.5 text-base font-normal text-primary-foreground shadow-sm transition-opacity disabled:opacity-50"
                 >
                   {busy.has(claim.id) ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -308,7 +308,7 @@ function ClaimsReview({
                   type="button"
                   disabled={busy.has(claim.id)}
                   onClick={() => void handleAction(claim, "rejected")}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-1.5 text-sm text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive-foreground disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-1.5 text-base text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive-foreground disabled:opacity-50"
                 >
                   <X className="h-3.5 w-3.5" />
                   Reject

@@ -95,7 +95,7 @@ export function AdminNav({ token }: { token: string }) {
             key={href}
             href={href}
             className={[
-              "relative inline-flex items-center gap-1 rounded-md px-2.5 py-1 font-mono text-[11px] uppercase tracking-wide transition-colors",
+              "relative inline-flex items-center gap-1 rounded-md px-2.5 py-1 font-mono text-[13px] uppercase tracking-wide transition-colors",
               isActive
                 ? "bg-secondary/60 text-foreground"
                 : "text-muted-foreground hover:text-foreground",
@@ -104,7 +104,7 @@ export function AdminNav({ token }: { token: string }) {
             {label}
             {showWarning && (
               <AlertTriangle
-                className="h-3 w-3 text-amber-500"
+                className="h-3 w-3 text-zinc-500"
                 aria-label={`${staleCount} stale station${staleCount === 1 ? "" : "s"}`}
               />
             )}

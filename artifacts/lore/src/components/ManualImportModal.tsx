@@ -264,16 +264,16 @@ function ImportHistoryRow({ job, onClose }: { job: NonNullable<ReturnType<typeof
         )}
       </div>
       <div className="flex flex-1 flex-col gap-0.5 min-w-0">
-        <p className="font-mono text-[11px] text-foreground">{label}</p>
+        <p className="font-mono text-[13px] text-foreground">{label}</p>
         {statusText && (
-          <p className="font-mono text-[10px] text-muted-foreground truncate">{statusText}</p>
+          <p className="font-mono text-[12px] text-muted-foreground truncate">{statusText}</p>
         )}
       </div>
       {isRunning && (
         <button
           type="button"
           onClick={onClose}
-          className="shrink-0 font-mono text-[10px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+          className="shrink-0 font-mono text-[12px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
         >
           Track progress
         </button>
@@ -310,7 +310,7 @@ function ScreenshotDropZone({
       tabIndex={0}
       aria-label="Paste or drop a library screenshot"
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); imageRef.current?.click(); } }}
-      className="flex cursor-pointer items-center gap-2 rounded-xl border border-dashed px-4 py-3 font-mono text-[11px] text-muted-foreground transition-colors"
+      className="flex cursor-pointer items-center gap-2 rounded-xl border border-dashed px-4 py-3 font-mono text-[13px] text-muted-foreground transition-colors"
       style={{
         borderColor: isDragging ? "hsl(var(--primary))" : "hsl(var(--border))",
         background: isDragging ? "hsl(var(--primary)/0.06)" : "hsl(var(--muted)/0.08)",
@@ -885,11 +885,11 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
               </button>
             )}
             <div>
-              <h2 className="font-mono text-sm font-semibold text-foreground">
+              <h2 className="font-mono text-base font-normal text-foreground">
                 {headerTitle[mode] ?? "Import your tracks"}
               </h2>
               {mode === "service-picker" && (
-                <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+                <p className="mt-0.5 font-mono text-[13px] text-muted-foreground">
                   Imports are additive — they never remove anything.
                 </p>
               )}
@@ -926,10 +926,10 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
                 }}
               >
                 <div>
-                  <p className="font-mono text-[12px] font-semibold" style={{ color: "hsl(var(--primary))" }}>
+                  <p className="font-mono text-[14px] font-normal" style={{ color: "hsl(var(--primary))" }}>
                     Start with artists you love
                   </p>
-                  <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">
+                  <p className="mt-0.5 font-mono text-[12px] text-muted-foreground">
                     Pick from Lore's most-played artists — no account needed
                   </p>
                 </div>
@@ -939,7 +939,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
               {/* Divider */}
               <div className="flex items-center gap-2 py-0.5">
                 <div className="flex-1 border-t border-border" />
-                <span className="font-mono text-[10px] text-muted-foreground/50">or import from a service</span>
+                <span className="font-mono text-[12px] text-muted-foreground/50">or import from a service</span>
                 <div className="flex-1 border-t border-border" />
               </div>
 
@@ -953,8 +953,8 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
                   style={{ background: "hsl(var(--muted)/0.2)" }}
                 >
                   <div>
-                    <p className="font-mono text-[12px] font-semibold text-foreground">{tile.label}</p>
-                    <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">{tile.hint}</p>
+                    <p className="font-mono text-[14px] font-normal text-foreground">{tile.label}</p>
+                    <p className="mt-0.5 font-mono text-[12px] text-muted-foreground">{tile.hint}</p>
                   </div>
                   <ChevronRight size={14} className="shrink-0 text-muted-foreground" aria-hidden />
                 </button>
@@ -962,7 +962,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
             </div>
 
             {/* "Come back later" callout */}
-            <p className="font-mono text-[10px] text-muted-foreground/60 text-center">
+            <p className="font-mono text-[12px] text-muted-foreground/60 text-center">
               Imports run in the background and are always additive — close anytime and the strip at the top will track progress.
             </p>
           </>
@@ -978,18 +978,18 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
                 style={{ background: "hsl(var(--muted)/0.2)" }}
               >
                 <div>
-                  <p className="font-mono text-[12px] font-semibold text-foreground">Connect Spotify</p>
-                  <p className="mt-1 font-mono text-[11px] text-muted-foreground leading-relaxed">
+                  <p className="font-mono text-[14px] font-normal text-foreground">Connect Spotify</p>
+                  <p className="mt-1 font-mono text-[13px] text-muted-foreground leading-relaxed">
                     {hasSpotify
                       ? "Your Spotify account is already connected. Click below to pull your saved tracks."
                       : "This will open Spotify and ask permission to read your saved tracks. Lore never sees your password."}
                   </p>
                 </div>
                 {error && mode === "service-guide" && (
-                  <p className="font-mono text-[11px] text-destructive">{error}</p>
+                  <p className="font-mono text-[13px] text-destructive">{error}</p>
                 )}
                 {spotifyOAuthWaiting && (
-                  <p className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
+                  <p className="flex items-center gap-1.5 font-mono text-[13px] text-muted-foreground">
                     <Loader2 size={11} className="animate-spin shrink-0" aria-hidden />
                     Waiting for Spotify authorization in the other tab…
                   </p>
@@ -998,7 +998,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
                   type="button"
                   disabled={submitting || spotifyOAuthWaiting}
                   onClick={() => void handleSpotifyDirectImport()}
-                  className="self-start rounded-full border border-primary bg-primary px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-primary-foreground disabled:opacity-40"
+                  className="self-start rounded-full border border-primary bg-primary px-4 py-1.5 font-mono text-[12px] uppercase tracking-wide text-primary-foreground disabled:opacity-40"
                 >
                   {submitting ? "Starting…" : spotifyOAuthWaiting ? "Waiting for Spotify…" : hasSpotify ? "Import saved tracks" : "Connect Spotify"}
                 </button>
@@ -1009,15 +1009,15 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
                 className="rounded-xl border border-border px-4 py-4 flex flex-col gap-2"
                 style={{ background: "hsl(var(--muted)/0.1)" }}
               >
-                <p className="font-mono text-[12px] font-semibold text-foreground">Export a playlist via Exportify</p>
-                <ol className="space-y-1.5 font-mono text-[11px] text-muted-foreground list-none">
+                <p className="font-mono text-[14px] font-normal text-foreground">Export a playlist via Exportify</p>
+                <ol className="space-y-1.5 font-mono text-[13px] text-muted-foreground list-none">
                   {[
                     <>Go to <a href="https://exportify.net" target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">exportify.net</a> and log in with Spotify.</>,
                     <>Click Export next to the playlist you want.</>,
                     <>Drop the CSV below or paste its contents.</>,
                   ].map((step, i) => (
                     <li key={i} className="flex gap-2">
-                      <span className="shrink-0 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold" style={{ background: "hsl(var(--primary)/0.15)", color: "hsl(var(--primary))" }} aria-hidden>{i + 1}</span>
+                      <span className="shrink-0 flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-normal" style={{ background: "hsl(var(--primary)/0.15)", color: "hsl(var(--primary))" }} aria-hidden>{i + 1}</span>
                       <span>{step}</span>
                     </li>
                   ))}
@@ -1031,7 +1031,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
                   tabIndex={0}
                   aria-label="Upload or drop a CSV file"
                   onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileRef.current?.click(); }}
-                  className="mt-1 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-3 font-mono text-[11px] text-muted-foreground transition-colors"
+                  className="mt-1 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-3 font-mono text-[13px] text-muted-foreground transition-colors"
                   style={{
                     borderColor: isDragging ? "hsl(var(--primary))" : "hsl(var(--border))",
                     background: isDragging ? "hsl(var(--primary)/0.06)" : "hsl(var(--muted)/0.08)",
@@ -1062,15 +1062,15 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
           <div className="flex flex-col gap-3">
             {/* Option 1: TuneMyMusic CSV */}
             <div className="rounded-xl border border-border px-4 py-4 flex flex-col gap-2" style={{ background: "hsl(var(--muted)/0.2)" }}>
-              <p className="font-mono text-[12px] font-semibold text-foreground">Export via TuneMyMusic</p>
-              <ol className="space-y-1.5 font-mono text-[11px] text-muted-foreground list-none">
+              <p className="font-mono text-[14px] font-normal text-foreground">Export via TuneMyMusic</p>
+              <ol className="space-y-1.5 font-mono text-[13px] text-muted-foreground list-none">
                 {[
                   <>Go to <a href="https://www.tunemymusic.com/transfer" target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">tunemymusic.com</a> and choose Apple Music as the source.</>,
                   <>Choose "To File" and download the CSV.</>,
                   <>Drop the CSV below or paste its contents.</>,
                 ].map((step, i) => (
                   <li key={i} className="flex gap-2">
-                    <span className="shrink-0 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold" style={{ background: "hsl(var(--primary)/0.15)", color: "hsl(var(--primary))" }} aria-hidden>{i + 1}</span>
+                    <span className="shrink-0 flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-normal" style={{ background: "hsl(var(--primary)/0.15)", color: "hsl(var(--primary))" }} aria-hidden>{i + 1}</span>
                     <span>{step}</span>
                   </li>
                 ))}
@@ -1083,7 +1083,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
                 role="button" tabIndex={0}
                 aria-label="Upload or drop a CSV file"
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileRef.current?.click(); }}
-                className="mt-1 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-3 font-mono text-[11px] text-muted-foreground transition-colors"
+                className="mt-1 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-3 font-mono text-[13px] text-muted-foreground transition-colors"
                 style={{ borderColor: isDragging ? "hsl(var(--primary))" : "hsl(var(--border))", background: isDragging ? "hsl(var(--primary)/0.06)" : "hsl(var(--muted)/0.08)" }}
               >
                 <Upload size={13} aria-hidden />
@@ -1094,8 +1094,8 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
 
             {/* Option 2: Screenshot */}
             <div className="rounded-xl border border-border px-4 py-3 flex flex-col gap-2" style={{ background: "hsl(var(--muted)/0.1)" }}>
-              <p className="font-mono text-[12px] font-semibold text-foreground">Paste a screenshot</p>
-              <p className="font-mono text-[11px] text-muted-foreground">Open your Apple Music library, take a screenshot, and paste it here — we'll recognize the track rows automatically.</p>
+              <p className="font-mono text-[14px] font-normal text-foreground">Paste a screenshot</p>
+              <p className="font-mono text-[13px] text-muted-foreground">Open your Apple Music library, take a screenshot, and paste it here — we'll recognize the track rows automatically.</p>
               <ScreenshotDropZone
                 isDragging={isDragging}
                 onDragOver={handleDragOver}
@@ -1114,8 +1114,8 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
           <div className="flex flex-col gap-3">
             {/* Primary: Screenshot */}
             <div className="rounded-xl border border-border px-4 py-3 flex flex-col gap-2" style={{ background: "hsl(var(--muted)/0.2)" }}>
-              <p className="font-mono text-[12px] font-semibold text-foreground">Paste a screenshot</p>
-              <p className="font-mono text-[11px] text-muted-foreground">Open your YouTube Music library, take a screenshot of your liked songs or playlists, and paste it here — we'll recognize the track rows automatically.</p>
+              <p className="font-mono text-[14px] font-normal text-foreground">Paste a screenshot</p>
+              <p className="font-mono text-[13px] text-muted-foreground">Open your YouTube Music library, take a screenshot of your liked songs or playlists, and paste it here — we'll recognize the track rows automatically.</p>
               <ScreenshotDropZone
                 isDragging={isDragging}
                 onDragOver={handleDragOver}
@@ -1129,8 +1129,8 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
 
             {/* Secondary: TuneMyMusic */}
             <div className="rounded-xl border border-border px-4 py-3 flex flex-col gap-2" style={{ background: "hsl(var(--muted)/0.1)" }}>
-              <p className="font-mono text-[12px] font-semibold text-foreground">Export via TuneMyMusic</p>
-              <p className="font-mono text-[11px] text-muted-foreground">
+              <p className="font-mono text-[14px] font-normal text-foreground">Export via TuneMyMusic</p>
+              <p className="font-mono text-[13px] text-muted-foreground">
                 <a href="https://www.tunemymusic.com/transfer" target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">tunemymusic.com</a>
                 {" "}can export a YouTube Music playlist as a CSV — then drop it here.
               </p>
@@ -1142,7 +1142,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
                 role="button" tabIndex={0}
                 aria-label="Upload or drop a CSV file"
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileRef.current?.click(); }}
-                className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-3 font-mono text-[11px] text-muted-foreground transition-colors"
+                className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-3 font-mono text-[13px] text-muted-foreground transition-colors"
                 style={{ borderColor: isDragging ? "hsl(var(--primary))" : "hsl(var(--border))", background: isDragging ? "hsl(var(--primary)/0.06)" : "hsl(var(--muted)/0.08)" }}
               >
                 <Upload size={13} aria-hidden />
@@ -1161,15 +1161,15 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
               className="rounded-xl border border-border px-4 py-4 flex flex-col gap-2"
               style={{ background: "hsl(var(--muted)/0.2)" }}
             >
-              <p className="font-mono text-[12px] font-semibold text-foreground">Export your Last.fm loved tracks</p>
-              <ol className="space-y-1.5 font-mono text-[11px] text-muted-foreground list-none">
+              <p className="font-mono text-[14px] font-normal text-foreground">Export your Last.fm loved tracks</p>
+              <ol className="space-y-1.5 font-mono text-[13px] text-muted-foreground list-none">
                 {[
                   <>Open <a href="https://benjaminbenben.com/lastfm-to-csv/" target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">Last.fm to CSV</a> (free, no login beyond Last.fm).</>,
                   <>Enter your username and export your loved tracks.</>,
                   <>Download the CSV, then drop it below or paste the contents.</>,
                 ].map((step, i) => (
                   <li key={i} className="flex gap-2">
-                    <span className="shrink-0 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold" style={{ background: "hsl(var(--primary)/0.15)", color: "hsl(var(--primary))" }} aria-hidden>{i + 1}</span>
+                    <span className="shrink-0 flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-normal" style={{ background: "hsl(var(--primary)/0.15)", color: "hsl(var(--primary))" }} aria-hidden>{i + 1}</span>
                     <span>{step}</span>
                   </li>
                 ))}
@@ -1183,7 +1183,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
                 tabIndex={0}
                 aria-label="Upload or drop a CSV file"
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileRef.current?.click(); }}
-                className="mt-1 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-3 font-mono text-[11px] text-muted-foreground transition-colors"
+                className="mt-1 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-3 font-mono text-[13px] text-muted-foreground transition-colors"
                 style={{
                   borderColor: isDragging ? "hsl(var(--primary))" : "hsl(var(--border))",
                   background: isDragging ? "hsl(var(--primary)/0.06)" : "hsl(var(--muted)/0.08)",
@@ -1201,8 +1201,8 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
               style={{ background: "hsl(var(--muted)/0.1)" }}
             >
               <div>
-                <p className="font-mono text-[12px] font-semibold text-foreground">Or enter your Last.fm username</p>
-                <p className="mt-1 font-mono text-[11px] text-muted-foreground leading-relaxed">
+                <p className="font-mono text-[14px] font-normal text-foreground">Or enter your Last.fm username</p>
+                <p className="mt-1 font-mono text-[13px] text-muted-foreground leading-relaxed">
                   We'll import your loved tracks directly — no CSV export needed. No account connection required.
                 </p>
               </div>
@@ -1214,7 +1214,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
                   onChange={(e) => { setLfmUsername(e.target.value); setError(null); }}
                   onKeyDown={(e) => { if (e.key === "Enter") void handleLastFmImport(); }}
                   placeholder="Your Last.fm username"
-                  className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 font-mono text-[11px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 font-mono text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                   spellCheck={false}
                   data-testid="lastfm-username-input"
                 />
@@ -1222,14 +1222,14 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
                   type="button"
                   onClick={() => void handleLastFmImport()}
                   disabled={!lfmUsername.trim() || submitting}
-                  className="shrink-0 rounded-lg border border-primary bg-primary px-3 py-2 font-mono text-[10px] uppercase tracking-wide text-primary-foreground transition-opacity disabled:opacity-40"
+                  className="shrink-0 rounded-lg border border-primary bg-primary px-3 py-2 font-mono text-[12px] uppercase tracking-wide text-primary-foreground transition-opacity disabled:opacity-40"
                 >
                   {submitting ? "…" : "Import"}
                 </button>
               </div>
-              {error && <p className="font-mono text-[11px] text-destructive">{error}</p>}
+              {error && <p className="font-mono text-[13px] text-destructive">{error}</p>}
               {submitting && (
-                <p className="font-mono text-[11px] text-muted-foreground">Starting import…</p>
+                <p className="font-mono text-[13px] text-muted-foreground">Starting import…</p>
               )}
             </div>
 
@@ -1249,10 +1249,10 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
         {mode === "listenbrainz" && (
           <>
             <div
-              className="rounded-lg border border-border px-3 py-3 font-mono text-[11px] text-muted-foreground"
+              className="rounded-lg border border-border px-3 py-3 font-mono text-[13px] text-muted-foreground"
               style={{ background: "hsl(var(--muted)/0.3)" }}
             >
-              <p className="font-semibold text-foreground mb-1">Enter your ListenBrainz username</p>
+              <p className="font-normal text-foreground mb-1">Enter your ListenBrainz username</p>
               <p>We'll import your loved recordings using the public ListenBrainz API. No account connection needed.</p>
             </div>
 
@@ -1265,7 +1265,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
                 onKeyDown={(e) => { if (e.key === "Enter") void handleListenBrainzImport(); }}
                 placeholder="Your ListenBrainz username"
                 autoFocus
-                className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 font-mono text-[11px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 font-mono text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                 spellCheck={false}
                 data-testid="listenbrainz-username-input"
               />
@@ -1273,16 +1273,16 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
                 type="button"
                 onClick={() => void handleListenBrainzImport()}
                 disabled={!lbUsername.trim() || submitting}
-                className="shrink-0 rounded-lg border border-primary bg-primary px-3 py-2 font-mono text-[10px] uppercase tracking-wide text-primary-foreground transition-opacity disabled:opacity-40"
+                className="shrink-0 rounded-lg border border-primary bg-primary px-3 py-2 font-mono text-[12px] uppercase tracking-wide text-primary-foreground transition-opacity disabled:opacity-40"
               >
                 {submitting ? "…" : "Import"}
               </button>
             </div>
 
-            {error && <p className="font-mono text-[11px] text-destructive">{error}</p>}
+            {error && <p className="font-mono text-[13px] text-destructive">{error}</p>}
 
             {submitting && (
-              <p className="font-mono text-[11px] text-muted-foreground">Starting import…</p>
+              <p className="font-mono text-[13px] text-muted-foreground">Starting import…</p>
             )}
           </>
         )}
@@ -1293,7 +1293,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
             {/* Service summary banner for CSV services */}
             {(selectedService === "exportify" || selectedService === "applemusiccsv") && (
               <div
-                className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 font-mono text-[10px] text-muted-foreground"
+                className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 font-mono text-[12px] text-muted-foreground"
                 style={{ background: "hsl(var(--muted)/0.15)" }}
                 data-testid="service-summary-banner"
               >
@@ -1317,7 +1317,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
                   : "Artist – Title\nArtist – Title\n…"
               }
               rows={7}
-              className="w-full resize-y rounded-lg border border-border bg-background px-3 py-2 font-mono text-[11px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              className="w-full resize-y rounded-lg border border-border bg-background px-3 py-2 font-mono text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               spellCheck={false}
               data-testid="tracks-textarea"
             />
@@ -1327,7 +1327,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1 font-mono text-[10px] uppercase tracking-wide text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+                className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1 font-mono text-[12px] uppercase tracking-wide text-muted-foreground transition-colors hover:border-primary hover:text-primary"
               >
                 <Upload size={11} aria-hidden />
                 Upload file
@@ -1335,7 +1335,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
               <button
                 type="button"
                 onClick={() => { setMode("images"); setSelectedService("screenshots"); }}
-                className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1 font-mono text-[10px] uppercase tracking-wide text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+                className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1 font-mono text-[12px] uppercase tracking-wide text-muted-foreground transition-colors hover:border-primary hover:text-primary"
               >
                 <ImageIcon size={11} aria-hidden />
                 Paste screenshot
@@ -1350,7 +1350,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
                 style={{ background: "hsl(var(--muted)/0.15)" }}
                 data-testid="track-preview"
               >
-                <div className="px-3 py-1.5 border-b border-border/50 font-mono text-[10px] text-muted-foreground">
+                <div className="px-3 py-1.5 border-b border-border/50 font-mono text-[12px] text-muted-foreground">
                   <span className="text-foreground">{tracks.length.toLocaleString()}</span> tracks found
                 </div>
                 <div className="overflow-y-auto" style={{ maxHeight: "200px" }} data-testid="track-preview-list">
@@ -1358,7 +1358,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
                     {tracks.slice(0, 50).map((track, i) => (
                       <li
                         key={i}
-                        className="px-3 py-1 font-mono text-[11px] text-foreground border-b border-border/20 last:border-0"
+                        className="px-3 py-1 font-mono text-[13px] text-foreground border-b border-border/20 last:border-0"
                       >
                         <span className="text-muted-foreground">{track.artist}</span>
                         <span className="mx-1 text-muted-foreground/50">–</span>
@@ -1366,7 +1366,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
                       </li>
                     ))}
                     {tracks.length > 50 && (
-                      <li className="px-3 py-1.5 font-mono text-[10px] text-muted-foreground/60">
+                      <li className="px-3 py-1.5 font-mono text-[12px] text-muted-foreground/60">
                         …and {(tracks.length - 50).toLocaleString()} more
                       </li>
                     )}
@@ -1376,7 +1376,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
             )}
 
             {rawInput.trim() && tracks.length === 0 && (
-              <p className="font-mono text-[11px] text-destructive" data-testid="track-count">
+              <p className="font-mono text-[13px] text-destructive" data-testid="track-count">
                 {rawInput.includes(",")
                   ? "Couldn\u2019t find \u2018Track Name\u2019 or \u2018Artist Name(s)\u2019 columns \u2014 try re-exporting your CSV"
                   : "No tracks recognised \u2014 use one track per line: Artist \u2013 Title"}
@@ -1384,7 +1384,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
             )}
 
             {error && (
-              <p className="font-mono text-[11px] text-destructive">{error}</p>
+              <p className="font-mono text-[13px] text-destructive">{error}</p>
             )}
 
             {/* Actions */}
@@ -1392,7 +1392,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-full border border-border px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+                className="rounded-full border border-border px-4 py-1.5 font-mono text-[12px] uppercase tracking-wide text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
               >
                 Cancel
               </button>
@@ -1400,13 +1400,13 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
                 type="button"
                 onClick={() => void handleManualImport()}
                 disabled={submitting || tracks.length === 0}
-                className="rounded-full border border-primary bg-primary px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-primary-foreground transition-opacity disabled:opacity-40"
+                className="rounded-full border border-primary bg-primary px-4 py-1.5 font-mono text-[12px] uppercase tracking-wide text-primary-foreground transition-opacity disabled:opacity-40"
               >
                 {submitting ? "Starting…" : `Import ${tracks.length} tracks`}
               </button>
             </div>
 
-            <p className="font-mono text-[10px] text-muted-foreground/60">
+            <p className="font-mono text-[12px] text-muted-foreground/60">
               <FileText size={10} className="inline mr-1 -mt-px" aria-hidden />
               Accepts any CSV with artist and title columns, or lines of Artist – Title.
             </p>
@@ -1417,10 +1417,10 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
         {mode === "images" && (
           <>
             <div
-              className="rounded-lg border border-border px-3 py-3 font-mono text-[11px] text-muted-foreground space-y-1.5"
+              className="rounded-lg border border-border px-3 py-3 font-mono text-[13px] text-muted-foreground space-y-1.5"
               style={{ background: "hsl(var(--muted)/0.3)" }}
             >
-              <p className="font-semibold text-foreground">Recognize library screenshots</p>
+              <p className="font-normal text-foreground">Recognize library screenshots</p>
               <p>Paste a screenshot here, or add up to {IMAGE_MAX_COUNT} images. Clear song rows are kept for your review; menus and album art are ignored.</p>
             </div>
             <div
@@ -1437,7 +1437,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
                   imageRef.current?.click();
                 }
               }}
-              className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-6 font-mono text-[11px] text-muted-foreground transition-colors"
+              className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-6 font-mono text-[13px] text-muted-foreground transition-colors"
               style={{
                 borderColor: isDragging ? "hsl(var(--primary))" : "hsl(var(--border))",
                 background: isDragging ? "hsl(var(--primary)/0.06)" : "hsl(var(--muted)/0.15)",
@@ -1447,7 +1447,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
               <span className={isDragging ? "text-primary" : ""}>
                 {isDragging ? "Drop screenshots to add" : "Drop screenshots, click to browse, or paste"}
               </span>
-              <span className="text-[10px] text-muted-foreground/60">PNG, JPEG, WebP, or GIF · 4 MB each</span>
+              <span className="text-[12px] text-muted-foreground/60">PNG, JPEG, WebP, or GIF · 4 MB each</span>
               <input ref={imageRef} data-testid="screenshot-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={handleImageInput} />
             </div>
             {images.length > 0 && (
@@ -1455,7 +1455,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
                 {images.map((image) => (
                   <div key={image.id} className="relative overflow-hidden rounded-lg border border-border" data-testid={`image-preview-${image.id}`}>
                     <img src={`data:${image.mediaType};base64,${image.data}`} alt={`Screenshot ${image.name}`} className="h-24 w-full object-cover" />
-                    <div className="flex items-center justify-between gap-1 px-2 py-1 font-mono text-[9px] text-muted-foreground">
+                    <div className="flex items-center justify-between gap-1 px-2 py-1 font-mono text-[10px] text-muted-foreground">
                       <span className="truncate">{image.name}</span>
                       <button type="button" onClick={() => removeImage(image.id)} aria-label={`Remove ${image.name}`} className="shrink-0 hover:text-foreground">
                         <Trash2 size={11} aria-hidden />
@@ -1464,7 +1464,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
                     {image.status === "extracting" && <div className="absolute inset-0 flex items-center justify-center bg-black/50"><Loader2 size={16} className="animate-spin text-white" aria-label="Extracting" /></div>}
                     {image.status === "error" && (
                       <div className="flex items-center justify-between gap-1 border-t border-destructive/40 px-2 py-1">
-                        <span className="truncate font-mono text-[9px] text-destructive">{image.error}</span>
+                        <span className="truncate font-mono text-[10px] text-destructive">{image.error}</span>
                         <button type="button" onClick={() => void extractImages([image.id])} aria-label={`Retry ${image.name}`} className="shrink-0 text-destructive hover:text-foreground">
                           <RotateCcw size={11} aria-hidden />
                         </button>
@@ -1474,10 +1474,10 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
                 ))}
               </div>
             )}
-            {error && <p className="font-mono text-[11px] text-destructive" role="alert">{error}</p>}
+            {error && <p className="font-mono text-[13px] text-destructive" role="alert">{error}</p>}
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={onClose} className="rounded-full border border-border px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">Cancel</button>
-              <button type="button" onClick={() => void extractImages()} disabled={imageBusy || pendingImageCount === 0} className="rounded-full border border-primary bg-primary px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-primary-foreground disabled:opacity-40">
+              <button type="button" onClick={onClose} className="rounded-full border border-border px-4 py-1.5 font-mono text-[12px] uppercase tracking-wide text-muted-foreground">Cancel</button>
+              <button type="button" onClick={() => void extractImages()} disabled={imageBusy || pendingImageCount === 0} className="rounded-full border border-primary bg-primary px-4 py-1.5 font-mono text-[12px] uppercase tracking-wide text-primary-foreground disabled:opacity-40">
                 {imageBusy ? "Reading…" : `Read ${pendingImageCount} screenshot${pendingImageCount === 1 ? "" : "s"}`}
               </button>
             </div>
@@ -1487,14 +1487,14 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
         {/* ── Artist seeds — compact chip grid ───────────────────────────── */}
         {mode === "artist-seeds" && (
           <>
-            <p className="font-mono text-[11px] text-muted-foreground">
+            <p className="font-mono text-[13px] text-muted-foreground">
               Pick the artists you love. Lore will show you live when they're on air.
             </p>
 
             {/* Chip grid */}
             <div className="import-modal-chips" role="group" aria-label="Select artists">
               {artistFreqLoading && onboardingArtists.length === 0 && (
-                <span className="font-mono text-[11px] text-muted-foreground/60">Loading artists…</span>
+                <span className="font-mono text-[13px] text-muted-foreground/60">Loading artists…</span>
               )}
               {onboardingArtists.slice(0, 80).map((a) => {
                 const key = liveIdentityKey(a.artist);
@@ -1516,27 +1516,27 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
                 );
               })}
               {!artistFreqLoading && onboardingArtists.length === 0 && (
-                <span className="font-mono text-[11px] text-muted-foreground/60">
+                <span className="font-mono text-[13px] text-muted-foreground/60">
                   No artists available right now — come back soon or import a library above.
                 </span>
               )}
             </div>
 
             {selectedArtists.size >= 30 && (
-              <p className="font-mono text-[10px] text-muted-foreground/70" role="status">
+              <p className="font-mono text-[12px] text-muted-foreground/70" role="status">
                 30 artists selected — deselect one to choose another.
               </p>
             )}
 
             {error && (
-              <p className="font-mono text-[11px] text-destructive" role="alert">{error}</p>
+              <p className="font-mono text-[13px] text-destructive" role="alert">{error}</p>
             )}
 
             <div className="flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => { setMode("service-picker"); setError(null); }}
-                className="rounded-full border border-border px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                className="rounded-full border border-border px-4 py-1.5 font-mono text-[12px] uppercase tracking-wide text-muted-foreground hover:text-foreground"
               >
                 Back
               </button>
@@ -1544,7 +1544,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
                 type="button"
                 onClick={() => void handleArtistSeedsDone()}
                 disabled={seedSaving}
-                className="rounded-full border border-primary bg-primary px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-primary-foreground disabled:opacity-40"
+                className="rounded-full border border-primary bg-primary px-4 py-1.5 font-mono text-[12px] uppercase tracking-wide text-primary-foreground disabled:opacity-40"
               >
                 {seedSaving
                   ? "Saving…"
@@ -1559,7 +1559,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
         {/* ── Avatar picker ─────────────────────────────────────────────── */}
         {mode === "avatar" && (
           <>
-            <p className="font-mono text-[11px] text-muted-foreground">
+            <p className="font-mono text-[13px] text-muted-foreground">
               Your listener cover is anonymous — it only appears as "listening here" on a station, never with your name.
             </p>
 
@@ -1590,20 +1590,20 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
                 {avatarChosen && (() => {
                   const c = albumAvatarData.candidates.find((x) => x.recordingMbid === avatarChosen);
                   return c ? (
-                    <p className="font-mono text-[10px] text-muted-foreground text-center">
+                    <p className="font-mono text-[12px] text-muted-foreground text-center">
                       {c.albumTitle} · {c.artist}
                     </p>
                   ) : null;
                 })()}
               </>
             ) : (
-              <p className="font-mono text-[11px] text-muted-foreground/60">
+              <p className="font-mono text-[13px] text-muted-foreground/60">
                 {albumAvatarData?.needsChoice ? "Loading your covers…" : "You're all set — cover already chosen."}
               </p>
             )}
 
             {error && (
-              <p className="font-mono text-[11px] text-destructive" role="alert">{error}</p>
+              <p className="font-mono text-[13px] text-destructive" role="alert">{error}</p>
             )}
 
             <div className="flex justify-end">
@@ -1611,7 +1611,7 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
                 type="button"
                 onClick={() => void handleAvatarConfirm()}
                 disabled={avatarSaving || (albumAvatarData?.needsChoice === true && !avatarChosen)}
-                className="rounded-full border border-primary bg-primary px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-primary-foreground disabled:opacity-40"
+                className="rounded-full border border-primary bg-primary px-4 py-1.5 font-mono text-[12px] uppercase tracking-wide text-primary-foreground disabled:opacity-40"
               >
                 {avatarSaving ? "Saving…" : avatarChosen ? "Use this cover" : "Continue →"}
               </button>
@@ -1624,38 +1624,38 @@ export function ManualImportModal({ onClose, onImportStarted, initialService, in
           <>
             <div className="flex items-center justify-between gap-2">
               <div>
-                <p className="font-mono text-[12px] font-semibold text-foreground">Review recognized tracks</p>
-                <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">{reviewTracks.length} track{reviewTracks.length === 1 ? "" : "s"} recognized · edit or remove anything incorrect</p>
+                <p className="font-mono text-[14px] font-normal text-foreground">Review recognized tracks</p>
+                <p className="mt-0.5 font-mono text-[12px] text-muted-foreground">{reviewTracks.length} track{reviewTracks.length === 1 ? "" : "s"} recognized · edit or remove anything incorrect</p>
               </div>
-              <button type="button" onClick={() => setMode("images")} className="rounded-full border border-border px-3 py-1 font-mono text-[10px] text-muted-foreground hover:text-foreground">Add screenshots</button>
+              <button type="button" onClick={() => setMode("images")} className="rounded-full border border-border px-3 py-1 font-mono text-[12px] text-muted-foreground hover:text-foreground">Add screenshots</button>
             </div>
             {reviewTracks.length > 0 ? (
               <div className="max-h-72 space-y-2 overflow-y-auto" data-testid="ocr-review-list">
                 {reviewTracks.map((track, index) => (
                   <div key={`${index}-${track.artist}-${track.title}`} className="flex items-center gap-1.5">
-                    <span className="w-5 shrink-0 text-right font-mono text-[9px] text-muted-foreground">{index + 1}</span>
-                    <input value={track.artist} onChange={(e) => updateReviewTrack(index, "artist", e.target.value)} aria-label={`Artist ${index + 1}`} className="min-w-0 flex-1 rounded border border-border bg-background px-2 py-1.5 font-mono text-[10px] text-foreground" />
-                    <input value={track.title} onChange={(e) => updateReviewTrack(index, "title", e.target.value)} aria-label={`Title ${index + 1}`} className="min-w-0 flex-1 rounded border border-border bg-background px-2 py-1.5 font-mono text-[10px] text-foreground" />
+                    <span className="w-5 shrink-0 text-right font-mono text-[10px] text-muted-foreground">{index + 1}</span>
+                    <input value={track.artist} onChange={(e) => updateReviewTrack(index, "artist", e.target.value)} aria-label={`Artist ${index + 1}`} className="min-w-0 flex-1 rounded border border-border bg-background px-2 py-1.5 font-mono text-[12px] text-foreground" />
+                    <input value={track.title} onChange={(e) => updateReviewTrack(index, "title", e.target.value)} aria-label={`Title ${index + 1}`} className="min-w-0 flex-1 rounded border border-border bg-background px-2 py-1.5 font-mono text-[12px] text-foreground" />
                     <button type="button" onClick={() => deleteReviewTrack(index)} aria-label={`Delete track ${index + 1}`} className="shrink-0 text-muted-foreground hover:text-destructive"><Trash2 size={12} aria-hidden /></button>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="rounded-lg border border-dashed border-border px-3 py-5 text-center font-mono text-[11px] text-muted-foreground">No clear song rows found. Try another screenshot or retry an unreadable one.</div>
+              <div className="rounded-lg border border-dashed border-border px-3 py-5 text-center font-mono text-[13px] text-muted-foreground">No clear song rows found. Try another screenshot or retry an unreadable one.</div>
             )}
-            {error && <p className="font-mono text-[11px] text-muted-foreground" role="status">{error}</p>}
+            {error && <p className="font-mono text-[13px] text-muted-foreground" role="status">{error}</p>}
             {failedImageCount > 0 && (
-              <p className="font-mono text-[10px] text-destructive" role="alert">
+              <p className="font-mono text-[12px] text-destructive" role="alert">
                 {failedImageCount} screenshot{failedImageCount === 1 ? "" : "s"} could not be read. Add or retry them from the screenshot step.
                 <button type="button" onClick={() => setMode("images")} className="ml-1 underline underline-offset-2">Review errors</button>
               </p>
             )}
             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
               <div className="flex gap-1.5">
-                <button type="button" onClick={() => void exportReview("text")} disabled={reviewTracks.length === 0} className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 font-mono text-[10px] text-muted-foreground disabled:opacity-40"><Copy size={10} aria-hidden /> Copy text</button>
-                <button type="button" onClick={() => void exportReview("csv")} disabled={reviewTracks.length === 0} className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 font-mono text-[10px] text-muted-foreground disabled:opacity-40"><Download size={10} aria-hidden /> CSV</button>
+                <button type="button" onClick={() => void exportReview("text")} disabled={reviewTracks.length === 0} className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 font-mono text-[12px] text-muted-foreground disabled:opacity-40"><Copy size={10} aria-hidden /> Copy text</button>
+                <button type="button" onClick={() => void exportReview("csv")} disabled={reviewTracks.length === 0} className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 font-mono text-[12px] text-muted-foreground disabled:opacity-40"><Download size={10} aria-hidden /> CSV</button>
               </div>
-              <button type="button" onClick={() => void handleManualImport()} disabled={submitting || reviewReadyTracks.length === 0} className="rounded-full border border-primary bg-primary px-4 py-1.5 font-mono text-[10px] uppercase tracking-wide text-primary-foreground disabled:opacity-40">
+              <button type="button" onClick={() => void handleManualImport()} disabled={submitting || reviewReadyTracks.length === 0} className="rounded-full border border-primary bg-primary px-4 py-1.5 font-mono text-[12px] uppercase tracking-wide text-primary-foreground disabled:opacity-40">
                 {submitting ? "Starting…" : `Import ${reviewReadyTracks.length} tracks`}
               </button>
             </div>

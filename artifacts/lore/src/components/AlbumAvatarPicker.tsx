@@ -47,16 +47,16 @@ export function AlbumAvatarPicker({
     >
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
         <div>
-          <div id="album-avatar-title" style={{ fontFamily: "var(--app-font-display)", fontSize: 12, fontWeight: 700 }}>
+          <div id="album-avatar-title" style={{ fontFamily: "var(--app-font-display)", fontSize: 14, fontWeight: 400 }}>
             {data.needsChoice ? "Choose an album cover for your listener identity" : "Your anonymous listener cover"}
           </div>
-          <div style={{ marginTop: 3, color: "hsl(var(--dim))", fontSize: 11 }}>
+          <div style={{ marginTop: 3, color: "hsl(var(--dim))", fontSize: 13 }}>
             {data.needsChoice
               ? "Anonymous, music-grounded, and only shown as “listening here.”"
               : `${data.current!.albumTitle} · ${data.current!.artist} — choose another from your library below.`}
           </div>
         </div>
-        <span style={{ color: "hsl(var(--faint))", fontSize: 10, whiteSpace: "nowrap" }}>
+        <span style={{ color: "hsl(var(--faint))", fontSize: 12, whiteSpace: "nowrap" }}>
           {sourceLabel(data.candidates[0].source)}
         </span>
       </div>
@@ -87,10 +87,10 @@ export function AlbumAvatarPicker({
               }}
             >
               <img src={proxyArtUrl(candidate.artworkUrl) ?? undefined} alt="" width={82} height={82} style={{ display: "block", width: "100%", objectFit: "cover", borderRadius: 3 }} onError={onArtError} />
-              <span style={{ display: "block", marginTop: 5, fontSize: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <span style={{ display: "block", marginTop: 5, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {candidate.albumTitle}
               </span>
-              <span style={{ display: "block", color: "hsl(var(--dim))", fontSize: 9, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <span style={{ display: "block", color: "hsl(var(--dim))", fontSize: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {candidate.artist}
               </span>
             </button>
@@ -109,7 +109,7 @@ export function AlbumAvatarPicker({
           background: chosen ? "hsl(var(--library))" : "hsl(var(--secondary))",
           color: chosen ? "hsl(var(--library-foreground))" : "hsl(var(--faint))",
           cursor: chosen ? "pointer" : "default",
-          fontSize: 10,
+          fontSize: 12,
         }}
       >
         {setAvatar.isPending ? "saving…" : "Use this cover"}

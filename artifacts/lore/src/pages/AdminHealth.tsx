@@ -87,14 +87,14 @@ function TokenGate({ onSave }: { onSave: (t: string) => void }) {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm rounded-2xl border border-card-border bg-card p-8 shadow-lg">
-        <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wide text-primary">
+        <div className="flex items-center gap-2 font-mono text-[13px] uppercase tracking-wide text-primary">
           <KeyRound className="h-3.5 w-3.5" />
           Admin access
         </div>
-        <h1 className="mt-3 font-serif text-2xl font-semibold text-foreground">
+        <h1 className="mt-3 font-serif text-3xl font-normal text-foreground">
           Enter admin token
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1 text-base text-muted-foreground">
           Stored in your browser — you won't need to re-enter it.
         </p>
         <form
@@ -110,12 +110,12 @@ function TokenGate({ onSave }: { onSave: (t: string) => void }) {
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Token"
             autoFocus
-            className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+            className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-base text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
           />
           <button
             type="submit"
             disabled={!draft.trim()}
-            className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-opacity disabled:opacity-40"
+            className="rounded-full bg-primary px-5 py-2 text-base font-normal text-primary-foreground shadow-sm transition-opacity disabled:opacity-40"
           >
             Continue
           </button>
@@ -195,14 +195,14 @@ function HealthPanel({
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wide text-primary">
+            <div className="flex items-center gap-2 font-mono text-[13px] uppercase tracking-wide text-primary">
               <Radio className="h-3.5 w-3.5" />
               Admin · Feed health
             </div>
-            <h1 className="mt-2 font-serif text-3xl font-semibold text-foreground">
+            <h1 className="mt-2 font-serif text-4xl font-normal text-foreground">
               Station feed health
             </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1 text-base text-muted-foreground">
               Alerts when a feed goes silent. Refreshes every 30 seconds.
             </p>
           </div>
@@ -210,19 +210,19 @@ function HealthPanel({
             <button
               onClick={() => void fetchAll()}
               disabled={refreshing}
-              className="flex items-center gap-1.5 rounded-full border border-border bg-secondary/40 px-3 py-1.5 text-xs text-muted-foreground transition hover:text-foreground disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-full border border-border bg-secondary/40 px-3 py-1.5 text-sm text-muted-foreground transition hover:text-foreground disabled:opacity-50"
             >
               <RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} />
               Refresh
             </button>
             {lastRefreshed && (
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-[13px] text-muted-foreground">
                 Updated {lastRefreshed.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
               </span>
             )}
             <button
               onClick={onClearToken}
-              className="text-[11px] text-muted-foreground underline-offset-2 hover:underline"
+              className="text-[13px] text-muted-foreground underline-offset-2 hover:underline"
             >
               Sign out
             </button>
@@ -245,17 +245,17 @@ function HealthPanel({
 
         {/* Error */}
         {!loading && loadError && (
-          <div className="mt-8 rounded-xl border border-destructive/30 bg-destructive/10 px-5 py-4 text-sm text-destructive">
-            <span className="font-medium">Error loading health data:</span> {loadError}
+          <div className="mt-8 rounded-xl border border-destructive/30 bg-destructive/10 px-5 py-4 text-base text-destructive">
+            <span className="font-normal">Error loading health data:</span> {loadError}
           </div>
         )}
 
         {/* All healthy */}
         {allHealthy && (
           <div className="mt-10 flex flex-col items-center gap-3 rounded-2xl border border-border bg-card px-6 py-10 text-center">
-            <CheckCircle2 className="h-8 w-8 text-green-500" />
-            <p className="text-base font-medium text-foreground">All feeds healthy</p>
-            <p className="max-w-xs text-sm text-muted-foreground">
+            <CheckCircle2 className="h-8 w-8 text-zinc-500" />
+            <p className="text-lg font-normal text-foreground">All feeds healthy</p>
+            <p className="max-w-xs text-base text-muted-foreground">
               No silent stations detected. BBC and SomaFM feeds are receiving spins on schedule.
             </p>
           </div>
@@ -323,15 +323,15 @@ function MonitoringBanner({ monitoringSince }: { monitoringSince: string }) {
 
   return (
     <div
-      className={`mt-6 flex items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
+      className={`mt-6 flex items-start gap-3 rounded-xl border px-4 py-3 text-base ${
         isNew
-          ? "border-blue-500/30 bg-blue-500/5 text-blue-700 dark:text-blue-300"
+          ? "border-zinc-500/30 bg-zinc-500/5 text-zinc-700 dark:text-zinc-300"
           : "border-border bg-card/60 text-muted-foreground"
       }`}
     >
-      <Info className={`mt-0.5 h-4 w-4 shrink-0 ${isNew ? "text-blue-500" : "text-muted-foreground"}`} />
+      <Info className={`mt-0.5 h-4 w-4 shrink-0 ${isNew ? "text-zinc-500" : "text-muted-foreground"}`} />
       <div>
-        <span className="font-medium text-foreground">
+        <span className="font-normal text-foreground">
           Monitoring since {since.toLocaleString(undefined, {
             month: "short",
             day: "numeric",
@@ -341,13 +341,13 @@ function MonitoringBanner({ monitoringSince }: { monitoringSince: string }) {
         </span>
         <span className="ml-1">({formatDuration(uptimeMs)} ago)</span>
         {isNew && (
-          <p className="mt-0.5 text-xs">
+          <p className="mt-0.5 text-sm">
             Health state resets on every server restart — data may not yet reflect pre-restart
             conditions. Results will stabilise after feeds have had time to report.
           </p>
         )}
         {!isNew && (
-          <span className="ml-1 text-xs">· Health state resets on server restart.</span>
+          <span className="ml-1 text-sm">· Health state resets on server restart.</span>
         )}
       </div>
     </div>
@@ -368,13 +368,13 @@ function SectionHeading({
   return (
     <div>
       <div className="flex items-center gap-2">
-        <span className="text-amber-500">{icon}</span>
-        <h2 className="font-semibold text-foreground">{title}</h2>
-        <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+        <span className="text-zinc-500">{icon}</span>
+        <h2 className="font-normal text-foreground">{title}</h2>
+        <span className="rounded-full bg-zinc-500/15 px-2 py-0.5 text-sm font-normal text-zinc-600 dark:text-zinc-400">
           {badge}
         </span>
       </div>
-      <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+      <p className="mt-1 text-base text-muted-foreground">{description}</p>
     </div>
   );
 }
@@ -382,10 +382,10 @@ function SectionHeading({
 function HealthyRow({ label, detail }: { label: string; detail: string }) {
   return (
     <div className="flex items-center gap-3 rounded-xl border border-border bg-card/60 px-4 py-3">
-      <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />
+      <CheckCircle2 className="h-4 w-4 shrink-0 text-zinc-500" />
       <div>
-        <span className="text-sm font-medium text-foreground">{label}</span>
-        <span className="ml-2 text-sm text-muted-foreground">{detail}</span>
+        <span className="text-base font-normal text-foreground">{label}</span>
+        <span className="ml-2 text-base text-muted-foreground">{detail}</span>
       </div>
     </div>
   );
@@ -397,25 +397,25 @@ function FeedFreshnessCard({ station }: { station: FeedFreshnessStation }) {
   const pollInterval = formatDuration(station.pollIntervalMs);
 
   return (
-    <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-5 py-4">
+    <div className="rounded-xl border border-zinc-500/30 bg-zinc-500/5 px-5 py-4">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-2">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-zinc-500" />
           <div>
-            <span className="font-mono text-sm font-semibold text-foreground">
+            <span className="font-mono text-base font-normal text-foreground">
               {station.slug}
             </span>
-            <span className="ml-2 rounded-md bg-secondary/60 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+            <span className="ml-2 rounded-md bg-secondary/60 px-1.5 py-0.5 font-mono text-[13px] text-muted-foreground">
               {station.source}
             </span>
           </div>
         </div>
-        <span className="shrink-0 rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-semibold text-amber-600 dark:text-amber-400">
+        <span className="shrink-0 rounded-full bg-zinc-500/20 px-2.5 py-0.5 text-sm font-normal text-zinc-600 dark:text-zinc-400">
           silent {silentFor}
         </span>
       </div>
 
-      <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm sm:grid-cols-3">
+      <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-base sm:grid-cols-3">
         <DataRow label="Last spin" value={formatTimestamp(station.lastSpinAt)} />
         <DataRow label="Last poll" value={formatTimestamp(station.lastEmptyAt)} />
         <DataRow label="Consecutive empty" value={String(station.consecutiveEmpties)} />
@@ -430,23 +430,23 @@ function SpinitronWebCard({ station }: { station: SpinitronWebStation }) {
   const silentFor = formatDuration(station.staleSinceMs);
 
   return (
-    <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-5 py-4">
+    <div className="rounded-xl border border-zinc-500/30 bg-zinc-500/5 px-5 py-4">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-2">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-          <span className="font-mono text-sm font-semibold text-foreground">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-zinc-500" />
+          <span className="font-mono text-base font-normal text-foreground">
             {station.slug}
           </span>
-          <span className="rounded-md bg-secondary/60 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+          <span className="rounded-md bg-secondary/60 px-1.5 py-0.5 font-mono text-[13px] text-muted-foreground">
             spinitron_web
           </span>
         </div>
-        <span className="shrink-0 rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-semibold text-amber-600 dark:text-amber-400">
+        <span className="shrink-0 rounded-full bg-zinc-500/20 px-2.5 py-0.5 text-sm font-normal text-zinc-600 dark:text-zinc-400">
           failing {silentFor}
         </span>
       </div>
 
-      <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm sm:grid-cols-3">
+      <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-base sm:grid-cols-3">
         <DataRow label="Last success" value={formatTimestamp(station.lastSuccessAt)} />
         <DataRow label="Last null" value={formatTimestamp(station.lastNullAt)} />
         <DataRow label="Consecutive nulls" value={String(station.consecutiveNulls)} />
@@ -458,8 +458,8 @@ function SpinitronWebCard({ station }: { station: SpinitronWebStation }) {
 function DataRow({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</dt>
-      <dd className="font-mono text-xs text-foreground">{value}</dd>
+      <dt className="text-[13px] uppercase tracking-wide text-muted-foreground">{label}</dt>
+      <dd className="font-mono text-sm text-foreground">{value}</dd>
     </div>
   );
 }
