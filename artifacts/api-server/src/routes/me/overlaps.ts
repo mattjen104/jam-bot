@@ -518,6 +518,7 @@ router.get("/me/overlaps/runs", h(async (req, res) => {
     .select({
       runId: sql<number>`min(${spinsTable.id})`,
       day: spinDayExpr,
+      stationId: stationsTable.id,
       stationSlug: stationsTable.slug,
       stationName: stationsTable.name,
       stationClass: stationsTable.stationClass,
@@ -554,6 +555,7 @@ router.get("/me/overlaps/runs", h(async (req, res) => {
     items: rows.map((r) => ({
       runId: r.runId,
       day: r.day,
+      stationId: r.stationId,
       station: {
         slug: r.stationSlug,
         name: r.stationName,
@@ -577,48 +579,78 @@ router.get("/me/overlaps/runs", h(async (req, res) => {
 /**
  * GET /api/me/overlaps/spine — hourly density bins for the time-axis spine.
  *
- * Returns per-hour counts of `owned` (MBIDs in the user's library) and
- * `discover` (resolved MBIDs NOT in the library) for a single station over a
- * requested time range.
+ * Two calling modes:
  *
- * Coverage note: `covered` is intentionally absent from the response.
- * Per-station per-hour polling coverage is NOT derivable from existing data
- * (confirmed in the prerequisites report). The frontend treats every bin with
- * owned=0 and discover=0 as "unknown" rather than "silence", which is the only
- * honest rendering when coverage cannot be established.
+ *   1. Day shorthand (preferred for the dial):
+ *      `?day=YYYY-MM-DD[&stationId=N]`
+ *      Derives from/to from the UTC calendar day.  When stationId is omitted,
+ *      aggregates across ALL stations the user has crossed for that day.
  *
- * Query params:
- *   stationId  required  integer  station primary key
- *   from       required  ISO 8601 datetime (inclusive)
- *   to         required  ISO 8601 datetime (exclusive)
+ *   2. Explicit range:
+ *      `?stationId=N&from=ISO&to=ISO`
+ *      Requires stationId.
+ *
+ * Coverage note: `covered` is intentionally absent.  Per-station per-hour
+ * polling coverage is NOT derivable from existing data.  Every bin with
+ * owned=0 and discover=0 renders as "unknown" in the DensitySpine.
  */
 router.get("/me/overlaps/spine", h(async (req, res) => {
   const user = (req as AuthedRequest).loreUser;
 
+  const dayRaw = req.query["day"];
   const stationIdRaw = req.query["stationId"];
   const fromRaw = req.query["from"];
   const toRaw = req.query["to"];
 
-  const stationId = Number(stationIdRaw);
-  if (!stationIdRaw || !Number.isInteger(stationId) || stationId <= 0) {
-    return res.status(400).json({ error: "stationId must be a positive integer" });
-  }
-  if (!fromRaw || !toRaw || typeof fromRaw !== "string" || typeof toRaw !== "string") {
-    return res.status(400).json({ error: "from and to are required ISO datetime strings" });
-  }
-  const fromDate = new Date(fromRaw);
-  const toDate = new Date(toRaw);
-  if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
-    return res.status(400).json({ error: "from and to must be valid ISO datetimes" });
-  }
-  if (toDate <= fromDate) {
-    return res.status(400).json({ error: "to must be after from" });
+  let fromDate: Date;
+  let toDate: Date;
+  let stationIdFilter: number | null = null;
+
+  if (typeof dayRaw === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dayRaw)) {
+    // Day shorthand mode
+    fromDate = new Date(`${dayRaw}T00:00:00Z`);
+    toDate = new Date(`${dayRaw}T23:59:59.999Z`);
+    if (stationIdRaw) {
+      const sid = Number(stationIdRaw);
+      if (!Number.isInteger(sid) || sid <= 0) {
+        return res.status(400).json({ error: "stationId must be a positive integer" });
+      }
+      stationIdFilter = sid;
+    }
+  } else {
+    // Explicit range mode — stationId required
+    const stationId = Number(stationIdRaw);
+    if (!stationIdRaw || !Number.isInteger(stationId) || stationId <= 0) {
+      return res.status(400).json({ error: "stationId required (or use ?day=YYYY-MM-DD)" });
+    }
+    if (!fromRaw || !toRaw || typeof fromRaw !== "string" || typeof toRaw !== "string") {
+      return res.status(400).json({ error: "from and to are required ISO datetime strings" });
+    }
+    fromDate = new Date(fromRaw);
+    toDate = new Date(toRaw);
+    if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+      return res.status(400).json({ error: "from and to must be valid ISO datetimes" });
+    }
+    if (toDate <= fromDate) {
+      return res.status(400).json({ error: "to must be after from" });
+    }
+    stationIdFilter = stationId;
   }
 
   const userMbids = db
     .select({ mbid: libraryItemsTable.mbid })
     .from(libraryItemsTable)
     .where(eq(libraryItemsTable.userId, user.id));
+
+  const timeFilter = and(
+    isNotNull(spinsTable.mbid),
+    sql`${spinsTable.playedAt} >= ${fromDate.toISOString()}::timestamptz`,
+    sql`${spinsTable.playedAt} < ${toDate.toISOString()}::timestamptz`,
+  );
+
+  const whereClause = stationIdFilter !== null
+    ? and(timeFilter, eq(spinsTable.stationId, stationIdFilter))
+    : timeFilter;
 
   const rows = await db
     .select({
@@ -627,14 +659,7 @@ router.get("/me/overlaps/spine", h(async (req, res) => {
       discover: sql<number>`count(*) filter (where ${spinsTable.mbid} is not null and ${spinsTable.mbid} not in (${userMbids}))::int`,
     })
     .from(spinsTable)
-    .where(
-      and(
-        eq(spinsTable.stationId, stationId),
-        isNotNull(spinsTable.mbid),
-        sql`${spinsTable.playedAt} >= ${fromDate.toISOString()}::timestamptz`,
-        sql`${spinsTable.playedAt} < ${toDate.toISOString()}::timestamptz`,
-      ),
-    )
+    .where(whereClause)
     .groupBy(sql`date_trunc('hour', ${spinsTable.playedAt})`)
     .orderBy(sql`date_trunc('hour', ${spinsTable.playedAt})`);
 

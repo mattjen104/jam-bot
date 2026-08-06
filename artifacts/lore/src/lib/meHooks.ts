@@ -124,6 +124,7 @@ export interface OverlapStation {
 export interface OverlapRun {
   runId: number;
   day: string;
+  stationId: number;
   station: { slug: string; name: string; stationClass: string };
   show: { name: string; djName: string | null } | null;
   owned: number;
@@ -1135,6 +1136,78 @@ export function useMyOverlapRunsFor(
     enabled,
     staleTime: 5 * 60_000,
     retry: false,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Spine density bins
+// ---------------------------------------------------------------------------
+
+export interface SpineBin {
+  /** ISO 8601 datetime string for the start of this hour bucket (UTC). */
+  hourStart: string;
+  /** Count of spins whose MBID is in the listener's library. */
+  owned: number;
+  /** Count of spins whose MBID is NOT in the library but is resolved. */
+  discover: number;
+}
+
+export const ME_OVERLAP_SPINE_DAY_KEY = (day: string, stationId?: number) =>
+  ["me", "overlaps", "spine", day, stationId ?? "all"] as const;
+
+/**
+ * Hourly density bins for a given UTC day.  When `stationId` is provided,
+ * shows density for that station only; when omitted, aggregates all stations
+ * crossed on that day.  Empty bins (owned=0, discover=0) are NOT returned
+ * from the server — the client fills them as "unknown" via `fillSpineBins`.
+ *
+ * Coverage: `covered` intentionally absent — see prerequisites report.
+ */
+export function useMyOverlapSpine(
+  day: string | null,
+  opts: { stationId?: number; enabled?: boolean } = {},
+) {
+  const { stationId, enabled = true } = opts;
+  const queryKey = day
+    ? ME_OVERLAP_SPINE_DAY_KEY(day, stationId)
+    : (["me", "overlaps", "spine", "disabled"] as const);
+  const url = day
+    ? `/api/me/overlaps/spine?day=${encodeURIComponent(day)}${stationId != null ? `&stationId=${stationId}` : ""}`
+    : null;
+  return useQuery({
+    queryKey,
+    queryFn: () =>
+      url
+        ? fetchOrNull<{ bins: SpineBin[] }>(url).then((d) => d?.bins ?? [])
+        : Promise.resolve([]),
+    enabled: enabled && day !== null,
+    staleTime: 10 * 60_000,
+    retry: false,
+  });
+}
+
+/**
+ * Expands a sparse server response into a dense 24-bin array covering the
+ * full UTC day, filling missing hours as unknown (owned=0, discover=0).
+ * The DensitySpine renders empty bins as the "unknown" texture.
+ */
+export function fillSpineBins(
+  day: string,
+  serverBins: SpineBin[],
+): Array<{ hourStart: number; owned: number; discover: number }> {
+  const byHour = new Map(
+    serverBins.map((b) => [b.hourStart.slice(0, 13), b]),
+  );
+  return Array.from({ length: 24 }, (_, h) => {
+    const iso = `${day}T${String(h).padStart(2, "0")}:00:00`;
+    const utcMs = new Date(`${iso}Z`).getTime();
+    const key = `${day}T${String(h).padStart(2, "0")}`;
+    const server = byHour.get(key);
+    return {
+      hourStart: utcMs,
+      owned: server?.owned ?? 0,
+      discover: server?.discover ?? 0,
+    };
   });
 }
 

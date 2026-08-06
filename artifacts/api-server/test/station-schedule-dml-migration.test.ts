@@ -64,6 +64,11 @@ beforeAll(async () => {
 afterAll(async () => {
   if (!dbAvailable || !stationId) return;
   await db.execute(sql`DELETE FROM scraped_shows WHERE station_id = ${stationId}`);
+  // Must clear all FK children before the station row — order from memory note:
+  // radio_browser_stations → spins → shows → stations (no cascade defined)
+  await db.execute(sql`DELETE FROM radio_browser_stations WHERE station_id = ${stationId}`);
+  await db.execute(sql`DELETE FROM spins WHERE station_id = ${stationId}`);
+  await db.execute(sql`DELETE FROM shows WHERE station_id = ${stationId}`);
   await db.execute(sql`DELETE FROM stations WHERE id = ${stationId}`);
   await db.execute(sql`DELETE FROM migration_completions WHERE name = ${LEDGER_KEY}`);
   await db.execute(sql`DELETE FROM migration_completions WHERE name = ${RECEIPT_LEDGER_KEY}`);

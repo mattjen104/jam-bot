@@ -10,7 +10,8 @@ import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, typ
 import { SeedInput } from "./SeedInput";
 import { Search } from "lucide-react";
 import { useLocation, Link } from "wouter";
-import { useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyAlbumAvatar, useMyPopularCrossings, useRecentSets, useMyOverlapRunsFor, type GhostStation, type PopularCrossingArtist, type RecentSetItem, type RecentSetArtist, type RecentSetWindow, type OverlapRun } from "../lib/meHooks";
+import { useMyGhostMissed, useSpotifyLibraryConnected, startSpotifyLibraryConnect, useMyTasteSeeds, useSetTasteSeeds, useMattStarterLibrary, useStartMattLibrary, useMyWeeklyRecap, useMyAlbumAvatar, useMyPopularCrossings, useRecentSets, useMyOverlapRunsFor, useMyOverlapSpine, fillSpineBins, type GhostStation, type PopularCrossingArtist, type RecentSetItem, type RecentSetArtist, type RecentSetWindow, type OverlapRun } from "../lib/meHooks";
+import { DensitySpine } from "./DensitySpine";
 import { useGetStationNowPlaying, getGetStationNowPlayingQueryKey } from "@workspace/api-client-react";
 import { useFrontDoorScan } from "../hooks/useFrontDoorScan";
 import { StationLane } from "./StationLane";
@@ -742,14 +743,14 @@ export function DialTimeTravelStrip({
  * the station-run archive uses. It is NOT a replay manifest ID; routing to
  * /replay/{runId} would silently fail for runs without a manifest.
  */
-function RunRow({ run }: { run: OverlapRun }) {
+function RunRow({ run, focused = false }: { run: OverlapRun; focused?: boolean }) {
   const [, navigate] = useLocation();
   const djName = run.show?.djName ?? null;
   const showName = run.show?.name ?? null;
 
   return (
     <div
-      className="fdrow fdrow--run"
+      className={`fdrow fdrow--run${focused ? " fdrow--run-focused" : ""}`}
       role="button"
       tabIndex={0}
       data-run-id={run.runId}
@@ -2063,9 +2064,11 @@ export function DialView() {
   // Active tab — resets to primary on each page load (not persisted).
   const [activeTab, setActiveTab] = useState<"library" | "recently-aired">("library");
 
-  // ── Time-travel mode (day nav + top sets) ───────────────────────────────────
+  // ── Time-travel mode (day nav + top sets + spine) ───────────────────────────
   const [ttMode, setTtMode] = useState<TtMode>("live");
   const [ttDay, setTtDay] = useState<string | null>(null);
+  /** Index into `ttDayRunsChron` (sorted oldest-first by runId) for run navigation. */
+  const [ttRunIndex, setTtRunIndex] = useState<number | null>(null);
 
   // Fetch day-specific runs (only when day mode is active).
   const { data: ttDayRuns = [], isLoading: ttDayLoading } = useMyOverlapRunsFor(
@@ -2078,9 +2081,54 @@ export function DialView() {
     { enabled: ttMode === "top" },
   );
 
+  // Chronological sort of day runs for prev/next navigation.
+  // Server returns owned-desc order; we want oldest-first for time travel.
+  const ttDayRunsChron = useMemo(
+    () => [...ttDayRuns].sort((a, b) => a.runId - b.runId),
+    [ttDayRuns],
+  );
+
+  // Focused run — whichever the user has navigated to; falls back to null.
+  const focusedRun: OverlapRun | null =
+    ttRunIndex !== null ? (ttDayRunsChron[ttRunIndex] ?? null) : null;
+
+  // Reset run index when the day changes.
+  useEffect(() => { setTtRunIndex(null); }, [ttDay]);
+
+  // Spine density bins for the selected day — aggregated across all stations
+  // (no stationId) when no specific run is focused; per-station when focused.
+  const { data: spineServerBins = [], isLoading: spineLoading } = useMyOverlapSpine(
+    ttDay,
+    {
+      stationId: focusedRun?.stationId,
+      enabled: ttMode === "day" && ttDay !== null,
+    },
+  );
+
+  const spineBins = useMemo(
+    () => ttDay ? fillSpineBins(ttDay, spineServerBins) : [],
+    [ttDay, spineServerBins],
+  );
+
+  /** Step to the previous run in chronological order within the day. */
+  const handleRunPrev = useCallback(() => {
+    if (ttDayRunsChron.length === 0) return;
+    setTtRunIndex((prev) =>
+      prev === null ? ttDayRunsChron.length - 1 : Math.max(0, prev - 1),
+    );
+  }, [ttDayRunsChron]);
+
+  /** Step to the next run in chronological order within the day. */
+  const handleRunNext = useCallback(() => {
+    if (ttDayRunsChron.length === 0) return;
+    setTtRunIndex((prev) =>
+      prev === null ? 0 : Math.min(ttDayRunsChron.length - 1, prev + 1),
+    );
+  }, [ttDayRunsChron]);
+
   const handleTtModeChange = (m: TtMode) => {
     setTtMode(m);
-    if (m === "live") setTtDay(null);
+    if (m === "live") { setTtDay(null); setTtRunIndex(null); }
   };
 
   // Slug-key strings — order-insensitive (sorted) so a live reorder of the same
@@ -2551,9 +2599,74 @@ export function DialView() {
                   <PopScrubber items={scrubItems} onScrub={handleScrub} />
                 )}
 
-                {/* ── Day mode: historical crossing runs for the selected day ── */}
+                {/* ── Day mode: density spine + historical crossing runs ── */}
                 {ttMode === "day" && (
                   <>
+                    {/* Density spine — shows hourly crossing density for the day.
+                        Loaded independently so runs can render while spine fetches. */}
+                    {ttDay && (
+                      <div className="dial-tt-spine">
+                        {spineLoading && spineBins.length === 0 ? (
+                          <div className="dial-tt-spine__loading" aria-label="Loading spine" />
+                        ) : (
+                          <DensitySpine
+                            bins={spineBins}
+                            nowMs={Date.now()}
+                            onTap={(hourMs) => {
+                              // Find the nearest run by hour (runId = min spin.id = chronological proxy)
+                              // We approximate each run's hour from the day string since we don't
+                              // have per-run timestamps yet; distribute runs evenly across the day.
+                              if (ttDayRunsChron.length === 0) return;
+                              const dayStartMs = new Date(`${ttDay}T00:00:00Z`).getTime();
+                              const dayMs = 24 * 60 * 60_000;
+                              const fraction = Math.max(0, Math.min(1, (hourMs - dayStartMs) / dayMs));
+                              const idx = Math.min(
+                                ttDayRunsChron.length - 1,
+                                Math.floor(fraction * ttDayRunsChron.length),
+                              );
+                              setTtRunIndex(idx);
+                              // Scroll the focused run into view
+                              setTimeout(() => {
+                                document
+                                  .querySelector(`[data-run-id="${ttDayRunsChron[idx]?.runId}"]`)
+                                  ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                              }, 0);
+                            }}
+                            className="dial-tt-spine__canvas"
+                          />
+                        )}
+                      </div>
+                    )}
+
+                    {/* Run navigation — prev/next accessible alternatives to spine drag */}
+                    {!ttDayLoading && ttDayRunsChron.length > 1 && (
+                      <div className="dial-tt-runnav">
+                        <button
+                          type="button"
+                          className="dial-tt-runnav__btn"
+                          aria-label="Previous set"
+                          disabled={ttRunIndex === 0}
+                          onClick={handleRunPrev}
+                        >
+                          ‹ prev
+                        </button>
+                        <span className="dial-tt-runnav__label">
+                          {ttRunIndex !== null
+                            ? `${ttRunIndex + 1} of ${ttDayRunsChron.length} sets`
+                            : `${ttDayRunsChron.length} sets`}
+                        </span>
+                        <button
+                          type="button"
+                          className="dial-tt-runnav__btn"
+                          aria-label="Next set"
+                          disabled={ttRunIndex === ttDayRunsChron.length - 1}
+                          onClick={handleRunNext}
+                        >
+                          next ›
+                        </button>
+                      </div>
+                    )}
+
                     {ttDayLoading && (
                       <>
                         <DialRowSkeleton delay={0} />
@@ -2568,8 +2681,14 @@ export function DialView() {
                         </div>
                       </div>
                     )}
+                    {/* Render runs in owned-desc order (server order).
+                        The focused run (from spine tap or prev/next) gets a highlight class. */}
                     {ttDayRuns.map((run) => (
-                      <RunRow key={run.runId} run={run} />
+                      <RunRow
+                        key={run.runId}
+                        run={run}
+                        focused={focusedRun?.runId === run.runId}
+                      />
                     ))}
                   </>
                 )}
